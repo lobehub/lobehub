@@ -340,23 +340,6 @@
         "title": "Schrijfkring"
       }
     },
-    "qa": {
-      "q01": "Wat is LobeHub?",
-      "q02": "Wat is {{appName}}?",
-      "q03": "Heeft {{appName}} ondersteuning van de gemeenschap?",
-      "q04": "Welke functies ondersteunt {{appName}}?",
-      "q05": "Hoe wordt {{appName}} geïmplementeerd en gebruikt?",
-      "q06": "Wat zijn de prijzen van {{appName}}?",
-      "q07": "Is {{appName}} gratis?",
-      "q08": "Is er een cloudversie beschikbaar?",
-      "q09": "Ondersteunt het lokale taalmodellen?",
-      "q10": "Ondersteunt het beeldherkenning en -generatie?",
-      "q11": "Ondersteunt het spraaksynthese en spraakherkenning?",
-      "q12": "Ondersteunt het een plug-insysteem?",
-      "q13": "Is er een eigen markt om GPT's te verkrijgen?",
-      "q14": "Ondersteunt het meerdere AI-dienstverleners?",
-      "q15": "Wat moet ik doen als ik problemen ondervind tijdens het gebruik?"
-    },
     "questions": {
       "moreBtn": "Meer informatie",
       "title": "Probeer te vragen:"

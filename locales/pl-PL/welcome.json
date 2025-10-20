@@ -340,23 +340,6 @@
         "title": "Krąg pisarski"
       }
     },
-    "qa": {
-      "q01": "Czym jest LobeHub?",
-      "q02": "Czym jest {{appName}}?",
-      "q03": "Czy {{appName}} ma wsparcie społeczności?",
-      "q04": "Jakie funkcje wspiera {{appName}}?",
-      "q05": "Jak wdrożyć i używać {{appName}}?",
-      "q06": "Jakie są ceny {{appName}}?",
-      "q07": "Czy {{appName}} jest darmowy?",
-      "q08": "Czy dostępna jest wersja w chmurze?",
-      "q09": "Czy wspiera lokalne modele językowe?",
-      "q10": "Czy wspiera rozpoznawanie i generowanie obrazów?",
-      "q11": "Czy wspiera syntezę mowy i rozpoznawanie mowy?",
-      "q12": "Czy wspiera system wtyczek?",
-      "q13": "Czy ma własny rynek do pozyskiwania GPT-ów?",
-      "q14": "Czy wspiera wielu dostawców usług AI?",
-      "q15": "Co powinienem zrobić, jeśli napotkam problemy podczas korzystania?"
-    },
     "questions": {
       "moreBtn": "Dowiedz się więcej",
       "title": "Spróbuj zapytać:"

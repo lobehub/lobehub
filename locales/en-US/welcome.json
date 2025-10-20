@@ -340,23 +340,6 @@
         "title": "Writing Circle"
       }
     },
-    "qa": {
-      "q01": "What is LobeHub?",
-      "q02": "What is {{appName}}?",
-      "q03": "Does {{appName}} have community support?",
-      "q04": "What features does {{appName}} support?",
-      "q05": "How do I deploy and use {{appName}}?",
-      "q06": "What is the pricing for {{appName}}?",
-      "q07": "Is {{appName}} free?",
-      "q08": "Is there a cloud service version available?",
-      "q09": "Does it support local language models?",
-      "q10": "Does it support image recognition and generation?",
-      "q11": "Does it support speech synthesis and speech recognition?",
-      "q12": "Does it support a plugin system?",
-      "q13": "Is there a marketplace to acquire GPTs?",
-      "q14": "Does it support multiple AI service providers?",
-      "q15": "What should I do if I encounter issues while using it?"
-    },
     "questions": {
       "moreBtn": "Learn More",
       "title": "Try asking:"

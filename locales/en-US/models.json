@@ -311,6 +311,12 @@
   "Qwen/QwQ-32B-Preview": {
     "description": "QwQ-32B-Preview is Qwen's latest experimental research model, focusing on enhancing AI reasoning capabilities. By exploring complex mechanisms such as language mixing and recursive reasoning, its main advantages include strong analytical reasoning, mathematical, and programming abilities. However, it also faces challenges such as language switching issues, reasoning loops, safety considerations, and differences in other capabilities."
   },
+  "Qwen/Qwen-Image": {
+    "description": "Qwen-Image is a foundational image generation model developed by Alibaba's Tongyi Qianwen team, featuring 20 billion parameters. The model has made significant advancements in complex text rendering and precise image editing, excelling particularly at generating images with high-fidelity Chinese and English text. Qwen-Image can handle multi-line layouts and paragraph-level text while maintaining coherent typography and contextual harmony in generated images. Beyond its exceptional text rendering capabilities, the model supports a wide range of artistic styles—from photorealism to anime aesthetics—adapting flexibly to diverse creative needs. It also boasts powerful image editing and understanding capabilities, supporting advanced operations such as style transfer, object addition/removal, detail enhancement, text editing, and even human pose manipulation. Qwen-Image is designed to be a comprehensive foundational model for intelligent visual creation and processing, integrating language, layout, and imagery."
+  },
+  "Qwen/Qwen-Image-Edit-2509": {
+    "description": "Qwen-Image-Edit-2509 is the latest image editing version of Qwen-Image, released by Alibaba's Tongyi Qianwen team. Built upon the 20B-parameter Qwen-Image model, it has been further trained to extend its unique text rendering capabilities into the domain of image editing, enabling precise manipulation of text within images. Qwen-Image-Edit employs an innovative architecture that feeds the input image into both Qwen2.5-VL (for visual semantic control) and a VAE Encoder (for visual appearance control), enabling dual editing capabilities in both semantics and appearance. This allows for not only localized visual edits such as adding, removing, or modifying elements, but also high-level semantic edits like IP creation and style transfer that require semantic consistency. The model has demonstrated state-of-the-art (SOTA) performance across multiple public benchmarks, making it a powerful foundational model for image editing."
+  },
   "Qwen/Qwen2-72B-Instruct": {
     "description": "Qwen2 is an advanced general-purpose language model that supports various types of instructions."
   },
@@ -391,6 +397,12 @@
   },
   "Qwen/Qwen3-Next-80B-A3B-Thinking": {
     "description": "Qwen3-Next-80B-A3B-Thinking is the next-generation foundational model released by Alibaba's Tongyi Qianwen team, specifically designed for complex reasoning tasks. It is based on the innovative Qwen3-Next architecture, which integrates a hybrid attention mechanism (Gated DeltaNet and Gated Attention) and a highly sparse mixture-of-experts (MoE) structure, aiming for ultimate training and inference efficiency. As a sparse model with a total of 80 billion parameters, it activates only about 3 billion parameters during inference, greatly reducing computational costs. When processing long-context tasks exceeding 32K tokens, its throughput is more than 10 times higher than the Qwen3-32B model. This \"Thinking\" version is optimized for executing challenging multi-step tasks such as mathematical proofs, code synthesis, logical analysis, and planning, and by default outputs the reasoning process in a structured \"chain-of-thought\" format. In terms of performance, it not only surpasses higher-cost models like Qwen3-32B-Thinking but also outperforms Gemini-2.5-Flash-Thinking on multiple benchmarks."
+  },
+  "Qwen/Qwen3-VL-8B-Instruct": {
+    "description": "Qwen3-VL-8B-Instruct is a vision-language model from the Qwen3 series, built on Qwen3-8B-Instruct and trained on a large corpus of image-text data. It excels at general visual understanding, vision-centric dialogue, and multilingual text recognition within images. It is well-suited for tasks such as visual question answering, image captioning, multimodal instruction following, and tool invocation."
+  },
+  "Qwen/Qwen3-VL-8B-Thinking": {
+    "description": "Qwen3-VL-8B-Thinking is the visual reasoning variant of the Qwen3 series, optimized for complex multi-step reasoning tasks. By default, it generates a step-by-step thinking chain before answering, enhancing reasoning accuracy. It is ideal for scenarios requiring in-depth reasoning, such as visual question answering and detailed analysis of image content."
   },
   "Qwen2-72B-Instruct": {
     "description": "Qwen2 is the latest series of the Qwen model, supporting 128k context. Compared to the current best open-source models, Qwen2-72B significantly surpasses leading models in natural language understanding, knowledge, coding, mathematics, and multilingual capabilities."

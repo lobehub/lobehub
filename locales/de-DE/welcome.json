@@ -340,23 +340,6 @@
         "title": "Schreibteam"
       }
     },
-    "qa": {
-      "q01": "Was ist LobeHub?",
-      "q02": "Was ist {{appName}}?",
-      "q03": "Hat {{appName}} Community-Support?",
-      "q04": "Welche Funktionen unterstützt {{appName}}?",
-      "q05": "Wie wird {{appName}} bereitgestellt und verwendet?",
-      "q06": "Wie ist die Preisgestaltung von {{appName}}?",
-      "q07": "Ist {{appName}} kostenlos?",
-      "q08": "Gibt es eine Cloud-Service-Version?",
-      "q09": "Unterstützt es lokale Sprachmodelle?",
-      "q10": "Unterstützt es Bildverarbeitung und -erzeugung?",
-      "q11": "Unterstützt es Sprachsynthese und Spracherkennung?",
-      "q12": "Unterstützt es ein Plug-in-System?",
-      "q13": "Gibt es einen eigenen Marktplatz für GPTs?",
-      "q14": "Unterstützt es mehrere AI-Dienstanbieter?",
-      "q15": "Was soll ich tun, wenn ich Probleme bei der Nutzung habe?"
-    },
     "questions": {
       "moreBtn": "Mehr erfahren",
       "title": "Versuchen Sie zu fragen:"

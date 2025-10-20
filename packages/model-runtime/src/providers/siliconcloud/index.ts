@@ -7,6 +7,7 @@ import {
 import { ChatCompletionErrorPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { createSiliconCloudImage } from './createImage';
 
 export interface SiliconCloudModelCard {
   id: string;
@@ -73,6 +74,7 @@ export const params = {
       return result;
     },
   },
+  createImage: createSiliconCloudImage,
   debug: {
     chatCompletion: () => process.env.DEBUG_SILICONCLOUD_CHAT_COMPLETION === '1',
   },

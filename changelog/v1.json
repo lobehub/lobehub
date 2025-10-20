@@ -1,6 +1,20 @@
 [
   {
     "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-10-20",
+    "version": "1.139.1"
+  },
+  {
+    "children": {
+      "features": ["Support image generation for siliconcloud."]
+    },
+    "date": "2025-10-19",
+    "version": "1.139.0"
+  },
+  {
+    "children": {
       "improvements": ["Refactor upload router into lambda and decide to remove it in V2."]
     },
     "date": "2025-10-18",

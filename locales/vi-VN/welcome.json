@@ -340,23 +340,6 @@
         "title": "Cộng đồng viết"
       }
     },
-    "qa": {
-      "q01": "LobeHub là gì?",
-      "q02": "{{appName}} là gì?",
-      "q03": "{{appName}} có hỗ trợ cộng đồng không?",
-      "q04": "{{appName}} hỗ trợ những tính năng nào?",
-      "q05": "{{appName}} được triển khai và sử dụng như thế nào?",
-      "q06": "Giá cả của {{appName}} như thế nào?",
-      "q07": "{{appName}} có miễn phí không?",
-      "q08": "Có phiên bản dịch vụ đám mây không?",
-      "q09": "Có hỗ trợ mô hình ngôn ngữ địa phương không?",
-      "q10": "Có hỗ trợ nhận diện và tạo hình ảnh không?",
-      "q11": "Có hỗ trợ tổng hợp giọng nói và nhận diện giọng nói không?",
-      "q12": "Có hỗ trợ hệ thống plugin không?",
-      "q13": "Có thị trường riêng để lấy GPTs không?",
-      "q14": "Có hỗ trợ nhiều nhà cung cấp dịch vụ AI không?",
-      "q15": "Tôi nên làm gì nếu gặp vấn đề khi sử dụng?"
-    },
     "questions": {
       "moreBtn": "Tìm hiểu thêm",
       "title": "Hãy thử hỏi:"

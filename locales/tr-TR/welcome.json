@@ -340,23 +340,6 @@
         "title": "Yazım Çemberi"
       }
     },
-    "qa": {
-      "q01": "LobeHub nedir?",
-      "q02": "{{appName}} nedir?",
-      "q03": "{{appName}}'in topluluk desteği var mı?",
-      "q04": "{{appName}} hangi özellikleri destekliyor?",
-      "q05": "{{appName}} nasıl dağıtılır ve kullanılır?",
-      "q06": "{{appName}}'in fiyatlandırması nasıldır?",
-      "q07": "{{appName}} ücretsiz mi?",
-      "q08": "Bulut hizmeti versiyonu var mı?",
-      "q09": "Yerel dil modellerini destekliyor mu?",
-      "q10": "Görüntü tanıma ve oluşturma destekleniyor mu?",
-      "q11": "Ses sentezi ve ses tanıma destekleniyor mu?",
-      "q12": "Eklenti sistemi destekleniyor mu?",
-      "q13": "GPT'leri almak için kendi pazarımız var mı?",
-      "q14": "Birden fazla AI hizmet sağlayıcısını destekliyor mu?",
-      "q15": "Kullanım sırasında sorun yaşarsam ne yapmalıyım?"
-    },
     "questions": {
       "moreBtn": "Daha Fazla Bilgi",
       "title": "Şunu sormayı deneyin:"

@@ -311,6 +311,12 @@
   "Qwen/QwQ-32B-Preview": {
     "description": "QwQ-32B-Preview là mô hình nghiên cứu thử nghiệm mới nhất của Qwen, tập trung vào việc nâng cao khả năng suy luận của AI. Thông qua việc khám phá các cơ chế phức tạp như trộn ngôn ngữ và suy luận đệ quy, những lợi thế chính bao gồm khả năng phân tích suy luận mạnh mẽ, khả năng toán học và lập trình. Tuy nhiên, cũng có những vấn đề về chuyển đổi ngôn ngữ, vòng lặp suy luận, các vấn đề an toàn và sự khác biệt về các khả năng khác."
   },
+  "Qwen/Qwen-Image": {
+    "description": "Qwen-Image là mô hình nền tạo ảnh do đội ngũ Tongyi Qianwen của Alibaba phát triển, với 20 tỷ tham số. Mô hình này đạt được những tiến bộ đáng kể trong việc hiển thị văn bản phức tạp và chỉnh sửa hình ảnh chính xác, đặc biệt xuất sắc trong việc tạo ra hình ảnh chứa văn bản tiếng Trung và tiếng Anh với độ trung thực cao. Qwen-Image không chỉ xử lý tốt bố cục nhiều dòng và văn bản cấp đoạn, mà còn duy trì sự nhất quán trong bố cục và hài hòa về ngữ cảnh khi tạo ảnh. Bên cạnh khả năng hiển thị văn bản vượt trội, mô hình còn hỗ trợ nhiều phong cách nghệ thuật, từ ảnh hiện thực đến thẩm mỹ anime, linh hoạt đáp ứng các nhu cầu sáng tạo khác nhau. Đồng thời, nó cũng sở hữu khả năng chỉnh sửa và hiểu hình ảnh mạnh mẽ, hỗ trợ các thao tác nâng cao như chuyển đổi phong cách, thêm hoặc xóa đối tượng, tăng cường chi tiết, chỉnh sửa văn bản và điều khiển tư thế cơ thể người, hướng tới việc trở thành một mô hình nền thông minh toàn diện cho sáng tạo và xử lý hình ảnh tích hợp ngôn ngữ, bố cục và thị giác."
+  },
+  "Qwen/Qwen-Image-Edit-2509": {
+    "description": "Qwen-Image-Edit-2509 là phiên bản chỉnh sửa hình ảnh mới nhất của Qwen-Image, được phát hành bởi đội ngũ Tongyi Qianwen của Alibaba. Mô hình này được huấn luyện chuyên sâu dựa trên Qwen-Image với 20 tỷ tham số, mở rộng thành công khả năng hiển thị văn bản độc đáo sang lĩnh vực chỉnh sửa hình ảnh, cho phép chỉnh sửa chính xác văn bản trong ảnh. Ngoài ra, Qwen-Image-Edit áp dụng kiến trúc sáng tạo, đưa hình ảnh đầu vào đồng thời vào Qwen2.5-VL (để kiểm soát ngữ nghĩa thị giác) và VAE Encoder (để kiểm soát diện mạo thị giác), từ đó đạt được khả năng chỉnh sửa kép về ngữ nghĩa và diện mạo. Điều này có nghĩa là mô hình không chỉ hỗ trợ chỉnh sửa cục bộ như thêm, xóa hoặc thay đổi các yếu tố, mà còn hỗ trợ chỉnh sửa ngữ nghĩa thị giác nâng cao như sáng tạo IP, chuyển đổi phong cách mà vẫn giữ được tính nhất quán về ngữ nghĩa. Mô hình đã thể hiện hiệu suất hàng đầu (SOTA) trên nhiều bộ đánh giá công khai, trở thành một mô hình nền chỉnh sửa hình ảnh mạnh mẽ."
+  },
   "Qwen/Qwen2-72B-Instruct": {
     "description": "Qwen2 là mô hình ngôn ngữ tổng quát tiên tiến, hỗ trợ nhiều loại chỉ dẫn."
   },
@@ -391,6 +397,12 @@
   },
   "Qwen/Qwen3-Next-80B-A3B-Thinking": {
     "description": "Qwen3-Next-80B-A3B-Thinking là mô hình nền tảng thế hệ tiếp theo do đội ngũ Alibaba Tongyi Qianwen phát hành, được thiết kế chuyên biệt cho các tác vụ suy luận phức tạp. Nó dựa trên kiến trúc sáng tạo Qwen3-Next, kết hợp cơ chế chú ý hỗn hợp (Gated DeltaNet và Gated Attention) và cấu trúc chuyên gia hỗn hợp có độ thưa cao (MoE), nhằm đạt hiệu quả tối ưu trong huấn luyện và suy luận. Là mô hình thưa với tổng số 80 tỷ tham số, nó chỉ kích hoạt khoảng 3 tỷ tham số trong quá trình suy luận, giảm đáng kể chi phí tính toán, và khi xử lý các tác vụ ngữ cảnh dài trên 32K token, thông lượng cao hơn mô hình Qwen3-32B hơn 10 lần. Phiên bản “Thinking” này được tối ưu để thực hiện các tác vụ đa bước khó như chứng minh toán học, tổng hợp mã, phân tích logic và lập kế hoạch, và mặc định xuất ra quá trình suy luận dưới dạng chuỗi suy nghĩ có cấu trúc. Về hiệu năng, nó không chỉ vượt trội so với các mô hình có chi phí cao hơn như Qwen3-32B-Thinking mà còn vượt qua Gemini-2.5-Flash-Thinking trong nhiều bài kiểm tra chuẩn."
+  },
+  "Qwen/Qwen3-VL-8B-Instruct": {
+    "description": "Qwen3-VL-8B-Instruct là mô hình ngôn ngữ thị giác thuộc dòng Qwen3, được phát triển dựa trên Qwen3-8B-Instruct và huấn luyện trên lượng lớn dữ liệu hình ảnh và văn bản. Mô hình này có thế mạnh trong hiểu thị giác tổng quát, đối thoại xoay quanh hình ảnh và nhận diện văn bản đa ngôn ngữ trong ảnh. Phù hợp với các tình huống như hỏi đáp thị giác, mô tả hình ảnh, tuân theo chỉ dẫn đa phương thức và gọi công cụ."
+  },
+  "Qwen/Qwen3-VL-8B-Thinking": {
+    "description": "Qwen3-VL-8B-Thinking là phiên bản tư duy thị giác thuộc dòng Qwen3, được tối ưu hóa cho các nhiệm vụ suy luận đa bước phức tạp. Mặc định mô hình sẽ tạo ra chuỗi suy nghĩ (thinking chain) trước khi trả lời nhằm nâng cao độ chính xác trong suy luận. Phù hợp với các tình huống yêu cầu suy luận sâu như hỏi đáp thị giác, đánh giá nội dung hình ảnh và đưa ra phân tích chi tiết."
   },
   "Qwen2-72B-Instruct": {
     "description": "Qwen2 là dòng mô hình mới nhất của Qwen, hỗ trợ ngữ cảnh 128k, so với các mô hình mã nguồn mở tốt nhất hiện tại, Qwen2-72B vượt trội hơn hẳn trong nhiều khả năng như hiểu ngôn ngữ tự nhiên, kiến thức, mã, toán học và đa ngôn ngữ."

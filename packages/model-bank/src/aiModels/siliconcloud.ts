@@ -1547,6 +1547,52 @@ const siliconcloudImageModels: AIImageModelCard[] = [
     releasedAt: '2024-07-06',
     type: 'image',
   },
+  {
+    description:
+      'Qwen-Image 是由阿里巴巴通义千问团队发布的图像生成基础模型，拥有 200 亿参数。该模型在复杂的文本渲染和精确的图像编辑方面取得了显著进展，尤其擅长生成包含高保真度中英文文字的图像。Qwen-Image 不仅能够处理多行布局和段落级文本，还能在生成图像时保持排版的连贯性和上下文的和谐。除了卓越的文本渲染能力，该模型还支持广泛的艺术风格，从写实照片到动漫美学，能够灵活适应各种创作需求。同时，它也具备强大的图像编辑和理解能力，支持风格迁移、物体增删、细节增强、文本编辑乃至人体姿态操控等高级操作，旨在成为一个集语言、布局和图像于一体的综合性智能视觉创作与处理基础模型',
+    displayName: 'Qwen-Image',
+    enabled: true,
+    id: 'Qwen/Qwen-Image',
+    parameters: {
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      size: {
+        default: '1328x1328',
+        enum: ['1328x1328', '1584x1056', '1140x1472', '1664x928', '928x1664'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-08-04',
+    type: 'image',
+  },
+  {
+    description:
+      'Qwen-Image-Edit-2509 是由阿里巴巴通义千问团队发布的 Qwen-Image 的图像编辑最新版本。该模型基于 20B 参数的 Qwen-Image 模型进行深入训练，将其独特的文本渲染能力成功扩展至图像编辑领域，实现了对图片中文字的精准编辑。此外，Qwen-Image-Edit 采用了一种创新的架构，将输入图像同时送入 Qwen2.5-VL（用于视觉语义控制）和 VAE Encoder（用于视觉外观控制），从而兼具语义与外观的双重编辑能力。这意味着它不仅支持元素的添加、删除或修改等局部外观编辑，还支持如 IP 创作、风格迁移等需要保持语义一致性的高阶视觉语义编辑。模型在多个公开基准测试中展现了顶尖（SOTA）的性能，使其成为一个强大的图像编辑基础模型',
+    displayName: 'Qwen-Image-Edit (2509)',
+    enabled: true,
+    id: 'Qwen/Qwen-Image-Edit-2509',
+    parameters: {
+      imageUrls: {
+        default: [],
+        maxCount: 3,
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-09-22',
+    type: 'image',
+  },
 ];
 
 export const allModels = [...siliconcloudChatModels, ...siliconcloudImageModels];
