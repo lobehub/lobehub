@@ -5,16 +5,20 @@ import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
 
 interface FrequencyPenaltyProps {
+  disabled?: boolean;
   onChange?: (value: number) => void;
   value?: number;
 }
 
-const FrequencyPenalty = memo<FrequencyPenaltyProps>(({ value, onChange }) => {
+const FrequencyPenalty = memo<FrequencyPenaltyProps>(({ value, onChange, disabled }) => {
   const theme = useTheme();
 
   return (
-    <Flexbox style={{ paddingInlineStart: 8 }}>
+    <Flexbox style={{ width: '100%' }}>
       <SliderWithInput
+        changeOnWheel
+        controls={false}
+        disabled={disabled}
         marks={{
           '-2': (
             <Icon icon={FileIcon} size={'small'} style={{ color: theme.colorTextQuaternary }} />
@@ -29,9 +33,10 @@ const FrequencyPenalty = memo<FrequencyPenaltyProps>(({ value, onChange }) => {
         onChange={onChange}
         size={'small'}
         step={0.1}
+        style={{ height: 42 }}
         styles={{
           input: {
-            maxWidth: 64,
+            maxWidth: 43,
           },
         }}
         value={value}

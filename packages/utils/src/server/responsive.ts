@@ -4,7 +4,7 @@ import { UAParser } from 'ua-parser-js';
 /**
  * check mobile device in server
  */
-const isMobileDevice = async () => {
+export const isMobileDevice = async () => {
   if (typeof process === 'undefined') {
     throw new Error('[Server method] you are importing a server-only module outside of server');
   }

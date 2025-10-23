@@ -1,3 +1,4 @@
+import { Pricing } from 'model-bank';
 import anthropicChatModels from 'model-bank/anthropic';
 import googleChatModels from 'model-bank/google';
 import lobehubChatModels from 'model-bank/lobehub';
@@ -157,13 +158,13 @@ describe('computeChatPricing', () => {
       // Verify cached tokens (over 200k threshold, use higher tier rate)
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(253_891);
-      expect(cached?.credits).toBeCloseTo(158_681.875, 6);
+      expect(cached?.credits).toBe(158_682); // ceil(158681.875) = 158682
       expect(cached?.segments).toEqual([{ quantity: 253_891, rate: 0.625, credits: 158_681.875 }]);
 
       // Verify input cache miss tokens (calculated as totalInputTokens - inputCachedTokens = 4275)
       const input = breakdown.find((item) => item.unit.name === 'textInput');
       expect(input?.quantity).toBe(4_275); // 258_166 - 253_891 = 4_275 (cache miss)
-      expect(input?.credits).toBeCloseTo(5_343.75, 6);
+      expect(input?.credits).toBe(5_344); // ceil(5343.75) = 5344
       expect(input?.segments).toEqual([{ quantity: 4_275, rate: 1.25, credits: 5_343.75 }]);
 
       // Verify output tokens include reasoning tokens (under 200k threshold, use lower tier rate)
@@ -173,7 +174,7 @@ describe('computeChatPricing', () => {
       expect(output?.segments).toEqual([{ quantity: 3_063, rate: 10, credits: 30_630 }]);
 
       // Verify corrected totals (no double counting of cached tokens)
-      expect(totalCredits).toBe(194_656); // ceil(158681.875 + 5343.75 + 30630) = 194656
+      expect(totalCredits).toBe(194_656); // 158682 + 5344 + 30630 = 194656
       expect(totalCost).toBeCloseTo(0.194656, 6); // 194656 credits = $0.194656
     });
 
@@ -274,13 +275,13 @@ describe('computeChatPricing', () => {
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(257_955);
 
-      expect(cached?.credits).toBeCloseTo(161_221.875, 6);
+      expect(cached?.credits).toBe(161_222); // ceil(161221.875) = 161222
       expect(cached?.segments).toEqual([{ quantity: 257_955, rate: 0.625, credits: 161_221.875 }]);
 
       // Verify input cache miss tokens (under 200k tier, use lower rate)
       const input = breakdown.find((item) => item.unit.name === 'textInput');
       expect(input?.quantity).toBe(5_005);
-      expect(input?.credits).toBeCloseTo(6_256.25, 6);
+      expect(input?.credits).toBe(6_257); // ceil(6256.25) = 6257
       expect(input?.segments).toEqual([{ quantity: 5_005, rate: 1.25, credits: 6_256.25 }]);
 
       // Verify output tokens (under 200k threshold, use lower tier rate)
@@ -290,7 +291,7 @@ describe('computeChatPricing', () => {
       expect(output?.segments).toEqual([{ quantity: 1_744, rate: 10, credits: 17_440 }]);
 
       // Verify totals match actual billing log
-      expect(totalCredits).toBe(184_919); // ceil(161221.875 + 6256.25 + 17440) = 184919
+      expect(totalCredits).toBe(184_919); // 161222 + 6257 + 17440 = 184919
       expect(totalCost).toBeCloseTo(0.184919, 6); // 184919 credits = $0.184919
     });
   });
@@ -468,16 +469,16 @@ describe('computeChatPricing', () => {
       // Verify cached tokens (discounted rate)
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(1183);
-      expect(cached?.credits).toBeCloseTo(354.9, 6);
+      expect(cached?.credits).toBe(355); // 354.9 rounded = 355
 
       // Verify cache write tokens
       const cacheWrite = breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
       expect(cacheWrite?.quantity).toBe(458);
       expect(cacheWrite?.lookupKey).toBe('5m');
-      expect(cacheWrite?.credits).toBeCloseTo(1_717.5, 6);
+      expect(cacheWrite?.credits).toBe(1_718); // 1717.5 rounded = 1718
 
       // Verify totals match the actual billing log
-      expect(totalCredits).toBe(9_915); // ceil(12 + 7830 + 354.9 + 1717.5) = 9915
+      expect(totalCredits).toBe(9_915); // 12 + 7830 + 355 + 1718 = 9915
       expect(totalCost).toBeCloseTo(0.009915, 6); // 9915 credits = $0.009915
     });
 
@@ -516,15 +517,15 @@ describe('computeChatPricing', () => {
       // Verify cached tokens (discounted rate)
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(3021);
-      expect(cached?.credits).toBeCloseTo(906.3, 6);
+      expect(cached?.credits).toBe(907); // ceil(906.3) = 907
 
       // Verify cache write tokens (fixed strategy in lobehub model)
       const cacheWrite = breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
       expect(cacheWrite?.quantity).toBe(1697);
-      expect(cacheWrite?.credits).toBeCloseTo(6_363.75, 6);
+      expect(cacheWrite?.credits).toBe(6_364); // ceil(6363.75) = 6364
 
       // Verify totals match the actual billing log
-      expect(totalCredits).toBe(49_916); // ceil(30 + 42615 + 906.3 + 6363.75) = 49916
+      expect(totalCredits).toBe(49_916); // 30 + 42615 + 907 + 6364 = 49916
       expect(totalCost).toBeCloseTo(0.049916, 6); // 49916 credits = $0.049916
     });
   });
@@ -680,6 +681,198 @@ describe('computeChatPricing', () => {
       expect(result?.breakdown).toHaveLength(0); // No breakdown items when no tokens
       expect(result?.totalCredits).toBe(0);
       expect(result?.totalCost).toBe(0);
+    });
+  });
+
+  describe('Currency Conversion', () => {
+    describe('DeepSeek (CNY pricing)', () => {
+      it('converts CNY to USD for deepseek-chat without cache', () => {
+        // DeepSeek pricing in CNY
+        const pricing = {
+          currency: 'CNY',
+          units: [
+            { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+            { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+          ],
+        };
+
+        const usage: ModelTokensUsage = {
+          inputCacheMissTokens: 1000,
+          inputTextTokens: 1000,
+          outputTextTokens: 500,
+          totalInputTokens: 1000,
+          totalOutputTokens: 500,
+          totalTokens: 1500,
+        };
+
+        // Use fixed exchange rate for testing
+        const result = computeChatCost(pricing as any, usage, { usdToCnyRate: 5 });
+        expect(result).toBeDefined();
+        expect(result?.issues).toHaveLength(0);
+
+        const { breakdown, totalCost, totalCredits } = result!;
+        expect(breakdown).toHaveLength(2); // Input and output
+
+        // Verify input tokens
+        // 1000 tokens * 2 CNY/M = 2000 raw CNY-credits
+        // 2000 / 5 = 400 USD-credits
+        const input = breakdown.find((item) => item.unit.name === 'textInput');
+        expect(input?.quantity).toBe(1000);
+        expect(input?.credits).toBe(400); // USD credits
+
+        // Verify output tokens
+        // 500 tokens * 3 CNY/M = 1500 raw CNY-credits
+        // 1500 / 5 = 300 USD-credits
+        const output = breakdown.find((item) => item.unit.name === 'textOutput');
+        expect(output?.quantity).toBe(500);
+        expect(output?.credits).toBe(300); // USD credits
+
+        // Verify totals with CNY to USD conversion
+        // Total USD credits = 400 + 300 = 700
+        // totalCredits = ceil(700) = 700
+        expect(totalCredits).toBe(700);
+
+        // totalCost = 700 / 1_000_000 = 0.0007 USD
+        expect(totalCost).toBeCloseTo(0.0007, 6);
+      });
+
+      it('converts CNY to USD for deepseek-chat with cache tokens', () => {
+        const pricing = {
+          currency: 'CNY',
+          units: [
+            { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+            { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+            { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+          ],
+        } satisfies Pricing;
+
+        const usage: ModelTokensUsage = {
+          inputCacheMissTokens: 785,
+          inputCachedTokens: 2752,
+          inputTextTokens: 3537,
+          outputTextTokens: 77,
+          totalInputTokens: 3537,
+          totalOutputTokens: 77,
+          totalTokens: 3614,
+        };
+
+        const result = computeChatCost(pricing, usage, { usdToCnyRate: 5 });
+        expect(result).toBeDefined();
+        expect(result?.issues).toHaveLength(0);
+
+        const { breakdown, totalCost, totalCredits } = result!;
+        expect(breakdown).toHaveLength(3); // Cache read, input, and output
+
+        // Verify cache miss tokens
+        // 785 tokens * 2 CNY/M = 1570 raw CNY-credits
+        // 1570 / 5 = 314 USD-credits
+        const input = breakdown.find((item) => item.unit.name === 'textInput');
+        expect(input?.quantity).toBe(785);
+        expect(input?.credits).toBe(314); // USD credits
+
+        // Verify cached tokens
+        // 2752 tokens * 0.2 CNY/M = 550.4 raw CNY-credits
+        // 550.4 / 5 = 110.08 -> ceil(110.08) = 111 USD-credits
+        const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+        expect(cached?.quantity).toBe(2752);
+        expect(cached?.credits).toBe(111); // USD credits
+
+        // Verify output tokens
+        // 77 tokens * 3 CNY/M = 231 raw CNY-credits
+        // 231 / 5 = 46.2 -> ceil(46.2) = 47 USD-credits
+        const output = breakdown.find((item) => item.unit.name === 'textOutput');
+        expect(output?.quantity).toBe(77);
+        expect(output?.credits).toBe(47); // USD credits
+
+        // Verify totals with CNY to USD conversion
+        // Total USD credits = 314 + 111 + 47 = 472
+        expect(totalCredits).toBe(472);
+
+        // totalCost = 472 / 1_000_000 = 0.000472 USD
+        expect(totalCost).toBe(0.000472);
+      });
+
+      it('converts CNY to USD for large token usage', () => {
+        const pricing = {
+          currency: 'CNY',
+          units: [
+            { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+            { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+          ],
+        };
+
+        const usage: ModelTokensUsage = {
+          inputTextTokens: 1_000_000, // 1M input tokens
+          outputTextTokens: 500_000, // 500K output tokens
+        };
+
+        const result = computeChatCost(pricing as any, usage, { usdToCnyRate: 5 });
+        expect(result).toBeDefined();
+
+        const { totalCost, totalCredits } = result!;
+
+        // Input: 1M * 2 CNY = 2M CNY-credits = 2M / 5 = 400000 USD-credits
+        // Output: 500K * 3 CNY = 1.5M CNY-credits = 1.5M / 5 = 300000 USD-credits
+        // Total: 700000 USD-credits
+        expect(totalCredits).toBe(700_000);
+
+        // totalCost = 700000 / 1_000_000 = 0.7 USD
+        expect(totalCost).toBe(0.7);
+      });
+    });
+
+    describe('USD pricing (no conversion)', () => {
+      it('does not convert USD pricing', () => {
+        const pricing = {
+          currency: 'USD',
+          units: [
+            { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+            { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+          ],
+        };
+
+        const usage: ModelTokensUsage = {
+          inputTextTokens: 1000,
+          outputTextTokens: 500,
+        };
+
+        const result = computeChatCost(pricing as any, usage);
+        expect(result).toBeDefined();
+
+        const { totalCost, totalCredits } = result!;
+
+        // Input: 1000 * 2 = 2000 USD-credits
+        // Output: 500 * 8 = 4000 USD-credits
+        // Total: 6000 USD-credits
+        expect(totalCredits).toBe(6000);
+
+        // totalCost = 6000 / 1_000_000 = 0.006 USD
+        expect(totalCost).toBeCloseTo(0.006, 6);
+      });
+
+      it('defaults to USD when currency is not specified', () => {
+        const pricing = {
+          // No currency field
+          units: [
+            { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+            { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+          ],
+        };
+
+        const usage: ModelTokensUsage = {
+          inputTextTokens: 1000,
+          outputTextTokens: 500,
+        };
+
+        const result = computeChatCost(pricing as any, usage);
+        expect(result).toBeDefined();
+
+        const { totalCost, totalCredits } = result!;
+
+        // Should be treated as USD (no conversion)
+        expect(totalCredits).toBe(6000);
+        expect(totalCost).toBeCloseTo(0.006, 6);
+      });
     });
   });
 });

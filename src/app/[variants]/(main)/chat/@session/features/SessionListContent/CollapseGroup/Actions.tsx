@@ -82,11 +82,28 @@ const Actions = memo<ActionsProps>(
       },
     };
 
-    const handleCreateGroupWithMembers = async (selectedAgents: string[]) => {
+    const handleCreateGroupWithMembers = async (
+      selectedAgents: string[],
+      hostConfig?: { model?: string; provider?: string },
+      enableSupervisor?: boolean,
+    ) => {
       try {
         setIsCreatingGroup(true);
+
+        const config: any = {};
+
+        if (enableSupervisor !== undefined) {
+          config.enableSupervisor = enableSupervisor;
+        }
+
+        if (hostConfig) {
+          config.orchestratorModel = hostConfig.model;
+          config.orchestratorProvider = hostConfig.provider;
+        }
+
         await createGroup(
           {
+            config: Object.keys(config).length > 0 ? config : undefined,
             title: 'New Group Chat',
           },
           selectedAgents,

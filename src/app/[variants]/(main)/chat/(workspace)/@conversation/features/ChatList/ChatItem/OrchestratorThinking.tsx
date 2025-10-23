@@ -27,7 +27,7 @@ const useStyles = createStyles(({ token, css }) => ({
   shinyText: shinyTextStylish(token),
 }));
 
-const OrchestratorThinkingTag = memo(() => {
+const SupervisorThinkingTag = memo(() => {
   const { t } = useTranslation('chat');
   const activeGroupId = useSessionStore((s) => s.activeId);
   const isSupervisorLoading = useChatStore(chatSelectors.isSupervisorLoading(activeGroupId || ''));
@@ -42,7 +42,6 @@ const OrchestratorThinkingTag = memo(() => {
         {t('group.orchestratorThinking')}
       </Text>
       <ActionIcon
-        className="show-on-hover"
         icon={StopCircle}
         onClick={(e) => {
           e.stopPropagation();
@@ -55,4 +54,4 @@ const OrchestratorThinkingTag = memo(() => {
   );
 });
 
-export default OrchestratorThinkingTag;
+export default SupervisorThinkingTag;

@@ -20,6 +20,11 @@ const handler = (req: NextRequest) =>
     },
 
     req,
+    responseMeta({ ctx }) {
+      const headers = ctx?.resHeaders;
+
+      return { headers };
+    },
     router: desktopRouter,
   });
 

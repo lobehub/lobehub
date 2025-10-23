@@ -82,6 +82,58 @@
       "title": "شناسه حساب Cloudflare / آدرس API"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "کلید API مورد نیاز برای احراز هویت Bearer Token",
+      "placeholder": "لطفاً کلید API را وارد کنید",
+      "required": "لطفاً کلید API را وارد کنید",
+      "title": "کلید API"
+    },
+    "authType": {
+      "desc": "نوع احراز هویت با سرور ComfyUI را انتخاب کنید",
+      "options": {
+        "basic": "نام کاربری/رمز عبور",
+        "bearer": "Bearer (کلید API)",
+        "custom": "هدر سفارشی",
+        "none": "بدون احراز هویت"
+      },
+      "placeholder": "لطفاً نوع احراز هویت را انتخاب کنید",
+      "title": "نوع احراز هویت"
+    },
+    "baseURL": {
+      "desc": "آدرس وب برای دسترسی به ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "لطفاً آدرس سرویس ComfyUI را وارد کنید",
+      "title": "آدرس سرویس ComfyUI"
+    },
+    "checker": {
+      "desc": "بررسی کنید که اتصال به درستی پیکربندی شده باشد",
+      "title": "بررسی اتصال"
+    },
+    "customHeaders": {
+      "addButton": "افزودن هدر",
+      "deleteTooltip": "حذف این هدر",
+      "desc": "هدرهای مورد نیاز برای احراز هویت سفارشی، به صورت جفت کلید-مقدار",
+      "duplicateKeyError": "نام کلید هدر نباید تکراری باشد",
+      "keyPlaceholder": "نام کلید",
+      "required": "لطفاً هدر سفارشی را وارد کنید",
+      "title": "هدرهای سفارشی",
+      "valuePlaceholder": "مقدار"
+    },
+    "password": {
+      "desc": "رمز عبور مورد نیاز برای احراز هویت پایه",
+      "placeholder": "لطفاً رمز عبور را وارد کنید",
+      "required": "لطفاً رمز عبور را وارد کنید",
+      "title": "رمز عبور"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "نام کاربری مورد نیاز برای احراز هویت پایه",
+      "placeholder": "لطفاً نام کاربری را وارد کنید",
+      "required": "لطفاً نام کاربری را وارد کنید",
+      "title": "نام کاربری"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "لطفاً کلید API خود را وارد کنید",

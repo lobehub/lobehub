@@ -82,6 +82,58 @@
       "title": "Cloudflare 계정 ID / API 주소"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Bearer 토큰 인증에 필요한 API 키",
+      "placeholder": "API 키를 입력하세요",
+      "required": "API 키를 입력하세요",
+      "title": "API 키"
+    },
+    "authType": {
+      "desc": "ComfyUI 서버와의 인증 방식을 선택하세요",
+      "options": {
+        "basic": "아이디/비밀번호",
+        "bearer": "Bearer (API 키)",
+        "custom": "사용자 정의 헤더",
+        "none": "인증 없음"
+      },
+      "placeholder": "인증 방식을 선택하세요",
+      "title": "인증 방식"
+    },
+    "baseURL": {
+      "desc": "ComfyUI 웹 접속 주소",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "ComfyUI 서비스 주소를 입력하세요",
+      "title": "ComfyUI 서비스 주소"
+    },
+    "checker": {
+      "desc": "연결이 올바르게 구성되었는지 테스트합니다",
+      "title": "연결 확인"
+    },
+    "customHeaders": {
+      "addButton": "헤더 추가",
+      "deleteTooltip": "이 헤더 삭제",
+      "desc": "사용자 정의 인증 방식에 필요한 요청 헤더로, 키-값 쌍 형식입니다",
+      "duplicateKeyError": "헤더 키 이름은 중복될 수 없습니다",
+      "keyPlaceholder": "키 이름",
+      "required": "사용자 정의 요청 헤더를 입력하세요",
+      "title": "사용자 정의 요청 헤더",
+      "valuePlaceholder": "값"
+    },
+    "password": {
+      "desc": "기본 인증에 필요한 비밀번호",
+      "placeholder": "비밀번호를 입력하세요",
+      "required": "비밀번호를 입력하세요",
+      "title": "비밀번호"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "기본 인증에 필요한 사용자 이름",
+      "placeholder": "사용자 이름을 입력하세요",
+      "required": "사용자 이름을 입력하세요",
+      "title": "사용자 이름"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "API Key를 입력하세요",

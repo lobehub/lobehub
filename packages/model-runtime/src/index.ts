@@ -13,6 +13,7 @@ export { LobeBedrockAI } from './providers/bedrock';
 export { LobeBflAI } from './providers/bfl';
 export { LobeCerebrasAI } from './providers/cerebras';
 export { LobeCometAPIAI } from './providers/cometapi';
+export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeGoogleAI } from './providers/google';
 export { LobeGroq } from './providers/groq';
@@ -39,3 +40,4 @@ export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';
 export { getModelPricing } from './utils/getModelPricing';
 export { parseDataUri } from './utils/uriParser';
+

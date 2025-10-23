@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "مدلی که امکان دسته‌بندی یا تبدیل متن، تصویر یا محتوای ترکیبی به جاسازی را فراهم می‌کند."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - مدل تولید تصویر از متن با کیفیت بالا، تولید در ۱۰ تا ۵۰ مرحله، مناسب برای خلق آثار هنری و تولید محتوای خلاقانه با کیفیت بالا"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - مدل ویرایش تصویر، پشتیبانی از ویرایش تصاویر موجود بر اساس دستورات متنی، شامل ویرایش موضعی و انتقال سبک"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - مدل تولید تصویر از متن با ایمنی تقویت‌شده، توسعه‌یافته با همکاری Krea، دارای فیلترهای ایمنی داخلی"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - مدل فوق‌سریع تولید تصویر از متن، تولید تصاویر با کیفیت بالا تنها در ۱ تا ۴ مرحله، مناسب برای کاربردهای بلادرنگ و نمونه‌سازی سریع"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "مدل تولید تصویر از متن Stable Diffusion 1.5، با وضوح کلاسیک ۵۱۲x۵۱۲، مناسب برای نمونه‌سازی سریع و آزمایش‌های خلاقانه"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "مدل نسل جدید تولید تصویر از متن Stable Diffusion 3.5، در دو نسخه Large و Medium، نیازمند فایل رمزگذار CLIP خارجی، ارائه‌دهنده کیفیت تصویر عالی و تطابق دقیق با دستورات متنی"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "نسخه Stable Diffusion 3.5 با رمزگذار داخلی CLIP/T5، بدون نیاز به فایل رمزگذار خارجی، مناسب برای مدل‌هایی مانند sd3.5_medium_incl_clips، با مصرف منابع کمتر"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "مدل سفارشی تولید تصویر از متن SD، نام فایل مدل باید custom_sd_lobe.safetensors باشد، در صورت وجود VAE از custom_sd_vae_lobe.safetensors استفاده شود، فایل‌های مدل باید طبق دستورالعمل Comfy در پوشه مناسب قرار گیرند"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "مدل سفارشی SDXL برای تبدیل تصویر به تصویر، نام فایل مدل باید custom_sd_lobe.safetensors باشد، در صورت وجود VAE از custom_sd_vae_lobe.safetensors استفاده شود، فایل‌های مدل باید طبق دستورالعمل Comfy در پوشه مناسب قرار گیرند"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "مدل SDXL برای تبدیل تصویر به تصویر، تبدیل تصاویر ورودی به تصاویر با کیفیت بالا، پشتیبانی از انتقال سبک، ترمیم تصویر و تغییرات خلاقانه"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "مدل تولید تصویر از متن SDXL، پشتیبانی از تولید تصویر با وضوح بالا ۱۰۲۴x۱۰۲۴، ارائه کیفیت تصویر بهتر و جزئیات دقیق‌تر"
+  },
   "command": {
     "description": "یک مدل گفتگوی پیروی از دستور که در وظایف زبانی کیفیت بالاتر و قابلیت اطمینان بیشتری را ارائه می‌دهد و نسبت به مدل‌های تولید پایه ما دارای طول زمینه بیشتری است."
   },

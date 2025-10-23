@@ -50,5 +50,5 @@ jobs:
             ![](https://github-production-user-asset-6210df.s3.amazonaws.com/17870709/273954625-df80c890-0822-4ac2-95e6-c990785cbed5.png)
 
             [lobechat]: https://github.com/lobehub/lobe-chat
-            [tutorial-zh-CN]: https://github.com/lobehub/lobe-chat/wiki/Upstream-Sync.zh-CN
-            [tutorial-en-US]: https://github.com/lobehub/lobe-chat/wiki/Upstream-Sync
+            [tutorial-zh-CN]: https://lobehub.com/zh/docs/self-hosting/advanced/upstream-sync
+            [tutorial-en-US]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync

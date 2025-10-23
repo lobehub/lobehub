@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "총 {{count}}개 항목",
       "selectedCount": "{{count}}개 선택됨"
+    },
+    "view": {
+      "list": "목록 보기",
+      "masonry": "그리드 보기"
     }
   },
   "FileParsingStatus": {

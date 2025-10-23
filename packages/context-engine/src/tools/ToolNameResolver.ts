@@ -1,7 +1,7 @@
 import { ChatToolPayload, MessageToolCall } from '@lobechat/types';
 import { Md5 } from 'ts-md5';
 
-import { LobeChatPluginApi, LobeChatPluginManifest } from './types';
+import { LobeChatPluginApi, LobeToolManifest } from './types';
 
 // Tool naming constants
 const PLUGIN_SCHEMA_SEPARATOR = '____';
@@ -57,7 +57,7 @@ export class ToolNameResolver {
    */
   resolve(
     toolCalls: MessageToolCall[],
-    manifests: Record<string, LobeChatPluginManifest>,
+    manifests: Record<string, LobeToolManifest>,
   ): ChatToolPayload[] {
     return toolCalls
       .map((toolCall): ChatToolPayload | null => {

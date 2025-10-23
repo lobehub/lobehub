@@ -3,8 +3,8 @@ import { memo } from 'react';
 
 import { LocalSystemApiName } from '@/tools/local-system';
 
+import ReadLocalFile from '../Render/ReadLocalFile/ReadFileSkeleton';
 import { ListFiles } from './ListFiles';
-import ReadLocalFile from './ReadLocalFile';
 import SearchFiles from './SearchFiles';
 
 const RenderMap = {

@@ -4,11 +4,12 @@ import { Github, MCP } from '@lobehub/icons';
 import { ActionIcon, Avatar, Button, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStyles, useResponsive } from 'antd-style';
 import { BookTextIcon, CoinsIcon, DotIcon } from 'lucide-react';
-import Link from 'next/link';
+import NextLink from 'next/link';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
+import { Link as RouterLink } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { formatIntergerNumber } from '@/utils/format';
@@ -52,16 +53,16 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const cate = categories.find((c) => c.key === category);
 
   const cateButton = (
-    <Link
-      href={qs.stringifyUrl({
+    <RouterLink
+      to={qs.stringifyUrl({
         query: { category: cate?.key },
-        url: '/discover/assistant',
+        url: '/assistant',
       })}
     >
       <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>
         {cate?.label}
       </Button>
-    </Link>
+    </RouterLink>
   );
 
   return (
@@ -105,7 +106,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               </Text>
             </Flexbox>
             <Flexbox align={'center'} gap={6} horizontal>
-              <Link
+              <NextLink
                 href={urlJoin(
                   'https://github.com/lobehub/lobe-chat-agents/tree/main/locales',
                   identifier as string,
@@ -114,14 +115,14 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
                 target={'_blank'}
               >
                 <ActionIcon fill={theme.colorTextDescription} icon={Github} />
-              </Link>
+              </NextLink>
             </Flexbox>
           </Flexbox>
           <Flexbox align={'center'} gap={4} horizontal>
             {author && (
-              <Link href={urlJoin('https://github.com', author)} target={'_blank'}>
+              <NextLink href={urlJoin('https://github.com', author)} target={'_blank'}>
                 {author}
-              </Link>
+              </NextLink>
             )}
             <Icon icon={DotIcon} />
             <PublishedTime

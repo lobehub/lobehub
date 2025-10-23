@@ -651,6 +651,58 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 
 The above example disables all models first, then enables `fal-ai/flux/schnell` and `fal-ai/flux-pro/kontext` (displayed as `FLUX.1 Kontext [pro]`).
 
+## ComfyUI
+
+### `COMFYUI_BASE_URL`
+
+- Type: Optional
+- Description: The base URL address of the ComfyUI service
+- Default: `http://localhost:8188`
+- Example: `http://192.168.1.100:8188` or `https://my-comfyui-server.com`
+
+### `COMFYUI_AUTH_TYPE`
+
+- Type: Optional
+- Description: The authentication type for ComfyUI, supporting 4 authentication methods
+  - `none`: No authentication (default)
+  - `basic`: Basic authentication (username + password)
+  - `bearer`: Bearer Token authentication (API key)
+  - `custom`: Custom request header authentication
+- Default: `none`
+- Example: `basic`
+
+### `COMFYUI_API_KEY`
+
+- Type: Optional
+- Description: The API key used when the authentication type is `bearer`
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `COMFYUI_USERNAME`
+
+- Type: Optional
+- Description: The username used when the authentication type is `basic`
+- Default: -
+- Example: `admin`
+
+### `COMFYUI_PASSWORD`
+
+- Type: Optional
+- Description: The password used when the authentication type is `basic`
+- Default: -
+- Example: `password123`
+
+### `COMFYUI_CUSTOM_HEADERS`
+
+- Type: Optional
+- Description: Custom request headers used when the authentication type is `custom`, requires JSON format string
+- Default: -
+- Example: `{"X-Auth-Token": "your-token", "X-Custom-Header": "value"}`
+
+<Callout type={'info'}>
+  ComfyUI supports multiple authentication methods. Please choose the appropriate authentication type and corresponding authentication parameters according to your ComfyUI service configuration. If your ComfyUI service has no authentication set up, you can skip configuring authentication-related environment variables.
+</Callout>
+
 ## BFL
 
 ### `ENABLED_BFL`

@@ -1,7 +1,11 @@
-import { InterceptRouteParams } from '@lobechat/electron-client-ipc';
+import { InterceptRouteParams, OpenSettingsWindowOptions } from '@lobechat/electron-client-ipc';
 import { extractSubPath, findMatchingRoute } from '~common/routes';
 
-import { AppBrowsersIdentifiers, BrowsersIdentifiers, WindowTemplateIdentifiers } from '@/appBrowsers';
+import {
+  AppBrowsersIdentifiers,
+  BrowsersIdentifiers,
+  WindowTemplateIdentifiers,
+} from '@/appBrowsers';
 import { IpcClientEventSender } from '@/types/ipcClientEvent';
 
 import { ControllerModule, ipcClientEvent, shortcut } from './index';
@@ -14,11 +18,16 @@ export default class BrowserWindowsCtr extends ControllerModule {
   }
 
   @ipcClientEvent('openSettingsWindow')
-  async openSettingsWindow(tab?: string) {
-    console.log('[BrowserWindowsCtr] Received request to open settings window', tab);
+  async openSettingsWindow(options?: string | OpenSettingsWindowOptions) {
+    const normalizedOptions: OpenSettingsWindowOptions =
+      typeof options === 'string' || options === undefined
+        ? { tab: typeof options === 'string' ? options : undefined }
+        : options;
+
+    console.log('[BrowserWindowsCtr] Received request to open settings window', normalizedOptions);
 
     try {
-      await this.app.browserManager.showSettingsWindowWithTab(tab);
+      await this.app.browserManager.showSettingsWindowWithTab(normalizedOptions);
 
       return { success: true };
     } catch (error) {
@@ -68,15 +77,37 @@ export default class BrowserWindowsCtr extends ControllerModule {
 
     try {
       if (matchedRoute.targetWindow === BrowsersIdentifiers.settings) {
-        const subPath = extractSubPath(path, matchedRoute.pathPrefix);
+        const extractedSubPath = extractSubPath(path, matchedRoute.pathPrefix);
+        const sanitizedSubPath =
+          extractedSubPath && !extractedSubPath.startsWith('?') ? extractedSubPath : undefined;
+        let searchParams: Record<string, string> | undefined;
+        try {
+          const url = new URL(params.url);
+          const entries = Array.from(url.searchParams.entries());
+          if (entries.length > 0) {
+            searchParams = entries.reduce<Record<string, string>>((acc, [key, value]) => {
+              acc[key] = value;
+              return acc;
+            }, {});
+          }
+        } catch (error) {
+          console.warn(
+            '[BrowserWindowsCtr] Failed to parse URL for settings route interception:',
+            params.url,
+            error,
+          );
+        }
 
-        await this.app.browserManager.showSettingsWindowWithTab(subPath);
+        await this.app.browserManager.showSettingsWindowWithTab({
+          searchParams,
+          tab: sanitizedSubPath,
+        });
 
         return {
           intercepted: true,
           path,
           source,
-          subPath,
+          subPath: sanitizedSubPath,
           targetWindow: matchedRoute.targetWindow,
         };
       } else {
@@ -105,8 +136,8 @@ export default class BrowserWindowsCtr extends ControllerModule {
    */
   @ipcClientEvent('createMultiInstanceWindow')
   async createMultiInstanceWindow(params: {
-    templateId: WindowTemplateIdentifiers;
     path: string;
+    templateId: WindowTemplateIdentifiers;
     uniqueId?: string;
   }) {
     try {

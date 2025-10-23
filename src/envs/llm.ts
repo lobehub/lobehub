@@ -174,6 +174,14 @@ export const getLLMConfig = () => {
       ENABLED_BFL: z.boolean(),
       BFL_API_KEY: z.string().optional(),
 
+      ENABLED_COMFYUI: z.boolean(),
+      COMFYUI_BASE_URL: z.string().optional(),
+      COMFYUI_AUTH_TYPE: z.string().optional(),
+      COMFYUI_API_KEY: z.string().optional(),
+      COMFYUI_USERNAME: z.string().optional(),
+      COMFYUI_PASSWORD: z.string().optional(),
+      COMFYUI_CUSTOM_HEADERS: z.string().optional(),
+
       ENABLED_MODELSCOPE: z.boolean(),
       MODELSCOPE_API_KEY: z.string().optional(),
 
@@ -369,6 +377,14 @@ export const getLLMConfig = () => {
 
       ENABLED_BFL: !!process.env.BFL_API_KEY,
       BFL_API_KEY: process.env.BFL_API_KEY,
+
+      ENABLED_COMFYUI: process.env.ENABLED_COMFYUI !== '0',
+      COMFYUI_BASE_URL: process.env.COMFYUI_BASE_URL,
+      COMFYUI_AUTH_TYPE: process.env.COMFYUI_AUTH_TYPE,
+      COMFYUI_API_KEY: process.env.COMFYUI_API_KEY,
+      COMFYUI_USERNAME: process.env.COMFYUI_USERNAME,
+      COMFYUI_PASSWORD: process.env.COMFYUI_PASSWORD,
+      COMFYUI_CUSTOM_HEADERS: process.env.COMFYUI_CUSTOM_HEADERS,
 
       ENABLED_MODELSCOPE: !!process.env.MODELSCOPE_API_KEY,
       MODELSCOPE_API_KEY: process.env.MODELSCOPE_API_KEY,

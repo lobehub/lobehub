@@ -28,7 +28,7 @@ const TitleTags = memo(() => {
     agentSelectors.isAgentConfigLoading(s),
   ]);
 
-  const plugins = useAgentStore(agentSelectors.currentAgentPlugins, isEqual);
+  const plugins = useAgentStore(agentSelectors.displayableAgentPlugins, isEqual);
   const enabledKnowledge = useAgentStore(agentSelectors.currentEnabledKnowledge, isEqual);
   const enableHistoryCount = useAgentStore(agentChatConfigSelectors.enableHistoryCount);
 

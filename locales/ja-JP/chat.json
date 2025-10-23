@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "現在の会話をクリア",
   "confirmClearCurrentMessages": "現在の会話をクリアします。クリアした後は元に戻すことはできません。操作を確認してください。",
-  "confirmRemoveChatGroupItemAlert": "このグループチャットを削除しますが、グループメンバーには影響しません。操作を確認してください。",
+  "confirmRemoveChatGroupItemAlert": "このエージェントチームを削除しようとしています。チームメンバーには影響しません。操作を確認してください。",
   "confirmRemoveGroupItemAlert": "このグループを削除すると、グループ内のアシスタントはデフォルトの一覧に移動します。操作を続行してもよろしいですか？",
-  "confirmRemoveGroupSuccess": "グループチャットが正常に削除されました",
+  "confirmRemoveGroupSuccess": "エージェントチームの削除に成功しました",
   "confirmRemoveSessionItemAlert": "このエージェントを削除します。削除した後は元に戻すことはできません。操作を確認してください。",
   "confirmRemoveSessionSuccess": "セッションが正常に削除されました",
   "defaultAgent": "デフォルトエージェント",
-  "defaultGroupChat": "グループチャット",
+  "defaultGroupChat": "エージェントチーム",
   "defaultList": "デフォルトリスト",
   "defaultSession": "デフォルトセッション",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "メンバーを削除",
     "title": "グループ"
   },
-  "groupDescription": "グループの説明",
+  "groupDescription": "チームの説明",
   "groupSidebar": {
     "members": {
       "addMember": "メンバーを追加",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "既存のアシスタントを選択...",
-    "createGroup": "グループチャットを作成",
-    "existingMembers": "既存のメンバー",
+    "createGroup": "チームを作成",
+    "existingMembers": "既存のエージェント",
     "groupMembers": "これらのアシスタントもあなたのリストに追加されます",
     "host": {
-      "description": "グループチャットの自動運用を実現する",
-      "title": "ホスト",
-      "tooltip": "グループチャットのホストを無効にすると、メンバーに返信してもらうには手動で@メンションする必要があります"
+      "description": "チームの自律的な運営を可能にします",
+      "title": "ホストを有効にする",
+      "tooltip": "チームホストを無効にすると、メンバーに返信してもらうには手動で@メンションする必要があります"
     },
     "memberCount": "{{count}} 人のメンバー",
     "noMatchingTemplates": "一致するテンプレートがありません",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "テンプレートにメンバーがいません",
     "noTemplates": "利用可能なテンプレートがありません",
     "searchTemplates": "テンプレートを検索...",
-    "title": "グループチャットの作成",
+    "title": "エージェントチームを作成",
     "useTemplate": "テンプレートを使用する"
   },
   "hideForYou": "プライベートメッセージの内容は非表示です。設定で【プライベートメッセージの内容を表示】を有効にしてご覧ください。",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "メンバーを追加",
     "allMembers": "全メンバー",
-    "createGroup": "グループチャットを作成",
+    "createGroup": "エージェントチームを作成",
     "noAvailableAgents": "招待可能なアシスタントがいません",
     "noSelectedAgents": "アシスタントが選択されていません",
     "searchAgents": "アシスタントを検索...",
-    "setInitialMembers": "グループメンバーを選択"
+    "setInitialMembers": "チームメンバーを選択"
   },
   "members": "メンバー",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "メッセージ {{index}} へジャンプ",
     "nextMessage": "次のメッセージ",
-    "previousMessage": "前のメッセージ"
+    "previousMessage": "前のメッセージ",
+    "senderAssistant": "アシスタント",
+    "senderUser": "あなた"
   },
   "newAgent": "新しいエージェント",
-  "newGroupChat": "新しいグループチャットを作成",
-  "noAgentsYet": "このグループにはまだアシスタントがいません。「+」ボタンをクリックしてアシスタントを招待してください。",
-  "noAvailableAgents": "招待できるアシスタントがいません",
-  "noMatchingAgents": "一致するアシスタントが見つかりません",
+  "newGroupChat": "新しいエージェントチーム",
+  "noAgentsYet": "このエージェントチームにはまだメンバーがいません。+ ボタンをクリックしてアシスタントを招待してください。",
+  "noAvailableAgents": "招待可能なメンバーがいません",
+  "noMatchingAgents": "一致するメンバーが見つかりません",
   "noMembersYet": "このグループにはまだメンバーがいません。「＋」ボタンをクリックしてアシスタントを招待してください。",
-  "noSelectedAgents": "まだアシスタントが選択されていません",
+  "noSelectedAgents": "メンバーがまだ選択されていません",
   "owner": "グループ管理者",
   "pin": "ピン留め",
   "pinOff": "ピン留め解除",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "コピー",
     "download": "スクリーンショットをダウンロード",
+    "downloadError": "ダウンロード失敗",
     "downloadFile": "ファイルをダウンロード",
+    "downloadPdf": "PDFをダウンロード",
+    "downloadSuccess": "ダウンロード成功",
+    "exportPdf": "PDFとしてエクスポート",
     "exportTitle": "デフォルトタイトル",
+    "generatePdf": "PDFを生成する",
+    "generatingPdf": "PDFを生成中...",
     "imageType": "画像形式",
     "includeTool": "ツールメッセージを含める",
     "includeUser": "ユーザーメッセージを含める",
+    "loadingPdf": "PDFを読み込み中...",
+    "noPdfData": "PDFデータがありません",
+    "pdf": "PDF",
+    "pdfErrorDescription": "PDFの生成中にエラーが発生しました。再試行してください。",
+    "pdfGenerationError": "PDFの生成に失敗しました",
+    "pdfReady": "PDFの準備ができました",
+    "regeneratePdf": "PDFを再生成する",
     "screenshot": "スクリーンショット",
     "settings": "エクスポート設定",
     "text": "テキスト",

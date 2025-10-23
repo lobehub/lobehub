@@ -34,6 +34,15 @@ export interface CloudflareKeyVault {
   baseURLOrAccountID?: string;
 }
 
+export interface ComfyUIKeyVault {
+  apiKey?: string;
+  authType?: 'none' | 'basic' | 'bearer' | 'custom';
+  baseURL?: string;
+  customHeaders?: Record<string, string>;
+  password?: string;
+  username?: string;
+}
+
 export interface SearchEngineKeyVaults {
   searchxng?: {
     apiKey?: string;
@@ -57,6 +66,7 @@ export interface UserKeyVaults extends SearchEngineKeyVaults {
   cloudflare?: CloudflareKeyVault;
   cohere?: OpenAICompatibleKeyVault;
   cometapi?: OpenAICompatibleKeyVault;
+  comfyui?: ComfyUIKeyVault;
   deepseek?: OpenAICompatibleKeyVault;
   fal?: FalKeyVault;
   fireworksai?: OpenAICompatibleKeyVault;

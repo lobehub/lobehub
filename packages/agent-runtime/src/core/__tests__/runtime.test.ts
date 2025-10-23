@@ -369,7 +369,7 @@ describe('AgentRuntime', () => {
           type: 'tool_pending',
         });
 
-        expect(result.newState.status).toBe('waiting_for_human_input');
+        expect(result.newState.status).toBe('waiting_for_human');
         expect(result.newState.pendingToolsCalling).toBeDefined();
       });
 
@@ -396,7 +396,7 @@ describe('AgentRuntime', () => {
           sessionId: 'test-session',
         });
 
-        expect(result.newState.status).toBe('waiting_for_human_input');
+        expect(result.newState.status).toBe('waiting_for_human');
         expect(result.newState.pendingHumanPrompt).toEqual({
           prompt: 'Please provide input',
           metadata: { key: 'value' },
@@ -434,7 +434,7 @@ describe('AgentRuntime', () => {
           sessionId: 'test-session',
         });
 
-        expect(result.newState.status).toBe('waiting_for_human_input');
+        expect(result.newState.status).toBe('waiting_for_human');
       });
     });
 
@@ -733,7 +733,7 @@ describe('AgentRuntime', () => {
         },
         tools: {
           totalCalls: 0,
-          byTool: {},
+          byTool: [],
           totalTimeMs: 0,
         },
         humanInteraction: {
@@ -746,12 +746,12 @@ describe('AgentRuntime', () => {
 
       expect(state.cost).toMatchObject({
         llm: {
-          byModel: {},
+          byModel: [],
           total: 0,
           currency: 'USD',
         },
         tools: {
-          byTool: {},
+          byTool: [],
           total: 0,
           currency: 'USD',
         },
@@ -890,8 +890,8 @@ describe('AgentRuntime', () => {
 
         calculateCost(context: CostCalculationContext): Cost {
           return {
-            llm: { byModel: {}, total: 15.0, currency: 'USD' },
-            tools: { byTool: {}, total: 0, currency: 'USD' },
+            llm: { byModel: [], total: 15.0, currency: 'USD' },
+            tools: { byTool: [], total: 0, currency: 'USD' },
             total: 15.0,
             currency: 'USD',
             calculatedAt: new Date().toISOString(),
@@ -1018,7 +1018,7 @@ describe('AgentRuntime', () => {
       result = await runtime.step(result.newState, result.nextContext);
 
       // Now should request human approval
-      expect(result.newState.status).toBe('waiting_for_human_input');
+      expect(result.newState.status).toBe('waiting_for_human');
       expect(result.newState.pendingToolsCalling).toHaveLength(1);
 
       // Step 2: Approve and execute tool call
@@ -1210,7 +1210,7 @@ describe('AgentRuntime', () => {
       expect(agent.tools.safe_tool).toHaveBeenCalled();
 
       // Should be in waiting state (blocked by approval request)
-      expect(result.newState.status).toBe('waiting_for_human_input');
+      expect(result.newState.status).toBe('waiting_for_human');
 
       // Should have pending tool calls
       expect(result.newState.pendingToolsCalling).toHaveLength(1);
@@ -1333,8 +1333,8 @@ describe('AgentRuntime', () => {
           return {
             calculatedAt: new Date().toISOString(),
             currency: 'USD',
-            llm: { byModel: {}, currency: 'USD', total: 15.0 },
-            tools: { byTool: {}, currency: 'USD', total: 0 },
+            llm: { byModel: [], currency: 'USD', total: 15.0 },
+            tools: { byTool: [], currency: 'USD', total: 0 },
             total: 15.0,
           };
         }
@@ -1396,8 +1396,8 @@ describe('AgentRuntime', () => {
           return {
             calculatedAt: new Date().toISOString(),
             currency: 'USD',
-            llm: { byModel: {}, currency: 'USD', total: 0 },
-            tools: { byTool: {}, currency: 'USD', total: 20.0 },
+            llm: { byModel: [], currency: 'USD', total: 0 },
+            tools: { byTool: [], currency: 'USD', total: 20.0 },
             total: 20.0,
           };
         }
@@ -1438,8 +1438,8 @@ describe('AgentRuntime', () => {
           const baseCost = context.previousCost || {
             calculatedAt: new Date().toISOString(),
             currency: 'USD',
-            llm: { byModel: {}, currency: 'USD', total: 0 },
-            tools: { byTool: {}, currency: 'USD', total: 0 },
+            llm: { byModel: [], currency: 'USD', total: 0 },
+            tools: { byTool: [], currency: 'USD', total: 0 },
             total: 0,
           };
 
@@ -1447,7 +1447,7 @@ describe('AgentRuntime', () => {
             ...baseCost,
             calculatedAt: new Date().toISOString(),
             tools: {
-              byTool: {},
+              byTool: [],
               currency: 'USD',
               total: baseCost.tools.total + 5.0,
             },
@@ -1514,15 +1514,17 @@ describe('AgentRuntime', () => {
             newUsage.tools.totalCalls += 1;
             newUsage.tools.totalTimeMs += 100;
 
-            if (newUsage.tools.byTool[toolName]) {
-              newUsage.tools.byTool[toolName].calls += 1;
-              newUsage.tools.byTool[toolName].totalTimeMs += 100;
+            const existingTool = newUsage.tools.byTool.find((t) => t.name === toolName);
+            if (existingTool) {
+              existingTool.calls += 1;
+              existingTool.totalTimeMs += 100;
             } else {
-              newUsage.tools.byTool[toolName] = {
+              newUsage.tools.byTool.push({
                 calls: 1,
                 errors: 0,
+                name: toolName,
                 totalTimeMs: 100,
-              };
+              });
             }
 
             return newUsage;
@@ -1567,10 +1569,14 @@ describe('AgentRuntime', () => {
 
       // Should have per-tool statistics
       expect(result.newState.usage.tools.totalCalls).toBe(2);
-      expect(result.newState.usage.tools.byTool.analytics_tool).toBeDefined();
-      expect(result.newState.usage.tools.byTool.analytics_tool.calls).toBe(1);
-      expect(result.newState.usage.tools.byTool.logging_tool).toBeDefined();
-      expect(result.newState.usage.tools.byTool.logging_tool.calls).toBe(1);
+      const analyticsTool = result.newState.usage.tools.byTool.find(
+        (t) => t.name === 'analytics_tool',
+      );
+      const loggingTool = result.newState.usage.tools.byTool.find((t) => t.name === 'logging_tool');
+      expect(analyticsTool).toBeDefined();
+      expect(analyticsTool!.calls).toBe(1);
+      expect(loggingTool).toBeDefined();
+      expect(loggingTool!.calls).toBe(1);
     });
   });
 });

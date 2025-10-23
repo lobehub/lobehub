@@ -5,16 +5,20 @@ import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
 
 interface TopPProps {
+  disabled?: boolean;
   onChange?: (value: number) => void;
   value?: number;
 }
 
-const TopP = memo<TopPProps>(({ value, onChange }) => {
+const TopP = memo<TopPProps>(({ value, onChange, disabled }) => {
   const theme = useTheme();
 
   return (
-    <Flexbox style={{ paddingInlineStart: 8 }}>
+    <Flexbox style={{ width: '100%' }}>
       <SliderWithInput
+        changeOnWheel
+        controls={false}
+        disabled={disabled}
         marks={{
           0: (
             <Icon
@@ -31,9 +35,10 @@ const TopP = memo<TopPProps>(({ value, onChange }) => {
         onChange={onChange}
         size={'small'}
         step={0.1}
+        style={{ height: 42 }}
         styles={{
           input: {
-            maxWidth: 64,
+            maxWidth: 43,
           },
         }}
         value={value}

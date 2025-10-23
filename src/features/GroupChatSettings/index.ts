@@ -1,10 +1,9 @@
-export { default as ChatGroupMeta } from './ChatGroupMeta';
-export { default as ChatGroupSettings } from './ChatGroupSettings';
+export { default as AgentTeamChatSettings } from './AgentTeamChatSettings';
+export { default as GroupMembersConfig } from './AgentTeamMembersSettings';
+export { default as ChatGroupMeta } from './AgentTeamMetaSettings';
+export { default as AgentTeamSettings } from './AgentTeamSettings';
 export { default as GroupCategory } from './GroupCategory';
 export { GroupChatSettingsProvider } from './GroupChatSettingsProvider';
-export { default as GroupMembers } from './GroupMembers';
-export { default as GroupSettings } from './GroupSettings';
-export { default as GroupSettingsContent } from './GroupSettingsContent';
 
 // Hooks
 export type { GroupChatSettingsInstance } from './hooks/useGroupChatSettings';

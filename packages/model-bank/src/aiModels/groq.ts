@@ -133,23 +133,6 @@ const groqChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'DeepSeek R1 Distill Llama 70B',
-    id: 'deepseek-r1-distill-llama-70b',
-    maxOutput: 131_072,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.99, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:

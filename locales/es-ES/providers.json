@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras es una plataforma de inferencia de IA basada en su sistema especializado CS-3, diseñada para ofrecer el servicio de LLM más rápido del mundo, con respuesta en tiempo real y alto rendimiento. Está especialmente concebida para eliminar la latencia y acelerar flujos de trabajo complejos de IA, como la generación de código en tiempo real y tareas de agentes."
   },
-  "cerebras": {
-    "description": "Cerebras es una plataforma de inferencia de IA basada en su sistema especializado CS-3, diseñada para ofrecer el servicio de LLM más rápido del mundo, con respuesta en tiempo real y alto rendimiento. Está especialmente concebida para eliminar la latencia y acelerar flujos de trabajo complejos de IA, como la generación de código en tiempo real y tareas de agentes."
-  },
   "cloudflare": {
     "description": "Ejecuta modelos de aprendizaje automático impulsados por GPU sin servidor en la red global de Cloudflare."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI es una plataforma de servicios que ofrece múltiples interfaces de modelos avanzados, compatible con OpenAI, Anthropic, Google y más, ideal para diversas necesidades de desarrollo y aplicación. Los usuarios pueden elegir de manera flexible el modelo y precio óptimos según sus necesidades, facilitando una mejor experiencia con IA."
+  },
+  "comfyui": {
+    "description": "Potente motor de flujo de trabajo de código abierto para la generación de imágenes, videos y audio, compatible con modelos avanzados como SD, FLUX, Qwen, Hunyuan y WAN, que ofrece edición de flujos de trabajo basada en nodos y capacidad de implementación privada."
   },
   "deepseek": {
     "description": "DeepSeek es una empresa centrada en la investigación y aplicación de tecnologías de inteligencia artificial, cuyo modelo más reciente, DeepSeek-V2.5, combina capacidades de diálogo general y procesamiento de código, logrando mejoras significativas en alineación con preferencias humanas, tareas de escritura y seguimiento de instrucciones."

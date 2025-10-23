@@ -43,8 +43,8 @@
   "header": {
     "desc": "偏好與模型設定",
     "global": "全域設定",
-    "group": "群聊設定",
-    "groupDesc": "管理當前群聊",
+    "group": "團隊設定",
+    "groupDesc": "管理 Agent 團隊與聊天偏好",
     "session": "對話設定",
     "sessionDesc": "角色設定與會話偏好",
     "sessionWithName": "對話設定 · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "請輸入群聊描述",
-      "title": "群聊描述"
+      "placeholder": "請輸入團隊描述",
+      "title": "團隊描述"
     },
     "name": {
-      "placeholder": "請輸入群聊名稱",
-      "title": "群聊名稱"
+      "placeholder": "請輸入團隊名稱",
+      "title": "團隊名稱"
     },
     "scene": {
-      "desc": "選擇群聊場景",
+      "desc": "選擇團隊場景",
       "options": {
         "casual": "休閒",
         "productive": "生產力"
       },
-      "title": "群聊場景"
+      "title": "團隊場景"
     },
-    "submit": "更新群聊",
+    "submit": "更新團隊",
     "systemPrompt": {
       "placeholder": "請輸入主持人系統提示詞",
       "title": "主持人系統提示詞"
     },
-    "title": "群聊資訊"
+    "title": "Agent 團隊資訊"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "允許助手發送私訊"
     },
     "enableSupervisor": {
-      "desc": "啟用群聊主持人功能，主持人將管理群聊對話流程",
+      "desc": "啟用 Agent 團隊主持人功能，主持人將管理團隊對話流程",
       "title": "啟用主持人"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "主持人設定",
     "responseOrder": {
-      "desc": "代理將按照在群聊中設定的順序進行回覆",
+      "desc": "代理將依照在聊天中設定的順序進行回覆",
       "options": {
         "natural": "自然",
         "sequential": "順序"
@@ -356,7 +356,7 @@
       "title": "回覆順序"
     },
     "responseSpeed": {
-      "desc": "控制群聊的整體進行速度",
+      "desc": "控制聊天的整體進行速度",
       "options": {
         "fast": "快速",
         "medium": "中等",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "加入群組",
     "availableAgents": "可用助理",
+    "createMember": "建立成員",
     "defaultAgent": "自訂助理",
     "disableHost": "關閉主持助理",
     "edit": "編輯成員",
-    "empty": "該群聊中暫無代理。點擊 + 按鈕添加成員。",
+    "empty": "該團隊中尚無成員。點擊 + 按鈕新增成員。",
     "enableHost": "啟用主持助理",
     "groupHost": "群主持",
     "groupMembers": "群組成員",
@@ -626,11 +627,6 @@
       "label": "AI 繪畫話題命名模型",
       "modelDesc": "指定用於 AI 繪畫自動命名話題的模型",
       "title": "AI 繪畫自動命名話題"
-    },
-    "groupChatSupervisor": {
-      "label": "群組聊天監督模型",
-      "modelDesc": "指定用於監督與管理群組聊天對話的模型",
-      "title": "群組聊天監督管理"
     },
     "helpInfo": "當創建新助手時，將以預設助手設定作為預設值。",
     "historyCompress": {

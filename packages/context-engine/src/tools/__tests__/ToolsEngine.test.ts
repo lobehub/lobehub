@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ToolsEngine } from '../ToolsEngine';
-import type { LobeChatPluginManifest } from '../types';
+import type { LobeToolManifest } from '../types';
 
 // Mock manifest schemas for testing
-const mockWebBrowsingManifest: LobeChatPluginManifest = {
+const mockWebBrowsingManifest: LobeToolManifest = {
   api: [
     {
       description: 'Search the web',
@@ -26,7 +26,7 @@ const mockWebBrowsingManifest: LobeChatPluginManifest = {
   type: 'builtin',
 };
 
-const mockDalleManifest: LobeChatPluginManifest = {
+const mockDalleManifest: LobeToolManifest = {
   api: [
     {
       description: 'Generate images',
@@ -337,6 +337,150 @@ describe('ToolsEngine', () => {
     });
   });
 
+  describe('getEnabledPluginManifests', () => {
+    it('should return empty Map when no tool IDs provided', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+      });
+
+      const result = engine.getEnabledPluginManifests([]);
+
+      expect(result.size).toBe(0);
+    });
+
+    it('should return Map with plugin manifests for given tool IDs', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+      });
+
+      const result = engine.getEnabledPluginManifests(['lobe-web-browsing', 'dalle']);
+
+      expect(result.size).toBe(2);
+      expect(result.get('lobe-web-browsing')).toBe(mockWebBrowsingManifest);
+      expect(result.get('dalle')).toBe(mockDalleManifest);
+    });
+
+    it('should include default tool IDs in the result', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['dalle'],
+      });
+
+      const result = engine.getEnabledPluginManifests(['lobe-web-browsing']);
+
+      expect(result.size).toBe(2);
+      expect(result.has('lobe-web-browsing')).toBe(true);
+      expect(result.has('dalle')).toBe(true);
+    });
+
+    it('should handle non-existent plugins gracefully', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest],
+      });
+
+      const result = engine.getEnabledPluginManifests(['lobe-web-browsing', 'non-existent']);
+
+      expect(result.size).toBe(1);
+      expect(result.has('lobe-web-browsing')).toBe(true);
+      expect(result.has('non-existent')).toBe(false);
+    });
+
+    it('should return all default tools when called without arguments', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['dalle', 'lobe-web-browsing'],
+      });
+
+      const result = engine.getEnabledPluginManifests();
+
+      expect(result.size).toBe(2);
+      expect(result.has('lobe-web-browsing')).toBe(true);
+      expect(result.has('dalle')).toBe(true);
+    });
+
+    it('should not duplicate tools when same ID appears in both toolIds and defaultToolIds', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+        defaultToolIds: ['dalle'],
+      });
+
+      const result = engine.getEnabledPluginManifests(['dalle']);
+
+      expect(result.size).toBe(1);
+      expect(result.get('dalle')).toBe(mockDalleManifest);
+    });
+  });
+
+  describe('getAllPluginManifests', () => {
+    it('should return all plugin manifests', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+      });
+
+      const result = engine.getAllPluginManifests();
+
+      expect(result.size).toBe(2);
+      expect(result.get('lobe-web-browsing')).toBe(mockWebBrowsingManifest);
+      expect(result.get('dalle')).toBe(mockDalleManifest);
+    });
+
+    it('should return empty Map when no manifests are loaded', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [],
+      });
+
+      const result = engine.getAllPluginManifests();
+
+      expect(result.size).toBe(0);
+    });
+
+    it('should return a new Map instance (not the internal one)', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest],
+      });
+
+      const result1 = engine.getAllPluginManifests();
+      const result2 = engine.getAllPluginManifests();
+
+      // Should be different Map instances
+      expect(result1).not.toBe(result2);
+
+      // But have the same content
+      expect(result1.size).toBe(result2.size);
+      expect(result1.get('lobe-web-browsing')).toBe(result2.get('lobe-web-browsing'));
+    });
+
+    it('should reflect changes after adding a plugin', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest],
+      });
+
+      let result = engine.getAllPluginManifests();
+      expect(result.size).toBe(1);
+
+      engine.addPluginManifest(mockDalleManifest);
+
+      result = engine.getAllPluginManifests();
+      expect(result.size).toBe(2);
+      expect(result.has('dalle')).toBe(true);
+    });
+
+    it('should reflect changes after removing a plugin', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
+      });
+
+      let result = engine.getAllPluginManifests();
+      expect(result.size).toBe(2);
+
+      engine.removePluginManifest('dalle');
+
+      result = engine.getAllPluginManifests();
+      expect(result.size).toBe(1);
+      expect(result.has('dalle')).toBe(false);
+    });
+  });
+
   describe('default behavior', () => {
     it('should use default enable checker when none provided', () => {
       const engine = new ToolsEngine({
@@ -373,7 +517,7 @@ describe('ToolsEngine', () => {
 
   describe('ToolsEngine Integration Tests (migrated from enabledSchema)', () => {
     // Mock manifest data similar to the original tool selector tests
-    const mockManifests: LobeChatPluginManifest[] = [
+    const mockManifests: LobeToolManifest[] = [
       {
         identifier: 'plugin-1',
         api: [{ name: 'api-1', description: 'API 1', parameters: {} }],
@@ -730,7 +874,7 @@ describe('ToolsEngine', () => {
    */
   describe('enabledSchema Migration to ToolsEngine', () => {
     // Sample manifest data that mimics the old toolSelectors test data
-    const sampleManifests: LobeChatPluginManifest[] = [
+    const sampleManifests: LobeToolManifest[] = [
       {
         identifier: 'plugin-1',
         api: [{ name: 'api-1', description: 'API 1', parameters: {} }],

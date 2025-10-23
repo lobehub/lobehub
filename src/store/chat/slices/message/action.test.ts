@@ -103,6 +103,98 @@ describe('chatMessage actions', () => {
     });
   });
 
+  describe('addUserMessage', () => {
+    it('should return early if activeId is undefined', async () => {
+      useChatStore.setState({ activeId: undefined });
+      const { result } = renderHook(() => useChatStore());
+      const updateInputMessageSpy = vi.spyOn(result.current, 'updateInputMessage');
+
+      await act(async () => {
+        await result.current.addUserMessage({ message: 'test message' });
+      });
+
+      expect(messageService.createMessage).not.toHaveBeenCalled();
+      expect(updateInputMessageSpy).not.toHaveBeenCalled();
+    });
+
+    it('should call internal_createMessage with correct parameters', async () => {
+      const message = 'Test user message';
+      const fileList = ['file-id-1', 'file-id-2'];
+      useChatStore.setState({
+        activeId: mockState.activeId,
+        activeTopicId: mockState.activeTopicId,
+      });
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.addUserMessage({ message, fileList });
+      });
+
+      expect(messageService.createMessage).toHaveBeenCalledWith({
+        content: message,
+        files: fileList,
+        role: 'user',
+        sessionId: mockState.activeId,
+        topicId: mockState.activeTopicId,
+        threadId: undefined,
+      });
+    });
+
+    it('should call internal_createMessage with threadId when activeThreadId is set', async () => {
+      const message = 'Test user message';
+      const activeThreadId = 'thread-123';
+      useChatStore.setState({
+        activeId: mockState.activeId,
+        activeTopicId: mockState.activeTopicId,
+        activeThreadId,
+      });
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.addUserMessage({ message });
+      });
+
+      expect(messageService.createMessage).toHaveBeenCalledWith({
+        content: message,
+        files: undefined,
+        role: 'user',
+        sessionId: mockState.activeId,
+        topicId: mockState.activeTopicId,
+        threadId: activeThreadId,
+      });
+    });
+
+    it('should call updateInputMessage with empty string', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const updateInputMessageSpy = vi.spyOn(result.current, 'updateInputMessage');
+
+      await act(async () => {
+        await result.current.addUserMessage({ message: 'test' });
+      });
+
+      expect(updateInputMessageSpy).toHaveBeenCalledWith('');
+    });
+
+    it('should handle message without fileList', async () => {
+      const message = 'Test user message without files';
+      useChatStore.setState({ activeId: mockState.activeId });
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.addUserMessage({ message });
+      });
+
+      expect(messageService.createMessage).toHaveBeenCalledWith({
+        content: message,
+        files: undefined,
+        role: 'user',
+        sessionId: mockState.activeId,
+        topicId: mockState.activeTopicId,
+        threadId: undefined,
+      });
+    });
+  });
+
   describe('deleteMessage', () => {
     it('deleteMessage should remove a message by id', async () => {
       const { result } = renderHook(() => useChatStore());

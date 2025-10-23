@@ -5,6 +5,25 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'Ling-1T 是 "灵 2.0" 系列的首款旗舰级 non-thinking 模型，拥有 1 万亿总参数和每 token 约 500 亿个活动参数。基于灵 2.0 架构构建，Ling-1T 旨在突破高效推理和可扩展认知的极限。Ling-1T-base 在超过 20 万亿个高质量、推理密集的 token 上进行训练，针对大型知识密集型任务与长文档理解进行了优化，具备出色的工具调用和上下文记忆能力。',
+    displayName: 'Ling 1T',
+    id: 'inclusionAI/Ling-1T',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-10-09',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 131_072,
@@ -109,6 +128,130 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Qwen3-VL-30B-A3B-Instruct 是 Qwen3-VL 系列的指令微调版本，具有强大的视觉-语言理解与生成能力，原生支持 256K 上下文长度，适合多模态对话与图像条件生成任务。',
+    displayName: 'Qwen3 VL 30B A3B Instruct',
+    id: 'Qwen/Qwen3-VL-30B-A3B-Instruct',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Qwen3-VL-30B-A3B-Thinking 是 Qwen3-VL 的推理增强版本（Thinking），在多模态推理、图像到代码和复杂视觉理解任务上进行了优化，支持 256K 上下文并具备更强的链式思考能力。',
+    displayName: 'Qwen3 VL 30B A3B Thinking',
+    id: 'Qwen/Qwen3-VL-30B-A3B-Thinking',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Qwen3-VL-235B-A22B-Instruct 是 Qwen3-VL 系列的大型指令微调模型，基于混合专家（MoE）架构，拥有卓越的多模态理解与生成能力，原生支持 256K 上下文，适用于高并发生产级多模态服务。',
+    displayName: 'Qwen3 VL 235B A22B Instruct',
+    id: 'Qwen/Qwen3-VL-235B-A22B-Instruct',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Qwen3-VL-235B-A22B-Thinking 是 Qwen3-VL 系列中的旗舰思考版本，针对复杂多模态推理、长上下文推理与智能体交互进行了专项优化，适合需要深度思考与视觉推理的企业级场景。',
+    displayName: 'Qwen3 VL 235B A22B Thinking',
+    id: 'Qwen/Qwen3-VL-235B-A22B-Thinking',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 163_840,
+    description:
+      'DeepSeek-V3.2-Exp 是 DeepSeek 发布的实验性 V3.2 版本，作为迈向下一代架构的中间探索。它在 V3.1-Terminus 的基础上引入了 DeepSeek 稀疏注意力（DeepSeek Sparse Attention，DSA）机制以提升长上下文训练与推理效率，针对工具调用、长文档理解与多步推理进行了专项优化。V3.2-Exp 为研究与产品化之间的桥梁，适合希望在高上下文预算场景中探索更高推理效率的用户。',
+    displayName: 'DeepSeek V3.2 Exp',
+    id: 'deepseek-ai/DeepSeek-V3.2-Exp',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-29',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 163_840,
+    description:
+      'DeepSeek-V3.2-Exp 是 DeepSeek 发布的实验性 V3.2 版本，作为迈向下一代架构的中间探索。它在 V3.1-Terminus 的基础上引入了 DeepSeek 稀疏注意力（DeepSeek Sparse Attention，DSA）机制以提升长上下文训练与推理效率，针对工具调用、长文档理解与多步推理进行了专项优化。V3.2-Exp 为研究与产品化之间的桥梁，适合希望在高上下文预算场景中探索更高推理效率的用户。',
+    displayName: 'DeepSeek V3.2 Exp (Pro)',
+    id: 'Pro/deepseek-ai/DeepSeek-V3.2-Exp',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-29',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 163_840,
@@ -139,50 +282,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       'DeepSeek-V3.1-Terminus 是由深度求索（DeepSeek）发布的 V3.1 模型的更新版本，定位为混合智能体大语言模型。此次更新在保持模型原有能力的基础上，专注于修复用户反馈的问题并提升稳定性。它显著改善了语言一致性，减少了中英文混用和异常字符的出现。模型集成了“思考模式”（Thinking Mode）和“非思考模式”（Non-thinking Mode），用户可通过聊天模板灵活切换以适应不同任务。作为一个重要的优化，V3.1-Terminus 增强了代码智能体（Code Agent）和搜索智能体（Search Agent）的性能，使其在工具调用和执行多步复杂任务方面更加可靠。',
     displayName: 'DeepSeek V3.1 Terminus (Pro)',
     id: 'Pro/deepseek-ai/DeepSeek-V3.1-Terminus',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 163_840,
-    description:
-      'DeepSeek-V3.1 是由深度求索（DeepSeek AI）发布的混合模式大语言模型，它在前代模型的基础上进行了多方面的重要升级。该模型的一大创新是集成了“思考模式”（Thinking Mode）和“非思考模式”（Non-thinking Mode）于一体，用户可以通过调整聊天模板灵活切换，以适应不同的任务需求。通过专门的训练后优化，V3.1 在工具调用和 Agent 任务方面的性能得到了显著增强，能够更好地支持外部搜索工具和执行多步复杂任务。该模型基于 DeepSeek-V3.1-Base 进行后训练，通过两阶段长文本扩展方法，大幅增加了训练数据量，使其在处理长文档和长篇代码方面表现更佳。作为一个开源模型，DeepSeek-V3.1 在编码、数学和推理等多个基准测试中展现了与顶尖闭源模型相媲美的能力，同时凭借其混合专家（MoE）架构，在保持巨大模型容量的同时，有效降低了推理成本。',
-    displayName: 'DeepSeek V3.1',
-    id: 'deepseek-ai/DeepSeek-V3.1',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 163_840,
-    description:
-      'DeepSeek-V3.1 是由深度求索（DeepSeek AI）发布的混合模式大语言模型，它在前代模型的基础上进行了多方面的重要升级。该模型的一大创新是集成了“思考模式”（Thinking Mode）和“非思考模式”（Non-thinking Mode）于一体，用户可以通过调整聊天模板灵活切换，以适应不同的任务需求。通过专门的训练后优化，V3.1 在工具调用和 Agent 任务方面的性能得到了显著增强，能够更好地支持外部搜索工具和执行多步复杂任务。该模型基于 DeepSeek-V3.1-Base 进行后训练，通过两阶段长文本扩展方法，大幅增加了训练数据量，使其在处理长文档和长篇代码方面表现更佳。作为一个开源模型，DeepSeek-V3.1 在编码、数学和推理等多个基准测试中展现了与顶尖闭源模型相媲美的能力，同时凭借其混合专家（MoE）架构，在保持巨大模型容量的同时，有效降低了推理成本。',
-    displayName: 'DeepSeek V3.1 (Pro)',
-    id: 'Pro/deepseek-ai/DeepSeek-V3.1',
     pricing: {
       currency: 'CNY',
       units: [

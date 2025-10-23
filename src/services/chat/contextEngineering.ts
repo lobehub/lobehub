@@ -1,6 +1,5 @@
 import { INBOX_GUIDE_SYSTEMROLE, INBOX_SESSION_ID, isDesktop, isServerMode } from '@lobechat/const';
 import {
-  type AgentState,
   ContextEngine,
   HistorySummaryProvider,
   HistoryTruncateProcessor,
@@ -122,14 +121,7 @@ export const contextEngineering = async ({
     ],
   });
 
-  const initialState: AgentState = { messages, model, provider, systemRole, tools };
-
-  const result = await pipeline.process({
-    initialState,
-    maxTokens: 10_000_000,
-    messages,
-    model,
-  });
+  const result = await pipeline.process({ messages });
 
   return result.messages;
 };

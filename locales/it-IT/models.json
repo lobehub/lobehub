@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "Un modello che consente di classificare o trasformare testo, immagini o contenuti misti in embedding."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - Modello di generazione testo-immagine di alta qualità, genera in 10-50 passaggi, ideale per creazioni artistiche e contenuti visivi di alta qualità"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - Modello di editing delle immagini, consente modifiche basate su istruzioni testuali, supporta modifiche locali e trasferimento di stile"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - Modello testo-immagine con sicurezza avanzata, sviluppato in collaborazione con Krea, include filtri di sicurezza integrati"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - Modello testo-immagine ultra-veloce, genera immagini di alta qualità in 1-4 passaggi, ideale per applicazioni in tempo reale e prototipazione rapida"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 - Modello classico di generazione testo-immagine con risoluzione 512x512, adatto per prototipi rapidi ed esperimenti creativi"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 - Modello di nuova generazione per la generazione testo-immagine, disponibile in versioni Large e Medium, richiede file esterni del codificatore CLIP, offre qualità d'immagine eccezionale e alta coerenza con i prompt"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 con codificatore CLIP/T5 integrato, non richiede file esterni, compatibile con modelli come sd3.5_medium_incl_clips, con minore utilizzo di risorse"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "Modello personalizzato SD per generazione testo-immagine, il file del modello deve essere nominato custom_sd_lobe.safetensors, se presente VAE usare custom_sd_vae_lobe.safetensors, i file devono essere posizionati nella cartella corretta secondo le specifiche di Comfy"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "Modello personalizzato SDXL per generazione immagine-immagine, il file del modello deve essere nominato custom_sd_lobe.safetensors, se presente VAE usare custom_sd_vae_lobe.safetensors, i file devono essere posizionati nella cartella corretta secondo le specifiche di Comfy"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "Modello SDXL per generazione immagine-immagine, consente trasformazioni visive di alta qualità basate su immagini in input, supporta trasferimento di stile, restauro e variazioni creative"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "Modello SDXL per generazione testo-immagine, supporta risoluzione elevata 1024x1024, offre qualità visiva superiore e dettagli più raffinati"
+  },
   "command": {
     "description": "Un modello di dialogo che segue le istruzioni, con alta qualità e maggiore affidabilità nelle attività linguistiche, e una lunghezza di contesto più lunga rispetto ai nostri modelli generativi di base."
   },

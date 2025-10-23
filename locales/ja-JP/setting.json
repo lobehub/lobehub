@@ -43,8 +43,8 @@
   "header": {
     "desc": "設定優先順位和模型設置。",
     "global": "グローバル設定",
-    "group": "グループチャット設定",
-    "groupDesc": "現在のグループチャットを管理",
+    "group": "チーム設定",
+    "groupDesc": "エージェントチームとチャットの設定を管理",
     "session": "セッション設定",
     "sessionDesc": "キャラクター設定とセッションの好み。",
     "sessionWithName": "セッション設定 · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "グループチャットの説明を入力してください",
-      "title": "グループチャットの説明"
+      "placeholder": "チームの説明を入力してください",
+      "title": "チームの説明"
     },
     "name": {
-      "placeholder": "グループチャット名を入力してください",
-      "title": "グループチャット名"
+      "placeholder": "チーム名を入力してください",
+      "title": "チーム名"
     },
     "scene": {
-      "desc": "グループチャットのシーンを選択",
+      "desc": "チームのシナリオを選択",
       "options": {
         "casual": "カジュアル",
         "productive": "生産性"
       },
-      "title": "グループチャットのシーン"
+      "title": "チームシナリオ"
     },
-    "submit": "グループチャットを更新",
+    "submit": "チームを更新",
     "systemPrompt": {
       "placeholder": "ホストのシステムプロンプトを入力してください",
       "title": "ホストのシステムプロンプト"
     },
-    "title": "グループチャット情報"
+    "title": "エージェントチーム情報"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "アシスタントからのダイレクトメッセージを許可"
     },
     "enableSupervisor": {
-      "desc": "グループチャットの司会機能を有効にすると、司会者が会話の進行を管理します",
+      "desc": "エージェントチームのモデレーター機能を有効にします。モデレーターはチームの会話の流れを管理します",
       "title": "司会者を有効にする"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "ホスト設定",
     "responseOrder": {
-      "desc": "代理はグループチャットで設定された順序に従って返信します",
+      "desc": "チャット内で設定された順番に従ってエージェントが応答します",
       "options": {
         "natural": "自然",
         "sequential": "順序通り"
@@ -356,7 +356,7 @@
       "title": "返信順序"
     },
     "responseSpeed": {
-      "desc": "グループチャット全体の進行速度を制御します",
+      "desc": "チャット全体の進行速度を調整します",
       "options": {
         "fast": "速い",
         "medium": "中程度",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "グループに参加",
     "availableAgents": "利用可能なアシスタント",
+    "createMember": "メンバーを作成",
     "defaultAgent": "カスタムアシスタント",
     "disableHost": "ホストアシスタントを無効にする",
     "edit": "メンバーを編集",
-    "empty": "このグループチャットには代理がいません。+ ボタンをクリックしてメンバーを追加してください。",
+    "empty": "このチームにはまだメンバーがいません。「＋」ボタンをクリックしてメンバーを追加してください。",
     "enableHost": "ホストアシスタントを有効にする",
     "groupHost": "グループホスト",
     "groupMembers": "グループメンバー",
@@ -626,11 +627,6 @@
       "label": "AI絵画トピック命名モデル",
       "modelDesc": "AI絵画の自動トピック命名に使用されるモデルを指定します",
       "title": "AI絵画自動トピック命名"
-    },
-    "groupChatSupervisor": {
-      "label": "グループチャット監督モデル",
-      "modelDesc": "グループチャットの会話を監督・管理するために使用するモデルを指定します",
-      "title": "グループチャットの監督・管理"
     },
     "helpInfo": "新しいアシスタントを作成するとき、デフォルトのアシスタント設定がプリセット値として使用されます。",
     "historyCompress": {

@@ -174,7 +174,7 @@ export default {
         },
       },
 
-      title: '群聊用法推荐',
+      title: '团队聊天用法推荐',
       // 写作圈专属活动
       writing: {
         bookClub: {

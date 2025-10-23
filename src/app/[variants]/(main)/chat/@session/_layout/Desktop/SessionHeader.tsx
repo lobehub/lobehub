@@ -46,6 +46,8 @@ const Header = memo(() => {
   const { showCreateSession, enableGroupChat } = useServerConfigStore(featureFlagsSelectors);
   const [isGroupWizardOpen, setIsGroupWizardOpen] = useState(false);
 
+  // const enableGroupChatInLabs = useUserStore(preferenceSelectors.enableGroupChat);
+
   // We need pass inital member list so we cannot use mutate
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 

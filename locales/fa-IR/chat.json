@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "پاک کردن پیام‌های جلسه فعلی",
   "confirmClearCurrentMessages": "پیام‌های جلسه فعلی به زودی پاک خواهند شد و پس از پاک شدن قابل بازیابی نخواهند بود. لطفاً عملیات خود را تأیید کنید.",
-  "confirmRemoveChatGroupItemAlert": "در حال حذف این گروه چت هستید، اعضای گروه تحت تأثیر قرار نمی‌گیرند، لطفاً عملیات خود را تأیید کنید",
+  "confirmRemoveChatGroupItemAlert": "این تیم Agent به‌زودی حذف خواهد شد، اما اعضای تیم تحت تأثیر قرار نمی‌گیرند. لطفاً اقدام خود را تأیید کنید.",
   "confirmRemoveGroupItemAlert": "در حال حذف این گروه هستید؛ پس از حذف، دستیاران این گروه به فهرست پیش‌فرض منتقل خواهند شد. لطفاً عملیات خود را تأیید کنید.",
-  "confirmRemoveGroupSuccess": "حذف گروه چت با موفقیت انجام شد",
+  "confirmRemoveGroupSuccess": "تیم Agent با موفقیت حذف شد",
   "confirmRemoveSessionItemAlert": "این دستیار به زودی حذف خواهد شد و پس از حذف قابل بازیابی نخواهد بود، لطفاً عملیات خود را تأیید کنید.",
   "confirmRemoveSessionSuccess": "حذف دستیار با موفقیت انجام شد",
   "defaultAgent": "دستیار سفارشی",
-  "defaultGroupChat": "گروه چت",
+  "defaultGroupChat": "تیم Agent",
   "defaultList": "فهرست پیش‌فرض",
   "defaultSession": "دستیار سفارشی",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "حذف عضو",
     "title": "گروه‌ها"
   },
-  "groupDescription": "توضیحات گروه",
+  "groupDescription": "توضیحات تیم",
   "groupSidebar": {
     "members": {
       "addMember": "افزودن عضو",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "انتخاب دستیاران موجود...",
-    "createGroup": "ایجاد گروه چت",
-    "existingMembers": "دستیاران موجود",
+    "createGroup": "ایجاد تیم",
+    "existingMembers": "Agentهای موجود",
     "groupMembers": "این دستیاران نیز به فهرست شما اضافه خواهند شد",
     "host": {
-      "description": "اجرای خودکار چت گروهی",
-      "title": "مجری",
-      "tooltip": "اگر میزبانی گروه غیرفعال شود، باید به‌صورت دستی با @ اعضا را منشن کنید تا بتوانند پاسخ دهند"
+      "description": "اجازه دهید تیم به‌صورت مستقل عمل کند",
+      "title": "فعال‌سازی میزبان",
+      "tooltip": "اگر میزبان تیم غیرفعال باشد، باید به‌صورت دستی با @ اعضا را منشن کنید تا پاسخ دهند"
     },
     "memberCount": "{{count}} عضو",
     "noMatchingTemplates": "هیچ قالبی مطابقت ندارد",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "در قالب هیچ عضوی وجود ندارد",
     "noTemplates": "هیچ قالبی در دسترس نیست",
     "searchTemplates": "جستجوی قالب‌ها...",
-    "title": "ایجاد گروه چت",
+    "title": "ایجاد تیم Agent",
     "useTemplate": "استفاده از قالب"
   },
   "hideForYou": "محتوای پیام خصوصی مخفی شده است، لطفاً برای مشاهده آن گزینه «نمایش محتوای پیام خصوصی» را در تنظیمات فعال کنید",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "افزودن عضو",
     "allMembers": "تمام اعضا",
-    "createGroup": "ایجاد گروه چت",
+    "createGroup": "ایجاد تیم Agent",
     "noAvailableAgents": "دستیار قابل دعوت وجود ندارد",
     "noSelectedAgents": "هنوز دستیار انتخاب نشده است",
     "searchAgents": "جستجوی دستیار...",
-    "setInitialMembers": "انتخاب اعضای گروه"
+    "setInitialMembers": "انتخاب اعضای تیم"
   },
   "members": "اعضا",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "رفتن به پیام شماره {{index}}",
     "nextMessage": "پیام بعدی",
-    "previousMessage": "پیام قبلی"
+    "previousMessage": "پیام قبلی",
+    "senderAssistant": "دستیار",
+    "senderUser": "شما"
   },
   "newAgent": "دستیار جدید",
-  "newGroupChat": "ایجاد چت گروهی جدید",
-  "noAgentsYet": "در این گروه هنوز هیچ دستیار وجود ندارد. برای دعوت دستیار، روی دکمهٔ «+» کلیک کنید.",
-  "noAvailableAgents": "هیچ دستیاری برای دعوت موجود نیست",
-  "noMatchingAgents": "هیچ دستیار مطابقتی یافت نشد",
+  "newGroupChat": "ایجاد تیم Agent جدید",
+  "noAgentsYet": "هنوز هیچ عضوی در این تیم Agent وجود ندارد. برای دعوت از دستیاران روی دکمه + کلیک کنید.",
+  "noAvailableAgents": "عضوی برای دعوت در دسترس نیست",
+  "noMatchingAgents": "عضوی مطابق با جستجو یافت نشد",
   "noMembersYet": "این گروه هنوز عضوی ندارد. برای دعوت دستیاران، روی دکمهٔ + کلیک کنید.",
-  "noSelectedAgents": "هنوز هیچ دستیار انتخاب نشده است",
+  "noSelectedAgents": "هنوز هیچ عضوی انتخاب نشده است",
   "owner": "صاحب گروه",
   "pin": "سنجاق کردن",
   "pinOff": "لغو سنجاق",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "کپی",
     "download": "دانلود اسکرین‌شات",
+    "downloadError": "دانلود ناموفق بود",
     "downloadFile": "دانلود فایل",
+    "downloadPdf": "دانلود PDF",
+    "downloadSuccess": "دانلود با موفقیت انجام شد",
+    "exportPdf": "صادر کردن به PDF",
     "exportTitle": "عنوان پیش‌فرض",
+    "generatePdf": "ایجاد PDF",
+    "generatingPdf": "در حال تولید PDF...",
     "imageType": "فرمت تصویر",
     "includeTool": "شامل پیام‌های ابزار",
     "includeUser": "شامل پیام‌های کاربر",
+    "loadingPdf": "در حال بارگذاری PDF...",
+    "noPdfData": "داده‌ای برای PDF موجود نیست",
+    "pdf": "PDF",
+    "pdfErrorDescription": "خطا در تولید PDF، لطفاً دوباره تلاش کنید",
+    "pdfGenerationError": "تولید PDF ناموفق بود",
+    "pdfReady": "PDF آماده است",
+    "regeneratePdf": "تولید مجدد PDF",
     "screenshot": "اسکرین‌شات",
     "settings": "تنظیمات خروجی",
     "text": "متن",

@@ -43,8 +43,8 @@
   "header": {
     "desc": "Präferenzen und Modellkonfigurationen.",
     "global": "Global Einstellungen",
-    "group": "Gruppeneinstellungen",
-    "groupDesc": "Verwalten Sie den aktuellen Gruppenchat",
+    "group": "Team-Einstellungen",
+    "groupDesc": "Verwalten Sie Agent-Teams und Chat-Einstellungen",
     "session": "Sitzungseinstellungen",
     "sessionDesc": "Rollenkonfiguration und Sitzungspräferenzen.",
     "sessionWithName": "Sitzungseinstellungen · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Bitte geben Sie eine Gruppenchat-Beschreibung ein",
-      "title": "Gruppenchat-Beschreibung"
+      "placeholder": "Bitte geben Sie eine Team-Beschreibung ein",
+      "title": "Team-Beschreibung"
     },
     "name": {
-      "placeholder": "Bitte geben Sie einen Gruppennamen ein",
-      "title": "Gruppenchat-Name"
+      "placeholder": "Bitte geben Sie einen Teamnamen ein",
+      "title": "Teamname"
     },
     "scene": {
-      "desc": "Gruppenchatszenario auswählen",
+      "desc": "Wählen Sie ein Teamszenario",
       "options": {
         "casual": "Freizeit",
         "productive": "Produktivität"
       },
-      "title": "Gruppenchatszenario"
+      "title": "Teamszenario"
     },
-    "submit": "Gruppe aktualisieren",
+    "submit": "Team aktualisieren",
     "systemPrompt": {
       "placeholder": "Bitte geben Sie den Systemhinweis für den Moderator ein",
       "title": "Systemhinweis des Moderators"
     },
-    "title": "Gruppenchat-Informationen"
+    "title": "Agent-Teaminformationen"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Direktnachrichten vom Assistenten erlauben"
     },
     "enableSupervisor": {
-      "desc": "Aktiviere die Moderationsfunktion für Gruppenchats. Moderatoren verwalten den Gesprächsverlauf.",
+      "desc": "Aktivieren Sie die Moderatorfunktion für das Agent-Team. Moderatoren verwalten den Gesprächsverlauf des Teams.",
       "title": "Moderator aktivieren"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Moderatoreinstellungen",
     "responseOrder": {
-      "desc": "Der Agent antwortet in der im Gruppenchat festgelegten Reihenfolge.",
+      "desc": "Agenten antworten in der im Chat festgelegten Reihenfolge",
       "options": {
         "natural": "Natürlich",
         "sequential": "Sequenziell"
@@ -356,7 +356,7 @@
       "title": "Antwortreihenfolge"
     },
     "responseSpeed": {
-      "desc": "Steuert die allgemeine Geschwindigkeit des Gruppenchat-Verlaufs.",
+      "desc": "Steuern Sie die allgemeine Geschwindigkeit des Gesprächs",
       "options": {
         "fast": "Schnell",
         "medium": "Mittel",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Zur Gruppe hinzufügen",
     "availableAgents": "Verfügbare Assistenten",
+    "createMember": "Mitglied erstellen",
     "defaultAgent": "Benutzerdefinierter Assistent",
     "disableHost": "Moderator-Assistent deaktivieren",
     "edit": "Mitglieder bearbeiten",
-    "empty": "In diesem Gruppenchat sind keine Agenten vorhanden. Klicken Sie auf die + Schaltfläche, um Mitglieder hinzuzufügen.",
+    "empty": "Dieses Team hat derzeit keine Mitglieder. Klicken Sie auf die + Schaltfläche, um Mitglieder hinzuzufügen.",
     "enableHost": "Moderator-Assistent aktivieren",
     "groupHost": "Gruppenmoderator",
     "groupMembers": "Gruppenmitglieder",
@@ -626,11 +627,6 @@
       "label": "Modell zur Benennung von KI-Malthemen",
       "modelDesc": "Modell zur automatischen Benennung von Themen für KI-Malerei",
       "title": "Automatische Benennung von KI-Malthemen"
-    },
-    "groupChatSupervisor": {
-      "label": "Gruppenchat-Überwachungsmodell",
-      "modelDesc": "Ein Modell, das zur Überwachung und Verwaltung von Gruppenchats verwendet wird.",
-      "title": "Überwachung und Verwaltung von Gruppenchats"
     },
     "helpInfo": "Beim Erstellen eines neuen Assistenten werden die Standardassistenteneinstellungen als Voreinstellungen verwendet.",
     "historyCompress": {

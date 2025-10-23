@@ -16,7 +16,6 @@ export const DEFAULT_QUERY_REWRITE_SYSTEM_AGENT_ITEM: QueryRewriteSystemAgent = 
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserSystemAgentConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_SYSTEM_AGENT_ITEM,
-  groupChatSupervisor: DEFAULT_SYSTEM_AGENT_ITEM,
   historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
   queryRewrite: DEFAULT_QUERY_REWRITE_SYSTEM_AGENT_ITEM,
   thread: DEFAULT_SYSTEM_AGENT_ITEM,

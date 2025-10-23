@@ -8,13 +8,13 @@ import type { Cost, CostLimit, Usage } from './usage';
 export interface AgentState {
   sessionId: string;
   // --- State Machine ---
-  status: 'idle' | 'running' | 'waiting_for_human_input' | 'done' | 'error' | 'interrupted';
+  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
 
   // --- Core Context ---
   messages: any[];
   tools?: any[];
   systemRole?: string;
-
+  toolManifestMap: Record<string, any>;
   // --- Execution Tracking ---
   /**
    * Number of execution steps in this session.
@@ -46,7 +46,7 @@ export interface AgentState {
 
   // --- HIL ---
   /**
-   * When status is 'waiting_for_human_input', this stores pending requests
+   * When status is 'waiting_for_human', this stores pending requests
    * for human-in-the-loop operations.
    */
   pendingToolsCalling?: ToolsCalling[];

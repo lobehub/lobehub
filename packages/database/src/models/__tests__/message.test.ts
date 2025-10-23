@@ -7,10 +7,10 @@ import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../models/__tests__/_util';
 import {
-  chunks,
-  embeddings,
   agents,
   chatGroups,
+  chunks,
+  embeddings,
   fileChunks,
   files,
   messagePlugins,
@@ -1287,6 +1287,204 @@ describe('MessageModel', () => {
       await expect(messageModel.updatePluginState('1', { key: 'value' })).rejects.toThrowError(
         'Plugin not found',
       );
+    });
+  });
+
+  describe('updateMetadata', () => {
+    it('should update metadata for an existing message', async () => {
+      // 创建测试数据
+      await serverDB.insert(messages).values({
+        id: 'msg-with-metadata',
+        userId,
+        role: 'user',
+        content: 'test message',
+        metadata: { existingKey: 'existingValue' },
+      });
+
+      // 调用 updateMetadata 方法
+      await messageModel.updateMetadata('msg-with-metadata', { newKey: 'newValue' });
+
+      // 断言结果
+      const result = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'msg-with-metadata'));
+
+      expect(result[0].metadata).toEqual({
+        existingKey: 'existingValue',
+        newKey: 'newValue',
+      });
+    });
+
+    it('should merge new metadata with existing metadata using lodash merge behavior', async () => {
+      // 创建测试数据
+      await serverDB.insert(messages).values({
+        id: 'msg-merge-metadata',
+        userId,
+        role: 'assistant',
+        content: 'test message',
+        metadata: {
+          level1: {
+            level2a: 'original',
+            level2b: { level3: 'deep' },
+          },
+          array: [1, 2, 3],
+        },
+      });
+
+      // 调用 updateMetadata 方法
+      await messageModel.updateMetadata('msg-merge-metadata', {
+        level1: {
+          level2a: 'updated',
+          level2c: 'new',
+        },
+        newTopLevel: 'value',
+      });
+
+      // 断言结果 - 应该使用 lodash merge 行为
+      const result = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'msg-merge-metadata'));
+
+      expect(result[0].metadata).toEqual({
+        level1: {
+          level2a: 'updated',
+          level2b: { level3: 'deep' },
+          level2c: 'new',
+        },
+        array: [1, 2, 3],
+        newTopLevel: 'value',
+      });
+    });
+
+    it('should handle non-existent message IDs', async () => {
+      // 调用 updateMetadata 方法，尝试更新不存在的消息
+      const result = await messageModel.updateMetadata('non-existent-id', { key: 'value' });
+
+      // 断言结果 - 应该返回 undefined
+      expect(result).toBeUndefined();
+    });
+
+    it('should handle empty metadata updates', async () => {
+      // 创建测试数据
+      await serverDB.insert(messages).values({
+        id: 'msg-empty-metadata',
+        userId,
+        role: 'user',
+        content: 'test message',
+        metadata: { originalKey: 'originalValue' },
+      });
+
+      // 调用 updateMetadata 方法，传递空对象
+      await messageModel.updateMetadata('msg-empty-metadata', {});
+
+      // 断言结果 - 原始 metadata 应该保持不变
+      const result = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'msg-empty-metadata'));
+
+      expect(result[0].metadata).toEqual({ originalKey: 'originalValue' });
+    });
+
+    it('should handle message with null metadata', async () => {
+      // 创建测试数据
+      await serverDB.insert(messages).values({
+        id: 'msg-null-metadata',
+        userId,
+        role: 'user',
+        content: 'test message',
+        metadata: null,
+      });
+
+      // 调用 updateMetadata 方法
+      await messageModel.updateMetadata('msg-null-metadata', { key: 'value' });
+
+      // 断言结果 - 应该创建新的 metadata
+      const result = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'msg-null-metadata'));
+
+      expect(result[0].metadata).toEqual({ key: 'value' });
+    });
+
+    it('should only update messages belonging to the current user', async () => {
+      // 创建测试数据 - 其他用户的消息
+      await serverDB.insert(messages).values({
+        id: 'msg-other-user',
+        userId: '456',
+        role: 'user',
+        content: 'test message',
+        metadata: { originalKey: 'originalValue' },
+      });
+
+      // 调用 updateMetadata 方法
+      const result = await messageModel.updateMetadata('msg-other-user', {
+        hackedKey: 'hackedValue',
+      });
+
+      // 断言结果 - 应该返回 undefined
+      expect(result).toBeUndefined();
+
+      // 验证原始 metadata 未被修改
+      const dbResult = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'msg-other-user'));
+
+      expect(dbResult[0].metadata).toEqual({ originalKey: 'originalValue' });
+    });
+
+    it('should handle complex nested metadata updates', async () => {
+      // 创建测试数据
+      await serverDB.insert(messages).values({
+        id: 'msg-complex-metadata',
+        userId,
+        role: 'assistant',
+        content: 'test message',
+        metadata: {
+          config: {
+            settings: {
+              enabled: true,
+              options: ['a', 'b'],
+            },
+            version: 1,
+          },
+        },
+      });
+
+      // 调用 updateMetadata 方法
+      await messageModel.updateMetadata('msg-complex-metadata', {
+        config: {
+          settings: {
+            enabled: false,
+            timeout: 5000,
+          },
+          newField: 'value',
+        },
+        stats: { count: 10 },
+      });
+
+      // 断言结果
+      const result = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'msg-complex-metadata'));
+
+      expect(result[0].metadata).toEqual({
+        config: {
+          settings: {
+            enabled: false,
+            options: ['a', 'b'],
+            timeout: 5000,
+          },
+          version: 1,
+          newField: 'value',
+        },
+        stats: { count: 10 },
+      });
     });
   });
 

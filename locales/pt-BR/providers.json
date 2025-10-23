@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras é uma plataforma de inferência de IA baseada em seu sistema dedicado CS-3, projetada para oferecer o serviço de LLM mais rápido do mundo, com resposta em tempo real e alta taxa de transferência. Foi desenvolvida para eliminar a latência e acelerar fluxos de trabalho complexos de IA, como geração de código em tempo real e tarefas de agentes."
   },
-  "cerebras": {
-    "description": "Cerebras é uma plataforma de inferência de IA baseada em seu sistema dedicado CS-3, projetada para oferecer o serviço de LLM mais rápido do mundo, com resposta em tempo real e alta taxa de transferência. Foi desenvolvida para eliminar a latência e acelerar fluxos de trabalho complexos de IA, como geração de código em tempo real e tarefas de agentes."
-  },
   "cloudflare": {
     "description": "Execute modelos de aprendizado de máquina impulsionados por GPU sem servidor na rede global da Cloudflare."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI é uma plataforma de serviços que oferece diversas interfaces de modelos avançados, suportando OpenAI, Anthropic, Google e muito mais, adequada para necessidades variadas de desenvolvimento e aplicação. Os usuários podem escolher de forma flexível o modelo e preço ideais conforme suas necessidades, promovendo uma melhor experiência com IA."
+  },
+  "comfyui": {
+    "description": "Um poderoso mecanismo de fluxo de trabalho de código aberto para geração de imagens, vídeos e áudios, compatível com modelos avançados como SD, FLUX, Qwen, Hunyuan, WAN, oferecendo edição de fluxo de trabalho baseada em nós e capacidade de implantação privada."
   },
   "deepseek": {
     "description": "A DeepSeek é uma empresa focada em pesquisa e aplicação de tecnologia de inteligência artificial, cujo modelo mais recente, DeepSeek-V2.5, combina capacidades de diálogo geral e processamento de código, alcançando melhorias significativas em alinhamento com preferências humanas, tarefas de escrita e seguimento de instruções."

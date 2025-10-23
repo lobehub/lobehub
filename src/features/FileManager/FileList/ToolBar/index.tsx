@@ -10,6 +10,7 @@ import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import Config from './Config';
 import MultiSelectActions, { MultiSelectActionType } from './MultiSelectActions';
+import ViewSwitcher, { ViewMode } from './ViewSwitcher';
 
 const useStyles = createStyles(({ css, token, isDarkMode }) => ({
   container: css`
@@ -23,12 +24,14 @@ interface MultiSelectActionsProps {
   config: { showFilesInKnowledgeBase: boolean };
   knowledgeBaseId?: string;
   onConfigChange: (config: { showFilesInKnowledgeBase: boolean }) => void;
+  onViewChange: (view: ViewMode) => void;
   selectCount: number;
   selectFileIds: string[];
   setSelectedFileIds: (ids: string[]) => void;
   showConfig?: boolean;
   total?: number;
   totalFileIds: string[];
+  viewMode: ViewMode;
 }
 
 const ToolBar = memo<MultiSelectActionsProps>(
@@ -42,6 +45,8 @@ const ToolBar = memo<MultiSelectActionsProps>(
     config,
     onConfigChange,
     knowledgeBaseId,
+    viewMode,
+    onViewChange,
   }) => {
     const { styles } = useStyles();
 
@@ -111,7 +116,10 @@ const ToolBar = memo<MultiSelectActionsProps>(
           selectCount={selectCount}
           total={total}
         />
-        {showConfig && <Config config={config} onConfigChange={onConfigChange} />}
+        <Flexbox gap={8} horizontal>
+          <ViewSwitcher onViewChange={onViewChange} view={viewMode} />
+          {showConfig && <Config config={config} onConfigChange={onConfigChange} />}
+        </Flexbox>
       </Flexbox>
     );
   },

@@ -81,6 +81,12 @@
     "522": "很抱歉，伺服器連接超時，未能及時響應您的請求。可能是網路不穩定或伺服器暫時無法訪問。請稍後再試，我們正在努力恢復服務。",
     "524": "很抱歉，伺服器在等回覆時超時了，可能是因為回應太慢，請稍後再試",
     "AgentRuntimeError": "Lobe 語言模型運行時執行出錯，請根據以下信息排查或重試",
+    "ComfyUIBizError": "請求 ComfyUI 服務時發生錯誤，請根據以下資訊進行排查或重試",
+    "ComfyUIEmptyResult": "ComfyUI 未產生任何圖像，請檢查模型設定或重試",
+    "ComfyUIModelError": "ComfyUI 模型載入失敗，請確認模型檔案是否存在",
+    "ComfyUIServiceUnavailable": "無法連接 ComfyUI 服務，請確認 ComfyUI 是否正常運行，或檢查服務位址設定是否正確",
+    "ComfyUIUploadFailed": "ComfyUI 圖片上傳失敗，請檢查伺服器連線或重試",
+    "ComfyUIWorkflowError": "ComfyUI 工作流程執行失敗，請檢查工作流程設定",
     "ConnectionCheckFailed": "請求返回為空，請檢查 API 代理地址末尾是否未包含 `/v1`",
     "CreateMessageError": "很抱歉，訊息未能正常發送，請複製內容後重新發送，刷新頁面後此訊息將不會保留",
     "ExceededContextWindow": "當前請求內容超出模型可處理的長度，請減少內容量後重試",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "密碼不正確或為空，請輸入正確的訪問密碼，或添加自定義 API 金鑰",
     "InvalidBedrockCredentials": "Bedrock 驗證未通過，請檢查 AccessKeyId/SecretAccessKey 後重試",
     "InvalidClerkUser": "很抱歉，你當前尚未登錄，請先登錄或註冊帳號後繼續操作",
+    "InvalidComfyUIArgs": "ComfyUI 設定不正確，請檢查 ComfyUI 設定後重試",
     "InvalidGithubToken": "Github 個人存取權杖不正確或為空，請檢查 Github 個人存取權杖後再試一次",
     "InvalidOllamaArgs": "Ollama 配置不正確，請檢查 Ollama 配置後重試",
     "InvalidProviderAPIKey": "{{provider}} API 金鑰不正確或為空，請檢查 {{provider}} API 金鑰後重試",
@@ -149,6 +156,11 @@
       "title": "使用自定義 {{name}} API 金鑰"
     },
     "closeMessage": "關閉提示",
+    "comfyui": {
+      "description": "請輸入正確的 {{name}} 認證資訊即可開始生成圖像",
+      "modifyBaseUrl": "修改 Comfy UI 服務位址",
+      "title": "確認你的 {{name}} 認證資訊"
+    },
     "confirm": "確認並重試",
     "oauth": {
       "description": "管理員已開啟統一登錄認證，點擊下方按鈕登錄，即可解鎖應用",

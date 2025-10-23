@@ -11,13 +11,13 @@ But here is the easier approach that can reduce your pain.
 
 ### Environment Configuration
 
-First, copy the example environment file to create your development configuration:
+First, copy the example environment file to create your Docker Compose configuration:
 
 ```bash
-cp .env.example.development .env.development
+cp docker-compose/local/.env.example docker-compose/local/.env
 ```
 
-This file contains all necessary environment variables for server-side database mode and configures:
+Edit `docker-compose/local/.env` as needed for your development setup. This file contains all necessary environment variables for the Docker services and configures:
 
 - **Service Mode**: `NEXT_PUBLIC_SERVICE_MODE=server`
 - **Database**: PostgreSQL with connection string
@@ -72,7 +72,7 @@ When working with image generation features (text-to-image, image-to-image), the
 
 ### Image Generation Configuration
 
-The existing Docker Compose configuration already includes MinIO storage service and all necessary environment variables in `.env.example.development`. No additional setup is required.
+The existing Docker Compose configuration already includes MinIO storage service and all necessary environment variables in `docker-compose/local/.env.example`. No additional setup is required.
 
 ### Image Generation Architecture
 
@@ -84,7 +84,7 @@ The image generation feature requires:
 
 ### Storage Configuration
 
-The `.env.example.development` file includes all necessary S3 environment variables:
+The `docker-compose/local/.env.example` file includes all necessary S3 environment variables:
 
 ```bash
 # S3 Storage Configuration (MinIO for local development)

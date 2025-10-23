@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "Tổng cộng {{count}} mục",
       "selectedCount": "Đã chọn {{count}} mục"
+    },
+    "view": {
+      "list": "Chế độ danh sách",
+      "masonry": "Chế độ lưới"
     }
   },
   "FileParsingStatus": {

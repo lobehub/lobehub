@@ -44,6 +44,9 @@
   "cometapi": {
     "description": "CometAPI 是一个提供多种前沿大模型接口的服务平台，支持 OpenAI、Anthropic、Google 及更多，适合多样化的开发和应用需求。用户可根据自身需求灵活选择最优的模型和价格，助力AI体验的提升。"
   },
+  "comfyui": {
+    "description": "强大的开源图像、视频、音频生成工作流引擎，支持 SD FLUX Qwen Hunyuan WAN 等先进模型，提供节点化工作流编辑和私有化部署能力"
+  },
   "deepseek": {
     "description": "DeepSeek 是一家专注于人工智能技术研究和应用的公司，其最新模型 DeepSeek-V3 多项评测成绩超越 Qwen2.5-72B 和 Llama-3.1-405B 等开源模型，性能对齐领军闭源模型 GPT-4o 与 Claude-3.5-Sonnet。"
   },

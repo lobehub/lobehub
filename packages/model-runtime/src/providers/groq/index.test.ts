@@ -33,6 +33,455 @@ afterEach(() => {
 });
 
 describe('LobeGroq - custom features', () => {
+  describe('filterAdvancedFields', () => {
+    const filterAdvancedFields = params.generateObject!.handleSchema!;
+
+    it('should filter out maxItems from schema', () => {
+      const schema = {
+        items: { type: 'string' },
+        maxItems: 5,
+        type: 'array',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        items: { type: 'string' },
+        type: 'array',
+      });
+      expect(result.maxItems).toBeUndefined();
+    });
+
+    it('should filter out minItems from schema', () => {
+      const schema = {
+        items: { type: 'string' },
+        minItems: 2,
+        type: 'array',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        items: { type: 'string' },
+        type: 'array',
+      });
+      expect(result.minItems).toBeUndefined();
+    });
+
+    it('should filter out maxLength from schema', () => {
+      const schema = {
+        maxLength: 100,
+        type: 'string',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'string',
+      });
+      expect(result.maxLength).toBeUndefined();
+    });
+
+    it('should filter out minLength from schema', () => {
+      const schema = {
+        minLength: 5,
+        type: 'string',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'string',
+      });
+      expect(result.minLength).toBeUndefined();
+    });
+
+    it('should filter out pattern from schema', () => {
+      const schema = {
+        pattern: '^[a-z]+$',
+        type: 'string',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'string',
+      });
+      expect(result.pattern).toBeUndefined();
+    });
+
+    it('should filter out format from schema', () => {
+      const schema = {
+        format: 'email',
+        type: 'string',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'string',
+      });
+      expect(result.format).toBeUndefined();
+    });
+
+    it('should filter out uniqueItems from schema', () => {
+      const schema = {
+        items: { type: 'number' },
+        type: 'array',
+        uniqueItems: true,
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        items: { type: 'number' },
+        type: 'array',
+      });
+      expect(result.uniqueItems).toBeUndefined();
+    });
+
+    it('should filter out maxProperties from schema', () => {
+      const schema = {
+        maxProperties: 10,
+        type: 'object',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'object',
+      });
+      expect(result.maxProperties).toBeUndefined();
+    });
+
+    it('should filter out minProperties from schema', () => {
+      const schema = {
+        minProperties: 2,
+        type: 'object',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'object',
+      });
+      expect(result.minProperties).toBeUndefined();
+    });
+
+    it('should filter out multipleOf from schema', () => {
+      const schema = {
+        multipleOf: 5,
+        type: 'number',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'number',
+      });
+      expect(result.multipleOf).toBeUndefined();
+    });
+
+    it('should filter out maximum from schema', () => {
+      const schema = {
+        maximum: 100,
+        type: 'number',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'number',
+      });
+      expect(result.maximum).toBeUndefined();
+    });
+
+    it('should filter out minimum from schema', () => {
+      const schema = {
+        minimum: 0,
+        type: 'number',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'number',
+      });
+      expect(result.minimum).toBeUndefined();
+    });
+
+    it('should filter out exclusiveMaximum from schema', () => {
+      const schema = {
+        exclusiveMaximum: 100,
+        type: 'number',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'number',
+      });
+      expect(result.exclusiveMaximum).toBeUndefined();
+    });
+
+    it('should filter out exclusiveMinimum from schema', () => {
+      const schema = {
+        exclusiveMinimum: 0,
+        type: 'number',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'number',
+      });
+      expect(result.exclusiveMinimum).toBeUndefined();
+    });
+
+    it('should filter out multiple unsupported properties at once', () => {
+      const schema = {
+        format: 'email',
+        maxLength: 100,
+        minLength: 5,
+        pattern: '^[a-z]+$',
+        type: 'string',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        type: 'string',
+      });
+      expect(result.maxLength).toBeUndefined();
+      expect(result.minLength).toBeUndefined();
+      expect(result.pattern).toBeUndefined();
+      expect(result.format).toBeUndefined();
+    });
+
+    it('should preserve supported properties', () => {
+      const schema = {
+        description: 'A test field',
+        enum: ['a', 'b', 'c'],
+        maxLength: 10,
+        type: 'string',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        description: 'A test field',
+        enum: ['a', 'b', 'c'],
+        type: 'string',
+      });
+    });
+
+    it('should handle nested objects recursively', () => {
+      const schema = {
+        properties: {
+          email: {
+            format: 'email',
+            maxLength: 100,
+            type: 'string',
+          },
+          name: {
+            minLength: 2,
+            type: 'string',
+          },
+        },
+        type: 'object',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        properties: {
+          email: {
+            type: 'string',
+          },
+          name: {
+            type: 'string',
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    it('should handle deeply nested objects', () => {
+      const schema = {
+        properties: {
+          user: {
+            properties: {
+              address: {
+                maxProperties: 5,
+                properties: {
+                  city: {
+                    maxLength: 50,
+                    type: 'string',
+                  },
+                  zip: {
+                    pattern: '^\\d{5}$',
+                    type: 'string',
+                  },
+                },
+                type: 'object',
+              },
+              name: {
+                minLength: 1,
+                type: 'string',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'object',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        properties: {
+          user: {
+            properties: {
+              address: {
+                properties: {
+                  city: {
+                    type: 'string',
+                  },
+                  zip: {
+                    type: 'string',
+                  },
+                },
+                type: 'object',
+              },
+              name: {
+                type: 'string',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    it('should handle arrays in schema', () => {
+      const schema = {
+        items: {
+          maxLength: 50,
+          type: 'string',
+        },
+        maxItems: 10,
+        minItems: 1,
+        type: 'array',
+        uniqueItems: true,
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        items: {
+          type: 'string',
+        },
+        type: 'array',
+      });
+    });
+
+    it('should handle arrays of objects', () => {
+      const schema = {
+        items: {
+          properties: {
+            age: {
+              maximum: 120,
+              minimum: 0,
+              type: 'number',
+            },
+            name: {
+              maxLength: 100,
+              type: 'string',
+            },
+          },
+          type: 'object',
+        },
+        type: 'array',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        items: {
+          properties: {
+            age: {
+              type: 'number',
+            },
+            name: {
+              type: 'string',
+            },
+          },
+          type: 'object',
+        },
+        type: 'array',
+      });
+    });
+
+    it('should handle null values', () => {
+      const result = filterAdvancedFields(null);
+      expect(result).toBeNull();
+    });
+
+    it('should handle primitive values', () => {
+      expect(filterAdvancedFields('string')).toBe('string');
+      expect(filterAdvancedFields(123)).toBe(123);
+      expect(filterAdvancedFields(true)).toBe(true);
+    });
+
+    it('should handle empty objects', () => {
+      const schema = {};
+      const result = filterAdvancedFields(schema);
+      expect(result).toEqual({});
+    });
+
+    it('should preserve required and other common fields', () => {
+      const schema = {
+        additionalProperties: false,
+        description: 'A person object',
+        maxProperties: 10,
+        properties: {
+          age: {
+            description: 'Person age',
+            maximum: 150,
+            type: 'number',
+          },
+          name: {
+            description: 'Person name',
+            maxLength: 100,
+            type: 'string',
+          },
+        },
+        required: ['name', 'age'],
+        type: 'object',
+      };
+
+      const result = filterAdvancedFields(schema);
+
+      expect(result).toEqual({
+        additionalProperties: false,
+        description: 'A person object',
+        properties: {
+          age: {
+            description: 'Person age',
+            type: 'number',
+          },
+          name: {
+            description: 'Person name',
+            type: 'string',
+          },
+        },
+        required: ['name', 'age'],
+        type: 'object',
+      });
+    });
+  });
+
   describe('Debug Configuration', () => {
     it('should disable debug by default', () => {
       delete process.env.DEBUG_GROQ_CHAT_COMPLETION;

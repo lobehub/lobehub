@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "مسح رسائل الجلسة الحالية",
   "confirmClearCurrentMessages": "سيتم مسح رسائل الجلسة الحالية قريبًا، وبمجرد المسح لن يمكن استعادتها، يرجى تأكيد الإجراء الخاص بك",
-  "confirmRemoveChatGroupItemAlert": "سيتم حذف هذه المحادثة الجماعية، ولن يتأثر أعضاء المجموعة، يرجى تأكيد العملية الخاصة بك",
+  "confirmRemoveChatGroupItemAlert": "سيتم حذف فريق الوكيل هذا، ولن يتأثر الأعضاء الآخرون. يرجى تأكيد الإجراء.",
   "confirmRemoveGroupItemAlert": "سيتم حذف هذه المجموعة قريبًا. بعد الحذف، سيُنتقل المساعدون في هذه المجموعة إلى القائمة الافتراضية. يرجى تأكيد إجراء الحذف.",
-  "confirmRemoveGroupSuccess": "تم حذف الدردشة الجماعية بنجاح",
+  "confirmRemoveGroupSuccess": "تم حذف فريق الوكلاء بنجاح",
   "confirmRemoveSessionItemAlert": "سيتم حذف هذا المساعد قريبًا، وبمجرد الحذف لن يمكن استعادته، يرجى تأكيد الإجراء الخاص بك",
   "confirmRemoveSessionSuccess": "تم حذف المساعد بنجاح",
   "defaultAgent": "المساعد الافتراضي",
-  "defaultGroupChat": "المحادثة الجماعية",
+  "defaultGroupChat": "فريق الوكلاء",
   "defaultList": "القائمة الافتراضية",
   "defaultSession": "المساعد الافتراضي",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "إزالة عضو",
     "title": "مجموعة"
   },
-  "groupDescription": "وصف المجموعة",
+  "groupDescription": "وصف الفريق",
   "groupSidebar": {
     "members": {
       "addMember": "إضافة عضو",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "اختر المساعدين الحاليين...",
-    "createGroup": "إنشاء دردشة جماعية",
-    "existingMembers": "الأعضاء الحاليون",
+    "createGroup": "إنشاء فريق",
+    "existingMembers": "الوكلاء الحاليون",
     "groupMembers": "سيتم أيضًا إضافة هؤلاء المساعدين إلى قائمتك",
     "host": {
-      "description": "لجعل الدردشة الجماعية تعمل تلقائيًا",
-      "title": "المضيف",
-      "tooltip": "إذا تم تعطيل مضيف الدردشة الجماعية، فستحتاج إلى الإشارة يدويًا إلى الأعضاء باستخدام @ لكي يتمكنوا من الرد"
+      "description": "تمكين الفريق من العمل بشكل مستقل",
+      "title": "تفعيل المضيف",
+      "tooltip": "إذا قمت بتعطيل المضيف، فستحتاج إلى الإشارة إلى الأعضاء يدويًا باستخدام @ لكي يتمكنوا من الرد"
     },
     "memberCount": "{{count}} عضو",
     "noMatchingTemplates": "لا توجد قوالب مطابقة",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "لا يوجد أعضاء في القالب",
     "noTemplates": "لا توجد قوالب متاحة",
     "searchTemplates": "ابحث في القوالب...",
-    "title": "إنشاء دردشة جماعية",
+    "title": "إنشاء فريق وكلاء",
     "useTemplate": "استخدام القالب"
   },
   "hideForYou": "تم إخفاء محتوى الرسائل الخاصة، يرجى تفعيل خيار 【عرض محتوى الرسائل الخاصة】 في الإعدادات للعرض",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "إضافة عضو",
     "allMembers": "جميع الأعضاء",
-    "createGroup": "إنشاء محادثة جماعية",
+    "createGroup": "إنشاء فريق وكيل",
     "noAvailableAgents": "لا يوجد مساعدين متاحين للدعوة",
     "noSelectedAgents": "لم يتم اختيار مساعدين بعد",
     "searchAgents": "البحث عن مساعدين...",
-    "setInitialMembers": "اختيار أعضاء المجموعة"
+    "setInitialMembers": "اختيار أعضاء الفريق"
   },
   "members": "الأعضاء",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "الانتقال إلى الرسالة رقم {{index}}",
     "nextMessage": "الرسالة التالية",
-    "previousMessage": "الرسالة السابقة"
+    "previousMessage": "الرسالة السابقة",
+    "senderAssistant": "المساعد",
+    "senderUser": "أنت"
   },
   "newAgent": "مساعد جديد",
-  "newGroupChat": "إنشاء دردشة جماعية جديدة",
-  "noAgentsYet": "لا يوجد أي مساعد في هذه المجموعة بعد. انقر على زر + لدعوة مساعد.",
-  "noAvailableAgents": "لا يوجد مساعدون متاحون للدعوة",
-  "noMatchingAgents": "لا يوجد مساعد متطابق",
+  "newGroupChat": "إنشاء فريق وكلاء جديد",
+  "noAgentsYet": "لا يوجد أعضاء في هذا الفريق بعد. انقر على زر + لدعوة مساعد.",
+  "noAvailableAgents": "لا يوجد أعضاء متاحون للدعوة",
+  "noMatchingAgents": "لا يوجد أعضاء مطابقون",
   "noMembersYet": "لا يوجد أعضاء في هذه المجموعة بعد. انقر على زر + لدعوة المساعدين.",
-  "noSelectedAgents": "لم يتم اختيار أي مساعد بعد",
+  "noSelectedAgents": "لم يتم اختيار أي أعضاء بعد",
   "owner": "مالك المجموعة",
   "pin": "تثبيت",
   "pinOff": "إلغاء التثبيت",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "نسخ",
     "download": "تحميل اللقطة",
+    "downloadError": "فشل التنزيل",
     "downloadFile": "تحميل الملف",
+    "downloadPdf": "تنزيل PDF",
+    "downloadSuccess": "تم التنزيل بنجاح",
+    "exportPdf": "تصدير إلى PDF",
     "exportTitle": "العنوان الافتراضي",
+    "generatePdf": "إنشاء ملف PDF",
+    "generatingPdf": "جارٍ إنشاء PDF...",
     "imageType": "نوع الصورة",
     "includeTool": "تضمين رسالة الأداة",
     "includeUser": "تضمين رسالة المستخدم",
+    "loadingPdf": "جارٍ تحميل ملف PDF...",
+    "noPdfData": "لا توجد بيانات PDF",
+    "pdf": "PDF",
+    "pdfErrorDescription": "حدث خطأ أثناء إنشاء PDF، يرجى المحاولة مرة أخرى",
+    "pdfGenerationError": "فشل إنشاء PDF",
+    "pdfReady": "تم تجهيز PDF",
+    "regeneratePdf": "إعادة إنشاء ملف PDF",
     "screenshot": "لقطة شاشة",
     "settings": "إعدادات التصدير",
     "text": "نص",

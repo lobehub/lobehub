@@ -82,6 +82,58 @@
       "title": "Cloudflare-Kundenkennung / API-Adresse"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "API-Schlüssel für die Authentifizierung mit Bearer-Token",
+      "placeholder": "Bitte API-Schlüssel eingeben",
+      "required": "Bitte API-Schlüssel eingeben",
+      "title": "API-Schlüssel"
+    },
+    "authType": {
+      "desc": "Wählen Sie die Authentifizierungsmethode für den ComfyUI-Server",
+      "options": {
+        "basic": "Benutzername/Passwort",
+        "bearer": "Bearer (API-Schlüssel)",
+        "custom": "Benutzerdefinierte Header",
+        "none": "Keine Authentifizierung erforderlich"
+      },
+      "placeholder": "Bitte Authentifizierungstyp wählen",
+      "title": "Authentifizierungstyp"
+    },
+    "baseURL": {
+      "desc": "Webadresse für den Zugriff auf ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Bitte ComfyUI-Serveradresse eingeben",
+      "title": "ComfyUI-Serveradresse"
+    },
+    "checker": {
+      "desc": "Verbindung testen, um die Konfiguration zu überprüfen",
+      "title": "Verbindungsprüfung"
+    },
+    "customHeaders": {
+      "addButton": "Header hinzufügen",
+      "deleteTooltip": "Diesen Header löschen",
+      "desc": "Erforderliche Header für benutzerdefinierte Authentifizierung im Schlüssel-Wert-Format",
+      "duplicateKeyError": "Header-Schlüssel dürfen nicht doppelt sein",
+      "keyPlaceholder": "Schlüssel",
+      "required": "Bitte benutzerdefinierte Header eingeben",
+      "title": "Benutzerdefinierte Header",
+      "valuePlaceholder": "Wert"
+    },
+    "password": {
+      "desc": "Passwort für die Basis-Authentifizierung",
+      "placeholder": "Bitte Passwort eingeben",
+      "required": "Bitte Passwort eingeben",
+      "title": "Passwort"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Benutzername für die Basis-Authentifizierung",
+      "placeholder": "Bitte Benutzernamen eingeben",
+      "required": "Bitte Benutzernamen eingeben",
+      "title": "Benutzername"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Bitte geben Sie Ihren API-Schlüssel ein",

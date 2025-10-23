@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "清空當前對話",
   "confirmClearCurrentMessages": "即將清空當前對話，清空後將無法找回，請確認你的操作",
-  "confirmRemoveChatGroupItemAlert": "即將刪除該群聊，群聊成員不受影響，請確認你的操作",
+  "confirmRemoveChatGroupItemAlert": "即將刪除該 Agent 團隊，團隊成員不受影響，請確認你的操作",
   "confirmRemoveGroupItemAlert": "即將刪除此分組。刪除後，該分組中的助理將移至預設列表，請確認是否繼續。",
-  "confirmRemoveGroupSuccess": "群組刪除成功",
+  "confirmRemoveGroupSuccess": "Agent 團隊刪除成功",
   "confirmRemoveSessionItemAlert": "即將刪除該助手，刪除後將無法找回，請確認你的操作",
   "confirmRemoveSessionSuccess": "助手刪除成功",
   "defaultAgent": "自定義助手",
-  "defaultGroupChat": "群聊",
+  "defaultGroupChat": "Agent 團隊",
   "defaultList": "預設清單",
   "defaultSession": "自定義助手",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "移除成員",
     "title": "群組"
   },
-  "groupDescription": "群組描述",
+  "groupDescription": "團隊描述",
   "groupSidebar": {
     "members": {
       "addMember": "添加成員",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "選擇現有助理...",
-    "createGroup": "建立群組聊天",
-    "existingMembers": "已有助理",
+    "createGroup": "建立團隊",
+    "existingMembers": "已有 Agent",
     "groupMembers": "這些助理也將被加入您的列表中",
     "host": {
-      "description": "使群聊自動化運作",
-      "title": "主持人",
-      "tooltip": "若停用群組主持人，您需要手動@提及成員才能讓他們回覆"
+      "description": "使團隊自主運作",
+      "title": "啟用主持人",
+      "tooltip": "若停用團隊主持人，您需要手動 @ 提及成員才能讓他們回覆"
     },
     "memberCount": "{{count}} 位成員",
     "noMatchingTemplates": "沒有符合的範本",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "模板中沒有成員",
     "noTemplates": "沒有可用的範本",
     "searchTemplates": "搜尋範本...",
-    "title": "建立群組聊天",
+    "title": "建立 Agent 團隊",
     "useTemplate": "使用模板"
   },
   "hideForYou": "私訊內容已經隱藏，請在設定中開啟【顯示私訊內容】以查看",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "添加成員",
     "allMembers": "所有成員",
-    "createGroup": "建立群聊",
+    "createGroup": "建立 Agent 團隊",
     "noAvailableAgents": "沒有可邀請的助理",
     "noSelectedAgents": "尚未選擇助理",
     "searchAgents": "搜尋助理...",
-    "setInitialMembers": "選擇群成員"
+    "setInitialMembers": "選擇團隊成員"
   },
   "members": "成員",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "跳轉至第 {{index}} 條訊息",
     "nextMessage": "下一條訊息",
-    "previousMessage": "上一條訊息"
+    "previousMessage": "上一條訊息",
+    "senderAssistant": "助理",
+    "senderUser": "您"
   },
   "newAgent": "新建助手",
-  "newGroupChat": "建立群組",
-  "noAgentsYet": "此群組還沒有助手。點擊 + 按鈕邀請助手。",
-  "noAvailableAgents": "沒有可邀請的助手",
-  "noMatchingAgents": "找不到符合的助手",
+  "newGroupChat": "新增 Agent 團隊",
+  "noAgentsYet": "此 Agent 團隊尚無成員。點擊 + 按鈕邀請助手。",
+  "noAvailableAgents": "沒有可邀請的成員",
+  "noMatchingAgents": "沒有符合的成員",
   "noMembersYet": "此群組尚未有成員。請點選 + 按鈕邀請助理。",
-  "noSelectedAgents": "尚未選擇助理",
+  "noSelectedAgents": "尚未選擇成員",
   "owner": "群組擁有者",
   "pin": "置頂",
   "pinOff": "取消置頂",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "複製",
     "download": "下載截圖",
+    "downloadError": "下載失敗",
     "downloadFile": "下載檔案",
+    "downloadPdf": "下載 PDF",
+    "downloadSuccess": "下載成功",
+    "exportPdf": "匯出為 PDF",
     "exportTitle": "預設標題",
+    "generatePdf": "生成 PDF",
+    "generatingPdf": "正在產生 PDF...",
     "imageType": "圖片格式",
     "includeTool": "包含插件訊息",
     "includeUser": "包含使用者訊息",
+    "loadingPdf": "載入 PDF...",
+    "noPdfData": "暫無 PDF 資料",
+    "pdf": "PDF",
+    "pdfErrorDescription": "產生 PDF 時發生錯誤，請重試",
+    "pdfGenerationError": "PDF 產生失敗",
+    "pdfReady": "PDF 已準備就緒",
+    "regeneratePdf": "重新生成 PDF",
     "screenshot": "截圖",
     "settings": "導出設置",
     "text": "文本",

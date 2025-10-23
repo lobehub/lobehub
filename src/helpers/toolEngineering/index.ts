@@ -6,12 +6,13 @@ import type { PluginEnableChecker } from '@lobechat/context-engine';
 import { ChatCompletionTool, WorkingModel } from '@lobechat/types';
 import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
-import { getSearchConfig } from '@/helpers/getSearchConfig';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { WebBrowsingManifest } from '@/tools/web-browsing';
 
+import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
+import { shouldEnableTool } from '../toolFilters';
 
 /**
  * Tools engine configuration options
@@ -58,6 +59,11 @@ export const createChatToolsEngine = (workingModel: WorkingModel) =>
     defaultToolIds: [WebBrowsingManifest.identifier],
     // Create search-aware enableChecker for this request
     enableChecker: ({ pluginId }) => {
+      // Check platform-specific constraints (e.g., LocalSystem desktop-only)
+      if (!shouldEnableTool(pluginId)) {
+        return false;
+      }
+
       // For WebBrowsingManifest, apply search logic
       if (pluginId === WebBrowsingManifest.identifier) {
         const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);

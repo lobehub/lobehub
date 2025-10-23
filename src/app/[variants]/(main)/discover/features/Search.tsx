@@ -42,6 +42,7 @@ const Search = memo<StoreSearchBarProps>(() => {
 
   return (
     <SearchBar
+      data-testid="search-bar"
       defaultValue={q}
       enableShortKey
       onInputChange={(v) => {

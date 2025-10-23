@@ -98,7 +98,7 @@ const Main = memo<{ className?: string }>(({ className }) => {
         <GroupAvatar
           avatars={[
             {
-              avatar: currentUser.avatar,
+              avatar: currentUser.avatar || DEFAULT_AVATAR,
             },
             ...(members?.map((member: GroupMemberWithAgent) => ({
               avatar: member.avatar || DEFAULT_AVATAR,

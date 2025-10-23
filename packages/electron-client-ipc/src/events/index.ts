@@ -50,3 +50,5 @@ export type MainBroadcastEventKey = keyof MainBroadcastEvents;
 export type MainBroadcastParams<T extends MainBroadcastEventKey> = Parameters<
   MainBroadcastEvents[T]
 >[0];
+
+export type { OpenSettingsWindowOptions } from './windows';

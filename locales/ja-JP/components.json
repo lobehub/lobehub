@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "合計 {{count}} 件",
       "selectedCount": "選択済み {{count}} 件"
+    },
+    "view": {
+      "list": "リスト表示",
+      "masonry": "グリッド表示"
     }
   },
   "FileParsingStatus": {

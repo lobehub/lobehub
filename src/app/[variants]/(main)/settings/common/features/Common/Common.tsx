@@ -17,6 +17,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { LocaleMode } from '@/types/locale';
 
 const Common = memo(() => {
   const { t } = useTranslation('setting');
@@ -32,6 +33,10 @@ const Common = memo(() => {
     s.isStatusInit,
   ]);
   const [loading, setLoading] = useState(false);
+
+  const handleLangChange = (value: LocaleMode) => {
+    switchLocale(value);
+  };
 
   if (!(isStatusInit && isUserStateInit))
     return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
@@ -75,7 +80,7 @@ const Common = memo(() => {
         children: (
           <Select
             defaultValue={language}
-            onChange={switchLocale}
+            onChange={handleLangChange}
             options={[{ label: t('settingCommon.lang.autoMode'), value: 'auto' }, ...localeOptions]}
           />
         ),

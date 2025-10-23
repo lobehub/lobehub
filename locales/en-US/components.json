@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "Total {{count}} items",
       "selectedCount": "Selected {{count}} items"
+    },
+    "view": {
+      "list": "List View",
+      "masonry": "Grid View"
     }
   },
   "FileParsingStatus": {

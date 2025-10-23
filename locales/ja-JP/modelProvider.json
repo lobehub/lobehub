@@ -82,6 +82,58 @@
       "title": "Cloudflare アカウント ID / API アドレス"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Bearerトークン認証に必要なAPIキー",
+      "placeholder": "APIキーを入力してください",
+      "required": "APIキーを入力してください",
+      "title": "APIキー"
+    },
+    "authType": {
+      "desc": "ComfyUIサーバーとの認証方式を選択してください",
+      "options": {
+        "basic": "ユーザー名/パスワード",
+        "bearer": "Bearer（APIキー）",
+        "custom": "カスタムヘッダー",
+        "none": "認証不要"
+      },
+      "placeholder": "認証タイプを選択してください",
+      "title": "認証タイプ"
+    },
+    "baseURL": {
+      "desc": "ComfyUIのWebアクセスアドレス",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "ComfyUIサービスのアドレスを入力してください",
+      "title": "ComfyUIサービスアドレス"
+    },
+    "checker": {
+      "desc": "接続が正しく構成されているかをテストします",
+      "title": "接続チェック"
+    },
+    "customHeaders": {
+      "addButton": "ヘッダーを追加",
+      "deleteTooltip": "このヘッダーを削除",
+      "desc": "カスタム認証方式に必要なリクエストヘッダー（キーと値のペア）",
+      "duplicateKeyError": "ヘッダーのキー名は重複できません",
+      "keyPlaceholder": "キー名",
+      "required": "カスタムヘッダーを入力してください",
+      "title": "カスタムヘッダー",
+      "valuePlaceholder": "値"
+    },
+    "password": {
+      "desc": "基本認証に必要なパスワード",
+      "placeholder": "パスワードを入力してください",
+      "required": "パスワードを入力してください",
+      "title": "パスワード"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "基本認証に必要なユーザー名",
+      "placeholder": "ユーザー名を入力してください",
+      "required": "ユーザー名を入力してください",
+      "title": "ユーザー名"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "あなたの API キーを入力してください",

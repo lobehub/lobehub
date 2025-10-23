@@ -39,6 +39,7 @@ export const UpdateNotification: React.FC = () => {
     'unconfirm' | 'installLater' | 'installNow' | null
   >('unconfirm');
   const [detailVisible, setDetailVisible] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   useWatchBroadcast('updateDownloaded', (info: UpdateInfo) => {
     setUpdateInfo(info);
@@ -110,7 +111,15 @@ export const UpdateNotification: React.FC = () => {
               {t('updater.later')}
             </Button>
 
-            <Button onClick={() => autoUpdateService.installNow()} size="small" type="primary">
+            <Button
+              loading={isInstalling}
+              onClick={() => {
+                setIsInstalling(true);
+                autoUpdateService.installNow();
+              }}
+              size="small"
+              type="primary"
+            >
               {t('updater.upgradeNow')}
             </Button>
           </div>
@@ -137,7 +146,15 @@ export const UpdateNotification: React.FC = () => {
               <Button onClick={() => autoUpdateService.installLater()} size="small">
                 {t('updater.installLater')}
               </Button>
-              <Button onClick={() => autoUpdateService.installNow()} size="small" type="primary">
+              <Button
+                loading={isInstalling}
+                onClick={() => {
+                  setIsInstalling(true);
+                  autoUpdateService.installNow();
+                }}
+                size="small"
+                type="primary"
+              >
                 {t('updater.restartAndInstall', '立即安装')}
               </Button>
             </div>

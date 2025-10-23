@@ -3,6 +3,7 @@ import {
   LobeAnthropicAI,
   LobeAzureOpenAI,
   LobeBedrockAI,
+  LobeComfyUI,
   LobeDeepSeekAI,
   LobeGoogleAI,
   LobeGroq,
@@ -249,6 +250,49 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime']).toBeInstanceOf(LobeStepfunAI);
     });
 
+    it('ComfyUI provider: with multiple auth types', async () => {
+      // Test basic auth
+      const basicAuthPayload: ClientSecretPayload = {
+        authType: 'basic',
+        username: 'test-user',
+        password: 'test-pass',
+        baseURL: 'http://localhost:8188',
+      };
+      let runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, basicAuthPayload);
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeComfyUI);
+      expect(runtime['_runtime'].baseURL).toBe(basicAuthPayload.baseURL);
+
+      // Test bearer auth
+      const bearerAuthPayload: ClientSecretPayload = {
+        authType: 'bearer',
+        apiKey: 'test-token',
+        baseURL: 'http://localhost:8188',
+      };
+      runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, bearerAuthPayload);
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeComfyUI);
+
+      // Test custom auth
+      const customAuthPayload: ClientSecretPayload = {
+        authType: 'custom',
+        customHeaders: { 'X-API-Key': 'secret123' },
+        baseURL: 'http://localhost:8188',
+      };
+      runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, customAuthPayload);
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeComfyUI);
+
+      // Test none auth
+      const noAuthPayload: ClientSecretPayload = {
+        authType: 'none',
+        baseURL: 'http://localhost:8188',
+      };
+      runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, noAuthPayload);
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeComfyUI);
+    });
+
     it('Unknown Provider: with apikey and endpoint, should initialize to OpenAi', async () => {
       const jwtPayload: ClientSecretPayload = {
         apiKey: 'user-unknown-key',
@@ -418,6 +462,28 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime']).toBeInstanceOf(LobeQwenAI);
       // endpoint 不存在，应返回 DEFAULT_BASE_URL
       expect(runtime['_runtime'].baseURL).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1');
+    });
+
+    it('ComfyUI provider: without user payload (using environment variables)', async () => {
+      const jwtPayload: ClientSecretPayload = {};
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, jwtPayload);
+
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeComfyUI);
+      // Should use environment variable defaults
+      expect(runtime['_runtime'].baseURL).toBe('http://127.0.0.1:8000');
+    });
+
+    it('ComfyUI provider: partial payload (mixed with env vars)', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        baseURL: 'http://custom-comfyui:8188',
+        // authType, username, password will come from env vars
+      };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, jwtPayload);
+
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeComfyUI);
+      expect(runtime['_runtime'].baseURL).toBe('http://custom-comfyui:8188');
     });
 
     it('Unknown Provider', async () => {

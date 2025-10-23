@@ -1,0 +1,399 @@
+# 集成测试指南
+
+## 概述
+
+集成测试验证多个模块协同工作的正确性，确保完整的调用链路（Router → Service → Model → Database）正常运行。
+
+## 为什么需要集成测试？
+
+即使单元测试覆盖率很高（80%+），仍可能出现集成问题：
+
+### 常见问题示例
+
+```typescript
+// ❌ 问题：参数在调用链中丢失
+// Router 层
+const messageId = await messageModel.create({
+  content: 'test',
+  sessionId: 'xxx',
+  topicId: 'yyy',  // ← 传入了 topicId
+});
+
+// Model 层（假设实现有问题）
+async create(data) {
+  return this.db.insert(messages).values({
+    content: data.content,
+    sessionId: data.sessionId,
+    // ❌ 忘记传递 topicId
+  });
+}
+
+// 结果：单元测试通过（因为 mock 了 Model），但实际运行时 topicId 丢失
+```
+
+### 集成测试能发现的问题
+
+1. **参数传递遗漏**: containerId、threadId、topicId 等在调用链中丢失
+2. **数据库约束**: 外键关系、级联删除等在 mock 中无法验证
+3. **事务完整性**: 跨表操作的原子性
+4. **权限验证**: 跨用户访问控制
+5. **真实场景**: 模拟用户的完整操作流程
+
+## 运行集成测试
+
+```bash
+# 运行所有集成测试
+pnpm test:integration
+
+# 运行特定文件
+pnpm vitest tests/integration/routers/message.integration.test.ts
+
+# 监听模式
+pnpm vitest tests/integration --watch
+
+# 生成覆盖率报告
+pnpm test:integration --coverage
+```
+
+## 目录结构
+
+```
+tests/integration/
+├── README.md                              # 集成测试说明
+├── setup.ts                               # 通用设置和工具函数
+└── routers/                               # Router 层集成测试
+    ├── message.integration.test.ts        # Message Router 测试
+    ├── session.integration.test.ts        # Session Router 测试
+    ├── topic.integration.test.ts          # Topic Router 测试
+    └── chat-flow.integration.test.ts      # 完整聊天流程测试
+```
+
+## 编写集成测试
+
+### 基本模板
+
+```typescript
+// @vitest-environment node
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { getTestDB } from '@/database/models/__tests__/_util';
+import { messages, sessions, users } from '@/database/schemas';
+import { LobeChatDatabase } from '@/database/type';
+import { messageRouter } from '@/server/routers/lambda/message';
+
+import { cleanupTestUser, createTestContext, createTestUser } from '../setup';
+
+describe('Your Feature Integration Tests', () => {
+  let serverDB: LobeChatDatabase;
+  let userId: string;
+
+  beforeEach(async () => {
+    // 1. 获取测试数据库
+    serverDB = await getTestDB();
+
+    // 2. 创建测试用户
+    userId = await createTestUser(serverDB);
+
+    // 3. 准备其他测试数据
+    // ...
+  });
+
+  afterEach(async () => {
+    // 清理测试数据
+    await cleanupTestUser(serverDB, userId);
+  });
+
+  it('should do something', async () => {
+    // 1. 创建 tRPC caller
+    const caller = messageRouter.createCaller(createTestContext(userId));
+
+    // 2. 执行操作
+    const result = await caller.someMethod({
+      /* params */
+    });
+
+    // 3. 验证结果
+    expect(result).toBeDefined();
+
+    // 4. 🔥 关键：从数据库验证
+    const [dbRecord] = await serverDB.select().from(messages).where(eq(messages.id, result));
+
+    expect(dbRecord).toMatchObject({
+      // 验证所有关键字段
+    });
+  });
+});
+```
+
+### 最佳实践
+
+#### 1. 测试完整的调用链路
+
+```typescript
+it('should create message with correct associations', async () => {
+  const caller = messageRouter.createCaller(createTestContext(userId));
+
+  // 执行操作
+  const messageId = await caller.createMessage({
+    content: 'Test',
+    sessionId: testSessionId,
+    topicId: testTopicId,
+  });
+
+  // ✅ 从数据库验证，而不是只验证返回值
+  const [message] = await serverDB.select().from(messages).where(eq(messages.id, messageId));
+
+  expect(message.sessionId).toBe(testSessionId);
+  expect(message.topicId).toBe(testTopicId);
+  expect(message.userId).toBe(userId);
+});
+```
+
+#### 2. 测试级联操作
+
+```typescript
+it('should cascade delete messages when session is deleted', async () => {
+  const sessionCaller = sessionRouter.createCaller(createTestContext(userId));
+  const messageCaller = messageRouter.createCaller(createTestContext(userId));
+
+  // 创建 session 和 messages
+  const sessionId = await sessionCaller.createSession({
+    /* ... */
+  });
+  await messageCaller.createMessage({ sessionId /* ... */ });
+
+  // 删除 session
+  await sessionCaller.removeSession({ id: sessionId });
+
+  // ✅ 验证相关消息也被删除
+  const remainingMessages = await serverDB
+    .select()
+    .from(messages)
+    .where(eq(messages.sessionId, sessionId));
+
+  expect(remainingMessages).toHaveLength(0);
+});
+```
+
+#### 3. 测试跨 Router 协作
+
+```typescript
+it('should handle complete chat flow', async () => {
+  const sessionCaller = sessionRouter.createCaller(createTestContext(userId));
+  const topicCaller = topicRouter.createCaller(createTestContext(userId));
+  const messageCaller = messageRouter.createCaller(createTestContext(userId));
+
+  // 1. 创建 session
+  const sessionId = await sessionCaller.createSession({
+    /* ... */
+  });
+
+  // 2. 创建 topic
+  const topicId = await topicCaller.createTopic({ sessionId /* ... */ });
+
+  // 3. 创建 message
+  const messageId = await messageCaller.createMessage({
+    sessionId,
+    topicId,
+    /* ... */
+  });
+
+  // ✅ 验证完整的关联关系
+  const [message] = await serverDB.select().from(messages).where(eq(messages.id, messageId));
+
+  expect(message.sessionId).toBe(sessionId);
+  expect(message.topicId).toBe(topicId);
+});
+```
+
+#### 4. 测试错误场景
+
+```typescript
+it('should prevent cross-user access', async () => {
+  // 用户 A 创建 session
+  const sessionId = await sessionRouter.createCaller(createTestContext(userA)).createSession({
+    /* ... */
+  });
+
+  // 用户 B 尝试访问
+  const callerB = messageRouter.createCaller(createTestContext(userB));
+
+  // ✅ 应该抛出错误
+  await expect(
+    callerB.createMessage({
+      sessionId,
+      content: 'Unauthorized',
+    }),
+  ).rejects.toThrow();
+});
+```
+
+#### 5. 测试并发场景
+
+```typescript
+it('should handle concurrent operations', async () => {
+  const caller = messageRouter.createCaller(createTestContext(userId));
+
+  // 并发创建多个消息
+  const promises = Array.from({ length: 10 }, (_, i) =>
+    caller.createMessage({
+      content: `Message ${i}`,
+      sessionId: testSessionId,
+    }),
+  );
+
+  const messageIds = await Promise.all(promises);
+
+  // ✅ 验证所有消息都创建成功且唯一
+  expect(messageIds).toHaveLength(10);
+  expect(new Set(messageIds).size).toBe(10);
+});
+```
+
+### 数据隔离
+
+每个测试用例应该独立，不依赖其他测试：
+
+```typescript
+beforeEach(async () => {
+  // 为每个测试创建新的数据
+  userId = await createTestUser(serverDB);
+  testSessionId = await createTestSession(serverDB, userId);
+});
+
+afterEach(async () => {
+  // 清理测试数据
+  await cleanupTestUser(serverDB, userId);
+});
+```
+
+### 测试命名
+
+使用清晰的命名描述测试意图：
+
+```typescript
+// ✅ 好的命名
+it('should create message with correct sessionId and topicId');
+it('should cascade delete messages when session is deleted');
+it('should prevent cross-user access to messages');
+
+// ❌ 不好的命名
+it('test message creation');
+it('test delete');
+```
+
+## 与单元测试的区别
+
+| 维度      | 单元测试      | 集成测试    |
+| ------- | --------- | ------- |
+| **范围**  | 单个函数 / 类  | 多个模块协作  |
+| **依赖**  | Mock 外部依赖 | 使用真实依赖  |
+| **数据库** | Mock      | 真实测试数据库 |
+| **速度**  | 快（毫秒级）    | 慢（秒级）   |
+| **数量**  | 多（60%）    | 少（30%）  |
+| **目的**  | 验证逻辑正确性   | 验证集成正确性 |
+
+## 测试金字塔
+
+```
+       /\
+      /E2E\        ← 10% (关键业务流程)
+     /------\
+    /  集成  \      ← 30% (API 集成测试) ⭐ 本指南重点
+   /----------\
+  / 单元测试   \    ← 60% (已有 80%+)
+ /--------------\
+```
+
+## 覆盖目标
+
+### 优先级 P0（必须覆盖）
+
+- ✅ 跨层级的 ID 传递（sessionId、topicId、containerId、threadId）
+- ✅ 权限验证（用户只能访问自己的资源）
+- ✅ 级联删除（删除 session 时相关数据也删除）
+- ✅ 外键约束（不能创建不存在的关联）
+
+### 优先级 P1（应该覆盖）
+
+- 并发场景（多个请求同时操作）
+- 分页查询（正确的数据分页）
+- 搜索功能（关键词搜索）
+- 批量操作（批量创建 / 删除）
+
+### 优先级 P2（可以覆盖）
+
+- 统计功能（计数、排名）
+- 复杂查询（多条件筛选）
+- 性能测试（大量数据场景）
+
+## 调试技巧
+
+### 1. 查看测试数据库状态
+
+```typescript
+it('debug test', async () => {
+  // 执行操作
+  await caller.createMessage({
+    /* ... */
+  });
+
+  // 打印数据库状态
+  const allMessages = await serverDB.select().from(messages);
+  console.log('All messages:', allMessages);
+});
+```
+
+### 2. 使用 Drizzle Studio
+
+```bash
+# 启动 Drizzle Studio 查看测试数据库
+pnpm db:studio
+```
+
+### 3. 保留测试数据
+
+```typescript
+afterEach(async () => {
+  // 临时注释掉清理代码，保留数据用于调试
+  // await cleanupTestUser(serverDB, userId);
+});
+```
+
+## 常见问题
+
+### Q: 集成测试很慢怎么办？
+
+A:
+
+1. 只测试关键路径，不要过度测试
+2. 使用 `test.concurrent` 并行执行独立的测试
+3. 优化测试数据准备，避免重复创建
+
+### Q: 测试之间相互影响怎么办？
+
+A:
+
+1. 确保每个测试使用独立的 userId
+2. 在 `afterEach` 中彻底清理数据
+3. 使用事务隔离（如果数据库支持）
+
+### Q: 如何测试需要认证的 API？
+
+A: 使用 `createTestContext(userId)` 创建带认证信息的上下文：
+
+```typescript
+const caller = messageRouter.createCaller(createTestContext(userId));
+```
+
+## 参考资料
+
+- [Vitest 文档](https://vitest.dev/)
+- [Drizzle ORM 文档](https://orm.drizzle.team/)
+- [tRPC 测试指南](https://trpc.io/docs/server/testing)
+- [测试金字塔](https://martinfowler.com/articles/practical-test-pyramid.html)
+
+## 贡献
+
+欢迎补充更多集成测试用例！请参考现有测试文件的风格。

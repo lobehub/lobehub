@@ -237,10 +237,12 @@ export const createAiProviderSlice: StateCreator<
 
   useFetchAiProviderRuntimeState: (isLogin) => {
     const isAuthLoaded = authSelectors.isLoaded(useUserStore.getState());
+    // Only fetch when auth is loaded and login status is explicitly defined (true or false)
+    // Prevents unnecessary requests when login state is null/undefined
+    const shouldFetch =
+      isAuthLoaded && !isDeprecatedEdition && isLogin !== null && isLogin !== undefined;
     return useClientDataSWR<AiProviderRuntimeStateWithBuiltinModels | undefined>(
-      isAuthLoaded && !isDeprecatedEdition
-        ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin]
-        : null,
+      shouldFetch ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin] : null,
       async ([, isLogin]) => {
         const [{ LOBE_DEFAULT_MODEL_LIST: builtinAiModelList }, { DEFAULT_MODEL_PROVIDER_LIST }] =
           await Promise.all([import('model-bank'), import('@/config/modelProviders')]);

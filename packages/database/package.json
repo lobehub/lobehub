@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./schemas": "./src/schemas/index.ts"
+    "./schemas": "./src/schemas/index.ts",
+    "./test-utils": "./tests/test-utils.ts"
   },
   "scripts": {
     "test": "npm run test:client-db && npm run test:server-db",

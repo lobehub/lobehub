@@ -1,0 +1,816 @@
+---
+title: 在 LobeChat 中使用 ComfyUI 生成图像
+description: 学习如何在 LobeChat 中配置和使用 ComfyUI 服务，支持 FLUX 系列模型的高质量图像生成和编辑功能
+tags:
+  - ComfyUI
+  - FLUX
+  - 文生图
+  - 图像编辑
+  - AI 图像生成
+---
+
+# 在 LobeChat 中使用 ComfyUI
+
+<Image alt={'在 LobeChat 中使用 ComfyUI'} cover src={'https://github.com/lobehub/lobe-chat/assets/17870709/c9e5eafc-ca22-496b-a88d-cc0ae53bf720'} />
+
+本文档将指导你如何在 LobeChat 中使用 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 进行高质量的 AI 图像生成和编辑。
+
+## ComfyUI 简介
+
+ComfyUI 是一个功能强大的稳定扩散和流扩散 GUI，提供基于节点的工作流界面。LobeChat 集成了 ComfyUI，支持完整的 FLUX 系列模型，包括文本生成图像和图像编辑功能。
+
+### 主要特性
+
+- **广泛模型支持**：支持 223 个模型，包含 FLUX 系列（130 个）和 SD 系列（93 个）
+- **配置驱动架构**：注册表系统提供智能模型选择
+- **多格式支持**：支持 .safetensors 和 .gguf 格式，包含多种量化级别
+- **动态精度选择**：支持 default、fp8\_e4m3fn、fp8\_e5m2、fp8\_e4m3fn\_fast 精度
+- **多种认证方式**：支持无认证、基本认证、Bearer Token 和自定义认证
+- **智能组件选择**：自动选择最优的 T5、CLIP、VAE 编码器组合
+- **企业级优化**：包含 NF4、SVDQuant、TorchAO、MFLUX 等优化变体
+
+## 快速开始
+
+### 步骤一：在 LobeChat 中配置 ComfyUI
+
+#### 1. 打开设置界面
+
+- 访问 LobeChat 的 `设置` 界面
+- 在 `AI 服务商` 下找到 `ComfyUI` 的设置项
+
+<Image alt={'ComfyUI 设置界面'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/3f31bc33-509f-4ad2-ba81-280c2a6ec5fa'} />
+
+#### 2. 配置连接参数
+
+**基本配置**：
+
+- **服务器地址**：输入 ComfyUI 服务器地址，如 `http://localhost:8000`
+- **认证类型**：选择合适的认证方式（默认无认证）
+
+### 步骤二：选择模型并开始生成图像
+
+#### 1. 选择 FLUX 模型
+
+在对话界面中：
+
+- 点击模型选择按钮
+- 从 ComfyUI 分类中选择所需的 FLUX 模型
+
+<Image alt={'选择 FLUX 模型'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/ff7ebacf-27f0-42d7-810b-00314499a084'} />
+
+#### 2. 文本生成图像
+
+**使用 FLUX Schnell（快速生成）**：
+
+```plaintext
+Generate an image: A cute orange cat sitting on a sunny windowsill, warm lighting, detailed fur texture
+```
+
+**使用 FLUX Dev（高质量生成）**：
+
+```plaintext
+Generate high quality image: City skyline at sunset, cyberpunk style, neon lights, 4K high resolution, detailed architecture
+```
+
+#### 3. 图像编辑
+
+**使用 FLUX Kontext-dev 编辑图像**：
+
+```plaintext
+Edit this image: Change the background to a starry night sky, keep the main subject, cosmic atmosphere
+```
+
+然后上传需要编辑的原始图像。
+
+<Callout type={'info'}>
+  图像编辑功能需要先上传原始图像，然后描述你希望进行的修改。
+</Callout>
+
+## 认证配置指南
+
+ComfyUI 支持四种认证方式，请根据你的服务器配置和安全需求选择合适的认证方式：
+
+### 无认证 (none)
+
+**适用场景**：
+
+- 本地开发环境（localhost）
+- 内网环境且信任所有用户
+- 个人使用的单机部署
+
+**配置方法**：
+
+```yaml
+认证类型：无认证
+服务器地址：http://localhost:8000
+```
+
+### 基本认证 (basic)
+
+**适用场景**：
+
+- 使用 Nginx 反向代理的部署
+- 团队内部使用且需要基础访问控制
+
+**配置方法**：
+
+1. **创建用户密码**：
+
+```bash
+# 安装 apache2-utils
+sudo apt-get install apache2-utils
+
+# 创建用户 'admin'
+sudo htpasswd -c /etc/nginx/.htpasswd admin
+```
+
+2. **LobeChat 配置**：
+
+```yaml
+认证类型：基本认证
+服务器地址：https://your-domain.com
+用户名：admin
+密码：your_secure_password
+```
+
+### Bearer Token (bearer)
+
+**适用场景**：
+
+- API 驱动的应用集成
+- 需要 Token 认证的企业环境
+
+**生成 Token**：
+
+```python
+import jwt
+import datetime
+
+payload = {
+    'user': 'admin',
+    'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
+}
+
+secret_key = "your-secret-key"
+token = jwt.encode(payload, secret_key, algorithm='HS256')
+print(f"Bearer Token: {token}")
+```
+
+**LobeChat 配置**：
+
+```yaml
+认证类型：Bearer Token
+服务器地址：https://your-domain.com
+API 密钥：example-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### 自定义认证 (custom)
+
+**适用场景**：
+
+- 集成现有企业认证系统
+- 需要多重认证头的系统
+
+**LobeChat 配置**：
+
+```yaml
+认证类型：自定义
+服务器地址：https://your-domain.com
+自定义请求头：
+{
+  "X-API-Key": "your_api_key",
+  "X-Client-ID": "lobechat"
+}
+```
+
+## 常见问题处理
+
+### 1. 如何安装 Comfy-Manager
+
+Comfy-Manager 是 ComfyUI 的扩展管理器，让你能够轻松安装和管理各种节点、模型和扩展。
+
+<details>
+  <summary><b>📦 安装 Comfy-Manager 步骤</b></summary>
+
+  #### 方法一：手动安装（推荐）
+
+  ```bash
+  # 进入 ComfyUI 的 custom_nodes 目录
+  cd ComfyUI/custom_nodes
+
+  # 克隆 Comfy-Manager 仓库
+  git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+
+  # 重启 ComfyUI 服务器
+  # 重新启动后，你会在 UI 中看到 Manager 按钮
+  ```
+
+  #### 方法二：使用一键安装脚本
+
+  ```bash
+  # 在 ComfyUI 根目录下执行
+  curl -fsSL https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/install.sh | bash
+  ```
+
+  #### 验证安装
+
+  1. 重启 ComfyUI 服务器
+  2. 访问 `http://localhost:8000`
+  3. 你应该能在界面右下角看到 "Manager" 按钮
+
+  #### 使用 Comfy-Manager
+
+  **安装模型**：
+
+  1. 点击 "Manager" 按钮
+  2. 选择 "Install Models"
+  3. 搜索需要的模型（如 FLUX、SD3.5）
+  4. 点击 "Install" 自动下载到正确目录
+
+  **安装节点扩展**：
+
+  1. 点击 "Manager" 按钮
+  2. 选择 "Install Custom Nodes"
+  3. 搜索需要的节点（如 ControlNet、AnimateDiff）
+  4. 点击 "Install" 并重启服务器
+
+  **管理已安装内容**：
+
+  1. 点击 "Manager" 按钮
+  2. 选择 "Installed" 查看已安装的扩展
+  3. 可以更新、禁用或卸载扩展
+</details>
+
+### 2. 如何处理 "Model not found" 错误
+
+当你看到类似 `Model not found: flux1-dev.safetensors, please install one first.` 的错误时，说明服务器上缺少所需的模型文件。
+
+<details>
+  <summary><b>🔧 解决 Model not found 错误</b></summary>
+
+  #### 错误示例
+
+  ```plaintext
+  Model not found: flux1-dev.safetensors, please install one first.
+  ```
+
+  这个错误表示系统期望找到 `flux1-dev.safetensors` 模型文件，但在服务器上没有找到。
+
+  #### 解决方法
+
+  **方法一：使用 Comfy-Manager 下载（推荐）**
+
+  1. 打开 ComfyUI 界面
+  2. 点击 "Manager" → "Install Models"
+  3. 搜索错误提示中的模型名（如 "flux1-dev"）
+  4. 点击 "Install" 自动下载
+
+  **方法二：手动下载模型**
+
+  1. **下载模型文件**：
+     - 访问 [Hugging Face](https://huggingface.co/black-forest-labs/FLUX.1-dev) 或其他模型源
+     - 下载错误提示中的文件（如 `flux1-dev.safetensors`）
+
+  2. **放置到正确目录**：
+     ```bash
+     # FLUX 和 SD3.5 主模型放入
+     ComfyUI/models/diffusion_models/flux1-dev.safetensors
+
+     # SD1.5 和 SDXL 模型放入
+     ComfyUI/models/checkpoints/
+     ```
+
+  3. **验证文件**：
+     ```bash
+     # 检查文件是否存在
+     ls -la ComfyUI/models/diffusion_models/flux1-dev.safetensors
+
+     # 检查文件完整性（可选）
+     sha256sum flux1-dev.safetensors
+     ```
+
+  4. **重启 ComfyUI 服务器**
+
+  **方法三：使用 wget/curl 直接下载**
+
+  ```bash
+  # 进入模型目录
+  cd ComfyUI/models/diffusion_models/
+
+  # 使用 wget 下载（替换为实际下载链接）
+  wget https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors
+
+  # 或使用 curl
+  curl -L -o flux1-dev.safetensors https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors
+  ```
+
+  #### 常见模型下载源
+
+  - **Hugging Face**：[https://huggingface.co/models](https://huggingface.co/models)
+  - **Civitai**：[https://civitai.com/models](https://civitai.com/models)
+  - **官方源**：
+    - FLUX: [https://huggingface.co/black-forest-labs](https://huggingface.co/black-forest-labs)
+    - SD3.5: [https://huggingface.co/stabilityai](https://huggingface.co/stabilityai)
+
+  #### 预防措施
+
+  1. **基础模型包**：至少下载一个基础模型
+     - FLUX: `flux1-schnell.safetensors`（快速）或 `flux1-dev.safetensors`（高质量）
+     - SD3.5: `sd3.5_large.safetensors`
+
+  2. **检查磁盘空间**：
+     ```bash
+     # 检查可用空间
+     df -h ComfyUI/models/
+     ```
+
+  3. **设置模型路径**（可选）：
+     如果你的模型存储在其他位置，可以创建符号链接：
+     ```bash
+     ln -s /path/to/your/models ComfyUI/models/diffusion_models/
+     ```
+</details>
+
+### 3. 如何处理缺少 System Component 错误
+
+当你看到类似 `Missing VAE encoder: ae.safetensors` 或其他组件文件缺失的错误时，需要下载相应的系统组件。
+
+<details>
+  <summary><b>🛠️ 解决缺少 System Component 错误</b></summary>
+
+  #### 常见组件错误
+
+  ```plaintext
+  Missing VAE encoder: ae.safetensors. Please download and place it in the models/vae folder.
+  Missing CLIP encoder: clip_l.safetensors. Please download and place it in the models/clip folder.
+  Missing T5 encoder: t5xxl_fp16.safetensors. Please download and place it in the models/clip folder.
+  ```
+
+  #### 组件类型说明
+
+  | 组件类型           | 文件名示例                          | 用途         | 存放目录               |
+  | -------------- | ------------------------------ | ---------- | ------------------ |
+  | **VAE**        | ae.safetensors                 | 图像编码 / 解码  | models/vae/        |
+  | **CLIP**       | clip\_l.safetensors            | 文本编码（CLIP） | models/clip/       |
+  | **T5**         | t5xxl\_fp16.safetensors        | 文本编码（T5）   | models/clip/       |
+  | **ControlNet** | flux-controlnet-\*.safetensors | 控制网络       | models/controlnet/ |
+
+  #### 解决方法
+
+  **方法一：使用 Comfy-Manager（推荐）**
+
+  1. 点击 "Manager" → "Install Models"
+  2. 在 "Filter" 中选择组件类型（VAE/CLIP/T5）
+  3. 下载对应的组件文件
+
+  **方法二：手动下载必需组件**
+
+  ##### FLUX 必需组件
+
+  ```bash
+  # 1. VAE 编码器
+  cd ComfyUI/models/vae/
+  wget https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors
+
+  # 2. CLIP-L 编码器
+  cd ComfyUI/models/clip/
+  wget https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors
+
+  # 3. T5-XXL 编码器（可选择不同精度）
+  # FP16 版本（推荐，平衡性能）
+  wget https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors
+
+  # 或 FP8 版本（节省显存）
+  wget https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors
+  ```
+
+  ##### SD3.5 必需组件
+
+  ```bash
+  # SD3.5 使用不同的编码器
+  cd ComfyUI/models/clip/
+
+  # CLIP-G 编码器
+  wget https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/clip_g.safetensors
+
+  # CLIP-L 编码器
+  wget https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/clip_l.safetensors
+
+  # T5-XXL 编码器
+  wget https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/t5xxl_fp16.safetensors
+  ```
+
+  ##### SDXL 必需组件
+
+  ```bash
+  # SDXL VAE
+  cd ComfyUI/models/vae/
+  wget https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors
+
+  # SDXL 使用内置的 CLIP 编码器，通常不需要单独下载
+  ```
+
+  #### 组件兼容性矩阵
+
+  | 模型系列      | 必需 VAE         | 必需 CLIP             | 必需 T5                   | 可选组件       |
+  | --------- | -------------- | ------------------- | ----------------------- | ---------- |
+  | **FLUX**  | ae.safetensors | clip\_l.safetensors | t5xxl\_fp16.safetensors | ControlNet |
+  | **SD3.5** | 内置             | clip\_g + clip\_l   | t5xxl\_fp16             | -          |
+  | **SDXL**  | sdxl\_vae      | 内置                  | -                       | Refiner    |
+  | **SD1.5** | vae-ft-mse     | 内置                  | -                       | ControlNet |
+
+  #### 精度选择建议
+
+  **T5 编码器精度选择**：
+
+  | 显存容量    | 推荐版本   | 文件名                            |
+  | ------- | ------ | ------------------------------ |
+  | \< 12GB | FP8 量化 | t5xxl\_fp8\_e4m3fn.safetensors |
+  | 12-16GB | FP16   | t5xxl\_fp16.safetensors        |
+  | > 16GB  | FP32   | t5xxl.safetensors              |
+
+  #### 验证组件安装
+
+  ```bash
+  # 检查所有必需组件
+  echo "=== VAE Components ==="
+  ls -la ComfyUI/models/vae/
+
+  echo "=== CLIP/T5 Components ==="
+  ls -la ComfyUI/models/clip/
+
+  echo "=== ControlNet Components ==="
+  ls -la ComfyUI/models/controlnet/
+  ```
+
+  #### 故障排除
+
+  **问题：下载后仍然报错**
+
+  1. **检查文件权限**：
+     ```bash
+     chmod 644 ComfyUI/models/vae/*.safetensors
+     chmod 644 ComfyUI/models/clip/*.safetensors
+     ```
+
+  2. **清除缓存**：
+     ```bash
+     # 清除 ComfyUI 缓存
+     rm -rf ComfyUI/temp/*
+     rm -rf ComfyUI/__pycache__/*
+     ```
+
+  3. **重启服务器**：
+     ```bash
+     # 完全重启 ComfyUI
+     pkill -f "python main.py"
+     python main.py --listen 0.0.0.0 --port 8000
+     ```
+
+  **问题：显存不足**
+
+  使用量化版本的组件：
+
+  - T5: 使用 `t5xxl_fp8_e4m3fn.safetensors` 而不是 FP16/FP32
+  - VAE: 某些模型支持 FP16 VAE 版本
+
+  **问题：下载速度慢**
+
+  1. 使用镜像源（如适用）
+  2. 使用下载工具（如 aria2c）支持断点续传：
+     ```bash
+     aria2c -x 16 -s 16 -k 1M [下载链接]
+     ```
+</details>
+
+## ComfyUI 服务器安装
+
+<details>
+  <summary><b>🚀 安装和配置 ComfyUI 服务器</b></summary>
+
+  ### 1. 安装 ComfyUI
+
+  ```bash
+  # 克隆 ComfyUI 仓库
+  git clone https://github.com/comfyanonymous/ComfyUI.git
+  cd ComfyUI
+
+  # 安装依赖
+  pip install -r requirements.txt
+
+  # 可选：安装JWT支持（用于Token认证）
+  pip install PyJWT
+
+  # 启动 ComfyUI 服务器
+  python main.py --listen 0.0.0.0 --port 8000
+  ```
+
+  ### 2. 下载模型文件
+
+  **推荐基础配置** (最小化安装)：
+
+  **主模型** (放入 `models/diffusion_models/` 目录)：
+
+  - `flux1-schnell.safetensors` - 快速生成（4 步）
+  - `flux1-dev.safetensors` - 高质量创作（20 步）
+
+  **必需组件** (放入相应目录)：
+
+  - `models/vae/ae.safetensors` - VAE 编码器
+  - `models/clip/clip_l.safetensors` - CLIP 文本编码器
+  - `models/clip/t5xxl_fp16.safetensors` - T5 文本编码器
+
+  ### 3. 验证服务器运行
+
+  访问 `http://localhost:8000` 确认 ComfyUI 界面正常加载。
+
+  <Callout type={'info'}>
+    **智能模型选择**：LobeChat 会根据服务器上可用的模型文件自动选择最佳模型。您无需下载所有模型，系统会在可用模型中按优先级（官方 > 企业 > 社区）自动选择。
+  </Callout>
+</details>
+
+## 支持的模型
+
+LobeChat ComfyUI 集成采用配置驱动的架构，支持 **223 个模型**，提供从官方模型到社区优化版本的全覆盖。
+
+### FLUX 系列推荐参数
+
+| 模型类型        | 推荐步数 | CFG Scale | 分辨率范围               |
+| ----------- | ---- | --------- | ------------------- |
+| **Schnell** | 4 步  | -         | 512×512 至 1536×1536 |
+| **Dev**     | 20 步 | 3.5       | 512×512 至 2048×2048 |
+| **Kontext** | 20 步 | 3.5       | 512×512 至 2048×2048 |
+| **Krea**    | 20 步 | 4.5       | 512×512 至 2048×2048 |
+
+### SD3.5 系列参数
+
+| 模型类型            | 推荐步数 | CFG Scale | 分辨率范围               |
+| --------------- | ---- | --------- | ------------------- |
+| **Large**       | 25 步 | 7.0       | 512×512 至 2048×2048 |
+| **Large Turbo** | 8 步  | 3.5       | 512×512 至 1536×1536 |
+| **Medium**      | 20 步 | 6.0       | 512×512 至 1536×1536 |
+
+<details>
+  <summary><b>📋 当前完整支持的模型列表</b></summary>
+
+  ### 模型分类体系
+
+  #### 优先级 1：官方核心模型
+
+  **FLUX.1 Official 系列**：
+
+  - `flux1-dev.safetensors` - 高质量创作模型
+  - `flux1-schnell.safetensors` - 快速生成模型
+  - `flux1-kontext-dev.safetensors` - 图像编辑模型
+  - `flux1-krea-dev.safetensors` - 安全增强模型
+
+  **SD3.5 Official 系列**：
+
+  - `sd3.5_large.safetensors` - SD3.5 大型基础模型
+  - `sd3.5_large_turbo.safetensors` - 快速生成版本
+  - `sd3.5_medium.safetensors` - 中等规模模型
+
+  #### 优先级 2：企业优化模型（106 个 FLUX）
+
+  **量化优化系列**：
+
+  - **GGUF 量化**：每个变体支持 11 种量化级别（F16, Q8\_0, Q6\_K, Q5\_K\_M, Q5\_K\_S, Q4\_K\_M, Q4\_K\_S, Q4\_0, Q3\_K\_M, Q3\_K\_S, Q2\_K）
+  - **FP8 精度**：fp8\_e4m3fn、fp8\_e5m2 优化版本
+  - **企业轻量级**：FLUX.1-lite-8B 系列
+  - **技术实验**：NF4、SVDQuant、TorchAO、optimum-quanto、MFLUX 优化版本
+
+  #### 优先级 3：社区精调模型（48 个 FLUX）
+
+  **社区优化系列**：
+
+  - **Jib Mix Flux** 系列：高质量混合模型
+  - **Real Dream FLUX** 系列：现实主义风格
+  - **Vision Realistic** 系列：视觉现实化
+  - **PixelWave FLUX** 系列：像素艺术优化
+  - **Fluxmania** 系列：多样化风格支持
+
+  ### SD 系列模型支持（93 个）
+
+  **SD3.5 系列**：5 个模型
+  **SD1.5 系列**：37 个模型（包括官方、量化和社区版本）
+  **SDXL 系列**：50 个模型（包括基础、Refiner 和 Playground 模型）
+
+  ### 工作流支持
+
+  系统支持 **6 种工作流**：
+
+  - **flux-dev**：高质量创作工作流
+  - **flux-schnell**：快速生成工作流
+  - **flux-kontext**：图像编辑工作流
+  - **sd35**：SD3.5 专用工作流
+  - **simple-sd**：简单 SD 工作流
+  - **index**：工作流入口
+</details>
+
+## 性能优化建议
+
+### 硬件要求
+
+**最低配置** (GGUF 量化模型)：
+
+- GPU：6GB VRAM (使用 Q4 量化)
+- RAM：12GB
+- 存储：30GB 可用空间
+
+**推荐配置** (标准模型)：
+
+- GPU：12GB+ VRAM (RTX 4070 Ti 或更高)
+- RAM：24GB+
+- 存储：SSD 100GB+ 可用空间
+
+### 显存优化策略
+
+| 显存容量        | 推荐量化            | 模型示例                               | 性能特点    |
+| ----------- | --------------- | ---------------------------------- | ------- |
+| **6-8GB**   | Q4\_0, Q4\_K\_S | `flux1-dev-Q4_0.gguf`              | 最小显存占用  |
+| **10-12GB** | Q6\_K, Q8\_0    | `flux1-dev-Q6_K.gguf`              | 平衡性能与质量 |
+| **16GB+**   | FP8, FP16       | `flux1-dev-fp8-e4m3fn.safetensors` | 接近原始质量  |
+| **24GB+**   | 完整模型            | `flux1-dev.safetensors`            | 最佳质量    |
+
+## 自定义模型使用
+
+<details>
+  <summary><b>🎨 配置自定义 SD 模型</b></summary>
+
+  LobeChat 支持使用自定义的 Stable Diffusion 模型。系统使用固定的文件名来识别自定义模型。
+
+  ### 1. 模型文件准备
+
+  **必需文件**：
+
+  - **主模型文件**：`custom_sd_lobe.safetensors`
+  - **VAE 文件（可选）**：`custom_sd_vae_lobe.safetensors`
+
+  ### 2. 添加自定义模型
+
+  **方法一：重命名现有模型**
+
+  ```bash
+  # 将您的模型重命名为固定文件名
+  mv your_custom_model.safetensors custom_sd_lobe.safetensors
+
+  # 移动到正确目录
+  mv custom_sd_lobe.safetensors ComfyUI/models/diffusion_models/
+  ```
+
+  **方法二：创建符号链接（推荐）**
+
+  ```bash
+  # 创建软链接，方便切换不同模型
+  ln -s /path/to/your_model.safetensors ComfyUI/models/diffusion_models/custom_sd_lobe.safetensors
+  ```
+
+  ### 3. 使用自定义模型
+
+  在 LobeChat 中，自定义模型会显示为：
+
+  - **stable-diffusion-custom**：标准自定义模型
+  - **stable-diffusion-custom-refiner**：Refiner 自定义模型
+
+  ### 自定义模型参数建议
+
+  | 参数         | SD 1.5 模型 | SDXL 模型 |
+  | ---------- | --------- | ------- |
+  | **steps**  | 20-30     | 25-40   |
+  | **cfg**    | 7.0       | 6.0-8.0 |
+  | **width**  | 512       | 1024    |
+  | **height** | 512       | 1024    |
+</details>
+
+## 故障排除
+
+### 智能错误诊断系统
+
+LobeChat 集成了智能错误处理系统，能够自动诊断并提供针对性的解决方案。
+
+#### 错误类型与解决方案
+
+| 错误类型     | 用户提示                | 自动诊断            |
+| -------- | ------------------- | --------------- |
+| **连接问题** | "无法连接到 ComfyUI 服务器" | 自动检测服务器状态和网络连通性 |
+| **认证问题** | "API 密钥无效或已过期"      | 自动验证认证凭据有效性     |
+| **权限问题** | "访问权限不足"            | 自动检查用户权限和文件访问权限 |
+| **模型问题** | "找不到指定的模型文件"        | 自动扫描可用模型并建议替代方案 |
+| **配置问题** | "配置文件存在错误"          | 自动验证配置完整性和语法正确性 |
+
+<details>
+  <summary><b>🔍 传统故障排除方法</b></summary>
+
+  #### 1. 连接失败
+
+  **问题**：无法连接到 ComfyUI 服务器
+
+  **解决方案**：
+
+  ```bash
+  # 确认服务器运行
+  curl http://localhost:8000/system_stats
+
+  # 检查端口
+  netstat -tulpn | grep 8000
+  ```
+
+  #### 2. 内存不足
+
+  **问题**：生成过程中出现内存错误
+
+  **解决方案**：
+
+  - 降低图像分辨率
+  - 减少生成步数
+  - 使用量化模型
+
+  #### 3. 认证失败
+
+  **问题**：401 或 403 错误
+
+  **解决方案**：
+
+  - 验证认证配置
+  - 检查 Token 是否过期
+  - 确认用户权限
+</details>
+
+## 最佳实践
+
+### 提示词编写
+
+1. **详细描述**：提供清晰、详细的图像描述
+2. **风格指定**：明确指定艺术风格、色彩风格等
+3. **质量关键词**：添加 "4K", "high quality", "detailed" 等关键词
+4. **避免矛盾**：确保描述内容逻辑一致
+
+**示例**：
+
+```plaintext
+A young woman with flowing long hair, wearing an elegant blue dress, standing in a cherry blossom park,
+sunlight filtering through leaves, warm atmosphere, cinematic lighting, 4K high resolution, detailed, photorealistic
+```
+
+### 参数调优
+
+1. **FLUX Schnell**：适合快速预览，使用 4 步生成
+2. **FLUX Dev**：平衡质量和速度，CFG 3.5，步数 20
+3. **FLUX Krea-dev**：安全创作，CFG 4.5，注意内容过滤
+4. **FLUX Kontext-dev**：图像编辑，strength 0.6-0.9
+
+<Callout type={'warning'}>
+  在使用过程中请注意：
+
+  - FLUX Dev、Krea-dev、Kontext-dev 模型仅限非商业使用
+  - 生成内容请遵守相关法律法规和平台政策
+  - 大型模型生成可能需要较长时间，请耐心等待
+</Callout>
+
+## API 参考
+
+<details>
+  <summary><b>📚 API 文档</b></summary>
+
+  ### 请求格式
+
+  ```typescript
+  interface ComfyUIRequest {
+    model: string; // 模型 ID，如 'flux-schnell'
+    prompt: string; // 文本提示词
+    width: number; // 图像宽度
+    height: number; // 图像高度
+    steps: number; // 生成步数
+    seed: number; // 随机种子
+    cfg?: number; // CFG Scale (Dev/Krea/Kontext 专用)
+    strength?: number; // 编辑强度 (Kontext 专用)
+    imageUrl?: string; // 输入图像 (Kontext 专用)
+  }
+  ```
+
+  ### 响应格式
+
+  ```typescript
+  interface ComfyUIResponse {
+    images: Array<{
+      url: string; // 生成的图像 URL
+      filename: string; // 文件名
+      subfolder: string; // 子目录
+      type: string; // 文件类型
+    }>;
+    prompt_id: string; // 提示 ID
+  }
+  ```
+
+  ### 错误代码
+
+  | 错误代码  | 描述     | 解决建议           |
+  | ----- | ------ | -------------- |
+  | `400` | 请求参数无效 | 检查参数格式和范围      |
+  | `401` | 认证失败   | 验证 API 密钥和认证配置 |
+  | `403` | 权限不足   | 检查用户权限         |
+  | `404` | 模型未找到  | 确认模型文件存在       |
+  | `500` | 服务器错误  | 检查 ComfyUI 日志  |
+</details>
+
+至此你已经可以在 LobeChat 中使用 ComfyUI 进行高质量的 AI 图像生成和编辑了。如果遇到问题，请参考故障排除部分或查阅 [ComfyUI 官方文档](https://github.com/comfyanonymous/ComfyUI)。

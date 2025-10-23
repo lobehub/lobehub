@@ -4,7 +4,7 @@ import { Flexbox } from 'react-layout-kit';
 import CategoryContainer from '../../../components/CategoryContainer';
 import Category from '../features/Category';
 
-const Layout = async ({ children }: PropsWithChildren) => {
+const Layout = ({ children }: PropsWithChildren) => {
   return (
     <Flexbox gap={24} horizontal style={{ position: 'relative' }} width={'100%'}>
       <CategoryContainer>

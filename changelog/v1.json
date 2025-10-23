@@ -1,6 +1,118 @@
 [
   {
     "children": {
+      "fixes": ["Loadmore not work & navbar not show in pwa."]
+    },
+    "date": "2025-10-23",
+    "version": "1.141.10"
+  },
+  {
+    "children": {
+      "improvements": ["Improve local system tools render."]
+    },
+    "date": "2025-10-23",
+    "version": "1.141.9"
+  },
+  {
+    "children": {
+      "improvements": ["Improvement for Agent Team After Alpha Launch [LOB-517]."]
+    },
+    "date": "2025-10-23",
+    "version": "1.141.8"
+  },
+  {
+    "children": {
+      "improvements": ["Allow removal of top_p and similar request parameters."]
+    },
+    "date": "2025-10-23",
+    "version": "1.141.7"
+  },
+  {
+    "children": {},
+    "date": "2025-10-22",
+    "version": "1.141.6"
+  },
+  {
+    "children": {
+      "improvements": ["Change discover page from RSC to SPA to improve performance."]
+    },
+    "date": "2025-10-22",
+    "version": "1.141.5"
+  },
+  {
+    "children": {
+      "improvements": ["Fix model runtime cost calculate with CNY."]
+    },
+    "date": "2025-10-22",
+    "version": "1.141.4"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-10-22",
+    "version": "1.141.3"
+  },
+  {
+    "children": {},
+    "date": "2025-10-21",
+    "version": "1.141.2"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor context engine."]
+    },
+    "date": "2025-10-21",
+    "version": "1.141.1"
+  },
+  {
+    "children": {
+      "features": ["Add PDF export functionality to share modal."],
+      "fixes": [
+        "Ignore abort signal errors in TRPC client, slove when pwa user info have code cannot be viewed in full."
+      ],
+      "improvements": [
+        "Add knowledge base mansory layout [LOB-496], improve rich text link display."
+      ]
+    },
+    "date": "2025-10-21",
+    "version": "1.141.0"
+  },
+  {
+    "children": {
+      "features": ["Add ComfyUI integration Phase1(RFC-128)."]
+    },
+    "date": "2025-10-21",
+    "version": "1.140.0"
+  },
+  {
+    "children": {},
+    "date": "2025-10-21",
+    "version": "1.139.5"
+  },
+  {
+    "children": {
+      "fixes": ["Pass threadId to messages in sendMessageInServer."]
+    },
+    "date": "2025-10-21",
+    "version": "1.139.4"
+  },
+  {
+    "children": {
+      "improvements": ["Show message author in minimap."]
+    },
+    "date": "2025-10-21",
+    "version": "1.139.3"
+  },
+  {
+    "children": {
+      "improvements": ["Solve when desktop the sider agent list too long."]
+    },
+    "date": "2025-10-20",
+    "version": "1.139.2"
+  },
+  {
+    "children": {
       "improvements": ["Update i18n."]
     },
     "date": "2025-10-20",

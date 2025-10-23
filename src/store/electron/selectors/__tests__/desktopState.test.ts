@@ -6,7 +6,7 @@ import { merge } from '@/utils/merge';
 import { desktopStateSelectors } from '../desktopState';
 
 describe('desktopStateSelectors', () => {
-  describe('usePath', () => {
+  describe('userPath', () => {
     it('should return userPath from appState', () => {
       const state: ElectronState = merge(initialState, {
         appState: {
@@ -23,7 +23,7 @@ describe('desktopStateSelectors', () => {
         },
       });
 
-      expect(desktopStateSelectors.usePath(state)).toEqual({
+      expect(desktopStateSelectors.userPath(state)).toEqual({
         desktop: '/test/desktop',
         documents: '/test/documents',
         downloads: '/test/downloads',
@@ -40,7 +40,7 @@ describe('desktopStateSelectors', () => {
         appState: {},
       });
 
-      expect(desktopStateSelectors.usePath(state)).toBeUndefined();
+      expect(desktopStateSelectors.userPath(state)).toBeUndefined();
     });
   });
 });

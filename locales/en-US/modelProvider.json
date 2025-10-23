@@ -82,6 +82,58 @@
       "title": "Cloudflare Account ID / API Address"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "API key for Bearer Token authentication",
+      "placeholder": "Enter API key",
+      "required": "Please enter the API key",
+      "title": "API Key"
+    },
+    "authType": {
+      "desc": "Select the authentication method for connecting to the ComfyUI server",
+      "options": {
+        "basic": "Basic Authentication",
+        "bearer": "Bearer Token",
+        "custom": "Custom Authentication",
+        "none": "No Authentication"
+      },
+      "placeholder": "Please select an authentication type",
+      "title": "Authentication Type"
+    },
+    "baseURL": {
+      "desc": "ComfyUI server access address, e.g., http://localhost:8000",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Please enter the ComfyUI service URL",
+      "title": "ComfyUI Service URL"
+    },
+    "checker": {
+      "desc": "Test if the connection is properly configured",
+      "title": "Connectivity Check"
+    },
+    "customHeaders": {
+      "addButton": "Add Header",
+      "deleteTooltip": "Delete this header",
+      "desc": "Request headers required for custom authentication, formatted as key-value pairs",
+      "duplicateKeyError": "Header names cannot be duplicated",
+      "keyPlaceholder": "Key",
+      "required": "Please enter custom request headers",
+      "title": "Custom Headers",
+      "valuePlaceholder": "Value"
+    },
+    "password": {
+      "desc": "Password for basic authentication",
+      "placeholder": "Enter password",
+      "required": "Please enter the password",
+      "title": "Password"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Username for basic authentication",
+      "placeholder": "Enter username",
+      "required": "Please enter the username",
+      "title": "Username"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Please enter your API Key",

@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "Metin, görüntü veya karma içeriklerin sınıflandırılması veya gömme haline dönüştürülmesine olanak tanıyan model."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - Yüksek kaliteli metinden görsele model, 10-50 adımda üretim, sanatsal çalışmalar ve yaratıcı içerikler için uygundur"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - Görsel düzenleme modeli, metin komutlarına dayalı mevcut görselleri düzenlemeyi destekler, bölgesel düzenleme ve stil transferi mümkündür"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - Geliştirilmiş güvenliğe sahip metinden görsele modeli, Krea iş birliğiyle geliştirilmiştir, yerleşik güvenlik filtresi içerir"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - Ultra hızlı metinden görsele modeli, yalnızca 1-4 adımda yüksek kaliteli görseller üretir, gerçek zamanlı uygulamalar ve hızlı prototipleme için idealdir"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 metinden görsele modeli, klasik 512x512 çözünürlükte metinden görsele üretim sağlar, hızlı prototipleme ve yaratıcı denemeler için uygundur"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 yeni nesil metinden görsele modeli, Large ve Medium olmak üzere iki sürümü destekler, harici CLIP kodlayıcı dosyası gerektirir, üstün görsel kalite ve istem uyumu sunar"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 yerleşik CLIP/T5 kodlayıcılı sürüm, harici kodlayıcı dosyasına ihtiyaç duymaz, sd3.5_medium_incl_clips gibi modeller için uygundur, daha az kaynak kullanır"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "Özelleştirilmiş SD metinden görsele modeli, model dosya adı custom_sd_lobe.safetensors olmalıdır, varsa VAE dosyası custom_sd_vae_lobe.safetensors olarak adlandırılmalıdır, model dosyaları Comfy'nin gereksinimlerine göre ilgili klasöre yerleştirilmelidir"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "Özelleştirilmiş SDXL görselden görsele modeli, model dosya adı custom_sd_lobe.safetensors olmalıdır, varsa VAE dosyası custom_sd_vae_lobe.safetensors olarak adlandırılmalıdır, model dosyaları Comfy'nin gereksinimlerine göre ilgili klasöre yerleştirilmelidir"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "SDXL görselden görsele modeli, giriş görseline dayalı yüksek kaliteli dönüşüm sağlar, stil transferi, görsel onarımı ve yaratıcı dönüşümleri destekler"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "SDXL metinden görsele modeli, 1024x1024 yüksek çözünürlükte metinden görsele üretimi destekler, daha iyi görsel kalite ve detay sunar"
+  },
   "command": {
     "description": "Dil görevlerinde yüksek kalite ve güvenilirlik sunan, talimatları izleyen bir diyalog modelidir ve temel üretim modelimize göre daha uzun bir bağlam uzunluğuna sahiptir."
   },

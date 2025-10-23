@@ -1,4 +1,5 @@
 packages:
   - 'packages/**'
   - '.'
+  - 'e2e'
   - '!apps/**'

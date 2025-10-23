@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "Ein Modell, das es ermöglicht, Text, Bilder oder gemischte Inhalte zu klassifizieren oder in Einbettungen umzuwandeln."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev – Hochwertiges Text-zu-Bild-Modell, erzeugt Bilder in 10–50 Schritten, ideal für kreative Arbeiten und künstlerische Bildgenerierung"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev – Bildbearbeitungsmodell, unterstützt textbasierte Anweisungen zur Modifikation bestehender Bilder, inklusive lokaler Änderungen und Stilübertragungen"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev – Sicheres Text-zu-Bild-Modell, entwickelt in Zusammenarbeit mit Krea, mit integriertem Sicherheitsfilter"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell – Ultraflottes Text-zu-Bild-Modell, erzeugt hochwertige Bilder in nur 1–4 Schritten, ideal für Echtzeitanwendungen und schnelles Prototyping"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 Text-zu-Bild-Modell, klassisches 512x512-Auflösungsmodell für schnelle Prototypen und kreative Experimente"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 – Nächste Generation des Text-zu-Bild-Modells, verfügbar in Large- und Medium-Versionen, benötigt externe CLIP-Encoder-Dateien, bietet herausragende Bildqualität und präzise Prompt-Übereinstimmung"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 mit integriertem CLIP/T5-Encoder – keine externen Encoder-Dateien erforderlich, geeignet für Modelle wie sd3.5_medium_incl_clips, ressourcenschonender"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "Benutzerdefiniertes SD Text-zu-Bild-Modell – Modell-Dateiname sollte custom_sd_lobe.safetensors lauten, bei VAE bitte custom_sd_vae_lobe.safetensors verwenden; Modell-Dateien müssen gemäß Comfy-Vorgaben im entsprechenden Ordner abgelegt werden"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "Benutzerdefiniertes SDXL Bild-zu-Bild-Modell – Modell-Dateiname sollte custom_sd_lobe.safetensors lauten, bei VAE bitte custom_sd_vae_lobe.safetensors verwenden; Modell-Dateien müssen gemäß Comfy-Vorgaben im entsprechenden Ordner abgelegt werden"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "SDXL Bild-zu-Bild-Modell – Hochwertige Bildtransformation basierend auf Eingabebildern, unterstützt Stilübertragungen, Bildrestaurierung und kreative Modifikationen"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "SDXL Text-zu-Bild-Modell – Unterstützt hochauflösende 1024x1024 Text-zu-Bild-Generierung, bietet verbesserte Bildqualität und Detailgenauigkeit"
+  },
   "command": {
     "description": "Ein dialogbasiertes Modell, das Anweisungen folgt und in sprachlichen Aufgaben hohe Qualität und Zuverlässigkeit bietet. Im Vergleich zu unserem grundlegenden Generierungsmodell hat es eine längere Kontextlänge."
   },

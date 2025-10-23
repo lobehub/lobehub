@@ -6,11 +6,10 @@ import { Popover } from 'antd';
 import { createStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { ClockIcon } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'nextjs-toploader/app';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
+import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelInfoTags } from '@/components/ModelSelect';
@@ -57,14 +56,14 @@ const ModelItem = memo<DiscoverModelItem>(
   ({ identifier, displayName, contextWindowTokens, releasedAt, type, abilities, providers }) => {
     const { t } = useTranslation(['models', 'discover']);
     const { styles } = useStyles();
-    const router = useRouter();
-    const link = urlJoin('/discover/model', identifier);
+    const navigate = useNavigate();
+    const link = urlJoin('/model', identifier);
     return (
       <Block
         clickable
         height={'100%'}
         onClick={() => {
-          router.push(link);
+          navigate(link);
         }}
         style={{
           overflow: 'hidden',
@@ -106,7 +105,7 @@ const ModelItem = memo<DiscoverModelItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link href={link} style={{ color: 'inherit', overflow: 'hidden' }}>
+                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
                   <Text as={'h2'} className={styles.title} ellipsis>
                     {displayName}
                   </Text>

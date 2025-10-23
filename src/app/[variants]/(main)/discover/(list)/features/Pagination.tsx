@@ -3,11 +3,10 @@
 import { Pagination as Page } from 'antd';
 import { createStyles } from 'antd-style';
 import { memo } from 'react';
-import urlJoin from 'url-join';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/discover/features/const';
 import { useQuery } from '@/hooks/useQuery';
-import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { DiscoverTab } from '@/types/discover';
 
 const useStyles = createStyles(({ css, token, prefixCls }) => {
@@ -36,14 +35,14 @@ interface PaginationProps {
 const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize }) => {
   const { styles } = useStyles();
   const { page } = useQuery();
-  const router = useQueryRoute();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handlePageChange = (newPage: number) => {
-    router.push(urlJoin('/discover', tab), {
-      query: {
-        page: String(newPage),
-      },
-    });
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.set('page', String(newPage));
+    navigate(`/${tab}?${searchParams.toString()}`);
+
     const scrollableElement = document?.querySelector(`#${SCROLL_PARENT_ID}`);
     if (!scrollableElement) return;
     scrollableElement.scrollTo({ behavior: 'smooth', top: 0 });

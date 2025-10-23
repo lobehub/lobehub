@@ -82,6 +82,58 @@
       "title": "ID tài khoản Cloudflare / địa chỉ API"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Khóa API cần thiết để xác thực Bearer Token",
+      "placeholder": "Vui lòng nhập khóa API",
+      "required": "Vui lòng nhập khóa API",
+      "title": "Khóa API"
+    },
+    "authType": {
+      "desc": "Chọn phương thức xác thực với máy chủ ComfyUI",
+      "options": {
+        "basic": "Tài khoản/Mật khẩu",
+        "bearer": "Bearer (Khóa API)",
+        "custom": "Tiêu đề yêu cầu tùy chỉnh",
+        "none": "Không cần xác thực"
+      },
+      "placeholder": "Vui lòng chọn loại xác thực",
+      "title": "Loại xác thực"
+    },
+    "baseURL": {
+      "desc": "Địa chỉ truy cập web của ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Vui lòng nhập địa chỉ dịch vụ ComfyUI",
+      "title": "Địa chỉ dịch vụ ComfyUI"
+    },
+    "checker": {
+      "desc": "Kiểm tra kết nối đã được cấu hình đúng chưa",
+      "title": "Kiểm tra kết nối"
+    },
+    "customHeaders": {
+      "addButton": "Thêm tiêu đề yêu cầu",
+      "deleteTooltip": "Xóa tiêu đề yêu cầu này",
+      "desc": "Tiêu đề yêu cầu cần thiết cho phương thức xác thực tùy chỉnh, định dạng cặp khóa-giá trị",
+      "duplicateKeyError": "Tên khóa tiêu đề yêu cầu không được trùng lặp",
+      "keyPlaceholder": "Tên khóa",
+      "required": "Vui lòng nhập tiêu đề yêu cầu tùy chỉnh",
+      "title": "Tiêu đề yêu cầu tùy chỉnh",
+      "valuePlaceholder": "Giá trị"
+    },
+    "password": {
+      "desc": "Mật khẩu cần thiết cho xác thực cơ bản",
+      "placeholder": "Vui lòng nhập mật khẩu",
+      "required": "Vui lòng nhập mật khẩu",
+      "title": "Mật khẩu"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Tên người dùng cần thiết cho xác thực cơ bản",
+      "placeholder": "Vui lòng nhập tên người dùng",
+      "required": "Vui lòng nhập tên người dùng",
+      "title": "Tên người dùng"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Vui lòng nhập API Key của bạn",

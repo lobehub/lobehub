@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "Toplam {{count}} öğe",
       "selectedCount": "Seçilen {{count}} öğe"
+    },
+    "view": {
+      "list": "Liste Görünümü",
+      "masonry": "Karo Görünümü"
     }
   },
   "FileParsingStatus": {

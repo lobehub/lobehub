@@ -1,5 +1,5 @@
 {
-  "desc": "Manage files and knowledge base",
+  "desc": "Manage your knowledge",
   "detail": {
     "basic": {
       "createdAt": "Creation Time",
@@ -70,7 +70,7 @@
     "videos": "Videos",
     "websites": "Websites"
   },
-  "title": "Files",
+  "title": "Knowledge Base",
   "toggleLeftPanel": {
     "title": "Show/Hide Left Panel"
   },

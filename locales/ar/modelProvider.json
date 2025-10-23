@@ -82,6 +82,58 @@
       "title": "رقم حساب Cloudflare / عنوان URL API"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "مفتاح API المطلوب لمصادقة Bearer Token",
+      "placeholder": "يرجى إدخال مفتاح API",
+      "required": "يرجى إدخال مفتاح API",
+      "title": "مفتاح API"
+    },
+    "authType": {
+      "desc": "اختر طريقة المصادقة مع خادم ComfyUI",
+      "options": {
+        "basic": "اسم المستخدم/كلمة المرور",
+        "bearer": "Bearer (مفتاح API)",
+        "custom": "رؤوس مخصصة",
+        "none": "لا حاجة للمصادقة"
+      },
+      "placeholder": "يرجى اختيار نوع المصادقة",
+      "title": "نوع المصادقة"
+    },
+    "baseURL": {
+      "desc": "عنوان الوصول إلى واجهة ComfyUI على الويب",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "يرجى إدخال عنوان خدمة ComfyUI",
+      "title": "عنوان خدمة ComfyUI"
+    },
+    "checker": {
+      "desc": "اختبار ما إذا كان الاتصال مهيأ بشكل صحيح",
+      "title": "فحص الاتصال"
+    },
+    "customHeaders": {
+      "addButton": "إضافة رأس طلب",
+      "deleteTooltip": "حذف رأس الطلب هذا",
+      "desc": "رؤوس الطلب المطلوبة لطريقة المصادقة المخصصة، بتنسيق زوج مفتاح-قيمة",
+      "duplicateKeyError": "لا يمكن تكرار أسماء رؤوس الطلب",
+      "keyPlaceholder": "اسم المفتاح",
+      "required": "يرجى إدخال رؤوس الطلب المخصصة",
+      "title": "رؤوس الطلب المخصصة",
+      "valuePlaceholder": "القيمة"
+    },
+    "password": {
+      "desc": "كلمة المرور المطلوبة للمصادقة الأساسية",
+      "placeholder": "يرجى إدخال كلمة المرور",
+      "required": "يرجى إدخال كلمة المرور",
+      "title": "كلمة المرور"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "اسم المستخدم المطلوب للمصادقة الأساسية",
+      "placeholder": "يرجى إدخال اسم المستخدم",
+      "required": "يرجى إدخال اسم المستخدم",
+      "title": "اسم المستخدم"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "يرجى إدخال مفتاح API الخاص بك",

@@ -64,7 +64,7 @@ describe('BrowserWindowsCtr', () => {
     it('should show the settings window with the specified tab', async () => {
       const tab = 'appearance';
       const result = await browserWindowsCtr.openSettingsWindow(tab);
-      expect(mockShowSettingsWindowWithTab).toHaveBeenCalledWith(tab);
+      expect(mockShowSettingsWindowWithTab).toHaveBeenCalledWith({ tab });
       expect(result).toEqual({ success: true });
     });
 
@@ -120,11 +120,11 @@ describe('BrowserWindowsCtr', () => {
     it('should show settings window if matched route target is settings', async () => {
       const params: InterceptRouteParams = {
         ...baseParams,
-        path: '/settings?active=common',
-        url: 'app://host/settings?active=common',
+        path: '/settings/provider',
+        url: 'app://host/settings/provider?active=provider&provider=ollama',
       };
       const matchedRoute = { targetWindow: BrowsersIdentifiers.settings, pathPrefix: '/settings' };
-      const subPath = 'common';
+      const subPath = 'provider';
       (findMatchingRoute as Mock).mockReturnValue(matchedRoute);
       (extractSubPath as Mock).mockReturnValue(subPath);
 
@@ -132,7 +132,10 @@ describe('BrowserWindowsCtr', () => {
 
       expect(findMatchingRoute).toHaveBeenCalledWith(params.path);
       expect(extractSubPath).toHaveBeenCalledWith(params.path, matchedRoute.pathPrefix);
-      expect(mockShowSettingsWindowWithTab).toHaveBeenCalledWith(subPath);
+      expect(mockShowSettingsWindowWithTab).toHaveBeenCalledWith({
+        searchParams: { active: 'provider', provider: 'ollama' },
+        tab: subPath,
+      });
       expect(result).toEqual({
         intercepted: true,
         path: params.path,
@@ -170,11 +173,11 @@ describe('BrowserWindowsCtr', () => {
     it('should return error if processing route interception fails for settings', async () => {
       const params: InterceptRouteParams = {
         ...baseParams,
-        path: '/settings?active=general',
+        path: '/settings',
         url: 'app://host/settings?active=general',
       };
       const matchedRoute = { targetWindow: BrowsersIdentifiers.settings, pathPrefix: '/settings' };
-      const subPath = 'general';
+      const subPath = undefined;
       const errorMessage = 'Processing error for settings';
       (findMatchingRoute as Mock).mockReturnValue(matchedRoute);
       (extractSubPath as Mock).mockReturnValue(subPath);
@@ -182,6 +185,10 @@ describe('BrowserWindowsCtr', () => {
 
       const result = await browserWindowsCtr.interceptRoute(params);
 
+      expect(mockShowSettingsWindowWithTab).toHaveBeenCalledWith({
+        searchParams: { active: 'general' },
+        tab: subPath,
+      });
       expect(result).toEqual({
         error: errorMessage,
         intercepted: false,

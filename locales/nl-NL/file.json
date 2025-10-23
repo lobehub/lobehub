@@ -1,5 +1,5 @@
 {
-  "desc": "Beheer je bestanden en kennisbank",
+  "desc": "Beheer je kennis",
   "detail": {
     "basic": {
       "createdAt": "Aanmaakdatum",
@@ -70,7 +70,7 @@
     "videos": "Video's",
     "websites": "Websites"
   },
-  "title": "Bestanden",
+  "title": "Kennisbank",
   "toggleLeftPanel": {
     "title": "Toon/Verberg het linkerpaneel"
   },

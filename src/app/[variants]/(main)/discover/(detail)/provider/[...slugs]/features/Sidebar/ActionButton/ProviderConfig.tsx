@@ -9,7 +9,7 @@ import { useRouter } from 'nextjs-toploader/app';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { isDeprecatedEdition } from '@/const/version';
+import { isDeprecatedEdition, isDesktop } from '@/const/version';
 
 import { useDetailContext } from '../../DetailProvider';
 
@@ -26,7 +26,21 @@ const ProviderConfig = memo(() => {
   const { t } = useTranslation('discover');
   const { url, modelsUrl, identifier } = useDetailContext();
   const router = useRouter();
-  const openSettings = () => {
+  const openSettings = async () => {
+    const searchParams = isDeprecatedEdition
+      ? { active: 'llm' }
+      : { active: 'provider', provider: identifier };
+    const tab = isDeprecatedEdition ? 'llm' : 'provider';
+
+    if (isDesktop) {
+      const { dispatch } = await import('@lobechat/electron-client-ipc');
+      await dispatch('openSettingsWindow', {
+        searchParams,
+        tab,
+      });
+      return;
+    }
+
     router.push(
       isDeprecatedEdition
         ? '/settings?active=llm'

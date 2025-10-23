@@ -238,7 +238,7 @@ jobs:
 
       # 下载所有平台的构建产物
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: release
           pattern: release-*
@@ -287,7 +287,7 @@ jobs:
 
       # 下载合并后的构建产物
       - name: Download merged artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: merged-release-pr
           path: release

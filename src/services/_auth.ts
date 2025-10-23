@@ -4,6 +4,7 @@ import {
   AzureOpenAIKeyVault,
   ClientSecretPayload,
   CloudflareKeyVault,
+  ComfyUIKeyVault,
   OpenAICompatibleKeyVault,
   VertexAIKeyVault,
 } from '@lobechat/types';
@@ -23,6 +24,7 @@ export const getProviderAuthPayload = (
     AzureOpenAIKeyVault &
     AWSBedrockKeyVault &
     CloudflareKeyVault &
+    ComfyUIKeyVault &
     VertexAIKeyVault,
 ) => {
   switch (provider) {
@@ -76,10 +78,21 @@ export const getProviderAuthPayload = (
       };
     }
 
+    case ModelProvider.ComfyUI: {
+      return {
+        apiKey: keyVaults?.apiKey,
+        authType: keyVaults?.authType,
+        baseURL: keyVaults?.baseURL,
+        customHeaders: keyVaults?.customHeaders,
+        password: keyVaults?.password,
+        username: keyVaults?.username,
+      };
+    }
+
     case ModelProvider.VertexAI: {
       // Vertex AI uses JSON credentials, should not split by comma
-      return { 
-        apiKey: keyVaults?.apiKey, 
+      return {
+        apiKey: keyVaults?.apiKey,
         baseURL: keyVaults?.baseURL,
         vertexAIRegion: keyVaults?.region,
       };

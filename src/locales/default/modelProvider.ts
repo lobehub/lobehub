@@ -85,6 +85,58 @@ export default {
       title: 'Cloudflare 账户 ID / API 地址',
     },
   },
+  comfyui: {
+    apiKey: {
+      desc: 'Bearer Token 认证所需的 API 密钥',
+      placeholder: '请输入 API 密钥',
+      required: '请输入 API 密钥',
+      title: 'API 密钥',
+    },
+    authType: {
+      desc: '选择与 ComfyUI 服务器的认证方式',
+      options: {
+        basic: '账号/密码',
+        bearer: 'Bearer (API 密钥)',
+        custom: '自定义请求头',
+        none: '无需认证',
+      },
+      placeholder: '请选择认证类型',
+      title: '认证类型',
+    },
+    baseURL: {
+      desc: 'ComfyUI 网页访问地址',
+      placeholder: 'http://127.0.0.1:8000',
+      required: '请输入 ComfyUI 服务地址',
+      title: 'ComfyUI 服务地址',
+    },
+    checker: {
+      desc: '测试连接是否正确配置',
+      title: '连通性检查',
+    },
+    customHeaders: {
+      addButton: '添加请求头',
+      deleteTooltip: '删除此请求头',
+      desc: '自定义认证方式所需的请求头，格式为键值对',
+      duplicateKeyError: '请求头键名不能重复',
+      keyPlaceholder: '键名',
+      required: '请输入自定义请求头',
+      title: '自定义请求头',
+      valuePlaceholder: '值',
+    },
+    password: {
+      desc: '基本认证所需的密码',
+      placeholder: '请输入密码',
+      required: '请输入密码',
+      title: '密码',
+    },
+    title: 'ComfyUI',
+    username: {
+      desc: '基本认证所需的用户名',
+      placeholder: '请输入用户名',
+      required: '请输入用户名',
+      title: '用户名',
+    },
+  },
   createNewAiProvider: {
     apiKey: {
       placeholder: '请填写你的 API Key',

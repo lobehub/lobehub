@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "共 {{count}} 項",
       "selectedCount": "已選 {{count}} 項"
+    },
+    "view": {
+      "list": "清單檢視",
+      "masonry": "網格檢視"
     }
   },
   "FileParsingStatus": {

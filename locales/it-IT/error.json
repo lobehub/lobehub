@@ -81,6 +81,12 @@
     "522": "Ci scusiamo, la connessione al server è scaduta e non ha risposto in tempo alla tua richiesta. Potrebbe essere dovuto a una rete instabile o a un server temporaneamente non accessibile. Riprova più tardi, stiamo lavorando per ripristinare il servizio.",
     "524": "Ci scusiamo, il server ha superato il tempo di attesa in attesa di una risposta, probabilmente a causa di una risposta troppo lenta. Riprova più tardi.",
     "AgentRuntimeError": "Errore di esecuzione del modello linguistico Lobe, controlla le informazioni seguenti o riprova",
+    "ComfyUIBizError": "Errore nella richiesta al servizio ComfyUI, verifica le informazioni seguenti o riprova",
+    "ComfyUIEmptyResult": "Nessuna immagine generata da ComfyUI, controlla la configurazione del modello o riprova",
+    "ComfyUIModelError": "Caricamento del modello ComfyUI fallito, verifica che il file del modello esista",
+    "ComfyUIServiceUnavailable": "Connessione al servizio ComfyUI non riuscita, verifica che ComfyUI sia in esecuzione correttamente o controlla la configurazione dell'indirizzo del servizio",
+    "ComfyUIUploadFailed": "Caricamento immagine su ComfyUI non riuscito, controlla la connessione al server o riprova",
+    "ComfyUIWorkflowError": "Esecuzione del workflow ComfyUI fallita, controlla la configurazione del workflow",
     "ConnectionCheckFailed": "La risposta è vuota, controlla se l'indirizzo del proxy API termina con `/v1`",
     "CreateMessageError": "Ci dispiace, il messaggio non è stato inviato correttamente. Si prega di copiare il contenuto e inviarlo nuovamente. Dopo aver aggiornato la pagina, questo messaggio non verrà conservato.",
     "ExceededContextWindow": "Il contenuto della richiesta attuale supera la lunghezza che il modello può gestire. Si prega di ridurre la quantità di contenuto e riprovare.",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "Password incorrect or empty, please enter the correct access password, or add a custom API Key",
     "InvalidBedrockCredentials": "Autenticazione Bedrock non riuscita, controlla AccessKeyId/SecretAccessKey e riprova",
     "InvalidClerkUser": "Spiacenti, al momento non hai effettuato l'accesso. Per favore, effettua l'accesso o registrati prima di continuare.",
+    "InvalidComfyUIArgs": "Configurazione ComfyUI non corretta, controlla la configurazione e riprova",
     "InvalidGithubToken": "Il token di accesso personale di Github non è corretto o è vuoto. Controlla il token di accesso personale di Github e riprova.",
     "InvalidOllamaArgs": "Configurazione Ollama non valida, controllare la configurazione di Ollama e riprovare",
     "InvalidProviderAPIKey": "{{provider}} Chiave API non valida o vuota, controlla la Chiave API di {{provider}} e riprova",
@@ -149,6 +156,11 @@
       "title": "Usa la tua Chiave API personalizzata {{name}}"
     },
     "closeMessage": "Chiudi messaggio",
+    "comfyui": {
+      "description": "Inserisci le credenziali corrette di {{name}} per iniziare a generare immagini",
+      "modifyBaseUrl": "Modifica l'indirizzo del servizio Comfy UI",
+      "title": "Conferma le tue credenziali di {{name}}"
+    },
     "confirm": "Conferma e riprova",
     "oauth": {
       "description": "L'amministratore ha abilitato l'autenticazione di accesso unificata. Fai clic sul pulsante sottostante per accedere e sbloccare l'applicazione.",

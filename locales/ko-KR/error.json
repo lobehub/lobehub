@@ -81,6 +81,12 @@
     "522": "죄송합니다. 서버 연결이 시간 초과되어 요청에 대한 응답을 제때 받지 못했습니다. 이는 네트워크가 불안정하거나 서버에 일시적으로 접근할 수 없기 때문일 수 있습니다. 나중에 다시 시도해 주시기 바랍니다. 서비스를 복구하기 위해 노력하고 있습니다.",
     "524": "죄송합니다. 서버가 응답을 기다리는 동안 시간 초과가 발생했습니다. 이는 응답이 너무 느리기 때문일 수 있습니다. 나중에 다시 시도해 주세요.",
     "AgentRuntimeError": "Lobe 언어 모델 실행 중 오류가 발생했습니다. 아래 정보를 확인하고 다시 시도하십시오.",
+    "ComfyUIBizError": "ComfyUI 서비스 요청 중 오류가 발생했습니다. 아래 정보를 참고하여 문제를 해결하거나 다시 시도해 주세요.",
+    "ComfyUIEmptyResult": "ComfyUI에서 생성된 이미지가 없습니다. 모델 설정을 확인하거나 다시 시도해 주세요.",
+    "ComfyUIModelError": "ComfyUI 모델 로딩에 실패했습니다. 모델 파일이 존재하는지 확인해 주세요.",
+    "ComfyUIServiceUnavailable": "ComfyUI 서비스 연결에 실패했습니다. ComfyUI가 정상적으로 실행 중인지 또는 서비스 주소 설정이 올바른지 확인해 주세요.",
+    "ComfyUIUploadFailed": "ComfyUI 이미지 업로드에 실패했습니다. 서버 연결을 확인하거나 다시 시도해 주세요.",
+    "ComfyUIWorkflowError": "ComfyUI 워크플로우 실행에 실패했습니다. 워크플로우 설정을 확인해 주세요.",
     "ConnectionCheckFailed": "요청이 빈 응답으로 돌아왔습니다. API 프록시 주소의 끝에 `/v1`이 포함되어 있는지 확인하세요.",
     "CreateMessageError": "죄송합니다. 메시지를 정상적으로 전송할 수 없습니다. 내용을 복사한 후 다시 전송해 주시고, 페이지를 새로 고치면 이 메시지는 보존되지 않습니다.",
     "ExceededContextWindow": "현재 요청 내용이 모델이 처리할 수 있는 길이를 초과했습니다. 내용량을 줄인 후 다시 시도해 주십시오.",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "액세스 코드가 잘못되었거나 비어 있습니다. 올바른 액세스 코드를 입력하거나 사용자 지정 API 키를 추가하십시오.",
     "InvalidBedrockCredentials": "Bedrock 인증에 실패했습니다. AccessKeyId/SecretAccessKey를 확인한 후 다시 시도하십시오.",
     "InvalidClerkUser": "죄송합니다. 현재 로그인되어 있지 않습니다. 계속하려면 먼저 로그인하거나 계정을 등록해주세요.",
+    "InvalidComfyUIArgs": "ComfyUI 설정이 올바르지 않습니다. 설정을 확인한 후 다시 시도해 주세요.",
     "InvalidGithubToken": "Github 개인 액세스 토큰이 올바르지 않거나 비어 있습니다. Github 개인 액세스 토큰을 확인한 후 다시 시도해 주십시오.",
     "InvalidOllamaArgs": "Ollama 구성이 잘못되었습니다. Ollama 구성을 확인한 후 다시 시도하십시오.",
     "InvalidProviderAPIKey": "{{provider}} API 키가 잘못되었거나 비어 있습니다. {{provider}} API 키를 확인하고 다시 시도하십시오.",
@@ -149,6 +156,11 @@
       "title": "사용자 정의 {{name}} API 키 사용"
     },
     "closeMessage": "알림 닫기",
+    "comfyui": {
+      "description": "정확한 {{name}} 인증 정보를 입력하시면 이미지 생성을 시작할 수 있습니다.",
+      "modifyBaseUrl": "Comfy UI 서비스 주소 수정",
+      "title": "{{name}} 인증 정보를 확인해 주세요"
+    },
     "confirm": "확인 및 다시 시도",
     "oauth": {
       "description": "관리자가 통합 로그인 인증을 활성화했습니다. 아래 버튼을 클릭하여 로그인하면 앱을 잠금 해제할 수 있습니다.",

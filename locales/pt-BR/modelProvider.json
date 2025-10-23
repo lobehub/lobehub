@@ -82,6 +82,58 @@
       "title": "ID da conta do Cloudflare / Endereço da API"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Chave de API necessária para autenticação via Token Bearer",
+      "placeholder": "Insira a chave de API",
+      "required": "Por favor, insira a chave de API",
+      "title": "Chave de API"
+    },
+    "authType": {
+      "desc": "Selecione o método de autenticação com o servidor ComfyUI",
+      "options": {
+        "basic": "Usuário/Senha",
+        "bearer": "Bearer (Chave de API)",
+        "custom": "Cabeçalhos personalizados",
+        "none": "Sem autenticação"
+      },
+      "placeholder": "Selecione o tipo de autenticação",
+      "title": "Tipo de autenticação"
+    },
+    "baseURL": {
+      "desc": "Endereço de acesso web do ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Por favor, insira o endereço do serviço ComfyUI",
+      "title": "Endereço do serviço ComfyUI"
+    },
+    "checker": {
+      "desc": "Testar se a conexão está configurada corretamente",
+      "title": "Verificação de conectividade"
+    },
+    "customHeaders": {
+      "addButton": "Adicionar cabeçalho",
+      "deleteTooltip": "Remover este cabeçalho",
+      "desc": "Cabeçalhos necessários para autenticação personalizada, no formato chave-valor",
+      "duplicateKeyError": "Os nomes das chaves dos cabeçalhos não podem se repetir",
+      "keyPlaceholder": "Nome da chave",
+      "required": "Por favor, insira os cabeçalhos personalizados",
+      "title": "Cabeçalhos personalizados",
+      "valuePlaceholder": "Valor"
+    },
+    "password": {
+      "desc": "Senha necessária para autenticação básica",
+      "placeholder": "Insira a senha",
+      "required": "Por favor, insira a senha",
+      "title": "Senha"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Nome de usuário necessário para autenticação básica",
+      "placeholder": "Insira o nome de usuário",
+      "required": "Por favor, insira o nome de usuário",
+      "title": "Nome de usuário"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Por favor, insira sua API Key",

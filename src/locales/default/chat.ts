@@ -22,13 +22,13 @@ export default {
   },
   clearCurrentMessages: '清空当前会话消息',
   confirmClearCurrentMessages: '即将清空当前会话消息，清空后将无法找回，请确认你的操作',
-  confirmRemoveChatGroupItemAlert: '即将删除该群聊，群聊成员不受影响，请确认你的操作',
+  confirmRemoveChatGroupItemAlert: '即将删除该 Agent 团队，团队成员不受影响，请确认你的操作',
   confirmRemoveGroupItemAlert: '即将删除该分组，删除后该分组的助手将移动到默认列表，请确认你的操作',
-  confirmRemoveGroupSuccess: '群聊删除成功',
+  confirmRemoveGroupSuccess: 'Agent 团队删除成功',
   confirmRemoveSessionItemAlert: '即将删除该助手，删除后该将无法找回，请确认你的操作',
   confirmRemoveSessionSuccess: '助手删除成功',
   defaultAgent: '自定义助手',
-  defaultGroupChat: '群聊',
+  defaultGroupChat: 'Agent 团队',
   defaultList: '默认列表',
   defaultSession: '自定义助手',
   dm: {
@@ -78,7 +78,7 @@ export default {
     removeMember: '移除成员',
     title: '群组',
   },
-  groupDescription: '群组描述',
+  groupDescription: '团队描述',
   groupSidebar: {
     members: {
       addMember: '添加成员',
@@ -98,13 +98,13 @@ export default {
 
   groupWizard: {
     chooseMembers: '选择现有助手...',
-    createGroup: '创建群聊',
-    existingMembers: '已有助手',
+    createGroup: '创建团队',
+    existingMembers: '已有 Agent',
     groupMembers: '这些助手也将被添加到您的列表中',
     host: {
-      description: '使群聊自动化运行',
-      title: '主持人',
-      tooltip: '如果禁用群聊主持人，您需要手动@提及成员才能让他们回复',
+      description: '使团队自主运行',
+      title: '启用主持人',
+      tooltip: '如果禁用团队主持人，您需要手动@提及成员才能让他们回复',
     },
     memberCount: '{{count}} 个成员',
     noMatchingTemplates: '没有匹配的模板',
@@ -112,7 +112,7 @@ export default {
     noTemplateMembers: '模板中没有成员',
     noTemplates: '没有可用的模板',
     searchTemplates: '搜索模板...',
-    title: '创建群聊',
+    title: '创建 Agent 团队',
     useTemplate: '使用模板',
   },
 
@@ -174,11 +174,11 @@ export default {
   memberSelection: {
     addMember: '添加成员',
     allMembers: '全体成员',
-    createGroup: '创建群聊',
+    createGroup: '创建 Agent 团队',
     noAvailableAgents: '没有可邀请的助手',
     noSelectedAgents: '还未选择助手',
     searchAgents: '搜索助手...',
-    setInitialMembers: '选择群成员',
+    setInitialMembers: '选择团队成员',
   },
 
   members: 'Members',
@@ -247,21 +247,23 @@ export default {
     jumpToMessage: '跳转至第 {{index}} 条消息',
     nextMessage: '下一条消息',
     previousMessage: '上一条消息',
+    senderAssistant: '助手',
+    senderUser: '你',
   },
 
   newAgent: '新建助手',
 
-  newGroupChat: '新建群聊',
+  newGroupChat: '新建 Agent 团队',
 
-  noAgentsYet: '此群组还没有助手。点击 + 按钮邀请助手。',
+  noAgentsYet: '此 Agent 团队还没有成员。点击 + 按钮邀请助手。',
 
-  noAvailableAgents: '没有可邀请的助手',
+  noAvailableAgents: '没有可邀请的成员',
 
-  noMatchingAgents: '没有匹配的助手',
+  noMatchingAgents: '没有匹配的成员',
 
   noMembersYet: '此群组还没有成员。点击 + 按钮邀请助手。',
 
-  noSelectedAgents: '还未选择助手',
+  noSelectedAgents: '还未选择成员',
 
   owner: '群主',
 
@@ -332,11 +334,24 @@ export default {
   shareModal: {
     copy: '复制',
     download: '下载截图',
+    downloadError: '下载失败',
     downloadFile: '下载文件',
+    downloadPdf: '下载 PDF',
+    downloadSuccess: '下载成功',
+    exportPdf: '导出为 PDF',
     exportTitle: '默认标题',
+    generatePdf: '生成 PDF',
+    generatingPdf: '正在生成 PDF...',
     imageType: '图片格式',
     includeTool: '包含插件消息',
     includeUser: '包含用户消息',
+    loadingPdf: '加载 PDF...',
+    noPdfData: '暂无 PDF 数据',
+    pdf: 'PDF',
+    pdfErrorDescription: '生成 PDF 时出现错误，请重试',
+    pdfGenerationError: 'PDF 生成失败',
+    pdfReady: 'PDF 已准备就绪',
+    regeneratePdf: '重新生成 PDF',
     screenshot: '截图',
     settings: '导出设置',
     text: '文本',

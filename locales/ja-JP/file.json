@@ -1,5 +1,5 @@
 {
-  "desc": "ファイルと知識ベースを管理する",
+  "desc": "あなたの知識を管理する",
   "detail": {
     "basic": {
       "createdAt": "作成日時",
@@ -70,7 +70,7 @@
     "videos": "動画",
     "websites": "ウェブサイト"
   },
-  "title": "ファイル",
+  "title": "ナレッジベース",
   "toggleLeftPanel": {
     "title": "左側パネルの表示/非表示"
   },

@@ -27,12 +27,13 @@ const Top = () => {
 
 const Nav = memo(() => {
   const theme = useTheme();
-  const isSingleMode = useIsSingleMode()
+  const isSingleMode = useIsSingleMode();
   const inZenMode = useGlobalStore(systemStatusSelectors.inZenMode);
   const { showPinList } = useServerConfigStore(featureFlagsSelectors);
 
   return (
-    !inZenMode && !isSingleMode && (
+    !inZenMode &&
+    !isSingleMode && (
       <SideNav
         avatar={
           <div className={electronStylish.nodrag}>
@@ -54,11 +55,14 @@ const Nav = memo(() => {
         }}
         topActions={
           <Suspense>
-            <div className={electronStylish.nodrag} style={{
-              display: 'flex',
-              flexDirection: 'column',
-              maxHeight: "calc(100vh - 150px)"
-            }}>
+            <div
+              className={electronStylish.nodrag}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                maxHeight: isDesktop ? 'calc(100vh - 180px)' : 'calc(100vh - 150px)',
+              }}
+            >
               <Top />
               {showPinList && <PinList />}
             </div>

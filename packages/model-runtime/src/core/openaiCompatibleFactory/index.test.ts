@@ -2048,6 +2048,319 @@ describe('LobeOpenAICompatibleFactory', () => {
       });
     });
 
+    describe('handleSchema option', () => {
+      let instanceWithSchemaHandler: any;
+      const mockSchemaHandler = vi.fn((schema: any) => {
+        const filtered: any = {};
+        for (const [key, value] of Object.entries(schema)) {
+          if (key !== 'maxLength' && key !== 'pattern') {
+            filtered[key] = value;
+          }
+        }
+        return filtered;
+      });
+
+      beforeEach(() => {
+        mockSchemaHandler.mockClear();
+        const RuntimeClass = createOpenAICompatibleRuntime({
+          baseURL: 'https://api.test.com',
+          generateObject: {
+            handleSchema: mockSchemaHandler,
+          },
+          provider: 'test-provider',
+        });
+
+        instanceWithSchemaHandler = new RuntimeClass({ apiKey: 'test-key' });
+      });
+
+      it('should apply schema transformation with Responses API', async () => {
+        const mockResponse = {
+          output_text: '{"name":"Alice","age":30}',
+        };
+
+        vi.spyOn(instanceWithSchemaHandler['client'].responses, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Extract person', role: 'user' as const }],
+          model: 'gpt-4o',
+          responseApi: true,
+          schema: {
+            name: 'person',
+            schema: {
+              maxLength: 100,
+              pattern: '^[a-z]+$',
+              properties: {
+                age: { type: 'number' },
+                name: { type: 'string' },
+              },
+              type: 'object' as const,
+            },
+          },
+        };
+
+        await instanceWithSchemaHandler.generateObject(payload);
+
+        expect(mockSchemaHandler).toHaveBeenCalledWith(payload.schema.schema);
+        expect(instanceWithSchemaHandler['client'].responses.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: expect.objectContaining({
+              format: expect.objectContaining({
+                schema: {
+                  properties: {
+                    age: { type: 'number' },
+                    name: { type: 'string' },
+                  },
+                  type: 'object',
+                },
+              }),
+            }),
+          }),
+          expect.any(Object),
+        );
+      });
+
+      it('should apply schema transformation with Chat Completions API', async () => {
+        const mockResponse = {
+          choices: [
+            {
+              message: {
+                content: '{"name":"Bob","age":25}',
+              },
+            },
+          ],
+        };
+
+        vi.spyOn(instanceWithSchemaHandler['client'].chat.completions, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Extract person', role: 'user' as const }],
+          model: 'test-model',
+          schema: {
+            name: 'person',
+            schema: {
+              maxLength: 100,
+              pattern: '^[a-z]+$',
+              properties: {
+                age: { type: 'number' },
+                name: { type: 'string' },
+              },
+              type: 'object' as const,
+            },
+          },
+        };
+
+        await instanceWithSchemaHandler.generateObject(payload);
+
+        expect(mockSchemaHandler).toHaveBeenCalledWith(payload.schema.schema);
+        expect(instanceWithSchemaHandler['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            response_format: expect.objectContaining({
+              json_schema: expect.objectContaining({
+                schema: {
+                  properties: {
+                    age: { type: 'number' },
+                    name: { type: 'string' },
+                  },
+                  type: 'object',
+                },
+              }),
+            }),
+          }),
+          expect.any(Object),
+        );
+      });
+
+      it('should apply schema transformation with tool calling fallback', async () => {
+        const RuntimeClass = createOpenAICompatibleRuntime({
+          baseURL: 'https://api.test.com',
+          generateObject: {
+            handleSchema: mockSchemaHandler,
+            useToolsCalling: true,
+          },
+          provider: 'test-provider',
+        });
+
+        const instance = new RuntimeClass({ apiKey: 'test-key' });
+
+        const mockResponse = {
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: '{"name":"Charlie","age":35}',
+                      name: 'person',
+                    },
+                    type: 'function' as const,
+                  },
+                ],
+              },
+            },
+          ],
+        };
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Extract person', role: 'user' as const }],
+          model: 'test-model',
+          schema: {
+            name: 'person',
+            schema: {
+              maxLength: 100,
+              pattern: '^[a-z]+$',
+              properties: {
+                age: { type: 'number' },
+                name: { type: 'string' },
+              },
+              type: 'object' as const,
+            },
+          },
+        };
+
+        await instance.generateObject(payload);
+
+        expect(mockSchemaHandler).toHaveBeenCalledWith(payload.schema.schema);
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tools: [
+              expect.objectContaining({
+                function: expect.objectContaining({
+                  parameters: {
+                    properties: {
+                      age: { type: 'number' },
+                      name: { type: 'string' },
+                    },
+                    type: 'object',
+                  },
+                }),
+              }),
+            ],
+          }),
+          expect.any(Object),
+        );
+      });
+
+      it('should not apply schema transformation when handleSchema is not configured', async () => {
+        const RuntimeClass = createOpenAICompatibleRuntime({
+          baseURL: 'https://api.test.com',
+          provider: 'test-provider',
+        });
+
+        const instance = new RuntimeClass({ apiKey: 'test-key' });
+
+        const mockResponse = {
+          choices: [
+            {
+              message: {
+                content: '{"name":"Test"}',
+              },
+            },
+          ],
+        };
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Extract data', role: 'user' as const }],
+          model: 'test-model',
+          schema: {
+            name: 'test',
+            schema: {
+              maxLength: 100,
+              properties: {
+                name: { type: 'string' },
+              },
+              type: 'object' as const,
+            },
+          },
+        };
+
+        await instance.generateObject(payload);
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            response_format: expect.objectContaining({
+              json_schema: expect.objectContaining({
+                schema: {
+                  maxLength: 100,
+                  properties: {
+                    name: { type: 'string' },
+                  },
+                  type: 'object',
+                },
+              }),
+            }),
+          }),
+          expect.any(Object),
+        );
+      });
+
+      it('should preserve original schema properties while filtering', async () => {
+        const mockResponse = {
+          output_text: '{"result":"success"}',
+        };
+
+        vi.spyOn(instanceWithSchemaHandler['client'].responses, 'create').mockResolvedValue(
+          mockResponse as any,
+        );
+
+        const payload = {
+          messages: [{ content: 'Test', role: 'user' as const }],
+          model: 'gpt-4o',
+          responseApi: true,
+          schema: {
+            description: 'Test schema',
+            name: 'test',
+            schema: {
+              description: 'Inner schema description',
+              maxLength: 100,
+              pattern: '^test$',
+              properties: {
+                result: { type: 'string' },
+              },
+              required: ['result'],
+              type: 'object' as const,
+            },
+            strict: true,
+          },
+        };
+
+        await instanceWithSchemaHandler.generateObject(payload);
+
+        expect(mockSchemaHandler).toHaveBeenCalledWith(payload.schema.schema);
+        expect(instanceWithSchemaHandler['client'].responses.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: expect.objectContaining({
+              format: expect.objectContaining({
+                description: 'Test schema',
+                name: 'test',
+                schema: {
+                  description: 'Inner schema description',
+                  properties: {
+                    result: { type: 'string' },
+                  },
+                  required: ['result'],
+                  type: 'object',
+                },
+                strict: true,
+              }),
+            }),
+          }),
+          expect.any(Object),
+        );
+      });
+    });
+
     describe('tool calling fallback', () => {
       let instanceWithToolCalling: any;
 

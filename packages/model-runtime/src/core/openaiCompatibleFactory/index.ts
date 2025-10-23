@@ -120,6 +120,10 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
   };
   generateObject?: {
     /**
+     * Transform schema before sending to the provider (e.g., filter unsupported properties)
+     */
+    handleSchema?: (schema: any) => any;
+    /**
      * If true, route generateObject requests to Responses API path directly
      */
     useResponse?: boolean;
@@ -454,12 +458,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       // Use tool calling fallback if configured
       if (generateObjectConfig?.useToolsCalling) {
         log('using tool calling fallback for structured output');
+
+        // Apply schema transformation if configured
+        const processedSchema = generateObjectConfig.handleSchema
+          ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
+          : schema;
+
         const tool: ChatCompletionTool = {
           function: {
             description:
-              schema.description || 'Generate structured output according to the provided schema',
-            name: schema.name || 'structured_output',
-            parameters: schema.schema,
+              processedSchema.description ||
+              'Generate structured output according to the provided schema',
+            name: processedSchema.name || 'structured_output',
+            parameters: processedSchema.schema,
           },
           type: 'function',
         };
@@ -531,13 +542,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return false;
       })();
 
+      // Apply schema transformation if configured
+      const processedSchema = generateObjectConfig?.handleSchema
+        ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
+        : schema;
+
       if (shouldUseResponses) {
         log('calling responses.create for structured output');
         const res = await this.client!.responses.create(
           {
             input: messages,
             model,
-            text: { format: { strict: true, type: 'json_schema', ...schema } },
+            text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
             user: options?.user,
           },
           { headers: options?.headers, signal: options?.signal },
@@ -561,7 +577,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         {
           messages,
           model,
-          response_format: { json_schema: schema, type: 'json_schema' },
+          response_format: { json_schema: processedSchema, type: 'json_schema' },
           user: options?.user,
         },
         { headers: options?.headers, signal: options?.signal },

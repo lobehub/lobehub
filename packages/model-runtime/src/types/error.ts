@@ -19,6 +19,14 @@ export const AgentRuntimeErrorType = {
   OllamaBizError: 'OllamaBizError',
   OllamaServiceUnavailable: 'OllamaServiceUnavailable',
 
+  InvalidComfyUIArgs: 'InvalidComfyUIArgs',
+  ComfyUIBizError: 'ComfyUIBizError',
+  ComfyUIServiceUnavailable: 'ComfyUIServiceUnavailable',
+  ComfyUIEmptyResult: 'ComfyUIEmptyResult',
+  ComfyUIUploadFailed: 'ComfyUIUploadFailed',
+  ComfyUIWorkflowError: 'ComfyUIWorkflowError',
+  ComfyUIModelError: 'ComfyUIModelError',
+
   InvalidBedrockCredentials: 'InvalidBedrockCredentials',
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',

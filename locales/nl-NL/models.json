@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "Een model dat tekst, afbeeldingen of gemengde inhoud kan classificeren of omzetten in embeddings."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - Hoogwaardige tekst-naar-beeldmodel, genereert in 10-50 stappen, geschikt voor hoogwaardige creatieve en artistieke toepassingen"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - Beeldbewerkingsmodel dat bestaande afbeeldingen kan aanpassen op basis van tekstinstructies, ondersteunt lokale aanpassingen en stijltransformatie"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - Versterkt veilig tekst-naar-beeldmodel, ontwikkeld in samenwerking met Krea, met ingebouwde veiligheidsfilters"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - Ultrasnel tekst-naar-beeldmodel, genereert hoogwaardige beelden in slechts 1-4 stappen, ideaal voor realtime toepassingen en snelle prototyping"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 tekst-naar-beeldmodel, klassiek 512x512 resolutie voor snelle prototyping en creatieve experimenten"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 - Nieuwe generatie tekst-naar-beeldmodel, beschikbaar in Large en Medium versies, vereist externe CLIP-encoderbestanden, levert uitstekende beeldkwaliteit en promptnauwkeurigheid"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 met ingebouwde CLIP/T5-encoder, geen externe encoderbestanden nodig, geschikt voor modellen zoals sd3.5_medium_incl_clips, met lager resourceverbruik"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "Aangepast SD tekst-naar-beeldmodel. Gebruik bestandsnaam custom_sd_lobe.safetensors; indien VAE aanwezig, gebruik custom_sd_vae_lobe.safetensors. Modelbestanden moeten volgens Comfy-vereisten in de juiste map geplaatst worden"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "Aangepast SDXL beeld-naar-beeldmodel. Gebruik bestandsnaam custom_sd_lobe.safetensors; indien VAE aanwezig, gebruik custom_sd_vae_lobe.safetensors. Modelbestanden moeten volgens Comfy-vereisten in de juiste map geplaatst worden"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "SDXL beeld-naar-beeldmodel, genereert hoogwaardige beeldtransformaties op basis van invoerafbeeldingen, ondersteunt stijltransformatie, beeldherstel en creatieve aanpassingen"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "SDXL tekst-naar-beeldmodel, ondersteunt hoge resolutie 1024x1024 beeldgeneratie, levert superieure beeldkwaliteit en detailweergave"
+  },
   "command": {
     "description": "Een instructievolgend dialoogmodel dat hoge kwaliteit en betrouwbaarheid biedt voor taaltaken, met een langere contextlengte dan ons basisgeneratiemodel."
   },

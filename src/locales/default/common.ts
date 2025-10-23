@@ -333,6 +333,7 @@ export default {
     chat: '会话',
     discover: '发现',
     files: '文件',
+    knowledgeBase: '知识库',
     me: '我',
     setting: '设置',
   },

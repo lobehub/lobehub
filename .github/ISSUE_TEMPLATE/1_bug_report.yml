@@ -5,32 +5,15 @@ type: Bug
 body:
   - type: dropdown
     attributes:
-      label: '📦 Platform'
+      label: '📱 Client Type'
+      description: 'Select how you are accessing LobeChat'
       multiple: true
       options:
-        - 'Official Preview'
-        - 'Official Cloud'
-        - 'Vercel'
-        - 'Zeabur'
-        - 'Sealos'
-        - 'Netlify'
-        - 'Self hosting Docker'
+        - 'Web (Desktop Browser)'
+        - 'Web (Mobile Browser)'
+        - 'Desktop App (Electron)'
+        - 'Mobile App (React Native)'
         - 'Other'
-    validations:
-      required: true
-  - type: dropdown
-    attributes:
-      label: '📦 Deploymenet mode'
-      multiple: true
-      options:
-        - 'client db (lobe-chat image)'
-        - 'client pgelite db (lobe-chat-pglite image)'
-        - 'server db(lobe-chat-database image)'
-    validations:
-      required: true
-  - type: input
-    attributes:
-      label: '📌 Version'
     validations:
       required: true
 
@@ -48,6 +31,39 @@ body:
         - 'Other'
     validations:
       required: true
+
+  - type: dropdown
+    attributes:
+      label: '📦 Deployment Platform'
+      multiple: true
+      options:
+        - 'Official Cloud'
+        - 'Vercel'
+        - 'Zeabur'
+        - 'Sealos'
+        - 'Netlify'
+        - 'Self hosting Docker'
+        - 'Other'
+    validations:
+      required: false
+
+  - type: dropdown
+    attributes:
+      label: '🔧 Deployment Mode'
+      multiple: true
+      options:
+        - 'client db (lobe-chat image)'
+        - 'client pgelite db (lobe-chat-pglite image)'
+        - 'server db (lobe-chat-database image)'
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: '📌 Version'
+    validations:
+      required: true
+
   - type: dropdown
     attributes:
       label: '🌐 Browser'
@@ -60,21 +76,49 @@ body:
         - 'Other'
     validations:
       required: true
+
   - type: textarea
     attributes:
       label: '🐛 Bug Description'
       description: A clear and concise description of the bug, if the above option is `Other`, please also explain in detail.
     validations:
       required: true
+
   - type: textarea
     attributes:
       label: '📷 Recurrence Steps'
       description: A clear and concise description of how to recurrence.
+
   - type: textarea
     attributes:
       label: '🚦 Expected Behavior'
       description: A clear and concise description of what you expected to happen.
+
   - type: textarea
     attributes:
       label: '📝 Additional Information'
       description: If your problem needs further explanation, or if the issue you're seeing cannot be reproduced in a gist, please add more information here.
+
+  - type: dropdown
+    attributes:
+      label: '🛠️ Willing to Submit a PR?'
+      description: Would you be willing to submit a pull request to fix this bug?
+      options:
+        - 'Yes, I am willing to submit a PR'
+        - 'No, but I am happy to help test the fix'
+    validations:
+      required: false
+
+  - type: checkboxes
+    attributes:
+      label: '✅ Validations'
+      description: Before submitting the issue, please make sure you do the following
+      options:
+        - label: Read the [docs](https://lobehub.com/zh/docs).
+          required: true
+        - label: Check that there isn't [already an issue](https://github.com/lobehub/lobe-chat/issues) that reports the same bug to avoid creating a duplicate.
+          required: true
+        - label: Make sure this is a LobeChat issue and not a third-party library or provider issue.
+          required: true
+        - label: Check that this is a concrete bug. For Q&A, please use [GitHub Discussions](https://github.com/lobehub/lobe-chat/discussions) or join our [Discord Server](https://discord.gg/rGHwKq4R).
+          required: true

@@ -1,8 +1,61 @@
-import { LobeChatPluginApi, Meta } from '@lobehub/chat-plugin-sdk';
 import { ReactNode } from 'react';
+
+import type { HumanInterventionConfig, HumanInterventionPolicy } from './intervention';
+
+interface Meta {
+  /**
+   * avatar
+   * @desc Avatar of the plugin
+   * @nameCN 头像
+   * @descCN 插件的头像
+   */
+  avatar?: string;
+  /**
+   * description
+   * @desc Description of the plugin
+   * @nameCN 描述
+   * @descCN 插件的描述
+   */
+  description?: string;
+  /**
+   * tags
+   * @desc Tags of the plugin
+   * @nameCN 标签
+   * @descCN 插件的标签
+   */
+  tags?: string[];
+  title: string;
+}
+export interface LobeChatPluginApi {
+  description: string;
+  /**
+   * Human intervention configuration
+   * Controls when and how the tool requires human approval/selection
+   *
+   * Can be either:
+   * - Simple: A policy string ('never', 'always', 'first')
+   * - Complex: Array of rules for parameter-level control
+   *
+   * Examples:
+   * - 'always' - always require intervention
+   * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
+   */
+  humanIntervention?: HumanInterventionConfig;
+  name: string;
+  parameters: Record<string, any>;
+  url?: string;
+}
 
 export interface BuiltinToolManifest {
   api: LobeChatPluginApi[];
+
+  /**
+   * Tool-level default human intervention policy
+   * This policy applies to all APIs that don't specify their own policy
+   *
+   * @default 'never'
+   */
+  humanIntervention?: HumanInterventionPolicy;
 
   /**
    * Plugin name

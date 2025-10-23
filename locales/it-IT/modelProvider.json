@@ -82,6 +82,58 @@
       "title": "ID account Cloudflare / indirizzo API"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Chiave API necessaria per l'autenticazione con Bearer Token",
+      "placeholder": "Inserisci la chiave API",
+      "required": "Inserisci la chiave API",
+      "title": "Chiave API"
+    },
+    "authType": {
+      "desc": "Seleziona il metodo di autenticazione con il server ComfyUI",
+      "options": {
+        "basic": "Account/Password",
+        "bearer": "Bearer (Chiave API)",
+        "custom": "Header personalizzati",
+        "none": "Nessuna autenticazione"
+      },
+      "placeholder": "Seleziona il tipo di autenticazione",
+      "title": "Tipo di autenticazione"
+    },
+    "baseURL": {
+      "desc": "Indirizzo web per accedere a ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Inserisci l'indirizzo del servizio ComfyUI",
+      "title": "Indirizzo del servizio ComfyUI"
+    },
+    "checker": {
+      "desc": "Verifica se la connessione è configurata correttamente",
+      "title": "Controllo di connettività"
+    },
+    "customHeaders": {
+      "addButton": "Aggiungi header",
+      "deleteTooltip": "Elimina questo header",
+      "desc": "Header richiesti per l'autenticazione personalizzata, in formato chiave-valore",
+      "duplicateKeyError": "I nomi delle chiavi degli header non possono essere duplicati",
+      "keyPlaceholder": "Nome chiave",
+      "required": "Inserisci gli header personalizzati",
+      "title": "Header personalizzati",
+      "valuePlaceholder": "Valore"
+    },
+    "password": {
+      "desc": "Password richiesta per l'autenticazione di base",
+      "placeholder": "Inserisci la password",
+      "required": "Inserisci la password",
+      "title": "Password"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Nome utente richiesto per l'autenticazione di base",
+      "placeholder": "Inserisci il nome utente",
+      "required": "Inserisci il nome utente",
+      "title": "Nome utente"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Inserisci la tua API Key",

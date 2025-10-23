@@ -29,7 +29,7 @@ const Preview = memo<PreviewProps>(
   ({ title, withBackground, withFooter, message, previewId = 'preview' }) => {
     const [model, plugins] = useAgentStore((s) => [
       agentSelectors.currentAgentModel(s),
-      agentSelectors.currentAgentPlugins(s),
+      agentSelectors.displayableAgentPlugins(s),
     ]);
 
     const [isInbox, description, avatar, backgroundColor] = useSessionStore((s) => [

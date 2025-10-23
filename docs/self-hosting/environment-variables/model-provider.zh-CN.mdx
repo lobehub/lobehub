@@ -165,6 +165,58 @@ LobeChat 在部署时提供了丰富的模型服务商相关的环境变量，�
 - 默认值：`us-east-1`
 - 示例：`us-east-1`
 
+## ComfyUI
+
+### `COMFYUI_BASE_URL`
+
+- 类型：可选
+- 描述：ComfyUI 服务的基础 URL 地址
+- 默认值：`http://localhost:8000`
+- 示例：`http://192.168.1.100:8000` 或 `https://my-comfyui-server.com`
+
+### `COMFYUI_AUTH_TYPE`
+
+- 类型：可选
+- 描述：ComfyUI 的认证类型，支持 4 种认证方式
+  - `none`: 无认证（默认）
+  - `basic`: 基础认证（用户名 + 密码）
+  - `bearer`: Bearer Token 认证（API 密钥）
+  - `custom`: 自定义请求头认证
+- 默认值：`none`
+- 示例：`basic`
+
+### `COMFYUI_API_KEY`
+
+- 类型：可选
+- 描述：当认证类型为 `bearer` 时使用的 API 密钥
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `COMFYUI_USERNAME`
+
+- 类型：可选
+- 描述：当认证类型为 `basic` 时使用的用户名
+- 默认值：-
+- 示例：`admin`
+
+### `COMFYUI_PASSWORD`
+
+- 类型：可选
+- 描述：当认证类型为 `basic` 时使用的密码
+- 默认值：-
+- 示例：`password123`
+
+### `COMFYUI_CUSTOM_HEADERS`
+
+- 类型：可选
+- 描述：当认证类型为 `custom` 时使用的自定义请求头，需要使用 JSON 格式字符串
+- 默认值：-
+- 示例：`{"X-Auth-Token": "your-token", "X-Custom-Header": "value"}`
+
+<Callout type={'info'}>
+  ComfyUI 支持多种认证方式，请根据您的 ComfyUI 服务配置选择合适的认证类型和相应的认证参数。如果您的 ComfyUI 服务没有设置认证，可以不配置认证相关的环境变量。
+</Callout>
+
 ## DeepSeek AI
 
 ### `DEEPSEEK_PROXY_URL`

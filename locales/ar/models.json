@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "نموذج يسمح بتصنيف النصوص أو الصور أو المحتوى المختلط أو تحويلها إلى تمثيلات مضمنة."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - نموذج تحويل النص إلى صورة عالي الجودة، يولّد الصور خلال 10 إلى 50 خطوة، مناسب للإبداع الفني وإنتاج الأعمال الفنية الراقية"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - نموذج لتحرير الصور، يدعم تعديل الصور الحالية بناءً على التعليمات النصية، ويتيح التعديلات الموضعية ونقل الأسلوب"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - نموذج تحويل النص إلى صورة معزز بالأمان، تم تطويره بالتعاون مع Krea، ويحتوي على مرشحات أمان مدمجة"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - نموذج فائق السرعة لتحويل النص إلى صورة، يولّد صوراً عالية الجودة خلال 1 إلى 4 خطوات فقط، مثالي للتطبيقات الفورية والنماذج الأولية السريعة"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 - نموذج تحويل النص إلى صورة الكلاسيكي بدقة 512x512، مناسب للنماذج الأولية السريعة والتجارب الإبداعية"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 - الجيل الجديد من نماذج تحويل النص إلى صورة، يدعم نسختي Large وMedium، يتطلب ملف ترميز CLIP خارجي، ويوفر جودة صور ممتازة وتطابقاً دقيقاً مع الكلمات المفتاحية"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 - نسخة مدمجة مع مشفرات CLIP/T5، لا يتطلب ملفات ترميز خارجية، مناسب لنماذج مثل sd3.5_medium_incl_clips، ويستهلك موارد أقل"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "نموذج مخصص لتحويل النص إلى صورة باستخدام Stable Diffusion، يجب تسمية ملف النموذج بـ custom_sd_lobe.safetensors، وإذا كان هناك VAE يجب تسميته بـ custom_sd_vae_lobe.safetensors، ويجب وضع الملفات في المجلدات المحددة حسب متطلبات Comfy"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "نموذج مخصص لتحويل الصورة إلى صورة باستخدام SDXL، يجب تسمية ملف النموذج بـ custom_sd_lobe.safetensors، وإذا كان هناك VAE يجب تسميته بـ custom_sd_vae_lobe.safetensors، ويجب وضع الملفات في المجلدات المحددة حسب متطلبات Comfy"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "نموذج SDXL لتحويل الصورة إلى صورة، يتيح تحويل الصور بجودة عالية بناءً على صورة الإدخال، ويدعم نقل الأسلوب، ترميم الصور، والتحولات الإبداعية"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "نموذج SDXL لتحويل النص إلى صورة، يدعم توليد صور عالية الدقة تصل إلى 1024x1024، ويوفر جودة صور أفضل وتفاصيل أدق"
+  },
   "command": {
     "description": "نموذج حواري يتبع التعليمات، يظهر جودة عالية وموثوقية أكبر في المهام اللغوية، ويتميز بطول سياق أطول مقارنة بنموذجنا الأساسي للتوليد."
   },

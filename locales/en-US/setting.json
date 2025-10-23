@@ -43,8 +43,8 @@
   "header": {
     "desc": "Preferences and model settings.",
     "global": "Global Settings",
-    "group": "Group Chat Settings",
-    "groupDesc": "Manage the current group chat",
+    "group": "Team Settings",
+    "groupDesc": "Manage Agent teams and chat preferences",
     "session": "Session Settings",
     "sessionDesc": "Role settings and session preferences.",
     "sessionWithName": "Session Settings · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Please enter the group chat description",
-      "title": "Group Chat Description"
+      "placeholder": "Enter team description",
+      "title": "Team Description"
     },
     "name": {
-      "placeholder": "Please enter the group chat name",
-      "title": "Group Chat Name"
+      "placeholder": "Enter team name",
+      "title": "Team Name"
     },
     "scene": {
-      "desc": "Select group chat scenario",
+      "desc": "Select team scenario",
       "options": {
         "casual": "Casual",
         "productive": "Productive"
       },
-      "title": "Group Chat Scenario"
+      "title": "Team Scenario"
     },
-    "submit": "Update Group Chat",
+    "submit": "Update Team",
     "systemPrompt": {
       "placeholder": "Please enter the host system prompt",
       "title": "Host System Prompt"
     },
-    "title": "Group Chat Information"
+    "title": "Agent Team Information"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Allow Direct Messages from Assistant"
     },
     "enableSupervisor": {
-      "desc": "The host will manage the flow of the conversation.",
+      "desc": "Enable the Agent team moderator feature. Moderators will manage the team conversation flow.",
       "title": "Enable Host"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Host Settings",
     "responseOrder": {
-      "desc": "The agent will reply in the order set within the group chat",
+      "desc": "Agents will respond in the order set in the chat",
       "options": {
         "natural": "Natural",
         "sequential": "Sequential"
@@ -356,7 +356,7 @@
       "title": "Reply Order"
     },
     "responseSpeed": {
-      "desc": "Controls the overall pace of the group chat",
+      "desc": "Control the overall pace of the conversation",
       "options": {
         "fast": "Fast",
         "medium": "Medium",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Add to Group",
     "availableAgents": "Available Assistants",
+    "createMember": "Create Member",
     "defaultAgent": "Custom Assistant",
     "disableHost": "Disable Host Assistant",
     "edit": "Edit Member",
-    "empty": "No agents in this group chat yet. Click the + button to add members.",
+    "empty": "There are no members in this team yet. Click the + button to add members.",
     "enableHost": "Enable Host Assistant",
     "groupHost": "Group Host",
     "groupMembers": "Group Members",
@@ -626,11 +627,6 @@
       "label": "AI Art Topic Naming Model",
       "modelDesc": "Model designated for automatic naming of AI art topics",
       "title": "AI Art Automatic Topic Naming"
-    },
-    "groupChatSupervisor": {
-      "label": "Group Chat Supervision Model",
-      "modelDesc": "Model for supervising and managing group chat conversations.",
-      "title": "Group Chat Supervision"
     },
     "helpInfo": "When creating a new assistant, the default assistant settings will be used as preset values.",
     "historyCompress": {

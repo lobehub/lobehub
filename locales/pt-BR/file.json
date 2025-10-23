@@ -1,5 +1,5 @@
 {
-  "desc": "Gerencie seus arquivos e repositórios de conhecimento",
+  "desc": "Gerencie seu conhecimento",
   "detail": {
     "basic": {
       "createdAt": "Data de criação",
@@ -70,7 +70,7 @@
     "videos": "Vídeos",
     "websites": "Sites"
   },
-  "title": "Arquivos",
+  "title": "Base de Conhecimento",
   "toggleLeftPanel": {
     "title": "Mostrar/Ocultar painel esquerdo"
   },

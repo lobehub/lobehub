@@ -82,6 +82,58 @@
       "title": "ID de compte Cloudflare / adresse API"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Clé API requise pour l'authentification par jeton Bearer",
+      "placeholder": "Veuillez saisir la clé API",
+      "required": "Veuillez saisir la clé API",
+      "title": "Clé API"
+    },
+    "authType": {
+      "desc": "Choisissez le mode d'authentification avec le serveur ComfyUI",
+      "options": {
+        "basic": "Identifiant/Mot de passe",
+        "bearer": "Bearer (Clé API)",
+        "custom": "En-têtes personnalisés",
+        "none": "Aucune authentification"
+      },
+      "placeholder": "Veuillez sélectionner un type d'authentification",
+      "title": "Type d'authentification"
+    },
+    "baseURL": {
+      "desc": "Adresse Web d'accès à ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Veuillez saisir l'adresse du service ComfyUI",
+      "title": "Adresse du service ComfyUI"
+    },
+    "checker": {
+      "desc": "Tester si la connexion est correctement configurée",
+      "title": "Vérification de la connectivité"
+    },
+    "customHeaders": {
+      "addButton": "Ajouter un en-tête",
+      "deleteTooltip": "Supprimer cet en-tête",
+      "desc": "En-têtes requis pour l'authentification personnalisée, au format clé-valeur",
+      "duplicateKeyError": "Les noms de clé des en-têtes ne doivent pas être dupliqués",
+      "keyPlaceholder": "Nom de la clé",
+      "required": "Veuillez saisir les en-têtes personnalisés",
+      "title": "En-têtes personnalisés",
+      "valuePlaceholder": "Valeur"
+    },
+    "password": {
+      "desc": "Mot de passe requis pour l'authentification de base",
+      "placeholder": "Veuillez saisir le mot de passe",
+      "required": "Veuillez saisir le mot de passe",
+      "title": "Mot de passe"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Nom d'utilisateur requis pour l'authentification de base",
+      "placeholder": "Veuillez saisir le nom d'utilisateur",
+      "required": "Veuillez saisir le nom d'utilisateur",
+      "title": "Nom d'utilisateur"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Veuillez entrer votre clé API",

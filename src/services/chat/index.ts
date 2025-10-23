@@ -274,6 +274,12 @@ class ChatService {
       { ...res, apiMode, model },
     );
 
+    // Convert null to undefined for model params to prevent sending null values to API
+    if (payload.temperature === null) payload.temperature = undefined;
+    if (payload.top_p === null) payload.top_p = undefined;
+    if (payload.presence_penalty === null) payload.presence_penalty = undefined;
+    if (payload.frequency_penalty === null) payload.frequency_penalty = undefined;
+    
     const sdkType = resolveRuntimeProvider(provider);
 
     /**

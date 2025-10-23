@@ -5,11 +5,10 @@ import { ActionIcon, Avatar, Block, Icon, Tag, Text, Tooltip } from '@lobehub/ui
 import { Spotlight } from '@lobehub/ui/awesome';
 import { createStyles } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'nextjs-toploader/app';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
+import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import InstallationIcon from '@/components/MCPDepsIcon';
@@ -78,14 +77,14 @@ const McpItem = memo<DiscoverMcpItem>(
   }) => {
     const { t } = useTranslation('discover');
     const { styles, theme } = useStyles();
-    const router = useRouter();
-    const link = urlJoin('/discover/mcp', identifier);
+    const navigate = useNavigate();
+    const link = urlJoin('/mcp', identifier);
     return (
       <Block
         clickable
         height={'100%'}
         onClick={() => {
-          router.push(link);
+          navigate(link);
         }}
         style={{
           overflow: 'hidden',
@@ -128,7 +127,7 @@ const McpItem = memo<DiscoverMcpItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link href={link} style={{ color: 'inherit', overflow: 'hidden' }}>
+                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
                   <Text as={'h2'} className={styles.title} ellipsis>
                     {name}
                   </Text>
@@ -145,9 +144,14 @@ const McpItem = memo<DiscoverMcpItem>(
           <Flexbox align={'center'} gap={4} horizontal>
             {installationMethods && <InstallationIcon type={installationMethods} />}
             {github && (
-              <Link href={github.url} onClick={(e) => e.stopPropagation()} target={'_blank'}>
+              <a
+                href={github.url}
+                onClick={(e) => e.stopPropagation()}
+                rel="noopener noreferrer"
+                target={'_blank'}
+              >
                 <ActionIcon fill={theme.colorTextDescription} icon={Github} />
-              </Link>
+              </a>
             )}
           </Flexbox>
         </Flexbox>

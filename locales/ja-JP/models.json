@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "テキスト、画像、または混合コンテンツを分類または埋め込みに変換できるモデルです。"
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - 高品質なテキストから画像生成モデル。10〜50ステップで生成可能で、高品質な創作やアート作品の生成に適しています。"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - 画像編集モデル。テキスト指示に基づく既存画像の編集をサポートし、部分的な修正やスタイル変換にも対応しています。"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - セキュリティ強化型のテキストから画像生成モデル。Kreaとの共同開発で、安全フィルターを内蔵しています。"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - 超高速テキストから画像生成モデル。1〜4ステップで高品質な画像を生成でき、リアルタイムアプリケーションや迅速なプロトタイピングに最適です。"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 テキストから画像生成モデル。クラシックな512x512解像度で、迅速なプロトタイピングやクリエイティブな実験に適しています。"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 次世代テキストから画像生成モデル。LargeおよびMediumの2バージョンに対応し、外部CLIPエンコーダーファイルが必要です。優れた画像品質とプロンプト適合性を提供します。"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 内蔵CLIP/T5エンコーダーバージョン。外部エンコーダーファイルは不要で、sd3.5_medium_incl_clipsなどのモデルに対応。リソース消費も抑えられています。"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "カスタムSDテキストから画像生成モデル。モデルファイル名は custom_sd_lobe.safetensors を使用してください。VAEがある場合は custom_sd_vae_lobe.safetensors を使用し、Comfyの要件に従って適切なフォルダに配置してください。"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "カスタムSDXL画像から画像生成モデル。モデルファイル名は custom_sd_lobe.safetensors を使用してください。VAEがある場合は custom_sd_vae_lobe.safetensors を使用し、Comfyの要件に従って適切なフォルダに配置してください。"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "SDXL画像から画像生成モデル。入力画像に基づいて高品質な画像変換を行い、スタイル変換、画像修復、創造的な変換をサポートします。"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "SDXLテキストから画像生成モデル。1024x1024の高解像度に対応し、より優れた画像品質とディテール表現を提供します。"
+  },
   "command": {
     "description": "指示に従う対話モデルで、言語タスクにおいて高品質で信頼性が高く、私たちの基本生成モデルよりも長いコンテキスト長を持っています。"
   },

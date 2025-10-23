@@ -2,11 +2,10 @@ import { Github } from '@lobehub/icons';
 import { ActionIcon, Avatar, Block, Icon, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'nextjs-toploader/app';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
+import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
@@ -63,16 +62,17 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     backgroundColor,
   }) => {
     const { styles, theme } = useStyles();
-    const router = useRouter();
-    const link = urlJoin('/discover/assistant', identifier);
+    const navigate = useNavigate();
+    const link = urlJoin('/assistant', identifier);
     const { t } = useTranslation('discover');
 
     return (
       <Block
         clickable
+        data-testid="assistant-item"
         height={'100%'}
         onClick={() => {
-          router.push(link);
+          navigate(link);
         }}
         style={{
           overflow: 'hidden',
@@ -119,7 +119,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link href={link} style={{ color: 'inherit', overflow: 'hidden' }}>
+                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
                   <Text as={'h2'} className={styles.title} ellipsis>
                     {title}
                   </Text>
@@ -129,16 +129,17 @@ const AssistantItem = memo<DiscoverAssistantItem>(
             </Flexbox>
           </Flexbox>
           <Flexbox align={'center'} gap={4} horizontal>
-            <Link
+            <a
               href={urlJoin(
                 'https://github.com/lobehub/lobe-chat-agents/tree/main/locales',
                 identifier,
               )}
               onClick={(e) => e.stopPropagation()}
+              rel="noopener noreferrer"
               target={'_blank'}
             >
               <ActionIcon fill={theme.colorTextDescription} icon={Github} />
-            </Link>
+            </a>
           </Flexbox>
         </Flexbox>
         <Flexbox flex={1} gap={12} paddingInline={16}>

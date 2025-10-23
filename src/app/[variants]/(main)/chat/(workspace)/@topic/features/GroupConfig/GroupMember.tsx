@@ -53,12 +53,39 @@ const GroupMember = memo<GroupMemberProps>(
     const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
     const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>();
 
-    const handleAddMembers = async (selectedAgents: string[]) => {
+    const handleAddMembers = async (
+      selectedAgents: string[],
+      hostConfig?: { model?: string; provider?: string },
+      enableSupervisor?: boolean,
+    ) => {
       if (!sessionId) {
         console.error('No active group to add members to');
         return;
       }
-      await addAgentsToGroup(sessionId, selectedAgents);
+
+      // Update host config if changed
+      if (hostConfig !== undefined || enableSupervisor !== undefined) {
+        const newConfig: any = {};
+
+        if (enableSupervisor !== undefined) {
+          newConfig.enableSupervisor = enableSupervisor;
+        }
+
+        if (hostConfig) {
+          newConfig.orchestratorModel = hostConfig.model;
+          newConfig.orchestratorProvider = hostConfig.provider;
+        }
+
+        if (Object.keys(newConfig).length > 0) {
+          await updateGroupConfig(newConfig);
+        }
+      }
+
+      // Add selected agents
+      if (selectedAgents.length > 0) {
+        await addAgentsToGroup(sessionId, selectedAgents);
+      }
+
       onAddModalOpenChange(false);
     };
 
@@ -209,6 +236,11 @@ const GroupMember = memo<GroupMemberProps>(
         </Flexbox>
 
         <MemberSelectionModal
+          currentHostConfig={{
+            enableSupervisor: groupConfig?.enableSupervisor,
+            orchestratorModel: groupConfig?.orchestratorModel,
+            orchestratorProvider: groupConfig?.orchestratorProvider,
+          }}
           // @ts-ignore
           // TODO: fix type
           existingMembers={currentSession?.members?.map((member: any) => member.id) || []}

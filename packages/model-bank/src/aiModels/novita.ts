@@ -316,21 +316,6 @@ const novitaChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 120_000,
-    displayName: 'ERNIE 4.5 0.3B',
-    id: 'baidu/ernie-4.5-0.3b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 120_000,
     displayName: 'ERNIE 4.5 21B A3B',
     id: 'baidu/ernie-4.5-21B-a3b',
     pricing: {
@@ -432,8 +417,8 @@ const novitaChatModels: AIChatModelCard[] = [
     id: 'qwen/qwen3-4b-fp8',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -635,19 +620,6 @@ const novitaChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 32_768,
-    description: 'Mistral 7B Instruct 是一款兼有速度优化和长上下文支持的高性能行业标准模型。',
-    displayName: 'Mistral 7B Instruct',
-    id: 'mistralai/mistral-7b-instruct',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.029, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.059, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 65_535,
     description: 'WizardLM-2 8x22B 是微软AI最先进的Wizard模型，显示出极其竞争力的表现。',
     displayName: 'WizardLM-2 8x22B',
@@ -836,21 +808,6 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 32_000,
-    displayName: 'Deepseek R1 Distill Llama 8B',
-    id: 'deepseek/deepseek-r1-distill-llama-8b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       functionCall: true,
     },
     contextWindowTokens: 32_000,
@@ -984,21 +941,6 @@ const novitaChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 32_000,
-    displayName: 'GLM 4 32B 0414',
-    id: 'thudm/glm-4-32b-0414',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.55, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.66, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',

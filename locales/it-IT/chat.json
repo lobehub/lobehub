@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "Cancella messaggi attuali",
   "confirmClearCurrentMessages": "Stai per cancellare i messaggi attuali, questa operazione non potrà essere annullata. Confermi?",
-  "confirmRemoveChatGroupItemAlert": "Stai per eliminare questa chat di gruppo, i membri del gruppo non saranno influenzati, conferma la tua azione",
+  "confirmRemoveChatGroupItemAlert": "Stai per eliminare questo team di Agent. I membri del team non saranno influenzati. Conferma la tua azione.",
   "confirmRemoveGroupItemAlert": "Stai per eliminare questo gruppo. Dopo l'eliminazione, gli assistenti contenuti in esso verranno spostati nell'elenco predefinito. Confermi l'operazione?",
-  "confirmRemoveGroupSuccess": "Gruppo eliminato con successo",
+  "confirmRemoveGroupSuccess": "Team di agent eliminato con successo",
   "confirmRemoveSessionItemAlert": "Stai per rimuovere questo assistente, l'operazione non potrà essere annullata. Confermi?",
   "confirmRemoveSessionSuccess": "Session eliminata con successo",
   "defaultAgent": "Assistente predefinito",
-  "defaultGroupChat": "Chat di gruppo",
+  "defaultGroupChat": "Team di agent",
   "defaultList": "Lista predefinita",
   "defaultSession": "Sessione predefinita",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "Rimuovi membro",
     "title": "Gruppi"
   },
-  "groupDescription": "Descrizione del gruppo",
+  "groupDescription": "Descrizione del team",
   "groupSidebar": {
     "members": {
       "addMember": "Aggiungi membro",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "Seleziona assistenti esistenti...",
-    "createGroup": "Crea gruppo",
-    "existingMembers": "Assistenti esistenti",
+    "createGroup": "Crea un team",
+    "existingMembers": "Agent esistenti",
     "groupMembers": "Questi assistenti saranno aggiunti anche alla tua lista",
     "host": {
-      "description": "Automatizza il funzionamento della chat di gruppo",
-      "title": "Moderatore",
-      "tooltip": "Se disattivi l'ospitante della chat di gruppo, dovrai menzionare manualmente i membri con @ per ottenere una risposta"
+      "description": "Consenti al team di operare in modo autonomo",
+      "title": "Abilita moderatore",
+      "tooltip": "Se disabiliti il moderatore del team, dovrai menzionare manualmente i membri con @ per ottenere una risposta"
     },
     "memberCount": "{{count}} membri",
     "noMatchingTemplates": "Nessun modello corrispondente",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "Nessun membro nel modello",
     "noTemplates": "Nessun modello disponibile",
     "searchTemplates": "Cerca modelli...",
-    "title": "Crea gruppo",
+    "title": "Crea team di agent",
     "useTemplate": "Usa modello"
   },
   "hideForYou": "Il contenuto del messaggio privato è stato nascosto, abilita 【Mostra contenuto messaggi privati】 nelle impostazioni per visualizzarlo",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "Aggiungi membro",
     "allMembers": "Tutti i membri",
-    "createGroup": "Crea chat di gruppo",
+    "createGroup": "Crea un team di Agent",
     "noAvailableAgents": "Nessun assistente disponibile da invitare",
     "noSelectedAgents": "Nessun assistente selezionato",
     "searchAgents": "Cerca assistenti...",
-    "setInitialMembers": "Seleziona membri del gruppo"
+    "setInitialMembers": "Seleziona i membri del team"
   },
   "members": "Membri",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "Vai al messaggio n. {{index}}",
     "nextMessage": "Messaggio successivo",
-    "previousMessage": "Messaggio precedente"
+    "previousMessage": "Messaggio precedente",
+    "senderAssistant": "Assistente",
+    "senderUser": "Tu"
   },
   "newAgent": "Nuovo assistente",
-  "newGroupChat": "Nuova chat di gruppo",
-  "noAgentsYet": "In questo gruppo non ci sono ancora assistenti. Fai clic sul pulsante + per invitare assistenti.",
-  "noAvailableAgents": "Nessun assistente disponibile da invitare",
-  "noMatchingAgents": "Nessun assistente corrispondente",
+  "newGroupChat": "Nuovo team di agent",
+  "noAgentsYet": "Questo team di agent non ha ancora membri. Clicca sul pulsante + per invitare un assistente.",
+  "noAvailableAgents": "Nessun membro disponibile da invitare",
+  "noMatchingAgents": "Nessun membro corrispondente trovato",
   "noMembersYet": "Questo gruppo non ha ancora membri. Clicca sul pulsante + per invitare assistenti.",
-  "noSelectedAgents": "Nessun assistente selezionato",
+  "noSelectedAgents": "Nessun membro selezionato",
   "owner": "Proprietario del gruppo",
   "pin": "Fissa in alto",
   "pinOff": "Annulla fissaggio in alto",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "Copia",
     "download": "Scarica screenshot",
+    "downloadError": "Download fallito",
     "downloadFile": "Scarica file",
+    "downloadPdf": "Scarica PDF",
+    "downloadSuccess": "Download riuscito",
+    "exportPdf": "Esporta come PDF",
     "exportTitle": "Titolo predefinito",
+    "generatePdf": "Genera PDF",
+    "generatingPdf": "Generazione PDF in corso...",
     "imageType": "Tipo di immagine",
     "includeTool": "Includi messaggio dello strumento",
     "includeUser": "Includi messaggio dell'utente",
+    "loadingPdf": "Caricamento PDF...",
+    "noPdfData": "Nessun dato PDF disponibile",
+    "pdf": "PDF",
+    "pdfErrorDescription": "Si è verificato un errore durante la generazione del PDF, riprova",
+    "pdfGenerationError": "Generazione PDF fallita",
+    "pdfReady": "PDF pronto",
+    "regeneratePdf": "Rigenera PDF",
     "screenshot": "Screenshot",
     "settings": "Impostazioni di esportazione",
     "text": "Testo",

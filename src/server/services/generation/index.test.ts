@@ -129,7 +129,40 @@ describe('GenerationService', () => {
 
         const result = await fetchImageFromUrl('https://example.com/image.jpg');
 
-        expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg');
+        expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg', {
+          headers: undefined,
+        });
+        expect(result.mimeType).toBe('image/jpeg');
+        expect(result.buffer).toBeInstanceOf(Buffer);
+        expect(result.buffer.equals(mockBuffer)).toBe(true);
+      });
+
+      it('should fetch image with custom fetchHeaders', async () => {
+        const mockBuffer = Buffer.from('mock image data');
+        const mockArrayBuffer = mockBuffer.buffer.slice(
+          mockBuffer.byteOffset,
+          mockBuffer.byteOffset + mockBuffer.byteLength,
+        );
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: {
+            get: vi.fn().mockReturnValue('image/jpeg'),
+          },
+          arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
+        });
+
+        const customHeaders = {
+          'Authorization': 'Bearer token123',
+          'X-API-Key': 'api-key-456',
+        };
+
+        const result = await fetchImageFromUrl('https://example.com/image.jpg', customHeaders);
+
+        expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg', {
+          headers: customHeaders,
+        });
         expect(result.mimeType).toBe('image/jpeg');
         expect(result.buffer).toBeInstanceOf(Buffer);
         expect(result.buffer.equals(mockBuffer)).toBe(true);
@@ -168,7 +201,9 @@ describe('GenerationService', () => {
           'Failed to fetch image from https://example.com/nonexistent.jpg: 404 Not Found',
         );
 
-        expect(mockFetch).toHaveBeenCalledWith('https://example.com/nonexistent.jpg');
+        expect(mockFetch).toHaveBeenCalledWith('https://example.com/nonexistent.jpg', {
+          headers: undefined,
+        });
       });
 
       it('should throw error when network request fails', async () => {
@@ -406,7 +441,7 @@ describe('GenerationService', () => {
       const url = 'https://example.com/image';
       vi.mocked(inferFileExtensionFromImageUrl).mockReturnValue('');
 
-      // Mock fetch for HTTP URL
+      // Mock fetch for HTTP URL - return a MIME type that can't be resolved to extension
       const mockArrayBuffer = mockOriginalBuffer.buffer.slice(
         mockOriginalBuffer.byteOffset,
         mockOriginalBuffer.byteOffset + mockOriginalBuffer.byteLength,
@@ -415,7 +450,7 @@ describe('GenerationService', () => {
         ok: true,
         status: 200,
         headers: {
-          get: vi.fn().mockReturnValue('image/jpeg'),
+          get: vi.fn().mockReturnValue('application/octet-stream'), // Changed to unresolvable MIME type
         },
         arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
       });

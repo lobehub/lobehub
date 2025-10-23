@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { LobeChatPluginManifest } from '../types';
+import type { LobeToolManifest } from '../types';
 import { filterValidManifests, validateManifest } from '../utils';
 
 // Mock manifest schemas
-const mockBuiltinManifest: LobeChatPluginManifest = {
+const mockBuiltinManifest: LobeToolManifest = {
   api: [
     {
       description: 'Built-in tool',

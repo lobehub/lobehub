@@ -3,6 +3,8 @@ import { UserSystemAgentConfig } from '@/types/user/settings';
 
 const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
 
+const defaultTrueLey = new Set(['queryRewrite', 'autoSuggestion']);
+
 export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgentConfig> => {
   if (!envString) return {};
 
@@ -38,7 +40,7 @@ export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgen
 
       if (protectedKeys.includes(key)) {
         config[key as keyof UserSystemAgentConfig] = {
-          enabled: key === 'queryRewrite' ? true : undefined,
+          enabled: defaultTrueLey.has(key) ? true : undefined,
           model: model.trim(),
           provider: provider.trim(),
         } as any;
@@ -53,7 +55,7 @@ export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgen
     for (const key of protectedKeys) {
       if (!config[key as keyof UserSystemAgentConfig]) {
         config[key as keyof UserSystemAgentConfig] = {
-          enabled: key === 'queryRewrite' ? true : undefined,
+          enabled: defaultTrueLey.has(key) ? true : undefined,
           model: defaultSetting.model,
           provider: defaultSetting.provider,
         } as any;

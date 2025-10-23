@@ -22,7 +22,7 @@ const Preview = memo<FieldType & { title?: string }>(
   ({ title, withSystemRole, withBackground, withFooter }) => {
     const [model, plugins, systemRole] = useAgentStore((s) => [
       agentSelectors.currentAgentModel(s),
-      agentSelectors.currentAgentPlugins(s),
+      agentSelectors.displayableAgentPlugins(s),
       agentSelectors.currentAgentSystemRole(s),
     ]);
     const [isInbox, description, avatar, backgroundColor] = useSessionStore((s) => [

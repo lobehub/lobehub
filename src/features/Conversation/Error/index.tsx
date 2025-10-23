@@ -55,7 +55,9 @@ const getErrorAlertConfig = (
     }
 
     case AgentRuntimeErrorType.OllamaServiceUnavailable:
-    case AgentRuntimeErrorType.NoOpenAIAPIKey: {
+    case AgentRuntimeErrorType.NoOpenAIAPIKey:
+    case AgentRuntimeErrorType.ComfyUIServiceUnavailable:
+    case AgentRuntimeErrorType.InvalidComfyUIArgs: {
       return {
         extraDefaultExpand: true,
         extraIsolate: true,

@@ -1,5 +1,5 @@
 {
-  "desc": "Gestisci i tuoi file e il tuo knowledge base",
+  "desc": "Gestisci le tue conoscenze",
   "detail": {
     "basic": {
       "createdAt": "Data di creazione",
@@ -70,7 +70,7 @@
     "videos": "Video",
     "websites": "Siti web"
   },
-  "title": "File",
+  "title": "Archivio di Conoscenza",
   "toggleLeftPanel": {
     "title": "Mostra/Nascondi il pannello sinistro"
   },

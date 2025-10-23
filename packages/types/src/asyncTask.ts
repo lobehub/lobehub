@@ -15,6 +15,10 @@ export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
   InvalidProviderAPIKey = 'InvalidProviderAPIKey',
   /**
+   * Model not found on server
+   */
+  ModelNotFound = 'ModelNotFound',
+  /**
    * the chunk parse result it empty
    */
   NoChunkError = 'NoChunkError',

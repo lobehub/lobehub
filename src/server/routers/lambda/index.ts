@@ -9,6 +9,7 @@ import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
 import { chunkRouter } from './chunk';
+import { comfyuiRouter } from './comfyui';
 import { configRouter } from './config';
 import { documentRouter } from './document';
 import { exporterRouter } from './exporter';
@@ -38,6 +39,7 @@ export const lambdaRouter = router({
   aiProvider: aiProviderRouter,
   apiKey: apiKeyRouter,
   chunk: chunkRouter,
+  comfyui: comfyuiRouter,
   config: configRouter,
   document: documentRouter,
   exporter: exporterRouter,

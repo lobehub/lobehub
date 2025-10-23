@@ -59,10 +59,6 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5-mini",
     "provider": "openai",
   },
-  "groupChatSupervisor": {
-    "model": "gpt-5-mini",
-    "provider": "openai",
-  },
   "historyCompress": {
     "model": "gpt-5-mini",
     "provider": "openai",

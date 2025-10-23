@@ -89,6 +89,41 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
       return { apiKey, baseURLOrAccountID };
     }
 
+    case ModelProvider.ComfyUI: {
+      const {
+        COMFYUI_BASE_URL,
+        COMFYUI_AUTH_TYPE,
+        COMFYUI_API_KEY,
+        COMFYUI_USERNAME,
+        COMFYUI_PASSWORD,
+        COMFYUI_CUSTOM_HEADERS,
+      } = llmConfig;
+
+      // ComfyUI specific handling with environment variables fallback
+      const baseURL = payload?.baseURL || COMFYUI_BASE_URL || 'http://127.0.0.1:8000';
+
+      // ComfyUI supports multiple auth types: none, basic, bearer, custom
+      // Extract all relevant auth fields from the payload or environment
+      const authType = payload?.authType || COMFYUI_AUTH_TYPE || 'none';
+      const apiKey = payload?.apiKey || COMFYUI_API_KEY;
+      const username = payload?.username || COMFYUI_USERNAME;
+      const password = payload?.password || COMFYUI_PASSWORD;
+
+      // Parse customHeaders from JSON string (similar to Vertex AI credentials handling)
+      // Support both payload object and environment variable JSON string
+      const customHeaders = payload?.customHeaders || safeParseJSON(COMFYUI_CUSTOM_HEADERS);
+
+      // Return all authentication parameters
+      return {
+        apiKey,
+        authType,
+        baseURL,
+        customHeaders,
+        password,
+        username,
+      };
+    }
+
     case ModelProvider.GiteeAI: {
       const { GITEE_AI_API_KEY } = llmConfig;
 

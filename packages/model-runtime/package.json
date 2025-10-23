@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.862.0",
+    "@huggingface/inference": "^4.11.3",
     "@lobechat/const": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",

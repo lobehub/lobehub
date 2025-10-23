@@ -17,7 +17,7 @@ export const MARKET_SIDEBAR_WIDTH = 400;
 export const FOLDER_WIDTH = 270;
 export const MAX_WIDTH = 1024;
 export const FORM_STYLE: FormProps = {
-  itemMinWidth: 'max(30%,240px)',
+  itemMinWidth: 'max(34%, 240px)',
   style: { maxWidth: MAX_WIDTH, width: '100%' },
 };
 export const MOBILE_HEADER_ICON_SIZE: ActionIconProps['size'] = { blockSize: 36, size: 22 };

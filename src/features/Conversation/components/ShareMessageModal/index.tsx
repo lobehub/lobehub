@@ -1,15 +1,18 @@
-import { Modal, Segmented, type SegmentedProps } from '@lobehub/ui';
+import { Modal, Segmented, Tabs } from '@lobehub/ui';
 import { memo, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
+import { isServerMode } from '@/const/version';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { ChatMessage } from '@/types/message';
 
 import ShareImage from './ShareImage';
 import ShareText from './ShareText';
+import SharePdf from '@/features/ShareModal/SharePdf';
 
 enum Tab {
+  PDF = 'pdf',
   Screenshot = 'screenshot',
   Text = 'text',
 }
@@ -24,26 +27,39 @@ const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
   const [tab, setTab] = useState<Tab>(Tab.Screenshot);
   const { t } = useTranslation('chat');
   const uniqueId = useId();
-
-  const options: SegmentedProps['options'] = useMemo(
-    () => [
-      {
-        label: t('shareModal.screenshot'),
-        value: Tab.Screenshot,
-      },
-      {
-        label: t('shareModal.text'),
-        value: Tab.Text,
-      },
-    ],
-    [],
-  );
-
   const isMobile = useIsMobile();
+
+  const tabItems = useMemo(() => {
+    const items = [
+      {
+        children: <ShareImage message={message} mobile={isMobile} uniqueId={uniqueId} />,
+        key: Tab.Screenshot,
+        label: t('shareModal.screenshot'),
+      },
+      {
+        children: <ShareText item={message} />,
+        key: Tab.Text,
+        label: t('shareModal.text'),
+      },
+    ];
+
+    // Only add PDF tab in server mode
+    if (isServerMode) {
+      items.push({
+        children: <SharePdf message={message} />,
+        key: Tab.PDF,
+        label: t('shareModal.pdf'),
+      });
+    }
+
+    return items;
+  }, [isMobile, message, uniqueId, t]);
+
   return (
     <Modal
       allowFullscreen
       centered={false}
+      destroyOnHidden={true}
       footer={null}
       onCancel={onCancel}
       open={open}
@@ -54,15 +70,24 @@ const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
         <Segmented
           block
           onChange={(value) => setTab(value as Tab)}
-          options={options}
+          options={tabItems.map((item) => {
+            return {
+              label: item?.label,
+              value: item?.key,
+            };
+          })}
           style={{ width: '100%' }}
           value={tab}
           variant={'filled'}
         />
-        {tab === Tab.Screenshot && (
-          <ShareImage message={message} mobile={isMobile} uniqueId={uniqueId} />
-        )}
-        {tab === Tab.Text && <ShareText item={message} />}
+        <Tabs
+          activeKey={tab}
+          indicator={{ align: 'center', size: (origin) => origin - 20 }}
+          items={tabItems}
+          onChange={(key) => setTab(key as Tab)}
+          // eslint-disable-next-line react/jsx-no-useless-fragment
+          renderTabBar={() => <></>}
+        />
       </Flexbox>
     </Modal>
   );

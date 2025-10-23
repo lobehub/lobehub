@@ -43,8 +43,8 @@
   "header": {
     "desc": "Preferenze e impostazioni del modello.",
     "global": "Impostazioni globali",
-    "group": "Impostazioni chat di gruppo",
-    "groupDesc": "Gestisci la chat di gruppo corrente",
+    "group": "Impostazioni del Team",
+    "groupDesc": "Gestisci il team di agenti e le preferenze di chat",
     "session": "Impostazioni della sessione",
     "sessionDesc": "Impostazioni del personaggio e preferenze di sessione.",
     "sessionWithName": "Impostazioni della sessione · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Inserisci la descrizione della chat di gruppo",
-      "title": "Descrizione della chat di gruppo"
+      "placeholder": "Inserisci la descrizione del team",
+      "title": "Descrizione del Team"
     },
     "name": {
-      "placeholder": "Inserisci il nome della chat di gruppo",
-      "title": "Nome della chat di gruppo"
+      "placeholder": "Inserisci il nome del team",
+      "title": "Nome del Team"
     },
     "scene": {
-      "desc": "Seleziona la scena della chat di gruppo",
+      "desc": "Seleziona lo scenario del team",
       "options": {
         "casual": "Informale",
         "productive": "Produttivo"
       },
-      "title": "Scena della chat di gruppo"
+      "title": "Scenario del Team"
     },
-    "submit": "Aggiorna chat di gruppo",
+    "submit": "Aggiorna Team",
     "systemPrompt": {
       "placeholder": "Inserisci il prompt di sistema del moderatore",
       "title": "Prompt di sistema del moderatore"
     },
-    "title": "Informazioni chat di gruppo"
+    "title": "Informazioni sul Team di Agenti"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Consenti messaggi privati dall'assistente"
     },
     "enableSupervisor": {
-      "desc": "Attiva la funzione di moderatore della chat di gruppo; il moderatore gestirà il flusso della conversazione",
+      "desc": "Abilita la funzione di supervisore del team di agenti. Il supervisore gestirà il flusso delle conversazioni del team",
       "title": "Attiva moderatore"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Impostazioni moderatore",
     "responseOrder": {
-      "desc": "Gli agenti risponderanno nell'ordine stabilito nella chat di gruppo",
+      "desc": "Gli agenti risponderanno nell'ordine impostato nella chat",
       "options": {
         "natural": "Naturale",
         "sequential": "Sequenziale"
@@ -356,7 +356,7 @@
       "title": "Ordine di risposta"
     },
     "responseSpeed": {
-      "desc": "Controlla la velocità complessiva della chat di gruppo",
+      "desc": "Controlla la velocità complessiva della conversazione",
       "options": {
         "fast": "Veloce",
         "medium": "Media",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Aggiungi al gruppo",
     "availableAgents": "Assistenti disponibili",
+    "createMember": "Crea membro",
     "defaultAgent": "Assistente personalizzato",
     "disableHost": "Disattiva assistente host",
     "edit": "Modifica membro",
-    "empty": "Nessun agente presente in questa chat di gruppo. Clicca il pulsante + per aggiungere membri.",
+    "empty": "Non ci sono ancora membri in questo team. Clicca sul pulsante + per aggiungerli.",
     "enableHost": "Attiva assistente host",
     "groupHost": "Host del gruppo",
     "groupMembers": "Membri del gruppo",
@@ -626,11 +627,6 @@
       "label": "Modello di denominazione argomenti per disegno AI",
       "modelDesc": "Modello specificato per la denominazione automatica degli argomenti nel disegno AI",
       "title": "Denominazione automatica argomenti per disegno AI"
-    },
-    "groupChatSupervisor": {
-      "label": "Modello di supervisione per chat di gruppo",
-      "modelDesc": "Specifica il modello da utilizzare per la supervisione e la gestione delle conversazioni di gruppo",
-      "title": "Supervisione e gestione delle chat di gruppo"
     },
     "helpInfo": "Quando crei un nuovo assistente, verranno utilizzate le impostazioni predefinite dell'assistente come valori predefiniti.",
     "historyCompress": {

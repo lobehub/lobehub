@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "Clear current session messages",
   "confirmClearCurrentMessages": "You are about to clear the current session messages. Once cleared, they cannot be retrieved. Please confirm your action.",
-  "confirmRemoveChatGroupItemAlert": "You are about to delete this group chat. Group members will not be affected. Please confirm your action.",
+  "confirmRemoveChatGroupItemAlert": "This Agent team will be deleted. Team members will not be affected. Please confirm your action.",
   "confirmRemoveGroupItemAlert": "You are about to delete this group. After deletion, its assistants will be moved to the default list. Please confirm your action.",
-  "confirmRemoveGroupSuccess": "Group chat deleted successfully",
+  "confirmRemoveGroupSuccess": "Agent team deleted successfully",
   "confirmRemoveSessionItemAlert": "You are about to delete this assistant. Once deleted, it cannot be retrieved. Please confirm your action.",
   "confirmRemoveSessionSuccess": "Assistant removed successfully",
   "defaultAgent": "Default Assistant",
-  "defaultGroupChat": "Group Chat",
+  "defaultGroupChat": "Agent Team",
   "defaultList": "Default List",
   "defaultSession": "Default Assistant",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "Remove Member",
     "title": "Group"
   },
-  "groupDescription": "Group description",
+  "groupDescription": "Team Description",
   "groupSidebar": {
     "members": {
       "addMember": "Add Member",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "Select existing assistants...",
-    "createGroup": "Create Group Chat",
-    "existingMembers": "Existing Assistants",
+    "createGroup": "Create Team",
+    "existingMembers": "Current Agents",
     "groupMembers": "These assistants will also be added to your list",
     "host": {
-      "description": "Automate group chat operations",
-      "title": "Host",
-      "tooltip": "If group chat hosting is disabled, you'll need to manually @mention members to get their responses."
+      "description": "Enable the team to operate independently",
+      "title": "Enable Host",
+      "tooltip": "If the team host is disabled, you'll need to manually @mention members to get their responses"
     },
     "memberCount": "{{count}} members",
     "noMatchingTemplates": "No matching templates",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "No members in the template",
     "noTemplates": "No templates available",
     "searchTemplates": "Search templates...",
-    "title": "Create Group Chat",
+    "title": "Create Agent Team",
     "useTemplate": "Use Template"
   },
   "hideForYou": "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "Add Member",
     "allMembers": "All members",
-    "createGroup": "Create Group Chat",
+    "createGroup": "Create Agent Team",
     "noAvailableAgents": "No assistants available to invite",
     "noSelectedAgents": "No assistants selected yet",
     "searchAgents": "Search assistants...",
-    "setInitialMembers": "Select Group Members"
+    "setInitialMembers": "Select Team Members"
   },
   "members": "Members",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "Jump to message {{index}}",
     "nextMessage": "Next message",
-    "previousMessage": "Previous message"
+    "previousMessage": "Previous message",
+    "senderAssistant": "Assistant",
+    "senderUser": "You"
   },
   "newAgent": "New Assistant",
-  "newGroupChat": "New Group Chat",
-  "noAgentsYet": "There are no assistants in this group yet. Click the + button to invite an assistant.",
-  "noAvailableAgents": "No assistants available to invite",
-  "noMatchingAgents": "No matching assistants",
+  "newGroupChat": "New Agent Team",
+  "noAgentsYet": "This Agent Team has no members yet. Click the + button to invite assistants.",
+  "noAvailableAgents": "No members available to invite",
+  "noMatchingAgents": "No matching members found",
   "noMembersYet": "This group doesn't have any members yet. Click the + button to invite assistants.",
-  "noSelectedAgents": "No assistant selected yet",
+  "noSelectedAgents": "No members selected yet",
   "owner": "Group Owner",
   "pin": "Pin",
   "pinOff": "Unpin",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "Copy",
     "download": "Download Screenshot",
+    "downloadError": "Download failed",
     "downloadFile": "Download File",
+    "downloadPdf": "Download PDF",
+    "downloadSuccess": "Download successful",
+    "exportPdf": "Export as PDF",
     "exportTitle": "Default Title",
+    "generatePdf": "Generate PDF",
+    "generatingPdf": "Generating PDF...",
     "imageType": "Image Format",
     "includeTool": "Include Plugin Messages",
     "includeUser": "Include User Messages",
+    "loadingPdf": "Loading PDF...",
+    "noPdfData": "No PDF data available",
+    "pdf": "PDF",
+    "pdfErrorDescription": "An error occurred while generating the PDF, please try again",
+    "pdfGenerationError": "PDF generation failed",
+    "pdfReady": "PDF is ready",
+    "regeneratePdf": "Regenerate PDF",
     "screenshot": "Screenshot",
     "settings": "Export Settings",
     "text": "Text",

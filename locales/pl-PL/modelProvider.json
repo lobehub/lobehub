@@ -82,6 +82,58 @@
       "title": "ID konta Cloudflare / adres API"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Klucz API wymagany do uwierzytelnienia Bearer Token",
+      "placeholder": "Wprowadź klucz API",
+      "required": "Wprowadź klucz API",
+      "title": "Klucz API"
+    },
+    "authType": {
+      "desc": "Wybierz metodę uwierzytelnienia z serwerem ComfyUI",
+      "options": {
+        "basic": "Login/Hasło",
+        "bearer": "Bearer (klucz API)",
+        "custom": "Niestandardowe nagłówki",
+        "none": "Brak uwierzytelnienia"
+      },
+      "placeholder": "Wybierz typ uwierzytelnienia",
+      "title": "Typ uwierzytelnienia"
+    },
+    "baseURL": {
+      "desc": "Adres URL do interfejsu webowego ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Wprowadź adres usługi ComfyUI",
+      "title": "Adres usługi ComfyUI"
+    },
+    "checker": {
+      "desc": "Sprawdź, czy połączenie zostało poprawnie skonfigurowane",
+      "title": "Sprawdzenie połączenia"
+    },
+    "customHeaders": {
+      "addButton": "Dodaj nagłówek",
+      "deleteTooltip": "Usuń ten nagłówek",
+      "desc": "Nagłówki wymagane dla niestandardowego uwierzytelnienia w formacie klucz-wartość",
+      "duplicateKeyError": "Nazwy nagłówków nie mogą się powtarzać",
+      "keyPlaceholder": "Nazwa klucza",
+      "required": "Wprowadź niestandardowe nagłówki",
+      "title": "Niestandardowe nagłówki",
+      "valuePlaceholder": "Wartość"
+    },
+    "password": {
+      "desc": "Hasło wymagane do podstawowego uwierzytelnienia",
+      "placeholder": "Wprowadź hasło",
+      "required": "Wprowadź hasło",
+      "title": "Hasło"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Nazwa użytkownika wymagana do podstawowego uwierzytelnienia",
+      "placeholder": "Wprowadź nazwę użytkownika",
+      "required": "Wprowadź nazwę użytkownika",
+      "title": "Nazwa użytkownika"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Proszę wpisać swój klucz API",

@@ -1,5 +1,5 @@
 {
-  "desc": "管理你的文件與知識庫",
+  "desc": "管理你的知識",
   "detail": {
     "basic": {
       "createdAt": "創建時間",
@@ -70,7 +70,7 @@
     "videos": "視頻",
     "websites": "網頁"
   },
-  "title": "檔案",
+  "title": "知識庫",
   "toggleLeftPanel": {
     "title": "顯示/隱藏左側面板"
   },

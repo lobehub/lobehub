@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "Всего {{count}} элементов",
       "selectedCount": "Выбрано {{count}} элементов"
+    },
+    "view": {
+      "list": "Список",
+      "masonry": "Сетка"
     }
   },
   "FileParsingStatus": {

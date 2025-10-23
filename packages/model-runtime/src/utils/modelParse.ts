@@ -23,6 +23,12 @@ export const MODEL_LIST_CONFIGS = {
     reasoningKeywords: ['-3-7', '3.7', '-4'],
     visionKeywords: ['claude'],
   },
+  comfyui: {
+    // ComfyUI models are image generation models, no chat capabilities
+    functionCallKeywords: [],
+    reasoningKeywords: [],
+    visionKeywords: [],
+  },
   deepseek: {
     functionCallKeywords: ['v3', 'r1', 'deepseek-chat'],
     reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.1', 'v3.2'],
@@ -105,6 +111,7 @@ export const MODEL_LIST_CONFIGS = {
 // 模型所有者 (提供商) 关键词配置
 export const MODEL_OWNER_DETECTION_CONFIG = {
   anthropic: ['claude'],
+  comfyui: ['comfyui/'], // ComfyUI models detection - all ComfyUI models have comfyui/ prefix
   deepseek: ['deepseek'],
   google: ['gemini', 'imagen'],
   inclusionai: ['ling-', 'ming-', 'ring-'],

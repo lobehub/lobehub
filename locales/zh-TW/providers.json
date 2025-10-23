@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras 是一個基於其專用 CS-3 系統的 AI 推理平台，旨在提供全球最快、即時回應、高吞吐量的 LLM 服務，專為消除延遲並加速複雜的 AI 工作流程（如即時程式碼生成與代理任務）而設計。"
   },
-  "cerebras": {
-    "description": "Cerebras 是一個基於其專用 CS-3 系統的 AI 推理平台，旨在提供全球最快、即時回應、高吞吐量的 LLM 服務，專為消除延遲並加速複雜的 AI 工作流程（如即時程式碼生成與代理任務）而設計。"
-  },
   "cloudflare": {
     "description": "在 Cloudflare 的全球網絡上運行由無伺服器 GPU 驅動的機器學習模型。"
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI 是一個提供多種前沿大型模型介面的服務平台，支援 OpenAI、Anthropic、Google 及更多，適合多樣化的開發和應用需求。使用者可根據自身需求靈活選擇最優的模型和價格，助力 AI 體驗的提升。"
+  },
+  "comfyui": {
+    "description": "強大的開源圖像、影片、音訊生成工作流程引擎，支援 SD、FLUX、Qwen、Hunyuan、WAN 等先進模型，提供節點化工作流程編輯與私有化部署能力"
   },
   "deepseek": {
     "description": "DeepSeek 是一家專注於人工智慧技術研究和應用的公司，其最新模型 DeepSeek-V2.5 融合了通用對話和代碼處理能力，並在人類偏好對齊、寫作任務和指令跟隨等方面實現了顯著提升。"

@@ -36,19 +36,9 @@ describe('ContextEngine', () => {
   });
 
   const createInitialContext = (): {
-    initialState: any;
-    maxTokens: number;
     messages: any[];
-    model: string;
   } => ({
-    initialState: {
-      messages: [],
-      model: 'test-model',
-      provider: 'test-provider',
-    },
-    maxTokens: 4000,
     messages: [{ content: 'test', role: 'user' }],
-    model: 'test-model',
   });
 
   describe('constructor', () => {
@@ -206,8 +196,7 @@ describe('ContextEngine', () => {
       const processor = createMockProcessor('p1');
       const engine = new ContextEngine({ pipeline: [processor] });
 
-      const input = { ...createInitialContext(), messages: undefined };
-      const result = await engine.process(input);
+      const result = await engine.process({ messages: [] });
 
       expect(result.messages).toEqual([]);
     });
@@ -216,19 +205,14 @@ describe('ContextEngine', () => {
       const processor: ContextProcessor = {
         name: 'test',
         process: vi.fn(async (context) => {
-          expect(context.metadata.maxTokens).toBe(4000);
-          expect(context.metadata.model).toBe('test-model');
-          expect(context.metadata.customKey).toBe('customValue');
+          expect(context.metadata).toBeDefined();
           return context;
         }),
       };
 
       const engine = new ContextEngine({ pipeline: [processor] });
 
-      await engine.process({
-        ...createInitialContext(),
-        metadata: { customKey: 'customValue' },
-      });
+      await engine.process(createInitialContext());
     });
 
     it('should track execution stats', async () => {
@@ -278,12 +262,7 @@ describe('ContextEngine', () => {
         pipeline: [processor1, processor2],
       });
 
-      const input = {
-        ...createInitialContext(),
-      };
-      input.initialState = { ...input.initialState, messages: [] };
-
-      const result = await engine.process(input);
+      const result = await engine.process(createInitialContext());
 
       expect(result.isAborted).toBe(true);
       expect(result.stats.processedCount).toBe(1);
@@ -333,16 +312,17 @@ describe('ContextEngine', () => {
     });
 
     it('should preserve initial state', async () => {
+      const testContext = createInitialContext();
       const processor: ContextProcessor = {
         name: 'test',
         process: vi.fn(async (context) => {
-          expect(context.initialState).toEqual(createInitialContext().initialState);
+          expect(context.initialState.messages).toEqual(testContext.messages);
           return context;
         }),
       };
 
       const engine = new ContextEngine({ pipeline: [processor] });
-      await engine.process(createInitialContext());
+      await engine.process(testContext);
     });
   });
 

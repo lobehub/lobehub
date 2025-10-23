@@ -57,8 +57,12 @@ describe('LobeAzureAI', () => {
         model: 'gpt-4',
       };
 
-      vi.spyOn(instance.client.path('/chat/completions'), 'post').mockResolvedValue({
+      const mockPost = vi.fn().mockResolvedValue({
         body: mockResponse,
+      });
+
+      vi.spyOn(instance.client, 'path').mockReturnValue({
+        post: mockPost,
       } as any);
 
       const result = await instance.chat({
@@ -68,12 +72,18 @@ describe('LobeAzureAI', () => {
       });
 
       expect(result).toBeDefined();
+      expect(instance.client.path).toHaveBeenCalledWith('/chat/completions');
+      expect(mockPost).toHaveBeenCalled();
     });
 
     it('should handle generic errors', async () => {
       const mockError = new Error('Network error');
 
-      vi.spyOn(instance.client.path('/chat/completions'), 'post').mockRejectedValue(mockError);
+      const mockPost = vi.fn().mockRejectedValue(mockError);
+
+      vi.spyOn(instance.client, 'path').mockReturnValue({
+        post: mockPost,
+      } as any);
 
       try {
         await instance.chat({

@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras, özel CS-3 sistemi üzerine kurulu bir yapay zeka çıkarım platformudur. Gerçek zamanlı yanıtlar ve yüksek veri işleme kapasitesiyle dünyanın en hızlı LLM hizmetini sunmayı hedefler. Gecikmeleri ortadan kaldırmak ve gerçek zamanlı kod üretimi ile aracı görevler gibi karmaşık yapay zeka iş akışlarını hızlandırmak için tasarlanmıştır."
   },
-  "cerebras": {
-    "description": "Cerebras, özel CS-3 sistemi üzerine kurulu bir yapay zeka çıkarım platformudur. Gerçek zamanlı yanıtlar ve yüksek veri işleme kapasitesiyle dünyanın en hızlı LLM hizmetini sunmayı hedefler. Gecikmeleri ortadan kaldırmak ve gerçek zamanlı kod üretimi ile aracı görevler gibi karmaşık yapay zeka iş akışlarını hızlandırmak için tasarlanmıştır."
-  },
   "cloudflare": {
     "description": "Cloudflare'ın küresel ağı üzerinde sunucusuz GPU destekli makine öğrenimi modelleri çalıştırın."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI, OpenAI, Anthropic, Google ve daha fazlasını destekleyen çeşitli ileri düzey büyük model arayüzleri sunan bir hizmet platformudur. Çeşitli geliştirme ve uygulama ihtiyaçlarına uygundur. Kullanıcılar, kendi ihtiyaçlarına göre en uygun modeli ve fiyatı esnek bir şekilde seçebilir, böylece yapay zeka deneyimini geliştirebilirler."
+  },
+  "comfyui": {
+    "description": "Güçlü bir açık kaynaklı görüntü, video ve ses üretim iş akışı motoru; SD, FLUX, Qwen, Hunyuan, WAN gibi ileri düzey modelleri destekler, düğüm tabanlı iş akışı düzenleme ve özelleştirilmiş dağıtım yetenekleri sunar."
   },
   "deepseek": {
     "description": "DeepSeek, yapay zeka teknolojisi araştırma ve uygulamalarına odaklanan bir şirkettir. En son modeli DeepSeek-V2.5, genel diyalog ve kod işleme yeteneklerini birleştirerek, insan tercihleriyle uyum, yazma görevleri ve talimat takibi gibi alanlarda önemli iyileştirmeler sağlamaktadır."

@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "Общо {{count}} елемента",
       "selectedCount": "Избрани {{count}} елемента"
+    },
+    "view": {
+      "list": "Изглед като списък",
+      "masonry": "Изглед като мрежа"
     }
   },
   "FileParsingStatus": {

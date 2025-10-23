@@ -43,8 +43,8 @@
   "header": {
     "desc": "Thiết lập Ưu tiên và Mô hình.",
     "global": "Cài đặt toàn cầu",
-    "group": "Cài đặt nhóm trò chuyện",
-    "groupDesc": "Quản lý nhóm trò chuyện hiện tại",
+    "group": "Cài đặt nhóm",
+    "groupDesc": "Quản lý nhóm Agent và tùy chọn trò chuyện",
     "session": "Cài đặt cuộc trò chuyện",
     "sessionDesc": "Thiết lập nhân vật và ưu tiên phiên hội thoại.",
     "sessionWithName": "Cài đặt cuộc trò chuyện · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Vui lòng nhập mô tả nhóm trò chuyện",
-      "title": "Mô tả nhóm trò chuyện"
+      "placeholder": "Vui lòng nhập mô tả nhóm",
+      "title": "Mô tả nhóm"
     },
     "name": {
-      "placeholder": "Vui lòng nhập tên nhóm trò chuyện",
-      "title": "Tên nhóm trò chuyện"
+      "placeholder": "Vui lòng nhập tên nhóm",
+      "title": "Tên nhóm"
     },
     "scene": {
-      "desc": "Chọn bối cảnh trò chuyện nhóm",
+      "desc": "Chọn ngữ cảnh nhóm",
       "options": {
         "casual": "Thư giãn",
         "productive": "Năng suất"
       },
-      "title": "Bối cảnh trò chuyện nhóm"
+      "title": "Ngữ cảnh nhóm"
     },
-    "submit": "Cập nhật nhóm trò chuyện",
+    "submit": "Cập nhật nhóm",
     "systemPrompt": {
       "placeholder": "Vui lòng nhập từ khóa hệ thống cho người dẫn chương trình",
       "title": "Từ khóa hệ thống người dẫn chương trình"
     },
-    "title": "Thông tin nhóm trò chuyện"
+    "title": "Thông tin nhóm Agent"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Cho phép trợ lý gửi tin nhắn riêng"
     },
     "enableSupervisor": {
-      "desc": "Bật chức năng người điều phối nhóm, người điều phối sẽ quản lý luồng hội thoại trong nhóm",
+      "desc": "Bật chức năng người điều phối nhóm Agent, người điều phối sẽ quản lý luồng hội thoại của nhóm",
       "title": "Bật người điều phối"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Cài đặt người dẫn chương trình",
     "responseOrder": {
-      "desc": "Đại diện sẽ trả lời theo thứ tự được thiết lập trong nhóm trò chuyện",
+      "desc": "Các Agent sẽ phản hồi theo thứ tự đã thiết lập trong cuộc trò chuyện",
       "options": {
         "natural": "Tự nhiên",
         "sequential": "Tuần tự"
@@ -356,7 +356,7 @@
       "title": "Thứ tự trả lời"
     },
     "responseSpeed": {
-      "desc": "Điều khiển tốc độ tổng thể của cuộc trò chuyện nhóm",
+      "desc": "Kiểm soát tốc độ tiến hành tổng thể của cuộc trò chuyện",
       "options": {
         "fast": "Nhanh",
         "medium": "Trung bình",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Thêm vào nhóm",
     "availableAgents": "Trợ lý có sẵn",
+    "createMember": "Tạo thành viên",
     "defaultAgent": "Trợ lý tùy chỉnh",
     "disableHost": "Tắt trợ lý chủ trì",
     "edit": "Chỉnh sửa thành viên",
-    "empty": "Hiện chưa có đại diện trong nhóm này. Nhấn nút + để thêm thành viên.",
+    "empty": "Hiện chưa có thành viên nào trong nhóm. Nhấn nút + để thêm thành viên.",
     "enableHost": "Bật trợ lý chủ trì",
     "groupHost": "Chủ trì nhóm",
     "groupMembers": "Thành viên nhóm",
@@ -626,11 +627,6 @@
       "label": "Mô hình đặt tên chủ đề vẽ AI",
       "modelDesc": "Mô hình được chỉ định để tự động đặt tên chủ đề cho vẽ AI",
       "title": "Tự động đặt tên chủ đề vẽ AI"
-    },
-    "groupChatSupervisor": {
-      "label": "Mô hình giám sát cuộc trò chuyện nhóm",
-      "modelDesc": "Mô hình được chỉ định để giám sát và quản lý các cuộc trò chuyện nhóm",
-      "title": "Quản lý giám sát cuộc trò chuyện nhóm"
     },
     "helpInfo": "Khi tạo trợ lý mới, sẽ sử dụng cài đặt trợ lý mặc định làm giá trị mặc định.",
     "historyCompress": {

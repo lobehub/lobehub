@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "Mô hình cho phép phân loại hoặc chuyển đổi văn bản, hình ảnh hoặc nội dung hỗn hợp thành các vector nhúng."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - Mô hình tạo ảnh từ văn bản chất lượng cao, tạo ảnh trong 10-50 bước, phù hợp cho sáng tác chất lượng cao và tác phẩm nghệ thuật."
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - Mô hình chỉnh sửa hình ảnh, hỗ trợ chỉnh sửa hình ảnh hiện có dựa trên hướng dẫn văn bản, bao gồm chỉnh sửa cục bộ và chuyển đổi phong cách."
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - Mô hình tạo ảnh từ văn bản với tính năng an toàn nâng cao, phát triển hợp tác với Krea, tích hợp bộ lọc an toàn."
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - Mô hình tạo ảnh từ văn bản siêu nhanh, tạo ảnh chất lượng cao chỉ trong 1-4 bước, lý tưởng cho ứng dụng thời gian thực và tạo nguyên mẫu nhanh."
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 - Mô hình tạo ảnh từ văn bản cổ điển với độ phân giải 512x512, phù hợp cho tạo nguyên mẫu nhanh và thử nghiệm sáng tạo."
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 - Mô hình tạo ảnh từ văn bản thế hệ mới, hỗ trợ hai phiên bản Large và Medium, yêu cầu tệp mã hóa CLIP bên ngoài, mang lại chất lượng hình ảnh vượt trội và độ khớp cao với từ khóa."
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 - Phiên bản tích hợp mã hóa CLIP/T5, không cần tệp mã hóa bên ngoài, phù hợp với các mô hình như sd3.5_medium_incl_clips, sử dụng ít tài nguyên hơn."
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "Mô hình tạo ảnh từ văn bản SD tùy chỉnh, tên tệp mô hình nên là custom_sd_lobe.safetensors, nếu có VAE thì dùng custom_sd_vae_lobe.safetensors, tệp mô hình cần được đặt đúng thư mục theo yêu cầu của Comfy."
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "Mô hình chuyển ảnh thành ảnh SDXL tùy chỉnh, tên tệp mô hình nên là custom_sd_lobe.safetensors, nếu có VAE thì dùng custom_sd_vae_lobe.safetensors, tệp mô hình cần được đặt đúng thư mục theo yêu cầu của Comfy."
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "Mô hình chuyển ảnh thành ảnh SDXL, chuyển đổi hình ảnh đầu vào thành hình ảnh chất lượng cao, hỗ trợ chuyển đổi phong cách, phục hồi hình ảnh và biến đổi sáng tạo."
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "Mô hình tạo ảnh từ văn bản SDXL, hỗ trợ tạo ảnh độ phân giải cao 1024x1024 từ văn bản, mang lại chất lượng hình ảnh và chi tiết vượt trội."
+  },
   "command": {
     "description": "Một mô hình đối thoại tuân theo chỉ dẫn, thể hiện chất lượng cao và đáng tin cậy trong các nhiệm vụ ngôn ngữ, đồng thời có độ dài ngữ cảnh dài hơn so với mô hình sinh cơ bản của chúng tôi."
   },

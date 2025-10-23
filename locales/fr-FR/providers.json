@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras est une plateforme d'inférence IA basée sur son système dédié CS-3, conçue pour offrir les services de LLM les plus rapides au monde, avec une réponse en temps réel et un débit élevé. Elle est spécialement conçue pour éliminer la latence et accélérer les flux de travail IA complexes, tels que la génération de code en temps réel et les tâches d'agents."
   },
-  "cerebras": {
-    "description": "Cerebras est une plateforme d'inférence IA basée sur son système dédié CS-3, conçue pour offrir les services de LLM les plus rapides au monde, avec une réponse en temps réel et un débit élevé. Elle est spécialement conçue pour éliminer la latence et accélérer les flux de travail IA complexes, tels que la génération de code en temps réel et les tâches d'agents."
-  },
   "cloudflare": {
     "description": "Exécutez des modèles d'apprentissage automatique alimentés par GPU sans serveur sur le réseau mondial de Cloudflare."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI est une plateforme de services offrant diverses interfaces de modèles avancés, prenant en charge OpenAI, Anthropic, Google et bien d'autres, adaptée à des besoins de développement et d'application variés. Les utilisateurs peuvent choisir librement le modèle et le tarif optimaux selon leurs besoins, favorisant ainsi une meilleure expérience en IA."
+  },
+  "comfyui": {
+    "description": "Un puissant moteur open source de génération d’images, de vidéos et d’audio, prenant en charge des modèles avancés tels que SD, FLUX, Qwen, Hunyuan et WAN, avec des fonctionnalités d’édition de flux de travail par nœuds et de déploiement privé."
   },
   "deepseek": {
     "description": "DeepSeek est une entreprise spécialisée dans la recherche et l'application des technologies d'intelligence artificielle, dont le dernier modèle, DeepSeek-V2.5, combine des capacités de dialogue général et de traitement de code, réalisant des améliorations significatives dans l'alignement des préférences humaines, les tâches d'écriture et le suivi des instructions."

@@ -81,6 +81,12 @@
     "522": "Üzgünüz, sunucu bağlantısı zaman aşımına uğradı ve isteğinize zamanında yanıt veremedi. Bu, ağın kararsız olmasından veya sunucunun geçici olarak erişilememesinden kaynaklanıyor olabilir. Lütfen daha sonra tekrar deneyin, hizmeti geri getirmek için çalışıyoruz.",
     "524": "Üzgünüz, sunucu yanıt beklerken zaman aşımına uğradı, bu muhtemelen yanıtın çok yavaş olmasından kaynaklanıyor. Lütfen daha sonra tekrar deneyin.",
     "AgentRuntimeError": "Lobe dil modeli çalışma zamanı hatası, lütfen aşağıdaki bilgilere göre sorunu gidermeye çalışın veya tekrar deneyin",
+    "ComfyUIBizError": "ComfyUI hizmeti isteğinde hata oluştu, lütfen aşağıdaki bilgilere göre sorunu giderin veya tekrar deneyin",
+    "ComfyUIEmptyResult": "ComfyUI herhangi bir görsel üretmedi, lütfen model yapılandırmasını kontrol edin veya tekrar deneyin",
+    "ComfyUIModelError": "ComfyUI modeli yüklenemedi, lütfen model dosyasının mevcut olup olmadığını kontrol edin",
+    "ComfyUIServiceUnavailable": "ComfyUI hizmetine bağlanılamadı, lütfen ComfyUI'nin düzgün çalışıp çalışmadığını veya hizmet adresi yapılandırmasının doğru olup olmadığını kontrol edin",
+    "ComfyUIUploadFailed": "ComfyUI görsel yüklemesi başarısız oldu, lütfen sunucu bağlantısını kontrol edin veya tekrar deneyin",
+    "ComfyUIWorkflowError": "ComfyUI iş akışı yürütülemedi, lütfen iş akışı yapılandırmasını kontrol edin",
     "ConnectionCheckFailed": "İstek boş döndü, lütfen API代理地址ının sonuna `/v1` ekleyip eklemediğinizi kontrol edin.",
     "CreateMessageError": "Üzgünüm, mesaj düzgün bir şekilde gönderilemedi. Lütfen içeriği kopyalayın ve yeniden gönderin, sayfayı yeniledikten sonra bu mesaj kaydedilmeyecek.",
     "ExceededContextWindow": "Mevcut istek içeriği modelin işleyebileceği uzunluğu aşıyor, lütfen içerik miktarını azaltıp tekrar deneyin",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "Geçersiz Erişim Kodu: Geçersiz veya boş bir şifre girdiniz. Lütfen doğru erişim şifresini girin veya özel API Anahtarı ekleyin.",
     "InvalidBedrockCredentials": "Bedrock kimlik doğrulaması geçersiz, lütfen AccessKeyId/SecretAccessKey bilgilerinizi kontrol edip tekrar deneyin",
     "InvalidClerkUser": "Üzgünüz, şu anda giriş yapmadınız. Lütfen işlemlere devam etmeden önce giriş yapın veya hesap oluşturun",
+    "InvalidComfyUIArgs": "ComfyUI yapılandırması hatalı, lütfen yapılandırmayı kontrol edip tekrar deneyin",
     "InvalidGithubToken": "Github Kişisel Erişim Token'ı hatalı veya boş. Lütfen Github Kişisel Erişim Token'ınızı kontrol edin ve tekrar deneyin.",
     "InvalidOllamaArgs": "Ollama yapılandırması yanlış, lütfen Ollama yapılandırmasını kontrol edip tekrar deneyin",
     "InvalidProviderAPIKey": "{{provider}} API Anahtarı geçersiz veya boş, lütfen {{provider}} API Anahtarını kontrol edip tekrar deneyin",
@@ -149,6 +156,11 @@
       "title": "Özel {{name}} API Anahtarını kullan"
     },
     "closeMessage": "Mesajı kapat",
+    "comfyui": {
+      "description": "Görsel üretmeye başlamak için lütfen doğru {{name}} kimlik doğrulama bilgilerini girin",
+      "modifyBaseUrl": "Comfy UI hizmet adresini değiştir",
+      "title": "{{name}} kimlik doğrulama bilgilerinizi onaylayın"
+    },
     "confirm": "Onayla ve Yeniden Dene",
     "oauth": {
       "description": "Yönetici, tek oturum açma kimlik doğrulamasını etkinleştirdi. Aşağıdaki düğmeye tıklayarak giriş yapabilir ve uygulamayı kilidini açabilirsiniz.",

@@ -8,6 +8,8 @@ import ShareMessageModal from '@/features/Conversation/components/ShareMessageMo
 import { VirtuosoContext } from '@/features/Conversation/components/VirtualizedList/VirtuosoContext';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
+import { useSessionStore } from '@/store/session';
+import { sessionSelectors } from '@/store/session/selectors';
 import { ChatMessage } from '@/types/message';
 
 import { InPortalThreadContext } from '../../../context/InPortalThreadContext';
@@ -25,6 +27,7 @@ export const AssistantActionsBar = memo<AssistantActionsProps>(({ id, data, inde
     !!s.activeThreadId,
     threadSelectors.hasThreadBySourceMsgId(id)(s),
   ]);
+  const isGroupSession = useSessionStore(sessionSelectors.isCurrentSessionGroupSession);
   const [showShareModal, setShareModal] = useState(false);
 
   const {
@@ -49,8 +52,10 @@ export const AssistantActionsBar = memo<AssistantActionsProps>(({ id, data, inde
   const items = useMemo(() => {
     if (hasTools) return [delAndRegenerate, copy];
 
-    return [edit, copy, inThread ? null : branching].filter(Boolean) as ActionIconGroupItemType[];
-  }, [inThread, hasTools]);
+    return [edit, copy, inThread || isGroupSession ? null : branching].filter(
+      Boolean,
+    ) as ActionIconGroupItemType[];
+  }, [inThread, hasTools, isGroupSession]);
 
   const { t } = useTranslation('common');
   const searchParams = useSearchParams();
@@ -155,7 +160,7 @@ export const AssistantActionsBar = memo<AssistantActionsProps>(({ id, data, inde
         translateMessage(id, lang);
       }
     },
-    [data],
+    [data, topic],
   );
 
   if (error) return <ErrorActionsBar onActionClick={onActionClick} />;

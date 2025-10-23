@@ -98,14 +98,49 @@ export const chatGroupAction: StateCreator<
       return group.id;
     },
     deleteGroup: async (id) => {
+      // First, get all group members to identify virtual members
+      // Note: ChatGroupAgentItem type is incorrectly defined in schema as agents table type
+      // but getGroupAgents actually returns chatGroupsAgents junction table entries
+      const groupAgents = (await chatGroupService.getGroupAgents(id)) as unknown as Array<{
+        agentId: string;
+        chatGroupId: string;
+      }>;
+
+      // Delete the group first (this will cascade delete the chat_groups_agents entries)
       await chatGroupService.deleteGroup(id);
       dispatch({ payload: id, type: 'deleteGroup' });
+
+      // Now delete virtual members (agents with virtual: true)
+      const sessionStore = getSessionStoreState();
+      const sessions = sessionStore.sessions || [];
+
+      // Find and delete all virtual sessions that were members of this group
+      const virtualMemberDeletions = groupAgents
+        .map((groupAgent) => {
+          // groupAgent has agentId property from the junction table
+          const session = sessions.find((s) => {
+            // Type guard: check if it's an agent session
+            if (s.type === 'agent') {
+              return s.config?.id === groupAgent.agentId;
+            }
+            return false;
+          });
+
+          // Only delete if the session exists and has virtual flag set to true
+          if (session && session.type === 'agent' && session.config?.virtual) {
+            return sessionStore.removeSession(session.id);
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      // Wait for all virtual member deletions to complete
+      await Promise.all(virtualMemberDeletions);
 
       await get().loadGroups();
       await getSessionStoreState().refreshSessions();
 
       // If the active session is the deleted group, switch to the inbox session
-      const sessionStore = getSessionStoreState();
       if (sessionStore.activeId === id) {
         sessionStore.switchSession(INBOX_SESSION_ID);
       }

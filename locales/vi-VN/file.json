@@ -1,5 +1,5 @@
 {
-  "desc": "Quản lý tệp và kho tri thức của bạn",
+  "desc": "Quản lý kiến thức của bạn",
   "detail": {
     "basic": {
       "createdAt": "Thời gian tạo",
@@ -70,7 +70,7 @@
     "videos": "Video",
     "websites": "Trang web"
   },
-  "title": "Tệp",
+  "title": "Kho kiến thức",
   "toggleLeftPanel": {
     "title": "Hiện/Ẩn bảng bên trái"
   },

@@ -1,3 +1,5 @@
+import { ModelUsage } from '@lobechat/types';
+
 /**
  * Token usage tracking for different types of operations
  */
@@ -39,14 +41,16 @@ export interface Usage {
   /** Tool usage statistics */
   tools: {
     /** Usage breakdown by tool name */
-    byTool: Record<
-      string,
-      {
-        calls: number;
-        errors: number;
-        totalTimeMs: number;
-      }
-    >;
+    byTool: Array<{
+      /** Number of calls */
+      calls: number;
+      /** Number of errors */
+      errors: number;
+      /** Tool name/identifier */
+      name: string;
+      /** Total execution time in milliseconds */
+      totalTimeMs: number;
+    }>;
     /** Number of tool calls executed */
     totalCalls: number;
     /** Total tool execution time */
@@ -66,15 +70,18 @@ export interface Cost {
   /** LLM API costs */
   llm: {
     /** Cost per model used */
-    byModel: Record<
-      string,
-      {
-        currency: string;
-        inputTokens: number;
-        outputTokens: number;
-        totalCost: number;
-      }
-    >;
+    byModel: Array<{
+      /** Model identifier in format "provider/model" */
+      id: string;
+      /** Model name */
+      model: string;
+      /** Provider name */
+      provider: string;
+      /** Total cost for this model */
+      totalCost: number;
+      /** Detailed usage breakdown */
+      usage: ModelUsage;
+    }>;
     currency: string;
     /** Total LLM cost */
     total: number;
@@ -82,14 +89,16 @@ export interface Cost {
   /** Tool execution costs */
   tools: {
     /** Cost per tool (if tool has associated costs) */
-    byTool: Record<
-      string,
-      {
-        calls: number;
-        currency: string;
-        totalCost: number;
-      }
-    >;
+    byTool: Array<{
+      /** Number of calls */
+      calls: number;
+      /** Currency */
+      currency: string;
+      /** Tool name/identifier */
+      name: string;
+      /** Total cost for this tool */
+      totalCost: number;
+    }>;
     currency: string;
     /** Total tool cost */
     total: number;

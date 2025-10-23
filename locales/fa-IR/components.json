@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "مجموعاً {{count}} مورد",
       "selectedCount": "{{count}} مورد انتخاب شده"
+    },
+    "view": {
+      "list": "نمای فهرست",
+      "masonry": "نمای شبکه‌ای"
     }
   },
   "FileParsingStatus": {

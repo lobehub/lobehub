@@ -82,6 +82,58 @@
       "title": "Cloudflare Hesap ID / API Adresi"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Bearer Token kimlik doğrulaması için gerekli API anahtarı",
+      "placeholder": "Lütfen API anahtarını girin",
+      "required": "Lütfen API anahtarını girin",
+      "title": "API Anahtarı"
+    },
+    "authType": {
+      "desc": "ComfyUI sunucusuyla kimlik doğrulama yöntemini seçin",
+      "options": {
+        "basic": "Kullanıcı adı/Şifre",
+        "bearer": "Bearer (API Anahtarı)",
+        "custom": "Özel Başlık",
+        "none": "Kimlik doğrulama gerekmez"
+      },
+      "placeholder": "Lütfen kimlik doğrulama türünü seçin",
+      "title": "Kimlik Doğrulama Türü"
+    },
+    "baseURL": {
+      "desc": "ComfyUI web erişim adresi",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Lütfen ComfyUI sunucu adresini girin",
+      "title": "ComfyUI Sunucu Adresi"
+    },
+    "checker": {
+      "desc": "Bağlantının doğru yapılandırılıp yapılandırılmadığını test edin",
+      "title": "Bağlantı Kontrolü"
+    },
+    "customHeaders": {
+      "addButton": "Başlık Ekle",
+      "deleteTooltip": "Bu başlığı sil",
+      "desc": "Özel kimlik doğrulama için gerekli başlıklar, anahtar-değer çifti formatında",
+      "duplicateKeyError": "Başlık anahtarları benzersiz olmalıdır",
+      "keyPlaceholder": "Anahtar",
+      "required": "Lütfen özel başlıkları girin",
+      "title": "Özel Başlıklar",
+      "valuePlaceholder": "Değer"
+    },
+    "password": {
+      "desc": "Temel kimlik doğrulama için gerekli şifre",
+      "placeholder": "Lütfen şifreyi girin",
+      "required": "Lütfen şifreyi girin",
+      "title": "Şifre"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Temel kimlik doğrulama için gerekli kullanıcı adı",
+      "placeholder": "Lütfen kullanıcı adını girin",
+      "required": "Lütfen kullanıcı adını girin",
+      "title": "Kullanıcı Adı"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Lütfen API Anahtarınızı girin",

@@ -1,12 +1,10 @@
 import { Icon } from '@lobehub/ui';
-import { Skeleton } from 'antd';
 import { createStyles } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
-import { useIsMobile } from '@/hooks/useIsMobile';
 import { shinyTextStylish } from '@/styles/loading';
 
 const useStyles = createStyles(({ css, token }) => ({
@@ -41,16 +39,9 @@ interface SearchBarProps {
 const SearchBar = memo<SearchBarProps>(
   ({ defaultQuery, resultsNumber, onEditingChange, searching }) => {
     const { t } = useTranslation('tool');
-    const isMobile = useIsMobile();
     const { styles, cx } = useStyles();
     return (
-      <Flexbox
-        align={isMobile ? 'flex-start' : 'center'}
-        distribution={'space-between'}
-        gap={isMobile ? 8 : 40}
-        height={isMobile ? undefined : 32}
-        horizontal={!isMobile}
-      >
+      <Flexbox align={'center'} distribution={'space-between'} gap={40} height={26} horizontal>
         <Flexbox
           align={'center'}
           className={cx(styles.query, searching && styles.shinyText)}
@@ -64,11 +55,9 @@ const SearchBar = memo<SearchBarProps>(
           {defaultQuery}
         </Flexbox>
 
-        <Flexbox align={'center'} horizontal>
-          <>
-            <div className={styles.font}>{t('search.searchResult')}</div>
-            {searching ? <Skeleton.Button active size={'small'} /> : resultsNumber}
-          </>
+        <Flexbox align={'center'} className={styles.font} horizontal>
+          <div>{t('search.searchResult')}</div>
+          {resultsNumber}
         </Flexbox>
       </Flexbox>
     );

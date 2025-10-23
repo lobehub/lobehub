@@ -1,5 +1,5 @@
 {
-  "desc": "Gérez vos fichiers et votre base de connaissances",
+  "desc": "Gérez vos connaissances",
   "detail": {
     "basic": {
       "createdAt": "Date de création",
@@ -70,7 +70,7 @@
     "videos": "Vidéos",
     "websites": "Sites web"
   },
-  "title": "Fichiers",
+  "title": "Base de connaissances",
   "toggleLeftPanel": {
     "title": "Afficher/Masquer le panneau de gauche"
   },

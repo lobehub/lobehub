@@ -8,6 +8,8 @@ import { Flexbox } from 'react-layout-kit';
 
 import FileIcon from '@/components/FileIcon';
 import { localFileService } from '@/services/electron/localFileService';
+import { useElectronStore } from '@/store/electron';
+import { desktopStateSelectors } from '@/store/electron/selectors';
 
 const useStyles = createStyles(({ css, token, cx }) => ({
   actions: cx(
@@ -20,10 +22,18 @@ const useStyles = createStyles(({ css, token, cx }) => ({
     `,
   ),
   container: css`
+    justify-content: space-between;
+
+    height: 64px;
     padding: 8px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusLG}px;
+
     transition: all 0.2s ${token.motionEaseInOut};
+
+    .local-file-actions {
+      opacity: 0;
+    }
 
     &:hover {
       border-color: ${token.colorBorder};
@@ -48,10 +58,13 @@ const useStyles = createStyles(({ css, token, cx }) => ({
   lineCount: css`
     color: ${token.colorTextQuaternary};
   `,
-  meta: css`
-    font-size: 12px;
-    color: ${token.colorTextTertiary};
-  `,
+  meta: cx(
+    'local-file-actions',
+    css`
+      font-size: 12px;
+      color: ${token.colorTextTertiary};
+    `,
+  ),
   path: css`
     margin-block-start: 4px;
     padding-inline: 4px;
@@ -104,6 +117,8 @@ const ReadFileView = memo<ReadFileViewProps>(
       localFileService.openLocalFolder({ isDirectory: false, path });
     };
 
+    const displayPath = useElectronStore(desktopStateSelectors.displayRelativePath(path));
+
     return (
       <Flexbox className={styles.container}>
         <Flexbox
@@ -115,7 +130,7 @@ const ReadFileView = memo<ReadFileViewProps>(
           onClick={handleToggleExpand}
         >
           <Flexbox align={'center'} flex={1} gap={0} horizontal style={{ overflow: 'hidden' }}>
-            <FileIcon fileName={filename} fileType={fileType} size={24} variant={'raw'} />
+            <FileIcon fileName={filename} fileType={fileType} size={16} variant={'raw'} />
             <Flexbox horizontal>
               <Text className={styles.fileName} ellipsis>
                 {filename}
@@ -174,7 +189,7 @@ const ReadFileView = memo<ReadFileViewProps>(
 
         {/* Path */}
         <Text className={styles.path} ellipsis type={'secondary'}>
-          {path}
+          {displayPath}
         </Text>
 
         {isExpanded && (

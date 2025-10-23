@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "Un modèle permettant de classifier ou de transformer en embeddings des textes, images ou contenus mixtes."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - Modèle de génération d'images à partir de texte de haute qualité, 10 à 50 étapes de génération, idéal pour la création artistique et les œuvres visuelles de qualité."
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - Modèle d'édition d'image, permet de modifier des images existantes à l'aide d'instructions textuelles, avec prise en charge des modifications locales et du transfert de style."
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - Modèle de génération d'images à partir de texte avec sécurité renforcée, développé en collaboration avec Krea, intègre un filtrage de sécurité."
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - Modèle ultra-rapide de génération d'images à partir de texte, produit des images de haute qualité en 1 à 4 étapes, idéal pour les applications en temps réel et le prototypage rapide."
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 - Modèle classique de génération d'images à partir de texte en résolution 512x512, adapté au prototypage rapide et aux expérimentations créatives."
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 - Modèle de nouvelle génération pour la génération d'images à partir de texte, disponible en versions Large et Medium, nécessite un fichier d'encodeur CLIP externe, offre une qualité d'image exceptionnelle et une grande fidélité aux invites textuelles."
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 avec encodeur CLIP/T5 intégré - Ne nécessite pas de fichier d'encodeur externe, compatible avec des modèles comme sd3.5_medium_incl_clips, avec une consommation de ressources réduite."
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "Modèle personnalisé SD pour la génération d'images à partir de texte. Le fichier du modèle doit être nommé custom_sd_lobe.safetensors. Si un VAE est utilisé, nommez-le custom_sd_vae_lobe.safetensors. Les fichiers doivent être placés dans les dossiers requis selon les spécifications de Comfy."
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "Modèle personnalisé SDXL pour la transformation d'image à image. Le fichier du modèle doit être nommé custom_sd_lobe.safetensors. Si un VAE est utilisé, nommez-le custom_sd_vae_lobe.safetensors. Les fichiers doivent être placés dans les dossiers requis selon les spécifications de Comfy."
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "Modèle SDXL de transformation d'image à image, permet une conversion d'image de haute qualité à partir d'une image source, avec prise en charge du transfert de style, de la restauration d'image et des transformations créatives."
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "Modèle SDXL de génération d'images à partir de texte, prend en charge une résolution élevée de 1024x1024, offrant une qualité d'image supérieure et un meilleur rendu des détails."
+  },
   "command": {
     "description": "Un modèle de dialogue qui suit des instructions, offrant une haute qualité et une fiabilité accrue dans les tâches linguistiques, avec une longueur de contexte plus longue que notre modèle de génération de base."
   },

@@ -1,8 +1,8 @@
 'use client';
 
-import { ActionIcon, Avatar, List, Modal, SearchBar } from '@lobehub/ui';
+import { ActionIcon, Avatar, List, Modal, SearchBar, Text, Tooltip } from '@lobehub/ui';
 import { useHover } from 'ahooks';
-import { List as AntdList, Button, Checkbox, Empty, Typography } from 'antd';
+import { List as AntdList, Button, Checkbox, Empty, Switch, Typography } from 'antd';
 import { createStyles } from 'antd-style';
 import { X } from 'lucide-react';
 import { type ChangeEvent, memo, useCallback, useMemo, useRef, useState } from 'react';
@@ -10,10 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
+import ModelSelect from '@/features/ModelSelect';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSessionStore } from '@/store/session';
 import { LobeAgentSession, LobeSessionType } from '@/types/session';
 
-const { Text } = Typography;
+const { Text: AntText } = Typography;
 
 const AvailableAgentItem = memo<{
   agent: LobeAgentSession;
@@ -56,11 +58,11 @@ const AvailableAgentItem = memo<{
           />
         </Flexbox>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text className={styles.title}>{title}</Text>
+          <AntText className={styles.title}>{title}</AntText>
           {description && (
-            <Text className={styles.description} ellipsis>
+            <AntText className={styles.description} ellipsis>
               {description}
-            </Text>
+            </AntText>
           )}
         </Flexbox>
       </Flexbox>
@@ -81,6 +83,14 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 11px;
     line-height: 1.2;
     color: ${token.colorTextSecondary};
+  `,
+  hostCard: css`
+    margin-block-end: ${token.paddingSM}px;
+    padding: ${token.padding}px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusLG}px;
+
+    background: ${token.colorFillTertiary};
   `,
   leftColumn: css`
     user-select: none;
@@ -107,6 +117,9 @@ const useStyles = createStyles(({ css, token }) => ({
       background: ${token.colorFillTertiary};
     }
   `,
+  modelSelectDisabled: css`
+    pointer-events: none;
+  `,
   rightColumn: css`
     overflow-y: auto;
     flex: 1;
@@ -122,6 +135,14 @@ export type MemberSelectionMode = 'create' | 'add';
 
 export interface MemberSelectionModalProps {
   /**
+   * Current host configuration (for add mode)
+   */
+  currentHostConfig?: {
+    enableSupervisor?: boolean;
+    orchestratorModel?: string;
+    orchestratorProvider?: string;
+  };
+  /**
    * Existing group members to exclude from available agents (for add mode)
    */
   existingMembers?: string[];
@@ -136,7 +157,11 @@ export interface MemberSelectionModalProps {
    */
   mode: MemberSelectionMode;
   onCancel: () => void;
-  onConfirm: (selectedAgents: string[]) => void | Promise<void>;
+  onConfirm: (
+    selectedAgents: string[],
+    hostConfig?: { model?: string; provider?: string },
+    enableSupervisor?: boolean,
+  ) => void | Promise<void>;
   open: boolean;
   /**
    * Pre-selected agent IDs (useful for editing existing groups)
@@ -145,15 +170,56 @@ export interface MemberSelectionModalProps {
 }
 
 const MemberSelectionModal = memo<MemberSelectionModalProps>(
-  ({ existingMembers = [], mode, onCancel, onConfirm, open, preSelectedAgents = [] }) => {
+  ({
+    currentHostConfig,
+    existingMembers = [],
+    mode,
+    onCancel,
+    onConfirm,
+    open,
+    preSelectedAgents = [],
+  }) => {
     const { t } = useTranslation(['chat', 'common']);
     const { styles, cx } = useStyles();
+    const enabledModels = useEnabledChatModels();
     const [selectedAgents, setSelectedAgents] = useState<string[]>(preSelectedAgents);
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Determine if host card should be shown
+    const isHostCurrentlyEnabled = mode === 'add' && currentHostConfig?.enableSupervisor === true;
+
+    // Initialize host state:
+    // - In create mode: default to enabled (isHostRemoved = false)
+    // - In add mode with host disabled: default to disabled (isHostRemoved = true)
+    const [isHostRemoved, setIsHostRemoved] = useState(mode === 'add' ? true : false);
+    const [hostModelConfig, setHostModelConfig] = useState<{ model?: string; provider?: string }>(
+      () => {
+        if (mode === 'add' && currentHostConfig) {
+          return {
+            model: currentHostConfig.orchestratorModel,
+            provider: currentHostConfig.orchestratorProvider,
+          };
+        }
+        // Set default for create mode
+        if (enabledModels.length > 0 && enabledModels[0].children.length > 0) {
+          const firstProvider = enabledModels[0];
+          const firstModel = firstProvider.children[0];
+
+          return {
+            model: firstModel.id,
+            provider: firstProvider.id,
+          };
+        }
+        return {};
+      },
+    );
+
     const agentSessions = useSessionStore((s) => {
       const allSessions = s.sessions || [];
-      return allSessions.filter((session) => session.type === LobeSessionType.Agent);
+      return allSessions.filter(
+        (session): session is LobeAgentSession =>
+          session.type === LobeSessionType.Agent && !session.config?.virtual,
+      );
     });
 
     const currentSessionId = useSessionStore((s) => s.activeId);
@@ -170,6 +236,14 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
 
     const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
       setSearchTerm(e.target.value);
+    }, []);
+
+    const handleHostToggle = useCallback((enabled: boolean) => {
+      setIsHostRemoved(!enabled);
+    }, []);
+
+    const handleHostModelChange = useCallback((config: { model?: string; provider?: string }) => {
+      setHostModelConfig(config);
     }, []);
 
     // Filter logic based on mode
@@ -237,14 +311,35 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const handleReset = () => {
       setSelectedAgents(preSelectedAgents);
       setSearchTerm('');
+      setIsHostRemoved(mode === 'add' ? true : false);
+      if (mode === 'add' && currentHostConfig) {
+        setHostModelConfig({
+          model: currentHostConfig.orchestratorModel,
+          provider: currentHostConfig.orchestratorProvider,
+        });
+      }
     };
 
     const [isAdding, setIsAdding] = useState(false);
 
+    const normalizedHostModelConfig = useMemo(() => {
+      const model = hostModelConfig.model;
+      const provider = hostModelConfig.provider;
+
+      if (!model || !provider) return undefined;
+
+      return { model, provider };
+    }, [hostModelConfig]);
+
     const handleConfirm = async () => {
       try {
         setIsAdding(true);
-        await onConfirm(selectedAgents);
+        // Only pass host config if the host card is visible (being managed in this modal)
+        const shouldManageHost = !isHostCurrentlyEnabled;
+        const hostConfig =
+          shouldManageHost && !isHostRemoved ? normalizedHostModelConfig : undefined;
+        const enableSupervisor = shouldManageHost ? !isHostRemoved : undefined;
+        await onConfirm(selectedAgents, hostConfig, enableSupervisor);
         handleReset();
       } catch (error) {
         console.error('Failed to confirm action:', error);
@@ -265,8 +360,13 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const confirmButtonText =
       mode === 'create' ? t('memberSelection.createGroup') : t('memberSelection.addMember');
 
+    // Calculate total member count including host if enabled
+    // Only count the host when the host card is visible (create mode or add mode with host disabled)
+    const shouldShowHostCard = !isHostCurrentlyEnabled;
+    const totalMemberCount = selectedAgents.length + (shouldShowHostCard && !isHostRemoved ? 1 : 0);
+
     const minMembersRequired = mode === 'create' ? 1 : 0; // At least 1 member for group creation
-    const isConfirmDisabled = selectedAgents.length < minMembersRequired || isAdding;
+    const isConfirmDisabled = totalMemberCount < minMembersRequired || isAdding;
 
     return (
       <Modal
@@ -280,7 +380,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
               onClick={handleConfirm}
               type="primary"
             >
-              {confirmButtonText} ({selectedAgents.length})
+              {confirmButtonText} ({totalMemberCount})
             </Button>
           </Flexbox>
         }
@@ -337,22 +437,66 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
             </Flexbox>
           </Flexbox>
 
-          {/* Right Column - Selected Agents */}
+          {/* Right Column - Host and Selected Agents */}
           <Flexbox className={styles.rightColumn} flex={1}>
-            {selectedAgentListItems.length === 0 ? (
-              <Flexbox align="center" flex={1} justify="center">
-                <Empty
-                  description={
-                    mode === 'create'
-                      ? t('memberSelection.noSelectedAgents')
-                      : t('memberSelection.noSelectedAgents')
-                  }
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                />
+            <Flexbox gap={16}>
+              {/* Host Card - Only show in create mode or when host is disabled in add mode */}
+              {!isHostCurrentlyEnabled && (
+                <Flexbox align="center" className={styles.hostCard} gap={12} horizontal>
+                  <Flexbox flex={1} gap={2}>
+                    <Text
+                      style={{ fontSize: 14, fontWeight: 500 }}
+                      type={isHostRemoved ? 'secondary' : undefined}
+                    >
+                      {t('groupWizard.host.title')}
+                    </Text>
+                    <Text
+                      style={{ color: '#999', fontSize: 12 }}
+                      type={isHostRemoved ? 'secondary' : undefined}
+                    >
+                      {t('groupWizard.host.description')}
+                    </Text>
+                  </Flexbox>
+                  <Flexbox align="center" gap={12} horizontal>
+                    <div
+                      className={cx(isHostRemoved && styles.modelSelectDisabled)}
+                      style={{ opacity: isHostRemoved ? 0.6 : 1 }}
+                    >
+                      <ModelSelect
+                        onChange={handleHostModelChange}
+                        requiredAbilities={['functionCall']}
+                        value={normalizedHostModelConfig}
+                      />
+                    </div>
+                    <Tooltip title={t('groupWizard.host.tooltip')}>
+                      <Switch
+                        checked={!isHostRemoved}
+                        onChange={(checked) => handleHostToggle(checked)}
+                        size="small"
+                      />
+                    </Tooltip>
+                  </Flexbox>
+                </Flexbox>
+              )}
+
+              {/* Selected Agents List */}
+              <Flexbox flex={1}>
+                {selectedAgentListItems.length === 0 ? (
+                  <Flexbox align="center" flex={1} justify="center">
+                    <Empty
+                      description={
+                        mode === 'create'
+                          ? t('memberSelection.noSelectedAgents')
+                          : t('memberSelection.noSelectedAgents')
+                      }
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  </Flexbox>
+                ) : (
+                  <List items={selectedAgentListItems} />
+                )}
               </Flexbox>
-            ) : (
-              <List items={selectedAgentListItems} />
-            )}
+            </Flexbox>
           </Flexbox>
         </Flexbox>
       </Modal>

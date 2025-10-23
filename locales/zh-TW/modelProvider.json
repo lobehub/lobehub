@@ -82,6 +82,58 @@
       "title": "Cloudflare 帳戶 ID / API 位址"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "Bearer Token 認證所需的 API 金鑰",
+      "placeholder": "請輸入 API 金鑰",
+      "required": "請輸入 API 金鑰",
+      "title": "API 金鑰"
+    },
+    "authType": {
+      "desc": "選擇與 ComfyUI 伺服器的認證方式",
+      "options": {
+        "basic": "帳號/密碼",
+        "bearer": "Bearer（API 金鑰）",
+        "custom": "自訂請求標頭",
+        "none": "無需認證"
+      },
+      "placeholder": "請選擇認證類型",
+      "title": "認證類型"
+    },
+    "baseURL": {
+      "desc": "ComfyUI 網頁存取位址",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "請輸入 ComfyUI 服務位址",
+      "title": "ComfyUI 服務位址"
+    },
+    "checker": {
+      "desc": "測試連線是否正確設定",
+      "title": "連線檢查"
+    },
+    "customHeaders": {
+      "addButton": "新增請求標頭",
+      "deleteTooltip": "刪除此請求標頭",
+      "desc": "自訂認證方式所需的請求標頭，格式為鍵值對",
+      "duplicateKeyError": "請求標頭鍵名不能重複",
+      "keyPlaceholder": "鍵名",
+      "required": "請輸入自訂請求標頭",
+      "title": "自訂請求標頭",
+      "valuePlaceholder": "值"
+    },
+    "password": {
+      "desc": "基本認證所需的密碼",
+      "placeholder": "請輸入密碼",
+      "required": "請輸入密碼",
+      "title": "密碼"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "基本認證所需的使用者名稱",
+      "placeholder": "請輸入使用者名稱",
+      "required": "請輸入使用者名稱",
+      "title": "使用者名稱"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "請填寫你的 API Key",

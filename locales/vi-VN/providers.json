@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras là một nền tảng suy luận AI dựa trên hệ thống chuyên dụng CS-3, được thiết kế để cung cấp dịch vụ LLM nhanh nhất thế giới, phản hồi theo thời gian thực và thông lượng cao, nhằm loại bỏ độ trễ và tăng tốc các quy trình làm việc AI phức tạp như tạo mã theo thời gian thực và các tác vụ đại lý."
   },
-  "cerebras": {
-    "description": "Cerebras là một nền tảng suy luận AI dựa trên hệ thống chuyên dụng CS-3, được thiết kế để cung cấp dịch vụ LLM nhanh nhất thế giới, phản hồi theo thời gian thực và thông lượng cao, nhằm loại bỏ độ trễ và tăng tốc các quy trình làm việc AI phức tạp như tạo mã theo thời gian thực và các tác vụ đại lý."
-  },
   "cloudflare": {
     "description": "Chạy các mô hình học máy được hỗ trợ bởi GPU không máy chủ trên mạng lưới toàn cầu của Cloudflare."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI là một nền tảng dịch vụ cung cấp nhiều giao diện mô hình lớn tiên tiến, hỗ trợ OpenAI, Anthropic, Google và nhiều hơn nữa, phù hợp với các nhu cầu phát triển và ứng dụng đa dạng. Người dùng có thể linh hoạt lựa chọn mô hình và giá cả tối ưu theo nhu cầu của mình, giúp nâng cao trải nghiệm AI."
+  },
+  "comfyui": {
+    "description": "Một công cụ mã nguồn mở mạnh mẽ để tạo hình ảnh, video và âm thanh theo quy trình làm việc, hỗ trợ các mô hình tiên tiến như SD, FLUX, Qwen, Hunyuan, WAN, cung cấp khả năng chỉnh sửa quy trình làm việc theo dạng nút và triển khai riêng tư."
   },
   "deepseek": {
     "description": "DeepSeek là một công ty tập trung vào nghiên cứu và ứng dụng công nghệ trí tuệ nhân tạo, mô hình mới nhất của họ, DeepSeek-V2.5, kết hợp khả năng đối thoại chung và xử lý mã, đồng thời đạt được sự cải thiện đáng kể trong việc căn chỉnh sở thích của con người, nhiệm vụ viết và tuân theo chỉ dẫn."

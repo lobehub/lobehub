@@ -43,8 +43,8 @@
   "header": {
     "desc": "Tercihler ve model ayarları.",
     "global": "Genel Ayarlar",
-    "group": "Grup Sohbeti Ayarları",
-    "groupDesc": "Mevcut grup sohbetini yönet",
+    "group": "Takım Ayarları",
+    "groupDesc": "Agent takımını ve sohbet tercihlerini yönetin",
     "session": "Oturum Ayarları",
     "sessionDesc": "Karakter ayarları ve oturum tercihleri.",
     "sessionWithName": "Oturum Ayarları · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Lütfen grup sohbeti açıklamasını girin",
-      "title": "Grup Sohbeti Açıklaması"
+      "placeholder": "Lütfen takım açıklamasını girin",
+      "title": "Takım Açıklaması"
     },
     "name": {
-      "placeholder": "Lütfen grup sohbeti adını girin",
-      "title": "Grup Sohbeti Adı"
+      "placeholder": "Lütfen takım adını girin",
+      "title": "Takım Adı"
     },
     "scene": {
-      "desc": "Grup sohbeti sahnesini seçin",
+      "desc": "Takım senaryosunu seçin",
       "options": {
         "casual": "Rahat",
         "productive": "Verimli"
       },
-      "title": "Grup Sohbeti Sahnesi"
+      "title": "Takım Senaryosu"
     },
-    "submit": "Grup Sohbetini Güncelle",
+    "submit": "Takımı Güncelle",
     "systemPrompt": {
       "placeholder": "Lütfen moderatör sistem istemini girin",
       "title": "Moderatör Sistem İstemi"
     },
-    "title": "Grup Sohbeti Bilgisi"
+    "title": "Agent Takım Bilgileri"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Asistanların özel mesaj göndermesine izin ver"
     },
     "enableSupervisor": {
-      "desc": "Grup sohbeti moderatörlüğü özelliğini etkinleştirerek, moderatör sohbet akışını yönetecektir",
+      "desc": "Agent takım moderatörünü etkinleştir, moderatör takım sohbet sürecini yönetecektir",
       "title": "Moderatörü etkinleştir"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Moderatör Ayarları",
     "responseOrder": {
-      "desc": "Temsilci, grup sohbetinde ayarlanan sıraya göre yanıt verecektir",
+      "desc": "Agent'lar sohbette belirlenen sıraya göre yanıt verecektir",
       "options": {
         "natural": "Doğal",
         "sequential": "Sıralı"
@@ -356,7 +356,7 @@
       "title": "Yanıt Sırası"
     },
     "responseSpeed": {
-      "desc": "Grup sohbetinin genel hızını kontrol edin",
+      "desc": "Sohbetin genel hızını kontrol edin",
       "options": {
         "fast": "Hızlı",
         "medium": "Orta",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Gruba Ekle",
     "availableAgents": "Mevcut Asistanlar",
+    "createMember": "Üye Oluştur",
     "defaultAgent": "Özel Asistan",
     "disableHost": "Sunucu Yardımcısını Kapat",
     "edit": "Üyeyi Düzenle",
-    "empty": "Bu grup sohbetinde henüz temsilci yok. Üye eklemek için + butonuna tıklayın.",
+    "empty": "Bu takımda henüz üye yok. Üye eklemek için + düğmesine tıklayın.",
     "enableHost": "Sunucu Yardımcısını Etkinleştir",
     "groupHost": "Grup Sunucusu",
     "groupMembers": "Grup Üyeleri",
@@ -626,11 +627,6 @@
       "label": "Yapay Zeka Resim Konusu İsimlendirme Modeli",
       "modelDesc": "Yapay zeka resimlerinin otomatik konu isimlendirmesi için belirlenen model",
       "title": "Yapay Zeka Resim Otomatik Konu İsimlendirme"
-    },
-    "groupChatSupervisor": {
-      "label": "Grup Sohbet Denetim Modeli",
-      "modelDesc": "Grup sohbeti diyaloglarını denetlemek ve yönetmek için kullanılan model",
-      "title": "Grup Sohbet Denetimi ve Yönetimi"
     },
     "helpInfo": "Yeni bir asistan oluşturduğunuzda, varsayılan asistan ayarları ön ayar olarak kullanılacaktır.",
     "historyCompress": {

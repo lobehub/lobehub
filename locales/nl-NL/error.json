@@ -81,6 +81,12 @@
     "522": "Het spijt ons, de server heeft een time-out op de verbinding, waardoor uw verzoek niet tijdig kon worden beantwoord. Dit kan te wijten zijn aan een onbetrouwbaar netwerk of de server is tijdelijk niet bereikbaar. Probeer het later opnieuw, we werken hard aan het herstellen van de service.",
     "524": "Het spijt ons, de server heeft een time-out terwijl hij op een antwoord wacht, mogelijk omdat de reactie te traag is. Probeer het later opnieuw.",
     "AgentRuntimeError": "Lobe language model runtime execution error, please troubleshoot or retry based on the following information",
+    "ComfyUIBizError": "Er is een fout opgetreden bij het aanvragen van de ComfyUI-service. Controleer de onderstaande informatie of probeer het opnieuw.",
+    "ComfyUIEmptyResult": "ComfyUI heeft geen afbeeldingen gegenereerd. Controleer de modelconfiguratie of probeer het opnieuw.",
+    "ComfyUIModelError": "Laden van het ComfyUI-model is mislukt. Controleer of het modelfile bestaat.",
+    "ComfyUIServiceUnavailable": "Kan geen verbinding maken met de ComfyUI-service. Controleer of ComfyUI correct werkt of of het serviceadres juist is geconfigureerd.",
+    "ComfyUIUploadFailed": "Uploaden van afbeelding naar ComfyUI is mislukt. Controleer de serververbinding of probeer het opnieuw.",
+    "ComfyUIWorkflowError": "Uitvoering van de ComfyUI-workflow is mislukt. Controleer de workflowconfiguratie.",
     "ConnectionCheckFailed": "Het verzoek heeft geen antwoord geleverd. Controleer of het API-proxyadres niet eindigt met `/v1`.",
     "CreateMessageError": "Het spijt ons, het bericht kon niet correct worden verzonden. Kopieer de inhoud en probeer het opnieuw. Na het vernieuwen van de pagina gaat dit bericht verloren.",
     "ExceededContextWindow": "De inhoud van de huidige aanvraag overschrijdt de lengte die het model kan verwerken. Verminder de hoeveelheid inhoud en probeer het opnieuw.",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "Ongeldige toegangscode: het wachtwoord is onjuist of leeg. Voer de juiste toegangscode in of voeg een aangepaste API-sleutel toe.",
     "InvalidBedrockCredentials": "Bedrock authentication failed, please check AccessKeyId/SecretAccessKey and retry",
     "InvalidClerkUser": "Sorry, you are not currently logged in. Please log in or register an account to continue.",
+    "InvalidComfyUIArgs": "Ongeldige ComfyUI-configuratie. Controleer de instellingen en probeer het opnieuw.",
     "InvalidGithubToken": "Github Persoonlijke Toegangstoken is ongeldig of leeg, controleer de Github Persoonlijke Toegangstoken en probeer het opnieuw.",
     "InvalidOllamaArgs": "Ollama-configuratie is onjuist, controleer de Ollama-configuratie en probeer het opnieuw",
     "InvalidProviderAPIKey": "{{provider}} API-sleutel is onjuist of leeg. Controleer de {{provider}} API-sleutel en probeer het opnieuw.",
@@ -149,6 +156,11 @@
       "title": "Gebruik aangepaste {{name}} API-sleutel"
     },
     "closeMessage": "Sluit bericht",
+    "comfyui": {
+      "description": "Voer de juiste {{name}} verificatiegegevens in om te beginnen met het genereren van afbeeldingen.",
+      "modifyBaseUrl": "ComfyUI-serviceadres wijzigen",
+      "title": "Bevestig je {{name}} verificatiegegevens"
+    },
     "confirm": "Bevestigen en opnieuw proberen",
     "oauth": {
       "description": "De beheerder heeft een uniforme aanmeldingsverificatie ingeschakeld. Klik op de onderstaande knop om in te loggen en de app te ontgrendelen.",

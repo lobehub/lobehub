@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "Aktuelle Nachrichten löschen",
   "confirmClearCurrentMessages": "Möchtest du wirklich die aktuellen Nachrichten löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
-  "confirmRemoveChatGroupItemAlert": "Die Gruppenunterhaltung wird gelöscht, die Mitglieder bleiben davon unberührt. Bitte bestätigen Sie Ihre Aktion.",
+  "confirmRemoveChatGroupItemAlert": "Dieses Agenten-Team wird gelöscht. Die Teammitglieder bleiben davon unberührt. Bitte bestätigen Sie Ihre Aktion.",
   "confirmRemoveGroupItemAlert": "Sie sind dabei, diese Gruppe zu löschen. Nach der Löschung werden die Assistenten dieser Gruppe in die Standardliste verschoben. Bitte bestätigen Sie Ihre Aktion.",
-  "confirmRemoveGroupSuccess": "Gruppenchat erfolgreich gelöscht",
+  "confirmRemoveGroupSuccess": "Agent-Team erfolgreich gelöscht",
   "confirmRemoveSessionItemAlert": "Möchtest du diesen Assistenten wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
   "confirmRemoveSessionSuccess": "Hilfe wurde erfolgreich entfernt",
   "defaultAgent": "Standardassistent",
-  "defaultGroupChat": "Gruppenchat",
+  "defaultGroupChat": "Agent-Team",
   "defaultList": "Standardliste",
   "defaultSession": "Standardassistent",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "Mitglied entfernen",
     "title": "Gruppe"
   },
-  "groupDescription": "Gruppenbeschreibung",
+  "groupDescription": "Team-Beschreibung",
   "groupSidebar": {
     "members": {
       "addMember": "Mitglied hinzufügen",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "Bestehende Assistenten auswählen...",
-    "createGroup": "Gruppenchat erstellen",
-    "existingMembers": "Bestehende Assistenten",
+    "createGroup": "Team erstellen",
+    "existingMembers": "Vorhandene Agenten",
     "groupMembers": "Diese Assistenten werden ebenfalls zu Ihrer Liste hinzugefügt",
     "host": {
-      "description": "Automatisiert den Gruppenchat",
-      "title": "Moderator",
-      "tooltip": "Wenn der Gruppenmoderator deaktiviert ist, müssen Sie Mitglieder manuell mit @ erwähnen, damit sie antworten können."
+      "description": "Ermöglicht dem Team, eigenständig zu arbeiten",
+      "title": "Moderator aktivieren",
+      "tooltip": "Wenn der Team-Moderator deaktiviert ist, müssen Sie Mitglieder manuell mit @ erwähnen, damit sie antworten können"
     },
     "memberCount": "{{count}} Mitglieder",
     "noMatchingTemplates": "Keine passenden Vorlagen",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "Keine Mitglieder in der Vorlage",
     "noTemplates": "Keine Vorlagen verfügbar",
     "searchTemplates": "Vorlagen durchsuchen...",
-    "title": "Gruppenchat erstellen",
+    "title": "Agent-Team erstellen",
     "useTemplate": "Vorlage verwenden"
   },
   "hideForYou": "Private Nachrichten sind ausgeblendet. Bitte aktivieren Sie in den Einstellungen „Private Nachrichten anzeigen“, um sie zu sehen.",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "Mitglied hinzufügen",
     "allMembers": "Alle Mitglieder",
-    "createGroup": "Gruppenchat erstellen",
+    "createGroup": "Agenten-Team erstellen",
     "noAvailableAgents": "Keine verfügbaren Assistenten zum Einladen",
     "noSelectedAgents": "Noch keine Assistenten ausgewählt",
     "searchAgents": "Assistenten suchen...",
-    "setInitialMembers": "Gruppenmitglieder auswählen"
+    "setInitialMembers": "Teammitglieder auswählen"
   },
   "members": "Mitglieder",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "Zur Nachricht Nr. {{index}} springen",
     "nextMessage": "Nächste Nachricht",
-    "previousMessage": "Vorherige Nachricht"
+    "previousMessage": "Vorherige Nachricht",
+    "senderAssistant": "Assistent",
+    "senderUser": "Du"
   },
   "newAgent": "Neuer Assistent",
-  "newGroupChat": "Neue Gruppe erstellen",
-  "noAgentsYet": "In dieser Gruppe gibt es noch keine Assistenten. Klicken Sie auf die + Schaltfläche, um einen Assistenten einzuladen.",
-  "noAvailableAgents": "Keine verfügbaren Assistenten zum Einladen.",
-  "noMatchingAgents": "Keine passenden Assistenten",
+  "newGroupChat": "Neues Agent-Team",
+  "noAgentsYet": "Dieses Agent-Team hat noch keine Mitglieder. Klicken Sie auf die + Schaltfläche, um Assistenten einzuladen.",
+  "noAvailableAgents": "Keine Mitglieder verfügbar zum Einladen",
+  "noMatchingAgents": "Keine passenden Mitglieder gefunden",
   "noMembersYet": "Diese Gruppe hat noch keine Mitglieder. Klicken Sie auf die +-Schaltfläche, um Assistenten einzuladen.",
-  "noSelectedAgents": "Noch keinen Assistenten ausgewählt",
+  "noSelectedAgents": "Noch keine Mitglieder ausgewählt",
   "owner": "Gruppeninhaber",
   "pin": "Anheften",
   "pinOff": "Anheften aufheben",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "Kopieren",
     "download": "Screenshot herunterladen",
+    "downloadError": "Download fehlgeschlagen",
     "downloadFile": "Datei herunterladen",
+    "downloadPdf": "PDF herunterladen",
+    "downloadSuccess": "Download erfolgreich",
+    "exportPdf": "Als PDF exportieren",
     "exportTitle": "Standardtitel",
+    "generatePdf": "PDF erstellen",
+    "generatingPdf": "PDF wird erstellt...",
     "imageType": "Bildformat",
     "includeTool": "Plugin-Nachricht einfügen",
     "includeUser": "Benutzernachricht einfügen",
+    "loadingPdf": "PDF wird geladen...",
+    "noPdfData": "Keine PDF-Daten vorhanden",
+    "pdf": "PDF",
+    "pdfErrorDescription": "Beim Erstellen des PDFs ist ein Fehler aufgetreten, bitte versuchen Sie es erneut",
+    "pdfGenerationError": "PDF-Erstellung fehlgeschlagen",
+    "pdfReady": "PDF ist bereit",
+    "regeneratePdf": "PDF neu erstellen",
     "screenshot": "Screenshot",
     "settings": "Exporteinstellungen",
     "text": "Text",

@@ -1,8 +1,7 @@
 'use client';
 
 import { Icon, Tag } from '@lobehub/ui';
-import Link from 'next/link';
-import { useRouter } from 'nextjs-toploader/app';
+import { Link, useNavigate } from 'react-router-dom';
 import qs from 'query-string';
 import { memo, useMemo } from 'react';
 
@@ -18,20 +17,20 @@ const Category = memo(() => {
   const useModelCategories = useDiscoverStore((s) => s.useModelCategories);
   const { category = 'all', q } = useQuery() as { category?: string; q?: string };
   const { data: items = [] } = useModelCategories({ q });
-  const route = useRouter();
+  const navigate = useNavigate();
   const cates = useCategory();
 
   const genUrl = (key: string) =>
     qs.stringifyUrl(
       {
         query: { category: key === 'all' ? null : key, q },
-        url: '/discover/model',
+        url: '/model',
       },
       { skipNull: true },
     );
 
   const handleClick = (key: string) => {
-    route.push(genUrl(key));
+    navigate(genUrl(key));
     const scrollableElement = document?.querySelector(`#${SCROLL_PARENT_ID}`);
     if (!scrollableElement) return;
     scrollableElement.scrollTo({ behavior: 'smooth', top: 0 });
@@ -69,7 +68,7 @@ const Category = memo(() => {
                 ),
           ...item,
           icon: <Icon icon={item.icon} size={18} />,
-          label: <Link href={genUrl(item.key)}>{item.label}</Link>,
+          label: <Link to={genUrl(item.key)}>{item.label}</Link>,
         };
       })}
       mode={'inline'}

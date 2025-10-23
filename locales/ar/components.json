@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "إجمالي {{count}} عنصر",
       "selectedCount": "تم تحديد {{count}} عنصر"
+    },
+    "view": {
+      "list": "عرض القائمة",
+      "masonry": "عرض الشبكة"
     }
   },
   "FileParsingStatus": {

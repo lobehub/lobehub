@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "Huidige berichten wissen",
   "confirmClearCurrentMessages": "Huidige berichten worden gewist en kunnen niet worden hersteld. Bevestig je actie.",
-  "confirmRemoveChatGroupItemAlert": "Deze groepschat wordt verwijderd, de groepsleden worden niet beïnvloed. Bevestig je actie alstublieft.",
+  "confirmRemoveChatGroupItemAlert": "Je staat op het punt dit Agent-team te verwijderen. De teamleden blijven behouden. Bevestig je actie alstublieft.",
   "confirmRemoveGroupItemAlert": "Je staat op het punt deze groep te verwijderen. Nadat de groep is verwijderd, worden de assistenten uit deze groep verplaatst naar de standaardlijst. Bevestig je actie.",
-  "confirmRemoveGroupSuccess": "Groepschat succesvol verwijderd",
+  "confirmRemoveGroupSuccess": "Agentteam succesvol verwijderd",
   "confirmRemoveSessionItemAlert": "Deze assistent wordt verwijderd en kan niet worden hersteld. Bevestig je actie.",
   "confirmRemoveSessionSuccess": "Sessie succesvol verwijderd",
   "defaultAgent": "Standaard assistent",
-  "defaultGroupChat": "Groepschat",
+  "defaultGroupChat": "Agentteam",
   "defaultList": "Standaardlijst",
   "defaultSession": "Standaard assistent",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "Lid verwijderen",
     "title": "Groep"
   },
-  "groupDescription": "Groepsbeschrijving",
+  "groupDescription": "Teamomschrijving",
   "groupSidebar": {
     "members": {
       "addMember": "Lid toevoegen",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "Kies bestaande assistenten...",
-    "createGroup": "Groepschat aanmaken",
-    "existingMembers": "Bestaande assistenten",
+    "createGroup": "Team aanmaken",
+    "existingMembers": "Bestaande Agents",
     "groupMembers": "Deze assistenten worden ook aan uw lijst toegevoegd",
     "host": {
-      "description": "Automatiseer groepschat",
-      "title": "Gastheer",
-      "tooltip": "Als de groepsgastheer is uitgeschakeld, moet je handmatig leden @vermelden om een reactie van hen te krijgen"
+      "description": "Laat het team zelfstandig functioneren",
+      "title": "Host inschakelen",
+      "tooltip": "Als de teamhost is uitgeschakeld, moet je handmatig leden @vermelden om een reactie te krijgen"
     },
     "memberCount": "{{count}} leden",
     "noMatchingTemplates": "Geen overeenkomende sjablonen",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "Geen leden in de sjabloon",
     "noTemplates": "Geen sjablonen beschikbaar",
     "searchTemplates": "Zoek sjablonen...",
-    "title": "Groepschat aanmaken",
+    "title": "Agentteam aanmaken",
     "useTemplate": "Sjabloon gebruiken"
   },
   "hideForYou": "Privéberichten zijn verborgen. Schakel 'Toon privéberichten' in de instellingen in om ze te bekijken.",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "Lid toevoegen",
     "allMembers": "Alle leden",
-    "createGroup": "Groepschat aanmaken",
+    "createGroup": "Agent-team aanmaken",
     "noAvailableAgents": "Geen assistenten beschikbaar om uit te nodigen",
     "noSelectedAgents": "Nog geen assistenten geselecteerd",
     "searchAgents": "Assistenten zoeken...",
-    "setInitialMembers": "Selecteer groepsleden"
+    "setInitialMembers": "Selecteer teamleden"
   },
   "members": "Leden",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "Ga naar bericht {{index}}",
     "nextMessage": "Volgend bericht",
-    "previousMessage": "Vorig bericht"
+    "previousMessage": "Vorig bericht",
+    "senderAssistant": "Assistent",
+    "senderUser": "Jij"
   },
   "newAgent": "Nieuwe assistent",
-  "newGroupChat": "Nieuwe groepschat",
-  "noAgentsYet": "Deze groep heeft nog geen assistenten. Klik op de +‑knop om een assistent uit te nodigen.",
-  "noAvailableAgents": "Geen beschikbare assistenten om uit te nodigen",
-  "noMatchingAgents": "Geen bijpassende assistenten gevonden",
+  "newGroupChat": "Nieuw Agentteam",
+  "noAgentsYet": "Dit agentteam heeft nog geen leden. Klik op de + knop om assistenten uit te nodigen.",
+  "noAvailableAgents": "Geen beschikbare leden om uit te nodigen",
+  "noMatchingAgents": "Geen overeenkomende leden gevonden",
   "noMembersYet": "Deze groep heeft nog geen leden. Klik op de + knop om assistenten uit te nodigen.",
-  "noSelectedAgents": "Nog geen assistent geselecteerd",
+  "noSelectedAgents": "Nog geen leden geselecteerd",
   "owner": "Groepseigenaar",
   "pin": "Vastzetten",
   "pinOff": "Vastzetten uitschakelen",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "Kopiëren",
     "download": "Screenshot downloaden",
+    "downloadError": "Download mislukt",
     "downloadFile": "Bestand downloaden",
+    "downloadPdf": "PDF downloaden",
+    "downloadSuccess": "Download geslaagd",
+    "exportPdf": "Exporteren als PDF",
     "exportTitle": "Standaardtitel",
+    "generatePdf": "PDF genereren",
+    "generatingPdf": "PDF wordt gegenereerd...",
     "imageType": "Afbeeldingstype",
     "includeTool": "Inclusief pluginbericht",
     "includeUser": "Inclusief gebruikersbericht",
+    "loadingPdf": "PDF laden...",
+    "noPdfData": "Geen PDF-gegevens beschikbaar",
+    "pdf": "PDF",
+    "pdfErrorDescription": "Er is een fout opgetreden bij het genereren van de PDF, probeer het opnieuw",
+    "pdfGenerationError": "PDF-generatie mislukt",
+    "pdfReady": "PDF is klaar",
+    "regeneratePdf": "PDF opnieuw genereren",
     "screenshot": "Screenshot",
     "settings": "Exportinstellingen",
     "text": "Tekst",

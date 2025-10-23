@@ -1,5 +1,5 @@
 {
-  "desc": "파일과 지식베이스를 관리하세요",
+  "desc": "지식을 관리하세요",
   "detail": {
     "basic": {
       "createdAt": "생성 시간",
@@ -70,7 +70,7 @@
     "videos": "비디오",
     "websites": "웹사이트"
   },
-  "title": "파일",
+  "title": "지식 베이스",
   "toggleLeftPanel": {
     "title": "왼쪽 패널 표시/숨기기"
   },

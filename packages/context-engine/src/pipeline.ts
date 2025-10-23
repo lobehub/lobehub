@@ -1,12 +1,6 @@
 import debug from 'debug';
 
-import type {
-  AgentState,
-  ContextProcessor,
-  PipelineContext,
-  PipelineResult,
-  ProcessorOptions,
-} from './types';
+import type { ContextProcessor, PipelineContext, PipelineResult, ProcessorOptions } from './types';
 import { PipelineError } from './types';
 
 const log = debug('context-engine:ContextEngine');
@@ -70,26 +64,16 @@ export class ContextEngine {
   /**
    * Execute pipeline processing
    */
-  async process(input: {
-    initialState: AgentState;
-    maxTokens: number;
-    messages?: Array<any>;
-    metadata?: Record<string, any>;
-    model: string;
-  }): Promise<PipelineResult> {
+  async process(input: { messages: Array<any> }): Promise<PipelineResult> {
     const startTime = Date.now();
     const processorDurations: Record<string, number> = {};
 
     // Create initial pipeline context
     let context: PipelineContext = {
-      initialState: input.initialState,
+      initialState: { messages: input.messages },
       isAborted: false,
-      messages: Array.isArray(input.messages) ? [...input.messages] : [],
-      metadata: {
-        maxTokens: input.maxTokens,
-        model: input.model,
-        ...input.metadata,
-      },
+      messages: [...input.messages],
+      metadata: {},
     };
 
     log('Starting pipeline processing');

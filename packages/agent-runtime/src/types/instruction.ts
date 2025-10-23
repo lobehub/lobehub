@@ -1,3 +1,5 @@
+import type { ModelUsage } from '@lobechat/types';
+
 import type { FinishReason } from './event';
 import { AgentState, ToolRegistry, ToolsCalling } from './state';
 import type { Cost, CostCalculationContext, Usage } from './usage';
@@ -26,6 +28,8 @@ export interface AgentRuntimeContext {
     status: AgentState['status'];
     stepCount: number;
   };
+  /** Usage statistics from the current step (if applicable) */
+  stepUsage?: ModelUsage | unknown;
 }
 
 /**

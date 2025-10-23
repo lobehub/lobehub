@@ -7,6 +7,7 @@ import {
   ReactCodePlugin,
   ReactCodeblockPlugin,
   ReactHRPlugin,
+  ReactLinkHighlightPlugin,
   ReactListPlugin,
   ReactMathPlugin,
   ReactTablePlugin,
@@ -92,6 +93,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
               ReactCodePlugin,
               ReactCodeblockPlugin,
               ReactHRPlugin,
+              ReactLinkHighlightPlugin,
               ReactTablePlugin,
               Editor.withProps(ReactMathPlugin, {
                 renderComp: expand

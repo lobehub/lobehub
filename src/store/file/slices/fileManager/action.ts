@@ -11,6 +11,7 @@ import {
   uploadFileListReducer,
 } from '@/store/file/reducers/uploadFileList';
 import { FileListItem, QueryFileListParams } from '@/types/files';
+import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import { FileStore } from '../../store';
 import { fileManagerSelectors } from './selectors';
@@ -98,17 +99,28 @@ export const createFileManageSlice: StateCreator<
       type: 'addFiles',
     });
 
-    const pools = files.map(async (file) => {
-      await get().uploadWithProgress({
-        file,
-        knowledgeBaseId,
-        onStatusUpdate: dispatchDockFileList,
-      });
+    const uploadResults = await Promise.all(
+      files.map(async (file) => {
+        const result = await get().uploadWithProgress({
+          file,
+          knowledgeBaseId,
+          onStatusUpdate: dispatchDockFileList,
+        });
 
-      await get().refreshFileList();
-    });
+        await get().refreshFileList();
 
-    await Promise.all(pools);
+        return { file, fileId: result?.id, fileType: file.type };
+      }),
+    );
+
+    // 2. auto-embed files that support chunking
+    const fileIdsToEmbed = uploadResults
+      .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
+      .map(({ fileId }) => fileId!);
+
+    if (fileIdsToEmbed.length > 0) {
+      await get().parseFilesToChunks(fileIdsToEmbed, { skipExist: false });
+    }
   },
 
   reEmbeddingChunks: async (id) => {

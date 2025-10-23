@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras is een AI-inferentieplatform gebaseerd op het speciale CS-3-systeem, ontworpen om 's werelds snelste, realtime reagerende en hoog-throughput LLM-diensten te leveren. Het is speciaal ontwikkeld om vertragingen te elimineren en complexe AI-workflows te versnellen, zoals realtime codegeneratie en agenttaken."
   },
-  "cerebras": {
-    "description": "Cerebras is een AI-inferentieplatform gebaseerd op het speciale CS-3-systeem, ontworpen om 's werelds snelste, realtime reagerende en hoog-throughput LLM-diensten te leveren. Het is speciaal ontwikkeld om vertragingen te elimineren en complexe AI-workflows te versnellen, zoals realtime codegeneratie en agenttaken."
-  },
   "cloudflare": {
     "description": "Voer machine learning-modellen aan, aangedreven door serverloze GPU's, uit op het wereldwijde netwerk van Cloudflare."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI is een serviceplatform dat diverse geavanceerde modelinterfaces aanbiedt, met ondersteuning voor OpenAI, Anthropic, Google en meer. Het is geschikt voor uiteenlopende ontwikkelings- en toepassingsbehoeften. Gebruikers kunnen flexibel het beste model en de beste prijs kiezen op basis van hun eigen behoeften, wat bijdraagt aan een verbeterde AI-ervaring."
+  },
+  "comfyui": {
+    "description": "Een krachtige open-source workflow-engine voor het genereren van afbeeldingen, video en audio. Ondersteunt geavanceerde modellen zoals SD, FLUX, Qwen, Hunyuan en WAN, en biedt mogelijkheden voor node-gebaseerde workflowbewerking en private implementatie."
   },
   "deepseek": {
     "description": "DeepSeek is een bedrijf dat zich richt op onderzoek en toepassing van kunstmatige intelligentietechnologie, en hun nieuwste model DeepSeek-V2.5 combineert algemene dialoog- en codeverwerkingscapaciteiten, met significante verbeteringen in het afstemmen op menselijke voorkeuren, schrijfopdrachten en het volgen van instructies."

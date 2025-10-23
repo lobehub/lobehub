@@ -145,26 +145,24 @@ jobs:
           node-version: 22
           package-manager-cache: false
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.23
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Install deps
-        run: bun i
+        run: pnpm i
 
       - name: Lint
-        run: bun run lint
+        run: npm run lint
 
       - name: Test Client DB
-        run: bun run --filter @lobechat/database test:client-db
+        run: pnpm --filter @lobechat/database test:client-db
         env:
           KEY_VAULTS_SECRET: LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=
           S3_PUBLIC_DOMAIN: https://example.com
           APP_URL: https://home.com
 
       - name: Test Coverage
-        run: bun run --filter @lobechat/database test:coverage
+        run: pnpm --filter @lobechat/database test:coverage
         env:
           DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/postgres
           DATABASE_DRIVER: node

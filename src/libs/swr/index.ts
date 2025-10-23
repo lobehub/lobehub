@@ -34,6 +34,19 @@ export const useClientDataSWR: SWRHook = (key, fetch, config) =>
         ? 1500
         : // web 300s
           5 * 60 * 1000,
+    // Custom error retry logic: don't retry on 401 errors
+    onErrorRetry: (error: any, key: any, config: any, revalidate: any, { retryCount }: any) => {
+      // Check if error is marked as non-retryable (e.g., 401 authentication errors)
+      if (error?.meta?.shouldRetry === false) {
+        return;
+      }
+      // For other errors, use default SWR retry behavior
+      // Default: exponential backoff, max 5 retries
+      if (retryCount >= 5) return;
+      const exponentialDelay = 1000 * Math.pow(2, Math.min(retryCount, 10));
+      const timeout = Math.min(exponentialDelay, 30_000);
+      setTimeout(() => revalidate({ retryCount }), timeout);
+    },
     refreshWhenOffline: false,
     revalidateOnFocus: true,
     revalidateOnReconnect: true,

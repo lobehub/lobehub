@@ -43,8 +43,8 @@
   "header": {
     "desc": "Préférences et paramètres du modèle.",
     "global": "Paramètres globaux",
-    "group": "Paramètres du groupe",
-    "groupDesc": "Gérer le groupe actuel",
+    "group": "Paramètres de l'équipe",
+    "groupDesc": "Gérer l'équipe d'agents et les préférences de chat",
     "session": "Paramètres de session",
     "sessionDesc": "Paramètres de personnage et préférences de session.",
     "sessionWithName": "Paramètres de session · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Veuillez saisir la description du groupe",
-      "title": "Description du groupe"
+      "placeholder": "Veuillez saisir une description de l'équipe",
+      "title": "Description de l'équipe"
     },
     "name": {
-      "placeholder": "Veuillez saisir le nom du groupe",
-      "title": "Nom du groupe"
+      "placeholder": "Veuillez saisir le nom de l'équipe",
+      "title": "Nom de l'équipe"
     },
     "scene": {
-      "desc": "Choisir le scénario de discussion de groupe",
+      "desc": "Choisissez le contexte de l'équipe",
       "options": {
         "casual": "Décontracté",
         "productive": "Productif"
       },
-      "title": "Scénario de discussion de groupe"
+      "title": "Contexte de l'équipe"
     },
-    "submit": "Mettre à jour le groupe",
+    "submit": "Mettre à jour l'équipe",
     "systemPrompt": {
       "placeholder": "Veuillez saisir l'invite système de l'animateur",
       "title": "Invite système de l'animateur"
     },
-    "title": "Informations du groupe"
+    "title": "Informations sur l'équipe d'agents"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Autoriser les messages privés de l’assistant"
     },
     "enableSupervisor": {
-      "desc": "Activez la fonction de modérateur pour gérer le déroulement des conversations de groupe",
+      "desc": "Activer la fonction de modérateur pour l'équipe d'agents. Le modérateur gérera le déroulement des conversations.",
       "title": "Activer le modérateur"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Paramètres de l'animateur",
     "responseOrder": {
-      "desc": "Les agents répondront dans l'ordre défini dans le groupe",
+      "desc": "Les agents répondront dans l'ordre défini dans la conversation",
       "options": {
         "natural": "Naturel",
         "sequential": "Séquentiel"
@@ -356,7 +356,7 @@
       "title": "Ordre des réponses"
     },
     "responseSpeed": {
-      "desc": "Contrôle la vitesse globale du groupe",
+      "desc": "Contrôler la vitesse globale des échanges",
       "options": {
         "fast": "Rapide",
         "medium": "Moyenne",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Ajouter au groupe",
     "availableAgents": "Assistants disponibles",
+    "createMember": "Créer un membre",
     "defaultAgent": "Assistant personnalisé",
     "disableHost": "Désactiver l'assistant hôte",
     "edit": "Modifier le membre",
-    "empty": "Aucun agent dans ce groupe. Cliquez sur le bouton + pour ajouter des membres.",
+    "empty": "Aucun membre dans cette équipe pour le moment. Cliquez sur le bouton + pour ajouter un membre.",
     "enableHost": "Activer l'assistant hôte",
     "groupHost": "Hôte du groupe",
     "groupMembers": "Membres du groupe",
@@ -626,11 +627,6 @@
       "label": "Modèle de nomination de sujets pour peinture IA",
       "modelDesc": "Modèle spécifiquement utilisé pour la nomination automatique des sujets de peinture IA",
       "title": "Nomination automatique des sujets de peinture IA"
-    },
-    "groupChatSupervisor": {
-      "label": "Modèle de supervision des discussions de groupe",
-      "modelDesc": "Modèle spécialement conçu pour superviser et gérer les conversations de groupe.",
-      "title": "Supervision et gestion des discussions de groupe"
     },
     "helpInfo": "Lors de la création d'un nouvel assistant, les paramètres par défaut de l'assistant seront utilisés comme valeurs par défaut.",
     "historyCompress": {

@@ -22,7 +22,7 @@ const n = setNamespace('g');
 export interface GlobalGeneralAction {
   openSessionInNewWindow: (sessionId: string) => Promise<void>;
   openTopicInNewWindow: (sessionId: string, topicId: string) => Promise<void>;
-  switchLocale: (locale: LocaleMode) => void;
+  switchLocale: (locale: LocaleMode, params?: { skipBroadcast?: boolean }) => void;
   switchThemeMode: (themeMode: ThemeMode, params?: { skipBroadcast?: boolean }) => void;
   updateSystemStatus: (status: Partial<SystemStatus>, action?: any) => void;
   useCheckLatestVersion: (enabledCheck?: boolean) => SWRResponse<string>;
@@ -79,12 +79,12 @@ export const generalActionSlice: StateCreator<
     }
   },
 
-  switchLocale: (locale) => {
+  switchLocale: (locale, { skipBroadcast } = {}) => {
     get().updateSystemStatus({ language: locale });
 
     switchLang(locale);
 
-    if (isDesktop) {
+    if (isDesktop && !skipBroadcast) {
       (async () => {
         try {
           const { dispatch } = await import('@lobechat/electron-client-ipc');

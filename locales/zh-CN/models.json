@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "一个允许对文本、图像或混合内容进行分类或转换为嵌入的模型。"
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - 高质量文生图模型，10-50步生成，适合高质量创作和艺术作品生成"
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - 图像编辑模型，支持基于文本指令修改现有图像，支持局部修改和风格迁移"
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - 增强安全的文生图模型，与 Krea 合作开发，内置安全过滤"
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - 超快速文生图模型，1-4步即可生成高质量图像，适合实时应用和快速原型制作"
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 文生图模型，经典的512x512分辨率文本到图像生成，适合快速原型和创意实验"
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 新一代文生图模型，支持 Large 和 Medium 两个版本，需要外部 CLIP 编码器文件，提供卓越的图像质量和提示词匹配度。"
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 内置 CLIP/T5 编码器版本，无需外部编码器文件，适用于 sd3.5_medium_incl_clips 等模型，资源占用更少。"
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "自定义 SD 文生图模型，模型文件名请使用 custom_sd_lobe.safetensors，如有 VAE 请使用 custom_sd_vae_lobe.safetensors，模型文件需要按照 Comfy 的要求放入对应文件夹"
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "自定义 SDXL 图生图模型，模型文件名请使用 custom_sd_lobe.safetensors，如有 VAE 请使用 custom_sd_vae_lobe.safetensors，模型文件需要按照 Comfy 的要求放入对应文件夹"
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "SDXL 图生图模型，基于输入图像进行高质量的图像到图像转换，支持风格迁移、图像修复和创意变换。"
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "SDXL 文生图模型，支持1024x1024高分辨率文本到图像生成，提供更好的图像质量和细节表现"
+  },
   "command": {
     "description": "一个遵循指令的对话模型，在语言任务中表现出高质量、更可靠，并且相比我们的基础生成模型具有更长的上下文长度。"
   },

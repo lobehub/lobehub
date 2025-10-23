@@ -32,6 +32,7 @@ export {
 export type {
   FunctionCallChecker,
   GenerateToolsParams,
+  LobeToolManifest,
   PluginEnableChecker,
   ToolNameGenerator,
   ToolsEngineOptions,

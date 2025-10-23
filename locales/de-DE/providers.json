@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras ist eine KI-Inferenzplattform, die auf dem spezialisierten CS-3-System basiert. Sie wurde entwickelt, um weltweit die schnellsten, in Echtzeit reagierenden und hochdurchsatzfähigen LLM-Dienste bereitzustellen. Ziel ist es, Latenzen zu eliminieren und komplexe KI-Workflows wie die Echtzeit-Codegenerierung und Agentenaufgaben zu beschleunigen."
   },
-  "cerebras": {
-    "description": "Cerebras ist eine KI-Inferenzplattform, die auf dem spezialisierten CS-3-System basiert. Sie wurde entwickelt, um weltweit die schnellsten, in Echtzeit reagierenden und hochdurchsatzfähigen LLM-Dienste bereitzustellen. Ziel ist es, Latenzen zu eliminieren und komplexe KI-Workflows wie die Echtzeit-Codegenerierung und Agentenaufgaben zu beschleunigen."
-  },
   "cloudflare": {
     "description": "Führen Sie von serverlosen GPUs betriebene Machine-Learning-Modelle im globalen Netzwerk von Cloudflare aus."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI ist eine Serviceplattform, die verschiedene fortschrittliche Schnittstellen für große Modelle anbietet und OpenAI, Anthropic, Google und weitere unterstützt. Sie eignet sich für vielfältige Entwicklungs- und Anwendungsanforderungen. Nutzer können je nach Bedarf das optimale Modell und den besten Preis flexibel auswählen, um das KI-Erlebnis zu verbessern."
+  },
+  "comfyui": {
+    "description": "Leistungsstarke Open-Source-Engine für die Erstellung von Bildern, Videos und Audiodateien. Unterstützt fortschrittliche Modelle wie SD, FLUX, Qwen, Hunyuan und WAN. Bietet eine node-basierte Workflow-Bearbeitung sowie Möglichkeiten zur privaten Bereitstellung."
   },
   "deepseek": {
     "description": "DeepSeek ist ein Unternehmen, das sich auf die Forschung und Anwendung von KI-Technologien spezialisiert hat. Ihr neuestes Modell, DeepSeek-V2.5, kombiniert allgemeine Dialog- und Codeverarbeitungsfähigkeiten und hat signifikante Fortschritte in den Bereichen menschliche Präferenzanpassung, Schreibaufgaben und Befehlsbefolgung erzielt."

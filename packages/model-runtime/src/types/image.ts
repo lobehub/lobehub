@@ -34,3 +34,12 @@ export type CreateImageResponse = {
    */
   modelUsage?: ModelUsage;
 };
+
+// 新增：支持认证图片下载的运行时接口
+export interface AuthenticatedImageRuntime {
+  /**
+   * Get authentication headers for image download
+   * Used when the image server requires authentication
+   */
+  getAuthHeaders(): Record<string, string> | undefined;
+}

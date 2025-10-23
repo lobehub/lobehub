@@ -81,6 +81,12 @@
     "522": "Przykro nam, połączenie z serwerem wygasło, nie udało się odpowiedzieć na Twoje żądanie na czas. Może to być spowodowane niestabilnością sieci lub tym, że serwer jest tymczasowo niedostępny. Proszę spróbować później, staramy się przywrócić usługi.",
     "524": "Przykro nam, serwer przekroczył czas oczekiwania na odpowiedź, być może z powodu zbyt wolnej reakcji. Proszę spróbować później.",
     "AgentRuntimeError": "Wystąpił błąd wykonania modelu językowego Lobe, prosimy o sprawdzenie poniższych informacji lub ponowne próbowanie.",
+    "ComfyUIBizError": "Wystąpił błąd podczas żądania do usługi ComfyUI. Sprawdź poniższe informacje lub spróbuj ponownie.",
+    "ComfyUIEmptyResult": "ComfyUI nie wygenerował żadnego obrazu. Sprawdź konfigurację modelu lub spróbuj ponownie.",
+    "ComfyUIModelError": "Nie udało się załadować modelu ComfyUI. Sprawdź, czy plik modelu istnieje.",
+    "ComfyUIServiceUnavailable": "Nie udało się połączyć z usługą ComfyUI. Sprawdź, czy ComfyUI działa poprawnie lub czy adres usługi jest poprawnie skonfigurowany.",
+    "ComfyUIUploadFailed": "Nie udało się przesłać obrazu do ComfyUI. Sprawdź połączenie z serwerem lub spróbuj ponownie.",
+    "ComfyUIWorkflowError": "Wykonanie przepływu pracy ComfyUI nie powiodło się. Sprawdź konfigurację przepływu.",
     "ConnectionCheckFailed": "Odpowiedź jest pusta. Sprawdź, czy na końcu adresu proxy API nie brakuje `/v1`",
     "CreateMessageError": "Przykro nam, wiadomość nie została wysłana poprawnie. Proszę skopiować treść i spróbować ponownie, po odświeżeniu strony ta wiadomość nie zostanie zachowana.",
     "ExceededContextWindow": "Aktualna zawartość żądania przekracza długość, którą model może przetworzyć. Proszę zmniejszyć ilość treści i spróbować ponownie.",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "Nieprawidłowy kod dostępu: Hasło jest nieprawidłowe lub puste. Proszę wprowadzić poprawne hasło dostępu lub dodać niestandardowy klucz API.",
     "InvalidBedrockCredentials": "Uwierzytelnienie Bedrock nie powiodło się, prosimy sprawdzić AccessKeyId/SecretAccessKey i spróbować ponownie.",
     "InvalidClerkUser": "Przepraszamy, nie jesteś obecnie zalogowany. Proszę najpierw zalogować się lub zarejestrować, aby kontynuować.",
+    "InvalidComfyUIArgs": "Nieprawidłowa konfiguracja ComfyUI. Sprawdź ustawienia i spróbuj ponownie.",
     "InvalidGithubToken": "Token dostępu osobistego do GitHub jest niewłaściwy lub pusty. Proszę sprawdzić Token dostępu osobistego do GitHub i spróbować ponownie.",
     "InvalidOllamaArgs": "Nieprawidłowa konfiguracja Ollama, sprawdź konfigurację Ollama i spróbuj ponownie",
     "InvalidProviderAPIKey": "{{provider}} Klucz API jest nieprawidłowy lub pusty. Sprawdź Klucz API {{provider}} i spróbuj ponownie.",
@@ -149,6 +156,11 @@
       "title": "Użyj niestandardowego Klucza API {{name}}"
     },
     "closeMessage": "Zamknij komunikat",
+    "comfyui": {
+      "description": "Wprowadź poprawne dane uwierzytelniające {{name}}, aby rozpocząć generowanie obrazów.",
+      "modifyBaseUrl": "Zmień adres usługi Comfy UI",
+      "title": "Potwierdź dane uwierzytelniające {{name}}"
+    },
     "confirm": "Potwierdź i spróbuj ponownie",
     "oauth": {
       "description": "Administrator włączył jednolite uwierzytelnianie logowania. Kliknij poniższy przycisk, aby się zalogować i odblokować aplikację.",

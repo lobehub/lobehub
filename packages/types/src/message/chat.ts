@@ -138,6 +138,7 @@ export interface CreateMessageParams
   role: MessageRoleType;
   sessionId: string;
   targetId?: string | null;
+  threadId?: string | null;
   topicId?: string;
   traceId?: string;
 }

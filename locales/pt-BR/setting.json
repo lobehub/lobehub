@@ -43,8 +43,8 @@
   "header": {
     "desc": "Preferências e configurações do modelo.",
     "global": "Configurações Globais",
-    "group": "Configurações do Grupo",
-    "groupDesc": "Gerenciar o grupo atual",
+    "group": "Configurações da Equipe",
+    "groupDesc": "Gerencie a equipe de agentes e preferências de chat",
     "session": "Configurações de Sessão",
     "sessionDesc": "Configurações de personagem e preferências de sessão.",
     "sessionWithName": "Configurações de Sessão · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Por favor, insira a descrição do grupo",
-      "title": "Descrição do Grupo"
+      "placeholder": "Insira a descrição da equipe",
+      "title": "Descrição da Equipe"
     },
     "name": {
-      "placeholder": "Por favor, insira o nome do grupo",
-      "title": "Nome do Grupo"
+      "placeholder": "Insira o nome da equipe",
+      "title": "Nome da Equipe"
     },
     "scene": {
-      "desc": "Escolha o cenário do chat em grupo",
+      "desc": "Selecione o cenário da equipe",
       "options": {
         "casual": "Casual",
         "productive": "Produtivo"
       },
-      "title": "Cenário do chat em grupo"
+      "title": "Cenário da Equipe"
     },
-    "submit": "Atualizar Grupo",
+    "submit": "Atualizar Equipe",
     "systemPrompt": {
       "placeholder": "Por favor, insira a frase de comando do sistema do anfitrião",
       "title": "Frase de Comando do Sistema do Anfitrião"
     },
-    "title": "Informações do Grupo"
+    "title": "Informações da Equipe de Agentes"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Permitir mensagens diretas do assistente"
     },
     "enableSupervisor": {
-      "desc": "Ative a função de moderador para que ele gerencie o fluxo da conversa no grupo",
+      "desc": "Ative a função de moderador da equipe de agentes. O moderador gerenciará o fluxo das conversas da equipe",
       "title": "Ativar moderador"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Configurações do Anfitrião",
     "responseOrder": {
-      "desc": "O agente responderá na ordem definida na conversa do grupo",
+      "desc": "Os agentes responderão na ordem definida no chat",
       "options": {
         "natural": "Natural",
         "sequential": "Sequencial"
@@ -356,7 +356,7 @@
       "title": "Ordem de Resposta"
     },
     "responseSpeed": {
-      "desc": "Controle a velocidade geral da conversa do grupo",
+      "desc": "Controle a velocidade geral do andamento da conversa",
       "options": {
         "fast": "Rápido",
         "medium": "Médio",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Adicionar ao Grupo",
     "availableAgents": "Assistentes Disponíveis",
+    "createMember": "Criar membro",
     "defaultAgent": "Assistente Personalizado",
     "disableHost": "Desativar assistente do anfitrião",
     "edit": "Editar Membro",
-    "empty": "Não há agentes neste grupo. Clique no botão + para adicionar membros.",
+    "empty": "Ainda não há membros nesta equipe. Clique no botão + para adicionar membros.",
     "enableHost": "Ativar assistente do anfitrião",
     "groupHost": "Anfitrião do grupo",
     "groupMembers": "Membros do Grupo",
@@ -626,11 +627,6 @@
       "label": "Modelo de Nomeação de Tópicos para Pintura AI",
       "modelDesc": "Modelo designado para nomeação automática de tópicos em pintura AI",
       "title": "Nomeação Automática de Tópicos para Pintura AI"
-    },
-    "groupChatSupervisor": {
-      "label": "Modelo de supervisão de chats em grupo",
-      "modelDesc": "Modelo designado para supervisionar e gerenciar conversas em grupo",
-      "title": "Supervisão de chats em grupo"
     },
     "helpInfo": "Ao criar um novo assistente, as configurações padrão do assistente serão usadas como valores predefinidos.",
     "historyCompress": {

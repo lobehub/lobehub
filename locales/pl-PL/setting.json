@@ -43,8 +43,8 @@
   "header": {
     "desc": "Preferencje i ustawienia modelu.",
     "global": "Ustawienia globalne",
-    "group": "Ustawienia czatu grupowego",
-    "groupDesc": "Zarządzaj bieżącym czatem grupowym",
+    "group": "Ustawienia zespołu",
+    "groupDesc": "Zarządzaj zespołem Agentów i preferencjami czatu",
     "session": "Ustawienia sesji",
     "sessionDesc": "Ustawienia postaci i preferencje sesji.",
     "sessionWithName": "Ustawienia sesji · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Wprowadź opis czatu grupowego",
-      "title": "Opis czatu grupowego"
+      "placeholder": "Wprowadź opis zespołu",
+      "title": "Opis zespołu"
     },
     "name": {
-      "placeholder": "Wprowadź nazwę czatu grupowego",
-      "title": "Nazwa czatu grupowego"
+      "placeholder": "Wprowadź nazwę zespołu",
+      "title": "Nazwa zespołu"
     },
     "scene": {
-      "desc": "Wybierz scenariusz czatu grupowego",
+      "desc": "Wybierz scenariusz zespołu",
       "options": {
         "casual": "Nieformalny",
         "productive": "Produktywność"
       },
-      "title": "Scenariusz czatu grupowego"
+      "title": "Scenariusz zespołu"
     },
-    "submit": "Aktualizuj czat grupowy",
+    "submit": "Zaktualizuj zespół",
     "systemPrompt": {
       "placeholder": "Wprowadź systemową wskazówkę prowadzącego",
       "title": "Systemowa wskazówka prowadzącego"
     },
-    "title": "Informacje o czacie grupowym"
+    "title": "Informacje o zespole Agentów"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Zezwól asystentowi na wysyłanie wiadomości prywatnych"
     },
     "enableSupervisor": {
-      "desc": "Włącz funkcję moderatora czatu grupowego — moderator będzie zarządzać przebiegiem rozmowy",
+      "desc": "Włącz funkcję moderatora zespołu Agentów — moderator będzie zarządzać przebiegiem rozmowy",
       "title": "Włącz moderatora"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Ustawienia prowadzącego",
     "responseOrder": {
-      "desc": "Agent będzie odpowiadał zgodnie z kolejnością ustaloną w czacie grupowym",
+      "desc": "Agenci będą odpowiadać w ustalonej kolejności w czacie",
       "options": {
         "natural": "Naturalna",
         "sequential": "Sekwencyjna"
@@ -356,7 +356,7 @@
       "title": "Kolejność odpowiedzi"
     },
     "responseSpeed": {
-      "desc": "Kontroluj ogólne tempo czatu grupowego",
+      "desc": "Kontroluj ogólne tempo rozmowy",
       "options": {
         "fast": "Szybkie",
         "medium": "Średnie",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Dołącz do grupy",
     "availableAgents": "Dostępni asystenci",
+    "createMember": "Utwórz członka",
     "defaultAgent": "Niestandardowy asystent",
     "disableHost": "Wyłącz asystenta gospodarza",
     "edit": "Edytuj członka",
-    "empty": "Brak agentów w tym czacie grupowym. Kliknij przycisk +, aby dodać członków.",
+    "empty": "Ten zespół nie ma jeszcze członków. Kliknij przycisk +, aby dodać członków.",
     "enableHost": "Włącz asystenta gospodarza",
     "groupHost": "Gospodarz grupy",
     "groupMembers": "Członkowie grupy",
@@ -626,11 +627,6 @@
       "label": "Model nazewnictwa tematów do AI w malarstwie",
       "modelDesc": "Model przeznaczony do automatycznego nadawania nazw tematom w AI malarskim",
       "title": "Automatyczne nadawanie nazw tematom w AI malarskim"
-    },
-    "groupChatSupervisor": {
-      "label": "Model nadzoru czatu grupowego",
-      "modelDesc": "Model przeznaczony do nadzorowania i zarządzania rozmowami w czatach grupowych",
-      "title": "Nadzór i zarządzanie czatem grupowym"
     },
     "helpInfo": "Podczas tworzenia nowego asystenta, domyślne ustawienia asystenta będą używane jako wartości wstępne.",
     "historyCompress": {

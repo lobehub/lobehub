@@ -1,5 +1,5 @@
 {
-  "desc": "管理你的文件与知识库",
+  "desc": "管理你的知识",
   "detail": {
     "basic": {
       "createdAt": "创建时间",
@@ -70,7 +70,7 @@
     "videos": "视频",
     "websites": "网页"
   },
-  "title": "文件",
+  "title": "知识库",
   "toggleLeftPanel": {
     "title": "显示/隐藏左侧面板"
   },

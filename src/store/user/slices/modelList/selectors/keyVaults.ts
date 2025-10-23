@@ -2,6 +2,7 @@ import { UserStore } from '@/store/user';
 import {
   AWSBedrockKeyVault,
   AzureOpenAIKeyVault,
+  ComfyUIKeyVault,
   GlobalLLMProviderKey,
   OpenAICompatibleKeyVault,
   UserKeyVaults,
@@ -20,7 +21,8 @@ const cloudflareConfig = (s: UserStore) => keyVaultsSettings(s).cloudflare || {}
 const getVaultByProvider = (provider: GlobalLLMProviderKey) => (s: UserStore) =>
   (keyVaultsSettings(s)[provider] || {}) as OpenAICompatibleKeyVault &
     AzureOpenAIKeyVault &
-    AWSBedrockKeyVault;
+    AWSBedrockKeyVault &
+    ComfyUIKeyVault;
 
 const isProviderEndpointNotEmpty = (provider: string) => (s: UserStore) => {
   const vault = getVaultByProvider(provider as GlobalLLMProviderKey)(s);

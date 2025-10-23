@@ -255,7 +255,8 @@ export const chatMessage: StateCreator<
     updateInputMessage('');
   },
   addUserMessage: async ({ message, fileList }) => {
-    const { internal_createMessage, updateInputMessage, activeTopicId, activeId } = get();
+    const { internal_createMessage, updateInputMessage, activeTopicId, activeId, activeThreadId } =
+      get();
     if (!activeId) return;
 
     await internal_createMessage({
@@ -265,6 +266,7 @@ export const chatMessage: StateCreator<
       sessionId: activeId,
       // if there is activeTopicId，then add topicId to message
       topicId: activeTopicId,
+      threadId: activeThreadId,
     });
 
     updateInputMessage('');
@@ -428,11 +430,7 @@ export const chatMessage: StateCreator<
       internal_toggleMessageLoading(true, tempId);
     }
 
-    console.log('internal_createMessafe', message);
-
     try {
-      console.log('internal_createMessage: Trying to call messageService.createMessage', message);
-
       const id = await messageService.createMessage(message);
       if (!context?.skipRefresh) {
         internal_toggleMessageLoading(true, tempId);

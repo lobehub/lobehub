@@ -3,9 +3,10 @@
 import { Icon } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import Link from 'next/link';
+import NextLink from 'next/link';
 import { ReactNode, memo } from 'react';
 import { Flexbox, FlexboxProps } from 'react-layout-kit';
+import { Link as RouterLink } from 'react-router-dom';
 
 const useStyles = createStyles(({ css, token }) => ({
   more: css`
@@ -39,10 +40,41 @@ const Title = memo<TitleProps>(
   ({ id, tag, children, moreLink, more, level = 2, icon, ...rest }) => {
     const { cx, styles } = useStyles();
     const title = (
-      <h2 className={cx(styles.title, styles[`title${level}`])} id={id}>
+      <h2 className={cx(styles.title, styles[`title${level}` as 'title2' | 'title3'])} id={id}>
         {children}
       </h2>
     );
+
+    // Check if it's an external link or internal discover route
+    const isExternalLink = moreLink?.startsWith('http') ?? false;
+    const isDiscoverRoute = moreLink?.startsWith('/discover') ?? false;
+
+    let moreLinkElement = null;
+    if (moreLink) {
+      if (isExternalLink) {
+        moreLinkElement = (
+          <NextLink className={styles.more} href={moreLink} target="_blank">
+            <span style={{ marginRight: 4 }}>{more}</span>
+            <Icon icon={ChevronRight} />
+          </NextLink>
+        );
+      } else if (isDiscoverRoute) {
+        moreLinkElement = (
+          <RouterLink className={styles.more} to={moreLink.replace('/discover', '')}>
+            <span style={{ marginRight: 4 }}>{more}</span>
+            <Icon icon={ChevronRight} />
+          </RouterLink>
+        );
+      } else {
+        moreLinkElement = (
+          <NextLink className={styles.more} href={moreLink}>
+            <span style={{ marginRight: 4 }}>{more}</span>
+            <Icon icon={ChevronRight} />
+          </NextLink>
+        );
+      }
+    }
+
     return (
       <Flexbox
         align={'center'}
@@ -65,16 +97,7 @@ const Title = memo<TitleProps>(
         ) : (
           title
         )}
-        {moreLink && (
-          <Link
-            className={styles.more}
-            href={moreLink}
-            target={moreLink.startsWith('http') ? '_blank' : undefined}
-          >
-            <span style={{ marginRight: 4 }}>{more}</span>
-            <Icon icon={ChevronRight} />
-          </Link>
-        )}
+        {moreLinkElement}
       </Flexbox>
     );
   },

@@ -4,7 +4,7 @@
   },
   "active": "활성",
   "agentDefaultMessage": "안녕하세요, 저는 **{{name}}**입니다. 지금 바로 저와 대화를 시작하시거나 [도우미 설정]({{url}})으로 가셔서 제 정보를 완성하실 수 있습니다.",
-  "agentDefaultMessageWithSystemRole": "안녕하세요, 저는 **{{name}}**입니다. {{systemRole}}입니다. 대화를 시작해 봅시다!",
+  "agentDefaultMessageWithSystemRole": "안녕하세요, 저는 **{{name}}**입니다. 대화를 시작해 봅시다!",
   "agentDefaultMessageWithoutEdit": "안녕하세요, 저는 **{{name}}**입니다. 대화를 시작해보세요!",
   "agents": "도우미",
   "artifact": {
@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "현재 대화 지우기",
   "confirmClearCurrentMessages": "현재 대화를 지우시면 되돌릴 수 없습니다. 작업을 확인하시겠습니까?",
-  "confirmRemoveChatGroupItemAlert": "이 그룹 채팅을 삭제하려고 합니다. 그룹 채팅 멤버는 영향을 받지 않습니다. 작업을 확인해 주세요.",
+  "confirmRemoveChatGroupItemAlert": "이 Agent 팀을 삭제하려고 합니다. 팀 구성원에게는 영향이 없습니다. 계속하시겠습니까?",
   "confirmRemoveGroupItemAlert": "해당 그룹을 삭제하려고 합니다. 삭제하면 해당 그룹의 어시스턴트가 기본 목록으로 이동합니다. 계속 진행하시겠습니까?",
-  "confirmRemoveGroupSuccess": "그룹 채팅이 성공적으로 삭제되었습니다",
+  "confirmRemoveGroupSuccess": "에이전트 팀이 성공적으로 삭제되었습니다",
   "confirmRemoveSessionItemAlert": "이 도우미를 삭제하시면 되돌릴 수 없습니다. 작업을 확인하시겠습니까?",
   "confirmRemoveSessionSuccess": "도우미가 성공적으로 삭제되었습니다",
   "defaultAgent": "기본 도우미",
-  "defaultGroupChat": "그룹 채팅",
+  "defaultGroupChat": "에이전트 팀",
   "defaultList": "기본 목록",
   "defaultSession": "기본 도우미",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "멤버 제거",
     "title": "그룹"
   },
-  "groupDescription": "그룹 설명",
+  "groupDescription": "팀 설명",
   "groupSidebar": {
     "members": {
       "addMember": "멤버 추가",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "기존 도우미 선택...",
-    "createGroup": "그룹 채팅 생성",
-    "existingMembers": "기존 멤버",
+    "createGroup": "팀 만들기",
+    "existingMembers": "기존 Agent",
     "groupMembers": "이 도우미들도 귀하의 목록에 추가됩니다",
     "host": {
-      "description": "그룹 채팅을 자동으로 운영합니다",
-      "title": "호스트",
-      "tooltip": "그룹 호스트 기능을 비활성화하면, 멤버가 응답할 수 있도록 수동으로 @멘션해야 합니다"
+      "description": "팀이 자율적으로 운영되도록 설정합니다",
+      "title": "호스트 활성화",
+      "tooltip": "팀 호스트를 비활성화하면, 멤버가 응답할 수 있도록 수동으로 @멘션해야 합니다"
     },
     "memberCount": "{{count}}명 멤버",
     "noMatchingTemplates": "일치하는 템플릿이 없습니다",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "템플릿에 멤버가 없습니다",
     "noTemplates": "사용 가능한 템플릿이 없습니다",
     "searchTemplates": "템플릿 검색...",
-    "title": "그룹 채팅 생성",
+    "title": "에이전트 팀 생성",
     "useTemplate": "템플릿 사용"
   },
   "hideForYou": "개인 메시지 내용이 숨겨져 있습니다. 설정에서 【개인 메시지 내용 표시】를 켜서 확인하세요.",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "멤버 추가",
     "allMembers": "전체 멤버",
-    "createGroup": "그룹 채팅 생성",
+    "createGroup": "Agent 팀 만들기",
     "noAvailableAgents": "초대할 보조자가 없습니다",
     "noSelectedAgents": "아직 보조자를 선택하지 않았습니다",
     "searchAgents": "보조자 검색...",
-    "setInitialMembers": "그룹 멤버 선택"
+    "setInitialMembers": "팀 구성원 선택"
   },
   "members": "구성원",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "{{index}}번째 메시지로 이동",
     "nextMessage": "다음 메시지",
-    "previousMessage": "이전 메시지"
+    "previousMessage": "이전 메시지",
+    "senderAssistant": "도우미",
+    "senderUser": "당신"
   },
   "newAgent": "새 도우미",
-  "newGroupChat": "새 그룹 채팅 만들기",
-  "noAgentsYet": "이 그룹에는 아직 어시스턴트가 없습니다. '+' 버튼을 눌러 어시스턴트를 초대하세요.",
-  "noAvailableAgents": "초대할 수 있는 어시스턴트가 없습니다.",
-  "noMatchingAgents": "일치하는 어시스턴트가 없습니다.",
+  "newGroupChat": "새 에이전트 팀",
+  "noAgentsYet": "이 에이전트 팀에는 아직 멤버가 없습니다. + 버튼을 눌러 어시스턴트를 초대하세요.",
+  "noAvailableAgents": "초대할 수 있는 멤버가 없습니다",
+  "noMatchingAgents": "일치하는 멤버가 없습니다",
   "noMembersYet": "이 그룹에는 아직 구성원이 없습니다. + 버튼을 눌러 어시스턴트를 초대하세요.",
-  "noSelectedAgents": "아직 어시스턴트를 선택하지 않았습니다",
+  "noSelectedAgents": "아직 멤버를 선택하지 않았습니다",
   "owner": "그룹 소유자",
   "pin": "고정",
   "pinOff": "고정 해제",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "복사",
     "download": "스크린샷 다운로드",
+    "downloadError": "다운로드 실패",
     "downloadFile": "파일 다운로드",
+    "downloadPdf": "PDF 다운로드",
+    "downloadSuccess": "다운로드 성공",
+    "exportPdf": "PDF로 내보내기",
     "exportTitle": "기본 제목",
+    "generatePdf": "PDF 생성",
+    "generatingPdf": "PDF 생성 중...",
     "imageType": "이미지 형식",
     "includeTool": "플러그인 메시지 포함",
     "includeUser": "사용자 메시지 포함",
+    "loadingPdf": "PDF 로드 중...",
+    "noPdfData": "PDF 데이터가 없습니다",
+    "pdf": "PDF",
+    "pdfErrorDescription": "PDF 생성 중 오류가 발생했습니다. 다시 시도해 주세요.",
+    "pdfGenerationError": "PDF 생성 실패",
+    "pdfReady": "PDF가 준비되었습니다",
+    "regeneratePdf": "PDF 다시 생성",
     "screenshot": "스크린샷",
     "settings": "내보내기 설정",
     "text": "텍스트",

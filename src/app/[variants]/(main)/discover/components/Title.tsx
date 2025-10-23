@@ -3,9 +3,9 @@
 import { Button, Icon, Tag } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import Link from 'next/link';
 import { ReactNode, memo } from 'react';
 import { Flexbox, FlexboxProps } from 'react-layout-kit';
+import { Link } from 'react-router-dom';
 
 const useStyles = createStyles(({ css, responsive, token }) => ({
   more: css`
@@ -59,7 +59,10 @@ const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
         title
       )}
       {moreLink && (
-        <Link href={moreLink} target={moreLink.startsWith('http') ? '_blank' : undefined}>
+        <Link
+          target={moreLink.startsWith('http') ? '_blank' : undefined}
+          to={moreLink}
+        >
           <Button className={styles.more} style={{ paddingInline: 6 }} type={'text'}>
             <span>{more}</span>
             <Icon icon={ChevronRight} />

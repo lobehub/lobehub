@@ -13,6 +13,49 @@ export interface GroqModelCard {
   id: string;
 }
 
+/**
+ * Filter out advanced JSON Schema properties that Groq doesn't support
+ */
+const filterAdvancedFields = (schema: any): any => {
+  if (typeof schema !== 'object' || schema === null) {
+    return schema;
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.map(filterAdvancedFields);
+  }
+
+  const filtered: any = {};
+
+  // List of advanced properties to filter out
+  const unsupportedProperties = new Set([
+    'maxItems',
+    'minItems',
+    'maxLength',
+    'minLength',
+    'pattern',
+    'format',
+    'uniqueItems',
+    'maxProperties',
+    'minProperties',
+    'multipleOf',
+    'maximum',
+    'minimum',
+    'exclusiveMaximum',
+    'exclusiveMinimum',
+  ]);
+
+  for (const [key, value] of Object.entries(schema)) {
+    if (unsupportedProperties.has(key)) {
+      continue;
+    }
+
+    filtered[key] = filterAdvancedFields(value);
+  }
+
+  return filtered;
+};
+
 export const params = {
   baseURL: 'https://api.groq.com/openai/v1',
   chatCompletion: {
@@ -39,6 +82,9 @@ export const params = {
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_GROQ_CHAT_COMPLETION === '1',
+  },
+  generateObject: {
+    handleSchema: filterAdvancedFields,
   },
   models: async ({ client }) => {
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');

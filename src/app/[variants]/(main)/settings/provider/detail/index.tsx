@@ -3,6 +3,7 @@ import Azure from './azure';
 import AzureAI from './azureai';
 import Bedrock from './bedrock';
 import Cloudflare from './cloudflare';
+import ComfyUI from './comfyui';
 import DefaultPage from './default/ProviderDetialPage';
 import GitHub from './github';
 import Ollama from './ollama';
@@ -27,6 +28,9 @@ const ProviderDetailPage = (props: { id?: string | null }) => {
     }
     case 'cloudflare': {
       return <Cloudflare />;
+    }
+    case 'comfyui': {
+      return <ComfyUI />;
     }
     case 'github': {
       return <GitHub />;

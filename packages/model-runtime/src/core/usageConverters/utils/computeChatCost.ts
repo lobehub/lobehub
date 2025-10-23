@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix */
-import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
+import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
 import debug from 'debug';
 import {
   FixedPricingUnit,
@@ -17,6 +17,7 @@ const log = debug('lobe-cost:computeChatPricing');
 export interface PricingUnitBreakdown {
   cost: number;
   credits: number;
+  currency: string | 'USD' | 'CNY';
   /**
    * For lookup strategies we expose the resolved key.
    */
@@ -39,6 +40,11 @@ export interface ComputeChatCostOptions {
    * Input parameters used by lookup strategies (e.g. ttl, thinkingMode).
    */
   lookupParams?: Record<string, string | number | boolean>;
+  /**
+   * Exchange rate for CNY to USD conversion. Defaults to USD_TO_CNY constant.
+   * Useful for testing with fixed exchange rates.
+   */
+  usdToCnyRate?: number;
 }
 
 export interface PricingComputationResult {
@@ -98,6 +104,27 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
   audioOutput: (usage) => usage.outputAudioTokens,
 };
 
+/**
+ * Convert currency-specific credits to USD credits and ceil to integer
+ * @param credits - Credits in the original currency
+ * @param currency - The currency of the credits ('USD' or 'CNY')
+ * @param usdToCnyRate - Exchange rate for CNY to USD conversion (defaults to USD_TO_CNY constant)
+ * @returns USD-equivalent credits (ceiled to integer)
+ */
+const toUSDCredits = (
+  credits: number,
+  currency: string = 'USD',
+  usdToCnyRate = USD_TO_CNY,
+): number => {
+  const usdCredits = currency === 'CNY' ? credits / usdToCnyRate : credits;
+  return Math.ceil(usdCredits);
+};
+
+/**
+ * Convert credits to USD dollar amount
+ * @param credits - USD credits
+ * @returns USD dollar amount
+ */
 const creditsToUSD = (credits: number) => credits / CREDITS_PER_DOLLAR;
 
 /**
@@ -221,6 +248,8 @@ export const computeChatCost = (
 
   const breakdown: PricingUnitBreakdown[] = [];
   const issues: PricingComputationIssue[] = [];
+  const currency = pricing.currency || 'USD';
+  const usdToCnyRate = options?.usdToCnyRate ?? USD_TO_CNY;
 
   for (const unit of pricing.units) {
     const quantity = resolveQuantity(unit, usage);
@@ -231,11 +260,13 @@ export const computeChatCost = (
         throw new Error(`Unsupported chat pricing unit: ${unit.unit}`);
 
       const fixedUnit = unit as FixedPricingUnit;
-      const credits = computeFixedCredits(fixedUnit, quantity);
+      const rawCredits = computeFixedCredits(fixedUnit, quantity);
+      const usdCredits = toUSDCredits(rawCredits, currency, usdToCnyRate);
       breakdown.push({
-        cost: creditsToUSD(credits),
-        credits,
+        cost: creditsToUSD(usdCredits),
+        credits: usdCredits,
         quantity,
+        currency,
         unit,
       });
       continue;
@@ -243,11 +274,13 @@ export const computeChatCost = (
 
     if (unit.strategy === 'tiered') {
       const tieredUnit = unit as TieredPricingUnit;
-      const { credits, segments } = computeTieredCredits(tieredUnit, quantity);
+      const { credits: rawCredits, segments } = computeTieredCredits(tieredUnit, quantity);
+      const usdCredits = toUSDCredits(rawCredits, currency, usdToCnyRate);
       breakdown.push({
-        cost: creditsToUSD(credits),
-        credits,
+        cost: creditsToUSD(usdCredits),
+        credits: usdCredits,
         quantity,
+        currency,
         segments,
         unit,
       });
@@ -257,18 +290,20 @@ export const computeChatCost = (
     if (unit.strategy === 'lookup') {
       const lookupUnit = unit as LookupPricingUnit;
       const {
-        credits,
+        credits: rawCredits,
         key,
         issues: lookupIssue,
       } = computeLookupCredits(lookupUnit, quantity, options);
 
       if (lookupIssue) issues.push(lookupIssue);
 
+      const usdCredits = toUSDCredits(rawCredits, currency, usdToCnyRate);
       breakdown.push({
-        cost: creditsToUSD(credits),
-        credits,
+        cost: creditsToUSD(usdCredits),
+        credits: usdCredits,
         lookupKey: key,
         quantity,
+        currency,
         unit,
       });
       continue;
@@ -277,9 +312,10 @@ export const computeChatCost = (
     issues.push({ reason: 'Unsupported pricing strategy', unit });
   }
 
+  // Sum up USD credits from all breakdown items
   const rawTotalCredits = breakdown.reduce((sum, item) => sum + item.credits, 0);
   const totalCredits = Math.ceil(rawTotalCredits);
-  // !: totalCredits has been uniformly rounded up to integer credits, divided by CREDITS_PER_DOLLAR naturally retains only 6 decimal places, no additional processing needed
+  // !: totalCredits has been uniformly rounded up to integer USD credits, divided by CREDITS_PER_DOLLAR naturally retains only 6 decimal places, no additional processing needed
   const totalCost = creditsToUSD(totalCredits);
 
   log(`computeChatPricing breakdown: ${JSON.stringify(breakdown, null, 2)}`);

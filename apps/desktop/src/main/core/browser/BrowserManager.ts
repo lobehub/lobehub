@@ -1,9 +1,18 @@
-import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import {
+  MainBroadcastEventKey,
+  MainBroadcastParams,
+  OpenSettingsWindowOptions,
+} from '@lobechat/electron-client-ipc';
 import { WebContents } from 'electron';
 
 import { createLogger } from '@/utils/logger';
 
-import { AppBrowsersIdentifiers, appBrowsers, WindowTemplate, WindowTemplateIdentifiers, windowTemplates } from '../../appBrowsers';
+import {
+  AppBrowsersIdentifiers,
+  WindowTemplateIdentifiers,
+  appBrowsers,
+  windowTemplates,
+} from '../../appBrowsers';
 import type { App } from '../App';
 import type { BrowserWindowOpts } from './Browser';
 import Browser from './Browser';
@@ -63,14 +72,35 @@ export class BrowserManager {
    * Display the settings window and navigate to a specific tab
    * @param tab Settings window sub-path tab
    */
-  async showSettingsWindowWithTab(tab?: string) {
-    logger.debug(`Showing settings window with tab: ${tab || 'default'}`);
-    // common is the main path for settings route
-    if (tab && tab !== 'common') {
-      const browser = await this.redirectToPage('settings', tab);
+  async showSettingsWindowWithTab(options?: OpenSettingsWindowOptions) {
+    const tab = options?.tab;
+    const searchParams = options?.searchParams;
+
+    const query = new URLSearchParams();
+    if (searchParams) {
+      Object.entries(searchParams).forEach(([key, value]) => {
+        if (value !== undefined) query.set(key, value);
+      });
+    }
+
+    if (tab && tab !== 'common' && !query.has('active')) {
+      query.set('active', tab);
+    }
+
+    const queryString = query.toString();
+    const activeTab = query.get('active') ?? tab;
+
+    logger.debug(
+      `Showing settings window with navigation: active=${activeTab || 'default'}, query=${
+        queryString || 'none'
+      }`,
+    );
+
+    if (queryString) {
+      const browser = await this.redirectToPage('settings', undefined, queryString);
 
       // make provider page more large
-      if (tab.startsWith('provider/')) {
+      if (activeTab?.startsWith('provider')) {
         logger.debug('Resizing window for provider settings');
         browser.setWindowSize({ height: 1000, width: 1400 });
         browser.moveToCenter();
@@ -87,7 +117,7 @@ export class BrowserManager {
    * @param identifier Window identifier
    * @param subPath Sub-path, such as 'agent', 'about', etc.
    */
-  async redirectToPage(identifier: string, subPath?: string) {
+  async redirectToPage(identifier: string, subPath?: string, search?: string) {
     try {
       // Ensure window is retrieved or created
       const browser = this.retrieveByIdentifier(identifier);
@@ -105,11 +135,14 @@ export class BrowserManager {
 
       // Build complete URL path
       const fullPath = subPath ? `${baseRoute}/${subPath}` : baseRoute;
+      const normalizedSearch =
+        search && search.length > 0 ? (search.startsWith('?') ? search : `?${search}`) : '';
+      const fullUrl = `${fullPath}${normalizedSearch}`;
 
-      logger.debug(`Redirecting to: ${fullPath}`);
+      logger.debug(`Redirecting to: ${fullUrl}`);
 
       // Load URL and show window
-      await browser.loadUrl(fullPath);
+      await browser.loadUrl(fullUrl);
       browser.show();
 
       return browser;
@@ -143,14 +176,20 @@ export class BrowserManager {
    * @param uniqueId Optional unique identifier, will be generated if not provided
    * @returns The window identifier and Browser instance
    */
-  createMultiInstanceWindow(templateId: WindowTemplateIdentifiers, path: string, uniqueId?: string) {
+  createMultiInstanceWindow(
+    templateId: WindowTemplateIdentifiers,
+    path: string,
+    uniqueId?: string,
+  ) {
     const template = windowTemplates[templateId];
     if (!template) {
       throw new Error(`Window template ${templateId} not found`);
     }
 
     // Generate unique identifier
-    const windowId = uniqueId || `${template.baseIdentifier}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const windowId =
+      uniqueId ||
+      `${template.baseIdentifier}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
     // Create browser options from template
     const browserOpts: BrowserWindowOpts = {
@@ -164,8 +203,8 @@ export class BrowserManager {
     const browser = this.retrieveOrInitialize(browserOpts);
 
     return {
-      identifier: windowId,
       browser: browser,
+      identifier: windowId,
     };
   }
 
@@ -176,7 +215,7 @@ export class BrowserManager {
    */
   getWindowsByTemplate(templateId: string): string[] {
     const prefix = `${templateId}_`;
-    return Array.from(this.browsers.keys()).filter(id => id.startsWith(prefix));
+    return Array.from(this.browsers.keys()).filter((id) => id.startsWith(prefix));
   }
 
   /**
@@ -185,7 +224,7 @@ export class BrowserManager {
    */
   closeWindowsByTemplate(templateId: string): void {
     const windowIds = this.getWindowsByTemplate(templateId);
-    windowIds.forEach(id => {
+    windowIds.forEach((id) => {
       const browser = this.browsers.get(id);
       if (browser) {
         browser.close();
@@ -235,8 +274,7 @@ export class BrowserManager {
     });
 
     browser.browserWindow.on('show', () => {
-      if (browser.webContents)
-        this.webContentsMap.set(browser.webContents, browser.identifier);
+      if (browser.webContents) this.webContentsMap.set(browser.webContents, browser.identifier);
     });
 
     return browser;

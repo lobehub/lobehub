@@ -60,9 +60,9 @@ export interface PipelineContext {
     /** 当前 token 估算值 */
     currentTokenCount?: number;
     /** 最大 token 限制 */
-    maxTokens: number;
+    maxTokens?: number;
     /** 模型标识 */
-    model: string;
+    model?: string;
   };
 }
 

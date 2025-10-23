@@ -1,5 +1,5 @@
 {
-  "desc": "Verwalten Sie Ihre Dateien und Wissensdatenbank",
+  "desc": "Verwalte dein Wissen",
   "detail": {
     "basic": {
       "createdAt": "Erstellungszeit",
@@ -70,7 +70,7 @@
     "videos": "Videos",
     "websites": "Webseiten"
   },
-  "title": "Dateien",
+  "title": "Wissensdatenbank",
   "toggleLeftPanel": {
     "title": "Linkes Panel einblenden/ausblenden"
   },

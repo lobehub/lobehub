@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras è una piattaforma di inferenza AI basata sul suo sistema dedicato CS-3, progettata per offrire il servizio LLM più veloce al mondo, con risposta in tempo reale e un'elevata capacità di elaborazione. È pensata per eliminare la latenza e accelerare i flussi di lavoro AI complessi, come la generazione di codice in tempo reale e le attività degli agenti."
   },
-  "cerebras": {
-    "description": "Cerebras è una piattaforma di inferenza AI basata sul suo sistema dedicato CS-3, progettata per offrire il servizio LLM più veloce al mondo, con risposta in tempo reale e un'elevata capacità di elaborazione. È pensata per eliminare la latenza e accelerare i flussi di lavoro AI complessi, come la generazione di codice in tempo reale e le attività degli agenti."
-  },
   "cloudflare": {
     "description": "Esegui modelli di machine learning alimentati da GPU serverless sulla rete globale di Cloudflare."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI è una piattaforma di servizi che offre molteplici interfacce per modelli avanzati, supportando OpenAI, Anthropic, Google e altri ancora, adatta a esigenze di sviluppo e applicazione diversificate. Gli utenti possono scegliere in modo flessibile il modello e il prezzo più adatti alle proprie necessità, contribuendo a migliorare l'esperienza AI."
+  },
+  "comfyui": {
+    "description": "Potente motore open source per flussi di lavoro di generazione di immagini, video e audio, compatibile con modelli avanzati come SD, FLUX, Qwen, Hunyuan, WAN, e dotato di funzionalità per l'editing dei flussi tramite nodi e la distribuzione in ambienti privati."
   },
   "deepseek": {
     "description": "DeepSeek è un'azienda focalizzata sulla ricerca e applicazione della tecnologia AI, il cui ultimo modello DeepSeek-V2.5 combina capacità di dialogo generico e elaborazione del codice, realizzando miglioramenti significativi nell'allineamento delle preferenze umane, nei compiti di scrittura e nel rispetto delle istruzioni."

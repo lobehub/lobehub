@@ -43,8 +43,8 @@
   "header": {
     "desc": "Voorkeuren en modelinstellingen.",
     "global": "Algemene instellingen",
-    "group": "Groepschatinstellingen",
-    "groupDesc": "Beheer de huidige groepschat",
+    "group": "Teaminstellingen",
+    "groupDesc": "Beheer Agent-teams en chatvoorkeuren",
     "session": "Sessie-instellingen",
     "sessionDesc": "Rolinstellingen en sessievoorkeuren.",
     "sessionWithName": "Sessie-instellingen · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "Voer een groepschatbeschrijving in",
-      "title": "Groepschatbeschrijving"
+      "placeholder": "Voer een teamomschrijving in",
+      "title": "Teamomschrijving"
     },
     "name": {
-      "placeholder": "Voer een groepschatnaam in",
-      "title": "Groepschatnaam"
+      "placeholder": "Voer een teamnaam in",
+      "title": "Teamnaam"
     },
     "scene": {
-      "desc": "Kies groepschatscenario",
+      "desc": "Selecteer de teamsituatie",
       "options": {
         "casual": "Informeel",
         "productive": "Productief"
       },
-      "title": "Groepschatscenario"
+      "title": "Teamsituatie"
     },
-    "submit": "Groepschat bijwerken",
+    "submit": "Team bijwerken",
     "systemPrompt": {
       "placeholder": "Voer de systeemopdracht van de host in",
       "title": "Systeemopdracht van de host"
     },
-    "title": "Groepschatinformatie"
+    "title": "Agent Teaminformatie"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "Sta privéberichten van assistent toe"
     },
     "enableSupervisor": {
-      "desc": "Schakel de moderatorfunctie in voor groepschats; de moderator beheert het verloop van het gesprek",
+      "desc": "Schakel de moderatorfunctie voor het Agent-team in. De moderator beheert het verloop van teamgesprekken.",
       "title": "Moderator inschakelen"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "Hostinstellingen",
     "responseOrder": {
-      "desc": "De agent zal antwoorden in de volgorde die in de groepschat is ingesteld",
+      "desc": "Agenten reageren in de volgorde die is ingesteld in de chat",
       "options": {
         "natural": "Natuurlijk",
         "sequential": "Opeenvolgend"
@@ -356,7 +356,7 @@
       "title": "Antwoordvolgorde"
     },
     "responseSpeed": {
-      "desc": "Beheert het algemene tempo van de groepschat",
+      "desc": "Beheer de algemene snelheid van het gesprek",
       "options": {
         "fast": "Snel",
         "medium": "Gemiddeld",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "Toevoegen aan groep",
     "availableAgents": "Beschikbare assistenten",
+    "createMember": "Lid aanmaken",
     "defaultAgent": "Aangepaste assistent",
     "disableHost": "Host-assistent uitschakelen",
     "edit": "Lid bewerken",
-    "empty": "Er zijn momenteel geen agenten in deze groepschat. Klik op de + knop om leden toe te voegen.",
+    "empty": "Er zijn momenteel geen leden in dit team. Klik op de + knop om leden toe te voegen.",
     "enableHost": "Host-assistent inschakelen",
     "groupHost": "Groepshost",
     "groupMembers": "Groepsleden",
@@ -626,11 +627,6 @@
       "label": "AI-schilderij onderwerp naamgevingsmodel",
       "modelDesc": "Model aangewezen voor het automatisch benoemen van onderwerpen in AI-schilderijen",
       "title": "Automatisch onderwerp naamgeven voor AI-schilderijen"
-    },
-    "groupChatSupervisor": {
-      "label": "Model voor groepschattoezicht",
-      "modelDesc": "Speciaal model voor het toezicht en beheer van groepschatgesprekken",
-      "title": "Groepschattoezicht en -beheer"
     },
     "helpInfo": "Wanneer je een nieuwe assistent maakt, worden de standaard assistentinstellingen als standaardwaarden gebruikt.",
     "historyCompress": {

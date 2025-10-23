@@ -11,13 +11,13 @@ LobeChat 提供了内置的客户端数据库体验。
 
 ### 环境配置
 
-首先，复制示例环境文件来创建你的开发配置：
+首先，复制示例环境文件来创建你的 Docker Compose 配置：
 
 ```bash
-cp .env.example.development .env.development
+cp docker-compose/local/.env.example docker-compose/local/.env
 ```
 
-此文件包含服务端数据库模式所需的所有环境变量，配置了：
+根据需要编辑 `docker-compose/local/.env` 文件以适应你的开发设置。此文件包含 Docker 服务所需的所有环境变量，配置了：
 
 - **服务模式**: `NEXT_PUBLIC_SERVICE_MODE=server`
 - **数据库**: 带连接字符串的 PostgreSQL
@@ -72,7 +72,7 @@ docker-compose -f docker-compose.development.yml ps
 
 ### 图像生成配置
 
-现有的 Docker Compose 配置已经包含了 MinIO 存储服务以及 `.env.example.development` 中的所有必要环境变量。无需额外配置。
+现有的 Docker Compose 配置已经包含了 MinIO 存储服务以及 `docker-compose/local/.env.example` 中的所有必要环境变量。无需额外配置。
 
 ### 图像生成架构
 
@@ -84,7 +84,7 @@ docker-compose -f docker-compose.development.yml ps
 
 ### 存储配置
 
-`.env.example.development` 文件包含所有必要的 S3 环境变量：
+`docker-compose/local/.env.example` 文件包含所有必要的 S3 环境变量：
 
 ```bash
 # S3 存储配置（本地开发使用 MinIO）

@@ -8,6 +8,7 @@ export { ToolNameResolver } from './ToolNameResolver';
 export type {
   FunctionCallChecker,
   GenerateToolsParams,
+  LobeToolManifest,
   PluginEnableChecker,
   ToolNameGenerator,
   ToolsEngineOptions,

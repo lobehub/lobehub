@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/e2e-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "E2E tests for LobeChat using Cucumber and Playwright",
+  "scripts": {
+    "test": "cucumber-js --config cucumber.config.js",
+    "test:discover": "cucumber-js --config cucumber.config.js src/features/discover/",
+    "test:headed": "HEADLESS=false cucumber-js --config cucumber.config.js",
+    "test:routes": "cucumber-js --config cucumber.config.js --tags '@routes'",
+    "test:routes:ci": "cucumber-js --config cucumber.config.js --tags '@routes and not @ci-skip'",
+    "test:smoke": "cucumber-js --config cucumber.config.js --tags '@smoke'"
+  },
+  "dependencies": {
+    "@cucumber/cucumber": "^12.2.0",
+    "@playwright/test": "^1.56.1",
+    "playwright": "^1.56.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.7.3"
+  }
+}

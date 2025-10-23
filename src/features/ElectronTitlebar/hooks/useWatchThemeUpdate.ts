@@ -15,12 +15,19 @@ export const useWatchThemeUpdate = () => {
       s.appState.isMac,
     ],
   );
-  const switchThemeMode = useGlobalStore((s) => s.switchThemeMode);
+  const [switchThemeMode, switchLocale] = useGlobalStore((s) => [
+    s.switchThemeMode,
+    s.switchLocale,
+  ]);
 
   const theme = useTheme();
 
   useWatchBroadcast('themeChanged', ({ themeMode }) => {
     switchThemeMode(themeMode, { skipBroadcast: true });
+  });
+
+  useWatchBroadcast('localeChanged', ({ locale }) => {
+    switchLocale(locale as any, { skipBroadcast: true });
   });
 
   useWatchBroadcast('systemThemeChanged', ({ themeMode }) => {

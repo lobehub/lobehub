@@ -1,0 +1,816 @@
+---
+title: Using ComfyUI for Image Generation in LobeChat
+description: Learn how to configure and use ComfyUI service in LobeChat, supporting FLUX series models for high-quality image generation and editing features
+tags:
+  - ComfyUI
+  - FLUX
+  - Text-to-Image
+  - Image Editing
+  - AI Image Generation
+---
+
+# Using ComfyUI in LobeChat
+
+<Image alt={'Using ComfyUI in LobeChat'} cover src={'https://github.com/lobehub/lobe-chat/assets/17870709/c9e5eafc-ca22-496b-a88d-cc0ae53bf720'} />
+
+This documentation will guide you on how to use [ComfyUI](https://github.com/comfyanonymous/ComfyUI) in LobeChat for high-quality AI image generation and editing.
+
+## ComfyUI Overview
+
+ComfyUI is a powerful stable diffusion and flow diffusion GUI that provides a node-based workflow interface. LobeChat integrates with ComfyUI, supporting complete FLUX series models, including text-to-image generation and image editing capabilities.
+
+### Key Features
+
+- **Extensive Model Support**: Supports 223 models, including FLUX series (130) and SD series (93)
+- **Configuration-Driven Architecture**: Registry system provides intelligent model selection
+- **Multi-Format Support**: Supports .safetensors and .gguf formats with various quantization levels
+- **Dynamic Precision Selection**: Supports default, fp8\_e4m3fn, fp8\_e5m2, fp8\_e4m3fn\_fast precision
+- **Multiple Authentication Methods**: Supports no authentication, basic authentication, Bearer Token, and custom authentication
+- **Intelligent Component Selection**: Automatically selects optimal T5, CLIP, VAE encoder combinations
+- **Enterprise-Grade Optimization**: Includes NF4, SVDQuant, TorchAO, MFLUX optimization variants
+
+## Quick Start
+
+### Step 1: Configure ComfyUI in LobeChat
+
+#### 1. Open Settings Interface
+
+- Access LobeChat's `Settings` interface
+- Find the `ComfyUI` setting item under `AI Providers`
+
+<Image alt={'ComfyUI Settings Interface'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/3f31bc33-509f-4ad2-ba81-280c2a6ec5fa'} />
+
+#### 2. Configure Connection Parameters
+
+**Basic Configuration**:
+
+- **Server Address**: Enter ComfyUI server address, e.g., `http://localhost:8188`
+- **Authentication Type**: Select appropriate authentication method (default: no authentication)
+
+### Step 2: Select Model and Start Generating Images
+
+#### 1. Select FLUX Model
+
+In the conversation interface:
+
+- Click the model selection button
+- Select the desired FLUX model from the ComfyUI category
+
+<Image alt={'Select FLUX Model'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/ff7ebacf-27f0-42d7-810b-00314499a084'} />
+
+#### 2. Text-to-Image Generation
+
+**Using FLUX Schnell (Fast Generation)**:
+
+```plaintext
+Generate an image: A cute orange cat sitting on a sunny windowsill, warm lighting, detailed fur texture
+```
+
+**Using FLUX Dev (High Quality Generation)**:
+
+```plaintext
+Generate high quality image: City skyline at sunset, cyberpunk style, neon lights, 4K high resolution, detailed architecture
+```
+
+#### 3. Image Editing
+
+**Using FLUX Kontext-dev for Image Editing**:
+
+```plaintext
+Edit this image: Change the background to a starry night sky, keep the main subject, cosmic atmosphere
+```
+
+Then upload the original image you want to edit.
+
+<Callout type={'info'}>
+  Image editing functionality requires uploading the original image first, then describing the modifications you want to make.
+</Callout>
+
+## Authentication Configuration Guide
+
+ComfyUI supports four authentication methods. Choose the appropriate method based on your server configuration and security requirements:
+
+### No Authentication (none)
+
+**Use Cases**:
+
+- Local development environment (localhost)
+- Internal network with trusted users
+- Personal single-machine deployment
+
+**Configuration**:
+
+```yaml
+Authentication Type: None
+Server Address: http://localhost:8188
+```
+
+### Basic Authentication (basic)
+
+**Use Cases**:
+
+- Deployments using Nginx reverse proxy
+- Team internal use requiring basic access control
+
+**Configuration**:
+
+1. **Create User Password**:
+
+```bash
+# Install apache2-utils
+sudo apt-get install apache2-utils
+
+# Create user 'admin'
+sudo htpasswd -c /etc/nginx/.htpasswd admin
+```
+
+2. **LobeChat Configuration**:
+
+```yaml
+Authentication Type: Basic Authentication
+Server Address: http://your-domain.com
+Username: admin
+Password: your_secure_password
+```
+
+### Bearer Token (bearer)
+
+**Use Cases**:
+
+- API-driven application integration
+- Enterprise environments requiring Token authentication
+
+**Generate Token**:
+
+```python
+import jwt
+import datetime
+
+payload = {
+    'user': 'admin',
+    'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
+}
+
+secret_key = "your-secret-key"
+token = jwt.encode(payload, secret_key, algorithm='HS256')
+print(f"Bearer Token: {token}")
+```
+
+**LobeChat Configuration**:
+
+```yaml
+Authentication Type: Bearer Token
+Server Address: http://your-server:8188
+API Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Custom Authentication (custom)
+
+**Use Cases**:
+
+- Integration with existing enterprise authentication systems
+- Systems requiring multiple authentication headers
+
+**LobeChat Configuration**:
+
+```yaml
+Authentication Type: Custom
+Server Address: http://your-server:8188
+Custom Headers:
+{
+  "X-API-Key": "your_api_key",
+  "X-Client-ID": "lobechat"
+}
+```
+
+## Common Issues Resolution
+
+### 1. How to Install Comfy-Manager
+
+Comfy-Manager is ComfyUI's extension manager that allows you to easily install and manage various nodes, models, and extensions.
+
+<details>
+  <summary><b>📦 Install Comfy-Manager Steps</b></summary>
+
+  #### Method 1: Manual Installation (Recommended)
+
+  ```bash
+  # Navigate to ComfyUI's custom_nodes directory
+  cd ComfyUI/custom_nodes
+
+  # Clone Comfy-Manager repository
+  git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+
+  # Restart ComfyUI server
+  # After restart, you'll see the Manager button in the UI
+  ```
+
+  #### Method 2: One-Click Installation Script
+
+  ```bash
+  # Execute in ComfyUI root directory
+  curl -fsSL https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/install.sh | bash
+  ```
+
+  #### Verify Installation
+
+  1. Restart ComfyUI server
+  2. Visit `http://localhost:8188`
+  3. You should see the "Manager" button in the bottom-right corner
+
+  #### Using Comfy-Manager
+
+  **Install Models**:
+
+  1. Click "Manager" button
+  2. Select "Install Models"
+  3. Search for needed models (e.g., FLUX, SD3.5)
+  4. Click "Install" to automatically download to correct directory
+
+  **Install Node Extensions**:
+
+  1. Click "Manager" button
+  2. Select "Install Custom Nodes"
+  3. Search for needed nodes (e.g., ControlNet, AnimateDiff)
+  4. Click "Install" and restart server
+
+  **Manage Installed Content**:
+
+  1. Click "Manager" button
+  2. Select "Installed" to view installed extensions
+  3. Update, disable, or uninstall extensions
+</details>
+
+### 2. How to Handle "Model not found" Errors
+
+When you see errors like `Model not found: flux1-dev.safetensors, flux1-krea-dev.safetensors, flux1-schnell.safetensors`, it means the required model files are missing from the server.
+
+<details>
+  <summary><b>🔧 Resolve Model not found Errors</b></summary>
+
+  #### Error Example
+
+  ```plaintext
+  Model not found: flux1-dev.safetensors, flux1-krea-dev.safetensors, flux1-schnell.safetensors
+  ```
+
+  This error indicates the system expects to find these model files but couldn't locate them on the server.
+
+  #### Resolution Methods
+
+  **Method 1: Download using Comfy-Manager (Recommended)**
+
+  1. Open ComfyUI interface
+  2. Click "Manager" → "Install Models"
+  3. Search for the model name from the error (e.g., "flux1-dev")
+  4. Click "Install" to automatically download
+
+  **Method 2: Manual Model Download**
+
+  1. **Download Model Files**:
+     - Visit [Hugging Face](https://huggingface.co/black-forest-labs/FLUX.1-dev) or other model sources
+     - Download the files mentioned in the error (e.g., `flux1-dev.safetensors`)
+
+  2. **Place in Correct Directory**:
+     ```bash
+     # FLUX and SD3.5 main models go to
+     ComfyUI/models/diffusion_models/flux1-dev.safetensors
+
+     # SD1.5 and SDXL models go to
+     ComfyUI/models/checkpoints/
+     ```
+
+  3. **Verify Files**:
+     ```bash
+     # Check if file exists
+     ls -la ComfyUI/models/diffusion_models/flux1-dev.safetensors
+
+     # Check file integrity (optional)
+     sha256sum flux1-dev.safetensors
+     ```
+
+  4. **Restart ComfyUI Server**
+
+  **Method 3: Direct Download with wget/curl**
+
+  ```bash
+  # Navigate to models directory
+  cd ComfyUI/models/diffusion_models/
+
+  # Download using wget (replace with actual download link)
+  wget https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors
+
+  # Or use curl
+  curl -L -o flux1-dev.safetensors https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors
+  ```
+
+  #### Common Model Download Sources
+
+  - **Hugging Face**: [https://huggingface.co/models](https://huggingface.co/models)
+  - **Civitai**: [https://civitai.com/models](https://civitai.com/models)
+  - **Official Sources**:
+    - FLUX: [https://huggingface.co/black-forest-labs](https://huggingface.co/black-forest-labs)
+    - SD3.5: [https://huggingface.co/stabilityai](https://huggingface.co/stabilityai)
+
+  #### Prevention Measures
+
+  1. **Basic Model Package**: Download at least one base model
+     - FLUX: `flux1-schnell.safetensors` (fast) or `flux1-dev.safetensors` (high quality)
+     - SD3.5: `sd3.5_large.safetensors`
+
+  2. **Check Disk Space**:
+     ```bash
+     # Check available space
+     df -h ComfyUI/models/
+     ```
+
+  3. **Set Model Path** (optional):
+     If your models are stored elsewhere, create symbolic links:
+     ```bash
+     ln -s /path/to/your/models ComfyUI/models/diffusion_models/
+     ```
+</details>
+
+### 3. How to Handle Missing System Component Errors
+
+When you see errors like `Missing VAE encoder: ae.safetensors` or other component files missing, you need to download the corresponding system components.
+
+<details>
+  <summary><b>🛠️ Resolve Missing System Component Errors</b></summary>
+
+  #### Common Component Errors
+
+  ```plaintext
+  Missing VAE encoder: ae.safetensors. Please download and place it in the models/vae folder.
+  Missing CLIP encoder: clip_l.safetensors. Please download and place it in the models/clip folder.
+  Missing T5 encoder: t5xxl_fp16.safetensors. Please download and place it in the models/clip folder.
+  ```
+
+  #### Component Types Description
+
+  | Component Type | Example Filename               | Purpose                 | Storage Directory  |
+  | -------------- | ------------------------------ | ----------------------- | ------------------ |
+  | **VAE**        | ae.safetensors                 | Image encoding/decoding | models/vae/        |
+  | **CLIP**       | clip\_l.safetensors            | Text encoding (CLIP)    | models/clip/       |
+  | **T5**         | t5xxl\_fp16.safetensors        | Text encoding (T5)      | models/clip/       |
+  | **ControlNet** | flux-controlnet-\*.safetensors | Control networks        | models/controlnet/ |
+
+  #### Resolution Methods
+
+  **Method 1: Use Comfy-Manager (Recommended)**
+
+  1. Click "Manager" → "Install Models"
+  2. Select component type in "Filter" (VAE/CLIP/T5)
+  3. Download corresponding component files
+
+  **Method 2: Manual Component Download**
+
+  ##### FLUX Required Components
+
+  ```bash
+  # 1. VAE Encoder
+  cd ComfyUI/models/vae/
+  wget https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors
+
+  # 2. CLIP-L Encoder
+  cd ComfyUI/models/clip/
+  wget https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors
+
+  # 3. T5-XXL Encoder (choose different precisions)
+  # FP16 version (recommended, balanced performance)
+  wget https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors
+
+  # Or FP8 version (saves VRAM)
+  wget https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors
+  ```
+
+  ##### SD3.5 Required Components
+
+  ```bash
+  # SD3.5 uses different encoders
+  cd ComfyUI/models/clip/
+
+  # CLIP-G Encoder
+  wget https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/clip_g.safetensors
+
+  # CLIP-L Encoder
+  wget https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/clip_l.safetensors
+
+  # T5-XXL Encoder
+  wget https://huggingface.co/stabilityai/stable-diffusion-3.5-large/resolve/main/text_encoders/t5xxl_fp16.safetensors
+  ```
+
+  ##### SDXL Required Components
+
+  ```bash
+  # SDXL VAE
+  cd ComfyUI/models/vae/
+  wget https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors
+
+  # SDXL uses built-in CLIP encoders, usually no separate download needed
+  ```
+
+  #### Component Compatibility Matrix
+
+  | Model Series | Required VAE   | Required CLIP       | Required T5             | Optional Components |
+  | ------------ | -------------- | ------------------- | ----------------------- | ------------------- |
+  | **FLUX**     | ae.safetensors | clip\_l.safetensors | t5xxl\_fp16.safetensors | ControlNet          |
+  | **SD3.5**    | Built-in       | clip\_g + clip\_l   | t5xxl\_fp16             | -                   |
+  | **SDXL**     | sdxl\_vae      | Built-in            | -                       | Refiner             |
+  | **SD1.5**    | vae-ft-mse     | Built-in            | -                       | ControlNet          |
+
+  #### Precision Selection Recommendations
+
+  **T5 Encoder Precision Selection**:
+
+  | VRAM Capacity | Recommended Version | Filename                       |
+  | ------------- | ------------------- | ------------------------------ |
+  | \< 12GB       | FP8 Quantized       | t5xxl\_fp8\_e4m3fn.safetensors |
+  | 12-16GB       | FP16                | t5xxl\_fp16.safetensors        |
+  | > 16GB        | FP32                | t5xxl.safetensors              |
+
+  #### Verify Component Installation
+
+  ```bash
+  # Check all required components
+  echo "=== VAE Components ==="
+  ls -la ComfyUI/models/vae/
+
+  echo "=== CLIP/T5 Components ==="
+  ls -la ComfyUI/models/clip/
+
+  echo "=== ControlNet Components ==="
+  ls -la ComfyUI/models/controlnet/
+  ```
+
+  #### Troubleshooting
+
+  **Issue: Still getting errors after download**
+
+  1. **Check File Permissions**:
+     ```bash
+     chmod 644 ComfyUI/models/vae/*.safetensors
+     chmod 644 ComfyUI/models/clip/*.safetensors
+     ```
+
+  2. **Clear Cache**:
+     ```bash
+     # Clear ComfyUI cache
+     rm -rf ComfyUI/temp/*
+     rm -rf ComfyUI/__pycache__/*
+     ```
+
+  3. **Restart Server**:
+     ```bash
+     # Fully restart ComfyUI
+     pkill -f "python main.py"
+     python main.py --listen 0.0.0.0 --port 8188
+     ```
+
+  **Issue: Insufficient VRAM**
+
+  Use quantized component versions:
+
+  - T5: Use `t5xxl_fp8_e4m3fn.safetensors` instead of FP16/FP32
+  - VAE: Some models support FP16 VAE versions
+
+  **Issue: Slow Downloads**
+
+  1. Use mirror sources (if applicable)
+  2. Use download tools (like aria2c) with resume support:
+     ```bash
+     aria2c -x 16 -s 16 -k 1M [download_link]
+     ```
+</details>
+
+## ComfyUI Server Installation
+
+<details>
+  <summary><b>🚀 Install and Configure ComfyUI Server</b></summary>
+
+  ### 1. Install ComfyUI
+
+  ```bash
+  # Clone ComfyUI repository
+  git clone https://github.com/comfyanonymous/ComfyUI.git
+  cd ComfyUI
+
+  # Install dependencies
+  pip install -r requirements.txt
+
+  # Optional: Install JWT support (for Token authentication)
+  pip install PyJWT
+
+  # Start ComfyUI server
+  python main.py --listen 0.0.0.0 --port 8188
+  ```
+
+  ### 2. Download Model Files
+
+  **Recommended Basic Configuration** (Minimal installation):
+
+  **Main Models** (place in `models/diffusion_models/` directory):
+
+  - `flux1-schnell.safetensors` - Fast generation (4 steps)
+  - `flux1-dev.safetensors` - High-quality creation (20 steps)
+
+  **Required Components** (place in respective directories):
+
+  - `models/vae/ae.safetensors` - VAE encoder
+  - `models/clip/clip_l.safetensors` - CLIP text encoder
+  - `models/clip/t5xxl_fp16.safetensors` - T5 text encoder
+
+  ### 3. Verify Server Running
+
+  Visit `http://localhost:8188` to confirm ComfyUI interface loads properly.
+
+  <Callout type={'info'}>
+    **Smart Model Selection**: LobeChat will automatically select the best model based on available model files on the server. You don't need to download all models; the system will automatically choose from available models by priority (Official > Enterprise > Community).
+  </Callout>
+</details>
+
+## Supported Models
+
+LobeChat's ComfyUI integration uses a configuration-driven architecture, supporting **223 models**, providing complete coverage from official models to community-optimized versions.
+
+### FLUX Series Recommended Parameters
+
+| Model Type  | Recommended Steps | CFG Scale | Resolution Range     |
+| ----------- | ----------------- | --------- | -------------------- |
+| **Schnell** | 4 steps           | -         | 512×512 to 1536×1536 |
+| **Dev**     | 20 steps          | 3.5       | 512×512 to 2048×2048 |
+| **Kontext** | 20 steps          | 3.5       | 512×512 to 2048×2048 |
+| **Krea**    | 20 steps          | 4.5       | 512×512 to 2048×2048 |
+
+### SD3.5 Series Parameters
+
+| Model Type      | Recommended Steps | CFG Scale | Resolution Range     |
+| --------------- | ----------------- | --------- | -------------------- |
+| **Large**       | 25 steps          | 7.0       | 512×512 to 2048×2048 |
+| **Large Turbo** | 8 steps           | 3.5       | 512×512 to 1536×1536 |
+| **Medium**      | 20 steps          | 6.0       | 512×512 to 1536×1536 |
+
+<details>
+  <summary><b>📋 Complete Supported Model List</b></summary>
+
+  ### Model Classification System
+
+  #### Priority 1: Official Core Models
+
+  **FLUX.1 Official Series**:
+
+  - `flux1-dev.safetensors` - High-quality creation model
+  - `flux1-schnell.safetensors` - Fast generation model
+  - `flux1-kontext-dev.safetensors` - Image editing model
+  - `flux1-krea-dev.safetensors` - Safety-enhanced model
+
+  **SD3.5 Official Series**:
+
+  - `sd3.5_large.safetensors` - SD3.5 large base model
+  - `sd3.5_large_turbo.safetensors` - Fast generation version
+  - `sd3.5_medium.safetensors` - Medium-scale model
+
+  #### Priority 2: Enterprise Optimized Models (106 FLUX)
+
+  **Quantization Optimization Series**:
+
+  - **GGUF Quantization**: Each variant supports 11 quantization levels (F16, Q8\_0, Q6\_K, Q5\_K\_M, Q5\_K\_S, Q4\_K\_M, Q4\_K\_S, Q4\_0, Q3\_K\_M, Q3\_K\_S, Q2\_K)
+  - **FP8 Precision**: fp8\_e4m3fn, fp8\_e5m2 optimized versions
+  - **Enterprise Lightweight**: FLUX.1-lite-8B series
+  - **Technical Experiments**: NF4, SVDQuant, TorchAO, optimum-quanto, MFLUX optimized versions
+
+  #### Priority 3: Community Fine-tuned Models (48 FLUX)
+
+  **Community Optimization Series**:
+
+  - **Jib Mix Flux** Series: High-quality mixed models
+  - **Real Dream FLUX** Series: Realism style
+  - **Vision Realistic** Series: Visual realism
+  - **PixelWave FLUX** Series: Pixel art optimization
+  - **Fluxmania** Series: Diverse style support
+
+  ### SD Series Model Support (93 models)
+
+  **SD3.5 Series**: 5 models
+  **SD1.5 Series**: 37 models (including official, quantized, and community versions)
+  **SDXL Series**: 50 models (including base, Refiner, and Playground models)
+
+  ### Workflow Support
+
+  System supports **6 workflows**:
+
+  - **flux-dev**: High-quality creation workflow
+  - **flux-schnell**: Fast generation workflow
+  - **flux-kontext**: Image editing workflow
+  - **sd35**: SD3.5 dedicated workflow
+  - **simple-sd**: Simple SD workflow
+  - **index**: Workflow entry point
+</details>
+
+## Performance Optimization Recommendations
+
+### Hardware Requirements
+
+**Minimum Configuration** (GGUF quantized models):
+
+- GPU: 6GB VRAM (using Q4 quantization)
+- RAM: 12GB
+- Storage: 30GB available space
+
+**Recommended Configuration** (standard models):
+
+- GPU: 12GB+ VRAM (RTX 4070 Ti or higher)
+- RAM: 24GB+
+- Storage: SSD 100GB+ available space
+
+### VRAM Optimization Strategy
+
+| VRAM Capacity | Recommended Quantization | Model Example                      | Performance Characteristics |
+| ------------- | ------------------------ | ---------------------------------- | --------------------------- |
+| **6-8GB**     | Q4\_0, Q4\_K\_S          | `flux1-dev-Q4_0.gguf`              | Minimal VRAM usage          |
+| **10-12GB**   | Q6\_K, Q8\_0             | `flux1-dev-Q6_K.gguf`              | Balance performance/quality |
+| **16GB+**     | FP8, FP16                | `flux1-dev-fp8-e4m3fn.safetensors` | Near-original quality       |
+| **24GB+**     | Full model               | `flux1-dev.safetensors`            | Best quality                |
+
+## Custom Model Usage
+
+<details>
+  <summary><b>🎨 Configure Custom SD Models</b></summary>
+
+  LobeChat supports using custom Stable Diffusion models. The system uses fixed filenames to identify custom models.
+
+  ### 1. Model File Preparation
+
+  **Required Files**:
+
+  - **Main Model File**: `custom_sd_lobe.safetensors`
+  - **VAE File (Optional)**: `custom_sd_vae_lobe.safetensors`
+
+  ### 2. Add Custom Model
+
+  **Method 1: Rename Existing Model**
+
+  ```bash
+  # Rename your model to fixed filename
+  mv your_custom_model.safetensors custom_sd_lobe.safetensors
+
+  # Move to correct directory
+  mv custom_sd_lobe.safetensors ComfyUI/models/diffusion_models/
+  ```
+
+  **Method 2: Create Symbolic Link (Recommended)**
+
+  ```bash
+  # Create soft link for easy model switching
+  ln -s /path/to/your_model.safetensors ComfyUI/models/diffusion_models/custom_sd_lobe.safetensors
+  ```
+
+  ### 3. Use Custom Model
+
+  In LobeChat, custom models will appear as:
+
+  - **stable-diffusion-custom**: Standard custom model
+  - **stable-diffusion-custom-refiner**: Refiner custom model
+
+  ### Custom Model Parameter Recommendations
+
+  | Parameter  | SD 1.5 Models | SDXL Models |
+  | ---------- | ------------- | ----------- |
+  | **steps**  | 20-30         | 25-40       |
+  | **cfg**    | 7.0           | 6.0-8.0     |
+  | **width**  | 512           | 1024        |
+  | **height** | 512           | 1024        |
+</details>
+
+## Troubleshooting
+
+### Smart Error Diagnosis System
+
+LobeChat integrates a smart error handling system that can automatically diagnose and provide targeted solutions.
+
+#### Error Types and Solutions
+
+| Error Type         | User Prompt                        | Automatic Diagnosis                                 |
+| ------------------ | ---------------------------------- | --------------------------------------------------- |
+| **Connection**     | "Cannot connect to ComfyUI server" | Auto-detect server status and connectivity          |
+| **Authentication** | "API key invalid or expired"       | Auto-verify authentication credentials              |
+| **Permissions**    | "Access permissions insufficient"  | Auto-check user permissions and file access         |
+| **Model Issues**   | "Cannot find specified model file" | Auto-scan available models and suggest alternatives |
+| **Configuration**  | "Configuration file error"         | Auto-verify config completeness and syntax          |
+
+<details>
+  <summary><b>🔍 Traditional Troubleshooting Methods</b></summary>
+
+  #### 1. Connection Failure
+
+  **Issue**: Cannot connect to ComfyUI server
+
+  **Solution**:
+
+  ```bash
+  # Confirm server running
+  curl http://localhost:8188/system_stats
+
+  # Check port
+  netstat -tulpn | grep 8188
+  ```
+
+  #### 2. Out of Memory
+
+  **Issue**: Memory errors during generation
+
+  **Solution**:
+
+  - Lower image resolution
+  - Reduce generation steps
+  - Use quantized models
+
+  #### 3. Authentication Failure
+
+  **Issue**: 401 or 403 errors
+
+  **Solution**:
+
+  - Verify authentication configuration
+  - Check if Token is expired
+  - Confirm user permissions
+</details>
+
+## Best Practices
+
+### Prompt Writing
+
+1. **Detailed Description**: Provide clear, detailed image descriptions
+2. **Style Specification**: Clearly specify artistic style, color style, etc.
+3. **Quality Keywords**: Add "4K", "high quality", "detailed" keywords
+4. **Avoid Contradictions**: Ensure description content is logically consistent
+
+**Example**:
+
+```plaintext
+A young woman with flowing long hair, wearing an elegant blue dress, standing in a cherry blossom park,
+sunlight filtering through leaves, warm atmosphere, cinematic lighting, 4K high resolution, detailed, photorealistic
+```
+
+### Parameter Optimization
+
+1. **FLUX Schnell**: Suitable for quick previews, use 4-step generation
+2. **FLUX Dev**: Balance quality and speed, CFG 3.5, 20 steps
+3. **FLUX Krea-dev**: Safe creation, CFG 4.5, note content filtering
+4. **FLUX Kontext-dev**: Image editing, strength 0.6-0.9
+
+<Callout type={'warning'}>
+  Please note during use:
+
+  - FLUX Dev, Krea-dev, Kontext-dev models are for non-commercial use only
+  - Generated content must comply with relevant laws and platform policies
+  - Large model generation may take considerable time, please be patient
+</Callout>
+
+## API Reference
+
+<details>
+  <summary><b>📚 API Documentation</b></summary>
+
+  ### Request Format
+
+  ```typescript
+  interface ComfyUIRequest {
+    model: string; // Model ID, e.g., 'flux-schnell'
+    prompt: string; // Text prompt
+    width: number; // Image width
+    height: number; // Image height
+    steps: number; // Generation steps
+    seed: number; // Random seed
+    cfg?: number; // CFG Scale (Dev/Krea/Kontext specific)
+    strength?: number; // Edit strength (Kontext specific)
+    imageUrl?: string; // Input image (Kontext specific)
+  }
+  ```
+
+  ### Response Format
+
+  ```typescript
+  interface ComfyUIResponse {
+    images: Array<{
+      url: string; // Generated image URL
+      filename: string; // Filename
+      subfolder: string; // Subdirectory
+      type: string; // File type
+    }>;
+    prompt_id: string; // Prompt ID
+  }
+  ```
+
+  ### Error Codes
+
+  | Error Code | Description              | Resolution Suggestions           |
+  | ---------- | ------------------------ | -------------------------------- |
+  | `400`      | Invalid parameters       | Check parameter format and range |
+  | `401`      | Authentication failed    | Verify API key and auth config   |
+  | `403`      | Insufficient permissions | Check user permissions           |
+  | `404`      | Model not found          | Confirm model file exists        |
+  | `500`      | Server error             | Check ComfyUI logs               |
+</details>
+
+You can now use ComfyUI in LobeChat for high-quality AI image generation and editing. If you encounter issues, please refer to the troubleshooting section or consult the [ComfyUI official documentation](https://github.com/comfyanonymous/ComfyUI).

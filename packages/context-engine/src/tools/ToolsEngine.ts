@@ -3,7 +3,7 @@ import debug from 'debug';
 import {
   FunctionCallChecker,
   GenerateToolsParams,
-  LobeChatPluginManifest,
+  LobeToolManifest,
   PluginEnableChecker,
   ToolsEngineOptions,
   ToolsGenerationContext,
@@ -18,7 +18,7 @@ const log = debug('context-engine:tools-engine');
  * Tools Engine - Unified processing of tools array construction and transformation
  */
 export class ToolsEngine {
-  private manifestSchemas: Map<string, LobeChatPluginManifest>;
+  private manifestSchemas: Map<string, LobeToolManifest>;
   private enableChecker?: PluginEnableChecker;
   private functionCallChecker?: FunctionCallChecker;
   private defaultToolIds: string[];
@@ -162,13 +162,13 @@ export class ToolsEngine {
     context?: ToolsGenerationContext,
     supportsFunctionCall?: boolean,
   ): {
-    enabledManifests: LobeChatPluginManifest[];
+    enabledManifests: LobeToolManifest[];
     filteredPlugins: Array<{
       id: string;
       reason: 'not_found' | 'disabled' | 'incompatible';
     }>;
   } {
-    const enabledManifests: LobeChatPluginManifest[] = [];
+    const enabledManifests: LobeToolManifest[] = [];
     const filteredPlugins: Array<{
       id: string;
       reason: 'not_found' | 'disabled' | 'incompatible';
@@ -240,7 +240,7 @@ export class ToolsEngine {
   /**
    * Convert manifests to UniformTool array
    */
-  private convertManifestsToTools(manifests: LobeChatPluginManifest[]): UniformTool[] {
+  private convertManifestsToTools(manifests: LobeToolManifest[]): UniformTool[] {
     log('Converting %d manifests to tools', manifests.length);
 
     // Use simplified conversion logic to avoid external package dependencies
@@ -290,14 +290,14 @@ export class ToolsEngine {
   /**
    * 获取插件的 manifest
    */
-  getPluginManifest(pluginId: string): LobeChatPluginManifest | undefined {
+  getPluginManifest(pluginId: string): LobeToolManifest | undefined {
     return this.manifestSchemas.get(pluginId);
   }
 
   /**
    * 更新插件 manifest schemas（用于动态添加插件）
    */
-  updateManifestSchemas(manifestSchemas: LobeChatPluginManifest[]): void {
+  updateManifestSchemas(manifestSchemas: LobeToolManifest[]): void {
     this.manifestSchemas.clear();
     for (const schema of manifestSchemas) {
       this.manifestSchemas.set(schema.identifier, schema);
@@ -307,7 +307,7 @@ export class ToolsEngine {
   /**
    * 添加单个插件 manifest
    */
-  addPluginManifest(manifest: LobeChatPluginManifest): void {
+  addPluginManifest(manifest: LobeToolManifest): void {
     this.manifestSchemas.set(manifest.identifier, manifest);
   }
 
@@ -316,5 +316,34 @@ export class ToolsEngine {
    */
   removePluginManifest(pluginId: string): boolean {
     return this.manifestSchemas.delete(pluginId);
+  }
+
+  /**
+   * 获取所有 enabled plugin 的 Manifest Map
+   */
+  getEnabledPluginManifests(toolIds: string[] = []): Map<string, LobeToolManifest> {
+    // Merge user-provided tool IDs with default tool IDs
+    const allToolIds = [...toolIds, ...this.defaultToolIds];
+
+    log('Getting enabled plugin manifests for pluginIds=%o', allToolIds);
+
+    const manifestMap = new Map<string, LobeToolManifest>();
+
+    for (const pluginId of allToolIds) {
+      const manifest = this.manifestSchemas.get(pluginId);
+      if (manifest) {
+        manifestMap.set(pluginId, manifest);
+      }
+    }
+
+    log('Returning %d enabled plugin manifests', manifestMap.size);
+    return manifestMap;
+  }
+
+  /**
+   * 获取所有插件的 Manifest Map
+   */
+  getAllPluginManifests(): Map<string, LobeToolManifest> {
+    return new Map(this.manifestSchemas);
   }
 }

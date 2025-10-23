@@ -35,9 +35,6 @@
   "cerebras": {
     "description": "Cerebras to platforma do wnioskowania AI oparta na dedykowanym systemie CS-3, zaprojektowana w celu zapewnienia najszybszej na świecie, reakcji w czasie rzeczywistym oraz wysokiej przepustowości usług LLM. Stworzona została, aby eliminować opóźnienia i przyspieszać złożone przepływy pracy AI, takie jak generowanie kodu w czasie rzeczywistym i zadania agentowe."
   },
-  "cerebras": {
-    "description": "Cerebras to platforma do wnioskowania AI oparta na dedykowanym systemie CS-3, zaprojektowana w celu zapewnienia najszybszej na świecie, reakcji w czasie rzeczywistym oraz wysokiej przepustowości usług LLM. Stworzona została, aby eliminować opóźnienia i przyspieszać złożone przepływy pracy AI, takie jak generowanie kodu w czasie rzeczywistym i zadania agentowe."
-  },
   "cloudflare": {
     "description": "Uruchamiaj modele uczenia maszynowego napędzane przez GPU w globalnej sieci Cloudflare."
   },
@@ -46,6 +43,9 @@
   },
   "cometapi": {
     "description": "CometAPI to platforma usługowa oferująca różnorodne interfejsy najnowocześniejszych modeli, wspierająca OpenAI, Anthropic, Google i inne. Idealna do zróżnicowanych potrzeb deweloperskich i aplikacyjnych. Użytkownicy mogą elastycznie wybierać najlepsze modele i ceny, co wspiera poprawę doświadczeń związanych ze sztuczną inteligencją."
+  },
+  "comfyui": {
+    "description": "Potężny, otwartoźródłowy silnik przepływu pracy do generowania obrazów, wideo i dźwięku, obsługujący zaawansowane modele takie jak SD FLUX, Qwen, Hunyuan, WAN, oferujący edytor przepływu pracy oparty na węzłach oraz możliwość wdrożenia lokalnego."
   },
   "deepseek": {
     "description": "DeepSeek to firma skoncentrowana na badaniach i zastosowaniach technologii sztucznej inteligencji, której najnowszy model DeepSeek-V2.5 łączy zdolności do prowadzenia ogólnych rozmów i przetwarzania kodu, osiągając znaczące postępy w zakresie dostosowywania do preferencji ludzkich, zadań pisarskich i przestrzegania instrukcji."

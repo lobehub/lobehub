@@ -1,12 +1,13 @@
+import { ChatMessagePluginError } from '@lobechat/types';
 import { Skeleton } from 'antd';
 import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
 
 import { useChatStore } from '@/store/chat';
 import { chatToolSelectors } from '@/store/chat/selectors';
-import FileItem from '@/tools/local-system/components/FileItem';
-import { FileResult } from '@/tools/local-system/type';
-import { ChatMessagePluginError } from '@/types/message';
+
+import FileItem from '../../components/FileItem';
+import { FileResult } from '../../type';
 
 interface SearchFilesProps {
   messageId: string;
@@ -29,7 +30,7 @@ const SearchFiles = memo<SearchFilesProps>(({ searchResults = [], messageId }) =
   }
 
   return (
-    <Flexbox gap={2} style={{ maxHeight: 260, overflow: 'scroll' }}>
+    <Flexbox gap={2} style={{ maxHeight: 140, overflow: 'scroll' }}>
       {searchResults.map((item) => (
         <FileItem key={item.path} {...item} />
       ))}

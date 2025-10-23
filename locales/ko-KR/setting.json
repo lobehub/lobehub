@@ -43,8 +43,8 @@
   "header": {
     "desc": "환경설정 및 모델 설정",
     "global": "전역 설정",
-    "group": "그룹 채팅 설정",
-    "groupDesc": "현재 그룹 채팅 관리",
+    "group": "팀 설정",
+    "groupDesc": "에이전트 팀 및 채팅 환경 설정 관리",
     "session": "세션 설정",
     "sessionDesc": "역할 프롬프트 및 세션 환경설정",
     "sessionWithName": "세션 설정 · {{name}}",
@@ -306,27 +306,27 @@
   },
   "settingGroup": {
     "description": {
-      "placeholder": "그룹 채팅 설명을 입력하세요",
-      "title": "그룹 채팅 설명"
+      "placeholder": "팀 설명을 입력하세요",
+      "title": "팀 설명"
     },
     "name": {
-      "placeholder": "그룹 채팅 이름을 입력하세요",
-      "title": "그룹 채팅 이름"
+      "placeholder": "팀 이름을 입력하세요",
+      "title": "팀 이름"
     },
     "scene": {
-      "desc": "그룹 채팅 환경 선택",
+      "desc": "팀 시나리오 선택",
       "options": {
         "casual": "캐주얼",
         "productive": "생산성"
       },
-      "title": "그룹 채팅 환경"
+      "title": "팀 시나리오"
     },
-    "submit": "그룹 채팅 업데이트",
+    "submit": "팀 업데이트",
     "systemPrompt": {
       "placeholder": "호스트 시스템 프롬프트를 입력하세요",
       "title": "호스트 시스템 프롬프트"
     },
-    "title": "그룹 채팅 정보"
+    "title": "에이전트 팀 정보"
   },
   "settingGroupChat": {
     "allowDM": {
@@ -334,7 +334,7 @@
       "title": "어시스턴트의 DM 허용"
     },
     "enableSupervisor": {
-      "desc": "그룹 채팅 진행을 관리할 수 있는 진행자 기능을 활성화합니다",
+      "desc": "에이전트 팀 진행자 기능을 활성화하면, 진행자가 팀 대화 흐름을 관리합니다",
       "title": "진행자 활성화"
     },
     "maxResponseInRow": {
@@ -347,7 +347,7 @@
     },
     "orchestratorTitle": "호스트 설정",
     "responseOrder": {
-      "desc": "에이전트가 그룹 채팅에서 설정된 순서대로 답변합니다.",
+      "desc": "에이전트는 채팅에서 설정된 순서에 따라 응답합니다",
       "options": {
         "natural": "자연스러운",
         "sequential": "순차적인"
@@ -356,7 +356,7 @@
       "title": "답변 순서"
     },
     "responseSpeed": {
-      "desc": "그룹 채팅의 전체 진행 속도를 조절합니다.",
+      "desc": "채팅의 전체 진행 속도를 제어합니다",
       "options": {
         "fast": "빠름",
         "medium": "보통",
@@ -380,10 +380,11 @@
   "settingGroupMembers": {
     "addToGroup": "그룹에 추가",
     "availableAgents": "사용 가능한 어시스턴트",
+    "createMember": "구성원 생성",
     "defaultAgent": "맞춤 어시스턴트",
     "disableHost": "호스트 도우미 비활성화",
     "edit": "멤버 편집",
-    "empty": "이 그룹 채팅에는 에이전트가 없습니다. + 버튼을 눌러 멤버를 추가하세요.",
+    "empty": "이 팀에는 아직 멤버가 없습니다. + 버튼을 눌러 멤버를 추가하세요.",
     "enableHost": "호스트 도우미 활성화",
     "groupHost": "그룹 호스트",
     "groupMembers": "그룹 멤버",
@@ -626,11 +627,6 @@
       "label": "AI 그림 주제 명명 모델",
       "modelDesc": "AI 그림 자동 주제 명명에 사용되는 모델 지정",
       "title": "AI 그림 자동 주제 명명"
-    },
-    "groupChatSupervisor": {
-      "label": "그룹 채팅 감독 모델",
-      "modelDesc": "그룹 채팅 대화를 감독하고 관리하기 위해 지정된 모델",
-      "title": "그룹 채팅 감독 및 관리"
     },
     "helpInfo": "새 도우미를 생성할 때 기본 도우미 설정이 기본값으로 사용됩니다.",
     "historyCompress": {

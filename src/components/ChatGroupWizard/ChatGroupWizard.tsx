@@ -5,11 +5,11 @@ import { Button, Checkbox, Empty, Switch } from 'antd';
 import { createStyles, useTheme } from 'antd-style';
 import { omit } from 'lodash-es';
 import { Users } from 'lucide-react';
-import { ChangeEvent, memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
-import { DEFAULT_AVATAR, DEFAULT_SUPERVISOR_AVATAR } from '@/const/meta';
+import { DEFAULT_AVATAR } from '@/const/meta';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSessionStore } from '@/store/session';
@@ -233,6 +233,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       return { model: undefined, provider: undefined };
     }, [enabledModels]);
 
+    const [inputValue, setInputValue] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
     const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
@@ -243,6 +244,8 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
     );
     const [isCreatingCustom, setIsCreatingCustom] = useState(false);
     const [activePanel, setActivePanel] = useState<'templates' | 'agents'>('templates');
+
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const isCreatingFromTemplate = externalLoading ?? false;
 
@@ -278,10 +281,16 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
     const handleReset = () => {
       setSelectedTemplate('');
       setSelectedAgents([]);
+      setInputValue('');
       setSearchTerm('');
       setRemovedMembers({});
       setIsHostRemoved(false);
       setHostModelConfig(defaultModel.model && defaultModel.provider ? defaultModel : {});
+
+      // Clear any pending debounce timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
     };
 
     const handleHostModelChange = useCallback((config: { model?: string; provider?: string }) => {
@@ -319,10 +328,30 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
     }, []);
 
     const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-      setSearchTerm(event.target.value);
+      const value = event.target.value;
+      setInputValue(value);
+
+      // Clear previous timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
+      // Set new timer to update searchTerm after 300ms
+      debounceTimerRef.current = setTimeout(() => {
+        setSearchTerm(value);
+      }, 300);
     }, []);
 
     const agentCount = visibleAgentSessions.length;
+
+    // Cleanup debounce timer on unmount
+    useEffect(() => {
+      return () => {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+      };
+    }, []);
 
     useEffect(() => {
       if (!open) return;
@@ -551,7 +580,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
               onChange={handleSearchChange}
               placeholder={t('memberSelection.searchAgents')}
               style={{ margin: `${theme.paddingSM}px ${theme.paddingSM}px 0 ${theme.paddingSM}px` }}
-              value={searchTerm}
+              value={inputValue}
               variant="filled"
             />
             <Flexbox flex={1} style={{ overflowY: 'auto', padding: `0 ${theme.paddingSM}px` }}>
@@ -636,7 +665,6 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
           <Flexbox className={styles.rightColumn} flex={1}>
             <Flexbox flex={1} gap={16} style={{ overflowY: 'auto' }}>
               <Flexbox align="center" className={styles.hostCard} gap={12} horizontal>
-                <Avatar avatar={DEFAULT_SUPERVISOR_AVATAR} shape="circle" size={40} />
                 <Flexbox flex={1} gap={2}>
                   <Text
                     style={{ fontSize: 14, fontWeight: 500 }}

@@ -21,13 +21,13 @@
   },
   "clearCurrentMessages": "Mevcut oturum mesajlarını temizle",
   "confirmClearCurrentMessages": "Mevcut oturum mesajlarını temizlemek üzeresiniz. Temizlendikten sonra geri alınamazlar. Lütfen eyleminizi onaylayın.",
-  "confirmRemoveChatGroupItemAlert": "Bu grup sohbeti silinecek, grup üyeleri etkilenmeyecektir, lütfen işleminizi onaylayın",
+  "confirmRemoveChatGroupItemAlert": "Bu Agent ekibi silinmek üzere, ancak ekip üyeleri etkilenmeyecek. Lütfen işleminizi onaylayın.",
   "confirmRemoveGroupItemAlert": "Bu grubu silmek üzeresiniz; silindikten sonra bu gruba ait asistanlar varsayılan listeye taşınacaktır. Lütfen işlemi onaylayın.",
-  "confirmRemoveGroupSuccess": "Grup sohbeti başarıyla silindi",
+  "confirmRemoveGroupSuccess": "Temsilci ekibi başarıyla silindi",
   "confirmRemoveSessionItemAlert": "Bu asistanı silmek üzeresiniz. Silindikten sonra geri alınamaz. Lütfen eyleminizi onaylayın.",
   "confirmRemoveSessionSuccess": "Oturum başarıyla kaldırıldı",
   "defaultAgent": "Varsayılan Asistan",
-  "defaultGroupChat": "Grup Sohbeti",
+  "defaultGroupChat": "Temsilci Ekibi",
   "defaultList": "Varsayılan Liste",
   "defaultSession": "Varsayılan Asistan",
   "dm": {
@@ -77,7 +77,7 @@
     "removeMember": "Üyeyi Kaldır",
     "title": "Grup"
   },
-  "groupDescription": "Grup açıklaması",
+  "groupDescription": "Ekip Açıklaması",
   "groupSidebar": {
     "members": {
       "addMember": "Üye Ekle",
@@ -96,13 +96,13 @@
   },
   "groupWizard": {
     "chooseMembers": "Mevcut asistanları seçin...",
-    "createGroup": "Grup sohbeti oluştur",
-    "existingMembers": "Mevcut Yardımcılar",
+    "createGroup": "Grup Oluştur",
+    "existingMembers": "Mevcut Agent'lar",
     "groupMembers": "Bu asistanlar listenize de eklenecek",
     "host": {
-      "description": "Grup sohbetini otomatik olarak yönetir",
-      "title": "Ev Sahibi",
-      "tooltip": "Grup sohbeti sunucusu devre dışı bırakılırsa, üyelerin yanıt vermesini sağlamak için onları manuel olarak @etiketlemeniz gerekir"
+      "description": "Ekibin kendi kendine çalışmasını sağlar",
+      "title": "Sunucuyu Etkinleştir",
+      "tooltip": "Eğer ekip sunucusu devre dışı bırakılırsa, üyelerin yanıt vermesi için onları manuel olarak @ ile etiketlemeniz gerekir"
     },
     "memberCount": "{{count}} üye",
     "noMatchingTemplates": "Eşleşen şablon yok",
@@ -110,7 +110,7 @@
     "noTemplateMembers": "Şablonda üye yok",
     "noTemplates": "Kullanılabilir şablon yok",
     "searchTemplates": "Şablonlarda ara...",
-    "title": "Grup sohbeti oluştur",
+    "title": "Temsilci Ekibi Oluştur",
     "useTemplate": "Şablon Kullan"
   },
   "hideForYou": "Özel mesaj içeriği gizlendi, görüntülemek için ayarlardan 【Özel Mesaj İçeriğini Göster】 seçeneğini açın",
@@ -162,11 +162,11 @@
   "memberSelection": {
     "addMember": "Üye Ekle",
     "allMembers": "Tüm üyeler",
-    "createGroup": "Grup Sohbeti Oluştur",
+    "createGroup": "Agent Ekibi Oluştur",
     "noAvailableAgents": "Davet edilecek asistan yok",
     "noSelectedAgents": "Henüz asistan seçilmedi",
     "searchAgents": "Asistan ara...",
-    "setInitialMembers": "Grup üyelerini seçin"
+    "setInitialMembers": "Ekip üyelerini seç"
   },
   "members": "Üyeler",
   "mention": {
@@ -228,15 +228,17 @@
   "minimap": {
     "jumpToMessage": "{{index}} numaralı mesaja atla",
     "nextMessage": "Sonraki mesaj",
-    "previousMessage": "Önceki mesaj"
+    "previousMessage": "Önceki mesaj",
+    "senderAssistant": "Asistan",
+    "senderUser": "Sen"
   },
   "newAgent": "Yeni Asistan",
-  "newGroupChat": "Yeni grup sohbeti oluştur",
-  "noAgentsYet": "Bu grupta henüz asistan yok. Asistan davet etmek için + simgesine tıklayın.",
-  "noAvailableAgents": "Davet edilebilecek asistan yok.",
-  "noMatchingAgents": "Eşleşen asistan yok",
+  "newGroupChat": "Yeni Temsilci Ekibi",
+  "noAgentsYet": "Bu temsilci ekibinde henüz üye yok. Asistan davet etmek için + düğmesine tıklayın.",
+  "noAvailableAgents": "Davet edilebilecek üye yok",
+  "noMatchingAgents": "Eşleşen üye bulunamadı",
   "noMembersYet": "Bu grupta henüz üye yok. Asistanı davet etmek için + düğmesine tıklayın.",
-  "noSelectedAgents": "Henüz bir asistan seçilmedi",
+  "noSelectedAgents": "Henüz üye seçilmedi",
   "owner": "Grup sahibi",
   "pin": "Pin",
   "pinOff": "Unpin",
@@ -302,11 +304,24 @@
   "shareModal": {
     "copy": "Kopyala",
     "download": "Ekran Görüntüsünü İndir",
+    "downloadError": "İndirme Başarısız",
     "downloadFile": "Dosyayı İndir",
+    "downloadPdf": "PDF İndir",
+    "downloadSuccess": "İndirme Başarılı",
+    "exportPdf": "PDF Olarak Dışa Aktar",
     "exportTitle": "Varsayılan Başlık",
+    "generatePdf": "PDF Oluştur",
+    "generatingPdf": "PDF Oluşturuluyor...",
     "imageType": "Format",
     "includeTool": "Eklenti mesajını dahil et",
     "includeUser": "Kullanıcı mesajını dahil et",
+    "loadingPdf": "PDF Yükleniyor...",
+    "noPdfData": "PDF Verisi Yok",
+    "pdf": "PDF",
+    "pdfErrorDescription": "PDF oluşturulurken bir hata oluştu, lütfen tekrar deneyin",
+    "pdfGenerationError": "PDF oluşturma başarısız oldu",
+    "pdfReady": "PDF Hazır",
+    "regeneratePdf": "PDF'yi Yeniden Oluştur",
     "screenshot": "Ekran Görüntüsü",
     "settings": "Ayarlar",
     "text": "Metin",

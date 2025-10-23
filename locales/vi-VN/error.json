@@ -81,6 +81,12 @@
     "522": "Xin lỗi, kết nối máy chủ đã hết thời gian chờ, không thể phản hồi yêu cầu của bạn kịp thời. Có thể do mạng không ổn định hoặc máy chủ tạm thời không thể truy cập. Vui lòng thử lại sau, chúng tôi đang nỗ lực phục hồi dịch vụ.",
     "524": "Xin lỗi, máy chủ đã hết thời gian chờ khi đang chờ phản hồi, có thể do phản hồi quá chậm, vui lòng thử lại sau.",
     "AgentRuntimeError": "Lobe mô hình ngôn ngữ thực thi gặp lỗi, vui lòng kiểm tra và thử lại dựa trên thông tin dưới đây",
+    "ComfyUIBizError": "Đã xảy ra lỗi khi yêu cầu dịch vụ ComfyUI, vui lòng kiểm tra thông tin dưới đây hoặc thử lại",
+    "ComfyUIEmptyResult": "ComfyUI không tạo ra bất kỳ hình ảnh nào, vui lòng kiểm tra cấu hình mô hình hoặc thử lại",
+    "ComfyUIModelError": "Tải mô hình ComfyUI thất bại, vui lòng kiểm tra xem tệp mô hình có tồn tại không",
+    "ComfyUIServiceUnavailable": "Kết nối đến dịch vụ ComfyUI thất bại, vui lòng kiểm tra xem ComfyUI có đang hoạt động bình thường không, hoặc kiểm tra lại cấu hình địa chỉ dịch vụ",
+    "ComfyUIUploadFailed": "Tải ảnh lên ComfyUI thất bại, vui lòng kiểm tra kết nối máy chủ hoặc thử lại",
+    "ComfyUIWorkflowError": "Thực thi quy trình ComfyUI thất bại, vui lòng kiểm tra cấu hình quy trình",
     "ConnectionCheckFailed": "Yêu cầu trả về trống, xin kiểm tra xem địa chỉ API proxy có đang thiếu `/v1` ở cuối không",
     "CreateMessageError": "Xin lỗi, tin nhắn không thể được gửi đi bình thường, vui lòng sao chép nội dung và gửi lại, tin nhắn này sẽ không được lưu lại sau khi làm mới trang.",
     "ExceededContextWindow": "Nội dung yêu cầu hiện tại vượt quá độ dài mà mô hình có thể xử lý, vui lòng giảm khối lượng nội dung và thử lại",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "Mật khẩu truy cập không hợp lệ hoặc trống, vui lòng nhập mật khẩu truy cập đúng hoặc thêm Khóa API tùy chỉnh",
     "InvalidBedrockCredentials": "Xác thực Bedrock không thành công, vui lòng kiểm tra AccessKeyId/SecretAccessKey và thử lại",
     "InvalidClerkUser": "Xin lỗi, bạn chưa đăng nhập. Vui lòng đăng nhập hoặc đăng ký tài khoản trước khi tiếp tục.",
+    "InvalidComfyUIArgs": "Cấu hình ComfyUI không chính xác, vui lòng kiểm tra lại cấu hình ComfyUI và thử lại",
     "InvalidGithubToken": "Mã truy cập cá nhân Github không chính xác hoặc để trống, vui lòng kiểm tra lại Mã truy cập cá nhân Github và thử lại",
     "InvalidOllamaArgs": "Cấu hình Ollama không hợp lệ, vui lòng kiểm tra lại cấu hình Ollama và thử lại",
     "InvalidProviderAPIKey": "{{provider}} API Key không hợp lệ hoặc trống, vui lòng kiểm tra và thử lại",
@@ -149,6 +156,11 @@
       "title": "Sử dụng {{name}} API Key tùy chỉnh"
     },
     "closeMessage": "Đóng thông báo",
+    "comfyui": {
+      "description": "Vui lòng nhập thông tin xác thực {{name}} chính xác để bắt đầu tạo hình ảnh",
+      "modifyBaseUrl": "Chỉnh sửa địa chỉ dịch vụ Comfy UI",
+      "title": "Xác nhận thông tin xác thực {{name}} của bạn"
+    },
     "confirm": "Xác nhận và thử lại",
     "oauth": {
       "description": "Quản trị viên đã mở tính năng xác thực đăng nhập thống nhất. Nhấn vào nút bên dưới để đăng nhập và mở khóa ứng dụng",

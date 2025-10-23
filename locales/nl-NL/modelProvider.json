@@ -82,6 +82,58 @@
       "title": "Cloudflare-account ID / API-URL"
     }
   },
+  "comfyui": {
+    "apiKey": {
+      "desc": "API-sleutel vereist voor Bearer Token-authenticatie",
+      "placeholder": "Voer API-sleutel in",
+      "required": "Voer API-sleutel in",
+      "title": "API-sleutel"
+    },
+    "authType": {
+      "desc": "Selecteer de authenticatiemethode voor verbinding met de ComfyUI-server",
+      "options": {
+        "basic": "Gebruikersnaam/Wachtwoord",
+        "bearer": "Bearer (API-sleutel)",
+        "custom": "Aangepaste request headers",
+        "none": "Geen authenticatie vereist"
+      },
+      "placeholder": "Selecteer authenticatietype",
+      "title": "Authenticatietype"
+    },
+    "baseURL": {
+      "desc": "Webadres voor toegang tot ComfyUI",
+      "placeholder": "http://127.0.0.1:8000",
+      "required": "Voer het ComfyUI-serviceadres in",
+      "title": "ComfyUI-serviceadres"
+    },
+    "checker": {
+      "desc": "Test of de verbinding correct is geconfigureerd",
+      "title": "Connectiviteitscontrole"
+    },
+    "customHeaders": {
+      "addButton": "Request header toevoegen",
+      "deleteTooltip": "Verwijder deze request header",
+      "desc": "Request headers vereist voor aangepaste authenticatie, in key-value formaat",
+      "duplicateKeyError": "Header-sleutels mogen niet worden herhaald",
+      "keyPlaceholder": "Sleutel",
+      "required": "Voer aangepaste request headers in",
+      "title": "Aangepaste request headers",
+      "valuePlaceholder": "Waarde"
+    },
+    "password": {
+      "desc": "Wachtwoord vereist voor basisauthenticatie",
+      "placeholder": "Voer wachtwoord in",
+      "required": "Voer wachtwoord in",
+      "title": "Wachtwoord"
+    },
+    "title": "ComfyUI",
+    "username": {
+      "desc": "Gebruikersnaam vereist voor basisauthenticatie",
+      "placeholder": "Voer gebruikersnaam in",
+      "required": "Voer gebruikersnaam in",
+      "title": "Gebruikersnaam"
+    }
+  },
   "createNewAiProvider": {
     "apiKey": {
       "placeholder": "Vul je API-sleutel in",

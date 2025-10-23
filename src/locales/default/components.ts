@@ -53,6 +53,10 @@ export default {
       fileCount: '共 {{count}} 项',
       selectedCount: '已选 {{count}} 项',
     },
+    view: {
+      list: '列表视图',
+      masonry: '网格视图',
+    },
   },
   FileParsingStatus: {
     chunks: {

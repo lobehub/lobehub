@@ -145,6 +145,8 @@ describe('modelParse', () => {
       expect(detectModelProvider('deepseek-coder')).toBe('deepseek');
       expect(detectModelProvider('doubao-pro')).toBe('volcengine');
       expect(detectModelProvider('yi-large')).toBe('zeroone');
+      expect(detectModelProvider('comfyui/flux-dev')).toBe('comfyui');
+      expect(detectModelProvider('comfyui/sdxl-model')).toBe('comfyui');
     });
 
     it('should default to OpenAI when no provider is detected', () => {
@@ -362,21 +364,28 @@ describe('modelParse', () => {
         { id: 'claude-3-opus' }, // anthropic
         { id: 'gemini-pro' }, // google
         { id: 'qwen-turbo' }, // qwen
+        { id: 'comfyui/flux-dev', parameters: { width: 1024, height: 1024 } }, // comfyui
       ];
 
       const result = await processMultiProviderModelList(modelList);
-      expect(result).toHaveLength(4);
+      expect(result).toHaveLength(5);
 
       const gpt4 = result.find((model) => model.id === 'gpt-4')!;
       const claude = result.find((model) => model.id === 'claude-3-opus')!;
       const gemini = result.find((model) => model.id === 'gemini-pro')!;
       const qwen = result.find((model) => model.id === 'qwen-turbo')!;
+      const comfyui = result.find((model) => model.id === 'comfyui/flux-dev')!;
 
       // Check abilities based on their respective provider configs and knownModels
       expect(gpt4.reasoning).toBe(false); // From knownModel (gpt-4)
       expect(claude.functionCall).toBe(true); // From knownModel (claude-3-opus)
       expect(gemini.functionCall).toBe(true); // From google keyword 'gemini'
       expect(qwen.functionCall).toBe(true); // From knownModel (qwen-turbo)
+
+      // ComfyUI models should have no chat capabilities (all false)
+      expect(comfyui.functionCall).toBe(false); // ComfyUI config has empty arrays
+      expect(comfyui.reasoning).toBe(false); // ComfyUI config has empty arrays
+      expect(comfyui.vision).toBe(false); // ComfyUI config has empty arrays
     });
 
     it('should recognize model capabilities based on keyword detection across providers', async () => {

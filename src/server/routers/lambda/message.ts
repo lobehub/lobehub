@@ -198,6 +198,17 @@ export const messageRouter = router({
       await ctx.messageModel.updateMessageRAG(input.id, input.value);
     }),
 
+  updateMetadata: messageProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        value: z.object({}).passthrough(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.messageModel.updateMetadata(input.id, input.value);
+    }),
+
   updatePluginError: messageProcedure
     .input(
       z.object({

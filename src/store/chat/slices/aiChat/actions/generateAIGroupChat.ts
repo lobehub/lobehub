@@ -681,6 +681,7 @@ export const chatAiGroupChat: StateCreator<
             msg.role === 'user' ? member.id === 'user' : member.id === msg.agentId,
           );
           const authorName = authorInfo?.title || (msg.role === 'user' ? realUserName : 'Unknown');
+          const authorId = msg.role === 'user' ? 'user' : msg.agentId || 'unknown';
 
           // Keep user message as-is
           if (msg.role === 'user') {
@@ -692,7 +693,7 @@ export const chatAiGroupChat: StateCreator<
 
           return {
             ...msg,
-            content: `<author_name_do_not_include_in_your_response>${authorName}</author_name_do_not_include_in_your_response>${msg.content}`,
+            content: `<author_name_do_not_include_in_your_response name="${authorName}" id="${authorId}" />${msg.content}`,
           };
         });
 

@@ -570,6 +570,19 @@ export class MessageModel {
     });
   };
 
+  updateMetadata = async (id: string, metadata: Record<string, any>) => {
+    const item = await this.db.query.messages.findFirst({
+      where: and(eq(messages.id, id), eq(messages.userId, this.userId)),
+    });
+
+    if (!item) return;
+
+    return this.db
+      .update(messages)
+      .set({ metadata: merge(item.metadata || {}, metadata) })
+      .where(and(eq(messages.userId, this.userId), eq(messages.id, id)));
+  };
+
   updatePluginState = async (id: string, state: Record<string, any>) => {
     const item = await this.db.query.messagePlugins.findFirst({
       where: eq(messagePlugins.id, id),

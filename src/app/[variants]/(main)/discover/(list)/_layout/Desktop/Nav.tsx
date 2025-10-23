@@ -2,15 +2,13 @@
 
 import { Tabs } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { usePathname } from 'next/navigation';
 import { rgba } from 'polished';
 import { memo, useState } from 'react';
 import { Center, Flexbox } from 'react-layout-kit';
-import urlJoin from 'url-join';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { withSuspense } from '@/components/withSuspense';
 import { useQuery } from '@/hooks/useQuery';
-import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { DiscoverTab } from '@/types/discover';
 
 import { MAX_WIDTH, SCROLL_PARENT_ID } from '../../../features/const';
@@ -42,11 +40,11 @@ export const useStyles = createStyles(({ cx, stylish, css, token }) => ({
 
 const Nav = memo(() => {
   const [hide, setHide] = useState(false);
-  const pathname = usePathname();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { cx, styles } = useStyles();
   const { items, activeKey } = useNav();
   const { q } = useQuery() as { q?: string };
-  const router = useQueryRoute();
 
   useScroll((scroll, delta) => {
     if (delta < 0) {
@@ -58,7 +56,7 @@ const Nav = memo(() => {
     }
   });
 
-  const isHome = pathname === '/discover';
+  const isHome = location.pathname === '/';
 
   return (
     <Center className={cx(styles.container, hide && styles.hide)} height={46}>
@@ -77,8 +75,9 @@ const Nav = memo(() => {
             compact
             items={items as any}
             onChange={(key) => {
-              const href = key === DiscoverTab.Home ? '/discover' : urlJoin('/discover', key);
-              router.push(href, { query: q ? { q } : {}, replace: true });
+              const path = key === DiscoverTab.Home ? '/' : `/${key}`;
+              const search = q ? `?q=${encodeURIComponent(q)}` : '';
+              navigate(path + search, { replace: true });
               const scrollableElement = document?.querySelector(`#${SCROLL_PARENT_ID}`);
               if (!scrollableElement) return;
               scrollableElement.scrollTo({ behavior: 'smooth', top: 0 });

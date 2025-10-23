@@ -1,5 +1,5 @@
 import { ToolNameResolver } from './ToolNameResolver';
-import { LobeChatPluginManifest } from './types';
+import { LobeToolManifest } from './types';
 
 // Create a singleton instance for backward compatibility
 const resolver = new ToolNameResolver();
@@ -19,7 +19,7 @@ export const generateToolName = (
 /**
  * Validate manifest schema structure
  */
-export function validateManifest(manifest: any): manifest is LobeChatPluginManifest {
+export function validateManifest(manifest: any): manifest is LobeToolManifest {
   return Boolean(
     manifest &&
       typeof manifest === 'object' &&
@@ -34,9 +34,9 @@ export function validateManifest(manifest: any): manifest is LobeChatPluginManif
  */
 export function filterValidManifests(manifestSchemas: any[]): {
   invalid: any[];
-  valid: LobeChatPluginManifest[];
+  valid: LobeToolManifest[];
 } {
-  const valid: LobeChatPluginManifest[] = [];
+  const valid: LobeToolManifest[] = [];
   const invalid: any[] = [];
 
   for (const manifest of manifestSchemas) {

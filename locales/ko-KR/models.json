@@ -866,6 +866,39 @@
   "cohere/embed-v4.0": {
     "description": "텍스트, 이미지 또는 혼합 콘텐츠를 분류하거나 임베딩으로 변환할 수 있는 모델입니다."
   },
+  "comfyui/flux-dev": {
+    "description": "FLUX.1 Dev - 고품질 텍스트-투-이미지 생성 모델로, 10~50단계의 생성 과정을 통해 예술 작품 및 창작에 적합한 고화질 이미지를 생성합니다."
+  },
+  "comfyui/flux-kontext-dev": {
+    "description": "FLUX.1 Kontext-dev - 이미지 편집 모델로, 텍스트 지시를 기반으로 기존 이미지를 수정할 수 있으며, 부분 편집 및 스타일 전환을 지원합니다."
+  },
+  "comfyui/flux-krea-dev": {
+    "description": "FLUX.1 Krea-dev - Krea와 협력하여 개발된 강화된 안전성을 갖춘 텍스트-투-이미지 생성 모델로, 내장된 안전 필터링 기능을 제공합니다."
+  },
+  "comfyui/flux-schnell": {
+    "description": "FLUX.1 Schnell - 초고속 텍스트-투-이미지 생성 모델로, 1~4단계만으로 고품질 이미지를 생성할 수 있어 실시간 애플리케이션 및 빠른 프로토타입 제작에 적합합니다."
+  },
+  "comfyui/stable-diffusion-15": {
+    "description": "Stable Diffusion 1.5 텍스트-투-이미지 생성 모델로, 고전적인 512x512 해상도의 이미지 생성을 지원하며, 빠른 프로토타입 제작 및 창의적 실험에 적합합니다."
+  },
+  "comfyui/stable-diffusion-35": {
+    "description": "Stable Diffusion 3.5 차세대 텍스트-투-이미지 생성 모델로, Large 및 Medium 두 가지 버전을 지원하며, 외부 CLIP 인코더 파일이 필요합니다. 뛰어난 이미지 품질과 프롬프트 일치도를 제공합니다."
+  },
+  "comfyui/stable-diffusion-35-inclclip": {
+    "description": "Stable Diffusion 3.5 내장형 CLIP/T5 인코더 버전으로, 외부 인코더 파일이 필요 없으며 sd3.5_medium_incl_clips 등의 모델에 적합하고, 자원 사용이 더 적습니다."
+  },
+  "comfyui/stable-diffusion-custom": {
+    "description": "사용자 정의 SD 텍스트-투-이미지 생성 모델입니다. 모델 파일명은 custom_sd_lobe.safetensors를 사용하고, VAE가 있을 경우 custom_sd_vae_lobe.safetensors를 사용하세요. 모델 파일은 Comfy의 요구사항에 따라 지정된 폴더에 배치해야 합니다."
+  },
+  "comfyui/stable-diffusion-custom-refiner": {
+    "description": "사용자 정의 SDXL 이미지-투-이미지 생성 모델입니다. 모델 파일명은 custom_sd_lobe.safetensors를 사용하고, VAE가 있을 경우 custom_sd_vae_lobe.safetensors를 사용하세요. 모델 파일은 Comfy의 요구사항에 따라 지정된 폴더에 배치해야 합니다."
+  },
+  "comfyui/stable-diffusion-refiner": {
+    "description": "SDXL 이미지-투-이미지 생성 모델로, 입력 이미지를 기반으로 고품질의 이미지 변환을 지원하며, 스타일 전환, 이미지 복원 및 창의적 변형이 가능합니다."
+  },
+  "comfyui/stable-diffusion-xl": {
+    "description": "SDXL 텍스트-투-이미지 생성 모델로, 1024x1024 고해상도 이미지 생성을 지원하며, 향상된 이미지 품질과 세부 묘사를 제공합니다."
+  },
   "command": {
     "description": "지시를 따르는 대화 모델로, 언어 작업에서 높은 품질과 신뢰성을 제공하며, 우리의 기본 생성 모델에 비해 더 긴 컨텍스트 길이를 가지고 있습니다."
   },

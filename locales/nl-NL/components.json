@@ -50,6 +50,10 @@
     "total": {
       "fileCount": "Totaal {{count}} items",
       "selectedCount": "Geselecteerd {{count}} items"
+    },
+    "view": {
+      "list": "Lijstweergave",
+      "masonry": "Rasterweergave"
     }
   },
   "FileParsingStatus": {

@@ -160,7 +160,8 @@ export const createChatSlice: StateCreator<
   },
   useFetchAgentConfig: (isLogin, sessionId) =>
     useClientDataSWR<LobeAgentConfig>(
-      isLogin && !sessionId.startsWith('cg_')
+      // Only fetch when login status is explicitly true (not null/undefined)
+      isLogin === true && !sessionId.startsWith('cg_')
         ? ([FETCH_AGENT_CONFIG_KEY, sessionId] as const)
         : null,
       ([, id]: readonly [string, string]) => sessionService.getSessionConfig(id),
@@ -192,7 +193,8 @@ export const createChatSlice: StateCreator<
 
   useInitInboxAgentStore: (isLogin, defaultAgentConfig) =>
     useOnlyFetchOnceSWR<PartialDeep<LobeAgentConfig>>(
-      !!isLogin ? 'fetchInboxAgentConfig' : null,
+      // Only fetch when login status is explicitly true (not null/undefined/false)
+      isLogin === true ? 'fetchInboxAgentConfig' : null,
       () => sessionService.getSessionConfig(INBOX_SESSION_ID),
       {
         onSuccess: (data) => {

@@ -1,5 +1,5 @@
 {
-  "desc": "Zarządzaj swoimi plikami i bazą wiedzy",
+  "desc": "Zarządzaj swoją wiedzą",
   "detail": {
     "basic": {
       "createdAt": "Data utworzenia",
@@ -70,7 +70,7 @@
     "videos": "Wideo",
     "websites": "Strony internetowe"
   },
-  "title": "Pliki",
+  "title": "Baza wiedzy",
   "toggleLeftPanel": {
     "title": "Pokaż/ukryj panel po lewej stronie"
   },

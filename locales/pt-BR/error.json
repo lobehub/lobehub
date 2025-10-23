@@ -81,6 +81,12 @@
     "522": "Desculpe, a conexão com o servidor expirou e não conseguiu responder a sua solicitação a tempo. Isso pode ser devido a uma rede instável ou o servidor estar temporariamente inacessível. Tente novamente mais tarde, estamos trabalhando para restaurar o serviço.",
     "524": "Desculpe, o servidor excedeu o tempo de espera enquanto aguardava uma resposta, possivelmente devido a uma resposta lenta. Por favor, tente novamente mais tarde.",
     "AgentRuntimeError": "Erro de execução do modelo de linguagem Lobe, por favor, verifique as informações abaixo ou tente novamente",
+    "ComfyUIBizError": "Erro ao solicitar o serviço ComfyUI. Verifique as informações abaixo ou tente novamente.",
+    "ComfyUIEmptyResult": "Nenhuma imagem foi gerada pelo ComfyUI. Verifique a configuração do modelo ou tente novamente.",
+    "ComfyUIModelError": "Falha ao carregar o modelo do ComfyUI. Verifique se o arquivo do modelo existe.",
+    "ComfyUIServiceUnavailable": "Falha na conexão com o serviço ComfyUI. Verifique se o ComfyUI está funcionando corretamente ou se o endereço do serviço está configurado corretamente.",
+    "ComfyUIUploadFailed": "Falha no upload da imagem para o ComfyUI. Verifique a conexão com o servidor ou tente novamente.",
+    "ComfyUIWorkflowError": "Falha na execução do fluxo de trabalho do ComfyUI. Verifique a configuração do fluxo de trabalho.",
     "ConnectionCheckFailed": "A resposta da solicitação está vazia. Verifique se o endereço do proxy da API não termina com `/v1`",
     "CreateMessageError": "Desculpe, a mensagem não pôde ser enviada corretamente. Por favor, copie o conteúdo e tente enviar novamente. Após atualizar a página, esta mensagem não será mantida.",
     "ExceededContextWindow": "O conteúdo da solicitação atual excede o comprimento que o modelo pode processar. Por favor, reduza a quantidade de conteúdo e tente novamente.",
@@ -100,6 +106,7 @@
     "InvalidAccessCode": "Senha de acesso inválida ou em branco. Por favor, insira a senha de acesso correta ou adicione uma Chave de API personalizada.",
     "InvalidBedrockCredentials": "Credenciais Bedrock inválidas, por favor, verifique AccessKeyId/SecretAccessKey e tente novamente",
     "InvalidClerkUser": "Desculpe, você ainda não fez login. Por favor, faça login ou registre uma conta antes de continuar.",
+    "InvalidComfyUIArgs": "Configuração do ComfyUI incorreta. Verifique as configurações do ComfyUI e tente novamente.",
     "InvalidGithubToken": "O Token de Acesso Pessoal do Github está incorreto ou vazio. Por favor, verifique o Token de Acesso Pessoal do Github e tente novamente.",
     "InvalidOllamaArgs": "Configuração Ollama inválida, verifique a configuração do Ollama e tente novamente",
     "InvalidProviderAPIKey": "{{provider}} API Key inválido ou em branco, por favor, verifique o {{provider}} API Key e tente novamente",
@@ -149,6 +156,11 @@
       "title": "Usar chave de API personalizada {{name}}"
     },
     "closeMessage": "Fechar mensagem",
+    "comfyui": {
+      "description": "Insira as credenciais corretas de {{name}} para começar a gerar imagens.",
+      "modifyBaseUrl": "Modificar o endereço do serviço Comfy UI",
+      "title": "Confirme suas credenciais de {{name}}"
+    },
     "confirm": "Confirmar e tentar novamente",
     "oauth": {
       "description": "O administrador ativou a autenticação de login unificado. Clique no botão abaixo para fazer login e desbloquear o aplicativo.",
