@@ -51,6 +51,66 @@ const siliconFetch: typeof fetch = async (input, init) => {
   return response;
 };
 
+// 视频转换函数
+const convertVideoToBase64 = async (videoUrl: string): Promise<string> => {
+  const response = await fetch(videoUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch video: ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString('base64');
+  const mimeType = response.headers.get('content-type') || 'video/mp4';
+
+  return `data:${mimeType};base64,${base64}`;
+};
+
+// 消息转换函数
+const transformMessages = async (messages: any[]) => {
+  const transformedMessages = await Promise.all(
+    messages.map(async (message) => {
+      if (typeof message.content === 'string') {
+        return message;
+      }
+
+      // 转换消息内容数组
+      if (Array.isArray(message.content)) {
+        const convertedContent = await Promise.all(
+          message.content.map(async (content: any) => {
+            if (content.type === 'video_url') {
+              const isBase64 = content.video_url.url.startsWith('data:');
+
+              if (!isBase64 && process.env.LLM_VISION_VIDEO_USE_BASE64 === '1') {
+                try {
+                  const convertedUrl = await convertVideoToBase64(content.video_url.url);
+                  return {
+                    ...content,
+                    video_url: { url: convertedUrl },
+                  };
+                } catch (error) {
+                  console.warn('Failed to convert video to base64:', error);
+                  return content;
+                }
+              }
+            }
+
+            return content;
+          }),
+        );
+
+        return {
+          ...message,
+          content: convertedContent,
+        };
+      }
+
+      return message;
+    }),
+  );
+
+  return transformedMessages;
+};
+
 export const params = {
   baseURL: 'https://api.siliconflow.cn/v1',
   chatCompletion: {
@@ -68,8 +128,7 @@ export const params = {
         return {
           error: status,
           errorType: AgentRuntimeErrorType.ProviderBizError,
-          message:
-            '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
+          message: '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
         };
       }
 
@@ -115,6 +174,7 @@ export const params = {
       }
       return result;
     },
+    transformMessages,
   },
   constructorOptions: {
     fetch: siliconFetch,
