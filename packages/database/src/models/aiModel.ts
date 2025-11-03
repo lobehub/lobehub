@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import type {
   AiModelSortMap,
   AiProviderModelListItem,
@@ -189,20 +189,34 @@ export class AiModelModel {
       return;
     }
 
+    // Get default model list to preserve type information
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    const defaultModelMap = new Map(LOBE_DEFAULT_MODEL_LIST.map((m) => [m.id, m]));
+
     return this.db.transaction(async (trx) => {
       // 1. insert models that are not in the db
       const insertedRecords = await trx
         .insert(aiModels)
         .values(
-          models.map((i) => ({
-            enabled,
-            id: i,
-            providerId,
-            // if the model is not in the db, it's a builtin model
-            source: AiModelSourceEnum.Builtin,
-            updatedAt: new Date(),
-            userId: this.userId,
-          })),
+          models.map((i) => {
+            const defaultModel = defaultModelMap.get(i);
+            const insertValue: typeof aiModels.$inferInsert = {
+              enabled,
+              id: i,
+              providerId,
+              // if the model is not in the db, it's a builtin model
+              source: AiModelSourceEnum.Builtin,
+              updatedAt: new Date(),
+              userId: this.userId,
+            };
+
+            // Preserve type if available from default model list
+            if (defaultModel?.type) {
+              insertValue.type = defaultModel.type;
+            }
+
+            return insertValue;
+          }),
         )
         .onConflictDoNothing({
           target: [aiModels.id, aiModels.userId, aiModels.providerId],
@@ -213,16 +227,30 @@ export class AiModelModel {
       const insertedIds = new Set(insertedRecords.map((r) => r.id));
       const recordsToUpdate = models.filter((r) => !insertedIds.has(r));
 
-      await trx
-        .update(aiModels)
-        .set({ enabled })
-        .where(
-          and(
-            eq(aiModels.providerId, providerId),
-            inArray(aiModels.id, recordsToUpdate),
-            eq(aiModels.userId, this.userId),
-          ),
-        );
+      // Update each model individually to preserve type information
+      for (const modelId of recordsToUpdate) {
+        const defaultModel = defaultModelMap.get(modelId);
+        const updateValue: Partial<typeof aiModels.$inferInsert> = {
+          enabled,
+          updatedAt: new Date(),
+        };
+
+        // Preserve type if available from default model list
+        if (defaultModel?.type) {
+          updateValue.type = defaultModel.type;
+        }
+
+        await trx
+          .update(aiModels)
+          .set(updateValue)
+          .where(
+            and(
+              eq(aiModels.providerId, providerId),
+              eq(aiModels.id, modelId),
+              eq(aiModels.userId, this.userId),
+            ),
+          );
+      }
     });
   };
 
