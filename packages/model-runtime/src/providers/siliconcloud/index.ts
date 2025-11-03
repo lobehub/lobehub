@@ -55,7 +55,10 @@ export const params = {
       };
 
       if (thinking) {
-        result.enable_thinking = thinking.type === 'enabled';
+        // Only set enable_thinking if type is explicitly provided
+        if (typeof thinking.type !== 'undefined') {
+          result.enable_thinking = thinking.type === 'enabled';
+        }
         if (typeof thinkingBudget !== 'undefined') {
           result.thinking_budget = Math.min(Math.max(thinkingBudget, 128), 32_768);
         }

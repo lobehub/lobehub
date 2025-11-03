@@ -113,7 +113,7 @@ describe('LobeSiliconCloudAI - custom features', () => {
       expect(calledPayload.thinking_budget).toBe(32768);
     });
 
-    it('should set thinking_budget to 1 when budget_tokens is 0', async () => {
+    it('should set thinking_budget to 128 (minimum) when budget_tokens is 0', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'THUDM/GLM-4.5',
@@ -124,10 +124,10 @@ describe('LobeSiliconCloudAI - custom features', () => {
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.thinking_budget).toBe(1);
+      expect(calledPayload.thinking_budget).toBe(128);
     });
 
-    it('should not add enable_thinking for non-hybrid models', async () => {
+    it('should set enable_thinking when type is provided', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'Qwen/Qwen2.5-7B-Instruct',
@@ -138,8 +138,22 @@ describe('LobeSiliconCloudAI - custom features', () => {
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.enable_thinking).toBeUndefined();
+      expect(calledPayload.enable_thinking).toBe(true);
       expect(calledPayload.thinking_budget).toBe(1000);
+    });
+
+    it('should only set thinking_budget when type is not provided', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Qwen/Qwen3-8B',
+        thinking: {
+          budget_tokens: 1500,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBeUndefined();
+      expect(calledPayload.thinking_budget).toBe(1500);
     });
   });
 
