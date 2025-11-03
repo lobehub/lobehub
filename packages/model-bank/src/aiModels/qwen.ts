@@ -2623,7 +2623,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
     displayName: 'Qwen Image Edit',
-    enabled: true,
     id: 'qwen-image-edit',
     organization: 'Qwen',
     parameters: {

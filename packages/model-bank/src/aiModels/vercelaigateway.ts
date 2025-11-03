@@ -568,40 +568,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Command R is optimized for chat and long-context tasks, positioned as a “scalable” model that balances high performance and accuracy so companies can move beyond prototypes into production.',
-    displayName: 'Command R',
-    id: 'cohere/command-r',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Command R+ is Cohere’s latest LLM optimized for chat and long context, aiming for exceptional performance so companies can move past prototypes into production.',
-    displayName: 'Command R+',
-    id: 'cohere/command-r-plus',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 128_000,
@@ -629,19 +595,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.77, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.77, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 128_000,
-    description: 'DeepSeek V3.1 Base is an improved version of the DeepSeek V3 model.',
-    displayName: 'DeepSeek V3.1 Base',
-    id: 'deepseek/deepseek-v3.1-base',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.1999, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.8001, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -716,23 +669,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      'A 9B open-source model fine-tuned by Google for chat, served by Groq on LPU hardware for fast, efficient inference.',
-    displayName: 'Gemma 2 9B IT',
-    id: 'google/gemma-2-9b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -859,40 +795,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      'A 70B open-source model fine-tuned by Meta for instruction following, served by Groq on LPU hardware for fast, efficient inference.',
-    displayName: 'Llama 3 70B Instruct',
-    id: 'meta/llama-3-70b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.59, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.79, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      'An 8B open-source model fine-tuned by Meta for instruction following, served by Groq on LPU hardware for fast, efficient inference.',
-    displayName: 'Llama 3 8B Instruct',
-    id: 'meta/llama-3-8b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
