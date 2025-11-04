@@ -4,6 +4,22 @@ const cerebrasModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+    },
+    contextWindowTokens: 32_768,
+    description: 'Llama 3.1 8B: A small, low-latency Llama variant, suitable for lightweight online reasoning and interaction scenarios.',
+    displayName: 'Llama 3.1 8B',
+    id: 'llama3.1-8b',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
       structuredOutput: true,
     },
