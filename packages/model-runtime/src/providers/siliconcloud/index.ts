@@ -1,5 +1,3 @@
-import { Buffer } from 'node:buffer';
-
 import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
@@ -12,6 +10,10 @@ import { createSiliconCloudImage } from './createImage';
 export interface SiliconCloudModelCard {
   id: string;
 }
+
+const getByteLength = (value: string): number => {
+  return new TextEncoder().encode(value).length;
+};
 
 const defaultFetch = globalThis.fetch?.bind(globalThis);
 
@@ -34,7 +36,7 @@ const siliconFetch: typeof fetch = async (input, init) => {
       headers.delete('content-length');
 
       const body = JSON.stringify({ error: data });
-      headers.set('content-length', Buffer.byteLength(body).toString());
+      headers.set('content-length', getByteLength(body).toString());
 
       return new Response(body, {
         headers,
