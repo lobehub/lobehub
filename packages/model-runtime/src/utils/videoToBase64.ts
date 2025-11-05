@@ -1,5 +1,3 @@
-import { ssrfSafeFetch } from 'ssrf-safe-fetch';
-
 /**
  * Convert video URL to base64 data URL with SSRF protection
  */
@@ -7,6 +5,8 @@ export const videoUrlToBase64 = async (
   videoUrl: string,
 ): Promise<{ base64: string; mimeType: string }> => {
   try {
+    // Dynamic import to avoid loading Node.js modules at build time
+    const { ssrfSafeFetch } = await import('ssrf-safe-fetch');
     const response = await ssrfSafeFetch(videoUrl, {
       // Add reasonable timeout
       signal: AbortSignal.timeout(30_000), // 30 seconds
