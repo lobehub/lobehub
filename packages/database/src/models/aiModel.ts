@@ -193,65 +193,40 @@ export class AiModelModel {
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
     const defaultModelMap = new Map(LOBE_DEFAULT_MODEL_LIST.map((m) => [m.id, m]));
 
-    return this.db.transaction(async (trx) => {
-      // 1. insert models that are not in the db
-      const insertedRecords = await trx
-        .insert(aiModels)
-        .values(
-          models.map((i) => {
-            const defaultModel = defaultModelMap.get(i);
-            const insertValue: typeof aiModels.$inferInsert = {
-              enabled,
-              id: i,
-              providerId,
-              // if the model is not in the db, it's a builtin model
-              source: AiModelSourceEnum.Builtin,
-              updatedAt: new Date(),
-              userId: this.userId,
-            };
+    // Prepare all records for batch upsert
+    const allRecords = models.map((modelId) => {
+      const defaultModel = defaultModelMap.get(modelId);
+      const record: typeof aiModels.$inferInsert = {
+        enabled,
+        id: modelId,
+        providerId,
+        // if the model is not in the db, it's a builtin model
+        source: AiModelSourceEnum.Builtin,
+        updatedAt: new Date(),
+        userId: this.userId,
+      };
 
-            // Preserve type if available from default model list
-            if (defaultModel?.type) {
-              insertValue.type = defaultModel.type;
-            }
-
-            return insertValue;
-          }),
-        )
-        .onConflictDoNothing({
-          target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        })
-        .returning();
-
-      // 2. update models that are in the db
-      const insertedIds = new Set(insertedRecords.map((r) => r.id));
-      const recordsToUpdate = models.filter((r) => !insertedIds.has(r));
-
-      // Update each model individually to preserve type information
-      for (const modelId of recordsToUpdate) {
-        const defaultModel = defaultModelMap.get(modelId);
-        const updateValue: Partial<typeof aiModels.$inferInsert> = {
-          enabled,
-          updatedAt: new Date(),
-        };
-
-        // Preserve type if available from default model list
-        if (defaultModel?.type) {
-          updateValue.type = defaultModel.type;
-        }
-
-        await trx
-          .update(aiModels)
-          .set(updateValue)
-          .where(
-            and(
-              eq(aiModels.providerId, providerId),
-              eq(aiModels.id, modelId),
-              eq(aiModels.userId, this.userId),
-            ),
-          );
+      // Preserve type if available from default model list
+      if (defaultModel?.type) {
+        record.type = defaultModel.type;
       }
+
+      return record;
     });
+
+    // Use batch upsert to handle both insert and update in a single query
+    return this.db
+      .insert(aiModels)
+      .values(allRecords)
+      .onConflictDoUpdate({
+        set: {
+          enabled: sql.raw('excluded.enabled'),
+          // Preserve existing type in database, only update if new type is provided
+          type: sql`COALESCE(excluded.type, ${aiModels.type})`,
+          updatedAt: sql.raw('excluded.updated_at'),
+        },
+        target: [aiModels.id, aiModels.userId, aiModels.providerId],
+      });
   };
 
   clearRemoteModels(providerId: string) {
