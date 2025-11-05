@@ -1,8 +1,14 @@
 /// <reference types="vitest" />
 import OpenAI from 'openai';
+import { ssrfSafeFetch } from 'ssrf-safe-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { convertSiliconCloudMessageContent, transformSiliconCloudMessages } from './siliconcloud';
+
+// Mock ssrfSafeFetch before importing
+vi.mock('ssrf-safe-fetch', () => ({
+  ssrfSafeFetch: vi.fn(),
+}));
 
 describe('siliconcloud context builder', () => {
   const originalEnv = process.env;
@@ -66,7 +72,7 @@ describe('siliconcloud context builder', () => {
     it('should convert video URL to base64 when env is 1', async () => {
       process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
 
-      // Mock fetch to return a simple video
+      // Mock ssrfSafeFetch to return a simple video
       const mockResponse = {
         ok: true,
         status: 200,
@@ -76,8 +82,7 @@ describe('siliconcloud context builder', () => {
         arrayBuffer: async () => Promise.resolve(new ArrayBuffer(10)),
       };
 
-      const fetchMock = vi.fn().mockResolvedValue(mockResponse as any);
-      global.fetch = fetchMock;
+      (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
 
       const content: any = {
         type: 'video_url',
@@ -88,7 +93,7 @@ describe('siliconcloud context builder', () => {
 
       const result = await convertSiliconCloudMessageContent(content);
 
-      expect(fetchMock).toHaveBeenCalledWith(
+      expect(ssrfSafeFetch).toHaveBeenCalledWith(
         'https://example.com/video.mp4',
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
@@ -98,8 +103,7 @@ describe('siliconcloud context builder', () => {
     it('should return original content when fetch fails', async () => {
       process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
 
-      const fetchMock = vi.fn().mockRejectedValue(new Error('Network error'));
-      global.fetch = fetchMock;
+      (ssrfSafeFetch as any).mockRejectedValue(new Error('Network error'));
 
       const content: any = {
         type: 'video_url',
@@ -135,8 +139,7 @@ describe('siliconcloud context builder', () => {
         arrayBuffer: async () => Promise.resolve(new ArrayBuffer(10)),
       };
 
-      const fetchMock = vi.fn().mockResolvedValue(mockResponse as any);
-      global.fetch = fetchMock;
+      (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
 
       const messages: OpenAI.ChatCompletionMessageParam[] = [
         {
@@ -161,7 +164,7 @@ describe('siliconcloud context builder', () => {
       expect(result).toHaveLength(1);
       expect(result[0].content).toHaveLength(2);
       expect((result[0].content as any[])[1].video_url.url).toMatch(/^data:video\/mp4;base64,/);
-      expect(fetchMock).toHaveBeenCalledWith(
+      expect(ssrfSafeFetch).toHaveBeenCalledWith(
         'https://example.com/video.mp4',
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
