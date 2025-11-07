@@ -1,20 +1,22 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 
-import { CreateRouterRuntimeOptions, createRouterRuntime } from '../../core/RouterRuntime';
 import {
   buildDefaultAnthropicPayload,
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { ChatStreamPayload } from '../../types';
+import type {CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
+import { createRouterRuntime } from '../../core/RouterRuntime';
+import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface MoonshotModelCard {
+  context_length?: number;
   id: string;
 }
 

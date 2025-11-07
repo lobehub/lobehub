@@ -86,6 +86,7 @@ const moonshotChatModels: AIChatModelCard[] = [
       'kimi-k2-0905-preview offers a 256k context window, stronger agentic coding, better front-end code quality, and improved context understanding.',
     displayName: 'Kimi K2 0905',
     id: 'kimi-k2-0905-preview',
+    maxOutput: 65_536,
     pricing: {
       currency: 'CNY',
       units: [
