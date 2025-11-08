@@ -1,4 +1,4 @@
-import { ChatMessage } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,8 +10,8 @@ import {
 
 let messageCounter = 0;
 const createMessage = (
-  overrides: Partial<ChatMessage> & Pick<ChatMessage, 'role' | 'content'>,
-): ChatMessage => ({
+  overrides: Partial<UIChatMessage> & Pick<UIChatMessage, 'role' | 'content'>,
+): UIChatMessage => ({
   id: overrides.id ?? `msg-${++messageCounter}`,
   createdAt: overrides.createdAt ?? 0,
   updatedAt: overrides.updatedAt ?? 0,
@@ -22,7 +22,7 @@ const createMessage = (
 describe('chatHistoryPrompts', () => {
   // Test with empty messages array
   it('should return empty chat history with empty messages', () => {
-    const messages: ChatMessage[] = [];
+    const messages: UIChatMessage[] = [];
     const result = chatHistoryPrompts(messages);
 
     expect(result).toBe(`<chat_history>
@@ -37,7 +37,7 @@ describe('chatHistoryPrompts', () => {
         role: 'user',
         content: 'Hello',
       },
-    ] as ChatMessage[];
+    ] as UIChatMessage[];
     const result = chatHistoryPrompts(messages);
 
     expect(result).toBe(`<chat_history>
@@ -60,7 +60,7 @@ describe('chatHistoryPrompts', () => {
         role: 'user',
         content: 'How are you?',
       },
-    ] as ChatMessage[];
+    ] as UIChatMessage[];
     const result = chatHistoryPrompts(messages);
 
     expect(result).toBe(`<chat_history>
@@ -81,7 +81,7 @@ describe('chatHistoryPrompts', () => {
         role: 'assistant',
         content: '<test> & </test>',
       },
-    ] as ChatMessage[];
+    ] as UIChatMessage[];
 
     const result = chatHistoryPrompts(messages);
 
@@ -98,7 +98,7 @@ describe('chatHistoryPrompts', () => {
         role: 'user',
         content: 'Line 1\nLine 2',
       },
-    ] as ChatMessage[];
+    ] as UIChatMessage[];
 
     const result = chatHistoryPrompts(messages);
 
@@ -110,7 +110,7 @@ describe('chatHistoryPrompts', () => {
 
 describe('groupSupervisorPrompts', () => {
   it('should format messages and exclude supervisor role', () => {
-    const messages: ChatMessage[] = [
+    const messages: UIChatMessage[] = [
       createMessage({ role: 'user', content: 'Hello everyone' }),
       createMessage({ role: 'assistant', agentId: 'agent-1', content: 'Reporting in' }),
       createMessage({
@@ -136,7 +136,7 @@ describe('groupSupervisorPrompts', () => {
 
 describe('groupMemeberSpeakingPrompts', () => {
   it('should wrap messages in chat_group tags', () => {
-    const messages: ChatMessage[] = [
+    const messages: UIChatMessage[] = [
       createMessage({ role: 'user', content: 'Need assistance' }),
       createMessage({ role: 'assistant', content: 'On it!' }),
     ];
@@ -156,7 +156,7 @@ describe('consolidateGroupChatHistory', () => {
   });
 
   it('should format messages with agent titles and default labels', () => {
-    const messages: ChatMessage[] = [
+    const messages: UIChatMessage[] = [
       createMessage({ role: 'assistant', content: '   ' }), // filtered out
       createMessage({ role: 'user', content: 'Hello group' }),
       createMessage({ role: 'assistant', agentId: 'agent-1', content: 'Status update' }),

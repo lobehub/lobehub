@@ -1,15 +1,13 @@
+import { LOADING_FLAT } from '@lobechat/const';
+import { UIChatMessage } from '@lobechat/types';
 import { ReactNode, memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
 
-import { LOADING_FLAT } from '@/const/message';
-import { AssistantBlock } from '@/features/Conversation/Messages/Assistant/Block';
-import ImageFileListViewer from '@/features/Conversation/Messages/User/ImageFileListViewer';
-import VideoFileListViewer from '@/features/Conversation/Messages/User/VideoFileListViewer';
 import { useChatStore } from '@/store/chat';
 import { aiChatSelectors, chatSelectors } from '@/store/chat/selectors';
-import { ChatMessage } from '@/types/message';
 
 import { DefaultMessage } from '../Default';
+import ImageFileListViewer from '../User/ImageFileListViewer';
 import FileChunks from './FileChunks';
 import IntentUnderstanding from './IntentUnderstanding';
 import Reasoning from './Reasoning';
@@ -17,10 +15,10 @@ import SearchGrounding from './SearchGrounding';
 import Tool from './Tool';
 
 export const AssistantMessageContent = memo<
-  ChatMessage & {
+  UIChatMessage & {
     editableContent: ReactNode;
   }
->(({ id, tools, content, chunksList, search, imageList, videoList, children, ...props }) => {
+>(({ id, tools, content, chunksList, search, imageList, ...props }) => {
   const editing = useChatStore(chatSelectors.isMessageEditing(id));
   const generating = useChatStore(chatSelectors.isMessageGenerating(id));
 
@@ -32,7 +30,6 @@ export const AssistantMessageContent = memo<
 
   const showSearch = !!search && !!search.citations?.length;
   const showImageItems = !!imageList && imageList.length > 0;
-  const showVideoItems = !!videoList && videoList.length > 0;
 
   // remove \n to avoid empty content
   // refs: https://github.com/lobehub/lobe-chat/pull/6153
@@ -41,15 +38,6 @@ export const AssistantMessageContent = memo<
     (!props.reasoning && isReasoning);
 
   const showFileChunks = !!chunksList && chunksList.length > 0;
-
-  if (children && children?.length > 0)
-    return (
-      <Flexbox gap={8}>
-        {children.map((item) => (
-          <AssistantBlock key={item.id} {...item} editableContent={props.editableContent} />
-        ))}
-      </Flexbox>
-    );
 
   return editing ? (
     <DefaultMessage
@@ -79,7 +67,6 @@ export const AssistantMessageContent = memo<
         )
       )}
       {showImageItems && <ImageFileListViewer items={imageList} />}
-      {showVideoItems && <VideoFileListViewer items={videoList} />}
       {tools && (
         <Flexbox gap={8}>
           {tools.map((toolCall, index) => (

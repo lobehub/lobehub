@@ -85,6 +85,7 @@
         "restTime": "Temps restant {{time}}"
       }
     },
+    "fileQueueInfo": "Téléversement des {{count}} premiers fichiers en cours, les {{remaining}} fichiers restants seront mis en file d’attente",
     "totalCount": "Total {{count}} éléments",
     "uploadStatus": {
       "error": "Erreur de téléchargement",

@@ -6,7 +6,7 @@ import { testProvider } from '../../providerTestUtils';
 import { LobeQiniuAI, params } from './index';
 
 const provider = ModelProvider.Qiniu;
-const defaultBaseURL = 'https://api.qnaigc.com/v1';
+const defaultBaseURL = 'https://openai.qiniu.com/v1';
 
 testProvider({
   Runtime: LobeQiniuAI,
@@ -275,7 +275,7 @@ describe('LobeQiniuAI - custom features', () => {
     it('should export params object', () => {
       expect(params).toBeDefined();
       expect(params.provider).toBe(ModelProvider.Qiniu);
-      expect(params.baseURL).toBe('https://api.qnaigc.com/v1');
+      expect(params.baseURL).toBe('https://openai.qiniu.com/v1');
     });
 
     it('should export LobeQiniuAI class', () => {

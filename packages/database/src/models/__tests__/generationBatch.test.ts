@@ -1,9 +1,9 @@
 // @vitest-environment node
+import { GenerationConfig } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncTaskStatus } from '@/types/asyncTask';
-import { GenerationConfig } from '@/types/generation';
 
 import {
   NewGenerationBatch,

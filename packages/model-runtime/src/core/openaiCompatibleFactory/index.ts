@@ -702,6 +702,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       log('error code: %s, message: %s', errorResult.code, errorResult.message);
 
+      // Check for "Insufficient Balance" in error message
+      const errorMessage = errorResult.error?.message || errorResult.message;
+      if (errorMessage?.includes('Insufficient Balance')) {
+        log('insufficient balance error detected in message');
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.InsufficientQuota,
+          provider: this.id,
+        });
+      }
+
       switch (errorResult.code) {
         case 'insufficient_quota': {
           log('insufficient quota error');

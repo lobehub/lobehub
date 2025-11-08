@@ -85,6 +85,7 @@
         "restTime": "Осталось {{time}}"
       }
     },
+    "fileQueueInfo": "Загружаются первые {{count}} файлов, оставшиеся {{remaining}} будут поставлены в очередь",
     "totalCount": "Всего {{count}} элементов",
     "uploadStatus": {
       "error": "Ошибка загрузки",

@@ -1,7 +1,5 @@
+import { DBMessageItem, TopicRankItem } from '@lobechat/types';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
-
-import { MessageItem } from '@/types/message';
-import { TopicRankItem } from '@/types/topic';
 
 import { TopicItem, messages, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
@@ -274,7 +272,7 @@ export class TopicModel {
               id: idGenerator('messages'),
               topicId: duplicatedTopic.id,
             })
-            .returning()) as MessageItem[];
+            .returning()) as DBMessageItem[];
 
           return result[0];
         }),

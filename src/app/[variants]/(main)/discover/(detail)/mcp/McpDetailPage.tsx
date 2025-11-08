@@ -1,8 +1,8 @@
 'use client';
 
 import { memo } from 'react';
-import { useParams } from 'react-router-dom';
 import { Flexbox } from 'react-layout-kit';
+import { useParams } from 'react-router-dom';
 
 import { withSuspense } from '@/components/withSuspense';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
@@ -12,9 +12,9 @@ import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 import { DiscoverTab } from '@/types/discover';
 
+import NotFound from '../components/NotFound';
 import Breadcrumb from '../features/Breadcrumb';
 import { TocProvider } from '../features/Toc/useToc';
-import NotFound from '../components/NotFound';
 import Details from './[slug]/features/Details';
 import Loading from './[slug]/loading';
 

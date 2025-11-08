@@ -1,5 +1,5 @@
 import { contextSupervisorMakeDecision } from '@lobechat/prompts';
-import { ChatMessage, GroupMemberWithAgent } from '@lobechat/types';
+import { GroupMemberWithAgent, UIChatMessage } from '@lobechat/types';
 
 import { aiChatService } from '@/services/aiChat';
 
@@ -43,7 +43,7 @@ export interface SupervisorContext {
   allowDM?: boolean;
   availableAgents: GroupMemberWithAgent[];
   groupId: string;
-  messages: ChatMessage[];
+  messages: UIChatMessage[];
   model: string;
   provider: string;
   // Group scene controls which tools are exposed (e.g., todos only in 'productive')

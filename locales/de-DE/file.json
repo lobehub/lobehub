@@ -85,6 +85,7 @@
         "restTime": "Verbleibende Zeit {{time}}"
       }
     },
+    "fileQueueInfo": "Die ersten {{count}} Dateien werden hochgeladen, die verbleibenden {{remaining}} Dateien werden in die Warteschlange gestellt",
     "totalCount": "Insgesamt {{count}} Elemente",
     "uploadStatus": {
       "error": "Fehler beim Hochladen",

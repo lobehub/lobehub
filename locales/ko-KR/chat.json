@@ -163,9 +163,9 @@
     "addMember": "멤버 추가",
     "allMembers": "전체 멤버",
     "createGroup": "Agent 팀 만들기",
-    "noAvailableAgents": "초대할 보조자가 없습니다",
-    "noSelectedAgents": "아직 보조자를 선택하지 않았습니다",
-    "searchAgents": "보조자 검색...",
+    "noAvailableAgents": "초대할 수 있는 에이전트가 없습니다",
+    "noSelectedAgents": "선택된 에이전트가 없습니다",
+    "searchAgents": "에이전트 검색...",
     "setInitialMembers": "팀 구성원 선택"
   },
   "members": "구성원",
@@ -229,7 +229,7 @@
     "jumpToMessage": "{{index}}번째 메시지로 이동",
     "nextMessage": "다음 메시지",
     "previousMessage": "이전 메시지",
-    "senderAssistant": "도우미",
+    "senderAssistant": "에이전트",
     "senderUser": "당신"
   },
   "newAgent": "새 도우미",

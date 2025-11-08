@@ -193,6 +193,7 @@ table documents {
   file_id text
   user_id text [not null]
   client_id text
+  editor_data jsonb
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -972,6 +973,8 @@ table user_memories {
   memory_category varchar(255)
   memory_layer varchar(255)
   memory_type varchar(255)
+  metadata jsonb
+  tags text[]
   title varchar(255)
   summary text
   summary_vector_1024 vector(1024)
@@ -992,9 +995,10 @@ table user_memories {
 
 table user_memories_contexts {
   id varchar(255) [pk, not null]
+  user_id text
   user_memory_ids jsonb
-  labels jsonb
-  extracted_labels jsonb
+  metadata jsonb
+  tags text[]
   associated_objects jsonb
   associated_subjects jsonb
   title text
@@ -1018,9 +1022,10 @@ table user_memories_contexts {
 
 table user_memories_experiences {
   id varchar(255) [pk, not null]
-  user_memory_id text
-  labels jsonb
-  extracted_labels jsonb
+  user_id text
+  user_memory_id varchar(255)
+  metadata jsonb
+  tags text[]
   type varchar(255)
   situation text
   situation_vector vector(1024)
@@ -1030,7 +1035,6 @@ table user_memories_experiences {
   action_vector vector(1024)
   key_learning text
   key_learning_vector vector(1024)
-  metadata jsonb
   score_confidence real [default: 0]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1045,17 +1049,17 @@ table user_memories_experiences {
 }
 
 table user_memories_identities {
-  current_focuses text
+  id varchar(255) [pk, not null]
+  user_id text
+  user_memory_id varchar(255)
+  metadata jsonb
+  tags text[]
+  type varchar(255)
   description text
   description_vector vector(1024)
-  experience text
-  extracted_labels jsonb
-  id varchar(255) [pk, not null]
-  labels jsonb
-  relationship text
+  episodic_date "timestamp with time zone"
+  relationship varchar(255)
   role text
-  type varchar(255)
-  user_memory_id text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1068,11 +1072,10 @@ table user_memories_identities {
 
 table user_memories_preferences {
   id varchar(255) [pk, not null]
-  context_id varchar(255)
+  user_id text
   user_memory_id varchar(255)
-  labels jsonb
-  extracted_labels jsonb
-  extracted_scopes jsonb
+  metadata jsonb
+  tags text[]
   conclusion_directives text
   conclusion_directives_vector vector(1024)
   type varchar(255)

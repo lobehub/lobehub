@@ -1,7 +1,6 @@
 /* eslint-disable typescript-sort-keys/interface */
+import { ModelUsage } from '@lobechat/types';
 import { RuntimeImageGenParams } from 'model-bank';
-
-import { ModelUsage } from '@/types/message';
 
 export type CreateImagePayload = {
   model: string;

@@ -9,6 +9,21 @@ import type { App } from '../App';
 
 const logger = createLogger('core:StaticFileServerManager');
 
+const getAllowedOrigin = (rawOrigin?: string) => {
+  if (!rawOrigin) return '*';
+
+  try {
+    const url = new URL(rawOrigin);
+    const normalizedOrigin = `${url.protocol}//${url.host}`;
+    return url.hostname === 'localhost' || url.hostname === '127.0.0.1' ? normalizedOrigin : '*';
+  } catch {
+    const normalizedOrigin = rawOrigin.replace(/\/$/, '');
+    return normalizedOrigin.includes('localhost') || normalizedOrigin.includes('127.0.0.1')
+      ? normalizedOrigin
+      : '*';
+  }
+};
+
 export class StaticFileServerManager {
   private app: App;
   private fileService: FileService;
@@ -126,16 +141,38 @@ export class StaticFileServerManager {
         return;
       }
 
+      // 获取请求的 Origin 并设置 CORS
+      const origin = req.headers.origin || req.headers.referer;
+      const allowedOrigin = getAllowedOrigin(origin);
+
+      // 处理 CORS 预检请求
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Origin': allowedOrigin,
+          'Access-Control-Max-Age': '86400',
+        });
+        res.end();
+        return;
+      }
+
       const url = new URL(req.url, `http://127.0.0.1:${this.serverPort}`);
       logger.debug(`Processing HTTP file request: ${req.url}`);
+      logger.debug(`Request method: ${req.method}`);
+      logger.debug(`Request headers: ${JSON.stringify(req.headers)}`);
 
       // 提取文件路径：从 /desktop-file/path/to/file.png 中提取相对路径
       let filePath = decodeURIComponent(url.pathname.slice(1)); // 移除开头的 /
+      logger.debug(`Initial file path after decode: ${filePath}`);
 
       // 如果路径以 desktop-file/ 开头，则移除该前缀
       const prefixWithoutSlash = LOCAL_STORAGE_URL_PREFIX.slice(1) + '/'; // 移除开头的 / 并添加结尾的 /
+      logger.debug(`Prefix to remove: ${prefixWithoutSlash}`);
+
       if (filePath.startsWith(prefixWithoutSlash)) {
         filePath = filePath.slice(prefixWithoutSlash.length);
+        logger.debug(`File path after removing prefix: ${filePath}`);
       }
 
       if (!filePath) {
@@ -148,7 +185,12 @@ export class StaticFileServerManager {
       }
 
       // 使用 FileService 获取文件
-      const fileResult = await this.fileService.getFile(`desktop://${filePath}`);
+      const desktopPath = `desktop://${filePath}`;
+      logger.debug(`Attempting to get file: ${desktopPath}`);
+      const fileResult = await this.fileService.getFile(desktopPath);
+      logger.debug(
+        `File retrieved successfully, mime type: ${fileResult.mimeType}, size: ${fileResult.content.byteLength} bytes`,
+      );
 
       // 再次检查响应状态
       if (res.destroyed || res.headersSent) {
@@ -158,11 +200,8 @@ export class StaticFileServerManager {
 
       // 设置响应头
       res.writeHead(200, {
-        // 缓存一年
-        'Access-Control-Allow-Origin': 'http://localhost:*',
-
+        'Access-Control-Allow-Origin': allowedOrigin,
         'Cache-Control': 'public, max-age=31536000',
-        // 允许 localhost 的任意端口
         'Content-Length': Buffer.byteLength(fileResult.content),
         'Content-Type': fileResult.mimeType,
       });
@@ -173,16 +212,27 @@ export class StaticFileServerManager {
       logger.debug(`HTTP file served successfully: desktop://${filePath}`);
     } catch (error) {
       logger.error(`Error serving HTTP file: ${error}`);
+      logger.error(`Error stack: ${error.stack}`);
 
       // 检查响应是否仍然可写
       if (!res.destroyed && !res.headersSent) {
         try {
+          // 获取请求的 Origin 并设置 CORS（错误响应也需要！）
+          const origin = req.headers.origin || req.headers.referer;
+          const allowedOrigin = getAllowedOrigin(origin);
+
           // 判断是否是文件未找到错误
           if (error.name === 'FileNotFoundError') {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.writeHead(404, {
+              'Access-Control-Allow-Origin': allowedOrigin,
+              'Content-Type': 'text/plain',
+            });
             res.end('File Not Found');
           } else {
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.writeHead(500, {
+              'Access-Control-Allow-Origin': allowedOrigin,
+              'Content-Type': 'text/plain',
+            });
             res.end('Internal Server Error');
           }
         } catch (writeError) {

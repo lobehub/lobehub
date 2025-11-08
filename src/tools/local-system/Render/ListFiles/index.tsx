@@ -1,9 +1,9 @@
 import { ListLocalFileParams } from '@lobechat/electron-client-ipc';
+import { ChatMessagePluginError } from '@lobechat/types';
 import React, { memo } from 'react';
 
 import { LocalFolder } from '@/features/LocalFile';
 import { LocalFileListState } from '@/tools/local-system/type';
-import { ChatMessagePluginError } from '@/types/message';
 
 import SearchResult from './Result';
 

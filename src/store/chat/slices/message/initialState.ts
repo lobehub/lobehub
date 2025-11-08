@@ -1,5 +1,6 @@
+import { UIChatMessage } from '@lobechat/types';
+
 import { ChatGroupAgentItem, ChatGroupItem } from '@/database/schemas/chatGroup';
-import { ChatMessage } from '@/types/message';
 
 import type { SupervisorTodoItem } from './supervisor';
 
@@ -39,7 +40,7 @@ export interface ChatMessageState {
    * whether messages have fetched
    */
   messagesInit: boolean;
-  messagesMap: Record<string, ChatMessage[]>;
+  messagesMap: Record<string, UIChatMessage[]>;
   /**
    * Supervisor decision debounce timers by group ID
    */

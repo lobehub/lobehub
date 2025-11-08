@@ -358,6 +358,9 @@ export default class Browser {
       session: browserWindow.webContents.session,
     });
 
+    // Setup CORS bypass for local file server
+    this.setupCORSBypass(browserWindow);
+
     logger.debug(`[${this.identifier}] Initiating placeholder and URL loading sequence.`);
     this.loadPlaceholder().then(() => {
       this.loadUrl(path).catch((e) => {
@@ -490,5 +493,38 @@ export default class Browser {
   reapplyVisualEffects(): void {
     logger.debug(`[${this.identifier}] Manually reapplying visual effects via Browser.`);
     this.applyVisualEffects();
+  }
+
+  /**
+   * Setup CORS bypass for local file server (127.0.0.1:*)
+   * This is needed for Electron to access files from the local static file server
+   */
+  private setupCORSBypass(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up CORS bypass for local file server`);
+
+    const session = browserWindow.webContents.session;
+
+    // Intercept response headers to add CORS headers
+    session.webRequest.onHeadersReceived((details, callback) => {
+      const url = details.url;
+
+      // Only modify headers for local file server requests (127.0.0.1)
+      if (url.includes('127.0.0.1') || url.includes('lobe-desktop-file')) {
+        const responseHeaders = details.responseHeaders || {};
+
+        // Add CORS headers
+        responseHeaders['Access-Control-Allow-Origin'] = ['*'];
+        responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS'];
+        responseHeaders['Access-Control-Allow-Headers'] = ['*'];
+
+        callback({
+          responseHeaders,
+        });
+      } else {
+        callback({ responseHeaders: details.responseHeaders });
+      }
+    });
+
+    logger.debug(`[${this.identifier}] CORS bypass setup completed`);
   }
 }

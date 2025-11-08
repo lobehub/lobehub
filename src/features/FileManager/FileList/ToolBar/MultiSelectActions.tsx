@@ -148,7 +148,7 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
               size={'small'}
               variant={'filled'}
             >
-              {t('batchDelete', { ns: 'common' })}
+              {t('delete', { ns: 'common' })}
             </Button>
           </Flexbox>
         )}

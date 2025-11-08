@@ -163,9 +163,9 @@
     "addMember": "افزودن عضو",
     "allMembers": "تمام اعضا",
     "createGroup": "ایجاد تیم Agent",
-    "noAvailableAgents": "دستیار قابل دعوت وجود ندارد",
-    "noSelectedAgents": "هنوز دستیار انتخاب نشده است",
-    "searchAgents": "جستجوی دستیار...",
+    "noAvailableAgents": "هیچ عاملی برای دعوت در دسترس نیست",
+    "noSelectedAgents": "هنوز عاملی انتخاب نشده است",
+    "searchAgents": "جستجوی عامل...",
     "setInitialMembers": "انتخاب اعضای تیم"
   },
   "members": "اعضا",
@@ -229,7 +229,7 @@
     "jumpToMessage": "رفتن به پیام شماره {{index}}",
     "nextMessage": "پیام بعدی",
     "previousMessage": "پیام قبلی",
-    "senderAssistant": "دستیار",
+    "senderAssistant": "عامل",
     "senderUser": "شما"
   },
   "newAgent": "دستیار جدید",

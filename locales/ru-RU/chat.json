@@ -163,9 +163,9 @@
     "addMember": "Добавить участника",
     "allMembers": "Все участники",
     "createGroup": "Создать команду агентов",
-    "noAvailableAgents": "Нет доступных помощников для приглашения",
-    "noSelectedAgents": "Помощники не выбраны",
-    "searchAgents": "Поиск помощников...",
+    "noAvailableAgents": "Нет доступных агентов для приглашения",
+    "noSelectedAgents": "Агенты ещё не выбраны",
+    "searchAgents": "Поиск агентов...",
     "setInitialMembers": "Выберите участников команды"
   },
   "members": "Участники",
@@ -229,7 +229,7 @@
     "jumpToMessage": "Перейти к сообщению № {{index}}",
     "nextMessage": "Следующее сообщение",
     "previousMessage": "Предыдущее сообщение",
-    "senderAssistant": "Ассистент",
+    "senderAssistant": "Агент",
     "senderUser": "Вы"
   },
   "newAgent": "Создать помощника",

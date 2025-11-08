@@ -1,15 +1,15 @@
 'use client';
 
 import { memo } from 'react';
-import { useParams } from 'react-router-dom';
 import { Flexbox } from 'react-layout-kit';
+import { useParams } from 'react-router-dom';
 
 import { withSuspense } from '@/components/withSuspense';
 import { useDiscoverStore } from '@/store/discover';
 import { DiscoverTab } from '@/types/discover';
 
-import Breadcrumb from '../features/Breadcrumb';
 import NotFound from '../components/NotFound';
+import Breadcrumb from '../features/Breadcrumb';
 import { DetailProvider } from './[...slugs]/features/DetailProvider';
 import Details from './[...slugs]/features/Details';
 import Header from './[...slugs]/features/Header';

@@ -85,6 +85,7 @@
         "restTime": "Overgebleven {{time}}"
       }
     },
+    "fileQueueInfo": "Bezig met uploaden van de eerste {{count}} bestanden, de resterende {{remaining}} bestanden worden in de wachtrij geplaatst",
     "totalCount": "Totaal {{count}} items",
     "uploadStatus": {
       "error": "Uploadfout",

@@ -1,4 +1,5 @@
 import { TraceEventType } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 import * as lobeUIModules from '@lobehub/ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { mutate } from 'swr';
@@ -7,7 +8,6 @@ import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { ChatMessage } from '@/types/message';
 
 import { useChatStore } from '../../store';
 
@@ -206,7 +206,7 @@ describe('chatMessage actions', () => {
           activeId: 'session-id',
           activeTopicId: undefined,
           messagesMap: {
-            [messageMapKey('session-id')]: [{ id: messageId } as ChatMessage],
+            [messageMapKey('session-id')]: [{ id: messageId } as UIChatMessage],
           },
         });
       });
@@ -229,9 +229,9 @@ describe('chatMessage actions', () => {
           activeTopicId: undefined,
           messagesMap: {
             [messageMapKey('session-id')]: [
-              { id: messageId, tools: [{ id: 'tool1' }, { id: 'tool2' }] } as ChatMessage,
-              { id: '2', tool_call_id: 'tool1', role: 'tool' } as ChatMessage,
-              { id: '3', tool_call_id: 'tool2', role: 'tool' } as ChatMessage,
+              { id: messageId, tools: [{ id: 'tool1' }, { id: 'tool2' }] } as UIChatMessage,
+              { id: '2', tool_call_id: 'tool1', role: 'tool' } as UIChatMessage,
+              { id: '3', tool_call_id: 'tool2', role: 'tool' } as UIChatMessage,
             ],
           },
         });
@@ -292,9 +292,14 @@ describe('chatMessage actions', () => {
                 id: messageId,
                 role: 'assistant',
                 tools: [{ id: 'tool1' }, { id: 'tool2' }],
-              } as ChatMessage,
-              { id: '2', parentId: messageId, tool_call_id: 'tool1', role: 'tool' } as ChatMessage,
-              { id: '3', tool_call_id: 'tool2', role: 'tool' } as ChatMessage,
+              } as UIChatMessage,
+              {
+                id: '2',
+                parentId: messageId,
+                tool_call_id: 'tool1',
+                role: 'tool',
+              } as UIChatMessage,
+              { id: '3', tool_call_id: 'tool2', role: 'tool' } as UIChatMessage,
             ],
           },
         });

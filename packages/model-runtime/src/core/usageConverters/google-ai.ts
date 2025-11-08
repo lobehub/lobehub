@@ -3,9 +3,8 @@ import {
   MediaModality,
   ModalityTokenCount,
 } from '@google/genai';
+import { ModelUsage } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
-
-import { ModelUsage } from '@/types/message';
 
 import { withUsageCost } from './utils/withUsageCost';
 

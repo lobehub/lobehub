@@ -1,4 +1,4 @@
-import { ChatMessage } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 import { ActionIconGroup } from '@lobehub/ui';
 import { ActionIconGroupItemType } from '@lobehub/ui/es/ActionIconGroup';
 import { ActionIconGroupEvent } from '@lobehub/ui/es/ActionIconGroup/type';
@@ -17,7 +17,7 @@ import { InPortalThreadContext } from '../../context/InPortalThreadContext';
 import { useChatListActionsBar } from '../../hooks/useChatListActionsBar';
 
 interface UserActionsProps {
-  data: ChatMessage;
+  data: UIChatMessage;
   id: string;
   index: number;
 }

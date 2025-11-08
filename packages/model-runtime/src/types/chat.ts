@@ -1,4 +1,4 @@
-import { ModelSpeed, ModelTokensUsage, ModelUsage } from '@lobechat/types';
+import { ModelPerformance, ModelTokensUsage, ModelUsage } from '@lobechat/types';
 
 import { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
@@ -186,7 +186,7 @@ export interface ChatCompletionTool {
 
 export interface OnFinishData {
   grounding?: any;
-  speed?: ModelSpeed;
+  speed?: ModelPerformance;
   text: string;
   thinking?: string;
   toolsCalling?: MessageToolCall[];

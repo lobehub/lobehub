@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ChatMessage } from './message';
+import { UIChatMessage } from './message';
 import { OpenAIChatMessage } from './openai/chat';
 import { LobeUniformTool, LobeUniformToolSchema } from './tool';
 import { ChatTopic } from './topic';
@@ -50,7 +50,7 @@ export const AiSendMessageServerSchema = z.object({
 export interface SendMessageServerResponse {
   assistantMessageId: string;
   isCreateNewTopic: boolean;
-  messages: ChatMessage[];
+  messages: UIChatMessage[];
   topicId: string;
   topics?: ChatTopic[];
   userMessageId: string;

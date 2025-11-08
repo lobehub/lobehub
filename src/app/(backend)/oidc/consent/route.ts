@@ -122,7 +122,6 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.redirect(finalRedirectUrl, {
-      headers: request.headers,
       status: 303,
     });
   } catch (error) {

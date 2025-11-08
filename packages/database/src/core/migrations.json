@@ -682,5 +682,52 @@
     "bps": true,
     "folderMillis": 1760108430562,
     "hash": "ce09b301abb80f6563abc2f526bdd20b4f69bae430f09ba2179b9e3bfec43067"
+  },
+  {
+    "sql": ["ALTER TABLE \"documents\" ADD COLUMN IF NOT EXISTS \"editor_data\" jsonb;"],
+    "bps": true,
+    "folderMillis": 1761554153406,
+    "hash": "bf2f21293e90e11cf60a784cf3ec219eafa95f7545d7d2f9d1449c0b0949599a"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"user_memories_preferences\" DROP CONSTRAINT IF EXISTS \"user_memories_preferences_context_id_user_memories_contexts_id_fk\";\n",
+      "\nALTER TABLE \"user_memories_experiences\" ALTER COLUMN \"user_memory_id\" SET DATA TYPE varchar(255);",
+      "\nALTER TABLE \"user_memories_identities\" ALTER COLUMN \"relationship\" SET DATA TYPE varchar(255);",
+      "\nALTER TABLE \"user_memories_identities\" ALTER COLUMN \"user_memory_id\" SET DATA TYPE varchar(255);",
+      "\nALTER TABLE \"user_memories\" ADD COLUMN IF NOT EXISTS \"metadata\" jsonb;",
+      "\nALTER TABLE \"user_memories\" ADD COLUMN  IF NOT EXISTS\"tags\" text[];",
+      "\nALTER TABLE \"user_memories_contexts\" ADD COLUMN IF NOT EXISTS \"user_id\" text;",
+      "\nALTER TABLE \"user_memories_contexts\" ADD COLUMN IF NOT EXISTS \"metadata\" jsonb;",
+      "\nALTER TABLE \"user_memories_contexts\" ADD COLUMN IF NOT EXISTS \"tags\" text[];",
+      "\nALTER TABLE \"user_memories_experiences\" ADD COLUMN IF NOT EXISTS \"user_id\" text;",
+      "\nALTER TABLE \"user_memories_experiences\" ADD COLUMN IF NOT EXISTS \"tags\" text[];",
+      "\nALTER TABLE \"user_memories_identities\" ADD COLUMN IF NOT EXISTS \"user_id\" text;",
+      "\nALTER TABLE \"user_memories_identities\" ADD COLUMN IF NOT EXISTS \"metadata\" jsonb;",
+      "\nALTER TABLE \"user_memories_identities\" ADD COLUMN IF NOT EXISTS \"tags\" text[];",
+      "\nALTER TABLE \"user_memories_identities\" ADD COLUMN IF NOT EXISTS \"episodic_date\" timestamp with time zone;",
+      "\nALTER TABLE \"user_memories_preferences\" ADD COLUMN IF NOT EXISTS \"user_id\" text;",
+      "\nALTER TABLE \"user_memories_preferences\" ADD COLUMN IF NOT EXISTS \"metadata\" jsonb;",
+      "\nALTER TABLE \"user_memories_preferences\" ADD COLUMN IF NOT EXISTS \"tags\" text[];",
+      "\nALTER TABLE \"user_memories_contexts\" ADD CONSTRAINT \"user_memories_contexts_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"users\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"user_memories_experiences\" ADD CONSTRAINT \"user_memories_experiences_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"users\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"user_memories_identities\" ADD CONSTRAINT \"user_memories_identities_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"users\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"user_memories_preferences\" ADD CONSTRAINT \"user_memories_preferences_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"users\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"user_memories_contexts\" DROP COLUMN IF EXISTS \"labels\";",
+      "\nALTER TABLE \"user_memories_contexts\" DROP COLUMN IF EXISTS \"extracted_labels\";",
+      "\nALTER TABLE \"user_memories_experiences\" DROP COLUMN IF EXISTS \"labels\";",
+      "\nALTER TABLE \"user_memories_experiences\" DROP COLUMN IF EXISTS \"extracted_labels\";",
+      "\nALTER TABLE \"user_memories_identities\" DROP COLUMN IF EXISTS \"current_focuses\";",
+      "\nALTER TABLE \"user_memories_identities\" DROP COLUMN IF EXISTS \"experience\";",
+      "\nALTER TABLE \"user_memories_identities\" DROP COLUMN IF EXISTS \"extracted_labels\";",
+      "\nALTER TABLE \"user_memories_identities\" DROP COLUMN IF EXISTS \"labels\";",
+      "\nALTER TABLE \"user_memories_preferences\" DROP COLUMN IF EXISTS \"context_id\";",
+      "\nALTER TABLE \"user_memories_preferences\" DROP COLUMN IF EXISTS \"labels\";",
+      "\nALTER TABLE \"user_memories_preferences\" DROP COLUMN IF EXISTS \"extracted_labels\";",
+      "\nALTER TABLE \"user_memories_preferences\" DROP COLUMN IF EXISTS \"extracted_scopes\";\n"
+    ],
+    "bps": true,
+    "folderMillis": 1761563458595,
+    "hash": "c483b3ea859f78f687737229bd40f6fef5486aaf05fa20a8ea6961c2a8f0cc64"
   }
 ]

@@ -1,3 +1,4 @@
+import { BatchTaskResult, UIChatMessage, UpdateMessageRAGParamsSchema } from '@lobechat/types';
 import { z } from 'zod';
 
 import { MessageModel } from '@/database/models/message';
@@ -6,11 +7,8 @@ import { getServerDB } from '@/database/server';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { ChatMessage } from '@/types/message';
-import { UpdateMessageRAGParamsSchema } from '@/types/message/rag';
-import { BatchTaskResult } from '@/types/service';
 
-type ChatMessageList = ChatMessage[];
+type ChatMessageList = UIChatMessage[];
 
 const messageProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -66,6 +64,14 @@ export const messageRouter = router({
       const data = await ctx.messageModel.create(input as any);
 
       return data.id;
+    }),
+
+  createNewMessage: messageProcedure
+    .input(z.object({}).passthrough().partial())
+    .mutation(async ({ input, ctx }) => {
+      return ctx.messageModel.createNewMessage(input as any, {
+        postProcessUrl: (path) => ctx.fileService.getFullFileUrl(path),
+      });
     }),
 
   // TODO: it will be removed in V2

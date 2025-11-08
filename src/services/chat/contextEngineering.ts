@@ -15,7 +15,7 @@ import {
   ToolSystemRoleProvider,
 } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
-import { ChatMessage, OpenAIChatMessage } from '@lobechat/types';
+import { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 import { VARIABLE_GENERATORS } from '@lobechat/utils/client';
 
 import { isCanUseFC } from '@/helpers/isCanUseFC';
@@ -30,7 +30,7 @@ interface ContextEngineeringContext {
   historySummary?: string;
   inputTemplate?: string;
   isWelcomeQuestion?: boolean;
-  messages: ChatMessage[];
+  messages: UIChatMessage[];
   model: string;
   provider: string;
   sessionId?: string;

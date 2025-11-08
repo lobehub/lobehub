@@ -85,6 +85,7 @@
         "restTime": "Kalan {{time}}"
       }
     },
+    "fileQueueInfo": "{{count}} dosya yükleniyor, kalan {{remaining}} dosya sıraya alınacak",
     "totalCount": "Toplam {{count}} öğe",
     "uploadStatus": {
       "error": "Yükleme hatası",

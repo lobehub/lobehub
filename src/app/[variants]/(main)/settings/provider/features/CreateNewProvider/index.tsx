@@ -18,8 +18,8 @@ import { Flexbox } from 'react-layout-kit';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 import { CreateAiProviderParams } from '@/types/aiProvider';
 
-import { CUSTOM_PROVIDER_SDK_OPTIONS } from '../customProviderSdkOptions';
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
+import { CUSTOM_PROVIDER_SDK_OPTIONS } from '../customProviderSdkOptions';
 
 interface CreateNewProviderProps {
   onClose?: () => void;
@@ -142,7 +142,6 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
   return (
     <FormModal
       destroyOnHidden
-      height={'90%'}
       items={[
         {
           children: basicItems,

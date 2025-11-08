@@ -163,9 +163,9 @@
     "addMember": "Thêm thành viên",
     "allMembers": "Tất cả thành viên",
     "createGroup": "Tạo nhóm Agent",
-    "noAvailableAgents": "Không có trợ lý nào để mời",
-    "noSelectedAgents": "Chưa chọn trợ lý nào",
-    "searchAgents": "Tìm trợ lý...",
+    "noAvailableAgents": "Không có Agent nào để mời",
+    "noSelectedAgents": "Chưa chọn Agent nào",
+    "searchAgents": "Tìm kiếm Agent...",
     "setInitialMembers": "Chọn thành viên nhóm"
   },
   "members": "Thành viên",
@@ -229,7 +229,7 @@
     "jumpToMessage": "Chuyển đến tin nhắn thứ {{index}}",
     "nextMessage": "Tin nhắn tiếp theo",
     "previousMessage": "Tin nhắn trước",
-    "senderAssistant": "Trợ lý",
+    "senderAssistant": "Agent",
     "senderUser": "Bạn"
   },
   "newAgent": "Tạo trợ lý mới",

@@ -1,28 +1,29 @@
-import type { HeatmapsProps } from '@lobehub/charts';
-
 import {
-  ChatMessage,
   ChatMessageError,
   ChatMessagePluginError,
   ChatTTS,
   ChatTranslate,
   CreateMessageParams,
-  MessageItem,
+  CreateMessageResult,
+  DBMessageItem,
   ModelRankItem,
+  UIChatMessage,
   UpdateMessageParams,
-} from '@/types/message';
-import { UpdateMessageRAGParams } from '@/types/message/rag';
+  UpdateMessageRAGParams,
+} from '@lobechat/types';
+import type { HeatmapsProps } from '@lobehub/charts';
 
 /* eslint-disable typescript-sort-keys/interface */
 
 export interface IMessageService {
   createMessage(data: CreateMessageParams): Promise<string>;
-  batchCreateMessages(messages: MessageItem[]): Promise<any>;
+  createNewMessage(data: CreateMessageParams): Promise<CreateMessageResult>;
+  batchCreateMessages(messages: DBMessageItem[]): Promise<any>;
 
-  getMessages(sessionId: string, topicId?: string, groupId?: string): Promise<ChatMessage[]>;
-  getGroupMessages(groupId: string, topicId?: string): Promise<ChatMessage[]>;
-  getAllMessages(): Promise<ChatMessage[]>;
-  getAllMessagesInSession(sessionId: string): Promise<ChatMessage[]>;
+  getMessages(sessionId: string, topicId?: string, groupId?: string): Promise<UIChatMessage[]>;
+  getGroupMessages(groupId: string, topicId?: string): Promise<UIChatMessage[]>;
+  getAllMessages(): Promise<UIChatMessage[]>;
+  getAllMessagesInSession(sessionId: string): Promise<UIChatMessage[]>;
   countMessages(params?: {
     endDate?: string;
     range?: [string, string];

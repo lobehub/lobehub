@@ -222,7 +222,10 @@
     "description": "Llama 4 Maverick: Mixture-of-Experts tabanlı büyük ölçekli model, çıkarımda üstün performans için verimli uzman aktivasyon stratejisi sunar."
   },
   "MiniMax-M1": {
-    "description": "Tamamen kendi geliştirdiğimiz yeni çıkarım modeli. Küresel lider: 80K düşünce zinciri x 1M giriş, performansı uluslararası üst düzey modellerle eşdeğer."
+    "description": "Tamamen yeni, kendi geliştirdiğimiz çıkarım modeli. Dünya lideri: 80K düşünce zinciri x 1M girdi, performansı yurtdışındaki en iyi modellerle kıyaslanabilir düzeyde."
+  },
+  "MiniMax-M2": {
+    "description": "Verimli kodlama ve Agent iş akışları için özel olarak tasarlandı."
   },
   "MiniMax-Text-01": {
     "description": "MiniMax-01 serisi modellerinde cesur yenilikler yaptık: ilk kez büyük ölçekli lineer dikkat mekanizmasını gerçekleştirdik, geleneksel Transformer mimarisi artık tek seçenek değil. Bu modelin parametre sayısı 456 milyara kadar çıkmakta, tek bir aktivasyonda 45.9 milyar. Modelin genel performansı, yurtdışındaki en iyi modellerle karşılaştırılabilirken, dünya genelinde 4 milyon token uzunluğundaki bağlamı verimli bir şekilde işleyebilir, bu da GPT-4o'nun 32 katı, Claude-3.5-Sonnet'in 20 katıdır."
@@ -290,11 +293,11 @@
   "Pro/deepseek-ai/DeepSeek-V3": {
     "description": "DeepSeek-V3, 6710 milyar parametreye sahip bir karma uzman (MoE) dil modelidir ve çok başlı potansiyel dikkat (MLA) ve DeepSeekMoE mimarisini kullanarak, yardımcı kayıplar olmadan yük dengeleme stratejileri ile çıkarım ve eğitim verimliliğini optimize etmektedir. 14.8 trilyon yüksek kaliteli token üzerinde önceden eğitilmiş ve denetimli ince ayar ve güçlendirilmiş öğrenme ile, DeepSeek-V3 performans açısından diğer açık kaynak modelleri geride bırakmakta ve lider kapalı kaynak modellere yaklaşmaktadır."
   },
-  "Pro/deepseek-ai/DeepSeek-V3.1": {
-    "description": "DeepSeek-V3.1, DeepSeek AI tarafından yayımlanan hibrit modlu büyük dil modelidir ve selef modellerine kıyasla birçok önemli yükseltme içermektedir. Modelin en büyük yeniliği, \"Düşünme Modu\" (Thinking Mode) ve \"Düşünmeme Modu\" (Non-thinking Mode) özelliklerini bir arada sunmasıdır; kullanıcılar sohbet şablonlarını ayarlayarak farklı görev ihtiyaçlarına esnek şekilde uyum sağlayabilirler. Özel post-training optimizasyonları sayesinde V3.1, araç çağrıları ve Agent görevlerinde performansını önemli ölçüde artırmış, dış arama araçlarını destekleme ve çok adımlı karmaşık görevleri yerine getirme kapasitesini geliştirmiştir. Model, DeepSeek-V3.1-Base üzerine post-training uygulanarak, iki aşamalı uzun metin genişletme yöntemiyle eğitim veri miktarını büyük ölçüde artırmış ve uzun belgeler ile uzun kod parçalarını işleme yeteneğini geliştirmiştir. Açık kaynaklı bir model olarak DeepSeek-V3.1, kodlama, matematik ve çıkarım gibi birçok kıyaslama testinde en iyi kapalı kaynak modellerle rekabet eden performans sergilemekte ve MoE (Mixture of Experts) mimarisi sayesinde büyük model kapasitesini korurken çıkarım maliyetlerini etkin şekilde düşürmektedir."
-  },
   "Pro/deepseek-ai/DeepSeek-V3.1-Terminus": {
     "description": "DeepSeek-V3.1-Terminus, DeepSeek tarafından yayınlanan V3.1 modelinin güncellenmiş versiyonudur ve hibrit ajan büyük dil modeli olarak konumlandırılmıştır. Bu güncelleme, modelin mevcut yeteneklerini koruyarak kullanıcı geri bildirimlerine dayalı sorunları düzeltmeye ve kararlılığı artırmaya odaklanmıştır. Dil tutarlılığını önemli ölçüde iyileştirmiş, Çince ve İngilizce karışımı ile anormal karakterlerin görünümünü azaltmıştır. Model, farklı görevler için sohbet şablonları aracılığıyla esnek geçiş yapılabilen “Düşünme Modu” ve “Düşünmeme Modu”nu entegre etmiştir. Önemli bir iyileştirme olarak, V3.1-Terminus, kod ajanı (Code Agent) ve arama ajanı (Search Agent) performansını artırarak araç çağrıları ve çok adımlı karmaşık görevlerin yürütülmesinde daha güvenilir hale getirmiştir."
+  },
+  "Pro/deepseek-ai/DeepSeek-V3.2-Exp": {
+    "description": "DeepSeek-V3.2-Exp, DeepSeek tarafından yayınlanan deneysel V3.2 sürümüdür ve yeni nesil mimariye geçişte bir ara keşif niteliğindedir. Bu sürüm, V3.1-Terminus temelinde geliştirilmiş olup, uzun bağlamlı eğitim ve çıkarım verimliliğini artırmak amacıyla DeepSeek Seyrek Dikkat (DeepSeek Sparse Attention, DSA) mekanizmasını entegre eder. Araç kullanımı, uzun belge anlama ve çok adımlı akıl yürütme gibi alanlarda özel optimizasyonlar yapılmıştır. V3.2-Exp, araştırma ile ürünleştirme arasında bir köprü görevi görür ve yüksek bağlam bütçesi gerektiren senaryolarda daha verimli çıkarım arayan kullanıcılar için uygundur."
   },
   "Pro/moonshotai/Kimi-K2-Instruct-0905": {
     "description": "Kimi K2-Instruct-0905, Kimi K2'nin en yeni ve en güçlü versiyonudur. Bu, toplamda 1 trilyon parametreye ve 32 milyar aktif parametreye sahip, üst düzey bir Hibrit Uzman (MoE) dil modelidir. Modelin başlıca özellikleri şunlardır: geliştirilmiş ajan kodlama zekası, açık benchmark testlerinde ve gerçek dünya ajan kodlama görevlerinde belirgin performans artışı; ön uç kodlama deneyiminde iyileştirmeler, ön uç programlamada estetik ve işlevsellik açısından ilerlemeler."
@@ -397,6 +400,33 @@
   },
   "Qwen/Qwen3-Next-80B-A3B-Thinking": {
     "description": "Qwen3-Next-80B-A3B-Thinking, Alibaba Tongyi Qianwen ekibi tarafından karmaşık çıkarım görevleri için tasarlanmış yeni nesil temel modeldir. Yenilikçi Qwen3-Next mimarisi üzerine kurulmuş olup, hibrit dikkat mekanizması (Gated DeltaNet ve Gated Attention) ve yüksek seyrekli hibrit uzman (MoE) yapısını birleştirerek en üst düzey eğitim ve çıkarım verimliliğini hedefler. 80 milyar toplam parametreye sahip seyrek bir model olarak, çıkarım sırasında yalnızca yaklaşık 3 milyar parametreyi aktive ederek hesaplama maliyetlerini önemli ölçüde düşürür ve 32K token’dan uzun bağlam görevlerinde çıkarım verimliliği Qwen3-32B modeline kıyasla 10 kat daha fazladır. Bu “Thinking” versiyonu, matematiksel ispatlar, kod sentezi, mantıksal analiz ve planlama gibi zorlu çok adımlı görevler için optimize edilmiştir ve çıkarım sürecini varsayılan olarak yapılandırılmış “düşünce zinciri” biçiminde sunar. Performans açısından, yalnızca daha maliyetli modeller olan Qwen3-32B-Thinking’i değil, aynı zamanda Gemini-2.5-Flash-Thinking’i de birçok kıyaslama testinde geride bırakır."
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Captioner": {
+    "description": "Qwen3-Omni-30B-A3B-Captioner, Alibaba Tongyi Qianwen ekibinin Qwen3 serisinden bir görsel-dil modeli (VLM)'dir. Yüksek kaliteli, ayrıntılı ve doğru görsel açıklamalar üretmek için özel olarak tasarlanmıştır. 30 milyar toplam parametreye sahip karma uzman (MoE) mimarisi üzerine kuruludur ve görsel içeriği derinlemesine anlayarak bunu doğal ve akıcı metin açıklamalarına dönüştürebilir. Görsel detay yakalama, sahne anlama, nesne tanıma ve ilişki çıkarımı gibi alanlarda üstün performans gösterir. Özellikle hassas görsel anlama ve açıklama üretimi gerektiren uygulamalar için uygundur."
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Instruct": {
+    "description": "Qwen3-Omni-30B-A3B-Instruct, Alibaba Tongyi Qianwen ekibinin en yeni Qwen3 serisinin bir üyesidir. 30 milyar toplam parametre ve 3 milyar aktif parametreye sahip karma uzman (MoE) mimarisiyle, güçlü performansını korurken çıkarım maliyetini etkin şekilde düşürür. Yüksek kaliteli, çok kaynaklı ve çok dilli verilerle eğitilmiştir; güçlü genel yeteneklere sahiptir ve metin, görsel, ses ve video dahil olmak üzere tüm modlarda girdi işleyebilir. Modlar arası içerik anlama ve üretme yeteneğine sahiptir."
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Thinking": {
+    "description": "Qwen3-Omni-30B-A3B-Thinking, Qwen3-Omni çok modlu modelinin çekirdek \"düşünen\" (Thinker) bileşenidir. Metin, ses, görsel ve video dahil olmak üzere çok modlu girdileri işlemek ve karmaşık düşünce zinciri çıkarımı gerçekleştirmek üzere tasarlanmıştır. Çıkarımın beyni olarak, tüm girdileri ortak bir temsili alana dönüştürerek modlar arası derin anlama ve karmaşık çıkarım yetenekleri sağlar. Karma uzman (MoE) mimarisi üzerine kuruludur, 30 milyar toplam parametre ve 3 milyar aktif parametreye sahiptir; güçlü çıkarım yeteneğini korurken hesaplama verimliliğini optimize eder."
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Instruct": {
+    "description": "Qwen3-VL-235B-A22B-Instruct, Qwen3-VL serisinin büyük ölçekli talimatla ince ayarlanmış modelidir. Karışık uzman (MoE) mimarisi üzerine kuruludur ve üstün çok modlu anlama ve üretim yeteneklerine sahiptir. Doğal olarak 256K bağlamı destekler ve yüksek eşzamanlı üretim düzeyinde çok modlu hizmetler için uygundur."
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Thinking": {
+    "description": "Qwen3-VL-235B-A22B-Thinking, Qwen3-VL serisinin amiral gemisi düşünme sürümüdür. Karmaşık çok modlu akıl yürütme, uzun bağlamlı çıkarım ve yapay zeka etkileşimleri için özel olarak optimize edilmiştir. Derin düşünme ve görsel akıl yürütme gerektiren kurumsal düzeydeki senaryolar için uygundur."
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+    "description": "Qwen3-VL-30B-A3B-Instruct, Qwen3-VL serisinin talimatla ince ayarlanmış sürümüdür. Güçlü görsel-dil anlama ve üretim yeteneklerine sahiptir, doğal olarak 256K bağlam uzunluğunu destekler ve çok modlu diyaloglar ile görsel koşullu üretim görevleri için uygundur."
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Thinking": {
+    "description": "Qwen3-VL-30B-A3B-Thinking, Qwen3-VL serisinin akıl yürütme yetenekleri geliştirilmiş (Thinking) sürümüdür. Çok modlu akıl yürütme, görselden koda dönüşüm ve karmaşık görsel anlama görevlerinde optimize edilmiştir. 256K bağlam desteği sunar ve daha güçlü zincirleme düşünme yeteneğine sahiptir."
+  },
+  "Qwen/Qwen3-VL-32B-Instruct": {
+    "description": "Qwen3-VL-32B-Instruct, Alibaba Tongyi Qianwen ekibi tarafından geliştirilen bir görsel-dil modelidir ve birçok görsel-dil kıyaslamasında SOTA (state-of-the-art) performans elde etmiştir. Milyon piksel seviyesinde yüksek çözünürlüklü görsel girdileri destekler ve güçlü genel görsel anlama, çok dilli OCR, ince ayrıntılı görsel konumlandırma ve görsel diyalog yeteneklerine sahiptir. Qwen3 serisinin bir görsel-dil modeli olarak, karmaşık çok modlu görevleri işleyebilir; araç çağırma ve ön ek tamamlama gibi gelişmiş işlevleri destekler."
+  },
+  "Qwen/Qwen3-VL-32B-Thinking": {
+    "description": "Qwen3-VL-32B-Thinking, Alibaba Tongyi Qianwen ekibi tarafından geliştirilen görsel-dil modelleri arasında, karmaşık görsel çıkarım görevleri için özel olarak optimize edilmiş bir versiyondur. Dahili \"düşünme modu\" sayesinde, soruları yanıtlamadan önce ayrıntılı ara çıkarım adımları üretebilir; bu da çok adımlı mantık, planlama ve karmaşık çıkarım gerektiren görevlerde performansını önemli ölçüde artırır. Milyon piksel seviyesinde yüksek çözünürlüklü görsel girdileri destekler; güçlü genel görsel anlama, çok dilli OCR, ince ayrıntılı görsel konumlandırma ve görsel diyalog yeteneklerine sahiptir. Ayrıca araç çağırma ve ön ek tamamlama gibi işlevleri destekler."
   },
   "Qwen/Qwen3-VL-8B-Instruct": {
     "description": "Qwen3-VL-8B-Instruct, Qwen3 serisinin bir görsel-dil modelidir. Qwen3-8B-Instruct temel alınarak geliştirilmiş ve büyük miktarda görsel-metin verisiyle eğitilmiştir. Genel görsel anlama, görsel odaklı diyaloglar ve görsellerde çok dilli metin tanıma konularında uzmandır. Görsel soru-cevap, görsel betimleme, çok modlu komut takibi ve araç çağırma gibi senaryolarda kullanılabilir."
@@ -947,6 +977,9 @@
   "databricks/dbrx-instruct": {
     "description": "DBRX Instruct, yüksek güvenilirlikte talimat işleme yetenekleri sunar ve çok çeşitli endüstri uygulamalarını destekler."
   },
+  "deepseek-ai/DeepSeek-OCR": {
+    "description": "DeepSeek-OCR, DeepSeek AI tarafından geliştirilen bir görsel-dil modelidir ve optik karakter tanıma (OCR) ile \"bağlam optik sıkıştırma\"ya odaklanır. Görsellerden bağlamsal bilgiyi sıkıştırma sınırlarını keşfetmeyi amaçlar; belgeleri verimli şekilde işleyerek Markdown gibi yapılandırılmış metin formatlarına dönüştürebilir. Görsellerdeki metin içeriğini doğru şekilde tanıyabilir; özellikle belge dijitalleştirme, metin çıkarımı ve yapılandırılmış işleme gibi uygulamalar için uygundur."
+  },
   "deepseek-ai/DeepSeek-R1": {
     "description": "DeepSeek-R1, tekrarlayan öğrenme (RL) destekli bir çıkarım modelidir ve modeldeki tekrarlama ve okunabilirlik sorunlarını çözmektedir. RL'den önce, DeepSeek-R1 soğuk başlangıç verilerini tanıtarak çıkarım performansını daha da optimize etmiştir. Matematik, kod ve çıkarım görevlerinde OpenAI-o1 ile benzer bir performans sergilemekte ve özenle tasarlanmış eğitim yöntemleri ile genel etkisini artırmaktadır."
   },
@@ -978,13 +1011,13 @@
     "description": "DeepSeek-V3, 6710 milyar parametreye sahip bir karma uzman (MoE) dil modelidir. Çok başlı potansiyel dikkat (MLA) ve DeepSeekMoE mimarisini kullanarak, yardımcı kayıplar olmadan yük dengeleme stratejisi ile çıkarım ve eğitim verimliliğini optimize etmektedir. 14.8 trilyon yüksek kaliteli token üzerinde önceden eğitilmiş ve denetimli ince ayar ile tekrarlayan öğrenme gerçekleştirilmiştir; DeepSeek-V3, performans açısından diğer açık kaynaklı modelleri geride bırakmakta ve lider kapalı kaynaklı modellere yaklaşmaktadır."
   },
   "deepseek-ai/DeepSeek-V3.1": {
-    "description": "DeepSeek-V3.1, DeepSeek AI tarafından yayımlanan hibrit modlu büyük dil modelidir ve selef modellerine kıyasla birçok önemli yükseltme içermektedir. Modelin en büyük yeniliği, \"Düşünme Modu\" (Thinking Mode) ve \"Düşünmeme Modu\" (Non-thinking Mode) özelliklerini bir arada sunmasıdır; kullanıcılar sohbet şablonlarını ayarlayarak farklı görev ihtiyaçlarına esnek şekilde uyum sağlayabilirler. Özel post-training optimizasyonları sayesinde V3.1, araç çağrıları ve Agent görevlerinde performansını önemli ölçüde artırmış, dış arama araçlarını destekleme ve çok adımlı karmaşık görevleri yerine getirme kapasitesini geliştirmiştir. Model, DeepSeek-V3.1-Base üzerine post-training uygulanarak, iki aşamalı uzun metin genişletme yöntemiyle eğitim veri miktarını büyük ölçüde artırmış ve uzun belgeler ile uzun kod parçalarını işleme yeteneğini geliştirmiştir. Açık kaynaklı bir model olarak DeepSeek-V3.1, kodlama, matematik ve çıkarım gibi birçok kıyaslama testinde en iyi kapalı kaynak modellerle rekabet eden performans sergilemekte ve MoE (Mixture of Experts) mimarisi sayesinde büyük model kapasitesini korurken çıkarım maliyetlerini etkin şekilde düşürmektedir."
+    "description": "DeepSeek V3.1 modeli, hem düşünme hem de düşünme dışı modları destekleyen hibrit akıl yürütme mimarisine sahip bir modeldir."
   },
   "deepseek-ai/DeepSeek-V3.1-Terminus": {
     "description": "DeepSeek-V3.1-Terminus, DeepSeek tarafından yayınlanan V3.1 modelinin güncellenmiş versiyonudur ve hibrit ajan büyük dil modeli olarak konumlandırılmıştır. Bu güncelleme, modelin mevcut yeteneklerini koruyarak kullanıcı geri bildirimlerine dayalı sorunları düzeltmeye ve kararlılığı artırmaya odaklanmıştır. Dil tutarlılığını önemli ölçüde iyileştirmiş, Çince ve İngilizce karışımı ile anormal karakterlerin görünümünü azaltmıştır. Model, farklı görevler için sohbet şablonları aracılığıyla esnek geçiş yapılabilen “Düşünme Modu” ve “Düşünmeme Modu”nu entegre etmiştir. Önemli bir iyileştirme olarak, V3.1-Terminus, kod ajanı (Code Agent) ve arama ajanı (Search Agent) performansını artırarak araç çağrıları ve çok adımlı karmaşık görevlerin yürütülmesinde daha güvenilir hale getirmiştir."
   },
   "deepseek-ai/DeepSeek-V3.2-Exp": {
-    "description": "DeepSeek V3.2 Exp modeli, hem düşünme hem de düşünme dışı modları destekleyen hibrit bir akıl yürütme mimarisine sahiptir."
+    "description": "DeepSeek-V3.2-Exp, DeepSeek tarafından yayınlanan deneysel V3.2 sürümüdür ve yeni nesil mimariye geçişte bir ara keşif niteliğindedir. Bu sürüm, V3.1-Terminus temelinde geliştirilmiş olup, uzun bağlamlı eğitim ve çıkarım verimliliğini artırmak amacıyla DeepSeek Seyrek Dikkat (DeepSeek Sparse Attention, DSA) mekanizmasını entegre eder. Araç kullanımı, uzun belge anlama ve çok adımlı akıl yürütme gibi alanlarda özel optimizasyonlar yapılmıştır. V3.2-Exp, araştırma ile ürünleştirme arasında bir köprü görevi görür ve yüksek bağlam bütçesi gerektiren senaryolarda daha verimli çıkarım arayan kullanıcılar için uygundur."
   },
   "deepseek-ai/deepseek-llm-67b-chat": {
     "description": "DeepSeek 67B, yüksek karmaşıklıkta diyaloglar için eğitilmiş gelişmiş bir modeldir."
@@ -1657,9 +1690,6 @@
   },
   "google/gemma-3-12b-it": {
     "description": "Gemma 3 12B, Google tarafından geliştirilen açık kaynaklı bir dil modelidir ve verimlilik ile performansta yeni standartlar belirlemiştir."
-  },
-  "google/gemma-3-1b-it": {
-    "description": "Gemma 3 1B, Google tarafından geliştirilen açık kaynaklı bir dil modelidir ve verimlilik ile performansta yeni standartlar belirlemiştir."
   },
   "google/gemma-3-27b-it": {
     "description": "Gemma 3 27B, Google'ın verimlilik ve performans açısından yeni standartlar belirleyen açık kaynaklı bir dil modelidir."
@@ -2474,9 +2504,6 @@
   "mistralai/Mixtral-8x7B-v0.1": {
     "description": "Mixtral 8x7B, birden fazla parametre kullanarak akıl yürütme hızını artıran seyrek uzman modelidir, çok dilli ve kod üretim görevleri için uygundur."
   },
-  "mistralai/mistral-7b-instruct": {
-    "description": "Mistral 7B Instruct, hız optimizasyonu ve uzun bağlam desteği sunan yüksek performanslı bir endüstri standart modelidir."
-  },
   "mistralai/mistral-nemo": {
     "description": "Mistral Nemo, çok dilli destek ve yüksek performanslı programlama sunan 7.3B parametreli bir modeldir."
   },
@@ -3139,6 +3166,9 @@
   },
   "tencent/Hunyuan-A13B-Instruct": {
     "description": "Hunyuan-A13B-Instruct, 80 milyar parametreye sahip olup, 13 milyar parametre etkinleştirilerek daha büyük modellerle rekabet edebilir; \"hızlı düşünme/yavaş düşünme\" karma akıl yürütmeyi destekler; uzun metin anlama kararlıdır; BFCL-v3 ve τ-Bench ile doğrulanmış, ajan yeteneklerinde liderdir; GQA ve çoklu kuantizasyon formatlarıyla birleşerek verimli akıl yürütme sağlar."
+  },
+  "tencent/Hunyuan-MT-7B": {
+    "description": "Hunyuan Çeviri Modeli, Hunyuan-MT-7B çeviri modeli ve Hunyuan-MT-Chimera birleşik modelinden oluşur. Hunyuan-MT-7B, 7 milyar parametreye sahip hafif bir çeviri modelidir ve kaynak metni hedef dile çevirmek için kullanılır. Model, 33 dili ve 5 Çin azınlık dilini destekleyen çift yönlü çeviri yeteneğine sahiptir. WMT25 uluslararası makine çevirisi yarışmasında, katıldığı 31 dil kategorisinin 30'unda birinci olarak üstün çeviri yeteneğini kanıtlamıştır. Çeviri senaryoları için Tencent Hunyuan, ön eğitimden denetimli ince ayara, ardından çeviri güçlendirme ve birleşik güçlendirmeye kadar eksiksiz bir eğitim paradigması sunmuştur. Bu sayede benzer ölçekli modeller arasında sektör lideri performansa ulaşmıştır. Model yüksek hesaplama verimliliğine sahiptir, kolayca dağıtılabilir ve çeşitli uygulama senaryolarına uygundur."
   },
   "text-embedding-3-large": {
     "description": "En güçlü vektörleştirme modeli, İngilizce ve diğer dillerdeki görevler için uygundur."

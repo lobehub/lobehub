@@ -1,3 +1,4 @@
+import { ChatPluginPayload } from '@lobechat/types';
 import { Icon, Tag, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { CircuitBoard } from 'lucide-react';
@@ -10,7 +11,6 @@ import { useYamlArguments } from '@/hooks/useYamlArguments';
 import { useChatStore } from '@/store/chat';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
-import { ChatPluginPayload } from '@/types/message';
 
 import { useStyles } from './style';
 

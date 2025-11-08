@@ -1,6 +1,5 @@
+import { UIChatMessage } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-import { ChatMessage } from '@/types/message';
 
 import { CreateMessageParams, MessageModel } from '../message';
 
@@ -64,7 +63,7 @@ describe('MessageModel', () => {
 
   describe('batchCreate', () => {
     it('should batch create message records', async () => {
-      const messagesToCreate = [messageData, messageData] as ChatMessage[];
+      const messagesToCreate = [messageData, messageData] as UIChatMessage[];
       const results = await MessageModel.batchCreate(messagesToCreate);
 
       expect(results.success).toBeTruthy();
@@ -88,7 +87,7 @@ describe('MessageModel', () => {
   describe('query', () => {
     it('should query messages with pagination', async () => {
       // 创建多条消息以测试查询方法
-      await MessageModel.batchCreate([messageData, messageData] as ChatMessage[]);
+      await MessageModel.batchCreate([messageData, messageData] as UIChatMessage[]);
 
       const queriedMessages = await MessageModel.query({
         pageSize: 1,
@@ -102,7 +101,7 @@ describe('MessageModel', () => {
 
     it('should query correctly without topic id', async () => {
       // 创建多条消息以测试查询方法
-      await MessageModel.batchCreate([messageData, messageData] as ChatMessage[]);
+      await MessageModel.batchCreate([messageData, messageData] as UIChatMessage[]);
 
       const queriedMessages = await MessageModel.query({ sessionId: messageData.sessionId });
 
@@ -114,7 +113,7 @@ describe('MessageModel', () => {
       await MessageModel.batchCreate([
         messageData,
         { ...messageData, topicId: undefined },
-      ] as ChatMessage[]);
+      ] as UIChatMessage[]);
 
       const queriedMessages = await MessageModel.query({ sessionId: messageData.sessionId });
 
@@ -122,7 +121,7 @@ describe('MessageModel', () => {
     });
 
     it('should should have correct order', async () => {
-      const data: ChatMessage[] = [
+      const data: UIChatMessage[] = [
         {
           role: 'user',
           content: '1',

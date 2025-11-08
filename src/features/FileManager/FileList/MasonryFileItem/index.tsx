@@ -3,7 +3,6 @@ import { Checkbox, Image } from 'antd';
 import { createStyles } from 'antd-style';
 import { isNull } from 'lodash-es';
 import { FileBoxIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
@@ -111,8 +110,6 @@ const useStyles = createStyles(({ css, token }) => ({
     inset-block-end: 8px;
     inset-inline-end: 8px;
 
-    padding-block: 4px;
-    padding-inline: 8px;
     border-radius: ${token.borderRadius}px;
 
     opacity: 0;
@@ -268,6 +265,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
 interface MasonryFileItemProps extends FileListItem {
   knowledgeBaseId?: string;
+  onOpen: (id: string) => void;
   onSelectedChange: (id: string, selected: boolean) => void;
   selected?: boolean;
 }
@@ -288,10 +286,10 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     onSelectedChange,
     knowledgeBaseId,
     size,
+    onOpen,
   }) => {
     const { t } = useTranslation('components');
     const { styles, cx } = useStyles();
-    const router = useRouter();
     const [imageLoaded, setImageLoaded] = useState(false);
     const [markdownContent, setMarkdownContent] = useState<string>('');
     const [isLoadingMarkdown, setIsLoadingMarkdown] = useState(false);
@@ -320,8 +318,8 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
           });
         },
         {
-          rootMargin: '50px', // Start loading slightly before entering viewport
-          threshold: 0.1,
+          rootMargin: '200px', // Increased margin to load content earlier
+          threshold: 0.01, // Lower threshold for earlier triggering
         },
       );
 
@@ -372,7 +370,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         <div
           className={cx(styles.content, !isImage && !isMarkdown && styles.contentWithPadding)}
           onClick={() => {
-            router.push(`/files/${id}`);
+            onOpen(id);
           }}
         >
           {isImage && url ? (

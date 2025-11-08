@@ -1,4 +1,5 @@
 import { LocalFileItem } from '@lobechat/electron-client-ipc';
+import { ChatMessagePluginError } from '@lobechat/types';
 import { Skeleton } from 'antd';
 import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
@@ -6,7 +7,6 @@ import { Flexbox } from 'react-layout-kit';
 import { useChatStore } from '@/store/chat';
 import { chatToolSelectors } from '@/store/chat/selectors';
 import FileItem from '@/tools/local-system/components/FileItem';
-import { ChatMessagePluginError } from '@/types/message';
 
 interface SearchFilesProps {
   listResults?: LocalFileItem[];

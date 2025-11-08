@@ -1,3 +1,11 @@
+import {
+  ChatMessageError,
+  ChatTTS,
+  ChatTranslate,
+  CreateMessageParams,
+  DBMessageItem,
+  UIChatMessage,
+} from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,14 +20,6 @@ import {
   topics,
   users,
 } from '@/database/schemas';
-import {
-  ChatMessage,
-  ChatMessageError,
-  ChatTTS,
-  ChatTranslate,
-  CreateMessageParams,
-  MessageItem,
-} from '@/types/message';
 
 import { ClientService } from './client';
 
@@ -34,7 +34,7 @@ const mockMessage = {
   content: 'Mock message content',
   sessionId,
   role: 'user',
-} as ChatMessage;
+} as UIChatMessage;
 
 const mockMessages = [mockMessage];
 
@@ -98,7 +98,7 @@ describe('MessageClientService', () => {
           sessionId,
           role: 'user',
         },
-      ] as MessageItem[]);
+      ] as DBMessageItem[]);
       const count = await clientDB.$count(messages);
 
       // Assert

@@ -161,6 +161,7 @@ const ModelSwitchPanel = memo<IProps>(({ children, onOpenChange, open }) => {
       onOpenChange={onOpenChange}
       open={open}
       placement={'topLeft'}
+      prefetch
     >
       {icon}
     </ActionDropdown>

@@ -222,7 +222,10 @@
     "description": "Llama 4 Maverick：基于 Mixture-of-Experts 的大规模模型，提供高效的专家激活策略以在推理中表现优异。"
   },
   "MiniMax-M1": {
-    "description": "全新自研推理模型。全球领先：80K思维链 x 1M输入，效果比肩海外顶尖模型。"
+    "description": "全新自研推理模型。全球领先：80K 思维链 x 1M 输入，效果比肩海外顶尖模型"
+  },
+  "MiniMax-M2": {
+    "description": "专为高效编码与Agent工作流而生"
   },
   "MiniMax-Text-01": {
     "description": "在 MiniMax-01系列模型中，我们做了大胆创新：首次大规模实现线性注意力机制，传统 Transformer架构不再是唯一的选择。这个模型的参数量高达4560亿，其中单次激活459亿。模型综合性能比肩海外顶尖模型，同时能够高效处理全球最长400万token的上下文，是GPT-4o的32倍，Claude-3.5-Sonnet的20倍。"
@@ -290,11 +293,11 @@
   "Pro/deepseek-ai/DeepSeek-V3": {
     "description": "DeepSeek-V3 是一款拥有 6710 亿参数的混合专家（MoE）语言模型，采用多头潜在注意力（MLA）和 DeepSeekMoE 架构，结合无辅助损失的负载平衡策略，优化推理和训练效率。通过在 14.8 万亿高质量tokens上预训练，并进行监督微调和强化学习，DeepSeek-V3 在性能上超越其他开源模型，接近领先闭源模型。"
   },
-  "Pro/deepseek-ai/DeepSeek-V3.1": {
-    "description": "DeepSeek-V3.1 是由深度求索（DeepSeek AI）发布的混合模式大语言模型，它在前代模型的基础上进行了多方面的重要升级。该模型的一大创新是集成了“思考模式”（Thinking Mode）和“非思考模式”（Non-thinking Mode）于一体，用户可以通过调整聊天模板灵活切换，以适应不同的任务需求。通过专门的训练后优化，V3.1 在工具调用和 Agent 任务方面的性能得到了显著增强，能够更好地支持外部搜索工具和执行多步复杂任务。该模型基于 DeepSeek-V3.1-Base 进行后训练，通过两阶段长文本扩展方法，大幅增加了训练数据量，使其在处理长文档和长篇代码方面表现更佳。作为一个开源模型，DeepSeek-V3.1 在编码、数学和推理等多个基准测试中展现了与顶尖闭源模型相媲美的能力，同时凭借其混合专家（MoE）架构，在保持巨大模型容量的同时，有效降低了推理成本。"
-  },
   "Pro/deepseek-ai/DeepSeek-V3.1-Terminus": {
     "description": "DeepSeek-V3.1-Terminus 是由深度求索（DeepSeek）发布的 V3.1 模型的更新版本，定位为混合智能体大语言模型。此次更新在保持模型原有能力的基础上，专注于修复用户反馈的问题并提升稳定性。它显著改善了语言一致性，减少了中英文混用和异常字符的出现。模型集成了“思考模式”（Thinking Mode）和“非思考模式”（Non-thinking Mode），用户可通过聊天模板灵活切换以适应不同任务。作为一个重要的优化，V3.1-Terminus 增强了代码智能体（Code Agent）和搜索智能体（Search Agent）的性能，使其在工具调用和执行多步复杂任务方面更加可靠。"
+  },
+  "Pro/deepseek-ai/DeepSeek-V3.2-Exp": {
+    "description": "DeepSeek-V3.2-Exp 是 DeepSeek 发布的实验性 V3.2 版本，作为迈向下一代架构的中间探索。它在 V3.1-Terminus 的基础上引入了 DeepSeek 稀疏注意力（DeepSeek Sparse Attention，DSA）机制以提升长上下文训练与推理效率，针对工具调用、长文档理解与多步推理进行了专项优化。V3.2-Exp 为研究与产品化之间的桥梁，适合希望在高上下文预算场景中探索更高推理效率的用户。"
   },
   "Pro/moonshotai/Kimi-K2-Instruct-0905": {
     "description": "Kimi K2-Instruct-0905 是 Kimi K2 最新、最强大的版本。它是一款顶尖的混合专家（MoE）语言模型，拥有 1 万亿的总参数和 320 亿的激活参数。该模型的主要特性包括：增强的智能体编码智能，在公开基准测试和真实世界的编码智能体任务中表现出显著的性能提升；改进的前端编码体验，在前端编程的美观性和实用性方面均有进步。"
@@ -397,6 +400,33 @@
   },
   "Qwen/Qwen3-Next-80B-A3B-Thinking": {
     "description": "Qwen3-Next-80B-A3B-Thinking 是由阿里巴巴通义千问团队发布的、专为复杂推理任务设计的下一代基础模型。它基于创新的 Qwen3-Next 架构，该架构融合了混合注意力机制（Gated DeltaNet 与 Gated Attention）和高稀疏度混合专家（MoE）结构，旨在实现极致的训练与推理效率。作为一个总参数达 800 亿的稀疏模型，它在推理时仅激活约 30 亿参数，大幅降低了计算成本，在处理超过 32K tokens 的长上下文任务时，吞吐量比 Qwen3-32B 模型高出 10 倍以上。此“Thinking”版本专为执行数学证明、代码综合、逻辑分析和规划等高难度多步任务而优化，并默认以结构化的“思维链”形式输出推理过程。在性能上，它不仅超越了 Qwen3-32B-Thinking 等成本更高的模型，还在多个基准测试中优于 Gemini-2.5-Flash-Thinking。"
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Captioner": {
+    "description": "Qwen3-Omni-30B-A3B-Captioner 是阿里巴巴通义千问团队 Qwen3 系列中的一款视觉语言模型（VLM）。它专门用于生成高质量、详细且准确的图像描述。该模型基于 300 亿总参数的混合专家（MoE）架构，能够深入理解图像内容并将其转化为自然流畅的文字描述。它在图像细节捕捉、场景理解、物体识别和关系推理等方面表现卓越，特别适合需要精确图像理解和描述生成的应用场景。"
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Instruct": {
+    "description": "Qwen3-Omni-30B-A3B-Instruct 是阿里巴巴通义千问团队最新 Qwen3 系列中的一员。它是一个拥有 300 亿总参数和 30 亿激活参数的混合专家（MoE）模型，在保持强大性能的同时有效降低了推理成本。该模型在高质量、多来源、多语言的数据上进行训练，具备强大的通用能力，支持全模态输入处理，包括文本、图像、音频和视频，能够理解和生成跨模态的内容。"
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Thinking": {
+    "description": "Qwen3-Omni-30B-A3B-Thinking 是 Qwen3-Omni 全模态模型中的核心\"思考者\"（Thinker）组件。它专门负责处理包括文本、音频、图像和视频在内的多模态输入，并执行复杂的思维链推理。作为推理的大脑，该模型将所有输入统一到通用的表征空间中，实现跨模态的深度理解和复杂推理能力。该模型基于混合专家（MoE）架构，拥有 300 亿总参数和 30 亿激活参数，能够在保持强大推理能力的同时优化计算效率。"
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Instruct": {
+    "description": "Qwen3-VL-235B-A22B-Instruct 是 Qwen3-VL 系列的大型指令微调模型，基于混合专家（MoE）架构，拥有卓越的多模态理解与生成能力，原生支持 256K 上下文，适用于高并发生产级多模态服务。"
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Thinking": {
+    "description": "Qwen3-VL-235B-A22B-Thinking 是 Qwen3-VL 系列中的旗舰思考版本，针对复杂多模态推理、长上下文推理与智能体交互进行了专项优化，适合需要深度思考与视觉推理的企业级场景。"
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+    "description": "Qwen3-VL-30B-A3B-Instruct 是 Qwen3-VL 系列的指令微调版本，具有强大的视觉-语言理解与生成能力，原生支持 256K 上下文长度，适合多模态对话与图像条件生成任务。"
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Thinking": {
+    "description": "Qwen3-VL-30B-A3B-Thinking 是 Qwen3-VL 的推理增强版本（Thinking），在多模态推理、图像到代码和复杂视觉理解任务上进行了优化，支持 256K 上下文并具备更强的链式思考能力。"
+  },
+  "Qwen/Qwen3-VL-32B-Instruct": {
+    "description": "Qwen3-VL-32B-Instruct 是阿里巴巴通义千问团队推出的视觉语言模型，在多个视觉语言基准测试中取得了领先的 SOTA 性能。该模型支持百万像素级别的高分辨率图像输入，并具备强大的通用视觉理解、多语言 OCR、细粒度视觉定位和视觉对话能力。作为 Qwen3 系列中的视觉语言模型，它能够处理复杂的多模态任务，支持工具调用和前缀续写等高级功能。"
+  },
+  "Qwen/Qwen3-VL-32B-Thinking": {
+    "description": "Qwen3-VL-32B-Thinking 是阿里巴巴通义千问团队推出的视觉语言模型中一个为复杂视觉推理任务特别优化的版本。该模型内置了\"思考模式\"，使其在回答问题前能够生成详细的中间推理步骤，从而显著增强其在需要多步逻辑、规划和复杂推理的任务上的表现。该模型支持百万像素级别的高分辨率图像输入，具备强大的通用视觉理解、多语言 OCR、细粒度视觉定位和视觉对话能力，并支持工具调用和前缀续写等功能。"
   },
   "Qwen/Qwen3-VL-8B-Instruct": {
     "description": "Qwen3-VL-8B-Instruct 是 Qwen3 系列的视觉语言模型，基于 Qwen3-8B-Instruct 开发并在大量图文数据上训练，擅长通用视觉理解、以视觉为中心的对话以及图像中的多语言文本识别。适用于视觉问答、图像描述、多模态指令跟随与工具调用场景。"
@@ -947,6 +977,9 @@
   "databricks/dbrx-instruct": {
     "description": "DBRX Instruct 提供高可靠性的指令处理能力，支持多行业应用。"
   },
+  "deepseek-ai/DeepSeek-OCR": {
+    "description": "DeepSeek-OCR 是由深度求索（DeepSeek AI）推出的一个视觉语言模型，专注于光学字符识别（OCR）与\"上下文光学压缩\"。该模型旨在探索从图像中压缩上下文信息的边界，能够高效处理文档并将其转换为如 Markdown 等结构化文本格式。它能够准确识别图像中的文字内容，特别适用于文档数字化、文字提取和结构化处理等应用场景。"
+  },
   "deepseek-ai/DeepSeek-R1": {
     "description": "DeepSeek-R1 系列通过强化学习与冷启动数据优化推理性能，开源模型刷新多任务标杆，超越 OpenAI-o1-mini 水平。"
   },
@@ -978,13 +1011,13 @@
     "description": "DeepSeek-V3 是一款拥有 6710 亿参数的混合专家（MoE）语言模型，采用多头潜在注意力（MLA）和 DeepSeekMoE 架构，结合无辅助损失的负载平衡策略，优化推理和训练效率。通过在 14.8 万亿高质量tokens上预训练，并进行监督微调和强化学习，DeepSeek-V3 在性能上超越其他开源模型，接近领先闭源模型。"
   },
   "deepseek-ai/DeepSeek-V3.1": {
-    "description": "DeepSeek-V3.1 是由深度求索（DeepSeek AI）发布的混合模式大语言模型，它在前代模型的基础上进行了多方面的重要升级。该模型的一大创新是集成了“思考模式”（Thinking Mode）和“非思考模式”（Non-thinking Mode）于一体，用户可以通过调整聊天模板灵活切换，以适应不同的任务需求。通过专门的训练后优化，V3.1 在工具调用和 Agent 任务方面的性能得到了显著增强，能够更好地支持外部搜索工具和执行多步复杂任务。该模型基于 DeepSeek-V3.1-Base 进行后训练，通过两阶段长文本扩展方法，大幅增加了训练数据量，使其在处理长文档和长篇代码方面表现更佳。作为一个开源模型，DeepSeek-V3.1 在编码、数学和推理等多个基准测试中展现了与顶尖闭源模型相媲美的能力，同时凭借其混合专家（MoE）架构，在保持巨大模型容量的同时，有效降低了推理成本。"
+    "description": "DeepSeek V3.1 模型为混合推理架构模型，同时支持思考模式与非思考模式。"
   },
   "deepseek-ai/DeepSeek-V3.1-Terminus": {
     "description": "DeepSeek-V3.1-Terminus 是由深度求索（DeepSeek）发布的 V3.1 模型的更新版本，定位为混合智能体大语言模型。此次更新在保持模型原有能力的基础上，专注于修复用户反馈的问题并提升稳定性。它显著改善了语言一致性，减少了中英文混用和异常字符的出现。模型集成了“思考模式”（Thinking Mode）和“非思考模式”（Non-thinking Mode），用户可通过聊天模板灵活切换以适应不同任务。作为一个重要的优化，V3.1-Terminus 增强了代码智能体（Code Agent）和搜索智能体（Search Agent）的性能，使其在工具调用和执行多步复杂任务方面更加可靠。"
   },
   "deepseek-ai/DeepSeek-V3.2-Exp": {
-    "description": "DeepSeek V3.2 Exp 模型为混合推理架构模型，同时支持思考模式与非思考模式。"
+    "description": "DeepSeek-V3.2-Exp 是 DeepSeek 发布的实验性 V3.2 版本，作为迈向下一代架构的中间探索。它在 V3.1-Terminus 的基础上引入了 DeepSeek 稀疏注意力（DeepSeek Sparse Attention，DSA）机制以提升长上下文训练与推理效率，针对工具调用、长文档理解与多步推理进行了专项优化。V3.2-Exp 为研究与产品化之间的桥梁，适合希望在高上下文预算场景中探索更高推理效率的用户。"
   },
   "deepseek-ai/deepseek-llm-67b-chat": {
     "description": "DeepSeek LLM Chat (67B) 是创新的 AI 模型 提供深度语言理解和互动能力。"
@@ -1657,9 +1690,6 @@
   },
   "google/gemma-3-12b-it": {
     "description": "Gemma 3 12B 是谷歌的一款开源语言模型，以其在效率和性能方面设立了新的标准。"
-  },
-  "google/gemma-3-1b-it": {
-    "description": "Gemma 3 1B 是谷歌的一款开源语言模型，以其在效率和性能方面设立了新的标准。"
   },
   "google/gemma-3-27b-it": {
     "description": "Gemma 3 27B 是谷歌的一款开源语言模型，以其在效率和性能方面设立了新的标准。"
@@ -2474,9 +2504,6 @@
   "mistralai/Mixtral-8x7B-v0.1": {
     "description": "Mixtral 8x7B是一个稀疏专家模型，利用多个参数提高推理速度，适合处理多语言和代码生成任务。"
   },
-  "mistralai/mistral-7b-instruct": {
-    "description": "Mistral 7B Instruct 是一款兼有速度优化和长上下文支持的高性能行业标准模型。"
-  },
   "mistralai/mistral-nemo": {
     "description": "Mistral Nemo 是多语言支持和高性能编程的7.3B参数模型。"
   },
@@ -3139,6 +3166,9 @@
   },
   "tencent/Hunyuan-A13B-Instruct": {
     "description": "Hunyuan-A13B-Instruct 参数量800 亿，激活 130 亿参数即可对标更大模型，支持“快思考/慢思考”混合推理；长文理解稳定；经 BFCL-v3 与 τ-Bench 验证，Agent 能力领先；结合 GQA 与多量化格式，实现高效推理。"
+  },
+  "tencent/Hunyuan-MT-7B": {
+    "description": "混元翻译模型（Hunyuan Translation Model）由一个翻译模型 Hunyuan-MT-7B 和一个集成模型 Hunyuan-MT-Chimera 组成。Hunyuan-MT-7B 是一个拥有 70 亿参数的轻量级翻译模型，用于将源文本翻译成目标语言。该模型支持 33 种语言以及 5 种中国少数民族语言的互译。在 WMT25 国际机器翻译竞赛中，Hunyuan-MT-7B 在其参与的 31 个语言类别中获得了 30 个第一名，展现了其卓越的翻译能力。针对翻译场景，腾讯混元提出了一个从预训练到监督微调、再到翻译强化和集成强化的完整训练范式，使其在同等规模的模型中达到了业界领先的性能。该模型计算效率高、易于部署，适合多种应用场景。"
   },
   "text-embedding-3-large": {
     "description": "最强大的向量化模型，适用于英文和非英文任务"

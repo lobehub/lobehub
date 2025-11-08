@@ -1,6 +1,21 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { ChatErrorType, TraceEventType } from '@lobechat/types';
+import {
+  ChatErrorType,
+  ChatImageItem,
+  ChatMessageError,
+  ChatMessagePluginError,
+  CreateMessageParams,
+  GroundingSearch,
+  MessageMetadata,
+  MessageToolCall,
+  ModelReasoning,
+  TraceEventPayloads,
+  TraceEventType,
+  UIChatMessage,
+  UpdateMessageRAGParams,
+} from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
 import { copyToClipboard } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { SWRResponse, mutate } from 'swr';
@@ -14,21 +29,7 @@ import { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
-import {
-  ChatMessage,
-  ChatMessageError,
-  ChatMessagePluginError,
-  CreateMessageParams,
-  MessageMetadata,
-  MessageToolCall,
-  ModelReasoning,
-} from '@/types/message';
-import { ChatImageItem } from '@/types/message/image';
-import { UpdateMessageRAGParams } from '@/types/message/rag';
-import { GroundingSearch } from '@/types/search';
-import { TraceEventPayloads } from '@/types/trace';
 import { Action, setNamespace } from '@/utils/storeDebug';
-import { nanoid } from '@/utils/uuid';
 
 import type { ChatStoreState } from '../../initialState';
 import { chatSelectors } from '../../selectors';
@@ -61,10 +62,10 @@ export interface ChatMessageAction {
     messageContextId: string,
     activeTopicId?: string,
     type?: 'session' | 'group',
-  ) => SWRResponse<ChatMessage[]>;
+  ) => SWRResponse<UIChatMessage[]>;
   copyMessage: (id: string, content: string) => Promise<void>;
   refreshMessages: () => Promise<void>;
-  replaceMessages: (messages: ChatMessage[]) => void;
+  replaceMessages: (messages: UIChatMessage[]) => void;
   // =========  ↓ Internal Method ↓  ========== //
   // ========================================== //
   // ========================================== //
@@ -305,7 +306,7 @@ export const chatMessage: StateCreator<
    * @param messageContextId - Can be sessionId or groupId
    */
   useFetchMessages: (enable, messageContextId, activeTopicId, type = 'session') =>
-    useClientDataSWR<ChatMessage[]>(
+    useClientDataSWR<UIChatMessage[]>(
       enable ? [SWR_USE_FETCH_MESSAGES, messageContextId, activeTopicId, type] : null,
       async ([, sessionId, topicId, type]: [string, string, string | undefined, string]) =>
         type === 'session'

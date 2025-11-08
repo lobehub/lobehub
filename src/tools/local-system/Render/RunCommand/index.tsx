@@ -1,10 +1,10 @@
 import { RunCommandParams } from '@lobechat/electron-client-ipc';
+import { ChatMessagePluginError } from '@lobechat/types';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { memo, useEffect, useRef } from 'react';
 
 import { LocalReadFileState } from '@/tools/local-system/type';
-import { ChatMessagePluginError } from '@/types/message';
 
 interface RunCommandProps {
   args: RunCommandParams;

@@ -1,9 +1,11 @@
+import type { EmailAddress } from '@clerk/backend';
 import { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 import Provider, { Configuration, KoaContextWithOIDC, errors } from 'oidc-provider';
 import urlJoin from 'url-join';
 
 import { serverDBEnv } from '@/config/db';
+import { enableClerk } from '@/const/auth';
 import { UserModel } from '@/database/models/user';
 import { appEnv } from '@/envs/app';
 import { getJWKS } from '@/libs/oidc-provider/jwt';
@@ -14,6 +16,56 @@ import { defaultClaims, defaultClients, defaultScopes } from './config';
 import { createInteractionPolicy } from './interaction-policy';
 
 const logProvider = debug('lobe-oidc:provider'); // <--- 添加 provider 日志实例
+
+const MARKET_CLIENT_ID = 'lobehub-market';
+
+const resolveClerkAccount = async (accountId: string) => {
+  if (!enableClerk) return undefined;
+
+  try {
+    const { clerkClient } = await import('@clerk/nextjs/server');
+    const client = await clerkClient();
+    const user = await client.users.getUser(accountId);
+
+    if (!user) {
+      logProvider('Clerk user not found for accountId: %s', accountId);
+      return undefined;
+    }
+
+    const pickName = () =>
+      user.fullName ||
+      [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+      user.username ||
+      user.id;
+
+    const primaryEmail = user.primaryEmailAddressId
+      ? user.emailAddresses.find((item: EmailAddress) => item.id === user.primaryEmailAddressId)
+      : user.emailAddresses.at(0);
+
+    return {
+      accountId: user.id,
+      async claims(_use: string, scope: string) {
+        const scopeSet = new Set((scope || '').split(/\s+/).filter(Boolean));
+        const claims: { [key: string]: any; sub: string } = { sub: user.id };
+
+        if (scopeSet.has('profile')) {
+          claims.name = pickName();
+          if (user.imageUrl) claims.picture = user.imageUrl;
+        }
+
+        if (scopeSet.has('email') && primaryEmail) {
+          claims.email = primaryEmail.emailAddress;
+          claims.email_verified = primaryEmail.verification?.status === 'verified' || false;
+        }
+
+        return claims;
+      },
+    };
+  } catch (error) {
+    logProvider('Error resolving Clerk account for %s: %O', accountId, error);
+    return undefined;
+  }
+};
 
 export const API_AUDIENCE = 'urn:lobehub:chat'; // <-- 把这里换成你自己的 API 标识符
 
@@ -133,6 +185,29 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       // 确定要查找的账户 ID
       // 优先级: 1. externalAccountId 2. ctx.oidc.session?.accountId 3. 传入的 id
       const accountIdToFind = externalAccountId || ctx.oidc?.session?.accountId || id;
+
+      const clientId = ctx.oidc?.client?.clientId;
+
+      logProvider('OIDC request client id: %s', clientId);
+
+      if (clientId === MARKET_CLIENT_ID) {
+        logProvider('Using Clerk account resolution for marketplace client');
+
+        if (!accountIdToFind) {
+          logProvider('No account id available for Clerk resolution, returning undefined');
+          return undefined;
+        }
+
+        const clerkAccount = await resolveClerkAccount(accountIdToFind);
+
+        if (clerkAccount) {
+          logProvider('Clerk account resolved successfully for %s', accountIdToFind);
+          return clerkAccount;
+        }
+
+        logProvider('Clerk account resolution failed for %s', accountIdToFind);
+        return undefined;
+      }
 
       logProvider(
         'Attempting to find account with ID: %s (source: %s)',

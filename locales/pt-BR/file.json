@@ -85,6 +85,7 @@
         "restTime": "Restante {{time}}"
       }
     },
+    "fileQueueInfo": "Enviando os primeiros {{count}} arquivos, os {{remaining}} restantes estão na fila para upload",
     "totalCount": "Total de {{count}} itens",
     "uploadStatus": {
       "error": "Erro no envio",

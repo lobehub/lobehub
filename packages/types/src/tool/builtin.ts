@@ -1,5 +1,7 @@
 import { ReactNode } from 'react';
+import { z } from 'zod';
 
+import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 import type { HumanInterventionConfig, HumanInterventionPolicy } from './intervention';
 
 interface Meta {
@@ -26,6 +28,14 @@ interface Meta {
   tags?: string[];
   title: string;
 }
+
+const MetaSchema = z.object({
+  avatar: z.string().optional(),
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  title: z.string(),
+});
+
 export interface LobeChatPluginApi {
   description: string;
   /**
@@ -45,6 +55,14 @@ export interface LobeChatPluginApi {
   parameters: Record<string, any>;
   url?: string;
 }
+
+export const LobeChatPluginApiSchema = z.object({
+  description: z.string(),
+  humanIntervention: HumanInterventionConfigSchema.optional(),
+  name: z.string(),
+  parameters: z.record(z.string(), z.any()),
+  url: z.string().optional(),
+});
 
 export interface BuiltinToolManifest {
   api: LobeChatPluginApi[];
@@ -74,12 +92,28 @@ export interface BuiltinToolManifest {
   type?: 'builtin';
 }
 
+export const BuiltinToolManifestSchema = z.object({
+  api: z.array(LobeChatPluginApiSchema),
+  humanIntervention: HumanInterventionPolicySchema.optional(),
+  identifier: z.string(),
+  meta: MetaSchema,
+  systemRole: z.string(),
+  type: z.literal('builtin').optional(),
+});
+
 export interface LobeBuiltinTool {
   hidden?: boolean;
   identifier: string;
   manifest: BuiltinToolManifest;
   type: 'builtin';
 }
+
+export const LobeBuiltinToolSchema = z.object({
+  hidden: z.boolean().optional(),
+  identifier: z.string(),
+  manifest: BuiltinToolManifestSchema,
+  type: z.literal('builtin'),
+});
 
 export interface BuiltinRenderProps<Content = any, Arguments = any, State = any> {
   apiName?: string;

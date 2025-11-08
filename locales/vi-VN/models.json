@@ -222,7 +222,10 @@
     "description": "Llama 4 Maverick: Mô hình quy mô lớn dựa trên Mixture-of-Experts, cung cấp chiến lược kích hoạt chuyên gia hiệu quả để đạt hiệu suất xuất sắc trong suy luận."
   },
   "MiniMax-M1": {
-    "description": "Mô hình suy luận tự phát triển hoàn toàn mới. Dẫn đầu toàn cầu: 80K chuỗi tư duy x 1 triệu đầu vào, hiệu quả sánh ngang các mô hình hàng đầu quốc tế."
+    "description": "Mô hình suy luận tự phát triển hoàn toàn mới. Dẫn đầu toàn cầu: 80K chuỗi tư duy x 1M đầu vào, hiệu quả sánh ngang với các mô hình hàng đầu quốc tế"
+  },
+  "MiniMax-M2": {
+    "description": "Được thiết kế đặc biệt cho lập trình hiệu quả và quy trình làm việc của Agent"
   },
   "MiniMax-Text-01": {
     "description": "Trong dòng mô hình MiniMax-01, chúng tôi đã thực hiện những đổi mới táo bạo: lần đầu tiên hiện thực hóa quy mô lớn cơ chế chú ý tuyến tính, kiến trúc Transformer truyền thống không còn là lựa chọn duy nhất. Mô hình này có số lượng tham số lên tới 4560 tỷ, trong đó kích hoạt một lần là 45,9 tỷ. Hiệu suất tổng hợp của mô hình tương đương với các mô hình hàng đầu quốc tế, đồng thời có khả năng xử lý hiệu quả ngữ cảnh dài nhất toàn cầu lên tới 4 triệu token, gấp 32 lần GPT-4o và 20 lần Claude-3.5-Sonnet."
@@ -290,11 +293,11 @@
   "Pro/deepseek-ai/DeepSeek-V3": {
     "description": "DeepSeek-V3 là một mô hình ngôn ngữ hỗn hợp chuyên gia (MoE) với 6710 tỷ tham số, sử dụng chú ý tiềm ẩn đa đầu (MLA) và kiến trúc DeepSeekMoE, kết hợp chiến lược cân bằng tải không có tổn thất phụ trợ, tối ưu hóa hiệu suất suy diễn và đào tạo. Thông qua việc được tiền huấn luyện trên 14.8 triệu tỷ token chất lượng cao, và thực hiện tinh chỉnh giám sát và học tăng cường, DeepSeek-V3 vượt trội hơn các mô hình mã nguồn mở khác, gần với các mô hình đóng kín hàng đầu."
   },
-  "Pro/deepseek-ai/DeepSeek-V3.1": {
-    "description": "DeepSeek-V3.1 là mô hình ngôn ngữ lớn chế độ hỗn hợp do DeepSeek AI phát hành, với nhiều nâng cấp quan trọng dựa trên phiên bản trước. Một đổi mới lớn của mô hình là tích hợp \"Chế độ suy nghĩ\" (Thinking Mode) và \"Chế độ không suy nghĩ\" (Non-thinking Mode) trong cùng một mô hình, người dùng có thể linh hoạt chuyển đổi bằng cách điều chỉnh mẫu trò chuyện để phù hợp với các yêu cầu nhiệm vụ khác nhau. Qua tối ưu hóa sau huấn luyện chuyên biệt, V3.1 đã cải thiện đáng kể hiệu suất trong việc gọi công cụ và nhiệm vụ Agent, hỗ trợ tốt hơn cho các công cụ tìm kiếm bên ngoài và thực hiện các nhiệm vụ phức tạp nhiều bước. Mô hình được huấn luyện tiếp dựa trên DeepSeek-V3.1-Base, sử dụng phương pháp mở rộng văn bản dài hai giai đoạn, tăng đáng kể lượng dữ liệu huấn luyện, giúp cải thiện khả năng xử lý tài liệu dài và mã nguồn dài. Là một mô hình mã nguồn mở, DeepSeek-V3.1 thể hiện năng lực tương đương với các mô hình đóng hàng đầu trong các bài kiểm tra chuẩn về mã hóa, toán học và suy luận, đồng thời với kiến trúc chuyên gia hỗn hợp (MoE), nó duy trì dung lượng mô hình lớn trong khi giảm chi phí suy luận hiệu quả."
-  },
   "Pro/deepseek-ai/DeepSeek-V3.1-Terminus": {
     "description": "DeepSeek-V3.1-Terminus là phiên bản cập nhật của mô hình V3.1 do DeepSeek phát hành, được định vị là mô hình ngôn ngữ lớn với trí tuệ hỗn hợp. Bản cập nhật này tập trung sửa các vấn đề phản hồi từ người dùng và nâng cao độ ổn định trong khi vẫn giữ nguyên khả năng của mô hình. Nó cải thiện đáng kể tính nhất quán ngôn ngữ, giảm thiểu việc sử dụng lẫn lộn tiếng Trung và tiếng Anh cũng như các ký tự bất thường. Mô hình tích hợp \"Chế độ suy nghĩ\" (Thinking Mode) và \"Chế độ không suy nghĩ\" (Non-thinking Mode), người dùng có thể linh hoạt chuyển đổi qua các mẫu trò chuyện để phù hợp với các nhiệm vụ khác nhau. Một tối ưu quan trọng là V3.1-Terminus tăng cường hiệu suất của Agent mã (Code Agent) và Agent tìm kiếm (Search Agent), giúp chúng đáng tin cậy hơn trong việc gọi công cụ và thực hiện các nhiệm vụ phức tạp nhiều bước."
+  },
+  "Pro/deepseek-ai/DeepSeek-V3.2-Exp": {
+    "description": "DeepSeek-V3.2-Exp là phiên bản thử nghiệm V3.2 do DeepSeek phát hành, đóng vai trò là bước chuyển tiếp trong hành trình hướng tới kiến trúc thế hệ tiếp theo. Dựa trên nền tảng của V3.1-Terminus, phiên bản này tích hợp cơ chế Chú ý Thưa (DeepSeek Sparse Attention - DSA) nhằm nâng cao hiệu quả huấn luyện và suy luận trong ngữ cảnh dài. Nó được tối ưu hóa đặc biệt cho việc gọi công cụ, hiểu tài liệu dài và suy luận nhiều bước. V3.2-Exp là cầu nối giữa nghiên cứu và ứng dụng thực tế, phù hợp với người dùng mong muốn khám phá hiệu suất suy luận cao hơn trong các tình huống có ngân sách ngữ cảnh lớn."
   },
   "Pro/moonshotai/Kimi-K2-Instruct-0905": {
     "description": "Kimi K2-Instruct-0905 là phiên bản mới nhất và mạnh mẽ nhất của Kimi K2. Đây là một mô hình ngôn ngữ chuyên gia hỗn hợp (MoE) hàng đầu với tổng số tham số lên đến 1 nghìn tỷ và 32 tỷ tham số kích hoạt. Các đặc điểm chính của mô hình bao gồm: tăng cường trí tuệ mã hóa tác nhân, thể hiện sự cải thiện đáng kể trong các bài kiểm tra chuẩn công khai và các nhiệm vụ mã hóa tác nhân trong thế giới thực; cải tiến trải nghiệm mã hóa giao diện người dùng, nâng cao cả về tính thẩm mỹ và tính thực tiễn trong lập trình giao diện."
@@ -397,6 +400,33 @@
   },
   "Qwen/Qwen3-Next-80B-A3B-Thinking": {
     "description": "Qwen3-Next-80B-A3B-Thinking là mô hình nền tảng thế hệ tiếp theo do đội ngũ Alibaba Tongyi Qianwen phát hành, được thiết kế chuyên biệt cho các tác vụ suy luận phức tạp. Nó dựa trên kiến trúc sáng tạo Qwen3-Next, kết hợp cơ chế chú ý hỗn hợp (Gated DeltaNet và Gated Attention) và cấu trúc chuyên gia hỗn hợp có độ thưa cao (MoE), nhằm đạt hiệu quả tối ưu trong huấn luyện và suy luận. Là mô hình thưa với tổng số 80 tỷ tham số, nó chỉ kích hoạt khoảng 3 tỷ tham số trong quá trình suy luận, giảm đáng kể chi phí tính toán, và khi xử lý các tác vụ ngữ cảnh dài trên 32K token, thông lượng cao hơn mô hình Qwen3-32B hơn 10 lần. Phiên bản “Thinking” này được tối ưu để thực hiện các tác vụ đa bước khó như chứng minh toán học, tổng hợp mã, phân tích logic và lập kế hoạch, và mặc định xuất ra quá trình suy luận dưới dạng chuỗi suy nghĩ có cấu trúc. Về hiệu năng, nó không chỉ vượt trội so với các mô hình có chi phí cao hơn như Qwen3-32B-Thinking mà còn vượt qua Gemini-2.5-Flash-Thinking trong nhiều bài kiểm tra chuẩn."
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Captioner": {
+    "description": "Qwen3-Omni-30B-A3B-Captioner là một mô hình ngôn ngữ thị giác (VLM) thuộc dòng Qwen3 do nhóm Tongyi Qianwen của Alibaba phát triển. Mô hình này chuyên dùng để tạo ra các mô tả hình ảnh chất lượng cao, chi tiết và chính xác. Dựa trên kiến trúc chuyên gia hỗn hợp (MoE) với tổng cộng 30 tỷ tham số, nó có khả năng hiểu sâu nội dung hình ảnh và chuyển đổi thành mô tả ngôn ngữ tự nhiên mượt mà. Mô hình thể hiện xuất sắc trong việc nắm bắt chi tiết hình ảnh, hiểu cảnh vật, nhận diện đối tượng và suy luận mối quan hệ, đặc biệt phù hợp với các ứng dụng yêu cầu hiểu và mô tả hình ảnh chính xác."
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Instruct": {
+    "description": "Qwen3-Omni-30B-A3B-Instruct là một thành viên trong dòng Qwen3 mới nhất do nhóm Tongyi Qianwen của Alibaba phát triển. Đây là mô hình chuyên gia hỗn hợp (MoE) với tổng cộng 30 tỷ tham số và 3 tỷ tham số kích hoạt, giúp duy trì hiệu suất mạnh mẽ trong khi giảm chi phí suy luận. Mô hình được huấn luyện trên dữ liệu chất lượng cao, đa nguồn và đa ngôn ngữ, sở hữu năng lực tổng quát vượt trội, hỗ trợ xử lý đầu vào toàn bộ các dạng thức như văn bản, hình ảnh, âm thanh và video, có khả năng hiểu và tạo nội dung xuyên mô thức."
+  },
+  "Qwen/Qwen3-Omni-30B-A3B-Thinking": {
+    "description": "Qwen3-Omni-30B-A3B-Thinking là thành phần \"người suy nghĩ\" (Thinker) cốt lõi trong mô hình toàn mô thức Qwen3-Omni. Nó chuyên xử lý các đầu vào đa mô thức bao gồm văn bản, âm thanh, hình ảnh và video, thực hiện suy luận chuỗi tư duy phức tạp. Là bộ não của quá trình suy luận, mô hình này thống nhất tất cả đầu vào vào không gian biểu diễn chung, từ đó đạt được khả năng hiểu sâu và suy luận phức tạp xuyên mô thức. Dựa trên kiến trúc chuyên gia hỗn hợp (MoE) với 30 tỷ tham số và 3 tỷ tham số kích hoạt, mô hình tối ưu hóa hiệu quả tính toán trong khi vẫn duy trì năng lực suy luận mạnh mẽ."
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Instruct": {
+    "description": "Qwen3-VL-235B-A22B-Instruct là mô hình tinh chỉnh theo chỉ dẫn quy mô lớn thuộc dòng Qwen3-VL, dựa trên kiến trúc chuyên gia hỗn hợp (MoE), sở hữu khả năng hiểu và tạo nội dung đa phương tiện vượt trội, hỗ trợ nguyên bản ngữ cảnh lên đến 256K, thích hợp cho các dịch vụ đa phương tiện cấp độ sản xuất với yêu cầu đồng thời cao."
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Thinking": {
+    "description": "Qwen3-VL-235B-A22B-Thinking là phiên bản tư duy hàng đầu trong dòng Qwen3-VL, được tối ưu hóa đặc biệt cho suy luận đa phương tiện phức tạp, suy luận ngữ cảnh dài và tương tác với tác tử thông minh, phù hợp với các tình huống doanh nghiệp đòi hỏi khả năng tư duy sâu và suy luận hình ảnh."
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+    "description": "Qwen3-VL-30B-A3B-Instruct là phiên bản tinh chỉnh theo chỉ dẫn của dòng Qwen3-VL, có khả năng hiểu và tạo nội dung ngôn ngữ - hình ảnh mạnh mẽ, hỗ trợ nguyên bản độ dài ngữ cảnh lên đến 256K, phù hợp cho các tác vụ đối thoại đa phương tiện và tạo nội dung có điều kiện hình ảnh."
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Thinking": {
+    "description": "Qwen3-VL-30B-A3B-Thinking là phiên bản tăng cường suy luận (Thinking) của Qwen3-VL, được tối ưu hóa cho các tác vụ suy luận đa phương tiện, chuyển đổi hình ảnh thành mã và hiểu hình ảnh phức tạp, hỗ trợ ngữ cảnh lên đến 256K và có khả năng tư duy chuỗi mạnh mẽ hơn."
+  },
+  "Qwen/Qwen3-VL-32B-Instruct": {
+    "description": "Qwen3-VL-32B-Instruct là một mô hình ngôn ngữ thị giác do nhóm Tongyi Qianwen của Alibaba phát triển, đạt hiệu suất SOTA hàng đầu trong nhiều bài kiểm tra chuẩn ngôn ngữ thị giác. Mô hình hỗ trợ đầu vào hình ảnh độ phân giải cao cấp độ megapixel, sở hữu năng lực hiểu thị giác tổng quát mạnh mẽ, nhận diện ký tự đa ngôn ngữ (OCR), định vị thị giác chi tiết và đối thoại thị giác. Là một mô hình ngôn ngữ thị giác trong dòng Qwen3, nó có thể xử lý các nhiệm vụ đa mô thức phức tạp, hỗ trợ gọi công cụ và tiếp tục tiền tố."
+  },
+  "Qwen/Qwen3-VL-32B-Thinking": {
+    "description": "Qwen3-VL-32B-Thinking là phiên bản được tối ưu đặc biệt cho các nhiệm vụ suy luận thị giác phức tạp trong dòng mô hình ngôn ngữ thị giác do nhóm Tongyi Qianwen của Alibaba phát triển. Mô hình tích hợp chế độ \"suy nghĩ\", cho phép tạo ra các bước suy luận trung gian chi tiết trước khi trả lời câu hỏi, từ đó nâng cao đáng kể hiệu suất trong các nhiệm vụ đòi hỏi logic nhiều bước, lập kế hoạch và suy luận phức tạp. Mô hình hỗ trợ đầu vào hình ảnh độ phân giải cao cấp độ megapixel, có năng lực hiểu thị giác tổng quát mạnh mẽ, nhận diện ký tự đa ngôn ngữ (OCR), định vị thị giác chi tiết và đối thoại thị giác, đồng thời hỗ trợ gọi công cụ và tiếp tục tiền tố."
   },
   "Qwen/Qwen3-VL-8B-Instruct": {
     "description": "Qwen3-VL-8B-Instruct là mô hình ngôn ngữ thị giác thuộc dòng Qwen3, được phát triển dựa trên Qwen3-8B-Instruct và huấn luyện trên lượng lớn dữ liệu hình ảnh và văn bản. Mô hình này có thế mạnh trong hiểu thị giác tổng quát, đối thoại xoay quanh hình ảnh và nhận diện văn bản đa ngôn ngữ trong ảnh. Phù hợp với các tình huống như hỏi đáp thị giác, mô tả hình ảnh, tuân theo chỉ dẫn đa phương thức và gọi công cụ."
@@ -947,6 +977,9 @@
   "databricks/dbrx-instruct": {
     "description": "DBRX Instruct cung cấp khả năng xử lý chỉ dẫn đáng tin cậy, hỗ trợ nhiều ứng dụng trong ngành."
   },
+  "deepseek-ai/DeepSeek-OCR": {
+    "description": "DeepSeek-OCR là một mô hình ngôn ngữ thị giác do DeepSeek AI phát triển, tập trung vào nhận diện ký tự quang học (OCR) và \"nén quang học theo ngữ cảnh\". Mô hình này nhằm khám phá giới hạn của việc nén thông tin ngữ cảnh từ hình ảnh, có khả năng xử lý tài liệu hiệu quả và chuyển đổi chúng thành các định dạng văn bản có cấu trúc như Markdown. Nó có thể nhận diện chính xác nội dung văn bản trong hình ảnh, đặc biệt phù hợp với các ứng dụng số hóa tài liệu, trích xuất văn bản và xử lý có cấu trúc."
+  },
   "deepseek-ai/DeepSeek-R1": {
     "description": "DeepSeek-R1 là một mô hình suy diễn được điều khiển bởi học tăng cường (RL), giải quyết các vấn đề về tính lặp lại và khả năng đọc hiểu trong mô hình. Trước khi áp dụng RL, DeepSeek-R1 đã giới thiệu dữ liệu khởi động lạnh, tối ưu hóa thêm hiệu suất suy diễn. Nó thể hiện hiệu suất tương đương với OpenAI-o1 trong các nhiệm vụ toán học, mã và suy diễn, và thông qua phương pháp đào tạo được thiết kế cẩn thận, nâng cao hiệu quả tổng thể."
   },
@@ -978,13 +1011,13 @@
     "description": "DeepSeek-V3 là một mô hình ngôn ngữ hỗn hợp chuyên gia (MoE) với 6710 tỷ tham số, sử dụng chú ý tiềm ẩn đa đầu (MLA) và kiến trúc DeepSeekMoE, kết hợp với chiến lược cân bằng tải không có tổn thất phụ trợ, tối ưu hóa hiệu suất suy diễn và đào tạo. Thông qua việc được tiền huấn luyện trên 14.8 triệu tỷ token chất lượng cao, và thực hiện tinh chỉnh giám sát và học tăng cường, DeepSeek-V3 vượt trội về hiệu suất so với các mô hình mã nguồn mở khác, gần gũi với các mô hình đóng nguồn hàng đầu."
   },
   "deepseek-ai/DeepSeek-V3.1": {
-    "description": "DeepSeek-V3.1 là mô hình ngôn ngữ lớn chế độ hỗn hợp do DeepSeek AI phát hành, với nhiều nâng cấp quan trọng dựa trên phiên bản trước. Một đổi mới lớn của mô hình là tích hợp \"Chế độ suy nghĩ\" (Thinking Mode) và \"Chế độ không suy nghĩ\" (Non-thinking Mode) trong cùng một mô hình, người dùng có thể linh hoạt chuyển đổi bằng cách điều chỉnh mẫu trò chuyện để phù hợp với các yêu cầu nhiệm vụ khác nhau. Qua tối ưu hóa sau huấn luyện chuyên biệt, V3.1 đã cải thiện đáng kể hiệu suất trong việc gọi công cụ và nhiệm vụ Agent, hỗ trợ tốt hơn cho các công cụ tìm kiếm bên ngoài và thực hiện các nhiệm vụ phức tạp nhiều bước. Mô hình được huấn luyện tiếp dựa trên DeepSeek-V3.1-Base, sử dụng phương pháp mở rộng văn bản dài hai giai đoạn, tăng đáng kể lượng dữ liệu huấn luyện, giúp cải thiện khả năng xử lý tài liệu dài và mã nguồn dài. Là một mô hình mã nguồn mở, DeepSeek-V3.1 thể hiện năng lực tương đương với các mô hình đóng hàng đầu trong các bài kiểm tra chuẩn về mã hóa, toán học và suy luận, đồng thời với kiến trúc chuyên gia hỗn hợp (MoE), nó duy trì dung lượng mô hình lớn trong khi giảm chi phí suy luận hiệu quả."
+    "description": "Mô hình DeepSeek V3.1 là mô hình kiến trúc suy luận hỗn hợp, hỗ trợ cả chế độ tư duy và không tư duy."
   },
   "deepseek-ai/DeepSeek-V3.1-Terminus": {
     "description": "DeepSeek-V3.1-Terminus là phiên bản cập nhật của mô hình V3.1 do DeepSeek phát hành, được định vị là mô hình ngôn ngữ lớn với trí tuệ hỗn hợp. Bản cập nhật này tập trung sửa các vấn đề phản hồi từ người dùng và nâng cao độ ổn định trong khi vẫn giữ nguyên khả năng của mô hình. Nó cải thiện đáng kể tính nhất quán ngôn ngữ, giảm thiểu việc sử dụng lẫn lộn tiếng Trung và tiếng Anh cũng như các ký tự bất thường. Mô hình tích hợp \"Chế độ suy nghĩ\" (Thinking Mode) và \"Chế độ không suy nghĩ\" (Non-thinking Mode), người dùng có thể linh hoạt chuyển đổi qua các mẫu trò chuyện để phù hợp với các nhiệm vụ khác nhau. Một tối ưu quan trọng là V3.1-Terminus tăng cường hiệu suất của Agent mã (Code Agent) và Agent tìm kiếm (Search Agent), giúp chúng đáng tin cậy hơn trong việc gọi công cụ và thực hiện các nhiệm vụ phức tạp nhiều bước."
   },
   "deepseek-ai/DeepSeek-V3.2-Exp": {
-    "description": "Mô hình DeepSeek V3.2 Exp là kiến trúc suy luận hỗn hợp, hỗ trợ cả chế độ tư duy và không tư duy."
+    "description": "DeepSeek-V3.2-Exp là phiên bản thử nghiệm V3.2 do DeepSeek phát hành, đóng vai trò là bước chuyển tiếp trong hành trình hướng tới kiến trúc thế hệ tiếp theo. Dựa trên nền tảng của V3.1-Terminus, phiên bản này tích hợp cơ chế Chú ý Thưa (DeepSeek Sparse Attention - DSA) nhằm nâng cao hiệu quả huấn luyện và suy luận trong ngữ cảnh dài. Nó được tối ưu hóa đặc biệt cho việc gọi công cụ, hiểu tài liệu dài và suy luận nhiều bước. V3.2-Exp là cầu nối giữa nghiên cứu và ứng dụng thực tế, phù hợp với người dùng mong muốn khám phá hiệu suất suy luận cao hơn trong các tình huống có ngân sách ngữ cảnh lớn."
   },
   "deepseek-ai/deepseek-llm-67b-chat": {
     "description": "DeepSeek 67B là mô hình tiên tiến được huấn luyện cho các cuộc đối thoại phức tạp."
@@ -1657,9 +1690,6 @@
   },
   "google/gemma-3-12b-it": {
     "description": "Gemma 3 12B là một mô hình ngôn ngữ mã nguồn mở của Google, thiết lập tiêu chuẩn mới về hiệu quả và hiệu suất."
-  },
-  "google/gemma-3-1b-it": {
-    "description": "Gemma 3 1B là một mô hình ngôn ngữ mã nguồn mở của Google, thiết lập tiêu chuẩn mới về hiệu quả và hiệu suất."
   },
   "google/gemma-3-27b-it": {
     "description": "Gemma 3 27B là một mô hình ngôn ngữ mã nguồn mở của Google, thiết lập tiêu chuẩn mới về hiệu suất và hiệu quả."
@@ -2474,9 +2504,6 @@
   "mistralai/Mixtral-8x7B-v0.1": {
     "description": "Mixtral 8x7B là một mô hình chuyên gia thưa thớt, tận dụng nhiều tham số để tăng tốc độ suy luận, phù hợp để xử lý đa ngôn ngữ và tạo mã."
   },
-  "mistralai/mistral-7b-instruct": {
-    "description": "Mistral 7B Instruct là mô hình tiêu chuẩn ngành với tốc độ tối ưu hóa và hỗ trợ ngữ cảnh dài."
-  },
   "mistralai/mistral-nemo": {
     "description": "Mistral Nemo là mô hình 7.3B tham số hỗ trợ đa ngôn ngữ và lập trình hiệu suất cao."
   },
@@ -3139,6 +3166,9 @@
   },
   "tencent/Hunyuan-A13B-Instruct": {
     "description": "Hunyuan-A13B-Instruct có 80 tỷ tham số, kích hoạt 13 tỷ tham số để đạt hiệu năng tương đương các mô hình lớn hơn, hỗ trợ suy luận kết hợp “tư duy nhanh/tư duy chậm”; khả năng hiểu văn bản dài ổn định; được xác nhận qua BFCL-v3 và τ-Bench, năng lực Agent dẫn đầu; kết hợp GQA và nhiều định dạng lượng tử hóa, đạt hiệu quả suy luận cao."
+  },
+  "tencent/Hunyuan-MT-7B": {
+    "description": "Mô hình dịch Hunyuan (Hunyuan Translation Model) bao gồm một mô hình dịch Hunyuan-MT-7B và một mô hình tích hợp Hunyuan-MT-Chimera. Hunyuan-MT-7B là một mô hình dịch nhẹ với 7 tỷ tham số, dùng để dịch văn bản nguồn sang ngôn ngữ đích. Mô hình hỗ trợ dịch qua lại giữa 33 ngôn ngữ và 5 ngôn ngữ dân tộc thiểu số Trung Quốc. Trong cuộc thi dịch máy quốc tế WMT25, Hunyuan-MT-7B đã giành được 30 giải nhất trong số 31 hạng mục ngôn ngữ tham gia, thể hiện năng lực dịch thuật xuất sắc. Đối với các tình huống dịch thuật, Tencent Hunyuan đã đề xuất một quy trình huấn luyện hoàn chỉnh từ tiền huấn luyện đến tinh chỉnh có giám sát, sau đó là tăng cường dịch thuật và tăng cường tích hợp, giúp mô hình đạt hiệu suất hàng đầu trong các mô hình cùng quy mô. Mô hình có hiệu suất tính toán cao, dễ triển khai và phù hợp với nhiều tình huống ứng dụng."
   },
   "text-embedding-3-large": {
     "description": "Mô hình vector hóa mạnh mẽ nhất, phù hợp cho các nhiệm vụ tiếng Anh và không phải tiếng Anh."

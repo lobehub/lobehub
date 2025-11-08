@@ -1,3 +1,4 @@
+import { UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { TRPCClientError } from '@trpc/client';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,14 +8,13 @@ import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/co
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
+import { agentChatConfigSelectors } from '@/store/agent/selectors';
 import { UploadFileItem } from '@/types/files/upload';
-import { ChatMessage } from '@/types/message';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { TEST_CONTENT, TEST_IDS, createMockStoreState } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
-import { agentChatConfigSelectors } from '@/store/agent/selectors';
 
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
@@ -376,7 +376,7 @@ describe('generateAIChatV2 actions', () => {
         content: TEST_CONTENT.USER_MESSAGE,
         sessionId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,
-      } as ChatMessage;
+      } as UIChatMessage;
       const messages = [userMessage];
 
       const streamSpy = vi.spyOn(chatService, 'createAssistantMessageStream');
@@ -587,7 +587,7 @@ describe('generateAIChatV2 actions', () => {
 
       expect(
         result.current.mainSendMessageOperations[
-        messageMapKey(TEST_IDS.SESSION_ID, TEST_IDS.TOPIC_ID)
+          messageMapKey(TEST_IDS.SESSION_ID, TEST_IDS.TOPIC_ID)
         ],
       ).toBeUndefined();
     });

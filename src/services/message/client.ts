@@ -1,9 +1,10 @@
+import { UIChatMessage } from '@lobechat/types';
+
 import { INBOX_SESSION_ID } from '@/const/session';
 import { clientDB } from '@/database/client/db';
 import { MessageModel } from '@/database/models/message';
 import { BaseClientService } from '@/services/baseClientService';
 import { clientS3Storage } from '@/services/file/ClientS3';
-import { ChatMessage } from '@/types/message';
 
 import { IMessageService } from './type';
 
@@ -21,6 +22,18 @@ export class ClientService extends BaseClientService implements IMessageService 
     return id;
   };
 
+  createNewMessage: IMessageService['createNewMessage'] = async ({ sessionId, ...params }) => {
+    return await this.messageModel.createNewMessage(
+      {
+        ...params,
+        sessionId: sessionId ? (this.toDbSessionId(sessionId) as string) : '',
+      },
+      {
+        postProcessUrl: this.postProcessUrl,
+      },
+    );
+  };
+
   batchCreateMessages: IMessageService['batchCreateMessages'] = async (messages) => {
     return this.messageModel.batchCreate(messages);
   };
@@ -32,16 +45,11 @@ export class ClientService extends BaseClientService implements IMessageService 
         topicId,
       },
       {
-        postProcessUrl: async (url, file) => {
-          const hash = (url as string).replace('client-s3://', '');
-          const base64 = await this.getBase64ByFileHash(hash);
-
-          return `data:${file.fileType};base64,${base64}`;
-        },
+        postProcessUrl: this.postProcessUrl,
       },
     );
 
-    return data as unknown as ChatMessage[];
+    return data as unknown as UIChatMessage[];
   };
 
   getGroupMessages: IMessageService['getGroupMessages'] = async (groupId, topicId) => {
@@ -52,22 +60,17 @@ export class ClientService extends BaseClientService implements IMessageService 
         topicId,
       },
       {
-        postProcessUrl: async (url, file) => {
-          const hash = (url as string).replace('client-s3://', '');
-          const base64 = await this.getBase64ByFileHash(hash);
-
-          return `data:${file.fileType};base64,${base64}`;
-        },
+        postProcessUrl: this.postProcessUrl,
       },
     );
 
-    return data as unknown as ChatMessage[];
+    return data as unknown as UIChatMessage[];
   };
 
   getAllMessages: IMessageService['getAllMessages'] = async () => {
     const data = await this.messageModel.queryAll();
 
-    return data as unknown as ChatMessage[];
+    return data as unknown as UIChatMessage[];
   };
 
   countMessages: IMessageService['countMessages'] = async (params) => {
@@ -89,7 +92,7 @@ export class ClientService extends BaseClientService implements IMessageService 
   getAllMessagesInSession: IMessageService['getAllMessagesInSession'] = async (sessionId) => {
     const data = this.messageModel.queryBySessionId(this.toDbSessionId(sessionId));
 
-    return data as unknown as ChatMessage[];
+    return data as unknown as UIChatMessage[];
   };
 
   updateMessageError: IMessageService['updateMessageError'] = async (id, error) => {
@@ -165,6 +168,13 @@ export class ClientService extends BaseClientService implements IMessageService 
 
   private toDbSessionId = (sessionId: string | undefined) => {
     return sessionId === INBOX_SESSION_ID ? undefined : sessionId;
+  };
+
+  private postProcessUrl = async (url: string | null, file: any) => {
+    const hash = (url as string).replace('client-s3://', '');
+    const base64 = await this.getBase64ByFileHash(hash);
+
+    return `data:${file.fileType};base64,${base64}`;
   };
 
   private getBase64ByFileHash = async (hash: string) => {

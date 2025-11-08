@@ -1,6 +1,5 @@
+import type { ModelUsage } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
-
-import type { ModelUsage } from '@/types/message';
 
 import { computeChatCost } from './computeChatCost';
 import type { ComputeChatCostOptions } from './computeChatCost';

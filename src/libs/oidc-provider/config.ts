@@ -3,6 +3,8 @@ import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';
 
+const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
+
 /**
  * 默认 OIDC 客户端配置
  */
@@ -35,6 +37,7 @@ export const defaultClients: ClientMetadata[] = [
     // 标记为公共客户端客户端，无密钥
     token_endpoint_auth_method: 'none',
   },
+
   {
     application_type: 'native', // 移动端使用 native 类型
     client_id: 'lobehub-mobile',
@@ -48,6 +51,24 @@ export const defaultClients: ClientMetadata[] = [
     redirect_uris: ['com.lobehub.app://auth/callback'],
     response_types: ['code'],
     // 公共客户端，无密钥
+    token_endpoint_auth_method: 'none',
+  },
+
+  {
+    application_type: 'web',
+    client_id: 'lobehub-market',
+    client_name: 'LobeHub Marketplace',
+    grant_types: ['authorization_code', 'refresh_token'],
+    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
+    post_logout_redirect_uris: [
+      urlJoin(marketBaseUrl!, '/lobehub-oidc/logout'),
+      'http://localhost:8787/lobehub-oidc/logout',
+    ],
+    redirect_uris: [
+      urlJoin(marketBaseUrl!, '/lobehub-oidc/consent/callback'),
+      'http://localhost:8787/lobehub-oidc/consent/callback',
+    ],
+    response_types: ['code'],
     token_endpoint_auth_method: 'none',
   },
 ];

@@ -1,3 +1,11 @@
+import { DEFAULT_AGENT_CONFIG, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
+import {
+  ChatSessionList,
+  LobeAgentConfig,
+  LobeAgentSession,
+  LobeGroupSession,
+  SessionRankItem,
+} from '@lobechat/types';
 import {
   Column,
   and,
@@ -15,16 +23,6 @@ import {
 } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
-import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
-import { INBOX_SESSION_ID } from '@/const/session';
-import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { LobeAgentConfig } from '@/types/agent';
-import {
-  ChatSessionList,
-  LobeAgentSession,
-  LobeGroupSession,
-  SessionRankItem,
-} from '@/types/session';
 import { merge } from '@/utils/merge';
 
 import {

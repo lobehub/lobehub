@@ -85,6 +85,7 @@
         "restTime": "Remaining {{time}}"
       }
     },
+    "fileQueueInfo": "Uploading the first {{count}} files, {{remaining}} remaining in queue",
     "totalCount": "Total {{count}} items",
     "uploadStatus": {
       "error": "Upload error",

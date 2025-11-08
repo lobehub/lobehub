@@ -85,6 +85,7 @@
         "restTime": "Остава {{time}}"
       }
     },
+    "fileQueueInfo": "Качват се първите {{count}} файла, останалите {{remaining}} ще бъдат поставени в опашка за качване",
     "totalCount": "Общо {{count}} елемента",
     "uploadStatus": {
       "error": "Грешка при качване",

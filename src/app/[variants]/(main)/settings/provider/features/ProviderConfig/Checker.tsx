@@ -1,7 +1,7 @@
 'use client';
 
 import { CheckCircleFilled } from '@ant-design/icons';
-import { TraceNameMap } from '@lobechat/types';
+import { ChatMessageError, TraceNameMap } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Alert, Button, Highlighter, Icon, Select } from '@lobehub/ui';
 import { useTheme } from 'antd-style';
@@ -13,18 +13,22 @@ import { Flexbox } from 'react-layout-kit';
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { ChatMessageError } from '@/types/message';
 
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation('error');
   const providerName = useProviderName(error.body?.provider);
 
   return (
-    <Flexbox gap={8} style={{ width: '100%' }}>
+    <Flexbox gap={8} style={{ maxWidth: 600, width: '100%' }}>
       <Alert
         extra={
           <Flexbox>
-            <Highlighter actionIconSize={'small'} language={'json'} variant={'borderless'}>
+            <Highlighter
+              actionIconSize={'small'}
+              language={'json'}
+              variant={'borderless'}
+              wrap={true}
+            >
               {JSON.stringify(error.body || error, null, 2)}
             </Highlighter>
           </Flexbox>

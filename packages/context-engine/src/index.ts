@@ -19,6 +19,7 @@ export {
 
 // Processors
 export {
+  GroupMessageFlattenProcessor,
   HistoryTruncateProcessor,
   InputTemplateProcessor,
   MessageCleanupProcessor,

@@ -1,17 +1,18 @@
+import {
+  ChatFileItem,
+  ChatMessageError,
+  ChatTTS,
+  ChatTranslate,
+  CreateMessageParams,
+  CreateNewMessageParams,
+  ModelRankItem,
+  UIChatMessage,
+} from '@lobechat/types';
 import dayjs from 'dayjs';
 
 import { FileModel } from '@/database/_deprecated/models/file';
 import { MessageModel } from '@/database/_deprecated/models/message';
 import { DB_Message } from '@/database/_deprecated/schemas/message';
-import {
-  ChatFileItem,
-  ChatMessage,
-  ChatMessageError,
-  ChatTTS,
-  ChatTranslate,
-  CreateMessageParams,
-  ModelRankItem,
-} from '@/types/message';
 
 import { IMessageService } from './type';
 
@@ -22,12 +23,19 @@ export class ClientService implements IMessageService {
     return id;
   }
 
+  async createNewMessage(data: CreateNewMessageParams) {
+    const { id } = await MessageModel.create(data as any);
+    const messages = await this.getMessages(data.sessionId, data.topicId);
+
+    return { id, messages };
+  }
+
   // @ts-ignore
-  async batchCreateMessages(messages: ChatMessage[]) {
+  async batchCreateMessages(messages: UIChatMessage[]) {
     return MessageModel.batchCreate(messages);
   }
 
-  async getMessages(sessionId: string, topicId?: string): Promise<ChatMessage[]> {
+  async getMessages(sessionId: string, topicId?: string): Promise<UIChatMessage[]> {
     const messages = await MessageModel.query({ sessionId, topicId });
 
     const fileList = (await Promise.all(
@@ -49,7 +57,7 @@ export class ClientService implements IMessageService {
     }));
   }
 
-  async getGroupMessages(groupId: string, topicId?: string): Promise<ChatMessage[]> {
+  async getGroupMessages(groupId: string, topicId?: string): Promise<UIChatMessage[]> {
     // For the deprecated service, group messages are the same as regular messages
     // since the old schema doesn't differentiate between session and group messages
     return this.getMessages(groupId, topicId);

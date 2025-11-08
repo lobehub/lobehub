@@ -1,7 +1,7 @@
+import { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { ChatStoreState } from '@/store/chat';
-import { ChatMessage } from '@/types/message';
 
 import { chatPortalSelectors } from './selectors';
 
@@ -119,7 +119,7 @@ describe('chatDockSelectors', () => {
               role: 'user',
               meta: {},
               sessionId: 'test-id',
-            } as ChatMessage,
+            } as UIChatMessage,
           ],
         },
       });
@@ -140,7 +140,7 @@ describe('chatDockSelectors', () => {
               role: 'user',
               meta: {},
               sessionId: 'test-id',
-            } as ChatMessage,
+            } as UIChatMessage,
           ],
         },
       });
@@ -160,7 +160,7 @@ describe('chatDockSelectors', () => {
               role: 'user',
               meta: {},
               sessionId: 'test-id',
-            } as ChatMessage,
+            } as UIChatMessage,
           ],
         },
       });
@@ -192,7 +192,7 @@ ${htmlContent}
               role: 'user',
               meta: {},
               sessionId: 'test-id',
-            } as ChatMessage,
+            } as UIChatMessage,
           ],
         },
       });
@@ -213,7 +213,7 @@ ${htmlContent}
               role: 'user',
               meta: {},
               sessionId: 'test-id',
-            } as ChatMessage,
+            } as UIChatMessage,
           ],
         },
       });
@@ -232,7 +232,7 @@ ${htmlContent}
               role: 'user',
               meta: {},
               sessionId: 'test-id',
-            } as ChatMessage,
+            } as UIChatMessage,
           ],
         },
       });
@@ -251,7 +251,7 @@ ${htmlContent}
               role: 'user',
               meta: {},
               sessionId: 'test-id',
-            } as ChatMessage,
+            } as UIChatMessage,
           ],
         },
       });

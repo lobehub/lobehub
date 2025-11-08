@@ -1,12 +1,24 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "automerge": false,
-  "dependencyDashboard": true,
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "schedule:weekly",
+    ":prHourlyLimitNone",
+    ":prConcurrentLimitNone",
+    ":semanticPrefixFixDepsChoreOthers",
+    "group:monorepos",
+    "group:recommended",
+    "group:allNonMajor",
+    "replacements:all",
+    "workarounds:all"
+  ],
   "ignoreDeps": [],
   "labels": ["dependencies"],
   "postUpdateOptions": ["yarnDedupeHighest"],
   "prConcurrentLimit": 30,
   "prHourlyLimit": 0,
+  "rangeStrategy": "bump",
   "rebaseWhen": "conflicted",
   "schedule": "on sunday before 6:00am",
   "timezone": "UTC"

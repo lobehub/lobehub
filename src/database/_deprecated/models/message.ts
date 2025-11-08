@@ -1,9 +1,9 @@
+import { UIChatMessage } from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
 import { BaseModel } from '@/database/_deprecated/core';
 import { DBModel } from '@/database/_deprecated/core/types/db';
 import { DB_Message, DB_MessageSchema } from '@/database/_deprecated/schemas/message';
-import { ChatMessage } from '@/types/message';
 import { nanoid } from '@/utils/uuid';
 
 /**
@@ -11,8 +11,8 @@ import { nanoid } from '@/utils/uuid';
  * @deprecated
  */
 export interface CreateMessageParams
-  extends Partial<Omit<ChatMessage, 'content' | 'role'>>,
-    Pick<ChatMessage, 'content' | 'role'> {
+  extends Partial<Omit<UIChatMessage, 'content' | 'role'>>,
+    Pick<UIChatMessage, 'content' | 'role'> {
   files?: string[];
   fromModel?: string;
   fromProvider?: string;
@@ -39,7 +39,7 @@ class _MessageModel extends BaseModel {
     topicId,
     pageSize = 9999,
     current = 0,
-  }: QueryMessageParams): Promise<ChatMessage[]> {
+  }: QueryMessageParams): Promise<UIChatMessage[]> {
     const offset = current * pageSize;
 
     const query = !!topicId
@@ -57,15 +57,15 @@ class _MessageModel extends BaseModel {
 
     const messages = dbMessages.map((msg) => this.mapToChatMessage(msg));
 
-    const finalList: ChatMessage[] = [];
+    const finalList: UIChatMessage[] = [];
 
-    const addItem = (item: ChatMessage) => {
+    const addItem = (item: UIChatMessage) => {
       const isExist = finalList.some((i) => item.id === i.id);
       if (!isExist) {
         finalList.push(item);
       }
     };
-    const messageMap = new Map<string, ChatMessage>();
+    const messageMap = new Map<string, UIChatMessage>();
     for (const item of messages) messageMap.set(item.id, item);
 
     for (const item of messages) {
@@ -110,18 +110,18 @@ class _MessageModel extends BaseModel {
   async create(data: CreateMessageParams) {
     const id = nanoid();
 
-    const messageData: DB_Message = this.mapChatMessageToDBMessage(data as ChatMessage);
+    const messageData: DB_Message = this.mapChatMessageToDBMessage(data as UIChatMessage);
 
     return this._addWithSync(messageData, id);
   }
 
-  async batchCreate(messages: ChatMessage[]) {
+  async batchCreate(messages: UIChatMessage[]) {
     const data: DB_Message[] = messages.map((m) => this.mapChatMessageToDBMessage(m));
 
     return this._batchAdd(data);
   }
 
-  async duplicateMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
+  async duplicateMessages(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
     const duplicatedMessages = await this.createDuplicateMessages(messages);
     // 批量添加复制后的消息到数据库
     await this.batchCreate(duplicatedMessages);
@@ -230,7 +230,7 @@ class _MessageModel extends BaseModel {
 
   // **************** Helper *************** //
 
-  private async createDuplicateMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
+  private async createDuplicateMessages(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
     // 创建一个映射来存储原始消息ID和复制消息ID之间的关系
     const idMapping = new Map<string, string>();
 
@@ -252,7 +252,7 @@ class _MessageModel extends BaseModel {
     return duplicatedMessages;
   }
 
-  private mapChatMessageToDBMessage(message: ChatMessage): DB_Message {
+  private mapChatMessageToDBMessage(message: UIChatMessage): DB_Message {
     const { extra, ...messageData } = message;
 
     return { ...messageData, ...extra } as DB_Message;
@@ -270,7 +270,7 @@ class _MessageModel extends BaseModel {
       extra: { fromModel, fromProvider, translate, tts },
       meta: {},
       topicId: item.topicId ?? undefined,
-    } as ChatMessage;
+    } as UIChatMessage;
   };
 }
 

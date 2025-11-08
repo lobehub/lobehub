@@ -26,7 +26,7 @@ import {
   ChatMessageError,
   CreateMessageParams,
   MessageToolCall,
-} from '@/types/message';
+} from '@lobechat/types';
 import { TraceEventPayloads } from '@/types/trace';
 import { setNamespace } from '@/utils/storeDebug';
 import { nanoid } from '@/utils/uuid';

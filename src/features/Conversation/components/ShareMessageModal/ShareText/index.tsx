@@ -1,3 +1,4 @@
+import { UIChatMessage } from '@lobechat/types';
 import { Button, copyToClipboard } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -9,7 +10,6 @@ import { Flexbox } from 'react-layout-kit';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { ChatMessage } from '@/types/message';
 import { exportFile } from '@/utils/client';
 
 import { useStyles } from '../style';
@@ -17,7 +17,7 @@ import Preview from './Preview';
 import { generateMarkdown } from './template';
 
 interface ShareTextProps {
-  item: ChatMessage;
+  item: UIChatMessage;
 }
 
 const ShareText = memo<ShareTextProps>(({ item }) => {

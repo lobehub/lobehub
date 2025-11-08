@@ -1214,6 +1214,86 @@ describe('OpenAIStream', () => {
       );
     });
 
+    it('should split reasoning and text when </think> and content are in the same chunk', async () => {
+      const data = [
+        {
+          id: '1',
+          object: 'chat.completion.chunk',
+          created: 1737563070,
+          model: 'minimax-m2',
+          choices: [
+            {
+              index: 0,
+              delta: { content: '<think>思考开始' },
+              finish_reason: null,
+              logprobs: null,
+            },
+          ],
+        },
+        {
+          id: '1',
+          object: 'chat.completion.chunk',
+          created: 1737563071,
+          model: 'minimax-m2',
+          choices: [
+            {
+              index: 0,
+              delta: { content: '思考进行中' },
+              finish_reason: null,
+              logprobs: null,
+            },
+          ],
+        },
+        {
+          id: '1',
+          object: 'chat.completion.chunk',
+          created: 1737563072,
+          model: 'minimax-m2',
+          choices: [
+            {
+              index: 0,
+              delta: { content: '思考结束</think>这是最终回答' },
+              finish_reason: null,
+              logprobs: null,
+            },
+          ],
+        },
+      ];
+
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          data.forEach((chunk) => controller.enqueue(chunk));
+          controller.close();
+        },
+      });
+
+      const protocolStream = OpenAIStream(mockOpenAIStream);
+      const decoder = new TextDecoder();
+      const chunks = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      expect(chunks).toEqual(
+        [
+          'id: 1',
+          'event: reasoning',
+          `data: "思考开始"\n`,
+          'id: 1',
+          'event: reasoning',
+          `data: "思考进行中"\n`,
+          'id: 1',
+          'event: reasoning',
+          `data: "思考结束"\n`,
+          'id: 1',
+          'event: text',
+          `data: "这是最终回答"\n`,
+        ].map((i) => `${i}\n`),
+      );
+    });
+
     it('should handle reasoning event in official DeepSeek api', async () => {
       const data = [
         {

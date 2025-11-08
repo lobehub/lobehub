@@ -163,9 +163,9 @@
     "addMember": "メンバーを追加",
     "allMembers": "全メンバー",
     "createGroup": "エージェントチームを作成",
-    "noAvailableAgents": "招待可能なアシスタントがいません",
-    "noSelectedAgents": "アシスタントが選択されていません",
-    "searchAgents": "アシスタントを検索...",
+    "noAvailableAgents": "招待可能なエージェントがいません",
+    "noSelectedAgents": "エージェントがまだ選択されていません",
+    "searchAgents": "エージェントを検索...",
     "setInitialMembers": "チームメンバーを選択"
   },
   "members": "メンバー",
@@ -229,7 +229,7 @@
     "jumpToMessage": "メッセージ {{index}} へジャンプ",
     "nextMessage": "次のメッセージ",
     "previousMessage": "前のメッセージ",
-    "senderAssistant": "アシスタント",
+    "senderAssistant": "エージェント",
     "senderUser": "あなた"
   },
   "newAgent": "新しいエージェント",

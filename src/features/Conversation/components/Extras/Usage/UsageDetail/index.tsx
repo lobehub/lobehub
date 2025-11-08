@@ -1,3 +1,4 @@
+import { MessageMetadata } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { Divider, Popover } from 'antd';
 import { useTheme } from 'antd-style';
@@ -10,7 +11,6 @@ import InfoTooltip from '@/components/InfoTooltip';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { MessageMetadata } from '@/types/message';
 import { formatNumber } from '@/utils/format';
 
 import ModelCard from './ModelCard';

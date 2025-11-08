@@ -64,11 +64,11 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
                 label: t('knowledgeBase.library.action.detail'),
                 onClick: () => {
                   if (type === KnowledgeType.KnowledgeBase) {
-                    window.open(`/repos/${id}`);
+                    window.open(`/knowledge/bases/${id}`);
                     return;
                   }
 
-                  window.open(`/files/${id}`);
+                  window.open(`/knowledge?file=${id}`);
                 },
               },
               {

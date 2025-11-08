@@ -167,6 +167,13 @@ LobeChat 在部署时提供了丰富的模型服务商相关的环境变量，�
 
 ## ComfyUI
 
+### `ENABLED_COMFYUI`
+
+- 类型：可选
+- 描述：默认启用 ComfyUI 作为模型供应商，当设为 0 时关闭 ComfyUI 服务
+- 默认值：`1`
+- 示例：`0`
+
 ### `COMFYUI_BASE_URL`
 
 - 类型：可选
@@ -703,13 +710,6 @@ LobeChat 在部署时提供了丰富的模型服务商相关的环境变量，�
 
 ## BFL
 
-### `ENABLED_BFL`
-
-- 类型：可选
-- 描述：默认启用 BFL 作为模型供应商，当设为 0 时关闭 BFL 服务
-- 默认值：`1`
-- 示例：`0`
-
 ### `BFL_API_KEY`
 
 - 类型：必选
@@ -751,13 +751,6 @@ LobeChat 在部署时提供了丰富的模型服务商相关的环境变量，�
 
 ## Vercel AI Gateway
 
-### `ENABLED_VERCELAIGATEWAY`
-
-- 类型：可选
-- 描述：默认启用 Vercel AI Gateway 作为模型供应商，当设为 0 时关闭 Vercel AI Gateway 服务
-- 默认值：`1`
-- 示例：`0`
-
 ### `VERCELAIGATEWAY_API_KEY`
 
 - 类型：必选
@@ -787,5 +780,21 @@ LobeChat 在部署时提供了丰富的模型服务商相关的环境变量，�
 - 描述：用来控制 Cerebras 模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则与其他 provider 保持一致。
 - 默认值：`-`
 - 示例：`-all,+cerebras-model-1,+cerebras-model-2=cerebras-special`
+
+## AiHubMix
+
+### `AIHUBMIX_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 AiHubMix 服务中申请的 API 密钥
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `AIHUBMIX_MODEL_LIST`
+
+- 类型：可选
+- 描述：用来控制 AiHubMix 模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则与其他 provider 保持一致。
+- 默认值：`-`
+- 示例：`-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
 
 [model-list]: /zh/docs/self-hosting/advanced/model-list

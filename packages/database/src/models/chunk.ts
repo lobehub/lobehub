@@ -1,8 +1,6 @@
+import { ChunkMetadata, FileChunk } from '@lobechat/types';
 import { and, asc, cosineDistance, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { chunk } from 'lodash-es';
-
-import { LobeChatDatabase } from '../type';
-import { ChunkMetadata, FileChunk } from '@/types/chunk';
 
 import {
   NewChunkItem,
@@ -13,6 +11,7 @@ import {
   files,
   unstructuredChunks,
 } from '../schemas';
+import { LobeChatDatabase } from '../type';
 
 export class ChunkModel {
   private userId: string;

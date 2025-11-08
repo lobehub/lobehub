@@ -1,3 +1,4 @@
+import { UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { mutate } from 'swr';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +8,6 @@ import { chatService } from '@/services/chat';
 import { threadService } from '@/services/thread';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useSessionStore } from '@/store/session';
-import { ChatMessage } from '@/types/message';
 import { ThreadItem, ThreadStatus, ThreadType } from '@/types/topic';
 
 import { useChatStore } from '../../store';
@@ -426,7 +426,7 @@ describe('thread action', () => {
         });
       });
 
-      const messages: ChatMessage[] = [
+      const messages: UIChatMessage[] = [
         {
           content: 'Hello',
           createdAt: Date.now(),

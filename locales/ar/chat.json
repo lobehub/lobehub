@@ -163,9 +163,9 @@
     "addMember": "إضافة عضو",
     "allMembers": "جميع الأعضاء",
     "createGroup": "إنشاء فريق وكيل",
-    "noAvailableAgents": "لا يوجد مساعدين متاحين للدعوة",
-    "noSelectedAgents": "لم يتم اختيار مساعدين بعد",
-    "searchAgents": "البحث عن مساعدين...",
+    "noAvailableAgents": "لا يوجد وكلاء متاحون للدعوة",
+    "noSelectedAgents": "لم يتم اختيار أي وكيل بعد",
+    "searchAgents": "ابحث عن وكيل...",
     "setInitialMembers": "اختيار أعضاء الفريق"
   },
   "members": "الأعضاء",
@@ -229,7 +229,7 @@
     "jumpToMessage": "الانتقال إلى الرسالة رقم {{index}}",
     "nextMessage": "الرسالة التالية",
     "previousMessage": "الرسالة السابقة",
-    "senderAssistant": "المساعد",
+    "senderAssistant": "الوكيل",
     "senderUser": "أنت"
   },
   "newAgent": "مساعد جديد",

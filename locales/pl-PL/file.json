@@ -85,6 +85,7 @@
         "restTime": "Pozostały czas {{time}}"
       }
     },
+    "fileQueueInfo": "Trwa przesyłanie {{count}} pierwszych plików, pozostałe {{remaining}} pliki zostaną dodane do kolejki",
     "totalCount": "Łącznie {{count}} pozycji",
     "uploadStatus": {
       "error": "Błąd przesyłania",

@@ -1,17 +1,17 @@
-import { ChatMessage } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 
-const chatMessage = (message: ChatMessage) => {
+const chatMessage = (message: UIChatMessage) => {
   return `<${message.role}>${message.content}</${message.role}>`;
 };
 
-export const chatHistoryPrompts = (messages: ChatMessage[]) => {
+export const chatHistoryPrompts = (messages: UIChatMessage[]) => {
   return `<chat_history>
 ${messages.map((m) => chatMessage(m)).join('\n')}
 </chat_history>`;
 };
 
-export const groupSupervisorPrompts = (messages: ChatMessage[]) => {
-  const formatMessage = (message: ChatMessage) => {
+export const groupSupervisorPrompts = (messages: UIChatMessage[]) => {
+  const formatMessage = (message: UIChatMessage) => {
     const author = message.role === 'user' ? 'user' : message.agentId || 'assistant';
     const targetAttr = message.targetId ? ` target="${message.targetId}"` : '';
     return `<message author="${author}"${targetAttr}>${message.content}</message>`;
@@ -23,7 +23,7 @@ export const groupSupervisorPrompts = (messages: ChatMessage[]) => {
   return filteredMessages.map((m) => formatMessage(m)).join('\n');
 };
 
-export const groupMemeberSpeakingPrompts = (messages: ChatMessage[]) => {
+export const groupMemeberSpeakingPrompts = (messages: UIChatMessage[]) => {
   return `<chat_group>
 ${messages.map((m) => chatMessage(m)).join('\n')}
 </chat_group>`;
@@ -36,10 +36,13 @@ ${messages.map((m) => chatMessage(m)).join('\n')}
  * - Agent sees DMs they sent
  * - Agent sees user messages that are group messages or targeted to them
  * - For DM messages not involving the agent, content is replaced with "***"
- * 
+ *
  * TODO: Use context engineering to filter messages
  */
-export const filterMessagesForAgent = (messages: ChatMessage[], agentId: string): ChatMessage[] => {
+export const filterMessagesForAgent = (
+  messages: UIChatMessage[],
+  agentId: string,
+): UIChatMessage[] => {
   return messages
     .filter((message) => {
       // Exclude supervisor messages (messages with role="supervisor")
@@ -107,7 +110,7 @@ export const filterMessagesForAgent = (messages: ChatMessage[], agentId: string)
  * for use in system messages. Each message is formatted as "(AuthorName): content"
  */
 export const consolidateGroupChatHistory = (
-  messages: ChatMessage[],
+  messages: UIChatMessage[],
   agents: { id: string; title: string }[] = [],
 ) => {
   if (messages.length === 0) return '';
@@ -115,7 +118,7 @@ export const consolidateGroupChatHistory = (
   // Create a map for quick agent lookup
   const agentMap = new Map(agents.map((agent) => [agent.id, agent.title]));
 
-  const formatMessage = (message: ChatMessage) => {
+  const formatMessage = (message: UIChatMessage) => {
     let authorName: string;
 
     if (message.role === 'user') {

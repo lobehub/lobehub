@@ -1,4 +1,5 @@
 // Transformer processors
+export { GroupMessageFlattenProcessor } from './GroupMessageFlatten';
 export { HistoryTruncateProcessor } from './HistoryTruncate';
 export { InputTemplateProcessor } from './InputTemplate';
 export { MessageCleanupProcessor } from './MessageCleanup';

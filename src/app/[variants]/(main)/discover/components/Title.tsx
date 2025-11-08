@@ -59,10 +59,7 @@ const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
         title
       )}
       {moreLink && (
-        <Link
-          target={moreLink.startsWith('http') ? '_blank' : undefined}
-          to={moreLink}
-        >
+        <Link target={moreLink.startsWith('http') ? '_blank' : undefined} to={moreLink}>
           <Button className={styles.more} style={{ paddingInline: 6 }} type={'text'}>
             <span>{more}</span>
             <Icon icon={ChevronRight} />

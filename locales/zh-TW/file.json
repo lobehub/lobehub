@@ -85,6 +85,7 @@
         "restTime": "剩餘 {{time}}"
       }
     },
+    "fileQueueInfo": "正在上傳前 {{count}} 個檔案，剩餘 {{remaining}} 個檔案將排隊上傳",
     "totalCount": "共 {{count}} 項",
     "uploadStatus": {
       "error": "上傳出錯",

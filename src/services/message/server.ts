@@ -1,13 +1,21 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { ChatTranslate, UIChatMessage } from '@lobechat/types';
+
 import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
-import { ChatMessage, ChatTranslate } from '@/types/message';
 
 import { IMessageService } from './type';
 
 export class ServerService implements IMessageService {
   createMessage: IMessageService['createMessage'] = async ({ sessionId, ...params }) => {
     return lambdaClient.message.createMessage.mutate({
+      ...params,
+      sessionId: sessionId ? this.toDbSessionId(sessionId) : undefined,
+    });
+  };
+
+  createNewMessage: IMessageService['createNewMessage'] = async ({ sessionId, ...params }) => {
+    return lambdaClient.message.createNewMessage.mutate({
       ...params,
       sessionId: sessionId ? this.toDbSessionId(sessionId) : undefined,
     });
@@ -24,7 +32,7 @@ export class ServerService implements IMessageService {
       topicId,
     });
 
-    return data as unknown as ChatMessage[];
+    return data as unknown as UIChatMessage[];
   };
 
   getGroupMessages: IMessageService['getGroupMessages'] = async (groupId, topicId) => {
@@ -32,7 +40,7 @@ export class ServerService implements IMessageService {
       groupId,
       topicId,
     });
-    return data as unknown as ChatMessage[];
+    return data as unknown as UIChatMessage[];
   };
 
   getAllMessages: IMessageService['getAllMessages'] = async () => {

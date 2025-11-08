@@ -163,9 +163,9 @@
     "addMember": "Üye Ekle",
     "allMembers": "Tüm üyeler",
     "createGroup": "Agent Ekibi Oluştur",
-    "noAvailableAgents": "Davet edilecek asistan yok",
-    "noSelectedAgents": "Henüz asistan seçilmedi",
-    "searchAgents": "Asistan ara...",
+    "noAvailableAgents": "Davet edilebilecek bir Agent yok",
+    "noSelectedAgents": "Henüz bir Agent seçilmedi",
+    "searchAgents": "Agent ara...",
     "setInitialMembers": "Ekip üyelerini seç"
   },
   "members": "Üyeler",
@@ -229,7 +229,7 @@
     "jumpToMessage": "{{index}} numaralı mesaja atla",
     "nextMessage": "Sonraki mesaj",
     "previousMessage": "Önceki mesaj",
-    "senderAssistant": "Asistan",
+    "senderAssistant": "Agent",
     "senderUser": "Sen"
   },
   "newAgent": "Yeni Asistan",

@@ -1,5 +1,5 @@
-import { chainLangDetect , chainTranslate } from '@lobechat/prompts';
-import { TraceNameMap, TracePayload } from '@lobechat/types';
+import { chainLangDetect, chainTranslate } from '@lobechat/prompts';
+import { ChatTranslate, TraceNameMap, TracePayload } from '@lobechat/types';
 import { produce } from 'immer';
 import { StateCreator } from 'zustand/vanilla';
 
@@ -10,7 +10,6 @@ import { chatSelectors } from '@/store/chat/selectors';
 import { ChatStore } from '@/store/chat/store';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
-import { ChatTranslate } from '@/types/message';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 

@@ -1,4 +1,4 @@
-import { ChatMessage } from '@/types/index';
+import { UIChatMessage } from '@lobechat/types';
 
 export interface GroupMemberInfo {
   id: string;
@@ -27,7 +27,7 @@ export const buildGroupChatSystemPrompt = ({
   baseSystemRole?: string;
   groupMembers: GroupMemberInfo[];
   instruction?: string;
-  messages: ChatMessage[];
+  messages: UIChatMessage[];
   targetId?: string;
 }): string => {
   const membersTag = buildGroupMembersTag(groupMembers);
@@ -138,7 +138,7 @@ RULES:
 WHEN ASKING AGENTS TO SPEAK:
 
 - Only reference agents from the member list. Never invent new IDs.
-- Do not excessivly gathering information from user, you should only ask for information when it's necessary. 
+- Do not excessivly gathering information from user, you should only ask for information when it's necessary.
 - If need many information from user, make single agent to ask for all.
 ${dmRules}
 

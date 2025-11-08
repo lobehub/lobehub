@@ -1,8 +1,8 @@
-import { ChatMessage, ChatStreamPayload } from '@lobechat/types';
+import { ChatStreamPayload, UIChatMessage } from '@lobechat/types';
 
 import { chatHistoryPrompts } from '../prompts';
 
-export const chainSummaryHistory = (messages: ChatMessage[]): Partial<ChatStreamPayload> => ({
+export const chainSummaryHistory = (messages: UIChatMessage[]): Partial<ChatStreamPayload> => ({
   messages: [
     {
       content: `You're an assistant who's good at extracting key takeaways from conversations and summarizing them. Please summarize according to the user's needs. The content you need to summarize is located in the <chat_history> </chat_history> group of xml tags. The summary needs to maintain the original language.`,

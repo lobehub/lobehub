@@ -1,12 +1,10 @@
 // @vitest-environment node
+import { ImageGenerationTopic } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeChatDatabase } from '../../type';import { FileService } from '@/server/services/file';
-import { ImageGenerationTopic } from '@/types/generation';
-
 import { generationBatches, generationTopics, generations, users } from '../../schemas';
-import { GenerationTopicItem } from '../../schemas/generation';
+import { LobeChatDatabase } from '../../type';
 import { GenerationTopicModel } from '../generationTopic';
 import { getTestDB } from './_util';
 

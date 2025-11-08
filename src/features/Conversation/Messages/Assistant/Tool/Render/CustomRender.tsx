@@ -1,3 +1,4 @@
+import { UIChatMessage } from '@lobechat/types';
 import { ActionIcon } from '@lobehub/ui';
 import { App } from 'antd';
 import { Edit3Icon, PlayCircleIcon } from 'lucide-react';
@@ -10,7 +11,6 @@ import PluginResult from '@/features/Conversation/Messages/Assistant/Tool/Inspec
 import PluginRender from '@/features/PluginsUI/Render';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
-import { ChatMessage } from '@/types/message';
 
 import Arguments from './Arguments';
 import KeyValueEditor from './KeyValueEditor';
@@ -24,7 +24,7 @@ const safeParseJson = (str: string): Record<string, any> => {
   }
 };
 
-interface CustomRenderProps extends ChatMessage {
+interface CustomRenderProps extends UIChatMessage {
   requestArgs?: string;
   setShowPluginRender: (value: boolean) => void;
   showPluginRender: boolean;

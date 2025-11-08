@@ -1,7 +1,6 @@
+import { ChatFileItem } from '@lobechat/types';
 import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
-
-import { ChatFileItem } from '@/types/message';
 
 import FileItem from './Item';
 

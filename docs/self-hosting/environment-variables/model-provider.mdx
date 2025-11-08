@@ -653,6 +653,13 @@ The above example disables all models first, then enables `fal-ai/flux/schnell` 
 
 ## ComfyUI
 
+### `ENABLED_COMFYUI`
+
+- Type: Optional
+- Description: Enables ComfyUI as a model provider by default. Set to `0` to disable the ComfyUI service.
+- Default: `1`
+- Example: `0`
+
 ### `COMFYUI_BASE_URL`
 
 - Type: Optional
@@ -705,13 +712,6 @@ The above example disables all models first, then enables `fal-ai/flux/schnell` 
 
 ## BFL
 
-### `ENABLED_BFL`
-
-- Type: Optional
-- Description: Enables BFL as a model provider by default. Set to `0` to disable the BFL service.
-- Default: `1`
-- Example: `0`
-
 ### `BFL_API_KEY`
 
 - Type: Required
@@ -748,13 +748,6 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 
 ## Vercel AI Gateway
 
-### `ENABLED_VERCELAIGATEWAY`
-
-- Type: Optional
-- Description: Enables Vercel AI Gateway as a model provider by default. Set to `0` to disable the Vercel AI Gateway service.
-- Default: `1`
-- Example: `0`
-
 ### `VERCELAIGATEWAY_API_KEY`
 
 - Type: Required
@@ -784,5 +777,21 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Description: Used to control the Cerebras model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
 - Default: `-`
 - Example: `-all,+cerebras-model-1,+cerebras-model-2=cerebras-special`
+
+## AiHubMix
+
+### `AIHUBMIX_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the AiHubMix service.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `AIHUBMIX_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the AiHubMix model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
 
 [model-list]: /docs/self-hosting/advanced/model-list

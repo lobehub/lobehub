@@ -5,6 +5,12 @@ import {
   buildGroupChatSystemPrompt,
   filterMessagesForAgent,
 } from '@lobechat/prompts';
+import {
+  ChatErrorType,
+  CreateMessageParams,
+  SendGroupMessageParams,
+  UIChatMessage,
+} from '@lobechat/types';
 import { produce } from 'immer';
 import { StateCreator } from 'zustand/vanilla';
 
@@ -16,8 +22,6 @@ import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
-import { ChatErrorType } from '@/types/fetch';
-import { ChatMessage, CreateMessageParams, SendGroupMessageParams } from '@/types/message';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -99,7 +103,7 @@ const extractMentionsFromContent = (
 /**
  * Check if a message is a tool calling message that requires a follow-up
  */
-const isToolCallMessage = (message: ChatMessage): boolean => {
+const isToolCallMessage = (message: UIChatMessage): boolean => {
   return message.role === 'assistant' && !!message.tools && message.tools.length > 0;
 };
 
@@ -107,7 +111,7 @@ const isToolCallMessage = (message: ChatMessage): boolean => {
  * Count consecutive assistant messages from the end of the message list
  * This helps enforce maxResponseInRow limit
  */
-const countConsecutiveAssistantMessages = (messages: ChatMessage[]): number => {
+const countConsecutiveAssistantMessages = (messages: UIChatMessage[]): number => {
   let count = 0;
 
   // Count from the end of the array backwards
@@ -135,7 +139,7 @@ const countConsecutiveAssistantMessages = (messages: ChatMessage[]): number => {
  * Returns true if the conversation flow should continue without supervisor intervention
  */
 const shouldAvoidSupervisorDecision = (
-  messages: ChatMessage[],
+  messages: UIChatMessage[],
   maxResponseInRow?: number,
   isManualTrigger: boolean = false,
 ): boolean => {
@@ -666,7 +670,7 @@ export const chatAiGroupChat: StateCreator<
 
         const assistantId = await internal_createMessage(agentMessage);
 
-        const systemMessage: ChatMessage = {
+        const systemMessage: UIChatMessage = {
           id: 'group-system',
           role: 'system',
           content: groupChatSystemPrompt,

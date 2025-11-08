@@ -85,6 +85,7 @@
         "restTime": "Tiempo restante {{time}}"
       }
     },
+    "fileQueueInfo": "Subiendo los primeros {{count}} archivos, los {{remaining}} restantes se pondrán en cola para subir",
     "totalCount": "Total {{count}} elementos",
     "uploadStatus": {
       "error": "Error en la subida",

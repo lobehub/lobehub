@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Human Intervention Policy
  */
@@ -5,6 +7,8 @@ export type HumanInterventionPolicy =
   | 'never' // Never intervene, auto-execute
   | 'always' // Always require intervention
   | 'first'; // Require intervention on first call only
+
+export const HumanInterventionPolicySchema = z.enum(['never', 'always', 'first']);
 
 /**
  * Argument Matcher for parameter-level filtering
@@ -21,6 +25,14 @@ export type ArgumentMatcher =
       pattern: string;
       type: 'exact' | 'prefix' | 'wildcard' | 'regex';
     };
+
+export const ArgumentMatcherSchema: z.ZodType<ArgumentMatcher> = z.union([
+  z.string(),
+  z.object({
+    pattern: z.string(),
+    type: z.enum(['exact', 'prefix', 'wildcard', 'regex']),
+  }),
+]);
 
 /**
  * Human Intervention Rule
@@ -42,6 +54,11 @@ export interface HumanInterventionRule {
   policy: HumanInterventionPolicy;
 }
 
+export const HumanInterventionRuleSchema: z.ZodType<HumanInterventionRule> = z.object({
+  match: z.record(z.string(), ArgumentMatcherSchema).optional(),
+  policy: HumanInterventionPolicySchema,
+});
+
 /**
  * Human Intervention Configuration
  * Can be either:
@@ -53,6 +70,11 @@ export interface HumanInterventionRule {
  * - [{ match: { command: "ls:*" }, policy: "never" }, { policy: "always" }]
  */
 export type HumanInterventionConfig = HumanInterventionPolicy | HumanInterventionRule[];
+
+export const HumanInterventionConfigSchema: z.ZodType<HumanInterventionConfig> = z.union([
+  HumanInterventionPolicySchema,
+  z.array(HumanInterventionRuleSchema),
+]);
 
 /**
  * Human Intervention Response
@@ -85,6 +107,16 @@ export interface HumanInterventionResponse {
   };
 }
 
+export const HumanInterventionResponseSchema = z.object({
+  action: z.enum(['approve', 'reject', 'select']),
+  data: z
+    .object({
+      remember: z.boolean().optional(),
+      selected: z.union([z.string(), z.array(z.string())]).optional(),
+    })
+    .optional(),
+});
+
 /**
  * Parameters for shouldIntervene method
  */
@@ -112,3 +144,10 @@ export interface ShouldInterveneParams {
    */
   toolKey?: string;
 }
+
+export const ShouldInterveneParamsSchema = z.object({
+  config: HumanInterventionConfigSchema.optional(),
+  confirmedHistory: z.array(z.string()).optional(),
+  toolArgs: z.record(z.string(), z.any()).optional(),
+  toolKey: z.string().optional(),
+});

@@ -112,14 +112,16 @@ export const createCreateImageSlice: StateCreator<
     set({ isCreating: true }, false, 'recreateImage/startCreateImage');
 
     const store = get();
-    const imageNum = imageGenerationConfigSelectors.imageNum(store);
     const activeGenerationTopicId = generationTopicSelectors.activeGenerationTopicId(store);
-    const batch = generationBatchSelectors.getGenerationBatchByBatchId(generationBatchId)(store)!;
-    const { removeGenerationBatch } = store;
-
     if (!activeGenerationTopicId) {
       throw new Error('No active generation topic');
     }
+
+    const { removeGenerationBatch } = store;
+    const batch = generationBatchSelectors.getGenerationBatchByBatchId(generationBatchId)(store)!;
+
+    // Use batch.generations.length to preserve original imageNum (not UI config)
+    const imageNum = batch.generations.length;
 
     try {
       // 1. Delete generation batch

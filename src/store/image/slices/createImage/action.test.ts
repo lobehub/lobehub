@@ -54,6 +54,9 @@ describe('CreateImageAction', () => {
             provider: 'batch-provider',
             model: 'batch-model',
             config: { prompt: 'batch prompt' },
+            generations: [{}, {}, {}, {}], // 4 generations to match expected imageNum
+            createdAt: new Date(),
+            prompt: 'batch prompt',
           } as any,
         ],
       },
@@ -280,6 +283,10 @@ describe('CreateImageAction', () => {
         });
       });
 
+      // Get batch to verify imageNum uses batch.generations.length
+      const batch = result.current.generationBatchesMap['active-topic-id']?.[0];
+      const expectedImageNum = batch?.generations.length ?? 0;
+
       await act(async () => {
         await result.current.recreateImage('batch-id');
       });
@@ -290,12 +297,12 @@ describe('CreateImageAction', () => {
       // Verify batch removal
       expect(mockRemoveGenerationBatch).toHaveBeenCalledWith('batch-id', 'active-topic-id');
 
-      // Verify service call
+      // Verify service call uses batch.generations.length for imageNum
       expect(mockImageService.createImage).toHaveBeenCalledWith({
         generationTopicId: 'active-topic-id',
         provider: 'batch-provider',
         model: 'batch-model',
-        imageNum: 4,
+        imageNum: expectedImageNum,
         params: { prompt: 'batch prompt' },
       });
 

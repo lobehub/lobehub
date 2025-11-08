@@ -163,9 +163,9 @@
     "addMember": "Dodaj członka",
     "allMembers": "Wszyscy członkowie",
     "createGroup": "Utwórz zespół Agentów",
-    "noAvailableAgents": "Brak dostępnych asystentów do zaproszenia",
-    "noSelectedAgents": "Nie wybrano jeszcze asystentów",
-    "searchAgents": "Szukaj asystentów...",
+    "noAvailableAgents": "Brak dostępnych Agentów do zaproszenia",
+    "noSelectedAgents": "Nie wybrano jeszcze żadnego Agenta",
+    "searchAgents": "Szukaj Agenta...",
     "setInitialMembers": "Wybierz członków zespołu"
   },
   "members": "Członkowie",
@@ -229,7 +229,7 @@
     "jumpToMessage": "Przejdź do wiadomości nr {{index}}",
     "nextMessage": "Następna wiadomość",
     "previousMessage": "Poprzednia wiadomość",
-    "senderAssistant": "Asystent",
+    "senderAssistant": "Agent",
     "senderUser": "Ty"
   },
   "newAgent": "Nowy asystent",

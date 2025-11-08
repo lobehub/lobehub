@@ -15,6 +15,7 @@ export default defineConfig({
       '@/const/locale': resolve(__dirname, './src/const/locale'),
       // TODO: after refactor the errorResponse, we can remove it
       '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
+      '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
       '@/utils': resolve(__dirname, './packages/utils/src'),
       '@/types': resolve(__dirname, './packages/types/src'),
       '@/const': resolve(__dirname, './packages/const/src'),

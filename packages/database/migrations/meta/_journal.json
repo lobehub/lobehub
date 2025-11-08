@@ -273,6 +273,20 @@
       "when": 1760108430562,
       "tag": "0038_add_image_user_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1761554153406,
+      "tag": "0039_add_editor_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1761563458595,
+      "tag": "0040_improve_user_memory_field",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -1,5 +1,6 @@
 /* eslint-disable typescript-sort-keys/interface */
-import { CreateMessageParams } from '@/types/message';
+import { CreateMessageParams } from '@lobechat/types';
+
 import { CreateThreadParams, ThreadItem } from '@/types/topic';
 
 interface CreateThreadWithMessageParams extends CreateThreadParams {

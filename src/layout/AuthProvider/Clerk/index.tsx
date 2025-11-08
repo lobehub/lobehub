@@ -30,6 +30,17 @@ const Clerk = memo(({ children }: PropsWithChildren) => {
     });
   }, [count, setCount, isPending, startTransition]);
 
+  const allowedRedirectOrigins = useMemo(() => {
+    const rawOrigins = process.env.NEXT_PUBLIC_CLERK_AUTH_ALLOW_ORIGINS;
+    if (!rawOrigins) return undefined;
+
+    const origins = rawOrigins
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+    return origins.length ? origins : undefined;
+  }, []);
+
   const updatedAppearance = useMemo(
     () => ({
       ...appearance,
@@ -43,6 +54,7 @@ const Clerk = memo(({ children }: PropsWithChildren) => {
 
   return (
     <ClerkProvider
+      allowedRedirectOrigins={allowedRedirectOrigins}
       appearance={updatedAppearance}
       localization={localization}
       signUpUrl={!enableClerkSignUp ? '/login' : '/signup'} // Redirect sign-up to sign-in if disabled

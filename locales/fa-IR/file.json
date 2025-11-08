@@ -85,6 +85,7 @@
         "restTime": "زمان باقی‌مانده {{time}}"
       }
     },
+    "fileQueueInfo": "در حال بارگذاری {{count}} فایل اول، {{remaining}} فایل باقی‌مانده در صف بارگذاری قرار خواهند گرفت",
     "totalCount": "مجموعاً {{count}} مورد",
     "uploadStatus": {
       "error": "خطا در بارگذاری",

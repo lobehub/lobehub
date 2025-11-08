@@ -5,6 +5,149 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Qwen3-VL-32B-Instruct 是阿里巴巴通义千问团队推出的视觉语言模型，在多个视觉语言基准测试中取得了领先的 SOTA 性能。该模型支持百万像素级别的高分辨率图像输入，并具备强大的通用视觉理解、多语言 OCR、细粒度视觉定位和视觉对话能力。作为 Qwen3 系列中的视觉语言模型，它能够处理复杂的多模态任务，支持工具调用和前缀续写等高级功能。',
+    displayName: 'Qwen3 VL 32B Instruct',
+    id: 'Qwen/Qwen3-VL-32B-Instruct',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-10-21',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Qwen3-VL-32B-Thinking 是阿里巴巴通义千问团队推出的视觉语言模型中一个为复杂视觉推理任务特别优化的版本。该模型内置了"思考模式"，使其在回答问题前能够生成详细的中间推理步骤，从而显著增强其在需要多步逻辑、规划和复杂推理的任务上的表现。该模型支持百万像素级别的高分辨率图像输入，具备强大的通用视觉理解、多语言 OCR、细粒度视觉定位和视觉对话能力，并支持工具调用和前缀续写等功能。',
+    displayName: 'Qwen3 VL 32B Thinking',
+    id: 'Qwen/Qwen3-VL-32B-Thinking',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-10-21',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      vision: true,
+    },
+    contextWindowTokens: 8192,
+    description:
+      'DeepSeek-OCR 是由深度求索（DeepSeek AI）推出的一个视觉语言模型，专注于光学字符识别（OCR）与"上下文光学压缩"。该模型旨在探索从图像中压缩上下文信息的边界，能够高效处理文档并将其转换为如 Markdown 等结构化文本格式。它能够准确识别图像中的文字内容，特别适用于文档数字化、文字提取和结构化处理等应用场景。',
+    displayName: 'DeepSeek OCR',
+    id: 'deepseek-ai/DeepSeek-OCR',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-10-20',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 65_536,
+    description:
+      'Qwen3-Omni-30B-A3B-Instruct 是阿里巴巴通义千问团队最新 Qwen3 系列中的一员。它是一个拥有 300 亿总参数和 30 亿激活参数的混合专家（MoE）模型，在保持强大性能的同时有效降低了推理成本。该模型在高质量、多来源、多语言的数据上进行训练，具备强大的通用能力，支持全模态输入处理，包括文本、图像、音频和视频，能够理解和生成跨模态的内容。',
+    displayName: 'Qwen3 Omni 30B A3B Instruct',
+    id: 'Qwen/Qwen3-Omni-30B-A3B-Instruct',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-22',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 65_536,
+    description:
+      'Qwen3-Omni-30B-A3B-Thinking 是 Qwen3-Omni 全模态模型中的核心"思考者"（Thinker）组件。它专门负责处理包括文本、音频、图像和视频在内的多模态输入，并执行复杂的思维链推理。作为推理的大脑，该模型将所有输入统一到通用的表征空间中，实现跨模态的深度理解和复杂推理能力。该模型基于混合专家（MoE）架构，拥有 300 亿总参数和 30 亿激活参数，能够在保持强大推理能力的同时优化计算效率。',
+    displayName: 'Qwen3 Omni 30B A3B Thinking',
+    id: 'Qwen/Qwen3-Omni-30B-A3B-Thinking',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-22',
+    settings: {
+      extendParams: ['reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 65_536,
+    description:
+      'Qwen3-Omni-30B-A3B-Captioner 是阿里巴巴通义千问团队 Qwen3 系列中的一款视觉语言模型（VLM）。它专门用于生成高质量、详细且准确的图像描述。该模型基于 300 亿总参数的混合专家（MoE）架构，能够深入理解图像内容并将其转化为自然流畅的文字描述。它在图像细节捕捉、场景理解、物体识别和关系推理等方面表现卓越，特别适合需要精确图像理解和描述生成的应用场景。',
+    displayName: 'Qwen3 Omni 30B A3B Captioner',
+    id: 'Qwen/Qwen3-Omni-30B-A3B-Captioner',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-22',
+    type: 'chat',
+  },
+  {
+    contextWindowTokens: 32_768,
+    description:
+      '混元翻译模型（Hunyuan Translation Model）由一个翻译模型 Hunyuan-MT-7B 和一个集成模型 Hunyuan-MT-Chimera 组成。Hunyuan-MT-7B 是一个拥有 70 亿参数的轻量级翻译模型，用于将源文本翻译成目标语言。该模型支持 33 种语言以及 5 种中国少数民族语言的互译。在 WMT25 国际机器翻译竞赛中，Hunyuan-MT-7B 在其参与的 31 个语言类别中获得了 30 个第一名，展现了其卓越的翻译能力。针对翻译场景，腾讯混元提出了一个从预训练到监督微调、再到翻译强化和集成强化的完整训练范式，使其在同等规模的模型中达到了业界领先的性能。该模型计算效率高、易于部署，适合多种应用场景。',
+    displayName: 'Hunyuan MT 7B',
+    id: 'tencent/Hunyuan-MT-7B',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-01',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:

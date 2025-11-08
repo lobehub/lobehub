@@ -1,5 +1,6 @@
 'use client';
 
+import { UIChatMessage } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Button, Text } from '@lobehub/ui';
 import { createStyles, useTheme } from 'antd-style';
@@ -12,7 +13,6 @@ import { DEFAULT_SUPERVISOR_AVATAR } from '@/const/meta';
 import { ChatItem } from '@/features/ChatItem';
 import { useChatStore } from '@/store/chat';
 import { ChatErrorType } from '@/types/fetch';
-import { ChatMessage } from '@/types/message';
 
 import TodoList, { TodoData } from './TodoList';
 
@@ -54,7 +54,7 @@ const parseMarkdownTodos = (content: string): TodoData => {
   };
 };
 
-interface SupervisorMessageProps extends ChatMessage {
+interface SupervisorMessageProps extends UIChatMessage {
   disableEditing?: boolean;
   index: number;
 }

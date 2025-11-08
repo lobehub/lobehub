@@ -163,9 +163,9 @@
     "addMember": "Agregar miembro",
     "allMembers": "Todos los miembros",
     "createGroup": "Crear equipo de agentes",
-    "noAvailableAgents": "No hay asistentes disponibles para invitar",
-    "noSelectedAgents": "No se ha seleccionado ningún asistente",
-    "searchAgents": "Buscar asistentes...",
+    "noAvailableAgents": "No hay agentes disponibles para invitar",
+    "noSelectedAgents": "Aún no se ha seleccionado ningún agente",
+    "searchAgents": "Buscar agentes...",
     "setInitialMembers": "Seleccionar miembros del equipo"
   },
   "members": "Miembros",
@@ -229,7 +229,7 @@
     "jumpToMessage": "Ir al mensaje número {{index}}",
     "nextMessage": "Mensaje siguiente",
     "previousMessage": "Mensaje anterior",
-    "senderAssistant": "Asistente",
+    "senderAssistant": "Agente",
     "senderUser": "Tú"
   },
   "newAgent": "Nuevo asistente",

@@ -1,4 +1,4 @@
-import { ChatMessage } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 import { Mock, describe, expect, it, vi } from 'vitest';
 
 import { chainSummaryHistory } from '../summaryHistory';
@@ -9,7 +9,7 @@ describe('chainSummaryHistory', () => {
     const messages = [
       { content: 'Hello, how can I assist you?', role: 'assistant' },
       { content: 'I need help with my account.', role: 'user' },
-    ] as ChatMessage[];
+    ] as UIChatMessage[];
 
     // Act
     const result = chainSummaryHistory(messages);

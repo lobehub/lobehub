@@ -39,9 +39,8 @@ export const config = {
     '/changelog(.*)',
     '/settings(.*)',
     '/image',
-    '/files',
-    '/files(.*)',
-    '/repos(.*)',
+    '/knowledge',
+    '/knowledge(.*)',
     '/profile(.*)',
     '/me',
     '/me(.*)',
@@ -143,6 +142,7 @@ const defaultMiddleware = (request: NextRequest) => {
 
   url.pathname = nextPathname;
 
+  logDefault('nextURL after rewrite: %s', url.toString());
   // build rewrite response first
   const rewrite = NextResponse.rewrite(url, { status: 200 });
 
@@ -191,7 +191,7 @@ const isPublicRoute = createRouteMatcher([
 
 const isProtectedRoute = createRouteMatcher([
   '/settings(.*)',
-  '/files(.*)',
+  '/knowledge(.*)',
   '/onboard(.*)',
   '/oauth(.*)',
   // ↓ cloud ↓

@@ -1,5 +1,4 @@
 import { Button, Form, Input, TextArea } from '@lobehub/ui';
-import { useRouter } from 'next/navigation';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,13 +7,13 @@ import { CreateKnowledgeBaseParams } from '@/types/knowledgeBase';
 
 interface CreateFormProps {
   onClose?: () => void;
+  onSuccess?: (id: string) => void;
 }
 
-const CreateForm = memo<CreateFormProps>(({ onClose }) => {
+const CreateForm = memo<CreateFormProps>(({ onClose, onSuccess }) => {
   const { t } = useTranslation('knowledgeBase');
   const [loading, setLoading] = useState(false);
   const createNewKnowledgeBase = useKnowledgeBaseStore((s) => s.createNewKnowledgeBase);
-  const router = useRouter();
 
   const onFinish = async (values: CreateKnowledgeBaseParams) => {
     setLoading(true);
@@ -24,7 +23,12 @@ const CreateForm = memo<CreateFormProps>(({ onClose }) => {
       setLoading(false);
       onClose?.();
 
-      router.push(`/repos/${id}`);
+      // Call onSuccess callback if provided, otherwise navigate directly
+      if (onSuccess) {
+        onSuccess(id);
+      } else {
+        window.location.href = `/knowledge/bases/${id}`;
+      }
     } catch (e) {
       console.error(e);
       setLoading(false);

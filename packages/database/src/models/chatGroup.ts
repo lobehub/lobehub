@@ -7,8 +7,8 @@ import {
   NewChatGroupAgent,
   chatGroups,
   chatGroupsAgents,
-} from '@/database/schemas';
-import { LobeChatDatabase } from '@/database/type';
+} from '../schemas';
+import { LobeChatDatabase } from '../type';
 
 export class ChatGroupModel {
   private userId: string;

@@ -85,6 +85,7 @@
         "restTime": "Thời gian còn lại {{time}}"
       }
     },
+    "fileQueueInfo": "Đang tải lên {{count}} tệp đầu tiên, còn lại {{remaining}} tệp sẽ được xếp hàng để tải lên",
     "totalCount": "Tổng cộng {{count}} mục",
     "uploadStatus": {
       "error": "Lỗi tải lên",

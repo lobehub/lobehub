@@ -1,6 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-
-import { ModelUsage } from '@/types/message';
+import { ModelUsage } from '@lobechat/types';
 
 import { ChatPayloadForTransformStream } from '../streams/protocol';
 import { withUsageCost } from './utils/withUsageCost';

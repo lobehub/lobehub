@@ -85,6 +85,7 @@
         "restTime": "Tempo rimanente {{time}}"
       }
     },
+    "fileQueueInfo": "Caricamento in corso dei primi {{count}} file, i restanti {{remaining}} file saranno messi in coda",
     "totalCount": "Totale {{count}} elementi",
     "uploadStatus": {
       "error": "Errore di caricamento",

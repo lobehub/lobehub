@@ -35,7 +35,7 @@ export interface WindowsDispatchEvents {
    * @param templateId Template identifier
    * @returns Operation result
    */
-  closeWindowsByTemplate: (templateId: string) => { error?: string, success: boolean; };
+  closeWindowsByTemplate: (templateId: string) => { error?: string; success: boolean };
 
   /**
    * Create a new multi-instance window

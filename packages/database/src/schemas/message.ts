@@ -1,4 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
+import { GroundingSearch, ModelReasoning } from '@lobechat/types';
 import {
   boolean,
   index,
@@ -11,9 +12,6 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-
-import { ModelReasoning } from '@/types/message';
-import { GroundingSearch } from '@/types/search';
 
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps, varchar255 } from './_helpers';

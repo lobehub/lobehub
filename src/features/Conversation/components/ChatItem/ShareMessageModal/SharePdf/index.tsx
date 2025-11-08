@@ -1,3 +1,4 @@
+import { UIChatMessage } from '@lobechat/types';
 import { Button } from '@lobehub/ui';
 import { App } from 'antd';
 import { DownloadIcon, FileText } from 'lucide-react';
@@ -7,7 +8,6 @@ import { Flexbox } from 'react-layout-kit';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useChatStore } from '@/store/chat';
-import { ChatMessage } from '@/types/message';
 
 import PdfPreview from './PdfPreview';
 import { useContainerStyles, useStyles } from './style';
@@ -15,7 +15,7 @@ import { generateMarkdown } from './template';
 import { usePdfGeneration } from './usePdfGeneration';
 
 interface SharePdfProps {
-  message: ChatMessage;
+  message: UIChatMessage;
 }
 
 const SharePdf = memo<SharePdfProps>(({ message }) => {

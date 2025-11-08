@@ -760,6 +760,40 @@ describe('LobeOpenAICompatibleFactory', () => {
         }
       });
 
+      it('should return InsufficientQuota error when error message contains "Insufficient Balance"', async () => {
+        const apiError = new OpenAI.APIError(
+          400,
+          {
+            error: {
+              message: 'Insufficient Balance: Your account balance is too low',
+            },
+            status: 400,
+          },
+          'Error message',
+          {},
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        try {
+          await instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'mistralai/mistral-7b-instruct:free',
+            temperature: 0,
+          });
+        } catch (e) {
+          expect(e).toEqual({
+            endpoint: defaultBaseURL,
+            error: {
+              error: { message: 'Insufficient Balance: Your account balance is too low' },
+              status: 400,
+            },
+            errorType: AgentRuntimeErrorType.InsufficientQuota,
+            provider,
+          });
+        }
+      });
+
       it('should return AgentRuntimeError for non-OpenAI errors', async () => {
         // Arrange
         const genericError = new Error('Generic Error');

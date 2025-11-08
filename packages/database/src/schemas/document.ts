@@ -59,6 +59,8 @@ export const documents = pgTable(
       .notNull(),
     clientId: text('client_id'),
 
+    editorData: jsonb('editor_data').$type<Record<string, any>>(),
+
     // 时间戳
     ...timestamps,
   },

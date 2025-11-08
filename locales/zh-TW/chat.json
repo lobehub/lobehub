@@ -163,9 +163,9 @@
     "addMember": "添加成員",
     "allMembers": "所有成員",
     "createGroup": "建立 Agent 團隊",
-    "noAvailableAgents": "沒有可邀請的助理",
-    "noSelectedAgents": "尚未選擇助理",
-    "searchAgents": "搜尋助理...",
+    "noAvailableAgents": "沒有可邀請的 Agent",
+    "noSelectedAgents": "尚未選擇 Agent",
+    "searchAgents": "搜尋 Agent...",
     "setInitialMembers": "選擇團隊成員"
   },
   "members": "成員",
@@ -229,7 +229,7 @@
     "jumpToMessage": "跳轉至第 {{index}} 條訊息",
     "nextMessage": "下一條訊息",
     "previousMessage": "上一條訊息",
-    "senderAssistant": "助理",
+    "senderAssistant": "Agent",
     "senderUser": "您"
   },
   "newAgent": "新建助手",

@@ -6,3 +6,5 @@ export const FILE_UPLOAD_BLACKLIST = [
   'ehthumbs.db',
   'ehthumbs_vista.db',
 ];
+
+export const MAX_UPLOAD_FILE_COUNT = 10;

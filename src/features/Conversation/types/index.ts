@@ -1,13 +1,13 @@
+import { UIChatMessage } from '@lobechat/types';
 import { type ChatItemProps } from '@lobehub/ui/chat';
 import { FC, ReactNode } from 'react';
 
 import { LLMRoleType } from '@/types/llm';
-import { ChatMessage } from '@/types/message';
 
 export type RenderRole = LLMRoleType | 'default' | 'history' | string;
-export type RenderMessage = FC<ChatMessage & { editableContent: ReactNode }>;
-export type RenderBelowMessage = FC<ChatMessage>;
-export type RenderMessageExtra = FC<ChatMessage>;
+export type RenderMessage = FC<UIChatMessage & { editableContent: ReactNode }>;
+export type RenderBelowMessage = FC<UIChatMessage>;
+export type RenderMessageExtra = FC<UIChatMessage>;
 export type MarkdownCustomRender = (props: {
   displayMode: 'chat' | 'docs';
   dom: ReactNode;
@@ -15,7 +15,7 @@ export type MarkdownCustomRender = (props: {
   text: string;
 }) => ReactNode;
 
-export type RenderItem = FC<{ key: string } & ChatMessage & ListItemProps>;
+export type RenderItem = FC<{ key: string } & UIChatMessage & ListItemProps>;
 
 export interface ListItemProps {
   groupNav?: ChatItemProps['avatarAddon'];

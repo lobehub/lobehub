@@ -14,6 +14,11 @@ export interface ErrorContentProps {
 const ErrorContent = memo<ErrorContentProps>(({ message, error, placement }) => {
   const { styles } = useStyles({ placement });
 
+  if (!error?.message) {
+    if (!message) return null;
+    return <Flexbox className={styles.errorContainer}>{message}</Flexbox>;
+  }
+
   return (
     <Flexbox className={styles.errorContainer}>
       <Alert closable={false} extra={message} showIcon type={'error'} {...error} />

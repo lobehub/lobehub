@@ -163,9 +163,9 @@
     "addMember": "Добавяне на член",
     "allMembers": "Всички членове",
     "createGroup": "Създаване на екип на Agent",
-    "noAvailableAgents": "Няма налични асистенти за покана",
-    "noSelectedAgents": "Все още не са избрани асистенти",
-    "searchAgents": "Търсене на асистенти...",
+    "noAvailableAgents": "Няма налични агенти за покана",
+    "noSelectedAgents": "Все още не са избрани агенти",
+    "searchAgents": "Търсене на агент...",
     "setInitialMembers": "Избор на членове на екипа"
   },
   "members": "Членове",
@@ -229,7 +229,7 @@
     "jumpToMessage": "Отиди до съобщение № {{index}}",
     "nextMessage": "Следващо съобщение",
     "previousMessage": "Предишно съобщение",
-    "senderAssistant": "Асистент",
+    "senderAssistant": "Агент",
     "senderUser": "Ти"
   },
   "newAgent": "Нов агент",

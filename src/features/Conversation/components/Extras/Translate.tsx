@@ -1,3 +1,4 @@
+import { ChatTranslate } from '@lobechat/types';
 import { ActionIcon, Icon, Markdown, Tag, copyToClipboard } from '@lobehub/ui';
 import { App } from 'antd';
 import { useTheme } from 'antd-style';
@@ -8,7 +9,6 @@ import { Flexbox } from 'react-layout-kit';
 
 import BubblesLoading from '@/components/BubblesLoading';
 import { useChatStore } from '@/store/chat';
-import { ChatTranslate } from '@/types/message';
 
 interface TranslateProps extends ChatTranslate {
   id: string;

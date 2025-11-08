@@ -17,6 +17,8 @@ export const userMemories = pgTable(
     memoryCategory: varchar255('memory_category'),
     memoryLayer: varchar255('memory_layer'),
     memoryType: varchar255('memory_type'),
+    metadata: jsonb('metadata'),
+    tags: text('tags').array(),
 
     title: varchar255('title'),
     summary: text('summary'),
@@ -50,10 +52,11 @@ export const userMemoriesContexts = pgTable(
       .$defaultFn(() => idGenerator('memory'))
       .primaryKey(),
 
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     userMemoryIds: jsonb('user_memory_ids'),
 
-    labels: jsonb('labels'),
-    extractedLabels: jsonb('extracted_labels'),
+    metadata: jsonb('metadata'),
+    tags: text('tags').array(),
 
     associatedObjects: jsonb('associated_objects'),
     associatedSubjects: jsonb('associated_subjects'),
@@ -91,16 +94,13 @@ export const userMemoriesPreferences = pgTable(
       .$defaultFn(() => idGenerator('memory'))
       .primaryKey(),
 
-    contextId: varchar255('context_id').references(() => userMemoriesContexts.id, {
-      onDelete: 'cascade',
-    }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     userMemoryId: varchar255('user_memory_id').references(() => userMemories.id, {
       onDelete: 'cascade',
     }),
 
-    labels: jsonb('labels'),
-    extractedLabels: jsonb('extracted_labels'),
-    extractedScopes: jsonb('extracted_scopes'),
+    metadata: jsonb('metadata'),
+    tags: text('tags').array(),
 
     conclusionDirectives: text('conclusion_directives'),
     conclusionDirectivesVector: vector('conclusion_directives_vector', { dimensions: 1024 }),
@@ -123,21 +123,24 @@ export const userMemoriesPreferences = pgTable(
 export const userMemoriesIdentities = pgTable(
   'user_memories_identities',
   {
-    currentFocuses: text('current_focuses'),
-    description: text('description'),
-    descriptionVector: vector('description_vector', { dimensions: 1024 }),
-    experience: text('experience'),
-    extractedLabels: jsonb('extracted_labels'),
     id: varchar255('id')
       .$defaultFn(() => idGenerator('memory'))
       .primaryKey(),
 
-    labels: jsonb('labels'),
-    relationship: text('relationship'),
-    role: text('role'),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    userMemoryId: varchar255('user_memory_id').references(() => userMemories.id, {
+      onDelete: 'cascade',
+    }),
+
+    metadata: jsonb('metadata'),
+    tags: text('tags').array(),
 
     type: varchar255('type'),
-    userMemoryId: text('user_memory_id').references(() => userMemories.id, { onDelete: 'cascade' }),
+    description: text('description'),
+    descriptionVector: vector('description_vector', { dimensions: 1024 }),
+    episodicDate: timestamptz('episodic_date'),
+    relationship: varchar255('relationship'),
+    role: text('role'),
 
     ...timestamps,
   },
@@ -157,12 +160,15 @@ export const userMemoriesExperiences = pgTable(
       .$defaultFn(() => idGenerator('memory'))
       .primaryKey(),
 
-    userMemoryId: text('user_memory_id').references(() => userMemories.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    userMemoryId: varchar255('user_memory_id').references(() => userMemories.id, {
+      onDelete: 'cascade',
+    }),
 
-    labels: jsonb('labels'),
-    extractedLabels: jsonb('extracted_labels'),
+    metadata: jsonb('metadata'),
+    tags: text('tags').array(),
+
     type: varchar255('type'),
-
     situation: text('situation'),
     situationVector: vector('situation_vector', { dimensions: 1024 }),
     reasoning: text('reasoning'),
@@ -172,7 +178,6 @@ export const userMemoriesExperiences = pgTable(
     keyLearning: text('key_learning'),
     keyLearningVector: vector('key_learning_vector', { dimensions: 1024 }),
 
-    metadata: jsonb('metadata'),
     scoreConfidence: real('score_confidence').default(0),
 
     ...timestamps,

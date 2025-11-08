@@ -1,4 +1,4 @@
-import { ChatMessage } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 import { Tag } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
 import { ReactNode, memo, useCallback, useMemo } from 'react';
@@ -28,7 +28,7 @@ import { UserMessageExtra } from './Extra';
 import { MarkdownRender as UserMarkdownRender } from './MarkdownRender';
 import { UserMessageContent } from './MessageContent';
 
-interface UserMessageProps extends ChatMessage {
+interface UserMessageProps extends UIChatMessage {
   disableEditing?: boolean;
   index: number;
 }

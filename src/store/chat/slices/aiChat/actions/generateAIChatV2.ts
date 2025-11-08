@@ -1,21 +1,22 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { INBOX_SESSION_ID, isDesktop } from '@lobechat/const';
+import { DEFAULT_AGENT_CHAT_CONFIG, INBOX_SESSION_ID, isDesktop } from '@lobechat/const';
 import { knowledgeBaseQAPrompts } from '@lobechat/prompts';
 import {
-  ChatMessage,
+  ChatImageItem,
   ChatTopic,
+  ChatVideoItem,
   MessageSemanticSearchChunk,
   SendMessageParams,
   SendMessageServerResponse,
   TraceNameMap,
+  UIChatMessage,
 } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 import { produce } from 'immer';
 import { StateCreator } from 'zustand/vanilla';
 
-import { DEFAULT_AGENT_CHAT_CONFIG } from '@/const/settings';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
@@ -27,8 +28,6 @@ import type { ChatStore } from '@/store/chat/store';
 import { getFileStoreState } from '@/store/file/store';
 import { getSessionStoreState } from '@/store/session';
 import { WebBrowsingManifest } from '@/tools/web-browsing';
-import { ChatImageItem } from '@/types/message/image';
-import { ChatVideoItem } from '@/types/message/video';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { chatSelectors, topicSelectors } from '../../../selectors';
@@ -48,7 +47,7 @@ export interface AIGenerateV2Action {
   clearSendMessageError: () => void;
   internal_refreshAiChat: (params: {
     topics?: ChatTopic[];
-    messages: ChatMessage[];
+    messages: UIChatMessage[];
     sessionId: string;
     topicId?: string;
   }) => void;
@@ -57,7 +56,7 @@ export interface AIGenerateV2Action {
    * including preprocessing and postprocessing steps
    */
   internal_execAgentRuntime: (params: {
-    messages: ChatMessage[];
+    messages: UIChatMessage[];
     userMessageId: string;
     assistantMessageId: string;
     isWelcomeQuestion?: boolean;
@@ -354,7 +353,7 @@ export const generateAIChatV2: StateCreator<
 
       ragQueryId = queryId;
 
-      const lastMsg = messages.pop() as ChatMessage;
+      const lastMsg = messages.pop() as UIChatMessage;
 
       // 2. build the retrieve context messages
       const knowledgeBaseQAContext = knowledgeBaseQAPrompts({

@@ -1,3 +1,4 @@
+import { ChatPluginPayload } from '@lobechat/types';
 import { Avatar, Button } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { useTheme } from 'antd-style';
@@ -10,7 +11,6 @@ import PluginSettingsConfig from '@/features/PluginSettings';
 import { useChatStore } from '@/store/chat';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
-import { ChatPluginPayload } from '@/types/message';
 
 import { ErrorActionContainer, useStyles } from '../../../../Error/style';
 

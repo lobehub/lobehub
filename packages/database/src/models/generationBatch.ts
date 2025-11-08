@@ -1,8 +1,8 @@
+import { Generation, GenerationAsset, GenerationBatch, GenerationConfig } from '@lobechat/types';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
-import { Generation, GenerationAsset, GenerationBatch, GenerationConfig } from '@/types/generation';
 
 import {
   GenerationBatchItem,

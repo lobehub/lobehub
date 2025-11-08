@@ -85,6 +85,7 @@
         "restTime": "الوقت المتبقي {{time}}"
       }
     },
+    "fileQueueInfo": "يتم حاليًا تحميل {{count}} ملفًا، وسيتم وضع {{remaining}} ملفًا في قائمة الانتظار للتحميل",
     "totalCount": "إجمالي {{count}} عنصر",
     "uploadStatus": {
       "error": "حدث خطأ أثناء الرفع",

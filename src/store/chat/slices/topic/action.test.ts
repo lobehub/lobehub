@@ -1,3 +1,4 @@
+import { UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { mutate } from 'swr';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,7 +9,6 @@ import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useSessionStore } from '@/store/session';
-import { ChatMessage } from '@/types/message';
 import { LobeSessionType } from '@/types/session';
 import { ChatTopic } from '@/types/topic';
 
@@ -135,7 +135,7 @@ describe('topic action', () => {
 
     it('should create a topic and bind messages to it', async () => {
       const { result } = renderHook(() => useChatStore());
-      const messages = [{ id: 'message1' }, { id: 'message2' }] as ChatMessage[];
+      const messages = [{ id: 'message1' }, { id: 'message2' }] as UIChatMessage[];
       act(() => {
         useChatStore.setState({
           messagesMap: {
@@ -164,7 +164,7 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
       const groupId = 'group-session';
       const todoKey = messageMapKey(groupId, null);
-      const messages = [{ id: 'group-message-1' }] as ChatMessage[];
+      const messages = [{ id: 'group-message-1' }] as UIChatMessage[];
 
       await act(async () => {
         useChatStore.setState({
@@ -567,7 +567,7 @@ describe('topic action', () => {
   describe('summaryTopicTitle', () => {
     it('should auto-summarize the topic title and update it', async () => {
       const topicId = 'topic-1';
-      const messages = [{ id: 'message-1', content: 'Hello' }] as ChatMessage[];
+      const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
       const topics = [{ id: 'topic-1', title: 'Test Topic' }] as ChatTopic[];
       const { result } = renderHook(() => useChatStore());
       await act(async () => {
@@ -605,7 +605,7 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
       const activeId = 'test-session-id';
       const newTopicId = 'new-topic-id';
-      const messages = [{ id: 'message-1' }, { id: 'message-2' }] as ChatMessage[];
+      const messages = [{ id: 'message-1' }, { id: 'message-2' }] as UIChatMessage[];
 
       await act(async () => {
         useChatStore.setState({
@@ -661,7 +661,7 @@ describe('topic action', () => {
       const { result } = renderHook(() => useChatStore());
       const topicId = 'topic-1';
       const activeId = 'test-session-id';
-      const messages = [{ id: 'message-1', content: 'Hello' }] as ChatMessage[];
+      const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
 
       await act(async () => {
         useChatStore.setState({ activeId });

@@ -1,5 +1,6 @@
+import { UIChatMessage } from '@lobechat/types';
+
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { ChatMessage } from '@/types/message';
 
 // Test Constants
 export const TEST_IDS = {
@@ -21,7 +22,7 @@ export const TEST_CONTENT = {
 } as const;
 
 // Mock Data Factories
-export const createMockMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => {
+export const createMockMessage = (overrides: Partial<UIChatMessage> = {}): UIChatMessage => {
   const base: any = {
     content: TEST_CONTENT.USER_MESSAGE,
     createdAt: Date.now(),
@@ -33,10 +34,10 @@ export const createMockMessage = (overrides: Partial<ChatMessage> = {}): ChatMes
   };
 
   // Merge overrides, preserving all provided properties
-  return { ...base, ...overrides } as ChatMessage;
+  return { ...base, ...overrides } as UIChatMessage;
 };
 
-export const createMockMessages = (count: number): ChatMessage[] =>
+export const createMockMessages = (count: number): UIChatMessage[] =>
   Array.from({ length: count }, (_, i) =>
     createMockMessage({
       content: `Message ${i}`,

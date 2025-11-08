@@ -1,7 +1,6 @@
+import { ChatVideoItem } from '@lobechat/types';
 import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
-
-import { ChatVideoItem } from '@/types/message';
 
 interface VideoFileListViewerProps {
   items: ChatVideoItem[];

@@ -1,9 +1,8 @@
+import { MessageMetadata } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { createStyles } from 'antd-style';
 import { memo } from 'react';
 import { Center, Flexbox } from 'react-layout-kit';
-
-import { MessageMetadata } from '@/types/message';
 
 import TokenDetail from './UsageDetail';
 

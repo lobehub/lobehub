@@ -1,3 +1,4 @@
+import { SendMessageParams } from '@lobechat/types';
 import { useMemo, useState } from 'react';
 
 import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
@@ -5,7 +6,6 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/slices/chat';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
-import { SendMessageParams } from '@/types/message';
 
 export type UseSendMessageParams = Pick<
   SendMessageParams,

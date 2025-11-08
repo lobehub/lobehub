@@ -14,9 +14,10 @@ const ChunkDrawer = dynamic(() => import('./ChunkDrawer'), { ssr: false });
 interface FileManagerProps {
   category?: string;
   knowledgeBaseId?: string;
+  onOpenFile: (id: string) => void;
   title: string;
 }
-const FileManager = memo<FileManagerProps>(({ title, knowledgeBaseId, category }) => {
+const FileManager = memo<FileManagerProps>(({ title, knowledgeBaseId, category, onOpenFile }) => {
   return (
     <>
       <Header knowledgeBaseId={knowledgeBaseId} />
@@ -24,7 +25,7 @@ const FileManager = memo<FileManagerProps>(({ title, knowledgeBaseId, category }
         <Text strong style={{ fontSize: 16, marginBlock: 16, marginInline: 24 }}>
           {title}
         </Text>
-        <FileList category={category} knowledgeBaseId={knowledgeBaseId} />
+        <FileList category={category} knowledgeBaseId={knowledgeBaseId} onOpenFile={onOpenFile} />
       </Flexbox>
       <UploadDock />
       <ChunkDrawer />

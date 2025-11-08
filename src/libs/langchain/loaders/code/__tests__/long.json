@@ -8,7 +8,7 @@
     "metadata": { "loc": { "lines": { "from": 8, "to": 22 } } }
   },
   {
-    "pageContent": "import { traceService } from '@/services/trace';\nimport { useAgentStore } from '@/store/agent';\nimport { agentSelectors } from '@/store/agent/selectors';\nimport { chatHelpers } from '@/store/chat/helpers';\nimport { messageMapKey } from '@/store/chat/slices/message/utils';\nimport { ChatStore } from '@/store/chat/store';\nimport { useSessionStore } from '@/store/session';\nimport { UploadFileItem } from '@/types/files/upload';\nimport {\n  ChatMessage,\n  ChatMessageError,\n  CreateMessageParams,\n  MessageToolCall,\n} from '@/types/message';\nimport { TraceEventPayloads } from '@/types/trace';\nimport { setNamespace } from '@/utils/storeDebug';\nimport { nanoid } from '@/utils/uuid';",
+    "pageContent": "import { traceService } from '@/services/trace';\nimport { useAgentStore } from '@/store/agent';\nimport { agentSelectors } from '@/store/agent/selectors';\nimport { chatHelpers } from '@/store/chat/helpers';\nimport { messageMapKey } from '@/store/chat/slices/message/utils';\nimport { ChatStore } from '@/store/chat/store';\nimport { useSessionStore } from '@/store/session';\nimport { UploadFileItem } from '@/types/files/upload';\nimport {\n  ChatMessage,\n  ChatMessageError,\n  CreateMessageParams,\n  MessageToolCall,\n} from '@lobechat/types';\nimport { TraceEventPayloads } from '@/types/trace';\nimport { setNamespace } from '@/utils/storeDebug';\nimport { nanoid } from '@/utils/uuid';",
     "metadata": { "loc": { "lines": { "from": 16, "to": 32 } } }
   },
   {

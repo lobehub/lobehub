@@ -26,6 +26,17 @@ For example: `+qwen-7b-chat,+glm-6b,-gpt-3.5-turbo,gpt-4-0125-preview=gpt-4-turb
 
 In the above example, it adds `qwen-7b-chat` and `glm-6b` to the model list, removes `gpt-3.5-turbo` from the list, and displays the model name of `gpt-4-0125-preview` as `gpt-4-turbo`. If you want to disable all models first and then enable specific models, you can use `-all,+gpt-3.5-turbo`, which means only enabling `gpt-3.5-turbo`.
 
+### -all: Hide all models
+
+- Description: `-all` means hiding all built-in models first. It’s usually combined with `+` to only enable the models you explicitly specify.
+- Example:
+
+```text
+-all,+gpt-3.5-turbo,+gpt-4-0125-preview=gpt-4-turbo
+```
+
+This enables only gpt-3.5-turbo and gpt-4-turbo while hiding other models.
+
 ## Extension Capabilities
 
 Considering the diversity of model capabilities, we started to add extension configuration in version `0.147.8`, with the following rules:

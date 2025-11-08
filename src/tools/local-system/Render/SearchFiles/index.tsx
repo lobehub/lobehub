@@ -1,9 +1,9 @@
 import { LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
+import { ChatMessagePluginError } from '@lobechat/types';
 import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
 
 import { LocalFileSearchState } from '@/tools/local-system/type';
-import { ChatMessagePluginError } from '@/types/message';
 
 import SearchResult from './Result';
 import SearchQuery from './SearchQuery';

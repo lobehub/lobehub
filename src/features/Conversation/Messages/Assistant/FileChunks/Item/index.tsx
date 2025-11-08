@@ -1,3 +1,4 @@
+import { ChatFileChunk } from '@lobechat/types';
 import { Text, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 import { Center, Flexbox } from 'react-layout-kit';
@@ -5,7 +6,6 @@ import { Center, Flexbox } from 'react-layout-kit';
 import FileIcon from '@/components/FileIcon';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useChatStore } from '@/store/chat';
-import { ChatFileChunk } from '@/types/message';
 
 import { useStyles } from './style';
 

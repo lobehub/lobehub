@@ -2,16 +2,49 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { mutate } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
+import { message } from '@/components/AntdStaticMethods';
+import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { lambdaClient } from '@/libs/trpc/client';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { FileListItem } from '@/types/files';
 import { UploadFileItem } from '@/types/files/upload';
+import { unzipFile } from '@/utils/unzipFile';
 
 import { useFileStore as useStore } from '../../store';
 
 vi.mock('zustand/traditional');
+
+// Mock i18next translation function
+vi.mock('i18next', () => ({
+  t: (key: string, options?: any) => {
+    // Return a mock translation string that includes the options for verification
+    if (key === 'uploadDock.fileQueueInfo' && options?.count !== undefined) {
+      return `Uploading ${options.count} files, ${options.remaining} queued`;
+    }
+    return key;
+  },
+}));
+
+// Mock message
+vi.mock('@/components/AntdStaticMethods', () => ({
+  message: {
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
+
+// Mock unzipFile
+vi.mock('@/utils/unzipFile', () => ({
+  unzipFile: vi.fn(),
+}));
+
+// Mock p-map to run sequentially for easier testing
+vi.mock('p-map', () => ({
+  default: vi.fn(async (items, mapper) => {
+    return Promise.all(items.map(mapper));
+  }),
+}));
 
 // Mock SWR
 vi.mock('swr', async () => {
@@ -397,6 +430,108 @@ describe('FileManagerActions', () => {
 
       // Should not auto-parse when upload returns undefined
       expect(parseSpy).not.toHaveBeenCalled();
+    });
+
+    it('should enforce file count limit and queue excess files', async () => {
+      const { result } = renderHook(() => useStore());
+
+      // Create more files than the limit
+      const totalFiles = MAX_UPLOAD_FILE_COUNT + 5;
+      const files = Array.from(
+        { length: totalFiles },
+        (_, i) => new File(['content'], `file-${i}.txt`, { type: 'text/plain' }),
+      );
+
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      await act(async () => {
+        await result.current.pushDockFileList(files);
+      });
+
+      // Should add all files to dock (not just first MAX_UPLOAD_FILE_COUNT)
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        atStart: true,
+        files: expect.arrayContaining([
+          expect.objectContaining({ file: expect.any(File), status: 'pending' }),
+        ]),
+        type: 'addFiles',
+      });
+
+      // Verify all files were dispatched
+      const dispatchCall = dispatchSpy.mock.calls.find((call) => call[0].type === 'addFiles');
+      expect(dispatchCall?.[0]).toHaveProperty('files');
+      if (dispatchCall && 'files' in dispatchCall[0]) {
+        expect(dispatchCall[0].files).toHaveLength(totalFiles);
+      }
+    });
+
+    it('should extract ZIP files and upload contents', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const zipFile = new File(['zip content'], 'archive.zip', { type: 'application/zip' });
+      const extractedFiles = [
+        new File(['file1'], 'file1.txt', { type: 'text/plain' }),
+        new File(['file2'], 'file2.txt', { type: 'text/plain' }),
+      ];
+
+      vi.mocked(unzipFile).mockResolvedValue(extractedFiles);
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      await act(async () => {
+        await result.current.pushDockFileList([zipFile]);
+      });
+
+      // Should extract ZIP file
+      expect(unzipFile).toHaveBeenCalledWith(zipFile);
+
+      // Should upload extracted files
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        atStart: true,
+        files: extractedFiles.map((file) => ({ file, id: file.name, status: 'pending' })),
+        type: 'addFiles',
+      });
+    });
+
+    it('should handle ZIP extraction errors gracefully', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const zipFile = new File(['zip content'], 'archive.zip', { type: 'application/zip' });
+
+      vi.mocked(unzipFile).mockRejectedValue(new Error('Extraction failed'));
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      await act(async () => {
+        await result.current.pushDockFileList([zipFile]);
+      });
+
+      // Should log error
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      // Should fallback to uploading the ZIP file itself
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        atStart: true,
+        files: [{ file: zipFile, id: zipFile.name, status: 'pending' }],
+        type: 'addFiles',
+      });
     });
   });
 

@@ -43,18 +43,24 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
 interface FileListProps {
   category?: string;
   knowledgeBaseId?: string;
+  onOpenFile: (id: string) => void;
 }
 
-const FileList = memo<FileListProps>(({ knowledgeBaseId, category }) => {
+const FileList = memo<FileListProps>(({ knowledgeBaseId, category, onOpenFile }) => {
   const { t } = useTranslation('components');
   const { styles } = useStyles();
 
   const [selectFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [viewConfig, setViewConfig] = useState({ showFilesInKnowledgeBase: false });
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const viewMode = useGlobalStore((s) => s.status.fileManagerViewMode || 'list') as ViewMode;
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
-  const setViewMode = (mode: ViewMode) => updateSystemStatus({ fileManagerViewMode: mode });
+  const setViewMode = (mode: ViewMode) => {
+    setIsTransitioning(true);
+    updateSystemStatus({ fileManagerViewMode: mode });
+  };
 
   const [columnCount, setColumnCount] = useState(4);
 
@@ -105,6 +111,19 @@ const FileList = memo<FileListProps>(({ knowledgeBaseId, category }) => {
     ...viewConfig,
   });
 
+  // Handle view transition with a brief delay to show skeleton
+  React.useEffect(() => {
+    if (isTransitioning && data) {
+      // Use requestAnimationFrame to ensure smooth transition
+      requestAnimationFrame(() => {
+        const timer = setTimeout(() => {
+          setIsTransitioning(false);
+        }, 100);
+        return () => clearTimeout(timer);
+      });
+    }
+  }, [isTransitioning, viewMode, data]);
+
   useCheckTaskStatus(data);
 
   // Clean up selected files that no longer exist in the data
@@ -118,14 +137,22 @@ const FileList = memo<FileListProps>(({ knowledgeBaseId, category }) => {
     }
   }, [data]);
 
+  // Reset lastSelectedIndex when selection is cleared
+  React.useEffect(() => {
+    if (selectFileIds.length === 0) {
+      setLastSelectedIndex(null);
+    }
+  }, [selectFileIds.length]);
+
   // Memoize context object to avoid recreating on every render
   const masonryContext = useMemo(
     () => ({
       knowledgeBaseId,
+      openFile: onOpenFile,
       selectFileIds,
       setSelectedFileIds,
     }),
-    [knowledgeBaseId, selectFileIds],
+    [onOpenFile, knowledgeBaseId, selectFileIds],
   );
 
   return !isLoading && data?.length === 0 ? (
@@ -161,7 +188,7 @@ const FileList = memo<FileListProps>(({ knowledgeBaseId, category }) => {
           </Flexbox>
         )}
       </Flexbox>
-      {isLoading ? (
+      {isLoading || isTransitioning ? (
         viewMode === 'masonry' ? (
           <MasonrySkeleton columnCount={columnCount} />
         ) : (
@@ -184,13 +211,30 @@ const FileList = memo<FileListProps>(({ knowledgeBaseId, category }) => {
               index={index}
               key={item.id}
               knowledgeBaseId={knowledgeBaseId}
-              onSelectedChange={(id, checked) => {
-                setSelectedFileIds((prev) => {
-                  if (checked) {
-                    return [...prev, id];
-                  }
-                  return prev.filter((item) => item !== id);
-                });
+              onSelectedChange={(id, checked, shiftKey, clickedIndex) => {
+                if (shiftKey && lastSelectedIndex !== null && selectFileIds.length > 0 && data) {
+                  // Range selection with shift key
+                  const start = Math.min(lastSelectedIndex, clickedIndex);
+                  const end = Math.max(lastSelectedIndex, clickedIndex);
+                  const rangeIds = data.slice(start, end + 1).map((item) => item.id);
+
+                  setSelectedFileIds((prev) => {
+                    // Create a Set for efficient lookup
+                    const prevSet = new Set(prev);
+                    // Add all items in range
+                    rangeIds.forEach((rangeId) => prevSet.add(rangeId));
+                    return Array.from(prevSet);
+                  });
+                } else {
+                  // Normal selection
+                  setSelectedFileIds((prev) => {
+                    if (checked) {
+                      return [...prev, id];
+                    }
+                    return prev.filter((item) => item !== id);
+                  });
+                }
+                setLastSelectedIndex(clickedIndex);
               }}
               selected={selectFileIds.includes(item.id)}
               {...item}

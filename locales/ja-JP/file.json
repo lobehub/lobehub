@@ -85,6 +85,7 @@
         "restTime": "残り {{time}}"
       }
     },
+    "fileQueueInfo": "最初の {{count}} 件のファイルをアップロード中、残りの {{remaining}} 件は順番待ちです",
     "totalCount": "合計 {{count}} 件",
     "uploadStatus": {
       "error": "アップロードエラー",

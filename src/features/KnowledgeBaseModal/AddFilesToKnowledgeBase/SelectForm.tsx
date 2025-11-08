@@ -33,7 +33,7 @@ const SelectForm = memo<CreateFormProps>(({ onClose, knowledgeBaseId, fileIds })
       message.success({
         content: (
           <Trans i18nKey={'addToKnowledgeBase.addSuccess'} ns={'knowledgeBase'}>
-            文件添加成功，<Link href={`/repos/${values.id}`}>立即查看</Link>
+            文件添加成功，<Link href={`/knowledge/bases/${values.id}`}>立即查看</Link>
           </Trans>
         ),
       });

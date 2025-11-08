@@ -1,4 +1,5 @@
 import { RenameLocalFileParams } from '@lobechat/electron-client-ipc';
+import { ChatMessagePluginError } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { ArrowRightIcon } from 'lucide-react';
@@ -8,7 +9,6 @@ import { Flexbox } from 'react-layout-kit';
 
 import { LocalFile } from '@/features/LocalFile';
 import { LocalReadFileState } from '@/tools/local-system/type';
-import { ChatMessagePluginError } from '@/types/message';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`

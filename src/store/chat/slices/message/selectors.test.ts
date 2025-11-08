@@ -1,3 +1,5 @@
+import { UIChatMessage } from '@lobechat/types';
+import { LobeAgentConfig } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -8,8 +10,6 @@ import { ChatStore } from '@/store/chat';
 import { initialState } from '@/store/chat/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { createServerConfigStore } from '@/store/serverConfig/store';
-import { LobeAgentConfig } from '@/types/agent';
-import { ChatMessage } from '@/types/message';
 import { merge } from '@/utils/merge';
 
 import { chatSelectors } from './selectors';
@@ -45,7 +45,7 @@ const mockMessages = [
       },
     ],
   },
-] as ChatMessage[];
+] as UIChatMessage[];
 
 const mockReasoningMessages = [
   {
@@ -66,7 +66,7 @@ const mockReasoningMessages = [
       content: 'Reasoning Content',
     },
   },
-] as ChatMessage[];
+] as UIChatMessage[];
 
 const mockedChats = [
   {
@@ -105,7 +105,7 @@ const mockedChats = [
       },
     ],
   },
-] as ChatMessage[];
+] as UIChatMessage[];
 
 const mockChatStore = {
   messagesMap: {
@@ -172,7 +172,7 @@ describe('chatSelectors', () => {
           apiName: 'ttt',
           type: 'default',
         },
-      } as ChatMessage;
+      } as UIChatMessage;
       const state = merge(initialStore, {
         messagesMap: {
           [messageMapKey('abc')]: [...mockMessages, toolMessage],
@@ -350,7 +350,7 @@ describe('chatSelectors', () => {
         { id: '3', role: 'tool', content: 'Tool message 1' },
         { id: '4', role: 'user', content: 'Query' },
         { id: '5', role: 'tool', tools: [] },
-      ] as ChatMessage[];
+      ] as UIChatMessage[];
       const state: Partial<ChatStore> = {
         activeId: 'test-id',
         messagesMap: {
@@ -366,7 +366,7 @@ describe('chatSelectors', () => {
       const messages = [
         { id: '1', role: 'user', content: 'Hello' },
         { id: '2', role: 'assistant', content: 'Hi' },
-      ] as ChatMessage[];
+      ] as UIChatMessage[];
       const state: Partial<ChatStore> = {
         activeId: 'test-id',
         messagesMap: {
@@ -455,7 +455,7 @@ describe('chatSelectors', () => {
           groupId: 'group-123',
           agentId: 'agent-456',
         },
-      ] as ChatMessage[];
+      ] as UIChatMessage[];
 
       const state = merge(initialStore, {
         messagesMap: {

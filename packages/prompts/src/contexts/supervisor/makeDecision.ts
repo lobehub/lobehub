@@ -1,4 +1,4 @@
-import { ChatCompletionTool, ChatMessage, ChatStreamPayload } from '@lobechat/types';
+import { ChatCompletionTool, ChatStreamPayload, UIChatMessage } from '@lobechat/types';
 
 import { groupChatPrompts, groupSupervisorPrompts } from '../../prompts';
 import { SupervisorToolName, SupervisorTools } from './tools';
@@ -17,7 +17,7 @@ interface AgentItem {
 export interface SupervisorContext {
   allowDM?: boolean;
   availableAgents: AgentItem[];
-  messages: ChatMessage[];
+  messages: UIChatMessage[];
   // Group scene controls which tools are exposed (e.g., todos only in 'productive')
   scene?: 'casual' | 'productive';
   systemPrompt?: string;

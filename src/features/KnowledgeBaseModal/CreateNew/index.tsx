@@ -17,19 +17,23 @@ const Title = () => {
   );
 };
 
-export const useCreateNewModal = createModal((instance) => {
-  return {
-    content: (
-      <Flexbox paddingInline={16} style={{ paddingBottom: 16 }}>
-        <CreateForm
-          onClose={() => {
-            instance.current?.destroy();
-          }}
-        />
-      </Flexbox>
-    ),
-    focusTriggerAfterClose: true,
-    footer: false,
-    title: <Title />,
-  };
-});
+// eslint-disable-next-line unused-imports/no-unused-vars
+export const useCreateNewModal = createModal<{ onSuccess?: (id: string) => void }>(
+  (instance, props) => {
+    return {
+      content: (
+        <Flexbox paddingInline={16} style={{ paddingBottom: 16 }}>
+          <CreateForm
+            onClose={() => {
+              instance.current?.destroy();
+            }}
+            onSuccess={props?.onSuccess}
+          />
+        </Flexbox>
+      ),
+      focusTriggerAfterClose: true,
+      footer: false,
+      title: <Title />,
+    };
+  },
+);

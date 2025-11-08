@@ -5,7 +5,7 @@ import { testProvider } from '../../providerTestUtils';
 import { LobeMinimaxAI } from './index';
 
 const provider = ModelProvider.Minimax;
-const defaultBaseURL = 'https://api.minimax.chat/v1';
+const defaultBaseURL = 'https://api.minimaxi.com/v1';
 
 testProvider({
   Runtime: LobeMinimaxAI,

@@ -1,10 +1,11 @@
+import { UIChatMessage } from '@lobechat/types';
+
 import { LOADING_FLAT } from '@/const/message';
-import { ChatMessage } from '@/types/message';
 
 import { FieldType } from './type';
 
 interface JSONParams extends FieldType {
-  messages: ChatMessage[];
+  messages: UIChatMessage[];
   systemRole: string;
 }
 export const generateMessages = ({

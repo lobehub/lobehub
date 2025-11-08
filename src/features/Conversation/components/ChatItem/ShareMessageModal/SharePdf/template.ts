@@ -1,7 +1,7 @@
+import { UIChatMessage } from '@lobechat/types';
 import { template } from 'lodash-es';
 
 import { LOADING_FLAT } from '@/const/message';
-import { ChatMessage } from '@/types/message';
 
 const markdownTemplate = template(`{{message.content}}`, {
   evaluate: /<%([\S\s]+?)%>/g,
@@ -9,7 +9,7 @@ const markdownTemplate = template(`{{message.content}}`, {
 });
 
 interface MarkdownParams {
-  message: ChatMessage;
+  message: UIChatMessage;
 }
 
 export const generateMarkdown = ({ message }: MarkdownParams) => {

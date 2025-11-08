@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, PropsWithChildren } from 'react';
+import { PropsWithChildren, memo } from 'react';
 
 import Desktop from './_layout/Desktop';
 import Mobile from './_layout/Mobile';

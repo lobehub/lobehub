@@ -300,20 +300,50 @@ const transformOpenAIStream = (
       }
 
       if (typeof content === 'string') {
-        // 清除 <think> 及 </think> 标签
-        const thinkingContent = content.replaceAll(/<\/?think>/g, '');
-
-        // 判断是否有 <think> 或 </think> 标签，更新 thinkingInContent 状态
-        if (content.includes('<think>')) {
-          streamContext.thinkingInContent = true;
-        } else if (content.includes('</think>')) {
-          streamContext.thinkingInContent = false;
-        }
-
         // 如果 content 是空字符串但 chunk 带有 usage，则优先返回 usage（例如 Gemini image-preview 最终会在单独的 chunk 中返回 usage）
         if (content === '' && chunk.usage) {
           const usage = chunk.usage;
           return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
+        }
+
+        // 处理包含 </think> 标签的特殊情况：需要分割内容
+        if (content.includes('</think>')) {
+          const parts = content.split('</think>');
+          const beforeThink = parts[0].replaceAll('<think>', ''); // 移除可能的 <think> 标签
+          const afterThink = parts.slice(1).join('</think>'); // 处理可能有多个 </think> 的情况
+
+          const results: StreamProtocolChunk[] = [];
+
+          // </think> 之前的内容（如果有）作为 reasoning
+          if (beforeThink) {
+            results.push({
+              data: beforeThink,
+              id: chunk.id,
+              type: 'reasoning',
+            });
+          }
+
+          // 更新状态：已经结束思考模式
+          streamContext.thinkingInContent = false;
+
+          // </think> 之后的内容（如果有）作为 text
+          if (afterThink) {
+            results.push({
+              data: afterThink,
+              id: chunk.id,
+              type: 'text',
+            });
+          }
+
+          return results.length > 0 ? results : { data: '', id: chunk.id, type: 'text' };
+        }
+
+        // 清除 <think> 标签（不需要分割，因为 <think> 标签后续内容都是 reasoning）
+        const thinkingContent = content.replaceAll(/<\/?think>/g, '');
+
+        // 判断是否有 <think> 标签，更新 thinkingInContent 状态
+        if (content.includes('<think>')) {
+          streamContext.thinkingInContent = true;
         }
 
         // 判断是否有 citations 内容，更新 returnedCitation 状态

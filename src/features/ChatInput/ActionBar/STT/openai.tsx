@@ -1,3 +1,4 @@
+import { ChatMessageError } from '@lobechat/types';
 import { getRecordMineType } from '@lobehub/tts';
 import { OpenAISTTOptions, useOpenAISTT } from '@lobehub/tts/react';
 import isEqual from 'fast-deep-equal';
@@ -15,7 +16,6 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { ChatMessageError } from '@/types/message';
 import { getMessageError } from '@/utils/fetch';
 
 import CommonSTT from './common';

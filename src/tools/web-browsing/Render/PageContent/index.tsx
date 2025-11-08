@@ -12,10 +12,10 @@ import Result from './Result';
 interface PagesContentProps {
   messageId: string;
   results?: CrawlPluginState['results'];
-  urls: string[];
+  urls?: string[];
 }
 
-const PagesContent = memo<PagesContentProps>(({ results, messageId, urls }) => {
+const PagesContent = memo<PagesContentProps>(({ results, messageId, urls = [] }) => {
   const isMobile = useIsMobile();
 
   if (!results || results.length === 0) {

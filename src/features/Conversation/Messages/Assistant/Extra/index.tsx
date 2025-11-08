@@ -1,3 +1,4 @@
+import { type MessageMetadata } from '@lobechat/types';
 import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
 
@@ -8,7 +9,6 @@ import Translate from '@/features/Conversation/components/Extras/Translate';
 import Usage from '@/features/Conversation/components/Extras/Usage';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
-import { type MessageMetadata } from '@/types/message';
 
 interface AssistantMessageExtraProps {
   content: string;

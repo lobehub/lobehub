@@ -1,13 +1,13 @@
+import { UIChatMessage } from '@lobechat/types';
 import { ReactNode, memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 import { LOADING_FLAT } from '@/const/message';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
-import { ChatMessage } from '@/types/message';
 
 export const DefaultMessage = memo<
-  ChatMessage & {
+  UIChatMessage & {
     addIdOnDOM?: boolean;
     editableContent: ReactNode;
     isToolCallGenerating?: boolean;
@@ -22,6 +22,6 @@ export const DefaultMessage = memo<
   return <div id={addIdOnDOM ? id : undefined}>{editableContent}</div>;
 });
 
-export const DefaultBelowMessage = memo<ChatMessage>(() => {
+export const DefaultBelowMessage = memo<UIChatMessage>(() => {
   return null;
 });

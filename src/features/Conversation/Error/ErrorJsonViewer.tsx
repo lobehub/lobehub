@@ -1,8 +1,7 @@
+import { ChatMessageError } from '@lobechat/types';
 import { Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 import { Flexbox } from 'react-layout-kit';
-
-import { ChatMessageError } from '@/types/message';
 
 interface ErrorJSONViewerProps {
   error?: ChatMessageError | null;

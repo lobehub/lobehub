@@ -1,9 +1,9 @@
-import { ChatMessage, ChatToolPayload } from '@/types/message';
+import { ChatToolPayload, UIChatMessage } from '@lobechat/types';
 
 import { MessageDispatch, messagesReducer } from './reducer';
 
 describe('messagesReducer', () => {
-  let initialState: ChatMessage[];
+  let initialState: UIChatMessage[];
 
   beforeEach(() => {
     initialState = [
@@ -115,7 +115,7 @@ describe('messagesReducer', () => {
             role: 'user',
             meta: {},
             extra: { abc: '1' },
-          } as ChatMessage,
+          } as UIChatMessage,
           ...initialState,
         ],
         payload,
@@ -189,7 +189,7 @@ describe('messagesReducer', () => {
 
   describe('updateMessagePlugin', () => {
     it('should update the plugin of a tool message', () => {
-      const toolMessage: ChatMessage = {
+      const toolMessage: UIChatMessage = {
         id: 'toolMessage',
         role: 'tool',
         content: 'Tool content',
@@ -302,7 +302,7 @@ describe('messagesReducer', () => {
       };
 
       const newState = messagesReducer(
-        [...initialState, { id: messageId, role: 'assistant', content: '' } as ChatMessage],
+        [...initialState, { id: messageId, role: 'assistant', content: '' } as UIChatMessage],
         payload,
       );
       const updatedMessage = newState.find((m) => m.id === messageId);
@@ -330,7 +330,7 @@ describe('messagesReducer', () => {
       };
 
       const newState = messagesReducer(
-        [...initialState, { id: messageId, role: 'assistant', content: '' } as ChatMessage],
+        [...initialState, { id: messageId, role: 'assistant', content: '' } as UIChatMessage],
         payload,
       );
       const updatedMessage = newState.find((m) => m.id === messageId);

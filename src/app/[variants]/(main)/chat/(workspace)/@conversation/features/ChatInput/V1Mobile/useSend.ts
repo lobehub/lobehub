@@ -1,3 +1,4 @@
+import { SendMessageParams } from '@lobechat/types';
 import { useAnalytics } from '@lobehub/analytics/react';
 import { useCallback, useMemo } from 'react';
 
@@ -8,7 +9,6 @@ import { useChatStore } from '@/store/chat';
 import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { getUserStoreState } from '@/store/user';
-import { SendMessageParams } from '@/types/message';
 
 export type UseSendMessageParams = Pick<
   SendMessageParams,

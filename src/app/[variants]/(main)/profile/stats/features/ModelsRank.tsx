@@ -1,3 +1,4 @@
+import { ModelRankItem } from '@lobechat/types';
 import { BarList } from '@lobehub/charts';
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, FormGroup, Modal } from '@lobehub/ui';
@@ -9,7 +10,6 @@ import { Flexbox } from 'react-layout-kit';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useClientDataSWR } from '@/libs/swr';
 import { messageService } from '@/services/message';
-import { ModelRankItem } from '@/types/message';
 
 export const TopicsRank = memo(() => {
   const [open, setOpen] = useState(false);

@@ -1,6 +1,76 @@
 [
   {
     "children": {
+      "fixes": ["OIDC error when connecting to self-host instance."]
+    },
+    "date": "2025-11-02",
+    "version": "1.142.9"
+  },
+  {
+    "children": {},
+    "date": "2025-10-30",
+    "version": "1.142.8"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-10-28",
+    "version": "1.142.7"
+  },
+  {
+    "children": {},
+    "date": "2025-10-28",
+    "version": "1.142.6"
+  },
+  {
+    "children": {
+      "improvements": ["Add MiniMax-M2 model."]
+    },
+    "date": "2025-10-27",
+    "version": "1.142.5"
+  },
+  {
+    "children": {
+      "improvements": [
+        "Pre render ModelSwitchPanel, The error details of the connectivity check lead to a layout problem."
+      ]
+    },
+    "date": "2025-10-27",
+    "version": "1.142.4"
+  },
+  {
+    "children": {
+      "improvements": [
+        "Adjust modal setting form styles for improved layout and responsiveness, Unzip file when uploading in knowledge base [LOB-500]."
+      ]
+    },
+    "date": "2025-10-27",
+    "version": "1.142.3"
+  },
+  {
+    "children": {
+      "improvements": ["Improve provider modal height when creating custom provider."]
+    },
+    "date": "2025-10-26",
+    "version": "1.142.2"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-10-26",
+    "version": "1.142.1"
+  },
+  {
+    "children": {
+      "features": ["Use env to control clerk allow origin feature."]
+    },
+    "date": "2025-10-24",
+    "version": "1.142.0"
+  },
+  {
+    "children": {
       "fixes": ["Loadmore not work & navbar not show in pwa."]
     },
     "date": "2025-10-23",

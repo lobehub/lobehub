@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
-import { useChatStore } from '@/store/chat';
 
 const ShareModal = dynamic(() => import('@/features/ShareModal'));
 
@@ -21,13 +20,11 @@ interface ShareButtonProps {
 const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const [isModalOpen, setIsModalOpen] = useWorkspaceModal(open, setOpen);
   const { t } = useTranslation('common');
-  const [shareLoading] = useChatStore((s) => [s.shareLoading]);
 
   return (
     <>
       <ActionIcon
         icon={Share2}
-        loading={shareLoading}
         onClick={() => setIsModalOpen(true)}
         size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
         title={t('share')}

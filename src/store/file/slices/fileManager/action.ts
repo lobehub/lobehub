@@ -1,7 +1,8 @@
+import pMap from 'p-map';
 import { SWRResponse, mutate } from 'swr';
 import { StateCreator } from 'zustand/vanilla';
 
-import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
+import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { useClientDataSWR } from '@/libs/swr';
 import { fileService } from '@/services/file';
 import { ServerService } from '@/services/file/server';
@@ -12,6 +13,7 @@ import {
 } from '@/store/file/reducers/uploadFileList';
 import { FileListItem, QueryFileListParams } from '@/types/files';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
+import { unzipFile } from '@/utils/unzipFile';
 
 import { FileStore } from '../../store';
 import { fileManagerSelectors } from './selectors';
@@ -89,18 +91,37 @@ export const createFileManageSlice: StateCreator<
   pushDockFileList: async (rawFiles, knowledgeBaseId) => {
     const { dispatchDockFileList } = get();
 
-    // 0. skip file in blacklist
-    const files = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
+    // 0. Process ZIP files and extract their contents
+    const filesToUpload: File[] = [];
+    for (const file of rawFiles) {
+      if (file.type === 'application/zip' || file.name.endsWith('.zip')) {
+        try {
+          const extractedFiles = await unzipFile(file);
+          filesToUpload.push(...extractedFiles);
+        } catch (error) {
+          console.error('Failed to extract ZIP file:', error);
+          // If extraction fails, treat it as a regular file
+          filesToUpload.push(file);
+        }
+      } else {
+        filesToUpload.push(file);
+      }
+    }
 
-    // 1. add files
+    // 1. skip file in blacklist
+    const files = filesToUpload.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
+
+    // 2. Add all files to dock
     dispatchDockFileList({
       atStart: true,
       files: files.map((file) => ({ file, id: file.name, status: 'pending' })),
       type: 'addFiles',
     });
 
-    const uploadResults = await Promise.all(
-      files.map(async (file) => {
+    // 3. Upload files with concurrency limit using p-map
+    const uploadResults = await pMap(
+      files,
+      async (file) => {
         const result = await get().uploadWithProgress({
           file,
           knowledgeBaseId,
@@ -110,10 +131,11 @@ export const createFileManageSlice: StateCreator<
         await get().refreshFileList();
 
         return { file, fileId: result?.id, fileType: file.type };
-      }),
+      },
+      { concurrency: MAX_UPLOAD_FILE_COUNT },
     );
 
-    // 2. auto-embed files that support chunking
+    // 4. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults
       .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
       .map(({ fileId }) => fileId!);

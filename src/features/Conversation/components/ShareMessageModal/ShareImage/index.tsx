@@ -1,3 +1,4 @@
+import { UIChatMessage } from '@lobechat/types';
 import { Button, Form, type FormItemProps, Segmented } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { CopyIcon } from 'lucide-react';
@@ -11,7 +12,6 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreenshot';
 import { useSessionStore } from '@/store/session';
 import { sessionMetaSelectors } from '@/store/session/selectors';
-import { ChatMessage } from '@/types/message';
 
 import { useStyles } from '../style';
 import Preview from './Preview';
@@ -23,7 +23,7 @@ const DEFAULT_FIELD_VALUE: FieldType = {
   withFooter: true,
 };
 
-const ShareImage = memo<{ message: ChatMessage; mobile?: boolean; uniqueId?: string }>(
+const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: string }>(
   ({ message, uniqueId }) => {
     const currentAgentTitle = useSessionStore(sessionMetaSelectors.currentAgentTitle);
     const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);

@@ -25,6 +25,17 @@ id->deploymentName=displayName<maxToken:vision:reasoning:search:fc:file:imageOut
 
 上面示例表示增加 `qwen-7b-chat` 和 `glm-6b` 到模型列表，而从列表中删除 `gpt-3.5-turbo`，并将 `gpt-4-0125-preview` 模型名字展示为 `gpt-4-turbo`。如果你想先禁用所有模型，再启用指定模型，可以使用 `-all,+gpt-3.5-turbo`，则表示仅启用 `gpt-3.5-turbo`。
 
+### -all：隐藏所有模型
+
+- 描述：`-all` 表示先隐藏所有内置模型。通常与 `+` 组合使用，用于只启用你显式指定的模型。
+- 示例：
+
+```text
+-all,+gpt-3.5-turbo,+gpt-4-0125-preview=gpt-4-turbo
+```
+
+仅启用 gpt-3.5-turbo 和 gpt-4-turbo，而其他模型都隐藏。
+
 ## 扩展能力
 
 考虑到模型的能力多样性，我们在 `0.147.8` 版本开始增加扩展性配置，它的规则如下：

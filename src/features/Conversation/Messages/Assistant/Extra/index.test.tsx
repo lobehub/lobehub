@@ -1,8 +1,8 @@
+import { UIChatMessage } from '@lobechat/types';
 import { render, screen } from '@testing-library/react';
 import { Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
-import { ChatMessage } from '@/types/message';
 
 import { AssistantMessageExtra } from './index';
 
@@ -24,7 +24,7 @@ vi.mock('@/store/chat', () => ({
   useChatStore: vi.fn(),
 }));
 
-const mockData: ChatMessage = {
+const mockData: UIChatMessage = {
   content: 'test-content',
   createdAt: 0,
   id: 'abc',

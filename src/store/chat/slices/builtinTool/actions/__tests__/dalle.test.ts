@@ -1,4 +1,4 @@
-import { ChatMessage } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -24,7 +24,7 @@ describe('chatToolSlice - dalle', () => {
           ({
             id,
             content: initialMessageContent,
-          }) as ChatMessage,
+          }) as UIChatMessage,
       );
 
       const messageId = 'message-id';
@@ -84,7 +84,7 @@ describe('chatToolSlice - dalle', () => {
           ({
             id,
             content: initialMessageContent,
-          }) as ChatMessage,
+          }) as UIChatMessage,
       );
       vi.spyOn(messageService, 'updateMessage').mockResolvedValueOnce(undefined);
 

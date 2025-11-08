@@ -1,5 +1,5 @@
 import { AgentRuntimeError, ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { ChatErrorType, TracePayload, TraceTagMap } from '@lobechat/types';
+import { ChatErrorType, TracePayload, TraceTagMap, UIChatMessage } from '@lobechat/types';
 import { PluginRequestPayload, createHeadersWithPluginSettings } from '@lobehub/chat-plugin-sdk';
 import { merge } from 'lodash-es';
 import { ModelProvider } from 'model-bank';
@@ -22,11 +22,8 @@ import {
   userGeneralSettingsSelectors,
   userProfileSelectors,
 } from '@/store/user/selectors';
-import { ChatMessage } from '@/types/message';
 import type { ChatStreamPayload, OpenAIChatMessage } from '@/types/openai/chat';
-import {
-  fetchWithInvokeStream,
-} from '@/utils/electron/desktopRemoteRPCFetch';
+import { fetchWithInvokeStream } from '@/utils/electron/desktopRemoteRPCFetch';
 import { createErrorResponse } from '@/utils/errorResponse';
 import {
   FetchSSEOptions,
@@ -44,11 +41,11 @@ import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } fro
 import { FetchOptions } from './types';
 
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
-  messages: ChatMessage[];
+  messages: UIChatMessage[];
 }
 
 type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
-  messages?: (ChatMessage | OpenAIChatMessage)[];
+  messages?: (UIChatMessage | OpenAIChatMessage)[];
 };
 
 interface FetchAITaskResultParams extends FetchSSEOptions {
@@ -279,7 +276,7 @@ class ChatService {
     if (payload.top_p === null) payload.top_p = undefined;
     if (payload.presence_penalty === null) payload.presence_penalty = undefined;
     if (payload.frequency_penalty === null) payload.frequency_penalty = undefined;
-    
+
     const sdkType = resolveRuntimeProvider(provider);
 
     /**

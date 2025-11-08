@@ -1,8 +1,8 @@
+import { DBMessageItem } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageItem } from '@/types/message';
 import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../models/__tests__/_util';
@@ -919,7 +919,7 @@ describe('MessageModel', () => {
       const newMessages = [
         { id: '1', role: 'user', content: 'message 1' },
         { id: '2', role: 'assistant', content: 'message 2' },
-      ] as MessageItem[];
+      ] as DBMessageItem[];
 
       // 调用 batchCreateMessages 方法
       await messageModel.batchCreate(newMessages);
@@ -929,6 +929,78 @@ describe('MessageModel', () => {
       expect(result).toHaveLength(2);
       expect(result[0].content).toBe('message 1');
       expect(result[1].content).toBe('message 2');
+    });
+  });
+
+  describe('createNewMessage', () => {
+    it('should create message and return id with messages list', async () => {
+      // 调用 createNewMessage 方法
+      const result = await messageModel.createNewMessage({
+        role: 'user',
+        content: 'test message',
+        sessionId: '1',
+      });
+
+      // 断言返回结构
+      expect(result).toHaveProperty('id');
+      expect(result).toHaveProperty('messages');
+      expect(result.id).toBeDefined();
+      expect(result.messages).toBeInstanceOf(Array);
+    });
+
+    it('should return newly created message in messages list', async () => {
+      const content = 'new test message ' + Date.now();
+
+      const result = await messageModel.createNewMessage({
+        role: 'user',
+        content,
+        sessionId: '1',
+      });
+
+      // 验证新创建的消息在列表中
+      const createdMessage = result.messages.find((m) => m.id === result.id);
+      expect(createdMessage).toBeDefined();
+      expect(createdMessage?.content).toBe(content);
+      expect(createdMessage?.role).toBe('user');
+    });
+
+    it('should return all messages for the session', async () => {
+      // 创建多条消息
+      await messageModel.create({ role: 'user', content: 'message 1', sessionId: '1' });
+      await messageModel.create({ role: 'assistant', content: 'message 2', sessionId: '1' });
+
+      // 创建第三条消息并获取完整列表
+      const result = await messageModel.createNewMessage({
+        role: 'user',
+        content: 'message 3',
+        sessionId: '1',
+      });
+
+      // 验证返回了所有消息
+      expect(result.messages.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should filter messages by topicId if provided', async () => {
+      const topicId = 'topic-1';
+      await serverDB.insert(topics).values({ id: topicId, sessionId: '1', userId });
+
+      // 创建不同 topic 的消息
+      await messageModel.create({ role: 'user', content: 'topic 1 msg', sessionId: '1', topicId });
+      await messageModel.create({ role: 'user', content: 'no topic msg', sessionId: '1' });
+
+      // 创建新消息并指定 topicId
+      const result = await messageModel.createNewMessage({
+        role: 'user',
+        content: 'new topic msg',
+        sessionId: '1',
+        topicId,
+      });
+
+      // 验证只返回该 topic 的消息
+      expect(result.messages.every((m) => m.topicId === topicId || m.topicId === undefined)).toBe(
+        true,
+      );
+      expect(result.messages.find((m) => m.content === 'no topic msg')).toBeUndefined();
     });
   });
 
