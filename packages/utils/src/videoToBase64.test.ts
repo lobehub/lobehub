@@ -1,0 +1,166 @@
+import { ssrfSafeFetch } from 'ssrf-safe-fetch';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { videoUrlToBase64 } from './videoToBase64';
+
+// Mock ssrf-safe-fetch
+vi.mock('ssrf-safe-fetch', () => ({
+  ssrfSafeFetch: vi.fn(),
+}));
+
+describe('videoUrlToBase64', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should convert video URL to base64 successfully', async () => {
+    const mockArrayBuffer = new ArrayBuffer(16);
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      headers: {
+        get: vi.fn().mockReturnValue('video/mp4'),
+      },
+      arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
+    };
+
+    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+
+    const result = await videoUrlToBase64('https://example.com/video.mp4');
+
+    expect(ssrfSafeFetch).toHaveBeenCalledWith(
+      'https://example.com/video.mp4',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(result).toEqual({
+      base64: Buffer.from(mockArrayBuffer).toString('base64'),
+      mimeType: 'video/mp4',
+    });
+  });
+
+  it('should handle different video mime types', async () => {
+    const mockArrayBuffer = new ArrayBuffer(16);
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      headers: {
+        get: vi.fn().mockReturnValue('video/webm'),
+      },
+      arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
+    };
+
+    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+
+    const result = await videoUrlToBase64('https://example.com/video.webm');
+
+    expect(result.mimeType).toBe('video/webm');
+  });
+
+  it('should throw error when response is not ok', async () => {
+    const mockResponse = {
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    };
+
+    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(videoUrlToBase64('https://example.com/video.mp4')).rejects.toThrow(
+      'Failed to fetch video: 404 Not Found',
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Error converting video to base64:',
+      expect.any(Error),
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should throw error when content-type is not video', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      headers: {
+        get: vi.fn().mockReturnValue('image/png'),
+      },
+    };
+
+    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(videoUrlToBase64('https://example.com/image.png')).rejects.toThrow(
+      'URL does not point to a valid video file',
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Error converting video to base64:',
+      expect.any(Error),
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should throw error when content-type is missing', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      headers: {
+        get: vi.fn().mockReturnValue(null),
+      },
+    };
+
+    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(videoUrlToBase64('https://example.com/file')).rejects.toThrow(
+      'URL does not point to a valid video file',
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should throw error when fetch fails', async () => {
+    const mockError = new Error('Network error');
+    (ssrfSafeFetch as any).mockRejectedValue(mockError);
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(videoUrlToBase64('https://example.com/video.mp4')).rejects.toThrow(
+      'Network error',
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error converting video to base64:', mockError);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should use 30 second timeout', async () => {
+    const mockArrayBuffer = new ArrayBuffer(16);
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      headers: {
+        get: vi.fn().mockReturnValue('video/mp4'),
+      },
+      arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
+    };
+
+    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+
+    await videoUrlToBase64('https://example.com/video.mp4');
+
+    expect(ssrfSafeFetch).toHaveBeenCalledWith(
+      'https://example.com/video.mp4',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+});

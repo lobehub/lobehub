@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
 
+import { videoUrlToBase64 } from '@/utils/videoToBase64';
+
 import { parseDataUri } from '../../utils/uriParser';
-import { videoUrlToBase64 } from '../../utils/videoToBase64';
 
 interface SiliconCloudChatCompletionContentPartVideo {
   type: 'video_url';
