@@ -1,6 +1,5 @@
+import { videoUrlToBase64 } from '@lobechat/utils/videoToBase64';
 import OpenAI from 'openai';
-
-import { videoUrlToBase64 } from '@/utils/videoToBase64';
 
 import { parseDataUri } from '../../utils/uriParser';
 
