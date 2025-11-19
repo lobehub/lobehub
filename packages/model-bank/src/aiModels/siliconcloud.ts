@@ -697,36 +697,11 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 196_608,
-    description:
-      'MiniMax-M2 为智能体重新定义了效率。它是一款紧凑、快速且经济高效的 MoE 模型，拥有 2300 亿总参数和 100 亿激活参数，专为编码和智能体任务的顶级性能而打造，同时保持强大的通用智能。仅需 100 亿激活参数，MiniMax-M2 就能提供当今领先模型所期望的复杂端到端工具使用性能，但其外形尺寸更为精简，使得部署和扩展比以往任何时候都更容易',
-    displayName: 'MiniMax M2',
-    enabled: true,
-    id: 'MiniMaxAI/MiniMax-M2',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-10-28',
-    settings: {
-      extendParams: ['reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
       'KAT-Dev（32B）是一款专为软件工程任务设计的开源 32B 参数模型。在 SWE-Bench Verified 基准测试中，它取得了 62.4% 的解决率，在所有不同规模的开源模型中排名第五。该模型通过多个阶段进行优化，包括中间训练、监督微调（SFT）与强化微调（RFT），以及大规模智能体强化学习（RL）。该模型基于 Qwen3-32B，其训练过程通过增强工具使用、多轮交互和指令遵循等基础能力，为后续微调和强化学习阶段奠定基础。在微调阶段，模型不仅学习了八种精心策划的任务类型和编程场景，还创新性地引入了强化微调（RFT）阶段，利用人类工程师标注的“教师轨迹”进行指导。最后的智能体强化学习阶段通过多级前缀缓存、基于熵的轨迹修剪和高效架构解决了扩展性挑战',
     displayName: 'KAT-Dev',
-    enabled: true,
     id: 'Kwaipilot/KAT-Dev',
     pricing: {
       currency: 'CNY',
