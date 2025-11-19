@@ -6,13 +6,16 @@ export const videoUrlToBase64 = async (
   videoUrl: string,
 ): Promise<{ base64: string; mimeType: string }> => {
   try {
+    const isServer = typeof window === 'undefined';
+
     // Use SSRF-safe fetch to prevent SSRF attacks
-    const response = await import('ssrf-safe-fetch').then((m) =>
-      m.ssrfSafeFetch(videoUrl, {
-        // Add reasonable timeout
-        signal: AbortSignal.timeout(30_000), // 30 seconds
-      }),
-    );
+    const response = isServer
+      ? await import('ssrf-safe-fetch').then((m) =>
+          m.ssrfSafeFetch(videoUrl, {
+            signal: AbortSignal.timeout(30_000), // 30 seconds
+          }),
+        )
+      : await fetch(videoUrl);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
@@ -24,7 +27,11 @@ export const videoUrlToBase64 = async (
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    const base64 = isServer
+      ? Buffer.from(arrayBuffer).toString('base64')
+      : btoa(
+          new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''),
+        );
 
     return {
       base64,
