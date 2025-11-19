@@ -1,13 +1,13 @@
 /// <reference types="vitest" />
+import { videoUrlToBase64 } from '@lobechat/utils/videoToBase64';
 import OpenAI from 'openai';
-import { ssrfSafeFetch } from 'ssrf-safe-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { convertSiliconCloudMessageContent, transformSiliconCloudMessages } from './siliconcloud';
 
-// Mock ssrfSafeFetch before importing
-vi.mock('ssrf-safe-fetch', () => ({
-  ssrfSafeFetch: vi.fn(),
+// Mock videoUrlToBase64
+vi.mock('@lobechat/utils/videoToBase64', () => ({
+  videoUrlToBase64: vi.fn(),
 }));
 
 describe('siliconcloud context builder', () => {
@@ -72,17 +72,10 @@ describe('siliconcloud context builder', () => {
     it('should convert video URL to base64 when env is 1', async () => {
       process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
 
-      // Mock ssrfSafeFetch to return a simple video
-      const mockResponse = {
-        ok: true,
-        status: 200,
-        headers: new Headers({
-          'content-type': 'video/mp4',
-        }),
-        arrayBuffer: async () => Promise.resolve(new ArrayBuffer(10)),
-      };
-
-      (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+      vi.mocked(videoUrlToBase64).mockResolvedValue({
+        base64: 'mockBase64Data',
+        mimeType: 'video/mp4',
+      });
 
       const content: any = {
         type: 'video_url',
@@ -93,17 +86,14 @@ describe('siliconcloud context builder', () => {
 
       const result = await convertSiliconCloudMessageContent(content);
 
-      expect(ssrfSafeFetch).toHaveBeenCalledWith(
-        'https://example.com/video.mp4',
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
-      expect((result as any).video_url.url).toMatch(/^data:video\/mp4;base64,/);
+      expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+      expect((result as any).video_url.url).toBe('data:video/mp4;base64,mockBase64Data');
     });
 
-    it('should return original content when fetch fails', async () => {
+    it('should return original content when conversion fails', async () => {
       process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
 
-      (ssrfSafeFetch as any).mockRejectedValue(new Error('Network error'));
+      vi.mocked(videoUrlToBase64).mockRejectedValue(new Error('Conversion error'));
 
       const content: any = {
         type: 'video_url',
@@ -130,16 +120,10 @@ describe('siliconcloud context builder', () => {
     it('should transform messages with video content', async () => {
       process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
 
-      const mockResponse = {
-        ok: true,
-        status: 200,
-        headers: new Headers({
-          'content-type': 'video/mp4',
-        }),
-        arrayBuffer: async () => Promise.resolve(new ArrayBuffer(10)),
-      };
-
-      (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+      vi.mocked(videoUrlToBase64).mockResolvedValue({
+        base64: 'mockBase64Data',
+        mimeType: 'video/mp4',
+      });
 
       const messages: OpenAI.ChatCompletionMessageParam[] = [
         {
@@ -163,11 +147,10 @@ describe('siliconcloud context builder', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].content).toHaveLength(2);
-      expect((result[0].content as any[])[1].video_url.url).toMatch(/^data:video\/mp4;base64,/);
-      expect(ssrfSafeFetch).toHaveBeenCalledWith(
-        'https://example.com/video.mp4',
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      expect((result[0].content as any[])[1].video_url.url).toBe(
+        'data:video/mp4;base64,mockBase64Data',
       );
+      expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
     });
 
     it('should handle string content unchanged', async () => {

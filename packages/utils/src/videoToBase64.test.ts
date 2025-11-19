@@ -1,16 +1,26 @@
-import { ssrfSafeFetch } from 'ssrf-safe-fetch';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { videoUrlToBase64 } from './videoToBase64';
 
-// Mock ssrf-safe-fetch
+// Mock ssrf-safe-fetch module
+const mockSsrfSafeFetch = vi.fn();
 vi.mock('ssrf-safe-fetch', () => ({
-  ssrfSafeFetch: vi.fn(),
+  ssrfSafeFetch: mockSsrfSafeFetch,
 }));
 
 describe('videoUrlToBase64', () => {
+  const originalWindow = global.window;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mock server environment by removing window
+    // @ts-ignore
+    delete global.window;
+  });
+
+  afterEach(() => {
+    // Restore window
+    global.window = originalWindow;
   });
 
   it('should convert video URL to base64 successfully', async () => {
@@ -24,11 +34,11 @@ describe('videoUrlToBase64', () => {
       arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
     };
 
-    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+    mockSsrfSafeFetch.mockResolvedValue(mockResponse);
 
     const result = await videoUrlToBase64('https://example.com/video.mp4');
 
-    expect(ssrfSafeFetch).toHaveBeenCalledWith(
+    expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
       'https://example.com/video.mp4',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
@@ -51,7 +61,7 @@ describe('videoUrlToBase64', () => {
       arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
     };
 
-    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+    mockSsrfSafeFetch.mockResolvedValue(mockResponse);
 
     const result = await videoUrlToBase64('https://example.com/video.webm');
 
@@ -65,7 +75,7 @@ describe('videoUrlToBase64', () => {
       statusText: 'Not Found',
     };
 
-    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+    mockSsrfSafeFetch.mockResolvedValue(mockResponse);
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -90,7 +100,7 @@ describe('videoUrlToBase64', () => {
       },
     };
 
-    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+    mockSsrfSafeFetch.mockResolvedValue(mockResponse);
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -115,7 +125,7 @@ describe('videoUrlToBase64', () => {
       },
     };
 
-    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+    mockSsrfSafeFetch.mockResolvedValue(mockResponse);
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -128,7 +138,7 @@ describe('videoUrlToBase64', () => {
 
   it('should throw error when fetch fails', async () => {
     const mockError = new Error('Network error');
-    (ssrfSafeFetch as any).mockRejectedValue(mockError);
+    mockSsrfSafeFetch.mockRejectedValue(mockError);
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -152,11 +162,11 @@ describe('videoUrlToBase64', () => {
       arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
     };
 
-    (ssrfSafeFetch as any).mockResolvedValue(mockResponse);
+    mockSsrfSafeFetch.mockResolvedValue(mockResponse);
 
     await videoUrlToBase64('https://example.com/video.mp4');
 
-    expect(ssrfSafeFetch).toHaveBeenCalledWith(
+    expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
       'https://example.com/video.mp4',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
