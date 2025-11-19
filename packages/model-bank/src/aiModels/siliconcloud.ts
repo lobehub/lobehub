@@ -697,25 +697,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'KAT-Dev（32B）是一款专为软件工程任务设计的开源 32B 参数模型。在 SWE-Bench Verified 基准测试中，它取得了 62.4% 的解决率，在所有不同规模的开源模型中排名第五。该模型通过多个阶段进行优化，包括中间训练、监督微调（SFT）与强化微调（RFT），以及大规模智能体强化学习（RL）。该模型基于 Qwen3-32B，其训练过程通过增强工具使用、多轮交互和指令遵循等基础能力，为后续微调和强化学习阶段奠定基础。在微调阶段，模型不仅学习了八种精心策划的任务类型和编程场景，还创新性地引入了强化微调（RFT）阶段，利用人类工程师标注的“教师轨迹”进行指导。最后的智能体强化学习阶段通过多级前缀缓存、基于熵的轨迹修剪和高效架构解决了扩展性挑战',
-    displayName: 'KAT-Dev',
-    id: 'Kwaipilot/KAT-Dev',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-27',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       video: true,
       vision: true,
     },
