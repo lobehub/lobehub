@@ -8,6 +8,7 @@ import {
   type ChatToolPayloadWithResult,
   type ChatVideoItem,
   type CreateMessageParams,
+  type EmojiReaction,
   type GroundingSearch,
   type MessageMetadata,
   type MessagePluginItem,
@@ -30,6 +31,12 @@ import { dataSelectors } from '../../data/selectors';
  * with optimistic updates (update UI first, then persist to database)
  */
 export interface MessageCRUDAction {
+  // ===== Reaction ===== //
+  /**
+   * Add an emoji reaction to a message
+   */
+  addReaction: (messageId: string, emoji: string) => Promise<void>;
+
   // ===== Update Tools ===== //
   /**
    * Add a tool to an assistant message
@@ -85,6 +92,11 @@ export interface MessageCRUDAction {
    * Delete a tool message and remove the tool from its parent assistant message
    */
   deleteToolMessage: (id: string) => Promise<void>;
+
+  /**
+   * Remove an emoji reaction from a message
+   */
+  removeReaction: (messageId: string, emoji: string) => Promise<void>;
 
   /**
    * Remove a tool from an assistant message
@@ -169,6 +181,25 @@ export const messageCRUDSlice: StateCreator<
   [],
   MessageCRUDAction
 > = (set, get) => ({
+  // ===== Reaction ===== //
+  addReaction: async (messageId, emoji) => {
+    const { updateMessageMetadata } = get();
+    const message = dataSelectors.getDisplayMessageById(messageId)(get());
+
+    const currentReactions = message?.metadata?.reactions || {};
+    const emojiReaction: EmojiReaction = currentReactions[emoji] || { count: 0, users: [] };
+
+    const newReactions: Record<string, EmojiReaction> = {
+      ...currentReactions,
+      [emoji]: {
+        count: emojiReaction.count + 1,
+        users: [...emojiReaction.users, 'user'],
+      },
+    };
+
+    await updateMessageMetadata(messageId, { reactions: newReactions });
+  },
+
   // ===== Update Tools ===== //
   addToolToMessage: async (messageId, tool) => {
     const { internal_dispatchMessage, replaceMessages, context } = get();
@@ -367,6 +398,29 @@ export const messageCRUDSlice: StateCreator<
     if (result?.success && result.messages) {
       replaceMessages(result.messages);
     }
+  },
+
+  removeReaction: async (messageId, emoji) => {
+    const { updateMessageMetadata } = get();
+    const message = dataSelectors.getDisplayMessageById(messageId)(get());
+
+    const currentReactions = message?.metadata?.reactions || {};
+    const emojiReaction = currentReactions[emoji];
+
+    if (!emojiReaction) return;
+
+    const newReactions: Record<string, EmojiReaction> = { ...currentReactions };
+
+    if (emojiReaction.count <= 1) {
+      delete newReactions[emoji];
+    } else {
+      newReactions[emoji] = {
+        count: emojiReaction.count - 1,
+        users: emojiReaction.users.slice(0, -1),
+      };
+    }
+
+    await updateMessageMetadata(messageId, { reactions: newReactions });
   },
 
   removeToolFromMessage: async (messageId, toolCallId) => {
