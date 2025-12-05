@@ -33,12 +33,38 @@ const openrouterChatModels: AIChatModelCard[] = [
   {
     abilities: {
       imageOutput: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      'Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and high-fidelity visual synthesis. The model generates context-rich graphics, from infographics and diagrams to cinematic composites, and can incorporate real-time information via Search grounding.',
+    displayName: 'Nano Banana Pro',
+    id: 'google/gemini-3-pro-image-preview',
+    maxOutput: 32_768,
+    pricing: {
+      approximatePricePerImage: 0.134,
+      units: [
+        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-20',
+    settings: {
+      extendParams: ['imageAspectRatio'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
       vision: true,
     },
     contextWindowTokens: 32_768 + 8192,
-    description: 'Gemini 2.5 Flash experimental model with image generation support.',
+    description: 'Gemini 2.5 Flash Image, a.k.a. "Nano Banana," is now generally available. It is a state of the art image generation model with contextual understanding. It is capable of image generation, edits, and multi-turn conversations.',
     displayName: 'Nano Banana',
-    id: 'google/gemini-2.5-flash-image-preview',
+    id: 'google/gemini-2.5-flash-image',
     maxOutput: 8192,
     pricing: {
       approximatePricePerImage: 0.039,
@@ -48,7 +74,7 @@ const openrouterChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-08-26',
+    releasedAt: '2025-10-07',
     settings: {
       extendParams: ['imageAspectRatio'],
     },

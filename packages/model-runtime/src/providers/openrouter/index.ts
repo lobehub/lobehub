@@ -39,9 +39,11 @@ export const params = {
 
       // Add modalities and image_config for image generation models
       const isImageModel = model.includes('-image') || model.includes('flux');
-      const modalities = isImageModel ? ['image', 'text'] : undefined;
+      const modalities =
+        (payload as any).modalities ?? (isImageModel ? ['image', 'text'] : undefined);
       const image_config =
-        isImageModel && imageAspectRatio ? { aspect_ratio: imageAspectRatio } : undefined;
+        (payload as any).image_config ??
+        (isImageModel && imageAspectRatio ? { aspect_ratio: imageAspectRatio } : undefined);
 
       return {
         ...rest,
