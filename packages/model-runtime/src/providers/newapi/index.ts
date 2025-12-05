@@ -16,6 +16,7 @@ export interface NewAPIModelCard {
 
 export interface NewAPIPricing {
   completion_ratio?: number;
+  description?: string;
   enable_groups: string[];
   model_name: string;
   model_price?: number;
@@ -66,9 +67,10 @@ const fetchPricing = async (
 
       return await parsePricingResponse(proxyResponse);
     } else {
-      // In server environment, fetch directly
+      // In server environment, fetch directly with proper encoding headers
       const pricingResponse = await fetch(pricingUrl, {
         headers: {
+          Accept: 'application/json; charset=utf-8',
           Authorization: `Bearer ${apiKey}`,
         },
       });
@@ -183,9 +185,8 @@ export const params = {
       if (!existingModelIds.has(modelName)) {
         const pricingData = calculatePricing(pricing);
         additionalModels.push({
+          ...(pricing.description && { description: pricing.description }),
           id: modelName,
-          object: 'model',
-          owned_by: 'newapi',
           ...(pricingData && { pricing: pricingData }),
         });
       }
