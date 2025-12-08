@@ -82,6 +82,7 @@ const qiniuChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -89,7 +90,7 @@ const qiniuChatModels: AIChatModelCard[] = [
     displayName: 'LongCat Flash Chat',
     enabled: true,
     id: 'meituan/longcat-flash-chat',
-    maxOutput: 65536,
+    maxOutput: 65_536,
     pricing: {
       currency: 'CNY',
       units: [
