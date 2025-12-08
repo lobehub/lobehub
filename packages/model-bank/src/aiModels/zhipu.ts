@@ -9,6 +9,96 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'GLM-4.6V 是 GLM 系列在多模态方向上的一次重要迭代，它将训练时上下文窗口提升到128k tokens，在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。',
+    displayName: 'GLM-4.6V',
+    enabled: true,
+    id: 'glm-4.6v',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 0.2,
+              '[0.032, infinity]': 0.4,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1,
+              '[0.032, infinity]': 2,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 3,
+              '[0.032, infinity]': 6,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        { name: 'textInput_cacheWrite', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'GLM-4.6V-Flash 是 GLM-4.6V 的免费版本，是 GLM 系列在多模态方向上的一次重要迭代，支持开启或关闭思考模式。',
+    displayName: 'GLM-4.6V-Flash',
+    enabled: true,
+    id: 'glm-4.6v-flash',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     contextWindowTokens: 200_000,
     description:
@@ -1019,7 +1109,7 @@ const zhipuChatModels: AIChatModelCard[] = [
       'GLM-4V-Flash focuses on efficient single-image understanding for fast analysis scenarios such as real-time or batch image processing.',
     displayName: 'GLM-4V-Flash',
     id: 'glm-4v-flash',
-    maxOutput: 8192,
+    maxOutput: 1024,
     pricing: {
       currency: 'CNY',
       units: [
@@ -1039,6 +1129,7 @@ const zhipuChatModels: AIChatModelCard[] = [
       'GLM-4V-Plus understands video and multiple images, suitable for multimodal tasks.',
     displayName: 'GLM-4V-Plus-0111',
     id: 'glm-4v-plus-0111',
+    maxOutput: 8192,
     pricing: {
       currency: 'CNY',
       units: [
