@@ -207,32 +207,32 @@ export class AiInfraRepos {
             const user = allModels.find((m) => m.id === item.id && m.providerId === provider.id);
 
             // User hasn't modified local model
-            if (!user)
-              return {
-                ...item,
-                abilities: item.abilities || {},
-                providerId: provider.id,
-              };
+            const baseModel = !user
+              ? {
+                  ...item,
+                  abilities: item.abilities || {},
+                  providerId: provider.id,
+                }
+              : {
+                  ...item,
+                  abilities: !isEmpty(user.abilities) ? user.abilities : item.abilities || {},
+                  config: !isEmpty(user.config) ? user.config : item.config,
+                  contextWindowTokens:
+                    typeof user.contextWindowTokens === 'number'
+                      ? user.contextWindowTokens
+                      : item.contextWindowTokens,
+                  displayName: user?.displayName || item.displayName,
+                  enabled: typeof user.enabled === 'boolean' ? user.enabled : item.enabled,
+                  id: item.id,
+                  providerId: provider.id,
+                  settings: isEmpty(user.settings)
+                    ? item.settings
+                    : merge(item.settings || {}, user.settings || {}),
+                sort: user.sort || undefined,
+                  type: user.type || item.type,
+                };
 
-            const mergedModel = {
-              ...item,
-              abilities: !isEmpty(user.abilities) ? user.abilities : item.abilities || {},
-              config: !isEmpty(user.config) ? user.config : item.config,
-              contextWindowTokens:
-                typeof user.contextWindowTokens === 'number'
-                  ? user.contextWindowTokens
-                  : item.contextWindowTokens,
-              displayName: user?.displayName || item.displayName,
-              enabled: typeof user.enabled === 'boolean' ? user.enabled : item.enabled,
-              id: item.id,
-              providerId: provider.id,
-              settings: isEmpty(user.settings)
-                ? item.settings
-                : merge(item.settings || {}, user.settings || {}),
-              sort: user.sort || undefined,
-              type: user.type || item.type,
-            };
-            return injectSearchSettings(provider.id, mergedModel); // User modified local model, check search settings
+            return injectSearchSettings(provider.id, baseModel); // Always check and inject search settings for the final model object
           })
           .filter((item) => (filterEnabled ? item.enabled : true));
       },
