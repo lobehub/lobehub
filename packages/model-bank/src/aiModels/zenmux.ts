@@ -651,7 +651,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      reasoning: true,
+      functionCall: true,
     },
     contextWindowTokens: 128_000,
     description:
