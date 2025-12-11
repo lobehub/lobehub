@@ -5,6 +5,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 192_000,
     description:
@@ -80,6 +81,26 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'GLM-4.6V 在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。',
+    displayName: 'GLM-4.6V',
+    id: 'zai-org/GLM-4.6V',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-08',
     type: 'chat',
   },
   {
@@ -305,7 +326,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 131_072,
     description:
       'MiniMax-M2 redefines agent efficiency. It is a compact, fast, cost-effective MoE model with 230B total and 10B active parameters, built for top-tier coding and agent tasks while retaining strong general intelligence. With only 10B active parameters, it rivals much larger models, making it ideal for high-efficiency applications.',
     displayName: 'MiniMax-M2',

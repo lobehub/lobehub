@@ -6,6 +6,29 @@ const infiniaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'GLM-4.6V（106B） 是专为云端和高性能集群场景设计的基座模型。GLM-4.6V 将上下文窗口扩展至 128k tokens，并在同等参数规模的模型中实现了 SOTA 的视觉理解性能。关键在于，GLM-4.6V 首次集成了原生 Function Calling 能力，有效弥合了视觉感知与可执行行动之间的差距，为现实业务场景中的多模态 Agent 提供了统一的技术基础。',
+    displayName: 'GLM-4.6V',
+    id: 'glm-4.6v',
+    maxOutput: 4096,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 198_000,
