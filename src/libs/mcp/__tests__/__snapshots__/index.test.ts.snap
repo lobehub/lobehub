@@ -24,7 +24,6 @@ exports[`MCPClient > Stdio Transport > should list tools via stdio 1`] = `
     "description": "Lists all available tools and methods",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "additionalProperties": false,
       "properties": {},
       "type": "object",
     },

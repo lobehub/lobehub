@@ -1,7 +1,7 @@
 import { ChatMessageError, ErrorResponse, ErrorType } from '@lobechat/types';
 import { t } from 'i18next';
 
-export const getMessageError = async (response: Response) => {
+export const getMessageError = async (response: Response): Promise<ChatMessageError> => {
   let chatMessageError: ChatMessageError;
 
   // try to get the biz error
@@ -9,13 +9,13 @@ export const getMessageError = async (response: Response) => {
     const data = (await response.json()) as ErrorResponse;
     chatMessageError = {
       body: data.body,
-      message: t(`response.${data.errorType}` as any, { ns: 'error' }),
+      message: t(`response.${data.errorType}`, { ns: 'error' }),
       type: data.errorType,
     };
   } catch {
     // if not return, then it's a common error
     chatMessageError = {
-      message: t(`response.${response.status}` as any, { ns: 'error' }),
+      message: t(`response.${response.status}`, { ns: 'error' }),
       type: response.status as ErrorType,
     };
   }

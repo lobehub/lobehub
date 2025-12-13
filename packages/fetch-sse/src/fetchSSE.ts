@@ -12,9 +12,9 @@ import {
   ResponseAnimation,
   ResponseAnimationStyle,
 } from '@lobechat/types';
+import { fetchEventSource } from '@lobechat/utils/client/fetchEventSource/index';
+import { nanoid } from '@lobechat/utils/uuid';
 
-import { fetchEventSource } from '../client/fetchEventSource';
-import { nanoid } from '../uuid';
 import { getMessageError } from './parseError';
 
 type SSEFinishType = 'done' | 'error' | 'abort';

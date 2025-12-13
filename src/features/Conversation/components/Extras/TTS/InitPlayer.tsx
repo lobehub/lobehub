@@ -1,3 +1,4 @@
+import { getMessageError } from '@lobechat/fetch-sse';
 import { ChatMessageError, ChatTTS } from '@lobechat/types';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -5,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { useTTS } from '@/hooks/useTTS';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
-import { getMessageError } from '@/utils/fetch';
 
 import Player from './Player';
 

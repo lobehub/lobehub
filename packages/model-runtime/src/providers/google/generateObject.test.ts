@@ -1,4 +1,4 @@
-// @vitest-environment edge-runtime
+// @vitest-environment node
 import { Type as SchemaType } from '@google/genai';
 import { describe, expect, it, vi } from 'vitest';
 

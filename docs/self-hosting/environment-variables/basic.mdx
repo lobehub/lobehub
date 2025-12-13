@@ -127,16 +127,62 @@ For specific content, please refer to the [Feature Flags](/docs/self-hosting/adv
 ### `SSRF_ALLOW_PRIVATE_IP_ADDRESS`
 
 - Type: Optional
-- Description: Allow to connect private IP address. In a trusted environment, it can be set to true to turn off SSRF protection.
+- Description: Controls whether to allow connections to private IP addresses. Set to `1` to disable SSRF protection and allow all private IP addresses. In a trusted environment (e.g., internal network), this can be enabled to allow access to internal resources.
 - Default: `0`
 - Example: `1` or `0`
+
+<Callout type="warning">
+  **Security Notice**: Enabling this option will disable SSRF protection and allow connections to private
+  IP addresses (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.). Only enable this in
+  trusted environments where you need to access internal network resources.
+</Callout>
+
+**Use Cases**:
+
+LobeChat performs SSRF security checks in the following scenarios:
+
+1. **Image/Video URL to Base64 Conversion**: When processing media messages (e.g., vision models, multimodal models), LobeChat converts image and video URLs to base64 format. This check prevents malicious users from accessing internal network resources.
+
+   Examples:
+
+   - Image: A user sends an image message with URL `http://192.168.1.100/admin/secrets.png`
+   - Video: A user sends a video message with URL `http://10.0.0.50/internal/meeting.mp4`
+
+   Without SSRF protection, these requests could expose internal network resources.
+
+2. **Web Crawler**: When using web crawling features to fetch external content.
+
+3. **Proxy Requests**: When proxying external API requests.
+
+**Configuration Examples**:
+
+```bash
+# Scenario 1: Public deployment (recommended)
+# Block all private IP addresses for security
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=0
+
+# Scenario 2: Internal deployment
+# Allow all private IP addresses to access internal image servers
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=1
+
+# Scenario 3: Hybrid deployment (most common)
+# Block private IPs by default, but allow specific trusted internal servers
+SSRF_ALLOW_PRIVATE_IP_ADDRESS=0
+SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
+```
 
 ### `SSRF_ALLOW_IP_ADDRESS_LIST`
 
 - Type: Optional
-- Description: Allow private IP address list, multiple IP addresses are separated by commas. Only when `SSRF_ALLOW_PRIVATE_IP_ADDRESS` is `0`, it takes effect.
+- Description: Whitelist of allowed IP addresses, separated by commas. Only takes effect when `SSRF_ALLOW_PRIVATE_IP_ADDRESS` is `0`. Use this to allow specific internal IP addresses while keeping SSRF protection enabled for other private IPs.
 - Default: -
-- Example: `198.18.1.62,224.0.0.3`
+- Example: `192.168.1.100,10.0.0.50,172.16.0.10`
+
+**Common Use Cases**:
+
+- Allow access to internal image storage server: `192.168.1.100`
+- Allow access to internal API gateway: `10.0.0.50`
+- Allow access to internal documentation server: `172.16.0.10`
 
 ### `ENABLE_AUTH_PROTECTION`
 

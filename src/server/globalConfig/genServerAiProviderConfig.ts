@@ -1,9 +1,9 @@
 import { ProviderConfig } from '@lobechat/types';
-import { extractEnabledModels, transformToAiModelList } from '@lobechat/utils';
 import { AiFullModelCard, ModelProvider } from 'model-bank';
 import * as AiModels from 'model-bank';
 
 import { getLLMConfig } from '@/envs/llm';
+import { extractEnabledModels, transformToAiModelList } from '@/utils/server/parseModels';
 
 interface ProviderSpecificConfig {
   enabled?: boolean;

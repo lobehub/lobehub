@@ -1,4 +1,5 @@
 import type { ChatModelCard } from '@lobechat/types';
+import { imageUrlToBase64 } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
 import { Ollama, Tool } from 'ollama/browser';
 import { ClientOptions } from 'openai';
@@ -61,7 +62,7 @@ export class LobeOllamaAI implements LobeRuntimeAI {
       options?.signal?.addEventListener('abort', abort);
 
       const response = await this.client.chat({
-        messages: this.buildOllamaMessages(payload.messages),
+        messages: await this.buildOllamaMessages(payload.messages),
         model: payload.model,
         options: {
           frequency_penalty: payload.frequency_penalty,
@@ -169,11 +170,13 @@ export class LobeOllamaAI implements LobeRuntimeAI {
     }
   };
 
-  private buildOllamaMessages(messages: OpenAIChatMessage[]) {
-    return messages.map((message) => this.convertContentToOllamaMessage(message));
+  private async buildOllamaMessages(messages: OpenAIChatMessage[]) {
+    return Promise.all(messages.map((message) => this.convertContentToOllamaMessage(message)));
   }
 
-  private convertContentToOllamaMessage = (message: OpenAIChatMessage): OllamaMessage => {
+  private convertContentToOllamaMessage = async (
+    message: OpenAIChatMessage,
+  ): Promise<OllamaMessage> => {
     if (typeof message.content === 'string') {
       return { content: message.content, role: message.role };
     }
@@ -183,6 +186,9 @@ export class LobeOllamaAI implements LobeRuntimeAI {
       role: message.role,
     };
 
+    // Collect image processing tasks for parallel execution
+    const imagePromises: Array<Promise<string | null> | string> = [];
+
     for (const content of message.content) {
       switch (content.type) {
         case 'text': {
@@ -191,13 +197,31 @@ export class LobeOllamaAI implements LobeRuntimeAI {
           break;
         }
         case 'image_url': {
-          const { base64 } = parseDataUri(content.image_url.url);
+          const { base64, type } = parseDataUri(content.image_url.url);
+
+          // If already base64 format, use it directly
           if (base64) {
-            ollamaMessage.images ??= [];
-            ollamaMessage.images.push(base64);
+            imagePromises.push(base64);
+          }
+          // If it's a URL, add async conversion task with error handling
+          else if (type === 'url') {
+            imagePromises.push(
+              imageUrlToBase64(content.image_url.url)
+                .then((result) => result.base64)
+                .catch(() => null), // Silently ignore failed conversions
+            );
           }
           break;
         }
+      }
+    }
+
+    // Process all images in parallel and filter out failed conversions
+    if (imagePromises.length > 0) {
+      const results = await Promise.all(imagePromises);
+      const validImages = results.filter((img): img is string => img !== null);
+      if (validImages.length > 0) {
+        ollamaMessage.images = validImages;
       }
     }
 

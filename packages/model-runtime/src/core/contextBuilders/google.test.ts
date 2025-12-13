@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { Type as SchemaType } from '@google/genai';
+import * as imageToBase64Module from '@lobechat/utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
-import * as imageToBase64Module from '../../utils/imageToBase64';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   buildGoogleMessage,

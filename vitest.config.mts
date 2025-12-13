@@ -16,6 +16,8 @@ export default defineConfig({
       // TODO: after refactor the errorResponse, we can remove it
       '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
       '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
+      '@/utils/server': resolve(__dirname, './src/utils/server'),
+      '@/utils/electron': resolve(__dirname, './src/utils/electron'),
       '@/utils': resolve(__dirname, './packages/utils/src'),
       '@/types': resolve(__dirname, './packages/types/src'),
       '@/const': resolve(__dirname, './packages/const/src'),

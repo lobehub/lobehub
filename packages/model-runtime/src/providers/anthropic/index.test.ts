@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { ChatCompletionTool, ChatStreamPayload } from '@lobechat/model-runtime';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as anthropicHelpers from '../../core/contextBuilders/anthropic';
+import { ChatCompletionTool, ChatStreamPayload } from '../../types/chat';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeAnthropicAI } from './index';
 

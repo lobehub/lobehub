@@ -1,15 +1,12 @@
 // @vitest-environment node
-import {
-  AgentRuntimeErrorType,
-  ChatStreamCallbacks,
-  ChatStreamPayload,
-  LobeOpenAICompatibleRuntime,
-} from '@lobechat/model-runtime';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import { ChatStreamCallbacks, ChatStreamPayload } from '../../types/chat';
+import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
 import * as openaiHelpers from '../contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from './index';

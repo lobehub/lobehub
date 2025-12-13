@@ -47,6 +47,10 @@ export type UserMessageContentPart =
 export interface OpenAIChatMessage {
   content: string | UserMessageContentPart[];
   name?: string;
+  reasoning?: {
+    content?: string;
+    duration?: number;
+  };
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];

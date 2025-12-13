@@ -1,6 +1,27 @@
 [
   {
     "children": {
+      "fixes": ["Fix React CVE."]
+    },
+    "date": "2025-12-04",
+    "version": "1.143.2"
+  },
+  {
+    "children": {
+      "fixes": ["Deepseek interleaved thinking."]
+    },
+    "date": "2025-12-02",
+    "version": "1.143.1"
+  },
+  {
+    "children": {
+      "features": ["Support DeepSeek Interleaved thinking."]
+    },
+    "date": "2025-12-01",
+    "version": "1.143.0"
+  },
+  {
+    "children": {
       "fixes": ["OIDC error when connecting to self-host instance."]
     },
     "date": "2025-11-02",

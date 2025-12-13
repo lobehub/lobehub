@@ -1,8 +1,7 @@
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
+import { merge } from '@lobechat/utils';
 import { produce } from 'immer';
 import { AiFullModelCard, AiModelType } from 'model-bank';
-
-import { merge } from './merge';
 
 /**
  * Parse model string to add or remove models.

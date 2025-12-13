@@ -1,3 +1,4 @@
+import { MessageTextChunk } from '@lobechat/fetch-sse';
 import {
   chainPickEmoji,
   chainSummaryAgentName,
@@ -16,7 +17,6 @@ import { systemAgentSelectors } from '@/store/user/slices/settings/selectors';
 import { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
 import { MetaData } from '@/types/meta';
 import { SystemAgentItem } from '@/types/user/settings';
-import { MessageTextChunk } from '@/utils/fetch';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 

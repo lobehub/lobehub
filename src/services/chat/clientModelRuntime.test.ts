@@ -38,7 +38,7 @@ vi.stubGlobal(
   vi.fn(() => Promise.resolve(new Response(JSON.stringify({ some: 'data' })))),
 );
 
-vi.mock('@/utils/fetch', async (importOriginal) => {
+vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
   const module = await importOriginal();
 
   return { ...(module as any), getMessageError: vi.fn() };

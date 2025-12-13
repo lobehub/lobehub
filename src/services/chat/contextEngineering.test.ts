@@ -243,6 +243,10 @@ describe('contextEngineering', () => {
             type: 'text',
           },
         ],
+        reasoning: {
+          content: 'I need to calculate the answer to life, universe, and everything.',
+          signature: 'thinking_process',
+        },
         role: 'assistant',
       },
     ]);

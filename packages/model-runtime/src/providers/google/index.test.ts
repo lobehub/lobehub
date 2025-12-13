@@ -1,14 +1,11 @@
-// @vitest-environment edge-runtime
+// @vitest-environment node
 import { GenerateContentResponse, Tool } from '@google/genai';
-import { OpenAIChatMessage } from '@lobechat/model-runtime';
-import { ChatStreamPayload } from '@lobechat/types';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOBE_ERROR_KEY } from '../../core/streams';
 import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
-import * as imageToBase64Module from '../../utils/imageToBase64';
 import { LobeGoogleAI, resolveModelThinkingBudget } from './index';
 
 const provider = 'google';

@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { ChatCompletionTool } from '@lobechat/model-runtime';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ChatCompletionTool } from '../../types/chat';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeCloudflareAI } from './index';
 

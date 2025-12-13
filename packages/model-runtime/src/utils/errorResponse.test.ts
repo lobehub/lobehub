@@ -1,7 +1,7 @@
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AgentRuntimeErrorType } from '../types/error';
 import { createErrorResponse } from './errorResponse';
 
 describe('createErrorResponse', () => {

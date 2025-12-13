@@ -2,7 +2,14 @@
   "name": "ssrf-safe-fetch",
   "version": "1.0.0",
   "private": true,
-  "description": "",
+  "description": "SSRF-safe fetch implementation with browser/node conditional exports",
+  "exports": {
+    ".": {
+      "browser": "./index.browser.ts",
+      "node": "./index.ts",
+      "default": "./index.ts"
+    }
+  },
   "main": "index.ts",
   "scripts": {
     "test": "vitest run"

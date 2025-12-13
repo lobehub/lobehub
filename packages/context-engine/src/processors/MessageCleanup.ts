@@ -66,6 +66,7 @@ export class MessageCleanupProcessor extends BaseProcessor {
           content: message.content,
           role: message.role,
           ...(message.tool_calls && { tool_calls: message.tool_calls }),
+          ...(message.reasoning && { reasoning: message.reasoning }),
         };
       }
 

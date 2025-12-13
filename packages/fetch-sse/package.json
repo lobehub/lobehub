@@ -1,0 +1,29 @@
+{
+  "name": "@lobechat/fetch-sse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SSE fetch utilities with streaming support",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./parseError": {
+      "types": "./src/parseError.ts",
+      "default": "./src/parseError.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@lobechat/const": "workspace:*",
+    "@lobechat/model-runtime": "workspace:*",
+    "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "i18next": "^24.2.1"
+  }
+}

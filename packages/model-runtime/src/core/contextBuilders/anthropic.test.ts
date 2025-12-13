@@ -1,8 +1,8 @@
+import { imageUrlToBase64 } from '@lobechat/utils';
 import { OpenAI } from 'openai';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OpenAIChatMessage, UserMessageContentPart } from '../../types/chat';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   buildAnthropicBlock,
@@ -12,16 +12,22 @@ import {
 } from './anthropic';
 
 // Mock the parseDataUri function since it's an implementation detail
-vi.mock('../../utils/uriParser', () => ({
-  parseDataUri: vi.fn().mockReturnValue({
-    mimeType: 'image/jpeg',
-    base64: 'base64EncodedString',
-    type: 'base64',
-  }),
+vi.mock('../../utils/uriParser');
+vi.mock('@lobechat/utils', () => ({
+  imageUrlToBase64: vi.fn(),
 }));
-vi.mock('../../utils/imageToBase64');
 
 describe('anthropicHelpers', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // Set default mock implementation for parseDataUri
+    vi.mocked(parseDataUri).mockReturnValue({
+      mimeType: 'image/jpeg',
+      base64: 'base64EncodedString',
+      type: 'base64',
+    });
+  });
+
   describe('buildAnthropicBlock', () => {
     it('should return the content as is for text type', async () => {
       const content: UserMessageContentPart = { type: 'text', text: 'Hello!' };
@@ -52,7 +58,7 @@ describe('anthropicHelpers', () => {
         base64: null,
         type: 'url',
       });
-      vi.mocked(imageUrlToBase64).mockResolvedValue({
+      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
         base64: 'convertedBase64String',
         mimeType: 'image/jpg',
       });
@@ -82,7 +88,7 @@ describe('anthropicHelpers', () => {
         base64: null,
         type: 'url',
       });
-      vi.mocked(imageUrlToBase64).mockResolvedValue({
+      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
         base64: 'convertedBase64String',
         mimeType: 'image/png',
       });

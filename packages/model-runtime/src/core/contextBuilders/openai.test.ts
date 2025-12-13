@@ -1,7 +1,8 @@
+import { imageUrlToBase64 } from '@lobechat/utils';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   convertImageUrlToFile,
@@ -11,7 +12,9 @@ import {
 } from './openai';
 
 // 模拟依赖
-vi.mock('../../utils/imageToBase64');
+vi.mock('@lobechat/utils', () => ({
+  imageUrlToBase64: vi.fn(),
+}));
 vi.mock('../../utils/uriParser');
 
 describe('convertMessageContent', () => {
@@ -147,11 +150,71 @@ describe('convertOpenAIMessages', () => {
 
     expect(Promise.all).toHaveBeenCalledTimes(2); // 一次用于消息数组，一次用于内容数组
   });
+
+  it('should filter out reasoning field from messages', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Hello',
+        reasoning: { content: 'some reasoning', duration: 100 },
+      },
+      { role: 'user', content: 'Hi' },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      { role: 'assistant', content: 'Hello' },
+      { role: 'user', content: 'Hi' },
+    ]);
+    // Ensure reasoning field is removed
+    expect((result[0] as any).reasoning).toBeUndefined();
+  });
+
+  it('should preserve reasoning_content field from messages (for DeepSeek compatibility)', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Hello',
+        reasoning_content: 'some reasoning content',
+      },
+      { role: 'user', content: 'Hi' },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      { role: 'assistant', content: 'Hello', reasoning_content: 'some reasoning content' },
+      { role: 'user', content: 'Hi' },
+    ]);
+    // Ensure reasoning_content field is preserved
+    expect((result[0] as any).reasoning_content).toBe('some reasoning content');
+  });
+
+  it('should filter out reasoning but preserve reasoning_content field', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Hello',
+        reasoning: { content: 'some reasoning', duration: 100 },
+        reasoning_content: 'some reasoning content',
+      },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      { role: 'assistant', content: 'Hello', reasoning_content: 'some reasoning content' },
+    ]);
+    // Ensure reasoning object is removed but reasoning_content is preserved
+    expect((result[0] as any).reasoning).toBeUndefined();
+    expect((result[0] as any).reasoning_content).toBe('some reasoning content');
+  });
 });
 
 describe('convertOpenAIResponseInputs', () => {
   it('应该正确转换普通文本消息', async () => {
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
+    const messages: OpenAIChatMessage[] = [
       { role: 'user', content: 'Hello' },
       { role: 'assistant', content: 'Hi there!' },
     ];
@@ -165,7 +228,7 @@ describe('convertOpenAIResponseInputs', () => {
   });
 
   it('应该正确转换带有工具调用的消息', async () => {
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
+    const messages: OpenAIChatMessage[] = [
       {
         role: 'assistant',
         content: '',
@@ -195,7 +258,7 @@ describe('convertOpenAIResponseInputs', () => {
   });
 
   it('应该正确转换工具响应消息', async () => {
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
+    const messages: OpenAIChatMessage[] = [
       {
         role: 'tool',
         content: 'Function result',
@@ -215,7 +278,7 @@ describe('convertOpenAIResponseInputs', () => {
   });
 
   it('应该正确转换包含图片的消息', async () => {
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
+    const messages: OpenAIChatMessage[] = [
       {
         role: 'user',
         content: [
@@ -247,7 +310,7 @@ describe('convertOpenAIResponseInputs', () => {
   });
 
   it('应该正确处理混合类型的消息序列', async () => {
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
+    const messages: OpenAIChatMessage[] = [
       { role: 'user', content: 'I need help with a function' },
       {
         role: 'assistant',
@@ -285,6 +348,29 @@ describe('convertOpenAIResponseInputs', () => {
         output: '{"result": "success"}',
         type: 'function_call_output',
       },
+    ]);
+  });
+
+  it('should extract reasoning.content into a separate reasoning item', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { content: 'system prompts', role: 'system' },
+      { content: '你好', role: 'user' },
+      {
+        content: 'hello',
+        role: 'assistant',
+        reasoning: { content: 'reasoning content', duration: 2706 },
+      },
+      { content: '杭州天气如何', role: 'user' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      { content: '你好', role: 'user' },
+      { summary: [{ text: 'reasoning content', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'hello', role: 'assistant' },
+      { content: '杭州天气如何', role: 'user' },
     ]);
   });
 });

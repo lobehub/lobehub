@@ -1,14 +1,14 @@
 import { ErrorResponse } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getMessageError } from '../parseError';
 
-// 模拟 i18next
+// Mock i18next
 vi.mock('i18next', () => ({
   t: vi.fn((key) => `translated_${key}`),
 }));
 
-// 模拟 Response
+// Mock Response
 const createMockResponse = (body: any, ok: boolean, status: number = 200) => ({
   ok,
   status,
@@ -38,9 +38,12 @@ const createMockResponse = (body: any, ok: boolean, status: number = 200) => ({
   },
 });
 
-// 在每次测试后清理所有模拟
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 describe('getMessageError', () => {

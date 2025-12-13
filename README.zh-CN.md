@@ -374,14 +374,14 @@ LobeChat 的插件生态系统是其核心功能的重要扩展，它极大地�
 
 <!-- PLUGIN LIST -->
 
-| 最近新增                                                                                                                   | 描述                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [购物工具](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2025-10-27**</sup>       | 在 eBay 和 AliExpress 上搜索产品，查找 eBay 活动和优惠券。获取快速示例。<br/>`购物` `e-bay` `ali-express` `优惠券` |
-| [PortfolioMeta](https://lobechat.com/discover/plugin/StockData)<br/><sup>By **portfoliometa** on **2025-09-27**</sup>      | 分析股票并获取全面的实时投资数据和分析。<br/>`股票`                                                                |
-| [网页](https://lobechat.com/discover/plugin/web)<br/><sup>By **Proghit** on **2025-01-24**</sup>                           | 智能网页搜索，读取和分析页面，以提供来自 Google 结果的全面答案。<br/>`网页` `搜索`                                 |
-| [必应网页搜索](https://lobechat.com/discover/plugin/Bingsearch-identifier)<br/><sup>By **FineHow** on **2024-12-22**</sup> | 通过 BingApi 搜索互联网上的信息<br/>`bingsearch`                                                                   |
+| 最近新增                                                                                                              | 描述                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [PortfolioMeta](https://lobechat.com/discover/plugin/StockData)<br/><sup>By **portfoliometa** on **2025-11-28**</sup> | 分析股票并获取全面的实时投资数据和分析。<br/>`股票`                                                                |
+| [SEO](https://lobechat.com/discover/plugin/SEO)<br/><sup>By **orrenprunckun** on **2025-11-14**</sup>                 | 输入任何 URL 和关键词，获取页面 SEO 分析和见解！<br/>`seo`                                                         |
+| [购物工具](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2025-10-27**</sup>  | 在 eBay 和 AliExpress 上搜索产品，查找 eBay 活动和优惠券。获取快速示例。<br/>`购物` `e-bay` `ali-express` `优惠券` |
+| [网页](https://lobechat.com/discover/plugin/web)<br/><sup>By **Proghit** on **2025-01-24**</sup>                      | 智能网页搜索，读取和分析页面，以提供来自 Google 结果的全面答案。<br/>`网页` `搜索`                                 |
 
-> 📊 Total plugins: [<kbd>**42**</kbd>](https://lobechat.com/discover/plugins)
+> 📊 Total plugins: [<kbd>**41**</kbd>](https://lobechat.com/discover/plugins)
 
  <!-- PLUGIN LIST -->
 

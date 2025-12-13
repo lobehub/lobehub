@@ -1,5 +1,6 @@
-import { ChatMethodOptions } from '@lobechat/model-runtime';
 import debug from 'debug';
+
+import { ChatMethodOptions } from '../types/chat';
 
 const log = debug('model-runtime:helpers:mergeChatMethodOptions');
 

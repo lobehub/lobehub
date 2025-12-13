@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { imageUrlToBase64 } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
 import { Ollama } from 'ollama/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,13 @@ import * as debugStreamModule from '../../utils/debugStream';
 import { LobeOllamaAI, params } from './index';
 
 vi.mock('ollama/browser');
+vi.mock('@lobechat/utils', async () => {
+  const actual = await vi.importActual('@lobechat/utils');
+  return {
+    ...actual,
+    imageUrlToBase64: vi.fn(),
+  };
+});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -462,13 +470,13 @@ describe('LobeOllamaAI', () => {
   });
 
   describe('buildOllamaMessages', () => {
-    it('should convert OpenAIChatMessage array to OllamaMessage array', () => {
+    it('should convert OpenAIChatMessage array to OllamaMessage array', async () => {
       const messages = [
         { content: 'Hello', role: 'user' },
         { content: 'Hi there!', role: 'assistant' },
       ];
 
-      const ollamaMessages = ollamaAI['buildOllamaMessages'](messages as any);
+      const ollamaMessages = await ollamaAI['buildOllamaMessages'](messages as any);
 
       expect(ollamaMessages).toEqual([
         { content: 'Hello', role: 'user' },
@@ -476,15 +484,15 @@ describe('LobeOllamaAI', () => {
       ]);
     });
 
-    it('should handle empty message array', () => {
+    it('should handle empty message array', async () => {
       const messages: any[] = [];
 
-      const ollamaMessages = ollamaAI['buildOllamaMessages'](messages);
+      const ollamaMessages = await ollamaAI['buildOllamaMessages'](messages);
 
       expect(ollamaMessages).toEqual([]);
     });
 
-    it('should handle multiple messages with different roles', () => {
+    it('should handle multiple messages with different roles', async () => {
       const messages = [
         { content: 'Hello', role: 'system' },
         { content: 'Hi', role: 'user' },
@@ -492,7 +500,7 @@ describe('LobeOllamaAI', () => {
         { content: 'How are you?', role: 'user' },
       ];
 
-      const ollamaMessages = ollamaAI['buildOllamaMessages'](messages as any);
+      const ollamaMessages = await ollamaAI['buildOllamaMessages'](messages as any);
 
       expect(ollamaMessages).toHaveLength(4);
       expect(ollamaMessages[0].role).toBe('system');
@@ -503,26 +511,26 @@ describe('LobeOllamaAI', () => {
   });
 
   describe('convertContentToOllamaMessage', () => {
-    it('should convert string content to OllamaMessage', () => {
+    it('should convert string content to OllamaMessage', async () => {
       const message = { content: 'Hello', role: 'user' };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({ content: 'Hello', role: 'user' });
     });
 
-    it('should convert text content to OllamaMessage', () => {
+    it('should convert text content to OllamaMessage', async () => {
       const message = {
         content: [{ type: 'text', text: 'Hello' }],
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({ content: 'Hello', role: 'user' });
     });
 
-    it('should convert image_url content to OllamaMessage with images', () => {
+    it('should convert image_url content to OllamaMessage with images', async () => {
       const message = {
         content: [
           {
@@ -533,7 +541,7 @@ describe('LobeOllamaAI', () => {
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: '',
@@ -542,7 +550,7 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should ignore invalid image_url content', () => {
+    it('should ignore invalid image_url content', async () => {
       const message = {
         content: [
           {
@@ -553,7 +561,7 @@ describe('LobeOllamaAI', () => {
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: '',
@@ -561,7 +569,7 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle mixed text and image content', () => {
+    it('should handle mixed text and image content', async () => {
       const message = {
         content: [
           { type: 'text', text: 'First text' },
@@ -578,7 +586,7 @@ describe('LobeOllamaAI', () => {
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: 'Second text', // Should keep latest text
@@ -587,13 +595,13 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle content with empty text', () => {
+    it('should handle content with empty text', async () => {
       const message = {
         content: [{ type: 'text', text: '' }],
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: '',
@@ -601,7 +609,7 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle content with only images (no text)', () => {
+    it('should handle content with only images (no text)', async () => {
       const message = {
         content: [
           {
@@ -612,7 +620,7 @@ describe('LobeOllamaAI', () => {
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: '',
@@ -621,7 +629,7 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle multiple images without text', () => {
+    it('should handle multiple images without text', async () => {
       const message = {
         content: [
           {
@@ -640,7 +648,7 @@ describe('LobeOllamaAI', () => {
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: '',
@@ -649,7 +657,10 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should ignore images with invalid data URIs', () => {
+    it('should ignore images with invalid data URIs', async () => {
+      // Mock imageUrlToBase64 to simulate conversion failure for external URLs
+      vi.mocked(imageUrlToBase64).mockRejectedValue(new Error('Network error'));
+
       const message = {
         content: [
           { type: 'text', text: 'Hello' },
@@ -665,7 +676,7 @@ describe('LobeOllamaAI', () => {
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: 'Hello',
@@ -674,7 +685,7 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle complex interleaved content', () => {
+    it('should handle complex interleaved content', async () => {
       const message = {
         content: [
           { type: 'text', text: 'Text 1' },
@@ -692,7 +703,7 @@ describe('LobeOllamaAI', () => {
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: 'Text 3', // Should keep latest text
@@ -701,7 +712,7 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle assistant role with images', () => {
+    it('should handle assistant role with images', async () => {
       const message = {
         content: [
           { type: 'text', text: 'Here is the image' },
@@ -713,7 +724,7 @@ describe('LobeOllamaAI', () => {
         role: 'assistant',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: 'Here is the image',
@@ -722,13 +733,13 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle system role with text', () => {
+    it('should handle system role with text', async () => {
       const message = {
         content: [{ type: 'text', text: 'You are a helpful assistant' }],
         role: 'system',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: 'You are a helpful assistant',
@@ -736,13 +747,13 @@ describe('LobeOllamaAI', () => {
       });
     });
 
-    it('should handle empty content array', () => {
+    it('should handle empty content array', async () => {
       const message = {
         content: [],
         role: 'user',
       };
 
-      const ollamaMessage = ollamaAI['convertContentToOllamaMessage'](message as any);
+      const ollamaMessage = await ollamaAI['convertContentToOllamaMessage'](message as any);
 
       expect(ollamaMessage).toEqual({
         content: '',

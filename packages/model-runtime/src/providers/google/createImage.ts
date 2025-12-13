@@ -1,11 +1,11 @@
 import { Content, GenerateContentConfig, GoogleGenAI, Part } from '@google/genai';
+import { imageUrlToBase64 } from '@lobechat/utils';
 
 import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
 import { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { parseDataUri } from '../../utils/uriParser';
 
 // Maximum number of images allowed for processing
