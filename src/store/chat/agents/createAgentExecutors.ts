@@ -50,6 +50,7 @@ export const createAgentExecutors = (context: {
   skipCreateFirstMessage?: boolean;
 }) => {
   let shouldSkipCreateMessage = context.skipCreateFirstMessage;
+  const toolCallResults = new Map<string, string>();
 
   /**
    * Get operation context via closure
@@ -150,6 +151,16 @@ export const createAgentExecutors = (context: {
       // - Error handling
       // Use messages from state (already contains full conversation history)
       const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
+
+      // Fill empty tool_call content from stored results
+      for (const message of messages) {
+        if (message.tool_call_id && message.content === '') {
+          const storedContent = toolCallResults.get(message.tool_call_id);
+          if (storedContent) {
+            message.content = storedContent;
+          }
+        }
+      }
       const {
         isFunctionCall,
         content,
@@ -527,6 +538,7 @@ export const createAgentExecutors = (context: {
           }
         }
 
+        toolCallResults.set(chatToolPayload.id, result);
         events.push({ id: chatToolPayload.id, result, type: 'tool_result' });
 
         // Get latest messages from store (already updated by internal_invokeDifferentTypePlugin)
