@@ -1,5 +1,5 @@
 import { MemorySourceType } from '@lobechat/types';
-import { createWorkflow, serveMany } from '@upstash/workflow/nextjs';
+import { serve } from '@upstash/workflow/nextjs';
 
 import {
   MemoryExtractionExecutor,
@@ -7,12 +7,8 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-export const { POST } = serveMany({
-  'memory:user-memory:extract:users:topics:extract-layers:other-layers': createWorkflow<
-    MemoryExtractionPayloadInput,
-    { processed: number; results: any[] }
-  >(async (context) => {
-    const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
+export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
+  const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
     if (!params.userIds.length) {
       return { message: 'No user id provided for topic batch.', processed: 0, results: [] };
     }
@@ -54,5 +50,4 @@ export const { POST } = serveMany({
     }
 
     return { processed: results.length, results };
-  }),
 });

@@ -4,6 +4,7 @@ import { createWorkflow } from '@upstash/workflow/nextjs';
 import {
   MemoryExtractionExecutor,
   type MemoryExtractionPayloadInput,
+  TOPIC_WORKFLOW_NAMES,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
@@ -180,3 +181,8 @@ export const orchestratorWorkflow = createWorkflow<
     processedIdentity: identityIndex - (params.identityCursor ?? 0),
   };
 });
+
+// Explicitly set workflow ids to ensure context.invoke works
+cepWorkflow.workflowId = TOPIC_WORKFLOW_NAMES.cep;
+identityWorkflow.workflowId = TOPIC_WORKFLOW_NAMES.identity;
+orchestratorWorkflow.workflowId = TOPIC_WORKFLOW_NAMES.orchestrator;
