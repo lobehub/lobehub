@@ -289,7 +289,7 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
         break;
       }
       case 2: {
-        await ipc.system.openFullDiskAccessSettings();
+        await ipc.system.openFullDiskAccessSettings({ autoAdd: true });
         break;
       }
       case 3: {

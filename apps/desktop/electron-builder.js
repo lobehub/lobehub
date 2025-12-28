@@ -165,12 +165,16 @@ const config = {
           CFBundleURLSchemes: [protocolScheme],
         },
       ],
+      NSAppleEventsUsageDescription:
+        'Application needs to control System Settings to help you grant Full Disk Access automatically.',
       NSCameraUsageDescription: "Application requests access to the device's camera.",
       NSDocumentsFolderUsageDescription:
         "Application requests access to the user's Documents folder.",
       NSDownloadsFolderUsageDescription:
         "Application requests access to the user's Downloads folder.",
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+      NSScreenCaptureUsageDescription:
+        'Application requests access to record and analyze screen content for AI assistance.',
     },
     gatekeeperAssess: false,
     hardenedRuntime: hasAppleCertificate,

@@ -1,5 +1,7 @@
 import { createStaticStyles } from 'antd-style';
 
+import { isDesktop } from '@/const/version';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   // 内层容器
   innerContainer: css`
@@ -22,6 +24,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block-start: var(--container-padding-top, 8px);
     padding-inline-start: var(--container-padding-left, 8px);
 
-    background: ${cssVar.colorBgLayout};
+    background: ${isDesktop ? 'transparent' : cssVar.colorBgLayout};
   `,
 }));

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import React, { useCallback, useEffect, useState } from 'react';
 
 import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
+import { electronSystemService } from '@/services/electron/system';
 import { electronStylish } from '@/styles/electron';
 
 import { Navigation } from './Navigation';
@@ -75,7 +76,14 @@ interface OnboardingContainerProps {
   onComplete: () => void;
 }
 
-const screens = [Screen1, Screen2, Screen3, Screen4, Screen5];
+const getIsMacFromNavigator = () => {
+  if (typeof navigator === 'undefined') return true;
+  // Electron (and most browsers) expose "MacIntel" for macOS.
+  return /Mac/i.test(navigator.platform);
+};
+
+const macScreens = [Screen1, Screen2, Screen3, Screen4, Screen5];
+const nonMacScreens = [Screen1, Screen2, Screen4, Screen5];
 
 // 统一的屏幕配置接口
 interface ScreenConfig {
@@ -100,20 +108,24 @@ interface ScreenConfig {
 }
 
 export const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ onComplete }) => {
-  // 从 URL hash 获取初始屏幕索引
-  const getInitialStep = () => {
-    const hash = window.location.hash;
-    const match = hash.match(/^#(\d+)$/);
-    if (match) {
-      const step = parseInt(match[1], 10) - 1; // URL 使用 1-4，内部使用 0-3
-      if (step >= 0 && step < screens.length) {
-        return step;
-      }
-    }
-    return 0; // 默认第一屏
-  };
+  const [isMac, setIsMac] = useState(getIsMacFromNavigator);
+  const screens = isMac ? macScreens : nonMacScreens;
 
-  const [currentStep, setCurrentStep] = useState(getInitialStep());
+  // 从 URL hash 获取初始屏幕索引
+  const getInitialStep = useCallback(
+    (totalSteps: number) => {
+      const hash = window.location.hash;
+      const match = hash.match(/^#(\d+)$/);
+      if (match) {
+        const step = parseInt(match[1], 10) - 1; // URL 使用 1-based，内部使用 0-based
+        if (step >= 0 && step < totalSteps) return step;
+      }
+      return 0; // 默认第一屏
+    },
+    [],
+  );
+
+  const [currentStep, setCurrentStep] = useState(() => getInitialStep(screens.length));
   const [screenConfig, setScreenConfig] = useState<ScreenConfig>({
     background: undefined,
     navigation: {},
@@ -122,6 +134,29 @@ export const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ onComp
   const [previousStep, setPreviousStep] = useState(currentStep);
   const totalSteps = screens.length;
 
+  // 检测平台：非 macOS 直接跳过 Screen3（权限页）
+  useEffect(() => {
+    let mounted = true;
+    const detectPlatform = async () => {
+      try {
+        const state = await electronSystemService.getAppState();
+        if (!mounted) return;
+        setIsMac(state.platform === 'darwin');
+      } catch {
+        // Fallback: keep navigator-based decision
+      }
+    };
+    void detectPlatform();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // 当总步数改变时（例如非 macOS 过滤掉 Screen3），避免当前 step 越界
+  useEffect(() => {
+    setCurrentStep((step) => Math.min(step, Math.max(0, totalSteps - 1)));
+  }, [totalSteps]);
+
   // 监听 hash 变化
   useEffect(() => {
     const handleHashChange = () => {
@@ -129,7 +164,7 @@ export const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ onComp
       const match = hash.match(/^#(\d+)$/);
       if (match) {
         const step = parseInt(match[1], 10) - 1;
-        if (step >= 0 && step < screens.length && step !== currentStep) {
+        if (step >= 0 && step < totalSteps && step !== currentStep) {
           setCurrentStep(step);
         }
       }
@@ -137,7 +172,7 @@ export const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ onComp
 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [currentStep]);
+  }, [currentStep, totalSteps]);
 
   // 当 currentStep 改变时的处理
   useEffect(() => {
