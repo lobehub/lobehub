@@ -9,10 +9,12 @@
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
+  "dependencies": {
+    "lexical": "^0.39.0"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "@lobehub/editor": "^3",
-    "lexical": "^0.39.0"
+    "@lobehub/editor": "^3"
   },
   "peerDependencies": {
     "@lobehub/editor": "^3",

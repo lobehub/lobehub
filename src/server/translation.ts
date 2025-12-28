@@ -1,5 +1,8 @@
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, type NS, normalizeLocale } from '@/locales/resources';
+import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
+
+import { loadI18nNamespaceModuleWithFallback } from '../utils/i18n/loadI18nNamespaceModule';
 
 export const getLocale = async (hl?: string): Promise<Locales> => {
   if (hl) return normalizeLocale(hl) as Locales;
@@ -14,21 +17,19 @@ export const translation = async (ns: NS = 'common', hl: string) => {
     // Keep the same fallback rule as `src/locales/create.ts`:
     // - DEFAULT_LANG loads from `src/locales/default`
     // - other languages load from `locales/<lng>/*.json`, and fallback to default if missing
-    if (lng === DEFAULT_LANG) {
-      return import(`@/locales/default/${ns}`).then((mod) => mod.default);
-    }
-
-    // Try locale-specific JSON file, fallback to default if it fails
-    try {
-      return await import(`@/../locales/${normalizeLocale(lng)}/${ns}.json`);
-    } catch {
-      console.warn(`Translation file for ${lng}/${ns} not found, falling back to default`);
-      return import(`@/locales/default/${ns}`);
-    }
+    return loadI18nNamespaceModuleWithFallback({
+      defaultLang: DEFAULT_LANG,
+      lng,
+      normalizeLocale,
+      ns,
+      onFallback: () => {
+        console.warn(`Translation file for ${lng}/${ns} not found, falling back to default`);
+      },
+    });
   };
 
   try {
-    i18ns = await loadTranslations();
+    i18ns = unwrapESMModule(await loadTranslations());
   } catch (e) {
     console.error('Error while reading translation file', e);
   }
