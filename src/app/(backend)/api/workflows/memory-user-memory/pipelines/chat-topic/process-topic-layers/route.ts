@@ -31,6 +31,8 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
     }[] = [];
 
     for (const topicId of params.topicIds) {
+      console.log(`[chat-topic][process-topic-layers] Processing topic ${topicId} for user ${userId} with layers:`, params.layers);
+
       const extracted = await context.run(
         `memory:user-memory:extract:users:${userId}:topics:${topicId}:extract-topic-other-layers`,
         () =>

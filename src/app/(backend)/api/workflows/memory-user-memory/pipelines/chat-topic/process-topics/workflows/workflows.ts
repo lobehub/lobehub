@@ -62,6 +62,8 @@ export const createLayerWorkflow = (allowedLayers: LayersEnum[]) =>
       const results: ExtractionResult[] = [];
 
       for (const topicId of params.topicIds) {
+        console.log(`[chat-topic][layer] ${allowedLayers} processor processing topic ${topicId} for user ${userId} with layers:`, layers);
+
         const extracted = await context.run(
           `memory:user-memory:extract:users:${userId}:topics:${topicId}:extract-topic-${layers.join(
             '-',
@@ -78,6 +80,8 @@ export const createLayerWorkflow = (allowedLayers: LayersEnum[]) =>
               userId,
             }),
         );
+
+        console.log(`[chat-topic][layer] ${allowedLayers} processor finished topic ${topicId} for user ${userId}:`, extracted);
 
         results.push({ ...extracted, topicId, userId });
       }
@@ -152,7 +156,15 @@ export const orchestratorWorkflow = createWorkflow<
     });
 
   while (cepIndex < topicIds.length || identityIndex < topicIds.length) {
+    console.log('[chat-topic][orchestrator] Orchestrator progress', {
+      cepIndex,
+      identityIndex,
+      totalTopics: topicIds.length,
+    });
+
     if (cepIndex < topicIds.length) {
+      console.log('[chat-topic][orchestrator] Invoking CEP batch', { cepIndex });
+
       const cepBatch = topicIds.slice(cepIndex, cepIndex + CEP_PARALLEL_BATCH_SIZE);
       const tasks: Promise<any>[] = [invokeCep(cepBatch, cepIndex)];
 
@@ -162,15 +174,25 @@ export const orchestratorWorkflow = createWorkflow<
       }
 
       await Promise.all(tasks);
+      console.log('[chat-topic][orchestrator] Finished CEP batch', { cepIndex });
 
       cepIndex += cepBatch.length;
       if (shouldRunIdentity) {
         identityIndex += 1;
       }
     } else if (identityIndex < topicIds.length) {
+      console.log('[chat-topic][orchestrator] Invoking remaining identity extraction', {
+        identityIndex,
+        topicId: topicIds[identityIndex],
+      });
+
       await invokeIdentity(topicIds[identityIndex], identityIndex);
+
+      console.log('[chat-topic][orchestrator] Finished identity extraction', { identityIndex });
       identityIndex += 1;
     } else {
+      console.warn('[chat-topic][orchestrator] Unexpected state in orchestrator workflow');
+
       break;
     }
   }
