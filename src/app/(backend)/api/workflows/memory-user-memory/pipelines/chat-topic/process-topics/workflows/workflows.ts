@@ -4,7 +4,6 @@ import { createWorkflow } from '@upstash/workflow/nextjs';
 import {
   MemoryExtractionExecutor,
   type MemoryExtractionPayloadInput,
-  TOPIC_WORKFLOW_NAMES,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
@@ -31,6 +30,10 @@ const intersectLayers = (requested: LayersEnum[], allowed: LayersEnum[]) => {
 export const createLayerWorkflow = (allowedLayers: LayersEnum[]) =>
   createWorkflow<MemoryExtractionPayloadInput, { processed: number; results: ExtractionResult[] }>(
     async (context) => {
+      console.log('[chat-topic][layer] Starting layer processing workflow', {
+        allowedLayers,
+      });
+
       const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
       if (!params.userIds.length) {
         return { message: 'No user id provided for topic batch.', processed: 0, results: [] };
@@ -93,6 +96,8 @@ export const orchestratorWorkflow = createWorkflow<
     processedIdentity: number;
   }
 >(async (context) => {
+  console.log('[chat-topic][orchestrator] Starting orchestrator workflow');
+
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
   if (!params.userIds.length) {
     return {
@@ -175,8 +180,3 @@ export const orchestratorWorkflow = createWorkflow<
     processedIdentity: identityIndex - (params.identityCursor ?? 0),
   };
 });
-
-// Explicitly set workflow ids to keep context.invoke working even before serveMany assigns them
-cepWorkflow.workflowId = TOPIC_WORKFLOW_NAMES.cep;
-identityWorkflow.workflowId = TOPIC_WORKFLOW_NAMES.identity;
-orchestratorWorkflow.workflowId = TOPIC_WORKFLOW_NAMES.orchestrator;

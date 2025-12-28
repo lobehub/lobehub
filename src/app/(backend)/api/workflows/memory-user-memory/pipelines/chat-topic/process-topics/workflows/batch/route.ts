@@ -10,9 +10,20 @@ import { orchestratorWorkflow } from '../workflows';
 export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
   const payload = normalizeMemoryExtractionPayload(context.requestPayload || {});
 
-  await context.invoke('memory:user-memory:extract:topics:batch', {
+  console.log('[chat-topic][batch] Starting batch topic processing workflow', {
+    topicIds: payload.topicIds,
+    userIds: payload.userIds,
+  });
+
+  const { body, isCanceled, isFailed } = await context.invoke('memory:user-memory:extract:topics:batch', {
     body: context.requestPayload,
     workflow: orchestratorWorkflow,
+  });
+
+  console.log('[chat-topic][batch] Batch topic processing workflow invoked', {
+    body,
+    isCanceled,
+    isFailed,
   });
 
   return {
