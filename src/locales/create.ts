@@ -18,10 +18,6 @@ export const createI18nNext = (lang?: string) => {
     .use(LanguageDetector)
     .use(
       resourcesToBackend(async (lng: string, ns: string) => {
-        if (ns === 'models' || ns === 'providers') {
-          return import(`@/../locales/${normalizeLocale(lng)}/${ns}.json`);
-        }
-
         if (lng === DEFAULT_LANG) {
           return import(`./default/${ns}`);
         }
