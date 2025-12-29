@@ -45,7 +45,9 @@ export class DesktopLocalFileImpl implements FileServiceImpl {
   }
 
   async deleteFile(key: string): Promise<any> {
-    return await this.deleteFiles([key]);
+    // Handle legacy data compatibility - extract key from URL if needed
+    const actualKey = extractKeyFromUrlOrReturnOriginal(key, this.getKeyFromFullUrl.bind(this));
+    return await this.deleteFiles([actualKey]);
   }
 
   /**
@@ -55,8 +57,13 @@ export class DesktopLocalFileImpl implements FileServiceImpl {
     try {
       if (!keys || keys.length === 0) return { success: true };
 
+      // Handle legacy data compatibility - extract keys from URLs if needed
+      const actualKeys = keys.map((key) =>
+        extractKeyFromUrlOrReturnOriginal(key, this.getKeyFromFullUrl.bind(this)),
+      );
+      
       // Ensure all paths are valid desktop:// paths
-      const invalidKeys = keys.filter((key) => !key.startsWith('desktop://'));
+      const invalidKeys = actualKeys.filter((key) => !key.startsWith('desktop://'));
       if (invalidKeys.length > 0) {
         console.error('Invalid desktop file paths:', invalidKeys);
         return {
@@ -66,7 +73,7 @@ export class DesktopLocalFileImpl implements FileServiceImpl {
       }
 
       // Use electronIpcClient's dedicated method
-      return await electronIpcClient.deleteFiles(keys);
+      return await electronIpcClient.deleteFiles(actualKeys);
     } catch (error) {
       console.error('Failed to delete files:', error);
       return {

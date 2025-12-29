@@ -1,7 +1,7 @@
 import { DBMessageItem, TopicRankItem } from '@lobechat/types';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
-import { TopicItem, messages, topics } from '../schemas';
+import { TopicItem, messages, messagesFiles, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
@@ -286,6 +286,30 @@ export class TopicModel {
   };
 
   // **************** Delete *************** //
+
+  /**
+   * Get all file IDs associated with a topic
+   */
+  getTopicFileIds = async (topicId: string): Promise<string[]> => {
+    // 获取该话题下所有消息的ID
+    const topicMessages = await this.db
+      .select({ messageId: messages.id })
+      .from(messages)
+      .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)));
+
+    if (topicMessages.length === 0) return [];
+
+    const messageIds = topicMessages.map((m) => m.messageId);
+
+    // 获取这些消息关联的文件ID
+    const fileIds = await this.db
+      .select({ fileId: messagesFiles.fileId })
+      .from(messagesFiles)
+      .where(and(inArray(messagesFiles.messageId, messageIds), eq(messagesFiles.userId, this.userId)))
+      .groupBy(messagesFiles.fileId);
+
+    return fileIds.map((f) => f.fileId);
+  };
 
   /**
    * Delete a session, also delete all messages and topics associated with it.

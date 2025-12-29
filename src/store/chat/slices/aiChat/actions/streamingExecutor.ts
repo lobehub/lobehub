@@ -287,8 +287,9 @@ export const streamingExecutor: StateCreator<
     // Multimodal content parts
     let contentParts: MessageContentPart[] = [];
     let reasoningParts: MessageContentPart[] = [];
-    const contentImageUploads: Map<number, Promise<string>> = new Map();
-    const reasoningImageUploads: Map<number, Promise<string>> = new Map();
+    // Map to store content_part image uploads with file info (id, url) for messagesFiles association
+    const contentImageUploads: Map<number, Promise<{ id?: string; url: string }>> = new Map();
+    const reasoningImageUploads: Map<number, Promise<{ id?: string; url: string }>> = new Map();
 
     // Throttle tool_calls updates to prevent excessive re-renders (max once per 300ms)
     const throttledUpdateToolCalls = throttle(
@@ -365,13 +366,27 @@ export const streamingExecutor: StateCreator<
           }
         }
 
-        // Wait for all multimodal image uploads to complete
-        // Note: Arrays are already updated in-place when uploads complete
-        // Use Promise.allSettled to continue even if some uploads fail
-        await Promise.allSettled([
+        // Wait for all multimodal image uploads to complete and collect file info
+        // This ensures content_part and reasoning_part images are associated in messagesFiles
+        const multimodalUploadResults = await Promise.allSettled([
           ...Array.from(contentImageUploads.values()),
           ...Array.from(reasoningImageUploads.values()),
         ]);
+
+        // Collect file info from multimodal uploads for messagesFiles association
+        for (const result of multimodalUploadResults) {
+          if (result.status === 'fulfilled' && result.value.id && result.value.url) {
+            // Check if this file is not already in finalImages
+            const alreadyExists = finalImages.some((img) => img.id === result.value.id);
+            if (!alreadyExists) {
+              finalImages.push({
+                id: result.value.id,
+                url: result.value.url,
+                alt: result.value.id, // Use file ID as alt text
+              });
+            }
+          }
+        }
 
         let parsedToolCalls = toolCalls;
         if (parsedToolCalls && parsedToolCalls.length > 0) {
@@ -617,7 +632,7 @@ export const streamingExecutor: StateCreator<
               const newPart: MessageContentPart = { type: 'image', image: tempImage };
               reasoningParts = [...reasoningParts, newPart];
 
-              // Start upload task and update array when done
+              // Start upload task and update array when done, returning file info for messagesFiles
               const uploadTask = getFileStoreState()
                 .uploadBase64FileWithProgress(tempImage)
                 .then((file) => {
@@ -626,11 +641,12 @@ export const streamingExecutor: StateCreator<
                   const updatedParts = [...reasoningParts];
                   updatedParts[partIndex] = { type: 'image', image: url };
                   reasoningParts = updatedParts;
-                  return url;
+                  // Return file info for messagesFiles association
+                  return { id: file?.id, url };
                 })
                 .catch((error) => {
                   console.error('[reasoning_part] Image upload failed:', error);
-                  return tempImage;
+                  return { url: tempImage };
                 });
 
               reasoningImageUploads.set(partIndex, uploadTask);
@@ -689,7 +705,7 @@ export const streamingExecutor: StateCreator<
               };
               contentParts = [...contentParts, newPart];
 
-              // Start upload task and update array when done
+              // Start upload task and update array when done, returning file info for messagesFiles
               const uploadTask = getFileStoreState()
                 .uploadBase64FileWithProgress(tempImage)
                 .then((file) => {
@@ -701,11 +717,12 @@ export const streamingExecutor: StateCreator<
                     image: url,
                   };
                   contentParts = updatedParts;
-                  return url;
+                  // Return file info for messagesFiles association
+                  return { id: file?.id, url };
                 })
                 .catch((error) => {
                   console.error('[content_part] Image upload failed:', error);
-                  return tempImage;
+                  return { url: tempImage };
                 });
 
               contentImageUploads.set(partIndex, uploadTask);

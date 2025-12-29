@@ -4,6 +4,7 @@ export default {
     confirmRemoveAll: '即将删除全部话题，删除后将不可恢复，请谨慎操作。',
     confirmRemoveTopic: '即将删除该话题，删除后将不可恢复，请谨慎操作。',
     confirmRemoveUnstarred: '即将删除未收藏话题，删除后将不可恢复，请谨慎操作。',
+    deleteTopicFiles: '同时删除话题中的文件',
     duplicate: '创建副本',
     export: '导出话题',
     openInNewWindow: '单独打开页面',

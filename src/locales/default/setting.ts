@@ -655,6 +655,10 @@ export default {
       },
       title: '高级操作',
     },
+    deleteTopicFiles: {
+      desc: '启用后，删除话题时将同时删除该话题中的所有文件（不包括被其他话题引用的文件）',
+      title: '删除话题时一并删除文件',
+    },
     desc: '当前浏览器中的存储用量',
     embeddings: {
       used: '向量存储',

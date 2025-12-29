@@ -17,6 +17,7 @@ describe('settingsSelectors', () => {
 
       expect(result).toEqual({
         animationMode: 'agile',
+        deleteTopicFiles: false,
         fontSize: 12,
         highlighterTheme: 'lobe-theme',
         mermaidTheme: 'lobe-theme',

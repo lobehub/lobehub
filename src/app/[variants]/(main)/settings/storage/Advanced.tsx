@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Form, type FormGroupItemType, Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { App, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { useCallback } from 'react';
@@ -33,7 +33,10 @@ const AdvancedActions = () => {
   const [removeAllFiles] = useFileStore((s) => [s.removeAllFiles]);
   const removeAllPlugins = useToolStore((s) => s.removeAllPlugins);
   const settings = useUserStore(settingsSelectors.currentSettings, isEqual);
-  const [resetSettings] = useUserStore((s) => [s.resetSettings]);
+  const [resetSettings, updateGeneralConfig] = useUserStore((s) => [
+    s.resetSettings,
+    s.updateGeneralConfig,
+  ]);
 
   const handleClear = useCallback(() => {
     modal.confirm({
@@ -70,6 +73,20 @@ const AdvancedActions = () => {
 
   const system: FormGroupItemType = {
     children: [
+      {
+        children: (
+          <Switch
+            checked={settings.general?.deleteTopicFiles || false}
+            onChange={(checked) => {
+              updateGeneralConfig({ deleteTopicFiles: checked });
+            }}
+          />
+        ),
+        desc: t('storage.deleteTopicFiles.desc'),
+        label: t('storage.deleteTopicFiles.title'),
+        layout: 'horizontal',
+        minWidth: undefined,
+      },
       {
         children: (
           <DataImporter>

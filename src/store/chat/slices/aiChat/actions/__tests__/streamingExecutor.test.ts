@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
+import * as fileStoreModule from '@/store/file/store';
 
 import { useChatStore } from '../../../../store';
 import { TEST_CONTENT, TEST_IDS, createMockMessage } from './fixtures';
@@ -364,6 +365,152 @@ describe('StreamingExecutor actions', () => {
         }),
       );
 
+      streamSpy.mockRestore();
+    });
+
+    it('should handle content_part image chunks and collect file ids for finalImages', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [createMockMessage({ role: 'user' })];
+      const optimisticUpdateSpy = vi.spyOn(result.current, 'optimisticUpdateMessageContent');
+
+      // Mock getFileStoreState to return uploadBase64FileWithProgress
+      const mockUploadFn = vi.fn().mockResolvedValue({
+        id: 'uploaded-file-id',
+        url: 'https://example.com/uploaded.png',
+        filename: 'uploaded.png',
+      });
+      const getFileStoreStateSpy = vi
+        .spyOn(fileStoreModule, 'getFileStoreState')
+        .mockReturnValue({ uploadBase64FileWithProgress: mockUploadFn } as any);
+
+      // Create operation for this test
+      const { operationId } = result.current.startOperation({
+        type: 'execAgentRuntime',
+        context: {
+          sessionId: TEST_IDS.SESSION_ID,
+          topicId: null,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        },
+        label: 'Test AI Generation',
+      });
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onMessageHandle, onFinish }) => {
+          // Simulate content_part with image (correct chunk structure)
+          await onMessageHandle?.({
+            type: 'content_part',
+            partType: 'image',
+            content: 'base64imagedata',
+            mimeType: 'image/png',
+          } as any);
+          await onFinish?.('Answer with image', {} as any);
+        });
+
+      await act(async () => {
+        await result.current.internal_fetchAIChatMessage({
+          messages,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          model: 'gemini-3-pro-image-preview',
+          provider: 'google',
+          operationId,
+        });
+      });
+
+      // Verify upload was called with base64 data
+      expect(mockUploadFn).toHaveBeenCalledWith('data:image/png;base64,base64imagedata');
+
+      // Verify optimisticUpdateMessageContent was called with imageList containing file id
+      expect(optimisticUpdateSpy).toHaveBeenCalledWith(
+        TEST_IDS.ASSISTANT_MESSAGE_ID,
+        expect.any(String), // content
+        expect.objectContaining({
+          imageList: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'uploaded-file-id',
+              url: 'https://example.com/uploaded.png',
+            }),
+          ]),
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
+
+      getFileStoreStateSpy.mockRestore();
+      streamSpy.mockRestore();
+    });
+
+    it('should handle reasoning_part image chunks and collect file ids for finalImages', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [createMockMessage({ role: 'user' })];
+      const optimisticUpdateSpy = vi.spyOn(result.current, 'optimisticUpdateMessageContent');
+
+      // Mock getFileStoreState to return uploadBase64FileWithProgress
+      const mockUploadFn = vi.fn().mockResolvedValue({
+        id: 'reasoning-file-id',
+        url: 'https://example.com/reasoning.png',
+        filename: 'reasoning.png',
+      });
+      const getFileStoreStateSpy = vi
+        .spyOn(fileStoreModule, 'getFileStoreState')
+        .mockReturnValue({ uploadBase64FileWithProgress: mockUploadFn } as any);
+
+      // Create operation for this test
+      const { operationId } = result.current.startOperation({
+        type: 'execAgentRuntime',
+        context: {
+          sessionId: TEST_IDS.SESSION_ID,
+          topicId: null,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        },
+        label: 'Test AI Generation',
+      });
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onMessageHandle, onFinish }) => {
+          // Simulate reasoning_part with image (correct chunk structure)
+          await onMessageHandle?.({
+            type: 'reasoning_part',
+            partType: 'image',
+            content: 'reasoningbase64data',
+            mimeType: 'image/jpeg',
+          } as any);
+          await onFinish?.('Answer with reasoning image', {} as any);
+        });
+
+      await act(async () => {
+        await result.current.internal_fetchAIChatMessage({
+          messages,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          model: 'gemini-3-pro-image-preview',
+          provider: 'google',
+          operationId,
+        });
+      });
+
+      // Verify upload was called with base64 data
+      expect(mockUploadFn).toHaveBeenCalledWith('data:image/jpeg;base64,reasoningbase64data');
+
+      // Verify optimisticUpdateMessageContent was called with imageList containing file id
+      expect(optimisticUpdateSpy).toHaveBeenCalledWith(
+        TEST_IDS.ASSISTANT_MESSAGE_ID,
+        expect.any(String), // content
+        expect.objectContaining({
+          imageList: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'reasoning-file-id',
+              url: 'https://example.com/reasoning.png',
+            }),
+          ]),
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
+
+      getFileStoreStateSpy.mockRestore();
       streamSpy.mockRestore();
     });
 

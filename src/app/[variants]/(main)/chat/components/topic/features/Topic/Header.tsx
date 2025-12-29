@@ -1,10 +1,10 @@
 'use client';
 
 import { ActionIcon, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
-import { App } from 'antd';
+import { App, Button, Checkbox } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { LucideCheck, MoreHorizontal, Search, Trash } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
@@ -12,7 +12,7 @@ import SidebarHeader from '@/components/SidebarHeader';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
+import { preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
 import { TopicDisplayMode } from '@/types/topic';
 
 import TopicSearchBar from './TopicSearchBar';
@@ -28,6 +28,12 @@ const Header = memo(() => {
     preferenceSelectors.topicDisplayMode(s),
     s.updatePreference,
   ]);
+  const settings = useUserStore(settingsSelectors.currentSettings);
+  const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
+
+  // Use ref to track checkbox state in modal
+  const deleteFilesRef = useRef(settings.general?.deleteTopicFiles || false);
+
   const [showSearch, setShowSearch] = useState(false);
   const { modal } = App.useApp();
 
@@ -49,12 +55,38 @@ const Header = memo(() => {
         key: 'deleteUnstarred',
         label: t('actions.removeUnstarred'),
         onClick: () => {
-          modal.confirm({
-            cancelText: t('cancel', { ns: 'common' }),
+          // Reset ref to current setting value when opening modal
+          deleteFilesRef.current = settings.general?.deleteTopicFiles || false;
+
+          const { destroy } = modal.confirm({
             centered: true,
-            okButtonProps: { danger: true },
-            okText: t('ok', { ns: 'common' }),
-            onOk: removeUnstarredTopic,
+            footer: (
+              <Flexbox align="center" horizontal justify="space-between" style={{ marginTop: 24 }}>
+                <Checkbox
+                  defaultChecked={deleteFilesRef.current}
+                  onChange={(e) => {
+                    deleteFilesRef.current = e.target.checked;
+                    updateGeneralConfig({ deleteTopicFiles: e.target.checked });
+                  }}
+                >
+                  {t('actions.deleteTopicFiles')}
+                </Checkbox>
+                <Flexbox gap={8} horizontal>
+                  <Button onClick={() => destroy()}>{t('cancel', { ns: 'common' })}</Button>
+                  <Button
+                    danger
+                    onClick={async () => {
+                      await removeUnstarredTopic();
+                      destroy();
+                    }}
+                    type="primary"
+                  >
+                    {t('ok', { ns: 'common' })}
+                  </Button>
+                </Flexbox>
+              </Flexbox>
+            ),
+            maskClosable: true,
             title: t('actions.confirmRemoveUnstarred'),
           });
         },
@@ -65,18 +97,44 @@ const Header = memo(() => {
         key: 'deleteAll',
         label: t('actions.removeAll'),
         onClick: () => {
-          modal.confirm({
-            cancelText: t('cancel', { ns: 'common' }),
+          // Reset ref to current setting value when opening modal
+          deleteFilesRef.current = settings.general?.deleteTopicFiles || false;
+
+          const { destroy } = modal.confirm({
             centered: true,
-            okButtonProps: { danger: true },
-            okText: t('ok', { ns: 'common' }),
-            onOk: removeAllTopic,
+            footer: (
+              <Flexbox align="center" horizontal justify="space-between" style={{ marginTop: 24 }}>
+                <Checkbox
+                  defaultChecked={deleteFilesRef.current}
+                  onChange={(e) => {
+                    deleteFilesRef.current = e.target.checked;
+                    updateGeneralConfig({ deleteTopicFiles: e.target.checked });
+                  }}
+                >
+                  {t('actions.deleteTopicFiles')}
+                </Checkbox>
+                <Flexbox gap={8} horizontal>
+                  <Button onClick={() => destroy()}>{t('cancel', { ns: 'common' })}</Button>
+                  <Button
+                    danger
+                    onClick={async () => {
+                      await removeAllTopic();
+                      destroy();
+                    }}
+                    type="primary"
+                  >
+                    {t('ok', { ns: 'common' })}
+                  </Button>
+                </Flexbox>
+              </Flexbox>
+            ),
+            maskClosable: true,
             title: t('actions.confirmRemoveAll'),
           });
         },
       },
     ],
-    [topicDisplayMode],
+    [topicDisplayMode, settings.general?.deleteTopicFiles, updateGeneralConfig],
   );
 
   return showSearch ? (

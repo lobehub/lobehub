@@ -132,16 +132,101 @@ describe('S3StaticFileImpl', () => {
   });
 
   describe('deleteFile', () => {
-    it('应该调用S3的deleteFile方法', async () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should delete a single key or extracted key from URL (handles path, https and http)', async () => {
+      // plain key
       await fileService.deleteFile('test.jpg');
       expect(fileService['s3'].deleteFile).toHaveBeenCalledWith('test.jpg');
+
+      // path key
+      vi.clearAllMocks();
+      await fileService.deleteFile('path/to/file.jpg');
+      expect(fileService['s3'].deleteFile).toHaveBeenCalledWith('path/to/file.jpg');
+
+      // https URL with S3_SET_ACL=false -> should extract key
+      vi.clearAllMocks();
+      config.S3_SET_ACL = false;
+      const httpsUrl = 'https://s3.example.com/bucket/path/to/file.jpg?X-Amz-Signature=expired';
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValue('path/to/file.jpg');
+      await fileService.deleteFile(httpsUrl);
+      expect(fileService.getKeyFromFullUrl).toHaveBeenCalledWith(httpsUrl);
+      expect(fileService['s3'].deleteFile).toHaveBeenCalledWith('path/to/file.jpg');
+      config.S3_SET_ACL = true;
+
+      // http URL (legacy) should also extract key
+      vi.clearAllMocks();
+      const httpUrl = 'http://s3.example.com/bucket/path/to/file.jpg';
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValue('path/to/file.jpg');
+      await fileService.deleteFile(httpUrl);
+      expect(fileService.getKeyFromFullUrl).toHaveBeenCalledWith(httpUrl);
+      expect(fileService['s3'].deleteFile).toHaveBeenCalledWith('path/to/file.jpg');
+    });
+
+    it('throws when underlying S3.deleteFile rejects', async () => {
+      const deleteError = new Error('S3 delete failed');
+      fileService['s3'].deleteFile = vi.fn().mockRejectedValue(deleteError);
+
+      await expect(fileService.deleteFile('test.jpg')).rejects.toThrow('S3 delete failed');
     });
   });
 
   describe('deleteFiles', () => {
-    it('应该调用S3的deleteFiles方法', async () => {
-      await fileService.deleteFiles(['test1.jpg', 'test2.jpg']);
-      expect(fileService['s3'].deleteFiles).toHaveBeenCalledWith(['test1.jpg', 'test2.jpg']);
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should delete multiple keys, handle URLs and filter empty entries', async () => {
+      // plain keys
+      const keys = ['test1.jpg', 'test2.jpg', 'test3.jpg'];
+      await fileService.deleteFiles(keys);
+      expect(fileService['s3'].deleteFile).toHaveBeenCalledTimes(3);
+
+      // path keys
+      vi.clearAllMocks();
+      const pathKeys = ['path/to/file1.jpg', 'path/to/file2.jpg'];
+      await fileService.deleteFiles(pathKeys);
+      expect(fileService['s3'].deleteFile).toHaveBeenCalledTimes(2);
+
+      // mix URLs and keys
+      vi.clearAllMocks();
+      const mixedInputs = ['path/to/file1.jpg', 'https://s3.example.com/bucket/path/to/file2.jpg', 'file3.jpg'];
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValueOnce('path/to/file2.jpg');
+      await fileService.deleteFiles(mixedInputs);
+      expect(fileService['s3'].deleteFile).toHaveBeenCalledTimes(3);
+
+      // filter out empty strings
+      vi.clearAllMocks();
+      const keysWithEmpty = [
+        'https://example.com/test1.jpg',
+        '',
+        'https://example.com/test2.jpg'
+      ];
+      // when getKeyFromFullUrl returns '' for all URLs, no deletes should happen
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValue('');
+      await fileService.deleteFiles(keysWithEmpty);
+      expect(fileService['s3'].deleteFile).not.toHaveBeenCalled();
+
+      // empty array -> no calls
+      vi.clearAllMocks();
+      await fileService.deleteFiles([]);
+      expect(fileService['s3'].deleteFile).not.toHaveBeenCalled();
+
+      // all empty entries -> no calls
+      vi.clearAllMocks();
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValue('');
+      await fileService.deleteFiles(['', '', '']);
+      expect(fileService['s3'].deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('throws when any underlying S3.deleteFile rejects', async () => {
+      const deleteError = new Error('S3 delete failed');
+      fileService['s3'].deleteFile = vi.fn().mockRejectedValue(deleteError);
+
+      const keys = ['test1.jpg', 'test2.jpg'];
+      await expect(fileService.deleteFiles(keys)).rejects.toThrow('S3 delete failed');
     });
   });
 

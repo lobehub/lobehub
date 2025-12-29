@@ -1,5 +1,5 @@
 import { ActionIcon, Dropdown, EditableText, Icon, type MenuProps, Text } from '@lobehub/ui';
-import { App } from 'antd';
+import { App, Button, Checkbox } from 'antd';
 import { createStyles } from 'antd-style';
 import {
   ExternalLink,
@@ -11,7 +11,7 @@ import {
   Trash,
   Wand2,
 } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
@@ -21,6 +21,8 @@ import { isDesktop } from '@/const/version';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 const useStyles = createStyles(({ css }) => ({
   content: css`
@@ -49,6 +51,12 @@ const TopicContent = memo<TopicContentProps>(({ id, title, fav, showMore }) => {
   const mobile = useIsMobile();
 
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
+
+  const settings = useUserStore(settingsSelectors.currentSettings);
+  const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
+
+  // Use ref to track checkbox state in modal
+  const deleteFilesRef = useRef(settings.general?.deleteTopicFiles || false);
 
   const [
     editing,
@@ -142,12 +150,38 @@ const TopicContent = memo<TopicContentProps>(({ id, title, fav, showMore }) => {
         onClick: () => {
           if (!id) return;
 
-          modal.confirm({
+          // Reset ref to current setting value when opening modal
+          deleteFilesRef.current = settings.general?.deleteTopicFiles || false;
+
+          const { destroy } = modal.confirm({
             centered: true,
-            okButtonProps: { danger: true },
-            onOk: async () => {
-              await removeTopic(id);
-            },
+            footer: (
+              <Flexbox align="center" horizontal justify="space-between" style={{ marginTop: 24 }}>
+                <Checkbox
+                  defaultChecked={deleteFilesRef.current}
+                  onChange={(e) => {
+                    deleteFilesRef.current = e.target.checked;
+                    updateGeneralConfig({ deleteTopicFiles: e.target.checked });
+                  }}
+                >
+                  {t('actions.deleteTopicFiles')}
+                </Checkbox>
+                <Flexbox gap={8} horizontal>
+                  <Button onClick={() => destroy()}>{t('cancel', { ns: 'common' })}</Button>
+                  <Button
+                    danger
+                    onClick={async () => {
+                      await removeTopic(id);
+                      destroy();
+                    }}
+                    type="primary"
+                  >
+                    {t('ok', { ns: 'common' })}
+                  </Button>
+                </Flexbox>
+              </Flexbox>
+            ),
+            maskClosable: true,
             title: t('actions.confirmRemoveTopic'),
           });
         },
@@ -162,6 +196,8 @@ const TopicContent = memo<TopicContentProps>(({ id, title, fav, showMore }) => {
       t,
       toggleEditing,
       openTopicInNewWindow,
+      settings.general?.deleteTopicFiles,
+      updateGeneralConfig,
     ],
   );
 

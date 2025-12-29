@@ -160,6 +160,61 @@ describe('topic action', () => {
       expect(topicId).toEqual('new-topic-id');
     });
 
+    it('should collect nested tool message IDs from assistantGroup messages', async () => {
+      const { result } = renderHook(() => useChatStore());
+      // Create an assistantGroup message with nested children and tool messages
+      const messages = [
+        { id: 'user-message' },
+        {
+          id: 'assistant-group',
+          children: [
+            {
+              id: 'assistant-1',
+              tools: [
+                { id: 'tool-call-1', result_msg_id: 'tool-message-1' },
+                { id: 'tool-call-2', result_msg_id: 'tool-message-2' },
+              ],
+            },
+            {
+              id: 'assistant-2',
+              tools: [{ id: 'tool-call-3', result_msg_id: 'tool-message-3' }],
+            },
+          ],
+        },
+      ] as UIChatMessage[];
+
+      act(() => {
+        useChatStore.setState({
+          messagesMap: {
+            [messageMapKey('session-id')]: messages,
+          },
+          activeId: 'session-id',
+        });
+      });
+
+      const createTopicSpy = vi
+        .spyOn(topicService, 'createTopic')
+        .mockResolvedValue('new-topic-id');
+
+      await result.current.saveToTopic();
+
+      // Expect all IDs to be collected: user message + assistant group + 2 assistants + 3 tool messages
+      expect(createTopicSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 'session-id',
+          messages: [
+            'user-message',
+            'assistant-group',
+            'assistant-1',
+            'tool-message-1',
+            'tool-message-2',
+            'assistant-2',
+            'tool-message-3',
+          ],
+        }),
+      );
+    });
+
     it('should reset supervisor todos after saving to topic for group sessions', async () => {
       const { result } = renderHook(() => useChatStore());
       const groupId = 'group-session';

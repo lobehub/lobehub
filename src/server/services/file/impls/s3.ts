@@ -17,11 +17,21 @@ export class S3StaticFileImpl implements FileServiceImpl {
   }
 
   async deleteFile(key: string) {
-    return this.s3.deleteFile(key);
+    // Handle legacy data compatibility - extract key from URL if needed
+    const actualKey = extractKeyFromUrlOrReturnOriginal(key, this.getKeyFromFullUrl.bind(this));
+    return this.s3.deleteFile(actualKey);
   }
 
   async deleteFiles(keys: string[]) {
-    return this.s3.deleteFiles(keys);
+    // Handle legacy data compatibility - extract keys from URLs if needed
+    const actualKeys = keys
+      .map((key) => extractKeyFromUrlOrReturnOriginal(key, this.getKeyFromFullUrl.bind(this)))
+      .filter((key): key is string => typeof key === 'string' && key.length > 0);
+
+    if (actualKeys.length === 0) return;
+
+    // Delete each key individually to leverage the already working single-delete logic
+    await Promise.all(actualKeys.map((key) => this.s3.deleteFile(key)));
   }
 
   async getFileContent(key: string): Promise<string> {

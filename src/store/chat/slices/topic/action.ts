@@ -33,6 +33,35 @@ import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');
 
+/**
+ * Collect all message IDs including nested children and tool result IDs
+ */
+const collectAllMessageIds = (messages: UIChatMessage[]): string[] => {
+  const allMessageIds: string[] = [];
+  for (const message of messages) {
+    // Add the message's own ID
+    allMessageIds.push(message.id);
+
+    // For assistantGroup messages, collect IDs from children and their tools
+    if (message.children && message.children.length > 0) {
+      for (const child of message.children) {
+        // Add child assistant message ID
+        allMessageIds.push(child.id);
+
+        // Add tool message IDs (result_msg_id)
+        if (child.tools && child.tools.length > 0) {
+          for (const tool of child.tools) {
+            if (tool.result_msg_id) {
+              allMessageIds.push(tool.result_msg_id);
+            }
+          }
+        }
+      }
+    }
+  }
+  return allMessageIds;
+};
+
 const SWR_USE_FETCH_TOPIC = 'SWR_USE_FETCH_TOPIC';
 const SWR_USE_SEARCH_TOPIC = 'SWR_USE_SEARCH_TOPIC';
 
@@ -94,10 +123,13 @@ export const chatTopic: StateCreator<
 
     const messages = displayMessageSelectors.activeDisplayMessages(get());
 
+    // Collect all message IDs including nested ones in assistantGroup
+    const allMessageIds = collectAllMessageIds(messages);
+
     set({ creatingTopic: true }, false, n('creatingTopic/start'));
     const topicId = await internal_createTopic({
       title: t('defaultTitle', { ns: 'topic' }),
-      messages: messages.map((m) => m.id),
+      messages: allMessageIds,
       ...(activeSessionType === 'group'
         ? { groupId: groupId || activeId }
         : { sessionId: sessionId || activeId }),
@@ -114,10 +146,13 @@ export const chatTopic: StateCreator<
 
     const { activeId, activeSessionType, summaryTopicTitle, internal_createTopic } = get();
 
+    // Collect all message IDs including nested ones in assistantGroup
+    const allMessageIds = collectAllMessageIds(messages);
+
     // 1. create topic and bind these messages
     const topicId = await internal_createTopic({
       title: t('defaultTitle', { ns: 'topic' }),
-      messages: messages.map((m) => m.id),
+      messages: allMessageIds,
       ...(activeSessionType === 'group'
         ? { groupId: groupId || activeId }
         : { sessionId: sessionId || activeId }),
