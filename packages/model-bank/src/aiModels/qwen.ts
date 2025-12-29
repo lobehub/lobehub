@@ -2175,9 +2175,31 @@ const qwenChatModels: AIChatModelCard[] = [
 const qwenImageModels: AIImageModelCard[] = [
   {
     description:
+      '通义千问-图像编辑模型（Qwen-Image-Edit）支持多图输入和多图输出，可精确修改图内文字、增删或移动物体、改变主体动作、迁移图片风格及增强画面细节。',
+    displayName: 'Qwen Image Edit Plus',
+    enabled: true,
+    id: 'qwen-image-edit-plus',
+    organization: 'Qwen',
+    parameters: {
+      imageUrl: {
+        default: '',
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-10-31',
+    type: 'image',
+  },
+  {
+    description:
       'Qwen Image Edit 是一款图生图模型，支持基于输入图像和文本提示进行图像编辑和修改，能够根据用户需求对原图进行精准调整和创意改造。',
     displayName: 'Qwen Image Edit',
-    enabled: true,
     id: 'qwen-image-edit',
     organization: 'Qwen',
     parameters: {

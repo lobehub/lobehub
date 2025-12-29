@@ -566,40 +566,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Command R 是一个针对对话交互和长上下文任务优化的大型语言模型。它定位于"可扩展"类别的模型，在高性能和强准确性之间取得平衡，使公司能够超越概念验证并进入生产。',
-    displayName: 'Command R',
-    id: 'cohere/command-r',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'Command R+ 是 Cohere 最新的大型语言模型，针对对话交互和长上下文任务进行了优化。它的目标是在性能上极其出色，使公司能够超越概念验证并进入生产。',
-    displayName: 'Command R+',
-    id: 'cohere/command-r-plus',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 128_000,
@@ -627,19 +593,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.77, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.77, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 128_000,
-    description: 'DeepSeek V3.1 Base 是 DeepSeek V3 模型的改进版本。',
-    displayName: 'DeepSeek V3.1 Base',
-    id: 'deepseek/deepseek-v3.1-base',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.1999, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.8001, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -714,23 +667,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      '由 Google 精心调整用于聊天目的的 90 亿参数开源模型。由 Groq 使用其自定义语言处理单元 (LPU) 硬件提供服务，以提供快速高效的推理。',
-    displayName: 'Gemma 2 9B IT',
-    id: 'google/gemma-2-9b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -857,40 +793,6 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      '由 Meta 精心调整用于指令遵循目的的 700 亿参数开源模型。由 Groq 使用其自定义语言处理单元 (LPU) 硬件提供服务，以提供快速高效的推理。',
-    displayName: 'Llama 3 70B Instruct',
-    id: 'meta/llama-3-70b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.59, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.79, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      '由 Meta 精心调整用于指令遵循目的的 80 亿参数开源模型。由 Groq 使用其自定义语言处理单元 (LPU) 硬件提供服务，以提供快速高效的推理。',
-    displayName: 'Llama 3 8B Instruct',
-    id: 'meta/llama-3-8b',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',

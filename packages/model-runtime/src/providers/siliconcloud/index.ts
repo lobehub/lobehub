@@ -13,36 +13,85 @@ export interface SiliconCloudModelCard {
   id: string;
 }
 
+const getByteLength = (value: string): number => {
+  return new TextEncoder().encode(value).length;
+};
+
+const defaultFetch = globalThis.fetch?.bind(globalThis);
+
+const siliconFetch: typeof fetch = async (input, init) => {
+  if (!defaultFetch) return fetch(input, init);
+
+  const response = await defaultFetch(input, init);
+
+  if (!response || response.status < 400) return response;
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) return response;
+
+  try {
+    const cloned = response.clone();
+    const data = await cloned.json();
+
+    if (data && typeof data === 'object' && !('error' in data)) {
+      const headers = new Headers(response.headers);
+      headers.delete('content-length');
+
+      const body = JSON.stringify({ error: data });
+      headers.set('content-length', getByteLength(body).toString());
+
+      return new Response(body, {
+        headers,
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+  } catch {
+    // ignore JSON parse errors and fall back to original response
+  }
+
+  return response;
+};
+
 export const params = {
   baseURL: 'https://api.siliconflow.cn/v1',
   chatCompletion: {
     handleError: (error: any): Omit<ChatCompletionErrorPayload, 'provider'> | undefined => {
-      let errorResponse: Response | undefined;
-      if (error instanceof Response) {
-        errorResponse = error;
-      } else if ('status' in (error as any)) {
-        errorResponse = error as Response;
-      }
-      if (errorResponse) {
-        if (errorResponse.status === 401) {
-          return {
-            error: errorResponse.status,
-            errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
-          };
-        }
+      const status = error?.status || (error instanceof Response && error.status);
 
-        if (errorResponse.status === 403) {
+      if (status === 401) {
+        return {
+          error: status,
+          errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+        };
+      }
+
+      if (status === 403) {
+        return {
+          error: status,
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          message:
+            '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
+        };
+      }
+
+      if (error?.error || error?.code || error?.message) {
+        // Prioritize nested error structure, then fall back to top-level fields
+        const errorData = error?.error?.error || error?.error || error;
+        const { code, message, data } = errorData;
+
+        if (code || message || data) {
           return {
-            error: errorResponse.status,
-            errorType: AgentRuntimeErrorType.ProviderBizError,
-            message:
-              '请检查 API Key 余额是否充足，或者是否在用未实名的 API Key 访问需要实名的模型。',
+            error: {
+              ...(code !== undefined ? { code } : {}),
+              ...(typeof data !== 'undefined' ? { data } : {}),
+              ...(message !== undefined ? { message } : {}),
+            },
           };
         }
       }
-      return {
-        error,
-      };
+
+      return { error };
     },
     handlePayload: (payload) => {
       const { max_tokens, model, thinking, ...rest } = payload;
@@ -57,22 +106,19 @@ export const params = {
       };
 
       if (thinking) {
-        // 只有部分模型支持指定 enable_thinking，其余一些慢思考模型只支持调节 thinking budget
-        const hybridThinkingModels = [
-          /GLM-4\.5(?!.*Air$)/, // GLM-4.5 和 GLM-4.5V（不包含 GLM-4.5 Air）
-          /Qwen3-(?:\d+B|\d+B-A\d+B)$/, // Qwen3-8B、Qwen3-14B、Qwen3-32B、Qwen3-30B-A3B、Qwen3-235B-A22B
-          /DeepSeek-V3\.1/,
-          /Hunyuan-A13B-Instruct/,
-        ];
-        if (hybridThinkingModels.some((regexp) => regexp.test(model))) {
+        // Only set enable_thinking if type is explicitly provided
+        if (typeof thinking.type !== 'undefined') {
           result.enable_thinking = thinking.type === 'enabled';
         }
         if (typeof thinkingBudget !== 'undefined') {
-          result.thinking_budget = Math.min(Math.max(thinkingBudget, 1), 32_768);
+          result.thinking_budget = Math.min(Math.max(thinkingBudget, 128), 32_768);
         }
       }
       return result;
     },
+  },
+  constructorOptions: {
+    fetch: siliconFetch,
   },
   createImage: createSiliconCloudImage,
   debug: {

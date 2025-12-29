@@ -157,12 +157,12 @@ export class LobeAnthropicAI implements LobeRuntimeAI {
 
     const systemPrompts = !!system_message?.content
       ? ([
-          {
-            cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
-            text: system_message?.content as string,
-            type: 'text',
-          },
-        ] as Anthropic.TextBlockParam[])
+        {
+          cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+          text: system_message?.content as string,
+          type: 'text',
+        },
+      ] as Anthropic.TextBlockParam[])
       : undefined;
 
     const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
@@ -194,6 +194,7 @@ export class LobeAnthropicAI implements LobeRuntimeAI {
           budget_tokens: thinking?.budget_tokens
             ? Math.min(thinking.budget_tokens, resolvedMaxTokens - 1) // `max_tokens` must be greater than `thinking.budget_tokens`.
             : 1024,
+          type: 'enabled',
         },
         tools: postTools,
       } satisfies Anthropic.MessageCreateParams;

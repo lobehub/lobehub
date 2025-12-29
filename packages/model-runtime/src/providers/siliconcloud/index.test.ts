@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
+import OpenAI from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
@@ -112,7 +113,7 @@ describe('LobeSiliconCloudAI - custom features', () => {
       expect(calledPayload.thinking_budget).toBe(32768);
     });
 
-    it('should set thinking_budget to 1 when budget_tokens is 0', async () => {
+    it('should set thinking_budget to 128 (minimum) when budget_tokens is 0', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'THUDM/GLM-4.5',
@@ -123,10 +124,10 @@ describe('LobeSiliconCloudAI - custom features', () => {
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.thinking_budget).toBe(1);
+      expect(calledPayload.thinking_budget).toBe(128);
     });
 
-    it('should not add enable_thinking for non-hybrid models', async () => {
+    it('should set enable_thinking when type is provided', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'Qwen/Qwen2.5-7B-Instruct',
@@ -137,8 +138,22 @@ describe('LobeSiliconCloudAI - custom features', () => {
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.enable_thinking).toBeUndefined();
+      expect(calledPayload.enable_thinking).toBe(true);
       expect(calledPayload.thinking_budget).toBe(1000);
+    });
+
+    it('should only set thinking_budget when type is not provided', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'Qwen/Qwen3-8B',
+        thinking: {
+          budget_tokens: 1500,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBeUndefined();
+      expect(calledPayload.thinking_budget).toBe(1500);
     });
   });
 
@@ -171,6 +186,55 @@ describe('LobeSiliconCloudAI - custom features', () => {
       } catch (e: any) {
         expect(e.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
         expect(e.message).toContain('请检查 API Key 余额是否充足');
+      }
+    });
+
+    it('should extract error code and message from SiliconCloud API error response', async () => {
+      const error = {
+        error: {
+          code: 20015,
+          message: 'Value error, current model does not support parameter `enable_thinking`.',
+          data: null,
+        },
+        status: 400,
+      } as any;
+
+      vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(error);
+
+      try {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'Qwen/Qwen2.5-7B-Instruct',
+        });
+      } catch (e: any) {
+        expect(e.error?.code).toBe(20015);
+        expect(e.error?.message).toContain('does not support parameter `enable_thinking`');
+      }
+    });
+
+    it('should handle APIError with error body containing code and message', async () => {
+      // Create an APIError with the error structure that OpenAI library creates
+      const errorInfo = {
+        error: {
+          code: 20015,
+          message: 'Value error, current model does not support parameter `enable_thinking`.',
+        },
+      };
+      const apiError = new OpenAI.APIError(400, errorInfo, 'Request failed', {
+        status: 400,
+      } as any);
+
+      vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+      try {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'Qwen/Qwen2.5-7B-Instruct',
+        });
+      } catch (e: any) {
+        // The error should have the code and message extracted
+        expect(e.error?.code || e.error?.error?.code).toBe(20015);
+        expect(e.message || e.error?.message).toContain('does not support parameter `enable_thinking`');
       }
     });
   });
