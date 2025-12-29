@@ -6,7 +6,7 @@ import React, { memo, useCallback, useMemo } from 'react';
 
 import { useHomeStore } from '@/store/home';
 
-import { useCreateMenuItems, useSessionGroupMenuItems } from '../../../../hooks';
+import { useCreateMenuItems } from '../../../../hooks';
 import { useAgentModal } from '../../ModalProvider';
 import SessionList from '../List';
 import Actions from './Actions';
@@ -26,14 +26,10 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
   ]);
 
   // Modal management
-  const { openMemberSelectionModal, closeMemberSelectionModal, openConfigGroupModal } =
-    useAgentModal();
-
-  // Session group menu items
-  const { createGroupWithMembers, isCreatingGroup } = useSessionGroupMenuItems();
+  const { openConfigGroupModal } = useAgentModal();
 
   // Create menu items
-  const { isValidatingAgent } = useCreateMenuItems();
+  const { isLoading } = useCreateMenuItems();
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
@@ -42,35 +38,16 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
     [id],
   );
 
-  // Handler to open member selection modal with callbacks
-  const handleOpenMemberSelection = useCallback(() => {
-    openMemberSelectionModal({
-      onCancel: closeMemberSelectionModal,
-      onConfirm: async (selectedAgents, hostConfig, enableSupervisor) => {
-        await createGroupWithMembers(
-          selectedAgents,
-          'New Group Chat',
-          hostConfig,
-          enableSupervisor,
-        );
-        closeMemberSelectionModal();
-      },
-    });
-  }, [openMemberSelectionModal, closeMemberSelectionModal, createGroupWithMembers]);
-
   const handleOpenConfigGroupModal = useCallback(() => {
     openConfigGroupModal();
   }, [openConfigGroupModal]);
 
   const dropdownMenu = useGroupDropdownMenu({
-    handleOpenMemberSelection,
     id,
     isCustomGroup: true,
     openConfigGroupModal: handleOpenConfigGroupModal,
     toggleEditing,
   });
-
-  const isLoading = isValidatingAgent || isCreatingGroup;
 
   const groupIcon = useMemo(() => {
     if (isUpdating) {

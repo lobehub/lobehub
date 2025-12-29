@@ -9,12 +9,10 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useCreateMenuItems } from '../../hooks';
 
 interface AgentActionsDropdownMenuProps {
-  handleOpenGroupWizard: () => void;
   openConfigGroupModal: () => void;
 }
 
 export const useAgentActionsDropdownMenu = ({
-  handleOpenGroupWizard,
   openConfigGroupModal,
 }: AgentActionsDropdownMenuProps): MenuProps['items'] => {
   const { t } = useTranslation('common');
@@ -34,7 +32,7 @@ export const useAgentActionsDropdownMenu = ({
 
   return useMemo(() => {
     const createAgentItem = createAgentMenuItem();
-    const createGroupChatItem = createGroupChatMenuItem(handleOpenGroupWizard);
+    const createGroupChatItem = createGroupChatMenuItem();
     const createSessionGroupItem = createSessionGroupMenuItem();
     const configItem = configMenuItem(openConfigGroupModal);
 
@@ -69,7 +67,6 @@ export const useAgentActionsDropdownMenu = ({
     createGroupChatMenuItem,
     createSessionGroupMenuItem,
     configMenuItem,
-    handleOpenGroupWizard,
     openConfigGroupModal,
     t,
   ]);

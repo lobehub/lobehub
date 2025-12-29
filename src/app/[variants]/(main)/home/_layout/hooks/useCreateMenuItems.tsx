@@ -65,6 +65,29 @@ export const useCreateMenuItems = () => {
     },
   );
 
+  // SWR-based group creation with auto navigation to profile
+  const { mutate: mutateGroup, isValidating: isValidatingGroup } = useActionSWR(
+    'group.createGroup',
+    async () => {
+      const groupId = await createGroup(
+        {
+          config: DEFAULT_CHAT_GROUP_CHAT_CONFIG,
+          title: t('defaultGroupChat'),
+        },
+        [],
+        true, // silent mode - don't switch session, we'll navigate instead
+      );
+      navigate(`/group/${groupId}/profile`);
+      return groupId;
+    },
+    {
+      onSuccess: async () => {
+        await refreshAgentList();
+        await loadGroups();
+      },
+    },
+  );
+
   /**
    * Create agent action
    */
@@ -205,20 +228,27 @@ export const useCreateMenuItems = () => {
   );
 
   /**
+   * Create empty group and navigate to profile
+   */
+  const createEmptyGroup = useCallback(async () => {
+    await mutateGroup();
+  }, [mutateGroup]);
+
+  /**
    * Create group chat menu item
-   * Opens the group wizard modal
+   * Creates an empty group and navigates to its profile page
    */
   const createGroupChatMenuItem = useCallback(
-    (onOpenWizard: () => void): ItemType => ({
+    (): ItemType => ({
       icon: <Icon icon={GroupBotSquareIcon} />,
       key: 'newGroupChat',
       label: t('newGroupChat'),
-      onClick: (info) => {
+      onClick: async (info) => {
         info.domEvent?.stopPropagation();
-        onOpenWizard();
+        await createEmptyGroup();
       },
     }),
-    [t],
+    [t, createEmptyGroup],
   );
 
   /**
@@ -299,7 +329,7 @@ export const useCreateMenuItems = () => {
     // Loading states
     isCreatingGroup,
     isCreatingSessionGroup,
-    isLoading: isValidatingAgent || isCreatingGroup || isCreatingSessionGroup,
+    isLoading: isValidatingAgent || isValidatingGroup || isCreatingGroup || isCreatingSessionGroup,
     isValidatingAgent,
   };
 };

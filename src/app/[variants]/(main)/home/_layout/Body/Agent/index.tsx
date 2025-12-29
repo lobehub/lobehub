@@ -22,70 +22,16 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
   const { isRevalidating } = useFetchAgentList();
 
-  const {
-    openGroupWizardModal,
-    closeGroupWizardModal,
-    openConfigGroupModal,
-    setGroupWizardLoading,
-  } = useAgentModal();
+  const { openConfigGroupModal } = useAgentModal();
 
   // Create menu items
-  const { createGroupFromTemplate, createGroupWithMembers, isLoading } = useCreateMenuItems();
-
-  // Adapter functions to match GroupWizard interface
-  const handleGroupWizardCreateCustom = useCallback(
-    async (
-      selectedAgents: string[],
-      hostConfig?: { model?: string; provider?: string },
-      enableSupervisor?: boolean,
-    ) => {
-      await createGroupWithMembers(selectedAgents, undefined, hostConfig, enableSupervisor);
-    },
-    [createGroupWithMembers],
-  );
-
-  const handleGroupWizardCreateFromTemplate = useCallback(
-    async (
-      templateId: string,
-      hostConfig?: { model?: string; provider?: string },
-      enableSupervisor?: boolean,
-      selectedMemberTitles?: string[],
-    ) => {
-      setGroupWizardLoading(true);
-      try {
-        await createGroupFromTemplate(
-          templateId,
-          hostConfig,
-          enableSupervisor,
-          selectedMemberTitles,
-        );
-        closeGroupWizardModal();
-      } finally {
-        setGroupWizardLoading(false);
-      }
-    },
-    [createGroupFromTemplate, setGroupWizardLoading, closeGroupWizardModal],
-  );
-
-  const handleOpenGroupWizard = useCallback(() => {
-    openGroupWizardModal({
-      onCancel: closeGroupWizardModal,
-      onCreateCustom: handleGroupWizardCreateCustom,
-      onCreateFromTemplate: handleGroupWizardCreateFromTemplate,
-    });
-  }, [
-    openGroupWizardModal,
-    closeGroupWizardModal,
-    handleGroupWizardCreateFromTemplate,
-    handleGroupWizardCreateCustom,
-  ]);
+  const { isLoading } = useCreateMenuItems();
 
   const handleOpenConfigGroupModal = useCallback(() => {
     openConfigGroupModal();
   }, [openConfigGroupModal]);
 
   const dropdownMenu = useAgentActionsDropdownMenu({
-    handleOpenGroupWizard,
     openConfigGroupModal: handleOpenConfigGroupModal,
   });
 

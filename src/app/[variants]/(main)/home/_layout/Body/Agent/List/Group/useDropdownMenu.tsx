@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import { useCreateMenuItems, useSessionGroupMenuItems } from '../../../../hooks';
 
 interface GroupDropdownMenuProps {
-  handleOpenMemberSelection: () => void;
   id?: string;
   isCustomGroup?: boolean;
   isPinned?: boolean;
@@ -17,10 +16,8 @@ export const useGroupDropdownMenu = ({
   isCustomGroup,
   isPinned,
   toggleEditing,
-  handleOpenMemberSelection,
   openConfigGroupModal,
 }: GroupDropdownMenuProps): MenuProps['items'] => {
-
   // Session group menu items
   const { renameGroupMenuItem, configGroupMenuItem, deleteGroupMenuItem } =
     useSessionGroupMenuItems();
@@ -30,7 +27,7 @@ export const useGroupDropdownMenu = ({
 
   return useMemo(() => {
     const createAgentItem = createAgentMenuItem({ groupId: id, isPinned });
-    const createGroupChatItem = createGroupChatMenuItem(handleOpenMemberSelection);
+    const createGroupChatItem = createGroupChatMenuItem();
     const configItem = configGroupMenuItem(openConfigGroupModal);
     const renameItem = toggleEditing ? renameGroupMenuItem(toggleEditing) : null;
     const deleteItem = id ? deleteGroupMenuItem(id) : null;
@@ -53,7 +50,6 @@ export const useGroupDropdownMenu = ({
     configGroupMenuItem,
     renameGroupMenuItem,
     deleteGroupMenuItem,
-    handleOpenMemberSelection,
     openConfigGroupModal,
   ]);
 };
