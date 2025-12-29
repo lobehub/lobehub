@@ -7,6 +7,7 @@ type ExtendedDocumentType = DocumentType | 'agent/plan';
 interface CreateDocumentParams {
   content: string;
   description: string;
+  metadata?: Record<string, any>;
   title: string;
   topicId: string;
   type?: ExtendedDocumentType;
@@ -17,6 +18,7 @@ interface UpdateDocumentParams {
   content?: string;
   description?: string;
   id: string;
+  metadata?: Record<string, any>;
   title?: string;
 }
 

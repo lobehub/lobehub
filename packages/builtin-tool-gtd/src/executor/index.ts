@@ -14,10 +14,35 @@ import {
   type Plan,
   type RemoveTodosParams,
   type TodoItem,
+  type TodoState,
   type UpdatePlanParams,
   type UpdateTodosParams,
 } from '../types';
 import { getTodosFromContext } from './helper';
+
+/**
+ * Sync todos to the Plan document's metadata
+ * This allows the Plan to track todos persistently
+ */
+const syncTodosToPlan = async (topicId: string, todos: TodoState): Promise<void> => {
+  try {
+    // List all documents for this topic with type 'agent/plan'
+    const result = await notebookService.listDocuments({ topicId, type: 'agent/plan' });
+
+    // If there's a plan document, update its metadata with the todos
+    if (result.data.length > 0) {
+      // Update the first (most recent) plan document
+      const planDoc = result.data[0];
+      await notebookService.updateDocument({
+        id: planDoc.id,
+        metadata: { todos },
+      });
+    }
+  } catch (error) {
+    // Silently fail - todo sync is a non-critical feature
+    console.warn('Failed to sync todos to plan:', error);
+  }
+};
 
 // API enum for MVP (Todo + Plan)
 const GTDApiNameMVP = {
@@ -74,11 +99,18 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameMVP> {
     const addedList = itemsToAdd.map((item) => `- ${item.text}`).join('\n');
     const actionSummary = `✅ Added ${itemsToAdd.length} item${itemsToAdd.length > 1 ? 's' : ''}:\n${addedList}`;
 
+    const todoState = { items: updatedTodos, updatedAt: now };
+
+    // Sync todos to Plan document if topic exists
+    if (ctx.topicId) {
+      await syncTodosToPlan(ctx.topicId, todoState);
+    }
+
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
         createdItems: itemsToAdd.map((item) => item.text),
-        todos: { items: updatedTodos, updatedAt: now },
+        todos: todoState,
       },
       success: true,
     };
@@ -151,10 +183,17 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameMVP> {
         ? `🔄 Applied ${results.length} operation${results.length > 1 ? 's' : ''}:\n${results.map((r) => `- ${r}`).join('\n')}`
         : 'No operations applied.';
 
+    const todoState = { items: updatedTodos, updatedAt: now };
+
+    // Sync todos to Plan document if topic exists
+    if (ctx.topicId) {
+      await syncTodosToPlan(ctx.topicId, todoState);
+    }
+
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
-        todos: { items: updatedTodos, updatedAt: now },
+        todos: todoState,
       },
       success: true,
     };
@@ -220,11 +259,18 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameMVP> {
       actionSummary += `\n\nNote: Ignored invalid indices: ${invalidIndices.join(', ')}`;
     }
 
+    const todoState = { items: updatedTodos, updatedAt: now };
+
+    // Sync todos to Plan document if topic exists
+    if (ctx.topicId) {
+      await syncTodosToPlan(ctx.topicId, todoState);
+    }
+
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
         completedIndices: validIndices,
-        todos: { items: updatedTodos, updatedAt: now },
+        todos: todoState,
       },
       success: true,
     };
@@ -284,11 +330,18 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameMVP> {
       actionSummary += `\n\nNote: Ignored invalid indices: ${invalidIndices.join(', ')}`;
     }
 
+    const todoState = { items: updatedTodos, updatedAt: now };
+
+    // Sync todos to Plan document if topic exists
+    if (ctx.topicId) {
+      await syncTodosToPlan(ctx.topicId, todoState);
+    }
+
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
         removedIndices: validIndices,
-        todos: { items: updatedTodos, updatedAt: now },
+        todos: todoState,
       },
       success: true,
     };
@@ -339,13 +392,19 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameMVP> {
     }
 
     const now = new Date().toISOString();
+    const todoState = { items: updatedTodos, updatedAt: now };
+
+    // Sync todos to Plan document if topic exists
+    if (ctx.topicId) {
+      await syncTodosToPlan(ctx.topicId, todoState);
+    }
 
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
         clearedCount,
         mode,
-        todos: { items: updatedTodos, updatedAt: now },
+        todos: todoState,
       },
       success: true,
     };

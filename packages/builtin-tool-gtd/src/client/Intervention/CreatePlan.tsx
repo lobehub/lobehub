@@ -32,7 +32,6 @@ const useStyles = createStyles(({ css, token }) => ({
 
 const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
   ({ args, onArgsChange, registerBeforeApprove }) => {
-    console.log('[CreatePlanIntervention] args', args);
     const { t } = useTranslation('tool');
     const { styles } = useStyles();
 
@@ -48,7 +47,6 @@ const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
     // Initialize editor content when args.context changes
     useEffect(() => {
       if (editor && args?.context && !editorInitializedRef.current) {
-        console.log('[CreatePlanIntervention] initializing editor with context', args.context);
         editor.setDocument('text', args.context);
         editorInitializedRef.current = true;
       }

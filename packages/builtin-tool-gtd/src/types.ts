@@ -50,6 +50,9 @@ export interface TodoList {
   updatedAt: string;
 }
 
+/** Alias for TodoList, used for state storage in Plan metadata */
+export type TodoState = TodoList;
+
 // ==================== Todo Params ====================
 
 /**
