@@ -10,6 +10,7 @@ export default {
   'artifacts.svg.copySuccess': 'Image copied successfully',
   'artifacts.svg.download.png': 'Download as PNG',
   'artifacts.svg.download.svg': 'Download as SVG',
+  'document.todos.allCompleted': 'All tasks completed',
   'document.todos.title': 'Tasks',
   'emptyArtifactList': 'No Artifacts yet. Use Skills in the conversation, then come back here.',
   'emptyKnowledgeList': 'This list is empty.',

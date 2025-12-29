@@ -1,8 +1,8 @@
 'use client';
 
-import { Block, Checkbox, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,69 +21,90 @@ interface TodoState {
   updatedAt: string;
 }
 
-const useStyles = createStyles(({ css, token }) => ({
-  header: css`
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  collapsed: css`
+    max-height: 0;
+    padding-block: 0 !important;
+    opacity: 0;
+  `,
+  container: css`
     cursor: pointer;
+    user-select: none;
 
     padding-block: 8px;
     padding-inline: 12px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 8px;
 
-    transition: background-color 0.2s;
+    background: ${cssVar.colorBgElevated};
+
+    transition: all 0.2s ${cssVar.motionEaseInOut};
 
     &:hover {
-      background-color: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
-  headerCollapsed: css`
-    border-block-end: none;
+  count: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  expanded: css`
+    max-height: 300px;
+    opacity: 1;
+  `,
+  header: css`
+    overflow: hidden;
+
+    font-size: 13px;
+    font-weight: 500;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   itemRow: css`
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px dashed ${token.colorBorderSecondary};
+    padding-block: 6px;
+    padding-inline: 4px;
+    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
+    font-size: 13px;
 
     &:last-child {
       border-block-end: none;
     }
   `,
+  listContainer: css`
+    overflow: hidden;
+
+    margin-block-start: 8px;
+    padding-block: 4px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    transition:
+      max-height 0.25s ${cssVar.motionEaseInOut},
+      opacity 0.2s ${cssVar.motionEaseInOut},
+      padding 0.2s ${cssVar.motionEaseInOut};
+  `,
+  progress: css`
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: ${cssVar.colorFillSecondary};
+  `,
+  progressFill: css`
+    height: 100%;
+    border-radius: 2px;
+    background: ${cssVar.colorSuccess};
+    transition: width 0.3s ${cssVar.motionEaseInOut};
+  `,
   textChecked: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
   `,
 }));
 
-interface ReadOnlyTodoItemProps {
-  completed: boolean;
-  text: string;
-}
-
-const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, completed }) => {
-  const { styles, theme } = useStyles();
-
-  return (
-    <Checkbox
-      backgroundColor={theme.colorSuccess}
-      checked={completed}
-      classNames={{ text: completed ? styles.textChecked : undefined, wrapper: styles.itemRow }}
-      shape={'circle'}
-      style={{ borderWidth: 1.5, cursor: 'default' }}
-      textProps={{
-        type: completed ? 'secondary' : undefined,
-      }}
-    >
-      {text}
-    </Checkbox>
-  );
-});
-
-ReadOnlyTodoItem.displayName = 'ReadOnlyTodoItem';
-
 const TodoList = memo(() => {
   const { t } = useTranslation('portal');
-  const { styles, cx } = useStyles();
-  const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const documentId = useDocumentEditorStore((s) => s.documentId);
   const topicId = useDocumentEditorStore((s) => s.topicId);
@@ -98,34 +119,66 @@ const TodoList = memo(() => {
 
   if (items.length === 0) return null;
 
-  const completedCount = items.filter((item) => item.completed).length;
+  const total = items.length;
+  const completed = items.filter((item) => item.completed).length;
+  const progressPercent = total > 0 ? (completed / total) * 100 : 0;
+
+  // Find current pending task (first incomplete item)
+  const currentPendingTask = items.find((item) => !item.completed);
+
+  const toggleExpanded = () => setExpanded(!expanded);
 
   return (
-    <Flexbox gap={0}>
-      <Block variant={'outlined'} width="100%">
-        <Flexbox
-          align="center"
-          className={cx(styles.header, collapsed && styles.headerCollapsed)}
-          horizontal
-          justify="space-between"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          <Flexbox align="center" gap={8} horizontal>
-            <Icon icon={collapsed ? ChevronUp : ChevronDown} size={16} />
-            <Text style={{ fontSize: 14 }} type="secondary" weight={500}>
-              {t('document.todos.title', { ns: 'portal' })}
-            </Text>
-          </Flexbox>
-          <Text style={{ fontSize: 12, opacity: 0.45 }}>
-            {completedCount}/{items.length}
-          </Text>
+    <div className={styles.container} onClick={toggleExpanded}>
+      {/* Header */}
+      <Flexbox align="center" gap={8} horizontal justify="space-between">
+        <Flexbox align="center" gap={8} horizontal style={{ flex: 1, minWidth: 0 }}>
+          <Icon icon={ListTodo} size={16} style={{ color: cssVar.colorPrimary, flexShrink: 0 }} />
+          <span className={styles.header}>
+            {currentPendingTask?.text || t('document.todos.allCompleted')}
+          </span>
+          <Tag size="small" style={{ flexShrink: 0 }}>
+            <span className={styles.count}>
+              {completed}/{total}
+            </span>
+          </Tag>
         </Flexbox>
-        {!collapsed &&
-          items.map((item, index) => (
-            <ReadOnlyTodoItem completed={item.completed} key={index} text={item.text} />
-          ))}
-      </Block>
-    </Flexbox>
+        <Icon
+          icon={expanded ? ChevronUp : ChevronDown}
+          size={16}
+          style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
+        />
+      </Flexbox>
+
+      {/* Progress Bar */}
+      <Flexbox gap={8} horizontal style={{ marginTop: 8 }}>
+        <div className={styles.progress}>
+          <div className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
+        </div>
+      </Flexbox>
+
+      {/* Expandable Todo List */}
+      <div className={cx(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}>
+        {items.map((item, index) => (
+          <Checkbox
+            backgroundColor={cssVar.colorSuccess}
+            checked={item.completed}
+            classNames={{
+              text: item.completed ? styles.textChecked : undefined,
+              wrapper: styles.itemRow,
+            }}
+            key={index}
+            shape="circle"
+            style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
+            textProps={{
+              type: item.completed ? 'secondary' : undefined,
+            }}
+          >
+            {item.text}
+          </Checkbox>
+        ))}
+      </div>
+    </div>
   );
 });
 
