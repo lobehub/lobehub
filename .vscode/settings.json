@@ -15,7 +15,8 @@
     { "rule": "typescript-sort-keys/interface", "severity": "off" }
   ],
   "eslint.validate": [
-    "json",
+    // vscode eslint not 插件兼容性有问题
+    // "json",
     "javascript",
     "javascriptreact",
     "typescript",

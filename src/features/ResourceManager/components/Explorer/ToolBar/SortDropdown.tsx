@@ -4,16 +4,14 @@ import { ArrowDownAZ } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useQueryState } from '@/hooks/useQueryParam';
+import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
 
 const SortDropdown = memo(() => {
   const { t } = useTranslation('components');
-  const [sorter, setSorter] = useQueryState('sorter', {
-    clearOnDefault: true,
-    defaultValue: 'createdAt',
-  });
+  const sorter = useResourceManagerStore((s) => s.sorter);
+  const setSorter = useResourceManagerStore((s) => s.setSorter);
 
   const sortOptions = useMemo(
     () => [
@@ -27,7 +25,7 @@ const SortDropdown = memo(() => {
   const menuItems: MenuProps['items'] = sortOptions.map((option) => ({
     key: option.key,
     label: option.label,
-    onClick: () => setSorter(option.key),
+    onClick: () => setSorter(option.key as 'name' | 'createdAt' | 'size'),
   }));
 
   const currentSortLabel =

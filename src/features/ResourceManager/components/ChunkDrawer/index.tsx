@@ -10,6 +10,9 @@ import Content from './Content';
 
 const FileViewer = dynamic(() => import('@/features/FileViewer'), { ssr: false });
 
+/**
+ * Showing the chunk info of a file
+ */
 const ChunkDrawer = memo(() => {
   const [fileId, open, closeChunkDrawer] = useFileStore((s) => [
     s.chunkDetailId,
@@ -24,11 +27,11 @@ const ChunkDrawer = memo(() => {
         closeChunkDrawer();
       }}
       open={open}
+      size="large"
       styles={{
         body: { padding: 0 },
       }}
       title={file?.name}
-      width={'90%'}
     >
       <Flexbox height={'100%'} horizontal style={{ overflow: 'hidden' }}>
         {file && (

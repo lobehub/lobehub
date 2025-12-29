@@ -441,25 +441,16 @@ export const createFileManageSlice: StateCreator<
           limit: params.limit ?? 50,
           offset: 0,
         });
+
+        // Update store immediately with response data (no duplicate fetch!)
+        set({
+          fileList: response.items,
+          fileListHasMore: response.hasMore,
+          fileListOffset: response.items.length,
+          queryListParams: params,
+        });
+
         return response.items;
-      },
-      {
-        onSuccess: (data) => {
-          serverFileService
-            .getKnowledgeItems({
-              ...params,
-              limit: params.limit ?? 50,
-              offset: 0,
-            })
-            .then((response) => {
-              set({
-                fileList: data,
-                fileListHasMore: response.hasMore,
-                fileListOffset: data.length,
-                queryListParams: params,
-              });
-            });
-        },
       },
     ),
 });

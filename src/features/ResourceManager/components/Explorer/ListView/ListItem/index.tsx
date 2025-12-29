@@ -30,9 +30,6 @@ export const FILE_DATE_WIDTH = 160;
 export const FILE_SIZE_WIDTH = 140;
 
 const styles = createStaticStyles(({ css }) => {
-  const hover = css`
-    opacity: 0;
-  `;
   return {
     container: css`
       cursor: pointer;
@@ -40,13 +37,9 @@ const styles = createStaticStyles(({ css }) => {
       &:hover {
         background: ${cssVar.colorFillTertiary};
 
-        .${cx(hover)} {
+        .file-list-item-hover {
           opacity: 1;
         }
-      }
-
-      .chunk-tag {
-        opacity: 1;
       }
     `,
 
@@ -64,7 +57,12 @@ const styles = createStaticStyles(({ css }) => {
       opacity: 0.5;
     `,
 
-    hover,
+    hover: cx(
+      'file-list-item-hover',
+      css`
+        opacity: 0;
+      `,
+    ),
     item: css`
       padding-block: 0;
       padding-inline: 0 24px;
@@ -132,13 +130,13 @@ const FileListItem = memo<FileListItemProps>(
     const navigate = useNavigate();
     const [, setSearchParams] = useSearchParams();
 
-    const [isCreatingFileParseTask, parseFiles, renameFolder, setPendingRenameItemId] =
-      useFileStore((s) => [
-        fileManagerSelectors.isCreatingFileParseTask(id)(s),
-        s.parseFilesToChunks,
-        s.renameFolder,
-        s.setPendingRenameItemId,
-      ]);
+    const [isCreatingFileParseTask, parseFiles, renameFolder] = useFileStore((s) => [
+      fileManagerSelectors.isCreatingFileParseTask(id)(s),
+      s.parseFilesToChunks,
+      s.renameFolder,
+    ]);
+
+    const setPendingRenameItemId = useResourceManagerStore((s) => s.setPendingRenameItemId);
 
     const [isRenaming, setIsRenaming] = useState(false);
     const [renamingValue, setRenamingValue] = useState(name);

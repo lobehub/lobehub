@@ -1,15 +1,19 @@
 'use client';
 
-import { Button, Center, Checkbox, Flexbox } from '@lobehub/ui';
+import { Center, Checkbox, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type DragEvent, memo, useCallback, useMemo, useRef, useState } from 'react';
+import { type DragEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { VList, type VListHandle } from 'virtua';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
-import { useFileStore } from '@/store/file';
-import { type FileListItem as FileListItemType } from '@/types/files';
+import {
+  useResourceManagerFetchFolderBreadcrumb,
+  useResourceManagerFetchKnowledgeItems,
+  useResourceManagerStore,
+} from '@/app/[variants]/(main)/resource/features/store';
+import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 
 import FileListItem, { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './ListItem';
 
@@ -32,187 +36,224 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 0;
     padding-inline: 0 24px;
   `,
-  loadMoreContainer: css`
+  loadingIndicator: css`
     padding: 16px;
+    color: ${cssVar.colorTextDescription};
+    font-size: 14px;
   `,
 }));
 
-interface ListViewProps {
-  data: FileListItemType[] | undefined;
-  hasMore: boolean;
-  loadMore: () => Promise<void>;
-  onSelectionChange: (
-    id: string,
-    checked: boolean,
-    shiftKey: boolean,
-    clickedIndex: number,
-  ) => void;
-  pendingRenameItemId?: string | null;
-  selectFileIds: string[];
-  setSelectedFileIds: (ids: string[]) => void;
-}
-
-const ListView = memo<ListViewProps>(
-  ({
-    data,
-    hasMore,
-    loadMore,
-    onSelectionChange,
-    pendingRenameItemId,
+const ListView = memo(() => {
+  // Access all state from Resource Manager store
+  const [
+    libraryId,
+    category,
+    searchQuery,
     selectFileIds,
     setSelectedFileIds,
-  }) => {
-    const { t } = useTranslation(['components', 'file']);
-    const virtuaRef = useRef<VListHandle>(null);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const isDragActive = useDragActive();
-    const [isDropZoneActive, setIsDropZoneActive] = useState(false);
+    pendingRenameItemId,
+    fileListHasMore,
+    loadMoreKnowledgeItems,
+    sorter,
+    sortType,
+  ] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.searchQuery,
+    s.selectedFileIds,
+    s.setSelectedFileIds,
+    s.pendingRenameItemId,
+    s.fileListHasMore,
+    s.loadMoreKnowledgeItems,
+    s.sorter,
+    s.sortType,
+  ]);
 
-    const { currentFolderSlug } = useFolderPath();
-    const useFetchFolderBreadcrumb = useFileStore((s) => s.useFetchFolderBreadcrumb);
-    const { data: folderBreadcrumb } = useFetchFolderBreadcrumb(currentFolderSlug);
+  const { t } = useTranslation(['components', 'file']);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const isDragActive = useDragActive();
+  const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
-    // Get current folder ID - either from breadcrumb or null for root
-    const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
+  const { currentFolderSlug } = useFolderPath();
+  const { data: folderBreadcrumb } = useResourceManagerFetchFolderBreadcrumb(currentFolderSlug);
 
-    // Calculate select all checkbox state
-    const { allSelected, indeterminate } = useMemo(() => {
-      const fileCount = data?.length || 0;
-      const selectedCount = selectFileIds.length;
-      return {
-        allSelected: fileCount > 0 && selectedCount === fileCount,
-        indeterminate: selectedCount > 0 && selectedCount < fileCount,
-      };
-    }, [data, selectFileIds]);
+  // Get current folder ID - either from breadcrumb or null for root
+  const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
 
-    // Handle select all checkbox change
-    const handleSelectAll = () => {
-      if (allSelected) {
-        setSelectedFileIds([]);
+  // Fetch data with SWR
+  const { data: rawData } = useResourceManagerFetchKnowledgeItems({
+    category,
+    knowledgeBaseId: libraryId,
+    parentId: currentFolderSlug || null,
+    q: searchQuery ?? undefined,
+    showFilesInKnowledgeBase: false,
+  });
+
+  // Sort data using current sort settings
+  const data = sortFileList(rawData, sorter, sortType);
+
+  // Handle selection change with shift-click support for range selection
+  const handleSelectionChange = useCallback(
+    (id: string, checked: boolean, shiftKey: boolean, clickedIndex: number) => {
+      if (shiftKey && lastSelectedIndex !== null && selectFileIds.length > 0 && data) {
+        const start = Math.min(lastSelectedIndex, clickedIndex);
+        const end = Math.max(lastSelectedIndex, clickedIndex);
+        const rangeIds = data.slice(start, end + 1).map((item) => item.id);
+
+        const prevSet = new Set(selectFileIds);
+        rangeIds.forEach((rangeId) => prevSet.add(rangeId));
+        setSelectedFileIds(Array.from(prevSet));
       } else {
-        setSelectedFileIds(data?.map((item) => item.id) || []);
+        if (checked) {
+          setSelectedFileIds([...selectFileIds, id]);
+        } else {
+          setSelectedFileIds(selectFileIds.filter((item) => item !== id));
+        }
       }
+      setLastSelectedIndex(clickedIndex);
+    },
+    [lastSelectedIndex, selectFileIds, data, setSelectedFileIds],
+  );
+
+  // Clean up invalid selections when data changes
+  useEffect(() => {
+    if (data && selectFileIds.length > 0) {
+      const validFileIds = new Set(data.map((item) => item?.id).filter(Boolean));
+      const filteredSelection = selectFileIds.filter((id) => validFileIds.has(id));
+      if (filteredSelection.length !== selectFileIds.length) {
+        setSelectedFileIds(filteredSelection);
+      }
+    }
+  }, [data, selectFileIds, setSelectedFileIds]);
+
+  // Reset last selected index when all selections are cleared
+  useEffect(() => {
+    if (selectFileIds.length === 0) {
+      setLastSelectedIndex(null);
+    }
+  }, [selectFileIds.length]);
+
+  // Calculate select all checkbox state
+  const { allSelected, indeterminate } = useMemo(() => {
+    const fileCount = data?.length || 0;
+    const selectedCount = selectFileIds.length;
+    return {
+      allSelected: fileCount > 0 && selectedCount === fileCount,
+      indeterminate: selectedCount > 0 && selectedCount < fileCount,
     };
+  }, [data, selectFileIds]);
 
-    // Handle load more button click
-    const handleLoadMore = useCallback(async () => {
-      if (!hasMore || isLoadingMore) return;
+  // Handle select all checkbox change
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedFileIds([]);
+    } else {
+      setSelectedFileIds(data?.map((item) => item.id) || []);
+    }
+  };
 
-      setIsLoadingMore(true);
-      try {
-        await loadMore();
-      } finally {
-        setIsLoadingMore(false);
-      }
-    }, [hasMore, loadMore, isLoadingMore]);
+  // Handle automatic load more when reaching the end
+  const handleEndReached = useCallback(async () => {
+    console.log('handleEndReached', fileListHasMore, isLoadingMore);
 
-    // Drop zone handlers for dragging to blank space
-    const handleDropZoneDragOver = useCallback(
-      (e: DragEvent) => {
-        if (!isDragActive) return;
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDropZoneActive(true);
-      },
-      [isDragActive],
-    );
+    if (!fileListHasMore || isLoadingMore) return;
 
-    const handleDropZoneDragLeave = useCallback(() => {
-      setIsDropZoneActive(false);
-    }, []);
+    setIsLoadingMore(true);
+    try {
+      await loadMoreKnowledgeItems();
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [fileListHasMore, loadMoreKnowledgeItems, isLoadingMore]);
 
-    const handleDropZoneDrop = useCallback(() => {
-      setIsDropZoneActive(false);
-    }, []);
+  // Drop zone handlers for dragging to blank space
+  const handleDropZoneDragOver = useCallback(
+    (e: DragEvent) => {
+      if (!isDragActive) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDropZoneActive(true);
+    },
+    [isDragActive],
+  );
 
-    // Add virtual "load more" item to data if there's more to load
-    const displayData = useMemo(() => {
-      if (!data) return data;
-      if (!hasMore) return data;
-      // Add a fake item at the end to represent the Load More button
-      return [...data, { id: '__load_more__', isLoadMorePlaceholder: true } as any];
-    }, [data, hasMore]);
+  const handleDropZoneDragLeave = useCallback(() => {
+    setIsDropZoneActive(false);
+  }, []);
 
-    return (
-      <Flexbox height={'100%'}>
-        <Flexbox
-          align={'center'}
-          className={styles.header}
-          horizontal
-          paddingInline={8}
-          style={{
-            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-            fontSize: 12,
-          }}
-        >
-          <Center height={40} style={{ paddingInline: 4 }}>
-            <Checkbox
-              checked={allSelected}
-              indeterminate={indeterminate}
-              onChange={handleSelectAll}
-            />
-          </Center>
-          <Flexbox className={styles.headerItem} flex={1} style={{ paddingInline: 8 }}>
-            {t('FileManager.title.title')}
-          </Flexbox>
-          <Flexbox className={styles.headerItem} width={FILE_DATE_WIDTH}>
-            {t('FileManager.title.createdAt')}
-          </Flexbox>
-          <Flexbox className={styles.headerItem} width={FILE_SIZE_WIDTH}>
-            {t('FileManager.title.size')}
-          </Flexbox>
+  const handleDropZoneDrop = useCallback(() => {
+    setIsDropZoneActive(false);
+  }, []);
+
+  return (
+    <Flexbox height={'100%'}>
+      <Flexbox
+        align={'center'}
+        className={styles.header}
+        horizontal
+        paddingInline={8}
+        style={{
+          borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+          fontSize: 12,
+        }}
+      >
+        <Center height={40} style={{ paddingInline: 4 }}>
+          <Checkbox
+            checked={allSelected}
+            indeterminate={indeterminate}
+            onChange={handleSelectAll}
+          />
+        </Center>
+        <Flexbox className={styles.headerItem} flex={1} style={{ paddingInline: 8 }}>
+          {t('FileManager.title.title')}
         </Flexbox>
-        <div
-          className={cx(styles.dropZone, isDropZoneActive && styles.dropZoneActive)}
-          data-drop-target-id={currentFolderId || undefined}
-          data-is-folder="true"
-          onDragLeave={handleDropZoneDragLeave}
-          onDragOver={handleDropZoneDragOver}
-          onDrop={handleDropZoneDrop}
-          style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
-        >
-          <VList
-            bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-            data={displayData}
-            itemSize={48}
-            ref={virtuaRef}
-            style={{ height: '100%' }}
-          >
-            {(item, index) => {
-              // Render Load More button for the placeholder item
-              if (item.isLoadMorePlaceholder) {
-                return (
-                  <Center
-                    className={styles.loadMoreContainer}
-                    key="load-more"
-                    style={{
-                      borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
-                    }}
-                  >
-                    <Button loading={isLoadingMore} onClick={handleLoadMore} type="default">
-                      {t('loadMore', { defaultValue: 'Load More', ns: 'file' })}
-                    </Button>
-                  </Center>
-                );
-              }
-
-              // Render normal file item
-              return (
-                <FileListItem
-                  index={index}
-                  key={item.id}
-                  onSelectedChange={onSelectionChange}
-                  pendingRenameItemId={pendingRenameItemId}
-                  selected={selectFileIds.includes(item.id)}
-                  {...item}
-                />
-              );
-            }}
-          </VList>
-        </div>
+        <Flexbox className={styles.headerItem} width={FILE_DATE_WIDTH}>
+          {t('FileManager.title.createdAt')}
+        </Flexbox>
+        <Flexbox className={styles.headerItem} width={FILE_SIZE_WIDTH}>
+          {t('FileManager.title.size')}
+        </Flexbox>
       </Flexbox>
-    );
-  },
-);
+      <div
+        className={cx(styles.dropZone, isDropZoneActive && styles.dropZoneActive)}
+        data-drop-target-id={currentFolderId || undefined}
+        data-is-folder="true"
+        onDragLeave={handleDropZoneDragLeave}
+        onDragOver={handleDropZoneDragOver}
+        onDrop={handleDropZoneDrop}
+        style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
+      >
+        <Virtuoso
+          data={data}
+          endReached={handleEndReached}
+          itemContent={(index, item) => (
+            <FileListItem
+              index={index}
+              key={item.id}
+              onSelectedChange={handleSelectionChange}
+              pendingRenameItemId={pendingRenameItemId}
+              selected={selectFileIds.includes(item.id)}
+              {...item}
+            />
+          )}
+          ref={virtuosoRef}
+          style={{ height: '100%' }}
+        />
+        {isLoadingMore && (
+          <Center
+            className={styles.loadingIndicator}
+            style={{
+              borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
+            }}
+          >
+            {t('loading', { defaultValue: 'Loading...', ns: 'file' })}
+          </Center>
+        )}
+      </div>
+    </Flexbox>
+  );
+});
 
 export default ListView;

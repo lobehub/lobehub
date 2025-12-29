@@ -195,15 +195,18 @@ export class AiAgentService {
     }
 
     // 7. Create user message in database
+    // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
       content: prompt,
       role: 'user',
+      threadId: appContext?.threadId ?? undefined,
       topicId,
     });
     log('execAgent: created user message %s', userMessageRecord.id);
 
     // 8. Create assistant message placeholder in database
+    // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
       content: LOADING_FLAT,
@@ -211,6 +214,7 @@ export class AiAgentService {
       parentId: userMessageRecord.id,
       provider,
       role: 'assistant',
+      threadId: appContext?.threadId ?? undefined,
       topicId,
     });
     log('execAgent: created assistant message %s', assistantMessageRecord.id);

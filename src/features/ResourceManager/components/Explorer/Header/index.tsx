@@ -15,18 +15,19 @@ import AddButton from '../../Header/AddButton';
 import BatchActionsDropdown from '../ToolBar/BatchActionsDropdown';
 import SortDropdown from '../ToolBar/SortDropdown';
 import ViewSwitcher from '../ToolBar/ViewSwitcher';
-import { useFileExplorer } from '../useFileExplorer';
 import Breadcrumb from './Breadcrumb';
 
 const Header = memo(() => {
   const { t } = useTranslation('file');
 
-  const [libraryId] = useResourceManagerStore((s) => [s.libraryId]);
+  // Get state and actions from store
+  const [libraryId, category, onActionClick, selectFileIds] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.onActionClick,
+    s.selectedFileIds,
+  ]);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-
-  const { category, onActionClick, selectFileIds } = useFileExplorer({
-    libraryId,
-  });
 
   // Disable batch actions dropdown when no items selected and not in any library
   const isBatchActionsDisabled = selectFileIds.length === 0 && !libraryId;

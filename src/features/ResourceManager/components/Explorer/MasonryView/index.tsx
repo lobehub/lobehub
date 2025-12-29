@@ -2,7 +2,7 @@
 
 import { Center } from '@lobehub/ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
-import { Button } from 'antd';
+import { cssVar } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -40,7 +40,7 @@ const MasonryView = memo<MasonryViewProps>(
       [onOpenFile, libraryId, selectFileIds, setSelectedFileIds],
     );
 
-    // Handle load more button click
+    // Handle automatic load more when scrolling to bottom
     const handleLoadMore = useCallback(async () => {
       if (!hasMore || isLoadingMore) return;
 
@@ -52,8 +52,25 @@ const MasonryView = memo<MasonryViewProps>(
       }
     }, [hasMore, loadMore, isLoadingMore]);
 
+    // Handle scroll event to detect when near bottom
+    const handleScroll = useCallback(
+      (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.currentTarget;
+        const scrollTop = target.scrollTop;
+        const scrollHeight = target.scrollHeight;
+        const clientHeight = target.clientHeight;
+
+        // Trigger load when within 300px of bottom
+        if (scrollHeight - scrollTop - clientHeight < 300) {
+          handleLoadMore();
+        }
+      },
+      [handleLoadMore],
+    );
+
     return (
       <div
+        onScroll={handleScroll}
         style={{
           flex: 1,
           height: '100%',
@@ -72,11 +89,16 @@ const MasonryView = memo<MasonryViewProps>(
               gap: '16px',
             }}
           />
-          {hasMore && (
-            <Center style={{ marginBlockStart: 24 }}>
-              <Button loading={isLoadingMore} onClick={handleLoadMore} type="default">
-                {t('loadMore', { defaultValue: 'Load More' })}
-              </Button>
+          {isLoadingMore && (
+            <Center
+              style={{
+                color: cssVar.colorTextDescription,
+                fontSize: 14,
+                marginBlockStart: 16,
+                minHeight: 40,
+              }}
+            >
+              {t('loading', { defaultValue: 'Loading...' })}
             </Center>
           )}
         </div>

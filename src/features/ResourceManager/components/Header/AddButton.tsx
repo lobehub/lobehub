@@ -34,15 +34,16 @@ const AddButton = () => {
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createFolder = useFileStore((s) => s.createFolder);
   const createDocument = useFileStore((s) => s.createDocument);
-  const setPendingRenameItemId = useFileStore((s) => s.setPendingRenameItemId);
-  const currentFolderId = useFileStore((s) => s.currentFolderId);
   const refreshFileList = useFileStore((s) => s.refreshFileList);
 
-  const [libraryId, setCurrentViewItemId, setMode] = useResourceManagerStore((s) => [
-    s.libraryId,
-    s.setCurrentViewItemId,
-    s.setMode,
-  ]);
+  const [libraryId, currentFolderId, setCurrentViewItemId, setMode, setPendingRenameItemId] =
+    useResourceManagerStore((s) => [
+      s.libraryId,
+      s.currentFolderId,
+      s.setCurrentViewItemId,
+      s.setMode,
+      s.setPendingRenameItemId,
+    ]);
 
   const handleOpenPageEditor = useCallback(async () => {
     // Create a new page directly and switch to page view

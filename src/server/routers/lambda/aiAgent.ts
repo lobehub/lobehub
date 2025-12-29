@@ -460,7 +460,6 @@ export const aiAgentRouter = router({
       }
     }),
 
-  
   getOperationStatus: aiAgentProcedure
     .input(GetOperationStatusSchema)
     .query(async ({ input, ctx }) => {
@@ -482,8 +481,7 @@ export const aiAgentRouter = router({
       return operationStatus;
     }),
 
-  
-getPendingInterventions: aiAgentProcedure
+  getPendingInterventions: aiAgentProcedure
     .input(GetPendingInterventionsSchema)
     .query(async ({ input, ctx }) => {
       const { operationId, userId } = input;
@@ -513,7 +511,7 @@ getPendingInterventions: aiAgentProcedure
    * As a workaround, this endpoint also updates Thread metadata from Redis
    * when real-time status is available.
    */
-getSubAgentTaskStatus: aiAgentProcedure
+  getSubAgentTaskStatus: aiAgentProcedure
     .input(
       z.object({
         /** Thread ID */
@@ -663,6 +661,7 @@ getSubAgentTaskStatus: aiAgentProcedure
           // Tool message means tool has returned result
           currentActivity = {
             apiName: lastMessage.plugin?.apiName ?? undefined,
+            contentPreview: lastMessage.content?.slice(0, 100),
             identifier: lastMessage.plugin?.identifier ?? undefined,
             type: 'tool_result',
           };

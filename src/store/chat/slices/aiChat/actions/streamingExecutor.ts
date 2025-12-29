@@ -941,11 +941,6 @@ export const streamingExecutor: StateCreator<
     // Create a new array to avoid modifying the original messages
     let messages = [...originalMessages];
 
-    console.log('[internal_execAgentRuntime] Context scope:', {
-      scope: context.scope,
-      agentId: effectiveAgentId,
-    });
-
     // Use effectiveAgentId to get agent config (subAgentId in group orchestration, agentId otherwise)
     // resolveAgentConfig handles:
     // - Builtin agent runtime config merging

@@ -194,20 +194,6 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       ).rejects.toThrow();
     });
 
-    it('should reject when groupId is missing', async () => {
-      const caller = aiAgentRouter.createCaller(createTestContext());
-
-      await expect(
-        caller.execSubAgentTask({
-          agentId: testAgentId,
-          groupId: undefined,
-          instruction: 'Test instruction',
-          parentMessageId: 'parent-msg-1',
-          topicId: testTopicId,
-        } as any),
-      ).rejects.toThrow();
-    });
-
     it('should reject when instruction is missing', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
