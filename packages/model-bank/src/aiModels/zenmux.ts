@@ -20,7 +20,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     description: 'GPT-5.2 — 面向编码与 agentic 工作流的旗舰模型，提供更强推理与长上下文能力。',
     displayName: 'GPT-5.2',
     enabled: true,
-    id: 'gpt-5.2',
+    id: 'openai/gpt-5.2',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -47,7 +47,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 pro：更聪明、更精确的 GPT-5.2 版本（Responses API Only），适合高难度问题与更长的多轮推理。',
     displayName: 'GPT-5.2 pro',
-    id: 'gpt-5.2-pro',
+    id: 'openai/gpt-5.2-pro',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -70,7 +70,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     description: 'GPT-5.2 Chat：ChatGPT 使用的 GPT-5.2 变体（chat-latest），用于体验最新对话改进。',
     displayName: 'GPT-5.2 Chat',
     enabled: true,
-    id: 'gpt-5.2-chat-latest',
+    id: 'openai/gpt-5.2-chat',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -113,10 +113,10 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 65_536,
-    description: 'Gemini 3 Pro Image 免费版，支持受限额度的多模态生成。',
-    displayName: 'Gemini 3 Pro Image (Nano Banana) Free',
+    description: 'Gemini 3 Pro Image ，最新的多模态生成模型。',
+    displayName: 'Gemini 3 Pro Image (Nano Banana)',
     enabled: true,
-    id: 'google/gemini-3-pro-image-preview-free',
+    id: 'google/gemini-3-pro-image-preview',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -156,10 +156,10 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      'Gemini 3 Pro 免费预览版，具备与标准版相同的多模态理解与推理能力，但受免费额度与速率限制影响，更适合作为体验与低频使用。',
-    displayName: 'Gemini 3 Pro Preview Free',
+      'Gemini 3 Pro 预览版，具备与标准版相同的多模态理解与推理能力，但受免费额度与速率限制影响，更适合作为体验与低频使用。',
+    displayName: 'Gemini 3 Pro Preview',
     enabled: true,
-    id: 'google/gemini-3-pro-preview-free',
+    id: 'google/gemini-3-pro-preview',
     maxOutput: 65_530,
     pricing: {
       units: [
