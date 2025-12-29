@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "لغو",
+  "authorize.cancel": "فعلاً نه",
   "authorize.confirm": "ایجاد پروفایل شما",
   "authorize.description": "پروفایل انجمن شما مستقل از حساب کاربری {{appName}} است.",
   "authorize.footer.agreement": "با ادامه دادن، شما تأیید می‌کنید که <terms>شرایط و ضوابط</terms> و <privacy>سیاست حفظ حریم خصوصی</privacy> را خوانده و پذیرفته‌اید.",

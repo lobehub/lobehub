@@ -3,13 +3,13 @@
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Highlighter, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import { type EditLocalFileState } from '../../type';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     padding-inline: 8px 0;
@@ -27,11 +27,11 @@ const useStyles = createStyles(({ css, token }) => ({
     }
   `,
   path: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   stats: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
   `,
   statusIcon: css`
@@ -48,7 +48,6 @@ interface EditLocalFileParams {
 
 const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFileState>>(
   ({ args, pluginState }) => {
-    const { styles, theme } = useStyles();
     const [expanded, setExpanded] = useState(false);
     const isSuccess = pluginState && pluginState.replacements > 0;
 
@@ -65,12 +64,12 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
             {pluginState === undefined ? null : isSuccess ? (
               <CheckCircleFilled
                 className={styles.statusIcon}
-                style={{ color: theme.colorSuccess }}
+                style={{ color: cssVar.colorSuccess }}
               />
             ) : (
               <CloseCircleFilled
                 className={styles.statusIcon}
-                style={{ color: theme.colorError }}
+                style={{ color: cssVar.colorError }}
               />
             )}
             <Text className={styles.path}>

@@ -1,10 +1,6 @@
 {
   "actions.addNewTopic": "Iniciar novo tópico",
   "actions.autoRename": "Renomeação automática",
-  "actions.confirmRemoveAll": "Você está prestes a remover todos os tópicos. Após a exclusão, não será possível recuperar. Por favor, proceda com cautela.",
-  "actions.confirmRemoveTopic": "Você está prestes a remover este tópico. Após a exclusão, não será possível recuperar. Por favor, proceda com cautela.",
-  "actions.confirmRemoveUnstarred": "Você está prestes a remover tópicos não favoritos. Após a exclusão, não será possível recuperar. Por favor, proceda com cautela.",
-  "actions.duplicate": "Criar cópia",
   "actions.export": "Exportar tópicos",
   "actions.import": "Importar conversa",
   "actions.openInNewWindow": "Abrir em uma nova janela",

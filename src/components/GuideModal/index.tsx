@@ -2,11 +2,12 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { ConfigProvider, Modal, type ModalProps } from 'antd';
-import { createStyles } from 'antd-style';
-import { lighten } from 'polished';
-import { type ReactNode, memo } from 'react';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { type ReactNode, memo, useMemo } from 'react';
 
-const useStyles = createStyles(({ css, token, prefixCls }) => {
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => {
   return {
     content: css`
       .${prefixCls}-modal-footer {
@@ -26,8 +27,8 @@ const useStyles = createStyles(({ css, token, prefixCls }) => {
       .${prefixCls}-modal-container {
         overflow: hidden;
         padding: 0;
-        border: 1px solid ${token.colorSplit};
-        border-radius: ${token.borderRadiusLG}px;
+        border: 1px solid ${cssVar.colorSplit};
+        border-radius: ${cssVar.borderRadiusLG};
       }
     `,
     wrap: css`
@@ -44,15 +45,17 @@ interface GuideModalProps extends ModalProps {
 
 const GuideModal = memo<GuideModalProps>(
   ({ className, title, desc, cover, width = 360, ...rest }) => {
-    const { styles, cx, theme } = useStyles();
+    const configTheme = useMemo(
+      () => ({
+        token: {
+          colorBgElevated: `color-mix(in srgb, ${cssVar.colorBgContainer} 99.5%, white)`,
+        },
+      }),
+      [],
+    );
+
     return (
-      <ConfigProvider
-        theme={{
-          token: {
-            colorBgElevated: lighten(0.005, theme.colorBgContainer),
-          },
-        }}
-      >
+      <ConfigProvider theme={configTheme}>
         <Modal
           centered
           className={cx(styles.content, className)}

@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles , responsive } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,13 +9,13 @@ import { useConversationStore } from '@/features/Conversation';
 
 // import { useSend } from '../../features/ChatInput/useSend';
 
-const useStyles = createStyles(({ css, token, responsive }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 8px;
     padding-inline: 16px;
     border-radius: 48px;
 
-    ${responsive.mobile} {
+    ${responsive.sm} {
       padding-block: 8px;
       padding-inline: 16px;
     }
@@ -27,7 +27,7 @@ const useStyles = createStyles(({ css, token, responsive }) => ({
   `,
 
   title: css`
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
 }));
 
@@ -39,8 +39,6 @@ interface OpeningQuestionsProps {
 const OpeningQuestions = memo<OpeningQuestionsProps>(({ mobile, questions }) => {
   const { t } = useTranslation('welcome');
   const [sendMessage] = useConversationStore((s) => [s.sendMessage]);
-
-  const { styles } = useStyles();
 
   return (
     <div className={styles.container}>

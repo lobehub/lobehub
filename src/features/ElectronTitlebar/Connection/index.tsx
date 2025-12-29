@@ -1,12 +1,12 @@
 import { Drawer } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { useState } from 'react';
 
 import ConnectionMode from './ConnectionMode';
 import RemoteStatus from './RemoteStatus';
 import WaitingOAuth from './Waiting';
 
-const useStyles = createStyles(({ css }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     modal: css`
       .ant-drawer-close {
@@ -19,7 +19,6 @@ const useStyles = createStyles(({ css }) => {
 });
 
 const Connection = () => {
-  const { styles, theme } = useStyles();
   const [isOpen, setIsOpen] = useState(false);
   const [isWaiting, setWaiting] = useState(false);
 
@@ -39,7 +38,7 @@ const Connection = () => {
         open={isOpen}
         placement={'top'}
         style={{
-          background: theme.colorBgLayout,
+          background: cssVar.colorBgLayout,
         }}
         styles={{ body: { padding: 0 }, header: { padding: 0 } }}
       >

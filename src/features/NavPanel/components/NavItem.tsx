@@ -1,13 +1,13 @@
 'use client';
 
 import { Block, type BlockProps, Center, Flexbox, Icon, type IconProps, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     user-select: none;
     overflow: hidden;
@@ -17,7 +17,7 @@ const useStyles = createStyles(({ css, token }) => ({
       width: 0;
       margin-inline-end: 2px;
       opacity: 0;
-      transition: opacity 0.2s ${token.motionEaseOut};
+      transition: opacity 0.2s ${cssVar.motionEaseOut};
     }
 
     &:hover {
@@ -41,10 +41,8 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
 
 const NavItem = memo<NavItemProps>(
   ({ className, actions, active, icon, title, onClick, disabled, loading, extra, ...rest }) => {
-    const { cx, styles, theme } = useStyles();
-
-    const iconColor = active ? theme.colorText : theme.colorTextDescription;
-    const textColor = active ? theme.colorText : theme.colorTextSecondary;
+    const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
+    const textColor = active ? cssVar.colorText : cssVar.colorTextSecondary;
     const variant = active ? 'filled' : 'borderless';
     const iconComponent = loading ? Loader2Icon : icon;
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Markdown, Select } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { VertexAIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
@@ -14,15 +14,15 @@ import { KeyVaultsConfigKey, LLMProviderApiTokenKey } from '../../const';
 import { type ProviderItem } from '../../type';
 import ProviderDetail from '../default';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     p {
-      color: ${token.colorTextDescription} !important;
+      color: ${cssVar.colorTextDescription} !important;
     }
   `,
   tip: css`
     font-size: 12px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
 }));
 
@@ -73,7 +73,6 @@ const VERTEX_AI_REGIONS: string[] = [
 // Same as OpenAIProvider, but replace API Key with HuggingFace Access Token
 const useProviderCard = (): ProviderItem => {
   const { t } = useTranslation('modelProvider');
-  const { styles } = useStyles();
   const isLoading = useAiInfraStore(aiProviderSelectors.isAiProviderConfigLoading(providerKey));
 
   return {

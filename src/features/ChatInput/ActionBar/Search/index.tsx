@@ -1,5 +1,5 @@
 import { GlobeOffIcon } from '@lobehub/ui/icons';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,14 +23,13 @@ const Search = memo(() => {
     chatConfigByIdSelectors.getSearchModeById(agentId)(s),
   ]);
   const isAgentEnableSearch = useAgentEnableSearch();
-  const theme = useTheme();
   const isMobile = useIsMobile();
 
   if (isLoading) return <Action disabled icon={GlobeOffIcon} />;
 
   return (
     <Action
-      color={isAgentEnableSearch ? theme.colorInfo : undefined}
+      color={isAgentEnableSearch ? cssVar.colorInfo : undefined}
       icon={isAgentEnableSearch ? Globe : GlobeOffIcon}
       onClick={
         isMobile

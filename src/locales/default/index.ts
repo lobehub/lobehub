@@ -1,3 +1,5 @@
+import { businessLocales } from '@/business/locales/index';
+
 import auth from './auth';
 import authError from './authError';
 import changelog from './changelog';
@@ -29,6 +31,7 @@ import portal from './portal';
 import providers from './providers';
 import ragEval from './ragEval';
 import setting from './setting';
+import spend from './spend';
 import subscription from './subscription';
 import thread from './thread';
 import tool from './tool';
@@ -69,12 +72,15 @@ const resources = {
   providers,
   ragEval,
   setting,
+  spend,
   subscription,
   thread,
   tool,
   topic,
   ui,
   welcome,
+
+  ...businessLocales,
 } as const;
 
 export default resources;

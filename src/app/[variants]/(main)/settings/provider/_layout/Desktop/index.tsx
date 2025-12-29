@@ -3,6 +3,7 @@ import { type PropsWithChildren } from 'react';
 
 import ProviderMenu from '../../ProviderMenu';
 import Container from './Container';
+import { styles } from './style';
 
 const Layout = ({
   children,
@@ -11,13 +12,7 @@ const Layout = ({
   onProviderSelect: (providerKey: string) => void;
 }) => {
   return (
-    <Flexbox
-      horizontal
-      style={{
-        maxHeight: '100%',
-      }}
-      width={'100%'}
-    >
+    <Flexbox className={styles.mainContainer} horizontal width={'100%'}>
       <ProviderMenu mobile={false} onProviderSelect={onProviderSelect} />
       <Container>{children}</Container>
     </Flexbox>

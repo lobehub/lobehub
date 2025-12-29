@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -19,7 +19,6 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
     userProfileSelectors.username(s),
     authSelectors.isLogin(s),
   ]);
-  const theme = useTheme();
   return (
     <UserPanel>
       <Block
@@ -40,7 +39,7 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
         {!lite && (
           <Flexbox align={'center'} gap={4} horizontal style={{ overflow: 'hidden' }}>
             {!isSignedIn && (nickname || username) ? (
-              <ProductLogo color={theme.colorText} size={28} type={'text'} />
+              <ProductLogo color={cssVar.colorText} size={28} type={'text'} />
             ) : (
               <Text
                 ellipsis
@@ -53,7 +52,7 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
               </Text>
             )}
             <Icon
-              color={theme.colorTextDescription}
+              color={cssVar.colorTextDescription}
               icon={ChevronDownIcon}
               id={USER_DROPDOWN_ICON_ID}
             />

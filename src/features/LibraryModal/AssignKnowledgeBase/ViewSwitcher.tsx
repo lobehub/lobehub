@@ -1,5 +1,5 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ interface ViewSwitcherProps {
   view: ViewMode;
 }
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     gap: 4px;
   `,
@@ -19,7 +19,6 @@ const useStyles = createStyles(({ css }) => ({
 
 const ViewSwitcher = memo<ViewSwitcherProps>(({ onViewChange, view }) => {
   const { t } = useTranslation('components');
-  const { styles } = useStyles();
 
   return (
     <Flexbox className={styles.container} horizontal>

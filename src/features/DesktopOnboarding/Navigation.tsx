@@ -1,5 +1,5 @@
 import { Button } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as motion from 'motion/react-m';
 import React from 'react';
@@ -9,7 +9,7 @@ import { getThemeToken } from './styles/theme';
 const themeToken = getThemeToken();
 
 // 组件特有样式 - 仅用于 Navigation 组件
-const useStyles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   // 布局容器
   container: css`
     position: fixed;
@@ -95,12 +95,12 @@ const useStyles = createStyles(({ token, css }) => ({
 
   progressDotCompleted: css`
     width: 6px;
-    background-color: ${token.colorTextSecondary};
+    background-color: ${cssVar.colorTextSecondary};
   `,
 
   progressDotPending: css`
     width: 6px;
-    background-color: ${token.colorTextQuaternary};
+    background-color: ${cssVar.colorTextQuaternary};
   `,
 
   squareButton: css`
@@ -160,8 +160,6 @@ export const Navigation: React.FC<NavigationProps> = ({
   animationDuration = 1,
   animationDelay = 0,
 }) => {
-  const { styles, cx } = useStyles();
-
   // 导航内容组件 - 单行布局
   const navigationContent = (
     <>

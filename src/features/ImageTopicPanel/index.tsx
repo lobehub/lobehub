@@ -1,27 +1,25 @@
 'use client';
 
 import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { type PropsWithChildren, memo, useEffect, useState } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css }) => ({
   content: css`
     height: 100%;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   handle: css`
-    background: ${token.colorBgContainer} !important;
+    background: ${cssVar.colorBgContainer} !important;
   `,
 }));
 
 const ImageTopicPanel = memo<PropsWithChildren>(({ children }) => {
   const { md = true } = useResponsive();
-
-  const { styles } = useStyles();
   const [imageTopicPanelWidth, showImageTopicPanel, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.imageTopicPanelWidth(s),
     systemStatusSelectors.showImageTopicPanel(s),

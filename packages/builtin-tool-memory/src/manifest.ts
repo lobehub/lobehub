@@ -12,6 +12,8 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { MemoryApiName } from './types';
 
+export const MemoryIdentifier = 'lobe-user-memory';
+
 export const MemoryManifest: BuiltinToolManifest = {
   api: [
     {

@@ -22,7 +22,9 @@ export const loadResources = async (lng: string, ns: string) => {
   }
 
   try {
-    return await import(`@/../../resources/locales/${lng}/${ns}.json`);
+    const { default: content } = await import(`@/../../resources/locales/${lng}/${ns}.json`);
+
+    return content;
   } catch (error) {
     console.error(`无法加载翻译文件: ${lng} - ${ns}`, error);
     return {};

@@ -1,6 +1,6 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { memo } from 'react';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -8,30 +8,12 @@ import { WebBrowsingManifest } from '@/tools/web-browsing';
 
 import { EngineAvatarGroup } from '../../../components/EngineAvatar';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     cursor: pointer;
-
-    height: 100%;
     padding: 8px;
-    border-radius: 8px;
-
     font-size: 12px;
     color: initial;
-
-    background: ${token.colorFillQuaternary};
-
-    &:hover {
-      background: ${token.colorFillTertiary};
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    text-overflow: ellipsis;
   `,
 }));
 
@@ -39,27 +21,29 @@ interface ShowMoreProps {
   engines: string[];
   messageId: string;
   resultsNumber: number;
+  style?: CSSProperties;
 }
-const ShowMore = memo<ShowMoreProps>(({ messageId, engines, resultsNumber }) => {
-  const { styles } = useStyles();
+const ShowMore = memo<ShowMoreProps>(({ style, messageId, engines, resultsNumber }) => {
   const [openToolUI] = useChatStore((s) => [s.openToolUI]);
 
   const { t } = useTranslation('tool');
 
   return (
-    <Flexbox
+    <Block
       className={styles.container}
       gap={2}
       justify={'space-between'}
       onClick={() => {
         openToolUI(messageId, WebBrowsingManifest.identifier);
       }}
+      style={style}
+      variant={'outlined'}
     >
-      <div className={styles.title}>{t('search.viewMoreResults', { results: resultsNumber })}</div>
+      <Text ellipsis={{ rows: 2 }}>{t('search.viewMoreResults', { results: resultsNumber })}</Text>
       <Flexbox align={'center'} gap={4} horizontal>
         <EngineAvatarGroup engines={engines} />
       </Flexbox>
-    </Flexbox>
+    </Block>
   );
 });
 

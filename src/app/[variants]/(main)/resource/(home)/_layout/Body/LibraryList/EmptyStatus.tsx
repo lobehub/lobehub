@@ -1,13 +1,13 @@
 import type { IconType } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { forwardRef, memo } from 'react';
 import { Trans } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 
   paragraph: css`
@@ -18,7 +18,7 @@ const useStyles = createStyles(({ css, token }) => ({
       margin-inline: 2px;
       padding-inline: 6px;
       border-radius: 4px;
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
@@ -39,7 +39,6 @@ const LineIcon: IconType = forwardRef(({ size = 130, style, ...rest }, ref) => (
 ));
 
 const EmptyStatus = memo(() => {
-  const { styles } = useStyles();
   return (
     <Flexbox
       align={'flex-end'}

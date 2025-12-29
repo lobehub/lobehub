@@ -1,7 +1,7 @@
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Popover } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import { type AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
 import { memo, useMemo } from 'react';
@@ -10,18 +10,30 @@ import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 
 const POPOVER_MAX_WIDTH = 320;
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   descriptionText: css`
-    color: ${isDarkMode ? token.colorText : token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
+  `,
+  descriptionText_dark: css`
+    color: ${cssVar.colorText};
   `,
   popover: css`
     .ant-popover-inner {
-      background: ${isDarkMode ? token.colorBgSpotlight : token.colorBgElevated};
+      background: ${cssVar.colorBgElevated};
+    }
+  `,
+  popover_dark: css`
+    .ant-popover-inner {
+      background: ${cssVar.colorBgSpotlight};
     }
   `,
   priceText: css`
     font-weight: 500;
-    color: ${isDarkMode ? token.colorTextLightSolid : token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
+  `,
+  priceText_dark: css`
+    font-weight: 500;
+    color: ${cssVar.colorTextLightSolid};
   `,
 }));
 
@@ -47,7 +59,7 @@ const ImageModelItem = memo<ImageModelItemProps>(
     showBadge = true,
     ...model
   }) => {
-    const { styles } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     const priceLabel = useMemo(() => {
       // Priority 1: Use exact price
@@ -68,11 +80,19 @@ const ImageModelItem = memo<ImageModelItemProps>(
 
       return (
         <Flexbox gap={8} style={{ maxWidth: POPOVER_MAX_WIDTH }}>
-          {description && <Text className={styles.descriptionText}>{description}</Text>}
-          {priceLabel && <Text className={styles.priceText}>{priceLabel}</Text>}
+          {description && (
+            <Text className={cx(styles.descriptionText, isDarkMode && styles.descriptionText_dark)}>
+              {description}
+            </Text>
+          )}
+          {priceLabel && (
+            <Text className={cx(styles.priceText, isDarkMode && styles.priceText_dark)}>
+              {priceLabel}
+            </Text>
+          )}
         </Flexbox>
       );
-    }, [description, priceLabel, styles.descriptionText, styles.priceText]);
+    }, [description, priceLabel, isDarkMode]);
 
     const content = (
       <Flexbox align={'center'} gap={8} horizontal style={{ overflow: 'hidden' }}>
@@ -92,7 +112,7 @@ const ImageModelItem = memo<ImageModelItemProps>(
           offset: [24, -10],
         }}
         arrow={false}
-        classNames={{ root: styles.popover }}
+        classNames={{ root: cx(styles.popover, isDarkMode && styles.popover_dark) }}
         content={popoverContent}
         placement="rightTop"
       >

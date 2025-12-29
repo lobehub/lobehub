@@ -1,6 +1,6 @@
 import type { SidebarGroup } from '@lobechat/types';
 import { AccordionItem, Dropdown, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { HashIcon, Loader2 } from 'lucide-react';
 import React, { memo, useCallback, useMemo } from 'react';
 
@@ -13,7 +13,7 @@ import Actions from './Actions';
 import Editing from './Editing';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   item: css`
     padding-inline-start: 14px;
   `,
@@ -24,7 +24,6 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
     s.groupRenamingId === id,
     s.groupUpdatingId === id,
   ]);
-  const { styles } = useStyles();
 
   // Modal management
   const { openMemberSelectionModal, closeMemberSelectionModal, openConfigGroupModal } =

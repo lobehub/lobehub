@@ -1,4 +1,4 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
@@ -8,10 +8,10 @@ import MarkdownMessage from '@/features/Conversation/Markdown';
 import { normalizeThinkTags, processWithArtifact } from '../../../utils/markdown';
 import { useMarkdown } from '../useMarkdown';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     pWithTool: css`
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
     `,
   };
 });
@@ -24,7 +24,6 @@ interface ContentBlockProps {
 const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
   const message = normalizeThinkTags(processWithArtifact(content));
   const markdownProps = useMarkdown(id);
-  const { styles, cx } = useStyles();
 
   if (!content && !hasTools) return <BubblesLoading />;
 

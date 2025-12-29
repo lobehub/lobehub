@@ -161,6 +161,7 @@ describe('WebBrowsingExecutor', () => {
           { data: { title: 'Page 1', content: 'Content 1', url: 'https://example1.com' } },
           { data: { title: 'Page 2', content: 'Content 2', url: 'https://example2.com' } },
         ],
+        savedDocuments: [],
       };
       mockCrawlPages.mockResolvedValue(mockResponse);
 

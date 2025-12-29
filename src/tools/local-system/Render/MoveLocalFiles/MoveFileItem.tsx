@@ -1,27 +1,27 @@
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
 import { memo } from 'react';
 
 import { useElectronStore } from '@/store/electron';
 import { desktopStateSelectors } from '@/store/electron/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   icon: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   item: css`
     padding-block: 4px;
     padding-inline: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
     transition: all 0.2s ease;
 
     &:hover {
-      background: ${token.colorFillQuaternary};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   path: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     word-break: break-all;
   `,
@@ -33,7 +33,6 @@ interface MoveFileItemProps {
 }
 
 const MoveFileItem = memo<MoveFileItemProps>(({ oldPath, newPath }) => {
-  const { styles } = useStyles();
   const displayOldPath = useElectronStore(desktopStateSelectors.displayRelativePath(oldPath));
   const displayNewPath = useElectronStore(desktopStateSelectors.displayRelativePath(newPath));
 

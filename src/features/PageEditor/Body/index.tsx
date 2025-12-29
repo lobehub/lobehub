@@ -1,14 +1,14 @@
 'use client';
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 
 import EditorCanvas from '../EditorCanvas';
 import { usePageEditorStore } from '../store';
 import Title from './Title';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingOverlay: css`
     position: absolute;
     z-index: 10;
@@ -16,12 +16,11 @@ const useStyles = createStyles(({ css, token }) => ({
 
     padding: 24px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const Body = memo(() => {
-  const { styles } = useStyles();
   const isLoadingContent = usePageEditorStore((s) => s.isLoadingContent);
   const [showSkeleton, setShowSkeleton] = useState(false);
 

@@ -1,13 +1,13 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { type ReactNode, memo } from 'react';
 
 import { type GroupBy } from './index';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   itemWrapper: css`
     position: relative;
     padding-inline-start: 24px;
@@ -17,9 +17,9 @@ const useStyles = createStyles(({ css, token }) => ({
     z-index: 10;
     inset-block-start: 0;
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   timelineDot: css`
     position: absolute;
@@ -28,10 +28,10 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 16px;
     height: 16px;
-    border: 1px solid ${token.colorBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: 50%;
 
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
     box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 40%);
   `,
 }));
@@ -43,8 +43,6 @@ interface PeriodHeaderProps {
 }
 
 export const PeriodHeader = memo<PeriodHeaderProps>(({ periodKey, groupBy = 'day' }) => {
-  const { styles } = useStyles();
-
   const periodName =
     groupBy === 'month'
       ? dayjs(`${periodKey}-01`).format('MMMM YYYY')
@@ -62,8 +60,6 @@ interface TimelineItemWrapperProps {
 }
 
 export const TimelineItemWrapper = memo<TimelineItemWrapperProps>(({ children }) => {
-  const { styles } = useStyles();
-
   return (
     <div className={styles.itemWrapper}>
       <div className={styles.timelineDot} />

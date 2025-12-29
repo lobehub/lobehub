@@ -1,7 +1,7 @@
 import { ProviderIcon } from '@lobehub/icons';
 import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { Table, type TableColumnType } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,7 +13,6 @@ import { formatDate, formatNumber } from '@/utils/format';
 import { type UsageChartProps } from '../Client';
 
 const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
-  const theme = useTheme();
   const { t } = useTranslation('auth');
 
   const { data, isLoading, mutate } = useClientDataSWR('usage-logs', async () =>
@@ -48,7 +47,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
             provider={record.provider}
             size={18}
             style={{
-              border: `2px solid ${theme.colorBgContainer}`,
+              border: `2px solid ${cssVar.colorBgContainer}`,
               boxSizing: 'content-box',
               marginRight: -8,
             }}

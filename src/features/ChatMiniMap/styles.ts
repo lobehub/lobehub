@@ -1,18 +1,18 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useMinimapStyles = createStyles(({ css, token }) => ({
+export const minimapStyles = createStaticStyles(({ css, cssVar }) => ({
   arrow: css`
     opacity: 0;
-    transition: opacity ${token.motionDurationMid} ease;
+    transition: opacity ${cssVar.motionDurationMid} ease;
 
     &:hover {
-      color: ${token.colorText};
-      background: ${token.colorFill};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFill};
     }
 
     &:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 2px ${token.colorPrimaryBorder};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBorder};
     }
   `,
   arrowVisible: css`
@@ -68,7 +68,7 @@ export const useMinimapStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-export const useIndicatorStyles = createStyles(({ css, token }) => ({
+export const indicatorStyles = createStaticStyles(({ css, cssVar }) => ({
   indicator: css`
     flex-shrink: 0;
 
@@ -79,16 +79,16 @@ export const useIndicatorStyles = createStyles(({ css, token }) => ({
   `,
   indicatorActive: css`
     transform: scaleX(1.1);
-    background: ${token.colorPrimary};
-    box-shadow: 0 0 0 1px ${token.colorPrimaryHover};
+    background: ${cssVar.colorPrimary};
+    box-shadow: 0 0 0 1px ${cssVar.colorPrimaryHover};
   `,
   indicatorContent: css`
     width: 100%;
     height: 100%;
     border-radius: 3px;
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   indicatorContentActive: css`
-    background: ${token.colorPrimary};
+    background: ${cssVar.colorPrimary};
   `,
 }));

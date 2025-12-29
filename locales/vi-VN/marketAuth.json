@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "Hủy",
+  "authorize.cancel": "Không phải bây giờ",
   "authorize.confirm": "Tạo hồ sơ của bạn",
   "authorize.description": "Hồ sơ cộng đồng của bạn tồn tại độc lập với tài khoản người dùng {{appName}}.",
   "authorize.footer.agreement": "Bằng cách tiếp tục, bạn xác nhận rằng bạn đã hiểu và đồng ý với <terms>Điều khoản và Điều kiện</terms> và <privacy>Chính sách quyền riêng tư</privacy>",

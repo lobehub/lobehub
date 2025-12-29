@@ -5,7 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { Suspense, memo, useEffect, useMemo } from 'react';
 
 import ChatMiniMap from '@/features/ChatMiniMap';
-import { ChatList, ConversationProvider } from '@/features/Conversation';
+import { ChatList, ConversationProvider, TodoProgress } from '@/features/Conversation';
 import ZenModeToast from '@/features/ZenModeToast';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
@@ -100,6 +100,7 @@ const Conversation = memo(() => {
       >
         <ChatList welcome={<WelcomeChatItem />} />
       </Flexbox>
+      <TodoProgress />
       <MainChatInput />
       <ChatHydration />
       <ThreadHydration />

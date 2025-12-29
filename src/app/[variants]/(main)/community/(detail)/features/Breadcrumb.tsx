@@ -2,7 +2,7 @@
 
 import { CopyButton, Flexbox } from '@lobehub/ui';
 import { Breadcrumb as AntdBreadcrumb, type BreadcrumbProps } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -10,7 +10,6 @@ import { Link } from 'react-router-dom';
 import { DiscoverTab } from '@/types/discover';
 
 const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identifier }) => {
-  const theme = useTheme();
   const { t } = useTranslation('discover');
 
   const tabLabel = useMemo(() => {
@@ -33,7 +32,7 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
               gap={4}
               horizontal
               style={{
-                color: theme.colorTextSecondary,
+                color: cssVar.colorTextSecondary,
               }}
             >
               @{identifier}
@@ -57,7 +56,7 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
             gap={4}
             horizontal
             style={{
-              color: theme.colorTextSecondary,
+              color: cssVar.colorTextSecondary,
             }}
           >
             {identifier}
@@ -72,7 +71,7 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
         ),
       },
     ];
-  }, [tab, identifier, tabLabel, theme.colorTextSecondary]);
+  }, [tab, identifier, tabLabel]);
 
   return <AntdBreadcrumb items={items} />;
 });

@@ -1,14 +1,14 @@
 import { Button, Flexbox, type FlexboxProps, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   more: css`
     display: flex;
     align-items: center;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     margin-block: 0;
@@ -25,8 +25,6 @@ interface BlockProps extends FlexboxProps {
 }
 
 const Block = memo<BlockProps>(({ title, more, moreLink, children, ...rest }) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox gap={16} style={{ position: 'relative' }} width={'100%'}>
       <Flexbox align={'center'} gap={16} horizontal justify={'space-between'} width={'100%'}>

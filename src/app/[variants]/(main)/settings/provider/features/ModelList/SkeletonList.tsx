@@ -1,10 +1,10 @@
 'use client';
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     gap: 24px;
@@ -12,7 +12,7 @@ const useStyles = createStyles(({ css, token }) => ({
     justify-content: space-between;
 
     padding: 12px;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   leftContent: css`
     display: flex;
@@ -38,8 +38,6 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 export const Placeholder = memo(() => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox className={styles.container} horizontal>
       <Flexbox className={styles.leftContent} horizontal>

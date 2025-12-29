@@ -1,7 +1,7 @@
 'use client';
 
 import { Pagination as Page } from 'antd';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, useResponsive } from 'antd-style';
 import { memo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -11,16 +11,18 @@ import { type DiscoverTab } from '@/types/discover';
 
 const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';
 
-const useStyles = createStyles(({ css, token, prefixCls }) => {
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     page: css`
       .${prefixCls}-pagination-item-active {
-        border-color: ${token.colorFillSecondary};
-        background: ${token.colorFillSecondary};
+        border-color: ${cssVar.colorFillSecondary};
+        background: ${cssVar.colorFillSecondary};
 
         &:hover {
-          border-color: ${token.colorFill};
-          background: ${token.colorFill};
+          border-color: ${cssVar.colorFill};
+          background: ${cssVar.colorFill};
         }
       }
     `,
@@ -35,7 +37,6 @@ interface PaginationProps {
 }
 
 const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize }) => {
-  const { styles } = useStyles();
   const { page } = useQuery();
   const navigate = useNavigate();
   const location = useLocation();

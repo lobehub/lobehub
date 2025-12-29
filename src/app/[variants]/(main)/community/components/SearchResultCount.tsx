@@ -1,14 +1,14 @@
 'use client';
 
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { Trans } from 'react-i18next';
 
 import Title from './Title';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   highlight: css`
-    color: ${token.colorInfo};
+    color: ${cssVar.colorInfo};
 
     &::before,
     &::after {
@@ -18,7 +18,6 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const SearchResultCount = memo<{ count: number; keyword: string }>(({ keyword, count }) => {
-  const { styles } = useStyles();
   return (
     <Title>
       <Trans

@@ -2,7 +2,7 @@
 
 import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { Descriptions, Divider } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { BoltIcon, DownloadIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -17,7 +17,6 @@ export const DETAIL_PANEL_WIDTH = 300;
 const FileDetail = memo<FileListItem>((props) => {
   const { name, embeddingStatus, size, createdAt, updatedAt, chunkCount, url } = props || {};
   const { t } = useTranslation('file');
-  const theme = useTheme();
 
   if (!props) return null;
 
@@ -67,7 +66,7 @@ const FileDetail = memo<FileListItem>((props) => {
   return (
     <Flexbox
       padding={16}
-      style={{ borderInlineStart: `1px solid ${theme.colorSplit}` }}
+      style={{ borderInlineStart: `1px solid ${cssVar.colorSplit}` }}
       width={DETAIL_PANEL_WIDTH}
     >
       <Descriptions

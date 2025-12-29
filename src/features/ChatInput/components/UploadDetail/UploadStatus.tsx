@@ -1,7 +1,7 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,6 @@ interface UploadStateProps {
 }
 
 const UploadStatus = memo<UploadStateProps>(({ status, size, uploadState }) => {
-  const theme = useTheme();
   const { t } = useTranslation('chat');
 
   switch (status) {
@@ -57,7 +56,7 @@ const UploadStatus = memo<UploadStateProps>(({ status, size, uploadState }) => {
     case 'success': {
       return (
         <Flexbox align={'center'} gap={4} horizontal>
-          <CheckCircleFilled style={{ color: theme.colorSuccess, fontSize: 12 }} />
+          <CheckCircleFilled style={{ color: cssVar.colorSuccess, fontSize: 12 }} />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size)}
           </Text>

@@ -6,26 +6,19 @@
  */
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
 import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
+import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
+import { notebookExecutor } from '@lobechat/builtin-tool-notebook/executor';
 
 import type { IBuiltinToolExecutor } from '../types';
-// ==================== Import and register all executors ====================
-
-import { notebookExecutor } from './lobe-notebook';
+import { pageAgentExecutor } from './lobe-page-agent';
 import { webBrowsing } from './lobe-web-browsing';
+
+// ==================== Import and register all executors ====================
 
 /**
  * Registry structure: Map<identifier, executor instance>
  */
 const executorRegistry = new Map<string, IBuiltinToolExecutor>();
-
-/**
- * Register a builtin tool executor class instance
- *
- * @param executor - The executor instance to register
- */
-export const registerExecutor = (executor: IBuiltinToolExecutor): void => {
-  executorRegistry.set(executor.identifier, executor);
-};
 
 /**
  * Get a builtin tool executor by identifier
@@ -109,8 +102,23 @@ export const invokeExecutor = async (
   return executor.invoke(apiName, params, ctx);
 };
 
+/**
+ * Register builtin tool executor instances
+ *
+ * @param executors - Array of executor instances to register
+ */
+const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
+  for (const executor of executors) {
+    executorRegistry.set(executor.identifier, executor);
+  }
+};
+
 // Register all executor instances
-registerExecutor(groupManagementExecutor);
-registerExecutor(gtdExecutor);
-registerExecutor(notebookExecutor);
-registerExecutor(webBrowsing);
+registerExecutors([
+  groupManagementExecutor,
+  gtdExecutor,
+  memoryExecutor,
+  notebookExecutor,
+  pageAgentExecutor,
+  webBrowsing,
+]);

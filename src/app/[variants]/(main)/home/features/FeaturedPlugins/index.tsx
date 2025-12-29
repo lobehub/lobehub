@@ -2,7 +2,7 @@
 
 import { MCP } from '@lobehub/icons';
 import { ActionIcon, Dropdown, Grid } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { MoreHorizontal } from 'lucide-react';
 import { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,6 @@ import FeaturedPluginsList from './List';
 
 const FeaturedPlugins = memo(() => {
   const { t } = useTranslation('discover');
-  const theme = useTheme();
   const navigate = useNavigate();
 
   return (
@@ -37,7 +36,7 @@ const FeaturedPlugins = memo(() => {
           <ActionIcon icon={MoreHorizontal} size="small" />
         </Dropdown>
       }
-      icon={<MCP color={theme.colorTextDescription} size={18} />}
+      icon={<MCP color={cssVar.colorTextDescription} size={18} />}
       title={t('home.featuredPlugins')}
     >
       <Grid gap={12} maxItemWidth={320} rows={4} width={'100%'}>

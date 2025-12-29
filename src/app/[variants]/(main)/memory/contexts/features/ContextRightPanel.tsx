@@ -2,7 +2,7 @@
 
 import { Center, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { Badge } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +22,6 @@ import { LayersEnum } from '@/types/userMemory';
 import ContextDropdown from './ContextDropdown';
 
 const ContextRightPanel = memo(() => {
-  const theme = useTheme();
   const [contextId] = useQueryState('contextId', { clearOnDefault: true });
   const useFetchMemoryDetail = useUserMemoryStore((s) => s.useFetchMemoryDetail);
   const { t } = useTranslation('memory');
@@ -68,7 +67,9 @@ const ContextRightPanel = memo(() => {
             format={(percent) => `${t('filter.sort.scoreUrgency')}: ${percent}%`}
             percent={(context.scoreUrgency ?? 0) * 100}
             showInfo
-            strokeColor={(context.scoreUrgency ?? 0) >= 0.7 ? theme.colorError : theme.colorWarning}
+            strokeColor={
+              (context.scoreUrgency ?? 0) >= 0.7 ? cssVar.colorError : cssVar.colorWarning
+            }
           />
         </Flexbox>
         <Flexbox align="center" gap={16} horizontal justify="space-between">

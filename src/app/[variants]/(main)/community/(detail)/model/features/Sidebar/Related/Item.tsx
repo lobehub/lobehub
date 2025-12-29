@@ -1,18 +1,18 @@
 import { ModelIcon } from '@lobehub/icons';
 import { Block, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type DiscoverModelItem } from '@/types/discover';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     desc: css`
       flex: 1;
       margin: 0 !important;
       font-size: 14px !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     title: css`
       margin: 0 !important;
@@ -20,14 +20,13 @@ const useStyles = createStyles(({ css, token }) => {
       font-weight: 500 !important;
 
       &:hover {
-        color: ${token.colorLink};
+        color: ${cssVar.colorLink};
       }
     `,
   };
 });
 
 const RelatedItem = memo<DiscoverModelItem>(({ identifier, displayName }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('models');
   return (
     <Block gap={12} horizontal key={identifier} padding={12} variant={'outlined'}>

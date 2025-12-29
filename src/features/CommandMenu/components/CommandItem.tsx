@@ -3,7 +3,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { cloneElement, isValidElement, memo } from 'react';
 
 import { useCommandMenuContext } from '../CommandMenuContext';
-import { useStyles } from '../styles';
+import { styles } from '../styles';
 
 type BaseCommandItemProps = Omit<ComponentProps<typeof Command.Item>, 'children'> & {
   /**
@@ -33,7 +33,6 @@ type CommandItemProps = SimpleCommandItemProps | DetailedCommandItemProps;
  * Wrapper component for Command.Item that centralizes style management
  */
 const CommandItem = memo<CommandItemProps>((props) => {
-  const { styles } = useStyles();
   const { search } = useCommandMenuContext();
 
   // Check if item should be rendered

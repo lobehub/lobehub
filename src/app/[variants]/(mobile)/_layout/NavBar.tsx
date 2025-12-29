@@ -2,9 +2,8 @@
 
 import { Icon } from '@lobehub/ui';
 import { TabBar, type TabBarProps } from '@lobehub/ui/mobile';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Compass, MessageSquare, User } from 'lucide-react';
-import { rgba } from 'polished';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -14,10 +13,10 @@ import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
     svg {
-      fill: ${rgba(token.colorPrimary, 0.33)};
+      fill: color-mix(in srgb, ${cssVar.colorPrimary} 33%, transparent);
     }
   `,
   container: css`
@@ -30,7 +29,6 @@ const useStyles = createStyles(({ css, token }) => ({
 
 const NavBar = memo(() => {
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
   const activeKey = useActiveTabKey();
   const navigate = useNavigate();
 

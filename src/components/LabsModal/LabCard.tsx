@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Switch } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import Image from 'next/image';
 import { type PropsWithChildren, memo } from 'react';
 
@@ -18,24 +18,24 @@ interface LabCardProps {
   title: string;
 }
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     width: 100%;
     max-width: 800px;
     margin-block: 0;
     margin-inline: auto;
     padding: 16px;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   desc: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   meta: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   row: css`
     display: grid;
@@ -50,14 +50,14 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 250px;
     height: 150px;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: linear-gradient(135deg, ${token.colorFillTertiary}, ${token.colorFillQuaternary});
+    background: linear-gradient(135deg, ${cssVar.colorFillTertiary}, ${cssVar.colorFillQuaternary});
   `,
   title: css`
     font-size: 16px;
     font-weight: 600;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   wrap: css`
     width: 100%;
@@ -66,8 +66,6 @@ const useStyles = createStyles(({ css, token }) => ({
 
 const LabCard = memo<PropsWithChildren<LabCardProps>>(
   ({ title, desc, checked, onChange, meta, loading, cover }) => {
-    const { styles } = useStyles();
-
     return (
       <div className={styles.wrap}>
         <div className={styles.card}>

@@ -1,6 +1,6 @@
 import { Button, Modal, type ModalProps, SortableList } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,22 +12,21 @@ import { type SessionGroupItem } from '@/types/session';
 
 import GroupItem from './GroupItem';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     height: 36px;
     padding-inline: 8px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius}px;
     transition: background 0.2s ease-in-out;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
 
 const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
   // Map SidebarGroup to SessionGroupItem-like structure for the sortable list
   const sessionGroupItems = useHomeStore(
     (s) =>

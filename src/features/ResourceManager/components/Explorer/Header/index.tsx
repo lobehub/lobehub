@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,6 @@ import { useFileExplorer } from '../useFileExplorer';
 import Breadcrumb from './Breadcrumb';
 
 const Header = memo(() => {
-  const theme = useTheme();
   const { t } = useTranslation('file');
 
   const [libraryId] = useResourceManagerStore((s) => [s.libraryId]);
@@ -61,7 +60,7 @@ const Header = memo(() => {
         </>
       }
       style={{
-        borderBottom: `1px solid ${theme.colorBorderSecondary}`,
+        borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
       }}
     />
   );

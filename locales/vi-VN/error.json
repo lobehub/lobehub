@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Lỗi phân tích khối tin nhắn yêu cầu luồng, vui lòng kiểm tra xem API hiện tại có tuân thủ tiêu chuẩn hay không, hoặc liên hệ với nhà cung cấp API của bạn để được tư vấn.",
   "response.SubscriptionKeyMismatch": "Xin lỗi, do sự cố hệ thống tạm thời, lượng sử dụng đăng ký hiện tại đã không còn hiệu lực. Vui lòng nhấp vào nút bên dưới để khôi phục đăng ký hoặc gửi email cho chúng tôi để nhận hỗ trợ.",
   "response.SubscriptionPlanLimit": "Điểm đăng ký của bạn đã hết, không thể sử dụng tính năng này. Vui lòng nâng cấp lên gói cao hơn hoặc cấu hình API mô hình tùy chỉnh để tiếp tục sử dụng.",
+  "response.SubscriptionPlanLimitUltimate": "Điểm đăng ký của bạn đã hết, bạn không thể sử dụng tính năng này. Vui lòng nạp thêm tín dụng hoặc cấu hình API mô hình tùy chỉnh để tiếp tục sử dụng.",
   "response.SystemTimeNotMatchError": "Xin lỗi, thời gian hệ thống của bạn không khớp với máy chủ, vui lòng kiểm tra lại thời gian hệ thống của bạn và thử lại",
   "response.UnknownChatFetchError": "Xin lỗi, đã xảy ra lỗi yêu cầu không xác định. Vui lòng kiểm tra hoặc thử lại theo thông tin dưới đây.",
   "stt.responseError": "Yêu cầu dịch vụ thất bại, vui lòng kiểm tra cấu hình hoặc thử lại",

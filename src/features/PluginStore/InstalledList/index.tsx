@@ -1,5 +1,5 @@
 import { Center, DraggablePanel, Empty, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar, useTheme } from 'antd-style';
 import { Plug2 } from 'lucide-react';
 import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,7 @@ const PluginList = memo<{ keywords?: string }>(({ keywords }) => {
 
   const [type, setType] = useState<LobeToolType>();
   const [runtimeType, setRuntimeType] = useState<'mcp' | 'default'>();
-  const theme = useTheme();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
 
   const [identifier] = useToolStore((s) => [s.activePluginIdentifier]);
   const isEmpty = useToolStore((s) => pluginSelectors.installedPluginMetaList(s).length === 0);
@@ -35,7 +35,7 @@ const PluginList = memo<{ keywords?: string }>(({ keywords }) => {
       height={'75vh'}
       horizontal
       style={{
-        borderTop: `1px solid ${theme.colorBorderSecondary}`,
+        borderTop: `1px solid ${cssVar.colorBorderSecondary}`,
         overflow: 'hidden',
         position: 'relative',
       }}

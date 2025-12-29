@@ -250,7 +250,7 @@ export class DocumentService {
       // Clean up content - remove <page> tags if present
       let cleanContent = fileDocument.content;
       if (cleanContent.includes('<page')) {
-        cleanContent = cleanContent.replace(/<page[^>]*>([\s\S]*?)<\/page>/g, '$1').trim();
+        cleanContent = cleanContent.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim();
       }
 
       const document = await this.documentModel.create({

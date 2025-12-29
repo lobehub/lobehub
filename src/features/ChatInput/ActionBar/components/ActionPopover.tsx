@@ -2,13 +2,15 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Popover, type PopoverProps } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type ReactNode, memo } from 'react';
 
 import UpdateLoading from '@/components/Loading/UpdateLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   popoverContent: css`
     .${prefixCls}-form {
       .${prefixCls}-form-item:first-child {
@@ -45,7 +47,6 @@ const ActionPopover = memo<ActionPopoverProps>(
     extra,
     ...rest
   }) => {
-    const { cx, styles, theme } = useStyles();
     const isMobile = useIsMobile();
 
     // Properly handle classNames (can be object or function)
@@ -86,7 +87,7 @@ const ActionPopover = memo<ActionPopoverProps>(
             <Flexbox gap={8} horizontal justify={'space-between'} style={{ marginBottom: 16 }}>
               {title}
               {extra}
-              {loading && <UpdateLoading style={{ color: theme.colorTextSecondary }} />}
+              {loading && <UpdateLoading style={{ color: cssVar.colorTextSecondary }} />}
             </Flexbox>
           )
         }

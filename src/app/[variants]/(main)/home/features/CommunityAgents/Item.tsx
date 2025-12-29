@@ -1,5 +1,5 @@
 import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar, useThemeMode } from 'antd-style';
 import { memo } from 'react';
 
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
@@ -8,7 +8,7 @@ import { type DiscoverAssistantItem } from '@/types/discover';
 
 const CommunityAgentItem = memo<DiscoverAssistantItem>(
   ({ title, avatar, backgroundColor, author, description }) => {
-    const theme = useTheme();
+    const { isDarkMode } = useThemeMode();
 
     return (
       <Block
@@ -17,8 +17,8 @@ const CommunityAgentItem = memo<DiscoverAssistantItem>(
         height={RECENT_BLOCK_SIZE.AGENT.HEIGHT}
         justify={'space-between'}
         style={{
-          backgroundColor: theme.colorFillQuaternary,
-          borderRadius: theme.borderRadiusLG,
+          backgroundColor: cssVar.colorFillQuaternary,
+          borderRadius: cssVar.borderRadiusLG,
           overflow: 'hidden',
         }}
         variant={'filled'}
@@ -28,14 +28,14 @@ const CommunityAgentItem = memo<DiscoverAssistantItem>(
           flex={1}
           padding={12}
           style={{
-            backgroundColor: theme.isDarkMode ? theme.colorFillQuaternary : theme.colorBgContainer,
-            borderRadius: theme.borderRadiusLG,
+            backgroundColor: isDarkMode ? cssVar.colorFillQuaternary : cssVar.colorBgContainer,
+            borderRadius: cssVar.borderRadiusLG,
             boxShadow: '0 4px 8px -2px rgba(0,0,0,.02)',
             overflow: 'hidden',
           }}
           variant={'outlined'}
         >
-          <Text color={theme.colorTextSecondary} ellipsis={{ rows: 3 }} fontSize={13}>
+          <Text color={cssVar.colorTextSecondary} ellipsis={{ rows: 3 }} fontSize={13}>
             {description}
           </Text>
         </Block>

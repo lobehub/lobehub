@@ -1,9 +1,9 @@
-import { createStyles } from 'antd-style';
-import { rgba } from 'polished';
+import { lobeStaticStylish } from '@lobehub/ui';
+import { createStaticStyles, cx } from 'antd-style';
 
-export const useStyles = createStyles(({ token, css, stylish, cx }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: cx(
-    stylish.blur,
+    lobeStaticStylish.blur,
     css`
       pointer-events: none;
 
@@ -14,7 +14,7 @@ export const useStyles = createStyles(({ token, css, stylish, cx }) => ({
       transform: translateY(16px);
 
       opacity: 0;
-      background: ${rgba(token.colorBgElevated, 0.5)} !important;
+      background: color-mix(in srgb, ${cssVar.colorBgElevated} 50%, transparent) !important;
     `,
   ),
   visible: css`

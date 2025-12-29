@@ -1,11 +1,11 @@
 import { Image } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { type UploadFileItem } from '@/types/files/upload';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   image: css`
     width: 100%;
     height: 100%;
@@ -28,8 +28,6 @@ const useStyles = createStyles(({ css }) => ({
 }));
 
 const Content = memo<UploadFileItem>(({ file, previewUrl }) => {
-  const { styles } = useStyles();
-
   if (file.type.startsWith('image')) {
     return <Image alt={file.name} classNames={{ wrapper: styles.image }} src={previewUrl} />;
   }

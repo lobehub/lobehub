@@ -446,6 +446,14 @@ describe('contextEngineering', () => {
           meta: {},
           updatedAt: Date.now(),
         },
+        {
+          role: 'user',
+          content: 'Hello',
+          createdAt: Date.now(),
+          id: 'memory-placeholder-user',
+          meta: {},
+          updatedAt: Date.now(),
+        },
       ];
 
       // Mock topic memories and global identities separately
@@ -481,19 +489,20 @@ describe('contextEngineering', () => {
         provider: 'openai',
       });
 
+      // Keep the original system message as-is
       expect(result[0].role).toBe('system');
-      // Check the memory context is injected (memory_fetched_at is optional now)
-      expect(result[0].content).toContain('<user_memories');
-      expect(result[0].content).toContain('contexts="1"');
-      expect(result[0].content).toContain('experiences="0"');
-      expect(result[0].content).toContain('preferences="0"');
-      expect(result[0].content).toContain(
-        '<user_memories_context id="ctx-1"><context_title>LobeHub</context_title><context_description>Weekly syncs for LobeHub</context_description></user_memories_context>',
-      );
-      expect(result[0].content).toContain('<context_title>LobeHub</context_title>');
-      expect(result[1].content).toBe(
+      expect(result[0].content).toBe(
         'Memory load: available={{memory_available}}, total contexts={{memory_contexts_count}}\n{{memory_summary}}',
       );
+
+      // Memory context is injected as a consolidated user message before the first user message
+      // Note: meta/id fields are removed by the engine cleanup step, so assert via content.
+      const injection = result.find((m: any) => m.role === 'user' && String(m.content).includes('<user_memory>'));
+      expect(injection).toBeDefined();
+      expect(injection!.role).toBe('user');
+      expect(injection!.content).toContain('<user_memory>');
+      expect(injection!.content).toContain('<contexts count="1">');
+      expect(injection!.content).toContain('<context id="ctx-1" title="LobeHub">');
     });
 
     it('should handle missing placeholder variables gracefully', async () => {

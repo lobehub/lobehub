@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import { type KlavisServerType } from '@/const/index';
@@ -22,8 +22,6 @@ interface KlavisServerItemProps {
 
 const KlavisServerItem = memo<KlavisServerItemProps>(
   ({ identifier, label, server, serverName, icon }) => {
-    const theme = useTheme();
-
     const { isWaitingAuth, openOAuthWindow } = useKlavisOAuth({
       serverStatus: server?.status,
     });
@@ -61,8 +59,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         style={
           isConnected
             ? {
-                background: theme.colorSuccessBg,
-                borderColor: theme.colorSuccessBorder,
+                background: cssVar.colorSuccessBg,
+                borderColor: cssVar.colorSuccessBorder,
               }
             : {}
         }

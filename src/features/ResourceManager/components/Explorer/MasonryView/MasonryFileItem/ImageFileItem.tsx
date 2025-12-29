@@ -1,6 +1,6 @@
 import { Button, Flexbox, Tooltip } from '@lobehub/ui';
 import { Image } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -14,20 +14,20 @@ import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   floatingChunkBadge: css`
     position: absolute;
     z-index: 3;
     inset-block-end: 8px;
     inset-inline-end: 8px;
 
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     opacity: 0;
-    background: ${token.colorBgContainer};
-    box-shadow: ${token.boxShadow};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadow};
 
-    transition: opacity ${token.motionDurationMid};
+    transition: opacity ${cssVar.motionDurationMid};
   `,
   hoverOverlay: css`
     position: absolute;
@@ -42,9 +42,9 @@ const useStyles = createStyles(({ css, token }) => ({
     padding: 16px;
 
     opacity: 0;
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
 
-    transition: opacity ${token.motionDurationMid};
+    transition: opacity ${cssVar.motionDurationMid};
 
     &:hover {
       opacity: 1;
@@ -54,12 +54,12 @@ const useStyles = createStyles(({ css, token }) => ({
     display: flex;
     align-items: center;
     justify-content: center;
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   imageWrapper: css`
     position: relative;
     width: 100%;
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
 
     img {
       display: block;
@@ -74,13 +74,13 @@ const useStyles = createStyles(({ css, token }) => ({
 
     margin-block-end: 12px;
 
-    font-weight: ${token.fontWeightStrong};
-    color: ${token.colorText};
+    font-weight: ${cssVar.fontWeightStrong};
+    color: ${cssVar.colorText};
     word-break: break-word;
   `,
   overlaySize: css`
     font-size: 12px;
-    color: ${token.colorTextLightSolid};
+    color: ${cssVar.colorTextLightSolid};
     opacity: 0.9;
   `,
   overlayTitle: css`
@@ -93,8 +93,8 @@ const useStyles = createStyles(({ css, token }) => ({
     margin-block-end: 8px;
 
     font-size: 14px;
-    font-weight: ${token.fontWeightStrong};
-    color: ${token.colorTextLightSolid};
+    font-weight: ${cssVar.fontWeightStrong};
+    color: ${cssVar.colorTextLightSolid};
     text-align: center;
     word-break: break-word;
   `,
@@ -131,7 +131,6 @@ const ImageFileItem = memo<ImageFileItemProps>(
     url,
   }) => {
     const { t } = useTranslation('components');
-    const { styles, cx } = useStyles();
     const [imageLoaded, setImageLoaded] = useState(false);
     const [isCreatingFileParseTask, parseFiles] = useFileStore((s) => [
       fileManagerSelectors.isCreatingFileParseTask(id)(s),

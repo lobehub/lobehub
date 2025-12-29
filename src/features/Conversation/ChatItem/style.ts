@@ -1,6 +1,6 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token }) => {
+export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     container: css`
       position: relative;
@@ -10,7 +10,7 @@ export const useStyles = createStyles(({ css, token }) => {
       div[role='menubar'] {
         pointer-events: none;
         opacity: 0;
-        transition: opacity 200ms ${token.motionEaseOut};
+        transition: opacity 200ms ${cssVar.motionEaseOut};
       }
 
       time {
@@ -40,9 +40,9 @@ export const useStyles = createStyles(({ css, token }) => {
       height: 16px;
       border-radius: 50%;
 
-      color: ${token.colorBgLayout};
+      color: ${cssVar.colorBgLayout};
 
-      background: ${token.colorPrimary};
+      background: ${cssVar.colorPrimary};
     `,
     newScreen: css`
       min-height: calc(-300px + 100dvh);

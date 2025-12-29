@@ -2,19 +2,39 @@
 
 import { type TaskCurrentActivity, type TaskDetail } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, keyframes } from 'antd-style';
 import { Footprints, Loader2, Timer, Wrench } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 
-const useStyles = createStyles(({ css, token }) => ({
+const shimmer = keyframes`
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+`;
+
+const spin = keyframes`
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+`;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   activityContent: css`
     overflow: hidden;
 
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -33,12 +53,12 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   footer: css`
     padding-block: 8px;
     padding-inline: 16px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   metricItem: css`
     display: flex;
@@ -46,11 +66,11 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   metricValue: css`
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   progress: css`
     position: relative;
@@ -62,7 +82,7 @@ const useStyles = createStyles(({ css, token }) => ({
     margin-inline: 16px;
     border-radius: 2px;
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   progressBar: css`
     position: absolute;
@@ -72,7 +92,7 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 100%;
     border-radius: 2px;
 
-    background: linear-gradient(90deg, ${token.colorPrimary}, ${token.colorPrimaryHover});
+    background: linear-gradient(90deg, ${cssVar.colorPrimary}, ${cssVar.colorPrimaryHover});
 
     transition: width 0.5s ease-out;
   `,
@@ -84,38 +104,18 @@ const useStyles = createStyles(({ css, token }) => ({
     width: 100%;
     height: 100%;
 
-    background: linear-gradient(90deg, transparent, ${token.colorPrimaryBgHover}, transparent);
+    background: linear-gradient(90deg, transparent, ${cssVar.colorPrimaryBgHover}, transparent);
 
-    animation: shimmer 2s infinite;
-
-    @keyframes shimmer {
-      0% {
-        transform: translateX(-100%);
-      }
-
-      100% {
-        transform: translateX(100%);
-      }
-    }
+    animation: ${shimmer} 2s infinite;
   `,
   separator: css`
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: ${token.colorTextQuaternary};
+    background: ${cssVar.colorTextQuaternary};
   `,
   spin: css`
-    animation: spin 1s linear infinite;
-
-    @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
-    }
+    animation: ${spin} 1s linear infinite;
   `,
   statusIcon: css`
     display: flex;
@@ -127,9 +127,9 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 16px;
     border-radius: 50%;
 
-    color: ${token.colorPrimaryText};
+    color: ${cssVar.colorPrimaryText};
 
-    background: ${token.colorPrimaryBg};
+    background: ${cssVar.colorPrimaryBg};
   `,
 }));
 
@@ -167,7 +167,6 @@ const formatToolName = (activity: TaskCurrentActivity): string => {
 };
 
 const ProcessingState = memo<ProcessingStateProps>(({ taskDetail, messageId }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('chat');
   const [progress, setProgress] = useState(5);
   const [elapsedTime, setElapsedTime] = useState(0);

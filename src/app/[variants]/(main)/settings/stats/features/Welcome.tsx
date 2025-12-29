@@ -1,6 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox, FluentEmoji, Skeleton } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Clock3Icon, ClockArrowUp } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -22,7 +22,6 @@ const formatEnglishNumber = (number: number) => {
 
 const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t, i18n } = useTranslation('auth');
-  const theme = useTheme();
   const [nickname, username] = useUserStore((s) => [
     userProfileSelectors.nickName(s),
     userProfileSelectors.username(s),
@@ -71,7 +70,7 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
         gap={16}
         horizontal
         style={{
-          color: theme.colorTextDescription,
+          color: cssVar.colorTextDescription,
         }}
         wrap={'wrap'}
       >

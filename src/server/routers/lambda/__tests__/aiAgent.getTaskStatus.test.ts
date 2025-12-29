@@ -40,7 +40,7 @@ vi.mock('@/server/services/aiChat', () => ({
   AiChatService: vi.fn().mockImplementation(() => ({})),
 }));
 
-describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
+describe('aiAgentRouter.getSubAgentTaskStatus', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
   let testAgentId: string;
@@ -126,7 +126,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
     it('should return task status from Thread table', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -140,7 +140,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.getGroupSubAgentTaskStatus({
+        caller.getSubAgentTaskStatus({
           threadId: 'non-existent-thread-id',
         }),
       ).rejects.toThrow('Thread not found');
@@ -164,7 +164,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -197,7 +197,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
         const caller = aiAgentRouter.createCaller(createTestContext());
 
-        const result = await caller.getGroupSubAgentTaskStatus({
+        const result = await caller.getSubAgentTaskStatus({
           threadId: testThreadId,
         });
 
@@ -222,7 +222,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -261,7 +261,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -287,7 +287,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -308,7 +308,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await caller.getGroupSubAgentTaskStatus({
+      await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -332,7 +332,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -367,7 +367,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -391,7 +391,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
     it('should require threadId', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await expect(caller.getGroupSubAgentTaskStatus({} as any)).rejects.toThrow();
+      await expect(caller.getSubAgentTaskStatus({} as any)).rejects.toThrow();
     });
   });
 
@@ -443,7 +443,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -476,7 +476,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -499,7 +499,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
       // Thread is in processing status (default from beforeEach)
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -522,7 +522,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -548,7 +548,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -605,7 +605,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -631,7 +631,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -656,7 +656,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -688,7 +688,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 
@@ -699,7 +699,7 @@ describe('aiAgentRouter.getGroupSubAgentTaskStatus', () => {
     it('should not return currentActivity when no messages in thread', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.getGroupSubAgentTaskStatus({
+      const result = await caller.getSubAgentTaskStatus({
         threadId: testThreadId,
       });
 

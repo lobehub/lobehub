@@ -5,14 +5,15 @@ import Footer from '@/features/Setting/Footer';
 
 import { SCROLL_PARENT_ID } from '../../../../(main)/community/features/const';
 import Header from './Header';
+import { styles } from './style';
 
 const Layout = () => {
   return (
     <MobileContentLayout
+      className={styles.mainContainer}
       gap={16}
       header={<Header />}
       id={SCROLL_PARENT_ID}
-      style={{ paddingInline: 16, paddingTop: 8 }}
       withNav
     >
       <Outlet />

@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Erro de análise do bloco de mensagem da solicitação em fluxo. Verifique se a interface da API atual está em conformidade com os padrões ou entre em contato com seu fornecedor de API para mais informações.",
   "response.SubscriptionKeyMismatch": "Desculpe, devido a uma falha ocasional no sistema, o uso da assinatura atual está temporariamente inativo. Por favor, clique no botão abaixo para restaurar a assinatura ou entre em contato conosco por e-mail para obter suporte.",
   "response.SubscriptionPlanLimit": "Seu limite de pontos de assinatura foi atingido, não é possível usar essa funcionalidade. Por favor, faça um upgrade para um plano superior ou configure a API do modelo personalizado para continuar usando.",
+  "response.SubscriptionPlanLimitUltimate": "Seus pontos de assinatura foram esgotados e você não pode usar este recurso. Por favor, adicione créditos ou configure uma API de modelo personalizada para continuar utilizando.",
   "response.SystemTimeNotMatchError": "Desculpe, o horário do seu sistema não coincide com o do servidor. Por favor, verifique o horário do seu sistema e tente novamente.",
   "response.UnknownChatFetchError": "Desculpe, ocorreu um erro desconhecido na solicitação. Por favor, verifique as informações abaixo ou tente novamente.",
   "stt.responseError": "Falha na solicitação de serviço. Verifique a configuração ou tente novamente",

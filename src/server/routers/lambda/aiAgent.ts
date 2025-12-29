@@ -134,16 +134,17 @@ const ExecAgentsSchema = z.object({
 });
 
 /**
- * Schema for execGroupSubAgentTask - execute SubAgent task in Group chat
+ * Schema for execSubAgentTask - execute SubAgent task
+ * Supports both Group mode (with groupId) and Single Agent mode (without groupId)
  */
-const ExecGroupSubAgentTaskSchema = z.object({
+const ExecSubAgentTaskSchema = z.object({
   /** The SubAgent ID to execute the task */
   agentId: z.string(),
-  /** The Group ID (required) */
-  groupId: z.string(),
+  /** The Group ID (optional, only for Group mode) */
+  groupId: z.string().optional(),
   /** Task instruction/prompt for the SubAgent */
   instruction: z.string(),
-  /** The parent message ID (Supervisor's tool call message) */
+  /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: z.string(),
   /** Timeout in milliseconds (optional) */
   timeout: z.number().optional(),
@@ -420,20 +421,23 @@ export const aiAgentRouter = router({
   }),
 
   /**
-   * Execute SubAgent task in Group chat
+   * Execute SubAgent task (supports both Group and Single Agent mode)
    *
-   * This endpoint is called by Supervisor to delegate tasks to SubAgents.
-   * Each task runs in an isolated Thread context.
+   * This endpoint is called by Supervisor (Group mode) or Agent (Single mode)
+   * to delegate tasks to SubAgents. Each task runs in an isolated Thread context.
+   *
+   * - Group mode: pass groupId, Thread will be associated with the Group
+   * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
    */
-  execGroupSubAgentTask: aiAgentProcedure
-    .input(ExecGroupSubAgentTaskSchema)
+  execSubAgentTask: aiAgentProcedure
+    .input(ExecSubAgentTaskSchema)
     .mutation(async ({ input, ctx }) => {
       const { agentId, groupId, instruction, parentMessageId, topicId, timeout } = input;
 
-      log('execGroupSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
+      log('execSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
 
       try {
-        return await ctx.aiAgentService.execGroupSubAgentTask({
+        return await ctx.aiAgentService.execSubAgentTask({
           agentId,
           groupId,
           instruction,
@@ -442,7 +446,7 @@ export const aiAgentRouter = router({
           topicId,
         });
       } catch (error: any) {
-        log('execGroupSubAgentTask failed: %O', error);
+        log('execSubAgentTask failed: %O', error);
 
         if (error instanceof TRPCError) {
           throw error;
@@ -456,6 +460,45 @@ export const aiAgentRouter = router({
       }
     }),
 
+  
+  getOperationStatus: aiAgentProcedure
+    .input(GetOperationStatusSchema)
+    .query(async ({ input, ctx }) => {
+      const { historyLimit, includeHistory, operationId } = input;
+
+      if (!operationId) {
+        throw new Error('operationId parameter is required');
+      }
+
+      log('Getting operation status for %s', operationId);
+
+      // Get operation status using AgentRuntimeService
+      const operationStatus = await ctx.agentRuntimeService.getOperationStatus({
+        historyLimit,
+        includeHistory,
+        operationId,
+      });
+
+      return operationStatus;
+    }),
+
+  
+getPendingInterventions: aiAgentProcedure
+    .input(GetPendingInterventionsSchema)
+    .query(async ({ input, ctx }) => {
+      const { operationId, userId } = input;
+
+      log('Getting pending interventions for operationId: %s, userId: %s', operationId, userId);
+
+      // Get pending interventions using AgentRuntimeService
+      const result = await ctx.agentRuntimeService.getPendingInterventions({
+        operationId: operationId || undefined,
+        userId: userId || undefined,
+      });
+
+      return result;
+    }),
+
   /**
    * Get SubAgent task execution status
    *
@@ -463,12 +506,14 @@ export const aiAgentRouter = router({
    * It queries from Thread table (PostgreSQL) for persistence,
    * and supplements with real-time status from Redis if available.
    *
+   * Works for both Group mode and Single Agent mode tasks.
+   *
    * IMPORTANT: In QStash queue mode, step lifecycle callbacks cannot fire
    * because each HTTP request creates a new AgentRuntimeService instance.
    * As a workaround, this endpoint also updates Thread metadata from Redis
    * when real-time status is available.
    */
-  getGroupSubAgentTaskStatus: aiAgentProcedure
+getSubAgentTaskStatus: aiAgentProcedure
     .input(
       z.object({
         /** Thread ID */
@@ -478,7 +523,7 @@ export const aiAgentRouter = router({
     .query(async ({ input, ctx }) => {
       const { threadId } = input;
 
-      log('getGroupSubAgentTaskStatus: threadId=%s', threadId);
+      log('getSubAgentTaskStatus: threadId=%s', threadId);
 
       // 1. Find thread by threadId
       const thread = await ctx.threadModel.findById(threadId);
@@ -561,7 +606,7 @@ export const aiAgentRouter = router({
               status: ThreadStatus.Completed,
             });
 
-            log('getGroupSubAgentTaskStatus: marked thread %s as completed', threadId);
+            log('getSubAgentTaskStatus: marked thread %s as completed', threadId);
           } else if (realtimeStatus.hasError || redisState.status === 'error') {
             updatedMetadata.error = redisState.error;
             updatedMetadata.completedAt = new Date().toISOString();
@@ -573,18 +618,18 @@ export const aiAgentRouter = router({
               metadata: updatedMetadata,
               status: ThreadStatus.Failed,
             });
-            log('getGroupSubAgentTaskStatus: marked thread %s as failed', threadId);
+            log('getSubAgentTaskStatus: marked thread %s as failed', threadId);
           } else {
             // Still processing, just update metrics
             await ctx.threadModel.update(threadId, {
               metadata: updatedMetadata,
             });
-            log('getGroupSubAgentTaskStatus: updated thread %s metadata', threadId);
+            log('getSubAgentTaskStatus: updated thread %s metadata', threadId);
           }
         } else {
           // Redis status not available (expired), use Thread data only
           log(
-            'getGroupSubAgentTaskStatus: Redis operation %s expired, using Thread data only',
+            'getSubAgentTaskStatus: Redis operation %s expired, using Thread data only',
             resolvedOperationId,
           );
         }
@@ -678,43 +723,6 @@ export const aiAgentRouter = router({
             ? { total_tokens: updatedMetadata.totalTokens }
             : undefined),
       };
-
-      return result;
-    }),
-
-  getOperationStatus: aiAgentProcedure
-    .input(GetOperationStatusSchema)
-    .query(async ({ input, ctx }) => {
-      const { historyLimit, includeHistory, operationId } = input;
-
-      if (!operationId) {
-        throw new Error('operationId parameter is required');
-      }
-
-      log('Getting operation status for %s', operationId);
-
-      // Get operation status using AgentRuntimeService
-      const operationStatus = await ctx.agentRuntimeService.getOperationStatus({
-        historyLimit,
-        includeHistory,
-        operationId,
-      });
-
-      return operationStatus;
-    }),
-
-  getPendingInterventions: aiAgentProcedure
-    .input(GetPendingInterventionsSchema)
-    .query(async ({ input, ctx }) => {
-      const { operationId, userId } = input;
-
-      log('Getting pending interventions for operationId: %s, userId: %s', operationId, userId);
-
-      // Get pending interventions using AgentRuntimeService
-      const result = await ctx.agentRuntimeService.getPendingInterventions({
-        operationId: operationId || undefined,
-        userId: userId || undefined,
-      });
 
       return result;
     }),

@@ -1,7 +1,7 @@
 import { Form, type FormItemProps, Tag } from '@lobehub/ui';
-import { Flexbox , Checkbox } from '@lobehub/ui';
+import { Checkbox, Flexbox } from '@lobehub/ui';
 import { Form as AntdForm } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useRef } from 'react';
@@ -41,14 +41,14 @@ type ParamDescKey =
   | 'settingModel.presencePenalty.desc'
   | 'settingModel.frequencyPenalty.desc';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   checkbox: css`
     .ant-checkbox-inner {
       border-radius: 4px;
     }
 
     &:hover .ant-checkbox-inner {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
   `,
   label: css`
@@ -147,7 +147,6 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
   const mobile = useServerConfigStore((s) => s.isMobile);
   const agentId = useAgentId();
   const { updateAgentConfig } = useUpdateAgentConfig();
-  const { styles } = useStyles();
 
   const config = useAgentStore((s) => agentByIdSelectors.getAgentConfigById(agentId)(s), isEqual);
   const [form] = Form.useForm();

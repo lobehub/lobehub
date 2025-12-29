@@ -1,6 +1,6 @@
 import { ActionIcon, Dropdown, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
 import {
@@ -26,7 +26,7 @@ import { sessionHelpers } from '@/store/session/helpers';
 import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
 import { SessionDefaultGroup } from '@/types/index';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   modalRoot: css`
     z-index: 2000;
   `,
@@ -41,7 +41,6 @@ interface ActionProps {
 }
 
 const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType, setOpen }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('chat');
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);

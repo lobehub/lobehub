@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "Отказ",
+  "authorize.cancel": "Не сега",
   "authorize.confirm": "Създай своя профил",
   "authorize.description": "Твоят общностен профил съществува независимо от потребителския акаунт в {{appName}}.",
   "authorize.footer.agreement": "Продължавайки, потвърждаваш, че си запознат и приемаш <terms>Условията за ползване</terms> и <privacy>Политиката за поверителност</privacy>",

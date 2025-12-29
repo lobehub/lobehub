@@ -1,53 +1,53 @@
 import { type CodeInterpreterFileItem } from '@lobechat/types';
 import { Icon, Image, MaterialFileTypeIcon, Text, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Download } from 'lucide-react';
 import React, { memo } from 'react';
 
 import { fileService } from '@/services/file';
 import { useChatStore } from '@/store/chat';
 
-const useImageStyles = createStyles(({ css, token }) => ({
+const imageStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
 
-    border: 1px solid ${token.colorBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: 8px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      box-shadow: 0 2px 8px ${token.colorFillQuaternary};
+      border-color: ${cssVar.colorPrimary};
+      box-shadow: 0 2px 8px ${cssVar.colorFillQuaternary};
     }
   `,
 }));
 
-const useFileStyles = createStyles(({ css, token }) => ({
+const fileStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     cursor: pointer;
 
     display: inline-flex;
-    gap: ${token.marginXS}px;
+    gap: ${cssVar.marginXS};
     align-items: center;
 
-    padding-block: ${token.paddingXS}px;
-    padding-inline: ${token.paddingSM}px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusSM}px;
+    padding-block: ${cssVar.paddingXS};
+    padding-inline: ${cssVar.paddingSM};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusSM};
 
-    font-size: ${token.fontSizeSM}px;
-    color: ${token.colorText};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      background: ${token.colorBgTextHover};
+      border-color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorBgTextHover};
     }
   `,
 }));
@@ -60,7 +60,7 @@ function basename(filename: string) {
 const ResultImage = memo<CodeInterpreterFileItem>(({ filename, previewUrl, fileId }) => {
   const [useFetchPythonFileItem] = useChatStore((s) => [s.useFetchInterpreterFileItem]);
   const { data } = useFetchPythonFileItem(fileId);
-  const { styles } = useImageStyles();
+  const styles = imageStyles;
 
   const imageUrl = data?.url ?? previewUrl;
   const baseName = basename(data?.filename ?? filename);
@@ -80,7 +80,7 @@ const ResultImage = memo<CodeInterpreterFileItem>(({ filename, previewUrl, fileI
 
 // 文件显示子组件
 const ResultFile = memo<CodeInterpreterFileItem>(({ filename, fileId, previewUrl }) => {
-  const { styles } = useFileStyles();
+  const styles = fileStyles;
   const baseName = basename(filename);
   const onDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();

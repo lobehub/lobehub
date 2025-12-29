@@ -1,5 +1,5 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Wand2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,6 @@ export interface AutoGenerateAvatarProps {
 const AutoGenerateAvatar = memo<AutoGenerateAvatarProps>(
   ({ loading, background, value, onChange, onGenerate, canAutoGenerate }) => {
     const { t } = useTranslation('common');
-    const theme = useTheme();
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
     return (
@@ -31,21 +30,21 @@ const AutoGenerateAvatar = memo<AutoGenerateAvatarProps>(
         horizontal
         padding={2}
         style={{
-          background: theme.colorBgContainer,
-          border: `1px solid ${theme.colorBorderSecondary}`,
+          background: cssVar.colorBgContainer,
+          border: `1px solid ${cssVar.colorBorderSecondary}`,
           borderRadius: 32,
           paddingRight: 8,
           width: 'fit-content',
         }}
       >
         <EmojiPicker
-          background={background || theme.colorFillTertiary}
+          background={background || cssVar.colorFillTertiary}
           loading={loading}
           locale={locale}
           onChange={onChange}
           size={48}
           style={{
-            background: theme.colorFillTertiary,
+            background: cssVar.colorFillTertiary,
           }}
           value={value}
         />

@@ -9,7 +9,13 @@
   "addToKnowledgeBase.totalFiles": "已选择 {{count}} 个文件",
   "createNew.confirm": "新建",
   "createNew.description.placeholder": "资源库简介（选填）",
+  "createNew.formTitle": "基本信息",
   "createNew.name.placeholder": "资源库名称",
   "createNew.name.required": "请填写资源库名称",
-  "createNew.title": "新建资源库"
+  "createNew.title": "新建资源库",
+  "tab.evals": "评估",
+  "tab.files": "文件",
+  "tab.settings": "设置",
+  "tab.testing": "回忆测试",
+  "title": "资料库"
 }

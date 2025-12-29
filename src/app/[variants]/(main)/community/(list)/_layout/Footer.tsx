@@ -1,32 +1,33 @@
 import { Button, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DefaultFooter from '@/features/Setting/Footer';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
-const useStyles = createStyles(({ css, isDarkMode }) => {
-  const image = isDarkMode
-    ? '/images/community_footer_dark.webp'
-    : '/images/community_footer_light.webp';
-  return {
-    footer: css`
-      min-height: 320px;
-      padding-block-start: 32px;
+const styles = createStaticStyles(({ css }) => ({
+  footer: css`
+    min-height: 320px;
+    padding-block-start: 32px;
 
-      background-image: url(${image});
-      background-repeat: no-repeat;
-      background-position: center bottom;
-      background-size: 512px auto;
-      background-blend-mode: ${isDarkMode ? 'screen' : 'multiply'};
-    `,
-  };
-});
+    background-repeat: no-repeat;
+    background-position: center bottom;
+    background-size: 512px auto;
+  `,
+  footer_dark: css`
+    background-image: url('/images/community_footer_dark.webp');
+    background-blend-mode: screen;
+  `,
+  footer_light: css`
+    background-image: url('/images/community_footer_light.webp');
+    background-blend-mode: multiply;
+  `,
+}));
 
 const Footer = memo(() => {
   const { t } = useTranslation('discover');
-  const { styles } = useStyles();
+  const { isDarkMode } = useThemeMode();
   const { isAuthenticated, signIn } = useMarketAuth();
   const [loading, setLoading] = useState(false);
   const handleSignIn = useCallback(async () => {
@@ -42,7 +43,12 @@ const Footer = memo(() => {
   if (isAuthenticated) return <DefaultFooter />;
 
   return (
-    <Flexbox align={'center'} className={styles.footer} flex={'none'} gap={4}>
+    <Flexbox
+      align={'center'}
+      className={cx(styles.footer, isDarkMode ? styles.footer_dark : styles.footer_light)}
+      flex={'none'}
+      gap={4}
+    >
       <Text align={'center'} as={'h2'} fontSize={22} strong>
         {t('footer.title')}
       </Text>

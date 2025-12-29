@@ -10,7 +10,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { type LobeSession } from '@/types/session';
 
-import { useStyles } from './style';
+import { styles } from './style';
 
 interface GroupRoleProps {
   currentSession?: LobeSession;
@@ -22,7 +22,6 @@ interface GroupRoleProps {
 
 const GroupRole = memo<GroupRoleProps>(
   ({ currentSession, editorModalOpen, setEditorModalOpen, setEditing, editing }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('chat');
 
     const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);

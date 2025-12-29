@@ -1,6 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Settings2Icon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,10 +15,10 @@ import Action from '../components/Action';
 import { useActionBarContext } from '../context';
 import ControlsForm from './ControlsForm';
 
-const useStyles = createStyles(({ css, token, cx }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    border-radius: 10px;
-    background: ${token.colorFillTertiary};
+    border-radius: 24px;
+    background: ${cssVar.colorFillTertiary};
   `,
   icon: cx(
     'model-switch',
@@ -28,10 +28,10 @@ const useStyles = createStyles(({ css, token, cx }) => ({
   ),
   model: css`
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 24px;
 
     :hover {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
 
     :active {
@@ -41,22 +41,21 @@ const useStyles = createStyles(({ css, token, cx }) => ({
     }
   `,
   modelWithControl: css`
-    border-radius: 12px;
+    border-radius: 24px;
 
     :hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 
   video: css`
     overflow: hidden;
-    border-radius: 8px;
+    border-radius: 24px;
   `,
 }));
 
 const ModelSwitch = memo(() => {
   const { t } = useTranslation('chat');
-  const { styles, cx } = useStyles();
   const { dropdownPlacement } = useActionBarContext();
 
   const agentId = useAgentId();
@@ -105,7 +104,7 @@ const ModelSwitch = memo(() => {
             placement: 'topLeft',
           }}
           showTooltip={false}
-          style={{ borderRadius: 12, marginInlineStart: -4 }}
+          style={{ borderRadius: 24, marginInlineStart: -4 }}
           title={t('extendParams.title')}
         />
       )}

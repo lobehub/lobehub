@@ -2,7 +2,7 @@ import { FILE_URL } from '@lobechat/business-const';
 import { Notion } from '@lobehub/icons';
 import { Center, FileTypeIcon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Upload } from 'antd';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,11 +16,11 @@ import { DocumentSourceType } from '@/types/document';
 
 const ICON_SIZE = 80;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   actionTitle: css`
     margin-block-start: 12px;
     font-size: 16px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   card: css`
     cursor: pointer;
@@ -31,18 +31,18 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 200px;
     height: 140px;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     font-weight: 500;
     text-align: center;
 
-    background: ${token.colorFillTertiary};
-    box-shadow: 0 0 0 1px ${token.colorFillTertiary} inset;
+    background: ${cssVar.colorFillTertiary};
+    box-shadow: 0 0 0 1px ${cssVar.colorFillTertiary} inset;
 
     transition: background 0.3s ease-in-out;
 
     &:hover {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   glow: css`
@@ -74,9 +74,6 @@ interface PageExplorerPlaceholderProps {
 const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
   ({ hasPages = false, knowledgeBaseId }) => {
     const { t } = useTranslation(['file', 'common']);
-
-    const theme = useTheme();
-    const { styles } = useStyles();
     const [isUploading, setIsUploading] = useState(false);
     const [
       createNewPage,
@@ -260,10 +257,10 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
               padding={16}
             >
               <span className={styles.actionTitle}>{t('pageEditor.empty.createNewDocument')}</span>
-              <div className={styles.glow} style={{ background: theme.purple }} />
+              <div className={styles.glow} style={{ background: cssVar.purple }} />
               <FileTypeIcon
                 className={styles.icon}
-                color={theme.purple}
+                color={cssVar.purple}
                 icon={<Icon color={'#fff'} icon={PlusIcon} />}
                 size={ICON_SIZE}
                 type={'file'}
@@ -286,10 +283,10 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
                 <span className={styles.actionTitle}>
                   {isUploading ? 'Uploading...' : t('pageEditor.empty.uploadFiles')}
                 </span>
-                <div className={styles.glow} style={{ background: theme.gold }} />
+                <div className={styles.glow} style={{ background: cssVar.gold }} />
                 <FileTypeIcon
                   className={styles.icon}
-                  color={theme.gold}
+                  color={cssVar.gold}
                   icon={<Icon color={'#fff'} icon={ArrowUpIcon} />}
                   size={ICON_SIZE}
                   type={'file'}
@@ -304,10 +301,10 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
               padding={16}
             >
               <span className={styles.actionTitle}>{t('pageEditor.empty.importNotion')}</span>
-              <div className={styles.glow} style={{ background: theme.geekblue }} />
+              <div className={styles.glow} style={{ background: cssVar.geekblue }} />
               <FileTypeIcon
                 className={styles.icon}
-                color={theme.geekblue}
+                color={cssVar.geekblue}
                 icon={<Notion color={'#fff'} />}
                 size={ICON_SIZE}
                 type={'file'}

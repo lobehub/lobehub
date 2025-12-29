@@ -1,18 +1,17 @@
 'use client';
 
 import { Block, Flexbox, Grid, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
-    border-block-start: 1px dashed ${token.colorBorder};
-    background: ${token.colorBgContainerSecondary};
+    border-block-start: 1px dashed ${cssVar.colorBorder};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const Card = memo<{ banner?: boolean }>(({ banner }) => {
-  const { styles } = useStyles();
   return (
     <Block height={'100%'} style={{ overflow: 'hidden' }} variant={'outlined'} width={'100%'}>
       {banner && <Skeleton.Block active height={64} width={'100%'} />}

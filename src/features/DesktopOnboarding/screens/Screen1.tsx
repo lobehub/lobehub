@@ -1,8 +1,16 @@
+import { createStaticStyles } from 'antd-style';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
 import { LogoBrand } from '../common/LogoBrand';
-import { useLayoutStyles, useMediaStyles, useTypographyStyles } from '../styles';
+import { layoutStyles, mediaStyles, typographyStyles } from '../styles';
+
+const styles = createStaticStyles(({ css }) => ({
+  logoContainer: css`
+    transform: translate(0, var(--logo-target-y, 0));
+    margin-block-end: 60px;
+  `,
+}));
 
 const introVideo = new URL('../assets/intro-video.mp4', import.meta.url).href;
 interface Screen1Props {
@@ -185,11 +193,7 @@ export const Screen1 = ({ onScreenConfigChange }: Screen1Props) => {
     };
   }, [shouldStartAnimation, shouldStartFadeOut, animationPhase]);
 
-  // 使用多个样式 hooks
-  const { styles: layoutStyles } = useLayoutStyles();
-  const { styles: typographyStyles } = useTypographyStyles();
-  const { styles: mediaStyles } = useMediaStyles();
-
+  // @ts-ignore
   return (
     <motion.div
       animate={{ opacity: 1 }}
@@ -249,9 +253,10 @@ export const Screen1 = ({ onScreenConfigChange }: Screen1Props) => {
           >
             {/* Logo 组合 */}
             <div
+              className={styles.logoContainer}
               style={{
-                marginBottom: 60,
-                transform: `translate(0px, ${CONFIG.layout.logoTargetY}px)`,
+                // @ts-ignore
+                '--logo-target-y': `${CONFIG.layout.logoTargetY}px`,
               }}
             >
               <LogoBrand

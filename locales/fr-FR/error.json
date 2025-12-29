@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Erreur de parsing du bloc de message de la requête en streaming. Veuillez vérifier si l'API actuelle respecte les normes ou contacter votre fournisseur d'API pour des conseils.",
   "response.SubscriptionKeyMismatch": "Nous sommes désolés, en raison d'une défaillance système occasionnelle, l'utilisation actuelle de l'abonnement est temporairement inactive. Veuillez cliquer sur le bouton ci-dessous pour rétablir votre abonnement ou nous contacter par e-mail pour obtenir de l'aide.",
   "response.SubscriptionPlanLimit": "Votre quota d'abonnement est épuisé, vous ne pouvez pas utiliser cette fonctionnalité. Veuillez passer à un plan supérieur ou configurer l'API du modèle personnalisé pour continuer à l'utiliser.",
+  "response.SubscriptionPlanLimitUltimate": "Vos points d’abonnement sont épuisés et vous ne pouvez plus utiliser cette fonctionnalité. Veuillez recharger vos crédits ou configurer une API de modèle personnalisé pour continuer à l’utiliser.",
   "response.SystemTimeNotMatchError": "Désolé, l'heure de votre système ne correspond pas à celle du serveur. Veuillez vérifier l'heure de votre système et réessayer.",
   "response.UnknownChatFetchError": "Désolé, une erreur de requête inconnue s'est produite. Veuillez vérifier les informations ci-dessous ou réessayer.",
   "stt.responseError": "Échec de la requête de service. Veuillez vérifier la configuration ou réessayer",

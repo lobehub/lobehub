@@ -10,7 +10,7 @@ import type { SearchResult } from '@/database/repositories/search';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
-import { useStyles } from './styles';
+import { styles } from './styles';
 import type { ValidSearchType } from './utils/queryParser';
 
 interface SearchResultsProps {
@@ -29,7 +29,6 @@ const SearchResults = memo<SearchResultsProps>(
   ({ isLoading, onClose, onSetTypeFilter, results, searchQuery, typeFilter }) => {
     const { t } = useTranslation('common');
     const navigate = useNavigate();
-    const { styles } = useStyles();
     const { menuContext } = useCommandMenuContext();
 
     const handleNavigate = (result: SearchResult) => {

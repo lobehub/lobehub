@@ -1,5 +1,5 @@
 import { Flexbox, Hotkey } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,11 +10,11 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 import { type HotkeyGroupId } from '@/types/hotkey';
 
-const useStyle = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   desc: css`
     font-size: 12px;
     line-height: 1.3;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   hotkey: css`
     gap: 4px;
@@ -22,7 +22,7 @@ const useStyle = createStyles(({ css, token }) => ({
     kbd {
       min-width: 26px;
       height: 26px;
-      border: 1px solid ${token.colorBorder};
+      border: 1px solid ${cssVar.colorBorder};
     }
   `,
 }));
@@ -34,7 +34,6 @@ interface HotkeyContentProps {
 const HotkeyContent = memo<HotkeyContentProps>(({ groupId }) => {
   const settings = useUserStore(settingsSelectors.currentSettings, isEqual);
   const { t } = useTranslation('hotkey');
-  const { styles } = useStyle();
   return (
     <>
       {HOTKEYS_REGISTRATION.filter((item) => item.group === groupId).map((item) => (

@@ -1,7 +1,7 @@
 import { CategoryBar, useThemeColorRange } from '@lobehub/charts';
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { Collapse, Flexbox, Skeleton, Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -70,7 +70,6 @@ const formatData = (
 
 const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
   const { t } = useTranslation('auth');
-  const theme = useTheme();
   const themeColorRange = useThemeColorRange();
 
   const formattedData = useMemo(
@@ -110,7 +109,7 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
                             <ProviderIcon
                               provider={record.id}
                               style={{
-                                boxShadow: `0 0 0 2px ${theme.colorBgContainer}, 0 0 0 4px ${themeColorRange[index]}`,
+                                boxShadow: `0 0 0 2px ${cssVar.colorBgContainer}, 0 0 0 4px ${themeColorRange[index]}`,
                                 boxSizing: 'content-box',
                               }}
                             />
@@ -118,7 +117,7 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
                             <ModelIcon
                               model={record.id}
                               style={{
-                                boxShadow: `0 0 0 2px ${theme.colorBgContainer}, 0 0 0 4px ${themeColorRange[index]}`,
+                                boxShadow: `0 0 0 2px ${cssVar.colorBgContainer}, 0 0 0 4px ${themeColorRange[index]}`,
                                 boxSizing: 'content-box',
                               }}
                             />

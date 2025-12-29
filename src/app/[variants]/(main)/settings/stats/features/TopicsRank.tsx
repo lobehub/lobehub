@@ -1,6 +1,6 @@
 import { BarList } from '@lobehub/charts';
 import { ActionIcon, Flexbox, FormGroup, Icon, Modal } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { MaximizeIcon, MessageSquareIcon } from 'lucide-react';
 import Link from 'next/link';
 import qs from 'query-string';
@@ -17,7 +17,6 @@ import { type TopicRankItem } from '@/types/topic';
 export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const [open, setOpen] = useState(false);
   const { t } = useTranslation('auth');
-  const theme = useTheme();
   const navigate = useNavigate();
   const { data, isLoading } = useClientDataSWR('rank-topics', async () =>
     topicService.rankTopics(),
@@ -35,7 +34,7 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
       url: '/agent',
     });
     return {
-      icon: <Icon color={theme.colorTextDescription} icon={MessageSquareIcon} size={16} />,
+      icon: <Icon color={cssVar.colorTextDescription} icon={MessageSquareIcon} size={16} />,
       link,
       name: (
         <Link href={link} style={{ color: 'inherit' }}>

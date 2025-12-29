@@ -1,5 +1,5 @@
 import { ActionIcon, Block } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { MaximizeIcon, MinimizeIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { memo, useEffect, useState } from 'react';
@@ -13,7 +13,7 @@ const TagCloudCanvas = dynamic(() => import('./TagCloudCanvas'), {
   ssr: false,
 });
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   fullscreen: css`
     position: absolute;
     z-index: 10;
@@ -57,7 +57,6 @@ interface RoleTagCloudProps {
 const RoleTagCloud = memo<RoleTagCloudProps>(({ tags }) => {
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenAnimation, setFullscreenAnimation] = useState(false);
-  const { cx, styles } = useStyles();
 
   useEffect(() => {
     setFullscreenAnimation(true);

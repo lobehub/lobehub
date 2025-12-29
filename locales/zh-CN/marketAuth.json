@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "取消",
+  "authorize.cancel": "暂不授权",
   "authorize.confirm": "创建你的档案",
   "authorize.description": "你的社区个人档案独立于 {{appName}} 用户帐号而存在。",
   "authorize.footer.agreement": "继续操作即表示你确认已理解并同意<terms>条款和条件</terms>和<privacy>隐私政策</privacy>",

@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Tokeny na sekundę): Liczba tokenów generowanych na sekundę",
+  "duration.TTFT": "TTFT (Czas do pierwszego tokena): Opóźnienie pierwszego tokena",
+  "duration.completion": "Czas zakończenia generowania",
+  "duration.latency": "Czas trwania",
+  "duration.stage.end": "Koniec",
+  "duration.stage.firstToken": "Pierwszy token",
+  "duration.stage.start": "Początek",
+  "table.columns.TTFT.tooltip": "Czas do pierwszego tokena, jednostka: sekundy",
+  "table.columns.duration": "Czas trwania",
+  "table.columns.model": "Model",
+  "table.columns.spend": "Kredyty",
+  "table.columns.startTime": "Utworzono",
+  "table.columns.totalTokens": "Zużycie tokenów",
+  "table.columns.type.enums.chat": "Generowanie tekstu",
+  "table.columns.type.enums.imageGeneration": "Generowanie obrazów",
+  "table.columns.type.title": "Typ",
+  "table.desc": "Szczegóły wykorzystania kredytów obliczeniowych dla generowania tekstu, osadzania, generowania obrazów itp.",
+  "table.more": "Zobacz szczegóły",
+  "table.title": "Szczegóły wykorzystania kredytów obliczeniowych",
+  "table.totalToken.input": "Wejście",
+  "table.totalToken.output": "Wyjście"
+}

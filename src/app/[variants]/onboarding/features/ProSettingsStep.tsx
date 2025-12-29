@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,6 @@ interface ProSettingsStepProps {
 
 const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
   const { t } = useTranslation('onboarding');
-  const theme = useTheme();
   const navigate = useNavigate();
 
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
@@ -51,7 +50,7 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
       />
       {/* Default Model Section */}
       <Flexbox gap={16}>
-        <Text color={theme.colorTextSecondary}>{t('proSettings.model.title')}</Text>
+        <Text color={cssVar.colorTextSecondary}>{t('proSettings.model.title')}</Text>
         <ModelSelect
           onChange={handleModelChange}
           showAbility={false}
@@ -64,7 +63,7 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
       {/* Connectors Section (only show if Klavis is enabled) */}
       {enableKlavis && (
         <Flexbox gap={16}>
-          <Text color={theme.colorTextSecondary}>{t('proSettings.connectors.title')}</Text>
+          <Text color={cssVar.colorTextSecondary}>{t('proSettings.connectors.title')}</Text>
           <KlavisServerList />
         </Flexbox>
       )}
@@ -74,7 +73,7 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
           icon={Undo2Icon}
           onClick={onBack}
           style={{
-            color: theme.colorTextDescription,
+            color: cssVar.colorTextDescription,
           }}
           type={'text'}
         >

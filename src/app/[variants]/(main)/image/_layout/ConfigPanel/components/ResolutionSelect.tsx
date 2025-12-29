@@ -1,11 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
     cursor: pointer;
 
@@ -17,20 +17,20 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 32px;
     padding-block: 0;
     padding-inline: 16px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadius}px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius}px;
 
     font-size: 14px;
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      background: ${token.colorBgTextHover};
+      border-color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorBgTextHover};
     }
   `,
 
@@ -41,14 +41,14 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 
   selectedButton: css`
-    border-color: ${token.colorPrimary};
-    color: ${token.colorPrimary};
-    background: ${token.colorPrimaryBg};
+    border-color: ${cssVar.colorPrimary};
+    color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      color: ${token.colorPrimary};
-      background: ${token.colorPrimaryBgHover};
+      border-color: ${cssVar.colorPrimary};
+      color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorPrimaryBgHover};
     }
   `,
 }));
@@ -56,7 +56,6 @@ const useStyles = createStyles(({ css, token }) => ({
 const ResolutionSelect = memo(() => {
   const { t } = useTranslation('image');
   const { value, setValue, enumValues } = useGenerationConfigParam('resolution');
-  const { styles, cx } = useStyles();
 
   const handleClick = useCallback(
     (resolution: string) => {

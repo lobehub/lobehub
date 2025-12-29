@@ -1,10 +1,12 @@
 'use client';
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   item: css`
     display: flex;
     gap: 12px;
@@ -12,10 +14,10 @@ const useStyles = createStyles(({ css, token, prefixCls }) => ({
 
     padding-block: 12px;
     padding-inline: 16px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
 
     .${prefixCls}-skeleton-header {
@@ -44,8 +46,6 @@ interface SkeletonListProps {
 }
 
 const SkeletonList = memo<SkeletonListProps>(({ count = 4 }) => {
-  const { styles, theme } = useStyles();
-
   return (
     <Flexbox gap={4}>
       {Array.from({ length: count }).map((_, index) => (
@@ -54,7 +54,7 @@ const SkeletonList = memo<SkeletonListProps>(({ count = 4 }) => {
             active
             shape="square"
             size={40}
-            style={{ borderRadius: theme.borderRadius, flex: 'none' }}
+            style={{ borderRadius: cssVar.borderRadius, flex: 'none' }}
           />
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <Skeleton

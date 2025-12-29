@@ -113,6 +113,7 @@
   "response.StreamChunkError": "스트리밍 응답 구문 분석에 실패했습니다. 인터페이스가 사양을 준수하는지 확인하거나 모델 제공자에게 문의하세요",
   "response.SubscriptionKeyMismatch": "구독 상태 동기화 이상이 발생했습니다. 아래 버튼을 클릭하여 구독을 복구하거나 이메일로 문의하세요",
   "response.SubscriptionPlanLimit": "구독 크레딧이 소진되어 이 기능을 일시적으로 사용할 수 없습니다. 요금제를 업그레이드하거나 사용자 정의 모델 API를 설정한 후 계속하세요",
+  "response.SubscriptionPlanLimitUltimate": "구독 포인트가 모두 소진되어 이 기능을 사용할 수 없습니다. 계속 사용하려면 크레딧을 충전하거나 사용자 지정 모델 API를 설정해 주세요.",
   "response.SystemTimeNotMatchError": "시스템 시간이 서버와 일치하지 않습니다. 시스템 시간을 조정한 후 다시 시도하세요",
   "response.UnknownChatFetchError": "요청이 실패했습니다(알 수 없는 오류). 다음 정보를 기반으로 문제를 해결하거나 다시 시도하세요",
   "stt.responseError": "요청이 실패했습니다. 설정을 확인한 후 다시 시도하세요",

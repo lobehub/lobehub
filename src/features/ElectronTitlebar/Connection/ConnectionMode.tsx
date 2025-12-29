@@ -1,7 +1,7 @@
 import { type StorageMode, StorageModeEnum } from '@lobechat/electron-client-ipc';
 import { Button, Center, Flexbox, Input } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Server } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 
 import { Option } from './Option';
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     cardGroup: css`
       width: 400px; /* Increased width */
@@ -32,7 +32,7 @@ const useStyles = createStyles(({ token, css }) => {
       padding-inline-start: 4px; /* Align with card padding */
       font-size: 16px;
       font-weight: 500;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     header: css`
       text-align: center;
@@ -40,7 +40,7 @@ const useStyles = createStyles(({ token, css }) => {
     inputError: css`
       margin-block-start: 8px;
       font-size: 12px;
-      color: ${token.colorError};
+      color: ${cssVar.colorError};
     `,
     modal: css`
       .ant-drawer-close {
@@ -55,17 +55,17 @@ const useStyles = createStyles(({ token, css }) => {
     selfHostedText: css`
       cursor: pointer;
       font-size: 14px;
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
 
       :hover {
-        color: ${token.colorTextSecondary};
+        color: ${cssVar.colorTextSecondary};
       }
     `,
     title: css`
       margin-block: 16px 48px; /* Increased Spacing below title */
       font-size: 24px; /* Increased font size */
       font-weight: 600;
-      color: ${token.colorTextHeading};
+      color: ${cssVar.colorTextHeading};
     `,
   };
 });
@@ -77,7 +77,6 @@ interface ConnectionModeProps {
 }
 
 const ConnectionMode = memo<ConnectionModeProps>(({ setWaiting }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation(['electron', 'common']);
   const [urlError, setUrlError] = useState<string | undefined>();
 

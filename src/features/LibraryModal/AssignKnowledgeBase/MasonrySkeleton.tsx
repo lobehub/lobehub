@@ -1,13 +1,13 @@
 import { Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorBgContainer};
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorBgContainer};
   `,
   grid: css`
     display: grid;
@@ -21,7 +21,6 @@ interface MasonrySkeletonProps {
 }
 
 const MasonrySkeleton = memo<MasonrySkeletonProps>(({ columnCount }) => {
-  const { styles } = useStyles();
   // Generate varying heights for more natural masonry look
   const heights = [160, 180, 170, 160, 190, 170, 160, 180];
 

@@ -175,6 +175,7 @@ export class I18nManager {
     try {
       logger.debug(`Loading namespace: ${lng}/${ns}`);
       const resources = await loadResources(lng, ns);
+
       this.i18n.addResourceBundle(lng, ns, resources, true, true);
       return true;
     } catch (error) {

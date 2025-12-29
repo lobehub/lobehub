@@ -1,9 +1,8 @@
 'use client';
 
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
-import { darken, lighten } from 'polished';
 import { type CSSProperties, type ReactNode, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,7 +12,7 @@ import { useLocalDragUpload } from './useLocalDragUpload';
 const BLOCK_SIZE = 48;
 const ICON_SIZE = { size: 28, strokeWidth: 1.5 };
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     position: relative;
   `,
@@ -22,7 +21,7 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 100%;
     padding: 12px;
     border: 1.5px dashed #fff;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   desc: css`
     font-size: 12px;
@@ -30,9 +29,9 @@ const useStyles = createStyles(({ css, token }) => ({
     color: #fff;
   `,
   icon: css`
-    border-radius: ${token.borderRadiusSM}px;
-    color: ${darken(0.05, token.geekblue)};
-    background: ${lighten(0.38, token.geekblue)};
+    border-radius: ${cssVar.borderRadiusSM};
+    color: color-mix(in srgb, ${cssVar.geekblue} 95%, black);
+    background: color-mix(in srgb, ${cssVar.geekblue} 38%, white);
   `,
   iconGroup: css`
     margin-block-start: -32px;
@@ -48,17 +47,16 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
     justify-content: center;
 
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
 
     transition: all 0.2s ease-in-out;
   `,
   overlayContent: css`
-    padding: ${token.borderRadiusLG}px;
+    padding: ${cssVar.borderRadiusLG};
     border-radius: 12px;
-
-    background: ${token.geekblue};
+    background: ${cssVar.geekblue};
   `,
   title: css`
     font-size: 16px;
@@ -109,7 +107,6 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     onUploadFiles,
     style,
   }) => {
-    const { styles, cx, theme } = useStyles();
     const { t } = useTranslation('components');
 
     // Global drag state - shows overlay when dragging anywhere on page
@@ -136,7 +133,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                     className={styles.icon}
                     height={BLOCK_SIZE * 1.2}
                     style={{
-                      background: lighten(0.32, theme.geekblue),
+                      background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
                       transform: 'rotateZ(-20deg) translateX(8px)',
                     }}
                     width={BLOCK_SIZE}
@@ -158,7 +155,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                     className={styles.icon}
                     height={BLOCK_SIZE * 1.2}
                     style={{
-                      background: lighten(0.32, theme.geekblue),
+                      background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
                       transform: 'rotateZ(20deg) translateX(-8px)',
                     }}
                     width={BLOCK_SIZE}

@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Error parsing the message chunk of the streaming request. Please check if the current API interface complies with the standard specifications, or contact your API provider for assistance.",
   "response.SubscriptionKeyMismatch": "We apologize for the inconvenience. Due to a temporary system malfunction, your current subscription usage is inactive. Please click the button below to restore your subscription, or contact us via email for support.",
   "response.SubscriptionPlanLimit": "Your subscription points have been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.",
+  "response.SubscriptionPlanLimitUltimate": "Your subscription points have been exhausted, and you cannot use this feature. Please top up credits or configure a custom model API to continue using it.",
   "response.SystemTimeNotMatchError": "Sorry, your system time does not match the server. Please check your system time and try again.",
   "response.UnknownChatFetchError": "Sorry, an unknown request error occurred. Please check the information below or try again.",
   "stt.responseError": "Service request failed, please check the configuration or try again",

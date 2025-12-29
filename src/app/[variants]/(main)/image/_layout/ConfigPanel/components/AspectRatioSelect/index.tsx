@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Center, Grid, type GridProps, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar, useThemeMode } from 'antd-style';
 import { memo } from 'react';
 import useMergeState from 'use-merge-value';
 
@@ -14,7 +14,7 @@ export interface AspectRatioSelectProps extends Omit<GridProps, 'children' | 'on
 
 const AspectRatioSelect = memo<AspectRatioSelectProps>(
   ({ options, onChange, value, defaultValue, ...rest }) => {
-    const theme = useTheme();
+    const { isDarkMode } = useThemeMode();
     const [active, setActive] = useMergeState('1:1', {
       defaultValue: defaultValue || '1:1',
       onChange,
@@ -41,9 +41,9 @@ const AspectRatioSelect = memo<AspectRatioSelectProps>(
                   onChange?.(item.value);
                 }}
                 padding={8}
-                shadow={isActive && !theme.isDarkMode}
+                shadow={isActive && !isDarkMode}
                 style={{
-                  backgroundColor: isActive ? theme.colorBgElevated : 'transparent',
+                  backgroundColor: isActive ? cssVar.colorBgElevated : 'transparent',
                 }}
                 variant={'filled'}
               >
@@ -51,7 +51,7 @@ const AspectRatioSelect = memo<AspectRatioSelectProps>(
                   <div
                     style={{
                       aspectRatio: `${width} / ${height}`,
-                      border: `2px solid ${isActive ? theme.colorText : theme.colorTextDescription}`,
+                      border: `2px solid ${isActive ? cssVar.colorText : cssVar.colorTextDescription}`,
                       borderRadius: 3,
                       height: isWidthGreater ? undefined : 16,
                       width: isWidthGreater ? 16 : undefined,

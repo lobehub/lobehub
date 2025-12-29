@@ -1,13 +1,13 @@
 import { type ChatFileChunk } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import { BookOpenTextIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ChunkItem from './ChunkItem';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     cursor: pointer;
 
@@ -16,12 +16,18 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     padding-inline-end: 12px;
     border-radius: 8px;
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorFillTertiary};
-
+    background: ${cssVar.colorFillTertiary};
+  `,
+  containerDark: css`
     &:hover {
-      background: ${isDarkMode ? '' : token.colorFillSecondary};
+      background: '';
+    }
+  `,
+  containerLight: css`
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   title: css`
@@ -41,13 +47,13 @@ interface FileChunksProps {
 
 const FileChunks = memo<FileChunksProps>(({ data }) => {
   const { t } = useTranslation('chat');
-  const { styles, theme } = useStyles();
+  const { isDarkMode } = useThemeMode();
 
   const [showDetail, setShowDetail] = useState(false);
 
   return (
     <Flexbox
-      className={styles.container}
+      className={cx(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)}
       gap={16}
       onClick={() => {
         setShowDetail(!showDetail);
@@ -56,7 +62,7 @@ const FileChunks = memo<FileChunksProps>(({ data }) => {
     >
       <Flexbox distribution={'space-between'} flex={1} horizontal>
         <Flexbox gap={8} horizontal>
-          <Icon color={theme.geekblue} icon={BookOpenTextIcon} /> {t('rag.referenceChunks')}
+          <Icon color={cssVar.geekblue} icon={BookOpenTextIcon} /> {t('rag.referenceChunks')}
         </Flexbox>
         <Icon icon={showDetail ? ChevronDown : ChevronRight} />
       </Flexbox>

@@ -1,5 +1,5 @@
 import { Avatar } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import { CATEGORY_ICON_MAP } from '../const';
@@ -9,7 +9,6 @@ interface CategoryAvatarProps {
 }
 
 export const CategoryAvatar = memo<CategoryAvatarProps>(({ category }) => {
-  const theme = useTheme();
   const IconComponent = CATEGORY_ICON_MAP[category];
 
   return (
@@ -18,7 +17,7 @@ export const CategoryAvatar = memo<CategoryAvatarProps>(({ category }) => {
       icon={<IconComponent />}
       style={{
         backgroundColor: 'transparent',
-        color: theme.colorTextSecondary,
+        color: cssVar.colorTextSecondary,
         height: 16,
         width: 16,
       }}

@@ -1,10 +1,10 @@
 'use client';
 
 import { Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     tag: css`
       margin: 0;
@@ -12,14 +12,12 @@ const useStyles = createStyles(({ token, css }) => {
       padding-inline: 12px;
       border-radius: 16px;
 
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
   };
 });
 
 const VersionTag = memo<{ range: string[] }>(({ range }) => {
-  const { styles } = useStyles();
-
   return <Tag className={styles.tag}>{range.map((v) => 'v' + v).join(' ~ ')}</Tag>;
 });
 

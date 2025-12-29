@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Błąd analizy bloku wiadomości w żądaniu strumieniowym. Proszę sprawdzić, czy aktualny interfejs API jest zgodny z normami, lub skontaktować się z dostawcą API w celu uzyskania informacji.",
   "response.SubscriptionKeyMismatch": "Przepraszamy, z powodu sporadycznych awarii systemu, bieżące zużycie subskrypcji jest tymczasowo nieaktywne. Proszę kliknąć przycisk poniżej, aby przywrócić subskrypcję lub skontaktować się z nami drogą mailową w celu uzyskania wsparcia.",
   "response.SubscriptionPlanLimit": "Twoje punkty subskrypcyjne zostały wyczerpane, nie możesz korzystać z tej funkcji. Proszę zaktualizować do wyższego planu lub skonfigurować API modelu niestandardowego, aby kontynuować korzystanie.",
+  "response.SubscriptionPlanLimitUltimate": "Wyczerpano punkty subskrypcji – nie możesz korzystać z tej funkcji. Doładuj kredyty lub skonfiguruj własny interfejs API modelu, aby kontynuować korzystanie.",
   "response.SystemTimeNotMatchError": "Przykro nam, czas systemowy nie zgadza się z czasem serwera. Proszę sprawdzić czas systemowy i spróbować ponownie.",
   "response.UnknownChatFetchError": "Przykro nam, wystąpił nieznany błąd żądania. Proszę sprawdzić poniższe informacje lub spróbować ponownie.",
   "stt.responseError": "Błąd żądania usługi. Proszę sprawdź konfigurację i spróbuj ponownie",

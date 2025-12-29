@@ -1,18 +1,13 @@
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { createStyles } from 'antd-style';
+import { cssVar, cx } from 'antd-style';
 import { parse } from 'partial-json';
-import { rgba } from 'polished';
 import { type ReactNode, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Descriptions, { type DescriptionItem } from '@/components/Descriptions';
 import { useYamlArguments } from '@/hooks/useYamlArguments';
-import { shinyTextStylish } from '@/styles/loading';
-
-const useStyles = createStyles(({ token }) => ({
-  shineText: shinyTextStylish(token),
-}));
+import { shinyTextStyles } from '@/styles';
 
 const formatValue = (value: any): string => {
   if (Array.isArray(value)) {
@@ -35,7 +30,6 @@ export interface ArgumentsProps {
 
 const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions }) => {
   const { t } = useTranslation('plugin');
-  const { styles, cx, theme } = useStyles();
 
   const displayArgs = useMemo(() => {
     try {
@@ -72,13 +66,15 @@ const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions
         <Descriptions
           bordered={false}
           classNames={{
-            label: cx(loading && styles.shineText),
+            label: cx(loading && shinyTextStyles.shinyText),
           }}
           items={items}
           labelWidth={140}
           maxItemWidth={'100%'}
           styles={{
-            label: loading ? { color: rgba(theme.colorText, 0.33) } : {},
+            label: loading
+              ? { color: `color-mix(in srgb, ${cssVar.colorText} 33%, transparent)` }
+              : {},
           }}
         />
       </Flexbox>

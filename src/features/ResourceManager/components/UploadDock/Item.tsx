@@ -1,5 +1,5 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type ReactNode, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,7 +7,7 @@ import FileIcon from '@/components/FileIcon';
 import { type UploadFileItem } from '@/types/files/upload';
 import { formatSize, formatSpeed, formatTime } from '@/utils/format';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     progress: css`
       position: absolute;
@@ -15,9 +15,9 @@ const useStyles = createStyles(({ css, token }) => {
       inset-inline: 0 1%;
 
       height: 100%;
-      border-block-end: 3px solid ${token.geekblue};
+      border-block-end: 3px solid ${cssVar.geekblue};
 
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     `,
     title: css`
       overflow: hidden;
@@ -35,7 +35,6 @@ type UploadItemProps = UploadFileItem;
 
 const UploadItem = memo<UploadItemProps>(({ file, status, uploadState }) => {
   const { t } = useTranslation('file');
-  const { styles } = useStyles();
   const { type, name, size } = file;
 
   const desc: ReactNode = useMemo(() => {

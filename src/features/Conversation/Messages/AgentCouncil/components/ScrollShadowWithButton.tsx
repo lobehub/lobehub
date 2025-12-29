@@ -1,24 +1,24 @@
 import { Button, Flexbox, type FlexboxProps, ScrollShadow } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
     position: absolute;
     z-index: 10;
     inset-block-start: 50%;
     transform: translateY(-50%);
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     opacity: 0;
 
-    transition: opacity ${token.motionDurationMid} ${token.motionEaseInOut};
+    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
     &:hover {
-      border-color: ${token.colorBorder} !important;
-      box-shadow: ${token.boxShadowTertiary} !important;
+      border-color: ${cssVar.colorBorder} !important;
+      box-shadow: ${cssVar.boxShadowTertiary} !important;
     }
   `,
   container: css`
@@ -37,7 +37,6 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const ScrollShadowWithButton = memo<FlexboxProps>(({ children, ...rest }) => {
-  const { styles, cx } = useStyles();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);

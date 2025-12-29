@@ -1,6 +1,6 @@
 import { type UniformSearchResult } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';
@@ -8,7 +8,7 @@ import WebFavicon from '@/components/WebFavicon';
 import TitleExtra from './TitleExtra';
 import Video from './Video';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     container: css`
       display: flex;
@@ -20,7 +20,7 @@ const useStyles = createStyles(({ css, token }) => {
       color: initial;
 
       &:hover {
-        background: ${token.colorFillTertiary};
+        background: ${cssVar.colorFillTertiary};
       }
     `,
     desc: css`
@@ -29,15 +29,15 @@ const useStyles = createStyles(({ css, token }) => {
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
 
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
       text-overflow: ellipsis;
     `,
     displayLink: css`
-      color: ${token.colorTextQuaternary};
+      color: ${cssVar.colorTextQuaternary};
     `,
     title: css`
       font-size: 16px;
-      color: ${token.colorLink};
+      color: ${cssVar.colorLink};
     `,
     url: css`
       overflow: hidden;
@@ -45,7 +45,7 @@ const useStyles = createStyles(({ css, token }) => {
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 1;
 
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
       text-overflow: ellipsis;
     `,
   };
@@ -57,7 +57,6 @@ interface SearchResultProps extends UniformSearchResult {
 
 const SearchItem = memo<SearchResultProps>((props) => {
   const { content, url, score, engines, title, category } = props;
-  const { styles } = useStyles();
 
   if (category === 'videos') return <Video {...props} />;
 

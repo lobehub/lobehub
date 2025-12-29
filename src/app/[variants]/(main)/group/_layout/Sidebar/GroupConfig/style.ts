@@ -1,6 +1,6 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   memberItem: css`
     cursor: pointer;
 
@@ -14,7 +14,7 @@ export const useStyles = createStyles(({ css, token }) => ({
     max-height: 36px;
     padding-block: 0 !important;
     padding-inline: 4px !important;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     transition: all 0.2s ease;
 
@@ -23,7 +23,7 @@ export const useStyles = createStyles(({ css, token }) => ({
     }
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
 
       .show-on-hover {
         opacity: 1;
@@ -32,7 +32,7 @@ export const useStyles = createStyles(({ css, token }) => ({
   `,
   prompt: css`
     opacity: 0.75;
-    transition: opacity 200ms ${token.motionEaseOut};
+    transition: opacity 200ms ${cssVar.motionEaseOut};
 
     &:hover {
       opacity: 1;

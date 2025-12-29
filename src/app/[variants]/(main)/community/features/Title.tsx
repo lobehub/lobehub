@@ -1,17 +1,17 @@
 'use client';
 
 import { Flexbox, type FlexboxProps, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import NextLink from 'next/link';
 import { type ReactNode, memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   more: css`
     display: flex;
     align-items: center;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     margin-block: 0.2em;
@@ -37,7 +37,6 @@ export interface TitleProps extends FlexboxProps {
 
 const Title = memo<TitleProps>(
   ({ id, tag, children, moreLink, more, level = 2, icon, ...rest }) => {
-    const { cx, styles } = useStyles();
     const title = (
       <h2 className={cx(styles.title, styles[`title${level}` as 'title2' | 'title3'])} id={id}>
         {children}

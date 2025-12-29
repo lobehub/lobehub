@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,7 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   button: css`
     button {
       width: 100%;
@@ -24,7 +24,6 @@ const ActionButton = memo(() => {
   const { t } = useTranslation(['discover', 'plugin']);
   const detailContext = useDetailContext();
   const { identifier, haveCloudEndpoint } = detailContext;
-  const { styles } = useStyles();
   const [isLoading, setIsLoading] = useState(false);
   const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
 

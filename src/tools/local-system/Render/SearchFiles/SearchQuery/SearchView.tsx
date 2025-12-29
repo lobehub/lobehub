@@ -1,15 +1,15 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStylish } from '@/styles/loading';
+import { shinyTextStyles } from '@/styles';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   font: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   query: css`
     cursor: pointer;
@@ -19,13 +19,12 @@ const useStyles = createStyles(({ css, token }) => ({
     border-radius: 8px;
 
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
-  shinyText: shinyTextStylish(token),
 }));
 
 interface SearchBarProps {
@@ -38,12 +37,11 @@ interface SearchBarProps {
 const SearchBar = memo<SearchBarProps>(
   ({ defaultQuery, resultsNumber, onEditingChange, searching }) => {
     const { t } = useTranslation('tool');
-    const { styles, cx } = useStyles();
     return (
       <Flexbox align={'center'} distribution={'space-between'} gap={40} height={26} horizontal>
         <Flexbox
           align={'center'}
-          className={cx(styles.query, searching && styles.shinyText)}
+          className={cx(styles.query, searching && shinyTextStyles.shinyText)}
           gap={8}
           horizontal
           onClick={() => {

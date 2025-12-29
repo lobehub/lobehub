@@ -1,6 +1,6 @@
 import { Icon, type MenuProps } from '@lobehub/ui';
 import { Dropdown } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import React, { type CSSProperties, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +24,6 @@ interface KnowledgeBaseItemProps {
 
 const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(({ id, name, active, style, className }) => {
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
-  const theme = useTheme();
   const navigate = useNavigate();
 
   const [editing, isLoading] = useKnowledgeBaseStore((s) => [
@@ -62,10 +61,10 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(({ id, name, active, styl
   // Icon (show loader when updating)
   const icon = useMemo(() => {
     if (isLoading) {
-      return <Icon color={theme.colorTextDescription} icon={Loader2Icon} size={18} spin />;
+      return <Icon color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} spin />;
     }
     return <RepoIcon size={18} />;
-  }, [isLoading, theme.colorTextDescription]);
+  }, [isLoading]);
 
   const dropdownMenu: MenuProps['items'] = useDropdownMenu({
     id,

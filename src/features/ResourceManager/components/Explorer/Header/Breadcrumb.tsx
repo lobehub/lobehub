@@ -1,5 +1,5 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -10,26 +10,26 @@ import { useFileStore } from '@/store/file';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/knowledgeBase';
 import { FilesTabs } from '@/types/files';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
     font-size: 14px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   breadcrumbItem: css`
     cursor: pointer;
-    transition: color ${token.motionDurationSlow};
+    transition: color ${cssVar.motionDurationSlow};
 
     &:hover {
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     }
   `,
   currentItem: css`
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   separator: css`
     margin-inline: 8px;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
 }));
 
@@ -46,7 +46,6 @@ interface FolderCrumb {
 }
 
 const Breadcrumb = memo<BreadcrumbProps>(({ category, knowledgeBaseId, fileName }) => {
-  const { styles, cx } = useStyles();
   const { t } = useTranslation('file');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

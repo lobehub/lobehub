@@ -1,13 +1,14 @@
 import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
+import { cssVar, cx, useThemeMode } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';
-import { useStyles } from './style';
+import { styles } from './style';
 
 interface ProviderCardProps extends AiProviderListItem {
   loading?: boolean;
@@ -16,11 +17,15 @@ interface ProviderCardProps extends AiProviderListItem {
 const ProviderCard = memo<ProviderCardProps>(
   ({ id, description, name, enabled, source, logo, loading, onProviderSelect }) => {
     const { t } = useTranslation('providers');
-    const { cx, styles, theme } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     if (loading)
       return (
-        <Flexbox className={cx(styles.container)} gap={24} padding={16}>
+        <Flexbox
+          className={cx(isDarkMode ? styles.containerDark : styles.containerLight)}
+          gap={24}
+          padding={16}
+        >
           <Skeleton active />
         </Flexbox>
       );
@@ -30,7 +35,7 @@ const ProviderCard = memo<ProviderCardProps>(
     /* ↑ cloud slot ↑ */
 
     return (
-      <Flexbox className={cx(styles.container)} gap={24}>
+      <Flexbox className={cx(isDarkMode ? styles.containerDark : styles.containerLight)} gap={24}>
         <Flexbox gap={12} padding={16} width={'100%'}>
           <div
             onClick={() => {
@@ -44,7 +49,7 @@ const ProviderCard = memo<ProviderCardProps>(
                   <ProviderCombine
                     provider={id}
                     size={24}
-                    style={{ color: theme.colorText }}
+                    style={{ color: cssVar.colorText }}
                     title={name}
                   />
                 ) : (

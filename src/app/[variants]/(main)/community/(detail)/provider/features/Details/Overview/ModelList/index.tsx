@@ -2,7 +2,7 @@
 
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, Block, Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,6 @@ import { useDetailContext } from '../../../DetailProvider';
 const ModelList = memo(() => {
   const { models = [] } = useDetailContext();
   const { t } = useTranslation('discover');
-  const theme = useTheme();
 
   return (
     <TooltipGroup>
@@ -36,7 +35,7 @@ const ModelList = memo(() => {
                       <ModelIcon model={record.id} size={24} type={'avatar'} />
                       <Flexbox style={{ overflow: 'hidden' }}>
                         <div style={{ fontWeight: 500 }}>{record.displayName}</div>
-                        <div style={{ color: theme.colorTextSecondary, fontSize: 12 }}>
+                        <div style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
                           {record.id}
                         </div>
                       </Flexbox>
@@ -132,7 +131,7 @@ const ModelList = memo(() => {
                   <Flexbox align="center" gap={4} horizontal justify={'flex-end'}>
                     <Link style={{ color: 'inherit' }} to={urlJoin('/community/model', record.id)}>
                       <ActionIcon
-                        color={theme.colorTextDescription}
+                        color={cssVar.colorTextDescription}
                         icon={ChevronRightIcon}
                         size={'small'}
                         variant={'filled'}

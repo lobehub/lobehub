@@ -2,19 +2,19 @@
 
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { File, Folder } from 'lucide-react';
 import { memo } from 'react';
 
 import { type ListLocalFilesState } from '../../type';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     padding-inline: 8px 0;
   `,
   fileIcon: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   fileItem: css`
     cursor: default;
@@ -23,24 +23,24 @@ const useStyles = createStyles(({ css, token }) => ({
     border-radius: 4px;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   fileName: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   folderIcon: css`
-    color: ${token.colorWarning};
+    color: ${cssVar.colorWarning};
   `,
   path: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   size: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -61,8 +61,6 @@ const formatSize = (bytes?: number): string => {
 
 const ListFiles = memo<BuiltinRenderProps<ListLocalFilesParams, ListLocalFilesState>>(
   ({ args, pluginState }) => {
-    const { styles } = useStyles();
-
     if (!pluginState?.files) {
       return null;
     }

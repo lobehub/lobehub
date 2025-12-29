@@ -17,7 +17,6 @@ const Knowledge = memo(() => {
           description={t('assistants.details.capabilities.knowledge.desc')}
           descriptionProps={{ fontSize: 14 }}
           icon={BookOpen}
-          style={{ maxWidth: 400 }}
         />
       </Block>
     );

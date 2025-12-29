@@ -1,28 +1,29 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Cloud, Server } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 
+import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
 import { setDesktopAutoOidcFirstOpenHandled } from '@/utils/electron/autoOidc';
 
 import { AuthResult } from '../common/AuthResult';
 import { LogoBrand } from '../common/LogoBrand';
 import { TitleSection } from '../common/TitleSection';
-import { useLayoutStyles } from '../styles';
+import { layoutStyles } from '../styles';
 import { getThemeToken } from '../styles/theme';
 
 const themeToken = getThemeToken();
 
 // Screen4 特有的样式
-const useScreen4Styles = createStyles(({ token, css }) => ({
+const screen4Styles = createStaticStyles(({ css, cssVar }) => ({
   // 授权说明文字
   authDescription: css`
     margin: 0;
     margin-block-end: 32px;
 
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     color: rgba(255, 255, 255, 60%);
     text-align: center;
   `,
@@ -48,10 +49,10 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
     padding-block: 12px;
     padding-inline: 16px;
     border: 1px solid rgba(255, 255, 255, 10%);
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    font-size: ${token.fontSize}px;
-    color: ${token.colorTextBase};
+    font-size: ${cssVar.fontSize};
+    color: ${cssVar.colorTextBase};
 
     background: rgba(255, 255, 255, 5%);
     outline: none;
@@ -67,8 +68,8 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
     margin: 0;
     margin-block-start: 16px;
 
-    font-size: ${token.fontSizeSM}px;
-    color: ${token.colorError};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorError};
     text-align: center;
     word-break: break-word;
     white-space: pre-wrap;
@@ -146,18 +147,18 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
       background: rgba(255, 255, 255, 8%);
 
       svg {
-        color: rgba(255, 255, 255, 100%);
+        color: rgb(255, 255, 255);
       }
 
       span {
-        color: rgba(255, 255, 255, 100%);
+        color: rgb(255, 255, 255);
       }
     }
   `,
 
   // 方法卡片文字
   methodCardText: css`
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     font-weight: 600;
     color: rgba(255, 255, 255, 90%);
     white-space: nowrap;
@@ -185,7 +186,7 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
   // 登录方式标题
   methodSelectorTitle: css`
     margin-block-end: 8px;
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     color: rgba(255, 255, 255, 60%);
   `,
 
@@ -195,10 +196,10 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
     margin-block-end: 8px;
     margin-inline: 0;
 
-    font-family: ${token.fontFamily};
+    font-family: ${cssVar.fontFamily};
     font-size: 32px;
     font-weight: 500;
-    color: ${token.colorTextBase};
+    color: ${cssVar.colorTextBase};
   `,
 
   // 登录按钮
@@ -212,9 +213,9 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
     padding-block: 12px;
     padding-inline: 32px;
     border: none;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     font-weight: 700;
     color: #000;
 
@@ -344,9 +345,6 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
     }
   }, [onScreenConfigChange, currentMethod, cloudLoginStatus, selfhostLoginStatus]);
 
-  const { styles: layoutStyles } = useLayoutStyles();
-  const { styles: screen4Styles } = useScreen4Styles();
-
   // 处理登录方式切换
   const handleMethodChange = (method: LoginMethod) => {
     setCurrentMethod(method);
@@ -362,7 +360,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
   // 处理云端登录
   const handleCloudLogin = async () => {
     // Desktop runtime guard
-    if (process.env.NEXT_PUBLIC_IS_DESKTOP_APP !== '1') {
+    if (!isDesktop) {
       setRemoteError('OIDC authorization is only available in the desktop app runtime.');
       setCloudLoginStatus('error');
       return;
@@ -382,7 +380,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
   // 处理自建服务器连接
   const handleSelfhostConnect = async () => {
     // Desktop runtime guard
-    if (process.env.NEXT_PUBLIC_IS_DESKTOP_APP !== '1') {
+    if (!isDesktop) {
       setRemoteError('OIDC authorization is only available in the desktop app runtime.');
       setSelfhostLoginStatus('error');
       return;
@@ -484,7 +482,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
               {/* 重新登录按钮 */}
               <motion.button
                 animate={{ opacity: 1, y: 0 }}
-                className={`${screen4Styles.signInButton}`}
+                className={screen4Styles.signInButton}
                 initial={{ opacity: 0, y: 30 }}
                 key="cloud-retry"
                 onClick={handleReturnToLogin}
@@ -525,7 +523,10 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
             {/* 登录按钮 */}
             <motion.button
               animate={{ opacity: 1, y: 0 }}
-              className={`${screen4Styles.signInButton} ${cloudLoginStatus === 'loading' ? screen4Styles.loadingButton : ''}`}
+              className={cx(
+                screen4Styles.signInButton,
+                cloudLoginStatus === 'loading' && screen4Styles.loadingButton,
+              )}
               disabled={cloudLoginStatus === 'loading' || isConnectingServer}
               initial={{ opacity: 0, y: 30 }}
               key="cloud-button"
@@ -555,7 +556,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
               {/* 重新连接按钮 */}
               <motion.button
                 animate={{ opacity: 1, y: 0 }}
-                className={`${screen4Styles.signInButton}`}
+                className={screen4Styles.signInButton}
                 initial={{ opacity: 0, y: 30 }}
                 key="selfhost-retry"
                 onClick={handleReturnToLogin}
@@ -601,13 +602,11 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
 
               <motion.button
                 animate={{ opacity: 1, y: 0 }}
-                className={`${screen4Styles.signInButton} ${
-                  selfhostLoginStatus === 'loading'
-                    ? screen4Styles.loadingButton
-                    : !endpoint.trim()
-                      ? screen4Styles.disabledButton
-                      : ''
-                }`}
+                className={cx(
+                  screen4Styles.signInButton,
+                  selfhostLoginStatus === 'loading' && screen4Styles.loadingButton,
+                  !endpoint.trim() && screen4Styles.disabledButton,
+                )}
                 disabled={
                   !endpoint.trim() || selfhostLoginStatus === 'loading' || isConnectingServer
                 }
@@ -659,7 +658,10 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
               <div className={screen4Styles.methodOptions}>
                 {Object.values(loginMethods).map((method) => (
                   <motion.div
-                    className={`${screen4Styles.methodCard} ${currentMethod === method.id ? 'active' : ''}`}
+                    className={cx(
+                      screen4Styles.methodCard,
+                      currentMethod === method.id && 'active',
+                    )}
                     key={method.id}
                     onClick={() => handleMethodChange(method.id)}
                     whileHover={{ scale: 1.02 }}

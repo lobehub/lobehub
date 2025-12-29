@@ -1,21 +1,20 @@
 'use client';
 
 import { Flexbox, Modal } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PortalContent } from '@/features/Portal/router';
 import { useChatStore } from '@/store/chat';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    background: linear-gradient(${token.colorBgElevated}, ${token.colorBgContainer}) !important;
+    background: linear-gradient(${cssVar.colorBgElevated}, ${cssVar.colorBgContainer}) !important;
   `,
 }));
 
 const Layout = () => {
-  const { styles, cx } = useStyles();
   const [showMobilePortal, isPortalThread, togglePortal] = useChatStore((s) => [
     s.showPortal,
     !!s.portalThreadId,
@@ -24,12 +23,7 @@ const Layout = () => {
   const { t } = useTranslation('portal');
 
   const renderBody = (body: ReactNode) => (
-    <Flexbox
-      gap={8}
-      height={'calc(100% - 52px)'}
-      padding={'0 8px'}
-      style={{ overflow: 'hidden' }}
-    >
+    <Flexbox gap={8} height={'calc(100% - 52px)'} padding={'0 8px'} style={{ overflow: 'hidden' }}>
       <Flexbox
         height={'100%'}
         style={{ marginInline: -8, overflow: 'hidden', position: 'relative' }}

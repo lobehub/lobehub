@@ -1,6 +1,6 @@
 'use client';
 
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -9,15 +9,20 @@ import UserAvatar from '@/app/[variants]/(main)/community/features/UserAvatar';
 import NavHeader from '@/features/NavHeader';
 
 import SortButton from '../features/SortButton';
+import { styles } from './Header/style';
 
 const Header = memo(() => {
-  const theme = useTheme();
   const location = useLocation();
   // const { activeKey } = useNav();
   const isHome = location.pathname === '/';
 
+  const cssVariables: Record<string, string> = {
+    '--header-border-color': cssVar.colorBorderSecondary,
+  };
+
   return (
     <NavHeader
+      className={styles.headerContainer}
       left={<StoreSearchBar />}
       right={
         !isHome && (
@@ -28,9 +33,7 @@ const Header = memo(() => {
           </>
         )
       }
-      style={{
-        borderBottom: `1px solid ${theme.colorBorderSecondary}`,
-      }}
+      style={cssVariables}
       styles={{
         left: { flex: 1 },
       }}

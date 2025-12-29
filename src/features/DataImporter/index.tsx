@@ -3,7 +3,7 @@
 import { type ErrorShape, type ImportFileUploadState, ImportStage } from '@lobechat/types';
 import { Center } from '@lobehub/ui';
 import { Upload } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ImportIcon } from 'lucide-react';
 import React, { type ReactNode, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +35,7 @@ export interface ImportResults {
   type?: string;
 }
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   children: css`
     &::before {
       content: '';
@@ -56,7 +56,6 @@ interface DataImporterProps {
 
 const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
 
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const [refreshMessages, refreshTopics] = useChatStore((s) => [s.refreshMessages, s.refreshTopic]);
@@ -173,12 +172,12 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
 
           return false;
         }}
-        className={styles.wrapper}
+        className={cx(styles.wrapper)}
         maxCount={1}
         showUploadList={false}
       >
         {/* a very hackable solution: add a pseudo before to have a large hot zone */}
-        <div className={styles.children}>{children}</div>
+        <div className={cx(styles.children)}>{children}</div>
       </Upload>
       {importPgData && (
         <ImportPreviewModal

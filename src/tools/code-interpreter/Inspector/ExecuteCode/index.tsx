@@ -2,18 +2,18 @@
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStylish } from '@/styles/loading';
+import { shinyTextStyles } from '@/styles';
 
 import { type ExecuteCodeState } from '../../type';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
   `,
   root: css`
     overflow: hidden;
@@ -21,9 +21,8 @@ const useStyles = createStyles(({ css, token }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
-  shinyText: shinyTextStylish(token),
 }));
 
 interface ExecuteCodeParams {
@@ -36,11 +35,10 @@ export const ExecuteCodeInspector = memo<
   BuiltinInspectorProps<ExecuteCodeParams, ExecuteCodeState>
 >(({ args, partialArgs, isArgumentsStreaming }) => {
   const { t } = useTranslation('plugin');
-  const { styles, cx } = useStyles();
 
   if (isArgumentsStreaming && !partialArgs?.description)
     return (
-      <div className={cx(styles.root, styles.shinyText)}>
+      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-cloud-code-interpreter.title')}</span>
         <Icon icon={ChevronRight} style={{ marginInline: 4 }} />
         <span>{t('builtins.lobe-cloud-code-interpreter.apiName.executeCode')}</span>
@@ -50,7 +48,7 @@ export const ExecuteCodeInspector = memo<
   const displayText = args?.description || partialArgs?.description || '';
 
   return (
-    <div className={cx(styles.root, isArgumentsStreaming && styles.shinyText)}>
+    <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
       <span>{t('builtins.lobe-cloud-code-interpreter.apiName.executeCode')}</span>
       {displayText && (
         <>

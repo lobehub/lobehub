@@ -1,8 +1,7 @@
 import { Button, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { Badge } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import { BoltIcon, Loader2Icon, RotateCwIcon } from 'lucide-react';
-import { darken, lighten } from 'polished';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,7 +9,7 @@ import { AsyncTaskStatus, type FileParsingTask } from '@/types/asyncTask';
 
 import EmbeddingStatus from './EmbeddingStatus';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css }) => ({
   errorReason: css`
     padding: 4px;
     border-radius: 4px;
@@ -18,7 +17,13 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     font-family: monospace;
     font-size: 12px;
 
-    background: ${isDarkMode ? darken(0.1, token.colorText) : lighten(0.1, token.colorText)};
+    background: var(--error-reason-bg, ${cssVar.colorText});
+  `,
+  errorReasonDark: css`
+    --error-reason-bg: color-mix(in srgb, ${cssVar.colorText} 90%, black);
+  `,
+  errorReasonLight: css`
+    --error-reason-bg: color-mix(in srgb, ${cssVar.colorText} 90%, white);
   `,
 }));
 
@@ -47,7 +52,7 @@ const FileParsingStatus = memo<FileParsingStatusProps>(
     hideEmbeddingButton,
   }) => {
     const { t } = useTranslation(['components', 'common']);
-    const { styles, cx } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     switch (chunkingStatus) {
       case AsyncTaskStatus.Processing: {
@@ -71,7 +76,12 @@ const FileParsingStatus = memo<FileParsingStatusProps>(
               <Flexbox gap={4}>
                 {t('FileParsingStatus.chunks.status.errorResult')}
                 {chunkingError && (
-                  <Flexbox className={styles.errorReason}>
+                  <Flexbox
+                    className={cx(
+                      styles.errorReason,
+                      isDarkMode ? styles.errorReasonDark : styles.errorReasonLight,
+                    )}
+                  >
                     [{chunkingError.name}]:{' '}
                     {chunkingError.body && typeof chunkingError.body !== 'string'
                       ? chunkingError.body.detail

@@ -1,5 +1,5 @@
 import { ActionIcon, Block, Center, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,7 @@ import { type UploadFileItem } from '@/types/files/upload';
 import UploadDetail from '../../../components/UploadDetail';
 import Content from './Content';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   actions: css`
     position: absolute;
     z-index: 10;
@@ -19,10 +19,10 @@ const useStyles = createStyles(({ css, token }) => ({
 
     border-radius: 5px;
 
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
     box-shadow:
-      0 0 0 0.5px ${token.colorFillSecondary} inset,
-      ${token.boxShadowTertiary};
+      0 0 0 0.5px ${cssVar.colorFillSecondary} inset,
+      ${cssVar.boxShadowTertiary};
   `,
   container: css`
     user-select: none;
@@ -49,7 +49,6 @@ type FileItemProps = UploadFileItem;
 const FileItem = memo<FileItemProps>((props) => {
   const { file, uploadState, status, id, tasks } = props;
   const { t } = useTranslation(['chat', 'common']);
-  const { styles } = useStyles();
   const [removeChatUploadFile] = useFileStore((s) => [s.removeChatUploadFile]);
 
   return (

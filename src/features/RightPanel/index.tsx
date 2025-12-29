@@ -1,5 +1,5 @@
 import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Suspense, memo, useState } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -15,7 +15,6 @@ interface RightPanelProps extends Omit<
 
 const RightPanel = memo<RightPanelProps>(
   ({ maxWidth = 600, minWidth = 300, children, defaultWidth = 360, ...rest }) => {
-    const theme = useTheme();
     const [showRightPanel, toggleRightPanel] = useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
       s.toggleRightPanel,
@@ -25,7 +24,7 @@ const RightPanel = memo<RightPanelProps>(
 
     return (
       <DraggablePanel
-        backgroundColor={theme.colorBgContainer}
+        backgroundColor={cssVar.colorBgContainer}
         expand={showRightPanel}
         expandable={false}
         maxWidth={maxWidth}

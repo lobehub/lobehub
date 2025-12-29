@@ -3,7 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { Button, Icon } from '@lobehub/ui';
 import { Dropdown } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { useDetailContext } from '../../DetailProvider';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   button: css`
     button {
       width: 100%;
@@ -20,7 +20,6 @@ const useStyles = createStyles(({ css }) => ({
 }));
 
 const ProviderConfig = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('discover');
   const { url, modelsUrl, identifier } = useDetailContext();
   const navigate = useNavigate();

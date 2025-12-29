@@ -9,6 +9,10 @@ export async function getSubscriptionPlan(userId: string): Promise<Plans> {
   return Plans.Free;
 }
 
+export async function getIsInWaitList(userId: string): Promise<boolean> {
+  return true;
+}
+
 export async function initNewUserForBusiness(
   userId: string,
   createdAt: Date | null | undefined,

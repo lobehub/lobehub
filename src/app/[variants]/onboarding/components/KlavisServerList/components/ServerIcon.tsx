@@ -1,5 +1,5 @@
 import { Avatar, Icon } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -9,13 +9,11 @@ interface ServerIconProps {
 }
 
 const ServerIcon = memo<ServerIconProps>(({ icon, label }) => {
-  const theme = useTheme();
-
   if (typeof icon === 'string') {
     return <Avatar alt={label} avatar={icon} shape={'square'} size={24} style={{ flex: 'none' }} />;
   }
 
-  return <Icon fill={theme.colorText} icon={icon} size={24} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={24} />;
 });
 
 ServerIcon.displayName = 'ServerIcon';

@@ -1,5 +1,5 @@
 import { Avatar, Icon } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import {
   LucideAtom,
   LucideClapperboard,
@@ -20,8 +20,6 @@ interface CategoryAvatarProps {
 }
 
 const CategoryAvatar = memo<CategoryAvatarProps>(({ category, size = 24 }) => {
-  const theme = useTheme();
-
   const categoryIcon = useMemo(() => {
     switch (category) {
       default:
@@ -60,8 +58,8 @@ const CategoryAvatar = memo<CategoryAvatarProps>(({ category, size = 24 }) => {
 
   return (
     <Avatar
-      avatar={<Icon icon={categoryIcon} style={{ color: theme.colorTextSecondary }} />}
-      background={theme.colorFillTertiary}
+      avatar={<Icon icon={categoryIcon} style={{ color: cssVar.colorTextSecondary }} />}
+      background={cssVar.colorFillTertiary}
       size={size}
     />
   );

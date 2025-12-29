@@ -2,7 +2,7 @@
 
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { DotIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,17 +13,17 @@ import { ModelInfoTags } from '@/components/ModelSelect';
 import PublishedTime from '../../../../../../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     desc: css`
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     time: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     version: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 13px;
     `,
   };
@@ -32,7 +32,6 @@ const useStyles = createStyles(({ css, token }) => {
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { identifier, releasedAt, displayName, type, abilities, contextWindowTokens } =
     useDetailContext();
-  const { styles, theme } = useStyles();
   const { mobile = isMobile } = useResponsive();
   const { t } = useTranslation('models');
 
@@ -99,7 +98,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
       </Flexbox>
       <div
         style={{
-          color: theme.colorTextSecondary,
+          color: cssVar.colorTextSecondary,
         }}
       >
         {t(`${identifier}.description`)}

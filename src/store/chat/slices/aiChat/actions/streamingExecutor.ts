@@ -36,13 +36,13 @@ import { messageService } from '@/services/message';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { type ChatStore } from '@/store/chat/store';
 import { getFileStoreState } from '@/store/file/store';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
 import { topicSelectors } from '../../../selectors';
 import { cleanSpeakerTag } from '../../../utils/cleanSpeakerTag';
 import { messageMapKey } from '../../../utils/messageMapKey';
-import { pageAgentRuntime } from '../../builtinTool/actions/pageAgent';
 import { selectTodosFromMessages } from '../../message/selectors/dbMessage';
 
 const log = debug('lobe-store:streaming-executor');
@@ -940,7 +940,10 @@ export const streamingExecutor: StateCreator<
     // Create a new array to avoid modifying the original messages
     let messages = [...originalMessages];
 
-    console.log('[internal_execAgentRuntime] Context scope:', { scope: context.scope, agentId: effectiveAgentId });
+    console.log('[internal_execAgentRuntime] Context scope:', {
+      scope: context.scope,
+      agentId: effectiveAgentId,
+    });
 
     // Use effectiveAgentId to get agent config (subAgentId in group orchestration, agentId otherwise)
     // resolveAgentConfig handles:

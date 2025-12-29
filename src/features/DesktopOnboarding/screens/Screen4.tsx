@@ -1,4 +1,4 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { CheckCircle, HeartHandshake, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useEffect } from 'react';
@@ -7,18 +7,18 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { TitleSection } from '../common/TitleSection';
-import { useLayoutStyles } from '../styles';
+import { layoutStyles } from '../styles';
 import { getThemeToken } from '../styles/theme';
 
 const themeToken = getThemeToken();
 
 // Screen4 特有的样式
-const useScreen4Styles = createStyles(({ token, css }) => ({
+const screen4Styles = createStaticStyles(({ css, cssVar }) => ({
   // 卡片描述
   cardDescription: css`
     margin-block-end: 24px;
 
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     line-height: 1.5;
     color: rgba(255, 255, 255, 60%);
     text-align: center;
@@ -38,7 +38,7 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
   cardTitle: css`
     margin: 0;
 
-    font-family: ${token.fontFamily};
+    font-family: ${cssVar.fontFamily};
     font-size: 20px;
     font-weight: 700;
     color: ${themeToken.colorTextBase};
@@ -86,9 +86,9 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
 
       padding-inline-start: 20px;
 
-      font-size: ${token.fontSize}px;
+      font-size: ${cssVar.fontSize};
       line-height: 1.5;
-      color: rgba(255, 255, 255, 100%);
+      color: rgb(255, 255, 255);
 
       &::before {
         content: '•';
@@ -106,7 +106,7 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
   // 底部说明文字
   footerNote: css`
     margin-block-start: 24px;
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     color: rgba(255, 255, 255, 50%);
     text-align: center;
   `,
@@ -123,7 +123,7 @@ const useScreen4Styles = createStyles(({ token, css }) => ({
     padding-block: 32px;
     padding-inline: 28px;
     border: 1px solid rgba(255, 255, 255, 10%);
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: rgba(255, 255, 255, 2%);
 
@@ -209,9 +209,6 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
     }
   }, [onScreenConfigChange]);
 
-  const { styles: layoutStyles } = useLayoutStyles();
-  const { styles: screen4Styles } = useScreen4Styles();
-
   return (
     <div className={layoutStyles.fullScreen}>
       {/* 内容层 */}
@@ -234,10 +231,10 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
           >
             {/* 共享数据选项 */}
             <div
-              className={`${screen4Styles.optionCard} ${selectedMode === 'share' ? 'selected' : ''}`}
+              className={cx(screen4Styles.optionCard, selectedMode === 'share' && 'selected')}
               onClick={() => setMode('share')}
             >
-              <CheckCircle className={`${screen4Styles.checkIcon} check-icon`} size={24} />
+              <CheckCircle className={cx(screen4Styles.checkIcon, 'check-icon')} size={24} />
 
               <div className={screen4Styles.cardHeader}>
                 <HeartHandshake color={themeToken.colorGreen} size={48} />
@@ -257,10 +254,10 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
 
             {/* 隐私模式选项 */}
             <div
-              className={`${screen4Styles.optionCard} ${selectedMode === 'privacy' ? 'selected' : ''}`}
+              className={cx(screen4Styles.optionCard, selectedMode === 'privacy' && 'selected')}
               onClick={() => setMode('privacy')}
             >
-              <CheckCircle className={`${screen4Styles.checkIcon} check-icon`} size={24} />
+              <CheckCircle className={cx(screen4Styles.checkIcon, 'check-icon')} size={24} />
 
               <div className={screen4Styles.cardHeader}>
                 <Shield color={themeToken.colorBlue} size={48} />

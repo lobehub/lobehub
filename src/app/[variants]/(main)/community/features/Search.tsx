@@ -1,7 +1,7 @@
 'use client';
 
 import { SearchBar, type SearchBarProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -11,9 +11,11 @@ import { useQuery } from '@/app/[variants]/(main)/hooks/useQuery';
 import { withSuspense } from '@/components/withSuspense';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 
-export const useStyles = createStyles(({ css, prefixCls, token }) => ({
+const prefixCls = 'ant';
+
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
-    box-shadow: ${token.boxShadow};
+    box-shadow: ${cssVar.boxShadow};
   `,
   bar: css`
     .${prefixCls}-input-group-wrapper {

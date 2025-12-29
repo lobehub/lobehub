@@ -4,17 +4,17 @@ import { type EditLocalFileState } from '@lobechat/builtin-tool-local-system';
 import { type EditLocalFileParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStylish } from '@/styles/loading';
+import { shinyTextStyles } from '@/styles';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
   `,
   root: css`
     overflow: hidden;
@@ -22,16 +22,14 @@ const useStyles = createStyles(({ css, token }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
-  shinyText: shinyTextStylish(token),
 }));
 
 export const EditLocalFileInspector = memo<
   BuiltinInspectorProps<EditLocalFileParams, EditLocalFileState>
 >(({ args, isLoading }) => {
   const { t } = useTranslation('plugin');
-  const { styles, cx } = useStyles();
 
   // Show filename with parent directory for context
   let displayPath = '';
@@ -42,7 +40,7 @@ export const EditLocalFileInspector = memo<
   }
 
   return (
-    <div className={cx(styles.root, isLoading && styles.shinyText)}>
+    <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
       <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}</span>
       {displayPath && (
         <>

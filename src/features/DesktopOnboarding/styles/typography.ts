@@ -1,18 +1,18 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
 import { getThemeToken } from './theme';
 
 const colorToken = getThemeToken();
 // 文字排版相关的通用样式
-export const useTypographyStyles = createStyles(({ token, css }) => ({
+export const typographyStyles = createStaticStyles(({ css, cssVar }) => ({
   badge: css`
     display: inline-block;
 
-    padding-block: ${token.paddingXS}px;
-    padding-inline: ${token.paddingMD}px;
+    padding-block: ${cssVar.paddingXS};
+    padding-inline: ${cssVar.paddingMD};
     border-radius: 100px;
 
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     color: #000;
 
@@ -24,10 +24,10 @@ export const useTypographyStyles = createStyles(({ token, css }) => ({
     max-width: 672px;
     margin: 0;
     padding-block: 0;
-    padding-inline: ${token.paddingLG}px;
+    padding-inline: ${cssVar.paddingLG};
 
-    font-size: ${token.fontSizeLG}px;
-    line-height: ${token.lineHeight};
+    font-size: ${cssVar.fontSizeLG};
+    line-height: ${cssVar.lineHeight};
     color: ${colorToken.colorTextSecondary};
     text-align: center;
   `,
@@ -42,15 +42,15 @@ export const useTypographyStyles = createStyles(({ token, css }) => ({
     max-width: 576px;
     margin: 0;
 
-    font-size: ${token.fontSize}px;
-    line-height: ${token.lineHeight};
+    font-size: ${cssVar.fontSize};
+    line-height: ${cssVar.lineHeight};
     color: ${colorToken.colorTextSecondary};
     text-align: center;
   `,
 
   // 主标题 - 用于页面主要标题
   heroTitle: css`
-    font-family: ${token.fontFamily};
+    font-family: ${cssVar.fontFamily};
     font-size: 80px;
     font-weight: 900;
     font-style: italic;
@@ -62,16 +62,16 @@ export const useTypographyStyles = createStyles(({ token, css }) => ({
 
   // 小号文本
   small: css`
-    font-size: ${token.fontSizeSM}px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${colorToken.colorTextSecondary};
   `,
 
   // 副标题 - 用于次级标题
   subtitle: css`
-    margin-block: ${token.marginXS}px;
+    margin-block: ${cssVar.marginXS};
     margin-inline: 0;
 
-    font-family: ${token.fontFamily};
+    font-family: ${cssVar.fontFamily};
     font-size: 48px;
     font-weight: 700;
     font-style: italic;

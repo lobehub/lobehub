@@ -73,7 +73,7 @@ const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
       <Menu items={logoutItems} onClick={handleSignOut} />
       <Flexbox gap={4} horizontal justify={'space-between'} style={{ padding: '6px 8px 6px 16px' }}>
         <BrandWatermark />
-        <LangButton placement={'right'} />
+        <LangButton placement={'right' as any} />
       </Flexbox>
     </Flexbox>
   );

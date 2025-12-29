@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "إلغاء",
+  "authorize.cancel": "ليس الآن",
   "authorize.confirm": "أنشئ ملفك الشخصي",
   "authorize.description": "ملفك الشخصي في المجتمع مستقل عن حساب المستخدم في {{appName}}.",
   "authorize.footer.agreement": "بمتابعتك، فإنك تؤكد أنك قد قرأت ووافقت على <terms>الشروط والأحكام</terms> و<privacy>سياسة الخصوصية</privacy>",

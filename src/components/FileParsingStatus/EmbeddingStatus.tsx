@@ -1,21 +1,29 @@
 import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import { BoltIcon, RotateCwIcon } from 'lucide-react';
-import { darken, lighten } from 'polished';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AsyncTaskStatus, type FileParsingTask } from '@/types/asyncTask';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
-  errorReason: css`
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  errorReasonDark: css`
     padding: 4px;
     border-radius: 4px;
 
     font-family: monospace;
     font-size: 12px;
 
-    background: ${isDarkMode ? darken(0.1, token.colorText) : lighten(0.1, token.colorText)};
+    background: color-mix(in srgb, ${cssVar.colorText} 90%, black);
+  `,
+  errorReasonLight: css`
+    padding: 4px;
+    border-radius: 4px;
+
+    font-family: monospace;
+    font-size: 12px;
+
+    background: color-mix(in srgb, ${cssVar.colorText} 90%, white);
   `,
 }));
 
@@ -28,7 +36,7 @@ interface EmbeddingStatusProps extends FileParsingTask {
 const EmbeddingStatus = memo<EmbeddingStatusProps>(
   ({ chunkCount, embeddingStatus, embeddingError, onClick, onErrorClick, className }) => {
     const { t } = useTranslation(['components', 'common']);
-    const { styles, cx } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     switch (embeddingStatus) {
       case AsyncTaskStatus.Processing: {
@@ -64,7 +72,9 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
               <Flexbox gap={4}>
                 {t('FileParsingStatus.chunks.embeddingStatus.errorResult')}
                 {embeddingError && (
-                  <Flexbox className={styles.errorReason}>
+                  <Flexbox
+                    className={isDarkMode ? styles.errorReasonDark : styles.errorReasonLight}
+                  >
                     [{embeddingError.name}]:{' '}
                     {embeddingError.body && typeof embeddingError.body !== 'string'
                       ? embeddingError.body.detail

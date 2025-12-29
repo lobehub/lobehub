@@ -12,7 +12,7 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import { LinkIcon, Share2Icon } from 'lucide-react';
 import Link from 'next/link';
@@ -23,36 +23,36 @@ import { useShare } from '@/hooks/useShare';
 
 import CardBanner from '../../components/CardBanner';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     banner: css`
       overflow: hidden;
 
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: ${token.borderRadiusLG}px;
+      border: 1px solid ${cssVar.colorBorderSecondary};
+      border-radius: ${cssVar.borderRadiusLG};
 
-      background: ${token.colorBgContainer};
-      box-shadow: ${token.boxShadowTertiary};
+      background: ${cssVar.colorBgContainer};
+      box-shadow: ${cssVar.boxShadowTertiary};
     `,
     copy: css`
-      background: ${token.colorPrimary};
+      background: ${cssVar.colorPrimary};
 
       &:hover {
-        background: ${token.colorPrimaryHover};
+        background: ${cssVar.colorPrimaryHover};
       }
     `,
     icon: css`
-      border: 1px solid ${token.colorFillSecondary};
+      border: 1px solid ${cssVar.colorFillSecondary};
 
       svg {
-        fill: ${token.colorTextSecondary};
+        fill: ${cssVar.colorTextSecondary};
       }
 
       &:hover {
-        border: 1px solid ${token.colorBorderSecondary};
+        border: 1px solid ${cssVar.colorBorderSecondary};
 
         svg {
-          fill: ${token.colorText};
+          fill: ${cssVar.colorText};
         }
       }
     `,
@@ -80,7 +80,6 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
     ...meta,
   });
   const { t } = useTranslation('common');
-  const { styles, theme } = useStyles();
   const [open, setOpen] = useState(false);
 
   let content;
@@ -94,7 +93,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
             flex={'none'}
             height={72}
             style={{
-              backgroundColor: theme.colorBgContainer,
+              backgroundColor: cssVar.colorBgContainer,
               borderRadius: '50%',
               overflow: 'hidden',
               zIndex: 2,
@@ -105,7 +104,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
           </Center>
           <Center padding={12} width={'100%'}>
             <h3 style={{ fontWeight: 'bold', textAlign: 'center' }}>{meta.title}</h3>
-            <Text as={'p'} style={{ color: theme.colorTextSecondary, textAlign: 'center' }}>
+            <Text as={'p'} style={{ color: cssVar.colorTextSecondary, textAlign: 'center' }}>
               {meta.desc}
             </Text>
             {meta.hashtags && (
@@ -137,7 +136,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
           <Input value={meta.url} variant={'filled'} />
           <CopyButton
             className={styles.copy}
-            color={theme.colorBgLayout}
+            color={cssVar.colorBgLayout}
             content={meta.url}
             icon={LinkIcon}
             size={{ blockSize: 36, size: 16 }}

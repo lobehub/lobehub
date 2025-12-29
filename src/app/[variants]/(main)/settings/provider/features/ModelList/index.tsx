@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, Tabs } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   AudioLines,
@@ -147,7 +147,6 @@ interface ModelListProps extends ProviderSettingsContextValue {
 const ModelList = memo<ModelListProps>(
   ({ id, showModelFetcher, sdkType, showAddNewModel, showDeployName, modelEditable = true }) => {
     const mobile = useIsMobile();
-    const theme = useTheme();
 
     return (
       <ProviderSettingsContext
@@ -157,7 +156,7 @@ const ModelList = memo<ModelListProps>(
           gap={16}
           paddingInline={mobile ? 12 : 0}
           style={{
-            background: mobile ? theme.colorBgContainer : undefined,
+            background: mobile ? cssVar.colorBgContainer : undefined,
             paddingBottom: 16,
             paddingTop: 8,
           }}

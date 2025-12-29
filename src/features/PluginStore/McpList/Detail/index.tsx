@@ -25,7 +25,7 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier }) => {
   const [activeTab, setActiveTab] = useState(McpNavKey.Overview);
   const { t } = useTranslation('plugin');
 
-  const theme = useTheme();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
   const [activeMCPIdentifier, isMcpListInit] = useToolStore((s) => [
     s.activeMCPIdentifier,
     s.isMcpListInit,

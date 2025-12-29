@@ -5,7 +5,7 @@ import {
   type CodeInterpreterState,
 } from '@lobechat/types';
 import { Alert, Flexbox, Highlighter, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +19,6 @@ const CodeInterpreter = memo<
   BuiltinRenderProps<CodeInterpreterParams, CodeInterpreterState, CodeInterpreterResponse>
 >(({ content, args, pluginState, messageId, apiName }) => {
   const { t } = useTranslation('tool');
-  const theme = useTheme();
 
   const isExecuting = useChatStore(chatToolSelectors.isInterpreterExecuting(messageId));
 
@@ -81,9 +80,9 @@ const CodeInterpreter = memo<
               </Text>
               <div
                 style={{
-                  backgroundColor: theme.colorBgContainer,
-                  border: `1px solid ${theme.colorBorder}`,
-                  borderRadius: theme.borderRadius,
+                  backgroundColor: cssVar.colorBgContainer,
+                  border: `1px solid ${cssVar.colorBorder}`,
+                  borderRadius: cssVar.borderRadius,
                   fontSize: 13,
                   lineHeight: 1.5,
                   overflow: 'auto',

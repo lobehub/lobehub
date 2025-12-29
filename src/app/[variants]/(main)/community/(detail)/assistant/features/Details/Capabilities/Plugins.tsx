@@ -17,7 +17,6 @@ const Plugin = memo(() => {
           description={t('assistants.details.capabilities.plugin.desc')}
           descriptionProps={{ fontSize: 14 }}
           icon={Plug2}
-          style={{ maxWidth: 400 }}
         />
       </Block>
     );

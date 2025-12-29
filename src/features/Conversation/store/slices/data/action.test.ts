@@ -2,7 +2,7 @@ import { UIChatMessage } from '@lobechat/types';
 import { act, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 
 import { createStore } from '../../index';
@@ -31,14 +31,14 @@ vi.mock('@/services/message', () => ({
 
 // Mock SWR
 vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: vi.fn((key, fetcher, options) => {
+  useClientDataSWRWithSync: vi.fn((key, fetcher, options) => {
     // Simulate SWR behavior for testing
     if (key) {
-      // Execute fetcher and call onSuccess
-      fetcher?.(key).then((data: UIChatMessage[]) => {
-        options?.onSuccess?.(data);
+      fetcher?.().then((data: UIChatMessage[]) => {
+        options?.onData?.(data);
       });
     }
+
     return { data: undefined, isLoading: true };
   }),
 }));
@@ -506,7 +506,7 @@ describe('DataSlice', () => {
       });
 
       // SWR should be called with null key (disabled)
-      expect(vi.mocked(useClientDataSWR)).toHaveBeenCalledWith(
+      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
         null,
         expect.any(Function),
         expect.any(Object),
@@ -524,7 +524,7 @@ describe('DataSlice', () => {
         threadId: 'thread-1',
       });
 
-      const firstCallKey = vi.mocked(useClientDataSWR).mock.calls[0][0];
+      const firstCallKey = vi.mocked(useClientDataSWRWithSync).mock.calls[0][0];
 
       const store2 = createStore({
         context: { agentId: 'session-1', topicId: 'topic-1', threadId: 'thread-2' },
@@ -536,7 +536,7 @@ describe('DataSlice', () => {
         threadId: 'thread-2',
       });
 
-      const secondCallKey = vi.mocked(useClientDataSWR).mock.calls[1][0];
+      const secondCallKey = vi.mocked(useClientDataSWRWithSync).mock.calls[1][0];
 
       // Keys should be different because threadIds are different
       expect(firstCallKey).not.toEqual(secondCallKey);
@@ -555,7 +555,7 @@ describe('DataSlice', () => {
         threadId: 'test-thread',
       });
 
-      const swrKey = vi.mocked(useClientDataSWR).mock.calls[0][0] as any[];
+      const swrKey = vi.mocked(useClientDataSWRWithSync).mock.calls[0][0] as any[];
 
       // Key should be an array with prefix and context object
       expect(Array.isArray(swrKey)).toBe(true);

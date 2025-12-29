@@ -2,7 +2,7 @@
 
 // Removed Image import - using img tags instead
 import { Center } from '@lobehub/ui';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
 import Image from 'next/image';
 import React, { type FC, memo, useEffect, useRef, useState } from 'react';
@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { CONFIG_PANEL_WIDTH } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/constants';
 import { useDragAndDrop } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useDragAndDrop';
 import { useUploadFilesValidation } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useUploadFilesValidation';
-import { useConfigPanelStyles } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/style';
+import { configPanelStyles } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/style';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
 
@@ -52,7 +52,7 @@ export interface MultiImagesUploadProps {
 
 // ======== Styles ======== //
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   // Calculate available width for thumbnails
   // Panel width - outer padding (16px * 2) - gaps (8px * 3 for 4 items)
   const availableWidth = CONFIG_PANEL_WIDTH - 32 - 24;
@@ -75,16 +75,16 @@ const useStyles = createStyles(({ css, token }) => {
       height: 20px;
       border-radius: 50%;
 
-      color: ${token.colorTextLightSolid};
+      color: ${cssVar.colorTextLightSolid};
 
       opacity: 0;
-      background: ${token.colorBgMask};
+      background: ${cssVar.colorBgMask};
 
       transition: opacity 0.2s ease;
 
       &:hover {
-        color: ${token.colorError};
-        background: ${token.colorErrorBg};
+        color: ${cssVar.colorError};
+        background: ${cssVar.colorErrorBg};
       }
     `,
 
@@ -93,11 +93,11 @@ const useStyles = createStyles(({ css, token }) => {
 
       overflow: hidden;
 
-      width: ${thumbnailSize}px;
-      height: ${thumbnailSize}px;
-      border-radius: ${token.borderRadius}px;
+      width: ${thumbnailSize};
+      height: ${thumbnailSize};
+      border-radius: ${cssVar.borderRadius};
 
-      background: ${token.colorBgContainer};
+      background: ${cssVar.colorBgContainer};
 
       &:hover .delete-icon {
         opacity: 1;
@@ -112,15 +112,15 @@ const useStyles = createStyles(({ css, token }) => {
       gap: 8px;
 
       width: 100%;
-      height: ${thumbnailSize}px;
+      height: ${thumbnailSize};
       padding: 0;
-      border-radius: ${token.borderRadiusLG}px;
+      border-radius: ${cssVar.borderRadiusLG};
 
       transition: all 0.2s ease;
 
       &.drag-over {
         transform: scale(1.02);
-        background: ${token.colorPrimaryBg};
+        background: ${cssVar.colorPrimaryBg};
       }
     `,
 
@@ -135,9 +135,9 @@ const useStyles = createStyles(({ css, token }) => {
 
       font-size: 16px;
       font-weight: 600;
-      color: ${token.colorTextLightSolid};
+      color: ${cssVar.colorTextLightSolid};
 
-      background: ${token.colorBgMask};
+      background: ${cssVar.colorBgMask};
     `,
 
     placeholder: css`
@@ -145,32 +145,32 @@ const useStyles = createStyles(({ css, token }) => {
 
       width: 100%;
       height: 120px;
-      border: 1px solid ${token.colorBorder};
-      border-radius: ${token.borderRadiusLG}px;
+      border: 1px solid ${cssVar.colorBorder};
+      border-radius: ${cssVar.borderRadiusLG};
 
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
 
       transition: all 0.2s ease;
 
       &:hover {
-        background: ${token.colorFillSecondary};
+        background: ${cssVar.colorFillSecondary};
       }
 
       &.drag-over {
         transform: scale(1.02);
-        border-color: ${token.colorPrimary};
-        background: ${token.colorPrimaryBg};
+        border-color: ${cssVar.colorPrimary};
+        background: ${cssVar.colorPrimaryBg};
       }
     `,
 
     placeholderIcon: css`
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
     `,
 
     placeholderText: css`
       font-size: 12px; /* Made smaller than default token.fontSize (14px) */
       line-height: 1.4;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
       text-align: center;
     `,
 
@@ -183,16 +183,16 @@ const useStyles = createStyles(({ css, token }) => {
 
       width: 100%;
       height: 120px;
-      border: 2px solid ${token.colorPrimary};
-      border-radius: ${token.borderRadiusLG}px;
+      border: 2px solid ${cssVar.colorPrimary};
+      border-radius: ${cssVar.borderRadiusLG};
 
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
 
       transition: all 0.2s ease;
 
       &.drag-over {
         transform: scale(1.02);
-        background: ${token.colorPrimaryBg};
+        background: ${cssVar.colorPrimaryBg};
       }
     `,
 
@@ -200,14 +200,14 @@ const useStyles = createStyles(({ css, token }) => {
       margin-block-end: 4px;
       font-size: 14px;
       font-weight: 600;
-      color: ${token.colorPrimary};
+      color: ${cssVar.colorPrimary};
     `,
 
     progressText: css`
       font-size: 12px;
       font-weight: 500;
       line-height: 1.4;
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
       text-align: center;
     `,
     // Single image display styles
@@ -220,9 +220,9 @@ const useStyles = createStyles(({ css, token }) => {
 
       width: 100%;
       height: 160px;
-      border-radius: ${token.borderRadiusLG}px;
+      border-radius: ${cssVar.borderRadiusLG};
 
-      background: ${token.colorBgContainer};
+      background: ${cssVar.colorBgContainer};
 
       transition: all 0.2s ease;
 
@@ -236,7 +236,7 @@ const useStyles = createStyles(({ css, token }) => {
 
       &.drag-over {
         transform: scale(1.02);
-        background: ${token.colorPrimaryBg};
+        background: ${cssVar.colorPrimaryBg};
       }
     `,
     uploadMoreButton: css`
@@ -244,20 +244,20 @@ const useStyles = createStyles(({ css, token }) => {
 
       padding-block: 8px;
       padding-inline: 16px;
-      border: 1px solid ${token.colorBorder};
-      border-radius: ${token.borderRadius}px;
+      border: 1px solid ${cssVar.colorBorder};
+      border-radius: ${cssVar.borderRadius};
 
       font-size: 12px;
       font-weight: 500;
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
 
-      background: ${token.colorBgContainer};
-      box-shadow: ${token.boxShadowSecondary};
+      background: ${cssVar.colorBgContainer};
+      box-shadow: ${cssVar.boxShadowSecondary};
 
       &:hover {
-        border-color: ${token.colorPrimary};
-        color: ${token.colorPrimary};
-        background: ${token.colorBgElevated};
+        border-color: ${cssVar.colorPrimary};
+        color: ${cssVar.colorPrimary};
+        background: ${cssVar.colorBgElevated};
       }
     `,
     uploadMoreOverlay: css`
@@ -271,7 +271,7 @@ const useStyles = createStyles(({ css, token }) => {
       justify-content: center;
 
       opacity: 0;
-      background: ${token.colorBgMask};
+      background: ${cssVar.colorBgMask};
 
       transition: opacity 0.2s ease;
     `,
@@ -295,12 +295,11 @@ interface ImageUploadPlaceholderProps {
 }
 
 const ImageUploadPlaceholder: FC<ImageUploadPlaceholderProps> = memo(({ isDragOver, onClick }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('components');
 
   return (
     <Center
-      className={`${styles.placeholder} ${isDragOver ? 'drag-over' : ''}`}
+      className={cx(styles.placeholder, isDragOver && 'drag-over')}
       gap={16}
       horizontal={false}
       onClick={onClick}
@@ -330,8 +329,6 @@ interface CircularProgressProps {
 
 const CircularProgress: FC<CircularProgressProps> = memo(
   ({ value, size = 48, strokeWidth = 4, className, showText = true }) => {
-    const theme = useTheme();
-
     // Ensure value is between 0 and 100
     const progress = Math.min(100, Math.max(0, value));
 
@@ -363,7 +360,7 @@ const CircularProgress: FC<CircularProgressProps> = memo(
             cy={size / 2}
             fill="none"
             r={radius}
-            stroke={theme.colorBorder}
+            stroke={cssVar.colorBorder}
             strokeWidth={strokeWidth}
           />
         </svg>
@@ -379,7 +376,7 @@ const CircularProgress: FC<CircularProgressProps> = memo(
             cy={size / 2}
             fill="none"
             r={radius}
-            stroke={theme.colorPrimary}
+            stroke={cssVar.colorPrimary}
             strokeDasharray={circumference}
             strokeDashoffset={offset}
             strokeLinecap="round"
@@ -394,7 +391,7 @@ const CircularProgress: FC<CircularProgressProps> = memo(
         {showText && (
           <span
             style={{
-              color: theme.colorPrimary,
+              color: cssVar.colorPrimary,
               fontSize: '12px',
               fontWeight: 600,
               position: 'relative',
@@ -420,7 +417,6 @@ interface ImageUploadProgressProps {
 
 const ImageUploadProgress: FC<ImageUploadProgressProps> = memo(
   ({ completedCount, totalCount, currentProgress, showCount = true }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('components');
 
     return (
@@ -455,8 +451,7 @@ interface ImageThumbnailsProps {
 
 const ImageThumbnails: FC<ImageThumbnailsProps> = memo(
   ({ images, isDragOver, onClick, onDelete }) => {
-    const { styles } = useStyles();
-    const { styles: configStyles } = useConfigPanelStyles();
+    const configStyles = configPanelStyles;
 
     // Display max 4 images, with overflow indication
     const displayImages = images.slice(0, 4);
@@ -482,7 +477,7 @@ const ImageThumbnails: FC<ImageThumbnailsProps> = memo(
           />
           {!showOverlay && (
             <div
-              className={`${styles.deleteIcon} delete-icon`}
+              className={cx(styles.deleteIcon, 'delete-icon')}
               onClick={(e) => handleDelete(index, e)}
             >
               <X size={12} />
@@ -495,7 +490,11 @@ const ImageThumbnails: FC<ImageThumbnailsProps> = memo(
 
     return (
       <div
-        className={`${styles.imageThumbnails} ${configStyles.dragTransition} ${isDragOver ? configStyles.dragOver : ''}`}
+        className={cx(
+          styles.imageThumbnails,
+          configStyles.dragTransition,
+          isDragOver && configStyles.dragOver,
+        )}
         onClick={onClick}
       >
         {displayImages.map(renderImageItem)}
@@ -515,8 +514,7 @@ interface SingleImageDisplayProps {
 
 const SingleImageDisplay: FC<SingleImageDisplayProps> = memo(
   ({ imageUrl, isDragOver, onClick, onDelete }) => {
-    const { styles } = useStyles();
-    const { styles: configStyles } = useConfigPanelStyles();
+    const configStyles = configPanelStyles;
     const { t } = useTranslation('components');
 
     const handleDelete = (event: React.MouseEvent) => {
@@ -531,7 +529,11 @@ const SingleImageDisplay: FC<SingleImageDisplayProps> = memo(
 
     return (
       <div
-        className={`${styles.singleImageDisplay} ${configStyles.dragTransition} ${isDragOver ? configStyles.dragOver : ''}`}
+        className={cx(
+          styles.singleImageDisplay,
+          configStyles.dragTransition,
+          isDragOver && configStyles.dragOver,
+        )}
       >
         <Image
           alt="Uploaded image"
@@ -542,13 +544,13 @@ const SingleImageDisplay: FC<SingleImageDisplayProps> = memo(
         />
 
         {/* Delete button */}
-        <div className={`${styles.deleteIcon} delete-icon`} onClick={handleDelete}>
+        <div className={cx(styles.deleteIcon, 'delete-icon')} onClick={handleDelete}>
           <X size={12} />
         </div>
 
         {/* Upload more overlay */}
         <div
-          className={`${styles.uploadMoreOverlay} upload-more-overlay`}
+          className={cx(styles.uploadMoreOverlay, 'upload-more-overlay')}
           onClick={handleOverlayClick}
         >
           <button className={styles.uploadMoreButton} type="button">
@@ -570,7 +572,7 @@ const MultiImagesUpload: FC<MultiImagesUploadProps> = memo(
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const [displayItems, setDisplayItems] = useState<DisplayItem[]>([]);
     const [modalOpen, setModalOpen] = useState(false);
-    const { styles: configStyles } = useConfigPanelStyles();
+    const configStyles = configPanelStyles;
     const { validateFiles } = useUploadFilesValidation(maxCount, maxFileSize);
 
     // Cleanup blob URLs to prevent memory leaks
@@ -788,9 +790,7 @@ const MultiImagesUpload: FC<MultiImagesUploadProps> = memo(
 
         {/* Conditional rendering based on state */}
         {isUploading ? (
-          <div
-            className={`${configStyles.dragTransition} ${isDragOver ? configStyles.dragOver : ''}`}
-          >
+          <div className={cx(configStyles.dragTransition, isDragOver && configStyles.dragOver)}>
             <ImageUploadProgress
               completedCount={completedFiles}
               currentProgress={overallProgress}

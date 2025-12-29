@@ -143,7 +143,7 @@ jobs:
         run: pnpm install
         working-directory: apps/desktop
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Typecheck Desktop
         run: pnpm type-check
@@ -172,6 +172,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+
 
         ports:
           - 5432:5432

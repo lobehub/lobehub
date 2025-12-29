@@ -9,6 +9,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 
 import { MAX_WIDTH, SCROLL_PARENT_ID } from '../../features/const';
 import Header from './Header';
+import { styles } from './style';
 
 /**
  * Desktop Discover Detail Layout
@@ -18,21 +19,24 @@ const DesktopDiscoverDetailLayout = memo(() => {
   return (
     <>
       <Header />
-      <Flexbox height={'100%'} id={SCROLL_PARENT_ID} style={{ overflowY: 'auto' }} width={'100%'}>
+      <Flexbox
+        className={styles.mainContainer}
+        height={'100%'}
+        id={SCROLL_PARENT_ID}
+        width={'100%'}
+      >
         <WideScreenContainer
+          className={styles.contentContainer}
           gap={32}
           minWidth={MAX_WIDTH}
           paddingBlock={16}
-          style={{
-            minHeight: '100%',
-          }}
           wrapperStyle={{
             minHeight: '100%',
             position: 'relative',
           }}
         >
           <Outlet />
-          <div style={{ flex: 1 }} />
+          <div className={styles.spacer} />
           <Footer />
         </WideScreenContainer>
       </Flexbox>

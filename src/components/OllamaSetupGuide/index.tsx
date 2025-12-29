@@ -1,13 +1,15 @@
 import { ProviderCombine } from '@lobehub/icons';
 import { Flexbox, Highlighter, Snippet, Tabs } from '@lobehub/ui';
 import { Steps } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import Link from 'next/link';
 import { readableColor } from 'polished';
-import { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, prefixCls, token }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   steps: css`
     margin-block-start: 32px;
     &.${prefixCls}-steps-small .${prefixCls}-steps-item-title {
@@ -21,13 +23,13 @@ const useStyles = createStyles(({ css, prefixCls, token }) => ({
     }
 
     .${prefixCls}-steps-icon {
-      color: ${readableColor(token.colorPrimary)} !important;
+      color: var(--steps-icon-color, ${cssVar.colorText}) !important;
     }
   `,
 }));
 
 const SetupGuide = memo(() => {
-  const { styles } = useStyles();
+  const iconColor = useMemo(() => readableColor(cssVar.colorPrimary), []);
   const { t } = useTranslation('components');
   return (
     <>
@@ -75,6 +77,7 @@ const SetupGuide = memo(() => {
                   },
                 ]}
                 size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'macos',
@@ -113,6 +116,7 @@ const SetupGuide = memo(() => {
                   },
                 ]}
                 size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'windows',
@@ -176,6 +180,7 @@ Environment="OLLAMA_ORIGINS=*"`}
                   },
                 ]}
                 size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'linux',
@@ -219,6 +224,7 @@ Environment="OLLAMA_ORIGINS=*"`}
                   },
                 ]}
                 size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'docker',

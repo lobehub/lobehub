@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "Annuler",
+  "authorize.cancel": "Pas maintenant",
   "authorize.confirm": "Créer votre profil",
   "authorize.description": "Votre profil communautaire est distinct de votre compte utilisateur {{appName}}.",
   "authorize.footer.agreement": "En continuant, vous confirmez avoir lu et accepté les <terms>Conditions générales</terms> et la <privacy>Politique de confidentialité</privacy>",

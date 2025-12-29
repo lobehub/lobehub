@@ -1,18 +1,19 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { cx } from 'antd-style';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MinimapIndicator } from './MinimapIndicator';
-import { useMinimapStyles } from './styles';
+import { minimapStyles } from './styles';
 import { useMinimapData } from './useMinimapData';
 import { MIN_MESSAGES_THRESHOLD } from './utils';
 
 const ChatMinimap = memo(() => {
   const { t } = useTranslation('chat');
-  const { styles, cx } = useMinimapStyles();
+  const styles = minimapStyles;
   const [isHovered, setIsHovered] = useState(false);
 
   const { indicators, activeIndicatorPosition, handleJump, handleStep } = useMinimapData();

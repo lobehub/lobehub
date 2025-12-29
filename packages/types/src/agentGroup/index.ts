@@ -242,20 +242,23 @@ export interface ExecGroupAgentResponse {
   userMessageId: string;
 }
 
-// ============ Group SubAgent Task Execution Types ============
+// ============ SubAgent Task Execution Types ============
 
 /**
- * Parameters for execGroupSubAgentTask - execute SubAgent task in Group chat
- * This is called by Supervisor to delegate tasks to SubAgents
+ * Parameters for execSubAgentTask - execute SubAgent task
+ * Supports both Group mode and Single Agent mode
+ *
+ * - Group mode: pass groupId, Thread will be associated with the Group
+ * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
  */
-export interface ExecGroupSubAgentTaskParams {
+export interface ExecSubAgentTaskParams {
   /** The SubAgent ID to execute the task */
   agentId: string;
-  /** The Group ID (required) */
-  groupId: string;
+  /** The Group ID (optional, only for Group mode) */
+  groupId?: string;
   /** Task instruction/prompt for the SubAgent */
   instruction: string;
-  /** The parent message ID (Supervisor's tool call message) */
+  /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: string;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
@@ -264,9 +267,9 @@ export interface ExecGroupSubAgentTaskParams {
 }
 
 /**
- * Result from execGroupSubAgentTask
+ * Result from execSubAgentTask
  */
-export interface ExecGroupSubAgentTaskResult {
+export interface ExecSubAgentTaskResult {
   /** The assistant message ID created for this task */
   assistantMessageId: string;
   /** Error message if task failed to start */
@@ -278,6 +281,16 @@ export interface ExecGroupSubAgentTaskResult {
   /** The Thread ID where the task is executed */
   threadId: string;
 }
+
+/**
+ * @deprecated Use ExecSubAgentTaskParams instead
+ */
+export type ExecGroupSubAgentTaskParams = ExecSubAgentTaskParams;
+
+/**
+ * @deprecated Use ExecSubAgentTaskResult instead
+ */
+export type ExecGroupSubAgentTaskResult = ExecSubAgentTaskResult;
 
 /**
  * Current activity for real-time progress display

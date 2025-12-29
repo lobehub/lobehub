@@ -1,4 +1,5 @@
 import { Block, Collapse, Empty, Highlighter, Icon, Markdown } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { CheckIcon, MessageSquare, MinusIcon } from 'lucide-react';
 import { markdownToTxt } from 'markdown-to-txt';
 import { memo } from 'react';
@@ -10,7 +11,7 @@ import Title from '../../../app/[variants]/(main)/community/features/Title';
 import CollapseDesc from '../CollapseDesc';
 import CollapseLayout from '../CollapseLayout';
 import { useDetailContext } from '../DetailProvider';
-import { useStyles } from './style';
+import { styles } from './style';
 import { ModeType } from './types';
 
 interface PromptsProps {
@@ -22,7 +23,6 @@ interface PromptsProps {
 const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
   const { t } = useTranslation(['discover', 'plugin']);
   const { prompts } = useDetailContext();
-  const { styles, theme } = useStyles();
 
   if (!prompts)
     return (
@@ -62,7 +62,7 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                               <span
                                 className={styles.code}
                                 style={{
-                                  color: theme.gold,
+                                  color: cssVar.gold,
                                 }}
                               >
                                 {record.name}
@@ -75,7 +75,9 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             render: (_, record) => (
                               <Icon
                                 color={
-                                  record.required ? theme.colorSuccess : theme.colorTextDescription
+                                  record.required
+                                    ? cssVar.colorSuccess
+                                    : cssVar.colorTextDescription
                                 }
                                 icon={record.required ? CheckIcon : MinusIcon}
                               />

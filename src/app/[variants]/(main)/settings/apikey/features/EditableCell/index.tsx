@@ -2,7 +2,7 @@
 
 import { ActionIcon, Input } from '@lobehub/ui';
 import { App, type InputRef } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Check, Edit, X } from 'lucide-react';
 import React, { memo, useRef, useState } from 'react';
@@ -28,7 +28,7 @@ export interface EditableCellProps {
 }
 
 // 样式定义
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   actionButtons: css`
     display: flex;
     flex-shrink: 0;
@@ -50,7 +50,7 @@ const useStyles = createStyles(({ css, token }) => ({
   content: css`
     min-width: 0;
     line-height: 1.5;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
     word-break: break-all;
   `,
   editButton: css`
@@ -78,7 +78,6 @@ const useStyles = createStyles(({ css, token }) => ({
 // 主组件实现
 const EditableCell = memo<EditableCellProps>(
   ({ value, type, onSubmit, placeholder, disabled = false }) => {
-    const { styles, cx } = useStyles();
     const { t } = useTranslation('auth');
     const { message } = App.useApp();
 

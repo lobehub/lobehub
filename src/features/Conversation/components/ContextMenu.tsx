@@ -5,7 +5,7 @@ import { ActionIcon } from '@lobehub/ui';
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
 import { Dropdown, type MenuProps } from 'antd';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   type ComponentType,
@@ -42,7 +42,7 @@ interface ActionMenuItem extends ActionIconGroupItemType {
 type MenuItem = ActionMenuItem | { type: 'divider' };
 type ContextMenuEvent = ActionIconGroupEvent & { selectedText?: string };
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   contextMenu: css`
     position: fixed;
     z-index: 1000;
@@ -51,7 +51,7 @@ const useStyles = createStyles(({ css }) => ({
     .ant-dropdown-menu {
       border: none;
       border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 15%);
+      box-shadow: 0 4px 12px color-mix(in srgb, black 15%, transparent);
     }
   `,
   trigger: css`
@@ -80,7 +80,6 @@ interface ContextMenuProps {
 
 const ContextMenu = memo<ContextMenuProps>(
   ({ visible, position, selectedText, id, index, inPortalThread, topic, virtuaRef, onClose }) => {
-    const { styles } = useStyles();
     const { message } = App.useApp();
     const { t } = useTranslation('common');
     const [shareMessage, setShareMessage] = useState<UIChatMessage | null>(null);

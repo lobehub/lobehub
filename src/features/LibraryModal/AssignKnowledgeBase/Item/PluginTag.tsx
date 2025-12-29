@@ -1,35 +1,34 @@
 import { Icon, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { BadgeCheck, CircleUser, Package } from 'lucide-react';
-import { rgba } from 'polished';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type InstallPluginMeta } from '@/types/tool/plugin';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   community: css`
-    color: ${rgba(token.colorInfo, 0.75)};
-    background: ${token.colorInfoBg};
+    color: color-mix(in srgb, ${cssVar.colorInfo} 75%, transparent);
+    background: ${cssVar.colorInfoBg};
 
     &:hover {
-      color: ${token.colorInfo};
+      color: ${cssVar.colorInfo};
     }
   `,
   custom: css`
-    color: ${rgba(token.colorWarning, 0.75)};
-    background: ${token.colorWarningBg};
+    color: color-mix(in srgb, ${cssVar.colorWarning} 75%, transparent);
+    background: ${cssVar.colorWarningBg};
 
     &:hover {
-      color: ${token.colorWarning};
+      color: ${cssVar.colorWarning};
     }
   `,
   official: css`
-    color: ${rgba(token.colorSuccess, 0.75)};
-    background: ${token.colorSuccessBg};
+    color: color-mix(in srgb, ${cssVar.colorSuccess} 75%, transparent);
+    background: ${cssVar.colorSuccessBg};
 
     &:hover {
-      color: ${token.colorSuccess};
+      color: ${cssVar.colorSuccess};
     }
   `,
 }));
@@ -41,7 +40,6 @@ interface PluginTagProps extends Pick<InstallPluginMeta, 'author' | 'type'> {
 
 const PluginTag = memo<PluginTagProps>(({ showIcon = true, author, type, showText = true }) => {
   const { t } = useTranslation('plugin');
-  const { styles, cx } = useStyles();
   const isCustom = type === 'customPlugin';
   const isOfficial = author === 'LobeHub';
 

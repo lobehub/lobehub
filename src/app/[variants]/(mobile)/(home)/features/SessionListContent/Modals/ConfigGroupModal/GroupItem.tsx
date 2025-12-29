@@ -1,6 +1,6 @@
 import { ActionIcon, EditableText, SortableList } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { PencilLine, Trash } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useSessionStore } from '@/store/session';
 import { type SessionGroupItem } from '@/types/session';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   content: css`
     position: relative;
     overflow: hidden;
@@ -24,7 +24,6 @@ const useStyles = createStyles(({ css }) => ({
 
 const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
   const { message, modal } = App.useApp();
 
   const [editing, setEditing] = useState(false);

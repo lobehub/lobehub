@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,11 +11,11 @@ import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import FunctionCallingModelSelect from './FunctionCallingModelSelect';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   check: css`
     margin-inline-start: 12px;
     font-size: 16px;
-    color: ${token.colorPrimary};
+    color: ${cssVar.colorPrimary};
   `,
   content: css`
     flex: 1;
@@ -24,18 +24,17 @@ const useStyles = createStyles(({ css, token }) => ({
   description: css`
     width: 200px;
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     font-size: 14px;
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
 const FCSearchModel = memo(() => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const searchFCModel = useAgentStore((s) =>

@@ -2,26 +2,24 @@ import type { LocalReadFileState } from '@lobechat/builtin-tool-local-system';
 import { type RenameLocalFileParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ArrowRightIcon } from 'lucide-react';
 import path from 'path-browserify-esm';
 import React, { memo } from 'react';
 
 import { LocalFile } from '@/features/LocalFile';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   new: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
 const RenameLocalFile = memo<BuiltinRenderProps<RenameLocalFileParams, LocalReadFileState>>(
   ({ args }) => {
-    const { styles } = useStyles();
-
     const { base: oldFileName, dir } = path.parse(args.path);
 
     return (

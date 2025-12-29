@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
-import { memo } from 'react';
+import { cssVar, useTheme } from 'antd-style';
+import { memo, useMemo } from 'react';
 
 import { isCustomBranding } from '@/const/version';
 import NavHeader from '@/features/NavHeader';
@@ -8,23 +8,28 @@ import NavHeader from '@/features/NavHeader';
 import CreateButton from '../features/CreateButton';
 import StoreSearchBar from '../features/Search';
 import UserAvatar from '../features/UserAvatar';
+import { styles } from './Header/style';
 
 const Header = memo(() => {
-  const theme = useTheme();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
+  const cssVariables = useMemo<Record<string, string>>(
+    () => ({
+      '--header-bg': theme.colorBgContainerSecondary,
+      '--header-border-color': cssVar.colorBorderSecondary,
+    }),
+    [theme.colorBgContainerSecondary],
+  );
+
   return (
     <NavHeader
+      className={styles.headerContainer}
       right={
         <Flexbox align="center" gap={8} horizontal>
           {!isCustomBranding && <CreateButton />}
           <UserAvatar />
         </Flexbox>
       }
-      style={{
-        background: theme.colorBgContainerSecondary,
-        borderBottom: `1px solid ${theme.colorBorderSecondary}`,
-        position: 'relative',
-        zIndex: 10,
-      }}
+      style={cssVariables}
       styles={{
         center: { flex: 1, maxWidth: 720 },
         left: { flex: 1, maxWidth: 120 },

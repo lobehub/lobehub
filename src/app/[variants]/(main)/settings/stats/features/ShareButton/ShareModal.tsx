@@ -2,7 +2,7 @@
 
 import { type FormItemProps, FormModal, type FormModalProps, Segmented } from '@lobehub/ui';
 import { Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import dynamic from 'next/dynamic';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +23,9 @@ const Preview = dynamic(() => import('./Preview'), {
   ),
 });
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   preview: css`
     .${prefixCls}-form-item-label {
       display: none;
@@ -42,7 +44,6 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const ShareModal = memo<FormModalProps & { mobile?: boolean }>(({ open, onCancel, mobile }) => {
   const { t } = useTranslation(['chat', 'common']);
   const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
-  const { styles } = useStyles();
   const { loading, onDownload } = useScreenshot({
     imageType: fieldValue.imageType,
     title: 'stats',

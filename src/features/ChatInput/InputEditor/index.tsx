@@ -5,7 +5,7 @@ import {
   INSERT_MENTION_COMMAND,
   INSERT_TABLE_COMMAND,
   ReactCodePlugin,
-  ReactCodeblockPlugin,
+  ReactCodemirrorPlugin,
   ReactHRPlugin,
   ReactLinkHighlightPlugin,
   ReactListPlugin,
@@ -91,7 +91,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
             plugins: [
               ReactListPlugin,
               ReactCodePlugin,
-              ReactCodeblockPlugin,
+              ReactCodemirrorPlugin,
               ReactHRPlugin,
               ReactLinkHighlightPlugin,
               ReactTablePlugin,

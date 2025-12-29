@@ -7,9 +7,7 @@ import { type GroupAgentBuilderAction, groupAgentBuilderSlice } from './groupAge
 import { type ChatCodeInterpreterAction, codeInterpreterSlice } from './interpreter';
 import { type KnowledgeBaseAction, knowledgeBaseSlice } from './knowledgeBase';
 import { type LocalFileAction, localSystemSlice } from './localSystem';
-import { type PageAgentAction, pageAgentSlice } from './pageAgent';
 import { type SearchAction, searchSlice } from './search';
-import { type UserMemoryAction, userMemorySlice } from './userMemory';
 
 export interface ChatBuiltinToolAction
   extends
@@ -17,10 +15,8 @@ export interface ChatBuiltinToolAction
     LocalFileAction,
     ChatCodeInterpreterAction,
     KnowledgeBaseAction,
-    UserMemoryAction,
     AgentBuilderAction,
-    GroupAgentBuilderAction,
-    PageAgentAction {}
+    GroupAgentBuilderAction {}
 
 export const chatToolSlice: StateCreator<
   ChatStore,
@@ -32,8 +28,6 @@ export const chatToolSlice: StateCreator<
   ...localSystemSlice(...params),
   ...codeInterpreterSlice(...params),
   ...knowledgeBaseSlice(...params),
-  ...userMemorySlice(...params),
   ...agentBuilderSlice(...params),
   ...groupAgentBuilderSlice(...params),
-  ...pageAgentSlice(...params),
 });

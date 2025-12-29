@@ -4,7 +4,7 @@ import { SiDiscord, SiGithub, SiRss, SiX, SiYoutube } from '@icons-pack/react-si
 import { BRANDING_EMAIL, BRANDING_NAME, SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Form } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,17 +16,16 @@ import ItemCard from './features/ItemCard';
 import ItemLink from './features/ItemLink';
 import Version from './features/Version';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   title: css`
     font-size: 14px;
     font-weight: bold;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
 const Page = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
 
   return (
     <>

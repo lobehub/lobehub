@@ -3,12 +3,9 @@ import { type PropsWithChildren, memo } from 'react';
 
 import { useModelHasContextWindowToken } from '@/hooks/useModelHasContextWindowToken';
 import { useChatStore } from '@/store/chat';
-import { chatSelectors, threadSelectors } from '@/store/chat/selectors';
+import { displayMessageSelectors, threadSelectors } from '@/store/chat/selectors';
 
 const LargeTokenContent = dynamic(() => import('./TokenTag'), { ssr: false });
-const LargeTokenContentForGroupChat = dynamic(() => import('./TokenTagForGroupChat'), {
-  ssr: false,
-});
 
 const Token = memo<PropsWithChildren>(({ children }) => {
   const showTag = useModelHasContextWindowToken();
@@ -17,7 +14,7 @@ const Token = memo<PropsWithChildren>(({ children }) => {
 });
 
 export const MainToken = memo(() => {
-  const total = useChatStore(chatSelectors.mainAIChatsMessageString);
+  const total = useChatStore(displayMessageSelectors.mainAIChatsMessageString);
 
   return (
     <Token>
@@ -32,16 +29,6 @@ export const PortalToken = memo(() => {
   return (
     <Token>
       <LargeTokenContent total={total} />
-    </Token>
-  );
-});
-
-export const GroupChatToken = memo(() => {
-  const total = useChatStore(chatSelectors.mainAIChatsMessageString);
-
-  return (
-    <Token>
-      <LargeTokenContentForGroupChat total={total} />
     </Token>
   );
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, SearchBar } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,6 @@ interface ProviderMenuProps {
 }
 const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
   const { t } = useTranslation('modelProvider');
-  const theme = useTheme();
 
   const [providerSearchKeyword, useFetchAiProviderList] = useAiInfraStore((s) => [
     s.providerSearchKeyword,
@@ -33,8 +32,8 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
   return (
     <Flexbox
       style={{
-        background: theme.colorBgContainer,
-        borderRight: `1px solid ${theme.colorBorderSecondary}`,
+        background: cssVar.colorBgContainer,
+        borderRight: `1px solid ${cssVar.colorBorderSecondary}`,
         minWidth: width,
         overflow: mobile ? undefined : 'scroll',
       }}
@@ -47,8 +46,8 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
         justify={'space-between'}
         padding={8}
         style={{
-          background: theme.colorBgContainer,
-          borderBottom: `1px solid ${theme.colorBorderSecondary}`,
+          background: cssVar.colorBgContainer,
+          borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
           marginBottom: 8,
           position: 'sticky',
           top: 0,
@@ -66,7 +65,7 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
           placeholder={t('menu.searchProviders')}
           prefix={
             <Icon
-              color={theme.colorTextDescription}
+              color={cssVar.colorTextDescription}
               icon={SearchIcon}
               style={{
                 marginRight: 12,

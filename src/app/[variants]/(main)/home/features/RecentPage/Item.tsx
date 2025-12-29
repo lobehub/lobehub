@@ -1,7 +1,7 @@
 'use client';
 
 import { Avatar, Block, Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { FileTextIcon } from 'lucide-react';
 import markdownToTxt from 'markdown-to-txt';
 import { memo } from 'react';
@@ -41,8 +41,6 @@ interface RecentPageItemProps {
 }
 
 const RecentPageItem = memo<RecentPageItemProps>(({ document }) => {
-  const theme = useTheme();
-
   const title = document.name || '';
   const previewText = getPreviewText(document);
   const emoji = document.metadata?.emoji;
@@ -53,7 +51,7 @@ const RecentPageItem = memo<RecentPageItemProps>(({ document }) => {
       flex={'none'}
       height={RECENT_BLOCK_SIZE.PAGE.HEIGHT}
       style={{
-        borderRadius: theme.borderRadiusLG,
+        borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
       }}
       variant={'outlined'}
@@ -63,7 +61,7 @@ const RecentPageItem = memo<RecentPageItemProps>(({ document }) => {
         flex={'none'}
         height={44}
         style={{
-          background: theme.colorFillTertiary,
+          background: cssVar.colorFillTertiary,
           overflow: 'hidden',
         }}
       />
@@ -78,7 +76,7 @@ const RecentPageItem = memo<RecentPageItemProps>(({ document }) => {
             <Avatar avatar={emoji} shape={'square'} size={30} />
           ) : (
             <Center flex={'none'} height={30} style={{ marginLeft: -4 }} width={30}>
-              <Icon color={theme.colorTextDescription} icon={FileTextIcon} size={24} />
+              <Icon color={cssVar.colorTextDescription} icon={FileTextIcon} size={24} />
             </Center>
           )}
           <Text ellipsis={{ rows: 2 }} style={{ fontSize: 14, lineHeight: 1.4 }} weight={500}>

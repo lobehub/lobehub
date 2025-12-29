@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, type FlexboxProps, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import PlanTag from '@/features/User/PlanTag';
@@ -16,7 +16,6 @@ export interface UserInfoProps extends FlexboxProps {
 }
 
 const UserInfo = memo<UserInfoProps>(({ avatarProps, onClick, ...rest }) => {
-  const theme = useTheme();
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const [nickname, username, subscriptionPlan] = useUserStore((s) => [
     userProfileSelectors.nickName(s),
@@ -35,7 +34,7 @@ const UserInfo = memo<UserInfoProps>(({ avatarProps, onClick, ...rest }) => {
       {...rest}
     >
       <Flexbox align={'center'} gap={10} horizontal onClick={onClick}>
-        <UserAvatar background={theme.colorFill} size={36} {...avatarProps} />
+        <UserAvatar background={cssVar.colorFill} size={36} {...avatarProps} />
         <Flexbox flex={1}>
           <Text style={{ lineHeight: 1.4 }} weight={'bold'}>
             {nickname}

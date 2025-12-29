@@ -1,22 +1,22 @@
 import { MCP } from '@lobehub/icons';
 import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { BookTextIcon, CoinsIcon, DownloadIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatIntergerNumber } from '@/utils/format';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     token: css`
       border-radius: 4px;
 
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 11px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
 
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     `,
   };
 });
@@ -31,7 +31,6 @@ interface TokenTagProps {
 
 const TokenTag = memo<TokenTagProps>(
   ({ tokenUsage, pluginCount, knowledgeCount, installCount, placement = 'right' }) => {
-    const { styles, theme } = useStyles();
     const { t } = useTranslation('discover');
     return (
       <Flexbox align={'center'} gap={4} horizontal>
@@ -61,7 +60,7 @@ const TokenTag = memo<TokenTagProps>(
             styles={{ root: { pointerEvents: 'none' } }}
             title={t('assistants.withPlugin')}
           >
-            <Tag icon={<Icon fill={theme.colorTextSecondary} icon={MCP} />}>{pluginCount}</Tag>
+            <Tag icon={<Icon fill={cssVar.colorTextSecondary} icon={MCP} />}>{pluginCount}</Tag>
           </Tooltip>
         )}
         {Boolean(knowledgeCount && knowledgeCount > 0) && (

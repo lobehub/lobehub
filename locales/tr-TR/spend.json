@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Saniye Başına Token): Saniyede üretilen token sayısı",
+  "duration.TTFT": "TTFT (İlk Token Süresi): İlk token gecikmesi",
+  "duration.completion": "Çıktı tamamlama süresi",
+  "duration.latency": "Süre",
+  "duration.stage.end": "Bitiş",
+  "duration.stage.firstToken": "İlk Token",
+  "duration.stage.start": "Başlangıç",
+  "table.columns.TTFT.tooltip": "İlk Token Süresi, birim: saniye",
+  "table.columns.duration": "Süre",
+  "table.columns.model": "Model",
+  "table.columns.spend": "Kredi",
+  "table.columns.startTime": "Oluşturulma Zamanı",
+  "table.columns.totalTokens": "Token Kullanımı",
+  "table.columns.type.enums.chat": "Metin Üretimi",
+  "table.columns.type.enums.imageGeneration": "Görsel Üretimi",
+  "table.columns.type.title": "Tür",
+  "table.desc": "Metin üretimi, gömme, görsel üretimi vb. işlemler için hesaplama kredisi kullanım detayları.",
+  "table.more": "Detayları Görüntüle",
+  "table.title": "Hesaplama Kredisi Kullanım Detayları",
+  "table.totalToken.input": "Girdi",
+  "table.totalToken.output": "Çıktı"
+}

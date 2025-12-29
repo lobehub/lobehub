@@ -1,6 +1,6 @@
 'use client';
 
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import dayjs from 'dayjs';
 import { type ReactNode, memo, useMemo } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
@@ -9,7 +9,7 @@ import Loading from '@/app/[variants]/(main)/memory/features/Loading';
 
 import { useScrollParent } from './useScrollParent';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   timelineContainer: css`
     position: relative;
     height: 100%;
@@ -22,7 +22,10 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     width: 1px;
     height: 100%;
 
-    background: ${isDarkMode ? token.colorFillQuaternary : token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
+  `,
+  timelineLine_dark: css`
+    background: ${cssVar.colorFillQuaternary};
   `,
 }));
 
@@ -66,7 +69,7 @@ function TimelineViewInner<T extends { createdAt: Date | string; id: string }>({
   renderHeader,
   renderItem,
 }: TimelineViewProps<T>) {
-  const { styles } = useStyles();
+  const { isDarkMode } = useThemeMode();
   const scrollParent = useScrollParent();
 
   const { groupCounts, sortedPeriods, groupedItems } = useMemo(() => {
@@ -122,7 +125,7 @@ function TimelineViewInner<T extends { createdAt: Date | string; id: string }>({
 
   return (
     <div className={styles.timelineContainer}>
-      <div className={styles.timelineLine} />
+      <div className={cx(styles.timelineLine, isDarkMode && styles.timelineLine_dark)} />
       <GroupedVirtuoso
         components={{
           Footer: isLoading ? () => <Loading viewMode={'timeline'} /> : undefined,

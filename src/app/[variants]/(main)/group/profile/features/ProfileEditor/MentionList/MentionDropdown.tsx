@@ -1,6 +1,6 @@
 import { type MenuRenderProps } from '@lobehub/editor/es/plugins/slash/react/type';
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { type ReactNode, memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { type MentionListOption } from './types';
@@ -23,7 +23,6 @@ const getCursorPosition = (): { x: number; y: number } | null => {
 
 const MentionDropdown = memo<MenuRenderProps>(
   ({ activeKey, onSelect, open, options, setActiveKey }) => {
-    const theme = useTheme();
     const activeItemRef = useRef<HTMLDivElement>(null);
     const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
 
@@ -51,10 +50,10 @@ const MentionDropdown = memo<MenuRenderProps>(
     return (
       <Flexbox
         style={{
-          background: theme.colorBgElevated,
-          border: `1px solid ${theme.colorBorderSecondary}`,
+          background: cssVar.colorBgElevated,
+          border: `1px solid ${cssVar.colorBorderSecondary}`,
           borderRadius: 12,
-          boxShadow: theme.boxShadowSecondary,
+          boxShadow: cssVar.boxShadowSecondary,
           left: position.x,
           maxHeight: 260,
           maxWidth: 400,
@@ -70,7 +69,7 @@ const MentionDropdown = memo<MenuRenderProps>(
             return (
               <div
                 key={`divider-${(option as any)?.key ?? 'divider'}`}
-                style={{ borderTop: `1px solid ${theme.colorBorderSecondary}` }}
+                style={{ borderTop: `1px solid ${cssVar.colorBorderSecondary}` }}
               />
             );
           }
@@ -93,14 +92,14 @@ const MentionDropdown = memo<MenuRenderProps>(
               paddingInline={12}
               ref={isActive ? activeItemRef : null}
               style={{
-                background: isActive ? theme.colorFillSecondary : undefined,
+                background: isActive ? cssVar.colorFillSecondary : undefined,
                 cursor: 'pointer',
               }}
             >
               {item.icon && <Flexbox style={{ flex: 'none' }}>{item?.icon as ReactNode}</Flexbox>}
               <div
                 style={{
-                  color: theme.colorText,
+                  color: cssVar.colorText,
                   fontSize: 14,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',

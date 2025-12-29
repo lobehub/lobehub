@@ -1,10 +1,10 @@
 'use client';
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     gap: 6px;
@@ -13,13 +13,11 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 32px;
     padding-block: 4px;
     padding-inline: 8px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
   `,
 }));
 
 const TreeSkeletonItem = memo(() => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox className={styles.container} horizontal>
       <Skeleton.Button

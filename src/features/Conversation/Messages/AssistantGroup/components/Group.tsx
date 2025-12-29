@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
@@ -10,7 +10,7 @@ import { CollapsedMessage } from './CollapsedMessage';
 import { GroupMessageContext } from './GroupContext';
 import GroupItem from './GroupItem';
 
-const useStyles = createStyles(({ css }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       &:has(.tool-blocks) {
@@ -31,7 +31,6 @@ interface GroupChildrenProps {
 
 const Group = memo<GroupChildrenProps>(
   ({ blocks, contentId, disableEditing, messageIndex, id, content }) => {
-    const { styles } = useStyles();
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
 

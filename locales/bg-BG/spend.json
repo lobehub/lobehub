@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Токени в секунда): Изход на токени в секунда",
+  "duration.TTFT": "TTFT (Време до първия токен): Закъснение до първия токен",
+  "duration.completion": "Време за завършване на изхода",
+  "duration.latency": "Продължителност",
+  "duration.stage.end": "Край",
+  "duration.stage.firstToken": "Първи токен",
+  "duration.stage.start": "Начало",
+  "table.columns.TTFT.tooltip": "Време до първия токен, единица: секунди",
+  "table.columns.duration": "Продължителност",
+  "table.columns.model": "Модел",
+  "table.columns.spend": "Кредити",
+  "table.columns.startTime": "Създадено на",
+  "table.columns.totalTokens": "Използвани токени",
+  "table.columns.type.enums.chat": "Генериране на текст",
+  "table.columns.type.enums.imageGeneration": "Генериране на изображения",
+  "table.columns.type.title": "Тип",
+  "table.desc": "Подробности за използването на изчислителни кредити за генериране на текст, вграждане, генериране на изображения и др.",
+  "table.more": "Виж подробности",
+  "table.title": "Подробности за използването на изчислителни кредити",
+  "table.totalToken.input": "Вход",
+  "table.totalToken.output": "Изход"
+}

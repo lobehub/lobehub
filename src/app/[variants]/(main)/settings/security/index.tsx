@@ -15,8 +15,8 @@ const ClerkProfile = dynamic(() => import('./features/ClerkProfile'), {
   ),
 });
 
-const SecuritySettings = memo<{ mobile?: boolean }>(({ mobile = false }) => {
-  return enableClerk ? <ClerkProfile mobile={mobile} /> : <Navigate replace to="/settings" />;
+const SecuritySettings = memo(() => {
+  return enableClerk ? <ClerkProfile /> : <Navigate replace to="/settings" />;
 });
 
 export default SecuritySettings;

@@ -1,6 +1,6 @@
 import { Flexbox, Tag, Tooltip } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 
 import { useFileStore } from '@/store/file';
@@ -10,19 +10,21 @@ import Content from './Content';
 import FilePreviewModal from './FilePreviewModal';
 import { getFileBasename } from './utils';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   closeBtn: css`
     flex-shrink: 0;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
 
     &:hover {
-      color: ${token.colorError};
-      background: ${token.colorErrorBg};
+      color: ${cssVar.colorError};
+      background: ${cssVar.colorErrorBg};
     }
   `,
   icon: css`
     position: relative;
+
     flex-shrink: 0;
+
     width: 18px;
     height: 18px;
     border-radius: 4px;
@@ -52,8 +54,9 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
     justify-content: center;
 
-    background: ${token.colorBgMask};
     border-radius: 4px;
+
+    background: ${cssVar.colorBgMask};
   `,
 }));
 
@@ -61,7 +64,6 @@ type FileItemProps = UploadFileItem;
 
 const ContextItem = memo<FileItemProps>((props) => {
   const { file, id, status, uploadState } = props;
-  const { styles } = useStyles();
   const [removeChatUploadFile] = useFileStore((s) => [s.removeChatUploadFile]);
   const [previewOpen, setPreviewOpen] = useState(false);
 

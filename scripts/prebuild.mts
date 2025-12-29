@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
+const isBundleAnalyzer = process.env.ANALYZE === 'true' && process.env.CI === 'true';
 
 if (isDesktop) {
   dotenvExpand.expand(dotenv.config({ path: '.env.desktop' }));
@@ -16,6 +17,12 @@ if (isDesktop) {
 // 创建需要排除的特性映射
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 const partialBuildPages = [
+  // no need for bundle analyzer (frontend only)
+  {
+    name: 'backend-routes',
+    disabled: isBundleAnalyzer,
+    paths: ['src/app/(backend)'],
+  },
   // no need for desktop
   // {
   //   name: 'changelog',

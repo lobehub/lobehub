@@ -2,7 +2,7 @@
 
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dynamic from 'next/dynamic';
 import { memo } from 'react';
 
@@ -14,7 +14,7 @@ import SendArea from '../SendArea';
 
 const FilePreview = dynamic(() => import('./FilePreview'), { ssr: false });
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css``,
   fullscreen: css`
     position: absolute;
@@ -25,15 +25,13 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 100%;
     padding: 12px;
 
-    background: ${token.colorBgLayout};
+    background: ${cssVar.colorBgLayout};
   `,
 }));
 
 const DesktopChatInput = memo(() => {
   const [slashMenuRef, expand] = useChatInputStore((s) => [s.slashMenuRef, s.expand]);
   const leftActions = useChatInputStore((s) => s.leftActions);
-
-  const { styles, cx } = useStyles();
 
   const fileNode = leftActions.flat().includes('fileUpload') && <FilePreview />;
 

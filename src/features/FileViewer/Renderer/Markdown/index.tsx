@@ -1,18 +1,18 @@
 'use client';
 
 import { Center, Flexbox, Highlighter } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import CircleLoading from '@/components/Loading/CircleLoading';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     width: 100%;
-    padding: ${token.paddingLG}px;
-    background: ${token.colorBgContainer};
+    padding: ${cssVar.paddingLG};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
@@ -22,7 +22,6 @@ interface MarkdownViewerProps {
 }
 
 const MarkdownViewer = memo<MarkdownViewerProps>(({ url }) => {
-  const { styles } = useStyles();
   const { fileData, loading } = useTextFileLoader(url);
 
   return (

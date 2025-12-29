@@ -1,7 +1,7 @@
 import { type NotebookDocument } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Trash2Icon } from 'lucide-react';
 import { type MouseEvent, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,21 +9,21 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { useNotebookStore } from '@/store/notebook';
 
-const useStyles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     cursor: pointer;
     padding: 12px;
     border-radius: 8px;
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
 
     &:hover {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   description: css`
     font-size: 12px;
     line-height: 1.5;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     font-weight: 500;
@@ -37,7 +37,6 @@ interface DocumentItemProps {
 
 const DocumentItem = memo<DocumentItemProps>(({ document, topicId }) => {
   const { t } = useTranslation('portal');
-  const { styles } = useStyles();
   const { modal } = App.useApp();
   const [deleting, setDeleting] = useState(false);
 

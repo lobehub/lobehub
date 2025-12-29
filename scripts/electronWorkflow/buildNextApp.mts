@@ -89,7 +89,7 @@ const build = async () => {
       cwd: TEMP_DIR,
       env: {
         ...process.env,
-        NODE_OPTIONS: process.env.NODE_OPTIONS || '--max-old-space-size=6144',
+        NODE_OPTIONS: process.env.NODE_OPTIONS || '--max-old-space-size=8192',
       },
       stdio: 'inherit',
     });

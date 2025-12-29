@@ -2,8 +2,6 @@ import { type UIChatMessage } from '@lobechat/types';
 
 import { type ChatGroupAgentItem } from '@/database/schemas/chatGroup';
 
-import type { SupervisorTodoItem } from './supervisor';
-
 export interface ChatMessageState {
   activeAgentId: string;
   /**
@@ -35,22 +33,6 @@ export interface ChatMessageState {
    * Parsed messages for display (includes assistantGroup from conversation-flow)
    */
   messagesMap: Record<string, UIChatMessage[]>;
-  /**
-   * Supervisor decision debounce timers by group ID
-   */
-  supervisorDebounceTimers: Record<string, number>;
-  /**
-   * Supervisor decision abort controllers by group ID
-   */
-  supervisorDecisionAbortControllers: Record<string, AbortController>;
-  /**
-   * Supervisor decision loading states
-   */
-  supervisorDecisionLoading: string[];
-  /**
-   * Supervisor todo list map keyed by session/topic combination
-   */
-  supervisorTodos: Record<string, SupervisorTodoItem[]>;
 }
 
 export const initialMessageState: ChatMessageState = {
@@ -63,8 +45,4 @@ export const initialMessageState: ChatMessageState = {
   messageLoadingIds: [],
   messagesInit: false,
   messagesMap: {},
-  supervisorDebounceTimers: {},
-  supervisorDecisionAbortControllers: {},
-  supervisorDecisionLoading: [],
-  supervisorTodos: {},
 };

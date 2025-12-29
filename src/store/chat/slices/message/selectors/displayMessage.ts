@@ -302,16 +302,6 @@ const findLastMessageId = (id: string) => (s: ChatStoreState) => {
   return findLastMessageIdRecursive(message);
 };
 
-// ============= Supervisor Selectors ========== //
-
-const isSupervisorLoading = (groupId: string) => (s: ChatStoreState) =>
-  s.supervisorDecisionLoading.includes(groupId);
-
-const getSupervisorTodos = (groupId?: string, topicId?: string | null) => (s: ChatStoreState) => {
-  if (!groupId) return [];
-  return s.supervisorTodos[messageMapKey({ agentId: groupId, topicId })] || [];
-};
-
 // ============= Inbox Selectors ========== //
 
 /**
@@ -331,12 +321,10 @@ export const displayMessageSelectors = {
   getDisplayMessageById,
   getDisplayMessagesByKey,
   getGroupLatestMessageWithoutTools,
-  getSupervisorTodos,
   getThreadMessageIDs,
   getThreadMessages,
   inboxActiveTopicDisplayMessages,
   isCurrentDisplayChatLoaded,
-  isSupervisorLoading,
   lastDisplayMessageId,
   mainAIChats,
   mainAIChatsMessageString,

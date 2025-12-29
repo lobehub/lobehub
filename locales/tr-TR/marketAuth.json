@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "İptal",
+  "authorize.cancel": "Şimdi Değil",
   "authorize.confirm": "Profilinizi Oluşturun",
   "authorize.description": "Topluluk profiliniz, {{appName}} kullanıcı hesabınızdan bağımsız olarak var olur.",
   "authorize.footer.agreement": "Devam ederek <terms>Hizmet Şartları</terms> ve <privacy>Gizlilik Politikası</privacy>'nı anladığınızı ve kabul ettiğinizi onaylamış olursunuz.",

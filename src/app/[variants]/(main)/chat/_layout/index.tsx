@@ -1,5 +1,4 @@
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
 import { type FC } from 'react';
 import { Outlet } from 'react-router-dom';
 
@@ -10,23 +9,15 @@ import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 
 import RegisterHotkeys from './RegisterHotkeys';
 import Sidebar from './Sidebar';
+import { styles } from './style';
 
 const Layout: FC = () => {
-  const theme = useTheme();
   useInitAgentConfig();
 
   return (
     <>
       <Sidebar />
-      <Flexbox
-        flex={1}
-        height={'100%'}
-        style={{
-          background: theme.colorBgContainer,
-          overflow: 'hidden',
-          position: 'relative',
-        }}
-      >
+      <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
         <Outlet />
       </Flexbox>
       {/* ↓ cloud slot ↓ */}

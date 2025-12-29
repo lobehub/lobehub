@@ -2,7 +2,7 @@
 
 import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { type PropsWithChildren, memo, useState } from 'react';
 
@@ -16,7 +16,7 @@ import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selecto
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     display: flex;
     flex-direction: column;
@@ -25,17 +25,16 @@ const useStyles = createStyles(({ css, token }) => ({
   drawer: css`
     z-index: 10;
     height: 100%;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   panel: css`
     overflow: hidden;
     height: 100%;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const PortalPanel = memo(({ children }: PropsWithChildren) => {
-  const { styles } = useStyles();
   const { md = true } = useResponsive();
 
   const [showPortal, showToolUI, showArtifactUI, showThread] = useChatStore((s) => [

@@ -1,5 +1,5 @@
 import { Flexbox, ScrollShadow } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import { useChatInputStore } from '@/features/ChatInput/store';
@@ -7,7 +7,7 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import FileItem from './FileItem';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow-x: scroll;
     width: 100%;
@@ -19,7 +19,6 @@ const FileList = memo(() => {
 
   const inputFilesList = useFileStore(fileChatSelectors.chatUploadFileList);
   const showFileList = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
-  const { styles } = useStyles();
 
   if (!inputFilesList.length || !showFileList) return null;
 

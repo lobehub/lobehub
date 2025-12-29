@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  BusinessDesktopRoutesWithMainLayout,
+  BusinessDesktopRoutesWithoutMainLayout,
+} from '@/business/client/BusinessDesktopRoutes';
 import { isDesktop } from '@/const/version';
 import { ErrorBoundary, type RouteConfig, dynamicElement, redirectElement } from '@/utils/router';
 
@@ -351,6 +355,8 @@ export const desktopRoutes: RouteConfig[] = [
         path: 'image',
       },
 
+      ...BusinessDesktopRoutesWithMainLayout,
+
       // Pages routes
       {
         children: [
@@ -388,6 +394,7 @@ export const desktopRoutes: RouteConfig[] = [
     errorElement: <ErrorBoundary resetPath="/" />,
     path: '/onboarding',
   },
+  ...BusinessDesktopRoutesWithoutMainLayout,
 ];
 
 // Desktop onboarding route (SPA-only)

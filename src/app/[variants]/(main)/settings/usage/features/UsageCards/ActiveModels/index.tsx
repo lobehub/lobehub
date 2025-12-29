@@ -1,6 +1,6 @@
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { ActionIcon, Flexbox, Modal } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { MaximizeIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +35,6 @@ const computeList = (data: UsageLog[], groupBy: GroupBy): string[] => {
 
 const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
   const { t } = useTranslation('auth');
-  const theme = useTheme();
 
   const [open, setOpen] = useState(false);
 
@@ -71,7 +70,7 @@ const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
                     model={item}
                     size={18}
                     style={{
-                      border: `2px solid ${theme.colorBgContainer}`,
+                      border: `2px solid ${cssVar.colorBgContainer}`,
                       boxSizing: 'content-box',
                       marginRight: -8,
                       zIndex: i + 1,
@@ -83,7 +82,7 @@ const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
                     provider={item}
                     size={18}
                     style={{
-                      border: `2px solid ${theme.colorBgContainer}`,
+                      border: `2px solid ${cssVar.colorBgContainer}`,
                       boxSizing: 'content-box',
                       marginRight: -8,
                       zIndex: i + 1,

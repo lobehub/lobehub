@@ -6,26 +6,25 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { MAX_WIDTH } from '../../features/const';
 import Footer from './Footer';
 import Header from './Header';
+import { styles } from './style';
 
 const Layout = () => {
   return (
     <>
       <Header />
-      <Flexbox height={'100%'} style={{ overflowY: 'auto' }} width={'100%'}>
+      <Flexbox className={styles.mainContainer} height={'100%'} width={'100%'}>
         <WideScreenContainer
+          className={styles.contentContainer}
           gap={16}
           minWidth={MAX_WIDTH}
           paddingBlock={16}
-          style={{
-            minHeight: '100%',
-          }}
           wrapperStyle={{
             minHeight: '100%',
             position: 'relative',
           }}
         >
           <Outlet />
-          <div style={{ flex: 1 }} />
+          <div className={styles.spacer} />
           <Footer />
         </WideScreenContainer>
       </Flexbox>

@@ -1,3 +1,4 @@
+import { GTDInspectors, GTDManifest } from '@lobechat/builtin-tool-gtd/client';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier, PageAgentInspectors } from '@lobechat/builtin-tool-page-agent/client';
 import { type BuiltinInspector } from '@lobechat/types';
@@ -20,6 +21,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
   [PageAgentIdentifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
+  [GTDManifest.identifier]: GTDInspectors as Record<string, BuiltinInspector>,
 };
 
 /**

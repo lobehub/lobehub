@@ -1,15 +1,16 @@
 import { Block, Text } from '@lobehub/ui';
 import { Popover } from 'antd';
+import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIndicatorStyles } from './styles';
+import { indicatorStyles } from './styles';
 import type { MinimapIndicatorProps } from './types';
 
 export const MinimapIndicator = memo<MinimapIndicatorProps>(
   ({ id, width, preview, role, virtuosoIndex, position, activePosition, onJump }) => {
     const { t } = useTranslation('chat');
-    const { styles, cx } = useIndicatorStyles();
+    const styles = indicatorStyles;
 
     const isActive = activePosition === position;
     const senderLabel = role === 'user' ? t('minimap.senderUser') : t('minimap.senderAssistant');

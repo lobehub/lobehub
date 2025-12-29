@@ -2,29 +2,29 @@
 
 import { CaretDownFilled } from '@ant-design/icons';
 import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as motion from 'motion/react-m';
 import { memo, useCallback } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   folderHeader: css`
     cursor: pointer;
 
     padding-block: 4px;
     padding-inline: 8px;
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     transition: background-color 0.2s;
 
     &:hover {
-      background-color: ${token.colorFillTertiary};
+      background-color: ${cssVar.colorFillTertiary};
     }
   `,
   folderHeaderActive: css`
-    color: ${token.colorText};
-    background-color: ${token.colorFillSecondary};
+    color: ${cssVar.colorText};
+    background-color: ${cssVar.colorFillSecondary};
   `,
 }));
 
@@ -58,8 +58,6 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
     selectedKey,
     onFolderClick,
   }) => {
-    const { styles, cx } = useStyles();
-
     const itemKey = item.slug || item.id;
     const isExpanded = expandedFolders.has(itemKey);
     const isActive = selectedKey === itemKey;

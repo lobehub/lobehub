@@ -1,21 +1,21 @@
 'use client';
 
 import { Block, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import { type TaskDetail } from '@/types/index';
 
 import StatusContent from './StatusContent';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   instruction: css`
     padding-block: 12px;
     padding-inline: 16px;
 
     font-size: 12px;
     line-height: 1.6;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -31,8 +31,6 @@ interface TaskDetailPanelProps {
 
 const TaskDetailPanel = memo<TaskDetailPanelProps>(
   ({ taskDetail, instruction, content, messageId }) => {
-    const { styles } = useStyles();
-
     return (
       <Block paddingBlock={8} paddingInline={12}>
         {/* Instruction Header */}

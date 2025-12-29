@@ -1,7 +1,7 @@
 import { getCachedTextInputUnitRate, getWriteCacheInputUnitRate } from '@lobechat/utils';
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Icon, Segmented, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ArrowDownToDot, ArrowUpFromDot, BookUp2Icon, CircleFadingArrowUp } from 'lucide-react';
 import { type LobeDefaultAiModelListItem } from 'model-bank';
 import { memo } from 'react';
@@ -12,18 +12,18 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { getPrice } from './pricing';
 
-export const useStyles = createStyles(({ css, token }) => {
+export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     container: css`
       font-size: 12px;
     `,
     desc: css`
       line-height: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     pricing: css`
       font-size: 12px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
   };
 });
@@ -34,7 +34,6 @@ interface ModelCardProps extends LobeDefaultAiModelListItem {
 
 const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
 
   const isShowCredit = useGlobalStore(systemStatusSelectors.isShowCredit) && !!pricing;
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);

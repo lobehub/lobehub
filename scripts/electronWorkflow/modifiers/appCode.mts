@@ -1,19 +1,14 @@
 import { Lang, parse } from '@ast-grep/napi';
-import fs from 'fs-extra';
 import path from 'node:path';
 
-import { isDirectRun, runStandalone } from './utils.mjs';
-
-const rewriteFile = async (filePath: string, transformer: (code: string) => string) => {
-  if (!fs.existsSync(filePath)) return;
-
-  const original = await fs.readFile(filePath, 'utf8');
-  const updated = transformer(original);
-
-  if (updated !== original) {
-    await fs.writeFile(filePath, updated);
-  }
-};
+import {
+  isDirectRun,
+  normalizeEol,
+  removePathEnsuring,
+  runStandalone,
+  updateFile,
+  writeFileEnsuring,
+} from './utils.mjs';
 
 const desktopOnlyVariantsPage = `import { DynamicLayoutProps } from '@/types/next';
 
@@ -35,6 +30,11 @@ const stripDevPanel = (code: string) => {
   return result;
 };
 
+const assertDevPanelStripped = (code: string) =>
+  !/import\s+DevPanel\s+from\s+['"]@\/features\/DevPanel['"]/.test(code) &&
+  !/<DevPanel\b/.test(code) &&
+  !/NEXT_PUBLIC_ENABLE_DEV_PANEL|DevPanel\s*\/>/.test(code);
+
 const removeSecurityTab = (code: string) => {
   const componentEntryRegex =
     /[\t ]*\[SettingsTabs\.Security]: dynamic\(\(\) => import\('\.\.\/security'\), {[\s\S]+?}\),\s*\r?\n/;
@@ -42,6 +42,8 @@ const removeSecurityTab = (code: string) => {
 
   return code.replace(componentEntryRegex, '').replace(securityTabRegex, '');
 };
+
+const assertSecurityTabRemoved = (code: string) => !/\bSettingsTabs\.Security\b/.test(code);
 
 const removeSpeedInsightsAndAnalytics = (code: string) => {
   const ast = parse(Lang.Tsx, code);
@@ -129,6 +131,12 @@ const removeSpeedInsightsAndAnalytics = (code: string) => {
 
   return result;
 };
+
+const assertSpeedInsightsAndAnalyticsRemoved = (code: string) =>
+  !/<Analytics\s*\/>/.test(code) &&
+  !/<SpeedInsights\s*\/>/.test(code) &&
+  !/import\s+\{\s*SpeedInsights\s*\}\s+from\b/.test(code) &&
+  !/import\s+Analytics\s+from\b/.test(code);
 
 const removeClerkLogic = (code: string) => {
   const ast = parse(Lang.Tsx, code);
@@ -244,6 +252,10 @@ const removeClerkLogic = (code: string) => {
   return result;
 };
 
+const assertClerkLogicRemoved = (code: string) =>
+  !/\bNEXT_PUBLIC_ENABLE_CLERK_AUTH\b/.test(code) &&
+  !/\bauthEnv\.NEXT_PUBLIC_ENABLE_CLERK_AUTH\b/.test(code);
+
 const removeManifestFromMetadata = (code: string) => {
   const ast = parse(Lang.Tsx, code);
   const root = ast.root();
@@ -320,65 +332,90 @@ const removeManifestFromMetadata = (code: string) => {
   return result;
 };
 
+const assertMetadataManifestRemoved = (code: string) =>
+  !/\bmanifest\s*:/.test(code) && !/\bmetadataBase\s*:/.test(code);
+
 export const modifyAppCode = async (TEMP_DIR: string) => {
   // 1. Replace src/app/[variants]/page.tsx with a desktop-only entry
   const variantsPagePath = path.join(TEMP_DIR, 'src/app/[variants]/page.tsx');
-  if (fs.existsSync(variantsPagePath)) {
-    console.log('  Processing src/app/[variants]/page.tsx...');
-    await fs.writeFile(variantsPagePath, desktopOnlyVariantsPage);
-  }
+  console.log('  Processing src/app/[variants]/page.tsx...');
+  await writeFileEnsuring({
+    filePath: variantsPagePath,
+    name: 'modifyAppCode:variantsPage',
+    text: desktopOnlyVariantsPage,
+    assertAfter: (code) => normalizeEol(code) === normalizeEol(desktopOnlyVariantsPage),
+  });
 
   // 2. Remove DevPanel from src/layout/GlobalProvider/index.tsx
   const globalProviderPath = path.join(TEMP_DIR, 'src/layout/GlobalProvider/index.tsx');
-  if (fs.existsSync(globalProviderPath)) {
-    console.log('  Processing src/layout/GlobalProvider/index.tsx...');
-    await rewriteFile(globalProviderPath, stripDevPanel);
-  }
+  console.log('  Processing src/layout/GlobalProvider/index.tsx...');
+  await updateFile({
+    filePath: globalProviderPath,
+    name: 'modifyAppCode:stripDevPanel',
+    transformer: stripDevPanel,
+    assertAfter: assertDevPanelStripped,
+  });
 
   // 3. Delete src/app/[variants]/(main)/settings/security directory
   const securityDirPath = path.join(TEMP_DIR, 'src/app/[variants]/(main)/settings/security');
-  if (fs.existsSync(securityDirPath)) {
-    console.log('  Deleting src/app/[variants]/(main)/settings/security directory...');
-    await fs.remove(securityDirPath);
-  }
+  console.log('  Deleting src/app/[variants]/(main)/settings/security directory...');
+  await removePathEnsuring({
+    name: 'modifyAppCode:deleteSecurityDir',
+    path: securityDirPath,
+  });
 
   // 4. Remove Security tab wiring from SettingsContent
   const settingsContentPath = path.join(
     TEMP_DIR,
     'src/app/[variants]/(main)/settings/features/SettingsContent.tsx',
   );
-  if (fs.existsSync(settingsContentPath)) {
-    console.log('  Processing src/app/[variants]/(main)/settings/features/SettingsContent.tsx...');
-    await rewriteFile(settingsContentPath, removeSecurityTab);
-  }
+  console.log('  Processing src/app/[variants]/(main)/settings/features/SettingsContent.tsx...');
+  await updateFile({
+    filePath: settingsContentPath,
+    name: 'modifyAppCode:removeSecurityTab',
+    transformer: removeSecurityTab,
+    assertAfter: assertSecurityTabRemoved,
+  });
 
   // 5. Remove SpeedInsights and Analytics from src/app/[variants]/layout.tsx
   const variantsLayoutPath = path.join(TEMP_DIR, 'src/app/[variants]/layout.tsx');
-  if (fs.existsSync(variantsLayoutPath)) {
-    console.log('  Processing src/app/[variants]/layout.tsx...');
-    await rewriteFile(variantsLayoutPath, removeSpeedInsightsAndAnalytics);
-  }
+  console.log('  Processing src/app/[variants]/layout.tsx...');
+  await updateFile({
+    filePath: variantsLayoutPath,
+    name: 'modifyAppCode:removeSpeedInsightsAndAnalytics',
+    transformer: removeSpeedInsightsAndAnalytics,
+    assertAfter: assertSpeedInsightsAndAnalyticsRemoved,
+  });
 
   // 6. Remove Clerk logic from src/layout/AuthProvider/index.tsx
   const authProviderPath = path.join(TEMP_DIR, 'src/layout/AuthProvider/index.tsx');
-  if (fs.existsSync(authProviderPath)) {
-    console.log('  Processing src/layout/AuthProvider/index.tsx...');
-    await rewriteFile(authProviderPath, removeClerkLogic);
-  }
+  console.log('  Processing src/layout/AuthProvider/index.tsx...');
+  await updateFile({
+    filePath: authProviderPath,
+    name: 'modifyAppCode:removeClerkLogic',
+    transformer: removeClerkLogic,
+    assertAfter: assertClerkLogicRemoved,
+  });
 
   // 7. Replace mdx Image component with next/image export
   const mdxImagePath = path.join(TEMP_DIR, 'src/components/mdx/Image.tsx');
-  if (fs.existsSync(mdxImagePath)) {
-    console.log('  Processing src/components/mdx/Image.tsx...');
-    await fs.writeFile(mdxImagePath, "export { default } from 'next/image';\n");
-  }
+  console.log('  Processing src/components/mdx/Image.tsx...');
+  await writeFileEnsuring({
+    filePath: mdxImagePath,
+    name: 'modifyAppCode:replaceMdxImage',
+    text: "export { default } from 'next/image';\n",
+    assertAfter: (code) => normalizeEol(code).trim() === "export { default } from 'next/image';",
+  });
 
   // 8. Remove manifest from metadata
   const metadataPath = path.join(TEMP_DIR, 'src/app/[variants]/metadata.ts');
-  if (fs.existsSync(metadataPath)) {
-    console.log('  Processing src/app/[variants]/metadata.ts...');
-    await rewriteFile(metadataPath, removeManifestFromMetadata);
-  }
+  console.log('  Processing src/app/[variants]/metadata.ts...');
+  await updateFile({
+    filePath: metadataPath,
+    name: 'modifyAppCode:removeManifestFromMetadata',
+    transformer: removeManifestFromMetadata,
+    assertAfter: assertMetadataManifestRemoved,
+  });
 };
 
 if (isDirectRun(import.meta.url)) {

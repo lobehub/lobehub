@@ -563,7 +563,7 @@ describe('resolveAgentConfig', () => {
 
       // Should still inject PageAgentIdentifier but with empty systemRole
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
+      expect(result.agentConfig.systemRole.trim()).toBe('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -579,7 +579,7 @@ describe('resolveAgentConfig', () => {
       });
 
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
+      expect(result.agentConfig.systemRole.trim()).toBe('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
   });

@@ -2,7 +2,7 @@
 
 import { Avatar, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Spin } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { BookOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,6 @@ import DocumentItem from './DocumentItem';
 
 const NotebookBody = memo(() => {
   const { t } = useTranslation('portal');
-  const theme = useTheme();
   const topicId = useChatStore((s) => s.activeTopicId);
   const { documents, isLoading } = useFetchNotebookDocuments(topicId);
 
@@ -26,11 +25,11 @@ const NotebookBody = memo(() => {
         flex={1}
         gap={8}
         paddingBlock={24}
-        style={{ border: `1px dashed ${theme.colorSplit}`, borderRadius: 8, marginInline: 12 }}
+        style={{ border: `1px dashed ${cssVar.colorSplit}`, borderRadius: 8, marginInline: 12 }}
       >
         <Avatar
           avatar={<Icon icon={BookOpenIcon} size={'large'} />}
-          background={theme.colorFillTertiary}
+          background={cssVar.colorFillTertiary}
           shape={'square'}
           size={48}
         />
@@ -57,11 +56,11 @@ const NotebookBody = memo(() => {
         flex={1}
         gap={8}
         paddingBlock={24}
-        style={{ border: `1px dashed ${theme.colorSplit}`, borderRadius: 8, marginInline: 12 }}
+        style={{ border: `1px dashed ${cssVar.colorSplit}`, borderRadius: 8, marginInline: 12 }}
       >
         <Avatar
           avatar={<Icon icon={BookOpenIcon} size={'large'} />}
-          background={theme.colorFillTertiary}
+          background={cssVar.colorFillTertiary}
           shape={'square'}
           size={48}
         />

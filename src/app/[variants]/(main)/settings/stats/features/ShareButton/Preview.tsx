@@ -1,6 +1,6 @@
 import { OFFICIAL_URL, imageUrl } from '@lobechat/const';
-import { Center, Flexbox, Grid } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Center, Flexbox, Grid , lobeStaticStylish } from '@lobehub/ui';
+import { createStaticStyles, cx , responsive } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,11 +11,11 @@ import AiHeatmaps from '../AiHeatmaps';
 import TotalMessages from '../TotalMessages';
 import TotalWords from '../TotalWords';
 
-const useStyles = createStyles(({ css, token, stylish, cx, responsive }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`
     box-sizing: content-box;
-    border: 4px solid ${token.colorBgLayout};
-    background: ${token.colorText};
+    border: 4px solid ${cssVar.colorBgLayout};
+    background: ${cssVar.colorText};
   `,
   background: css`
     position: relative;
@@ -23,7 +23,7 @@ const useStyles = createStyles(({ css, token, stylish, cx, responsive }) => ({
     width: 100%;
     padding: 24px;
 
-    background-color: ${token.colorBgLayout};
+    background-color: ${cssVar.colorBgLayout};
     background-image: url(${imageUrl('screenshot_background.webp')});
     background-position: center;
     background-size: 120% 120%;
@@ -35,19 +35,19 @@ const useStyles = createStyles(({ css, token, stylish, cx, responsive }) => ({
     overflow: hidden;
 
     width: 100%;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusLG * 2}px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: calc(${cssVar.borderRadiusLG} * 2);
 
-    background: ${token.colorBgLayout};
-    box-shadow: ${token.boxShadow};
+    background: ${cssVar.colorBgLayout};
+    box-shadow: ${cssVar.boxShadow};
   `,
   decs: css`
     font-size: 12px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   footer: css`
     font-size: 12px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   heatmaps: css`
     .legend-month,
@@ -56,16 +56,16 @@ const useStyles = createStyles(({ css, token, stylish, cx, responsive }) => ({
     }
   `,
   preview: cx(
-    stylish.noScrollbar,
+    lobeStaticStylish.noScrollbar,
     css`
       overflow: hidden scroll;
 
       width: 100%;
       max-height: 70dvh;
-      border: 1px solid ${token.colorBorder};
-      border-radius: ${token.borderRadiusLG}px;
+      border: 1px solid ${cssVar.colorBorder};
+      border-radius: ${cssVar.borderRadiusLG};
 
-      background: ${token.colorBgLayout};
+      background: ${cssVar.colorBgLayout};
 
       * {
         pointer-events: none;
@@ -76,7 +76,7 @@ const useStyles = createStyles(({ css, token, stylish, cx, responsive }) => ({
         }
       }
 
-      ${responsive.mobile} {
+      ${responsive.sm} {
         max-height: 40dvh;
       }
     `,
@@ -89,7 +89,6 @@ const useStyles = createStyles(({ css, token, stylish, cx, responsive }) => ({
 }));
 
 const Preview = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('auth');
 
   return (

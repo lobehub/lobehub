@@ -1,3 +1,3 @@
-export { MemoryManifest, UserMemoryManifest } from './manifest';
+export { MemoryIdentifier, MemoryManifest } from './manifest';
 export { systemPrompt } from './systemRole';
-export { MemoryApiName, type MemoryApiNameType,UserMemoryApiName } from './types';
+export { MemoryApiName, type MemoryApiNameType } from './types';

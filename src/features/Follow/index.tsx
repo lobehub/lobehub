@@ -3,23 +3,23 @@
 import { SiDiscord, SiGithub, SiMedium, SiX } from '@icons-pack/react-simple-icons';
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GITHUB } from '@/const/url';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     icon: css`
       svg {
-        fill: ${token.colorTextDescription};
+        fill: ${cssVar.colorTextDescription};
       }
 
       &:hover {
         svg {
-          fill: ${token.colorText};
+          fill: ${cssVar.colorText};
         }
       }
     `,
@@ -27,7 +27,6 @@ const useStyles = createStyles(({ css, token }) => {
 });
 
 const Follow = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('common');
   return (
     <Flexbox gap={8} horizontal>

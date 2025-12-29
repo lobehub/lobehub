@@ -2,7 +2,7 @@
 
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
 import { ActionIcon, Avatar, Button, Flexbox, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,6 @@ import Banner from './Banner';
 
 const UserHeader = memo(() => {
   const { t } = useTranslation('discover');
-  const theme = useTheme();
   const { user, isOwner, onEditProfile } = useUserDetailContext();
 
   const displayName = user.displayName || user.userName || user.namespace;
@@ -28,7 +27,7 @@ const UserHeader = memo(() => {
           avatar={user.avatarUrl || undefined}
           shape={'square'}
           size={64}
-          style={{ boxShadow: `0 0 0 4px ${theme.colorBgContainer}`, flexShrink: 0 }}
+          style={{ boxShadow: `0 0 0 4px ${cssVar.colorBgContainer}`, flexShrink: 0 }}
         />
         <Flexbox align={'flex-start'} gap={16} horizontal justify={'space-between'}>
           <Flexbox

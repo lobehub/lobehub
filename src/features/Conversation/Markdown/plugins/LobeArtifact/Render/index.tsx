@@ -1,5 +1,5 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import { Loader2 } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,29 +11,32 @@ import { dotLoading } from '@/styles/loading';
 import { type MarkdownElementProps } from '../../type';
 import ArtifactIcon from './Icon';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`
-    border-inline-end: 1px solid ${token.colorSplit};
-    background: ${token.colorFillQuaternary};
+    border-inline-end: 1px solid ${cssVar.colorSplit};
+    background: ${cssVar.colorFillQuaternary};
   `,
   container: css`
     cursor: pointer;
 
     margin-block-start: 12px;
-    border: 1px solid ${token.colorBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: 8px;
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    box-shadow: ${isDarkMode ? token.boxShadowSecondary : token.boxShadowTertiary};
+    box-shadow: ${cssVar.boxShadowTertiary};
 
     &:hover {
-      background: ${token.colorFillQuaternary};
+      background: ${cssVar.colorFillQuaternary};
     }
+  `,
+  container_dark: css`
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   desc: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   title: css`
     overflow: hidden;
@@ -54,7 +57,7 @@ interface ArtifactProps extends MarkdownElementProps {
 
 const Render = memo<ArtifactProps>(({ identifier, title, type, language, children, id }) => {
   const { t } = useTranslation('chat');
-  const { styles, cx } = useStyles();
+  const { isDarkMode } = useThemeMode();
 
   const hasChildren = !!children;
   const str = ((children as string) || '').toString?.();
@@ -80,7 +83,7 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
 
   return (
     <Flexbox
-      className={styles.container}
+      className={cx(styles.container, isDarkMode && styles.container_dark)}
       gap={16}
       onClick={() => {
         const currentArtifactMessageId = chatPortalSelectors.artifactMessageId(

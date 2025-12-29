@@ -2,7 +2,7 @@
 
 import { Github } from '@lobehub/icons';
 import { ActionIcon, Avatar, Collapse, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { DotIcon } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
@@ -14,17 +14,17 @@ import PublishedTime from '@/components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 import TagList from './TagList';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     desc: css`
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     time: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     version: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 13px;
     `,
   };
@@ -32,7 +32,6 @@ const useStyles = createStyles(({ css, token }) => {
 
 const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile, inModal }) => {
   const { author, identifier, createdAt, avatar, title, tags, description } = useDetailContext();
-  const { styles, theme } = useStyles();
   const { mobile = isMobile } = useResponsive();
   const { t } = useTranslation('discover');
 
@@ -86,7 +85,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
                   onClick={(e) => e.stopPropagation()}
                   target={'_blank'}
                 >
-                  <ActionIcon fill={theme.colorTextDescription} icon={Github} />
+                  <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
                 </Link>
               </Flexbox>
             )}

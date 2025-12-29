@@ -1,6 +1,6 @@
 import { Avatar, List, type ListItemProps } from '@lobehub/ui';
 import { useHover } from 'ahooks';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo, useRef } from 'react';
 
 import GroupAvatar from '@/features/GroupAvatar';
@@ -8,13 +8,13 @@ import { useServerConfigStore } from '@/store/serverConfig';
 
 const { Item } = List;
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     container: css`
       position: relative;
       margin-block: 2px;
       padding-inline: 12px 16px;
-      border-radius: ${token.borderRadius}px;
+      border-radius: ${cssVar.borderRadius};
     `,
     mobile: css`
       margin-block: 0;
@@ -37,7 +37,6 @@ const ListItem = memo<
   const ref = useRef(null);
   const isHovering = useHover(ref);
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { cx, styles } = useStyles();
 
   const avatarRender = useMemo(() => {
     if (type === 'group') {

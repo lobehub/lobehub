@@ -3,7 +3,7 @@
 import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
 import { Alert, Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -55,7 +55,6 @@ interface KlavisToolAuthItemProps {
 
 const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete }) => {
   const { t } = useTranslation('chat');
-  const theme = useTheme();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
@@ -196,7 +195,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
     if (typeof tool.icon === 'string') {
       return <Avatar alt={tool.label} avatar={tool.icon} size={20} style={{ flex: 'none' }} />;
     }
-    return <Icon fill={theme.colorText} icon={tool.icon} size={20} />;
+    return <Icon fill={cssVar.colorText} icon={tool.icon} size={20} />;
   };
 
   const isLoading = isConnecting || isWaitingAuth;

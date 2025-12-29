@@ -3,13 +3,12 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useStyles } from './styles';
+import { styles } from './styles';
 import { useCommandMenu } from './useCommandMenu';
 
 const ThemeMenu = memo(() => {
   const { t } = useTranslation('common');
   const { handleThemeChange } = useCommandMenu();
-  const { styles } = useStyles();
 
   return (
     <>

@@ -1,7 +1,7 @@
 import { type ChatModelCard } from '@lobechat/types';
 import { type IconAvatarProps, ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, useResponsive } from 'antd-style';
 import {
   Infinity,
   AtomIcon,
@@ -24,7 +24,7 @@ import NewModelBadgeI18n, { NewModelBadge as NewModelBadgeCore } from './NewMode
 
 export const TAG_CLASSNAME = 'lobe-model-info-tags';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   tag: css`
     cursor: default;
 
@@ -41,15 +41,15 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 20px;
     border-radius: 4px;
 
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 
-type TooltipStyles = ReturnType<typeof useStyles>['styles'];
+type TooltipStyles = typeof styles;
 
 const DEFAULT_TOOLTIP_STYLES = {
   root: { pointerEvents: 'none' },
@@ -238,8 +238,6 @@ const Context = memo(
 
 export const ModelInfoTags = memo<ModelInfoTagsProps>(
   ({ directionReverse, placement = 'top', withTooltip = true, ...model }) => {
-    const { styles } = useStyles();
-
     return (
       <Flexbox
         className={TAG_CLASSNAME}

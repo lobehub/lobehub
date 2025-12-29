@@ -2,7 +2,7 @@
 
 import { BuiltinRenderProps } from '@lobechat/types';
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Clock } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,23 +12,23 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTaskParams, ExecuteTaskState } from '../../../types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   agentTitle: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   container: css`
     padding-block: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
   `,
   taskContent: css`
     padding-block: 8px;
     padding-inline: 12px;
-    border-radius: ${token.borderRadius}px;
-    background: ${token.colorFillTertiary};
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorFillTertiary};
   `,
   timeout: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -38,7 +38,6 @@ const useStyles = createStyles(({ css, token }) => ({
  */
 const ExecuteTaskRender = memo<BuiltinRenderProps<ExecuteTaskParams, ExecuteTaskState>>(
   ({ args }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('tool');
 
     // Get agent info from store

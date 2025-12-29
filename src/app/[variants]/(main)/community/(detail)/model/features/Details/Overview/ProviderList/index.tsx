@@ -2,7 +2,7 @@
 
 import { ProviderIcon } from '@lobehub/icons';
 import { ActionIcon, Block, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { BadgeCheck, BookIcon, ChevronRightIcon, KeyIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,6 @@ import { useDetailContext } from '../../../DetailProvider';
 const ProviderList = memo(() => {
   const { providers = [] } = useDetailContext();
   const { t } = useTranslation('discover');
-  const theme = useTheme();
 
   return (
     <TooltipGroup>
@@ -140,7 +139,7 @@ const ProviderList = memo(() => {
                     {isLobeHub && (
                       <Tooltip title={t('models.providerInfo.officialTooltip')}>
                         <ActionIcon
-                          color={theme.colorSuccess}
+                          color={cssVar.colorSuccess}
                           icon={BadgeCheck}
                           size={'small'}
                           variant={'filled'}
@@ -170,7 +169,7 @@ const ProviderList = memo(() => {
                       to={urlJoin('/community/provider', record.id)}
                     >
                       <ActionIcon
-                        color={theme.colorTextDescription}
+                        color={cssVar.colorTextDescription}
                         icon={ChevronRightIcon}
                         size={'small'}
                         variant={'filled'}

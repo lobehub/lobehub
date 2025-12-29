@@ -3,7 +3,7 @@
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Popover } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { ClockIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -17,27 +17,27 @@ import { type DiscoverModelItem } from '@/types/discover';
 import PublishedTime from '../../../../../../../../components/PublishedTime';
 import ModelTypeIcon from './ModelTypeIcon';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     author: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     code: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
     `,
     desc: css`
       flex: 1;
       margin: 0 !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     footer: css`
       margin-block-start: 16px;
-      border-block-start: 1px dashed ${token.colorBorder};
-      background: ${token.colorBgContainerSecondary};
+      border-block-start: 1px dashed ${cssVar.colorBorder};
+      background: ${cssVar.colorBgContainer};
     `,
     secondaryDesc: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     title: css`
       margin: 0 !important;
@@ -45,7 +45,7 @@ const useStyles = createStyles(({ css, token }) => {
       font-weight: 500 !important;
 
       &:hover {
-        color: ${token.colorLink};
+        color: ${cssVar.colorLink};
       }
     `,
   };
@@ -54,7 +54,6 @@ const useStyles = createStyles(({ css, token }) => {
 const ModelItem = memo<DiscoverModelItem>(
   ({ identifier, displayName, contextWindowTokens, releasedAt, type, abilities, providers }) => {
     const { t } = useTranslation(['models', 'discover']);
-    const { styles } = useStyles();
     const navigate = useNavigate();
     const link = urlJoin('/community/model', identifier);
     return (

@@ -1,9 +1,9 @@
 'use client';
 
 import { BuiltinInterventionProps } from '@lobechat/types';
-import { Avatar, Flexbox , Tooltip } from '@lobehub/ui';
+import { Avatar, Flexbox, Tooltip } from '@lobehub/ui';
 import { Input, InputNumber } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Clock } from 'lucide-react';
 import { ChangeEvent, memo, useCallback, useEffect, useState } from 'react';
@@ -14,11 +14,11 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTaskParams } from '../../types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   agentCard: css`
     padding: 4px;
-    border-radius: ${token.borderRadius}px;
-    background: ${token.colorFillTertiary};
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorFillTertiary};
   `,
   agentDescription: css`
     overflow: hidden;
@@ -28,16 +28,16 @@ const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 12px;
     line-height: 1.4;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   agentTitle: css`
     font-size: 14px;
     font-weight: 600;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   container: css`
     padding-block: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
   `,
   header: css`
     font-size: 14px;
@@ -50,11 +50,11 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 32px;
     height: 32px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    color: ${token.colorPrimary};
+    color: ${cssVar.colorPrimary};
 
-    background: ${token.colorPrimaryBg};
+    background: ${cssVar.colorPrimaryBg};
   `,
   timeoutInput: css`
     width: 100px;
@@ -70,7 +70,6 @@ const DEFAULT_TIMEOUT = 1_800_000; // 30 minutes
  */
 const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>>(
   ({ args, onArgsChange, registerBeforeApprove }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('tool');
 
     // Get agent info from store

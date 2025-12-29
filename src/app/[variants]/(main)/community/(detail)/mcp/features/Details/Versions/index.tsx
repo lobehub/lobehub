@@ -1,5 +1,5 @@
 import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { CheckIcon, MinusIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo } from 'react';
@@ -14,7 +14,6 @@ import { useDetailContext } from '../../../../../../../../../features/MCPPluginD
 import Title from '../../../../../features/Title';
 
 const Versions = memo(() => {
-  const theme = useTheme();
   const { t } = useTranslation('discover');
   const { versions } = useDetailContext();
   const pathname = usePathname();
@@ -50,7 +49,7 @@ const Versions = memo(() => {
               dataIndex: 'isValidated',
               render: (_, record) => (
                 <Icon
-                  color={record.isValidated ? theme.colorSuccess : theme.colorTextDescription}
+                  color={record.isValidated ? cssVar.colorSuccess : cssVar.colorTextDescription}
                   icon={record.isValidated ? CheckIcon : MinusIcon}
                 />
               ),

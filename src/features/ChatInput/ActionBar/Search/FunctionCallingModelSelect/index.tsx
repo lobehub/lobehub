@@ -1,5 +1,5 @@
 import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
@@ -7,7 +7,9 @@ import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { type WorkingModel } from '@/types/agent';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   select: css`
     &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
       padding-inline-start: 12px;
@@ -29,8 +31,6 @@ interface ModelSelectProps extends SelectProps {
 
 const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
   const enabledList = useEnabledChatModels();
-
-  const { styles } = useStyles();
 
   const options = useMemo<SelectProps['options']>(() => {
     const getChatModels = (provider: EnabledProviderWithModels) =>

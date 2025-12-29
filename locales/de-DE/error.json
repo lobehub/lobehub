@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Fehler beim Parsen des Nachrichtenchunks der Streaming-Anfrage. Bitte überprüfen Sie, ob die aktuelle API-Schnittstelle den Standards entspricht, oder wenden Sie sich an Ihren API-Anbieter.",
   "response.SubscriptionKeyMismatch": "Es tut uns leid, aufgrund eines vorübergehenden Systemfehlers ist das aktuelle Abonnement vorübergehend ungültig. Bitte klicken Sie auf die Schaltfläche unten, um das Abonnement wiederherzustellen, oder kontaktieren Sie uns per E-Mail für Unterstützung.",
   "response.SubscriptionPlanLimit": "Ihr Abonnementspunktestand ist erschöpft, Sie können diese Funktion nicht nutzen. Bitte upgraden Sie auf einen höheren Plan oder konfigurieren Sie die benutzerdefinierte Modell-API, um weiterhin zu verwenden.",
+  "response.SubscriptionPlanLimitUltimate": "Ihre Abonnementpunkte sind aufgebraucht, und Sie können diese Funktion nicht mehr nutzen. Bitte laden Sie Guthaben auf oder konfigurieren Sie eine benutzerdefinierte Modell-API, um die Nutzung fortzusetzen.",
   "response.SystemTimeNotMatchError": "Es tut uns leid, Ihre Systemzeit stimmt nicht mit dem Server überein. Bitte überprüfen Sie Ihre Systemzeit und versuchen Sie es erneut.",
   "response.UnknownChatFetchError": "Es tut uns leid, es ist ein unbekannter Anforderungsfehler aufgetreten. Bitte überprüfen Sie die folgenden Informationen oder versuchen Sie es erneut.",
   "stt.responseError": "Serviceanfrage fehlgeschlagen. Bitte überprüfen Sie die Konfiguration oder versuchen Sie es erneut",

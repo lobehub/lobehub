@@ -25,11 +25,11 @@ export class EdgeConfig {
     return isEnabled;
   }
 
-  private async getValue<K extends EdgeConfigKeys>(key: K) {
+  async getValue<K extends EdgeConfigKeys>(key: K) {
     return this.client.get<EdgeConfigData[K]>(key);
   }
 
-  private async getValues<const K extends EdgeConfigKeys>(keys: K[]) {
+  async getValues<const K extends EdgeConfigKeys>(keys: K[]) {
     return this.client.getAll<Pick<EdgeConfigData, K>>(keys);
   }
 

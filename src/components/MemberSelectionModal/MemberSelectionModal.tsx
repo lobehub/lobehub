@@ -4,16 +4,17 @@ import {
   ActionIcon,
   Avatar,
   Button,
+  Checkbox,
   Flexbox,
   List,
   Modal,
   SearchBar,
   Text,
   Tooltip,
- Checkbox } from '@lobehub/ui';
+} from '@lobehub/ui';
 import { useHover } from 'ahooks';
 import { List as AntdList, Switch } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { type ChangeEvent, memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,27 +75,27 @@ const AvailableAgentItem = memo<{
   );
 });
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex-direction: row;
 
     height: 500px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadius}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
   `,
   description: css`
     font-size: 11px;
     line-height: 1.2;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   hostCard: css`
-    margin-block-end: ${token.paddingSM}px;
-    padding: ${token.padding}px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    margin-block-end: ${cssVar.paddingSM};
+    padding: ${cssVar.padding};
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   leftColumn: css`
     user-select: none;
@@ -102,9 +103,9 @@ const useStyles = createStyles(({ css, token }) => ({
     overflow-y: auto;
     flex: 1;
 
-    padding-block: ${token.paddingSM}px 0;
-    padding-inline: ${token.paddingSM}px;
-    border-inline-end: 1px solid ${token.colorBorderSecondary};
+    padding-block: ${cssVar.paddingSM} 0;
+    padding-inline: ${cssVar.paddingSM};
+    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   listItem: css`
     cursor: pointer;
@@ -112,13 +113,13 @@ const useStyles = createStyles(({ css, token }) => ({
     position: relative;
 
     margin-block: 2px;
-    padding: ${token.paddingSM}px !important;
-    border-radius: ${token.borderRadius}px;
+    padding: ${cssVar.paddingSM} !important;
+    border-radius: ${cssVar.borderRadius};
 
     transition: all 0.2s ease;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   modelSelectDisabled: css`
@@ -127,11 +128,11 @@ const useStyles = createStyles(({ css, token }) => ({
   rightColumn: css`
     overflow-y: auto;
     flex: 1;
-    padding: ${token.paddingSM}px;
+    padding: ${cssVar.paddingSM};
   `,
   selectedItem: css`
     opacity: 0.6;
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
 }));
 
@@ -184,7 +185,6 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     preSelectedAgents = [],
   }) => {
     const { t } = useTranslation(['chat', 'common']);
-    const { styles, cx } = useStyles();
     const enabledModels = useEnabledChatModels();
     const [selectedAgents, setSelectedAgents] = useState<string[]>(preSelectedAgents);
     const [searchTerm, setSearchTerm] = useState('');

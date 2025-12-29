@@ -1,5 +1,5 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,7 +9,7 @@ import { type FileUploadState, type FileUploadStatus } from '@/types/files';
 
 import UploadStatus from './UploadStatus';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   status: css`
     &.ant-tag {
       padding-inline: 0;
@@ -27,7 +27,6 @@ interface UploadDetailProps {
 
 const UploadDetail = memo<UploadDetailProps>(({ uploadState, status, size, tasks }) => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
 
   return (
     <Flexbox align={'center'} gap={8} height={22} horizontal>

@@ -2,7 +2,7 @@
 
 import { SendButton } from '@lobehub/editor/react';
 import { Button, Flexbox, Select, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,6 @@ interface ResponseLanguageStepProps {
 
 const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation(['onboarding', 'common']);
-  const theme = useTheme();
   const switchLocale = useGlobalStore((s) => s.switchLocale);
   const setSettings = useUserStore((s) => s.setSettings);
 
@@ -89,7 +88,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
           icon={Undo2Icon}
           onClick={onBack}
           style={{
-            color: theme.colorTextDescription,
+            color: cssVar.colorTextDescription,
           }}
           type={'text'}
         >

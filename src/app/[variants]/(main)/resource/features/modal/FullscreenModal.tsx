@@ -2,52 +2,53 @@
 
 import { Modal } from '@lobehub/ui';
 import { ConfigProvider } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode, useCallback, useState } from 'react';
 
 import { DETAIL_PANEL_WIDTH } from '../FileDetail';
 
-const useStyles = createStyles(({ css, token }, showDetail: boolean) => {
-  return {
-    body: css`
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  body: css`
+    height: 100%;
+    max-height: calc(100dvh - 56px) !important;
+  `,
+  content: css`
+    height: 100%;
+    border: none !important;
+    background: transparent !important;
+  `,
+  extra: css`
+    position: fixed;
+    z-index: ${cssVar.zIndexPopupBase + 10};
+    inset-block: 0 0;
+    inset-inline-end: 0;
+
+    width: ${DETAIL_PANEL_WIDTH}px;
+    border-inline-start: 1px solid ${cssVar.colorSplit};
+
+    background: ${cssVar.colorBgLayout};
+  `,
+  header: css`
+    background: transparent !important;
+  `,
+  modal: css`
+    position: relative;
+    inset-block-start: 0;
+
+    width: 100vw !important;
+    max-width: none;
+    height: 100%;
+    margin: 0;
+    padding-block-end: 0;
+
+    > div {
       height: 100%;
-      max-height: calc(100dvh - 56px) !important;
-    `,
-    content: css`
-      height: 100%;
-      border: none !important;
-      background: transparent !important;
-    `,
-    extra: css`
-      position: fixed;
-      z-index: ${token.zIndexPopupBase + 10};
-      inset-block: 0 0;
-      inset-inline-end: 0;
-
-      width: ${DETAIL_PANEL_WIDTH}px;
-      border-inline-start: 1px solid ${token.colorSplit};
-
-      background: ${token.colorBgLayout};
-    `,
-    header: css`
-      background: transparent !important;
-    `,
-    modal: css`
-      position: relative;
-      inset-block-start: 0;
-
-      width: ${showDetail ? `calc(100vw - ${DETAIL_PANEL_WIDTH}px) ` : '100vw'} !important;
-      max-width: none;
-      height: 100%;
-      margin: 0;
-      padding-block-end: 0;
-
-      > div {
-        height: 100%;
-      }
-    `,
-  };
-});
+    }
+  `,
+  modal_withDetail: css`
+    width: calc(100vw - ${DETAIL_PANEL_WIDTH}px) !important;
+  `,
+}));
 
 interface FullscreenModalProps {
   children: ReactNode;
@@ -57,8 +58,7 @@ interface FullscreenModalProps {
 
 const FullscreenModal = ({ children, detail, onClose }: FullscreenModalProps) => {
   const [open, setOpen] = useState(true);
-
-  const { styles } = useStyles(!!detail);
+  const showDetail = !!detail;
 
   const handleCancel = useCallback(() => {
     setOpen(false);
@@ -69,7 +69,7 @@ const FullscreenModal = ({ children, detail, onClose }: FullscreenModalProps) =>
     <>
       <ConfigProvider theme={{ token: { motion: false } }}>
         <Modal
-          className={styles.modal}
+          className={cx(styles.modal, showDetail && styles.modal_withDetail)}
           classNames={{ body: styles.body, header: styles.header, wrapper: styles.content }}
           footer={false}
           onCancel={handleCancel}

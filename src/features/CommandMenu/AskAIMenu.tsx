@@ -10,7 +10,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useCommandMenuContext } from './CommandMenuContext';
-import { useStyles } from './styles';
+import { styles } from './styles';
 import { useCommandMenu } from './useCommandMenu';
 
 const AskAIMenu = memo(() => {
@@ -18,7 +18,6 @@ const AskAIMenu = memo(() => {
   const navigate = useNavigate();
   const { handleAskLobeAI, handleAIPainting, closeCommandMenu } = useCommandMenu();
   const { search } = useCommandMenuContext();
-  const { styles } = useStyles();
 
   // Get agent list (limit to first 20 items for simplicity)
   const allAgents = useHomeStore(homeAgentListSelectors.allAgents);

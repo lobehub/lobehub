@@ -15,7 +15,6 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
 import { aiChatSelectors } from '@/store/chat/selectors';
 
-// import { useSendGroupMessage } from '../ChatInput/useSend';
 import MessageFromUrl from './MessageFromUrl';
 import { useSendMenuItems } from './useSendMenuItems';
 
@@ -25,7 +24,7 @@ const leftActions: ActionKeys[] = [
   'knowledgeBase',
   '---',
   ['stt', 'clear'],
-  'groupChatToken',
+  'mainToken',
 ];
 
 const dmLeftActions: ActionKeys[] = ['typo', 'fileUpload', 'knowledgeBase', '---', ['stt']];

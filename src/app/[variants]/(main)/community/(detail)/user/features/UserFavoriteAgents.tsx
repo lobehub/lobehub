@@ -2,7 +2,7 @@
 
 import { Avatar, Block, Flexbox, Grid, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ClockIcon, DownloadIcon, Heart } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useCallback } from 'react';
@@ -18,12 +18,12 @@ import { formatIntergerNumber } from '@/utils/format';
 
 import { useUserDetailContext } from './DetailProvider';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     desc: css`
       flex: 1;
       margin: 0 !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     favoriteButton: css`
       cursor: pointer;
@@ -32,7 +32,7 @@ const useStyles = createStyles(({ css, token }) => {
       inset-block-start: 12px;
       inset-inline-end: 12px;
 
-      color: ${token.colorError};
+      color: ${cssVar.colorError};
 
       opacity: 0;
 
@@ -40,21 +40,21 @@ const useStyles = createStyles(({ css, token }) => {
     `,
     footer: css`
       margin-block-start: 16px;
-      border-block-start: 1px dashed ${token.colorBorder};
-      background: ${token.colorBgContainerSecondary};
+      border-block-start: 1px dashed ${cssVar.colorBorder};
+      background: ${cssVar.colorBgContainer};
     `,
     secondaryDesc: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     statTag: css`
       border-radius: 4px;
 
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 11px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
 
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     `,
     title: css`
       margin: 0 !important;
@@ -62,7 +62,7 @@ const useStyles = createStyles(({ css, token }) => {
       font-weight: 500 !important;
 
       &:hover {
-        color: ${token.colorLink};
+        color: ${cssVar.colorLink};
       }
     `,
     wrapper: css`
@@ -90,7 +90,6 @@ const FavoriteAgentCard = memo<FavoriteAgentCardProps>(
     onUnfavorite,
     showUnfavorite,
   }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('discover');
     const navigate = useNavigate();
 
@@ -119,7 +118,7 @@ const FavoriteAgentCard = memo<FavoriteAgentCardProps>(
         {showUnfavorite && (
           <Tooltip title={t('user.unfavorite')}>
             <div
-              className={`favorite-button ${styles.favoriteButton}`}
+              className={cx('favorite-button', styles.favoriteButton)}
               onClick={(e) => {
                 e.stopPropagation();
                 onUnfavorite(identifier);

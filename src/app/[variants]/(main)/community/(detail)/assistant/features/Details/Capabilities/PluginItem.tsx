@@ -1,7 +1,7 @@
 import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -15,26 +15,24 @@ import { useDiscoverStore } from '@/store/discover';
  * For IconType type icon, use Icon component to render with theme fill color
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  const theme = useTheme();
-
   if (typeof icon === 'string') {
     return <Image alt={label} height={40} src={icon} style={{ flex: 'none' }} width={40} />;
   }
 
   // Use theme color fill, automatically adapts in dark mode
-  return <Icon fill={theme.colorText} icon={icon} size={40} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={40} />;
 });
 
 KlavisIcon.displayName = 'KlavisIcon';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     clickable: css`
       cursor: pointer;
 
       &:hover {
         .plugin-title {
-          color: ${token.colorLink};
+          color: ${cssVar.colorLink};
         }
       }
     `,
@@ -42,7 +40,7 @@ const useStyles = createStyles(({ css, token }) => {
       flex: 1;
       margin: 0 !important;
       font-size: 14px !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     noLink: css`
       cursor: default;
@@ -71,7 +69,6 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const { t } = useTranslation('discover');
   const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
   const { data: apiData, isLoading } = usePluginDetail({ identifier, withManifest: false });
-  const { styles, cx } = useStyles();
 
   // Try to get Klavis tool info if API returns no data
   const klavisTool = useMemo(() => {

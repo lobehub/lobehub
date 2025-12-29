@@ -1,11 +1,13 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 
 import { useConversationStore } from '../../store';
 
-const useStyles = createStyles(({ css, token, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   button: css`
     cursor: pointer;
 
@@ -17,13 +19,13 @@ const useStyles = createStyles(({ css, token, prefixCls }) => ({
     height: 20px;
     border-radius: 4px;
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     transition: all 0.2s ease;
 
     &:hover:not(.${prefixCls}-disabled) {
-      color: ${token.colorText};
-      background: ${token.colorFillSecondary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
     }
 
     &.${prefixCls}-disabled {
@@ -40,7 +42,7 @@ const useStyles = createStyles(({ css, token, prefixCls }) => ({
 
     height: 20px;
     padding-inline: 4px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
   `,
   text: css`
     min-width: 24px;
@@ -48,7 +50,7 @@ const useStyles = createStyles(({ css, token, prefixCls }) => ({
 
     font-size: 12px;
     font-variant-numeric: tabular-nums;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
 }));
@@ -60,7 +62,6 @@ interface MessageBranchProps {
 }
 
 const MessageBranch = memo<MessageBranchProps>(({ activeBranchIndex, count, messageId }) => {
-  const { styles, cx, prefixCls } = useStyles();
   const switchMessageBranch = useConversationStore((s) => s.switchMessageBranch);
 
   const handlePrevious = () => {

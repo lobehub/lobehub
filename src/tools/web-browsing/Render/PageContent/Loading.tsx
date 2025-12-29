@@ -1,15 +1,14 @@
 'use client';
 
 import { CopyButton, Flexbox, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lineEllipsis } from '@/styles';
-import { shinyTextStylish } from '@/styles/loading';
+import { lineEllipsis, shinyTextStyles } from '@/styles';
 
-const useStyles = createStyles(({ token, css, cx }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     cardBody: css`
       padding-block-start: 12px;
@@ -22,7 +21,7 @@ const useStyles = createStyles(({ token, css, cx }) => {
       min-width: 360px;
       max-width: 360px;
       height: 136px;
-      border: 1px solid ${token.colorBorderSecondary};
+      border: 1px solid ${cssVar.colorBorderSecondary};
       border-radius: 12px;
     `,
 
@@ -30,18 +29,17 @@ const useStyles = createStyles(({ token, css, cx }) => {
       padding-block: 8px;
       padding-inline: 12px;
 
-      font-size: ${token.fontSizeSM}px;
-      color: ${token.colorTextTertiary};
+      font-size: ${cssVar.fontSizeSM};
+      color: ${cssVar.colorTextTertiary};
 
-      background-color: ${token.colorFillQuaternary};
+      background-color: ${cssVar.colorFillQuaternary};
     `,
-    text: cx(lineEllipsis(2), shinyTextStylish(token)),
+    text: cx(lineEllipsis(2), shinyTextStyles.shinyText),
   };
 });
 
 const LoadingCard = memo<{ url: string }>(({ url }) => {
   const { t } = useTranslation('plugin');
-  const { styles } = useStyles();
 
   return (
     <Flexbox className={styles.container}>

@@ -3,7 +3,7 @@ import { type ChatMessageError } from '@lobechat/types';
 import { AudioPlayer } from '@lobehub/tts/react';
 import { Alert, Button, Flexbox, Highlighter, Select, type SelectProps } from '@lobehub/ui';
 import { type RefSelectProps } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { forwardRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +19,6 @@ const SelectWithTTSPreview = forwardRef<RefSelectProps, SelectWithTTSPreviewProp
     const [error, setError] = useState<ChatMessageError>();
     const [voice, setVoice] = useState<string>(value);
     const { t } = useTranslation('welcome');
-    const theme = useTheme();
     const PREVIEW_TEXT = ['Lobe Chat', t('slogan.title'), t('slogan.desc1')].join('. ');
 
     const setDefaultError = useCallback(
@@ -80,8 +79,8 @@ const SelectWithTTSPreview = forwardRef<RefSelectProps, SelectWithTTSPreviewProp
             buttonActive
             buttonSize={{ blockSize: 36, size: 16 }}
             buttonStyle={{
-              background: theme.colorBgContainer,
-              border: `1px solid ${theme.colorBorder}`,
+              background: cssVar.colorBgContainer,
+              border: `1px solid ${cssVar.colorBorder}`,
             }}
             isLoading={isGlobalLoading}
             onInitPlay={start}

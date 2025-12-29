@@ -1,6 +1,6 @@
 import { ActionIcon, Dropdown, type DropdownProps, Icon, type MenuProps } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { MoreVertical, PencilLine, Plus, Settings2, Trash, UsersRound } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useSessionStore } from '@/store/session';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   modalRoot: css`
     z-index: 2000;
   `,
@@ -29,7 +29,6 @@ type MenuItemType = ItemOfType<MenuProps['items']>;
 const Actions = memo<ActionsProps>(
   ({ id, openRenameModal, openConfigModal, onOpenChange, isCustomGroup, isPinned }) => {
     const { t } = useTranslation('chat');
-    const { styles } = useStyles();
     const { modal, message } = App.useApp();
 
     const isMobile = useIsMobile();

@@ -1,13 +1,11 @@
 'use client';
 
 import { Flexbox, type FlexboxProps, Skeleton } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 export const SkeletonItem = memo<{ avatarSize?: number } & Omit<FlexboxProps, 'children'>>(
   ({ padding = 6, height = 36, style, avatarSize = 28, ...rest }) => {
-    const theme = useTheme();
-
     return (
       <Flexbox
         align={'center'}
@@ -22,7 +20,7 @@ export const SkeletonItem = memo<{ avatarSize?: number } & Omit<FlexboxProps, 'c
         <Skeleton.Button
           size={'small'}
           style={{
-            borderRadius: theme.borderRadius,
+            borderRadius: cssVar.borderRadius,
             height: avatarSize,
             maxHeight: avatarSize,
             maxWidth: avatarSize,
@@ -35,7 +33,7 @@ export const SkeletonItem = memo<{ avatarSize?: number } & Omit<FlexboxProps, 'c
             block
             size={'small'}
             style={{
-              borderRadius: theme.borderRadius,
+              borderRadius: cssVar.borderRadius,
               height: 16,
               margin: 0,
               maxHeight: 16,

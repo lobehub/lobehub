@@ -4,7 +4,7 @@ import { type ActionType, type ProColumns, ProTable } from '@ant-design/pro-comp
 import { Button } from '@lobehub/ui';
 import { useMutation } from '@tanstack/react-query';
 import { Popconfirm, Switch } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { type FC, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } fro
 
 import { ApiKeyDisplay, ApiKeyModal, EditableCell } from './features';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     .ant-pro-card-body {
       padding-inline: 0;
@@ -27,16 +27,15 @@ const useStyles = createStyles(({ css, token }) => ({
   header: css`
     display: flex;
     justify-content: flex-end;
-    margin-block-end: ${token.margin}px;
+    margin-block-end: ${cssVar.margin};
   `,
   table: css`
-    border-radius: ${token.borderRadius}px;
-    background: ${token.colorBgContainer};
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const Client: FC = () => {
-  const { styles } = useStyles();
   const { t } = useTranslation('auth');
   const [modalOpen, setModalOpen] = useState(false);
 

@@ -31,7 +31,7 @@ export const GTDManifest: BuiltinToolManifest = {
             type: 'string',
           },
         },
-        required: ['goal', 'description'],
+        required: ['goal', 'description', 'context'],
         type: 'object',
       },
     },

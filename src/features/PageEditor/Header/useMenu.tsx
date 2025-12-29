@@ -1,6 +1,6 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { App, Switch } from 'antd';
-import { useResponsive, useTheme } from 'antd-style';
+import { cssVar, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import { CopyPlus, Download, Link2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -18,7 +18,6 @@ import { usePageEditorStore, useStoreApi } from '../store';
 export const useMenu = (): { menuItems: any[] } => {
   const { t } = useTranslation(['file', 'common', 'chat']);
   const { message, modal } = App.useApp();
-  const theme = useTheme();
   const storeApi = useStoreApi();
   const { lg = true } = useResponsive();
 
@@ -143,7 +142,7 @@ export const useMenu = (): { menuItems: any[] } => {
         disabled: true,
         key: 'page-info',
         label: (
-          <div style={{ color: theme.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
+          <div style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
             <div>{t('pageEditor.wordCount', { wordCount })}</div>
             <div>
               {lastUpdatedTime
@@ -157,7 +156,6 @@ export const useMenu = (): { menuItems: any[] } => {
       },
     ],
     [
-      theme,
       wordCount,
       lastUpdatedTime,
       storeApi,

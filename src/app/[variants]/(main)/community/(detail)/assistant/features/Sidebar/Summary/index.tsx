@@ -1,5 +1,5 @@
 import { Collapse } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,7 +8,6 @@ import { useDetailContext } from '../../DetailProvider';
 const Summary = memo(() => {
   const { description, summary } = useDetailContext();
   const { t } = useTranslation('discover');
-  const theme = useTheme();
   return (
     <Collapse
       defaultActiveKey={['summary']}
@@ -18,7 +17,7 @@ const Summary = memo(() => {
           children: (
             <p
               style={{
-                color: theme.colorTextSecondary,
+                color: cssVar.colorTextSecondary,
                 margin: 0,
               }}
             >

@@ -1,6 +1,6 @@
 import { Aws } from '@lobehub/icons';
 import { Button, Icon, InputPassword, Select } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Network, ShieldPlus } from 'lucide-react';
 import { ModelProvider } from 'model-bank';
 import { memo, useState } from 'react';
@@ -18,10 +18,9 @@ const BedrockForm = memo<{ description: string }>(({ description }) => {
   const setConfig = useAiInfraStore((s) => s.updateAiProviderConfig);
   const { accessKeyId, secretAccessKey, sessionToken, region } = config || {};
 
-  const theme = useTheme();
   return (
     <FormAction
-      avatar={<Aws.Color color={theme.colorText} size={56} />}
+      avatar={<Aws.Color color={cssVar.colorText} size={56} />}
       description={description}
       title={t('bedrock.unlock.title')}
     >

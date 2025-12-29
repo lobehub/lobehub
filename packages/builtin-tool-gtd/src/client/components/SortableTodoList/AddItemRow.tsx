@@ -2,14 +2,14 @@
 
 import { ActionIcon, Checkbox, Flexbox, Input } from '@lobehub/ui';
 import { InputRef } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { ChangeEvent, KeyboardEvent, memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ADD_ITEM_ID, useTodoListStore } from './store';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   addRow: css`
     padding-block: 10px;
     padding-inline: 12px;
@@ -26,7 +26,6 @@ interface AddItemRowProps {
 }
 
 const AddItemRow = memo<AddItemRowProps>(({ placeholder, showDragHandle = true, className }) => {
-  const { styles, cx } = useStyles();
   const { t } = useTranslation('tool');
   const inputRef = useRef<InputRef>(null);
   const defaultPlaceholder = placeholder || t('lobe-gtd.addTodo.placeholder');

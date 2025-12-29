@@ -3,6 +3,7 @@ import { type UIChatMessage } from '@lobechat/types';
 import { ModelTag } from '@lobehub/icons';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { ChatHeaderTitle } from '@lobehub/ui/chat';
+import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,8 +14,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { useAgentMeta, useIsBuiltinAgent } from '../../../hooks';
-import { useContainerStyles } from '../style';
-import { useStyles } from './style';
+import { styles as containerStyles } from '../style';
+import { styles } from './style';
 import { type FieldType } from './type';
 
 interface PreviewProps extends FieldType {
@@ -34,8 +35,6 @@ const Preview = memo<PreviewProps>(
     const isBuiltinAgent = useIsBuiltinAgent();
 
     const { t } = useTranslation('chat');
-    const { styles } = useStyles(withBackground);
-    const { styles: containerStyles } = useContainerStyles();
 
     const displayTitle = agentMeta.title || title;
     const displayDesc = isBuiltinAgent ? t('inbox.desc') : agentMeta.description;
@@ -43,7 +42,10 @@ const Preview = memo<PreviewProps>(
     return (
       <div className={containerStyles.preview}>
         <div className={withBackground ? styles.background : undefined} id={previewId}>
-          <Flexbox className={styles.container} gap={16}>
+          <Flexbox
+            className={cx(styles.container, withBackground && styles.container_withBackground_true)}
+            gap={16}
+          >
             <div className={styles.header}>
               <Flexbox align={'flex-start'} gap={12} horizontal>
                 <Avatar

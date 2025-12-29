@@ -36,7 +36,12 @@ const SearchQueryView = memo<SearchQueryViewProps>(
         messageId={messageId}
         onSearch={() => setEditing(false)}
         searchAddon={
-          <ActionIcon icon={XIcon} onClick={() => setEditing(false)} title={t('cancel')} />
+          <ActionIcon
+            icon={XIcon}
+            onClick={() => setEditing(false)}
+            title={t('cancel')}
+            variant={'outlined'}
+          />
         }
       />
     ) : (

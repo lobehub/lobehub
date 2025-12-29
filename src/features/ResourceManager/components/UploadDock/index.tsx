@@ -1,9 +1,8 @@
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import { ActionIcon, Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { UploadIcon, XIcon } from 'lucide-react';
-import { lighten } from 'polished';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,13 +11,8 @@ import { convertAlphaToSolid } from '@/utils/colorUtils';
 
 import Item from './Item';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
-    body: css`
-      height: 400px;
-      border-radius: 8px;
-      background: ${lighten(0.05, token.colorBgLayout)};
-    `,
     container: css`
       position: fixed;
       z-index: 100;
@@ -28,25 +22,10 @@ const useStyles = createStyles(({ css, token }) => {
       overflow: hidden;
 
       width: 360px;
-      border: 1px solid ${token.colorSplit};
+      border: 1px solid ${cssVar.colorSplit};
       border-radius: 8px;
 
-      box-shadow: ${token.boxShadow};
-    `,
-    header: css`
-      cursor: pointer;
-
-      padding-block: 8px;
-      padding-inline: 24px 12px;
-      border-radius: 8px;
-
-      background: ${token.colorBgContainer};
-
-      transition: all 0.3s ease-in-out;
-
-      &:hover {
-        background: ${convertAlphaToSolid(token.colorFillTertiary, token.colorBgContainer)};
-      }
+      box-shadow: ${cssVar.boxShadow};
     `,
     progress: css`
       pointer-events: none;
@@ -56,20 +35,19 @@ const useStyles = createStyles(({ css, token }) => {
       inset-inline: 0 1%;
 
       height: 100%;
-      border-block-end: 3px solid ${token.geekblue};
+      border-block-end: 3px solid ${cssVar.geekblue};
 
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     `,
     title: css`
       height: 36px;
       font-size: 16px;
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     `,
   };
 });
 
 const UploadDock = memo(() => {
-  const { styles, theme } = useStyles();
   const { t } = useTranslation('file');
   const [expand, setExpand] = useState(true);
   const [show, setShow] = useState(true);
@@ -86,10 +64,10 @@ const UploadDock = memo(() => {
   const icon = useMemo(() => {
     switch (overviewUploadingStatus) {
       case 'success': {
-        return <CheckCircleFilled style={{ color: theme.colorSuccess }} />;
+        return <CheckCircleFilled style={{ color: cssVar.colorSuccess }} />;
       }
       case 'error': {
-        return <CloseCircleFilled style={{ color: theme.colorError }} />;
+        return <CloseCircleFilled style={{ color: cssVar.colorError }} />;
       }
 
       default: {
@@ -111,16 +89,30 @@ const UploadDock = memo(() => {
     <Flexbox className={styles.container}>
       <Flexbox
         align={'center'}
-        className={styles.header}
         horizontal
         justify={'space-between'}
         onClick={() => {
           setExpand(!expand);
         }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = convertAlphaToSolid(
+            cssVar.colorFillTertiary,
+            cssVar.colorBgContainer,
+          );
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = cssVar.colorBgContainer;
+        }}
         style={{
-          borderBottom: expand ? `1px solid ${theme.colorSplit}` : undefined,
+          background: cssVar.colorBgContainer,
+          borderBottom: expand ? `1px solid ${cssVar.colorSplit}` : undefined,
           borderBottomLeftRadius: expand ? 0 : undefined,
           borderBottomRightRadius: expand ? 0 : undefined,
+          borderRadius: 8,
+          cursor: 'pointer',
+          paddingBlock: 8,
+          paddingInline: '24px 12px',
+          transition: 'all 0.3s ease-in-out',
         }}
       >
         <Flexbox align={'center'} className={styles.title} gap={16} horizontal>
@@ -140,7 +132,14 @@ const UploadDock = memo(() => {
       </Flexbox>
 
       {expand ? (
-        <Flexbox className={styles.body} justify={'space-between'}>
+        <Flexbox
+          justify={'space-between'}
+          style={{
+            background: `color-mix(in srgb, ${cssVar.colorBgLayout} 95%, white)`,
+            borderRadius: 8,
+            height: 400,
+          }}
+        >
           <Flexbox gap={8} paddingBlock={16} style={{ overflowY: 'scroll' }}>
             {fileList.map((item) => (
               <Item key={item.id} {...item} />
@@ -165,9 +164,9 @@ const UploadDock = memo(() => {
             style={{
               borderColor:
                 overviewUploadingStatus === 'success'
-                  ? theme.colorSuccess
+                  ? cssVar.colorSuccess
                   : overviewUploadingStatus === 'error'
-                    ? theme.colorError
+                    ? cssVar.colorError
                     : undefined,
               insetInlineEnd: `${100 - totalUploadingProgress}%`,
             }}

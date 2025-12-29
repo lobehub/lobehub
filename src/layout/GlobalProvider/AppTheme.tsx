@@ -8,13 +8,13 @@ import {
   ThemeProvider,
 } from '@lobehub/ui';
 import { message as antdMessage } from 'antd';
-import { type ThemeAppearance, createStyles } from 'antd-style';
+import { type ThemeAppearance, createStaticStyles, cx, useTheme } from 'antd-style';
 import 'antd/dist/reset.css';
 import { AppConfigContext } from 'antd/es/app/context';
 import * as motion from 'motion/react-m';
 import Image from 'next/image';
 import Link from 'next/link';
-import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
 
 import AntdStaticMethods from '@/components/AntdStaticMethods';
 import {
@@ -32,7 +32,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { GlobalStyle } from '@/styles';
 import { setCookie } from '@/utils/client/cookie';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   app: css`
     position: relative;
 
@@ -52,7 +52,7 @@ const useStyles = createStyles(({ css, token }) => ({
   // scrollbar-width and scrollbar-color are supported from Chrome 121
   // https://developer.mozilla.org/en-US/docs/Web/CSS/scrollbar-color
   scrollbar: css`
-    scrollbar-color: ${token.colorFill} transparent;
+    scrollbar-color: ${cssVar.colorFill} transparent;
     scrollbar-width: thin;
 
     #lobe-mobile-scroll-container {
@@ -78,7 +78,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
     :hover::-webkit-scrollbar-thumb {
       border: 3px solid transparent;
-      background-color: ${token.colorText};
+      background-color: ${cssVar.colorText};
       background-clip: content-box;
     }
 
@@ -110,7 +110,7 @@ const AppTheme = memo<AppThemeProps>(
   }) => {
     const themeMode = useGlobalStore(systemStatusSelectors.themeMode);
     const language = useGlobalStore(systemStatusSelectors.language);
-    const { styles, cx, theme } = useStyles();
+    const theme = useTheme();
     const [primaryColor, neutralColor, animationMode] = useUserStore((s) => [
       userGeneralSettingsSelectors.primaryColor(s),
       userGeneralSettingsSelectors.neutralColor(s),

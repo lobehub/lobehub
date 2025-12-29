@@ -1,6 +1,6 @@
 import { Markdown, Select, Snippet, Tag } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -14,7 +14,6 @@ type BadgeTheme = 'dark' | 'light';
 
 const GithubBadge = memo(() => {
   const { t } = useTranslation('discover');
-  const theme = useTheme();
   const { identifier = '' } = useDetailContext();
   const [selectedStyle, setSelectedStyle] = useState<BadgeStyle>('flat-square');
   const [selectedTheme, setSelectedTheme] = useState<BadgeTheme>('dark');
@@ -65,7 +64,7 @@ const GithubBadge = memo(() => {
         height={selectedStyle === 'for-the-badge' ? 28 : 20}
         src={styledBadgeUrl}
       />
-      <Divider style={{ color: theme.colorTextDescription, fontSize: 12 }}>OR</Divider>
+      <Divider style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>OR</Divider>
       <Select
         onChange={setSelectedTheme}
         options={themeOptions}

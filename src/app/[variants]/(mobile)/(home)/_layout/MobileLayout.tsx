@@ -2,13 +2,14 @@ import { type PropsWithChildren } from 'react';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 
+import { styles } from './MobileLayout/style';
 import SessionHeader from './SessionHeader';
 import SessionSearchBar from './SessionSearchBar';
 
 const MobileLayout = ({ children }: PropsWithChildren) => {
   return (
     <MobileContentLayout header={<SessionHeader />} withNav>
-      <div style={{ padding: '8px 16px' }}>
+      <div className={styles.searchBarContainer}>
         <SessionSearchBar mobile />
       </div>
       {children}

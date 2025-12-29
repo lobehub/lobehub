@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mutate } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 
 import { useAgentGroupStore } from '../store';
@@ -14,12 +15,9 @@ vi.mock('@/services/chatGroup', () => ({
   },
 }));
 
-vi.mock('swr', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...(actual as any),
-    mutate: vi.fn().mockResolvedValue(undefined),
-  };
+vi.mock('@/libs/swr', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/libs/swr')>();
+  return { ...actual, mutate: vi.fn().mockResolvedValue(undefined) };
 });
 
 describe('ChatGroupMemberSlice', () => {
@@ -56,7 +54,6 @@ describe('ChatGroupMemberSlice', () => {
     });
 
     it('should refresh group detail after adding agents', async () => {
-      const { mutate } = await import('swr');
       vi.mocked(chatGroupService.addAgentsToGroup).mockResolvedValue({ added: [], existing: [] });
 
       const { result } = renderHook(() => useAgentGroupStore());
@@ -86,7 +83,6 @@ describe('ChatGroupMemberSlice', () => {
     });
 
     it('should refresh group detail after removing agent', async () => {
-      const { mutate } = await import('swr');
       vi.mocked(chatGroupService.removeAgentsFromGroup).mockResolvedValue({
         deletedVirtualAgentIds: [],
         removedFromGroup: 1,
@@ -125,7 +121,6 @@ describe('ChatGroupMemberSlice', () => {
     });
 
     it('should refresh group detail after reordering', async () => {
-      const { mutate } = await import('swr');
       vi.mocked(chatGroupService.updateAgentInGroup).mockResolvedValue({} as any);
 
       const { result } = renderHook(() => useAgentGroupStore());

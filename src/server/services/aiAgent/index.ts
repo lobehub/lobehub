@@ -5,8 +5,8 @@ import type {
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
-  ExecGroupSubAgentTaskParams,
-  ExecGroupSubAgentTaskResult,
+  ExecSubAgentTaskParams,
+  ExecSubAgentTaskResult,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -425,23 +425,24 @@ export class AiAgentService {
   }
 
   /**
-   * Execute SubAgent task in Group chat
+   * Execute SubAgent task (supports both Group and Single Agent mode)
    *
-   * This method is called by Supervisor to delegate tasks to SubAgents.
-   * Each task runs in an isolated Thread context.
+   * This method is called by Supervisor (Group mode) or Agent (Single mode)
+   * to delegate tasks to SubAgents. Each task runs in an isolated Thread context.
+   *
+   * - Group mode: pass groupId, Thread will be associated with the Group
+   * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
    *
    * Flow:
    * 1. Create Thread (type='isolation', status='processing')
    * 2. Delegate to execAgent with threadId in appContext
    * 3. Store operationId in Thread metadata
    */
-  async execGroupSubAgentTask(
-    params: ExecGroupSubAgentTaskParams,
-  ): Promise<ExecGroupSubAgentTaskResult> {
+  async execSubAgentTask(params: ExecSubAgentTaskParams): Promise<ExecSubAgentTaskResult> {
     const { groupId, topicId, parentMessageId, agentId, instruction } = params;
 
     log(
-      'execGroupSubAgentTask: agentId=%s, groupId=%s, topicId=%s, instruction=%s',
+      'execSubAgentTask: agentId=%s, groupId=%s, topicId=%s, instruction=%s',
       agentId,
       groupId,
       topicId,
@@ -461,7 +462,7 @@ export class AiAgentService {
       throw new Error('Failed to create thread for task execution');
     }
 
-    log('execGroupSubAgentTask: created thread %s', thread.id);
+    log('execSubAgentTask: created thread %s', thread.id);
 
     // 2. Update Thread status to processing with startedAt timestamp
     const startedAt = new Date().toISOString();
@@ -484,7 +485,7 @@ export class AiAgentService {
     });
 
     log(
-      'execGroupSubAgentTask: delegated to execAgent, operationId=%s, success=%s',
+      'execSubAgentTask: delegated to execAgent, operationId=%s, success=%s',
       result.operationId,
       result.success,
     );
@@ -556,12 +557,12 @@ export class AiAgentService {
             },
           });
           log(
-            'execGroupSubAgentTask: updated thread %s metadata after step %d',
+            'execSubAgentTask: updated thread %s metadata after step %d',
             threadId,
             state.stepCount,
           );
         } catch (error) {
-          log('execGroupSubAgentTask: failed to update thread metadata: %O', error);
+          log('execSubAgentTask: failed to update thread metadata: %O', error);
         }
       },
 
@@ -604,7 +605,7 @@ export class AiAgentService {
             await this.messageModel.update(sourceMessageId, {
               content: lastAssistantMessage.content,
             });
-            log('execGroupSubAgentTask: updated task message %s with summary', sourceMessageId);
+            log('execSubAgentTask: updated task message %s with summary', sourceMessageId);
           }
 
           // Update Thread metadata
@@ -624,13 +625,13 @@ export class AiAgentService {
           });
 
           log(
-            'execGroupSubAgentTask: thread %s completed with status %s, reason: %s',
+            'execSubAgentTask: thread %s completed with status %s, reason: %s',
             threadId,
             status,
             reason,
           );
         } catch (error) {
-          console.error('execGroupSubAgentTask: failed to update thread on completion: %O', error);
+          console.error('execSubAgentTask: failed to update thread on completion: %O', error);
         }
       },
     };

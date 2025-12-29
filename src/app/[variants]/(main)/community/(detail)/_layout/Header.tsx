@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -11,8 +11,9 @@ import StoreSearchBar from '@/app/[variants]/(main)/community/features/Search';
 import UserAvatar from '@/app/[variants]/(main)/community/features/UserAvatar';
 import NavHeader from '@/features/NavHeader';
 
+import { styles } from './Header/style';
+
 const Header = memo(() => {
-  const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -26,8 +27,13 @@ const Header = memo(() => {
     }
   };
 
+  const cssVariables: Record<string, string> = {
+    '--header-border-color': cssVar.colorBorderSecondary,
+  };
+
   return (
     <NavHeader
+      className={styles.headerContainer}
       left={
         <Flexbox align={'center'} flex={1} gap={8} horizontal>
           <ActionIcon icon={ArrowLeft} onClick={handleGoBack} size={'small'} />
@@ -35,9 +41,7 @@ const Header = memo(() => {
         </Flexbox>
       }
       right={<UserAvatar />}
-      style={{
-        borderBottom: `1px solid ${theme.colorBorderSecondary}`,
-      }}
+      style={cssVariables}
       styles={{
         left: { flex: 1 },
       }}

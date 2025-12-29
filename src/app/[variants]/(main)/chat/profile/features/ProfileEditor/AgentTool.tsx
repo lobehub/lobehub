@@ -2,7 +2,7 @@
 
 import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
 import { Avatar, Button, Flexbox, Icon, type ItemType, Segmented } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, PlusIcon, Store, ToyBrick } from 'lucide-react';
 import Image from 'next/image';
@@ -36,8 +36,6 @@ type TabType = 'all' | 'installed';
  * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  const theme = useTheme();
-
   if (typeof icon === 'string') {
     return (
       <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} unoptimized width={18} />
@@ -45,14 +43,12 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
   }
 
   // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={theme.colorText} icon={icon} size={18} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
 });
 
 const AgentTool = memo(() => {
   const { t } = useTranslation('setting');
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
-
-  const theme = useTheme();
 
   // Plugin state management
   const plugins = config?.plugins || [];
@@ -356,7 +352,7 @@ const AgentTool = memo(() => {
       icon={PlusIcon}
       loading={updating}
       size={'small'}
-      style={{ color: theme.colorTextSecondary }}
+      style={{ color: cssVar.colorTextSecondary }}
       type={'text'}
     >
       {t('tools.add', { defaultValue: 'Add' })}

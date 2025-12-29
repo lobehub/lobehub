@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Hotkey } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,13 +9,13 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { HotkeyEnum } from '@/types/hotkey';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   closeButton: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     transition: color 0.2s;
 
     &:hover {
-      color: ${token.colorTextQuaternary};
+      color: ${cssVar.colorTextQuaternary};
     }
   `,
 
@@ -44,7 +44,7 @@ const useStyles = createStyles(({ css, token }) => ({
   text: css`
     font-size: 16px;
     font-weight: 500;
-    color: ${token.colorBgBase};
+    color: ${cssVar.colorBgBase};
   `,
 
   toast: css`
@@ -55,14 +55,13 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-inline: 24px;
     border-radius: 9999px;
 
-    background: ${token.colorText};
-    box-shadow: ${token.boxShadowSecondary};
+    background: ${cssVar.colorText};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
 }));
 
 const Toast = () => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
   const [isVisible, setIsVisible] = useState(true);
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ToggleZenMode));
 

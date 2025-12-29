@@ -1,5 +1,5 @@
 import { DraggablePanel, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar, useTheme } from 'antd-style';
 import dynamic from 'next/dynamic';
 import { memo, useRef } from 'react';
 
@@ -13,7 +13,7 @@ const Detail = dynamic(() => import('./Detail'), { loading: DetailLoading, ssr: 
 
 export const MCPPluginList = memo(() => {
   const ref = useRef<HTMLDivElement>(null);
-  const theme = useTheme();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
 
   const mobile = useServerConfigStore((s) => s.isMobile);
 
@@ -22,7 +22,7 @@ export const MCPPluginList = memo(() => {
       height={'75vh'}
       horizontal
       style={{
-        borderTop: `1px solid ${theme.colorBorderSecondary}`,
+        borderTop: `1px solid ${cssVar.colorBorderSecondary}`,
         overflow: 'hidden',
         position: 'relative',
       }}

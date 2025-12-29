@@ -20,7 +20,7 @@ const mockExecGroupSubAgentTask = vi.fn();
 const mockInterruptTask = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
-    execGroupSubAgentTask: mockExecGroupSubAgentTask,
+    execSubAgentTask: mockExecGroupSubAgentTask,
     interruptTask: mockInterruptTask,
   })),
 }));
@@ -146,7 +146,7 @@ describe('Agent Task Integration', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       // Create task
-      const createResult = await caller.execGroupSubAgentTask({
+      const createResult = await caller.execSubAgentTask({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -169,7 +169,7 @@ describe('Agent Task Integration', () => {
         metadata: {},
       });
 
-      const processingStatus = await caller.getGroupSubAgentTaskStatus({
+      const processingStatus = await caller.getSubAgentTaskStatus({
         threadId,
       });
 
@@ -204,7 +204,7 @@ describe('Agent Task Integration', () => {
         metadata: { lastActiveAt: '2024-01-01T12:00:00Z' },
       });
 
-      const completedStatus = await caller.getGroupSubAgentTaskStatus({
+      const completedStatus = await caller.getSubAgentTaskStatus({
         threadId,
       });
 
@@ -254,7 +254,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const createResult = await caller.execGroupSubAgentTask({
+      const createResult = await caller.execSubAgentTask({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Long running task',
@@ -283,7 +283,7 @@ describe('Agent Task Integration', () => {
         .set({ status: ThreadStatus.Cancel })
         .where(eq(threads.id, threadId));
 
-      const statusResult = await caller.getGroupSubAgentTaskStatus({
+      const statusResult = await caller.getSubAgentTaskStatus({
         threadId,
       });
 
@@ -325,7 +325,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const createResult = await caller.execGroupSubAgentTask({
+      const createResult = await caller.execSubAgentTask({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Failing task',
@@ -364,7 +364,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const statusResult = await caller.getGroupSubAgentTaskStatus({
+      const statusResult = await caller.getSubAgentTaskStatus({
         threadId,
       });
 
@@ -435,14 +435,14 @@ describe('Agent Task Integration', () => {
 
       // Execute tasks concurrently
       const [task1, task2] = await Promise.all([
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Task 1',
           parentMessageId: 'parent-msg-5',
           topicId: testTopicId,
         }),
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgent2Id,
           groupId: testGroupId,
           instruction: 'Task 2',
@@ -498,7 +498,7 @@ describe('Agent Task Integration', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       // Query by threadId
-      const status = await caller.getGroupSubAgentTaskStatus({
+      const status = await caller.getSubAgentTaskStatus({
         threadId,
       });
 
@@ -539,7 +539,7 @@ describe('Agent Task Integration', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       // Query task status
-      const status = await caller.getGroupSubAgentTaskStatus({ threadId });
+      const status = await caller.getSubAgentTaskStatus({ threadId });
 
       // Verify all metadata fields are accessible
       expect(status.status).toBe('completed');
@@ -595,7 +595,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const status = await caller.getGroupSubAgentTaskStatus({ threadId });
+      const status = await caller.getSubAgentTaskStatus({ threadId });
 
       // Should be processing with partial metadata
       expect(status.status).toBe('processing');
@@ -640,7 +640,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const status = await caller.getGroupSubAgentTaskStatus({ threadId });
+      const status = await caller.getSubAgentTaskStatus({ threadId });
 
       // Should be failed with error in metadata
       expect(status.status).toBe('failed');
@@ -680,7 +680,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const status = await caller.getGroupSubAgentTaskStatus({ threadId });
+      const status = await caller.getSubAgentTaskStatus({ threadId });
 
       expect(status.status).toBe('cancel');
       expect(status.taskDetail?.status).toBe(ThreadStatus.Cancel);
@@ -727,7 +727,7 @@ describe('Agent Task Integration', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const status = await caller.getGroupSubAgentTaskStatus({ threadId });
+      const status = await caller.getSubAgentTaskStatus({ threadId });
 
       // Status should reflect InReview from Thread table
       expect(status.taskDetail?.status).toBe(ThreadStatus.InReview);

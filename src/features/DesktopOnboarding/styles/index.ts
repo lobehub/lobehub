@@ -1,26 +1,19 @@
 // 统一导出所有样式模块
-// 导出一个组合的样式 hook，用于需要多个样式模块的场景
-import { useLayoutStyles } from './layout';
-import { useMediaStyles } from './media';
-import { useSpacingStyles } from './spacing';
-import { useTypographyStyles } from './typography';
+import { layoutStyles } from './layout';
+import { mediaStyles } from './media';
+import { spacingStyles } from './spacing';
+import { typographyStyles } from './typography';
 
-export { useLayoutStyles } from './layout';
-export { useMediaStyles } from './media';
-export { useSpacingStyles } from './spacing';
+export { layoutStyles } from './layout';
+export { mediaStyles } from './media';
+export { spacingStyles } from './spacing';
 export { customTheme } from './theme';
-export { useTypographyStyles } from './typography';
+export { typographyStyles } from './typography';
 
-export const useCommonStyles = () => {
-  const layout = useLayoutStyles();
-  const typography = useTypographyStyles();
-  const spacing = useSpacingStyles();
-  const media = useMediaStyles();
-
-  return {
-    layout,
-    media,
-    spacing,
-    typography,
-  };
+// 组合样式对象（用于需要多个样式模块的场景）
+export const commonStyles = {
+  layout: layoutStyles,
+  media: mediaStyles,
+  spacing: spacingStyles,
+  typography: typographyStyles,
 };

@@ -1,6 +1,6 @@
 import { ActionIcon, Icon, Select, type SelectProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,9 @@ import { type EnabledProviderWithModels } from '@/types/index';
 
 import ImageModelItem from './ImageModelItem';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   popup: css`
     &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
       padding-inline-start: 12px;
@@ -30,9 +32,7 @@ interface ModelOption {
 }
 
 const ModelSelect = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('components');
-  const theme = useTheme();
   const navigate = useNavigate();
 
   const [currentModel, currentProvider] = useImageStore((s) => [
@@ -57,7 +57,7 @@ const ModelSelect = memo(() => {
           {
             disabled: true,
             label: (
-              <Flexbox gap={8} horizontal style={{ color: theme.colorTextTertiary }}>
+              <Flexbox gap={8} horizontal style={{ color: cssVar.colorTextTertiary }}>
                 {t('ModelSwitchPanel.emptyModel')}
                 <Icon icon={LucideArrowRight} />
               </Flexbox>
@@ -79,7 +79,7 @@ const ModelSelect = memo(() => {
         {
           disabled: true,
           label: (
-            <Flexbox gap={8} horizontal style={{ color: theme.colorTextTertiary }}>
+            <Flexbox gap={8} horizontal style={{ color: cssVar.colorTextTertiary }}>
               {t('ModelSwitchPanel.emptyProvider')}
               <Icon icon={LucideArrowRight} />
             </Flexbox>
@@ -119,7 +119,7 @@ const ModelSelect = memo(() => {
       ),
       options: getImageModels(provider),
     }));
-  }, [enabledImageModelList, t, theme.colorTextTertiary, navigate]);
+  }, [enabledImageModelList, t, navigate]);
 
   const labelRender: SelectProps['labelRender'] = (props) => {
     const modelInfo = enabledImageModelList

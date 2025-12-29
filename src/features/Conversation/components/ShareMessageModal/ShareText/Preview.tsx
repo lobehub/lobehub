@@ -3,10 +3,9 @@ import { memo } from 'react';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-import { useContainerStyles } from '../style';
+import { styles } from '../style';
 
 const Preview = memo<{ content: string }>(({ content }) => {
-  const { styles } = useContainerStyles();
   const isMobile = useIsMobile();
 
   return (

@@ -1,5 +1,5 @@
 import { Button, Icon, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Link2 } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom';
 import { type MemorySource } from '@/database/repositories/userMemory';
 
 const SourceLink = memo<{ source?: MemorySource | null }>(({ source }) => {
-  const theme = useTheme();
   const navigate = useNavigate();
 
   if (!source) return;
@@ -41,7 +40,7 @@ const SourceLink = memo<{ source?: MemorySource | null }>(({ source }) => {
         title={title}
         type={'text'}
       >
-        <Text color={theme.colorTextSecondary} ellipsis>
+        <Text color={cssVar.colorTextSecondary} ellipsis>
           {title}
         </Text>
       </Button>

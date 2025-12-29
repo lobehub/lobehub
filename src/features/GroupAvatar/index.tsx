@@ -1,7 +1,7 @@
 'use client';
 
 import { GroupAvatar, GroupAvatarProps, Skeleton } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
@@ -14,7 +14,6 @@ interface GroupAvatarComponentProps extends GroupAvatarProps {
 
 const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
   ({ size = 28, avatars = [], loading, ...rest }) => {
-    const theme = useTheme();
     const [userAvatar, nickName, username] = useUserStore((s) => [
       userProfileSelectors.userAvatar(s),
       userProfileSelectors.nickName(s),
@@ -33,11 +32,11 @@ const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
       return [
         {
           avatar: userAvatar || nickName || username,
-          style: { color: theme.colorText },
+          style: { color: cssVar.colorText },
         },
         ...displayAvatars,
       ];
-    }, [avatars, userAvatar, nickName, username, theme.colorText]);
+    }, [avatars, userAvatar, nickName, username]);
 
     if (loading) return <Skeleton.Avatar active shape={'square'} size={size} />;
 

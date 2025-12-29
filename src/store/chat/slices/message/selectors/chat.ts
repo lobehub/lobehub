@@ -78,8 +78,6 @@ export const chatSelectors = {
 
   getMessageById: displayMessageSelectors.getDisplayMessageById,
 
-  getSupervisorTodos: displayMessageSelectors.getSupervisorTodos,
-
   getThreadMessageIDs: displayMessageSelectors.getThreadMessageIDs,
 
   getThreadMessages: displayMessageSelectors.getThreadMessages,
@@ -89,8 +87,6 @@ export const chatSelectors = {
   inboxActiveTopicMessages: displayMessageSelectors.inboxActiveTopicDisplayMessages,
 
   isCurrentChatLoaded: displayMessageSelectors.isCurrentDisplayChatLoaded,
-
-  isSupervisorLoading: displayMessageSelectors.isSupervisorLoading,
 
   latestMessage: dbMessageSelectors.latestDbMessage,
 

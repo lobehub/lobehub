@@ -4,7 +4,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDown } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,39 +14,38 @@ import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/featur
 import RepoIcon from '@/components/LibIcon';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/knowledgeBase';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   clickableHeader: css`
     cursor: pointer;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius}px;
     transition: all 0.2s;
 
     &:hover {
-      background-color: ${token.colorFillTertiary};
+      background-color: ${cssVar.colorFillTertiary};
     }
   `,
   dropZoneActive: css`
-    color: ${token.colorBgElevated} !important;
-    background-color: ${token.colorText} !important;
+    color: ${cssVar.colorBgElevated} !important;
+    background-color: ${cssVar.colorText} !important;
 
     * {
-      color: ${token.colorBgElevated} !important;
+      color: ${cssVar.colorBgElevated} !important;
     }
   `,
   icon: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     transition: all 0.2s;
 
     &:hover {
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     }
   `,
   menuIcon: css`
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
 const Head = memo<{ id: string }>(({ id }) => {
-  const { styles, cx } = useStyles();
   const navigate = useNavigate();
   const name = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseNameById(id));
   const setMode = useResourceManagerStore((s) => s.setMode);

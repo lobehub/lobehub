@@ -1,14 +1,14 @@
 'use client';
 
 import { ActionIcon, Flexbox, InputNumber } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Check, Plus, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   actionButton: css`
     flex-shrink: 0;
   `,
@@ -24,20 +24,20 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 32px;
     padding-block: 0;
     padding-inline: 12px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadius}px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius}px;
 
     font-size: 14px;
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      background: ${token.colorBgTextHover};
+      border-color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorBgTextHover};
     }
 
     &:disabled {
@@ -45,31 +45,31 @@ const useStyles = createStyles(({ css, token }) => ({
       opacity: 0.5;
 
       &:hover {
-        border-color: ${token.colorBorder};
-        background: ${token.colorBgContainer};
+        border-color: ${cssVar.colorBorder};
+        background: ${cssVar.colorBgContainer};
       }
     }
   `,
 
   cancelButton: css`
-    border-color: ${token.colorBorder};
-    color: ${token.colorTextTertiary};
+    border-color: ${cssVar.colorBorder};
+    color: ${cssVar.colorTextTertiary};
 
     &:hover {
-      border-color: ${token.colorBorderSecondary};
-      color: ${token.colorText};
-      background: ${token.colorBgTextHover};
+      border-color: ${cssVar.colorBorderSecondary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorBgTextHover};
     }
   `,
 
   confirmButton: css`
-    border-color: ${token.colorSuccess};
-    color: ${token.colorSuccess};
+    border-color: ${cssVar.colorSuccess};
+    color: ${cssVar.colorSuccess};
 
     &:hover {
-      border-color: ${token.colorSuccessHover};
-      color: ${token.colorSuccessHover};
-      background: ${token.colorSuccessBg};
+      border-color: ${cssVar.colorSuccessHover};
+      color: ${cssVar.colorSuccessHover};
+      background: ${cssVar.colorSuccessBg};
     }
   `,
 
@@ -97,14 +97,14 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 
   selectedButton: css`
-    border-color: ${token.colorPrimary};
-    color: ${token.colorPrimary};
-    background: ${token.colorPrimaryBg};
+    border-color: ${cssVar.colorPrimary};
+    color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      color: ${token.colorPrimary};
-      background: ${token.colorPrimaryBgHover};
+      border-color: ${cssVar.colorPrimary};
+      color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorPrimaryBgHover};
     }
   `,
 }));
@@ -120,8 +120,6 @@ const ImageNum = memo<ImageNumSelectorProps>(
   ({ presetCounts = [1, 2, 4, 8], min = 1, max = 50, disabled = false }) => {
     const imageNum = useImageStore(imageGenerationConfigSelectors.imageNum);
     const setImageNum = useImageStore((s) => s.setImageNum);
-
-    const { styles, cx } = useStyles();
     const [isEditing, setIsEditing] = useState(false);
     const [customCount, setCustomCount] = useState<number | null>(null);
     const customCountRef = useRef<number | null>(null);

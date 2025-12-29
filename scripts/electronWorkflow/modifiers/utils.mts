@@ -8,6 +8,84 @@ interface ValidationTarget {
   path: string;
 }
 
+interface UpdateFileOptions {
+  assertAfter?: (code: string) => boolean;
+  filePath: string;
+  name: string;
+  transformer: (code: string) => string;
+}
+
+interface WriteFileOptions {
+  assertAfter?: (code: string) => boolean;
+  filePath: string;
+  name: string;
+  text: string;
+}
+
+interface RemovePathOptions {
+  name: string;
+  path: string;
+  requireExists?: boolean;
+}
+
+export const invariant = (condition: unknown, message: string) => {
+  if (!condition) throw new Error(message);
+};
+
+export const normalizeEol = (code: string) => code.replaceAll('\r\n', '\n');
+
+export const updateFile = async ({
+  assertAfter,
+  filePath,
+  name,
+  transformer,
+}: UpdateFileOptions) => {
+  invariant(fs.existsSync(filePath), `[${name}] File not found: ${filePath}`);
+
+  const original = await fs.readFile(filePath, 'utf8');
+  const updated = transformer(original);
+
+  if (assertAfter) {
+    invariant(assertAfter(updated), `[${name}] Post-condition failed: ${filePath}`);
+  }
+
+  if (updated !== original) {
+    await fs.writeFile(filePath, updated);
+  }
+};
+
+export const writeFileEnsuring = async ({
+  assertAfter,
+  filePath,
+  name,
+  text,
+}: WriteFileOptions) => {
+  await updateFile({
+    assertAfter,
+    filePath,
+    name,
+    transformer: () => text,
+  });
+};
+
+export const removePathEnsuring = async ({
+  name,
+  path: targetPath,
+  requireExists,
+}: RemovePathOptions) => {
+  const exists = await fs.pathExists(targetPath);
+  if (requireExists) {
+    invariant(exists, `[${name}] Path not found: ${targetPath}`);
+  }
+
+  if (exists) {
+    await fs.remove(targetPath);
+  }
+
+  const stillExists = await fs.pathExists(targetPath);
+  invariant(!stillExists, `[${name}] Failed to remove path: ${targetPath}`);
+};
+
 export const isDirectRun = (importMetaUrl: string) => {
   const entry = process.argv[1];
   if (!entry) return false;

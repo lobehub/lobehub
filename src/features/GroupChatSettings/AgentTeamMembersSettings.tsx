@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox, Grid, Tag, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,7 @@ import { type LobeAgentSession, type LobeGroupSession, LobeSessionType } from '@
 import AgentCard from './AgentCard';
 import HostMemberCard from './HostMemberCard';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     width: 100%;
   `,
@@ -26,7 +26,6 @@ const HOST_MEMBER_ID = 'supervisor';
 
 const AgentTeamMembersSettings = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [loadingAgentId, setLoadingAgentId] = useState<string | null>(null);
   const [isCreatingMember, setIsCreatingMember] = useState(false);
 

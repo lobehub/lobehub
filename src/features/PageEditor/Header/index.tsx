@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Avatar, Dropdown, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Dropdown, Skeleton, Text } from '@lobehub/ui';
 import { ArrowLeftIcon, BotMessageSquareIcon, MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,10 +16,9 @@ import { useMenu } from './useMenu';
 
 const Header = memo(() => {
   const { t } = useTranslation('file');
-  const currentEmoji = usePageEditorStore((s) => s.currentEmoji);
-  const currentTitle = usePageEditorStore((s) => s.currentTitle);
-  const parentId = usePageEditorStore((s) => s.parentId);
-  const onBack = usePageEditorStore((s) => s.onBack);
+  const [currentEmoji, currentTitle, isLoadingContent, parentId, onBack] = usePageEditorStore(
+    (s) => [s.currentEmoji, s.currentTitle, s.isLoadingContent, s.parentId, s.onBack],
+  );
   const { menuItems } = useMenu();
 
   return (
@@ -35,13 +34,20 @@ const Header = memo(() => {
               {/* Icon */}
               {currentEmoji && <Avatar avatar={currentEmoji} shape={'square'} size={28} />}
               {/* Title */}
-              <Text ellipsis style={{ marginLeft: 4 }} weight={500}>
-                {currentTitle || t('pageEditor.titlePlaceholder')}
-              </Text>
+              {isLoadingContent ? (
+                <Skeleton.Button
+                  active
+                  style={{ height: 20, marginLeft: 4, maxWidth: 200, width: 200 }}
+                />
+              ) : (
+                <Text ellipsis style={{ marginLeft: 4 }} weight={500}>
+                  {currentTitle || t('pageEditor.titlePlaceholder')}
+                </Text>
+              )}
             </>
           )}
-          {/* Auto Save Status */}
-          <AutoSaveHint />
+          {/* Auto Save Status - hide while loading */}
+          {!isLoadingContent && <AutoSaveHint />}
         </>
       }
       right={

@@ -9,7 +9,7 @@ import {
 } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,7 @@ import { selectors, useStore } from '../store';
 
 type ParamKey = 'temperature' | 'top_p' | 'presence_penalty' | 'frequency_penalty';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   label: css`
     user-select: none;
   `,
@@ -121,7 +121,6 @@ const AgentModal = memo(() => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
   const config = useStore(selectors.currentAgentConfig, isEqual);
-  const { styles } = useStyles();
 
   const enableMaxTokens = AntdForm.useWatch(['chatConfig', 'enableMaxTokens'], form);
   const enableReasoningEffort = AntdForm.useWatch(['chatConfig', 'enableReasoningEffort'], form);

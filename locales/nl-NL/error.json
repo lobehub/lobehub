@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Fout bij het parseren van het berichtblok van de streamingaanroep. Controleer of de huidige API-interface voldoet aan de standaardnormen, of neem contact op met uw API-leverancier voor advies.",
   "response.SubscriptionKeyMismatch": "Het spijt ons, maar door een tijdelijke systeemfout is het huidige abonnement tijdelijk ongeldig. Klik op de onderstaande knop om het abonnement te herstellen, of neem contact met ons op via e-mail voor ondersteuning.",
   "response.SubscriptionPlanLimit": "Uw abonnementscredits zijn op, u kunt deze functie niet gebruiken. Upgrade naar een hoger plan of configureer de aangepaste model-API om door te gaan.",
+  "response.SubscriptionPlanLimitUltimate": "Je abonnementspunten zijn opgebruikt, waardoor je deze functie niet kunt gebruiken. Voeg tegoed toe of configureer een aangepaste model-API om door te gaan met gebruiken.",
   "response.SystemTimeNotMatchError": "Het spijt ons, uw systeemtijd komt niet overeen met de server. Controleer uw systeemtijd en probeer het opnieuw.",
   "response.UnknownChatFetchError": "Het spijt me, er is een onbekende verzoekfout opgetreden. Controleer de onderstaande informatie of probeer het opnieuw.",
   "stt.responseError": "Serviceverzoek mislukt. Controleer de configuratie of probeer opnieuw",

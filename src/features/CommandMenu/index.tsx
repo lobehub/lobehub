@@ -15,7 +15,7 @@ import SearchResults from './SearchResults';
 import ThemeMenu from './ThemeMenu';
 import CommandFooter from './components/CommandFooter';
 import CommandInput from './components/CommandInput';
-import { useStyles } from './styles';
+import { styles } from './styles';
 import { useCommandMenu } from './useCommandMenu';
 
 /**
@@ -23,7 +23,6 @@ import { useCommandMenu } from './useCommandMenu';
  */
 const CommandMenuContent = memo(() => {
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
   const { closeCommandMenu, handleBack, hasSearch, isSearching, searchQuery, searchResults } =
     useCommandMenu();
 
@@ -97,6 +96,7 @@ CommandMenuContent.displayName = 'CommandMenuContent';
 const CommandMenu = memo(() => {
   const [open] = useGlobalStore((s) => [s.status.showCommandMenu]);
   const [mounted, setMounted] = useState(false);
+  const [appRoot, setAppRoot] = useState<HTMLElement | null>(null);
   const location = useLocation();
   const pathname = location.pathname;
 
@@ -105,13 +105,41 @@ const CommandMenu = memo(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted || !open) return null;
+  // Find App root node (.ant-app)
+  useEffect(() => {
+    if (!mounted) return;
+
+    const findAppRoot = () => {
+      const appElement = document.querySelector('.ant-app') as HTMLElement;
+      if (appElement) {
+        setAppRoot(appElement);
+      } else {
+        // Fallback to body if App root not found
+        setAppRoot(document.body);
+      }
+    };
+
+    findAppRoot();
+
+    // Use MutationObserver to handle dynamic rendering
+    const observer = new MutationObserver(findAppRoot);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [mounted]);
+
+  if (!mounted || !open || !appRoot) return null;
 
   return createPortal(
     <CommandMenuProvider pathname={pathname}>
       <CommandMenuContent />
     </CommandMenuProvider>,
-    document.body,
+    appRoot,
   );
 });
 

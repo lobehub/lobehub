@@ -1,12 +1,12 @@
 import { type ChatContextContent } from '@lobechat/types';
 import { Tag, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { TextIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 
 import { useFileStore } from '@/store/file';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   name: css`
     overflow: hidden;
     flex: 1;
@@ -34,7 +34,6 @@ const getPreviewText = (content?: string, fallback?: string) => {
 };
 
 const SelectionItem = memo<ChatContextContent>(({ preview, id }) => {
-  const { styles } = useStyles();
   const [removeSelection] = useFileStore((s) => [s.removeChatContextSelection]);
 
   const displayText = useMemo(() => getPreviewText(preview), [preview]);

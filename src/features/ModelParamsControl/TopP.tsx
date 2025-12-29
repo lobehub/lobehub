@@ -1,5 +1,5 @@
 import { Flexbox, Icon, SliderWithInput } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { FlowerIcon, TrainFrontTunnel } from 'lucide-react';
 import { memo } from 'react';
 
@@ -10,8 +10,6 @@ interface TopPProps {
 }
 
 const TopP = memo<TopPProps>(({ value, onChange, disabled }) => {
-  const theme = useTheme();
-
   return (
     <Flexbox style={{ width: '100%' }}>
       <SliderWithInput
@@ -23,11 +21,13 @@ const TopP = memo<TopPProps>(({ value, onChange, disabled }) => {
             <Icon
               icon={TrainFrontTunnel}
               size={'small'}
-              style={{ color: theme.colorTextQuaternary }}
+              style={{ color: cssVar.colorTextQuaternary }}
             />
           ),
           0.9: <div />,
-          1: <Icon icon={FlowerIcon} size={'small'} style={{ color: theme.colorTextQuaternary }} />,
+          1: (
+            <Icon icon={FlowerIcon} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />
+          ),
         }}
         max={1}
         min={0}

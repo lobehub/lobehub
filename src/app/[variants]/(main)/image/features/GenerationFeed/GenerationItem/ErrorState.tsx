@@ -2,19 +2,19 @@
 
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { Block, Center, Icon, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { ImageOffIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ActionButtons } from './ActionButtons';
-import { useStyles } from './styles';
+import { styles } from './styles';
 import { type ErrorStateProps } from './types';
 import { getThumbnailMaxWidth } from './utils';
 
 // 错误状态组件
 export const ErrorState = memo<ErrorStateProps>(
   ({ generation, generationBatch, aspectRatio, onDelete, onCopyError }) => {
-    const { styles, theme } = useStyles();
     const { t } = useTranslation('image');
     const { t: tError } = useTranslation('error');
 
@@ -72,7 +72,7 @@ export const ErrorState = memo<ErrorStateProps>(
         variant={'filled'}
       >
         <Center gap={8}>
-          <Icon color={theme.colorTextDescription} icon={ImageOffIcon} size={24} />
+          <Icon color={cssVar.colorTextDescription} icon={ImageOffIcon} size={24} />
           <Text strong type={'secondary'}>
             {t('generation.status.failed')}
           </Text>

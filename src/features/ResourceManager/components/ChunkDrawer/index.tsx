@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import dynamic from 'next/dynamic';
 import { memo } from 'react';
 
@@ -18,7 +18,6 @@ const ChunkDrawer = memo(() => {
   ]);
   const file = useFileStore(fileManagerSelectors.getFileById(fileId));
 
-  const theme = useTheme();
   return (
     <Drawer
       onClose={() => {
@@ -37,7 +36,7 @@ const ChunkDrawer = memo(() => {
             <FileViewer {...file} />
           </Flexbox>
         )}
-        <Flexbox flex={1} style={{ borderInlineStart: `1px solid ${theme.colorSplit}` }}>
+        <Flexbox flex={1} style={{ borderInlineStart: `1px solid ${cssVar.colorSplit}` }}>
           <Content />
         </Flexbox>
       </Flexbox>

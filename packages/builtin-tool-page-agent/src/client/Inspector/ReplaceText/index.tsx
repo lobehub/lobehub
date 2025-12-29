@@ -2,27 +2,28 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
-import { rgba } from 'polished';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { shinyTextStyles } from '@/styles';
+
 import type { ReplaceTextArgs, ReplaceTextState } from '../../../types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   arrow: css`
     margin-inline: 4px;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   from: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-decoration: line-through;
   `,
   highlight: css`
     padding-block-end: 1px;
-    color: ${token.colorText};
-    background: linear-gradient(to top, ${token.gold3} 40%, transparent 40%);
+    color: ${cssVar.colorText};
+    background: linear-gradient(to top, ${cssVar.gold3} 40%, transparent 40%);
   `,
   root: css`
     overflow: hidden;
@@ -30,46 +31,21 @@ const useStyles = createStyles(({ css, token }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
-    color: ${token.colorTextSecondary};
-  `,
-  shinyText: css`
-    color: ${rgba(token.colorText, 0.45)};
-
-    background: linear-gradient(
-      120deg,
-      ${rgba(token.colorTextBase, 0)} 40%,
-      ${token.colorTextSecondary} 50%,
-      ${rgba(token.colorTextBase, 0)} 60%
-    );
-    background-clip: text;
-    background-size: 200% 100%;
-
-    animation: shine 1.5s linear infinite;
-
-    @keyframes shine {
-      0% {
-        background-position: 100%;
-      }
-
-      100% {
-        background-position: -100%;
-      }
-    }
+    color: ${cssVar.colorTextSecondary};
   `,
   stats: css`
-    font-family: ${token.fontFamilyCode};
-    color: ${token.colorTextSecondary};
+    font-family: ${cssVar.fontFamilyCode};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     margin-inline-end: 8px;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
 export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, ReplaceTextState>>(
   ({ args, partialArgs, isArgumentsStreaming, pluginState }) => {
     const { t } = useTranslation('plugin');
-    const { styles, cx } = useStyles();
 
     const from = args?.searchText || partialArgs?.searchText;
     const to = args?.newText ?? partialArgs?.newText;
@@ -77,7 +53,7 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     // During streaming without searchText yet, show init message
     if (isArgumentsStreaming && !from) {
       return (
-        <div className={cx(styles.root, styles.shinyText)}>
+        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-page-agent.apiName.replaceText.init')}</span>
         </div>
       );
@@ -87,7 +63,7 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     const hasResult = from && to !== undefined;
 
     return (
-      <div className={cx(styles.root, isArgumentsStreaming && styles.shinyText)}>
+      <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
         <span className={styles.title}>{t('builtins.lobe-page-agent.apiName.replaceText')}</span>
         {hasResult && (
           <>

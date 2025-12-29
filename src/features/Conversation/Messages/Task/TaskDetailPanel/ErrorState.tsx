@@ -1,14 +1,14 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { CircleX, MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type TaskDetail, ThreadStatus } from '@/types/index';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 12px;
     padding-inline: 16px;
@@ -16,12 +16,12 @@ const useStyles = createStyles(({ css, token }) => ({
   errorMessage: css`
     font-size: 13px;
     line-height: 1.6;
-    color: ${token.colorErrorText};
+    color: ${cssVar.colorErrorText};
   `,
   footer: css`
     padding-block: 8px;
     padding-inline: 16px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   metricItem: css`
     display: flex;
@@ -29,17 +29,17 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   metricValue: css`
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   separator: css`
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: ${token.colorTextQuaternary};
+    background: ${cssVar.colorTextQuaternary};
   `,
   statusIcon: css`
     display: flex;
@@ -51,16 +51,16 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 16px;
     border-radius: 50%;
 
-    color: ${token.colorErrorText};
+    color: ${cssVar.colorErrorText};
 
-    background: ${token.colorErrorBg};
+    background: ${cssVar.colorErrorBg};
   `,
   statusRow: css`
     font-size: 13px;
   `,
   statusText: css`
     font-weight: 500;
-    color: ${token.colorErrorText};
+    color: ${cssVar.colorErrorText};
   `,
 }));
 
@@ -69,7 +69,6 @@ interface ErrorStateProps {
 }
 
 const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('chat');
 
   const { status, duration, totalToolCalls, totalMessages, totalCost, error } = taskDetail;

@@ -1,6 +1,6 @@
 import { type LocalFileItem } from '@lobechat/electron-client-ipc';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpen } from 'lucide-react';
 import React, { memo, useState } from 'react';
@@ -10,14 +10,14 @@ import FileIcon from '@/components/FileIcon';
 import { localFileService } from '@/services/electron/localFileService';
 import { formatSize } from '@/utils/format';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     border-radius: 4px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     :hover {
-      color: ${token.colorText};
-      background: ${token.colorFillTertiary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   path: css`
@@ -25,16 +25,16 @@ const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 10px;
     line-height: 1;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   size: css`
     min-width: 50px;
 
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 10px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-align: end;
   `,
   title: css`
@@ -53,7 +53,6 @@ interface FileItemProps extends LocalFileItem {
 const FileItem = memo<FileItemProps>(
   ({ isDirectory, name, path, size, type, showTime = false, createdTime }) => {
     const { t } = useTranslation('tool');
-    const { styles } = useStyles();
     const [isHovering, setIsHovering] = useState(false);
 
     return (

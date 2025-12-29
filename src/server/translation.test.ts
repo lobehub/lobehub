@@ -25,8 +25,8 @@ vi.mock('@/utils/env', () => ({
   isDev: false,
 }));
 
-// Use `en-US` (DEFAULT_LANG) as the baseline and mock default locale modules.
-// We provide dotted keys directly to avoid Vitest's mocked-module export checks.
+// Mock default locale modules with flat key structure (i18n keys are flat, not nested objects)
+// Keys like 'nested.key' are direct string keys, not nested property paths
 vi.mock('@/locales/default/common', () => ({
   key1: 'Value 1',
   key2: 'Value 2 with {{param}}',
@@ -35,10 +35,25 @@ vi.mock('@/locales/default/common', () => ({
   simpleText: 'Just a simple text',
   withParam: 'Text with {{param}}',
   'very.deeply.nested.key': 'Found the nested value',
+  // Add exports for testing missing keys (will be undefined, triggering fallback)
+  nonexistent: undefined,
+  'totally.missing.key': undefined,
 }));
 
 vi.mock('@/locales/default/chat', () => ({
   welcome: 'Welcome to the chat',
+}));
+
+vi.mock('@/locales/default/models', () => ({
+  default: {
+    'gpt-4.description': 'GPT-4 description',
+  },
+}));
+
+vi.mock('@/locales/default/providers', () => ({
+  default: {
+    'openai.description': 'OpenAI provider description',
+  },
 }));
 
 describe('getLocale', () => {
@@ -93,7 +108,7 @@ describe('translation', () => {
     expect(t('welcome')).toBe('Welcome to the chat');
   });
 
-  it('should handle deep nested objects in translations', async () => {
+  it('should handle dotted keys (flat structure with dots in key names)', async () => {
     const { t } = await translation('common', 'en-US');
     expect(t('very.deeply.nested.key')).toBe('Found the nested value');
   });
@@ -107,5 +122,32 @@ describe('translation', () => {
     const { t } = await translation('common', 'en-US');
     // 当缺少参数时应保留占位符
     expect(t('withParam')).toBe('Text with {{param}}');
+  });
+
+  it('should return key when translation not found', async () => {
+    const { t } = await translation('common', 'en-US');
+    expect(t('nonexistent')).toBe('nonexistent');
+  });
+
+  it('should handle missing i18ns object gracefully', async () => {
+    // Test the case where i18ns might be empty due to import failure
+    const { t } = await translation('common', 'en-US');
+    // When a key doesn't exist, it should return the key itself
+    const result = t('totally.missing.key');
+    expect(result).toBe('totally.missing.key');
+  });
+
+  it('should fallback to default module when locale JSON is missing (models)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { t } = await translation('models', 'zz-ZZ');
+    expect(t('gpt-4.description')).toBe('GPT-4 description');
+  });
+
+  it('should fallback to default module when locale JSON is missing (providers)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { t } = await translation('providers', 'zz-ZZ');
+    expect(t('openai.description')).toBe('OpenAI provider description');
   });
 });

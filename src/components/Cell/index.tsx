@@ -1,18 +1,18 @@
 import { Flexbox, Icon, type IconProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 
 import Divider from './Divider';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     position: relative;
     border-radius: 0;
     font-size: 15px;
 
     &:active {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
@@ -26,8 +26,6 @@ export interface CellProps {
 }
 
 const Cell = memo<CellProps>(({ label, icon, onClick, type }) => {
-  const { cx, styles, theme } = useStyles();
-
   if (type === 'divider') return <Divider />;
 
   return (
@@ -41,10 +39,10 @@ const Cell = memo<CellProps>(({ label, icon, onClick, type }) => {
       padding={16}
     >
       <Flexbox align={'center'} gap={12} horizontal>
-        {icon && <Icon color={theme.colorPrimaryBorder} icon={icon} size={{ size: 20 }} />}
+        {icon && <Icon color={cssVar.colorPrimaryBorder} icon={icon} size={{ size: 20 }} />}
         {label}
       </Flexbox>
-      <Icon color={theme.colorBorder} icon={ChevronRight} size={{ size: 16 }} />
+      <Icon color={cssVar.colorBorder} icon={ChevronRight} size={{ size: 16 }} />
     </Flexbox>
   );
 });

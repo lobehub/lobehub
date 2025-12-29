@@ -1,21 +1,21 @@
 'use client';
 
 import { Center, Flexbox, Highlighter } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import CircleLoading from '@/components/Loading/CircleLoading';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     width: 100%;
     padding: 24px;
     border-radius: 4px;
 
-    background: ${token.colorBgContainer};
-    box-shadow: ${token.boxShadowTertiary};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
@@ -25,7 +25,6 @@ interface TXTViewerProps {
 }
 
 const TXTViewer = memo<TXTViewerProps>(({ url }) => {
-  const { styles } = useStyles();
   const { fileData, loading } = useTextFileLoader(url);
 
   return (

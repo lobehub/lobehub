@@ -1,7 +1,7 @@
 'use client';
 
 import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { type PropsWithChildren, memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,17 +11,16 @@ import { FOLDER_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css }) => ({
   panel: css`
     height: 100%;
-    background: ${token.colorBgLayout};
+    background: ${cssVar.colorBgLayout};
   `,
 }));
 
 const ImageSidePanel = memo<PropsWithChildren>(({ children }) => {
   const { md = true } = useResponsive();
   const { t } = useTranslation('image');
-  const { styles } = useStyles();
   const [imagePanelWidth, showImagePanel, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.imagePanelWidth(s),
     systemStatusSelectors.showImagePanel(s),

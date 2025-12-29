@@ -1,28 +1,28 @@
 import { Grid, type GridProps, Icon, type IconProps, Text } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx , responsive } from 'antd-style';
 import { type CSSProperties, type ReactNode, memo } from 'react';
 
 import CopyableLabel from '../CopyableLabel';
 
-const useStyles = createStyles(({ responsive, css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     bordered: css`
       overflow: hidden;
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: ${token.borderRadiusLG}px;
-      ${responsive.mobile} {
-        background: ${token.colorBgContainer};
+      border: 1px solid ${cssVar.colorBorderSecondary};
+      border-radius: ${cssVar.borderRadiusLG};
+      ${responsive.sm} {
+        background: ${cssVar.colorBgContainer};
       }
     `,
     cell: css`
       overflow: hidden;
-      box-shadow: 0 0 0 0.5px ${token.colorBorderSecondary};
+      box-shadow: 0 0 0 0.5px ${cssVar.colorBorderSecondary};
     `,
     label: css`
       overflow: hidden;
-      border-inline-end: 1px solid ${token.colorBorderSecondary};
-      background: ${token.colorFillQuaternary};
+      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+      background: ${cssVar.colorFillQuaternary};
     `,
   };
 });
@@ -72,8 +72,6 @@ const Descriptions = memo<DescriptionsProps>(
     styles: customStyles,
     ...rest
   }) => {
-    const { cx, styles, theme } = useStyles();
-
     return (
       <>
         {title && <h3 style={{ marginTop: 12 }}>{title}</h3>}
@@ -108,12 +106,12 @@ const Descriptions = memo<DescriptionsProps>(
                 style={{ height: '100%', position: 'relative' }}
                 width={labelWidth}
               >
-                {item.icon && <Icon color={theme.colorTextSecondary} icon={item.icon} />}
+                {item.icon && <Icon color={cssVar.colorTextSecondary} icon={item.icon} />}
                 <Text
                   className={cx(classNames?.label, item.classNames?.label)}
                   ellipsis
                   style={{
-                    color: theme.colorTextSecondary,
+                    color: cssVar.colorTextSecondary,
                     ...customStyles?.label,
                     ...item.styles?.label,
                   }}

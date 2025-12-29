@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "Annuleren",
+  "authorize.cancel": "Niet nu",
   "authorize.confirm": "Maak je profiel aan",
   "authorize.description": "Je communityprofiel staat los van je {{appName}} gebruikersaccount.",
   "authorize.footer.agreement": "Door door te gaan bevestig je dat je de <terms>Algemene Voorwaarden</terms> en het <privacy>Privacybeleid</privacy> hebt gelezen en ermee akkoord gaat.",

@@ -1,19 +1,17 @@
 'use client';
 
 import { Block, Flexbox, Grid, Skeleton } from '@lobehub/ui';
-import { createStyles, useResponsive, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
-    border-block-start: 1px dashed ${token.colorBorder};
-    background: ${token.colorBgContainerSecondary};
+    border-block-start: 1px dashed ${cssVar.colorBorder};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const ListLoading = memo<{ length?: number; rows?: number }>(({ rows = 3, length = 12 }) => {
-  const { styles } = useStyles();
-
   return (
     <Grid rows={rows} width={'100%'}>
       {Array.from({ length }).map((_, index) => (
@@ -53,7 +51,6 @@ const ListLoading = memo<{ length?: number; rows?: number }>(({ rows = 3, length
 
 export const DetailsLoading = memo(() => {
   const { mobile } = useResponsive();
-  const theme = useTheme();
   return (
     <Flexbox gap={24}>
       <Flexbox gap={12}>
@@ -69,7 +66,7 @@ export const DetailsLoading = memo(() => {
         height={54}
         horizontal
         style={{
-          borderBottom: `1px solid ${theme.colorBorder}`,
+          borderBottom: `1px solid ${cssVar.colorBorder}`,
         }}
       >
         <Skeleton.Button />

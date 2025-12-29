@@ -2,15 +2,15 @@
 
 import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { Result, Table } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { CheckCircle } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     zeroCell: css`
-      color: ${token.colorTextQuaternary};
+      color: ${cssVar.colorTextQuaternary};
     `,
   };
 });
@@ -29,7 +29,6 @@ interface SuccessResultProps {
 
 const SuccessResult = memo<SuccessResultProps>(({ duration, dataSource, onClickFinish }) => {
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
 
   const cellRender = (text: string) => {
     return text ? text : <span className={styles.zeroCell}>0</span>;

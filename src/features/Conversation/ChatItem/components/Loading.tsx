@@ -2,7 +2,7 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
 
-import { useStyles } from '../style';
+import { styles } from '../style';
 import type { ChatItemProps } from '../type';
 
 export interface LoadingProps {
@@ -10,9 +10,7 @@ export interface LoadingProps {
   placement?: ChatItemProps['placement'];
 }
 
-const Loading = memo<LoadingProps>(({ loading, placement }) => {
-  const { styles } = useStyles({ placement });
-
+const Loading = memo<LoadingProps>(({ loading }) => {
   if (!loading) return null;
 
   return (

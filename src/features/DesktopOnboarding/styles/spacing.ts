@@ -1,55 +1,55 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
 // 间距相关的通用样式
-export const useSpacingStyles = createStyles(({ token, css }) => ({
+export const spacingStyles = createStaticStyles(({ cssVar, css }) => ({
   // Gap (for flex/grid)
   gap: css`
-    gap: ${token.margin}px;
+    gap: ${cssVar.margin};
   `,
 
   gapLG: css`
-    gap: ${token.marginLG}px;
+    gap: ${cssVar.marginLG};
   `,
 
   gapSM: css`
-    gap: ${token.marginSM}px;
+    gap: ${cssVar.marginSM};
   `,
 
   // Margin
   marginBottom: css`
-    margin-block-end: ${token.margin}px;
+    margin-block-end: ${cssVar.margin};
   `,
 
   marginBottomLG: css`
-    margin-block-end: ${token.marginLG}px;
+    margin-block-end: ${cssVar.marginLG};
   `,
 
   marginBottomSM: css`
-    margin-block-end: ${token.marginSM}px;
+    margin-block-end: ${cssVar.marginSM};
   `,
 
   marginTop: css`
-    margin-block-start: ${token.margin}px;
+    margin-block-start: ${cssVar.margin};
   `,
 
   marginTopLG: css`
-    margin-block-start: ${token.marginLG}px;
+    margin-block-start: ${cssVar.marginLG};
   `,
 
   marginTopSM: css`
-    margin-block-start: ${token.marginSM}px;
+    margin-block-start: ${cssVar.marginSM};
   `,
 
   // Padding
   padding: css`
-    padding: ${token.padding}px;
+    padding: ${cssVar.padding};
   `,
 
   paddingLG: css`
-    padding: ${token.paddingLG}px;
+    padding: ${cssVar.paddingLG};
   `,
 
   paddingSM: css`
-    padding: ${token.paddingSM}px;
+    padding: ${cssVar.paddingSM};
   `,
 }));

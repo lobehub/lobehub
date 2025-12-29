@@ -1,3 +1,6 @@
+// Inspector components (customized tool call headers)
+export { GTDInspectors } from './Inspector';
+
 // Render components (read-only snapshots)
 export type { TodoListRenderState } from './Render';
 export { GTDRenders, TodoListRender, TodoListUI } from './Render';

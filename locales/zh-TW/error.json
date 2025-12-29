@@ -113,6 +113,7 @@
   "response.StreamChunkError": "流式請求的消息塊解析錯誤，請檢查當前 API 介面是否符合標準規範，或聯繫你的 API 供應商諮詢",
   "response.SubscriptionKeyMismatch": "很抱歉，由於系統偶發故障，當前訂閱用量暫時失效，請點擊下方按鈕恢復訂閱，或郵件聯繫我們獲取支持",
   "response.SubscriptionPlanLimit": "您的訂閱積分已用盡，無法使用該功能，請升級到更高計劃，或配置自訂模型 API 後繼續使用",
+  "response.SubscriptionPlanLimitUltimate": "您的訂閱點數已用盡，無法使用此功能。請儲值點數或設定自訂模型 API 以繼續使用。",
   "response.SystemTimeNotMatchError": "很抱歉，您的系統時間與伺服器不匹配，請檢查您的系統時間後重試",
   "response.UnknownChatFetchError": "很抱歉，遇到未知請求錯誤，請根據以下資訊排查或重試",
   "stt.responseError": "服務請求失敗，請檢查配置或重試",

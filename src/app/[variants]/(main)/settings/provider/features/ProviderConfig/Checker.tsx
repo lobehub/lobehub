@@ -4,7 +4,7 @@ import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError, TraceNameMap } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Alert, Button, Flexbox, Highlighter, Icon, Select } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { type ReactNode, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -67,7 +67,6 @@ const Checker = memo<ConnectionCheckerProps>(
     const [pass, setPass] = useState(false);
     const [checkModel, setCheckModel] = useState(model);
 
-    const theme = useTheme();
     const [error, setError] = useState<ChatMessageError | undefined>();
 
     const checkConnection = async () => {
@@ -161,7 +160,7 @@ const Checker = memo<ConnectionCheckerProps>(
               pass ? (
                 <CheckCircleFilled
                   style={{
-                    color: theme.colorSuccess,
+                    color: cssVar.colorSuccess,
                   }}
                 />
               ) : undefined
@@ -178,8 +177,8 @@ const Checker = memo<ConnectionCheckerProps>(
             style={
               pass
                 ? {
-                    borderColor: theme.colorSuccess,
-                    color: theme.colorSuccess,
+                    borderColor: cssVar.colorSuccess,
+                    color: cssVar.colorSuccess,
                   }
                 : undefined
             }

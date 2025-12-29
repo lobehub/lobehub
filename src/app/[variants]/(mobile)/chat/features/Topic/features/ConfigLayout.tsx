@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { type CSSProperties, type ReactNode, memo } from 'react';
 
@@ -9,9 +9,9 @@ import SidebarHeader from '@/components/SidebarHeader';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
-    transition: transform 0.2s ${token.motionEaseInOut};
+    transition: transform 0.2s ${cssVar.motionEaseInOut};
   `,
   chevronExpanded: css`
     transform: rotate(90deg);
@@ -19,7 +19,7 @@ export const useStyles = createStyles(({ css, token }) => ({
   container: css`
     position: relative;
     overflow: hidden auto;
-    transition: all 0.2s ${token.motionEaseInOut};
+    transition: all 0.2s ${cssVar.motionEaseInOut};
   `,
 }));
 
@@ -47,7 +47,6 @@ const ConfigLayout = memo<ConfigLayoutProps>(
     onHeaderClick,
     children,
   }) => {
-    const { styles } = useStyles();
     const [expanded, toggleAgentSystemRoleExpand] = useGlobalStore((s) => [
       systemStatusSelectors.getAgentSystemRoleExpanded(sessionId)(s),
       s.toggleAgentSystemRoleExpand,
@@ -74,7 +73,7 @@ const ConfigLayout = memo<ConfigLayoutProps>(
       <Flexbox align="center" gap={2} horizontal>
         {actions}
         <ActionIcon
-          className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
+          className={cx(styles.chevron, expanded && styles.chevronExpanded)}
           icon={ChevronRight}
           onClick={handleHeaderClick}
           size="small"

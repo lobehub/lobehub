@@ -2,32 +2,21 @@
 
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { useTheme } from 'antd-style';
-import { type PropsWithChildren, memo } from 'react';
+import { cx, useThemeMode } from 'antd-style';
+import type { FC, PropsWithChildren } from 'react';
 
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 
-const OnBoardingContainer = memo(({ children }: PropsWithChildren) => {
-  const theme = useTheme();
+import { styles } from './style';
+
+const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
+  const { isDarkMode } = useThemeMode();
   return (
-    <Flexbox
-      height={'100%'}
-      padding={8}
-      style={{
-        position: 'relative',
-      }}
-      width={'100%'}
-    >
+    <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
       <Flexbox
+        className={cx(isDarkMode ? styles.innerContainerDark : styles.innerContainerLight)}
         height={'100%'}
-        style={{
-          background: theme.colorBgContainer,
-          border: `1px solid ${theme.isDarkMode ? theme.colorBorderSecondary : theme.colorBorder}`,
-          borderRadius: theme.borderRadius,
-          overflow: 'hidden',
-          position: 'relative',
-        }}
         width={'100%'}
       >
         <Flexbox
@@ -41,12 +30,7 @@ const OnBoardingContainer = memo(({ children }: PropsWithChildren) => {
           <div />
           <Flexbox align={'center'} horizontal>
             <LangButton placement={'bottomRight'} size={18} />
-            <Divider
-              style={{
-                height: 24,
-              }}
-              type={'vertical'}
-            />
+            <Divider className={styles.divider} orientation={'vertical'} />
             <ThemeButton placement={'bottomRight'} size={18} />
           </Flexbox>
         </Flexbox>
@@ -55,13 +39,13 @@ const OnBoardingContainer = memo(({ children }: PropsWithChildren) => {
         </Center>
         <Center padding={24}>
           <Text align={'center'} type={'secondary'}>
-            © 2025 LobeHub, Inc. All rights reserved.
+            © 2025 LobeHub. All rights reserved.
           </Text>
         </Center>
       </Flexbox>
     </Flexbox>
   );
-});
+};
 
 OnBoardingContainer.displayName = 'OnBoardingContainer';
 

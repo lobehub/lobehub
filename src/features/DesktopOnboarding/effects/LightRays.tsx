@@ -1,3 +1,4 @@
+import { cx } from 'antd-style';
 import { Mesh, Program, Renderer, Triangle } from 'ogl';
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -494,7 +495,7 @@ void main() {
 
   return (
     <div
-      className={`light-rays-container ${className}`.trim()}
+      className={cx('light-rays-container', className)}
       ref={containerRef}
       style={{
         height: '100%',

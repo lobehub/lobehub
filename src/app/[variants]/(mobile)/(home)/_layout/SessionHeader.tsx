@@ -12,6 +12,8 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { useSessionStore } from '@/store/session';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
+import { styles } from './SessionHeader/style';
+
 const Header = memo(() => {
   const [createSession] = useSessionStore((s) => [s.createSession]);
   const navigate = useNavigate();
@@ -19,7 +21,7 @@ const Header = memo(() => {
   return (
     <ChatHeader
       left={
-        <Flexbox align={'center'} gap={8} horizontal style={{ marginLeft: 8 }}>
+        <Flexbox align={'center'} className={styles.leftContainer} gap={8} horizontal>
           <UserAvatar onClick={() => navigate('/me')} size={32} />
           <ProductLogo type={'text'} />
         </Flexbox>

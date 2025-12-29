@@ -1,6 +1,6 @@
 import { ActionIcon, Block, Flexbox } from '@lobehub/ui';
 import { Popover } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon, Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { Suspense, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import AgentItem from './AgentSelector/AgentItem';
 import TopicItem from './TopicSelector/TopicItem';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   fadeContainer: css`
     display: flex;
     gap: 0;
@@ -163,7 +163,6 @@ interface CopilotToolbarProps {
 
 const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
   const { t } = useTranslation('topic');
-  const { styles, cx } = useStyles();
   const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
 

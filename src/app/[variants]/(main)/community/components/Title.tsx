@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, type FlexboxProps, Icon, Tag } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, useResponsive , responsive } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,25 +10,25 @@ import { SCROLL_PARENT_ID } from '../features/const';
 
 const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';
 
-const useStyles = createStyles(({ css, responsive, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   more: css`
     display: flex;
     align-items: center;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   tag: css`
     flex: none;
 
     padding-block: 0.1em;
     padding-inline: 0.3em;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     font-size: 18px;
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorFillSecondary};
-    ${responsive.mobile} {
+    background: ${cssVar.colorFillSecondary};
+    ${responsive.sm} {
       font-size: 14px;
     }
   `,
@@ -36,7 +36,7 @@ const useStyles = createStyles(({ css, responsive, token }) => ({
     margin-block-start: 0.5em;
     font-size: 20px;
     font-weight: 600;
-    ${responsive.mobile} {
+    ${responsive.sm} {
       font-size: 18px;
     }
   `,
@@ -49,7 +49,6 @@ interface TitleProps extends FlexboxProps {
 }
 
 const Title = memo<TitleProps>(({ tag, children, moreLink, more }) => {
-  const { styles } = useStyles();
   const { mobile } = useResponsive();
   const title = <h2 className={styles.title}>{children}</h2>;
 

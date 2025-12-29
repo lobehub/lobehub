@@ -1,12 +1,12 @@
 import { type UniformSearchResult } from '@lobechat/types';
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 
 import { ENGINE_ICON_MAP } from '../../../../const';
 import TitleExtra from './TitleExtra';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       display: flex;
@@ -18,7 +18,7 @@ const useStyles = createStyles(({ css, token }) => {
       color: initial;
 
       &:hover {
-        background: ${token.colorFillTertiary};
+        background: ${cssVar.colorFillTertiary};
       }
     `,
     desc: css`
@@ -27,14 +27,14 @@ const useStyles = createStyles(({ css, token }) => {
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
 
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
       text-overflow: ellipsis;
     `,
     displayLink: css`
-      color: ${token.colorTextQuaternary};
+      color: ${cssVar.colorTextQuaternary};
     `,
     iframe: css`
-      border: 1px solid ${token.colorBorder};
+      border: 1px solid ${cssVar.colorBorder};
       border-radius: 8px;
     `,
     title: css`
@@ -44,7 +44,7 @@ const useStyles = createStyles(({ css, token }) => {
       -webkit-line-clamp: 1;
 
       font-size: 16px;
-      color: ${token.colorLink};
+      color: ${cssVar.colorLink};
       text-overflow: ellipsis;
     `,
     url: css`
@@ -53,7 +53,7 @@ const useStyles = createStyles(({ css, token }) => {
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 1;
 
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
       text-overflow: ellipsis;
     `,
   };
@@ -64,8 +64,6 @@ interface SearchResultProps extends UniformSearchResult {
 }
 const VideoItem = memo<SearchResultProps>(
   ({ content, url, iframeSrc, highlight, score, engines, title, category, ...res }) => {
-    const { styles, theme } = useStyles();
-
     const [expand, setExpand] = useState(false);
 
     const videoUrl = iframeSrc || (res as any).iframe_src; // iframe_src 是 SearchXNG 的字段，兼容老的数据结构
@@ -100,7 +98,7 @@ const VideoItem = memo<SearchResultProps>(
                   <Avatar.Group
                     items={engines.map((engine) => ({
                       avatar: ENGINE_ICON_MAP[engine],
-                      background: theme.colorBgLayout,
+                      background: cssVar.colorBgLayout,
                       key: engine,
                       title: engine,
                     }))}

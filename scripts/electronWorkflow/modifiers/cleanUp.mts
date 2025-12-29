@@ -1,41 +1,44 @@
 import { Lang, parse } from '@ast-grep/napi';
-import fs from 'fs-extra';
 import path from 'node:path';
 
-import { isDirectRun, runStandalone } from './utils.mjs';
+import { isDirectRun, runStandalone, updateFile } from './utils.mjs';
+
+const hasUseServerDirective = (code: string) =>
+  /^\s*['"]use server['"]\s*;?/m.test(code.trimStart());
 
 export const cleanUpCode = async (TEMP_DIR: string) => {
   // Remove 'use server'
   const filesToRemoveUseServer = [
-    'src/components/mdx/Image.tsx',
     'src/features/DevPanel/CacheViewer/getCacheEntries.ts',
     'src/server/translation.ts',
   ];
 
   for (const file of filesToRemoveUseServer) {
     const filePath = path.join(TEMP_DIR, file);
-    if (fs.existsSync(filePath)) {
-      console.log(`  Processing ${file}...`);
-      const code = await fs.readFile(filePath, 'utf8');
-      const ast = parse(Lang.TypeScript, code);
-      const root = ast.root();
+    console.log(`  Processing ${file}...`);
+    await updateFile({
+      filePath,
+      name: `cleanUpCode:removeUseServer:${file}`,
+      transformer: (code) => {
+        // Prefer a deterministic text rewrite for directive prologue:
+        // remove ONLY the top-level `'use server';` directive if present.
+        const next = code.replace(/^\s*['"]use server['"]\s*;\s*\r?\n?/, '');
+        if (next !== code) return next;
 
-      // 'use server' is usually an expression statement at the top
-      // We look for the literal string 'use server' or "use server"
-      const useServer =
-        root.find({
-          rule: {
-            pattern: "'use server'",
-          },
-        }) ||
-        root.find({
-          rule: {
-            pattern: '"use server"',
-          },
-        });
+        // Fallback to AST rewrite (in case of odd formatting)
+        const ast = parse(Lang.TypeScript, code);
+        const root = ast.root();
 
-      if (useServer) {
-        // Find the statement containing this string
+        const useServer =
+          root.find({
+            rule: { pattern: "'use server'" },
+          }) ||
+          root.find({
+            rule: { pattern: '"use server"' },
+          });
+
+        if (!useServer) return code;
+
         let curr = useServer.parent();
         while (curr) {
           if (curr.kind() === 'expression_statement') {
@@ -45,10 +48,11 @@ export const cleanUpCode = async (TEMP_DIR: string) => {
           if (curr.kind() === 'program') break;
           curr = curr.parent();
         }
-      }
 
-      await fs.writeFile(filePath, root.text());
-    }
+        return root.text();
+      },
+      assertAfter: (code) => !hasUseServerDirective(code),
+    });
   }
 };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, SearchBar, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type ChangeEvent, memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
@@ -10,7 +10,7 @@ import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 
 import AgentItem, { type AgentItemData } from './AgentItem';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     user-select: none;
 
@@ -19,9 +19,9 @@ const useStyles = createStyles(({ css, token }) => ({
     flex: 1;
     flex-direction: column;
 
-    padding-block: ${token.paddingSM}px 0;
-    padding-inline: ${token.paddingSM}px;
-    border-inline-end: 1px solid ${token.colorBorderSecondary};
+    padding-block: ${cssVar.paddingSM}px 0;
+    padding-inline: ${cssVar.paddingSM}px;
+    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -32,7 +32,6 @@ interface AvailableAgentListProps {
 
 const AvailableAgentList = memo<AvailableAgentListProps>(({ agents, isLoading }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { styles } = useStyles();
   const [searchTerm, setSearchTerm] = useState('');
 
   const defaultTitle = useMemo(() => t('defaultSession', { ns: 'common' }), [t]);

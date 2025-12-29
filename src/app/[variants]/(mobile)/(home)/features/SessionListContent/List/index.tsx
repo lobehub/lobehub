@@ -1,5 +1,5 @@
 import { useAnalytics } from '@lobehub/analytics/react';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import LazyLoad from 'react-lazy-load';
 import { Link } from 'react-router-dom';
@@ -17,7 +17,7 @@ import SkeletonList from '../../SkeletonList';
 import AddButton from './AddButton';
 import SessionItem from './Item';
 
-const useStyles = createStyles(
+const styles = createStaticStyles(
   ({ css }) => css`
     min-height: 70px;
   `,
@@ -29,7 +29,6 @@ interface SessionListProps {
 }
 const SessionList = memo<SessionListProps>(({ dataSource, groupId, showAddButton = true }) => {
   const { analytics } = useAnalytics();
-  const { styles } = useStyles();
 
   const isInit = useSessionStore(sessionSelectors.isSessionListInit);
   const mobile = useServerConfigStore((s) => s.isMobile);

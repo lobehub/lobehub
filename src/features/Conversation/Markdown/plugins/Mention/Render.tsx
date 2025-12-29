@@ -2,7 +2,7 @@
 
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { Popover } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ import { sessionSelectors } from '@/store/session/selectors';
 
 import { type MarkdownElementProps } from '../type';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   mention: css`
     cursor: pointer;
 
@@ -28,14 +28,14 @@ const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 0.875em;
     line-height: 1;
-    color: ${token.colorInfo};
+    color: ${cssVar.colorInfo};
     word-break: break-word;
     white-space: break-spaces;
 
-    background: ${token.colorInfoFillTertiary};
+    background: ${cssVar.colorInfoBg};
 
     &:hover {
-      background: ${token.colorInfoFillSecondary};
+      background: color-mix(in srgb, ${cssVar.colorInfo} 15%, ${cssVar.colorBgContainer});
     }
   `,
 }));
@@ -47,7 +47,6 @@ interface MentionProps {
 const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => {
   const { id: mentionId } = node?.properties || {};
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
 
   const currentGroupMembers = useSessionStore(sessionSelectors.currentGroupAgents, isEqual);
 

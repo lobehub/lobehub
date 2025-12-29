@@ -1,6 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Block, Button, Flexbox, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,9 +11,9 @@ import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { useGlobalStore } from '@/store/global';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   logo: css`
-    border-radius: ${token.borderRadiusLG * 2}px;
+    border-radius: calc(${cssVar.borderRadiusLG} * 2);
   `,
 }));
 
@@ -21,7 +21,6 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
   const [latestVersion] = useGlobalStore((s) => [s.latestVersion]);
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
 
   return (
     <Flexbox

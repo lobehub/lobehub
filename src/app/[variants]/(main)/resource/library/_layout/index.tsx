@@ -1,29 +1,19 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
 import { type FC } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import RegisterHotkeys from '@/app/[variants]/(main)/resource/library/features/RegisterHotkeys';
 
 import Sidebar from './Sidebar';
+import { styles } from './style';
 
 const LibraryLayout: FC = () => {
-  const theme = useTheme();
-
   return (
     <>
       <Sidebar />
-      <Flexbox
-        flex={1}
-        height={'100%'}
-        style={{
-          background: theme.colorBgContainer,
-          overflow: 'hidden',
-          position: 'relative',
-        }}
-      >
+      <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
         <Outlet />
       </Flexbox>
       <RegisterHotkeys />

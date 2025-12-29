@@ -1,6 +1,6 @@
 import { Dropdown, Icon } from '@lobehub/ui';
 import { TreeDownRightIcon } from '@lobehub/ui/icons';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useCallback } from 'react';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -18,7 +18,6 @@ export interface ThreadItemProps {
 }
 
 const ThreadItem = memo<ThreadItemProps>(({ title, id }) => {
-  const theme = useTheme();
   const [editing, activeThreadId] = useChatStore((s) => [
     s.threadRenamingId === id,
     s.activeThreadId,
@@ -57,7 +56,9 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id }) => {
           actions={<Actions dropdownMenu={dropdownMenu} />}
           active={active && !isInAgentSubRoute}
           disabled={editing}
-          icon={<Icon color={theme.colorTextDescription} icon={TreeDownRightIcon} size={'small'} />}
+          icon={
+            <Icon color={cssVar.colorTextDescription} icon={TreeDownRightIcon} size={'small'} />
+          }
           onClick={handleClick}
           title={title}
         />

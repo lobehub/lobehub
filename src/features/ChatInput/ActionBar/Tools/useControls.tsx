@@ -1,6 +1,6 @@
 import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
 import { Avatar, Flexbox, Icon, Image, type ItemType } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, Store, ToyBrick } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -29,14 +29,12 @@ import ToolItem from './ToolItem';
  * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  const theme = useTheme();
-
   if (typeof icon === 'string') {
     return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
   }
 
   // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={theme.colorText} icon={icon} size={18} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
 });
 
 KlavisIcon.displayName = 'KlavisIcon';

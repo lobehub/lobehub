@@ -1,45 +1,47 @@
 import { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { CheckCircle, FileText } from 'lucide-react';
 import { memo } from 'react';
 
 import type { UpdatePromptParams, UpdatePromptState } from '../../types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     font-size: 13px;
   `,
   fileIcon: css`
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   promptCard: css`
-    background: ${token.colorFillTertiary};
-    border-left: 3px solid ${token.colorSuccess};
-    margin-left: 12px;
+    margin-inline-start: 12px;
     padding: 12px;
+    border-inline-start: 3px solid ${cssVar.colorSuccess};
+    background: ${cssVar.colorFillTertiary};
   `,
   promptContent: css`
-    color: ${token.colorText};
+    overflow: auto;
+
+    max-height: 200px;
+    margin-inline: -12px;
+    margin-inline-start: 20px;
+    padding-inline: 12px;
+
     font-size: 13px;
     line-height: 1.6;
-    margin-left: 20px;
-    max-height: 200px;
-    overflow: auto;
-    white-space: pre-wrap;
+    color: ${cssVar.colorText};
     word-break: break-word;
-    margin-inline: -12px;
-    padding-inline: 12px;
+    white-space: pre-wrap;
   `,
   promptLabel: css`
-    color: ${token.colorTextSecondary};
     font-size: 12px;
     font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
   `,
   statusRow: css`
-    color: ${token.colorSuccess};
-    margin-left: 9px;
-    margin-bottom: 6px;
+    margin-block-end: 6px;
+    margin-inline-start: 9px;
+    color: ${cssVar.colorSuccess};
   `,
   statusText: css`
     font-weight: 500;
@@ -49,7 +51,6 @@ const useStyles = createStyles(({ css, token }) => ({
 const UpdatePrompt = memo<BuiltinRenderProps<UpdatePromptParams, UpdatePromptState>>(
   ({ pluginState }) => {
     const { newPrompt } = pluginState || {};
-    const { styles } = useStyles();
 
     return (
       <Flexbox className={styles.container} gap={8}>

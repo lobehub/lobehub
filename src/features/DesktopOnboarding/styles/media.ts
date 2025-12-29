@@ -1,7 +1,7 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
 // 媒体元素相关的通用样式
-export const useMediaStyles = createStyles(({ css }) => ({
+export const mediaStyles = createStaticStyles(({ css }) => ({
   // 圆形图片
   circleImage: css`
     border-radius: 50%;

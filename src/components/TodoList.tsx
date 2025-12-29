@@ -1,13 +1,13 @@
 import { Center, Collapse, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle, Circle, ListCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   collapse: css`
     padding-block: 0;
-    padding-inline: ${token.paddingXS}px;
+    padding-inline: ${cssVar.paddingXS};
 
     .ant-collapse-content-box {
       padding: 0;
@@ -15,11 +15,11 @@ const useStyles = createStyles(({ css, token }) => ({
 
     .ant-collapse-header {
       padding: 0 !important;
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
     }
 
     .ant-collapse-expand-icon {
-      color: ${token.colorTextTertiary} !important;
+      color: ${cssVar.colorTextTertiary} !important;
     }
   `,
 }));
@@ -43,8 +43,6 @@ export interface TodoListProps {
 
 const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
   const { t } = useTranslation('chat');
-  const theme = useTheme();
-  const { styles } = useStyles();
 
   const completedCount = todos.filter((todo) => todo.finished).length;
   const totalCount = todos.length;
@@ -52,9 +50,9 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
   // Create the header with progress indicator
   const headerContent = (
     <Flexbox align="center" gap={8} horizontal style={{ maxWidth: '100%', overflow: 'hidden' }}>
-      <Icon color={theme.colorTextTertiary} icon={ListCheck} size={16} style={{ flexShrink: 0 }} />
+      <Icon color={cssVar.colorTextTertiary} icon={ListCheck} size={16} style={{ flexShrink: 0 }} />
       <Text
-        color={theme.colorTextTertiary}
+        color={cssVar.colorTextTertiary}
         ellipsis={{ tooltip: true }}
         style={{ flex: 1 }}
         weight={400}
@@ -68,11 +66,11 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
   const todoItems =
     todos.length === 0 ? (
       <Flexbox align="center" gap={8} horizontal padding="8px 0">
-        <CheckCircle color={theme.colorSuccess} size={16} />
+        <CheckCircle color={cssVar.colorSuccess} size={16} />
         <span
           style={{
-            color: theme.colorTextSecondary,
-            fontSize: theme.fontSizeSM,
+            color: cssVar.colorTextSecondary,
+            fontSize: cssVar.fontSizeSM,
           }}
         >
           {t('supervisor.todoList.allComplete')}
@@ -88,14 +86,14 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
             key={index}
             style={{
               borderBottom:
-                index < todos.length - 1 ? `1px solid ${theme.colorBorderSecondary}` : 'none',
+                index < todos.length - 1 ? `1px solid ${cssVar.colorBorderSecondary}` : 'none',
               padding: '8px 0',
               width: '100%',
             }}
           >
             <Center
               style={{
-                color: todo.finished ? theme.colorSuccess : theme.colorTextTertiary,
+                color: todo.finished ? cssVar.colorSuccess : cssVar.colorTextTertiary,
                 flexShrink: 0,
               }}
             >
@@ -103,8 +101,8 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
             </Center>
             <span
               style={{
-                color: todo.finished ? theme.colorTextTertiary : theme.colorText,
-                fontSize: theme.fontSize,
+                color: todo.finished ? cssVar.colorTextTertiary : cssVar.colorText,
+                fontSize: cssVar.fontSize,
                 textDecoration: todo.finished ? 'line-through' : 'none',
               }}
             >
@@ -113,8 +111,8 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
             {todo.assignee && (
               <span
                 style={{
-                  color: theme.colorTextTertiary,
-                  fontSize: theme.fontSizeSM,
+                  color: cssVar.colorTextTertiary,
+                  fontSize: cssVar.fontSizeSM,
                   marginLeft: 6,
                 }}
               >
@@ -140,7 +138,7 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
       size="small"
       styles={{
         header: {
-          fontSize: theme.fontSize,
+          fontSize: cssVar.fontSize,
         },
       }}
       variant="borderless"

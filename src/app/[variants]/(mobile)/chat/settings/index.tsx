@@ -1,7 +1,7 @@
 'use client';
 
 import { Tabs } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +19,6 @@ import { useSessionStore } from '@/store/session';
 export default memo(() => {
   const { t } = useTranslation('setting');
   const [tab, setTab] = useState(ChatSettingsTabs.Prompt);
-  const theme = useTheme();
   const cateItems = useCategory();
   const id = useSessionStore((s) => s.activeId);
 
@@ -42,7 +41,7 @@ export default memo(() => {
         items={cateItems as any}
         onChange={(value) => setTab(value as ChatSettingsTabs)}
         style={{
-          borderBottom: `1px solid ${theme.colorBorderSecondary}`,
+          borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
         }}
       />
       <AgentSettings

@@ -1,7 +1,7 @@
 import { Button, Icon, InputPassword, Text } from '@lobehub/ui';
 import { Form } from 'antd';
 import type { FormInstance, InputRef } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +25,6 @@ export const SignInPasswordStep = ({
   onForgotPassword,
   onSubmit,
 }: SignInPasswordStepProps) => {
-  const theme = useTheme();
   const { t } = useTranslation('auth');
   const passwordInputRef = useRef<InputRef>(null);
 
@@ -90,7 +89,7 @@ export const SignInPasswordStep = ({
                 icon={ChevronRight}
                 loading={loading}
                 onClick={() => form.submit()}
-                style={{ color: theme.colorPrimary }}
+                style={{ color: cssVar.colorPrimary }}
                 title={t('betterAuth.signin.submit')}
                 variant={'filled'}
               />

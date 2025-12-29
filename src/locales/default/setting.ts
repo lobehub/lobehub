@@ -1,4 +1,5 @@
 export default {
+  '_cloud.officialProvider': '{{name}} Official Model Service',
   'about.title': 'About',
   'advancedSettings': 'Advanced Settings',
   'agentInfoDescription.basic.avatar': 'Avatar',

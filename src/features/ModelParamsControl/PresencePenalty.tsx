@@ -1,5 +1,5 @@
 import { Flexbox, Icon, SliderWithInput } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { AtomIcon, RepeatIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -10,8 +10,6 @@ interface PresencePenaltyProps {
 }
 
 const PresencePenalty = memo<PresencePenaltyProps>(({ value, onChange, disabled }) => {
-  const theme = useTheme();
-
   return (
     <Flexbox style={{ width: '100%' }}>
       <SliderWithInput
@@ -20,10 +18,10 @@ const PresencePenalty = memo<PresencePenaltyProps>(({ value, onChange, disabled 
         disabled={disabled}
         marks={{
           '-2': (
-            <Icon icon={RepeatIcon} size={'small'} style={{ color: theme.colorTextQuaternary }} />
+            <Icon icon={RepeatIcon} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />
           ),
           0: <div />,
-          2: <Icon icon={AtomIcon} size={'small'} style={{ color: theme.colorTextQuaternary }} />,
+          2: <Icon icon={AtomIcon} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />,
         }}
         max={2}
         min={-2}

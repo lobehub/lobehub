@@ -1,6 +1,42 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, keyframes } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token }) => ({
+const slideDown = keyframes`
+  from {
+    transform: translateY(-20px) scale(0.96);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+`;
+
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+`;
+
+const pulse = keyframes`
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+`;
+
+export const styles = createStaticStyles(({ css, cssVar }) => ({
+  backTag: css`
+    cursor: pointer;
+    font-size: 12px;
+  `,
   chatContainer: css`
     display: flex;
     flex-direction: column;
@@ -13,24 +49,34 @@ export const useStyles = createStyles(({ css, token }) => ({
     gap: 4px;
 
     padding: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   chatMessageContent: css`
     font-size: 14px;
     line-height: 1.6;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   chatMessageRole: css`
     font-size: 12px;
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-transform: uppercase;
   `,
   commandContainer: css`
     display: flex;
     flex-direction: column;
+  `,
+  commandFooter: css`
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   commandRoot: css`
     overflow: hidden;
@@ -39,24 +85,12 @@ export const useStyles = createStyles(({ css, token }) => ({
 
     width: min(640px, 90vw);
     max-height: min(500px, 70vh);
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgElevated};
-    box-shadow: ${token.boxShadowSecondary};
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
 
-    animation: slide-down 0.12s ease-out;
-
-    @keyframes slide-down {
-      from {
-        transform: translateY(-20px) scale(0.96);
-        opacity: 0;
-      }
-
-      to {
-        transform: translateY(0) scale(1);
-        opacity: 1;
-      }
-    }
+    animation: ${slideDown} 0.12s ease-out;
 
     [cmdk-input] {
       flex: 1;
@@ -67,13 +101,13 @@ export const useStyles = createStyles(({ css, token }) => ({
 
       font-family: inherit;
       font-size: 16px;
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
 
       background: transparent;
       outline: none;
 
       &::placeholder {
-        color: ${token.colorTextPlaceholder};
+        color: ${cssVar.colorTextPlaceholder};
       }
     }
 
@@ -88,7 +122,7 @@ export const useStyles = createStyles(({ css, token }) => ({
       padding-inline: 16px;
 
       font-size: 14px;
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
       text-align: center;
     }
 
@@ -102,18 +136,18 @@ export const useStyles = createStyles(({ css, token }) => ({
 
       padding-block: 12px;
       padding-inline: 16px;
-      border-radius: ${token.borderRadius}px;
+      border-radius: ${cssVar.borderRadius};
 
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
 
       transition: all 0.15s ease;
 
       &[aria-selected='true'] {
-        background: ${token.colorBgTextHover};
+        background: ${cssVar.colorBgTextHover};
       }
 
       &:hover {
-        background: ${token.colorBgTextHover};
+        background: ${cssVar.colorBgTextHover};
       }
     }
 
@@ -125,20 +159,40 @@ export const useStyles = createStyles(({ css, token }) => ({
 
       font-size: 12px;
       font-weight: 500;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     }
 
     [cmdk-separator] {
       height: 1px;
       margin-block: 4px;
-      background: ${token.colorBorderSecondary};
+      background: ${cssVar.colorBorderSecondary};
     }
+  `,
+  contextTag: css`
+    font-size: 12px;
+  `,
+  contextWrapper: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 16px;
   `,
   icon: css`
     flex-shrink: 0;
     width: 20px;
     height: 20px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
+  `,
+  inputWrapper: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   itemContent: css`
     display: flex;
@@ -155,7 +209,7 @@ export const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 12px;
     line-height: 1.4;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -172,7 +226,7 @@ export const useStyles = createStyles(({ css, token }) => ({
     width: 20px;
     height: 20px;
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   itemLabel: css`
     font-size: 14px;
@@ -191,8 +245,21 @@ export const useStyles = createStyles(({ css, token }) => ({
   itemType: css`
     flex-shrink: 0;
     font-size: 11px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-transform: capitalize;
+  `,
+  kbd: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  kbdIcon: css`
+    width: 14px;
+    height: 14px;
+    color: ${cssVar.colorTextTertiary};
   `,
   overlay: css`
     position: fixed;
@@ -204,43 +271,23 @@ export const useStyles = createStyles(({ css, token }) => ({
 
     padding-block-start: 15vh;
 
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
 
-    animation: fade-in 0.1s ease-in-out;
-
-    @keyframes fade-in {
-      from {
-        opacity: 0;
-      }
-
-      to {
-        opacity: 1;
-      }
-    }
+    animation: ${fadeIn} 0.1s ease-in-out;
   `,
   skeleton: css`
     height: 16px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     background: linear-gradient(
       90deg,
-      ${token.colorFillSecondary} 25%,
-      ${token.colorFillTertiary} 50%,
-      ${token.colorFillSecondary} 75%
+      ${cssVar.colorFillSecondary} 25%,
+      ${cssVar.colorFillTertiary} 50%,
+      ${cssVar.colorFillSecondary} 75%
     );
     background-size: 200% 100%;
 
-    animation: pulse 1.5s ease-in-out infinite;
-
-    @keyframes pulse {
-      0% {
-        background-position: 200% 0;
-      }
-
-      100% {
-        background-position: -200% 0;
-      }
-    }
+    animation: ${pulse} 1.5s ease-in-out infinite;
   `,
   skeletonItem: css`
     display: flex;

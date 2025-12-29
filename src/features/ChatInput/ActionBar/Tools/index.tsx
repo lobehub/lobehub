@@ -1,5 +1,5 @@
 import { Segmented } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Blocks } from 'lucide-react';
 import { Suspense, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,16 +16,18 @@ import { useControls } from './useControls';
 
 type TabType = 'all' | 'installed';
 
-const useStyles = createStyles(({ css, prefixCls, token }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   dropdown: css`
     overflow: hidden;
 
     width: 100%;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgElevated};
-    box-shadow: ${token.boxShadowSecondary};
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
 
     .${prefixCls}-dropdown-menu {
       border-radius: 0 !important;
@@ -34,8 +36,8 @@ const useStyles = createStyles(({ css, prefixCls, token }) => ({
     }
   `,
   header: css`
-    padding: ${token.paddingXS}px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    padding: ${cssVar.paddingXS};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: transparent;
   `,
   scroller: css`
@@ -45,7 +47,6 @@ const useStyles = createStyles(({ css, prefixCls, token }) => ({
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [modalOpen, setModalOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType | null>(null);

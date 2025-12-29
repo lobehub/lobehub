@@ -1,5 +1,5 @@
 import { ActionIcon, Dropdown, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { MessageSquareDashed, Star } from 'lucide-react';
 import { Suspense, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,8 +26,6 @@ interface TopicItemProps {
 
 const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) => {
   const { t } = useTranslation('topic');
-
-  const theme = useTheme();
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
@@ -69,7 +67,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
     return (
       <NavItem
         active={active && !isInAgentSubRoute}
-        icon={<Icon color={theme.colorTextDescription} icon={MessageSquareDashed} size={'small'} />}
+        icon={
+          <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+        }
         loading={isLoading}
         onClick={handleClick}
         title={
@@ -78,7 +78,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
             <Tag
               size={'small'}
               style={{
-                color: theme.colorTextDescription,
+                color: cssVar.colorTextDescription,
                 fontSize: 10,
               }}
             >
@@ -104,8 +104,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
           disabled={editing}
           icon={
             <ActionIcon
-              color={fav ? theme.colorWarning : undefined}
-              fill={fav ? theme.colorWarning : 'transparent'}
+              color={fav ? cssVar.colorWarning : undefined}
+              fill={fav ? cssVar.colorWarning : 'transparent'}
               icon={Star}
               onClick={(e) => {
                 e.stopPropagation();

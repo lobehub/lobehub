@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "取消",
+  "authorize.cancel": "稍後再說",
   "authorize.confirm": "建立你的檔案",
   "authorize.description": "你的社群個人檔案獨立於 {{appName}} 使用者帳號而存在。",
   "authorize.footer.agreement": "繼續操作即表示你確認已理解並同意<terms>服務條款</terms>與<privacy>隱私權政策</privacy>",

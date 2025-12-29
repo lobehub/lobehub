@@ -1,5 +1,5 @@
 import { Button, Flexbox, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon, Folder } from 'lucide-react';
 import { memo } from 'react';
@@ -13,20 +13,20 @@ import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   floatingChunkBadge: css`
     position: absolute;
     z-index: 3;
     inset-block-end: 8px;
     inset-inline-end: 8px;
 
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     opacity: 0;
-    background: ${token.colorBgContainer};
-    box-shadow: ${token.boxShadow};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadow};
 
-    transition: opacity ${token.motionDurationMid};
+    transition: opacity ${cssVar.motionDurationMid};
   `,
   name: css`
     overflow: hidden;
@@ -36,8 +36,8 @@ const useStyles = createStyles(({ css, token }) => ({
 
     margin-block-end: 12px;
 
-    font-weight: ${token.fontWeightStrong};
-    color: ${token.colorText};
+    font-weight: ${cssVar.fontWeightStrong};
+    color: ${cssVar.colorText};
     word-break: break-word;
   `,
 }));
@@ -69,7 +69,6 @@ const DefaultFileItem = memo<DefaultFileItemProps>(
     size,
   }) => {
     const { t } = useTranslation('components');
-    const { styles, cx } = useStyles();
     const [isCreatingFileParseTask, parseFiles] = useFileStore((s) => [
       fileManagerSelectors.isCreatingFileParseTask(id)(s),
       s.parseFilesToChunks,

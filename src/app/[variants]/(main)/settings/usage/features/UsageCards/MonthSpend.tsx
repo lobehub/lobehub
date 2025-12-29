@@ -1,6 +1,6 @@
 'use client';
 
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,13 +31,12 @@ const computeMonth = (
 
 const MonthSpend = memo<UsageChartProps>(({ data, isLoading }) => {
   const { t } = useTranslation('auth');
-  const theme = useTheme();
 
   const { spend, calls } = computeMonth(data || []);
 
   return (
     <StatisticCard
-      highlight={theme.blue}
+      highlight={cssVar.blue}
       loading={isLoading}
       statistic={{
         description: <Statistic title={t('usage.cards.month.modelCalls')} value={calls} />,

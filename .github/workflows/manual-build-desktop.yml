@@ -62,13 +62,9 @@ jobs:
 
       - name: Install deps
         run: bun i
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Lint
         run: bun run lint
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
 
   version:
     name: Determine version

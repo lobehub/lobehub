@@ -1,18 +1,18 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Bell, Check, FolderOpen, Mic, MonitorCog } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useCallback, useEffect, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useState } from 'react';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { TitleSection } from '../common/TitleSection';
-import { useLayoutStyles } from '../styles';
+import { layoutStyles } from '../styles';
 import { getThemeToken } from '../styles/theme';
 
 const themeToken = getThemeToken();
 
 // Screen3 特有的样式
-const useScreen3Styles = createStyles(({ token, css }) => ({
+const screen3Styles = createStaticStyles(({ css, cssVar }) => ({
   // 内容区
   content: css`
     display: flex;
@@ -21,8 +21,15 @@ const useScreen3Styles = createStyles(({ token, css }) => ({
     gap: 4px;
   `,
 
+  
+  // 图标样式
+icon: css`
+    color: var(--permission-icon-color, currentColor);
+  `,
+
+  
   // 图标容器
-  iconWrapper: css`
+iconWrapper: css`
     display: flex;
     flex-shrink: 0;
     align-items: center;
@@ -38,7 +45,7 @@ const useScreen3Styles = createStyles(({ token, css }) => ({
   // 项目描述
   itemDescription: css`
     margin: 0;
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     line-height: 1.5;
     color: rgba(255, 255, 255, 60%);
   `,
@@ -46,7 +53,7 @@ const useScreen3Styles = createStyles(({ token, css }) => ({
   // 项目标题
   itemTitle: css`
     margin: 0;
-    font-size: ${token.fontSizeLG}px;
+    font-size: ${cssVar.fontSizeLG};
     font-weight: 500;
     color: ${themeToken.colorTextBase};
   `,
@@ -66,7 +73,7 @@ const useScreen3Styles = createStyles(({ token, css }) => ({
     border: 1px solid rgba(255, 255, 255, 20%);
     border-radius: 8px;
 
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     font-weight: 700;
     color: ${themeToken.colorTextBase};
     white-space: nowrap;
@@ -111,7 +118,7 @@ const useScreen3Styles = createStyles(({ token, css }) => ({
     padding-block: 20px;
     padding-inline: 24px;
     border: 1px solid rgba(255, 255, 255, 10%);
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: rgba(255, 255, 255, 4%);
     backdrop-filter: blur(20px);
@@ -135,7 +142,7 @@ const useScreen3Styles = createStyles(({ token, css }) => ({
     width: 100%;
     max-width: 800px;
 
-    font-family: ${token.fontFamily};
+    font-family: ${cssVar.fontFamily};
   `,
 }));
 
@@ -310,9 +317,6 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
     }
   }, [onScreenConfigChange]);
 
-  const { styles: layoutStyles } = useLayoutStyles();
-  const { styles: screen3Styles } = useScreen3Styles();
-
   return (
     <div className={layoutStyles.fullScreen}>
       {/* 内容层 */}
@@ -340,8 +344,11 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
               }}
             >
               {/* 图标 */}
-              <div className={screen3Styles.iconWrapper}>
-                <permission.icon size={24} style={{ color: permission.iconColor }} />
+              <div
+                className={screen3Styles.iconWrapper}
+                style={{ '--permission-icon-color': permission.iconColor } as CSSProperties}
+              >
+                <permission.icon className={screen3Styles.icon} size={24} />
               </div>
 
               {/* 内容 */}
@@ -352,7 +359,7 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
 
               {/* 按钮 */}
               <button
-                className={`${screen3Styles.permissionButton} ${permission.granted ? 'granted' : ''}`}
+                className={cx(screen3Styles.permissionButton, permission.granted && 'granted')}
                 disabled={permission.granted && permission.id !== 2}
                 onClick={() => handlePermissionRequest(permission.id)}
                 type="button"

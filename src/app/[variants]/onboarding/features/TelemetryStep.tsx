@@ -5,7 +5,7 @@ import { Block, Button, Flexbox, Icon, type IconProps, Text } from '@lobehub/ui'
 import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { LoadingDots } from '@lobehub/ui/chat';
 import { Steps, Switch } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { BrainIcon, HeartHandshakeIcon, PencilRulerIcon, ShieldCheck } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -20,7 +20,6 @@ interface TelemetryStepProps {
 
 const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
   const { t } = useTranslation('onboarding');
-  const theme = useTheme();
   const [check, setCheck] = useState(true);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
@@ -29,24 +28,21 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
     onNext();
   };
 
-  const IconAvatar = useCallback(
-    ({ icon }: { icon: IconProps['icon'] }) => {
-      return (
-        <Block
-          align="center"
-          height={32}
-          justify="center"
-          padding={4}
-          shadow
-          variant="outlined"
-          width={32}
-        >
-          <Icon color={theme.colorTextDescription} icon={icon} size={16} />
-        </Block>
-      );
-    },
-    [theme],
-  );
+  const IconAvatar = useCallback(({ icon }: { icon: IconProps['icon'] }) => {
+    return (
+      <Block
+        align="center"
+        height={32}
+        justify="center"
+        padding={4}
+        shadow
+        variant="outlined"
+        width={32}
+      >
+        <Icon color={cssVar.colorTextDescription} icon={icon} size={16} />
+      </Block>
+    );
+  }, []);
 
   return (
     <Flexbox gap={16}>
@@ -76,7 +72,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
         items={[
           {
             description: (
-              <Text as={'p'} color={theme.colorTextSecondary} style={{ marginBottom: 16 }}>
+              <Text as={'p'} color={cssVar.colorTextSecondary} style={{ marginBottom: 16 }}>
                 {t('telemetry.rows.create.desc')}
               </Text>
             ),
@@ -89,7 +85,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
           },
           {
             description: (
-              <Text as={'p'} color={theme.colorTextSecondary} style={{ marginBottom: 16 }}>
+              <Text as={'p'} color={cssVar.colorTextSecondary} style={{ marginBottom: 16 }}>
                 {t('telemetry.rows.collaborate.desc')}
               </Text>
             ),
@@ -102,7 +98,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
           },
           {
             description: (
-              <Text as={'p'} color={theme.colorTextSecondary}>
+              <Text as={'p'} color={cssVar.colorTextSecondary}>
                 {t('telemetry.rows.evolve.desc')}
               </Text>
             ),
@@ -116,7 +112,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
         ]}
       />
       <Flexbox gap={8}>
-        <Text as={'p'} color={theme.colorTextSecondary}>
+        <Text as={'p'} color={cssVar.colorTextSecondary}>
           {t('telemetry.rows.privacy.desc', { appName: BRANDING_NAME })}
         </Text>
         <Flexbox align="center" gap={8} horizontal>
@@ -139,7 +135,11 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
       </Button>
       {check && (
         <Block align="flex-start" gap={8} horizontal variant={'borderless'}>
-          <Icon icon={ShieldCheck} size={16} style={{ color: theme.colorSuccess, flexShrink: 0 }} />
+          <Icon
+            icon={ShieldCheck}
+            size={16}
+            style={{ color: cssVar.colorSuccess, flexShrink: 0 }}
+          />
           <Text fontSize={12} type="secondary">
             <Trans
               components={{

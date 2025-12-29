@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Center, Grid, type GridProps, Select, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar, useThemeMode } from 'antd-style';
 import { type ReactNode, memo } from 'react';
 import useMergeState from 'use-merge-value';
 
@@ -26,7 +26,7 @@ const canParseAsRatio = (value: string): boolean => {
 };
 
 const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultValue, ...rest }) => {
-  const theme = useTheme();
+  const { isDarkMode } = useThemeMode();
   const [active, setActive] = useMergeState('auto', {
     defaultValue,
     onChange,
@@ -53,7 +53,7 @@ const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultVal
             content = (
               <div
                 style={{
-                  border: `2px dashed ${isActive ? theme.colorText : theme.colorTextDescription}`,
+                  border: `2px dashed ${isActive ? cssVar.colorText : cssVar.colorTextDescription}`,
                   borderRadius: 3,
                   height: 16,
                   width: 16,
@@ -67,7 +67,7 @@ const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultVal
               <div
                 style={{
                   aspectRatio: `${width} / ${height}`,
-                  border: `2px solid ${isActive ? theme.colorText : theme.colorTextDescription}`,
+                  border: `2px solid ${isActive ? cssVar.colorText : cssVar.colorTextDescription}`,
                   borderRadius: 3,
                   height: isWidthGreater ? undefined : 16,
                   width: isWidthGreater ? 16 : undefined,
@@ -88,9 +88,9 @@ const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultVal
                 onChange?.(item.value);
               }}
               padding={8}
-              shadow={isActive && !theme.isDarkMode}
+              shadow={isActive && !isDarkMode}
               style={{
-                backgroundColor: isActive ? theme.colorBgElevated : 'transparent',
+                backgroundColor: isActive ? cssVar.colorBgElevated : 'transparent',
               }}
               variant={'filled'}
             >

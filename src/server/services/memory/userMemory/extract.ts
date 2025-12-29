@@ -1762,16 +1762,9 @@ export class MemoryExtractionExecutor {
 }
 
 const WORKFLOW_PATHS = {
-  topicBatch:
-    '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics/workflows/batch',
+  topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
   userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
-} as const;
-
-export const TOPIC_WORKFLOW_NAMES = {
-  cep: 'process-topics-extract-layers-cep',
-  identity: 'process-topics-extract-layers-identity',
-  orchestrator: 'process-topics-extract-layers-orchestrator',
 } as const;
 
 const getWorkflowUrl = (path: string, baseUrl: string) => {

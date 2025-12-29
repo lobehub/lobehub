@@ -2,7 +2,7 @@
 
 import { Avatar, Flexbox, Text , Checkbox } from '@lobehub/ui';
 import { useHover } from 'ahooks';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo, useRef } from 'react';
 
@@ -10,19 +10,19 @@ import { DEFAULT_AVATAR } from '@/const/meta';
 
 import { useAgentSelectionStore } from './store';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   item: css`
     cursor: pointer;
 
     margin-block: 1px;
     padding-block: 6px;
     padding-inline: 8px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     transition: background 0.2s ease;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   removeButton: css`
@@ -36,13 +36,13 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 20px;
     border-radius: 4px;
 
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
 
     transition: all 0.2s ease;
 
     &:hover {
-      color: ${token.colorText};
-      background: ${token.colorFillSecondary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   title: css`
@@ -71,7 +71,6 @@ interface AgentItemProps {
 const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, showRemove }) => {
   const ref = useRef(null);
   const isHovering = useHover(ref);
-  const { styles } = useStyles();
 
   const isSelected = useAgentSelectionStore((s) => s.selectedAgentIds.includes(agent.id));
   const toggleAgent = useAgentSelectionStore((s) => s.toggleAgent);

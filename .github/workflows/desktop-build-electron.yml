@@ -32,7 +32,7 @@ jobs:
     name: Build desktop Next bundle
     runs-on: ubuntu-latest
     env:
-      NODE_OPTIONS: --max-old-space-size=6144
+      NODE_OPTIONS: --max-old-space-size=8192
       UPDATE_CHANNEL: nightly
       NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID || 'dummy-desktop-project' }}
       NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL || 'https://analytics.example.com' }}

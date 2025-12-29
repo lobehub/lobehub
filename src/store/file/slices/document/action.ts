@@ -1,6 +1,8 @@
 import { createNanoId } from '@lobechat/utils';
+import type { SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { useGlobalStore } from '@/store/global';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
@@ -133,6 +135,10 @@ export interface DocumentAction {
     documentId: string,
     updates: Partial<LobeDocument>,
   ) => Promise<void>;
+  /**
+   * SWR hook to fetch document detail with caching and auto-sync to store
+   */
+  useFetchDocumentDetail: (documentId: string | undefined) => SWRResponse<LobeDocument | null>;
 }
 
 export const createDocumentSlice: StateCreator<
@@ -705,5 +711,57 @@ export const createDocumentSlice: StateCreator<
       }
       set({ localDocumentMap: revertMap }, false, n('revertOptimisticUpdate'));
     }
+  },
+
+  useFetchDocumentDetail: (documentId) => {
+    const swrKey = documentId ? ['documentDetail', documentId] : null;
+
+    return useClientDataSWRWithSync<LobeDocument | null>(
+      swrKey,
+      async () => {
+        if (!documentId) return null;
+
+        const document = await documentService.getDocumentById(documentId);
+        if (!document) {
+          console.warn(`[useFetchDocumentDetail] Document not found: ${documentId}`);
+          return null;
+        }
+
+        // Transform API response to LobeDocument format
+        const fullDocument: LobeDocument = {
+          content: document.content || null,
+          createdAt: document.createdAt ? new Date(document.createdAt) : new Date(),
+          editorData:
+            typeof document.editorData === 'string'
+              ? JSON.parse(document.editorData)
+              : document.editorData || null,
+          fileType: document.fileType,
+          filename: document.title || document.filename || 'Untitled',
+          id: document.id,
+          metadata: document.metadata || {},
+          source: 'document',
+          sourceType: DocumentSourceType.EDITOR,
+          title: document.title || '',
+          totalCharCount: document.content?.length || 0,
+          totalLineCount: 0,
+          updatedAt: document.updatedAt ? new Date(document.updatedAt) : new Date(),
+        };
+
+        return fullDocument;
+      },
+      {
+        focusThrottleInterval: 5000,
+        onData: (document) => {
+          if (!document) return;
+
+          // Auto-sync to localDocumentMap
+          const { localDocumentMap } = get();
+          const newMap = new Map(localDocumentMap);
+          newMap.set(documentId!, document);
+          set({ localDocumentMap: newMap }, false, n('useFetchDocumentDetail/onData'));
+        },
+        revalidateOnFocus: true, // 5 seconds
+      },
+    );
   },
 });

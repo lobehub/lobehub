@@ -2,14 +2,14 @@
 
 import { ActionIcon, Checkbox, Flexbox, SortableList } from '@lobehub/ui';
 import { Input, InputRef } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { ChangeEvent, KeyboardEvent, memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTodoListStore } from './store';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   deleteIcon: css`
     flex-shrink: 0;
     opacity: 0;
@@ -25,7 +25,7 @@ const useStyles = createStyles(({ css, token }) => ({
     width: 100%;
     padding-block: 10px;
     padding-inline: 4px 12px;
-    border-block-end: 1px dashed ${token.colorBorderSecondary};
+    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
 
     &:hover {
       .drag-handle,
@@ -35,7 +35,7 @@ const useStyles = createStyles(({ css, token }) => ({
     }
   `,
   textChecked: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
   `,
 }));
@@ -46,7 +46,6 @@ interface TodoItemRowProps {
 }
 
 const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
-  const { styles, cx, theme } = useStyles();
   const { t } = useTranslation('tool');
   const inputRef = useRef<InputRef>(null);
   const defaultPlaceholder = placeholder || t('lobe-gtd.todoItem.placeholder');
@@ -125,7 +124,7 @@ const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
     <Flexbox align="center" className={styles.itemRow} gap={4} horizontal width="100%">
       <SortableList.DragHandle className={cx(styles.dragHandle, 'drag-handle')} size="small" />
       <Checkbox
-        backgroundColor={theme.colorSuccess}
+        backgroundColor={cssVar.colorSuccess}
         checked={completed}
         onChange={handleToggle}
         shape={'circle'}

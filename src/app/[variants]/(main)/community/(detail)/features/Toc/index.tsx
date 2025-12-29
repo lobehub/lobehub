@@ -1,7 +1,7 @@
 'use client';
 
 import { Anchor, type AnchorProps } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/community/features/const';
@@ -9,7 +9,9 @@ import { isOnServerSide } from '@/utils/env';
 
 import { createTOCTree } from './useToc';
 
-const useStyles = createStyles(({ css, token, responsive, prefixCls }) => {
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     toc: css`
       a {
@@ -52,14 +54,14 @@ const useStyles = createStyles(({ css, token, responsive, prefixCls }) => {
         }
 
         .${prefixCls}-anchor-link-title-active {
-          color: ${token.colorText} !important;
+          color: ${cssVar.colorText} !important;
         }
 
         .${prefixCls}-anchor-link-title:not(.${prefixCls}-anchor-link-title-active) {
-          color: ${token.colorTextSecondary};
+          color: ${cssVar.colorTextSecondary};
 
           &:hover {
-            color: ${token.colorText};
+            color: ${cssVar.colorText};
           }
         }
       }
@@ -72,8 +74,6 @@ const useStyles = createStyles(({ css, token, responsive, prefixCls }) => {
 });
 
 const Toc = memo<AnchorProps>(({ items, className, ...rest }) => {
-  const { cx, styles } = useStyles();
-
   const toc = useMemo(() => createTOCTree(items as any), [items]);
 
   return (

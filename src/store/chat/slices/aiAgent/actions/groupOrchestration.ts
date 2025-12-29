@@ -387,7 +387,7 @@ export const groupOrchestrationSlice: StateCreator<
     return useClientDataSWR<TaskStatusResult>(
       enabled && threadId && messageId ? [SWR_USE_POLLING_TASK_STATUS, threadId] : null,
       async ([, tid]: [string, string]) => {
-        return aiAgentService.getGroupSubAgentTaskStatus({ threadId: tid });
+        return aiAgentService.getSubAgentTaskStatus({ threadId: tid });
       },
       {
         revalidateOnFocus: false,

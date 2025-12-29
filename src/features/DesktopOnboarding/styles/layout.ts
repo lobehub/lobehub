@@ -1,7 +1,7 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
 // 布局相关的通用样式
-export const useLayoutStyles = createStyles(({ css }) => ({
+export const layoutStyles = createStaticStyles(({ css }) => ({
   // 绝对定位容器
   absolute: css`
     position: absolute;

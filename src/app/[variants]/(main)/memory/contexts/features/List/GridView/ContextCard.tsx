@@ -1,4 +1,4 @@
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +15,6 @@ interface ContextCardProps {
 
 const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
   const { t } = useTranslation('memory');
-  const theme = useTheme();
 
   return (
     <GridCard
@@ -29,7 +28,9 @@ const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
           <ProgressIcon
             format={(percent) => `${t('filter.sort.scoreUrgency')}: ${percent}%`}
             percent={(context.scoreUrgency ?? 0) * 100}
-            strokeColor={(context.scoreUrgency ?? 0) >= 0.7 ? theme.colorError : theme.colorWarning}
+            strokeColor={
+              (context.scoreUrgency ?? 0) >= 0.7 ? cssVar.colorError : cssVar.colorWarning
+            }
           />
         </>
       }

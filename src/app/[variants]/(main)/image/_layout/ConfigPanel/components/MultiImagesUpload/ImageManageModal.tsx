@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Modal } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Upload, X } from 'lucide-react';
 import Image from 'next/image';
 import React, { type FC, memo, useEffect, useRef, useState } from 'react';
@@ -52,23 +52,25 @@ const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 11
 
 // ======== Styles ======== //
 
-const useStyles = createStyles(({ prefixCls, css, token }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     display: flex;
     height: 480px;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   fileName: css`
     margin-block-start: 16px;
     padding-block: 8px;
     padding-inline: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   footer: css`
     display: flex;
@@ -77,9 +79,9 @@ const useStyles = createStyles(({ prefixCls, css, token }) => ({
 
     padding-block: 16px;
     padding-inline: 24px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   modal: css`
     .${prefixCls}-modal-container {
@@ -95,13 +97,13 @@ const useStyles = createStyles(({ prefixCls, css, token }) => ({
 
     padding-block: 2px;
     padding-inline: 6px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     font-size: 10px;
     font-weight: 500;
-    color: ${token.colorWhite};
+    color: ${cssVar.colorWhite};
 
-    background: ${token.colorSuccess};
+    background: ${cssVar.colorSuccess};
   `,
   previewArea: css`
     position: relative;
@@ -116,22 +118,22 @@ const useStyles = createStyles(({ prefixCls, css, token }) => ({
   `,
   previewEmpty: css`
     font-size: 16px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   previewImage: css`
     max-width: 100%;
     max-height: 320px;
-    border-radius: ${token.borderRadiusLG}px;
-    box-shadow: ${token.boxShadowSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   sidebar: css`
     overflow-y: auto;
 
     width: 200px;
     padding: 16px;
-    border-inline-end: 1px solid ${token.colorBorderSecondary};
+    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
-    background: ${token.colorBgLayout};
+    background: ${cssVar.colorBgLayout};
   `,
   thumbnail: css`
     cursor: pointer;
@@ -143,12 +145,12 @@ const useStyles = createStyles(({ prefixCls, css, token }) => ({
     width: 100%;
     height: 120px;
     border: 2px solid transparent;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     transition: border-color 0.2s ease;
 
     &:hover {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
 
     &:hover .thumbnail-delete {
@@ -156,7 +158,7 @@ const useStyles = createStyles(({ prefixCls, css, token }) => ({
     }
 
     &.selected {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
   `,
   thumbnailDelete: css`
@@ -175,16 +177,16 @@ const useStyles = createStyles(({ prefixCls, css, token }) => ({
     height: 20px;
     border-radius: 50%;
 
-    color: ${token.colorTextLightSolid};
+    color: ${cssVar.colorTextLightSolid};
 
     opacity: 0;
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
 
     transition: opacity 0.2s ease;
 
     &:hover {
-      color: ${token.colorError};
-      background: ${token.colorErrorBg};
+      color: ${cssVar.colorError};
+      background: ${cssVar.colorErrorBg};
     }
   `,
   thumbnailList: css`
@@ -198,7 +200,6 @@ const useStyles = createStyles(({ prefixCls, css, token }) => ({
 
 const ImageManageModal: FC<ImageManageModalProps> = memo(
   ({ open, images, maxCount, onClose, onComplete }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('components');
     const inputRef = useRef<HTMLInputElement>(null);
     const { validateFiles } = useUploadFilesValidation(maxCount);
@@ -321,7 +322,7 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
 
       return (
         <div
-          className={`${styles.thumbnail} ${index === selectedIndex ? 'selected' : ''}`}
+          className={cx(styles.thumbnail, index === selectedIndex && 'selected')}
           key={item.id}
           onClick={() => setSelectedIndex(index)}
         >
@@ -342,7 +343,7 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
 
           {/* 删除按钮 */}
           <div
-            className={`${styles.thumbnailDelete} thumbnail-delete`}
+            className={cx(styles.thumbnailDelete, 'thumbnail-delete')}
             onClick={(e) => handleThumbnailDelete(index, e)}
           >
             <X size={12} />

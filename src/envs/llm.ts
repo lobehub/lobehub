@@ -429,7 +429,7 @@ export const getLLMConfig = () => {
       ENABLED_ZENMUX: !!process.env.ZENMUX_API_KEY,
       ZENMUX_API_KEY: process.env.ZENMUX_API_KEY,
 
-      ENABLED_LOBEHUB: process.env.ENABLED_LOBEHUB === '1',
+      ENABLED_LOBEHUB: !!process.env.ENABLED_LOBEHUB,
     },
   });
 };

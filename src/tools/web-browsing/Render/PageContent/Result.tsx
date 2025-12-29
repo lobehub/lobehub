@@ -1,9 +1,9 @@
 'use client';
 
 import { type CrawlErrorResult, type CrawlSuccessResult } from '@lobechat/web-crawler';
-import { Alert, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Alert, Block, Flexbox, Text } from '@lobehub/ui';
 import { Descriptions } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
@@ -12,59 +12,37 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { WebBrowsingManifest } from '@/tools/web-browsing';
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
-    cardBody: css`
-      padding-block: 12px 8px;
-      padding-inline: 16px;
-    `,
     container: css`
-      cursor: pointer;
-
       overflow: hidden;
-
       min-width: 360px;
       max-width: 360px;
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: 12px;
-
-      transition: border-color 0.2s;
-
-      :hover {
-        border-color: ${token.colorPrimary};
-      }
     `,
-    description: css`
-      margin-block: 0 4px !important;
-      color: ${token.colorTextTertiary};
-    `,
+
     detailsSection: css`
-      padding-block: ${token.paddingSM}px;
+      padding-block: ${cssVar.paddingSM};
     `,
     externalLink: css`
-      color: ${token.colorTextQuaternary};
+      color: ${cssVar.colorTextQuaternary};
 
       :hover {
-        color: ${token.colorText};
+        color: ${cssVar.colorText};
       }
     `,
     footer: css`
-      padding-block: 8px;
-      padding-inline: 16px;
-      border-radius: 8px;
-
-      text-align: center;
-
-      background-color: ${token.colorFillQuaternary};
+      padding-block: 4px;
+      padding-inline: 12px;
+      background-color: ${cssVar.colorFillQuaternary};
     `,
     footerText: css`
       font-size: 12px !important;
-      color: ${token.colorTextTertiary} !important;
+      color: ${cssVar.colorTextTertiary} !important;
     `,
     metaInfo: css`
       display: flex;
       align-items: center;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     title: css`
       overflow: hidden;
@@ -75,7 +53,7 @@ const useStyles = createStyles(({ token, css }) => {
       margin-block-end: 0;
     `,
     titleRow: css`
-      color: ${token.colorText};
+      overflow: hidden;
     `,
   };
 });
@@ -89,7 +67,6 @@ interface CrawlerData {
 
 const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, originalUrl }) => {
   const { t } = useTranslation('plugin');
-  const { styles } = useStyles();
   const [openToolUI, togglePageContent] = useChatStore((s) => [s.openToolUI, s.togglePageContent]);
 
   if ('errorType' in result) {
@@ -123,30 +100,28 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
   const { url, title, description } = result as CrawlSuccessResult;
 
   return (
-    <Flexbox
+    <Block
       className={styles.container}
+      clickable
       justify={'space-between'}
       onClick={() => {
         openToolUI(messageId, WebBrowsingManifest.identifier);
         togglePageContent(originalUrl);
       }}
+      variant={'outlined'}
     >
-      <Flexbox className={styles.cardBody} gap={8}>
+      <Flexbox gap={8} paddingBlock={8} paddingInline={12}>
         <Flexbox align={'center'} className={styles.titleRow} horizontal justify={'space-between'}>
-          <Flexbox>
-            <div className={styles.title}>{title || originalUrl}</div>
-          </Flexbox>
+          <Text ellipsis>{title || originalUrl}</Text>
           <Link href={url} onClick={(e) => e.stopPropagation()} target={'_blank'}>
-            <Center className={styles.externalLink}>
-              <Icon icon={ExternalLink} />
-            </Center>
+            <ActionIcon icon={ExternalLink} size={'small'} />
           </Link>
         </Flexbox>
-        <Text className={styles.description} ellipsis={{ rows: 2 }}>
+        <Text ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
           {description || result.content?.slice(0, 40)}
         </Text>
       </Flexbox>
-      <div className={styles.footer}>
+      <Flexbox className={styles.footer}>
         <Descriptions
           classNames={{
             content: styles.footerText,
@@ -165,8 +140,8 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
           ]}
           size="small"
         />
-      </div>
-    </Flexbox>
+      </Flexbox>
+    </Block>
   );
 });
 

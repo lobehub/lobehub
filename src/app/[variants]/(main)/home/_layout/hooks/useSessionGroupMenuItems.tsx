@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type ItemType } from 'antd/es/menu/interface';
 import { FolderCogIcon, FolderPenIcon, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -12,7 +12,7 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   modalRoot: css`
     z-index: 2000;
   `,
@@ -29,7 +29,6 @@ interface HostConfig {
  */
 export const useSessionGroupMenuItems = () => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
   const { modal, message } = App.useApp();
   const groupTemplates = useGroupTemplates();
 

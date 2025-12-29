@@ -1,5 +1,5 @@
 import { Flexbox, ScrollShadow } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -10,7 +10,7 @@ import FileItem from '../FilePreview/FileItem';
 import ContextItem from './ContextItem';
 import SelectionItem from './SelectionItem';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow-x: scroll;
     width: 100%;
@@ -30,7 +30,6 @@ const ContextList = memo(() => {
   const rawSelectionList = useFileStore(fileChatSelectors.chatContextSelections);
   const showSelectionList = useFileStore(fileChatSelectors.chatContextSelectionHasItem);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
-  const { styles } = useStyles();
 
   // Clear selections only when agentId changes (not on initial mount)
   useEffect(() => {

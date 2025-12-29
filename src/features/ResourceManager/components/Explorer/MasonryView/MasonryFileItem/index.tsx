@@ -1,5 +1,5 @@
 import { Checkbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -73,10 +73,10 @@ const extractTextFromEditorJSON = (editorData: any): string => {
   return editorData.root.children.map((node: any) => extractFromNode(node)).join('\n');
 };
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   actions: css`
     opacity: 0;
-    transition: opacity ${token.motionDurationMid};
+    transition: opacity ${cssVar.motionDurationMid};
   `,
   card: css`
     cursor: pointer;
@@ -85,16 +85,16 @@ const useStyles = createStyles(({ css, token }) => ({
 
     overflow: hidden;
 
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
-    transition: all ${token.motionDurationMid};
+    transition: all ${cssVar.motionDurationMid};
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      box-shadow: ${token.boxShadowTertiary};
+      border-color: ${cssVar.colorPrimary};
+      box-shadow: ${cssVar.boxShadowTertiary};
 
       .actions {
         opacity: 1;
@@ -121,7 +121,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
     opacity: 0;
 
-    transition: opacity ${token.motionDurationMid};
+    transition: opacity ${cssVar.motionDurationMid};
   `,
   content: css`
     position: relative;
@@ -130,12 +130,12 @@ const useStyles = createStyles(({ css, token }) => ({
     padding: 12px;
   `,
   dragOver: css`
-    border-color: ${token.colorText} !important;
-    color: ${token.colorBgElevated} !important;
-    background-color: ${token.colorText} !important;
+    border-color: ${cssVar.colorText} !important;
+    color: ${cssVar.colorBgElevated} !important;
+    background-color: ${cssVar.colorText} !important;
 
     * {
-      color: ${token.colorBgElevated} !important;
+      color: ${cssVar.colorBgElevated} !important;
     }
   `,
   dragging: css`
@@ -150,11 +150,11 @@ const useStyles = createStyles(({ css, token }) => ({
 
     opacity: 0;
 
-    transition: opacity ${token.motionDurationMid};
+    transition: opacity ${cssVar.motionDurationMid};
   `,
   selected: css`
-    border-color: ${token.colorPrimary};
-    background: ${token.colorPrimaryBg};
+    border-color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
 
     .checkbox {
       opacity: 1;
@@ -191,7 +191,6 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     sourceType,
     slug,
   }) => {
-    const { styles, cx } = useStyles();
     const [markdownContent, setMarkdownContent] = useState<string>('');
     const [isLoadingMarkdown, setIsLoadingMarkdown] = useState(false);
     const navigate = useNavigate();

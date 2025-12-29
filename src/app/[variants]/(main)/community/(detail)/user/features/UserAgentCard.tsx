@@ -12,7 +12,7 @@ import {
   TooltipGroup,
 } from '@lobehub/ui';
 import { App, Dropdown } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import {
   AlertTriangle,
   ClockIcon,
@@ -60,20 +60,20 @@ const getStatusTagColor = (status?: AgentStatus) => {
   }
 };
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     author: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     desc: css`
       flex: 1;
       margin: 0 !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     footer: css`
       margin-block-start: 16px;
-      border-block-start: 1px dashed ${token.colorBorder};
-      background: ${token.colorBgContainerSecondary};
+      border-block-start: 1px dashed ${cssVar.colorBorder};
+      background: ${cssVar.colorBgContainer};
     `,
     moreButton: css`
       position: absolute;
@@ -86,16 +86,16 @@ const useStyles = createStyles(({ css, token }) => {
     `,
     secondaryDesc: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     statTag: css`
       border-radius: 4px;
 
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 11px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
 
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     `,
     title: css`
       margin: 0 !important;
@@ -103,7 +103,7 @@ const useStyles = createStyles(({ css, token }) => {
       font-weight: 500 !important;
 
       &:hover {
-        color: ${token.colorLink};
+        color: ${cssVar.colorLink};
       }
     `,
     wrapper: css`
@@ -129,7 +129,6 @@ const UserAgentCard = memo<UserAgentCardProps>(
     status,
     identifier,
   }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation(['discover', 'setting']);
     const navigate = useNavigate();
     const { message } = App.useApp();
@@ -261,7 +260,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
         {isOwner && (
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
             <div
-              className={`more-button ${styles.moreButton}`}
+              className={cx('more-button', styles.moreButton)}
               onClick={(e) => e.stopPropagation()}
             >
               <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />

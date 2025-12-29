@@ -1,5 +1,5 @@
 import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { CheckIcon, MinusIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useMemo } from 'react';
@@ -17,7 +17,6 @@ import { useDetailContext } from '../../DetailProvider';
 
 const Versions = memo(() => {
   const { t } = useTranslation('discover');
-  const theme = useTheme();
   const pathname = usePathname();
   const { versions = [], currentVersion } = useDetailContext();
   const { source } = useQuery() as { source?: AssistantMarketSource };
@@ -107,7 +106,7 @@ const Versions = memo(() => {
               dataIndex: 'isValidated',
               render: (_: any, record: any) => (
                 <Icon
-                  color={record.isValidated ? theme.colorSuccess : theme.colorTextDescription}
+                  color={record.isValidated ? cssVar.colorSuccess : cssVar.colorTextDescription}
                   icon={record.isValidated ? CheckIcon : MinusIcon}
                 />
               ),

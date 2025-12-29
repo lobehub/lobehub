@@ -3,29 +3,29 @@
 import { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Radio, RadioChangeEvent } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ClearTodosParams } from '../../types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding: 12px;
-    border-radius: ${token.borderRadius}px;
-    background: ${token.colorFillTertiary};
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorFillTertiary};
   `,
   dangerText: css`
     font-size: 13px;
-    color: ${token.colorError};
+    color: ${cssVar.colorError};
   `,
   header: css`
-    color: ${token.colorWarning};
+    color: ${cssVar.colorWarning};
   `,
   label: css`
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   normalText: css`
     font-size: 13px;
@@ -38,7 +38,6 @@ const useStyles = createStyles(({ css, token }) => ({
  */
 const ClearTodosIntervention = memo<BuiltinInterventionProps<ClearTodosParams>>(
   ({ args, onArgsChange }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('tool');
     const [mode, setMode] = useState<ClearTodosParams['mode']>(args?.mode || 'completed');
 

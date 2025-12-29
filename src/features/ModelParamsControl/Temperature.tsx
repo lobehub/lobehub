@@ -1,5 +1,5 @@
 import { Alert, Flexbox, Icon, SliderWithInput } from '@lobehub/ui';
-import { css, cx, useTheme } from 'antd-style';
+import { css, cssVar, cx } from 'antd-style';
 import { Sparkle, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +46,6 @@ interface TemperatureProps {
 }
 
 const Temperature = memo<TemperatureProps>(({ value, onChange, disabled }) => {
-  const theme = useTheme();
   return (
     <Flexbox gap={4} style={{ width: '100%' }}>
       <SliderWithInput
@@ -54,9 +53,9 @@ const Temperature = memo<TemperatureProps>(({ value, onChange, disabled }) => {
         controls={false}
         disabled={disabled}
         marks={{
-          0: <Icon icon={Sparkle} size={'small'} style={{ color: theme.colorTextQuaternary }} />,
+          0: <Icon icon={Sparkle} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />,
           1: <div />,
-          2: <Icon icon={Sparkles} size={'small'} style={{ color: theme.colorTextQuaternary }} />,
+          2: <Icon icon={Sparkles} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />,
         }}
         max={2}
         onChange={onChange}

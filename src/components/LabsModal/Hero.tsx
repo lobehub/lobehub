@@ -1,11 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     width: 100%;
     max-width: 800px;
@@ -15,17 +15,16 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-inline: 16px;
   `,
   desc: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     font-size: 22px;
     font-weight: 600;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
 const Hero = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('labs');
 
   return (

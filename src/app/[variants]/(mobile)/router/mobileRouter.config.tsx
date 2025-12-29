@@ -7,6 +7,10 @@ import MobileChatLayout from '@/app/[variants]/(mobile)/chat/_layout';
 import MobileMeHomeLayout from '@/app/[variants]/(mobile)/me/(home)/layout';
 import MobileMeProfileLayout from '@/app/[variants]/(mobile)/me/profile/layout';
 import MobileMeSettingsLayout from '@/app/[variants]/(mobile)/me/settings/layout';
+import {
+  BusinessMobileRoutesWithMainLayout,
+  BusinessMobileRoutesWithoutMainLayout,
+} from '@/business/client/BusinessMobileRoutes';
 import { ErrorBoundary, type RouteConfig, dynamicElement, redirectElement } from '@/utils/router';
 
 import MobileSettingsLayout from '../settings/_layout';
@@ -176,6 +180,8 @@ export const mobileRoutes: RouteConfig[] = [
         path: 'settings',
       },
 
+      ...BusinessMobileRoutesWithMainLayout,
+
       // Me routes (mobile personal center)
       {
         children: [
@@ -247,4 +253,5 @@ export const mobileRoutes: RouteConfig[] = [
     errorElement: <ErrorBoundary resetPath="/" />,
     path: '/onboarding',
   },
+  ...BusinessMobileRoutesWithoutMainLayout,
 ];

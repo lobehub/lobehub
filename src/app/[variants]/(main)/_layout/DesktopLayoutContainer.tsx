@@ -1,40 +1,50 @@
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
-import { type FC, type PropsWithChildren } from 'react';
+import { cssVar, useThemeMode } from 'antd-style';
+import { type FC, type PropsWithChildren, useMemo } from 'react';
 
 import { isDesktop } from '@/const/version';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { styles } from './DesktopLayoutContainer/style';
+
 const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
-  const theme = useTheme();
+  const { isDarkMode } = useThemeMode();
   const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
+
+  // CSS 变量用于动态样式
+  const outerCssVariables = useMemo<Record<string, string>>(
+    () => ({
+      '--container-padding-left': expand ? '0px' : '8px',
+      '--container-padding-top': isDesktop ? '0px' : '8px',
+    }),
+    [expand, isDesktop],
+  );
+
+  const innerCssVariables = useMemo<Record<string, string>>(() => {
+    const borderRadius =
+      typeof window !== 'undefined' && (window.lobeEnv?.darwinMajorVersion ?? 0) >= 25
+        ? '12px'
+        : cssVar.borderRadius;
+
+    return {
+      '--container-border-color': isDarkMode ? cssVar.colorBorderSecondary : cssVar.colorBorder,
+      '--container-border-radius': borderRadius,
+    };
+  }, [isDarkMode]);
 
   return (
     <Flexbox
+      className={styles.outerContainer}
       height={'100%'}
       padding={8}
-      style={{
-        overflow: 'hidden',
-        paddingLeft: expand ? 0 : 8,
-        paddingTop: isDesktop ? 0 : 8,
-        position: 'relative',
-      }}
+      style={outerCssVariables}
       width={'100%'}
     >
       <Flexbox
+        className={styles.innerContainer}
         height={'100%'}
-        style={{
-          background: theme.colorBgContainer,
-          border: `1px solid ${theme.isDarkMode ? theme.colorBorderSecondary : theme.colorBorder}`,
-          borderRadius:
-            // macOS 26's darwin is 25
-            typeof window !== 'undefined' && (window.lobeEnv?.darwinMajorVersion ?? 0) >= 25
-              ? 12
-              : theme.borderRadius,
-          overflow: 'hidden',
-          position: 'relative',
-        }}
+        style={innerCssVariables}
         width={'100%'}
       >
         {children}

@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,11 +24,10 @@ const formatNum = (num: string | number) => {
 const ParameterItem = memo<ParameterItemProps>(
   ({ docUrl = DEFAULT_DOC_URL, desc, type, defaultValue, range }) => {
     const { t } = useTranslation('discover');
-    const theme = useTheme();
 
     return (
       <Flexbox align={'flex-start'} gap={16}>
-        <p style={{ color: theme.colorTextSecondary, margin: 0 }}>
+        <p style={{ color: cssVar.colorTextSecondary, margin: 0 }}>
           {desc}{' '}
           <Link href={docUrl} target={'_blank'}>
             {t('models.parameterList.docs')}

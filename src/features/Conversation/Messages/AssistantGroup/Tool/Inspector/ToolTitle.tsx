@@ -1,5 +1,5 @@
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
@@ -7,12 +7,12 @@ import { useTranslation } from 'react-i18next';
 
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
-import { shinyTextStylish } from '@/styles/loading';
+import { shinyTextStyles } from '@/styles';
 import { builtinToolIdentifiers } from '@/tools/identifiers';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   aborted: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   root: css`
     overflow: hidden;
@@ -20,9 +20,8 @@ export const useStyles = createStyles(({ css, token }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
-  shinyText: shinyTextStylish(token),
 }));
 
 interface ToolTitleProps {
@@ -34,14 +33,19 @@ interface ToolTitleProps {
 
 const ToolTitle = memo<ToolTitleProps>(({ identifier, apiName, isLoading, isAborted }) => {
   const { t } = useTranslation('plugin');
-  const { styles, cx } = useStyles();
 
   const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier), isEqual);
   const isBuiltinPlugin = builtinToolIdentifiers.includes(identifier);
   const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? t('unknownPlugin');
 
   return (
-    <div className={cx(styles.root, isLoading && styles.shinyText, isAborted && styles.aborted)}>
+    <div
+      className={cx(
+        styles.root,
+        isLoading && shinyTextStyles.shinyText,
+        isAborted && styles.aborted,
+      )}
+    >
       <span>
         {isBuiltinPlugin
           ? t(`builtins.${identifier}.title`, {

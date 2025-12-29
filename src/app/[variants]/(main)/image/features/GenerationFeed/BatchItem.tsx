@@ -4,7 +4,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { ModelTag } from '@lobehub/icons';
 import { ActionIconGroup, Block, Flexbox, Grid, Markdown, Tag, Text } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { omit } from 'es-toolkit/compat';
@@ -22,19 +22,19 @@ import { GenerationItem } from './GenerationItem';
 import { DEFAULT_MAX_ITEM_WIDTH } from './GenerationItem/utils';
 import { ReferenceImages } from './ReferenceImages';
 
-const useStyles = createStyles(({ cx, css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar, cx }) => ({
   batchActions: cx(
     'batch-actions',
     css`
       opacity: 0;
-      transition: opacity 0.1s ${token.motionEaseInOut};
+      transition: opacity 0.1s ${cssVar.motionEaseInOut};
     `,
   ),
   batchDeleteButton: css`
     &:hover {
-      border-color: ${token.colorError} !important;
-      color: ${token.colorError} !important;
-      background: ${token.colorErrorBg} !important;
+      border-color: ${cssVar.colorError} !important;
+      color: ${cssVar.colorError} !important;
+      background: ${cssVar.colorErrorBg} !important;
     }
   `,
   container: css`
@@ -62,7 +62,6 @@ interface GenerationBatchItemProps {
 }
 
 export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation(['image', 'modelProvider', 'error']);
   const { message } = App.useApp();
 

@@ -1,6 +1,6 @@
 import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2 } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 
@@ -16,8 +16,6 @@ interface InitingProps {
 }
 
 const InitProgress = memo<InitingProps>(({ activeStage, stages }) => {
-  const theme = useTheme();
-
   const outStage = stages[activeStage];
   const percent = (activeStage / (stages.length - 1)) * 100;
 
@@ -28,7 +26,7 @@ const InitProgress = memo<InitingProps>(({ activeStage, stages }) => {
       <Progress
         percent={parseInt(percent.toFixed(0))}
         showInfo={false}
-        strokeColor={theme.colorPrimary}
+        strokeColor={cssVar.colorPrimary}
       />
       <Flexbox align={'center'} gap={4} horizontal>
         {stage?.icon ? stage?.icon : <Icon icon={Loader2} spin />}

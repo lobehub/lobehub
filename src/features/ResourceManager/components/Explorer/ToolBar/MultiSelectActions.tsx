@@ -1,19 +1,13 @@
-import { Button, Flexbox, Icon, Skeleton , Checkbox } from '@lobehub/ui';
+import { Button, Checkbox, Flexbox, Icon, Skeleton } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { BookMinusIcon, BookPlusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
-import { rgba } from 'polished';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
-  container: css`
-    height: 40px;
-    padding-block-end: 12px;
-    border-block-end: 1px solid ${isDarkMode ? token.colorSplit : rgba(token.colorSplit, 0.06)};
-  `,
+const styles = createStaticStyles(({ css }) => ({
   total: css`
     cursor: pointer;
     height: 27px;
@@ -38,7 +32,6 @@ interface MultiSelectActionsProps {
 const MultiSelectActions = memo<MultiSelectActionsProps>(
   ({ selectCount, total, onActionClick, onClickCheckbox }) => {
     const { t } = useTranslation(['components', 'common']);
-    const { styles } = useStyles();
 
     const isSelectedFiles = selectCount > 0;
     const { modal, message } = App.useApp();
@@ -46,7 +39,16 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
     const libraryId = useResourceManagerStore((s) => s.libraryId);
 
     return (
-      <Flexbox align={'center'} gap={12} horizontal>
+      <Flexbox
+        align={'center'}
+        gap={12}
+        horizontal
+        style={{
+          borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+          height: 40,
+          paddingBlockEnd: 12,
+        }}
+      >
         <Flexbox
           align={'center'}
           className={styles.total}

@@ -1,7 +1,7 @@
 import { Ollama } from '@lobehub/icons';
 import { Alert, Button, Center, Flexbox, Input } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { type ReactNode, memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,8 +29,6 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
     const percent = useMemo(() => {
       return total ? Number(((completed / total) * 100).toFixed(1)) : 0;
     }, [completed, total]);
-
-    const theme = useTheme();
 
     // 定义进度回调函数
     const handleProgress = useCallback((progress: ModelProgressInfo) => {
@@ -60,7 +58,7 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
     return (
       <Center gap={16} paddingBlock={32} style={{ width: '100%' }}>
         <FormAction
-          avatar={<Ollama color={theme.colorPrimary} size={64} />}
+          avatar={<Ollama color={cssVar.colorPrimary} size={64} />}
           description={isDownloading ? t('ollama.download.desc') : t('ollama.unlock.description')}
           title={
             isDownloading
@@ -82,13 +80,13 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
             <Progress
               percent={percent}
               showInfo
-              strokeColor={theme.colorSuccess}
-              trailColor={theme.colorSuccessBg}
+              strokeColor={cssVar.colorSuccess}
+              trailColor={cssVar.colorSuccessBg}
             />
             <Flexbox
               distribution={'space-between'}
               horizontal
-              style={{ color: theme.colorTextDescription, fontSize: 12 }}
+              style={{ color: cssVar.colorTextDescription, fontSize: 12 }}
             >
               <span>
                 {t('ollama.download.remainingTime')}: {remainingTime}

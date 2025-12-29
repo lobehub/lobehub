@@ -2695,7 +2695,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
           contextWindowTokens: 128_000,
           description:
-            'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+            'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
           displayName: 'GPT-4o',
           enabled: true,
           id: 'gpt-4o',
@@ -2734,7 +2734,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
           contextWindowTokens: 200_000,
           description:
-            'Claude 3 Haiku 是 Anthropic 的最快且最紧凑的模型，旨在实现近乎即时的响应。它具有快速且准确的定向性能。',
+            "Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.",
           displayName: 'Claude 3 Haiku',
           enabled: false,
           id: 'claude-3-haiku-20240307',
@@ -2790,7 +2790,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             deploymentName: 'gpt-4o-mini',
           },
           contextWindowTokens: 128_000,
-          description: 'GPT-4o Mini，小型高效模型，具备与GPT-4o相似的卓越性能。',
+          description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
           displayName: 'GPT 4o Mini',
           enabled: false,
           id: 'gpt-4o-mini',

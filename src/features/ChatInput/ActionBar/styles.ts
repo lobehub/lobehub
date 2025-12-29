@@ -1,6 +1,8 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+export const styles = createStaticStyles(({ css }) => ({
   dropdownMenu: css`
     &.${prefixCls}-dropdown-menu {
       .${prefixCls}-dropdown-menu-item-group-list {

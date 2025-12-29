@@ -1,5 +1,5 @@
 import { ActionIcon, Image, type ImageProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { type CSSProperties, memo } from 'react';
 
@@ -7,18 +7,18 @@ import { usePlatform } from '@/hooks/usePlatform';
 
 import { MIN_IMAGE_SIZE } from './style';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   deleteButton: css`
     color: #fff;
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
 
     &:hover {
-      background: ${token.colorError};
+      background: ${cssVar.colorError};
     }
   `,
   editableImage: css`
-    background: ${token.colorBgContainer};
-    box-shadow: 0 0 0 1px ${token.colorFill} inset;
+    background: ${cssVar.colorBgContainer};
+    box-shadow: 0 0 0 1px ${cssVar.colorFill} inset;
   `,
   image: css`
     margin-block: 0 !important;
@@ -49,7 +49,6 @@ interface ImageItemProps {
 const ImageItem = memo<ImageItemProps>(
   ({ className, style, editable, alt, onRemove, url, loading, alwaysShowClose, preview }) => {
     const IMAGE_SIZE = editable ? MIN_IMAGE_SIZE : '100%';
-    const { styles, cx } = useStyles();
     const { isSafari } = usePlatform();
 
     return (

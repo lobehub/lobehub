@@ -3,7 +3,7 @@
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
 import { ActionIcon, Block, Dropdown, Flexbox, Icon } from '@lobehub/ui';
 import { App, Input } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as motion from 'motion/react-m';
 import React, { memo, useCallback, useMemo, useReducer, useRef, useState } from 'react';
@@ -101,17 +101,17 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
   }
 };
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   dragging: css`
     will-change: transform;
     opacity: 0.5;
   `,
   fileItemDragOver: css`
-    color: ${token.colorBgElevated} !important;
-    background-color: ${token.colorText} !important;
+    color: ${cssVar.colorBgElevated} !important;
+    background-color: ${cssVar.colorText} !important;
 
     * {
-      color: ${token.colorBgElevated} !important;
+      color: ${cssVar.colorBgElevated} !important;
     }
   `,
   treeItem: css`
@@ -155,7 +155,6 @@ const FileTreeItem = memo<{
     updateKey,
     folderChildrenCache,
   }) => {
-    const { styles, cx } = useStyles();
     const navigate = useNavigate();
     const { currentFolderSlug } = useFolderPath();
     const { message } = App.useApp();

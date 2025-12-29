@@ -2,12 +2,12 @@
 
 import { Skeleton } from '@lobehub/ui';
 import { type SkeletonProps } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx , responsive } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(
-  ({ css, responsive }) => css`
-    ${responsive.mobile} {
+const styles = createStaticStyles(
+  ({ css }) => css`
+    ${responsive.sm} {
       padding: 16px;
     }
   `,
@@ -15,8 +15,6 @@ const useStyles = createStyles(
 
 const SkeletonLoading = memo<SkeletonProps>(
   ({ className, classNames, styles: customStyles, ...rest }) => {
-    const { cx, styles } = useStyles();
-
     return (
       <Skeleton
         active

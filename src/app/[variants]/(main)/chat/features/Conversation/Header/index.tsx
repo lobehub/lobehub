@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';
@@ -12,16 +12,15 @@ import ShareButton from './ShareButton';
 import Tags from './Tags';
 
 const Header = memo(() => {
-  const theme = useTheme();
   return (
     <NavHeader
       left={
-        <Flexbox style={{ backgroundColor: theme.colorBgContainer }}>
+        <Flexbox style={{ backgroundColor: cssVar.colorBgContainer }}>
           <Tags />
         </Flexbox>
       }
       right={
-        <Flexbox horizontal style={{ backgroundColor: theme.colorBgContainer }}>
+        <Flexbox horizontal style={{ backgroundColor: cssVar.colorBgContainer }}>
           <WideScreenButton />
           <NotebookButton />
           <ShareButton />

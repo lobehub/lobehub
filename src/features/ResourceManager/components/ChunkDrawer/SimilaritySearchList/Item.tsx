@@ -1,23 +1,23 @@
 import { Flexbox, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { type SemanticSearchChunk } from '@/types/chunk';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 12px;
     padding-inline: 8px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 4px;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   pageNumber: css`
     font-size: 12px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   text: css`
     font-size: 14px;
@@ -33,8 +33,6 @@ interface ChunkItemProps extends Omit<SemanticSearchChunk, 'index'> {
 }
 
 const SearchItem = memo<ChunkItemProps>(({ text, pageNumber, type, similarity }) => {
-  const { styles, cx } = useStyles();
-
   const typeClassName = useMemo(() => {
     switch (type) {
       default: {

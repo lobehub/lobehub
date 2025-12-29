@@ -1,5 +1,5 @@
 import { Avatar, Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { InboxIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,6 @@ import FileItem from './Item';
 const FileList = () => {
   const { t } = useTranslation('portal');
   const files = useChatStore(chatSelectors.currentUserFiles, isEqual);
-  const theme = useTheme();
   const isCurrentChatLoaded = useChatStore(chatSelectors.isCurrentChatLoaded);
 
   return !isCurrentChatLoaded ? (
@@ -25,11 +24,11 @@ const FileList = () => {
     <Center
       gap={8}
       paddingBlock={24}
-      style={{ border: `1px dashed ${theme.colorSplit}`, borderRadius: 8, marginInline: 12 }}
+      style={{ border: `1px dashed ${cssVar.colorSplit}`, borderRadius: 8, marginInline: 12 }}
     >
       <Avatar
         avatar={<Icon icon={InboxIcon} size={'large'} />}
-        background={theme.colorFillTertiary}
+        background={cssVar.colorFillTertiary}
         shape={'square'}
         size={48}
       />

@@ -11,7 +11,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { exportFile } from '@/utils/client';
 
-import { useStyles } from '../style';
+import { styles } from '../style';
 import Preview from './Preview';
 import { generateMarkdown } from './template';
 
@@ -21,7 +21,6 @@ interface ShareTextProps {
 
 const ShareText = memo<ShareTextProps>(({ item }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { styles } = useStyles();
   const { message } = App.useApp();
 
   const messages = [item];

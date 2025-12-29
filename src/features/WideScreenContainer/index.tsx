@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, type FlexboxProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { type CSSProperties, memo, useEffect } from 'react';
 
@@ -9,10 +9,10 @@ import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     align-self: center;
-    transition: width 0.25s ${token.motionEaseInOut};
+    transition: width 0.25s ${cssVar.motionEaseInOut};
   `,
 }));
 
@@ -24,7 +24,6 @@ interface WideScreenContainerProps extends FlexboxProps {
 
 const WideScreenContainer = memo<WideScreenContainerProps>(
   ({ children, className, onChange, wrapperStyle, onClick, minWidth, ...rest }) => {
-    const { cx, styles } = useStyles();
     const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
 
     useEffect(() => {

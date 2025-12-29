@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ArrowLeftIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,8 +33,6 @@ const FileEditor = memo(() => {
 
   const fileDetail = useFileStore(fileManagerSelectors.getFileById(currentViewItemId));
 
-  const theme = useTheme();
-
   return (
     <Flexbox height={'100%'}>
       <NavHeader
@@ -59,7 +57,7 @@ const FileEditor = memo(() => {
           </Flexbox>
         }
         style={{
-          borderBottom: `1px solid ${theme.colorBorderSecondary}`,
+          borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
         }}
         styles={{
           left: { padding: 0 },

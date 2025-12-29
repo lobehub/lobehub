@@ -1,16 +1,15 @@
 'use client';
 
 import { Flexbox, type FlexboxProps, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
-import { rgba } from 'polished';
 import { type ReactNode, memo } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import CardBanner from '../../components/CardBanner';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   background: css`
     pointer-events: none;
 
@@ -31,22 +30,22 @@ const useStyles = createStyles(({ css, token }) => ({
       width: 100%;
       height: 100%;
 
-      background: ${rgba(token.colorBgContainer, 0.5)};
+      background: color-mix(in srgb, ${cssVar.colorBgContainer} 50%, transparent);
     }
   `,
   container: css`
     position: relative;
     overflow: hidden;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
     box-shadow:
-      0 0 0 1px ${token.colorFill} inset,
-      ${token.boxShadowTertiary};
+      0 0 0 1px ${cssVar.colorFill} inset,
+      ${cssVar.boxShadowTertiary};
   `,
   header: css`
     position: relative;
     overflow: hidden;
     height: 58px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
 
@@ -57,7 +56,6 @@ interface HighlightBlockProps extends FlexboxProps {
 }
 
 const HighlightBlock = memo<HighlightBlockProps>(({ avatar, title, icon, children, ...rest }) => {
-  const { styles } = useStyles();
   const mobile = useServerConfigStore((s) => s.isMobile);
   return (
     <Flexbox className={styles.container} flex={'none'} width={'100%'} {...rest}>

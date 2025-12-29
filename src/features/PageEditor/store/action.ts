@@ -4,8 +4,8 @@ import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
 import { documentService } from '@/services/document';
-import { pageAgentRuntime } from '@/store/chat/slices/builtinTool/actions/pageAgent';
 import { useFileStore } from '@/store/file';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
 import { type State, initialState } from './initialState';
@@ -24,7 +24,7 @@ export interface Action {
   ) => Promise<void>;
   handleTitleSubmit: () => Promise<void>;
   onEditorInit: () => void;
-  performSave: () => Promise<void>;
+  performSave: (options?: { force?: boolean }) => Promise<void>;
   setCurrentEmoji: (emoji: string | undefined) => void;
   setCurrentTitle: (title: string) => void;
 }
@@ -141,7 +141,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         }
       },
 
-      performSave: async () => {
+      performSave: async (options) => {
         const {
           editor,
           currentDocId,
@@ -156,8 +156,13 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
 
         if (!editor) return;
 
-        // Skip save if no changes
-        if (!isDirty && currentDocId && !currentDocId.startsWith('temp-document-')) {
+        // Skip save if no changes (unless force is true)
+        if (
+          !options?.force &&
+          !isDirty &&
+          currentDocId &&
+          !currentDocId.startsWith('temp-document-')
+        ) {
           return;
         }
 

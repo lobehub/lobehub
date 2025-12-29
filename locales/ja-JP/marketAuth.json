@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "キャンセル",
+  "authorize.cancel": "後で行う",
   "authorize.confirm": "プロフィールを作成する",
   "authorize.description": "あなたのコミュニティプロフィールは、{{appName}} のユーザーアカウントとは独立しています。",
   "authorize.footer.agreement": "続行することで、<terms>利用規約</terms>および<privacy>プライバシーポリシー</privacy>に同意したものとみなされます。",

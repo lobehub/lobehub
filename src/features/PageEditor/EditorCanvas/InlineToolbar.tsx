@@ -14,7 +14,7 @@ import {
   FloatActions,
 } from '@lobehub/editor/react';
 import { Block } from '@lobehub/ui';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   BoldIcon,
   BotIcon,
@@ -49,13 +49,13 @@ interface ToolbarProps {
   style?: CSSProperties;
 }
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   askCopilot: css`
     border-radius: 6px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
 
     &:hover {
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     }
   `,
 }));
@@ -65,8 +65,6 @@ const TypoBar = memo<ToolbarProps>(({ floating, style, className }) => {
   const editor = usePageEditorStore((s) => s.editor);
   const editorState = usePageEditorStore((s) => s.editorState);
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
-  const theme = useTheme();
-  const { styles } = useStyles();
 
   const items: ChatInputActionsProps['items'] = useMemo(() => {
     if (!editorState) return [];
@@ -313,7 +311,7 @@ const TypoBar = memo<ToolbarProps>(({ floating, style, className }) => {
       padding={4}
       shadow
       style={{
-        background: theme.colorBgElevated,
+        background: cssVar.colorBgElevated,
         borderRadius: 8,
         marginBottom: 16,
         marginTop: 16,

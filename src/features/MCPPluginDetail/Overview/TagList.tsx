@@ -1,12 +1,12 @@
 'use client';
 
 import { Flexbox, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import Link from 'next/link';
 import qs from 'query-string';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     tag: css`
       margin: 0;
@@ -14,13 +14,12 @@ const useStyles = createStyles(({ token, css }) => {
       padding-inline: 12px;
       border-radius: 16px;
 
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
   };
 });
 
 const TagList = memo<{ tags: string[] }>(({ tags }) => {
-  const { styles } = useStyles();
   const showTags = Boolean(tags?.length && tags?.length > 0);
   return (
     showTags && (

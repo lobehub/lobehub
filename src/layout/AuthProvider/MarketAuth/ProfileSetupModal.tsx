@@ -3,7 +3,7 @@
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
 import { Center, Flexbox, Icon, Input, Modal, Text, TextArea, Tooltip } from '@lobehub/ui';
 import { App, Form, Upload, type UploadProps } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,14 +64,15 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     isFirstTimeSetup = false,
   }) => {
     const { t } = useTranslation('marketAuth');
-    const theme = useTheme();
     const { message } = App.useApp();
     const [form] = Form.useForm<FormValues>();
     const [loading, setLoading] = useState(false);
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
     // 检查是否是自动授权模式
-    const enableMarketTrustedClient = useServerConfigStore(serverConfigSelectors.enableMarketTrustedClient);
+    const enableMarketTrustedClient = useServerConfigStore(
+      serverConfigSelectors.enableMarketTrustedClient,
+    );
 
     // 获取当前用户头像作为默认值
     const currentUserAvatar = useUserStore(userProfileSelectors.userAvatar);
@@ -245,7 +246,17 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
       } finally {
         setLoading(false);
       }
-    }, [accessToken, avatarUrl, bannerUrl, enableMarketTrustedClient, form, message, onClose, onSuccess, t]);
+    }, [
+      accessToken,
+      avatarUrl,
+      bannerUrl,
+      enableMarketTrustedClient,
+      form,
+      message,
+      onClose,
+      onSuccess,
+      t,
+    ]);
 
     const handleCancel = useCallback(() => {
       if (!isFirstTimeSetup) {
@@ -392,11 +403,11 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                   >
                     <div
                       style={{
-                        backgroundColor: bannerUrl ? undefined : theme.colorFillTertiary,
+                        backgroundColor: bannerUrl ? undefined : cssVar.colorFillTertiary,
                         backgroundImage: bannerUrl ? `url(${bannerUrl})` : undefined,
                         backgroundPosition: 'center',
                         backgroundSize: 'cover',
-                        borderRadius: theme.borderRadiusLG,
+                        borderRadius: cssVar.borderRadiusLG,
                         cursor: 'pointer',
                         height: 120,
                         overflow: 'hidden',
@@ -422,11 +433,11 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                         <Flexbox align="center" gap={8}>
                           <ImagePlus
                             size={24}
-                            style={{ color: bannerUrl ? '#fff' : theme.colorTextSecondary }}
+                            style={{ color: bannerUrl ? '#fff' : cssVar.colorTextSecondary }}
                           />
                           <Text
                             style={{
-                              color: bannerUrl ? '#fff' : theme.colorTextSecondary,
+                              color: bannerUrl ? '#fff' : cssVar.colorTextSecondary,
                               fontSize: 12,
                             }}
                           >
@@ -446,7 +457,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                           handleBannerDelete();
                         }}
                         style={{
-                          color: theme.colorError,
+                          color: cssVar.colorError,
                           cursor: 'pointer',
                           fontSize: 12,
                         }}
@@ -470,7 +481,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                   placeholder={t('profileSetup.fields.github.placeholder')}
                   prefix={
                     <Icon
-                      fill={theme.colorTextSecondary}
+                      fill={cssVar.colorTextSecondary}
                       icon={SiGithub}
                       style={{ marginRight: 8 }}
                     />
@@ -482,7 +493,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                 <Input
                   placeholder={t('profileSetup.fields.twitter.placeholder')}
                   prefix={
-                    <Icon fill={theme.colorTextSecondary} icon={SiX} style={{ marginRight: 8 }} />
+                    <Icon fill={cssVar.colorTextSecondary} icon={SiX} style={{ marginRight: 8 }} />
                   }
                 />
               </Form.Item>
@@ -500,7 +511,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                   placeholder={t('profileSetup.fields.website.placeholder')}
                   prefix={
                     <Icon
-                      color={theme.colorTextSecondary}
+                      color={cssVar.colorTextSecondary}
                       icon={Globe}
                       style={{ marginRight: 8 }}
                     />

@@ -1,5 +1,5 @@
 import { Icon } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { CheckIcon, CircleX, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,11 +15,10 @@ interface ServerStatusControlProps {
 const ServerStatusControl = memo<ServerStatusControlProps>(
   ({ isConnecting, isWaitingAuth, server }) => {
     const { t } = useTranslation('setting');
-    const theme = useTheme();
 
     // Loading states
     if (isConnecting || isWaitingAuth) {
-      return <Icon color={theme.colorTextDescription} icon={Loader2} spin />;
+      return <Icon color={cssVar.colorTextDescription} icon={Loader2} spin />;
     }
 
     // No server yet - show nothing (click to connect)
@@ -30,7 +29,7 @@ const ServerStatusControl = memo<ServerStatusControlProps>(
     // Server status indicators
     switch (server.status) {
       case KlavisServerStatus.CONNECTED: {
-        return <Icon color={theme.colorSuccess} icon={CheckIcon} />;
+        return <Icon color={cssVar.colorSuccess} icon={CheckIcon} />;
       }
 
       case KlavisServerStatus.PENDING_AUTH: {
@@ -40,7 +39,7 @@ const ServerStatusControl = memo<ServerStatusControlProps>(
       case KlavisServerStatus.ERROR: {
         return (
           <Icon
-            color={theme.colorError}
+            color={cssVar.colorError}
             icon={CircleX}
             title={t('tools.klavis.error', { defaultValue: 'Error' })}
           />

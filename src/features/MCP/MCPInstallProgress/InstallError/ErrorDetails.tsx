@@ -1,5 +1,5 @@
 import { Button, Flexbox, Highlighter, Icon, Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import * as motion from 'motion/react-m';
 import { memo, useState } from 'react';
@@ -14,7 +14,6 @@ const ErrorDetails = memo<{
   const { t } = useTranslation('plugin');
   const [expanded, setExpanded] = useState(false);
 
-  const theme = useTheme();
   return (
     <Flexbox gap={8}>
       <Button
@@ -42,7 +41,7 @@ const ErrorDetails = memo<{
           <Flexbox
             gap={8}
             style={{
-              backgroundColor: theme.colorFillQuaternary,
+              backgroundColor: cssVar.colorFillQuaternary,
               borderRadius: 8,
               fontFamily: 'monospace',
               fontSize: '11px',

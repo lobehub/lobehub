@@ -1,19 +1,17 @@
 import { Center, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   icon: css`
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 8px;
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
   `,
 }));
 
 const GroupIcon = memo<{ icon: LucideIcon }>(({ icon }) => {
-  const { styles } = useStyles();
-
   return (
     <Center className={styles.icon} flex={'none'} height={40} width={40}>
       <Icon icon={icon} size={24} />

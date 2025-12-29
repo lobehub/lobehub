@@ -2,6 +2,7 @@ import { type UIChatMessage } from '@lobechat/types';
 import { Button, Form, type FormItemProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
 import { App, Switch } from 'antd';
+import { cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { DownloadIcon, FileText } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -16,7 +17,7 @@ import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
 
 import { generateMarkdown } from '../ShareText/template';
 import { type FieldType } from '../ShareText/type';
-import { useContainerStyles, useStyles } from '../style';
+import { containerStyles, styles } from '../style';
 import PdfPreview from './PdfPreview';
 import { usePdfGeneration } from './usePdfGeneration';
 
@@ -30,8 +31,6 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const SharePdf = memo((props: { message?: UIChatMessage }) => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
-  const { styles } = useStyles();
-  const { styles: containerStyles } = useContainerStyles();
   const { message } = App.useApp();
 
   const { message: outerMessage } = props;
@@ -153,7 +152,10 @@ const SharePdf = memo((props: { message?: UIChatMessage }) => {
   if (error) {
     return (
       <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
-        <div className={containerStyles.preview} style={{ padding: 12 }}>
+        <div
+          className={cx(containerStyles.preview, containerStyles.previewWide)}
+          style={{ padding: 12 }}
+        >
           <div style={{ color: 'red', textAlign: 'center' }}>
             {t('shareModal.pdfGenerationError')}: {error}
           </div>

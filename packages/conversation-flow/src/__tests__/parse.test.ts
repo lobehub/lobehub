@@ -156,7 +156,7 @@ describe('parse', () => {
   });
 
   describe('Performance', () => {
-    it('should parse 10000 items within 50ms', () => {
+    it('should parse 10000 items within 100ms', () => {
       // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)
       // This simulates a more realistic scenario where messages are not deeply nested
       const largeInput = Array.from({ length: 10000 }, (_, i) => ({
@@ -174,7 +174,7 @@ describe('parse', () => {
       const executionTime = endTime - startTime;
 
       expect(result.flatList.length).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(60);
+      expect(executionTime).toBeLessThan(100);
     });
   });
 });

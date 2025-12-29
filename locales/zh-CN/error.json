@@ -113,6 +113,7 @@
   "response.StreamChunkError": "流式响应解析失败。请检查接口是否符合规范，或联系模型服务商",
   "response.SubscriptionKeyMismatch": "订阅状态同步异常。你可以点击下方按钮恢复订阅，或邮件联系我们",
   "response.SubscriptionPlanLimit": "订阅积分已用尽，暂时无法使用该功能。你可以升级计划，或配置自定义模型 API 后继续",
+  "response.SubscriptionPlanLimitUltimate": "您的订阅积分已用尽，无法使用此功能。请充值积分或配置自定义模型 API 以继续使用。",
   "response.SystemTimeNotMatchError": "系统时间与服务器不一致。请校准系统时间后重试",
   "response.UnknownChatFetchError": "请求失败（未知错误）。请根据以下信息排查或重试",
   "stt.responseError": "请求失败。请检查配置后重试",

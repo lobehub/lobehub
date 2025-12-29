@@ -9,6 +9,7 @@
   "config.imageNum.label": "图片数量",
   "config.imageUrl.label": "参考图",
   "config.imageUrls.label": "参考图",
+  "config.model.label": "模型",
   "config.prompt.placeholder": "描述你想要生成的内容",
   "config.quality.label": "图片质量",
   "config.quality.options.hd": "高清",
@@ -21,6 +22,7 @@
   "config.seed.random": "随机种子",
   "config.size.label": "尺寸",
   "config.steps.label": "步数",
+  "config.title": "AI 图像",
   "config.width.label": "宽度",
   "generation.actions.applySeed": "应用种子",
   "generation.actions.copyError": "复制错误信息",
@@ -54,6 +56,7 @@
   "topic.createNew": "新建主题",
   "topic.deleteConfirm": "删除生成主题",
   "topic.deleteConfirmDesc": "确认删除该生成主题吗？删除后无法恢复",
+  "topic.empty": "暂无生成主题",
   "topic.title": "绘画主题",
   "topic.untitled": "默认主题"
 }

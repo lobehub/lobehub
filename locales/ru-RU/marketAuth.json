@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "Отмена",
+  "authorize.cancel": "Не сейчас",
   "authorize.confirm": "Создать ваш профиль",
   "authorize.description": "Ваш профиль сообщества существует отдельно от вашей учетной записи {{appName}}.",
   "authorize.footer.agreement": "Продолжая, вы подтверждаете, что ознакомились и соглашаетесь с <terms>Условиями использования</terms> и <privacy>Политикой конфиденциальности</privacy>",

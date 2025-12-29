@@ -1,10 +1,10 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { motion } from 'motion/react';
 
-import { useTypographyStyles } from '../styles';
+import { typographyStyles } from '../styles';
 
 // TitleSection 组件的样式
-const useTitleSectionStyles = createStyles(({ css }) => ({
+const titleSectionStyles = createStaticStyles(({ css }) => ({
   // 标题区域容器
   titleSection: css`
     margin-block-end: 48px;
@@ -44,8 +44,7 @@ export const TitleSection = ({
   },
   className,
 }: TitleSectionProps) => {
-  const { styles } = useTitleSectionStyles();
-  const { styles: typographyStyles } = useTypographyStyles();
+  const styles = titleSectionStyles;
 
   const content = (
     <>
@@ -59,7 +58,7 @@ export const TitleSection = ({
     return (
       <motion.div
         animate={animation.animate}
-        className={`${styles.titleSection} ${className || ''}`}
+        className={cx(styles.titleSection, className)}
         initial={animation.initial}
         transition={animation.transition}
       >
@@ -69,5 +68,5 @@ export const TitleSection = ({
   }
 
   // 静态版本（不带动画）
-  return <div className={`${styles.titleSection} ${className || ''}`}>{content}</div>;
+  return <div className={cx(styles.titleSection, className)}>{content}</div>;
 };

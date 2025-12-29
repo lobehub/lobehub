@@ -1,5 +1,5 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
@@ -10,9 +10,9 @@ import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
 import { type ThreadItem } from '@/types/topic';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   container: css`
     cursor: pointer;
@@ -24,18 +24,17 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 12px;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   extra: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
 const Item = memo<ThreadItem>(({ id, title, lastActiveAt, sourceMessageId }) => {
   const { t } = useTranslation('chat');
   const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
-  const { styles, cx } = useStyles();
   const [isActive, messageCount] = useChatStore((s) => [
     s.activeThreadId === id,
     chatSelectors.countMessagesByThreadId(id)(s),

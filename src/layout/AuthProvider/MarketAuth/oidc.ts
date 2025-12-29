@@ -1,3 +1,4 @@
+import { isDesktop } from '@/const/version';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 
 import { MarketAuthError } from './errors';
@@ -183,11 +184,9 @@ export class MarketOIDC {
       });
     }
 
-    const isDesktopApp = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
-
     // 在新窗口中打开授权页面
     let popup: Window | null = null;
-    if (isDesktopApp) {
+    if (isDesktop) {
       // Electron 桌面端：使用 IPC 调用主进程打开系统浏览器
       console.log('[MarketOIDC] Desktop app detected, opening system browser via IPC');
       const { remoteServerService } = await import('@/services/electron/remoteServer');

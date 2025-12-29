@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { FileText, NotebookText } from 'lucide-react';
 import { memo } from 'react';
 
@@ -9,54 +9,51 @@ import { useChatStore } from '@/store/chat';
 
 import { NotebookDocument } from '../../../types';
 
-const useStyles = createStyles(({ token, css }) => {
-  return {
-    container: css`
-      cursor: pointer;
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  container: css`
+    cursor: pointer;
 
-      overflow: hidden;
+    overflow: hidden;
 
-      width: 100%;
-      padding-block: 12px;
-      padding-inline: 12px;
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: 8px;
+    width: 100%;
+    padding-block: 12px;
+    padding-inline: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 8px;
 
-      background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
 
-      &:hover {
-        background: ${token.colorFillSecondary};
-      }
-    `,
-    description: css`
-      font-size: 12px;
-      line-height: 1.5;
-      color: ${token.colorTextSecondary};
-    `,
-    icon: css`
-      color: ${token.colorPrimary};
-    `,
-    title: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 1;
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  description: css`
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  icon: css`
+    color: ${cssVar.colorPrimary};
+  `,
+  title: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
 
-      font-weight: 500;
-      color: ${token.colorText};
-    `,
-    typeTag: css`
-      font-size: 11px;
-    `,
-  };
-});
+    font-weight: 500;
+    color: ${cssVar.colorText};
+  `,
+  typeTag: css`
+    font-size: 11px;
+  `,
+}));
 
 interface DocumentCardProps {
   document: NotebookDocument;
 }
 
 const DocumentCard = memo<DocumentCardProps>(({ document }) => {
-  const { styles } = useStyles();
   const openDocument = useChatStore((s) => s.openDocument);
 
   const handleClick = () => {

@@ -18,7 +18,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 const mockExecGroupSubAgentTask = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
-    execGroupSubAgentTask: mockExecGroupSubAgentTask,
+    execSubAgentTask: mockExecGroupSubAgentTask,
   })),
 }));
 
@@ -32,7 +32,7 @@ vi.mock('@/server/services/aiChat', () => ({
   AiChatService: vi.fn().mockImplementation(() => ({})),
 }));
 
-describe('aiAgentRouter.execGroupSubAgentTask', () => {
+describe('aiAgentRouter.execSubAgentTask', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
   let testAgentId: string;
@@ -108,7 +108,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await caller.execGroupSubAgentTask({
+      await caller.execSubAgentTask({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -136,7 +136,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.execGroupSubAgentTask({
+      const result = await caller.execSubAgentTask({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -162,7 +162,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await caller.execGroupSubAgentTask({
+      await caller.execSubAgentTask({
         agentId: testAgentId,
         groupId: testGroupId,
         instruction: 'Test instruction',
@@ -184,7 +184,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: undefined,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -198,7 +198,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgentId,
           groupId: undefined,
           instruction: 'Test instruction',
@@ -212,7 +212,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: undefined,
@@ -226,7 +226,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -240,7 +240,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -262,7 +262,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',
@@ -278,7 +278,7 @@ describe('aiAgentRouter.execGroupSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execGroupSubAgentTask({
+        caller.execSubAgentTask({
           agentId: testAgentId,
           groupId: testGroupId,
           instruction: 'Test instruction',

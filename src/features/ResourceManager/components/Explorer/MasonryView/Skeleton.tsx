@@ -1,22 +1,22 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, keyframes } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const pulse = keyframes`
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+`;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorFillQuaternary};
-    animation: pulse 1.5s ease-in-out infinite;
-
-    @keyframes pulse {
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.6;
-      }
-    }
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
+    animation: ${pulse} 1.5s ease-in-out infinite;
   `,
   grid: css`
     display: grid;
@@ -31,7 +31,6 @@ interface MasonrySkeletonProps {
 }
 
 const MasonryViewSkeleton = memo<MasonrySkeletonProps>(({ columnCount }) => {
-  const { styles } = useStyles();
   // Generate varying heights for more natural masonry look
   const heights = [180, 220, 200, 190, 240, 210, 200, 230, 180, 220, 210, 190];
 

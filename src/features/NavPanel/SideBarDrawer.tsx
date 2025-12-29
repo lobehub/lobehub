@@ -2,7 +2,7 @@
 
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { Drawer } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { type ReactNode, Suspense, memo } from 'react';
 
@@ -23,8 +23,6 @@ interface SideBarDrawerProps {
 
 const SideBarDrawer = memo<SideBarDrawerProps>(
   ({ subHeader, open, onClose, children, title, action }) => {
-    const theme = useTheme();
-
     return (
       <Drawer
         closable={false}
@@ -40,17 +38,17 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
         size={280}
         styles={{
           body: {
-            background: theme.colorBgLayout,
+            background: cssVar.colorBgLayout,
             padding: 0,
           },
           header: {
-            background: theme.colorBgLayout,
+            background: cssVar.colorBgLayout,
             borderBottom: 'none',
             padding: 0,
           },
           wrapper: {
-            borderLeft: `1px solid ${theme.colorBorderSecondary}`,
-            borderRight: `1px solid ${theme.colorBorderSecondary}`,
+            borderLeft: `1px solid ${cssVar.colorBorderSecondary}`,
+            borderRight: `1px solid ${cssVar.colorBorderSecondary}`,
             boxShadow: `4px 0 8px -2px rgba(0,0,0,.04)`,
             zIndex: 0,
           },

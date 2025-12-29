@@ -2,7 +2,7 @@
 
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Block, Checkbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import type { TodoItem, TodoList as TodoListType } from '../../types';
@@ -12,19 +12,19 @@ export interface TodoListRenderState {
 }
 
 // Styles matching TodoItemRow in SortableTodoList
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   itemRow: css`
     width: 100%;
     padding-block: 10px;
     padding-inline: 12px;
-    border-block-end: 1px dashed ${token.colorBorderSecondary};
+    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
 
     &:last-child {
       border-block-end: none;
     }
   `,
   textChecked: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
   `,
 }));
@@ -38,11 +38,9 @@ interface ReadOnlyTodoItemProps {
  * Read-only todo item row, matching the style of TodoItemRow in SortableTodoList
  */
 const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, completed }) => {
-  const { styles, theme } = useStyles();
-
   return (
     <Checkbox
-      backgroundColor={theme.colorSuccess}
+      backgroundColor={cssVar.colorSuccess}
       checked={completed}
       classNames={{ text: completed ? styles.textChecked : undefined, wrapper: styles.itemRow }}
       shape={'circle'}

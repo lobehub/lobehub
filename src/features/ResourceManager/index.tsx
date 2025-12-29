@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar, useTheme } from 'antd-style';
 import dynamic from 'next/dynamic';
 import { memo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -91,7 +91,7 @@ const ResourceManager = memo(() => {
           <Flexbox
             height={'100%'}
             style={{
-              backgroundColor: theme.colorBgLayout,
+              backgroundColor: cssVar.colorBgLayout,
               inset: 0,
               position: 'absolute',
               zIndex: 1,

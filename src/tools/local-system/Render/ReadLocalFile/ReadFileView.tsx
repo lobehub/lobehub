@@ -1,6 +1,6 @@
 import { type LocalReadFileResult } from '@lobechat/electron-client-ipc';
 import { ActionIcon, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { AlignLeft, Asterisk, ExternalLink, FolderOpen } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,32 +10,29 @@ import { localFileService } from '@/services/electron/localFileService';
 import { useElectronStore } from '@/store/electron';
 import { desktopStateSelectors } from '@/store/electron/selectors';
 
-const useStyles = createStyles(({ css, token, cx }) => ({
-  actions: cx(
-    'local-file-actions',
-    css`
-      cursor: pointer;
-      color: ${token.colorTextTertiary};
-      opacity: 0;
-      transition: opacity 0.2s ${token.motionEaseInOut};
-    `,
-  ),
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  actions: css`
+    cursor: pointer;
+    color: ${cssVar.colorTextTertiary};
+    opacity: 0;
+    transition: opacity 0.2s ${cssVar.motionEaseInOut};
+  `,
   container: css`
     justify-content: space-between;
 
     padding: 8px;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
 
-    transition: all 0.2s ${token.motionEaseInOut};
+    transition: all 0.2s ${cssVar.motionEaseInOut};
 
     .local-file-actions {
       opacity: 0;
     }
 
     &:hover {
-      border-color: ${token.colorBorder};
+      border-color: ${cssVar.colorBorder};
 
       .local-file-actions {
         opacity: 1;
@@ -45,31 +42,28 @@ const useStyles = createStyles(({ css, token, cx }) => ({
   fileName: css`
     flex: 1;
     margin-inline-start: 8px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     &:hover {
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     }
   `,
   header: css`
     cursor: pointer;
   `,
   lineCount: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
-  meta: cx(
-    'local-file-actions',
-    css`
-      font-size: 12px;
-      color: ${token.colorTextTertiary};
-    `,
-  ),
+  meta: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
   path: css`
     margin-block-start: 4px;
     padding-inline: 4px;
 
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     word-break: break-all;
   `,
   previewBox: css`
@@ -81,7 +75,7 @@ const useStyles = createStyles(({ css, token, cx }) => ({
     padding-inline: 8px;
     border-radius: 8px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   previewText: css`
     font-size: 12px;
@@ -99,7 +93,6 @@ interface ReadFileViewProps extends LocalReadFileResult {
 const ReadFileView = memo<ReadFileViewProps>(
   ({ filename, path, fileType, charCount, content, totalLineCount, totalCharCount, loc }) => {
     const { t } = useTranslation('tool');
-    const { styles } = useStyles();
 
     const handleOpenFile = (e: React.MouseEvent) => {
       e.stopPropagation();

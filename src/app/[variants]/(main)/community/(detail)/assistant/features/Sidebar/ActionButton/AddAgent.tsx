@@ -2,7 +2,7 @@
 
 import { Icon } from '@lobehub/ui';
 import { App, Dropdown } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,7 @@ import { useHomeStore } from '@/store/home';
 
 import { useDetailContext } from '../../DetailProvider';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   button: css`
     button {
       width: 100%;
@@ -27,8 +27,6 @@ const useStyles = createStyles(({ css }) => ({
 const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { avatar, description, tags, title, config, backgroundColor, identifier, editorData } =
     useDetailContext();
-
-  const { styles } = useStyles();
   const [isLoading, setIsLoading] = useState(false);
   const createAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);

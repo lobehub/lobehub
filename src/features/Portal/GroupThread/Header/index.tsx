@@ -1,5 +1,5 @@
 import { ActionIcon, Avatar, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -12,7 +12,6 @@ import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
 const Header = memo(() => {
-  const theme = useTheme();
   const togglePortal = useChatStore((s) => s.togglePortal);
   const close = () => {
     useAgentGroupStore.setState({ activeThreadAgentId: '' });
@@ -33,7 +32,7 @@ const Header = memo(() => {
       paddingBlock={6}
       paddingInline={8}
       style={{
-        background: theme.colorBgContainer,
+        background: cssVar.colorBgContainer,
       }}
       title={
         <Flexbox align={'center'} gap={8} horizontal>

@@ -1,19 +1,21 @@
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
-import { Activity, type FC, type ReactNode, useEffect, useState } from 'react';
+import { useTheme, useThemeMode } from 'antd-style';
+import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useHomeStore } from '@/store/home';
 
 import RecentHydration from './RecentHydration';
 import Sidebar from './Sidebar';
+import { styles } from './style';
 
 interface LayoutProps {
   children?: ReactNode;
 }
 
 const Layout: FC<LayoutProps> = ({ children }) => {
-  const theme = useTheme();
+  const { isDarkMode } = useThemeMode();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isHomeRoute = pathname === '/';
@@ -29,29 +31,26 @@ const Layout: FC<LayoutProps> = ({ children }) => {
     if (isHomeRoute) setHasActivated(true);
   }, [isHomeRoute]);
 
+  // CSS 变量用于动态背景色（colorBgContainerSecondary 不在 cssVar 中）
+  const cssVariables = useMemo<Record<string, string>>(
+    () => ({
+      '--content-bg-secondary': theme.colorBgContainerSecondary,
+    }),
+    [theme.colorBgContainerSecondary],
+  );
+
   if (!hasActivated) return null;
 
   // Keep the Home layout alive and render it offscreen when inactive.
   return (
     <Activity mode={isHomeRoute ? 'visible' : 'hidden'} name="DesktopHomeLayout">
-      <Flexbox
-        height={'100%'}
-        style={{
-          inset: 0,
-          position: 'absolute',
-        }}
-        width={'100%'}
-      >
+      <Flexbox className={styles.absoluteContainer} height={'100%'} width={'100%'}>
         <Sidebar />
         <Flexbox
+          className={isDarkMode ? styles.contentDark : styles.contentLight}
           flex={1}
           height={'100%'}
-          style={{
-            background: theme.isDarkMode
-              ? `linear-gradient(to bottom, ${theme.colorBgContainer}, ${theme.colorBgContainerSecondary})`
-              : theme.colorBgContainerSecondary,
-            overflow: 'hidden',
-          }}
+          style={cssVariables}
         >
           {content}
         </Flexbox>

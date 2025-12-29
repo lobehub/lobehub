@@ -15,16 +15,21 @@ export interface ExecAgentTaskParams {
   slug?: string;
 }
 
-export interface ExecGroupSubAgentTaskParams {
+/**
+ * Parameters for execSubAgentTask
+ * Supports both Group mode (with groupId) and Single Agent mode (without groupId)
+ */
+export interface ExecSubAgentTaskParams {
   agentId: string;
-  groupId: string;
+  /** Optional for Single Agent mode, required for Group mode */
+  groupId?: string;
   instruction: string;
   parentMessageId: string;
   timeout?: number;
   topicId: string;
 }
 
-export interface GetGroupSubAgentTaskStatusParams {
+export interface GetSubAgentTaskStatusParams {
   threadId: string;
 }
 
@@ -42,17 +47,21 @@ class AiAgentService {
   }
 
   /**
-   * Execute a sub-agent task in a group
+   * Execute a sub-agent task (supports both Group and Single Agent mode)
+   *
+   * - Group mode: pass groupId, Thread will be associated with the Group
+   * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
    */
-  async execGroupSubAgentTask(params: ExecGroupSubAgentTaskParams) {
-    return await lambdaClient.aiAgent.execGroupSubAgentTask.mutate(params);
+  async execSubAgentTask(params: ExecSubAgentTaskParams) {
+    return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }
 
   /**
    * Get SubAgent task status by threadId
+   * Works for both Group and Single Agent mode tasks
    */
-  async getGroupSubAgentTaskStatus(params: GetGroupSubAgentTaskStatusParams) {
-    return await lambdaClient.aiAgent.getGroupSubAgentTaskStatus.query(params);
+  async getSubAgentTaskStatus(params: GetSubAgentTaskStatusParams) {
+    return await lambdaClient.aiAgent.getSubAgentTaskStatus.query(params);
   }
 
   /**

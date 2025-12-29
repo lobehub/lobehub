@@ -1,19 +1,19 @@
 import { Center, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import React from 'react';
 import { TableVirtuoso } from 'react-virtuoso';
 
 import TableCell from './TableCell';
 
-const useStyles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   columnList: css`
     margin-inline-start: 32px;
-    font-size: ${token.fontSizeSM}px;
-    color: ${token.colorTextSecondary};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextSecondary};
 
     > div {
-      padding-block: ${token.paddingXS}px;
+      padding-block: ${cssVar.paddingXS};
       padding-inline: 0;
     }
   `,
@@ -25,12 +25,12 @@ const useStyles = createStyles(({ token, css }) => ({
       border-collapse: collapse;
       width: 100%;
       margin-inline-end: 12px;
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
     }
 
     thead {
       tr {
-        outline: 1px solid ${token.colorBorderSecondary};
+        outline: 1px solid ${cssVar.colorBorderSecondary};
       }
     }
 
@@ -41,7 +41,7 @@ const useStyles = createStyles(({ token, css }) => ({
       max-width: 200px;
       padding-block: 8px;
       padding-inline: 12px;
-      border-inline-end: 1px solid ${token.colorBorderSecondary};
+      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
 
       font-size: 12px;
       text-overflow: ellipsis;
@@ -53,23 +53,23 @@ const useStyles = createStyles(({ token, css }) => ({
       z-index: 1;
       inset-block-start: 0;
 
-      border-block-end: 1px solid ${token.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
-      font-weight: ${token.fontWeightStrong};
+      font-weight: ${cssVar.fontWeightStrong};
       text-align: start;
       text-wrap: nowrap;
 
-      background: ${token.colorBgElevated};
+      background: ${cssVar.colorBgElevated};
     }
 
     td {
-      border-block-end: 1px solid ${token.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
       text-wrap: nowrap;
     }
 
     tbody {
       tr:hover {
-        background: ${token.colorFillTertiary};
+        background: ${cssVar.colorFillTertiary};
       }
     }
   `,
@@ -77,13 +77,13 @@ const useStyles = createStyles(({ token, css }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: ${token.padding}px;
+    gap: ${cssVar.padding};
     align-items: center;
 
     padding: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -94,8 +94,6 @@ interface TableProps {
 }
 
 const Table = ({ columns, dataSource, loading }: TableProps) => {
-  const { styles } = useStyles();
-
   if (loading)
     return (
       <Center height={'100%'}>

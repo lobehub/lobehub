@@ -1,12 +1,32 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, keyframes } from 'antd-style';
 import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const shimmer = keyframes`
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+`;
+
+const spin = keyframes`
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+`;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 12px;
     padding-inline: 16px;
@@ -19,7 +39,7 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 3px;
     border-radius: 2px;
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   progressShimmer: css`
     position: absolute;
@@ -29,45 +49,24 @@ const useStyles = createStyles(({ css, token }) => ({
     width: 100%;
     height: 100%;
 
-    background: linear-gradient(90deg, transparent, ${token.colorPrimaryBgHover}, transparent);
+    background: linear-gradient(90deg, transparent, ${cssVar.colorPrimaryBgHover}, transparent);
 
-    animation: shimmer 2s infinite;
-
-    @keyframes shimmer {
-      0% {
-        transform: translateX(-100%);
-      }
-
-      100% {
-        transform: translateX(100%);
-      }
-    }
+    animation: ${shimmer} 2s infinite;
   `,
   spin: css`
-    animation: spin 1s linear infinite;
-
-    @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
-    }
+    animation: ${spin} 1s linear infinite;
   `,
   statusRow: css`
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   statusText: css`
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
 const InitializingState = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('chat');
 
   return (

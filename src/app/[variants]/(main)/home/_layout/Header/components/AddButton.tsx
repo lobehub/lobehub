@@ -1,7 +1,7 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { CreateBotIcon } from '@lobehub/ui/icons';
 import { Dropdown } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import React, { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,8 +13,6 @@ import { useCreateMenuItems } from '../../hooks';
 
 const AddButton = memo(() => {
   const { t: tChat } = useTranslation('chat');
-
-  const theme = useTheme();
 
   const { openGroupWizardModal, closeGroupWizardModal, setGroupWizardLoading } = useAgentModal();
 
@@ -99,7 +97,7 @@ const AddButton = memo(() => {
       />
       <Dropdown menu={{ items: dropdownItems || [] }}>
         <ActionIcon
-          color={theme.colorTextQuaternary}
+          color={cssVar.colorTextQuaternary}
           icon={ChevronDownIcon}
           size={{ blockSize: 32, size: 14 }}
           style={{

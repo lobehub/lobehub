@@ -1,65 +1,48 @@
 import { type UniformSearchResult } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import Link from 'next/link';
-import { memo } from 'react';
+import { CSSProperties, memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     cursor: pointer;
 
     height: 100%;
     padding: 8px;
-    border-radius: 8px;
 
     font-size: 12px;
     color: initial;
-
-    background: ${token.colorFillQuaternary};
-
-    &:hover {
-      background: ${token.colorFillTertiary};
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    color: ${token.colorText};
-    text-overflow: ellipsis;
-  `,
-  url: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    text-overflow: ellipsis;
   `,
 }));
 
-const SearchResultItem = memo<UniformSearchResult>(({ url, title }) => {
-  const { styles } = useStyles();
-
-  const urlObj = new URL(url);
-  const host = urlObj.hostname;
-  return (
-    <Link href={url} target={'_blank'}>
-      <Flexbox className={styles.container} gap={2} justify={'space-between'}>
-        <div className={styles.title}>{title}</div>
-        <Flexbox align={'center'} gap={4} horizontal>
-          <WebFavicon size={14} title={title} url={url} />
-          <Text className={styles.url} type={'secondary'}>
-            {host.replace('www.', '')}
-          </Text>
-        </Flexbox>
-      </Flexbox>
-    </Link>
-  );
-});
+const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
+  ({ url, title, style }) => {
+    const urlObj = new URL(url);
+    const host = urlObj.hostname;
+    return (
+      <Link href={url} target={'_blank'}>
+        <Block
+          className={styles.container}
+          clickable
+          gap={2}
+          justify={'space-between'}
+          style={style}
+          variant={'outlined'}
+        >
+          <Text ellipsis={{ rows: 2 }}>{title}</Text>
+          <Flexbox align={'center'} gap={4} horizontal>
+            <WebFavicon size={14} title={title} url={url} />
+            <Text ellipsis type={'secondary'}>
+              {host.replace('www.', '')}
+            </Text>
+          </Flexbox>
+        </Block>
+      </Link>
+    );
+  },
+);
 
 export default SearchResultItem;

@@ -4,16 +4,16 @@ import { type GlobFilesState } from '@lobechat/builtin-tool-local-system';
 import { type GlobFilesParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStylish } from '@/styles/loading';
+import { shinyTextStyles } from '@/styles';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
   `,
   root: css`
     overflow: hidden;
@@ -21,22 +21,20 @@ const useStyles = createStyles(({ css, token }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
-  shinyText: shinyTextStylish(token),
 }));
 
 export const GlobLocalFilesInspector = memo<BuiltinInspectorProps<GlobFilesParams, GlobFilesState>>(
   ({ args, isLoading }) => {
     const { t } = useTranslation('plugin');
-    const { styles, cx } = useStyles();
 
     const pattern = args?.pattern || '';
 
     // When loading, show "本地系统 > 匹配搜索文件"
     if (isLoading) {
       return (
-        <div className={cx(styles.root, styles.shinyText)}>
+        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-local-system.title')}</span>
           <Icon icon={ChevronRight} style={{ marginInline: 4 }} />
           <span>{t('builtins.lobe-local-system.apiName.globLocalFiles')}</span>

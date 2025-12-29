@@ -1,17 +1,16 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Popover, type PopoverProps } from 'antd';
+import { ActionIcon, Dropdown, DropdownProps, Flexbox, Text } from '@lobehub/ui';
 import { Languages } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Menu, { type MenuProps } from '@/components/Menu';
+import { type MenuProps } from '@/components/Menu';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { type LocaleMode } from '@/types/locale';
 
-const LangButton = memo<{ placement?: PopoverProps['placement']; size?: number }>(
-  ({ placement = 'right', size }) => {
+const LangButton = memo<{ placement?: DropdownProps['placement']; size?: number }>(
+  ({ placement, size }) => {
     const [language, switchLocale] = useGlobalStore((s) => [
       globalGeneralSelectors.language(s),
       s.switchLocale,
@@ -54,22 +53,22 @@ const LangButton = memo<{ placement?: PopoverProps['placement']; size?: number }
     );
 
     return (
-      <Popover
+      <Dropdown
         arrow={false}
-        content={<Menu items={items} selectable selectedKeys={[language]} />}
-        placement={placement}
-        styles={{
-          container: {
+        menu={{
+          items,
+          selectable: true,
+          selectedKeys: [language],
+          style: {
             maxHeight: 360,
             minWidth: 240,
             overflow: 'auto',
-            padding: 0,
           },
         }}
-        trigger={['click', 'hover']}
+        placement={placement}
       >
         <ActionIcon icon={Languages} size={size || { blockSize: 32, size: 16 }} />
-      </Popover>
+      </Dropdown>
     );
   },
 );

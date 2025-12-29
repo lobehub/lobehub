@@ -1,5 +1,5 @@
 {
-  "authorize.cancel": "취소",
+  "authorize.cancel": "지금은 아니에요",
   "authorize.confirm": "프로필 생성",
   "authorize.description": "귀하의 커뮤니티 프로필은 {{appName}} 사용자 계정과는 별도로 존재합니다.",
   "authorize.footer.agreement": "계속 진행하면 <terms>이용 약관</terms> 및 <privacy>개인정보 처리방침</privacy>에 동의한 것으로 간주됩니다.",

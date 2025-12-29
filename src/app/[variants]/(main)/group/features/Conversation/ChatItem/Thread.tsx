@@ -1,5 +1,5 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ import { threadSelectors } from '@/store/chat/selectors';
 
 import ThreadItem from './ThreadItem';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     cursor: pointer;
 
@@ -17,7 +17,10 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     padding-inline: 4px;
     border-radius: 6px;
 
-    background: ${isDarkMode ? token.colorFillTertiary : token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  container_dark: css`
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 
@@ -29,7 +32,7 @@ interface ThreadProps {
 
 const Thread = memo<ThreadProps>(({ id, placement, style }) => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
+  const { isDarkMode } = useThemeMode();
 
   const threads = useChatStore(threadSelectors.getThreadsBySourceMsgId(id), isEqual);
 
@@ -41,7 +44,12 @@ const Thread = memo<ThreadProps>(({ id, placement, style }) => {
       style={{ marginTop: -12, paddingBottom: 16, ...style }}
     >
       <div style={{ width: 40 }} />
-      <Flexbox className={styles.container} gap={4} padding={4} style={{ width: 'fit-content' }}>
+      <Flexbox
+        className={cx(styles.container, isDarkMode && styles.container_dark)}
+        gap={4}
+        padding={4}
+        style={{ width: 'fit-content' }}
+      >
         <Flexbox gap={8} horizontal paddingInline={6}>
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {t('thread.title')}

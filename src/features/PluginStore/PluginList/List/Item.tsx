@@ -1,6 +1,6 @@
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +23,6 @@ interface PluginItemProps extends DiscoverPluginItem {
 const Item = memo<PluginItemProps>(
   ({ title, description, avatar, onClick, active, identifier, author }) => {
     const { t } = useTranslation('plugin');
-    const theme = useTheme();
     const installProgress = useToolStore(
       pluginStoreSelectors.getPluginInstallProgress(identifier),
       isEqual,
@@ -76,7 +75,7 @@ const Item = memo<PluginItemProps>(
               showInfo={false}
               size="small"
               status="active"
-              strokeColor={{ '0%': theme.blue, '100%': theme.geekblue }}
+              strokeColor={{ '0%': cssVar.blue, '100%': cssVar.geekblue }}
             />
             {stepText && (
               <Text fontSize={11} style={{ marginTop: 4 }} type={'secondary'}>

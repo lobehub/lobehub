@@ -1,14 +1,14 @@
 import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     desc: css`
       flex: 1;
       margin: 0 !important;
       font-size: 14px !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     title: css`
       margin: 0 !important;
@@ -16,7 +16,7 @@ const useStyles = createStyles(({ css, token }) => {
       font-weight: 500 !important;
 
       &:hover {
-        color: ${token.colorLink};
+        color: ${cssVar.colorLink};
       }
     `,
   };
@@ -24,8 +24,6 @@ const useStyles = createStyles(({ css, token }) => {
 
 const KnowledgeItem = memo<{ avatar?: string; description?: string; title: string }>(
   ({ avatar, title, description }) => {
-    const { styles } = useStyles();
-
     return (
       <Block gap={12} horizontal padding={12} variant={'outlined'}>
         <Avatar avatar={avatar} shape={'square'} size={40} style={{ flex: 'none' }} />
@@ -36,7 +34,7 @@ const KnowledgeItem = memo<{ avatar?: string; description?: string; title: strin
             overflow: 'hidden',
           }}
         >
-          <Text as={'h2'} className={title} ellipsis>
+          <Text as={'h2'} className={styles.title} ellipsis>
             {title}
           </Text>
           <Text

@@ -1,6 +1,6 @@
 import { ActionIcon, Flexbox, Icon, TooltipGroup } from '@lobehub/ui';
 import { Dropdown } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -42,22 +42,22 @@ const ENABLE_RESIZING = {
   topRight: false,
 } as const;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   dropdown: css`
     overflow: hidden;
 
     width: 100%;
     height: 100%;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgElevated};
-    box-shadow: ${token.boxShadowSecondary};
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   groupHeader: css`
     padding-block: 8px;
     padding-inline: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   menuItem: css`
     cursor: pointer;
@@ -73,11 +73,11 @@ const useStyles = createStyles(({ css, token }) => ({
     white-space: nowrap;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   menuItemActive: css`
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   tag: css`
     cursor: pointer;
@@ -141,7 +141,6 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     const { t } = useTranslation('components');
     const { t: tCommon } = useTranslation('common');
     const newLabel = tCommon('new');
-    const { cx, styles, theme } = useStyles();
 
     const [panelWidth, setPanelWidth] = useState(() => {
       if (typeof window === 'undefined') return DEFAULT_WIDTH;
@@ -247,7 +246,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 key="no-provider"
                 onClick={() => navigate('/settings/provider/all')}
               >
-                <Flexbox gap={8} horizontal style={{ color: theme.colorTextTertiary }}>
+                <Flexbox gap={8} horizontal style={{ color: cssVar.colorTextTertiary }}>
                   {t('ModelSwitchPanel.emptyProvider')}
                   <Icon icon={LucideArrowRight} />
                 </Flexbox>
@@ -292,7 +291,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 key={`empty-${item.provider.id}`}
                 onClick={() => navigate(`/settings/provider/${item.provider.id}`)}
               >
-                <Flexbox gap={8} horizontal style={{ color: theme.colorTextTertiary }}>
+                <Flexbox gap={8} horizontal style={{ color: cssVar.colorTextTertiary }}>
                   {t('ModelSwitchPanel.emptyModel')}
                   <Icon icon={LucideArrowRight} />
                 </Flexbox>
@@ -329,17 +328,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
           }
         }
       },
-      [
-        activeKey,
-        cx,
-        handleModelChange,
-        handleOpenChange,
-        navigate,
-        newLabel,
-        styles,
-        t,
-        theme.colorTextTertiary,
-      ],
+      [activeKey, cx, handleModelChange, handleOpenChange, navigate, newLabel, styles, t],
     );
 
     return (

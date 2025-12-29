@@ -1,76 +1,72 @@
 'use client';
 
 import { Block, Button, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
-import { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import LobeMessage from '@/app/[variants]/onboarding/components/LobeMessage';
 import { useUserStore } from '@/store/user';
 
-const useStyles = createStyles(({ isDarkMode, css, token }) => {
-  const liteImg = isDarkMode ? '/images/mode_lite_dark.webp' : '/images/mode_lite_light.webp';
-  const proImg = isDarkMode ? '/images/mode_pro_dark.webp' : '/images/mode_pro_light.webp';
-  return {
-    base: css`
-      position: relative;
-      padding-inline-end: 160px;
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  base: css`
+    position: relative;
+    padding-inline-end: 160px;
+    transition: all 0.25s ease-in-out;
+
+    &::before {
+      content: '';
+
+      position: absolute;
+      z-index: 0;
+      inset: 0;
+
+      width: 100%;
+      height: 100%;
+
+      opacity: 0.5;
+      background-repeat: no-repeat;
+      background-position: 100% 100%;
+      background-size: auto 120px;
+
       transition: all 0.25s ease-in-out;
+    }
+
+    &:hover {
+      border-inline-end-width: 3px;
 
       &::before {
-        content: '';
-
-        position: absolute;
-        z-index: 0;
-        inset: 0;
-
-        width: 100%;
-        height: 100%;
-
-        opacity: 0.5;
-        background-repeat: no-repeat;
-        background-position: 100% 100%;
-        background-size: auto 120px;
-
-        transition: all 0.25s ease-in-out;
+        opacity: 1;
       }
+    }
+  `,
+  disabled: css`
+    transform: scale(1) !important;
+    opacity: 1 !important;
+  `,
+  lite: css`
+    &:hover {
+      border-inline-end-color: ${cssVar.purple};
+    }
 
-      &:hover {
-        border-inline-end-width: 3px;
+    &::before {
+      z-index: 0;
+      background-image: var(--lite-img);
+    }
+  `,
+  pro: css`
+    &:hover {
+      border-inline-end-color: ${cssVar.gold};
+    }
 
-        &::before {
-          opacity: 1;
-        }
-      }
-    `,
-    disabled: css`
-      transform: scale(1) !important;
-      opacity: 1 !important;
-    `,
-    lite: css`
-      &:hover {
-        border-inline-end-color: ${token.purple};
-      }
-
-      &::before {
-        z-index: 0;
-        background-image: url('${liteImg}');
-      }
-    `,
-    pro: css`
-      &:hover {
-        border-inline-end-color: ${token.gold};
-      }
-
-      &::before {
-        z-index: 0;
-        background-image: url('${proImg}');
-      }
-    `,
-  };
-});
+    &::before {
+      z-index: 0;
+      background-image: var(--pro-img);
+    }
+  `,
+}));
 
 interface ModeSelectionStepProps {
   onBack: () => void;
@@ -80,7 +76,16 @@ interface ModeSelectionStepProps {
 const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('onboarding');
   const navigate = useNavigate();
-  const { cx, styles, theme } = useStyles();
+  const { isDarkMode } = useThemeMode();
+
+  const imageStyles = useMemo<React.CSSProperties>(
+    () =>
+      ({
+        '--lite-img': `url('${isDarkMode ? '/images/mode_lite_dark.webp' : '/images/mode_lite_light.webp'}')`,
+        '--pro-img': `url('${isDarkMode ? '/images/mode_pro_dark.webp' : '/images/mode_pro_light.webp'}')`,
+      }) as React.CSSProperties,
+    [isDarkMode],
+  );
 
   const [updateGeneralConfig, finishOnboarding] = useUserStore((s) => [
     s.updateGeneralConfig,
@@ -111,6 +116,7 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
           clickable
           onClick={handleSelectLite}
           padding={16}
+          style={imageStyles}
           variant={'outlined'}
         >
           <Flexbox
@@ -135,6 +141,7 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
           clickable
           onClick={handleSelectPro}
           padding={16}
+          style={imageStyles}
           variant={'outlined'}
         >
           <Flexbox
@@ -158,7 +165,7 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
           icon={Undo2Icon}
           onClick={onBack}
           style={{
-            color: theme.colorTextDescription,
+            color: cssVar.colorTextDescription,
           }}
           type={'text'}
         >

@@ -1,4 +1,25 @@
 {
+  "changelog.description": "随时了解 {{appName}} 的新功能与改进",
+  "changelog.title": "更新日志",
   "chat.description": "{{appName}} 带给你最好的 ChatGPT, Claude , Gemini, OLLaMA WebUI 使用体验",
-  "chat.title": "{{appName}}"
+  "chat.title": "{{appName}}",
+  "discover.assistants.description": "内容、问答、图像、视频、语音、工作流——从社区中浏览并添加智能体。",
+  "discover.assistants.title": "智能体社区",
+  "discover.description": "探索智能体、技能、模型提供商、模型和 MCP 服务器。",
+  "discover.mcp.description": "搜索、比较并连接数千个 MCP 服务器，使 AI 系统能够轻松访问文件系统、数据库、API 及其他关键资源，全面扩展您的 AI 能力。",
+  "discover.mcp.title": "MCP 服务器社区",
+  "discover.models.description": "探索主流 AI 模型：OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "模型社区",
+  "discover.plugins.description": "探索图表、学术工具、图像/视频/语音生成与工作流——为您的智能体添加技能。",
+  "discover.plugins.title": "技能社区",
+  "discover.providers.description": "探索领先的模型提供商：OpenAI / 通义千问 / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "提供商社区",
+  "discover.search": "搜索",
+  "discover.title": "探索",
+  "image.description": "{{appName}} 携手 GPT Image、Flux、Midjourney 和 Stable Diffusion，为您带来卓越的体验",
+  "image.title": "AI 艺术",
+  "plugins.description": "搜索、图表、学术工具、图像/视频/语音生成、工作流——为您的智能体添加技能。",
+  "plugins.title": "技能社区",
+  "welcome.description": "{{appName}} 为 ChatGPT、Claude、Gemini 和 OLLaMA 提供最佳的用户界面体验。",
+  "welcome.title": "欢迎使用 {{appName}} — 协作智能体平台"
 }

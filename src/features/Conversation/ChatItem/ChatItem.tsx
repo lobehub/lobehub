@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { cx } from 'antd-style';
 import { memo } from 'react';
 
 import Actions from './components/Actions';
@@ -8,7 +9,7 @@ import Avatar from './components/Avatar';
 import ErrorContent from './components/ErrorContent';
 import MessageContent from './components/MessageContent';
 import Title from './components/Title';
-import { useStyles } from './style';
+import { styles } from './style';
 import { type ChatItemProps } from './type';
 
 const ChatItem = memo<ChatItemProps>(
@@ -40,11 +41,6 @@ const ChatItem = memo<ChatItemProps>(
     newScreen,
     ...rest
   }) => {
-    const { cx, styles } = useStyles({
-      disabled,
-      placement,
-    });
-
     const isUser = placement === 'right';
     const isEmptyMessage =
       !message || String(message).trim() === '' || message === placeholderMessage;

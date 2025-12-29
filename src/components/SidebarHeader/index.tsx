@@ -1,8 +1,8 @@
 import { Flexbox, type FlexboxProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type ReactNode, memo } from 'react';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   header: css`
     z-index: 10;
   `,
@@ -15,8 +15,6 @@ interface SidebarHeaderProps extends Omit<FlexboxProps, 'title'> {
 }
 
 const SidebarHeader = memo<SidebarHeaderProps>(({ title, style, actions, onClick, ...rest }) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox
       align={'center'}

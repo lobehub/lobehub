@@ -1,17 +1,15 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
 import { type FC } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import SideBar from '@/app/[variants]/(main)/settings/_layout/SideBar';
 
 import SettingsContextProvider from './ContextProvider';
+import { styles } from './style';
 
 const Layout: FC = () => {
-  const theme = useTheme();
-
   return (
     <SettingsContextProvider
       value={{
@@ -20,15 +18,7 @@ const Layout: FC = () => {
       }}
     >
       <SideBar />
-      <Flexbox
-        flex={1}
-        height={'100%'}
-        style={{
-          background: theme.colorBgContainer,
-          overflow: 'hidden',
-          position: 'relative',
-        }}
-      >
+      <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
         <Outlet />
       </Flexbox>
     </SettingsContextProvider>

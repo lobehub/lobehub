@@ -2,23 +2,23 @@
 
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Highlighter, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import { type ReadLocalFileState } from '../../type';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     padding-inline: 8px 0;
   `,
   fileInfo: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   path: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
 }));
@@ -66,8 +66,6 @@ const getLanguageFromExtension = (ext: string): string => {
 
 const ReadLocalFile = memo<BuiltinRenderProps<ReadLocalFileParams, ReadLocalFileState>>(
   ({ args, pluginState }) => {
-    const { styles } = useStyles();
-
     if (!pluginState?.content) {
       return null;
     }

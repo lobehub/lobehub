@@ -1,7 +1,6 @@
-import { createStyles } from 'antd-style';
-import { lighten } from 'polished';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   badge: css`
     padding-block: 4px;
     padding-inline: 6px;
@@ -9,9 +8,9 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
 
     font-size: 12px;
     line-height: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
 
   container: css`
@@ -23,16 +22,25 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     padding-inline-end: 12px;
     border-radius: 8px;
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${lighten(0.1, token.colorBgElevated)};
-    box-shadow: ${token.boxShadowTertiary};
+    background: color-mix(in srgb, ${cssVar.colorBgElevated} 90%, white);
+    box-shadow: ${cssVar.boxShadowTertiary};
 
     transition: all 0.2s;
 
     &:hover {
-      background: ${isDarkMode ? lighten(0.15, token.colorBgElevated) : ''};
-      box-shadow: ${token.boxShadowSecondary};
+      box-shadow: ${cssVar.boxShadowSecondary};
+    }
+  `,
+  containerDark: css`
+    &:hover {
+      background: color-mix(in srgb, ${cssVar.colorBgElevated} 85%, white);
+    }
+  `,
+  containerLight: css`
+    &:hover {
+      background: color-mix(in srgb, ${cssVar.colorBgElevated} 90%, white);
     }
   `,
   filename: css`

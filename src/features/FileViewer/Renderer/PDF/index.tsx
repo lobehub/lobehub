@@ -10,7 +10,7 @@ import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import HighlightLayer from './HighlightLayer';
-import { useStyles } from './style';
+import { styles } from './style';
 import useResizeObserver from './useResizeObserver';
 
 // 如果海外的地址： https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs
@@ -29,7 +29,6 @@ interface PDFViewerProps {
 }
 
 const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
-  const { styles } = useStyles();
   const [numPages, setNumPages] = useState<number>(0);
   const [containerRef, setContainerRef] = useState<HTMLElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>();

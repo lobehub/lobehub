@@ -1,6 +1,6 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Dropdown } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import type { ItemType } from 'antd/es/menu/interface';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -15,10 +15,10 @@ import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 dayjs.extend(relativeTime);
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   time: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     margin-left: 6px;
   `,
   title: css`
@@ -36,7 +36,6 @@ interface TopicSelectorProps {
 
 const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
   const { t } = useTranslation('topic');
-  const { styles } = useStyles();
 
   // Fetch topics for the agent builder
   useChatStore((s) => s.useFetchTopics)(true, { agentId });

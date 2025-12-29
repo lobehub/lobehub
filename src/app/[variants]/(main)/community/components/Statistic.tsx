@@ -1,9 +1,9 @@
 import { Flexbox, type FlexboxProps, Icon, Text, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { HelpCircleIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode, memo } from 'react';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     min-width: 64px;
@@ -21,7 +21,7 @@ export const useStyles = createStyles(({ css, token }) => ({
 
     font-size: 12px;
     line-height: 1.2;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
 }));
@@ -46,7 +46,6 @@ const Statistic = memo<StatisticProps>(
     value,
     ...rest
   }) => {
-    const { cx, styles } = useStyles();
     const isTop = valuePlacement === 'top';
     const valueContent = (
       <Text className={styles.number} ellipsis={{ rows: 1 }} style={valueStyle}>

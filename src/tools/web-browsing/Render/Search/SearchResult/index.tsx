@@ -1,7 +1,7 @@
 import { type SearchQuery, type UniformSearchResponse } from '@lobechat/types';
-import { Flexbox, Icon, Skeleton, Text , Button } from '@lobehub/ui';
+import { Block, Button, Empty, Flexbox, Icon, ScrollShadow, Skeleton } from '@lobehub/ui';
 import { uniq } from 'es-toolkit/compat';
-import { Edit2Icon } from 'lucide-react';
+import { Edit2Icon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,23 +35,18 @@ const SearchResult = memo<SearchResultProps>(
 
     if (loading || !pluginState)
       return (
-        <Flexbox gap={12} horizontal>
+        <Flexbox gap={8} horizontal>
           {['1', '2', '3', '4', '5'].map((id) => (
-            <Skeleton.Button
-              active
-              key={id}
-              style={{ borderRadius: 8, height: ITEM_HEIGHT, width: ITEM_WIDTH }}
-            />
+            <Skeleton.Block active height={ITEM_HEIGHT} key={id} width={ITEM_WIDTH} />
           ))}
         </Flexbox>
       );
 
     if (searchResults.length === 0)
       return (
-        <Flexbox align={'center'} gap={8} horizontal paddingInline={8}>
-          <Text type={'secondary'}>{t('search.emptyResult')}</Text>
-          {!editing && (
-            <div>
+        <Block variant={'outlined'}>
+          <Empty description={t('search.emptyResult')} icon={SearchIcon}>
+            {!editing && (
               <Button
                 color={'default'}
                 icon={<Icon icon={Edit2Icon} />}
@@ -63,34 +58,36 @@ const SearchResult = memo<SearchResultProps>(
               >
                 {t('edit', { ns: 'common' })}
               </Button>
-            </div>
-          )}
-        </Flexbox>
+            )}
+          </Empty>
+        </Block>
       );
 
     return (
-      <Flexbox gap={8}>
-        <Flexbox
-          gap={12}
-          horizontal
-          style={{ minHeight: ITEM_HEIGHT, overflowX: 'scroll', width: '100%' }}
-        >
-          {searchResults.slice(0, 5).map((result) => (
-            <div key={result.url} style={{ minWidth: ITEM_WIDTH, width: ITEM_WIDTH }}>
-              <SearchResultItem {...result} />
-            </div>
-          ))}
-          {!isMobile && searchResults.length > 5 && (
-            <div style={{ minWidth: ITEM_WIDTH }}>
-              <ShowMore
-                engines={defaultEngines}
-                messageId={messageId}
-                resultsNumber={searchResults.length - 5}
-              />
-            </div>
-          )}
-        </Flexbox>
-      </Flexbox>
+      <ScrollShadow
+        gap={8}
+        horizontal
+        offset={8}
+        orientation={'horizontal'}
+        size={4}
+        style={{ minHeight: ITEM_HEIGHT, paddingBottom: 8, width: '100%' }}
+      >
+        {searchResults.slice(0, 5).map((result) => (
+          <SearchResultItem
+            key={result.url}
+            style={{ minWidth: ITEM_WIDTH, width: ITEM_WIDTH }}
+            {...result}
+          />
+        ))}
+        {!isMobile && searchResults.length > 5 && (
+          <ShowMore
+            engines={defaultEngines}
+            messageId={messageId}
+            resultsNumber={searchResults.length - 5}
+            style={{ minWidth: ITEM_WIDTH }}
+          />
+        )}
+      </ScrollShadow>
     );
   },
 );

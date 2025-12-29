@@ -2,7 +2,7 @@
 
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Breadcrumb, type BreadcrumbProps } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 import { flushSync } from 'react-dom';
@@ -11,7 +11,9 @@ import { useNavigate } from 'react-router-dom';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 import BackButton from './components/BackButton';
 
-const useStyles = createStyles(({ css, token, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
     ol {
       align-items: center;
@@ -23,11 +25,11 @@ const useStyles = createStyles(({ css, token, prefixCls }) => ({
       display: flex !important;
       align-items: center !important;
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     }
     a.${prefixCls}-breadcrumb-link {
       &:hover {
-        color: ${token.colorText};
+        color: ${cssVar.colorText};
       }
     }
   `,
@@ -55,7 +57,6 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     breadcrumb = [],
     showTogglePanelButton = true,
   }) => {
-    const { styles } = useStyles();
     const navigate = useNavigate();
     const leftContent = left ? (
       <Flexbox

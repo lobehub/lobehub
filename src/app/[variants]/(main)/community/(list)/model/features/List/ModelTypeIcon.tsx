@@ -1,5 +1,5 @@
 import { Icon, Tooltip } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import {
   AudioLines,
@@ -27,10 +27,9 @@ const icons: Record<AiModelType, LucideIcon> = {
 };
 
 const ModelTypeIcon = memo<{ size?: number; type: AiModelType }>(({ type, size = 20 }) => {
-  const theme = useTheme();
   return (
     <Tooltip title={`${startCase(type)} Model`}>
-      <Icon color={theme.colorTextDescription} icon={icons?.[type]} size={size} />
+      <Icon color={cssVar.colorTextDescription} icon={icons?.[type]} size={size} />
     </Tooltip>
   );
 });

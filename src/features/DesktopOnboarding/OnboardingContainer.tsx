@@ -1,7 +1,7 @@
 'use client';
 
 import { ConfigProvider } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { AnimatePresence, motion } from 'motion/react';
 import React, { useCallback, useEffect, useState } from 'react';
 
@@ -15,10 +15,9 @@ import { Screen2 } from './screens/Screen2';
 import { Screen3 } from './screens/Screen3';
 import { Screen4 } from './screens/Screen4';
 import { Screen5 } from './screens/Screen5';
-import { customTheme, getThemeToken } from './styles/theme';
+import { customTheme } from './styles/theme';
 
-const token = getThemeToken();
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   backgroundLayer: css`
     position: relative;
     width: 100%;
@@ -35,7 +34,7 @@ const useStyles = createStyles(({ css }) => ({
 
     color: #fff;
 
-    background-color: ${token.colorBgBase};
+    background-color: ${cssVar.colorBgBase};
   `,
 
   content: css`
@@ -122,7 +121,6 @@ export const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ onComp
   const [backgroundKey, setBackgroundKey] = useState(0);
   const [previousStep, setPreviousStep] = useState(currentStep);
   const totalSteps = screens.length;
-  const { styles } = useStyles();
 
   // 监听 hash 变化
   useEffect(() => {
@@ -233,7 +231,7 @@ export const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ onComp
   return (
     <div className={styles.container}>
       {/* Title Bar Drag Region */}
-      <div className={`${styles.titleBar} ${electronStylish.draggable}`} />
+      <div className={cx(styles.titleBar, electronStylish.draggable)} />
 
       {/* LightRays Background Layer */}
       {renderBackground()}

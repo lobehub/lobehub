@@ -1,6 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DraggablePanel } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -12,7 +12,6 @@ import AgentBuilderConversation from './AgentBuilderConversation';
 import AgentBuilderProvider from './AgentBuilderProvider';
 
 const AgentBuilder = memo(() => {
-  const theme = useTheme();
   const chatPanelExpanded = useProfileStore((s) => s.chatPanelExpanded);
   const setChatPanelExpanded = useProfileStore((s) => s.setChatPanelExpanded);
   const groupAgentBuilderId = useAgentStore(builtinAgentSelectors.groupAgentBuilderId);
@@ -25,7 +24,7 @@ const AgentBuilder = memo(() => {
 
   return (
     <DraggablePanel
-      backgroundColor={theme.colorBgContainer}
+      backgroundColor={cssVar.colorBgContainer}
       expand={chatPanelExpanded}
       expandable={false}
       maxWidth={600}

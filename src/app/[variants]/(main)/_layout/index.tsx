@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cx } from 'antd-style';
 import dynamic from 'next/dynamic';
 import { type FC, Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
@@ -26,12 +26,12 @@ import DesktopHomeLayout from '../home/_layout';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import DesktopLayoutContainer from './DesktopLayoutContainer';
 import RegisterHotkeys from './RegisterHotkeys';
+import { styles } from './style';
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
-  const theme = useTheme();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
 
   return (
@@ -44,6 +44,7 @@ const Layout: FC = () => {
       </Suspense>
       <DndContextWrapper>
         <Flexbox
+          className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
           height={
             isDesktop
               ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
@@ -52,10 +53,6 @@ const Layout: FC = () => {
                 : '100%'
           }
           horizontal
-          style={{
-            borderTop: isPWA ? `1px solid ${theme.colorBorder}` : undefined,
-            position: 'relative',
-          }}
           width={'100%'}
         >
           <NavPanel />

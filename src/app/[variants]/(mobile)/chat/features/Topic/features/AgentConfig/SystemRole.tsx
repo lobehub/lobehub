@@ -2,7 +2,7 @@
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { EditableMessage } from '@lobehub/ui/chat';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type MouseEvent, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,10 +12,10 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   prompt: css`
     opacity: 0.75;
-    transition: opacity 200ms ${token.motionEaseOut};
+    transition: opacity 200ms ${cssVar.motionEaseOut};
 
     &:hover {
       opacity: 1;
@@ -32,7 +32,6 @@ interface SystemRoleProps {
 }
 
 const SystemRole = memo(({ editing, setEditing, open, setOpen, isLoading }: SystemRoleProps) => {
-  const { styles } = useStyles();
   const openChatSettings = useOpenChatSettings(ChatSettingsTabs.Prompt);
   const { t } = useTranslation('common');
 

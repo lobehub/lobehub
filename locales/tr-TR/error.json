@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Akış isteği mesaj parçası çözümleme hatası, lütfen mevcut API arayüzünün standartlara uygun olup olmadığını kontrol edin veya API sağlayıcınızla iletişime geçin.",
   "response.SubscriptionKeyMismatch": "Üzgünüz, sistemdeki geçici bir arıza nedeniyle mevcut abonelik kullanımınız geçici olarak devre dışı kalmıştır. Lütfen aşağıdaki düğmeye tıklayarak aboneliğinizi geri yükleyin veya destek almak için bizimle iletişime geçin.",
   "response.SubscriptionPlanLimit": "Abonelik puanlarınız tükenmiştir, bu özelliği kullanamazsınız. Lütfen daha yüksek bir plana geçin veya özel model API'sini yapılandırarak devam edin.",
+  "response.SubscriptionPlanLimitUltimate": "Abonelik puanlarınız tükendi ve bu özelliği kullanamazsınız. Lütfen kredilerinizi yenileyin ya da devam etmek için özel bir model API'si yapılandırın.",
   "response.SystemTimeNotMatchError": "Üzgünüm, sistem saatiniz ile sunucu arasında bir uyumsuzluk var, lütfen sistem saatinizi kontrol edip tekrar deneyin",
   "response.UnknownChatFetchError": "Üzgünüm, bilinmeyen bir istek hatasıyla karşılaştık. Lütfen aşağıdaki bilgileri kontrol edin veya tekrar deneyin.",
   "stt.responseError": "Hizmet isteği başarısız oldu, lütfen yapılandırmayı kontrol edin veya tekrar deneyin",

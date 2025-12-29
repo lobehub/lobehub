@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import ListLoading from '@/app/[variants]/(main)/community/components/ListLoading';
@@ -9,7 +9,6 @@ import ListLoading from '@/app/[variants]/(main)/community/components/ListLoadin
 import Banner from './features/Header/Banner';
 
 const Loading = memo(() => {
-  const theme = useTheme();
   return (
     <Flexbox gap={24} width={'100%'}>
       {/* User Header Skeleton */}
@@ -18,7 +17,7 @@ const Loading = memo(() => {
         <Skeleton.Avatar
           shape={'square'}
           size={64}
-          style={{ boxShadow: `0 0 0 4px ${theme.colorBgContainer}`, flexShrink: 0 }}
+          style={{ boxShadow: `0 0 0 4px ${cssVar.colorBgContainer}`, flexShrink: 0 }}
         />
         <Skeleton paragraph={{ rows: 1 }} />
       </Flexbox>

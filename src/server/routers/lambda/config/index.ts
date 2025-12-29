@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { businessConfigEndpoints } from '@/business/server/lambda-routers/config';
 import { getServerFeatureFlagsStateFromEdgeConfig } from '@/config/featureFlags';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { getServerDefaultAgentConfig, getServerGlobalConfig } from '@/server/globalConfig';
@@ -34,4 +35,6 @@ export const configRouter = router({
 
     return result;
   }),
+
+  ...businessConfigEndpoints,
 });

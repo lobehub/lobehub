@@ -1,6 +1,6 @@
 import {
   ReactCodePlugin,
-  ReactCodeblockPlugin,
+  ReactCodemirrorPlugin,
   ReactHRPlugin,
   ReactLinkHighlightPlugin,
   ReactListPlugin,
@@ -51,7 +51,7 @@ const EditableMessage = memo<EditableMessageProps>(
               plugins: [
                 ReactListPlugin,
                 ReactCodePlugin,
-                ReactCodeblockPlugin,
+                ReactCodemirrorPlugin,
                 ReactHRPlugin,
                 ReactLinkHighlightPlugin,
                 ReactTablePlugin,

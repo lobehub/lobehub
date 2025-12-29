@@ -1,5 +1,5 @@
 import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { MessageCircleHeartIcon, MessageCircleQuestionIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,6 @@ import TagList from './TagList';
 const Overview = memo(() => {
   const { t } = useTranslation('discover');
   const { tokenUsage, tags = [], config } = useDetailContext();
-  const theme = useTheme();
 
   const { systemRole, openingMessage, openingQuestions } = config || {};
   return (
@@ -34,7 +33,7 @@ const Overview = memo(() => {
           <Title>{t('assistants.details.systemRole.openingMessage')}</Title>
           <Block align={'flex-start'} gap={12} horizontal padding={16} variant={'outlined'}>
             <Icon
-              color={theme.colorError}
+              color={cssVar.colorError}
               icon={MessageCircleHeartIcon}
               size={20}
               style={{
@@ -53,7 +52,7 @@ const Overview = memo(() => {
           <Flexbox gap={8}>
             {openingQuestions?.map((item, key) => (
               <Block gap={12} horizontal key={key} padding={16} variant={'outlined'}>
-                <Icon color={theme.colorWarning} icon={MessageCircleQuestionIcon} size={20} />
+                <Icon color={cssVar.colorWarning} icon={MessageCircleQuestionIcon} size={20} />
                 <MarkdownRender>{item}</MarkdownRender>
               </Block>
             ))}

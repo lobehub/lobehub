@@ -113,6 +113,7 @@
   "response.StreamChunkError": "Erro di analisi del blocco di messaggi della richiesta in streaming. Controlla se l'interfaccia API attuale è conforme agli standard o contatta il tuo fornitore di API per ulteriori informazioni.",
   "response.SubscriptionKeyMismatch": "Ci scusiamo, ma a causa di un'imprevista anomalia di sistema, l'attuale utilizzo dell'abbonamento è temporaneamente non valido. Si prega di fare clic sul pulsante qui sotto per ripristinare l'abbonamento o contattarci via email per ricevere supporto.",
   "response.SubscriptionPlanLimit": "I tuoi punti di abbonamento sono esauriti, non puoi utilizzare questa funzione. Ti preghiamo di passare a un piano superiore o di configurare un modello API personalizzato per continuare a utilizzare.",
+  "response.SubscriptionPlanLimitUltimate": "Hai esaurito i punti del tuo abbonamento e non puoi utilizzare questa funzionalità. Ricarica i crediti o configura un'API di modello personalizzato per continuare a utilizzarla.",
   "response.SystemTimeNotMatchError": "Ci dispiace, l'orario del sistema non corrisponde a quello del server. Si prega di controllare l'orario del sistema e riprovare.",
   "response.UnknownChatFetchError": "Ci scusiamo, si è verificato un errore di richiesta sconosciuto. Si prega di controllare le informazioni seguenti o riprovare.",
   "stt.responseError": "Errore nella richiesta del servizio. Verifica la configurazione o riprova",

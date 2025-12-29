@@ -1,24 +1,24 @@
 import { ActionIcon, Button, Flexbox, Icon, Input } from '@lobehub/ui';
 import { App, Form, type FormInstance } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   form: css`
     position: relative;
 
     width: 100%;
     min-width: 600px;
     padding: 8px;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   formItem: css`
     margin-block-end: 4px !important;
   `,
   input: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   row: css`
@@ -26,7 +26,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   title: css`
     margin-block-end: 4px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -66,7 +66,6 @@ const formListToRecord = (list: KeyValueItem[]): Record<string, any> => {
 };
 
 const KeyValueEditor = memo<KeyValueEditorProps>(({ initialValue = {}, onFinish, onCancel }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation(['tool', 'common']);
   const [form] = Form.useForm();
   const { message } = App.useApp();

@@ -1,7 +1,7 @@
 import { type PluginSchema } from '@lobehub/chat-plugin-sdk';
 import { Form, Markdown } from '@lobehub/ui';
 import { Form as AForm } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
@@ -31,16 +31,15 @@ interface PluginSettingsConfigProps {
   schema: PluginSchema;
 }
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     p {
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     }
   `,
 }));
 
 const PluginSettingsConfig = memo<PluginSettingsConfigProps>(({ schema, id }) => {
-  const { styles } = useStyles();
   const [updatePluginSettings] = useToolStore((s) => [s.updatePluginSettings]);
   const pluginSetting = useToolStore(pluginSelectors.getPluginSettingsById(id), isEqual);
 

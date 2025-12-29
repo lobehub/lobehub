@@ -2,9 +2,10 @@
 
 import { FileSearchResult } from '@lobechat/types';
 import { Center, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { cx, useThemeMode } from 'antd-style';
 import { ComponentType, memo } from 'react';
 
-import { useStyles } from './style';
+import { styles } from './style';
 
 export interface FileItemProps extends FileSearchResult {
   FileIcon: ComponentType<{
@@ -19,7 +20,7 @@ export interface FileItemProps extends FileSearchResult {
 
 const FileItem = memo<FileItemProps>(
   ({ fileId, fileName, relevanceScore, topChunks, FileIcon, isMobile, onFileClick }) => {
-    const { styles, cx } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     // Use the first chunk for preview
     const firstChunk = topChunks[0];
@@ -27,7 +28,11 @@ const FileItem = memo<FileItemProps>(
     return (
       <Flexbox
         align={'center'}
-        className={cx(styles.container, isMobile && styles.mobile)}
+        className={cx(
+          styles.container,
+          isDarkMode ? styles.containerDark : styles.containerLight,
+          isMobile && styles.mobile,
+        )}
         gap={4}
         horizontal
         key={fileId}

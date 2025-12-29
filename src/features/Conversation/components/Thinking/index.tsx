@@ -1,5 +1,5 @@
 import { Accordion, AccordionItem, ScrollShadow } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import {
   type CSSProperties,
   type ReactNode,
@@ -15,15 +15,15 @@ import { type ChatCitationItem } from '@/types/index';
 
 import Title from './Title';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   contentScroll: css`
     max-height: min(40vh, 320px);
     padding-block-end: 8px;
     padding-inline: 8px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
 
     article * {
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     }
   `,
 }));
@@ -39,7 +39,6 @@ interface ThinkingProps {
 
 const Thinking = memo<ThinkingProps>((props) => {
   const { content, duration, thinking, citations, thinkingAnimated } = props;
-  const { styles } = useStyles();
   const [showDetail, setShowDetail] = useState(false);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
@@ -88,6 +87,7 @@ const Thinking = memo<ThinkingProps>((props) => {
       >
         <ScrollShadow
           className={styles.contentScroll}
+          offset={12}
           ref={contentRef as unknown as RefObject<HTMLDivElement>}
           size={12}
         >

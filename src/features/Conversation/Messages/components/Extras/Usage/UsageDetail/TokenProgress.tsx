@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import numeral from 'numeral';
 import { memo } from 'react';
 
@@ -18,7 +18,6 @@ interface TokenProgressProps {
 const format = (number: number) => numeral(number).format('0,0');
 
 const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
-  const theme = useTheme();
   const total = data.reduce((acc, item) => acc + item.value, 0);
 
   return (
@@ -27,7 +26,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
         height={6}
         horizontal
         style={{
-          background: total === 0 ? theme.colorFill : undefined,
+          background: total === 0 ? cssVar.colorFill : undefined,
           borderRadius: 3,
           overflow: 'hidden',
           position: 'relative',
@@ -57,7 +56,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon }) => {
                   }}
                 />
               )}
-              <div style={{ color: theme.colorTextSecondary }}>{item.title}</div>
+              <div style={{ color: cssVar.colorTextSecondary }}>{item.title}</div>
             </Flexbox>
             <div style={{ fontWeight: 500 }}>{format(item.value)}</div>
           </Flexbox>

@@ -12,7 +12,7 @@ import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreensho
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import { useStyles } from '../style';
+import { styles } from '../style';
 import Preview from './Preview';
 import { type FieldType, WidthMode } from './type';
 
@@ -29,7 +29,6 @@ const ShareImage = memo<{ mobile?: boolean }>(() => {
   const currentAgentTitle = useAgentStore(agentSelectors.currentAgentTitle);
   const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
-  const { styles } = useStyles();
   const { loading, onDownload, title } = useScreenshot({
     imageType: fieldValue.imageType,
     title: currentAgentTitle ?? undefined,

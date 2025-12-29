@@ -1,5 +1,5 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2, type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -8,14 +8,13 @@ const TimeLabel = memo<{
   icon: LucideIcon;
   title: string;
 }>(({ date, icon, title }) => {
-  const theme = useTheme();
   return (
     <Flexbox
       align={'center'}
       gap={4}
       horizontal
       style={{
-        color: theme.colorTextDescription,
+        color: cssVar.colorTextDescription,
         fontSize: 12,
       }}
     >

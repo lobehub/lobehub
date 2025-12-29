@@ -1,8 +1,7 @@
 'use client';
 
 import { Button, Center, Checkbox, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { rgba } from 'polished';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type DragEvent, memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VList, type VListHandle } from 'virtua';
@@ -14,21 +13,20 @@ import { type FileListItem as FileListItemType } from '@/types/files';
 
 import FileListItem, { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './ListItem';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css }) => ({
   dropZone: css`
     position: relative;
     height: 100%;
   `,
   dropZoneActive: css`
-    background: ${token.colorPrimaryBg};
-    outline: 2px dashed ${token.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
+    outline: 2px dashed ${cssVar.colorPrimary};
     outline-offset: -4px;
   `,
   header: css`
     height: 40px;
     min-height: 40px;
-    border-block-end: 1px solid ${isDarkMode ? token.colorSplit : rgba(token.colorSplit, 0.06)};
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   headerItem: css`
     padding-block: 0;
@@ -36,7 +34,6 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
   `,
   loadMoreContainer: css`
     padding: 16px;
-    border-block-start: 1px solid ${isDarkMode ? token.colorSplit : rgba(token.colorSplit, 0.06)};
   `,
 }));
 
@@ -66,7 +63,6 @@ const ListView = memo<ListViewProps>(
     setSelectedFileIds,
   }) => {
     const { t } = useTranslation(['components', 'file']);
-    const { styles, cx } = useStyles();
     const virtuaRef = useRef<VListHandle>(null);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const isDragActive = useDragActive();
@@ -144,7 +140,10 @@ const ListView = memo<ListViewProps>(
           className={styles.header}
           horizontal
           paddingInline={8}
-          style={{ fontSize: 12 }}
+          style={{
+            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            fontSize: 12,
+          }}
         >
           <Center height={40} style={{ paddingInline: 4 }}>
             <Checkbox
@@ -183,7 +182,13 @@ const ListView = memo<ListViewProps>(
               // Render Load More button for the placeholder item
               if (item.isLoadMorePlaceholder) {
                 return (
-                  <Center className={styles.loadMoreContainer} key="load-more">
+                  <Center
+                    className={styles.loadMoreContainer}
+                    key="load-more"
+                    style={{
+                      borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
+                    }}
+                  >
                     <Button loading={isLoadingMore} onClick={handleLoadMore} type="default">
                       {t('loadMore', { defaultValue: 'Load More', ns: 'file' })}
                     </Button>

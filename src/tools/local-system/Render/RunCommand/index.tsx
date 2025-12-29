@@ -1,16 +1,16 @@
 import { type RunCommandParams, type RunCommandResult } from '@lobechat/electron-client-ipc';
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Highlighter } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     padding-inline: 8px 0;
   `,
   head: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   header: css`
@@ -37,7 +37,6 @@ interface RunCommandState {
 
 const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
   ({ args, pluginState }) => {
-    const { styles } = useStyles();
     const { result } = pluginState || {};
 
     return (

@@ -1,7 +1,7 @@
 'use client';
 
 import { Popover } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type PropsWithChildren, Suspense, memo, useState } from 'react';
 
 import { isDesktop } from '@/const/version';
@@ -10,7 +10,7 @@ import PanelContent from './PanelContent';
 import UpgradeBadge from './UpgradeBadge';
 import { useNewVersion } from './useNewVersion';
 
-const useStyles = createStyles(({ css }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     popover: css`
       inset-block-start: ${isDesktop ? 32 : 8}px !important;
@@ -22,7 +22,6 @@ const useStyles = createStyles(({ css }) => {
 const UserPanel = memo<PropsWithChildren>(({ children }) => {
   const hasNewVersion = useNewVersion();
   const [open, setOpen] = useState(false);
-  const { styles } = useStyles();
 
   return (
     <Suspense fallback={children}>
@@ -37,7 +36,7 @@ const UserPanel = memo<PropsWithChildren>(({ children }) => {
           open={open}
           placement={'topRight'}
           styles={{
-            container: { padding: 0 },
+            container: { borderRadius: 10, padding: 0 },
           }}
           trigger={['click']}
         >

@@ -2,26 +2,27 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { DiffIcon, Minus, Plus } from 'lucide-react';
-import { rgba } from 'polished';
 import { type ReactNode, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { shinyTextStyles } from '@/styles';
+
 import type { ModifyNodesArgs, ModifyNodesState } from '../../../types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   insert: css`
-    font-family: ${token.fontFamilyCode};
-    color: ${token.colorSuccess};
+    font-family: ${cssVar.fontFamilyCode};
+    color: ${cssVar.colorSuccess};
   `,
   modify: css`
-    font-family: ${token.fontFamilyCode};
-    color: ${token.colorWarning};
+    font-family: ${cssVar.fontFamilyCode};
+    color: ${cssVar.colorWarning};
   `,
   remove: css`
-    font-family: ${token.fontFamilyCode};
-    color: ${token.colorError};
+    font-family: ${cssVar.fontFamilyCode};
+    color: ${cssVar.colorError};
   `,
   root: css`
     overflow: hidden;
@@ -31,42 +32,17 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   separator: css`
     margin-inline: 2px;
-    color: ${token.colorTextQuaternary};
-  `,
-  shinyText: css`
-    color: ${rgba(token.colorText, 0.45)};
-
-    background: linear-gradient(
-      120deg,
-      ${rgba(token.colorTextBase, 0)} 40%,
-      ${token.colorTextSecondary} 50%,
-      ${rgba(token.colorTextBase, 0)} 60%
-    );
-    background-clip: text;
-    background-size: 200% 100%;
-
-    animation: shine 1.5s linear infinite;
-
-    @keyframes shine {
-      0% {
-        background-position: 100%;
-      }
-
-      100% {
-        background-position: -100%;
-      }
-    }
+    color: ${cssVar.colorTextQuaternary};
   `,
   title: css`
     margin-inline-end: 8px;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
 export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, ModifyNodesState>>(
   ({ args, partialArgs, isArgumentsStreaming }) => {
     const { t } = useTranslation('plugin');
-    const { styles, cx } = useStyles();
 
     // Count operations by type
     const counts = useMemo(() => {
@@ -101,7 +77,7 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
     // During streaming without operations yet, show init message
     if (isArgumentsStreaming && !hasOperations) {
       return (
-        <div className={cx(styles.root, styles.shinyText)}>
+        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-page-agent.apiName.modifyNodes.init')}</span>
         </div>
       );
@@ -135,7 +111,7 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
     }
 
     return (
-      <div className={cx(styles.root, isArgumentsStreaming && styles.shinyText)}>
+      <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
         <span className={styles.title}>{t('builtins.lobe-page-agent.apiName.modifyNodes')}</span>
         {statsParts.length > 0 && (
           <>

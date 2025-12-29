@@ -2,7 +2,7 @@
 
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, HistoryIcon, LayersIcon, ListIcon, SquareUserIcon } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
@@ -15,17 +15,17 @@ import { AssistantNavKey } from '@/types/discover';
 
 import { useDetailContext } from '../DetailProvider';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     link: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
 
       &:hover {
-        color: ${token.colorInfo};
+        color: ${cssVar.colorInfo};
       }
     `,
     nav: css`
-      border-block-end: 1px solid ${token.colorBorder};
+      border-block-end: 1px solid ${cssVar.colorBorder};
     `,
   };
 });
@@ -38,7 +38,6 @@ interface NavProps {
 const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.Overview }) => {
   const { t } = useTranslation('discover');
   const { pluginCount, knowledgeCount, identifier } = useDetailContext();
-  const { styles } = useStyles();
   const { source } = useQuery() as { source?: string };
   const isLegacy = source === 'legacy';
   const marketplaceLink = identifier

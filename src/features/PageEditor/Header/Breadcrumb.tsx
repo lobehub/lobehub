@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,26 +8,26 @@ import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/knowledge
 
 import { usePageEditorStore } from '../store';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
     font-size: 14px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   breadcrumbItem: css`
     cursor: pointer;
-    transition: color ${token.motionDurationSlow};
+    transition: color ${cssVar.motionDurationSlow};
 
     &:hover {
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     }
   `,
   currentItem: css`
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   separator: css`
     margin-inline: 8px;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
 }));
 
@@ -39,7 +39,6 @@ interface FolderCrumb {
 
 const Breadcrumb = memo(() => {
   const { t } = useTranslation('file');
-  const { styles, cx } = useStyles();
 
   const currentTitle = usePageEditorStore((s) => s.currentTitle);
   const knowledgeBaseId = usePageEditorStore((s) => s.knowledgeBaseId);

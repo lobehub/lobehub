@@ -2,7 +2,7 @@
 
 import { ChatInput, ChatInputActionBar, type ChatInputProps } from '@lobehub/editor/react';
 import { Center, Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode, memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +19,7 @@ import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     .show-on-hover {
       opacity: 0;
@@ -71,8 +71,6 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       s.editor,
       s.leftActions,
     ]);
-
-    const { styles, cx } = useStyles();
 
     const chatKey = useChatStore(chatSelectors.currentChatKey);
 

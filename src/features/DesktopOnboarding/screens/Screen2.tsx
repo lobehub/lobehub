@@ -1,17 +1,17 @@
 import { MCP } from '@lobehub/icons';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Flower, Globe, Image, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 
 import { TitleSection } from '../common/TitleSection';
-import { useLayoutStyles } from '../styles';
+import { layoutStyles } from '../styles';
 import { getThemeToken } from '../styles/theme';
 
 const themeToken = getThemeToken();
 
 // Screen2 特有的样式
-const useScreen2Styles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   cardContent: css`
     position: relative;
     z-index: 2;
@@ -35,6 +35,7 @@ const useScreen2Styles = createStyles(({ token, css }) => ({
   cardIcon: css`
     width: 20px;
     height: 20px;
+    color: var(--icon-color, currentColor);
   `,
 
   // 径向渐变蒙层
@@ -52,7 +53,7 @@ const useScreen2Styles = createStyles(({ token, css }) => ({
   `,
 
   cardSubtitle: css`
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     color: rgba(255, 255, 255, 80%);
   `,
@@ -60,7 +61,7 @@ const useScreen2Styles = createStyles(({ token, css }) => ({
   cardTitle: css`
     margin: 0;
 
-    font-family: ${token.fontFamily};
+    font-family: ${cssVar.fontFamily};
     font-size: 24px;
     font-weight: 500;
     line-height: 1.3;
@@ -77,10 +78,11 @@ const useScreen2Styles = createStyles(({ token, css }) => ({
     flex-direction: column;
     justify-content: flex-start;
 
-    padding: ${token.paddingLG}px;
-    border-radius: ${token.borderRadiusLG}px;
+    padding: ${cssVar.paddingLG};
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: ${themeToken.colorBgBase};
+    background-image: var(--card-bg-image, none);
     background-repeat: no-repeat;
     background-position: right bottom;
     background-size: cover;
@@ -180,10 +182,6 @@ export const Screen2 = ({ onScreenConfigChange }: Screen2Props) => {
     }
   }, [onScreenConfigChange]);
 
-  // 使用样式 hooks
-  const { styles: layoutStyles } = useLayoutStyles();
-  const { styles: screen2Styles, cx } = useScreen2Styles();
-
   return (
     <div className={layoutStyles.fullScreen}>
       {/* 内容层 */}
@@ -197,15 +195,20 @@ export const Screen2 = ({ onScreenConfigChange }: Screen2Props) => {
         />
 
         {/* 卡片网格 */}
-        <div className={cx(screen2Styles.cardGrid, layoutStyles.contentSection)}>
+        <div className={cx(styles.cardGrid, layoutStyles.contentSection)}>
           {features.map((feature, index) => {
+            const cssVariables: Record<string, string> = {
+              '--card-bg-image': `url(${feature.backgroundImage})`,
+              '--icon-color': feature.color,
+            };
+
             return (
               <motion.div
                 animate={{ opacity: 1, y: 0 }}
-                className={screen2Styles.featureCard}
+                className={styles.featureCard}
                 initial={{ opacity: 0, y: 50 }}
                 key={feature.id}
-                style={{ backgroundImage: `url(${feature.backgroundImage})` }}
+                style={cssVariables}
                 transition={{
                   delay: 0.2 + index * 0.1,
                   duration: 0.3,
@@ -213,22 +216,19 @@ export const Screen2 = ({ onScreenConfigChange }: Screen2Props) => {
                 }}
               >
                 {/* 径向渐变蒙层 */}
-                <div className={screen2Styles.cardOverlay} />
+                <div className={styles.cardOverlay} />
 
                 {/* 内容 */}
-                <div className={screen2Styles.cardContent}>
+                <div className={styles.cardContent}>
                   {/* 图标和小标题行 */}
-                  <div className={screen2Styles.cardHeader}>
-                    <feature.icon
-                      className={screen2Styles.cardIcon}
-                      style={{ color: feature.color }}
-                    />
-                    <span className={screen2Styles.cardSubtitle}>{feature.subtitle}</span>
+                  <div className={styles.cardHeader}>
+                    <feature.icon className={styles.cardIcon} />
+                    <span className={styles.cardSubtitle}>{feature.subtitle}</span>
                   </div>
 
                   {/* 大标题 */}
                   <h3
-                    className={screen2Styles.cardTitle}
+                    className={styles.cardTitle}
                     dangerouslySetInnerHTML={{ __html: feature.title }}
                   />
                 </div>

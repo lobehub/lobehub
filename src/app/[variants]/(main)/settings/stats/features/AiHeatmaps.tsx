@@ -1,6 +1,6 @@
 import { Heatmaps, type HeatmapsProps } from '@lobehub/charts';
 import { Flexbox, FormGroup, Icon, Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar, useTheme } from 'antd-style';
 import { FlameIcon } from 'lucide-react';
 import { readableColor } from 'polished';
 import { memo } from 'react';
@@ -69,8 +69,8 @@ const AiHeatmaps = memo<
     >
       <Tag
         style={{
-          background: theme.colorText,
-          color: theme.colorBgLayout,
+          background: cssVar.colorText,
+          color: cssVar.colorBgLayout,
           fontWeight: 500,
           margin: 0,
         }}
@@ -82,7 +82,7 @@ const AiHeatmaps = memo<
         color={'gold'}
         icon={<Icon color={fillColor} fill={fillColor} icon={FlameIcon} />}
         style={{
-          background: theme.gold,
+          background: cssVar.gold,
           color: fillColor,
           fontWeight: 500,
           margin: 0,
@@ -100,7 +100,7 @@ const AiHeatmaps = memo<
         <Flexbox align={'baseline'} gap={4} horizontal justify={'space-between'}>
           <div
             style={{
-              color: theme.colorTextDescription,
+              color: cssVar.colorTextDescription,
               fontSize: 12,
             }}
           >

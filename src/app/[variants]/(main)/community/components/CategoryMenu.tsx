@@ -1,10 +1,12 @@
 'use client';
 
 import { Menu, type MenuProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, prefixCls }) => {
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => {
   return {
     menu: css`
       padding: 0 !important;
@@ -29,8 +31,6 @@ const useStyles = createStyles(({ css, prefixCls }) => {
 });
 
 const CategoryMenu = memo<MenuProps>(({ style, ...rest }) => {
-  const { styles } = useStyles();
-
   return (
     <Menu
       className={styles.menu}

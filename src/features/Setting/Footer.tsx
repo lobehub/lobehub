@@ -2,7 +2,7 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { MessageSquareHeart } from 'lucide-react';
 import Link from 'next/link';
 import { type PropsWithChildren, memo, useState } from 'react';
@@ -14,10 +14,10 @@ import { GITHUB, GITHUB_ISSUES } from '@/const/url';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { isOnServerSide } from '@/utils/env';
 
-const useStyles = createStyles(
-  ({ css, token }) => css`
+const styles = createStaticStyles(
+  ({ css, cssVar }) => css`
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 );
 
@@ -27,7 +27,6 @@ const Footer = memo<PropsWithChildren>(() => {
   const { t } = useTranslation('common');
   const [openStar, setOpenStar] = useState(false);
   const [openFeedback, setOpenFeedback] = useState(false);
-  const { styles } = useStyles();
 
   const { hideGitHub } = useServerConfigStore(featureFlagsSelectors);
 

@@ -3,16 +3,16 @@
 import { type RunCommandParams, type RunCommandResult } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStylish } from '@/styles/loading';
+import { shinyTextStyles } from '@/styles';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
   `,
   root: css`
     overflow: hidden;
@@ -20,9 +20,8 @@ const useStyles = createStyles(({ css, token }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
 
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
-  shinyText: shinyTextStylish(token),
 }));
 
 interface RunCommandState {
@@ -33,7 +32,6 @@ interface RunCommandState {
 export const RunCommandInspector = memo<BuiltinInspectorProps<RunCommandParams, RunCommandState>>(
   ({ args, isLoading }) => {
     const { t } = useTranslation('plugin');
-    const { styles, cx } = useStyles();
 
     // Show description if available, otherwise show command
     const displayText = args?.description || args?.command || '';
@@ -41,7 +39,7 @@ export const RunCommandInspector = memo<BuiltinInspectorProps<RunCommandParams, 
     // When loading, show "Local System > 执行命令"
     if (isLoading) {
       return (
-        <div className={cx(styles.root, styles.shinyText)}>
+        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-local-system.title')}</span>
           <Icon icon={ChevronRight} style={{ marginInline: 4 }} />
           <span>{t('builtins.lobe-local-system.apiName.runCommand')}</span>

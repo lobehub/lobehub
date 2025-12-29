@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Input } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,16 +10,16 @@ import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import AgentItem, { type AgentItemData } from './AgentItem';
 import { useAgentSelectionStore } from './store';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow-y: auto;
     flex: 1;
-    padding: ${token.paddingSM}px;
+    padding: ${cssVar.paddingSM}px;
   `,
   title: css`
     font-size: 12px;
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -32,7 +32,6 @@ interface SelectedAgentListProps {
 const SelectedAgentList = memo<SelectedAgentListProps>(
   ({ agents, groupName, onGroupNameChange }) => {
     const { t } = useTranslation(['chat', 'common']);
-    const { styles } = useStyles();
 
     const selectedAgentIds = useAgentSelectionStore((s) => s.selectedAgentIds);
 

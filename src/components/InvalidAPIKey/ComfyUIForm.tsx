@@ -2,7 +2,7 @@
 
 import { ComfyUI } from '@lobehub/icons';
 import { Button, Center, Flexbox, Icon, Select } from '@lobehub/ui';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, Network } from 'lucide-react';
 import { memo, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ interface ComfyUIFormProps {
   description: string;
 }
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   comfyuiFormWide: css`
     max-width: 900px !important;
 
@@ -31,20 +31,18 @@ const useStyles = createStyles(({ css, token }) => ({
   container: css`
     width: 100%;
     max-width: 900px;
-    border: 1px solid ${token.colorSplit};
+    border: 1px solid ${cssVar.colorSplit};
     border-radius: 8px;
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
   const { t } = useTranslation('error');
   const { t: s } = useTranslation('modelProvider');
-  const theme = useTheme();
-  const { styles } = useStyles();
 
   // Use aiInfraStore for updating config (same as settings page)
   const updateAiProviderConfig = useAiInfraStore((s) => s.updateAiProviderConfig);
@@ -224,7 +222,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                 <div style={{ fontSize: 14, fontWeight: 500 }}>
                   {s('comfyui.customHeaders.title')}
                 </div>
-                <div style={{ color: theme.colorTextSecondary, fontSize: 12, marginBottom: 4 }}>
+                <div style={{ color: cssVar.colorTextSecondary, fontSize: 12, marginBottom: 4 }}>
                   {s('comfyui.customHeaders.desc')}
                 </div>
                 <KeyValueEditor

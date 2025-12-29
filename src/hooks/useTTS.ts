@@ -1,3 +1,4 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import {
   type EdgeSpeechOptions,
   type MicrosoftSpeechOptions,
@@ -9,6 +10,7 @@ import {
 } from '@lobehub/tts/react';
 import isEqual from 'fast-deep-equal';
 
+import { useBusinessTTSProvider } from '@/business/client/hooks/useBusinessTTSProvider';
 import { createHeaderWithOpenAI } from '@/services/_header';
 import { API_ENDPOINTS } from '@/services/_url';
 import { useAgentStore } from '@/store/agent';
@@ -30,6 +32,7 @@ export const useTTS = (content: string, config?: TTSConfig) => {
   const ttsAgentSettings = useAgentStore(agentSelectors.currentAgentTTS, isEqual);
   const lang = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const voice = useAgentStore(agentSelectors.currentAgentTTSVoice(lang));
+  const businessTTSProvider = useBusinessTTSProvider();
   let useSelectedTTS;
   let options: any = {};
   switch (config?.server || ttsAgentSettings.ttsService) {
@@ -38,7 +41,7 @@ export const useTTS = (content: string, config?: TTSConfig) => {
       options = {
         api: {
           headers: createHeaderWithOpenAI(),
-          serviceUrl: API_ENDPOINTS.tts('openai'),
+          serviceUrl: API_ENDPOINTS.tts(ENABLE_BUSINESS_FEATURES ? businessTTSProvider : 'openai'),
         },
         options: {
           model: ttsSettings.openAI.ttsModel,

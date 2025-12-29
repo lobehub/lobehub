@@ -2,7 +2,7 @@
 
 import { SendButton } from '@lobehub/editor/react';
 import { Button, Flexbox, Icon, Input } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { SignatureIcon, Undo2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,6 @@ interface FullNameStepProps {
 
 const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('onboarding');
-  const theme = useTheme();
   const existingFullName = useUserStore(userProfileSelectors.fullName);
   const updateFullName = useUserStore((s) => s.updateFullName);
 
@@ -43,7 +42,7 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
           placeholder={t('username.placeholder')}
           prefix={
             <Icon
-              color={theme.colorTextDescription}
+              color={cssVar.colorTextDescription}
               icon={SignatureIcon}
               size={32}
               style={{
@@ -77,7 +76,7 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
           icon={Undo2Icon}
           onClick={onBack}
           style={{
-            color: theme.colorTextDescription,
+            color: cssVar.colorTextDescription,
           }}
           type={'text'}
         >

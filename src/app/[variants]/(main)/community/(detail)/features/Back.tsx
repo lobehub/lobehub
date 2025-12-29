@@ -1,19 +1,19 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ArrowLeft } from 'lucide-react';
 import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     back: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
 
       &:hover {
-        color: ${token.colorText};
+        color: ${cssVar.colorText};
       }
     `,
   };
@@ -21,7 +21,6 @@ const useStyles = createStyles(({ css, token }) => {
 
 const Back = memo<{ href: string; style?: CSSProperties }>(({ href, style }) => {
   const { t } = useTranslation('discover');
-  const { styles } = useStyles();
 
   return (
     <Link className={styles.back} style={{ marginBottom: 8, ...style }} to={href}>

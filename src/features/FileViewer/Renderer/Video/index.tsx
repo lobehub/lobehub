@@ -1,29 +1,29 @@
 'use client';
 
 import { Center } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding: ${token.paddingSM}px;
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorBgContainer};
+    padding: ${cssVar.paddingSM};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorBgContainer};
   `,
   video: css`
     max-width: 100%;
     max-height: 100%;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     object-fit: contain;
-    box-shadow: ${token.boxShadowTertiary};
+    box-shadow: ${cssVar.boxShadowTertiary};
 
     &::-webkit-media-controls-panel {
       background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 30%) 100%);
     }
 
     &:focus {
-      outline: 2px solid ${token.colorPrimary};
+      outline: 2px solid ${cssVar.colorPrimary};
       outline-offset: 2px;
     }
   `,
@@ -35,8 +35,6 @@ interface VideoViewerProps {
 }
 
 const VideoViewer = memo<VideoViewerProps>(({ url }) => {
-  const { styles } = useStyles();
-
   if (!url) return null;
 
   return (

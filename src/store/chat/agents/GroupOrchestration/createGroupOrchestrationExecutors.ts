@@ -427,7 +427,7 @@ export const createGroupOrchestrationExecutors = (
         log(`[${sessionLogId}] Created task message: ${taskMessageId}`);
 
         // 2. Create task via backend API (backend creates thread with sourceMessageId)
-        const createResult = await aiAgentService.execGroupSubAgentTask({
+        const createResult = await aiAgentService.execSubAgentTask({
           agentId,
           groupId,
           instruction: task,
@@ -476,7 +476,7 @@ export const createGroupOrchestrationExecutors = (
             };
           }
 
-          const status = await aiAgentService.getGroupSubAgentTaskStatus({
+          const status = await aiAgentService.getSubAgentTaskStatus({
             threadId: createResult.threadId,
           });
 

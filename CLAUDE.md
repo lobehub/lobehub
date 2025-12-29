@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This document serves as a shared guideline for all team members when using Claude Code in this repository.
+This document serves as a shared guideline for all team members when using Claude Code in this opensource lobe-chat(also known as lobehub) repository.
 
 ## Tech Stack
 
@@ -14,7 +14,6 @@ read @.cursor/rules/project-structure.mdc
 
 ### Git Workflow
 
-- The current release branch is `next` instead of `main` until v2.0.0 is officially released
 - use rebase for git pull
 - git commit message should prefix with gitmoji
 - git branch name format template: <type>/<feature-name>

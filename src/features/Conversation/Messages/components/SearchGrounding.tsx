@@ -1,53 +1,37 @@
 import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import { ChevronDown, ChevronRight, Globe } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import Image from 'next/image';
-import { rgba } from 'polished';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type GroundingSearch } from '@/types/search';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     width: fit-content;
     padding-block: 4px;
     padding-inline: 8px;
     border-radius: 6px;
 
-    color: ${token.colorTextTertiary};
-
+    color: ${cssVar.colorTextTertiary};
+  `,
+  containerDark: css`
     &:hover {
-      background: ${isDarkMode ? token.colorFillQuaternary : token.colorFillTertiary};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
-  expand: css`
-    background: ${isDarkMode ? token.colorFillQuaternary : token.colorFillTertiary} !important;
-  `,
-  shinyText: css`
-    color: ${rgba(token.colorText, 0.45)};
-
-    background: linear-gradient(
-      120deg,
-      ${rgba(token.colorTextBase, 0)} 40%,
-      ${token.colorTextSecondary} 50%,
-      ${rgba(token.colorTextBase, 0)} 60%
-    );
-    background-clip: text;
-    background-size: 200% 100%;
-
-    animation: shine 1.5s linear infinite;
-
-    @keyframes shine {
-      0% {
-        background-position: 100%;
-      }
-
-      100% {
-        background-position: -100%;
-      }
+  containerLight: css`
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
     }
+  `,
+  expandDark: css`
+    background: ${cssVar.colorFillQuaternary} !important;
+  `,
+  expandLight: css`
+    background: ${cssVar.colorFillTertiary} !important;
   `,
   title: css`
     overflow: hidden;
@@ -62,13 +46,17 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
 
 const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => {
   const { t } = useTranslation('chat');
-  const { styles, cx, theme } = useStyles();
+  const { isDarkMode } = useThemeMode();
 
   const [showDetail, setShowDetail] = useState(false);
 
   return (
     <Flexbox
-      className={cx(styles.container, showDetail && styles.expand)}
+      className={cx(
+        styles.container,
+        isDarkMode ? styles.containerDark : styles.containerLight,
+        showDetail && (isDarkMode ? styles.expandDark : styles.expandLight),
+      )}
       gap={16}
       style={{ width: showDetail ? '100%' : undefined }}
     >
@@ -94,7 +82,7 @@ const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => 
                   key={`${item.url}-${index}`}
                   src={`https://icons.duckduckgo.com/ip3/${new URL(item.url).host}.ico`}
                   style={{
-                    background: theme.colorBgContainer,
+                    background: cssVar.colorBgContainer,
                     borderRadius: 8,
                     marginInline: -2,
                     padding: 2,

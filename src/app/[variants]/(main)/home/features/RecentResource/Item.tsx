@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Center, Flexbox, Image, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import Time from '@/app/[variants]/(main)/home/features/components/Time';
@@ -24,8 +24,6 @@ interface RecentResourceItemProps {
 }
 
 const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
-  const theme = useTheme();
-
   const isImage = IMAGE_FILE_TYPES.has(file.fileType);
 
   return (
@@ -34,7 +32,7 @@ const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
       flex={'none'}
       height={RECENT_BLOCK_SIZE.RESOURCE.HEIGHT}
       style={{
-        borderRadius: theme.borderRadiusLG,
+        borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
       }}
       variant={'outlined'}
@@ -43,7 +41,7 @@ const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
       <Center
         flex={'none'}
         height={126}
-        style={{ background: theme.colorFillTertiary, overflow: 'hidden' }}
+        style={{ background: cssVar.colorFillTertiary, overflow: 'hidden' }}
       >
         {isImage && file.url ? (
           <Image

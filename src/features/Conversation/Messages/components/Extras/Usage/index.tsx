@@ -1,17 +1,17 @@
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import TokenDetail from './UsageDetail';
 
-export const useStyles = createStyles(({ token, css, cx }) => ({
-  container: cx(css`
+export const styles = createStaticStyles(({ css, cssVar }) => ({
+  container: css`
     font-size: 12px;
-    color: ${token.colorTextQuaternary};
-  `),
+    color: ${cssVar.colorTextQuaternary};
+  `,
 }));
 
 interface UsageProps {
@@ -22,8 +22,6 @@ interface UsageProps {
 }
 
 const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox
       align={'center'}

@@ -1,5 +1,6 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Disable the auto sort key eslint rule to make the code more logic and readable
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
 import {
   type ChatImageItem,
@@ -13,6 +14,7 @@ import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { aiChatService } from '@/services/aiChat';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -301,6 +303,10 @@ export const conversationLifecycle: StateCreator<
     // Clear editor temp state after message created
     if (data) {
       get().updateOperationMetadata(operationId, { inputEditorTempState: null });
+    }
+
+    if (ENABLE_BUSINESS_FEATURES) {
+      markUserValidAction();
     }
 
     if (!data) return;

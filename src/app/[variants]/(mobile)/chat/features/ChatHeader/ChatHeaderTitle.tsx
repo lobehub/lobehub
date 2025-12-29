@@ -1,6 +1,6 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ChevronDown } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +22,6 @@ const ChatHeaderTitle = memo(() => {
   ]);
   const isInbox = useSessionStore(sessionSelectors.isInboxSession);
   const title = useAgentStore(agentSelectors.currentAgentTitle);
-  const theme = useTheme();
 
   const displayTitle = isInbox ? 'Lobe AI' : title;
 
@@ -45,8 +44,8 @@ const ChatHeaderTitle = memo(() => {
             icon={ChevronDown}
             size={{ blockSize: 14, borderRadius: '50%', size: 12 }}
             style={{
-              background: theme.colorFillSecondary,
-              color: theme.colorTextDescription,
+              background: cssVar.colorFillSecondary,
+              color: cssVar.colorTextDescription,
             }}
           />
         </Flexbox>

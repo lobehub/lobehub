@@ -11,7 +11,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { Descriptions } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { memo, useState } from 'react';
@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next';
 
 import { CRAWL_CONTENT_LIMITED_COUNT } from '../../const';
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     cardBody: css`
       padding-block: 12px 8px;
@@ -31,42 +31,42 @@ const useStyles = createStyles(({ token, css }) => {
       overflow: hidden;
 
       max-width: 360px;
-      border: 1px solid ${token.colorBorderSecondary};
+      border: 1px solid ${cssVar.colorBorderSecondary};
       border-radius: 12px;
 
       transition: border-color 0.2s;
 
       :hover {
-        border-color: ${token.colorPrimary};
+        border-color: ${cssVar.colorPrimary};
       }
     `,
     description: css`
       margin-block: 0 4px !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     detailsSection: css`
-      padding-block: ${token.paddingSM}px;
+      padding-block: ${cssVar.paddingSM};
     `,
     externalLink: css`
-      color: ${token.colorPrimary};
+      color: ${cssVar.colorPrimary};
     `,
     footer: css`
-      padding: ${token.paddingXS}px;
+      padding: ${cssVar.paddingXS};
       border-radius: 6px;
       text-align: center;
-      background-color: ${token.colorFillQuaternary};
+      background-color: ${cssVar.colorFillQuaternary};
     `,
     footerText: css`
-      font-size: ${token.fontSizeSM}px;
-      color: ${token.colorTextTertiary} !important;
+      font-size: ${cssVar.fontSizeSM};
+      color: ${cssVar.colorTextTertiary} !important;
     `,
     metaInfo: css`
       display: flex;
       align-items: center;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     sliced: css`
-      color: ${token.colorTextQuaternary};
+      color: ${cssVar.colorTextQuaternary};
     `,
     title: css`
       overflow: hidden;
@@ -80,11 +80,11 @@ const useStyles = createStyles(({ token, css }) => {
       font-weight: bold;
     `,
     titleRow: css`
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     `,
 
     url: css`
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
     `,
   };
 });
@@ -101,7 +101,6 @@ interface PageContentProps {
 
 const PageContent = memo<PageContentProps>(({ result }) => {
   const { t } = useTranslation('plugin');
-  const { styles } = useStyles();
   const [display, setDisplay] = useState<DisplayType>(DisplayType.Render);
 
   if (!result || !result.data) return undefined;

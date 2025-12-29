@@ -1,9 +1,8 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 const DetailsLoading = memo(() => {
-  const theme = useTheme();
   return (
     <Flexbox gap={24}>
       <Flexbox gap={12}>
@@ -18,7 +17,7 @@ const DetailsLoading = memo(() => {
         height={54}
         horizontal
         style={{
-          borderBottom: `1px solid ${theme.colorBorder}`,
+          borderBottom: `1px solid ${cssVar.colorBorder}`,
         }}
       >
         <Skeleton.Button />

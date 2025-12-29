@@ -1,28 +1,26 @@
 import { type LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinPlaceholderProps } from '@lobechat/types';
 import { Center, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import React, { memo } from 'react';
 
-const useStyles = createStyles(({ css, token, cx }) => ({
-  query: cx(css`
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  query: css`
     padding-block: 4px;
     padding-inline: 8px;
     border-radius: 8px;
 
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
-  `),
+  `,
 }));
 
 const SearchFiles = memo<BuiltinPlaceholderProps<LocalSearchFilesParams>>(({ args = {} }) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox gap={4}>
       <Flexbox align={'center'} distribution={'space-between'} gap={40} height={26} horizontal>

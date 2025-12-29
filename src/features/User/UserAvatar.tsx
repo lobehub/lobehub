@@ -2,7 +2,7 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Avatar, type AvatarProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { forwardRef, useMemo } from 'react';
 
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
@@ -12,7 +12,7 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   clickable: css`
     position: relative;
     transition: all 200ms ease-out 0s;
@@ -35,7 +35,7 @@ const useStyles = createStyles(({ css, token }) => ({
     }
 
     &:hover {
-      box-shadow: 0 0 0 2px ${token.colorPrimary};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimary};
 
       &::before {
         transform: skewX(-45deg) translateX(400%);
@@ -50,7 +50,6 @@ export interface UserAvatarProps extends AvatarProps {
 
 const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
   ({ size = 40, background, clickable, className, style, ...rest }, ref) => {
-    const { styles, cx, theme } = useStyles();
     const [avatar, nickName, username] = useUserStore((s) => [
       userProfileSelectors.userAvatar(s),
       userProfileSelectors.nickName(s),
@@ -78,11 +77,11 @@ const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
         alt={isSignedIn ? nickName || username || 'User' : BRANDING_NAME}
         avatar={avatarUrl || nickName || username}
         background={background}
-        className={cx(clickable && styles.clickable, className)}
+        className={clickable ? styles.clickable : className}
         ref={ref}
         shape={'square'}
         size={size}
-        style={{ color: theme.colorText, flex: 'none', ...style }}
+        style={{ color: cssVar.colorText, flex: 'none', ...style }}
         {...rest}
       />
     );

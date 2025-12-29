@@ -1,5 +1,5 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { ArrowLeftRight, XIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -9,7 +9,6 @@ import { useChatStore } from '@/store/chat';
 import Title from './Title';
 
 const Header = memo(() => {
-  const theme = useTheme();
   const [hasPortal, portalThreadId, closeThreadPortal, switchThread] = useChatStore((s) => [
     !!s.portalThreadId,
     s.portalThreadId,
@@ -39,7 +38,7 @@ const Header = memo(() => {
       paddingBlock={6}
       paddingInline={8}
       style={{
-        borderBottom: `1px solid ${theme.colorBorderSecondary}`,
+        borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
       }}
       title={<Title />}
     />

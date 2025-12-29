@@ -6,7 +6,7 @@ import {
   type ChatInputActionsProps,
   CodeLanguageSelect,
 } from '@lobehub/editor/react';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import {
   BoldIcon,
   CodeXmlIcon,
@@ -26,7 +26,6 @@ import { useTranslation } from 'react-i18next';
 const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
   const { t } = useTranslation('editor');
   const editorState = useEditorState(editor);
-  const theme = useTheme();
 
   const items: ChatInputActionsProps['items'] = useMemo(
     () =>
@@ -138,7 +137,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
     <ChatInputActionBar
       left={<ChatInputActions items={items} />}
       style={{
-        background: theme.colorFillQuaternary,
+        background: cssVar.colorFillQuaternary,
         borderTopLeftRadius: 8,
         borderTopRightRadius: 8,
       }}

@@ -2,7 +2,7 @@ import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { Microsoft } from '@lobehub/icons';
 import { ActionIcon, Block, Collapse, Empty, Flexbox, Icon, Snippet, Tag } from '@lobehub/ui';
 import { Divider, Popover, Steps } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import {
   CheckIcon,
@@ -27,16 +27,15 @@ import CollapseLayout from '../CollapseLayout';
 import { useDetailContext } from '../DetailProvider';
 import Platform from './Platform';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     code: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
     `,
   };
 });
 
 const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
-  const { styles, theme } = useStyles();
   const { t } = useTranslation(['discover', 'plugin']);
   const { deploymentOptions = [], identifier } = useDetailContext();
   const [activeKey, setActiveKey] = useState<string[]>(['0']);
@@ -67,19 +66,19 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
   const getPlatformIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case 'macos': {
-        return <SiApple color={theme.colorTextDescription} size={16} />;
+        return <SiApple color={cssVar.colorTextDescription} size={16} />;
       }
       case 'windows': {
-        return <Microsoft color={theme.colorTextDescription} size={16} />;
+        return <Microsoft color={cssVar.colorTextDescription} size={16} />;
       }
       case 'linux_debian': {
-        return <SiLinux color={theme.colorTextDescription} size={16} />;
+        return <SiLinux color={cssVar.colorTextDescription} size={16} />;
       }
       case 'manual': {
-        return <CodeIcon color={theme.colorTextDescription} size={16} />;
+        return <CodeIcon color={cssVar.colorTextDescription} size={16} />;
       }
       default: {
-        return <CodeIcon color={theme.colorTextDescription} size={16} />;
+        return <CodeIcon color={cssVar.colorTextDescription} size={16} />;
       }
     }
   };
@@ -135,7 +134,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                           current={-1}
                           direction="vertical"
                           items={setupSteps.map((i) => ({
-                            title: <p style={{ color: theme.colorText }}>{i}</p>,
+                            title: <p style={{ color: cssVar.colorText }}>{i}</p>,
                           }))}
                           progressDot
                           size={'small'}
@@ -162,7 +161,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                             <span
                               className={styles.code}
                               style={{
-                                color: theme.gold,
+                                color: cssVar.gold,
                               }}
                             >
                               {record.name}
@@ -180,7 +179,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                           render: (_, record) => (
                             <Icon
                               color={
-                                record.required ? theme.colorSuccess : theme.colorTextDescription
+                                record.required ? cssVar.colorSuccess : cssVar.colorTextDescription
                               }
                               icon={record.required ? CheckIcon : MinusIcon}
                             />
@@ -213,7 +212,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                             <Flexbox align="center" gap={8} horizontal>
                               <span
                                 style={{
-                                  fontFamily: theme.fontFamilyCode,
+                                  fontFamily: cssVar.fontFamilyCode,
                                   fontSize: 12,
                                 }}
                               >
@@ -236,7 +235,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                                               </span>
                                             ),
                                             style: {
-                                              fontFamily: theme.fontFamilyCode,
+                                              fontFamily: cssVar.fontFamilyCode,
                                               fontSize: 12,
                                             },
                                             value: code,
@@ -254,7 +253,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                                                 key: 'check',
                                                 label: t('mcp.details.deployment.checkCommand'),
                                                 style: {
-                                                  fontFamily: theme.fontFamilyCode,
+                                                  fontFamily: cssVar.fontFamilyCode,
                                                   fontSize: 12,
                                                 },
                                                 value: dep.checkCommand,
@@ -269,7 +268,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                                   trigger={['hover']}
                                 >
                                   <ActionIcon
-                                    color={theme.colorTextDescription}
+                                    color={cssVar.colorTextDescription}
                                     icon={DownloadIcon}
                                     size={'small'}
                                   />

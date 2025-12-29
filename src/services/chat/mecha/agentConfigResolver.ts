@@ -44,20 +44,20 @@ export interface AgentConfigResolverContext {
   /** Agent ID to resolve config for */
   agentId: string;
 
-  /** Message map scope (e.g., 'page', 'main', 'thread') */
-  scope?: MessageMapScope;
-
   // Builtin agent specific context
-  /** Document content for page-agent */
+/** Document content for page-agent */
   documentContent?: string;
+
   /** Current model being used (for template variables) */
   model?: string;
-
   /** Plugins enabled for the agent */
   plugins?: string[];
 
   /** Current provider */
   provider?: string;
+
+  /** Message map scope (e.g., 'page', 'main', 'thread') */
+  scope?: MessageMapScope;
   /** Target agent config for agent-builder */
   targetAgentConfig?: LobeAgentConfig;
 }
@@ -98,8 +98,8 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   // Debug logging for page editor
   console.log('[agentConfigResolver] Resolving agent config:', {
     agentId,
-    scope: ctx.scope,
     plugins,
+    scope: ctx.scope,
   });
 
   const agentStoreState = getAgentStoreState();
@@ -114,7 +114,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   // Check if this is a builtin agent
   const slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
 
-  console.log('[agentConfigResolver] Agent type check:', { slug, isBuiltin: !!slug });
+  console.log('[agentConfigResolver] Agent type check:', { isBuiltin: !!slug, slug });
 
   if (!slug) {
     console.log('[agentConfigResolver] Taking CUSTOM AGENT branch');
@@ -157,9 +157,9 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       };
 
       console.log('[agentConfigResolver] Page-agent injection complete:', {
+        chatConfig: finalChatConfig,
         plugins: pageAgentPlugins,
         systemRoleLength: mergedSystemRole.length,
-        chatConfig: finalChatConfig,
       });
 
       return {
@@ -252,8 +252,8 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     };
 
     console.log('[agentConfigResolver] Page-agent injection complete for builtin agent:', {
-      slug,
       plugins: finalPlugins,
+      slug,
       systemRoleLength: resolvedSystemRole.length,
     });
   }

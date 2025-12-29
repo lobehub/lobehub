@@ -4,7 +4,7 @@ import { LoadingOutlined } from '@ant-design/icons';
 import { isDesktop } from '@lobechat/const';
 import { Block, Button, Flexbox, Icon, Input, Skeleton, Tag, Text } from '@lobehub/ui';
 import { Divider, Spin, Upload } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { BriefcaseIcon } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import {
@@ -267,7 +267,6 @@ const FullNameRow = memo<{ mobile?: boolean }>(({ mobile }) => {
 const InterestsRow = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('auth');
   const { t: tOnboarding } = useTranslation('onboarding');
-  const theme = useTheme();
   const interests = useUserStore(userProfileSelectors.interests);
   const updateInterests = useUserStore((s) => s.updateInterests);
   const [isEditing, setIsEditing] = useState(false);
@@ -363,14 +362,14 @@ const InterestsRow = memo<{ mobile?: boolean }>(({ mobile }) => {
                 style={
                   isSelected
                     ? {
-                        background: theme.colorFillSecondary,
-                        borderColor: theme.colorFillSecondary,
+                        background: cssVar.colorFillSecondary,
+                        borderColor: cssVar.colorFillSecondary,
                       }
                     : {}
                 }
                 variant="outlined"
               >
-                <Icon color={theme.colorTextSecondary} icon={item.icon} size={14} />
+                <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={14} />
                 <Text fontSize={13} weight={500}>
                   {item.label}
                 </Text>
@@ -387,8 +386,8 @@ const InterestsRow = memo<{ mobile?: boolean }>(({ mobile }) => {
                 onClick={() => toggleInterest(interest)}
                 padding={8}
                 style={{
-                  background: theme.colorFillSecondary,
-                  borderColor: theme.colorFillSecondary,
+                  background: cssVar.colorFillSecondary,
+                  borderColor: cssVar.colorFillSecondary,
                 }}
                 variant="outlined"
               >
@@ -405,12 +404,12 @@ const InterestsRow = memo<{ mobile?: boolean }>(({ mobile }) => {
             padding={8}
             style={
               showCustomInput
-                ? { background: theme.colorFillSecondary, borderColor: theme.colorFillSecondary }
+                ? { background: cssVar.colorFillSecondary, borderColor: cssVar.colorFillSecondary }
                 : {}
             }
             variant="outlined"
           >
-            <Icon color={theme.colorTextSecondary} icon={BriefcaseIcon} size={14} />
+            <Icon color={cssVar.colorTextSecondary} icon={BriefcaseIcon} size={14} />
             <Text fontSize={13} weight={500}>
               {tOnboarding('interests.area.other')}
             </Text>

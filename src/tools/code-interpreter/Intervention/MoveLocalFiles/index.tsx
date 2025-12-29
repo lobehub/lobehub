@@ -2,13 +2,13 @@
 
 import { type BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   path: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
 }));
@@ -18,7 +18,6 @@ interface MoveLocalFilesParams {
 }
 
 const MoveLocalFiles = memo<BuiltinInterventionProps<MoveLocalFilesParams>>(({ args }) => {
-  const { styles } = useStyles();
   const { operations } = args;
 
   return (

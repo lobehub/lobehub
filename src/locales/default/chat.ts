@@ -324,6 +324,8 @@ export default {
   'thread.divider': 'Subtopic',
   'thread.threadMessageCount': '{{messageCount}} messages',
   'thread.title': 'Subtopic',
+  'todoProgress.allCompleted': 'All tasks completed',
+  'todoProgress.title': 'Tasks',
   'toggleWideScreen.off': 'Turn off widescreen mode',
   'toggleWideScreen.on': 'Turn on widescreen mode',
   'tokenDetails.chats': 'Chat Messages',

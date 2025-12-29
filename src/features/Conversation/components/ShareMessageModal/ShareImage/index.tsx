@@ -13,7 +13,7 @@ import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreensho
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import { useStyles } from '../style';
+import { styles } from '../style';
 import Preview from './Preview';
 import { type FieldType } from './type';
 
@@ -28,7 +28,6 @@ const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: s
     const currentAgentTitle = useAgentStore(agentSelectors.currentAgentTitle);
     const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
     const { t } = useTranslation(['chat', 'common']);
-    const { styles } = useStyles();
 
     // 生成唯一的预览ID，避免DOM冲突
     const previewId = uniqueId ? `preview-${uniqueId}` : 'preview';

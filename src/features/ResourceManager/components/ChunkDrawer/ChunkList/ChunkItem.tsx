@@ -1,19 +1,19 @@
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { useFileStore } from '@/store/file';
 import { type FileChunk } from '@/types/chunk';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 12px;
     padding-inline: 8px;
-    border-block-end: 1px dashed ${token.colorBorderSecondary};
+    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: 4px;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   text: css`
@@ -28,8 +28,6 @@ const useStyles = createStyles(({ css, token }) => ({
 type ChunkItemProps = FileChunk;
 
 const ChunkItem = memo<ChunkItemProps>(({ text, type, id }) => {
-  const { styles, cx } = useStyles();
-
   const highlightChunks = useFileStore((s) => s.highlightChunks);
 
   const typeClassName = useMemo(() => {

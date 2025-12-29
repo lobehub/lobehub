@@ -1,7 +1,7 @@
 'use client';
 
 import { DraggablePanel } from '@lobehub/ui';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   type PropsWithChildren,
@@ -41,12 +41,32 @@ const setNavPanelSnapshot = (snapshot: NavPanelSnapshot) => {
   listeners.forEach((listener) => listener());
 };
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
+  content: css`
+    position: relative;
+
+    overflow: hidden;
+    display: flex;
+
+    height: 100%;
+    min-height: 100%;
+    max-height: 100%;
+  `,
+  inner: css`
+    position: relative;
+    inset: 0;
+
+    overflow: hidden;
+    flex: 1;
+    flex-direction: column;
+
+    min-width: 240px;
+  `,
   panel: css`
     user-select: none;
     height: 100%;
-    color: ${token.colorTextSecondary};
-    background: ${isDesktop && isMacOS() ? 'transparent' : token.colorBgLayout};
+    color: ${cssVar.colorTextSecondary};
+    background: ${isDesktop && isMacOS() ? 'transparent' : cssVar.colorBgLayout};
 
     * {
       user-select: none;
@@ -57,7 +77,7 @@ export const useStyles = createStyles(({ css, token }) => ({
       opacity: 0;
       transition:
         opacity,
-        width 0.2s ${token.motionEaseOut};
+        width 0.2s ${cssVar.motionEaseOut};
     }
 
     #${USER_DROPDOWN_ICON_ID} {
@@ -65,13 +85,13 @@ export const useStyles = createStyles(({ css, token }) => ({
       opacity: 0;
       transition:
         opacity,
-        width 0.2s ${token.motionEaseOut};
+        width 0.2s ${cssVar.motionEaseOut};
     }
 
     #${BACK_BUTTON_ID} {
       width: 0 !important;
       opacity: 0;
-      transition: all 0.2s ${token.motionEaseOut};
+      transition: all 0.2s ${cssVar.motionEaseOut};
     }
 
     &:hover {
@@ -96,7 +116,6 @@ export const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const NavPanel = memo(() => {
-  const { styles } = useStyles();
   const { expand, handleSizeChange, width, togglePanel } = useNavPanel();
   const panelContent = useSyncExternalStore(
     subscribeNavPanel,
@@ -107,11 +126,13 @@ const NavPanel = memo(() => {
   // Use home Content as fallback when no portal content is provided
   const activeContent = panelContent || { key: 'home', node: <Sidebar /> };
 
-  const theme = useTheme();
   return (
     <>
       <DraggablePanel
         className={styles.panel}
+        classNames={{
+          content: styles.content,
+        }}
         defaultSize={{ height: '100%', width }}
         expand={expand}
         expandable={false}
@@ -122,13 +143,14 @@ const NavPanel = memo(() => {
         placement="left"
         showBorder={false}
         style={{
-          background: isDesktop && isMacOS() ? 'transparent' : theme.colorBgLayout,
+          background: isDesktop && isMacOS() ? 'transparent' : cssVar.colorBgLayout,
           zIndex: 11,
         }}
       >
         <AnimatePresence initial={false} mode="popLayout">
           <motion.div
             animate={{ opacity: 1, x: 0 }}
+            className={styles.inner}
             exit={{
               opacity: 0,
               x: '-20%',
@@ -138,14 +160,6 @@ const NavPanel = memo(() => {
               x: 0,
             }}
             key={activeContent.key}
-            style={{
-              flexDirection: 'column',
-              height: '100%',
-              inset: 0,
-              minWidth: 240,
-              overflow: 'hidden',
-              position: 'relative',
-            }}
             transition={{
               duration: 0.4,
               ease: [0.4, 0, 0.2, 1],

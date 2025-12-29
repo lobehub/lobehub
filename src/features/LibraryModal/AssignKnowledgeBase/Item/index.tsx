@@ -1,5 +1,5 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
@@ -7,16 +7,16 @@ import { type KnowledgeItem } from '@/types/knowledgeBase';
 
 import Actions from './Action';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   desc: css`
     margin: 0 !important;
     font-size: 12px;
     line-height: 1;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   link: css`
     overflow: hidden;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   title: css`
     margin: 0 !important;
@@ -26,8 +26,6 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const PluginItem = memo<KnowledgeItem>(({ id, fileType, name, type, description, enabled }) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox
       align={'center'}

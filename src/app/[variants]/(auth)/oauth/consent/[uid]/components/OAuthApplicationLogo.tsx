@@ -1,11 +1,11 @@
 import { Avatar, Center, Flexbox, FluentEmoji, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Link2Icon } from 'lucide-react';
 import React, { memo } from 'react';
 
 import { ProductLogo } from '@/components/Branding';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   connector: css`
     width: 40px;
     height: 40px;
@@ -18,7 +18,7 @@ const useStyles = createStyles(({ css, token }) => ({
   connectorLine: css`
     width: 24px;
     height: 1px;
-    background-color: ${token.colorBorderSecondary};
+    background-color: ${cssVar.colorBorderSecondary};
 
     @media (max-width: 768px) {
       width: 24px;
@@ -35,7 +35,6 @@ interface OAuthApplicationLogoProps {
 
 const OAuthApplicationLogo = memo<OAuthApplicationLogoProps>(
   ({ isFirstParty, clientDisplayName, logoUrl, size = 72 }) => {
-    const { styles, theme } = useStyles();
     return isFirstParty ? (
       <Avatar alt={clientDisplayName} avatar={logoUrl!} shape={'square'} size={size} />
     ) : (
@@ -47,7 +46,7 @@ const OAuthApplicationLogo = memo<OAuthApplicationLogoProps>(
         )}
         <div className={styles.connectorLine} />
         <Center className={styles.connector}>
-          <Icon icon={Link2Icon} style={{ color: theme.colorTextSecondary, fontSize: 20 }} />
+          <Icon icon={Link2Icon} style={{ color: cssVar.colorTextSecondary, fontSize: 20 }} />
         </Center>
         <div className={styles.connectorLine} />
         <ProductLogo size={size} />

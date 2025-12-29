@@ -2,7 +2,7 @@
 
 import { Flexbox, Form, Highlighter } from '@lobehub/ui';
 import { Switch } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { ListRestartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -11,10 +11,12 @@ import { DEFAULT_FEATURE_FLAGS } from '@/config/featureFlags';
 
 import Header from '../features/Header';
 
-const useStyles = createStyles(({ css, token, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     * {
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 12px;
     }
     .${prefixCls}-form-item {
@@ -24,7 +26,6 @@ const useStyles = createStyles(({ css, token, prefixCls }) => ({
 }));
 
 const FeatureFlagForm = memo<{ flags: any }>(({ flags }) => {
-  const { styles } = useStyles();
   const [data, setData] = useState(flags);
   const [form] = Form.useForm();
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Skeleton } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 export const GroupSkeleton = memo<{
@@ -9,14 +9,13 @@ export const GroupSkeleton = memo<{
   rows?: number;
   width?: number | string;
 }>(({ rows = 12, width, height }) => {
-  const theme = useTheme();
   return Array.from({ length: rows }).map((_, i) => (
     <Skeleton.Button
       active
       key={i}
       size={'large'}
       style={{
-        borderRadius: theme.borderRadiusLG,
+        borderRadius: cssVar.borderRadiusLG,
         height: height,
         maxHeight: height,
         maxWidth: width,

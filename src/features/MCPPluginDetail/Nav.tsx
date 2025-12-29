@@ -2,7 +2,7 @@
 
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon, Tabs, type TabsProps, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import {
   BookOpenIcon,
   CodeIcon,
@@ -23,17 +23,17 @@ import { McpNavKey } from '@/types/discover';
 
 import { useDetailContext } from './DetailProvider';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     link: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
 
       &:hover {
-        color: ${token.colorInfo};
+        color: ${cssVar.colorInfo};
       }
     `,
     nav: css`
-      border-block-end: 1px solid ${token.colorBorder};
+      border-block-end: 1px solid ${cssVar.colorBorder};
     `,
     tabs: css`
       scrollbar-width: none;
@@ -67,7 +67,6 @@ const Nav = memo<NavProps>(
       github,
       identifier,
     } = useDetailContext();
-    const { styles } = useStyles();
 
     // 检查插件是否已安装
     const installedPlugin = useToolStore(pluginSelectors.getInstalledPluginById(identifier));

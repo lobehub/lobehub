@@ -64,6 +64,9 @@ describe('ChatPluginAction', () => {
 
       expect(internal_execAgentRuntimeMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          context: expect.objectContaining({
+            agentId: 'session-id',
+          }),
           messages: [
             {
               role: 'assistant',
@@ -73,9 +76,6 @@ describe('ChatPluginAction', () => {
               id: toolMessage.id,
               content: toolMessage.content,
               role: 'assistant',
-              meta: expect.objectContaining({
-                backgroundColor: 'rgba(0,0,0,0)',
-              }),
             }),
           ],
           parentMessageId: messageId,
@@ -705,7 +705,7 @@ describe('ChatPluginAction', () => {
           error: ['Invalid setting'],
           message: '[plugin] your settings is invalid with plugin manifest setting schema',
         },
-        message: undefined,
+        message: 'response.PluginSettingsInvalid',
         type: 'PluginSettingsInvalid',
       });
 

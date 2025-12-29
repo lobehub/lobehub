@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
+import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
 import { useHomeStore } from '@/store/home';
 import { getSessionStoreState } from '@/store/session';
@@ -129,7 +130,8 @@ describe('createSidebarUISlice', () => {
         await result.current.removeAgent(mockAgentId);
       });
 
-      expect(mockSwitchSession).toHaveBeenCalledWith(INBOX_SESSION_ID);
+      // removeAgent only removes and refreshes the agent list; session switching is handled in SessionStore.removeSession
+      expect(mockSwitchSession).not.toHaveBeenCalledWith(INBOX_SESSION_ID);
     });
   });
 
@@ -192,8 +194,11 @@ describe('createSidebarUISlice', () => {
         await result.current.duplicateAgent(mockAgentId);
       });
 
-      // In test environment, t() returns undefined, so fallback to 'Copy'
-      expect(sessionService.cloneSession).toHaveBeenCalledWith(mockAgentId, 'Copy');
+      // default title is i18n based
+      expect(sessionService.cloneSession).toHaveBeenCalledWith(
+        mockAgentId,
+        expect.stringContaining('Copy'),
+      );
     });
   });
 
@@ -201,7 +206,7 @@ describe('createSidebarUISlice', () => {
     it('should update agent group and refresh agent list', async () => {
       const mockAgentId = 'agent-123';
       const mockGroupId = 'group-456';
-      vi.spyOn(sessionService, 'updateSession').mockResolvedValueOnce(undefined as any);
+      vi.spyOn(homeService, 'updateAgentSessionGroupId').mockResolvedValueOnce(undefined as any);
       const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
 
       const { result } = renderHook(() => useHomeStore());
@@ -210,15 +215,13 @@ describe('createSidebarUISlice', () => {
         await result.current.updateAgentGroup(mockAgentId, mockGroupId);
       });
 
-      expect(sessionService.updateSession).toHaveBeenCalledWith(mockAgentId, {
-        group: mockGroupId,
-      });
+      expect(homeService.updateAgentSessionGroupId).toHaveBeenCalledWith(mockAgentId, mockGroupId);
       expect(spyOnRefresh).toHaveBeenCalled();
     });
 
     it('should set group to default when groupId is null', async () => {
       const mockAgentId = 'agent-123';
-      vi.spyOn(sessionService, 'updateSession').mockResolvedValueOnce(undefined as any);
+      vi.spyOn(homeService, 'updateAgentSessionGroupId').mockResolvedValueOnce(undefined as any);
       vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
 
       const { result } = renderHook(() => useHomeStore());
@@ -227,7 +230,7 @@ describe('createSidebarUISlice', () => {
         await result.current.updateAgentGroup(mockAgentId, null);
       });
 
-      expect(sessionService.updateSession).toHaveBeenCalledWith(mockAgentId, { group: 'default' });
+      expect(homeService.updateAgentSessionGroupId).toHaveBeenCalledWith(mockAgentId, null);
     });
   });
 

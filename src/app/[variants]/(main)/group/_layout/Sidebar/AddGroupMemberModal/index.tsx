@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Modal , Button } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Button, Flexbox, Modal } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -13,14 +13,14 @@ import AvailableAgentList from './AvailableAgentList';
 import SelectedAgentList from './SelectedAgentList';
 import { useAgentSelectionStore } from './store';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex-direction: row;
 
     height: 500px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadius}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius}px;
   `,
   rightColumn: css`
     display: flex;
@@ -40,7 +40,6 @@ export interface AddGroupMemberModalProps {
 const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
   ({ existingMembers = [], onCancel, onConfirm, open }) => {
     const { t } = useTranslation(['chat', 'common']);
-    const { styles } = useStyles();
 
     const selectedAgentIds = useAgentSelectionStore((s) => s.selectedAgentIds);
     const clearSelection = useAgentSelectionStore((s) => s.clearSelection);

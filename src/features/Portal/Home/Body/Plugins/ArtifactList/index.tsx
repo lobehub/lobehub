@@ -1,5 +1,5 @@
 import { Avatar, Center, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Origami } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,6 @@ const ArtifactList = () => {
   const messages = useChatStore(dbMessageSelectors.dbToolMessages, isEqual);
   const isCurrentChatLoaded = useChatStore(displayMessageSelectors.isCurrentDisplayChatLoaded);
 
-  const theme = useTheme();
   return !isCurrentChatLoaded ? (
     <Flexbox gap={12} paddingInline={12}>
       {[1, 1, 1, 1, 1, 1].map((key, index) => (
@@ -31,11 +30,11 @@ const ArtifactList = () => {
     <Center
       gap={8}
       paddingBlock={24}
-      style={{ border: `1px dashed ${theme.colorSplit}`, borderRadius: 8, marginInline: 12 }}
+      style={{ border: `1px dashed ${cssVar.colorSplit}`, borderRadius: 8, marginInline: 12 }}
     >
       <Avatar
         avatar={<Icon icon={Origami} size={'large'} />}
-        background={theme.colorFillTertiary}
+        background={cssVar.colorFillTertiary}
         shape={'square'}
         size={48}
       />

@@ -11,7 +11,7 @@ import {
   mermaidThemes,
 } from '@lobehub/ui';
 import { Skeleton } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon, TriangleAlert } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -29,7 +29,6 @@ import MermaidPreview from './MermaidPreview';
 const ChatAppearance = memo(() => {
   const { t } = useTranslation('setting');
   const { general } = useUserStore(settingsSelectors.currentSettings, isEqual);
-  const theme = useTheme();
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
@@ -71,7 +70,7 @@ const ChatAppearance = memo(() => {
             ? {
                 icon: (
                   <TriangleAlert
-                    color={theme.colorWarning}
+                    color={cssVar.colorWarning}
                     size={14}
                     style={{ alignSelf: 'flex-end', marginBlockEnd: 2, marginInlineStart: 8 }}
                   />

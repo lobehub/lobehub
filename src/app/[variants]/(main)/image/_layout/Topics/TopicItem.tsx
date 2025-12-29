@@ -2,7 +2,7 @@
 
 import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { App, Popover } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Trash } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +27,6 @@ interface TopicItemProps {
 }
 
 const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
-  const theme = useTheme();
   const { t } = useTranslation('image');
   const { modal } = App.useApp();
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
@@ -117,7 +116,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
       >
         <Avatar
           avatar={topic.coverUrl ?? ''}
-          background={theme.colorFillSecondary}
+          background={cssVar.colorFillSecondary}
           bordered={isActive}
           loading={isLoading}
           shape="square"

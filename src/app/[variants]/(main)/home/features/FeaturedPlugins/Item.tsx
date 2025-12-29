@@ -1,5 +1,5 @@
 import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import MetaInfo from '@/app/[variants]/(main)/community/(list)/mcp/features/List/MetaInfo';
@@ -7,8 +7,6 @@ import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
 import { type DiscoverMcpItem } from '@/types/discover';
 
 const FeaturedPluginItem = memo<DiscoverMcpItem>(({ name, icon, github, installCount }) => {
-  const theme = useTheme();
-
   return (
     <Block
       clickable
@@ -18,7 +16,7 @@ const FeaturedPluginItem = memo<DiscoverMcpItem>(({ name, icon, github, installC
       horizontal
       padding={12}
       style={{
-        borderRadius: theme.borderRadiusLG,
+        borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
         width: '100%',
       }}
@@ -48,7 +46,7 @@ const FeaturedPluginItem = memo<DiscoverMcpItem>(({ name, icon, github, installC
           installCount={installCount}
           stars={github?.stars}
           style={{
-            color: theme.colorTextDescription,
+            color: cssVar.colorTextDescription,
             fontSize: 12,
           }}
         />

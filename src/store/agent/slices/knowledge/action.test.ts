@@ -279,7 +279,7 @@ describe('KnowledgeSlice Actions', () => {
         useAgentStore.setState({ activeAgentId: 'agent-1' });
       });
 
-      const { result } = renderHook(() => useAgentStore().useFetchFilesAndKnowledgeBases(), {
+      const { result } = renderHook(() => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'), {
         wrapper: withSWR,
       });
 
@@ -295,7 +295,7 @@ describe('KnowledgeSlice Actions', () => {
         useAgentStore.setState({ activeAgentId: 'agent-1' });
       });
 
-      const { result } = renderHook(() => useAgentStore().useFetchFilesAndKnowledgeBases(), {
+      const { result } = renderHook(() => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'), {
         wrapper: withSWR,
       });
 

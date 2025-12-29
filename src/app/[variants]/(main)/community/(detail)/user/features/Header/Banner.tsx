@@ -1,10 +1,10 @@
 'use client';
 
 import { Center } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles , responsive } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, token, responsive }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   banner: css`
     position: absolute;
     inset-block-start: 0;
@@ -14,7 +14,7 @@ const useStyles = createStyles(({ css, token, responsive }) => ({
     height: 160px;
     padding: 16px;
 
-    ${responsive.mobile} {
+    ${responsive.sm} {
       position: relative;
 
       width: calc(100% + 32px);
@@ -38,9 +38,9 @@ const useStyles = createStyles(({ css, token, responsive }) => ({
 
     width: 100%;
     height: 100%;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
 
     @media (max-width: 1720px) {
       border-radius: 0;
@@ -57,7 +57,7 @@ const useStyles = createStyles(({ css, token, responsive }) => ({
     height: 64px;
     min-height: 64px;
 
-    ${responsive.mobile} {
+    ${responsive.sm} {
       display: none;
     }
   `,
@@ -69,7 +69,6 @@ interface BannerProps {
 }
 
 const Banner = memo<BannerProps>(({ avatar, bannerUrl }) => {
-  const { styles } = useStyles();
   // Use bannerUrl if available, otherwise fall back to blurred avatar
   const backgroundImage = bannerUrl || avatar;
   const shouldBlur = !bannerUrl && !!avatar;

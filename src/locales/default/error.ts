@@ -1,3 +1,5 @@
+import { businessErrorsLocales } from '@/business/locales/errors';
+
 export default {
   'clerkAuth.loginSuccess.action': 'Continue Session',
   'clerkAuth.loginSuccess.desc':
@@ -196,6 +198,8 @@ export default {
     'We apologize for the inconvenience. Due to a temporary system malfunction, your current subscription usage is inactive. Please click the button below to restore your subscription, or contact us via email for support.',
   'response.SubscriptionPlanLimit':
     'Your subscription points have been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.',
+  'response.SubscriptionPlanLimitUltimate':
+    'Your subscription points have been exhausted, and you cannot use this feature. Please top up credits or configure a custom model API to continue using it.',
   'response.SystemTimeNotMatchError':
     'Sorry, your system time does not match the server. Please check your system time and try again.',
   'response.UnknownChatFetchError':
@@ -234,4 +238,5 @@ export default {
   'upload.title': 'File upload failed. Please check your network connection or try again later',
   'upload.unknownError': 'Error reason: {{reason}}',
   'upload.uploadFailed': 'File upload failed.',
+  ...businessErrorsLocales,
 };

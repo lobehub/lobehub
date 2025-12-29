@@ -2,29 +2,28 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Block, Modal, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import AuthCard from '@/features/AuthCard';
 
-const useStyles = createStyles(({ css, isDarkMode }) => {
-  const image = isDarkMode
-    ? '/images/community_header_dark.webp'
-    : '/images/community_header_light.webp';
-  return {
-    container: css`
-      padding-block-start: 32px;
+const styles = createStaticStyles(({ css }) => ({
+  container: css`
+    padding-block-start: 32px;
 
-      background-image: url(${image});
-      background-repeat: no-repeat;
-      background-position: 400% 0;
-      background-size: 400px auto;
-      background-blend-mode: ${isDarkMode ? 'screen' : 'multiply'};
-    `,
-  };
-});
+    background-image: url('/images/community_header_light.webp');
+    background-repeat: no-repeat;
+    background-position: 400% 0;
+    background-size: 400px auto;
+    background-blend-mode: multiply;
+  `,
+  container_dark: css`
+    background-image: url('/images/community_header_dark.webp');
+    background-blend-mode: screen;
+  `,
+}));
 
 interface MarketAuthConfirmModalProps {
   onCancel: () => void;
@@ -35,7 +34,7 @@ interface MarketAuthConfirmModalProps {
 const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
   ({ open, onConfirm, onCancel }) => {
     const { t } = useTranslation('marketAuth');
-    const { styles } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     const footer = (
       <Text align={'center'} as={'div'} fontSize={13} type={'secondary'}>
@@ -68,7 +67,7 @@ const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
         cancelText={t('authorize.cancel')}
         centered
         classNames={{
-          container: styles.container,
+          container: cx(styles.container, isDarkMode && styles.container_dark),
         }}
         okText={t('authorize.confirm')}
         onCancel={onCancel}

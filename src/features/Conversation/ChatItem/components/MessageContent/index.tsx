@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import dynamic from 'next/dynamic';
 import { type ReactNode, Suspense, memo, useCallback } from 'react';
 
@@ -11,17 +11,17 @@ const EditableModal = dynamic(() => import('./EditableModal'), { ssr: false });
 
 export const MSG_CONTENT_CLASSNAME = 'msg_content_flag';
 
-export const useStyles = createStyles(({ css, token }) => {
+export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     bubble: css`
       padding-block: 8px;
       padding-inline: 12px;
-      border-radius: ${token.borderRadiusLG}px;
-      background-color: ${token.colorFillTertiary};
+      border-radius: ${cssVar.borderRadiusLG};
+      background-color: ${cssVar.colorFillTertiary};
     `,
     disabled: css`
       user-select: ${'none'};
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     message: css`
       position: relative;
@@ -55,7 +55,6 @@ const MessageContent = memo<MessageContentProps>(
     className,
     variant,
   }) => {
-    const { cx, styles } = useStyles();
     const [toggleMessageEditing, updateMessageContent] = useConversationStore((s) => [
       s.toggleMessageEditing,
       s.updateMessageContent,

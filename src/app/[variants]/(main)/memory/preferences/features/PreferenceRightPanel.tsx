@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { BotIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,17 +21,16 @@ import { LayersEnum } from '@/types/userMemory';
 
 import PreferenceDropdown from './PreferenceDropdown';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   suggestionsTitle: css`
     font-size: 12px;
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
 const PreferenceRightPanel = memo(() => {
   const { t } = useTranslation('memory');
-  const { styles } = useStyles();
   const [preferenceId] = useQueryState('preferenceId', { clearOnDefault: true });
   const useFetchMemoryDetail = useUserMemoryStore((s) => s.useFetchMemoryDetail);
 

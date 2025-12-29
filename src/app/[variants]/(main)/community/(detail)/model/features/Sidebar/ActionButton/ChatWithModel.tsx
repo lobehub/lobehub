@@ -3,16 +3,16 @@
 import { ProviderIcon } from '@lobehub/icons';
 import { Button, Icon } from '@lobehub/ui';
 import { Dropdown } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link , useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useDetailContext } from '../../DetailProvider';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   button: css`
     button {
       width: 100%;
@@ -21,7 +21,6 @@ const useStyles = createStyles(({ css }) => ({
 }));
 
 const ChatWithModel = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('discover');
   const { providers = [] } = useDetailContext();
   const includeLobeHub = providers.some((item) => item.id === 'lobehub');

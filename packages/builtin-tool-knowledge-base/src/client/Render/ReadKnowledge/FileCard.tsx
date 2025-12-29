@@ -2,70 +2,68 @@
 
 import { Alert, Flexbox, Text } from '@lobehub/ui';
 import { Descriptions } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ComponentType, memo } from 'react';
 
 import { FileContentDetail } from '../../../types';
 
-const useStyles = createStyles(({ token, css }) => {
-  return {
-    cardBody: css`
-      padding-block: 12px 8px;
-      padding-inline: 16px;
-    `,
-    container: css`
-      overflow: hidden;
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  cardBody: css`
+    padding-block: 12px 8px;
+    padding-inline: 16px;
+  `,
+  container: css`
+    overflow: hidden;
 
-      min-width: 360px;
-      max-width: 360px;
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: 12px;
-    `,
-    description: css`
-      margin-block: 0 4px !important;
-      color: ${token.colorTextTertiary};
-    `,
-    footer: css`
-      padding-block: 8px;
-      padding-inline: 16px;
-      border-radius: 8px;
+    min-width: 360px;
+    max-width: 360px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 12px;
+  `,
+  description: css`
+    margin-block: 0 4px !important;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  footer: css`
+    padding-block: 8px;
+    padding-inline: 16px;
+    border-radius: 8px;
 
-      text-align: center;
+    text-align: center;
 
-      background-color: ${token.colorFillQuaternary};
-    `,
-    footerText: css`
-      font-size: 12px !important;
-      color: ${token.colorTextTertiary} !important;
-    `,
-    icon: css`
-      color: ${token.colorTextSecondary};
-    `,
-    preview: css`
-      overflow: hidden;
+    background-color: ${cssVar.colorFillQuaternary};
+  `,
+  footerText: css`
+    font-size: 12px !important;
+    color: ${cssVar.colorTextTertiary} !important;
+  `,
+  icon: css`
+    color: ${cssVar.colorTextSecondary};
+  `,
+  preview: css`
+    overflow: hidden;
 
-      max-height: 80px;
-      padding: 8px;
-      border-radius: 6px;
+    max-height: 80px;
+    padding: 8px;
+    border-radius: 6px;
 
-      font-family: ${token.fontFamilyCode};
-      font-size: 12px;
-      line-height: 1.5;
-      color: ${token.colorTextSecondary};
-    `,
-    title: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 1;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  title: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
 
-      margin-block-end: 0;
-    `,
-    titleRow: css`
-      color: ${token.colorText};
-    `,
-  };
-});
+    margin-block-end: 0;
+  `,
+  titleRow: css`
+    color: ${cssVar.colorText};
+  `,
+}));
 
 interface FileCardProps {
   FileIcon: ComponentType<{ fileName: string; size: number }>;
@@ -77,8 +75,6 @@ interface FileCardProps {
 }
 
 const FileCard = memo<FileCardProps>(({ file, FileIcon, labels }) => {
-  const { styles } = useStyles();
-
   if (file.error) {
     return (
       <Flexbox className={styles.container} gap={8}>

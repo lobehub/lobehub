@@ -1,13 +1,15 @@
 import { Markdown } from '@lobehub/ui';
+import { cx } from 'antd-style';
 import { memo } from 'react';
 
-import { useContainerStyles } from '../style';
+import { containerStyles } from '../style';
 
 const Preview = memo<{ content: string }>(({ content }) => {
-  const { styles } = useContainerStyles();
-
   return (
-    <div className={styles.preview} style={{ padding: 12 }}>
+    <div
+      className={cx(containerStyles.preview, containerStyles.previewWide)}
+      style={{ padding: 12 }}
+    >
       <Markdown variant={'chat'}>{content}</Markdown>
     </div>
   );

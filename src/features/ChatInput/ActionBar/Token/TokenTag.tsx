@@ -1,6 +1,6 @@
 import { Center, Flexbox, Tooltip } from '@lobehub/ui';
 import { TokenTag } from '@lobehub/ui/chat';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import numeral from 'numeral';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +25,6 @@ interface TokenTagProps {
 }
 const Token = memo<TokenTagProps>(({ total: messageString }) => {
   const { t } = useTranslation(['chat', 'components']);
-  const theme = useTheme();
 
   const [input, historySummary] = useChatStore((s) => [
     s.inputMessage,
@@ -94,7 +93,7 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
   const content = (
     <Flexbox gap={12} style={{ minWidth: 200 }}>
       <Flexbox align={'center'} gap={4} horizontal justify={'space-between'} width={'100%'}>
-        <div style={{ color: theme.colorTextDescription }}>{t('tokenDetails.title')}</div>
+        <div style={{ color: cssVar.colorTextDescription }}>{t('tokenDetails.title')}</div>
         <Tooltip
           styles={{ root: { maxWidth: 'unset', pointerEvents: 'none' } }}
           title={t('ModelSelect.featureTag.tokens', {
@@ -106,10 +105,10 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
             height={20}
             paddingInline={4}
             style={{
-              background: theme.colorFillTertiary,
+              background: cssVar.colorFillTertiary,
               borderRadius: 4,
-              color: theme.colorTextSecondary,
-              fontFamily: theme.fontFamilyCode,
+              color: cssVar.colorTextSecondary,
+              fontFamily: cssVar.fontFamilyCode,
               fontSize: 11,
             }}
           >
@@ -120,25 +119,25 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
       <TokenProgress
         data={[
           {
-            color: theme.magenta,
+            color: cssVar.magenta,
             id: 'systemRole',
             title: t('tokenDetails.systemRole'),
             value: systemRoleToken,
           },
           {
-            color: theme.geekblue,
+            color: cssVar.geekblue,
             id: 'tools',
             title: t('tokenDetails.tools'),
             value: toolsToken,
           },
           {
-            color: theme.orange,
+            color: cssVar.orange,
             id: 'historySummary',
             title: t('tokenDetails.historySummary'),
             value: historySummaryToken,
           },
           {
-            color: theme.gold,
+            color: cssVar.gold,
             id: 'chats',
             title: t('tokenDetails.chats'),
             value: chatsToken,
@@ -149,13 +148,13 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
       <TokenProgress
         data={[
           {
-            color: theme.colorSuccess,
+            color: cssVar.colorSuccess,
             id: 'used',
             title: t('tokenDetails.used'),
             value: totalToken,
           },
           {
-            color: theme.colorFill,
+            color: cssVar.colorFill,
             id: 'rest',
             title: t('tokenDetails.rest'),
             value: maxTokens - totalToken,

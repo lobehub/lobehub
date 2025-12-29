@@ -2,7 +2,7 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Button, Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ShieldX } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ import { useElectronStore } from '@/store/electron';
 
 import WaitingAnim from './WaitingAnim';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     display: flex;
@@ -21,9 +21,9 @@ const useStyles = createStyles(({ css, token }) => ({
 
     min-height: 100vh;
 
-    color: ${token.colorTextBase};
+    color: ${cssVar.colorTextBase};
 
-    background-color: ${token.colorBgContainer};
+    background-color: ${cssVar.colorBgContainer};
   `,
 
   content: css`
@@ -34,30 +34,30 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 
   description: css`
-    margin-block-end: ${token.marginXL}px !important;
-    color: ${token.colorTextSecondary} !important;
+    margin-block-end: ${cssVar.marginXL} !important;
+    color: ${cssVar.colorTextSecondary} !important;
   `,
 
   errorIcon: css`
-    margin-block-end: ${token.marginXL}px;
-    color: ${token.colorError};
+    margin-block-end: ${cssVar.marginXL};
+    color: ${cssVar.colorError};
   `,
 
   errorMessage: css`
-    margin-block-end: ${token.marginXL}px !important;
-    color: ${token.colorError} !important;
+    margin-block-end: ${cssVar.marginXL} !important;
+    color: ${cssVar.colorError} !important;
     text-align: center;
   `,
 
   helpText: css`
-    margin-block-start: ${token.marginLG}px;
-    font-size: ${token.fontSizeSM}px;
-    color: ${token.colorTextTertiary};
+    margin-block-start: ${cssVar.marginLG};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextTertiary};
   `,
 
   title: css`
-    margin-block-end: ${token.marginSM}px !important;
-    color: ${token.colorText} !important;
+    margin-block-end: ${cssVar.marginSM} !important;
+    color: ${cssVar.colorText} !important;
   `,
 }));
 
@@ -67,7 +67,6 @@ interface WaitingOAuthProps {
 }
 
 const WaitingOAuth = memo<WaitingOAuthProps>(({ setWaiting, setIsOpen }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('electron');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const remoteServerSyncError = useElectronStore((s) => s.remoteServerSyncError);

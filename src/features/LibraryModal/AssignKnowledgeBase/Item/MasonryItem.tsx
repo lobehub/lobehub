@@ -1,5 +1,5 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
@@ -7,7 +7,7 @@ import { type KnowledgeItem } from '@/types/knowledgeBase';
 
 import Actions from './Action';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     cursor: pointer;
 
@@ -16,23 +16,23 @@ const useStyles = createStyles(({ css, token }) => ({
     overflow: hidden;
 
     padding: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
-    transition: all ${token.motionDurationMid};
+    transition: all ${cssVar.motionDurationMid};
 
     &:hover {
-      border-color: ${token.colorPrimary};
-      box-shadow: ${token.boxShadowTertiary};
+      border-color: ${cssVar.colorPrimary};
+      box-shadow: ${cssVar.boxShadowTertiary};
     }
   `,
   desc: css`
     margin: 0 !important;
     font-size: 12px;
     line-height: 1.4;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   title: css`
     margin: 0 !important;
@@ -43,8 +43,6 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const MasonryItem = memo<KnowledgeItem>(({ id, fileType, name, type, description, enabled }) => {
-  const { styles } = useStyles();
-
   return (
     <div className={styles.card}>
       <Flexbox gap={12} style={{ position: 'relative' }}>

@@ -2,7 +2,7 @@
 
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { FileText, FolderIcon } from 'lucide-react';
 import {
   type PropsWithChildren,
@@ -73,7 +73,6 @@ export const useDragState = () => useContext(DragStateContext);
  * Much more performant than dnd-kit for large virtualized lists
  */
 export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
-  const theme = useTheme();
   const { t } = useTranslation('components');
   const { message } = App.useApp();
   const [currentDrag, setCurrentDrag] = useState<DragState | null>(null);
@@ -262,10 +261,10 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
                 ref={overlayRef}
                 style={{
                   alignItems: 'center',
-                  background: theme.colorBgElevated,
-                  border: `1px solid ${theme.colorPrimaryBorder}`,
-                  borderRadius: theme.borderRadiusLG,
-                  boxShadow: theme.boxShadow,
+                  background: cssVar.colorBgElevated,
+                  border: `1px solid ${cssVar.colorPrimaryBorder}`,
+                  borderRadius: cssVar.borderRadiusLG,
+                  boxShadow: cssVar.boxShadow,
                   display: 'flex',
                   gap: 12,
                   height: 44,
@@ -284,7 +283,7 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
                 <div
                   style={{
                     alignItems: 'center',
-                    color: theme.colorPrimary,
+                    color: cssVar.colorPrimary,
                     display: 'flex',
                     flexShrink: 0,
                     justifyContent: 'center',
@@ -304,9 +303,9 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
                 </div>
                 <span
                   style={{
-                    color: theme.colorText,
+                    color: cssVar.colorText,
                     flex: 1,
-                    fontSize: theme.fontSize,
+                    fontSize: cssVar.fontSize,
                     fontWeight: 500,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -319,9 +318,9 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
                   <div
                     style={{
                       alignItems: 'center',
-                      background: theme.colorPrimary,
-                      borderRadius: theme.borderRadiusSM,
-                      color: theme.colorTextLightSolid,
+                      background: cssVar.colorPrimary,
+                      borderRadius: cssVar.borderRadiusSM,
+                      color: cssVar.colorTextLightSolid,
                       display: 'flex',
                       flexShrink: 0,
                       fontSize: 12,

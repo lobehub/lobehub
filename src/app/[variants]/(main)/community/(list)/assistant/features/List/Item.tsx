@@ -1,5 +1,5 @@
 import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
 import qs from 'query-string';
 import React, { memo, useCallback } from 'react';
@@ -13,32 +13,32 @@ import { type AssistantMarketSource, type DiscoverAssistantItem } from '@/types/
 
 import TokenTag from './TokenTag';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     author: css`
       cursor: pointer;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
 
       &:hover {
-        color: ${token.colorPrimary};
+        color: ${cssVar.colorPrimary};
       }
     `,
     code: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
     `,
     desc: css`
       flex: 1;
       margin: 0 !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     footer: css`
       margin-block-start: 16px;
-      border-block-start: 1px dashed ${token.colorBorder};
-      background: ${token.colorBgContainerSecondary};
+      border-block-start: 1px dashed ${cssVar.colorBorder};
+      background: ${cssVar.colorBgContainer};
     `,
     secondaryDesc: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     title: css`
       margin: 0 !important;
@@ -46,7 +46,7 @@ const useStyles = createStyles(({ css, token }) => {
       font-weight: 500 !important;
 
       &:hover {
-        color: ${token.colorLink};
+        color: ${cssVar.colorLink};
       }
     `,
   };
@@ -68,7 +68,6 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     backgroundColor,
     userName,
   }) => {
-    const { styles } = useStyles();
     const navigate = useNavigate();
     const { source } = useQuery() as { source?: AssistantMarketSource };
     const link = qs.stringifyUrl(

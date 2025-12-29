@@ -1,7 +1,7 @@
 import { GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +26,6 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
   const { id, avatar, title, pinned } = item;
   const { t } = useTranslation('chat');
 
-  const theme = useTheme();
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
   // Get UI state from homeStore (editing, updating)
@@ -81,10 +80,10 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
   // Memoize avatar icon (show loader when updating)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon color={theme.colorTextDescription} icon={Loader2} size={18} spin />;
+      return <Icon color={cssVar.colorTextDescription} icon={Loader2} size={18} spin />;
     }
     return <GroupAvatar avatars={(avatar as any) || []} size={22} />;
-  }, [isUpdating, avatar, theme.colorTextDescription]);
+  }, [isUpdating, avatar]);
 
   const dropdownMenu: MenuProps['items'] = useDropdownMenu({
     group: undefined,

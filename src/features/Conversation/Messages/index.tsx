@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   type MouseEvent,
@@ -34,7 +34,9 @@ import TaskMessage from './Task';
 import ToolMessage from './Tool';
 import UserMessage from './User';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   loading: css`
     opacity: 0.6;
   `,
@@ -69,7 +71,6 @@ const MessageItem = memo<MessageItemProps>(
     index,
     isLatestItem,
   }) => {
-    const { styles, cx } = useStyles();
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     const topic = useConversationStore((s) => s.context.topicId);

@@ -1,5 +1,6 @@
 {
   "actions.confirmRemoveThread": "将删除该子话题，删除后不可恢复。建议先复制需要保留的内容，再确认继续",
   "newPortalThread.includeContext": "包含话题上下文",
-  "newPortalThread.title": "开启新的子话题"
+  "newPortalThread.title": "开启新的子话题",
+  "notSupportMultiModals": "子话题目前不支持文件/图片上传。如有任何需求，欢迎在<1>💬 讨论区</1>留言。"
 }

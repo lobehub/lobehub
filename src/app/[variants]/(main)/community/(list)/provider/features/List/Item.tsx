@@ -1,6 +1,6 @@
 import { Github, ModelTag, ProviderCombine } from '@lobehub/icons';
 import { ActionIcon, Block, Flexbox, MaskShadow, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { GlobeIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,27 +9,27 @@ import urlJoin from 'url-join';
 
 import { type DiscoverProviderItem } from '@/types/discover';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     author: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     code: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
     `,
     desc: css`
       flex: none;
       margin: 0 !important;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     footer: css`
       margin-block-start: 16px;
-      border-block-start: 1px dashed ${token.colorBorder};
-      background: ${token.colorBgContainerSecondary};
+      border-block-start: 1px dashed ${cssVar.colorBorder};
+      background: ${cssVar.colorBgContainer};
     `,
     secondaryDesc: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     title: css`
       margin: 0 !important;
@@ -37,7 +37,7 @@ const useStyles = createStyles(({ css, token }) => {
       font-weight: 500 !important;
 
       &:hover {
-        color: ${token.colorLink};
+        color: ${cssVar.colorLink};
       }
     `,
   };
@@ -45,7 +45,6 @@ const useStyles = createStyles(({ css, token }) => {
 
 const ProviderItem = memo<DiscoverProviderItem>(
   ({ url, name, description, identifier, models }) => {
-    const { styles, theme } = useStyles();
     const navigate = useNavigate();
     const link = urlJoin('/community/provider', identifier);
     const { t } = useTranslation(['discover', 'providers']);
@@ -91,7 +90,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
               rel="noopener noreferrer"
               target={'_blank'}
             >
-              <ActionIcon color={theme.colorTextDescription} icon={GlobeIcon} />
+              <ActionIcon color={cssVar.colorTextDescription} icon={GlobeIcon} />
             </a>
             <a
               href={`https://github.com/lobehub/lobe-chat/blob/main/src/config/modelProviders/${identifier}.ts`}
@@ -99,7 +98,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
               rel="noopener noreferrer"
               target={'_blank'}
             >
-              <ActionIcon fill={theme.colorTextDescription} icon={Github} />
+              <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
             </a>
           </Flexbox>
         </Flexbox>

@@ -2,12 +2,12 @@
 
 import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { Input, Space } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   apiDesc: css`
     overflow: hidden;
     display: -webkit-box;
@@ -15,7 +15,7 @@ const useStyles = createStyles(({ css, token }) => ({
     -webkit-line-clamp: 2;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   apiHeader: css`
     cursor: pointer;
@@ -24,12 +24,12 @@ const useStyles = createStyles(({ css, token }) => ({
     justify-content: space-between;
   `,
   apiTitle: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
   `,
 
   emptyState: css`
     padding: 32px;
-    color: ${token.colorTextDisabled};
+    color: ${cssVar.colorTextDisabled};
     text-align: center;
   `,
   header: css`
@@ -41,7 +41,7 @@ const useStyles = createStyles(({ css, token }) => ({
   paramDesc: css`
     font-size: 12px;
     line-height: 18px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   paramGrid: css`
     display: grid;
@@ -58,11 +58,11 @@ const useStyles = createStyles(({ css, token }) => ({
     font-family: monospace;
   `,
   params: css`
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   required: css`
     margin-inline-start: 2px;
-    color: ${token.colorError};
+    color: ${cssVar.colorError};
   `,
   searchIcon: css`
     position: absolute;
@@ -71,7 +71,7 @@ const useStyles = createStyles(({ css, token }) => ({
     inset-inline-start: 12px;
     transform: translateY(-50%);
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   searchWrapper: css`
     position: relative;
@@ -98,7 +98,6 @@ interface ApiItemProps {
 }
 
 const ApiItem = memo<ApiItemProps>(({ api }) => {
-  const { styles, theme } = useStyles();
   const [expanded, setExpanded] = useState(false);
   const { t } = useTranslation('plugin');
 
@@ -118,7 +117,7 @@ const ApiItem = memo<ApiItemProps>(({ api }) => {
         <Flexbox
           gap={12}
           padding={16}
-          style={{ background: theme.colorFillQuaternary, borderRadius: 6 }}
+          style={{ background: cssVar.colorFillQuaternary, borderRadius: 6 }}
         >
           {params.length === 0 ? (
             <div className={styles.params}>{t('dev.preview.api.noParams')}</div>
@@ -153,7 +152,6 @@ interface ApiVisualizerProps {
 }
 
 const ApiVisualizer = memo<ApiVisualizerProps>(({ apis = [] }) => {
-  const { styles } = useStyles();
   const [searchQuery, setSearchQuery] = useState('');
   const { t } = useTranslation('plugin');
 

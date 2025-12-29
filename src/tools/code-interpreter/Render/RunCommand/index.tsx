@@ -3,19 +3,19 @@
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Highlighter, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import { type RunCommandState } from '../../type';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     padding-inline: 8px 0;
   `,
   head: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   header: css`
@@ -43,7 +43,6 @@ interface RunCommandParams {
 
 const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
   ({ args, pluginState }) => {
-    const { styles, theme } = useStyles();
     const isSuccess = pluginState?.success;
     const [expanded, setExpanded] = useState(false);
 
@@ -62,12 +61,12 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
               {pluginState === undefined ? null : isSuccess ? (
                 <CheckCircleFilled
                   className={styles.statusIcon}
-                  style={{ color: theme.colorSuccess }}
+                  style={{ color: cssVar.colorSuccess }}
                 />
               ) : (
                 <CloseCircleFilled
                   className={styles.statusIcon}
-                  style={{ color: theme.colorError }}
+                  style={{ color: cssVar.colorError }}
                 />
               )}
               <Text className={styles.head} ellipsis style={{ maxWidth: 300 }}>

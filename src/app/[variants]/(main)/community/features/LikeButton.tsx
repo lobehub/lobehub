@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatShortenNumber } from '@/utils/format';
 
-import { useStyles } from '../components/Statistic';
+import { styles } from '../components/Statistic';
 
 interface LikeButtonProps {
   count: number;
@@ -19,7 +19,6 @@ interface LikeButtonProps {
 
 const LikeButton = memo<LikeButtonProps>(
   ({ count, onLikeClick, onDislikeClick, isLiked, showDislike, isDisliked }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('discover');
 
     if (showDislike)

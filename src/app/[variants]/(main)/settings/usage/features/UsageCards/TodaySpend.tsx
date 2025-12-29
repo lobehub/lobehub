@@ -1,6 +1,6 @@
 'use client';
 
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -39,13 +39,12 @@ const computeSpend = (
 
 const TodaySpend = memo<UsageChartProps>(({ data, isLoading }) => {
   const { t } = useTranslation('auth');
-  const theme = useTheme();
 
   const { today, yesterday } = computeSpend(data || []);
 
   return (
     <StatisticCard
-      highlight={theme.green}
+      highlight={cssVar.green}
       loading={isLoading}
       statistic={{
         description: <Statistic title={t('usage.cards.today.yesterday')} value={yesterday} />,

@@ -12,7 +12,7 @@ import {
   TooltipGroup,
 } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { BookTextIcon, BookmarkCheckIcon, BookmarkIcon, CoinsIcon, DotIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
@@ -29,21 +29,12 @@ import { useCategory } from '../../../(list)/assistant/features/Category/useCate
 import PublishedTime from '../../../../../../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
-const useStyles = createStyles(({ css, token }) => {
-  return {
-    desc: css`
-      color: ${token.colorTextSecondary};
-    `,
-    time: css`
-      font-size: 12px;
-      color: ${token.colorTextDescription};
-    `,
-    version: css`
-      font-family: ${token.fontFamilyCode};
-      font-size: 13px;
-    `,
-  };
-});
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  time: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
+}));
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
@@ -60,7 +51,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     knowledgeCount,
     userName,
   } = useDetailContext();
-  const { styles, theme } = useStyles();
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
   const [favoriteLoading, setFavoriteLoading] = useState(false);
@@ -228,7 +218,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           gap={mobile ? 12 : 24}
           horizontal
           style={{
-            color: theme.colorTextSecondary,
+            color: cssVar.colorTextSecondary,
           }}
         >
           {!mobile && cateButton}
@@ -249,7 +239,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               title={t('assistants.withPlugin')}
             >
               <Flexbox align={'center'} gap={6} horizontal>
-                <Icon fill={theme.colorTextSecondary} icon={MCP} />
+                <Icon fill={cssVar.colorTextSecondary} icon={MCP} />
                 {pluginCount}
               </Flexbox>
             </Tooltip>

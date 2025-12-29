@@ -1,6 +1,4 @@
 import { serve } from '@upstash/workflow/nextjs';
-import { chunk } from 'es-toolkit/compat';
-
 import type { ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
 import {
   MemoryExtractionExecutor,
@@ -9,10 +7,11 @@ import {
   buildWorkflowPayloadInput,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { forEachBatchSequential } from '@/server/services/memory/userMemory/topicBatching';
 import { MemorySourceType } from '@lobechat/types';
 
 const TOPIC_PAGE_SIZE = 50;
-const TOPIC_BATCH_SIZE = 10;
+const TOPIC_BATCH_SIZE = 4;
 
 export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
@@ -87,25 +86,22 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
 
     const cursor = 'cursor' in topicBatch ? topicBatch.cursor : undefined;
 
-    const batches = chunk(ids, TOPIC_BATCH_SIZE);
-    // NOTICE: We trigger via QStash instead of context.invoke because invoke only swaps the last path
-    // segment with the workflowId. If we invoked directly from /process-user-topics, child workflow
-    // URLs would inherit that base and lose the desired /process-topics/workflows prefix.
-    await Promise.all(
-      batches.map((topicIds, index) =>
-        context.run(
-          `memory:user-memory:extract:users:${userId}:process-topics-batch:${index}`,
-          () =>
-            MemoryExtractionWorkflowService.triggerProcessTopics({
-              ...buildWorkflowPayloadInput(params),
-              topicCursor: undefined,
-              topicIds,
-              userId,
-              userIds: [userId],
-            }),
-        ),
-      ),
-    );
+    await forEachBatchSequential(ids, TOPIC_BATCH_SIZE, async (topicIds, batchIndex) => {
+      // NOTICE: We trigger via QStash instead of context.invoke because invoke only swaps the last path
+      // segment with the workflowId. If we invoked directly from /process-user-topics, child workflow
+      // URLs would inherit that base and lose the desired /process-topics/workflows prefix.
+      await context.run(
+        `memory:user-memory:extract:users:${userId}:process-topics-batch:${batchIndex}`,
+        () =>
+          MemoryExtractionWorkflowService.triggerProcessTopics({
+            ...buildWorkflowPayloadInput(params),
+            topicCursor: undefined,
+            topicIds,
+            userId,
+            userIds: [userId],
+          }),
+      );
+    });
 
     if (!topicsFromPayload && cursor) {
       await context.run(

@@ -2,7 +2,7 @@
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -21,14 +21,14 @@ const scrollToTop = () => {
   scrollableElement.scrollTo({ behavior: 'smooth', top: 0 });
 };
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   activeNavItem: css`
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   container: css`
     height: auto;
     padding-block: 4px;
-    background: ${token.colorBgLayout};
+    background: ${cssVar.colorBgLayout};
   `,
   navItem: css`
     font-weight: 500;
@@ -42,7 +42,6 @@ export const useStyles = createStyles(({ css, token }) => ({
 
 const Nav = memo(() => {
   const [open, setOpen] = useState(false);
-  const { styles, theme } = useStyles();
   const { items, activeKey, activeItem } = useNav();
   const navigate = useNavigate();
 
@@ -50,7 +49,7 @@ const Nav = memo(() => {
     <>
       <Flexbox align={'center'} className={styles.title} gap={4} horizontal>
         <ActionIcon
-          color={theme.colorText}
+          color={cssVar.colorText}
           icon={MenuIcon}
           onClick={() => {
             setOpen(true);
@@ -75,8 +74,8 @@ const Nav = memo(() => {
         placement={'left'}
         rootStyle={{ position: 'absolute' }}
         style={{
-          background: theme.colorBgLayout,
-          borderRight: `1px solid ${theme.colorSplit}`,
+          background: cssVar.colorBgLayout,
+          borderRight: `1px solid ${cssVar.colorSplit}`,
           paddingTop: 44,
         }}
         width={260}

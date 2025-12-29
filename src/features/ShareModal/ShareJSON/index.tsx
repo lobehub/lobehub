@@ -15,7 +15,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 
-import { useStyles } from '../style';
+import { styles } from '../style';
 import Preview from './Preview';
 import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
@@ -30,7 +30,6 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const ShareJSON = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
-  const { styles } = useStyles();
   const { message } = App.useApp();
 
   const exportModeOptions = useMemo(

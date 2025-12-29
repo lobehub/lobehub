@@ -1,9 +1,10 @@
 import { ActionIcon } from '@lobehub/ui';
+import { cx } from 'antd-style';
 import { ArrowDownIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useStyles } from './style';
+import { styles } from './style';
 
 export interface BackBottomProps {
   onScrollToBottom: () => void;
@@ -11,8 +12,6 @@ export interface BackBottomProps {
 }
 
 const BackBottom = memo<BackBottomProps>(({ visible, onScrollToBottom }) => {
-  const { styles, cx } = useStyles();
-
   const { t } = useTranslation('chat');
 
   return (

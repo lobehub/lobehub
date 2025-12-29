@@ -1,16 +1,16 @@
 import { type BuiltinPlaceholderProps, type SearchQuery } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { shinyTextStylish } from '@/styles/loading';
+import { shinyTextStyles } from '@/styles';
 
 const ITEM_HEIGHT = 80;
 const ITEM_WIDTH = 160;
 
-const useStyles = createStyles(({ css, token, cx }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   query: cx(
     css`
       padding-block: 4px;
@@ -18,13 +18,13 @@ const useStyles = createStyles(({ css, token, cx }) => ({
       border-radius: 8px;
 
       font-size: 12px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
 
       &:hover {
-        background: ${token.colorFillTertiary};
+        background: ${cssVar.colorFillTertiary};
       }
     `,
-    shinyTextStylish(token),
+    shinyTextStyles.shinyText,
   ),
 }));
 
@@ -32,7 +32,6 @@ export const Search = memo<BuiltinPlaceholderProps<SearchQuery>>(({ args }) => {
   const { query } = args || {};
 
   const isMobile = useIsMobile();
-  const { styles } = useStyles();
   return (
     <Flexbox gap={8}>
       <Flexbox

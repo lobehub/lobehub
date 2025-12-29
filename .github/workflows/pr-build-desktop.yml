@@ -39,12 +39,12 @@ jobs:
       - name: Install deps
         run: bun i
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Lint
         run: bun run lint
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
   version:
     name: Determine version
@@ -80,7 +80,7 @@ jobs:
           echo "📦 Release Version: ${version} (based on base version ${base_version})"
 
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
       # 输出版本信息总结，方便在 GitHub Actions 界面查看
       - name: Version Summary

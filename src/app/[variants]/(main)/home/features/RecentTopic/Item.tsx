@@ -1,5 +1,5 @@
 import { Avatar, Block, Center, Flexbox, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import Time from '@/app/[variants]/(main)/home/features/components/Time';
@@ -9,8 +9,6 @@ import GroupAvatar from '@/features/GroupAvatar';
 import { type RecentTopic } from '@/types/topic';
 
 const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type }) => {
-  const theme = useTheme();
-
   const isGroup = type === 'group';
 
   // For group topics, get the first member's background for blur effect
@@ -35,7 +33,7 @@ const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type
       flex={'none'}
       height={RECENT_BLOCK_SIZE.TOPIC.HEIGHT}
       style={{
-        borderRadius: theme.borderRadiusLG,
+        borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
       }}
       variant={'outlined'}
@@ -45,7 +43,7 @@ const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type
         flex={'none'}
         height={44}
         style={{
-          background: theme.colorFillTertiary,
+          background: cssVar.colorFillTertiary,
           overflow: 'hidden',
         }}
       >
@@ -76,7 +74,7 @@ const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type
               avatars={groupAvatars}
               size={30}
               style={{
-                background: theme.colorBgLayout,
+                background: cssVar.colorBgLayout,
               }}
             />
           ) : (

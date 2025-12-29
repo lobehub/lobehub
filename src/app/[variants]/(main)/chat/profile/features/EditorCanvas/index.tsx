@@ -2,7 +2,7 @@
 
 import {
   ReactCodePlugin,
-  ReactCodeblockPlugin,
+  ReactCodemirrorPlugin,
   ReactHRPlugin,
   ReactLinkHighlightPlugin,
   ReactListPlugin,
@@ -120,7 +120,7 @@ const EditorCanvas = memo(() => {
         plugins={[
           ReactListPlugin,
           ReactCodePlugin,
-          ReactCodeblockPlugin,
+          ReactCodemirrorPlugin,
           ReactHRPlugin,
           ReactLinkHighlightPlugin,
           ReactTablePlugin,

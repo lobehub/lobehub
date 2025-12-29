@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Tabs } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 
 import Header from '../features/Header';
@@ -9,7 +9,9 @@ import Ld from './Ld';
 import MetaData from './MetaData';
 import Og from './Og';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     * {
       font-size: 12px;
@@ -27,7 +29,6 @@ enum Tab {
 }
 
 const MetadataViewer = memo(() => {
-  const { styles } = useStyles();
   const [active, setActive] = useState<Tab>(Tab.Og);
   return (
     <Flexbox

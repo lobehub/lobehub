@@ -14,7 +14,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 
-import { useStyles } from '../style';
+import { styles } from '../style';
 import Preview from './Preview';
 import { generateMarkdown } from './template';
 import { type FieldType } from './type';
@@ -29,7 +29,6 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 const ShareText = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
-  const { styles } = useStyles();
   const { message } = App.useApp();
   const settings: FormItemProps[] = [
     {

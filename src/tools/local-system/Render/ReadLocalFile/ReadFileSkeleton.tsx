@@ -1,12 +1,12 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import React, { memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding: 8px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
   `,
 
   meta: css`
@@ -15,8 +15,6 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const ReadFileSkeleton = memo(() => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox className={styles.container} gap={2}>
       <Flexbox align={'center'} gap={24} horizontal justify={'space-between'}>

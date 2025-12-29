@@ -1,5 +1,5 @@
 import { Tag } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -20,12 +20,11 @@ export interface PlanTagProps {
 
 const PlanTag = memo<PlanTagProps>(({ type = PlanType.Preview }) => {
   const { t } = useTranslation('common');
-  const theme = useTheme();
 
   if (type === PlanType.Preview) {
     return (
       <Tag
-        style={{ background: theme.colorFill, borderRadius: 12, cursor: 'pointer' }}
+        style={{ background: cssVar.colorFill, borderRadius: 12, cursor: 'pointer' }}
         variant={'filled'}
       >
         {t('userPanel.community')}

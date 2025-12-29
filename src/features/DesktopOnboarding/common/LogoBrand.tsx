@@ -1,11 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { motion } from 'motion/react';
 
 const logoImage = new URL('../assets/lobe256.png', import.meta.url).href;
 const logoText = new URL('../assets/logo-text.svg', import.meta.url).href;
 // LogoBrand 组件的样式
-const useLogoBrandStyles = createStyles(({ css }) => ({
+const logoBrandStyles = createStaticStyles(({ css }) => ({
   // Logo 容器
   logoContainer: css`
     display: flex;
@@ -61,11 +61,11 @@ export const LogoBrand = ({
   },
   className,
 }: LogoBrandProps) => {
-  const { styles } = useLogoBrandStyles();
+  const styles = logoBrandStyles;
 
   if (animated) {
     return (
-      <motion.div className={`${styles.logoContainer} ${className || ''}`}>
+      <motion.div className={cx(styles.logoContainer, className)}>
         {/* Logo 图片 */}
         <motion.div
           animate={{
@@ -118,7 +118,7 @@ export const LogoBrand = ({
 
   // 静态版本（不带动画）
   return (
-    <div className={`${styles.logoContainer} ${className || ''}`}>
+    <div className={cx(styles.logoContainer, className)}>
       {/* Logo 图片 */}
       <div style={{ marginBottom: spacing }}>
         <img

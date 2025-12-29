@@ -1,4 +1,4 @@
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +14,6 @@ import TotalCard from './ShareButton/TotalCard';
 
 const TotalMessages = memo<{ inShare?: boolean; mobile?: boolean }>(({ inShare, mobile }) => {
   const { t } = useTranslation('auth');
-  const theme = useTheme();
   const { data, isLoading } = useClientDataSWR('stats-topics', async () => ({
     count: await topicService.countTopics(),
     prevCount: await topicService.countTopics({ endDate: lastMonth().format('YYYY-MM-DD') }),
@@ -27,7 +26,7 @@ const TotalMessages = memo<{ inShare?: boolean; mobile?: boolean }>(({ inShare, 
 
   return (
     <StatisticCard
-      highlight={mobile ? undefined : theme.gold}
+      highlight={mobile ? undefined : cssVar.gold}
       loading={isLoading || !data}
       statistic={{
         description: (

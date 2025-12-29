@@ -1,6 +1,6 @@
 import { Button, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
 import { Center } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,36 +10,35 @@ import { toolInterventionSelectors } from '@/store/user/selectors';
 
 import { type ApprovalMode } from './index';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   icon: css`
-    border: 1px solid ${token.colorFillTertiary};
-    border-radius: ${token.borderRadius}px;
-    background: ${token.colorBgElevated};
+    border: 1px solid ${cssVar.colorFillTertiary};
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorBgElevated};
   `,
   modeButton: css`
-    font-size: ${token.fontSizeSM}px;
-    color: ${token.colorTextSecondary};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextSecondary};
   `,
   modeDesc: css`
     margin-block-start: 2px;
     font-size: 12px;
     line-height: 1.4;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   modeItem: css`
     min-width: 160px;
   `,
   modeLabel: css`
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     line-height: 1.4;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
 const ModeSelector = memo(() => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
   const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
   const updateHumanIntervention = useUserStore((s) => s.updateHumanIntervention);
 

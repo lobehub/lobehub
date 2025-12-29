@@ -4,7 +4,7 @@ import { type API, apiPrompt, toolPrompt } from '@lobechat/prompts';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { type IEditor, INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { Icon, Image } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
 
@@ -28,14 +28,12 @@ const getKlavisServerType = (identifier: string) =>
  * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  const theme = useTheme();
-
   if (typeof icon === 'string') {
     return <Image alt={label} height={20} src={icon} style={{ flex: 'none' }} width={20} />;
   }
 
   // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={theme.colorText} icon={icon} size={20} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={20} />;
 });
 
 const toolNameResolver = new ToolNameResolver();
