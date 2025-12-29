@@ -9,6 +9,7 @@
   "artifacts.svg.copySuccess": "图片复制成功",
   "artifacts.svg.download.png": "下载为 PNG",
   "artifacts.svg.download.svg": "下载为 SVG",
+  "document.todos.title": "任务",
   "emptyArtifactList": "当前 Artifacts 列表为空，请在会话中按需使用技能后再查看",
   "emptyKnowledgeList": "当前知识列表为空",
   "files": "文件",

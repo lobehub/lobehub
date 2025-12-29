@@ -222,6 +222,10 @@ export interface NotebookDocument {
    */
   id: string;
   /**
+   * Document metadata (e.g., todos for agent/plan documents)
+   */
+  metadata: Record<string, any> | null;
+  /**
    * Document title
    */
   title: string | null;

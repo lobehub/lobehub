@@ -92,6 +92,7 @@ export const notebookRouter = router({
           description: doc.description,
           fileType: doc.fileType,
           id: doc.id,
+          metadata: doc.metadata,
           title: doc.title,
           totalCharCount: doc.totalCharCount,
           totalLineCount: doc.totalLineCount,
