@@ -1,98 +1,196 @@
 'use client';
 
+import {
+  ReactCodePlugin,
+  ReactCodeblockPlugin,
+  ReactHRPlugin,
+  ReactLinkPlugin,
+  ReactListPlugin,
+  ReactMathPlugin,
+  ReactTablePlugin,
+} from '@lobehub/editor';
+import { Editor, useEditor } from '@lobehub/editor/react';
 import { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { memo, useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CreatePlanParams } from '../../types';
 
+const useStyles = createStyles(({ css, token }) => ({
+  description: css`
+    font-size: 14px;
+    color: ${token.colorTextSecondary};
+  `,
+  title: css`
+    font-size: 28px;
+    font-weight: 600;
+  `,
+}));
+
 const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
   ({ args, onArgsChange, registerBeforeApprove }) => {
+    console.log('[CreatePlanIntervention] args', args);
     const { t } = useTranslation('tool');
+    const { styles } = useStyles();
 
     const [goal, setGoal] = useState(args?.goal || '');
     const [description, setDescription] = useState(args?.description || '');
-    const [context, setContext] = useState(args?.context || '');
+
+    const editor = useEditor();
+    const editorInitializedRef = useRef(false);
 
     // Track pending changes
     const pendingChangesRef = useRef<CreatePlanParams | null>(null);
 
+    // Initialize editor content when args.context changes
+    useEffect(() => {
+      if (editor && args?.context && !editorInitializedRef.current) {
+        console.log('[CreatePlanIntervention] initializing editor with context', args.context);
+        editor.setDocument('text', args.context);
+        editorInitializedRef.current = true;
+      }
+    }, [editor, args?.context]);
+
+    // Get current context from editor
+    const getContext = useCallback(() => {
+      if (!editor) return args?.context || '';
+      return (editor.getDocument('text') as unknown as string) || '';
+    }, [editor, args?.context]);
+
     // Save function
     const save = useCallback(async () => {
-      if (pendingChangesRef.current) {
-        await onArgsChange?.(pendingChangesRef.current);
-        pendingChangesRef.current = null;
-      }
-    }, [onArgsChange]);
+      const context = getContext();
+      const changes: CreatePlanParams = {
+        context: context || undefined,
+        description,
+        goal,
+      };
+
+      // Always submit current state when approving
+      await onArgsChange?.(changes);
+      pendingChangesRef.current = null;
+    }, [onArgsChange, goal, description, getContext]);
 
     // Register before approve callback
-    registerBeforeApprove?.('createPlan', save);
+    useEffect(() => {
+      return registerBeforeApprove?.('createPlan', save);
+    }, [registerBeforeApprove, save]);
 
     const handleGoalChange = useCallback(
       (value: string) => {
         setGoal(value);
         pendingChangesRef.current = {
-          context: context || undefined,
+          context: getContext() || undefined,
           description,
           goal: value,
         };
       },
-      [context, description],
+      [description, getContext],
     );
 
     const handleDescriptionChange = useCallback(
       (value: string) => {
         setDescription(value);
         pendingChangesRef.current = {
-          context: context || undefined,
+          context: getContext() || undefined,
           description: value,
           goal,
         };
       },
-      [context, goal],
+      [goal, getContext],
     );
 
-    const handleContextChange = useCallback(
-      (value: string) => {
-        setContext(value);
-        pendingChangesRef.current = {
-          context: value || undefined,
-          description,
-          goal,
-        };
+    const handleContentChange = useCallback(() => {
+      pendingChangesRef.current = {
+        context: getContext() || undefined,
+        description,
+        goal,
+      };
+    }, [description, goal, getContext]);
+
+    // Focus editor when pressing Enter in description
+    const handleDescriptionKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          editor?.focus();
+        }
       },
-      [description, goal],
+      [editor],
     );
+
+    // Focus description when pressing Enter in goal
+    const handleGoalKeyDown = useCallback((e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // Focus description textarea
+        const descriptionTextarea = document.querySelector(
+          '[data-testid="plan-description"]',
+        ) as HTMLTextAreaElement;
+        descriptionTextarea?.focus();
+      }
+    }, []);
 
     return (
-      <Flexbox gap={12}>
-        <Flexbox gap={8}>
-          <Text>{t('lobe-gtd.createPlan.goal.label')}</Text>
-          <Input
-            onChange={(e) => handleGoalChange(e.target.value)}
-            placeholder={t('lobe-gtd.createPlan.goal.placeholder')}
-            value={goal}
-          />
-        </Flexbox>
-        <Flexbox gap={8}>
-          <Text>{t('lobe-gtd.createPlan.description.label')}</Text>
-          <Input
-            onChange={(e) => handleDescriptionChange(e.target.value)}
-            placeholder={t('lobe-gtd.createPlan.description.placeholder')}
-            value={description}
-          />
-        </Flexbox>
-        <Flexbox gap={8}>
-          <Text>{t('lobe-gtd.createPlan.context.label')}</Text>
-          <TextArea
-            autoSize={{ minRows: 10 }}
-            onChange={(e) => handleContextChange(e.target.value)}
+      <Flexbox
+        gap={8}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        paddingBlock={16}
+      >
+        {/* Goal - Main Title */}
+        <TextArea
+          autoSize={{ minRows: 1 }}
+          className={styles.title}
+          onChange={(e) => handleGoalChange(e.target.value)}
+          onKeyDown={handleGoalKeyDown}
+          placeholder={t('lobe-gtd.createPlan.goal.placeholder')}
+          style={{ padding: 0, resize: 'none' }}
+          value={goal}
+          variant={'borderless'}
+        />
+
+        {/* Description - Subtitle */}
+        <TextArea
+          autoSize={{ minRows: 1 }}
+          className={styles.description}
+          data-testid="plan-description"
+          onChange={(e) => handleDescriptionChange(e.target.value)}
+          onKeyDown={handleDescriptionKeyDown}
+          placeholder={t('lobe-gtd.createPlan.description.placeholder')}
+          style={{ padding: 0, resize: 'none' }}
+          value={description}
+          variant={'borderless'}
+        />
+
+        {/* Context - Rich Text Editor */}
+        <div style={{ marginTop: 8, minHeight: 200 }}>
+          <Editor
+            content={args.context}
+            editor={editor}
+            lineEmptyPlaceholder={t('lobe-gtd.createPlan.context.placeholder')}
+            onTextChange={handleContentChange}
             placeholder={t('lobe-gtd.createPlan.context.placeholder')}
-            value={context}
+            plugins={[
+              ReactListPlugin,
+              ReactCodePlugin,
+              ReactCodeblockPlugin,
+              ReactHRPlugin,
+              ReactLinkPlugin,
+              ReactTablePlugin,
+              ReactMathPlugin,
+            ]}
+            style={{
+              minHeight: 200,
+            }}
+            type={'text'}
           />
-        </Flexbox>
+        </div>
       </Flexbox>
     );
   },

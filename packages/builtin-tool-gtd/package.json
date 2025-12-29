@@ -13,9 +13,11 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
+    "@lobehub/editor": "^1",
     "@lobehub/ui": "^4.3.1"
   },
   "peerDependencies": {
+    "@lobehub/editor": "^1",
     "@lobehub/ui": "^4",
     "antd": "^6",
     "antd-style": "*",
