@@ -31,11 +31,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export type GroupBy = 'day' | 'month';
 
-interface TimelineViewProps<T extends { createdAt: Date | string; id: string }> {
+interface TimelineViewProps<T extends { capturedAt?: Date | string; createdAt?: Date | string; id: string }> {
   data: T[];
   /**
    * Custom date field extractor for grouping
-   * Used when the date to group by is not `createdAt`
+   * Used when the date to group by is not `capturedAt`
    */
   getDateForGrouping?: (item: T) => Date | string;
   /**
@@ -59,7 +59,16 @@ interface TimelineViewProps<T extends { createdAt: Date | string; id: string }> 
   renderItem: (item: T) => ReactNode;
 }
 
-function TimelineViewInner<T extends { createdAt: Date | string; id: string }>({
+const getDateValue = <T extends { capturedAt?: Date | string; createdAt?: Date | string }>(
+  item: T,
+  getDateForGrouping?: (item: T) => Date | string,
+) => {
+  if (getDateForGrouping) return getDateForGrouping(item);
+
+  return item.capturedAt ?? item.createdAt ?? new Date();
+};
+
+function TimelineViewInner<T extends { capturedAt?: Date | string; createdAt?: Date | string; id: string }>({
   data,
   groupBy = 'day',
   getDateForGrouping,
@@ -78,7 +87,7 @@ function TimelineViewInner<T extends { createdAt: Date | string; id: string }>({
     // Group by period
     const groupedByPeriod = data.reduce(
       (acc, item) => {
-        const dateValue = getDateForGrouping ? getDateForGrouping(item) : item.createdAt;
+        const dateValue = getDateValue(item, getDateForGrouping);
         const date = dayjs(dateValue);
         const periodKey = date.format(format);
 
@@ -103,8 +112,8 @@ function TimelineViewInner<T extends { createdAt: Date | string; id: string }>({
 
       // Sort items within period by date descending
       const sortedItems = [...periodData].sort((a, b) => {
-        const dateA = getDateForGrouping ? getDateForGrouping(a) : a.createdAt;
-        const dateB = getDateForGrouping ? getDateForGrouping(b) : b.createdAt;
+        const dateA = getDateValue(a, getDateForGrouping);
+        const dateB = getDateValue(b, getDateForGrouping);
         return dayjs(dateB).valueOf() - dayjs(dateA).valueOf();
       });
 

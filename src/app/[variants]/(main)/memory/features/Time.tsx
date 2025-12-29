@@ -6,20 +6,23 @@ import { memo } from 'react';
 dayjs.extend(relativeTime);
 
 interface TimeProps {
-  updatedAt?: Date | number | string;
+  capturedAt?: Date | number | string;
 }
 
-const Time = memo<TimeProps>(({ updatedAt }) => {
-  if (!updatedAt) return;
+const Time = memo<TimeProps>(({ capturedAt }) => {
+  if (!capturedAt) return;
+
+  const datetime = dayjs(capturedAt);
+
   return (
     <Text
       as={'time'}
       fontSize={12}
       style={{ display: 'block', flex: 'none' }}
-      title={dayjs(updatedAt).format('YYYY-MM-DD HH:mm')}
+      title={datetime.format('YYYY-MM-DD HH:mm')}
       type={'secondary'}
     >
-      {dayjs(updatedAt).fromNow()}
+      {datetime.fromNow()}
     </Text>
   );
 });

@@ -41,7 +41,7 @@ const IdentityRightPanel = memo(() => {
         >
           {identity.role || identity.relationship || 'Identity'}
         </Text>
-        <Time updatedAt={identity.updatedAt || identity.createdAt} />
+        <Time capturedAt={identity.capturedAt || identity.updatedAt || identity.createdAt} />
         {identity.description && <HighlightedContent>{identity.description}</HighlightedContent>}
         <HashTags hashTags={identity.tags} />
       </>

@@ -74,7 +74,7 @@ const ExperienceRightPanel = memo(() => {
         </Flexbox>
         <Flexbox align="center" gap={16} horizontal justify="space-between">
           <SourceLink source={experience.source} />
-          <Time updatedAt={experience.createdAt} />
+          <Time capturedAt={experience.capturedAt || experience.updatedAt || experience.createdAt} />
         </Flexbox>
 
         {experience.keyLearning && (

@@ -35,11 +35,11 @@ interface TimeLineCardProps {
   onClick?: () => void;
   title?: ReactNode;
   titleAddon?: ReactNode;
-  updatedAt?: Date | number | string;
+  capturedAt?: Date | number | string;
 }
 
 const TimeLineCard = memo<TimeLineCardProps>(
-  ({ title, titleAddon, cate, children, actions, onClick, updatedAt, hashTags }) => {
+  ({ title, titleAddon, cate, children, actions, onClick, capturedAt, hashTags }) => {
     return (
       <Block
         className={styles.timelineCard}
@@ -87,7 +87,7 @@ const TimeLineCard = memo<TimeLineCardProps>(
         <Flexbox align={'center'} gap={8} horizontal justify={'space-between'}>
           <Flexbox align={'center'} gap={8} horizontal>
             <CateTag cate={cate} />
-            <Time updatedAt={updatedAt} />
+            <Time capturedAt={capturedAt} />
           </Flexbox>
           <Flexbox
             align={'center'}

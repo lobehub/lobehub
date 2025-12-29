@@ -37,7 +37,7 @@ const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
       cate={context.type}
       onClick={onClick}
       title={context.title}
-      updatedAt={context.updatedAt || context.createdAt}
+      capturedAt={context.capturedAt || context.updatedAt || context.createdAt}
     >
       {context.description}
     </GridCard>

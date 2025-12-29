@@ -20,7 +20,7 @@ const TimelineView = memo<TimelineViewProps>(({ identities, isLoading, onClick }
   return (
     <GenericTimelineView
       data={identities}
-      getDateForGrouping={(identity) => identity.episodicDate || identity.createdAt}
+      getDateForGrouping={(identity) => identity.episodicDate || identity.capturedAt || identity.createdAt}
       groupBy="month"
       hasMore={identitiesHasMore}
       isLoading={isLoading}

@@ -24,7 +24,8 @@ const PreferencesArea = memo(() => {
   const [sortValueRaw, setSortValueRaw] = useQueryState('sort', { clearOnDefault: true });
 
   const searchValue = searchValueRaw || '';
-  const sortValue = (sortValueRaw as 'createdAt' | 'scorePriority') || 'createdAt';
+  const sortValue: 'capturedAt' | 'scorePriority' =
+    sortValueRaw === 'scorePriority' ? 'scorePriority' : 'capturedAt';
 
   const preferencesPage = useUserMemoryStore((s) => s.preferencesPage);
   const preferencesInit = useUserMemoryStore((s) => s.preferencesInit);
@@ -34,12 +35,12 @@ const PreferencesArea = memo(() => {
   const resetPreferencesList = useUserMemoryStore((s) => s.resetPreferencesList);
 
   const sortOptions = [
-    { label: t('filter.sort.createdAt'), value: 'createdAt' },
+    { label: t('filter.sort.createdAt'), value: 'capturedAt' },
     { label: t('filter.sort.scorePriority'), value: 'scorePriority' },
   ];
 
-  // 转换 sort：createdAt 转为 undefined（后端默认）
-  const apiSort = sortValue === 'createdAt' ? undefined : (sortValue as 'scorePriority');
+  // 转换 sort：capturedAt 转为 undefined（后端默认）
+  const apiSort = sortValue === 'capturedAt' ? undefined : (sortValue as 'scorePriority');
 
   // 当搜索或排序变化时重置列表
   useEffect(() => {

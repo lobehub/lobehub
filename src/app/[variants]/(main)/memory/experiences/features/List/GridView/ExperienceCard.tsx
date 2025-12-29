@@ -31,7 +31,7 @@ const ExperienceCard = memo<ExperienceCardProps>(({ experience, onClick }) => {
       cate={experience.type}
       onClick={() => onClick(experience)}
       title={experience.title}
-      updatedAt={experience.updatedAt || experience.createdAt}
+      capturedAt={experience.capturedAt || experience.updatedAt || experience.createdAt}
     >
       {experience.keyLearning || experience.situation}
     </GridCard>

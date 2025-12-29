@@ -74,7 +74,7 @@ const ContextRightPanel = memo(() => {
         </Flexbox>
         <Flexbox align="center" gap={16} horizontal justify="space-between">
           <SourceLink source={context.source} />
-          <Time updatedAt={context.createdAt} />
+          <Time capturedAt={context.capturedAt || context.updatedAt || context.createdAt} />
         </Flexbox>
         <HighlightedContent>{context.description}</HighlightedContent>
         <HashTags hashTags={context.tags} />

@@ -64,7 +64,7 @@ const PreferenceRightPanel = memo(() => {
         </Flexbox>
         <Flexbox align="center" gap={16} horizontal justify="space-between">
           <SourceLink source={preference.source} />
-          <Time updatedAt={preference.createdAt} />
+          <Time capturedAt={preference.capturedAt || preference.updatedAt || preference.createdAt} />
         </Flexbox>
 
         {preference.conclusionDirectives && (

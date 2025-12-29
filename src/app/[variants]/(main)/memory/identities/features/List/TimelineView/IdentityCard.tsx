@@ -18,7 +18,7 @@ const IdentityCard = memo<IdentityCardProps>(({ identity, onClick }) => {
       hashTags={identity.tags}
       onClick={() => onClick?.(identity)}
       title={identity.role}
-      updatedAt={identity.updatedAt || identity.createdAt}
+      capturedAt={identity.capturedAt || identity.updatedAt || identity.createdAt}
     >
       {identity.description}
     </TimeLineCard>

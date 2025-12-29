@@ -24,7 +24,8 @@ const ContextsArea = memo(() => {
   const [sortValueRaw, setSortValueRaw] = useQueryState('sort', { clearOnDefault: true });
 
   const searchValue = searchValueRaw || '';
-  const sortValue = (sortValueRaw as 'createdAt' | 'scoreImpact' | 'scoreUrgency') || 'createdAt';
+  const sortValue: 'capturedAt' | 'scoreImpact' | 'scoreUrgency' =
+    sortValueRaw === 'scoreImpact' || sortValueRaw === 'scoreUrgency' ? sortValueRaw : 'capturedAt';
 
   const contextsPage = useUserMemoryStore((s) => s.contextsPage);
   const contextsInit = useUserMemoryStore((s) => s.contextsInit);
@@ -34,14 +35,14 @@ const ContextsArea = memo(() => {
   const resetContextsList = useUserMemoryStore((s) => s.resetContextsList);
 
   const sortOptions = [
-    { label: t('filter.sort.createdAt'), value: 'createdAt' },
+    { label: t('filter.sort.createdAt'), value: 'capturedAt' },
     { label: t('filter.sort.scoreImpact'), value: 'scoreImpact' },
     { label: t('filter.sort.scoreUrgency'), value: 'scoreUrgency' },
   ];
 
-  // 转换 sort：createdAt 转为 undefined（后端默认）
+  // 转换 sort：capturedAt 转为 undefined（后端默认）
   const apiSort =
-    sortValue === 'createdAt' ? undefined : (sortValue as 'scoreImpact' | 'scoreUrgency');
+    sortValue === 'capturedAt' ? undefined : (sortValue as 'scoreImpact' | 'scoreUrgency');
 
   // 当搜索或排序变化时重置列表
   useEffect(() => {

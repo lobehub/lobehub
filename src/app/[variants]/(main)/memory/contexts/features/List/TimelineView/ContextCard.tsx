@@ -18,7 +18,7 @@ const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
       hashTags={context.tags}
       onClick={onClick}
       title={context.title}
-      updatedAt={context.updatedAt || context.createdAt}
+      capturedAt={context.capturedAt || context.updatedAt || context.createdAt}
     >
       {context.description}
     </TimeLineCard>

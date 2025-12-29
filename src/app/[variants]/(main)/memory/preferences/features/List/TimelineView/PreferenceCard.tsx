@@ -18,7 +18,7 @@ const PreferenceCard = memo<PreferenceCardProps>(({ preference, onClick }) => {
       hashTags={preference.tags}
       onClick={onClick}
       title={preference.title}
-      updatedAt={preference.updatedAt || preference.createdAt}
+      capturedAt={preference.capturedAt || preference.updatedAt || preference.createdAt}
     >
       {preference.conclusionDirectives}
     </TimeLineCard>
