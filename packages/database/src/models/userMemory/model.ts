@@ -1938,6 +1938,23 @@ export class UserMemoryModel {
     return res;
   };
 
+  getAllIdentitiesWithMemory = async () => {
+    const res = await this.db
+      .select({
+        identity: selectNonVectorColumns(userMemoriesIdentities),
+        memory: selectNonVectorColumns(userMemories),
+      })
+      .from(userMemoriesIdentities)
+      .innerJoin(userMemories, eq(userMemories.id, userMemoriesIdentities.userMemoryId))
+      .where(eq(userMemoriesIdentities.userId, this.userId))
+      .orderBy(desc(userMemoriesIdentities.createdAt));
+
+    return res as Array<{
+      identity: typeof userMemoriesIdentities.$inferSelect;
+      memory: typeof userMemories.$inferSelect;
+    }>;
+  };
+
   getIdentitiesByType = async (type: string): Promise<UserMemoryIdentityWithoutVectors[]> => {
     const res = await this.db
       .select(selectNonVectorColumns(userMemoriesIdentities))

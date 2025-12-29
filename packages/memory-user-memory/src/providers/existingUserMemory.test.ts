@@ -4,7 +4,7 @@ import {
   RetrievalUserMemoryContextProvider,
   RetrievalUserMemoryIdentitiesProvider,
 } from './existingUserMemory';
-import { MemorySourceType } from '@lobechat/types';
+import { LayersEnum, MemorySourceType } from '@lobechat/types';
 
 const job = {
   source: MemorySourceType.ChatTopic,
@@ -104,19 +104,41 @@ describe('RetrievalUserMemoryIdentitiesProvider', () => {
       fetchedAt,
       retrievedIdentities: [
         {
-          accessedAt: new Date(),
-          createdAt: new Date(),
-          description: 'Worked with user on onboarding',
-          episodicDate: new Date('2023-05-20T00:00:00.000Z'),
-          id: 'identity-1',
-          metadata: { project: 'LobeHub' },
-          relationship: 'colleague',
-          role: 'developer advocate',
-          tags: ['onboarding'],
-          type: 'professional',
-          updatedAt: new Date(),
-          userId: 'user-1',
-          userMemoryId: 'mem-identity-1',
+          identity: {
+            accessedAt: new Date(),
+            createdAt: new Date(),
+            description: 'Worked with user on onboarding',
+            episodicDate: new Date('2023-05-20T00:00:00.000Z'),
+            id: 'identity-1',
+            metadata: { project: 'LobeHub' },
+            relationship: 'colleague',
+            role: 'developer advocate',
+            tags: ['onboarding'],
+            type: 'professional',
+            updatedAt: new Date(),
+            userId: 'user-1',
+            userMemoryId: 'mem-identity-1',
+          },
+          layer: LayersEnum.Identity,
+          memory: {
+            accessedAt: new Date(),
+            accessedCount: 1,
+            capturedAt: new Date('2023-05-19T00:00:00.000Z'),
+            createdAt: new Date(),
+            details: 'Detailed onboarding collaboration',
+            id: 'mem-identity-1',
+            lastAccessedAt: new Date(),
+            memoryCategory: 'people',
+            memoryLayer: 'identity',
+            memoryType: 'people',
+            metadata: { topic: 'onboarding' },
+            status: 'active',
+            summary: 'Supported onboarding as developer advocate',
+            tags: ['onboarding', 'support'],
+            title: 'Developer advocate for onboarding',
+            updatedAt: new Date(),
+            userId: 'user-1',
+          },
         },
       ],
     });
@@ -127,7 +149,7 @@ describe('RetrievalUserMemoryIdentitiesProvider', () => {
     expect(result.userId).toBe('user-1');
     expect(result.metadata).toEqual({});
     expect(result.context).equal(
-      '<user_memories_identities identities="1" memory_fetched_at="2024-02-01T00:00:00.000Z"><user_memories_identity id="identity-1" user_memory_id="mem-identity-1" relationship="colleague" role="developer advocate" type="professional" episodic_date="2023-05-20T00:00:00.000Z"><identity_description>Worked with user on onboarding</identity_description><identity_tags>onboarding</identity_tags><identity_metadata>{"project":"LobeHub"}</identity_metadata></user_memories_identity></user_memories_identities>',
+      '<user_memories_identities identities="1" memory_fetched_at="2024-02-01T00:00:00.000Z"><user_memories_identity id="identity-1" user_memory_id="mem-identity-1" memory_id="mem-identity-1" relationship="colleague" role="developer advocate" type="professional" episodic_date="2023-05-20T00:00:00.000Z" memory_category="people" memory_type="people"><identity_description>Worked with user on onboarding</identity_description><identity_tags>onboarding</identity_tags><identity_metadata>{"project":"LobeHub"}</identity_metadata><identity_memory_title>Developer advocate for onboarding</identity_memory_title><identity_memory_summary>Supported onboarding as developer advocate</identity_memory_summary><identity_memory_details>Detailed onboarding collaboration</identity_memory_details><identity_memory_tags>onboarding, support</identity_memory_tags><identity_memory_metadata>{"topic":"onboarding"}</identity_memory_metadata></user_memories_identity></user_memories_identities>',
     );
   });
 });

@@ -39,6 +39,7 @@ import {
 } from '@lobechat/observability-otel/modules/memory-user-memory';
 import { attributesCommon } from '@lobechat/observability-otel/node';
 import type {
+  IdentityMemoryDetail,
   MemoryExtractionAgentCallTrace,
   MemoryExtractionTraceError,
   MemoryExtractionTracePayload,
@@ -872,11 +873,13 @@ export class MemoryExtractionExecutor {
     };
   }
 
-  async listUserMemoryIdentities(job: MemoryExtractionJob, userId: string) {
+  async listUserMemoryIdentities(job: MemoryExtractionJob, userId: string): Promise<IdentityMemoryDetail[]> {
     const db = await this.db;
     const userMemoryModel = new UserMemoryModel(db, userId);
 
-    return userMemoryModel.getAllIdentities();
+    const res = await userMemoryModel.getAllIdentitiesWithMemory();
+
+    return res.map((item) => ({ ...item, layer: LayersEnum.Identity }));
   }
 
   async extractTopic(job: TopicExtractionJob) {

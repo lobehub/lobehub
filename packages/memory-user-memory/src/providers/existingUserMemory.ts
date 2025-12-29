@@ -1,7 +1,7 @@
 import type {
+  IdentityMemoryDetail,
   UserMemoryContextWithoutVectors,
   UserMemoryExperienceWithoutVectors,
-  UserMemoryIdentityWithoutVectors,
   UserMemoryPreferenceWithoutVectors,
 } from '@lobechat/types';
 import { u } from 'unist-builder';
@@ -19,7 +19,7 @@ interface RetrievedMemories {
 
 interface RetrievedIdentitiesOptions {
   fetchedAt?: number;
-  retrievedIdentities: UserMemoryIdentityWithoutVectors[];
+  retrievedIdentities: IdentityMemoryDetail[];
 }
 
 export class RetrievalUserMemoryContextProvider implements MemoryContextProvider {
@@ -146,7 +146,7 @@ export class RetrievalUserMemoryContextProvider implements MemoryContextProvider
 }
 
 export class RetrievalUserMemoryIdentitiesProvider implements MemoryContextProvider {
-  readonly retrievedIdentities: UserMemoryIdentityWithoutVectors[];
+  readonly retrievedIdentities: IdentityMemoryDetail[];
   readonly fetchedAt?: number;
 
   constructor(options: RetrievedIdentitiesOptions) {
@@ -157,11 +157,15 @@ export class RetrievalUserMemoryIdentitiesProvider implements MemoryContextProvi
   async buildContext(job: MemoryExtractionJob): Promise<BuiltContext> {
     const identityChildren: Child[] = [];
 
-    this.retrievedIdentities.forEach((identity) => {
+    this.retrievedIdentities.forEach((item) => {
+      const { identity, memory } = item;
       const attributes: Record<string, string> = { id: identity.id ?? '' };
 
       if (identity.userMemoryId) {
         attributes.user_memory_id = identity.userMemoryId;
+      }
+      if (memory.id) {
+        attributes.memory_id = memory.id;
       }
       if (identity.relationship) {
         attributes.relationship = identity.relationship;
@@ -175,6 +179,12 @@ export class RetrievalUserMemoryIdentitiesProvider implements MemoryContextProvi
       if (identity.episodicDate) {
         attributes.episodic_date = new Date(identity.episodicDate).toISOString();
       }
+      if (memory.memoryCategory) {
+        attributes.memory_category = memory.memoryCategory;
+      }
+      if (memory.memoryType) {
+        attributes.memory_type = memory.memoryType;
+      }
 
       const children: Child[] = [];
 
@@ -186,6 +196,21 @@ export class RetrievalUserMemoryIdentitiesProvider implements MemoryContextProvi
       }
       if (identity.metadata) {
         children.push(x('identity_metadata', JSON.stringify(identity.metadata)));
+      }
+      if (memory.title) {
+        children.push(x('identity_memory_title', memory.title));
+      }
+      if (memory.summary) {
+        children.push(x('identity_memory_summary', memory.summary));
+      }
+      if (memory.details) {
+        children.push(x('identity_memory_details', memory.details));
+      }
+      if (Array.isArray(memory.tags) && memory.tags.length > 0) {
+        children.push(x('identity_memory_tags', memory.tags.join(', ')));
+      }
+      if (memory.metadata) {
+        children.push(x('identity_memory_metadata', JSON.stringify(memory.metadata)));
       }
 
       identityChildren.push(x('user_memories_identity', attributes, ...children));
