@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { memo, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys, ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';

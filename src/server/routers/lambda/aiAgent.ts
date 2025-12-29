@@ -460,6 +460,45 @@ export const aiAgentRouter = router({
       }
     }),
 
+  
+  getOperationStatus: aiAgentProcedure
+    .input(GetOperationStatusSchema)
+    .query(async ({ input, ctx }) => {
+      const { historyLimit, includeHistory, operationId } = input;
+
+      if (!operationId) {
+        throw new Error('operationId parameter is required');
+      }
+
+      log('Getting operation status for %s', operationId);
+
+      // Get operation status using AgentRuntimeService
+      const operationStatus = await ctx.agentRuntimeService.getOperationStatus({
+        historyLimit,
+        includeHistory,
+        operationId,
+      });
+
+      return operationStatus;
+    }),
+
+  
+getPendingInterventions: aiAgentProcedure
+    .input(GetPendingInterventionsSchema)
+    .query(async ({ input, ctx }) => {
+      const { operationId, userId } = input;
+
+      log('Getting pending interventions for operationId: %s, userId: %s', operationId, userId);
+
+      // Get pending interventions using AgentRuntimeService
+      const result = await ctx.agentRuntimeService.getPendingInterventions({
+        operationId: operationId || undefined,
+        userId: userId || undefined,
+      });
+
+      return result;
+    }),
+
   /**
    * Get SubAgent task execution status
    *
@@ -474,7 +513,7 @@ export const aiAgentRouter = router({
    * As a workaround, this endpoint also updates Thread metadata from Redis
    * when real-time status is available.
    */
-  getSubAgentTaskStatus: aiAgentProcedure
+getSubAgentTaskStatus: aiAgentProcedure
     .input(
       z.object({
         /** Thread ID */
@@ -684,43 +723,6 @@ export const aiAgentRouter = router({
             ? { total_tokens: updatedMetadata.totalTokens }
             : undefined),
       };
-
-      return result;
-    }),
-
-  getOperationStatus: aiAgentProcedure
-    .input(GetOperationStatusSchema)
-    .query(async ({ input, ctx }) => {
-      const { historyLimit, includeHistory, operationId } = input;
-
-      if (!operationId) {
-        throw new Error('operationId parameter is required');
-      }
-
-      log('Getting operation status for %s', operationId);
-
-      // Get operation status using AgentRuntimeService
-      const operationStatus = await ctx.agentRuntimeService.getOperationStatus({
-        historyLimit,
-        includeHistory,
-        operationId,
-      });
-
-      return operationStatus;
-    }),
-
-  getPendingInterventions: aiAgentProcedure
-    .input(GetPendingInterventionsSchema)
-    .query(async ({ input, ctx }) => {
-      const { operationId, userId } = input;
-
-      log('Getting pending interventions for operationId: %s, userId: %s', operationId, userId);
-
-      // Get pending interventions using AgentRuntimeService
-      const result = await ctx.agentRuntimeService.getPendingInterventions({
-        operationId: operationId || undefined,
-        userId: userId || undefined,
-      });
 
       return result;
     }),

@@ -7,21 +7,21 @@ const isCJKChar = (char: string): boolean => {
 
   return (
     // CJK Unified Ideographs
-    (code >= 0x4e00 && code <= 0x9fff) ||
+    (code >= 0x4E_00 && code <= 0x9F_FF) ||
     // CJK Unified Ideographs Extension A
-    (code >= 0x3400 && code <= 0x4dbf) ||
+    (code >= 0x34_00 && code <= 0x4D_BF) ||
     // CJK Compatibility Ideographs
-    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xF9_00 && code <= 0xFA_FF) ||
     // Hiragana
-    (code >= 0x3040 && code <= 0x309f) ||
+    (code >= 0x30_40 && code <= 0x30_9F) ||
     // Katakana
-    (code >= 0x30a0 && code <= 0x30ff) ||
+    (code >= 0x30_A0 && code <= 0x30_FF) ||
     // Hangul Syllables
-    (code >= 0xac00 && code <= 0xd7af) ||
+    (code >= 0xAC_00 && code <= 0xD7_AF) ||
     // Hangul Jamo
-    (code >= 0x1100 && code <= 0x11ff) ||
+    (code >= 0x11_00 && code <= 0x11_FF) ||
     // CJK Unified Ideographs Extension B-F
-    (code >= 0x20000 && code <= 0x2ebef)
+    (code >= 0x2_00_00 && code <= 0x2_EB_EF)
   );
 };
 
