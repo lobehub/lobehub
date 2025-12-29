@@ -498,52 +498,6 @@ const doubaoChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    config: {
-      deploymentName: 'deepseek-r1-distill-qwen-32b-250120',
-    },
-    contextWindowTokens: 65_536,
-    description:
-      'DeepSeek-R1-Distill 模型是在开源模型的基础上通过微调训练得到的，训练过程中使用了由 DeepSeek-R1 生成的样本数据。',
-    displayName: 'DeepSeek R1 Distill Qwen 32B',
-    id: 'deepseek-r1-distill-qwen-32b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    config: {
-      deploymentName: 'deepseek-r1-distill-qwen-7b-250120',
-    },
-    contextWindowTokens: 65_536,
-    description:
-      'DeepSeek-R1-Distill 模型是在开源模型的基础上通过微调训练得到的，训练过程中使用了由 DeepSeek-R1 生成的样本数据。',
-    displayName: 'DeepSeek R1 Distill Qwen 7B',
-    id: 'deepseek-r1-distill-qwen-7b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     config: {
       deploymentName: 'deepseek-v3-250324',
@@ -698,71 +652,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    abilities: {
-      vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-vision-pro-32k-241028',
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Doubao-vision 模型是豆包推出的多模态大模型，具备强大的图片理解与推理能力，以及精准的指令理解能力。模型在图像文本信息抽取、基于图像的推理任务上有展现出了强大的性能，能够应用于更复杂、更广泛的视觉问答任务。',
-    displayName: 'Doubao Vision Pro 32k',
-    id: 'doubao-vision-pro-32k',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-10-28',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    config: {
-      deploymentName: 'doubao-vision-lite-32k-241015',
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Doubao-vision 模型是豆包推出的多模态大模型，具备强大的图片理解与推理能力，以及精准的指令理解能力。模型在图像文本信息抽取、基于图像的推理任务上有展现出了强大的性能，能够应用于更复杂、更广泛的视觉问答任务。',
-    displayName: 'Doubao Vision Lite 32k',
-    id: 'doubao-vision-lite-32k',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-10-15',
-    type: 'chat',
-  },
-  {
-    config: {
-      deploymentName: 'doubao-lite-4k-character-240828',
-    },
-    contextWindowTokens: 4096,
-    description:
-      '拥有极致的响应速度，更好的性价比，为客户不同场景提供更灵活的选择。支持 4k 上下文窗口的推理和精调。',
-    displayName: 'Doubao Lite 4k',
-    id: 'doubao-lite-4k',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     config: {
       deploymentName: 'doubao-lite-32k-240828',
     },
@@ -783,25 +672,6 @@ const doubaoChatModels: AIChatModelCard[] = [
   },
   {
     config: {
-      deploymentName: 'doubao-lite-128k-240828',
-    },
-    contextWindowTokens: 128_000,
-    description:
-      '拥有极致的响应速度，更好的性价比，为客户不同场景提供更灵活的选择。支持 128k 上下文窗口的推理和精调。',
-    displayName: 'Doubao Lite 128k',
-    id: 'doubao-lite-128k',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    config: {
       deploymentName: 'doubao-pro-32k-241215',
     },
     contextWindowTokens: 32_768,
@@ -815,25 +685,6 @@ const doubaoChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    config: {
-      deploymentName: 'doubao-pro-256k-241115',
-    },
-    contextWindowTokens: 256_000,
-    description:
-      '效果最好的主力模型，适合处理复杂任务，在参考问答、总结摘要、创作、文本分类、角色扮演等场景都有很好的效果。支持 256k 上下文窗口的推理和精调。',
-    displayName: 'Doubao Pro 256k',
-    id: 'doubao-pro-256k',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
