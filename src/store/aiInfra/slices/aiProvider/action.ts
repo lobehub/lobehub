@@ -1,4 +1,3 @@
-import { DESKTOP_USER_ID, isDesktop } from '@lobechat/const';
 import { getModelPropertyWithFallback, resolveImageSinglePrice } from '@lobechat/model-runtime';
 import { uniqBy } from 'es-toolkit/compat';
 import {
@@ -16,7 +15,7 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiProviderService } from '@/services/aiProvider';
 import { type AiInfraStore } from '@/store/aiInfra/store';
 import { useUserStore } from '@/store/user';
-import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/selectors';
 import {
   type AiProviderDetailItem,
   type AiProviderListItem,
@@ -319,26 +318,11 @@ export const createAiProviderSlice: StateCreator<
       },
     ),
 
-  useFetchAiProviderRuntimeState: (isLogin, isSyncActive?) => {
+  useFetchAiProviderRuntimeState: (isLogin) => {
     const isAuthLoaded = useUserStore(authSelectors.isLoaded);
-    const userId = useUserStore(userProfileSelectors.userId);
     // Only fetch when auth is loaded and login status is explicitly defined (true or false)
     // Prevents unnecessary requests when login state is null/undefined
-    let shouldFetch = isAuthLoaded && isLogin !== null && isLogin !== undefined;
-
-    if (isDesktop) {
-      if (isSyncActive) {
-        if (userId === undefined || userId === DESKTOP_USER_ID) {
-          shouldFetch = false;
-        } else {
-          shouldFetch = true;
-        }
-      } else if (userId === undefined) {
-        shouldFetch = false;
-      } else {
-        shouldFetch = true;
-      }
-    }
+    const shouldFetch = isAuthLoaded && isLogin !== null && isLogin !== undefined;
 
     return useClientDataSWR<AiProviderRuntimeStateWithBuiltinModels | undefined>(
       shouldFetch ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin] : null,
@@ -399,7 +383,6 @@ export const createAiProviderSlice: StateCreator<
         };
       },
       {
-        focusThrottleInterval: isDesktop ? 100 : undefined,
         onSuccess: (data) => {
           if (!data) return;
 

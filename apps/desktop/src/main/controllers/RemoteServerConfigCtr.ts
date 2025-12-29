@@ -96,6 +96,8 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     const merged = this.normalizeConfig({ ...prev, ...config });
     storeManager.set('dataSyncConfig', merged);
 
+    this.broadcastRemoteServerConfigUpdated();
+
     return true;
   }
 
@@ -113,7 +115,14 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Clear tokens (if any)
     await this.clearTokens();
 
+    this.broadcastRemoteServerConfigUpdated();
+
     return true;
+  }
+
+  private broadcastRemoteServerConfigUpdated() {
+    logger.debug('Broadcasting remoteServerConfigUpdated event to all windows');
+    this.app.browserManager.broadcastToAllWindows('remoteServerConfigUpdated', undefined);
   }
 
   /**

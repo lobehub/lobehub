@@ -44,7 +44,8 @@ const DesktopOnboarding = () => {
     <OnboardingContainerWithTheme
       onComplete={() => {
         setDesktopOnboardingCompleted();
-        navigate('/', { replace: true });
+        // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
+        window.location.replace('/');
       }}
     />
   );

@@ -43,7 +43,12 @@ const mockStoreManager = {
   set: vi.fn(),
 };
 
+const mockBrowserManager = {
+  broadcastToAllWindows: vi.fn(),
+};
+
 const mockApp = {
+  browserManager: mockBrowserManager,
   storeManager: mockStoreManager,
 } as unknown as App;
 

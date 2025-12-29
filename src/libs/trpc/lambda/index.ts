@@ -7,8 +7,6 @@
  * @link https://trpc.io/docs/v11/router
  * @link https://trpc.io/docs/v11/procedures
  */
-import { DESKTOP_USER_ID } from '@/const/desktop';
-import { isDesktop } from '@/const/version';
 
 import { openTelemetry } from '../middleware/openTelemetry';
 import { userAuth } from '../middleware/userAuth';
@@ -27,11 +25,7 @@ export const router = trpc.router;
  **/
 const baseProcedure = trpc.procedure.use(openTelemetry);
 
-export const publicProcedure = baseProcedure.use(({ next, ctx }) => {
-  return next({
-    ctx: { ...ctx, userId: isDesktop ? DESKTOP_USER_ID : ctx.userId },
-  });
-});
+export const publicProcedure = baseProcedure;
 
 // procedure that asserts that the user is logged in
 export const authedProcedure = baseProcedure.use(oidcAuth).use(userAuth);

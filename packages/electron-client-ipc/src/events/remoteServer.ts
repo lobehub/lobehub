@@ -9,5 +9,6 @@ export interface RemoteServerBroadcastEvents {
   authorizationFailed: (params: { error: string }) => void;
   authorizationRequired: (params: void) => void;
   authorizationSuccessful: (params: void) => void;
+  remoteServerConfigUpdated: (params: void) => void;
   tokenRefreshed: (params: void) => void;
 }

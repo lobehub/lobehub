@@ -21,6 +21,13 @@ const { mockProtocol, protocolHandlerRef } = vi.hoisted(() => {
   };
 });
 
+vi.mock('electron-is', () => ({
+  dev: vi.fn(() => false),
+  macOS: vi.fn(() => false),
+  windows: vi.fn(() => false),
+  linux: vi.fn(() => true),
+}));
+
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),

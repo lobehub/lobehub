@@ -1,5 +1,6 @@
 'use client';
 
+import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { type PropsWithChildren, useEffect, useState } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
@@ -18,6 +19,15 @@ const SWRMutateInitializer = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     setScopedMutate(mutate);
   }, [mutate]);
+
+  useWatchBroadcast('remoteServerConfigUpdated', () => {
+    try {
+      const result = mutate((key) => true, undefined, { revalidate: true });
+      void result?.catch?.(() => {});
+    } catch {
+      // Ignore: SWR cache may not be ready yet in early boot.
+    }
+  });
 
   // eslint-disable-next-line react/jsx-no-useless-fragment
   return <>{children}</>;
