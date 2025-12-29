@@ -7,7 +7,8 @@
     "./api": "./src/api.ts",
     "./trpc": "./src/trpc/index.ts",
     "./gen-ai": "./src/gen-ai/index.ts",
-    "./modules/memory-user-memory": "./src/modules/memory-user-memory/index.ts"
+    "./modules/memory-user-memory": "./src/modules/memory-user-memory/index.ts",
+    "./modules/upstash-workflow": "./src/modules/upstash-workflow/index.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
