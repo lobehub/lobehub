@@ -404,6 +404,7 @@ export const streamingExecutor: StateCreator<
         model,
         provider,
         scope, // Pass scope to chat service for page-agent injection
+        topicId, // Pass topicId for GTD context injection
         ...finalAgentConfig.params,
         plugins: finalAgentConfig.plugins,
       },

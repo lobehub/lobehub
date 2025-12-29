@@ -8,6 +8,8 @@ import type { AgentInfo } from '../../processors/GroupMessageSender';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
+import type { GTDPlan } from '../../providers/GTDPlanInjector';
+import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -140,6 +142,19 @@ export interface AgentGroupConfig {
 }
 
 /**
+ * GTD (Getting Things Done) configuration
+ * Used to inject plan and todo context for task management
+ */
+export interface GTDConfig {
+  /** Whether GTD context injection is enabled */
+  enabled?: boolean;
+  /** The current plan to inject (injected before first user message) */
+  plan?: GTDPlan;
+  /** The current todo list to inject (injected at end of last user message) */
+  todos?: GTDTodoList;
+}
+
+/**
  * MessagesEngine main parameters
  */
 export interface MessagesEngineParams {
@@ -190,6 +205,8 @@ export interface MessagesEngineParams {
   agentGroup?: AgentGroupConfig;
   /** Group Agent Builder context */
   groupAgentBuilderContext?: GroupAgentBuilderContext;
+  /** GTD (Getting Things Done) configuration */
+  gtd?: GTDConfig;
   /** User memory configuration */
   userMemory?: UserMemoryConfig;
 
@@ -235,5 +252,7 @@ export interface MessagesEngineResult {
 export { type AgentInfo } from '../../processors/GroupMessageSender';
 export { type AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
+export { type GTDPlan } from '../../providers/GTDPlanInjector';
+export { type GTDTodoItem, type GTDTodoList } from '../../providers/GTDTodoInjector';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
 export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';

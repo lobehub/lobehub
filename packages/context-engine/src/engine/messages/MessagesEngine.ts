@@ -22,6 +22,8 @@ import {
   AgentBuilderContextInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
+  GTDPlanInjector,
+  GTDTodoInjector,
   HistorySummaryProvider,
   KnowledgeInjector,
   PageEditorContextInjector,
@@ -121,6 +123,7 @@ export class MessagesEngine {
       agentBuilderContext,
       groupAgentBuilderContext,
       agentGroup,
+      gtd,
       userMemory,
       initialContext,
       stepContext,
@@ -135,6 +138,9 @@ export class MessagesEngine {
     const isUserMemoryEnabled = userMemory?.enabled && userMemory?.memories;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
+    // GTD is enabled if gtd.enabled is true and either plan or todos is provided
+    const isGTDPlanEnabled = gtd?.enabled && gtd?.plan;
+    const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
 
     return [
       // =============================================
@@ -174,6 +180,11 @@ export class MessagesEngine {
       // 4. User memory injection (conditionally added, injected first)
       ...(isUserMemoryEnabled ? [new UserMemoryInjector(userMemory)] : []),
 
+      // 4.5. GTD Plan injection (conditionally added, after user memory, before knowledge)
+      ...(isGTDPlanEnabled
+        ? [new GTDPlanInjector({ enabled: true, plan: gtd.plan })]
+        : []),
+
       // 5. Knowledge injection (full content for agent files + metadata for knowledge bases)
       new KnowledgeInjector({
         fileContents: knowledge?.fileContents,
@@ -199,13 +210,13 @@ export class MessagesEngine {
       // 8. Tool system role injection (conditionally added)
       ...(toolsConfig?.manifests && toolsConfig.manifests.length > 0
         ? [
-            new ToolSystemRoleProvider({
-              isCanUseFC: capabilities?.isCanUseFC || (() => true),
-              manifests: toolsConfig.manifests,
-              model,
-              provider,
-            }),
-          ]
+          new ToolSystemRoleProvider({
+            isCanUseFC: capabilities?.isCanUseFC || (() => true),
+            manifests: toolsConfig.manifests,
+            model,
+            provider,
+          }),
+        ]
         : []),
 
       // 9. History summary injection
@@ -222,23 +233,28 @@ export class MessagesEngine {
           ? pageContentContext
           : initialContext?.pageEditor
             ? {
-                markdown: initialContext.pageEditor.markdown,
-                metadata: {
-                  charCount: initialContext.pageEditor.metadata.charCount,
-                  lineCount: initialContext.pageEditor.metadata.lineCount,
-                  title: initialContext.pageEditor.metadata.title,
-                },
-                // Use latest XML from stepContext if available, otherwise fallback to initial XML
-                xml: stepContext?.stepPageEditor?.xml || initialContext.pageEditor.xml,
-              }
+              markdown: initialContext.pageEditor.markdown,
+              metadata: {
+                charCount: initialContext.pageEditor.metadata.charCount,
+                lineCount: initialContext.pageEditor.metadata.lineCount,
+                title: initialContext.pageEditor.metadata.title,
+              },
+              // Use latest XML from stepContext if available, otherwise fallback to initial XML
+              xml: stepContext?.stepPageEditor?.xml || initialContext.pageEditor.xml,
+            }
             : undefined,
       }),
+
+      // 10.5. GTD Todo injection (conditionally added, at end of last user message)
+      ...(isGTDTodoEnabled
+        ? [new GTDTodoInjector({ enabled: true, todos: gtd.todos })]
+        : []),
 
       // =============================================
       // Phase 3: Message Transformation
       // =============================================
 
-      // 10. Input template processing
+      // 11. Input template processing
       new InputTemplateProcessor({ inputTemplate }),
 
       // 11. Placeholder variables processing
@@ -261,10 +277,10 @@ export class MessagesEngine {
       // 16. Group message sender identity injection (for multi-agent chat)
       ...(isAgentGroupEnabled
         ? [
-            new GroupMessageSenderProcessor({
-              agentMap: agentGroup.agentMap!,
-            }),
-          ]
+          new GroupMessageSenderProcessor({
+            agentMap: agentGroup.agentMap!,
+          }),
+        ]
         : []),
 
       // =============================================

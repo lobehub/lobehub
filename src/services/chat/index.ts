@@ -67,6 +67,7 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
   groupId?: string;
   messages: UIChatMessage[];
   scope?: MessageMapScope;
+  topicId?: string;
 }
 
 type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
@@ -107,6 +108,7 @@ class ChatService {
       agentId,
       groupId,
       scope,
+      topicId,
       ...params
     }: GetChatCompletionPayload,
     options?: FetchOptions,
@@ -246,6 +248,7 @@ class ChatService {
       stepContext: options?.stepContext,
       systemRole: agentConfig.systemRole,
       tools: enabledToolIds,
+      topicId,
     });
 
     // ============  3. process extend params   ============ //

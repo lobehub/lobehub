@@ -1,9 +1,11 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
+import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { KLAVIS_SERVER_TYPES, isDesktop } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentGroupConfig,
+  type GTDConfig,
   type GroupAgentBuilderContext,
   type GroupOfficialToolItem,
   type LobeToolManifest,
@@ -20,6 +22,7 @@ import { VARIABLE_GENERATORS } from '@lobechat/utils/client';
 import debug from 'debug';
 
 import { isCanUseFC } from '@/helpers/isCanUseFC';
+import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
@@ -67,6 +70,8 @@ interface ContextEngineeringContext {
   stepContext?: RuntimeStepContext;
   systemRole?: string;
   tools?: string[];
+  /** Topic ID for GTD context injection */
+  topicId?: string;
 }
 
 // REVIEW：可能这里可以约束一下 identity，preference，exp 的 重新排序或者裁切过的上下文进来而不是全部丢进来
@@ -87,6 +92,7 @@ export const contextEngineering = async ({
   groupId,
   initialContext,
   stepContext,
+  topicId,
 }: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
   log('tools: %o', tools);
 
@@ -255,6 +261,50 @@ export const contextEngineering = async ({
     userMemoryData = combineUserMemoryData(topicMemories, globalIdentities);
   }
 
+  // Resolve GTD context: plan and todos
+  // GTD tool must be enabled and topicId must be provided
+  const isGTDEnabled = tools?.includes(GTDIdentifier) ?? false;
+  let gtdConfig: GTDConfig | undefined;
+
+  if (isGTDEnabled && topicId) {
+    try {
+      // Fetch plan document for the current topic
+      const planResult = await notebookService.listDocuments({
+        topicId,
+        type: 'agent/plan',
+      });
+
+      if (planResult.data.length > 0) {
+        const planDoc = planResult.data[0]; // Most recent plan
+
+        // Build plan object for injection
+        const plan = {
+          completed: false, // TODO: Add completed field to document if needed
+          context: planDoc.content ?? undefined,
+          createdAt: planDoc.createdAt.toISOString(),
+          description: planDoc.description || '',
+          goal: planDoc.title || '',
+          id: planDoc.id,
+          updatedAt: planDoc.updatedAt.toISOString(),
+        };
+
+        // Get todos from plan's metadata
+        const todos = planDoc.metadata?.todos;
+
+        gtdConfig = {
+          enabled: true,
+          plan,
+          todos,
+        };
+
+        log('GTD context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
+      }
+    } catch (error) {
+      // Silently fail - GTD context is optional
+      log('Failed to resolve GTD context:', error);
+    }
+  }
+
   // Create MessagesEngine with injected dependencies
   /* eslint-disable sort-keys-fix/sort-keys-fix */
   const engine = new MessagesEngine({
@@ -315,6 +365,7 @@ export const contextEngineering = async ({
     ...(isAgentBuilderEnabled && { agentBuilderContext }),
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
     ...(agentGroup && { agentGroup }),
+    ...(gtdConfig && { gtd: gtdConfig }),
   });
 
   const result = await engine.process();
