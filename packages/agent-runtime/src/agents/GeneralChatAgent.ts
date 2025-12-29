@@ -13,6 +13,8 @@ import {
   GeneralAgentCallingToolInstructionPayload,
   GeneralAgentConfig,
   HumanAbortPayload,
+  TaskResultPayload,
+  TasksBatchResultPayload,
 } from '../types';
 
 /**
@@ -315,7 +317,37 @@ export class GeneralChatAgent implements Agent {
       }
 
       case 'tool_result': {
-        const { parentMessageId } = context.payload as GeneralAgentCallToolResultPayload;
+        const { data, parentMessageId, stop } =
+          context.payload as GeneralAgentCallToolResultPayload;
+
+        // Check if this is a GTD async task request (only execTask/execTasks are passed here with stop=true)
+        if (stop && data?.state) {
+          const stateType = data.state.type;
+
+          // GTD async task (single)
+          if (stateType === 'execTask') {
+            const { parentMessageId: execParentId, task } = data.state as {
+              parentMessageId: string;
+              task: any;
+            };
+            return {
+              payload: { parentMessageId: execParentId, task },
+              type: 'exec_task',
+            };
+          }
+
+          // GTD async tasks (multiple)
+          if (stateType === 'execTasks') {
+            const { parentMessageId: execParentId, tasks } = data.state as {
+              parentMessageId: string;
+              tasks: any[];
+            };
+            return {
+              payload: { parentMessageId: execParentId, tasks },
+              type: 'exec_tasks',
+            };
+          }
+        }
 
         // Check if there are still pending tool messages waiting for approval
         const pendingToolMessages = state.messages.filter(
@@ -368,6 +400,40 @@ export class GeneralChatAgent implements Agent {
         }
 
         // No pending tools, continue to call LLM with tool results
+        return {
+          payload: {
+            messages: state.messages,
+            model: this.config.modelRuntimeConfig?.model,
+            parentMessageId,
+            provider: this.config.modelRuntimeConfig?.provider,
+            tools: state.tools,
+          } as GeneralAgentCallLLMInstructionPayload,
+          type: 'call_llm',
+        };
+      }
+
+      case 'task_result': {
+        // Single async task completed, continue to call LLM with result
+        const { parentMessageId } = context.payload as TaskResultPayload;
+
+        // Continue to call LLM with updated messages (task message is already in state)
+        return {
+          payload: {
+            messages: state.messages,
+            model: this.config.modelRuntimeConfig?.model,
+            parentMessageId,
+            provider: this.config.modelRuntimeConfig?.provider,
+            tools: state.tools,
+          } as GeneralAgentCallLLMInstructionPayload,
+          type: 'call_llm',
+        };
+      }
+
+      case 'tasks_batch_result': {
+        // Async tasks batch completed, continue to call LLM with results
+        const { parentMessageId } = context.payload as TasksBatchResultPayload;
+
+        // Continue to call LLM with updated messages (task messages are already in state)
         return {
           payload: {
             messages: state.messages,

@@ -101,6 +101,8 @@ export interface ToolsEngineOptions {
  * Tools generation result
  */
 export interface ToolsGenerationResult {
+  /** List of enabled manifests with systemRole and other metadata */
+  enabledManifests: LobeToolManifest[];
   /** List of enabled tool IDs */
   enabledToolIds: string[];
   /** Filtered plugins and their reasons */

@@ -9,7 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import { shinyTextStyles } from '@/styles';
 
-import type { ReplaceTextArgs, ReplaceTextState } from '../../../types';
+import type { ReplaceTextArgs } from '@lobechat/editor-runtime';
+
+import type { ReplaceTextState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   arrow: css`

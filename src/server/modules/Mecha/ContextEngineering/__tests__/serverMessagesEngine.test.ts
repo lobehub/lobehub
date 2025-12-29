@@ -147,7 +147,21 @@ describe('serverMessagesEngine', () => {
   describe('tools configuration', () => {
     it('should handle tools system roles', async () => {
       const messages = createBasicMessages();
-      const getToolSystemRoles = vi.fn().mockReturnValue('Tool instructions');
+      const mockManifests = [
+        {
+          identifier: 'tool1',
+          api: [{ name: 'action', description: 'Tool 1 action', parameters: {} }],
+          meta: { title: 'Tool 1' },
+          type: 'default' as const,
+          systemRole: 'Tool 1 instructions',
+        },
+        {
+          identifier: 'tool2',
+          api: [{ name: 'action', description: 'Tool 2 action', parameters: {} }],
+          meta: { title: 'Tool 2' },
+          type: 'default' as const,
+        },
+      ];
 
       const result = await serverMessagesEngine({
         capabilities: { isCanUseFC: () => true },
@@ -156,30 +170,37 @@ describe('serverMessagesEngine', () => {
         provider: 'openai',
         systemRole: 'Base system role',
         toolsConfig: {
-          getToolSystemRoles,
+          manifests: mockManifests,
           tools: ['tool1', 'tool2'],
         },
       });
 
-      expect(getToolSystemRoles).toHaveBeenCalled();
+      // Should inject tool system role when manifests are provided
+      const systemMessage = result.find((msg) => msg.role === 'system');
+      expect(systemMessage).toBeDefined();
       expect(result.length).toBeGreaterThan(0);
     });
 
-    it('should skip tool system role when no tools', async () => {
+    it('should skip tool system role when no manifests', async () => {
       const messages = createBasicMessages();
-      const getToolSystemRoles = vi.fn();
 
-      await serverMessagesEngine({
+      const result = await serverMessagesEngine({
         messages,
         model: 'gpt-4',
         provider: 'openai',
         toolsConfig: {
-          getToolSystemRoles,
+          manifests: [],
           tools: [],
         },
       });
 
-      expect(getToolSystemRoles).not.toHaveBeenCalled();
+      // Without manifests, no tool-related system role should be injected
+      const systemMessages = result.filter((msg) => msg.role === 'system');
+      const hasToolSystemRole = systemMessages.some((msg) => {
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        return content.includes('plugins');
+      });
+      expect(hasToolSystemRole).toBe(false);
     });
   });
 

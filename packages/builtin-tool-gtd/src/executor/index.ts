@@ -10,6 +10,8 @@ import {
   type CompleteTodosParams,
   type CreatePlanParams,
   type CreateTodosParams,
+  type ExecTaskParams,
+  type ExecTasksParams,
   GTDApiName,
   type Plan,
   type RemoveTodosParams,
@@ -45,11 +47,13 @@ const syncTodosToPlan = async (topicId: string, todos: TodoState): Promise<void>
 };
 
 // API enum for MVP (Todo + Plan)
-const GTDApiNameMVP = {
+const GTDApiNameEnum = {
   clearTodos: GTDApiName.clearTodos,
   completeTodos: GTDApiName.completeTodos,
   createPlan: GTDApiName.createPlan,
   createTodos: GTDApiName.createTodos,
+  execTask: GTDApiName.execTask,
+  execTasks: GTDApiName.execTasks,
   removeTodos: GTDApiName.removeTodos,
   updatePlan: GTDApiName.updatePlan,
   updateTodos: GTDApiName.updateTodos,
@@ -58,9 +62,9 @@ const GTDApiNameMVP = {
 /**
  * GTD Tool Executor
  */
-class GTDExecutor extends BaseExecutor<typeof GTDApiNameMVP> {
+class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
   readonly identifier = GTDIdentifier;
-  protected readonly apiEnum = GTDApiNameMVP;
+  protected readonly apiEnum = GTDApiNameEnum;
 
   // ==================== Todo APIs ====================
 
@@ -535,6 +539,92 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameMVP> {
         success: false,
       };
     }
+  };
+
+  // ==================== Async Tasks API ====================
+
+  /**
+   * Execute a single async task
+   *
+   * This method triggers async task execution by returning a special state.
+   * The AgentRuntime's executor will recognize this state and trigger the exec_task instruction.
+   *
+   * Flow:
+   * 1. GTD tool returns stop: true with state.type = 'execTask'
+   * 2. AgentRuntime executor recognizes the state and triggers exec_task instruction
+   * 3. exec_task executor creates task message and polls for completion
+   */
+  execTask = async (
+    params: ExecTaskParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const { description, instruction, inheritMessages, timeout } = params;
+
+    if (!description || !instruction) {
+      return {
+        content: 'Task description and instruction are required.',
+        success: false,
+      };
+    }
+
+    // Return stop: true with special state that AgentRuntime will recognize
+    // The exec_task executor will be triggered by the runtime when it sees this state
+    return {
+      content: `🚀 Triggered async task for execution:\n- ${description}`,
+      state: {
+        parentMessageId: ctx.messageId,
+        task: {
+          description,
+          inheritMessages,
+          instruction,
+          timeout,
+        },
+        type: 'execTask',
+      },
+      stop: true,
+      success: true,
+    };
+  };
+
+  /**
+   * Execute one or more async tasks
+   *
+   * This method triggers async task execution by returning a special state.
+   * The AgentRuntime's executor will recognize this state and trigger the exec_tasks instruction.
+   *
+   * Flow:
+   * 1. GTD tool returns stop: true with state.type = 'execTasks'
+   * 2. AgentRuntime executor recognizes the state and triggers exec_tasks instruction
+   * 3. exec_tasks executor creates task messages and polls for completion
+   */
+  execTasks = async (
+    params: ExecTasksParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const { tasks } = params;
+
+    if (!tasks || tasks.length === 0) {
+      return {
+        content: 'No tasks provided to execute.',
+        success: false,
+      };
+    }
+
+    const taskCount = tasks.length;
+    const taskList = tasks.map((t, i) => `${i + 1}. ${t.description}`).join('\n');
+
+    // Return stop: true with special state that AgentRuntime will recognize
+    // The exec_tasks executor will be triggered by the runtime when it sees this state
+    return {
+      content: `🚀 Triggered ${taskCount} async task${taskCount > 1 ? 's' : ''} for execution:\n${taskList}`,
+      state: {
+        parentMessageId: ctx.messageId,
+        tasks,
+        type: 'execTasks',
+      },
+      stop: true,
+      success: true,
+    };
   };
 }
 

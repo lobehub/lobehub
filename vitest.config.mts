@@ -48,6 +48,7 @@ export default defineConfig({
       '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
       '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
       '@/utils/server': resolve(__dirname, './src/utils/server'),
+      '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
       '@/utils/electron': resolve(__dirname, './src/utils/electron'),
       '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
       '@/utils': resolve(__dirname, './packages/utils/src'),

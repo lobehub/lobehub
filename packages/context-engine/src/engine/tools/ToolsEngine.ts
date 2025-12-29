@@ -131,6 +131,7 @@ export class ToolsEngine {
     );
 
     return {
+      enabledManifests,
       enabledToolIds: enabledManifests.map((m) => m.identifier),
       filteredTools: filteredPlugins,
       tools,

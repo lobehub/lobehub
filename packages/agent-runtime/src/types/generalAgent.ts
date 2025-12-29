@@ -27,6 +27,8 @@ export interface GeneralAgentCallToolResultPayload {
   executionTime: number;
   isSuccess: boolean;
   parentMessageId: string;
+  /** Whether tool requested to stop execution (e.g., group management speak/delegate, GTD async tasks) */
+  stop?: boolean;
   toolCall: ChatToolPayload;
   toolCallId: string;
 }

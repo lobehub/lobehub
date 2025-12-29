@@ -6,6 +6,7 @@ import {
   type AgentGroupConfig,
   type GroupAgentBuilderContext,
   type GroupOfficialToolItem,
+  type LobeToolManifest,
   MessagesEngine,
 } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
@@ -25,7 +26,7 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
-import { builtinToolSelectors, klavisStoreSelectors, toolSelectors } from '@/store/tool/selectors';
+import { builtinToolSelectors, klavisStoreSelectors } from '@/store/tool/selectors';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import {
@@ -53,6 +54,8 @@ interface ContextEngineeringContext {
    */
   initialContext?: RuntimeInitialContext;
   inputTemplate?: string;
+  /** Tool manifests with systemRole and API definitions */
+  manifests?: LobeToolManifest[];
   messages: UIChatMessage[];
   model: string;
   provider: string;
@@ -69,6 +72,7 @@ interface ContextEngineeringContext {
 // REVIEW：可能这里可以约束一下 identity，preference，exp 的 重新排序或者裁切过的上下文进来而不是全部丢进来
 export const contextEngineering = async ({
   messages = [],
+  manifests,
   tools,
   model,
   provider,
@@ -291,7 +295,7 @@ export const contextEngineering = async ({
 
     // Tools configuration
     toolsConfig: {
-      getToolSystemRoles: (tools) => toolSelectors.enabledSystemRoles(tools)(getToolStoreState()),
+      manifests,
       tools,
     },
 

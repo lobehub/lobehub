@@ -893,6 +893,164 @@ describe('GeneralChatAgent', () => {
     });
   });
 
+  describe('task_result phase (single task)', () => {
+    it('should return call_llm when task completed', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Execute task' },
+          { role: 'assistant', content: '' },
+          { role: 'task', content: 'Task result', metadata: { instruction: 'Do task' } },
+        ] as any,
+      });
+
+      const context = createMockContext('task_result', {
+        parentMessageId: 'task-parent-msg',
+        result: { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task result' },
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'task-parent-msg',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+
+    it('should return call_llm even when task failed', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Execute task' },
+          { role: 'assistant', content: '' },
+          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task' } },
+        ] as any,
+      });
+
+      const context = createMockContext('task_result', {
+        parentMessageId: 'task-parent-msg',
+        result: {
+          success: false,
+          taskMessageId: 'task-1',
+          threadId: 'thread-1',
+          error: 'Task timeout after 1800000ms',
+        },
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'task-parent-msg',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+  });
+
+  describe('tasks_batch_result phase (multiple tasks)', () => {
+    it('should return call_llm when tasks completed', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Execute tasks' },
+          { role: 'assistant', content: '' },
+          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
+          { role: 'task', content: 'Task 2 result', metadata: { instruction: 'Do task 2' } },
+        ] as any,
+      });
+
+      const context = createMockContext('tasks_batch_result', {
+        parentMessageId: 'task-parent-msg',
+        results: [
+          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
+          { success: true, taskMessageId: 'task-2', threadId: 'thread-2', result: 'Task 2 result' },
+        ],
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'task-parent-msg',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+
+    it('should return call_llm even when some tasks failed', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Execute tasks' },
+          { role: 'assistant', content: '' },
+          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
+          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task 2' } },
+        ] as any,
+      });
+
+      const context = createMockContext('tasks_batch_result', {
+        parentMessageId: 'task-parent-msg',
+        results: [
+          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
+          {
+            success: false,
+            taskMessageId: 'task-2',
+            threadId: 'thread-2',
+            error: 'Task timeout after 1800000ms',
+          },
+        ],
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'task-parent-msg',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+  });
+
   describe('unknown phase', () => {
     it('should return finish instruction for unknown phase', async () => {
       const agent = new GeneralChatAgent({

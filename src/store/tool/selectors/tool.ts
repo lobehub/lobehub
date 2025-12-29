@@ -1,48 +1,12 @@
-import { ToolNameResolver } from '@lobechat/context-engine';
-import { pluginPrompts } from '@lobechat/prompts';
 import { type RenderDisplayControl } from '@lobechat/types';
 import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 import { type MetaData } from '@/types/meta';
 import { type LobeToolMeta } from '@/types/tool/tool';
 
-import { pluginHelpers } from '../helpers';
 import { type ToolStoreState } from '../initialState';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
 import { pluginSelectors } from '../slices/plugin/selectors';
-
-const toolNameResolver = new ToolNameResolver();
-
-const enabledSystemRoles =
-  (tools: string[] = []) =>
-  (s: ToolStoreState) => {
-    const toolsSystemRole = pluginSelectors
-      .installedPluginManifestList(s)
-      .concat(s.builtinTools.map((b) => b.manifest as LobeChatPluginManifest))
-      // 如果存在 enabledPlugins，那么只启用 enabledPlugins 中的插件
-      .filter((m) => m && tools.includes(m.identifier))
-      .map((manifest) => {
-        const meta = manifest.meta || {};
-
-        const title = pluginHelpers.getPluginTitle(meta) || manifest.identifier;
-
-        return {
-          apis: manifest.api.map((m) => ({
-            desc: m.description,
-            name: toolNameResolver.generate(manifest.identifier, m.name, manifest.type),
-          })),
-          identifier: manifest.identifier,
-          name: title,
-          systemRole: manifest.systemRole,
-        };
-      });
-
-    if (toolsSystemRole.length > 0) {
-      return pluginPrompts({ tools: toolsSystemRole });
-    }
-
-    return '';
-  };
 
 const metaList = (s: ToolStoreState): LobeToolMeta[] => {
   const pluginList = pluginSelectors.installedPluginMetaList(s) as LobeToolMeta[];
@@ -117,7 +81,6 @@ const getRenderDisplayControl =
   };
 
 export const toolSelectors = {
-  enabledSystemRoles,
   getManifestById,
   getManifestLoadingStatus,
   getMetaById,

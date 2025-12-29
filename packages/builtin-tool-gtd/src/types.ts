@@ -24,6 +24,13 @@ export const GTDApiName = {
   /** Create new todo items */
   createTodos: 'createTodos',
 
+  // ==================== Async Tasks ====================
+  /** Execute a single async task */
+  execTask: 'execTask',
+
+  /** Execute one or more async tasks */
+  execTasks: 'execTasks',
+
   /** Remove todo items by indices */
   removeTodos: 'removeTodos',
 
@@ -231,4 +238,68 @@ export interface CreatePlanState {
 export interface UpdatePlanState {
   /** The updated plan document */
   plan: Plan;
+}
+
+// ==================== Async Tasks Types ====================
+
+/**
+ * Single task item for execution
+ */
+export interface ExecTaskItem {
+  /** Brief description of what this task does (shown in UI) */
+  description: string;
+  /** Whether to inherit context messages from parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the task execution */
+  instruction: string;
+  /** Timeout in milliseconds (optional, default 30 minutes) */
+  timeout?: number;
+}
+
+/**
+ * Parameters for execTask API
+ * Execute a single async task
+ */
+export interface ExecTaskParams {
+  /** Brief description of what this task does (shown in UI) */
+  description: string;
+  /** Whether to inherit context messages from parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the task execution */
+  instruction: string;
+  /** Timeout in milliseconds (optional, default 30 minutes) */
+  timeout?: number;
+}
+
+/**
+ * Parameters for execTasks API
+ * Execute one or more async tasks
+ */
+export interface ExecTasksParams {
+  /** Array of tasks to execute */
+  tasks: ExecTaskItem[];
+}
+
+/**
+ * State returned after triggering exec_task
+ */
+export interface ExecTaskState {
+  /** Parent message ID (tool message) */
+  parentMessageId: string;
+  /** The task definition that was triggered */
+  task: ExecTaskItem;
+  /** Type identifier for render component */
+  type: 'execTask';
+}
+
+/**
+ * State returned after triggering exec_tasks
+ */
+export interface ExecTasksState {
+  /** Parent message ID (tool message) */
+  parentMessageId: string;
+  /** Array of task definitions that were triggered */
+  tasks: ExecTaskItem[];
+  /** Type identifier for render component */
+  type: 'execTasks';
 }

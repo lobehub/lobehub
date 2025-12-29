@@ -78,12 +78,13 @@ export interface PluginTypesAction {
    * @param id - Tool message ID
    * @param payload - Tool call payload
    * @param stepContext - Optional step context with dynamic state like GTD todos
+   * @returns The tool execution result (including stop flag for flow control)
    */
   invokeBuiltinTool: (
     id: string,
     payload: ChatToolPayload,
     stepContext?: RuntimeStepContext,
-  ) => Promise<void>;
+  ) => Promise<any>;
 
   /**
    * Invoke Cloud Code Interpreter tool

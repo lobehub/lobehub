@@ -1,16 +1,18 @@
-import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
-
-import { PageAgentExecutionRuntime } from '../ExecutionRuntime';
 import type {
   EditTitleArgs,
-  EditTitleState,
+  EditorRuntime,
   GetPageContentArgs,
-  GetPageContentState,
   InitDocumentArgs,
-  InitDocumentState,
   ModifyNodesArgs,
-  ModifyNodesState,
   ReplaceTextArgs,
+} from '@lobechat/editor-runtime';
+import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
+
+import type {
+  EditTitleState,
+  GetPageContentState,
+  InitDocumentState,
+  ModifyNodesState,
   ReplaceTextState,
 } from '../types';
 import { PageAgentIdentifier } from '../types';
@@ -39,7 +41,7 @@ const PageAgentApiName = {
 /**
  * Page Agent Executor
  *
- * Wraps the PageAgentExecutionRuntime to provide a unified executor interface
+ * Wraps the EditorRuntime to provide a unified executor interface
  * that follows the BaseExecutor pattern used by other builtin tools.
  *
  * Note: Page Agent is a client-side tool that directly manipulates the Lexical editor.
@@ -53,9 +55,9 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * The execution runtime instance
    * This is a singleton that should be configured with an editor instance externally
    */
-  private runtime: PageAgentExecutionRuntime;
+  private runtime: EditorRuntime;
 
-  constructor(runtime: PageAgentExecutionRuntime) {
+  constructor(runtime: EditorRuntime) {
     super();
     this.runtime = runtime;
   }

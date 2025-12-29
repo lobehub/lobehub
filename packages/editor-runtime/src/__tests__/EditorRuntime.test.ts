@@ -9,10 +9,10 @@ import {
 import { resetRandomKey } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PageAgentExecutionRuntime } from './index';
+import { EditorRuntime } from '../EditorRuntime';
 
-describe('PageAgentExecutionRuntime', () => {
-  let runtime: PageAgentExecutionRuntime;
+describe('EditorRuntime', () => {
+  let runtime: EditorRuntime;
   let editor: IEditor;
   let mockTitleSetter: ReturnType<typeof vi.fn>;
   let mockTitleGetter: ReturnType<typeof vi.fn>;
@@ -23,7 +23,7 @@ describe('PageAgentExecutionRuntime', () => {
     editor.registerPlugins([CommonPlugin, MarkdownPlugin, LitexmlPlugin]);
     editor.initNodeEditor();
 
-    runtime = new PageAgentExecutionRuntime();
+    runtime = new EditorRuntime();
     runtime.setEditor(editor);
 
     mockTitleSetter = vi.fn();
@@ -515,7 +515,7 @@ describe('PageAgentExecutionRuntime', () => {
     });
 
     it('should return undefined when no document ID is set', () => {
-      const newRuntime = new PageAgentExecutionRuntime();
+      const newRuntime = new EditorRuntime();
       expect(newRuntime.getCurrentDocId()).toBeUndefined();
     });
 

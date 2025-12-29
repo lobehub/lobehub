@@ -95,7 +95,7 @@ export const serverMessagesEngine = async ({
 
     // Tools configuration
     toolsConfig: {
-      getToolSystemRoles: toolsConfig?.getToolSystemRoles,
+      manifests: toolsConfig?.manifests,
       tools: toolsConfig?.tools,
     },
 

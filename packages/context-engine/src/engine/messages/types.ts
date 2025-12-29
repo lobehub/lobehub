@@ -8,6 +8,7 @@ import type { AgentInfo } from '../../processors/GroupMessageSender';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
+import type { LobeToolManifest } from '../tools/types';
 
 /**
  * Model capability checker
@@ -36,9 +37,9 @@ export interface KnowledgeConfig {
  * Tools configuration
  */
 export interface ToolsConfig {
-  /** Function to get tool system roles */
-  getToolSystemRoles?: (tools: string[]) => string | undefined;
-  /** Enabled tool IDs */
+  /** Tool manifests with systemRole and API definitions */
+  manifests?: LobeToolManifest[];
+  /** Enabled tool IDs (kept for compatibility) */
   tools?: string[];
 }
 

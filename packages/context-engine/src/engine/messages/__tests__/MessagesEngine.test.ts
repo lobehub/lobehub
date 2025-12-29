@@ -57,7 +57,7 @@ describe('MessagesEngine', () => {
         },
         systemRole: 'You are a helpful assistant',
         toolsConfig: {
-          getToolSystemRoles: () => undefined,
+          manifests: [],
           tools: ['tool1'],
         },
         variableGenerators: {
@@ -363,21 +363,37 @@ describe('MessagesEngine', () => {
   });
 
   describe('tools config', () => {
-    it('should handle tools configuration', async () => {
-      const getToolSystemRoles = vi.fn().mockReturnValue('Tool system role');
+    it('should handle tools configuration with manifests', async () => {
+      const mockManifests = [
+        {
+          identifier: 'tool1',
+          api: [{ name: 'action', description: 'Tool 1 action', parameters: {} }],
+          meta: { title: 'Tool 1' },
+          type: 'default' as const,
+        },
+        {
+          identifier: 'tool2',
+          api: [{ name: 'action', description: 'Tool 2 action', parameters: {} }],
+          meta: { title: 'Tool 2' },
+          type: 'default' as const,
+        },
+      ];
 
       const params = createBasicParams({
         capabilities: { isCanUseFC: () => true },
         toolsConfig: {
-          getToolSystemRoles,
+          manifests: mockManifests,
           tools: ['tool1', 'tool2'],
         },
       });
       const engine = new MessagesEngine(params);
 
-      await engine.process();
+      const result = await engine.process();
 
-      expect(getToolSystemRoles).toHaveBeenCalled();
+      // Should inject tool system role when manifests are provided
+      const systemMessage = result.messages.find((msg) => msg.role === 'system');
+      expect(systemMessage).toBeDefined();
+      expect(systemMessage!.content).toContain('tool1');
     });
 
     it('should skip tool system role provider when no tools', async () => {

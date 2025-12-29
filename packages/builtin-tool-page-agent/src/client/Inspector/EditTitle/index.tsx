@@ -7,7 +7,9 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { shinyTextStyles } from '@/styles';
 
-import type { EditTitleArgs, EditTitleState } from '../../../types';
+import type { EditTitleArgs } from '@lobechat/editor-runtime';
+
+import type { EditTitleState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   highlight: css`

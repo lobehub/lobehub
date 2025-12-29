@@ -1,13 +1,13 @@
+import type { EditorRuntime } from '@lobechat/editor-runtime';
 import type { BuiltinToolContext } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PageAgentExecutionRuntime } from '../ExecutionRuntime';
 import { PageAgentIdentifier } from '../types';
 import { PageAgentExecutor } from './index';
 
 describe('PageAgentExecutor', () => {
   let executor: PageAgentExecutor;
-  let mockRuntime: PageAgentExecutionRuntime;
+  let mockRuntime: EditorRuntime;
   const mockContext = {} as BuiltinToolContext;
 
   beforeEach(() => {
@@ -18,7 +18,7 @@ describe('PageAgentExecutor', () => {
       initPage: vi.fn(),
       modifyNodes: vi.fn(),
       replaceText: vi.fn(),
-    } as unknown as PageAgentExecutionRuntime;
+    } as unknown as EditorRuntime;
 
     executor = new PageAgentExecutor(mockRuntime);
   });

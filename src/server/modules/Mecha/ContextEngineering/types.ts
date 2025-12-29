@@ -2,6 +2,7 @@ import type {
   AgentBuilderContext,
   FileContent,
   KnowledgeBaseInfo,
+  LobeToolManifest,
   UserMemoryData,
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
@@ -33,9 +34,9 @@ export interface ServerKnowledgeConfig {
  * Tools configuration for server context engineering
  */
 export interface ServerToolsConfig {
-  /** Function to get tool system roles */
-  getToolSystemRoles?: (tools: string[]) => string | undefined;
-  /** Enabled tool IDs */
+  /** Tool manifests with systemRole and API definitions */
+  manifests?: LobeToolManifest[];
+  /** Enabled tool IDs (kept for compatibility) */
   tools?: string[];
 }
 

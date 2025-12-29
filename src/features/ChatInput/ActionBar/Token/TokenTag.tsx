@@ -1,3 +1,5 @@
+import { ToolNameResolver } from '@lobechat/context-engine';
+import { pluginPrompts } from '@lobechat/prompts';
 import { Center, Flexbox, Tooltip } from '@lobehub/ui';
 import { TokenTag } from '@lobehub/ui/chat';
 import { cssVar } from 'antd-style';
@@ -14,11 +16,13 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import { useToolStore } from '@/store/tool';
-import { toolSelectors } from '@/store/tool/selectors';
+import { pluginHelpers } from '@/store/tool/helpers';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import ActionPopover from '../components/ActionPopover';
 import TokenProgress from './TokenProgress';
+
+const toolNameResolver = new ToolNameResolver();
 
 interface TokenTagProps {
   total: string;
@@ -56,19 +60,33 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
   const canUseTool = useModelSupportToolUse(model, provider);
   const pluginIds = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
-  const toolsString = useToolStore((s) => {
+  const toolsString = useToolStore(() => {
     const toolsEngine = createAgentToolsEngine({ model, provider });
 
-    const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({
+    const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
       model,
       provider,
       toolIds: pluginIds,
     });
     const schemaNumber = tools?.map((i) => JSON.stringify(i)).join('') || '';
 
-    const pluginSystemRoles = toolSelectors.enabledSystemRoles(enabledToolIds)(s);
+    // Generate plugin system roles from enabledManifests
+    const toolsSystemRole =
+      enabledManifests.length > 0
+        ? pluginPrompts({
+            tools: enabledManifests.map((manifest) => ({
+              apis: manifest.api.map((api) => ({
+                desc: api.description,
+                name: toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
+              })),
+              identifier: manifest.identifier,
+              name: pluginHelpers.getPluginTitle(manifest.meta) || manifest.identifier,
+              systemRole: manifest.systemRole,
+            })),
+          })
+        : '';
 
-    return pluginSystemRoles + schemaNumber;
+    return toolsSystemRole + schemaNumber;
   });
 
   const toolsToken = useTokenCount(canUseTool ? toolsString : '');

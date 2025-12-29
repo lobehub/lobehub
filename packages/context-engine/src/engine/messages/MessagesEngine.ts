@@ -197,14 +197,13 @@ export class MessagesEngine {
       }),
 
       // 8. Tool system role injection (conditionally added)
-      ...(toolsConfig?.tools && toolsConfig.tools.length > 0
+      ...(toolsConfig?.manifests && toolsConfig.manifests.length > 0
         ? [
             new ToolSystemRoleProvider({
-              getToolSystemRoles: toolsConfig.getToolSystemRoles || (() => undefined),
               isCanUseFC: capabilities?.isCanUseFC || (() => true),
+              manifests: toolsConfig.manifests,
               model,
               provider,
-              tools: toolsConfig.tools,
             }),
           ]
         : []),

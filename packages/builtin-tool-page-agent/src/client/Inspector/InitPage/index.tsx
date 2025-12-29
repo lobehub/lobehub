@@ -9,7 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import { shinyTextStyles } from '@/styles';
 
-import type { InitDocumentArgs, InitDocumentState } from '../../../types';
+import type { InitDocumentArgs } from '@lobechat/editor-runtime';
+
+import type { InitDocumentState } from '../../../types';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

@@ -982,6 +982,18 @@ describe('ToolsEngine', () => {
               },
             },
           ],
+          enabledManifests: [
+            {
+              identifier: 'plugin-1',
+              api: [{ name: 'api-1', description: 'API 1', parameters: {} }],
+              meta: {
+                title: 'Plugin 1',
+                description: 'Plugin 1 description',
+                avatar: '🔧',
+              },
+              type: 'default',
+            },
+          ],
           enabledToolIds: ['plugin-1'],
           filteredTools: [
             { id: 'plugin-2', reason: 'disabled' },

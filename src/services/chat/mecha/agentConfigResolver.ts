@@ -1,6 +1,10 @@
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { type LobeAgentChatConfig, type LobeAgentConfig, type MessageMapScope } from '@lobechat/types';
+import {
+  type LobeAgentChatConfig,
+  type LobeAgentConfig,
+  type MessageMapScope,
+} from '@lobechat/types';
 import { produce } from 'immer';
 
 import { getAgentStoreState } from '@/store/agent';
@@ -95,13 +99,6 @@ export interface ResolvedAgentConfig {
 export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
   const { agentId, model, documentContent, plugins, targetAgentConfig } = ctx;
 
-  // Debug logging for page editor
-  console.log('[agentConfigResolver] Resolving agent config:', {
-    agentId,
-    plugins,
-    scope: ctx.scope,
-  });
-
   const agentStoreState = getAgentStoreState();
 
   // Get base config from store
@@ -114,10 +111,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   // Check if this is a builtin agent
   const slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
 
-  console.log('[agentConfigResolver] Agent type check:', { isBuiltin: !!slug, slug });
-
   if (!slug) {
-    console.log('[agentConfigResolver] Taking CUSTOM AGENT branch');
     // Regular agent - use provided plugins if available, fallback to agent's plugins
     const finalPlugins = plugins && plugins.length > 0 ? plugins : basePlugins;
 
@@ -129,8 +123,6 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     // When custom agent is used in page editor (scope === 'page'),
     // automatically inject page-agent tools and system role
     if (ctx.scope === 'page') {
-      console.log('[agentConfigResolver] Page scope detected! Injecting page-agent tools...');
-
       // 1. Inject page-agent tool if not already present
       const pageAgentPlugins = finalPlugins.includes(PageAgentIdentifier)
         ? finalPlugins
@@ -141,9 +133,12 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
 
       // 3. Merge system roles: custom agent's role + page-agent role
-      const mergedSystemRole = agentConfig.systemRole
-        ? `${agentConfig.systemRole}\n\n${pageAgentSystemRole}`
-        : pageAgentSystemRole;
+      // Only append page-agent role if it exists
+      const mergedSystemRole = pageAgentSystemRole
+        ? agentConfig.systemRole
+          ? `${agentConfig.systemRole}\n\n${pageAgentSystemRole}`
+          : pageAgentSystemRole
+        : agentConfig.systemRole || '';
 
       finalAgentConfig = {
         ...finalAgentConfig,
@@ -155,12 +150,6 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
         ...chatConfig,
         enableHistoryCount: false, // Disable history truncation for full document context
       };
-
-      console.log('[agentConfigResolver] Page-agent injection complete:', {
-        chatConfig: finalChatConfig,
-        plugins: pageAgentPlugins,
-        systemRoleLength: mergedSystemRole.length,
-      });
 
       return {
         agentConfig: finalAgentConfig,
@@ -178,8 +167,6 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       plugins: finalPlugins,
     };
   }
-
-  console.log('[agentConfigResolver] Taking BUILTIN AGENT branch, slug:', slug);
 
   // Build groupSupervisorContext if this is a group-supervisor agent
   let groupSupervisorContext;
@@ -227,8 +214,6 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   // When a builtin agent (other than page-agent itself) is used in page editor,
   // inject page-agent tools and system role
   if (ctx.scope === 'page' && slug !== BUILTIN_AGENT_SLUGS.pageAgent) {
-    console.log('[agentConfigResolver] Builtin agent in page scope! Injecting page-agent tools...');
-
     // 1. Inject page-agent tool if not already present
     if (!finalPlugins.includes(PageAgentIdentifier)) {
       finalPlugins = [PageAgentIdentifier, ...finalPlugins];
@@ -250,12 +235,6 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       ...resolvedChatConfig,
       enableHistoryCount: false,
     };
-
-    console.log('[agentConfigResolver] Page-agent injection complete for builtin agent:', {
-      plugins: finalPlugins,
-      slug,
-      systemRoleLength: resolvedSystemRole.length,
-    });
   }
 
   // Merge runtime systemRole into agent config

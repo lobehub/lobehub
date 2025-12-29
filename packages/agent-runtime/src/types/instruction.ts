@@ -35,6 +35,8 @@ export interface AgentRuntimeContext {
     | 'llm_result'
     | 'tool_result'
     | 'tools_batch_result'
+    | 'task_result'
+    | 'tasks_batch_result'
     | 'human_response'
     | 'human_approved_tool'
     | 'human_abort'
@@ -225,6 +227,88 @@ export interface AgentInstructionCompressContext {
 }
 
 /**
+ * Task definition for exec_tasks instruction
+ */
+export interface ExecTaskItem {
+  /** Brief description of what this task does (shown in UI) */
+  description: string;
+  /** Whether to inherit context messages from parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the task execution */
+  instruction: string;
+  /** Timeout in milliseconds (optional, default 30 minutes) */
+  timeout?: number;
+}
+
+/**
+ * Instruction to execute a single async task
+ */
+export interface AgentInstructionExecTask {
+  payload: {
+    /** Parent message ID (tool message that triggered the task) */
+    parentMessageId: string;
+    /** Task to execute */
+    task: ExecTaskItem;
+  };
+  type: 'exec_task';
+}
+
+/**
+ * Instruction to execute multiple async tasks in parallel
+ */
+export interface AgentInstructionExecTasks {
+  payload: {
+    /** Parent message ID (tool message that triggered the tasks) */
+    parentMessageId: string;
+    /** Array of tasks to execute */
+    tasks: ExecTaskItem[];
+  };
+  type: 'exec_tasks';
+}
+
+/**
+ * Payload for task_result phase (single task)
+ */
+export interface TaskResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Result from executed task */
+  result: {
+    /** Error message if task failed */
+    error?: string;
+    /** Task result content */
+    result?: string;
+    /** Whether the task completed successfully */
+    success: boolean;
+    /** Task message ID */
+    taskMessageId: string;
+    /** Thread ID where the task was executed */
+    threadId: string;
+  };
+}
+
+/**
+ * Payload for tasks_batch_result phase (multiple tasks)
+ */
+export interface TasksBatchResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Results from executed tasks */
+  results: Array<{
+    /** Error message if task failed */
+    error?: string;
+    /** Task result content */
+    result?: string;
+    /** Whether the task completed successfully */
+    success: boolean;
+    /** Task message ID */
+    taskMessageId: string;
+    /** Thread ID where the task was executed */
+    threadId: string;
+  }>;
+}
+
+/**
  * A serializable instruction object that the "Agent" (Brain) returns
  * to the "AgentRuntime" (Engine) to execute.
  */
@@ -232,6 +316,8 @@ export type AgentInstruction =
   | AgentInstructionCallLlm
   | AgentInstructionCallTool
   | AgentInstructionCallToolsBatch
+  | AgentInstructionExecTask
+  | AgentInstructionExecTasks
   | AgentInstructionRequestHumanPrompt
   | AgentInstructionRequestHumanSelect
   | AgentInstructionRequestHumanApprove

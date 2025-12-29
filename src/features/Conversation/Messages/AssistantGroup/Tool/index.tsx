@@ -7,6 +7,7 @@ import { memo, useEffect, useState } from 'react';
 import Actions from '@/features/Conversation/Messages/AssistantGroup/Tool/Actions';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
+import { getBuiltinRender } from '@/tools/renders';
 import { getBuiltinStreaming } from '@/tools/streamings';
 
 import Inspectors from './Inspector';
@@ -79,6 +80,10 @@ const Tool = memo<GroupToolProps>(
     const hasStreamingRenderer = !!getBuiltinStreaming(identifier, apiName);
     const forceShowStreamingRender = isArgumentsStreaming && hasStreamingRenderer;
 
+    // Check if tool has custom render - if not, disable expand
+    // Custom render exists when: builtin render exists OR plugin type is not 'default'
+    const hasCustomRender = !!getBuiltinRender(identifier, apiName) || (!!type && type !== 'default');
+
     // Wrap handleExpand to prevent collapsing when alwaysExpand is set
     const wrappedHandleExpand = (expand?: boolean) => {
       // Block collapse action when alwaysExpand is set
@@ -117,6 +122,7 @@ const Tool = memo<GroupToolProps>(
             showPluginRender={showPluginRender}
           />
         }
+        allowExpand={hasCustomRender}
         itemKey={id}
         paddingBlock={4}
         paddingInline={4}

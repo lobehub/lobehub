@@ -1,4 +1,6 @@
 import * as builtinAgents from '@lobechat/builtin-agents';
+import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { NotebookIdentifier } from '@lobechat/builtin-tool-notebook';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -404,6 +406,42 @@ describe('resolveAgentConfig', () => {
 
       expect(result.chatConfig).toEqual(mockChatConfig);
     });
+
+    describe('inbox agent', () => {
+      beforeEach(() => {
+        vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => 'inbox');
+      });
+
+      it('should include GTD and Notebook tools in plugins', () => {
+        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+          plugins: [GTDIdentifier, NotebookIdentifier],
+          systemRole: 'Inbox system role',
+        });
+
+        const result = resolveAgentConfig({ agentId: 'inbox-agent' });
+
+        expect(result.plugins).toContain(GTDIdentifier);
+        expect(result.plugins).toContain(NotebookIdentifier);
+        expect(result.isBuiltinAgent).toBe(true);
+        expect(result.slug).toBe('inbox');
+      });
+
+      it('should preserve user plugins while including GTD and Notebook', () => {
+        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+          plugins: [GTDIdentifier, NotebookIdentifier, 'user-plugin'],
+          systemRole: 'Inbox system role',
+        });
+
+        const result = resolveAgentConfig({
+          agentId: 'inbox-agent',
+          plugins: ['user-plugin'],
+        });
+
+        expect(result.plugins).toContain(GTDIdentifier);
+        expect(result.plugins).toContain(NotebookIdentifier);
+        expect(result.plugins).toContain('user-plugin');
+      });
+    });
   });
 
   describe('Page Editor Integration (scope: page)', () => {
@@ -467,7 +505,9 @@ describe('resolveAgentConfig', () => {
         scope: 'page',
       });
 
-      expect(result.agentConfig.systemRole).toBe('Page agent system prompt with XML instructions...');
+      expect(result.agentConfig.systemRole).toBe(
+        'Page agent system prompt with XML instructions...',
+      );
     });
 
     it('should not inject page-agent for non-page scope', () => {

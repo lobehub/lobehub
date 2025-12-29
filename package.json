@@ -185,6 +185,7 @@
     "@lobechat/database": "workspace:*",
     "@lobechat/desktop-bridge": "workspace:*",
     "@lobechat/edge-config": "workspace:*",
+    "@lobechat/editor-runtime": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/fetch-sse": "workspace:*",

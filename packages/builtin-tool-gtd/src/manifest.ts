@@ -37,12 +37,13 @@ export const GTDManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Update an existing plan document. Use this to modify the goal, description, context, or mark the plan as completed.',
+        'Update an existing plan document. Only use this when the goal fundamentally changes. Plans should remain stable once created - do not update plans just because details change.',
       name: GTDApiName.updatePlan,
       parameters: {
         properties: {
           planId: {
-            description: 'The ID of the plan to update.',
+            description:
+              'The document ID of the plan to update (e.g., "docs_xxx"). This ID is returned in the createPlan response. Do NOT use the goal text as planId.',
             type: 'string',
           },
           goal: {
@@ -57,10 +58,6 @@ export const GTDManifest: BuiltinToolManifest = {
             description: 'Updated detailed context.',
             type: 'string',
           },
-          completed: {
-            description: 'Mark the plan as completed.',
-            type: 'boolean',
-          },
         },
         required: ['planId'],
         type: 'object',
@@ -71,8 +68,7 @@ export const GTDManifest: BuiltinToolManifest = {
     {
       description: 'Create new todo items. Pass an array of text strings.',
       name: GTDApiName.createTodos,
-      humanIntervention: 'always',
-      renderDisplayControl: 'expand',
+      humanIntervention: 'required',
       parameters: {
         properties: {
           adds: {
@@ -176,6 +172,74 @@ export const GTDManifest: BuiltinToolManifest = {
           },
         },
         required: ['mode'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Async Tasks ====================
+    {
+      description:
+        'Execute a single long-running async task. The task runs in an isolated context and can take significant time to complete. Use this for a single complex operation that requires extended processing.',
+      name: GTDApiName.execTask,
+      parameters: {
+        properties: {
+          description: {
+            description: 'Brief description of what this task does (shown in UI).',
+            type: 'string',
+          },
+          instruction: {
+            description: 'Detailed instruction/prompt for the task execution.',
+            type: 'string',
+          },
+          inheritMessages: {
+            description:
+              'Whether to inherit context messages from the parent conversation. Default is false.',
+            type: 'boolean',
+          },
+          timeout: {
+            description: 'Optional timeout in milliseconds. Default is 30 minutes.',
+            type: 'number',
+          },
+        },
+        required: ['description', 'instruction'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Execute one or more long-running async tasks. Each task runs in an isolated context and can take significant time to complete. Use this for complex operations that require extended processing.',
+      name: GTDApiName.execTasks,
+      parameters: {
+        properties: {
+          tasks: {
+            description: 'Array of tasks to execute asynchronously.',
+            items: {
+              properties: {
+                description: {
+                  description: 'Brief description of what this task does (shown in UI).',
+                  type: 'string',
+                },
+                instruction: {
+                  description: 'Detailed instruction/prompt for the task execution.',
+                  type: 'string',
+                },
+                inheritMessages: {
+                  description:
+                    'Whether to inherit context messages from the parent conversation. Default is false.',
+                  type: 'boolean',
+                },
+                timeout: {
+                  description: 'Optional timeout in milliseconds. Default is 30 minutes.',
+                  type: 'number',
+                },
+              },
+              required: ['description', 'instruction'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+        },
+        required: ['tasks'],
         type: 'object',
       },
     },

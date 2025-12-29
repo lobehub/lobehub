@@ -1,3 +1,4 @@
+import { GTDManifest, GTDStreamings } from '@lobechat/builtin-tool-gtd/client';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { type BuiltinStreaming } from '@lobechat/types';
 
@@ -15,6 +16,7 @@ import { LocalSystemStreamings } from './local-system/Streaming';
  */
 const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
   [CodeInterpreterIdentifier]: CodeInterpreterStreamings as Record<string, BuiltinStreaming>,
+  [GTDManifest.identifier]: GTDStreamings as Record<string, BuiltinStreaming>,
   [LocalSystemManifest.identifier]: LocalSystemStreamings as Record<string, BuiltinStreaming>,
 };
 

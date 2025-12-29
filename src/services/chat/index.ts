@@ -18,7 +18,10 @@ import {
   TraceTagMap,
   type UIChatMessage,
 } from '@lobechat/types';
-import { type PluginRequestPayload, createHeadersWithPluginSettings } from '@lobehub/chat-plugin-sdk';
+import {
+  type PluginRequestPayload,
+  createHeadersWithPluginSettings,
+} from '@lobehub/chat-plugin-sdk';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
@@ -98,7 +101,14 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
 
 class ChatService {
   createAssistantMessage = async (
-    { plugins: enabledPlugins, messages, agentId, groupId, scope, ...params }: GetChatCompletionPayload,
+    {
+      plugins: enabledPlugins,
+      messages,
+      agentId,
+      groupId,
+      scope,
+      ...params
+    }: GetChatCompletionPayload,
     options?: FetchOptions,
   ) => {
     const payload = merge(
@@ -138,7 +148,7 @@ class ChatService {
       provider: payload.provider!,
     });
 
-    const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({
+    const { tools, enabledToolIds, enabledManifests } = toolsEngine.generateToolsDetailed({
       model: payload.model,
       provider: payload.provider!,
       toolIds: pluginIds,
@@ -228,6 +238,7 @@ class ChatService {
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
+      manifests: enabledManifests,
       messages,
       model: payload.model,
       provider: payload.provider!,
@@ -456,18 +467,20 @@ class ChatService {
     onLoadingChange?.(true);
 
     try {
+      // Use simple tools engine without complex search logic
+      const toolsEngine = createToolsEngine();
+      const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
+        model: params.model!,
+        provider: params.provider!,
+        toolIds: params.plugins,
+      });
+
       const llmMessages = await contextEngineering({
+        manifests: enabledManifests,
         messages: params.messages as any,
         model: params.model!,
         provider: params.provider!,
         tools: params.plugins,
-      });
-      // Use simple tools engine without complex search logic
-      const toolsEngine = createToolsEngine();
-      const tools = toolsEngine.generateTools({
-        model: params.model!,
-        provider: params.provider!,
-        toolIds: params.plugins,
       });
 
       // remove plugins

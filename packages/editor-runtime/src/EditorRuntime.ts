@@ -14,17 +14,20 @@ import type {
   ModifyOperationResult,
   ReplaceTextArgs,
   ReplaceTextRuntimeResult,
-} from '../types';
+} from './types';
 
-const log = debug('page:page-agent');
+const log = debug('lobe:editor-runtime');
 
 /**
- * Page Agent Execution Runtime
- * Handles the execution logic for all Page Agent (Document) APIs
- *
- * See `packages/builtin-agents/src/agents/page-agent/README.md` for more detailsd
+ * Editor Execution Runtime
+ * Handles the execution logic for editor operations including:
+ * - Document initialization
+ * - Title management
+ * - Content retrieval
+ * - Node modifications (insert, modify, remove)
+ * - Text replacement
  */
-export class PageAgentExecutionRuntime {
+export class EditorRuntime {
   private editor: IEditor | null = null;
   private titleSetter: ((title: string) => void) | null = null;
   private titleGetter: (() => string) | null = null;

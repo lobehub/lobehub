@@ -9,7 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import { shinyTextStyles } from '@/styles';
 
-import type { ModifyNodesArgs, ModifyNodesState } from '../../../types';
+import type { ModifyNodesArgs } from '@lobechat/editor-runtime';
+
+import type { ModifyNodesState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   insert: css`
