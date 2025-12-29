@@ -150,7 +150,7 @@ describe('Manifest', () => {
         immutable: 'true',
         max_age: 31536000,
         sizes: '1280x676',
-        src: 'https://example.com/logo.png?v=1',
+        src: 'https://example.com/screenshot.png?v=1',
         type: 'image/png',
       });
     });

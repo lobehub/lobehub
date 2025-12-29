@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
-import { mutate } from 'swr';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mutate } from '@/libs/swr';
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
 import { useImageStore } from '@/store/image';
@@ -25,10 +25,10 @@ vi.mock('@/services/generationBatch', () => ({
   },
 }));
 
-vi.mock('swr', async () => {
-  const actual = await vi.importActual('swr');
+vi.mock('@/libs/swr', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/libs/swr')>();
   return {
-    ...(actual as any),
+    ...actual,
     mutate: vi.fn(),
   };
 });

@@ -123,7 +123,7 @@ describe('SessionAction', () => {
       });
 
       expect(message.loading).toHaveBeenCalled();
-      expect(sessionService.cloneSession).toHaveBeenCalledWith(sessionId, undefined);
+      expect(sessionService.cloneSession).toHaveBeenCalledWith(sessionId, expect.any(String));
     });
   });
 

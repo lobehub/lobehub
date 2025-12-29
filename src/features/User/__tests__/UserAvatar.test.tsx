@@ -66,7 +66,8 @@ describe('UserAvatar', () => {
       });
 
       render(<UserAvatar />);
-      expect(screen.getByAltText('testuser')).toHaveAttribute('src', DEFAULT_USER_AVATAR_URL);
+      // When user has no avatar url, <Avatar /> falls back to initials rendering (not an <img />)
+      expect(screen.getByText('TE')).toBeInTheDocument();
     });
 
     it('should show LobeChat and default avatar when the user is not logged in and enable auth', () => {

@@ -237,9 +237,11 @@ describe('serverMessagesEngine', () => {
         },
       });
 
-      // Should have user memory in system message
-      const systemMessages = result.filter((m) => m.role === 'system');
-      expect(systemMessages.length).toBeGreaterThan(0);
+      // User memories are injected as a consolidated user message before the first user message
+      // Note: meta/id fields are removed by the engine cleanup step, so assert via content.
+      const injection = result.find((m: any) => m.role === 'user' && String(m.content).includes('<user_memory>'));
+      expect(injection).toBeDefined();
+      expect(injection!.role).toBe('user');
     });
 
     it('should skip user memory when memories is undefined', async () => {

@@ -18,12 +18,23 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('antd-style', () => ({
-  useTheme: () => ({
-    colorTextSecondary: '#999',
-  }),
-  createStyles: vi.fn(() => () => ({ styles: {} })),
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd-style')>();
+
+  return {
+    ...actual,
+    createStaticStyles: vi.fn((fn: any) =>
+      fn({
+        css: () => '',
+        cssVar: {},
+      }),
+    ),
+    createStyles: vi.fn(() => () => ({ styles: {} })),
+    useTheme: () => ({
+      colorTextSecondary: '#999',
+    }),
+  };
+});
 
 vi.mock('@/components/FormInput', () => ({
   FormInput: vi.fn(({ value, onChange, ...props }) => (
@@ -47,6 +58,13 @@ vi.mock('@/components/FormInput', () => ({
 
 vi.mock('@/components/KeyValueEditor', () => ({
   default: vi.fn(() => <div data-testid="key-value-editor">Key-Value Editor</div>),
+}));
+
+vi.mock('@lobehub/icons', () => ({
+  ComfyUI: {
+    Combine: vi.fn(() => <div data-testid="comfyui-icon">ComfyUI Icon</div>),
+  },
+  ProviderIcon: vi.fn(() => <div data-testid="provider-icon">Provider Icon</div>),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -75,16 +93,6 @@ vi.mock('@lobehub/ui', () => ({
     </button>
   )),
   ProviderIcon: vi.fn(() => <div data-testid="provider-icon">Provider Icon</div>),
-}));
-
-vi.mock('@lobehub/icons', () => ({
-  ComfyUI: {
-    Combine: vi.fn(() => <div data-testid="comfyui-icon">ComfyUI Icon</div>),
-  },
-  ProviderIcon: vi.fn(() => <div data-testid="provider-icon">Provider Icon</div>),
-}));
-
-vi.mock('@lobehub/ui', () => ({
   Center: vi.fn(({ children, ...props }) => (
     <div data-testid="center" {...props}>
       {children}
