@@ -38,31 +38,33 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
           {t('providerModels.list.enabled')}
         </Text>
         {!isEmpty && (
-          <Flexbox horizontal>
-            <ActionIcon
-              icon={ToggleLeft}
-              loading={batchLoading}
-              onClick={async () => {
-                setBatchLoading(true);
-                await batchToggleAiModels(
-                  enabledModels.map((i) => i.id),
-                  false,
-                );
-                setBatchLoading(false);
-              }}
-              size={'small'}
-              title={t('providerModels.list.enabledActions.disableAll')}
-            />
+          <TooltipGroup>
+            <Flexbox horizontal>
+              <ActionIcon
+                icon={ToggleLeft}
+                loading={batchLoading}
+                onClick={async () => {
+                  setBatchLoading(true);
+                  await batchToggleAiModels(
+                    enabledModels.map((i) => i.id),
+                    false,
+                  );
+                  setBatchLoading(false);
+                }}
+                size={'small'}
+                title={t('providerModels.list.enabledActions.disableAll')}
+              />
 
-            <ActionIcon
-              icon={ArrowDownUpIcon}
-              onClick={() => {
-                setOpen(true);
-              }}
-              size={'small'}
-              title={t('providerModels.list.enabledActions.sort')}
-            />
-          </Flexbox>
+              <ActionIcon
+                icon={ArrowDownUpIcon}
+                onClick={() => {
+                  setOpen(true);
+                }}
+                size={'small'}
+                title={t('providerModels.list.enabledActions.sort')}
+              />
+            </Flexbox>
+          </TooltipGroup>
         )}
         {open && (
           <SortModelModal

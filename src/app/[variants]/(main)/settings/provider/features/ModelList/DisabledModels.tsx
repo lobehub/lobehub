@@ -1,12 +1,12 @@
-import { ActionIcon, Button, Dropdown, Flexbox, Icon, Text, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Dropdown, Flexbox, Icon, Text, TooltipGroup } from '@lobehub/ui';
 import type { ItemType } from 'antd/es/menu/interface';
-import isEqual from 'fast-deep-equal';
-import { ArrowDownUpIcon, ChevronDown, LucideCheck } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { ArrowDownUpIcon, LucideCheck } from 'lucide-react';
+import type { AiProviderModelListItem } from 'model-bank';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWRInfinite from 'swr/infinite';
 
-import { useAiInfraStore } from '@/store/aiInfra';
-import { aiModelSelectors } from '@/store/aiInfra/selectors';
+import { aiModelService } from '@/services/aiModel';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -14,6 +14,7 @@ import ModelItem from './ModelItem';
 
 interface DisabledModelsProps {
   activeTab: string;
+  providerId: string;
 }
 
 // Sort type enumeration
@@ -25,10 +26,11 @@ enum SortType {
   ReleasedAtDesc = 'releasedAtDesc',
 }
 
-const DisabledModels = memo<DisabledModelsProps>(({ activeTab }) => {
-  const { t } = useTranslation('modelProvider');
+const PAGE_SIZE = 30;
+const FETCH_DISABLED_MODELS_PAGE_KEY = 'FETCH_DISABLED_MODELS_PAGE';
 
-  const [showMore, setShowMore] = useState(false);
+const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => {
+  const { t } = useTranslation(['modelProvider', 'common']);
 
   const [sortType, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.disabledModelsSortType(s),
@@ -42,13 +44,77 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab }) => {
     [updateSystemStatus],
   );
 
-  const disabledModels = useAiInfraStore(aiModelSelectors.disabledAiProviderModelList, isEqual);
+  const getKey = useCallback(
+    (pageIndex: number, previousPageData: AiProviderModelListItem[] | null) => {
+      if (!providerId) return null;
+      if (previousPageData && previousPageData.length < PAGE_SIZE) return null;
+
+      const offset = pageIndex * PAGE_SIZE;
+      return [FETCH_DISABLED_MODELS_PAGE_KEY, providerId, offset] as const;
+    },
+    [providerId],
+  );
+
+  const {
+    data: pages,
+    error,
+    isValidating,
+    setSize,
+    size,
+  } = useSWRInfinite<AiProviderModelListItem[]>(getKey, async ([, id, offset]) => {
+    return aiModelService.getAiProviderModelList(id as string, {
+      enabled: false,
+      limit: PAGE_SIZE,
+      offset: offset as number,
+    });
+  });
+
+  const pagedDisabledModels = useMemo(() => (pages ? pages.flat() : []), [pages]);
+  const isInitialLoading = !pages && !error;
+  const isReachingEnd = !!pages && pages.length > 0 && pages.at(-1).length < PAGE_SIZE;
+  const isLoadingMore = isValidating && size > 0 && !!pages && pages.length < size;
+
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const triggerLoadMore = useCallback(() => {
+    if (isReachingEnd) return;
+    if (isValidating) return;
+    setSize(size + 1);
+  }, [isReachingEnd, isValidating, setSize, size]);
+
+  useEffect(() => {
+    if (isReachingEnd) return;
+    if (!loadMoreRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          triggerLoadMore();
+        });
+      },
+      {
+        rootMargin: '200px',
+        threshold: 0.01,
+      },
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isReachingEnd, triggerLoadMore]);
+
+  const sourceDisabledModels = pagedDisabledModels;
+
+  const shouldRenderSection = isInitialLoading || sourceDisabledModels.length > 0;
 
   // Filter models based on active tab
   const filteredDisabledModels = useMemo(() => {
-    if (activeTab === 'all') return disabledModels;
-    return disabledModels.filter((model) => model.type === activeTab);
-  }, [disabledModels, activeTab]);
+    if (activeTab === 'all') return sourceDisabledModels;
+    return sourceDisabledModels.filter((model) => model.type === activeTab);
+  }, [activeTab, sourceDisabledModels]);
 
   // Sort models based on sort type
   const sortedDisabledModels = useMemo(() => {
@@ -101,16 +167,16 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab }) => {
     }
   }, [filteredDisabledModels, sortType]);
 
-  const displayModels = showMore ? sortedDisabledModels : sortedDisabledModels.slice(0, 10);
+  const displayModels = sortedDisabledModels;
 
   return (
-    filteredDisabledModels.length > 0 && (
+    shouldRenderSection && (
       <Flexbox>
         <Flexbox align="center" horizontal justify="space-between">
           <Text style={{ fontSize: 12, marginTop: 8 }} type={'secondary'}>
             {t('providerModels.list.disabled')}
           </Text>
-          {filteredDisabledModels.length > 1 && (
+          {sourceDisabledModels.length > 1 && (
             <Dropdown
               menu={{
                 items: [
@@ -174,18 +240,15 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab }) => {
             <ModelItem {...item} key={item.id} />
           ))}
         </TooltipGroup>
-        {!showMore && sortedDisabledModels.length > 10 && (
-          <Button
-            block
-            icon={ChevronDown}
-            onClick={() => {
-              setShowMore(true);
-            }}
-            size={'small'}
-          >
-            {t('providerModels.list.disabledActions.showMore')}
-          </Button>
-        )}
+
+        <Flexbox align="center" horizontal justify="center" paddingBlock={8}>
+          <div ref={loadMoreRef} style={{ height: 1, width: '0' }} />
+          {(isInitialLoading || isLoadingMore) && (
+            <Text style={{ fontSize: 12, marginTop: 4 }} type={'secondary'}>
+              {t('common:loading')}
+            </Text>
+          )}
+        </Flexbox>
       </Flexbox>
     )
   );

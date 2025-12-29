@@ -280,7 +280,14 @@ export class AiInfraRepos {
     };
   };
 
-  getAiProviderModelList = async (providerId: string) => {
+  getAiProviderModelList = async (
+    providerId: string,
+    options?: {
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+  ) => {
     const aiModels = await this.aiModelModel.getModelListByProviderId(providerId);
 
     const defaultModels: AiProviderModelListItem[] =
@@ -288,7 +295,22 @@ export class AiInfraRepos {
     // Not modifying search settings here doesn't affect usage, but done for data consistency on get
     const mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
 
-    return mergedModel.map((m) => injectSearchSettings(providerId, m));
+    let list = mergedModel.map((m) =>
+      injectSearchSettings(providerId, m),
+    ) as AiProviderModelListItem[];
+
+    if (typeof options?.enabled === 'boolean') {
+      list = list.filter((m) => m.enabled === options.enabled);
+    }
+
+    if (typeof options?.offset === 'number' || typeof options?.limit === 'number') {
+      const offset = Math.max(0, options?.offset ?? 0);
+      const limit = options?.limit;
+      if (typeof limit === 'number') return list.slice(offset, offset + Math.max(0, limit));
+      return list.slice(offset);
+    }
+
+    return list;
   };
 
   /**

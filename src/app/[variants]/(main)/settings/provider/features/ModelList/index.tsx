@@ -33,7 +33,8 @@ interface ContentProps {
 }
 
 const Content = memo<ContentProps>(({ id }) => {
-  const { t } = useTranslation('modelProvider');
+  // preload common namespace to avoid Suspense remount when child components start using it (e.g. infinite scroll loading text)
+  const { t } = useTranslation(['modelProvider', 'common']);
   const [activeTab, setActiveTab] = useState('all');
 
   const [isSearching, isEmpty, useFetchAiProviderModels] = useAiInfraStore((s) => [
@@ -135,7 +136,7 @@ const Content = memo<ContentProps>(({ id }) => {
         style={{ marginBottom: 12, marginLeft: -6 }}
       />
       <EnabledModelList activeTab={currentActiveTab} />
-      <DisabledModels activeTab={currentActiveTab} />
+      <DisabledModels activeTab={currentActiveTab} providerId={id} />
     </Flexbox>
   );
 });
