@@ -723,14 +723,15 @@ export class MemoryExtractionExecutor {
       const res = await userMemoryModel.addIdentityEntry({
         base: {
           capturedAt: job.sourceUpdatedAt,
-          details: action.withIdentity.description,
+          details: action.details,
           detailsVector1024: detailsVector ?? undefined,
           memoryCategory: 'people',
           memoryLayer: LayersEnum.Identity,
           memoryType: TypesEnum.People,
           metadata,
-          summary: action.withIdentity.description,
+          summary: action.summary,
           summaryVector1024: summaryVector ?? undefined,
+          title: action.title,
         },
         identity: {
           capturedAt: job.sourceUpdatedAt,

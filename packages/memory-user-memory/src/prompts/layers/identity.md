@@ -23,6 +23,9 @@ Extract **ALL** identity layer information from the conversation. Capture
 personal background, roles, relationships, demographics, self-concept, and the
 small but meaningful signals people often overlook:
 
+- Craft `title` as a concise honorific-style phrase that pairs strength/impact with domain or milestone (e.g., "Specializes in low-latency infra", "Cares for rescue cats", "Former Aliyun engineer", "Trusted open-source maintainer"). Avoid bare job titles.
+- Only set `role` when the conversation states one (e.g., "platform engineer", "caregiver"); do not invent defaults. Keep it neutral and aligned to the evidence.
+
 - Highlights and recognition that feel meaningful or surprising (e.g., community
   support for an open-source maintainer, a sponsor, a compliment from a mentor)
 - Achievements and milestones that shape how the user sees themselves (career,

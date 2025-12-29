@@ -47,14 +47,18 @@ export const AddIdentityActionSchema = z
     memoryType: MemoryTypeSchema.describe('Memory type'),
     summary: z.string().describe('Concise overview of this specific memory'),
     tags: z.array(z.string()).describe('Model generated tags that summarize the identity facets'),
-    title: z.string().describe('Brief descriptive title'),
+    title: z
+      .string()
+      .describe('Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., "Trusted open-source maintainer", "Specializes in low-latency infra", "Former Aliyun engineer", "Cares for rescue cats"'),
     withIdentity: z
       .object({
         description: z.string(),
         episodicDate: z.union([z.string(), z.null()]),
         extractedLabels: z.array(z.string()),
         relationship: RelationshipEnum,
-        role: z.string(),
+        role: z
+          .string()
+          .describe('Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep neutral and only use when evidence exists'),
         scoreConfidence: z.number(),
         sourceEvidence: z.union([z.string(), z.null()]),
         type: IdentityTypeEnum,
@@ -90,7 +94,7 @@ export const UpdateIdentityActionSchema = z
       title: z
         .string()
         .nullable()
-        .describe('Brief descriptive title, use null for omitting the field'),
+        .describe('Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., "Trusted open-source maintainer", "Specializes in low-latency infra", "Former Aliyun engineer", "Cares for rescue cats"; use null for omitting the field'),
       withIdentity: z
         .object({
           description: z.string().nullable(),
@@ -101,7 +105,10 @@ export const UpdateIdentityActionSchema = z
             .string()
             .describe(`Possible values: ${RELATIONSHIP_ENUM.join(' | ')}`)
             .nullable(),
-          role: z.string().nullable(),
+          role: z
+            .string()
+            .describe('Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep existing when not updated; use null for omitting the field')
+            .nullable(),
           scoreConfidence: z.number().nullable(),
           sourceEvidence: z.string().nullable(),
           // TODO: OpenAI requires `required` fields to be always present, while enum fields cannot be null
