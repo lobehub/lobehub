@@ -11,7 +11,7 @@ import {
   MessageSquareTextIcon,
   MicIcon,
 } from 'lucide-react';
-import { Suspense, memo, useMemo, useState } from 'react';
+import { Suspense, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
@@ -146,6 +146,10 @@ const ModelList = memo<ModelListProps>(
   ({ id, showModelFetcher, sdkType, showAddNewModel, showDeployName, modelEditable = true }) => {
     const mobile = useIsMobile();
     const theme = useTheme();
+
+    useEffect(() => {
+      useAiInfraStore.setState({ modelSearchKeyword: '' });
+    }, [id]);
 
     return (
       <ProviderSettingsContext

@@ -121,6 +121,111 @@ const googleChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    contextWindowTokens: 1_048_576,
+    description: 'Latest release of Gemini Pro',
+    displayName: 'Gemini Pro Latest',
+    id: 'gemini-pro-latest',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.31, upTo: 200_000 },
+            { rate: 0.625, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.25, upTo: 200_000 },
+            { rate: 2.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 10, upTo: 200_000 },
+            { rate: 15, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    settings: {
+      extendParams: ['thinkingBudget', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description: 'Latest release of Gemini Flash',
+    displayName: 'Gemini Flash Latest',
+    id: 'gemini-flash-latest',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['thinkingBudget', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description: 'Latest release of Gemini Flash-Lite',
+    displayName: 'Gemini Flash-Lite Latest',
+    id: 'gemini-flash-lite-latest',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['thinkingBudget', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
       'Gemini 3 Pro 是 全球最佳的多模态理解模型，也是 Google 迄今为止最强大的智能体和氛围编程模型，提供更丰富的视觉效果和更深层次的交互性，所有这些都建立在最先进的推理能力基础之上。',
@@ -405,6 +510,34 @@ const googleChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    contextWindowTokens: 1_048_576,
+    description: 'Preview release (September 25th, 2025) of Gemini 2.5 Flash',
+    displayName: 'Gemini 2.5 Flash Preview Sep 2025',
+    id: 'gemini-2.5-flash-preview-09-2025',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-25',
+    settings: {
+      extendParams: ['thinkingBudget', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
     contextWindowTokens: 1_048_576 + 65_536,
     description: 'Preview release (Septempber 25th, 2025) of Gemini 2.5 Flash',
     displayName: 'Gemini 2.5 Flash Preview Sep 2025',
@@ -514,6 +647,34 @@ const googleChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    contextWindowTokens: 1_048_576,
+    description: 'Preview release (September 25th, 2025) of Gemini 2.5 Flash-Lite',
+    displayName: 'Gemini 2.5 Flash-Lite Preview Sep 2025',
+    id: 'gemini-2.5-flash-lite-preview-09-2025',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-25',
+    settings: {
+      extendParams: ['thinkingBudget', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
     contextWindowTokens: 1_048_576 + 65_536,
     description: 'Preview release (September 25th, 2025) of Gemini 2.5 Flash-Lite',
     displayName: 'Gemini 2.5 Flash-Lite Preview Sep 2025',
@@ -527,6 +688,32 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-09-25',
+    settings: {
+      extendParams: ['thinkingBudget', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description: 'Gemini Robotics-ER，全称为“Gemini Robotics-具身推理”，是一种思考模型，旨在提升机器人在理解和与物理世界交互方面的能力。',
+    displayName: 'Gemini Robotics-ER 1.5 Preview',
+    id: 'gemini-robotics-er-1.5-preview',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
     settings: {
       extendParams: ['thinkingBudget', 'urlContext'],
       searchImpl: 'params',
@@ -678,86 +865,6 @@ const googleChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 40_959,
-    description:
-      'LearnLM 是一个实验性的、特定于任务的语言模型，经过训练以符合学习科学原则，可在教学和学习场景中遵循系统指令，充当专家导师等。',
-    displayName: 'LearnLM 1.5 Pro Experimental',
-    id: 'learnlm-1.5-pro-experimental',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-11-19',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 002 是一款高效的多模态模型，支持广泛应用的扩展。',
-    displayName: 'Gemini 1.5 Flash 002',
-    id: 'gemini-1.5-flash-002', // Deprecated on 2025-09-24
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.018, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-25',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_008_192,
-    description:
-      'Gemini 1.5 Pro 002 是最新的生产就绪模型，提供更高质量的输出，特别在数学、长上下文和视觉任务方面有显著提升。',
-    displayName: 'Gemini 1.5 Pro 002',
-    id: 'gemini-1.5-pro-002', // Deprecated on 2025-09-24
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.3125, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-24',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 8B 是一款高效的多模态模型，支持广泛应用的扩展。',
-    displayName: 'Gemini 1.5 Flash 8B',
-    id: 'gemini-1.5-flash-8b-latest',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.0375, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-10-03',
     type: 'chat',
   },
   {

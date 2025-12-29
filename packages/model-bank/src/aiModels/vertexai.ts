@@ -328,45 +328,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-02-05',
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_000_000 + 8192,
-    description: 'Gemini 1.5 Flash 002 是一款高效的多模态模型，支持广泛应用的扩展。',
-    displayName: 'Gemini 1.5 Flash 002',
-    id: 'gemini-1.5-flash-002',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-25',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000 + 8192,
-    description:
-      'Gemini 1.5 Pro 002 是最新的生产就绪模型，提供更高质量的输出，特别在数学、长上下文和视觉任务方面有显著提升。',
-    displayName: 'Gemini 1.5 Pro 002',
-    id: 'gemini-1.5-pro-002',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-24',
-    type: 'chat',
-  },
 ];
 
 /* eslint-disable sort-keys-fix/sort-keys-fix */

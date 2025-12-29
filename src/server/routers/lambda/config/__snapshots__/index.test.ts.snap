@@ -251,18 +251,21 @@ exports[`configRouter > getGlobalConfig > Model Provider env > OPENROUTER_MODEL_
 {
   "enabled": false,
   "enabledModels": [
-    "meta-llama/llama-3.1-8b-instruct:free",
+    "deepseek/deepseek-r1:free",
     "google/gemma-2-9b-it:free",
   ],
   "serverModelLists": [
     {
-      "abilities": {},
-      "contextWindowTokens": 131072,
-      "description": "LLaMA 3.1 提供多语言支持，是业界领先的生成模型之一。",
-      "displayName": "Llama 3.1 8B (Free)",
+      "abilities": {
+        "reasoning": true,
+      },
+      "contextWindowTokens": 163840,
+      "description": "DeepSeek-R1 在仅有极少标注数据的情况下，极大提升了模型推理能力。在输出最终回答之前，模型会先输出一段思维链内容，以提升最终答案的准确性。",
+      "displayName": "DeepSeek R1 (Free)",
       "enabled": true,
-      "id": "meta-llama/llama-3.1-8b-instruct:free",
+      "id": "deepseek/deepseek-r1:free",
       "providerId": "openrouter",
+      "releasedAt": "2025-01-20",
       "source": "builtin",
       "type": "chat",
     },

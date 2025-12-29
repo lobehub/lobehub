@@ -139,7 +139,7 @@ describe('configRouter', () => {
       describe('OPENROUTER_MODEL_LIST', () => {
         it('custom deletion, addition, and renaming of models', async () => {
           process.env.OPENROUTER_MODEL_LIST =
-            '-all,+meta-llama/llama-3.1-8b-instruct:free,+google/gemma-2-9b-it:free';
+            '-all,+deepseek/deepseek-r1:free,+google/gemma-2-9b-it:free';
 
           const response = await router.getGlobalConfig();
 

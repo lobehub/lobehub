@@ -8,7 +8,7 @@ const Nvidia: ModelProviderCard = {
   id: 'nvidia',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://build.nvidia.com/models',
-  name: 'Nvidia',
+  name: 'Nvidia NIM',
   settings: {
     disableBrowserRequest: true, // CORS error
     proxyUrl: {

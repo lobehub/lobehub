@@ -42,6 +42,18 @@ const ollamaChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'Kimi K2 是由月之暗面 AI 开发的大规模混合专家 (MoE) 语言模型，具有 1 万亿总参数和每次前向传递 320 亿激活参数。它针对代理能力进行了优化，包括高级工具使用、推理和代码合成。',
+    displayName: 'Kimi K2',
+    id: 'kimi-k2:1t',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
     },
     contextWindowTokens: 262_144,
     description:

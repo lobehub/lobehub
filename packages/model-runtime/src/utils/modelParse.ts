@@ -36,11 +36,11 @@ export const MODEL_LIST_CONFIGS = {
   },
   google: {
     excludeKeywords: ['tts'],
-    functionCallKeywords: ['gemini', '!-image-'],
+    functionCallKeywords: ['gemini', '!-image-', 'robotics'],
     imageOutputKeywords: ['-image-'],
-    reasoningKeywords: ['thinking', '-2.5-', '!-image-'],
+    reasoningKeywords: ['thinking', '-2.5-', '!-image-', 'robotics'],
     searchKeywords: ['-search', '!-image-'],
-    videoKeywords: ['-2.5-', '!-image-'],
+    videoKeywords: ['-2.5-', '!-image-', 'robotics'],
     visionKeywords: ['gemini', 'learnlm'],
   },
   inclusionai: {

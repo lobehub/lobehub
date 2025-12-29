@@ -100,6 +100,7 @@ const ModelTitle = memo<ModelFetcherProps>(
             <Flexbox gap={8} horizontal>
               {!mobile && (
                 <Search
+                  key={provider}
                   onChange={(value) => {
                     useAiInfraStore.setState({ modelSearchKeyword: value });
                   }}
@@ -168,6 +169,7 @@ const ModelTitle = memo<ModelFetcherProps>(
 
         {mobile && (
           <Search
+            key={provider}
             onChange={(value) => {
               useAiInfraStore.setState({ modelSearchKeyword: value });
             }}

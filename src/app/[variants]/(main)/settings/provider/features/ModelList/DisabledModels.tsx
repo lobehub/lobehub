@@ -5,6 +5,7 @@ import { ArrowDownUpIcon, ChevronDown, LucideCheck } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
+import { Virtuoso } from 'react-virtuoso';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
@@ -12,6 +13,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import ModelItem from './ModelItem';
+import { useModelListVirtualConfig } from './useModelListVirtualConfig';
 
 interface DisabledModelsProps {
   activeTab: string;
@@ -104,6 +106,19 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab }) => {
 
   const displayModels = showMore ? sortedDisabledModels : sortedDisabledModels.slice(0, 10);
 
+  const filteredLength = displayModels.length;
+  const { increaseViewportBy, itemGap, itemSize, overscan, virtualListHeight } =
+    useModelListVirtualConfig(filteredLength);
+
+  const renderVirtualItem = useCallback(
+    (_index: number, item: (typeof displayModels)[number]) => (
+      <div style={{ paddingBottom: itemGap }}>
+        <ModelItem {...item} />
+      </div>
+    ),
+    [itemGap],
+  );
+
   return (
     filteredDisabledModels.length > 0 && (
       <Flexbox>
@@ -170,9 +185,17 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab }) => {
             </Dropdown>
           )}
         </Flexbox>
-        {displayModels.map((item) => (
-          <ModelItem {...item} key={item.id} />
-        ))}
+        <div style={{ height: virtualListHeight }}>
+          <Virtuoso
+            computeItemKey={(_, item) => item.id}
+            data={displayModels}
+            defaultItemHeight={itemSize}
+            fixedItemHeight={itemSize}
+            increaseViewportBy={increaseViewportBy}
+            itemContent={renderVirtualItem}
+            overscan={overscan}
+          />
+        </div>
         {!showMore && sortedDisabledModels.length > 10 && (
           <Button
             block
