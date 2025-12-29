@@ -1,5 +1,6 @@
 import type { Session } from 'electron';
 
+import { isDev } from '@/const/env';
 import { createLogger } from '@/utils/logger';
 
 interface BackendProxyProtocolManagerOptions {
@@ -124,6 +125,10 @@ export class BackendProxyProtocolManager {
         if (allowOrigin) {
           responseHeaders.set('Access-Control-Allow-Origin', allowOrigin);
           responseHeaders.set('Access-Control-Allow-Credentials', 'true');
+        }
+
+        if (isDev) {
+          responseHeaders.set('x-dev-oidc-auth', token);
         }
 
         responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');

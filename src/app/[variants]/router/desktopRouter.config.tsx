@@ -389,11 +389,7 @@ export const desktopRoutes: RouteConfig[] = [
     path: '/',
   },
   // Onboarding route (outside main layout)
-  {
-    element: dynamicElement(() => import('../onboarding'), 'Desktop > Onboarding'),
-    errorElement: <ErrorBoundary resetPath="/" />,
-    path: '/onboarding',
-  },
+
   ...BusinessDesktopRoutesWithoutMainLayout,
 ];
 
@@ -403,5 +399,11 @@ if (isDesktop) {
     element: <DesktopOnboarding />,
     errorElement: <ErrorBoundary resetPath="/" />,
     path: '/desktop-onboarding',
+  });
+} else {
+  desktopRoutes.push({
+    element: dynamicElement(() => import('../onboarding'), 'Desktop > Onboarding'),
+    errorElement: <ErrorBoundary resetPath="/" />,
+    path: '/onboarding',
   });
 }

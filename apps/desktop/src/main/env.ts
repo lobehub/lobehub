@@ -76,7 +76,7 @@ export const getDesktopEnv = memoize(() =>
       MCP_TOOL_TIMEOUT: envNumber(60_000),
 
       // cloud server url (can be overridden for selfhost/dev)
-      OFFICIAL_CLOUD_SERVER: z.string().optional().default('https://lobechat.com'),
+      OFFICIAL_CLOUD_SERVER: z.string().optional().default('https://app.lobehub.com'),
     },
     clientPrefix: 'PUBLIC_',
     client: {},

@@ -231,6 +231,35 @@ const screen4Styles = createStaticStyles(({ css, cssVar }) => ({
       transform: translateY(0);
     }
   `,
+
+  // 退出登录按钮（次要操作）
+  signOutButton: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    margin-block-start: 16px;
+    padding-block: 10px;
+    padding-inline: 28px;
+    border: 1px solid rgba(255, 255, 255, 18%);
+    border-radius: ${cssVar.borderRadius};
+
+    font-size: ${cssVar.fontSize};
+    font-weight: 600;
+    color: rgba(255, 255, 255, 85%);
+
+    background: rgba(255, 255, 255, 4%);
+
+    &:hover {
+      background: rgba(255, 255, 255, 8%);
+    }
+
+    &:active {
+      background: rgba(255, 255, 255, 6%);
+    }
+  `,
 }));
 
 // 登录方式类型
@@ -280,6 +309,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
   const [cloudLoginStatus, setCloudLoginStatus] = useState<LoginStatus>('idle');
   const [selfhostLoginStatus, setSelfhostLoginStatus] = useState<LoginStatus>('idle');
   const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const [
     dataSyncConfig,
@@ -289,6 +319,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
     connectRemoteServer,
     refreshServerConfig,
     clearRemoteServerSyncError,
+    disconnectRemoteServer,
   ] = useElectronStore((s) => [
     s.dataSyncConfig,
     s.isConnectingServer,
@@ -297,6 +328,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
     s.connectRemoteServer,
     s.refreshServerConfig,
     s.clearRemoteServerSyncError,
+    s.disconnectRemoteServer,
   ]);
 
   // Ensure remote server config is loaded early (desktop only hook)
@@ -412,6 +444,25 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
     }
   };
 
+  // 退出登录（断开远程同步授权）并回到登录选择
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    setRemoteError(null);
+    clearRemoteServerSyncError();
+
+    try {
+      await disconnectRemoteServer();
+      await refreshServerConfig();
+    } finally {
+      setCloudLoginStatus('idle');
+      setSelfhostLoginStatus('idle');
+      setEndpoint('');
+      setIsSigningOut(false);
+    }
+  };
+
   // Sync local UI status with real remote config
   useEffect(() => {
     if (isCloudAuthed) setCloudLoginStatus('success');
@@ -473,7 +524,28 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
       case 'cloud': {
         // 如果已有登录结果，显示结果页面
         if (cloudLoginStatus === 'success') {
-          return <AuthResult animated={true} key="cloud-result" success={true} />;
+          return (
+            <>
+              <AuthResult animated={true} key="cloud-result" success={true} />
+              {remoteError && <p className={screen4Styles.errorText}>{remoteError}</p>}
+              <motion.button
+                animate={{ opacity: 1, y: 0 }}
+                className={cx(
+                  screen4Styles.signOutButton,
+                  (isSigningOut || isConnectingServer) && screen4Styles.loadingButton,
+                )}
+                disabled={isSigningOut || isConnectingServer}
+                initial={{ opacity: 0, y: 30 }}
+                key="cloud-signout"
+                onClick={handleSignOut}
+                transition={{ delay: 0.3, duration: 0.5 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
+              </motion.button>
+            </>
+          );
         }
 
         // 如果登录失败，显示失败结果但允许重新登录
@@ -549,7 +621,28 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
       case 'selfhost': {
         // 如果连接成功，显示成功结果页面
         if (selfhostLoginStatus === 'success') {
-          return <AuthResult animated={true} key="selfhost-result" success={true} />;
+          return (
+            <>
+              <AuthResult animated={true} key="selfhost-result" success={true} />
+              {remoteError && <p className={screen4Styles.errorText}>{remoteError}</p>}
+              <motion.button
+                animate={{ opacity: 1, y: 0 }}
+                className={cx(
+                  screen4Styles.signOutButton,
+                  (isSigningOut || isConnectingServer) && screen4Styles.loadingButton,
+                )}
+                disabled={isSigningOut || isConnectingServer}
+                initial={{ opacity: 0, y: 30 }}
+                key="selfhost-signout"
+                onClick={handleSignOut}
+                transition={{ delay: 0.3, duration: 0.5 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
+              </motion.button>
+            </>
+          );
         }
 
         // 如果连接失败，显示失败结果但允许重新连接

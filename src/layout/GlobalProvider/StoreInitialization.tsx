@@ -1,7 +1,6 @@
 'use client';
 
 import { INBOX_SESSION_ID, enableNextAuth } from '@lobechat/const';
-import { usePathname } from 'next/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
@@ -15,14 +14,15 @@ import { useGlobalStore } from '@/store/global';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
-import { authSelectors, onboardingSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
+
+import { useUserStateRedirect } from './useUserStateRedirect';
 
 const StoreInitialization = memo(() => {
   // prefetch error ns to avoid don't show error content correctly
   useTranslation('error');
 
-  const pathname = usePathname();
   const [isLogin, isSignedIn, useInitUserState] = useUserStore((s) => [
     authSelectors.isLogin(s),
     s.isSignedIn,
@@ -70,21 +70,11 @@ const StoreInitialization = memo(() => {
   // init user memory identities (for chat context injection)
   useInitIdentities(isLoginOnInit);
 
+  const onUserStateSuccess = useUserStateRedirect();
+
   // init user state
   useInitUserState(isLoginOnInit, serverConfig, {
-    onSuccess: (state) => {
-      if (!state.isInWaitList && !pathname?.includes('/waitlist')) {
-        window.location.href = '/waitlist';
-        return;
-      }
-
-      // Skip redirect if already on onboarding page
-      if (pathname?.includes('/onboarding')) return;
-
-      if (onboardingSelectors.needsOnboarding(state)) {
-        window.location.href = '/onboarding';
-      }
-    },
+    onSuccess: onUserStateSuccess,
   });
 
   const useStoreUpdater = createStoreUpdater(useGlobalStore);

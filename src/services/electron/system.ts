@@ -40,6 +40,10 @@ class ElectronSystemService {
     return ensureElectronIpc().windows.setWindowSize(params);
   }
 
+  async openExternalLink(url: string): Promise<void> {
+    return ensureElectronIpc().system.openExternalLink(url);
+  }
+
   showContextMenu = async (type: string, data?: any) => {
     return ensureElectronIpc().menu.showContextMenu({ data, type });
   };
