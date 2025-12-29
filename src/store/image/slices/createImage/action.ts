@@ -35,6 +35,8 @@ export const createCreateImageSlice: StateCreator<
     const parameters = imageGenerationConfigSelectors.parameters(store);
     const provider = imageGenerationConfigSelectors.provider(store);
     const model = imageGenerationConfigSelectors.model(store);
+    const enabledSearch = imageGenerationConfigSelectors.enabledSearch(store);
+    const isSupportSearch = imageGenerationConfigSelectors.isSupportSearch(store);
     const activeGenerationTopicId = generationTopicSelectors.activeGenerationTopicId(store);
     const { createGenerationTopic, switchGenerationTopic, setTopicBatchLoaded } = store;
 
@@ -79,6 +81,7 @@ export const createCreateImageSlice: StateCreator<
         model,
         imageNum,
         params: parameters as any,
+        enabledSearch: isSupportSearch && enabledSearch,
       });
 
       // 6. Only refresh generation batches if it's not a new topic

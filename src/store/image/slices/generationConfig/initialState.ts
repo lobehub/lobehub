@@ -24,6 +24,11 @@ export interface GenerationConfigState {
   activeAspectRatio: string | null; // string - 虚拟比例; null - 原生比例
 
   /**
+   * 是否启用联网搜索
+   */
+  enabledSearch?: boolean;
+
+  /**
    * 标记配置是否已初始化（包括从记忆中恢复）
    */
   isInit: boolean;
@@ -40,5 +45,6 @@ export const initialGenerationConfigState: GenerationConfigState = {
   parametersSchema: gptImage1ParamsSchema,
   isAspectRatioLocked: false,
   activeAspectRatio: null,
+  enabledSearch: false,
   isInit: false,
 };

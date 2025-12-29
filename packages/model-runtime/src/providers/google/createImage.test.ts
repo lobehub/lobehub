@@ -652,6 +652,223 @@ describe('createGoogleImage', () => {
           }),
         );
       });
+
+      describe('Web Search Support (enabledSearch)', () => {
+        it('should include googleSearch tool when enabledSearch is true', async () => {
+          // Arrange
+          const realBase64ImageData =
+            'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBIKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+          const mockContentResponse = {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        data: realBase64ImageData,
+                        mimeType: 'image/png',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(
+            mockContentResponse as any,
+          );
+
+          const payload: CreateImagePayload = {
+            model: 'gemini-3-pro-image-preview:image',
+            params: {
+              prompt: 'Generate an image with web context',
+              aspectRatio: '1:1',
+            },
+            enabledSearch: true,
+          };
+
+          // Act
+          await createGoogleImage(mockClient, provider, payload);
+
+          // Assert
+          expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: 'Generate an image with web context' }],
+              },
+            ],
+            model: 'gemini-3-pro-image-preview',
+            config: {
+              responseModalities: ['Image'],
+              imageConfig: {
+                aspectRatio: '1:1',
+              },
+              tools: [{ googleSearch: {} }],
+            },
+          });
+        });
+
+        it('should not include googleSearch tool when enabledSearch is false', async () => {
+          // Arrange
+          const realBase64ImageData =
+            'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBIKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+          const mockContentResponse = {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        data: realBase64ImageData,
+                        mimeType: 'image/png',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(
+            mockContentResponse as any,
+          );
+
+          const payload: CreateImagePayload = {
+            model: 'gemini-3-pro-image-preview:image',
+            params: {
+              prompt: 'Generate a basic image',
+              aspectRatio: '1:1',
+            },
+            enabledSearch: false,
+          };
+
+          // Act
+          await createGoogleImage(mockClient, provider, payload);
+
+          // Assert
+          expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: 'Generate a basic image' }],
+              },
+            ],
+            model: 'gemini-3-pro-image-preview',
+            config: {
+              responseModalities: ['Image'],
+              imageConfig: {
+                aspectRatio: '1:1',
+              },
+            },
+          });
+        });
+
+        it('should not include googleSearch tool when enabledSearch is undefined', async () => {
+          // Arrange
+          const realBase64ImageData =
+            'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBIKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+          const mockContentResponse = {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        data: realBase64ImageData,
+                        mimeType: 'image/png',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(
+            mockContentResponse as any,
+          );
+
+          const payload: CreateImagePayload = {
+            model: 'gemini-3-pro-image-preview:image',
+            params: {
+              prompt: 'Generate an image',
+            },
+          };
+
+          // Act
+          await createGoogleImage(mockClient, provider, payload);
+
+          // Assert
+          expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: 'Generate an image' }],
+              },
+            ],
+            model: 'gemini-3-pro-image-preview',
+            config: {
+              responseModalities: ['Image'],
+            },
+          });
+        });
+
+        it('should support web search with image resolution parameter', async () => {
+          // Arrange
+          const realBase64ImageData =
+            'iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBIKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==';
+          const mockContentResponse = {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      inlineData: {
+                        data: realBase64ImageData,
+                        mimeType: 'image/png',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(
+            mockContentResponse as any,
+          );
+
+          const payload: CreateImagePayload = {
+            model: 'gemini-3-pro-image-preview:image',
+            params: {
+              prompt: 'Generate a high-resolution image',
+              aspectRatio: '16:9',
+              resolution: '4K',
+            },
+            enabledSearch: true,
+          };
+
+          // Act
+          await createGoogleImage(mockClient, provider, payload);
+
+          // Assert
+          expect(mockClient.models.generateContent).toHaveBeenCalledWith({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: 'Generate a high-resolution image' }],
+              },
+            ],
+            model: 'gemini-3-pro-image-preview',
+            config: {
+              responseModalities: ['Image'],
+              imageConfig: {
+                aspectRatio: '16:9',
+                imageSize: '4K',
+              },
+              tools: [{ googleSearch: {} }],
+            },
+          });
+        });
+      });
     });
   });
 });

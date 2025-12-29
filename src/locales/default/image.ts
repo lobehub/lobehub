@@ -45,6 +45,9 @@ export default {
         '4K': '4K',
       },
     },
+    search: {
+      label: '联网搜索',
+    },
     seed: {
       label: '种子',
       random: '随机种子',

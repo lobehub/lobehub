@@ -71,6 +71,7 @@ const imageProcedure = authedProcedure
   });
 
 const createImageInputSchema = z.object({
+  enabledSearch: z.boolean().optional(),
   generationTopicId: z.string(),
   imageNum: z.number(),
   model: z.string(),
@@ -92,7 +93,7 @@ export type CreateImageServicePayload = z.infer<typeof createImageInputSchema>;
 export const imageRouter = router({
   createImage: imageProcedure.input(createImageInputSchema).mutation(async ({ input, ctx }) => {
     const { userId, serverDB, asyncTaskModel, fileService } = ctx;
-    const { generationTopicId, provider, model, imageNum, params } = input;
+    const { generationTopicId, provider, model, imageNum, params, enabledSearch } = input;
 
     log('Starting image creation process, input: %O', input);
 
@@ -235,9 +236,14 @@ export const imageRouter = router({
         log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
         asyncCaller.image.createImage({
+          enabledSearch,
+
           generationId: generation.id,
+
           model,
+
           params,
+
           provider,
           taskId: asyncTaskId,
         });

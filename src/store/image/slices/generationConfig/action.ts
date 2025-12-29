@@ -28,6 +28,8 @@ export interface GenerationConfigAction {
 
   setImageNum: (imageNum: number) => void;
 
+  setEnabledSearch: (enabled: boolean) => void;
+
   reuseSettings: (
     model: string,
     provider: string,
@@ -309,6 +311,10 @@ export const createGenerationConfigSlice: StateCreator<
 
   setImageNum: (imageNum) => {
     set(() => ({ imageNum }), false, `setImageNum/${imageNum}`);
+  },
+
+  setEnabledSearch: (enabled) => {
+    set(() => ({ enabledSearch: enabled }), false, `setEnabledSearch/${enabled}`);
   },
 
   reuseSettings: (model: string, provider: string, settings: Partial<RuntimeImageGenParams>) => {

@@ -151,6 +151,8 @@ async function generateImageByChatModel(
           },
         }
       : {}),
+    // 如果启用搜索，添加 googleSearch 工具
+    ...(payload.enabledSearch ? { tools: [{ googleSearch: {} }] } : {}),
   };
 
   const response = await client.models.generateContent({

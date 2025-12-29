@@ -3,6 +3,7 @@ import { ModelUsage } from '@lobechat/types';
 import { RuntimeImageGenParams } from 'model-bank';
 
 export type CreateImagePayload = {
+  enabledSearch?: boolean;
   model: string;
   params: RuntimeImageGenParams;
 };

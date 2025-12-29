@@ -897,6 +897,10 @@ export const nanoBananaProParameters: ModelParamsSchema = {
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 const googleImageModels: AIImageModelCard[] = [
   {
+    abilities: {
+      reasoning: true,
+      search: true,
+    },
     displayName: 'Nano Banana Pro',
     id: 'gemini-3-pro-image-preview:image',
     type: 'image',

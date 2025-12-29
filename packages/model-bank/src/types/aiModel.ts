@@ -272,6 +272,7 @@ export interface AIEmbeddingModelCard extends AIBaseModelCard {
 }
 
 export interface AIImageModelCard extends AIBaseModelCard {
+  abilities?: ModelAbilities;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
   resolutions?: string[];

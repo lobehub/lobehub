@@ -20,6 +20,7 @@ import ImageUrlsUpload from './components/ImageUrlsUpload';
 import ModelSelect from './components/ModelSelect';
 import QualitySelect from './components/QualitySelect';
 import ResolutionSelect from './components/ResolutionSelect';
+import SearchSwitch from './components/SearchSwitch';
 import SeedNumberInput from './components/SeedNumberInput';
 import SizeSelect from './components/SizeSelect';
 import StepsSliderInput from './components/StepsSliderInput';
@@ -176,6 +177,8 @@ const ConfigPanel = memo(() => {
           <ResolutionSelect />
         </ConfigItemLayout>
       )}
+
+      <SearchSwitch />
 
       {showDimensionControl && <DimensionControlGroup />}
 

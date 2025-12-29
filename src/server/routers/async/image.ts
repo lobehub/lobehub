@@ -31,6 +31,7 @@ const imageProcedure = asyncAuthedProcedure.use(async (opts) => {
 });
 
 const createImageInputSchema = z.object({
+  enabledSearch: z.boolean().optional(),
   generationId: z.string(),
   model: z.string(),
   params: z
@@ -183,7 +184,7 @@ const categorizeError = (
 
 export const imageRouter = router({
   createImage: imageProcedure.input(createImageInputSchema).mutation(async ({ input, ctx }) => {
-    const { taskId, generationId, provider, model, params } = input;
+    const { taskId, generationId, provider, model, params, enabledSearch } = input;
 
     log('Starting async image generation: %O', {
       generationId,
@@ -219,6 +220,7 @@ export const imageRouter = router({
         checkAbortSignal(signal);
         log('Agent runtime initialized, calling createImage');
         const response = await agentRuntime.createImage!({
+          enabledSearch,
           model,
           params: params as unknown as RuntimeImageGenParams,
         });
