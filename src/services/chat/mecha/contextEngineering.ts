@@ -353,7 +353,7 @@ export const contextEngineering = async ({
     userMemory:
       enableUserMemories && userMemoryData
         ? {
-            enabled: true,
+            enabled: enableUserMemories,
             memories: userMemoryData,
           }
         : undefined,

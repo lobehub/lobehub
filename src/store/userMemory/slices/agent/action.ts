@@ -21,7 +21,7 @@ export interface AgentMemoryAction {
    * Fetch and cache memories for a specific topic
    * Uses SWR for caching and revalidation
    */
-  useFetchMemoriesForTopic: (topicId?: string) => SWRResponse<RetrieveMemoryResult>;
+  useFetchMemoriesForTopic: (topicId?: string | null) => SWRResponse<RetrieveMemoryResult>;
 }
 
 export const createAgentMemorySlice: StateCreator<

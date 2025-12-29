@@ -1,5 +1,4 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
-import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import type { OfficialToolItem } from '@lobechat/context-engine';
 import {
@@ -45,7 +44,11 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import {
+  settingsSelectors,
+  userGeneralSettingsSelectors,
+  userProfileSelectors,
+} from '@/store/user/selectors';
 import type { ChatStreamPayload, OpenAIChatMessage } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { createTraceHeader, getTraceId } from '@/utils/trace';
@@ -158,7 +161,7 @@ class ChatService {
 
     // =================== 1.1 process user memories =================== //
 
-    const isMemoryPluginEnabled = enabledToolIds.includes(MemoryManifest.identifier);
+    const enableUserMemories = settingsSelectors.memoryEnabled(getUserStoreState());
 
     // =================== 1.2 build agent builder context =================== //
 
@@ -233,7 +236,7 @@ class ChatService {
       agentId: targetAgentId,
       enableHistoryCount:
         chatConfigByIdSelectors.getEnableHistoryCountById(targetAgentId)(getAgentStoreState()),
-      enableUserMemories: isMemoryPluginEnabled,
+      enableUserMemories,
       groupId,
       historyCount:
         chatConfigByIdSelectors.getHistoryCountById(targetAgentId)(getAgentStoreState()) + 2,

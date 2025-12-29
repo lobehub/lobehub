@@ -4,6 +4,8 @@ import { type ReactNode, memo, useCallback } from 'react';
 
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import MessageItem from '../Messages';
@@ -30,6 +32,7 @@ export interface ChatListProps {
 const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
   // Fetch messages (SWR key is null when skipFetch is true)
   const context = useConversationStore((s) => s.context);
+  const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
   const [skipFetch, useFetchMessages] = useConversationStore((s) => [
     dataSelectors.skipFetch(s),
     s.useFetchMessages,
@@ -38,7 +41,7 @@ const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
 
   // Fetch notebook documents when topic is selected
   useFetchNotebookDocuments(context.topicId!);
-  useFetchTopicMemories(context.topicId!);
+  useFetchTopicMemories(enableUserMemories ? context.topicId : undefined);
 
   // Use selectors for data
 

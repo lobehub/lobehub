@@ -31,6 +31,8 @@ const currentImageSettings = (s: UserStore) => currentSettings(s).image;
 const currentMemorySettings = (s: UserStore) =>
   merge(DEFAULT_MEMORY_SETTINGS, currentSettings(s).memory);
 
+const memoryEnabled = (s: UserStore) => currentMemorySettings(s).enabled !== false;
+
 const currentTTS = (s: UserStore) => merge(DEFAULT_TTS_CONFIG, currentSettings(s).tts);
 
 const defaultAgent = (s: UserStore) => merge(DEFAULT_AGENT, currentSettings(s).defaultAgent);
@@ -52,6 +54,7 @@ export const settingsSelectors = {
   currentSettings,
   currentSystemAgent,
   currentTTS,
+  memoryEnabled,
   defaultAgent,
   defaultAgentConfig,
   defaultAgentMeta,
