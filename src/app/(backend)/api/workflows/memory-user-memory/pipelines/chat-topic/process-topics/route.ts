@@ -5,6 +5,7 @@ import {
 } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { LayersEnum, MemorySourceType } from '@lobechat/types';
 import { serve } from '@upstash/workflow/nextjs';
+import { WorkflowAbort } from '@upstash/workflow';
 
 import {
   MemoryExtractionExecutor,
@@ -118,11 +119,18 @@ export const { POST } = serve<MemoryExtractionPayloadInput>((context) =>
           processedUsers: payload.userIds.length,
         };
       } catch (error) {
+        // NOTICE: Let WorkflowAbort bubble up (used internally by Upstash); record others
+        if (error instanceof WorkflowAbort) {
+          console.warn('workflow aborted:', error.message);
+          throw error;
+        }
+
         span.recordException(error as Error);
         span.setStatus({
           code: SpanStatusCode.ERROR,
           message: error instanceof Error ? error.message : 'process-topics workflow failed',
         });
+
         throw error;
       } finally {
         span.end();
