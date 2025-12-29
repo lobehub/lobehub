@@ -177,8 +177,7 @@ const TokenTagForGroupChat = memo<TokenTagForGroupChatProps>(({ total: messageSt
   const inputTokenCount = useTokenCount(input);
 
   const chatsString = useMemo(() => {
-    const chats = chatSelectors.mainAIChatsWithHistoryConfig(useChatStore.getState());
-    return chats.map((chat) => chat.content).join('');
+    return chatSelectors.mainAIChatsMessageString(useChatStore.getState());
   }, [messageString]);
 
   const chatsToken = useTokenCount(chatsString) + inputTokenCount;

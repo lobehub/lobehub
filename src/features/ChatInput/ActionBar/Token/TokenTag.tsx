@@ -13,7 +13,7 @@ import { useTokenCount } from '@/hooks/useTokenCount';
 import { useAgentStore } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
+import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
@@ -77,8 +77,7 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
   const inputTokenCount = useTokenCount(input);
 
   const chatsString = useMemo(() => {
-    const chats = dbMessageSelectors.activeDbMessages(useChatStore.getState());
-    return chats.map((chat) => chat.content).join('');
+    return displayMessageSelectors.mainAIChatsMessageString(useChatStore.getState());
   }, [messageString, historyCount, enableHistoryCount]);
 
   const chatsToken = useTokenCount(chatsString) + inputTokenCount;
