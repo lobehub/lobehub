@@ -3,6 +3,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as motion from 'motion/react-m';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { getThemeToken } from './styles/theme';
 
@@ -57,6 +58,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   navigationButton: css`
     position: relative;
     z-index: 2;
+    &:not(:disabled) > * {
+      color: #000 !important;
+    }
   `,
 
   // 导航按钮区域 - 已整合到 content 中，不再需要
@@ -151,7 +155,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   canGoNext,
   canGoPrev,
   prevButtonText = '',
-  nextButtonText = 'Continue',
+  nextButtonText,
   showPrevButton = true,
   showNextButton = true,
   nextButtonDisabled = false,
@@ -160,6 +164,9 @@ export const Navigation: React.FC<NavigationProps> = ({
   animationDuration = 1,
   animationDelay = 0,
 }) => {
+  const { t } = useTranslation('desktop-onboarding');
+  const resolvedNextButtonText = nextButtonText ?? t('navigation.next');
+
   // 导航内容组件 - 单行布局
   const navigationContent = (
     <>
@@ -214,7 +221,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           onClick={onNext}
           type="primary"
         >
-          {nextButtonText}
+          {resolvedNextButtonText}
           {canGoNext && !nextButtonDisabled && <ChevronRight size={16} />}
         </Button>
       ) : (

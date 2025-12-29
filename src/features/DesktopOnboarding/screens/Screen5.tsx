@@ -3,6 +3,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { Cloud, Server } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
@@ -238,21 +239,20 @@ type LoginMethod = 'cloud' | 'selfhost';
 // 登录状态类型
 type LoginStatus = 'idle' | 'loading' | 'success' | 'error';
 
-// 登录方式配置
-const loginMethods = {
+const loginMethodMetas = {
   cloud: {
-    description: 'Authorization by Official cloud-based version',
+    descriptionKey: 'screen5.methods.cloud.description',
     icon: Cloud,
     id: 'cloud' as LoginMethod,
-    name: 'LobeHub Cloud',
+    nameKey: 'screen5.methods.cloud.name',
   },
   selfhost: {
-    description: 'Connect to your own LobeHub server instance',
+    descriptionKey: 'screen5.methods.selfhost.description',
     icon: Server,
     id: 'selfhost' as LoginMethod,
-    name: 'Self-hosted Instance',
+    nameKey: 'screen5.methods.selfhost.name',
   },
-};
+} as const satisfies Record<LoginMethod, unknown>;
 
 interface Screen5Props {
   onScreenConfigChange?: (config: {
@@ -274,6 +274,7 @@ interface Screen5Props {
 }
 
 export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
+  const { t } = useTranslation('desktop-onboarding');
   const [currentMethod, setCurrentMethod] = useState<LoginMethod>('cloud');
   const [endpoint, setEndpoint] = useState('');
   const [cloudLoginStatus, setCloudLoginStatus] = useState<LoginStatus>('idle');
@@ -331,7 +332,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
         animate: false,
         nextButtonDisabled: !canStart(),
         nextButtonHighlight: true,
-        nextButtonText: 'Start Using LobeHub',
+        nextButtonText: t('screen5.navigation.next'),
         showNextButton: true,
         showPrevButton: true,
       },
@@ -343,7 +344,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
     if (onScreenConfigChange) {
       onScreenConfigChange(CONFIG.screenConfig);
     }
-  }, [onScreenConfigChange, currentMethod, cloudLoginStatus, selfhostLoginStatus]);
+  }, [onScreenConfigChange, currentMethod, cloudLoginStatus, selfhostLoginStatus, t]);
 
   // 处理登录方式切换
   const handleMethodChange = (method: LoginMethod) => {
@@ -361,7 +362,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
   const handleCloudLogin = async () => {
     // Desktop runtime guard
     if (!isDesktop) {
-      setRemoteError('OIDC authorization is only available in the desktop app runtime.');
+      setRemoteError(t('screen5.errors.desktopOnlyOidc'));
       setCloudLoginStatus('error');
       return;
     }
@@ -381,7 +382,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
   const handleSelfhostConnect = async () => {
     // Desktop runtime guard
     if (!isDesktop) {
-      setRemoteError('OIDC authorization is only available in the desktop app runtime.');
+      setRemoteError(t('screen5.errors.desktopOnlyOidc'));
       setSelfhostLoginStatus('error');
       return;
     }
@@ -464,7 +465,9 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
 
   // 渲染不同登录方式的内容
   const renderLoginContent = () => {
-    const method = loginMethods[currentMethod];
+    const method = loginMethodMetas[currentMethod];
+    const methodName = t(method.nameKey);
+    const methodDescription = t(method.descriptionKey);
 
     switch (currentMethod) {
       case 'cloud': {
@@ -490,7 +493,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Try Again
+                {t('screen5.actions.tryAgain')}
               </motion.button>
             </>
           );
@@ -517,7 +520,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
               key="cloud-desc"
               transition={{ delay: 0.4, duration: 0.5 }}
             >
-              {method.description}
+              {methodDescription}
             </motion.p>
 
             {/* 登录按钮 */}
@@ -535,7 +538,9 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              {cloudLoginStatus === 'loading' ? 'Signing in...' : 'Sign in to LobeHub Cloud'}
+              {cloudLoginStatus === 'loading'
+                ? t('screen5.actions.signingIn')
+                : t('screen5.actions.signInCloud')}
             </motion.button>
           </>
         );
@@ -564,7 +569,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Try Again
+                {t('screen5.actions.tryAgain')}
               </motion.button>
             </>
           );
@@ -581,8 +586,8 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
               transition={{ delay: 0.3, duration: 0.5 }}
             >
               <Server color={themeToken.colorGreen} size={80} />
-              <h2 className={screen4Styles.serviceTitle}>{method.name}</h2>
-              <p className={screen4Styles.authDescription}>{method.description}</p>
+              <h2 className={screen4Styles.serviceTitle}>{methodName}</h2>
+              <p className={screen4Styles.authDescription}>{methodDescription}</p>
             </motion.div>
 
             {/* Endpoint 输入框 */}
@@ -594,7 +599,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
                 initial={{ opacity: 0, y: 30 }}
                 key="selfhost-input"
                 onChange={(e) => setEndpoint(e.target.value)}
-                placeholder="Endpoint URL (Example: https://your-server.com)"
+                placeholder={t('screen5.selfhost.endpointPlaceholder')}
                 transition={{ delay: 0.5, duration: 0.5 }}
                 type="text"
                 value={endpoint}
@@ -617,7 +622,9 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                {selfhostLoginStatus === 'loading' ? 'Connecting...' : 'Connect to Server'}
+                {selfhostLoginStatus === 'loading'
+                  ? t('screen5.actions.connecting')
+                  : t('screen5.actions.connectToServer')}
               </motion.button>
             </div>
           </>
@@ -637,9 +644,9 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
         {/* 标题部分 */}
         <TitleSection
           animated={true}
-          badge="Sign in"
-          description="Sign in to sync your AI agents, settings, and conversations across all devices."
-          title="Connect Your Account"
+          badge={t('screen5.badge')}
+          description={t('screen5.description')}
+          title={t('screen5.title')}
         />
 
         {/* 登录区域 */}
@@ -656,7 +663,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
               transition={{ delay: 0.7, duration: 0.5 }}
             >
               <div className={screen4Styles.methodOptions}>
-                {Object.values(loginMethods).map((method) => (
+                {Object.values(loginMethodMetas).map((method) => (
                   <motion.div
                     className={cx(
                       screen4Styles.methodCard,
@@ -668,7 +675,7 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
                     whileTap={{ scale: 0.98 }}
                   >
                     {method.icon && <method.icon size={20} />}
-                    <span className={screen4Styles.methodCardText}>{method.name}</span>
+                    <span className={screen4Styles.methodCardText}>{t(method.nameKey)}</span>
                   </motion.div>
                 ))}
               </div>

@@ -34,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     color: #fff;
 
-    background-color: ${cssVar.colorBgBase};
+    background-color: #000;
   `,
 
   content: css`

@@ -2,6 +2,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { Bell, Check, FolderOpen, Mic, MonitorCog } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CSSProperties, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -21,15 +22,13 @@ const screen3Styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 4px;
   `,
 
-  
   // 图标样式
-icon: css`
+  icon: css`
     color: var(--permission-icon-color, currentColor);
   `,
 
-  
   // 图标容器
-iconWrapper: css`
+  iconWrapper: css`
     display: flex;
     flex-shrink: 0;
     align-items: center;
@@ -94,17 +93,18 @@ iconWrapper: css`
     &.granted {
       cursor: not-allowed;
 
-      border-color: rgba(255, 255, 255, 8%);
+      border-color: ${themeToken.colorGreen};
 
-      color: rgba(255, 255, 255, 40%);
+      /* Use currentColor so the icon and text both become "success green" */
+      color: ${themeToken.colorGreen};
 
-      opacity: 0.6;
-      background: rgba(255, 255, 255, 3%);
+      opacity: 1;
+      background: color-mix(in srgb, ${themeToken.colorGreen} 12%, transparent);
 
       &:hover {
         transform: none;
-        border-color: rgba(255, 255, 255, 8%);
-        background: rgba(255, 255, 255, 3%);
+        border-color: ${themeToken.colorGreen};
+        background: color-mix(in srgb, ${themeToken.colorGreen} 12%, transparent);
       }
     }
   `,
@@ -146,49 +146,43 @@ iconWrapper: css`
   `,
 }));
 
-// 权限数据
-const initialPermissions = [
+const permissionMetas = [
   {
-    buttonText: 'Grant Access',
-    description:
-      'Send system notifications for task completions, AI responses, and important updates when the app is running in background',
-    granted: false,
+    descriptionKey: 'screen3.permissions.1.description',
     icon: Bell,
     iconColor: themeToken.colorYellow,
     id: 1,
-    title: 'Notification Permission',
+    titleKey: 'screen3.permissions.1.title',
   },
   {
-    buttonText: 'Grant Access',
-    description:
-      'Access documents and files to enable AI analysis, knowledge base creation, and document processing workflows',
-    granted: false,
+    descriptionKey: 'screen3.permissions.2.description',
     icon: FolderOpen,
     iconColor: themeToken.colorGreen,
     id: 2,
-    title: 'File & Folder Access',
+    titleKey: 'screen3.permissions.2.title',
   },
   {
-    buttonText: 'Grant Access',
-    description:
-      'Capture screen content and audio input for voice interactions, screen analysis, and multimodal AI assistance',
-    granted: false,
+    descriptionKey: 'screen3.permissions.3.description',
     icon: Mic,
     iconColor: themeToken.colorBlue,
     id: 3,
-    title: 'Screen & Audio Recording',
+    titleKey: 'screen3.permissions.3.title',
   },
   {
-    buttonText: 'Grant Access',
-    description:
-      'Enable system-level automation and enhanced integration for seamless AI workflow execution across applications',
-    granted: false,
+    descriptionKey: 'screen3.permissions.4.description',
     icon: MonitorCog,
     iconColor: themeToken.colorPurple,
     id: 4,
-    title: 'Accessibility Settings',
+    titleKey: 'screen3.permissions.4.title',
   },
-];
+] as const;
+
+type PermissionMeta = (typeof permissionMetas)[number];
+type PermissionButtonKey = 'screen3.actions.grantAccess' | 'screen3.actions.openSettings';
+type PermissionItem = PermissionMeta & {
+  buttonKey: PermissionButtonKey;
+  granted: boolean;
+};
 
 interface Screen3Props {
   onScreenConfigChange?: (config: {
@@ -210,6 +204,7 @@ interface Screen3Props {
 }
 
 export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
+  const { t } = useTranslation('desktop-onboarding');
   // 屏幕特定的配置
   const CONFIG = {
     screenConfig: {
@@ -221,7 +216,13 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
     },
   };
 
-  const [permissions, setPermissions] = useState(initialPermissions);
+  const [permissions, setPermissions] = useState<PermissionItem[]>(() =>
+    permissionMetas.map((p) => ({
+      ...p,
+      buttonKey: 'screen3.actions.grantAccess',
+      granted: false,
+    })),
+  );
 
   const checkAllPermissions = useCallback(async () => {
     const ipc = ensureElectronIpc();
@@ -243,7 +244,7 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
       prev.map((p) => {
         if (p.id === 1) return { ...p, granted: notifStatus === 'authorized' };
         // Full Disk Access cannot be checked programmatically, so it remains manual
-        if (p.id === 2) return { ...p, buttonText: 'Open Settings', granted: false };
+        if (p.id === 2) return { ...p, buttonKey: 'screen3.actions.openSettings', granted: false };
         if (p.id === 3)
           return { ...p, granted: micStatus === 'granted' && screenStatus === 'granted' };
         if (p.id === 4) return { ...p, granted: accessibilityStatus };
@@ -324,9 +325,9 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
         {/* 标题部分 */}
         <TitleSection
           animated={true}
-          badge="Permissions"
-          description="Grant the following permissions to experience LobeHub's full capabilities"
-          title="Enable Full Experience"
+          badge={t('screen3.badge')}
+          description={t('screen3.description')}
+          title={t('screen3.title')}
         />
 
         {/* 权限列表 */}
@@ -353,8 +354,8 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
 
               {/* 内容 */}
               <div className={screen3Styles.content}>
-                <h3 className={screen3Styles.itemTitle}>{permission.title}</h3>
-                <p className={screen3Styles.itemDescription}>{permission.description}</p>
+                <h3 className={screen3Styles.itemTitle}>{t(permission.titleKey)}</h3>
+                <p className={screen3Styles.itemDescription}>{t(permission.descriptionKey)}</p>
               </div>
 
               {/* 按钮 */}
@@ -367,10 +368,10 @@ export const Screen3 = ({ onScreenConfigChange }: Screen3Props) => {
                 {permission.granted && permission.id !== 2 ? (
                   <>
                     <Check size={16} />
-                    Access Granted
+                    {t('screen3.actions.granted')}
                   </>
                 ) : (
-                  permission.buttonText
+                  t(permission.buttonKey)
                 )}
               </button>
             </motion.div>

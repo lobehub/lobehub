@@ -1,0 +1,78 @@
+export default {
+  'navigation.next': 'Continue',
+
+  'screen1.description': 'AI-powered productivity platform with intelligent agents',
+  'screen1.navigation.next': 'Start Setting Up',
+  'screen1.slogan.line1': 'Built for you',
+  'screen1.slogan.line2': 'the Super Individual',
+
+  'screen2.badge': 'Features',
+  'screen2.description': 'Advanced AI capabilities tailored to your workflow',
+  'screen2.features.1.subtitle': 'Image Generation',
+  'screen2.features.1.title': 'Create What your feel',
+  'screen2.features.2.subtitle': 'MCP Marketplace',
+  'screen2.features.2.title': 'Discover, Connect, Extend',
+  'screen2.features.3.subtitle': 'Smart Web Search',
+  'screen2.features.3.title': 'World Knowledge Ready',
+  'screen2.features.4.subtitle': 'Cross-Platform Sync',
+  'screen2.features.4.title': 'Your Workspace, Anywhere',
+  'screen2.features.5.subtitle': 'Artifacts',
+  'screen2.features.5.title': 'AI Meets Visual Creation',
+  'screen2.features.6.subtitle': 'Multi AI Providers',
+  'screen2.features.6.title': 'One Platform, All Models',
+  'screen2.title': 'Everything You Need',
+
+  'screen3.actions.grantAccess': 'Grant Access',
+  'screen3.actions.granted': 'Access Granted',
+  'screen3.actions.openSettings': 'Open Settings',
+  'screen3.badge': 'Permissions',
+  'screen3.description': "Grant the following permissions to experience LobeHub's full capabilities",
+  'screen3.permissions.1.description':
+    'Send system notifications for task completions, AI responses, and important updates when the app is running in background',
+  'screen3.permissions.1.title': 'Notification Permission',
+  'screen3.permissions.2.description':
+    'Access documents and files to enable AI analysis, knowledge base creation, and document processing workflows',
+  'screen3.permissions.2.title': 'File & Folder Access',
+  'screen3.permissions.3.description':
+    'Capture screen content and audio input for voice interactions, screen analysis, and multimodal AI assistance',
+  'screen3.permissions.3.title': 'Screen & Audio Recording',
+  'screen3.permissions.4.description':
+    'Enable system-level automation and enhanced integration for seamless AI workflow execution across applications',
+  'screen3.permissions.4.title': 'Accessibility Settings',
+  'screen3.title': 'Enable Full Experience',
+
+  'screen4.badge': 'Privacy',
+  'screen4.description': 'Choose how you want to use LobeHub.',
+  'screen4.footerNote': 'You can always change this later in the settings.',
+  'screen4.navigation.next': 'Continue',
+  'screen4.privacy.description':
+    'If you enable Privacy Mode, none of your questions or conversations will ever be stored by us.',
+  'screen4.privacy.items.1': 'No data collection',
+  'screen4.privacy.items.2': 'No usage analytics',
+  'screen4.privacy.items.3': 'All processing stays local',
+  'screen4.privacy.title': 'Privacy Mode',
+  'screen4.share.description':
+    'To make LobeHub better, this option lets us collect usage data. This includes:',
+  'screen4.share.items.1': 'Performance metrics',
+  'screen4.share.items.2': 'Model usage patterns',
+  'screen4.share.items.3': 'Feature interactions',
+  'screen4.share.title': 'Help Improve LobeHub',
+  'screen4.title': 'Data Preferences',
+
+  'screen5.actions.connectToServer': 'Connect to Server',
+  'screen5.actions.connecting': 'Connecting...',
+  'screen5.actions.signInCloud': 'Sign in to LobeHub Cloud',
+  'screen5.actions.signingIn': 'Signing in...',
+  'screen5.actions.tryAgain': 'Try Again',
+  'screen5.badge': 'Sign in',
+  'screen5.description': 'Sign in to sync your AI agents, settings, and conversations across all devices.',
+  'screen5.errors.desktopOnlyOidc': 'OIDC authorization is only available in the desktop app runtime.',
+  'screen5.methods.cloud.description': 'Authorization by Official cloud-based version',
+  'screen5.methods.cloud.name': 'LobeHub Cloud',
+  'screen5.methods.selfhost.description': 'Connect to your own LobeHub server instance',
+  'screen5.methods.selfhost.name': 'Self-hosted Instance',
+  'screen5.navigation.next': 'Start Using LobeHub',
+  'screen5.selfhost.endpointPlaceholder': 'Endpoint URL (Example: https://your-server.com)',
+  'screen5.title': 'Connect Your Account',
+};
+

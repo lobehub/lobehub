@@ -2,6 +2,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { CheckCircle, HeartHandshake, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -176,6 +177,7 @@ interface Screen4Props {
 }
 
 export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
+  const { t } = useTranslation('desktop-onboarding');
   const telemetryEnabled = useUserStore(userGeneralSettingsSelectors.telemetry);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
   const selectedMode: DataMode = telemetryEnabled ? 'share' : 'privacy';
@@ -185,7 +187,7 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
     screenConfig: {
       navigation: {
         animate: false,
-        nextButtonText: 'Continue',
+        nextButtonText: t('screen4.navigation.next'),
         showNextButton: true,
         showPrevButton: true,
       },
@@ -207,7 +209,7 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
     if (onScreenConfigChange) {
       onScreenConfigChange(CONFIG.screenConfig);
     }
-  }, [onScreenConfigChange]);
+  }, [onScreenConfigChange, t]);
 
   return (
     <div className={layoutStyles.fullScreen}>
@@ -216,9 +218,9 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
         {/* 标题部分 */}
         <TitleSection
           animated={true}
-          badge="Privacy"
-          description="Choose how you want to use LobeHub."
-          title="Data Preferences"
+          badge={t('screen4.badge')}
+          description={t('screen4.description')}
+          title={t('screen4.title')}
         />
 
         {/* 选项卡区域 */}
@@ -238,17 +240,17 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
 
               <div className={screen4Styles.cardHeader}>
                 <HeartHandshake color={themeToken.colorGreen} size={48} />
-                <h3 className={screen4Styles.cardTitle}>Help Improve LobeHub</h3>
+                <h3 className={screen4Styles.cardTitle}>{t('screen4.share.title')}</h3>
               </div>
 
               <p className={screen4Styles.cardDescription}>
-                To make LobeHub better, this option lets us collect usage data. This includes:
+                {t('screen4.share.description')}
               </p>
 
               <ul className={screen4Styles.featureList}>
-                <li>Performance metrics</li>
-                <li>Model usage patterns</li>
-                <li>Feature interactions</li>
+                <li>{t('screen4.share.items.1')}</li>
+                <li>{t('screen4.share.items.2')}</li>
+                <li>{t('screen4.share.items.3')}</li>
               </ul>
             </div>
 
@@ -261,18 +263,17 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
 
               <div className={screen4Styles.cardHeader}>
                 <Shield color={themeToken.colorBlue} size={48} />
-                <h3 className={screen4Styles.cardTitle}>Privacy Mode</h3>
+                <h3 className={screen4Styles.cardTitle}>{t('screen4.privacy.title')}</h3>
               </div>
 
               <p className={screen4Styles.cardDescription}>
-                If you enable Privacy Mode, none of your questions or conversations will ever be
-                stored by us.
+                {t('screen4.privacy.description')}
               </p>
 
               <ul className={screen4Styles.featureList}>
-                <li>No data collection</li>
-                <li>No usage analytics</li>
-                <li>All processing stays local</li>
+                <li>{t('screen4.privacy.items.1')}</li>
+                <li>{t('screen4.privacy.items.2')}</li>
+                <li>{t('screen4.privacy.items.3')}</li>
               </ul>
             </div>
           </motion.div>
@@ -284,7 +285,7 @@ export const Screen4 = ({ onScreenConfigChange }: Screen4Props) => {
             initial={{ opacity: 0 }}
             transition={{ delay: 0.5, duration: 0.5 }}
           >
-            You can always change this later in the settings.
+            {t('screen4.footerNote')}
           </motion.p>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { Flower, Globe, Image, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { TitleSection } from '../common/TitleSection';
 import { layoutStyles } from '../styles';
@@ -97,57 +98,45 @@ const cardBg4 = new URL('../assets/card-bg-4.webp', import.meta.url).href;
 const cardBg5 = new URL('../assets/card-bg-5.webp', import.meta.url).href;
 const cardBg6 = new URL('../assets/card-bg-6.webp', import.meta.url).href;
 
-// 卡片数据
-const features = [
+// 卡片数据（文案由 i18n 提供）
+const featureMetas = [
   {
     backgroundImage: cardBg1,
     color: themeToken.colorPurple,
     icon: Image,
     id: 1,
-    subtitle: 'Image Generation',
-    title: 'Create What your feel',
   },
   {
     backgroundImage: cardBg2,
     color: themeToken.colorYellow,
     icon: MCP,
     id: 2,
-    subtitle: 'MCP Marketplace',
-    title: 'Discover, Connect, Extend',
   },
   {
     backgroundImage: cardBg3,
     color: themeToken.colorBlue,
     icon: Globe,
     id: 3,
-    subtitle: 'Smart Web Search',
-    title: 'World Knowledge Ready',
   },
   {
     backgroundImage: cardBg4,
     color: themeToken.colorBlue,
     icon: RefreshCw,
     id: 4,
-    subtitle: 'Cross-Platform Sync',
-    title: 'Your Workspace, Anywhere',
   },
   {
     backgroundImage: cardBg5,
     color: themeToken.colorGreen,
     icon: Flower,
     id: 5,
-    subtitle: 'Artifacts',
-    title: 'AI Meets Visual Creation',
   },
   {
     backgroundImage: cardBg6,
     color: themeToken.colorPurple,
     icon: RefreshCw,
     id: 6,
-    subtitle: 'Multi AI Providers',
-    title: 'One Platform, All Models',
   },
-];
+] as const;
 
 interface Screen2Props {
   onScreenConfigChange?: (config: {
@@ -164,23 +153,24 @@ interface Screen2Props {
 }
 
 export const Screen2 = ({ onScreenConfigChange }: Screen2Props) => {
-  // 屏幕特定的配置
-  const CONFIG = {
-    screenConfig: {
-      navigation: {
-        animate: false,
-        showNextButton: true,
-        showPrevButton: true,
-      },
-    },
-  };
+  const { t } = useTranslation('desktop-onboarding');
 
   // 通知父组件屏幕配置
   useEffect(() => {
     if (onScreenConfigChange) {
+      // 屏幕特定的配置
+      const CONFIG = {
+        screenConfig: {
+          navigation: {
+            animate: false,
+            showNextButton: true,
+            showPrevButton: true,
+          },
+        },
+      };
       onScreenConfigChange(CONFIG.screenConfig);
     }
-  }, [onScreenConfigChange]);
+  }, [onScreenConfigChange, t]);
 
   return (
     <div className={layoutStyles.fullScreen}>
@@ -189,14 +179,14 @@ export const Screen2 = ({ onScreenConfigChange }: Screen2Props) => {
         {/* 标题部分 */}
         <TitleSection
           animated={true}
-          badge="Features"
-          description="Advanced AI capabilities tailored to your workflow"
-          title="Everything You Need"
+          badge={t('screen2.badge')}
+          description={t('screen2.description')}
+          title={t('screen2.title')}
         />
 
         {/* 卡片网格 */}
         <div className={cx(styles.cardGrid, layoutStyles.contentSection)}>
-          {features.map((feature, index) => {
+          {featureMetas.map((feature, index) => {
             const cssVariables: Record<string, string> = {
               '--card-bg-image': `url(${feature.backgroundImage})`,
               '--icon-color': feature.color,
@@ -223,13 +213,17 @@ export const Screen2 = ({ onScreenConfigChange }: Screen2Props) => {
                   {/* 图标和小标题行 */}
                   <div className={styles.cardHeader}>
                     <feature.icon className={styles.cardIcon} />
-                    <span className={styles.cardSubtitle}>{feature.subtitle}</span>
+                    <span className={styles.cardSubtitle}>
+                      {t(`screen2.features.${feature.id}.subtitle`)}
+                    </span>
                   </div>
 
                   {/* 大标题 */}
                   <h3
                     className={styles.cardTitle}
-                    dangerouslySetInnerHTML={{ __html: feature.title }}
+                    dangerouslySetInnerHTML={{
+                      __html: t(`screen2.features.${feature.id}.title`),
+                    }}
                   />
                 </div>
               </motion.div>

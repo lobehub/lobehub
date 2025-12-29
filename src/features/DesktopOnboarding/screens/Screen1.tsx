@@ -1,6 +1,7 @@
 import { createStaticStyles } from 'antd-style';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { LogoBrand } from '../common/LogoBrand';
 import { layoutStyles, mediaStyles, typographyStyles } from '../styles';
@@ -33,6 +34,7 @@ interface Screen1Props {
 }
 
 export const Screen1 = ({ onScreenConfigChange }: Screen1Props) => {
+  const { t } = useTranslation('desktop-onboarding');
   const [animationPhase, setAnimationPhase] = useState<'playing' | 'transitioning' | 'finished'>(
     'playing',
   );
@@ -91,7 +93,7 @@ export const Screen1 = ({ onScreenConfigChange }: Screen1Props) => {
         // 启用动画
         animationDuration: 1,
 
-        nextButtonText: 'Start Setting Up',
+        nextButtonText: t('screen1.navigation.next'),
 
         showNextButton: true,
 
@@ -126,7 +128,7 @@ export const Screen1 = ({ onScreenConfigChange }: Screen1Props) => {
     if (onScreenConfigChange) {
       onScreenConfigChange(CONFIG.screenConfig);
     }
-  }, [onScreenConfigChange]);
+  }, [onScreenConfigChange, t]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -292,8 +294,8 @@ export const Screen1 = ({ onScreenConfigChange }: Screen1Props) => {
                 duration: CONFIG.animations.slogan.duration,
               }}
             >
-              Built for you <br />
-              the Super Individual
+              {t('screen1.slogan.line1')} <br />
+              {t('screen1.slogan.line2')}
             </motion.h1>
 
             {/* 说明文字 */}
@@ -309,7 +311,7 @@ export const Screen1 = ({ onScreenConfigChange }: Screen1Props) => {
                 duration: CONFIG.animations.description.duration,
               }}
             >
-              AI-powered productivity platform with intelligent agents
+              {t('screen1.description')}
             </motion.p>
           </motion.div>
         )}
