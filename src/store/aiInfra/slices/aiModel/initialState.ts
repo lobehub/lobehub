@@ -6,6 +6,8 @@ export interface AIModelsState {
   builtinAiModelList: LobeDefaultAiModelListItem[];
   isAiModelListInit?: boolean;
   modelSearchKeyword: string;
+  /** Model IDs that exist in model-bank but not available in remote provider */
+  unavailableModelIds: string[];
 }
 
 export const initialAIModelState: AIModelsState = {
@@ -13,4 +15,5 @@ export const initialAIModelState: AIModelsState = {
   aiProviderModelList: [],
   builtinAiModelList: [],
   modelSearchKeyword: '',
+  unavailableModelIds: [],
 };

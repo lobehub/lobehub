@@ -37,6 +37,7 @@ describe('aiModelSelectors', () => {
     builtinAiModelList: [],
     modelSearchKeyword: '',
     aiModelLoadingIds: ['model2'],
+    unavailableModelIds: [],
     enabledAiModels: [
       {
         id: 'model1',
@@ -86,8 +87,35 @@ describe('aiModelSelectors', () => {
   });
 
   describe('disabledAiProviderModelList', () => {
-    it('should return disabled models', () => {
+    it('should return disabled models excluding unavailable ones', () => {
       const result = aiModelSelectors.disabledAiProviderModelList(mockState);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('model2');
+    });
+
+    it('should exclude models in unavailableModelIds', () => {
+      const state = { ...mockState, unavailableModelIds: ['model2'] };
+      const result = aiModelSelectors.disabledAiProviderModelList(state);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('unavailableAiProviderModelList', () => {
+    it('should return empty when no unavailable models', () => {
+      const result = aiModelSelectors.unavailableAiProviderModelList(mockState);
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return models that are disabled and in unavailableModelIds', () => {
+      const state = { ...mockState, unavailableModelIds: ['model2'] };
+      const result = aiModelSelectors.unavailableAiProviderModelList(state);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('model2');
+    });
+
+    it('should not return enabled models even if in unavailableModelIds', () => {
+      const state = { ...mockState, unavailableModelIds: ['model1', 'model2'] };
+      const result = aiModelSelectors.unavailableAiProviderModelList(state);
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('model2');
     });

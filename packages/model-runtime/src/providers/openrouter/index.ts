@@ -57,18 +57,40 @@ export const params = {
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENROUTER_CHAT_COMPLETION === '1',
   },
-  models: async () => {
+  models: async ({ client }) => {
     let modelList: OpenRouterModelCard[] = [];
 
-    try {
-      const response = await fetch('https://openrouter.ai/api/v1/models');
-      if (response.ok) {
-        const data = await response.json();
-        modelList = data['data'];
+    // 优先尝试使用 /models/user 端点获取用户可用的模型列表
+    const apiKey = client.apiKey;
+    if (apiKey) {
+      try {
+        const userResponse = await fetch('https://openrouter.ai/api/v1/models/user', {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
+          method: 'GET',
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          modelList = userData['data'];
+        }
+      } catch {
+        // 静默处理，回退到公共端点
       }
-    } catch (error) {
-      console.error('Failed to fetch OpenRouter frontend models:', error);
-      return [];
+    }
+
+    // 如果 /models/user 失败或没有 API Key，回退到 /models 端点
+    if (modelList.length === 0) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/models');
+        if (response.ok) {
+          const data = await response.json();
+          modelList = data['data'];
+        }
+      } catch (error) {
+        console.error('Failed to fetch OpenRouter frontend models:', error);
+        return [];
+      }
     }
 
     // 处理前端获取的模型信息，转换为标准格式

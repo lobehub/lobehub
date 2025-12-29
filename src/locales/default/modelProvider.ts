@@ -433,6 +433,17 @@ export default {
         fetching: '正在获取模型列表...',
         latestTime: '上次更新时间：{{time}}',
         noLatestTime: '暂未获取列表',
+        updateResult: {
+          added: '新增 {{count}} 个模型',
+          builtinNotInRemote: '以下 {{count}} 个内置模型在远端不存在，已被禁用：',
+          collapse: '收起',
+          noChanges: '模型列表无变化',
+          removed: '移除 {{count}} 个模型',
+          removedButBuiltin: '以下 {{count}} 个模型已从远端移除，但仍保留在内置列表中：',
+          removedButBuiltinTitle: '模型列表已过期',
+          showMore: '展开更多 ({{count}} 个)',
+          title: '模型列表已更新',
+        },
       },
       noModelsInCategory: '该分类下暂无启用的模型',
       resetAll: {
@@ -444,6 +455,9 @@ export default {
       searchResult: '搜索到 {{count}} 个模型',
       title: '模型列表',
       total: '共 {{count}} 个模型可用',
+      unavailable: '不可用',
+      unavailableTooltip:
+        '这些模型存在于内置模型库中，但远端服务商未返回这些模型，可能已下架或需要特定访问权限',
     },
     searchNotFound: '未找到搜索结果',
     tabs: {

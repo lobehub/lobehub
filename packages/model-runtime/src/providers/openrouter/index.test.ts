@@ -383,6 +383,8 @@ describe('LobeOpenRouterAI - custom features', () => {
   });
 
   describe('models', () => {
+    const mockClient = { apiKey: 'test-api-key' } as any;
+
     beforeEach(() => {
       vi.clearAllMocks();
     });
@@ -424,9 +426,112 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
+
+      // 应该先尝试 /models/user，然后回退到 /models
+      expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/models/user', {
+        headers: { Authorization: 'Bearer test-api-key' },
+        method: 'GET',
+      });
+      expect(models.length).toBeGreaterThan(0);
+    });
+
+    it('should fallback to /models when /models/user fails', async () => {
+      const mockModels = [
+        {
+          id: 'openai/gpt-4',
+          canonical_slug: 'openai/gpt-4',
+          name: 'OpenAI: GPT-4',
+          created: 1679587200,
+          description: 'GPT-4 model',
+          context_length: 8192,
+          architecture: {
+            modality: 'text->text',
+            input_modalities: ['text'],
+            output_modalities: ['text'],
+            tokenizer: 'gpt-4',
+            instruct_type: null,
+          },
+          pricing: {
+            prompt: '0.00003',
+            completion: '0.00006',
+          },
+          top_provider: {
+            context_length: 8192,
+            max_completion_tokens: 4096,
+            is_moderated: false,
+          },
+          supported_parameters: ['tools', 'temperature'],
+        },
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockRejectedValueOnce(new Error('User endpoint failed'))
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ data: mockModels }),
+          }),
+      );
+
+      const models = await params.models({ client: mockClient });
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch).toHaveBeenNthCalledWith(1, 'https://openrouter.ai/api/v1/models/user', {
+        headers: { Authorization: 'Bearer test-api-key' },
+        method: 'GET',
+      });
+      expect(fetch).toHaveBeenNthCalledWith(2, 'https://openrouter.ai/api/v1/models');
+      expect(models.length).toBeGreaterThan(0);
+    });
+
+    it('should use /models when no apiKey provided', async () => {
+      const mockModels = [
+        {
+          id: 'openai/gpt-4',
+          canonical_slug: 'openai/gpt-4',
+          name: 'OpenAI: GPT-4',
+          created: 1679587200,
+          description: 'GPT-4 model',
+          context_length: 8192,
+          architecture: {
+            modality: 'text->text',
+            input_modalities: ['text'],
+            output_modalities: ['text'],
+            tokenizer: 'gpt-4',
+            instruct_type: null,
+          },
+          pricing: {
+            prompt: '0.00003',
+            completion: '0.00006',
+          },
+          top_provider: {
+            context_length: 8192,
+            max_completion_tokens: 4096,
+            is_moderated: false,
+          },
+          supported_parameters: ['tools', 'temperature'],
+        },
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ data: mockModels }),
+        }),
+      );
+
+      const clientWithoutKey = { apiKey: undefined } as any;
+      const models = await params.models({ client: clientWithoutKey });
 
       expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/models');
+      expect(fetch).not.toHaveBeenCalledWith(
+        'https://openrouter.ai/api/v1/models/user',
+        expect.anything(),
+      );
       expect(models.length).toBeGreaterThan(0);
     });
 
@@ -466,7 +571,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const claudeModel = models.find((m) => m.id === 'anthropic/claude-3-opus');
       expect(claudeModel?.displayName).toBe('Claude 3 Opus');
@@ -508,7 +613,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const deepseekModel = models.find((m) => m.id === 'deepseek/deepseek-chat');
       expect(deepseekModel?.displayName).toBe('DeepSeek: Chat');
@@ -550,7 +655,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const deepseekModel = models.find((m) => m.id === 'deepseek/deepseek-r1');
       expect(deepseekModel?.displayName).toBe('DeepSeek R1');
@@ -592,7 +697,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const freeModel = models.find((m) => m.id === 'free/model');
       expect(freeModel?.displayName).toBe('Free Model (free)');
@@ -634,7 +739,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const freeModel = models.find((m) => m.id === 'free/model');
       expect(freeModel?.displayName).toBe('Free Model (free)');
@@ -677,7 +782,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const visionModel = models.find((m) => m.id === 'vision/model');
       expect(visionModel?.vision).toBe(true);
@@ -719,7 +824,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const functionModel = models.find((m) => m.id === 'function/model');
       expect(functionModel?.functionCall).toBe(true);
@@ -761,7 +866,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const reasoningModel = models.find((m) => m.id === 'reasoning/model');
       expect(reasoningModel?.reasoning).toBe(true);
@@ -805,7 +910,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const pricingModel = models.find((m) => m.id === 'pricing/model');
       expect(pricingModel?.pricing).toBeDefined();
@@ -868,7 +973,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const noCacheModel = models.find((m) => m.id === 'no-cache-pricing/model');
       expect(noCacheModel?.pricing?.units).toBeDefined();
@@ -920,7 +1025,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const invalidPricingModel = models.find((m) => m.id === 'invalid-pricing/model');
       // -1 pricing is converted to undefined by formatPrice, so no pricing units should be present
@@ -963,7 +1068,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const contextModel = models.find((m) => m.id === 'context/model');
       expect(contextModel?.contextWindowTokens).toBe(8192);
@@ -1005,7 +1110,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const fallbackModel = models.find((m) => m.id === 'fallback-context/model');
       expect(fallbackModel?.contextWindowTokens).toBe(4096);
@@ -1047,7 +1152,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const maxOutputModel = models.find((m) => m.id === 'maxoutput/model');
       expect(maxOutputModel?.maxOutput).toBe(4096);
@@ -1089,7 +1194,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const nullMaxOutputModel = models.find((m) => m.id === 'null-maxoutput/model');
       expect(nullMaxOutputModel?.maxOutput).toBeUndefined();
@@ -1131,7 +1236,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const releasedModel = models.find((m) => m.id === 'released/model');
       expect(releasedModel?.releasedAt).toBe('2023-03-23');
@@ -1146,7 +1251,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       expect(models).toEqual([]);
     });
@@ -1159,7 +1264,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       expect(models).toEqual([]);
     });
@@ -1167,7 +1272,7 @@ describe('LobeOpenRouterAI - custom features', () => {
     it('should return empty array when fetch throws error', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       expect(models).toEqual([]);
       expect(console.error).toHaveBeenCalledWith(
@@ -1212,7 +1317,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const minimalModel = models.find((m) => m.id === 'minimal/model');
       expect(minimalModel).toBeDefined();
@@ -1257,7 +1362,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const simpleModel = models.find((m) => m.id === 'simple/model');
       expect(simpleModel?.displayName).toBe('Simple Model Name');
@@ -1317,7 +1422,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       expect(models.length).toBeGreaterThanOrEqual(2);
       const model1 = models.find((m) => m.id === 'model-1');
@@ -1365,7 +1470,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const advancedModel = models.find((m) => m.id === 'advanced/model');
       expect(advancedModel?.functionCall).toBe(true);
@@ -1409,7 +1514,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const emptyModel = models.find((m) => m.id === 'empty-modalities/model');
       expect(emptyModel?.vision).toBe(false);
@@ -1451,7 +1556,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const nullPricingModel = models.find((m) => m.id === 'null-pricing/model');
       // null is converted to 0 by formatPrice, which is valid pricing
@@ -1498,7 +1603,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const zeroPricingModel = models.find((m) => m.id === 'zero-pricing/model');
       expect(zeroPricingModel?.pricing).toBeDefined();
@@ -1545,7 +1650,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const mixedModel = models.find((m) => m.id === 'mixed-free/model');
       // Input or output is 0. Current behavior does not append '(free)' for mixed pricing,
@@ -1589,7 +1694,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const expensiveModel = models.find((m) => m.id === 'expensive/model');
       expect(expensiveModel?.pricing?.units).toBeDefined();
@@ -1601,6 +1706,8 @@ describe('LobeOpenRouterAI - custom features', () => {
   });
 
   describe('formatPrice utility', () => {
+    const mockClient = { apiKey: 'test-api-key' } as any;
+
     // Test formatPrice indirectly through models function
     it('should handle undefined price', async () => {
       const mockModels = [
@@ -1638,7 +1745,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const testModel = models.find((m) => m.id === 'test/model');
       expect(testModel?.pricing).toBeUndefined();
@@ -1680,7 +1787,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const invalidPriceModel = models.find((m) => m.id === 'invalid-price/model');
       expect(invalidPriceModel?.pricing).toBeUndefined();
@@ -1722,7 +1829,7 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: mockClient });
 
       const microPriceModel = models.find((m) => m.id === 'micro-price/model');
       expect(microPriceModel?.pricing?.units).toBeDefined();

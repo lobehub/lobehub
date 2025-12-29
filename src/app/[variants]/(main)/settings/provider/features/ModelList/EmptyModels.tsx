@@ -1,13 +1,16 @@
 import { Button, Icon } from '@lobehub/ui';
+import { App } from 'antd';
 import { createStyles } from 'antd-style';
 import { BrainIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Center, Flexbox } from 'react-layout-kit';
 
 import { useAiInfraStore } from '@/store/aiInfra';
+import { ModelUpdateResult } from '@/store/aiInfra/slices/aiModel/types';
 
 import CreateNewModelModal from './CreateNewModelModal';
+import { UpdateNotificationContent } from './UpdateNotification';
 
 const useStyles = createStyles(({ css, token }) => ({
   circle: css`
@@ -48,11 +51,54 @@ const useStyles = createStyles(({ css, token }) => ({
 const EmptyState = memo<{ provider: string }>(({ provider }) => {
   const { t } = useTranslation('modelProvider');
   const { styles } = useStyles();
+  const { notification } = App.useApp();
 
   const [fetchRemoteModelList] = useAiInfraStore((s) => [s.fetchRemoteModelList]);
 
   const [fetchRemoteModelsLoading, setFetchRemoteModelsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  const showUpdateNotification = useCallback(
+    (result: ModelUpdateResult) => {
+      const { added, builtinNotInRemote } = result;
+
+      // For first fetch (empty state), show if models were added or builtin not in remote
+      const hasChanges = added.length > 0 || (builtinNotInRemote && builtinNotInRemote.length > 0);
+      if (hasChanges) {
+        const notificationKey = `model-update-${Date.now()}`;
+        let dismissed = false;
+        const closeNotification = () => {
+          if (dismissed) return;
+          dismissed = true;
+          notification.destroy(notificationKey);
+        };
+
+        // Use warning notification for outdated (builtinNotInRemote), success for updates
+        const isOutdated = builtinNotInRemote && builtinNotInRemote.length > 0;
+        const notificationMethod = isOutdated ? notification.warning : notification.success;
+
+        notificationMethod({
+          description: (
+            <UpdateNotificationContent
+              added={added}
+              builtinNotInRemote={builtinNotInRemote}
+              onAutoClose={closeNotification}
+            />
+          ),
+          duration: null,
+          key: notificationKey,
+          message: isOutdated
+            ? t('providerModels.list.fetcher.updateResult.removedButBuiltinTitle')
+            : t('providerModels.list.fetcher.updateResult.title'),
+          onClose: () => {
+            dismissed = true;
+          },
+          style: { overflow: 'hidden', position: 'relative', width: 380 },
+        });
+      }
+    },
+    [notification, t],
+  );
 
   return (
     <Center className={styles.container} gap={24} paddingBlock={40}>
@@ -80,7 +126,10 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
           onClick={async () => {
             setFetchRemoteModelsLoading(true);
             try {
-              await fetchRemoteModelList(provider);
+              const result = await fetchRemoteModelList(provider);
+              if (result) {
+                showUpdateNotification(result);
+              }
             } catch (e) {
               console.error(e);
             }

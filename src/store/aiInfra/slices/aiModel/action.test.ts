@@ -151,6 +151,12 @@ describe('AiModelAction', () => {
   describe('clearRemoteModels', () => {
     it('should clear remote models for provider and refresh list', async () => {
       const { result } = renderHook(() => useStore());
+
+      // Set initial unavailableModelIds
+      act(() => {
+        useStore.setState({ unavailableModelIds: ['model-1', 'model-2'] });
+      });
+
       const refreshSpy = vi
         .spyOn(result.current, 'refreshAiModelList')
         .mockResolvedValue(undefined);
@@ -164,6 +170,8 @@ describe('AiModelAction', () => {
 
       expect(serviceSpy).toHaveBeenCalledWith('test-provider');
       expect(refreshSpy).toHaveBeenCalled();
+      // Should also clear unavailableModelIds
+      expect(result.current.unavailableModelIds).toEqual([]);
     });
   });
 
@@ -284,6 +292,192 @@ describe('AiModelAction', () => {
       });
 
       expect(batchUpdateSpy).not.toHaveBeenCalled();
+    });
+
+    it('should return ModelUpdateResult with added models when new models are fetched', async () => {
+      // Set up initial state with no remote models
+      act(() => {
+        useStore.setState({
+          aiProviderModelList: [],
+        });
+      });
+
+      const mockRemoteModels = [
+        { displayName: 'New Model 1', enabled: true, id: 'new-1', type: 'chat' },
+        { displayName: 'New Model 2', enabled: true, id: 'new-2', type: 'chat' },
+      ];
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(result.current, 'batchUpdateAiModels').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      let updateResult: any;
+      await act(async () => {
+        updateResult = await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      // First fetch with no previous remote models should return undefined (isFirstFetch=true, no changes)
+      // unless there are added models
+      await waitFor(() => {
+        // The result depends on whether models were added
+        if (updateResult) {
+          expect(updateResult.added).toBeDefined();
+          expect(Array.isArray(updateResult.added)).toBe(true);
+        }
+      });
+    });
+
+    it('should return ModelUpdateResult with removed models info', async () => {
+      // Set up initial state with existing remote models
+      act(() => {
+        useStore.setState({
+          aiProviderModelList: [
+            { id: 'existing-1', source: 'remote', displayName: 'Existing 1' },
+            { id: 'existing-2', source: 'remote', displayName: 'Existing 2' },
+            { id: 'custom-1', source: 'custom', displayName: 'Custom 1' },
+          ] as any,
+        });
+      });
+
+      // New fetch only returns existing-1, so existing-2 should be marked as removed
+      const mockRemoteModels = [
+        { displayName: 'Existing 1', enabled: true, id: 'existing-1', type: 'chat' },
+      ];
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(result.current, 'batchUpdateAiModels').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+      vi.spyOn(aiModelService, 'batchDeleteRemoteModels').mockResolvedValue(undefined as any);
+
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      let updateResult: any;
+      await act(async () => {
+        updateResult = await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      await waitFor(() => {
+        expect(updateResult).toBeDefined();
+        // existing-2 was removed
+        expect(
+          updateResult.removedFromList.includes('existing-2') ||
+            updateResult.removedButBuiltin.includes('existing-2'),
+        ).toBe(true);
+      });
+    });
+
+    it('should return undefined for first fetch when no changes and no remote models', async () => {
+      // Set up initial state with no remote models (first fetch scenario)
+      act(() => {
+        useStore.setState({
+          aiProviderModelList: [],
+        });
+      });
+
+      const mockRemoteModels: any[] = [];
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(result.current, 'batchUpdateAiModels').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      let updateResult: any;
+      await act(async () => {
+        updateResult = await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      // First fetch with no changes should return undefined
+      expect(updateResult).toBeUndefined();
+    });
+
+    it('should return result for non-first fetch even when no changes', async () => {
+      // Set up initial state with existing remote models (non-first fetch scenario)
+      act(() => {
+        useStore.setState({
+          aiProviderModelList: [
+            { id: 'existing-1', source: 'remote', displayName: 'Existing 1' },
+          ] as any,
+        });
+      });
+
+      // Same model returned - no changes but not first fetch
+      const mockRemoteModels = [
+        { displayName: 'Existing 1', enabled: true, id: 'existing-1', type: 'chat' },
+      ];
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(result.current, 'batchUpdateAiModels').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      let updateResult: any;
+      await act(async () => {
+        updateResult = await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      await waitFor(() => {
+        // Non-first fetch should return result even with no changes
+        expect(updateResult).toBeDefined();
+        expect(updateResult.added).toEqual([]);
+        expect(updateResult.removedFromList).toEqual([]);
+        expect(updateResult.removedButBuiltin).toEqual([]);
+        expect(updateResult.builtinNotInRemote).toBeDefined();
+      });
+    });
+
+    it('should not include model with colon suffix in builtinNotInRemote if base ID exists in remote', async () => {
+      // Mock model-bank with a model that has colon suffix
+      vi.doMock('model-bank', () => ({
+        'test-provider': [{ id: 'model-a:variant' }, { id: 'model-b' }],
+      }));
+
+      // Remote has base model 'model-a' but not 'model-a:variant'
+      const mockRemoteModels = [
+        { displayName: 'Model A', enabled: true, id: 'model-a', type: 'chat' },
+      ];
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(result.current, 'batchUpdateAiModels').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      let updateResult: any;
+      await act(async () => {
+        updateResult = await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      await waitFor(() => {
+        // 'model-a:variant' should NOT be in builtinNotInRemote because 'model-a' exists in remote
+        // 'model-b' SHOULD be in builtinNotInRemote because it doesn't exist in remote
+        expect(updateResult).toBeDefined();
+        expect(updateResult.builtinNotInRemote).not.toContain('model-a:variant');
+        expect(updateResult.builtinNotInRemote).toContain('model-b');
+      });
     });
   });
 

@@ -241,6 +241,23 @@ export class AiModelModel {
       .where(and(eq(aiModels.providerId, providerId), eq(aiModels.userId, this.userId)));
   }
 
+  batchDeleteRemoteModels = async (providerId: string, modelIds: string[]) => {
+    if (this.isEmptyArray(modelIds)) {
+      return;
+    }
+
+    return this.db
+      .delete(aiModels)
+      .where(
+        and(
+          eq(aiModels.providerId, providerId),
+          eq(aiModels.source, AiModelSourceEnum.Remote),
+          inArray(aiModels.id, modelIds),
+          eq(aiModels.userId, this.userId),
+        ),
+      );
+  };
+
   updateModelsOrder = async (providerId: string, sortMap: AiModelSortMap[]) => {
     // Early return if sortMap array is empty
     if (this.isEmptyArray(sortMap)) {

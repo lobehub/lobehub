@@ -52,6 +52,10 @@ export class AiModelService {
   deleteAiModel = async (params: { id: string; providerId: string }) => {
     return lambdaClient.aiModel.removeAiModel.mutate(params);
   };
+
+  batchDeleteRemoteModels = async (providerId: string, modelIds: string[]) => {
+    return lambdaClient.aiModel.batchDeleteRemoteModels.mutate({ modelIds, providerId });
+  };
 }
 
 export const aiModelService = new AiModelService();

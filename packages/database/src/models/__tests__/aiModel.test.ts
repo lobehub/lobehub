@@ -315,6 +315,130 @@ describe('AiModelModel', () => {
       expect(remainingModels).toHaveLength(1);
       expect(remainingModels[0].id).toBe('custom1');
     });
+
+    it('should only delete remote models for the specified provider', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'remote1', providerId: 'openai', source: 'remote', userId },
+        { id: 'remote2', providerId: 'anthropic', source: 'remote', userId },
+      ]);
+
+      await aiProviderModel.clearRemoteModels('openai');
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(1);
+      expect(remainingModels[0].id).toBe('remote2');
+    });
+  });
+
+  describe('clearModelsByProvider', () => {
+    it('should delete all models for a provider regardless of source', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'remote1', providerId: 'openai', source: 'remote', userId },
+        { id: 'custom1', providerId: 'openai', source: 'custom', userId },
+        { id: 'builtin1', providerId: 'openai', source: 'builtin', userId },
+      ]);
+
+      await aiProviderModel.clearModelsByProvider('openai');
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(0);
+    });
+
+    it('should only delete models for the specified provider', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'model1', providerId: 'openai', source: 'custom', userId },
+        { id: 'model2', providerId: 'anthropic', source: 'custom', userId },
+      ]);
+
+      await aiProviderModel.clearModelsByProvider('openai');
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(1);
+      expect(remainingModels[0].id).toBe('model2');
+    });
+
+    it('should only delete models for the current user', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'model1', providerId: 'openai', source: 'custom', userId },
+        { id: 'model2', providerId: 'openai', source: 'custom', userId: 'user2' },
+      ]);
+
+      await aiProviderModel.clearModelsByProvider('openai');
+
+      const remainingModels = await serverDB.query.aiModels.findMany();
+      expect(remainingModels).toHaveLength(1);
+      expect(remainingModels[0].userId).toBe('user2');
+    });
+  });
+
+  describe('batchDeleteRemoteModels', () => {
+    it('should delete specified remote models by ids', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'remote1', providerId: 'openai', source: 'remote', userId },
+        { id: 'remote2', providerId: 'openai', source: 'remote', userId },
+        { id: 'remote3', providerId: 'openai', source: 'remote', userId },
+      ]);
+
+      await aiProviderModel.batchDeleteRemoteModels('openai', ['remote1', 'remote2']);
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(1);
+      expect(remainingModels[0].id).toBe('remote3');
+    });
+
+    it('should return early when modelIds array is empty', async () => {
+      await serverDB
+        .insert(aiModels)
+        .values([{ id: 'remote1', providerId: 'openai', source: 'remote', userId }]);
+
+      const result = await aiProviderModel.batchDeleteRemoteModels('openai', []);
+      expect(result).toBeUndefined();
+
+      // Verify models were not affected
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(1);
+    });
+
+    it('should only delete remote source models, not custom or builtin', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'model1', providerId: 'openai', source: 'remote', userId },
+        { id: 'model2', providerId: 'openai', source: 'custom', userId },
+        { id: 'model3', providerId: 'openai', source: 'builtin', userId },
+      ]);
+
+      // Try to delete all three - only remote should be deleted
+      await aiProviderModel.batchDeleteRemoteModels('openai', ['model1', 'model2', 'model3']);
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(2);
+      expect(remainingModels.map((m) => m.id).sort()).toEqual(['model2', 'model3']);
+    });
+
+    it('should only delete models for the specified provider', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'model1', providerId: 'openai', source: 'remote', userId },
+        { id: 'model1', providerId: 'anthropic', source: 'remote', userId },
+      ]);
+
+      await aiProviderModel.batchDeleteRemoteModels('openai', ['model1']);
+
+      const remainingModels = await aiProviderModel.query();
+      expect(remainingModels).toHaveLength(1);
+      expect(remainingModels[0].providerId).toBe('anthropic');
+    });
+
+    it('should only delete models for the current user', async () => {
+      await serverDB.insert(aiModels).values([
+        { id: 'model1', providerId: 'openai', source: 'remote', userId },
+        { id: 'model1', providerId: 'openai', source: 'remote', userId: 'user2' },
+      ]);
+
+      await aiProviderModel.batchDeleteRemoteModels('openai', ['model1']);
+
+      const remainingModels = await serverDB.query.aiModels.findMany();
+      expect(remainingModels).toHaveLength(1);
+      expect(remainingModels[0].userId).toBe('user2');
+    });
   });
 
   describe('updateModelsOrder', () => {

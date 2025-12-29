@@ -37,6 +37,11 @@ const aiModelProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 });
 
 export const aiModelRouter = router({
+  batchDeleteRemoteModels: aiModelProcedure
+    .input(z.object({ modelIds: z.array(z.string()), providerId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.aiModelModel.batchDeleteRemoteModels(input.providerId, input.modelIds);
+    }),
   batchToggleAiModels: aiModelProcedure
     .input(
       z.object({
@@ -48,6 +53,7 @@ export const aiModelRouter = router({
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.batchToggleAiModels(input.id, input.models, input.enabled);
     }),
+
   batchUpdateAiModels: aiModelProcedure
     .input(
       z.object({
@@ -59,12 +65,12 @@ export const aiModelRouter = router({
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.batchUpdateAiModels(input.id, input.models);
     }),
-
   clearModelsByProvider: aiModelProcedure
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearModelsByProvider(input.providerId);
     }),
+
   clearRemoteModels: aiModelProcedure
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {

@@ -2,15 +2,17 @@ import { ActionIcon, Button, Dropdown, Text } from '@lobehub/ui';
 import { App, Skeleton, Space } from 'antd';
 import { useTheme } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
+import { ModelUpdateResult } from '@/store/aiInfra/slices/aiModel/types';
 
 import CreateNewModelModal from '../CreateNewModelModal';
+import { UpdateNotificationContent } from '../UpdateNotification';
 import Search from './Search';
 
 interface ModelFetcherProps {
@@ -23,7 +25,7 @@ const ModelTitle = memo<ModelFetcherProps>(
   ({ provider, showAddNewModel = true, showModelFetcher = true }) => {
     const theme = useTheme();
     const { t } = useTranslation('modelProvider');
-    const { modal, message } = App.useApp();
+    const { modal, message, notification } = App.useApp();
     const [
       searchKeyword,
       totalModels,
@@ -51,6 +53,74 @@ const ModelTitle = memo<ModelFetcherProps>(
     const [showModal, setShowModal] = useState(false);
 
     const mobile = useIsMobile();
+
+    const showUpdateNotification = useCallback(
+      (result: ModelUpdateResult) => {
+        const { added, builtinNotInRemote, removedFromList, removedButBuiltin } = result;
+        const hasChanges =
+          added.length > 0 ||
+          removedFromList.length > 0 ||
+          removedButBuiltin.length > 0 ||
+          builtinNotInRemote.length > 0;
+
+        if (!hasChanges) {
+          message.success(t('providerModels.list.fetcher.updateResult.noChanges'));
+          return;
+        }
+
+        const notificationKey = `model-update-${Date.now()}`;
+        let dismissed = false;
+        const closeNotification = () => {
+          if (dismissed) return;
+          dismissed = true;
+          notification.destroy(notificationKey);
+        };
+
+        const isOutdated = removedButBuiltin.length > 0 || builtinNotInRemote.length > 0;
+        const notificationStyle = { overflow: 'hidden', position: 'relative' as const, width: 380 };
+
+        if (isOutdated) {
+          notification.warning({
+            description: (
+              <UpdateNotificationContent
+                added={added}
+                builtinNotInRemote={builtinNotInRemote}
+                onAutoClose={closeNotification}
+                removedButBuiltin={removedButBuiltin}
+                removedFromList={removedFromList}
+              />
+            ),
+            duration: null,
+            key: notificationKey,
+            message: t('providerModels.list.fetcher.updateResult.removedButBuiltinTitle'),
+            onClose: () => {
+              dismissed = true;
+            },
+            style: notificationStyle,
+          });
+        } else {
+          notification.success({
+            description: (
+              <UpdateNotificationContent
+                added={added}
+                builtinNotInRemote={builtinNotInRemote}
+                onAutoClose={closeNotification}
+                removedButBuiltin={removedButBuiltin}
+                removedFromList={removedFromList}
+              />
+            ),
+            duration: null,
+            key: notificationKey,
+            message: t('providerModels.list.fetcher.updateResult.title'),
+            onClose: () => {
+              dismissed = true;
+            },
+            style: notificationStyle,
+          });
+        }
+      },
+      [notification, t, message],
+    );
 
     return (
       <Flexbox
@@ -114,7 +184,10 @@ const ModelTitle = memo<ModelFetcherProps>(
                     onClick={async () => {
                       setFetchRemoteModelsLoading(true);
                       try {
-                        await fetchRemoteModelList(provider);
+                        const result = await fetchRemoteModelList(provider);
+                        if (result) {
+                          showUpdateNotification(result);
+                        }
                       } catch (e) {
                         console.error(e);
                       }
