@@ -1,6 +1,7 @@
 import type { BuiltinStreaming } from '@lobechat/types';
 
 import { GTDApiName } from '../../types';
+import { CreatePlanStreaming } from './CreatePlan';
 import { ExecTaskStreaming } from './ExecTask';
 import { ExecTasksStreaming } from './ExecTasks';
 
@@ -11,8 +12,13 @@ import { ExecTasksStreaming } from './ExecTasks';
  * still executing, allowing real-time feedback to users.
  */
 export const GTDStreamings: Record<string, BuiltinStreaming> = {
+  [GTDApiName.createPlan]: CreatePlanStreaming as BuiltinStreaming,
   [GTDApiName.execTask]: ExecTaskStreaming as BuiltinStreaming,
   [GTDApiName.execTasks]: ExecTasksStreaming as BuiltinStreaming,
 };
 
-export { ExecTaskStreaming, ExecTasksStreaming };
+
+
+export {CreatePlanStreaming} from './CreatePlan';
+export {ExecTaskStreaming} from './ExecTask';
+export {ExecTasksStreaming} from './ExecTasks';

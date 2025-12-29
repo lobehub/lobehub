@@ -14,7 +14,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   description: css`
-    margin-bottom: 8px;
+    margin-block-end: 8px;
     font-weight: 500;
     color: ${cssVar.colorText};
   `,
