@@ -1,27 +1,107 @@
 # E2E Testing Guide for Claude
 
-本文档记录了在 LobeChat E2E 测试开发中的经验和最佳实践。
+本文档记录了在 LobeHub E2E 测试开发中的经验和最佳实践。
+
+Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产品功能-e2e-测试体验基准线)
+
+## 测试策略：体验驱动的 E2E 测试
+
+### 核心理念
+
+建立完整的**用户体验链路 E2E 测试**，作为未来变更和重构的**体验基准线**。
+
+**目的**：
+
+- 确保核心用户体验在代码变更后不会退化
+- 为重构提供安全网，敢于大胆改进代码
+- 从用户视角验证功能完整性
+
+### 产品架构覆盖
+
+| 模块             | 子功能               | 优先级 | 状态 |
+| ---------------- | -------------------- | ------ | ---- |
+| **Agent**        | Builder, 对话，Task  | P0     | 🚧   |
+| **Agent Group**  | Builder, 群聊        | P1     | ⏳   |
+| **Page（文稿）** | 创建，编辑，分享     | P1     | ⏳   |
+| **知识库**       | 创建，上传，RAG 对话 | P1     | ⏳   |
+| **记忆**         | 查看，编辑，关联     | P2     | ⏳   |
+
+### 标签系统
+
+```gherkin
+@journey      # 用户旅程测试（体验基准线）
+@smoke        # 冒烟测试（快速验证）
+@regression   # 回归测试
+
+@P0           # 最高优先级（CI 必跑）
+@P1           # 高优先级（Nightly）
+@P2           # 中优先级（发版前）
+
+@agent        # Agent 模块
+@agent-group  # Agent Group 模块
+@page         # Page 文稿模块
+@knowledge    # 知识库模块
+@memory       # 记忆模块
+```
+
+### 执行策略
+
+```bash
+# CI - P0 冒烟测试（每次 PR）
+pnpm exec cucumber-js --config cucumber.config.js --tags "@smoke and @P0"
+
+# Nightly - 所有用户旅程
+pnpm exec cucumber-js --config cucumber.config.js --tags "@journey"
+
+# 发版前 - 完整回归
+pnpm exec cucumber-js --config cucumber.config.js --tags "@P0 or @P1"
+
+# 完整测试
+pnpm exec cucumber-js --config cucumber.config.js
+```
+
+### 测试设计原则
+
+1. **按 CRUD + 核心交互覆盖**：每个模块覆盖创建、读取、更新、删除及核心交互流程
+2. **LLM 响应必须 Mock**：保证测试稳定性和可重复性
+3. **中文描述场景**：Feature 文件使用中文，贴近产品需求
+4. **优先级分层**：合理分配 P0/P1/P2，控制 CI 执行时间
 
 ## 目录结构
 
 ```
 e2e/
 ├── src/
-│   ├── features/           # Cucumber feature 文件
-│   │   ├── journeys/       # 用户旅程测试
-│   │   │   └── agent/      # Agent 相关测试
-│   │   ├── discover/       # Discover 页面测试
-│   │   └── routes/         # 路由测试
-│   ├── steps/              # Step definitions
-│   │   ├── agent/          # Agent 相关 steps
-│   │   ├── common/         # 通用 steps (auth, navigation)
-│   │   └── hooks.ts        # Before/After hooks
-│   ├── mocks/              # Mock 框架
-│   │   └── llm/            # LLM Mock (拦截 AI 请求)
-│   └── support/            # 测试支持文件
-│       └── world.ts        # CustomWorld 定义
-├── cucumber.config.js      # Cucumber 配置
-└── CLAUDE.md               # 本文档
+│   ├── features/                    # Cucumber feature 文件
+│   │   ├── journeys/                # 用户旅程（体验基准线）
+│   │   │   ├── agent/
+│   │   │   │   ├── agent-builder.feature
+│   │   │   │   ├── agent-conversation.feature  ✅
+│   │   │   │   └── agent-task.feature
+│   │   │   ├── agent-group/
+│   │   │   │   ├── group-builder.feature
+│   │   │   │   └── group-chat.feature
+│   │   │   ├── page/
+│   │   │   │   └── page-crud.feature
+│   │   │   ├── knowledge/
+│   │   │   │   └── knowledge-rag.feature
+│   │   │   └── memory/
+│   │   │       └── memory-crud.feature
+│   │   ├── smoke/                   # 冒烟测试
+│   │   │   └── discover/
+│   │   └── regression/              # 回归测试
+│   ├── steps/                       # Step definitions
+│   │   ├── agent/                   # Agent 相关 steps
+│   │   ├── common/                  # 通用 steps (auth, navigation)
+│   │   └── hooks.ts                 # Before/After hooks
+│   ├── mocks/                       # Mock 框架
+│   │   └── llm/                     # LLM Mock (拦截 AI 请求) ✅
+│   └── support/                     # 测试支持文件
+│       └── world.ts                 # CustomWorld 定义
+├── screenshots/                     # 失败截图
+├── reports/                         # 测试报告
+├── cucumber.config.js               # Cucumber 配置
+└── CLAUDE.md                        # 本文档
 ```
 
 ## 运行测试
@@ -49,7 +129,7 @@ LLM Mock 通过 Playwright 的 `page.route()` 拦截对 `/webapi/chat/openai` �
 
 ### SSE 响应格式
 
-LobeChat 使用特定的 SSE 格式，必须严格匹配：
+LobeHub 使用特定的 SSE 格式，必须严格匹配：
 
 ```typescript
 // 1. 初始 data 事件
@@ -104,30 +184,9 @@ llmMockManager.clearResponses();
 
 ## 页面元素定位技巧
 
-### Desktop/Mobile 双组件处理
-
-LobeChat 同时渲染 Desktop 和 Mobile 版本的组件，导致同一个 `data-testid` 可能匹配到多个元素。
-
-**解决方案**: 使用 `boundingBox()` 检测可见的组件：
-
-```typescript
-const chatInputs = this.page.locator('[data-testid="chat-input"]');
-const count = await chatInputs.count();
-
-let visibleContainer = chatInputs.first();
-for (let i = 0; i < count; i++) {
-  const elem = chatInputs.nth(i);
-  const box = await elem.boundingBox();
-  if (box && box.width > 0 && box.height > 0) {
-    visibleContainer = elem;
-    break;
-  }
-}
-```
-
 ### 富文本编辑器 (contenteditable) 输入
 
-LobeChat 使用 `@lobehub/editor` 作为聊天输入框，是一个 contenteditable 的富文本编辑器。
+LobeHub 使用 `@lobehub/editor` 作为聊天输入框，是一个 contenteditable 的富文本编辑器。
 
 **关键点**:
 
