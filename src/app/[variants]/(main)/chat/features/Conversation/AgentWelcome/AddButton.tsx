@@ -1,17 +1,23 @@
-import { Button } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
+import { Plus } from 'lucide-react';
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useActionSWR } from '@/libs/swr';
-import { useSessionStore } from '@/store/session';
+import { useAgentStore } from '@/store/agent';
 
 const AddButton = memo(() => {
-  const createSession = useSessionStore((s) => s.createSession);
-  const { mutate, isValidating } = useActionSWR(['session.createSession', undefined], () => {
-    return createSession({ group: undefined });
+  const navigate = useNavigate();
+  const createAgent = useAgentStore((s) => s.createAgent);
+  const { mutate, isValidating } = useActionSWR('agent.createAgent', async () => {
+    const result = await createAgent({});
+    navigate(`/agent/${result.agentId}/profile`);
+    return result;
   });
 
   return (
     <Button
+      icon={<Icon icon={Plus} size={'small'} />}
       loading={isValidating}
       onClick={() => mutate()}
       style={{
@@ -23,9 +29,7 @@ const AddButton = memo(() => {
         width: '20px',
       }}
       variant={'filled'}
-    >
-      +
-    </Button>
+    />
   );
 });
 
