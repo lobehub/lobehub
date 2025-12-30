@@ -47,10 +47,13 @@ export async function seedTestUser(): Promise<void> {
 
     // Use ON CONFLICT DO NOTHING to handle all unique constraint conflicts
     // This is safe because we're using fixed test user credentials
+    // Set onboarding as completed to skip onboarding flow in tests
+    const onboarding = JSON.stringify({ finishedAt: now, version: 1 });
+
     await client.query(
-      `INSERT INTO users (id, email, normalized_email, username, full_name, email_verified, created_at, updated_at, last_active_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
-       ON CONFLICT DO NOTHING`,
+      `INSERT INTO users (id, email, normalized_email, username, full_name, email_verified, onboarding, created_at, updated_at, last_active_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $8)
+       ON CONFLICT (id) DO UPDATE SET onboarding = $7, updated_at = $8`,
       [
         TEST_USER.id,
         TEST_USER.email,
@@ -58,6 +61,7 @@ export async function seedTestUser(): Promise<void> {
         TEST_USER.username,
         TEST_USER.fullName,
         true, // email_verified
+        onboarding,
         now,
       ],
     );
