@@ -6,8 +6,8 @@ import { startWebServer, stopWebServer } from '../support/webServer';
 import { CustomWorld } from '../support/world';
 
 process.env['E2E'] = '1';
-// Set default timeout for all steps to 30 seconds (production build is fast)
-setDefaultTimeout(30_000);
+// Set default timeout for all steps to 10 seconds
+setDefaultTimeout(10_000);
 
 // Store base URL and cached session cookies
 let baseUrl: string;
@@ -16,7 +16,7 @@ let sessionCookies: Cookie[] = [];
 BeforeAll({ timeout: 600_000 }, async function () {
   console.log('🚀 Starting E2E test suite...');
 
-  const PORT = process.env.PORT ? Number(process.env.PORT) : 3088;
+  const PORT = process.env.PORT ? Number(process.env.PORT) : 3006;
   baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
 
   console.log(`Base URL: ${baseUrl}`);
@@ -82,6 +82,9 @@ Before(async function (this: CustomWorld, { pickle }) {
 
   const testId = pickle.tags.find((tag) => tag.name.startsWith('@DISCOVER-'));
   console.log(`\n📝 Running: ${pickle.name}${testId ? ` (${testId.name.replace('@', '')})` : ''}`);
+
+  // Setup API mocks before any page navigation
+  // await mockManager.setup(this.page);
 
   // Set cached session cookies to skip login
   if (sessionCookies.length > 0) {

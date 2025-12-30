@@ -29,7 +29,7 @@ export class CustomWorld extends World {
   }
 
   async init() {
-    const PORT = process.env.PORT ? Number(process.env.PORT) : 3010;
+    const PORT = process.env.PORT ? Number(process.env.PORT) : 3006;
     const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
     this.browser = await chromium.launch({
