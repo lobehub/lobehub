@@ -42,7 +42,7 @@ export class CustomWorld extends World {
     });
 
     // Set expect timeout for assertions (e.g., toBeVisible, toHaveText)
-    this.browserContext.setDefaultTimeout(120_000);
+    this.browserContext.setDefaultTimeout(30_000);
 
     this.page = await this.browserContext.newPage();
 
@@ -58,7 +58,7 @@ export class CustomWorld extends World {
       }
     });
 
-    this.page.setDefaultTimeout(120_000);
+    this.page.setDefaultTimeout(30_000);
   }
 
   async cleanup() {
