@@ -156,7 +156,7 @@ const CompletedState = memo<CompletedStateProps>(
     // Detail variant: content first, then footer with metrics
     if (variant === 'detail') {
       return (
-        <Flexbox>
+        <>
           {content && <Markdown>{content}</Markdown>}
           {hasMetrics && (
             <MetricsRow
@@ -167,13 +167,18 @@ const CompletedState = memo<CompletedStateProps>(
               variant={variant}
             />
           )}
-        </Flexbox>
+        </>
       );
     }
 
     // Compact variant: metrics first, then expandable content
     return (
-      <Flexbox gap={8}>
+      <>
+        {hasContent && expanded && (
+          <div className={styles.collapseContent}>
+            <Markdown>{content}</Markdown>
+          </div>
+        )}
         {hasMetrics && (
           <MetricsRow
             formattedCost={formattedCost ?? undefined}
@@ -183,12 +188,7 @@ const CompletedState = memo<CompletedStateProps>(
             variant={variant}
           />
         )}
-        {hasContent && expanded && (
-          <div className={styles.collapseContent}>
-            <Markdown>{content}</Markdown>
-          </div>
-        )}
-      </Flexbox>
+      </>
     );
   },
 );

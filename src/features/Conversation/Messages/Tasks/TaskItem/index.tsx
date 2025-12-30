@@ -1,9 +1,7 @@
 'use client';
 
-import { Block, Icon, Text } from '@lobehub/ui';
-import { Check, ChevronDown, Loader2, XCircle } from 'lucide-react';
+import { AccordionItem, Block, Text } from '@lobehub/ui';
 import { memo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { ThreadStatus } from '@/types/index';
 import type { UIChatMessage } from '@/types/index';
@@ -15,14 +13,13 @@ import {
   ProcessingState,
   isProcessingStatus,
 } from '../shared';
-import { styles } from './styles';
+import TaskTitle from './TaskTitle';
 
 interface TaskItemProps {
   item: UIChatMessage;
 }
 
 const TaskItem = memo<TaskItemProps>(({ item }) => {
-  const { t } = useTranslation('chat');
   const { id, content, metadata, taskDetail } = item;
   const [expanded, setExpanded] = useState(false);
 
@@ -38,79 +35,25 @@ const TaskItem = memo<TaskItemProps>(({ item }) => {
   const isInitializing = !taskDetail || !status;
 
   const hasContent = content && content.trim().length > 0;
-
-  const getStatusIcon = () => {
-    if (isCompleted) {
-      return (
-        <div className={`${styles.statusIcon} ${styles.statusIconCompleted}`}>
-          <Check size={10} strokeWidth={3} />
-        </div>
-      );
-    }
-    if (isError) {
-      return (
-        <div className={`${styles.statusIcon} ${styles.statusIconError}`}>
-          <XCircle size={10} />
-        </div>
-      );
-    }
-    if (isProcessing || isInitializing) {
-      return (
-        <div className={`${styles.statusIcon} ${styles.statusIconProcessing}`}>
-          <Icon icon={Loader2} size={10} spin />
-        </div>
-      );
-    }
-    return null;
-  };
+  const allowExpand = !!(isCompleted && hasContent);
 
   return (
-    <Block variant={'outlined'}>
-      {/* Header Row: Status Icon + Title/Instruction + Expand Toggle */}
-      <div className={styles.headerRow}>
-        {getStatusIcon()}
-        <div className={styles.titleRow}>
-          {title && (
-            <Text as={'h4'} fontSize={14} weight={500}>
-              {title}
-            </Text>
-          )}
-          {instruction && (
-            <Text as={'p'} ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
-              {instruction}
-            </Text>
-          )}
-        </div>
-        {/* Expand/Collapse Toggle - only show for completed tasks with content */}
-        {isCompleted && hasContent && (
-          <Text
-            as={'span'}
-            fontSize={12}
-            onClick={() => setExpanded(!expanded)}
-            style={{
-              alignItems: 'center',
-              cursor: 'pointer',
-              display: 'flex',
-              flexShrink: 0,
-              gap: 4,
-              marginInlineStart: 'auto',
-            }}
-            type={'secondary'}
-          >
-            <ChevronDown
-              size={14}
-              style={{
-                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s',
-              }}
-            />
-            <span>{expanded ? t('messageAction.collapse') : t('messageAction.expand')}</span>
-          </Text>
+    <AccordionItem
+      allowExpand={allowExpand}
+      expand={expanded}
+      itemKey={id}
+      onExpandChange={setExpanded}
+      paddingBlock={4}
+      paddingInline={4}
+      title={<TaskTitle status={status} title={title} />}
+    >
+      <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
+        {instruction && (
+          <Block padding={12}>
+            <Text type={'secondary'}>{instruction}</Text>
+          </Block>
         )}
-      </div>
 
-      {/* Main Content Area */}
-      <div className={styles.mainContent}>
         {/* Initializing State - no taskDetail yet */}
         {isInitializing && <InitializingState />}
 
@@ -131,8 +74,8 @@ const TaskItem = memo<TaskItemProps>(({ item }) => {
             variant="compact"
           />
         )}
-      </div>
-    </Block>
+      </Block>
+    </AccordionItem>
   );
 }, Object.is);
 

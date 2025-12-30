@@ -23,7 +23,7 @@ const TaskDetailPanel = memo<TaskDetailPanelProps>(
       <>
         {/* Instruction Header */}
         {instruction && (
-          <Block padding={16}>
+          <Block padding={12}>
             <Text type={'secondary'}>{instruction}</Text>
           </Block>
         )}
