@@ -1,5 +1,7 @@
 import { IWorldOptions, World, setWorldConstructor } from '@cucumber/cucumber';
 import { Browser, BrowserContext, Page, Response, chromium } from '@playwright/test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 export interface TestContext {
   [key: string]: any;
@@ -68,8 +70,18 @@ export class CustomWorld extends World {
   }
 
   async takeScreenshot(name: string): Promise<Buffer> {
-    console.log(name);
-    return await this.page.screenshot({ fullPage: true });
+    const screenshot = await this.page.screenshot({ fullPage: true });
+
+    // Save screenshot to file
+    const screenshotsDir = path.join(process.cwd(), 'screenshots');
+    if (!fs.existsSync(screenshotsDir)) {
+      fs.mkdirSync(screenshotsDir, { recursive: true });
+    }
+    const filepath = path.join(screenshotsDir, `${name}.png`);
+    fs.writeFileSync(filepath, screenshot);
+    console.log(`📸 Screenshot saved: ${filepath}`);
+
+    return screenshot;
   }
 }
 
