@@ -23,7 +23,6 @@ import {
   Sparkles,
   UserCircle,
 } from 'lucide-react';
-import { label } from 'motion/react-m';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -36,6 +35,7 @@ export enum SettingsGroupKey {
   AIConfig = 'ai-config',
   Account = 'account',
   Profile = 'profile',
+  Subscription = 'subscription',
   System = 'system',
 }
 
@@ -88,35 +88,6 @@ export const useCategory = () => {
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
       },
-      ...(ENABLE_BUSINESS_FEATURES
-        ? [
-            {
-              icon: Map,
-              key: SettingsTabs.Plans,
-              label: tSubscription('tab.plans'),
-            },
-            {
-              icon: Coins,
-              key: SettingsTabs.Funds,
-              label: tSubscription('tab.funds'),
-            },
-            {
-              icon: PieChart,
-              key: SettingsTabs.Usage,
-              label: tSubscription('tab.usage'),
-            },
-            {
-              icon: CreditCard,
-              key: SettingsTabs.Billing,
-              label: tSubscription('tab.billing'),
-            },
-            {
-              icon: Gift,
-              key: SettingsTabs.Referral,
-              label: tSubscription('tab.referral'),
-            },
-          ]
-        : []),
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -124,6 +95,42 @@ export const useCategory = () => {
       key: SettingsGroupKey.Profile,
       title: t('group.profile'),
     });
+
+    const subscriptionItems: CategoryItem[] = [
+      {
+        icon: Map,
+        key: SettingsTabs.Plans,
+        label: tSubscription('tab.plans'),
+      },
+      {
+        icon: Coins,
+        key: SettingsTabs.Funds,
+        label: tSubscription('tab.funds'),
+      },
+      {
+        icon: PieChart,
+        key: SettingsTabs.Usage,
+        label: tSubscription('tab.usage'),
+      },
+      {
+        icon: CreditCard,
+        key: SettingsTabs.Billing,
+        label: tSubscription('tab.billing'),
+      },
+      {
+        icon: Gift,
+        key: SettingsTabs.Referral,
+        label: tSubscription('tab.referral'),
+      },
+    ];
+
+    if (ENABLE_BUSINESS_FEATURES) {
+      groups.push({
+        items: subscriptionItems,
+        key: SettingsGroupKey.Subscription,
+        title: t('group.subscription'),
+      });
+    }
 
     // 账号组 - 个人相关设置
     const commonItems: CategoryItem[] = [

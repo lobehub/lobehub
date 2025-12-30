@@ -56,6 +56,7 @@ export default {
   'group.aiConfig': 'Model',
   'group.common': 'General',
   'group.profile': 'Account',
+  'group.subscription': 'Subscription',
   'group.system': 'System',
   'groupTab.chat': 'Chat',
   'groupTab.members': 'Members',
