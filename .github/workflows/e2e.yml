@@ -63,9 +63,6 @@ jobs:
                 SKIP_LINT: '1'
 
             - name: Run E2E tests
-              env:
-                  PORT: 3088
-                  BASE_URL: ''
               run: bun run e2e
 
             - name: Upload Cucumber HTML report (on failure)
