@@ -132,7 +132,7 @@
     ]
   },
   "overrides": {
-    "@lobehub/ui": "^4.4.2",
+    "@lobehub/ui": "^4.4.5",
     "antd-style": "^4.1.0",
     "stylelint-config-clean-order": "7.0.0"
   },
@@ -208,7 +208,7 @@
     "@lobehub/icons": "^4.0.2",
     "@lobehub/market-sdk": "^0.25.0",
     "@lobehub/tts": "^4.0.2",
-    "@lobehub/ui": "^4.4.2",
+    "@lobehub/ui": "^4.4.5",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@neondatabase/serverless": "^1.0.2",
     "@next/third-parties": "^16.1.1",
