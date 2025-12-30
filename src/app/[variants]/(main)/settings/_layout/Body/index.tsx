@@ -37,6 +37,7 @@ const Body = memo(() => {
       <Accordion
         defaultExpandedKeys={[
           SettingsGroupKey.Profile,
+          SettingsGroupKey.Subscription,
           SettingsGroupKey.Account,
           SettingsGroupKey.AIConfig,
           SettingsGroupKey.System,
