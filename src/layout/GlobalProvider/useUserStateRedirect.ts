@@ -57,7 +57,7 @@ export const useDesktopUserStateRedirect = () => {
 
   return useCallback(
     (state: UserInitializationState) => {
-      if (state.isInWaitList !== true) {
+      if (state.isInWaitList === true) {
         void handleDesktopWaitlist();
         return;
       }
@@ -72,7 +72,7 @@ export const useDesktopUserStateRedirect = () => {
 export const useWebUserStateRedirect = (getCurrentPathname: () => string | null | undefined) =>
   useCallback(
     (state: UserInitializationState) => {
-      if (state.isInWaitList !== true) {
+      if (state.isInWaitList === true) {
         redirectIfNotOn(getCurrentPathname(), '/waitlist');
         return;
       }
