@@ -182,5 +182,6 @@ const DragUploadZone = memo<DragUploadZoneProps>(
 
 DragUploadZone.displayName = 'DragUploadZone';
 
+export { usePasteFile } from './usePasteFile';
 export { useUploadFiles } from './useUploadFiles';
 export default DragUploadZone;
