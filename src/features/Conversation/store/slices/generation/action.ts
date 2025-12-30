@@ -276,8 +276,15 @@ export const generationSlice: StateCreator<
     });
 
     try {
+      // Calculate next branch index by counting children of this user message
+      // We need to count how many assistant messages have this user message as parent
+      const { dbMessages } = get();
+      const childrenCount = dbMessages.filter((m) => m.parentId === messageId).length;
+      // New branch index = current children count (since index is 0-based)
+      const nextBranchIndex = childrenCount;
+
       // Switch to a new branch (pass operationId for correct context in optimistic update)
-      await chatStore.switchMessageBranch(messageId, item.branch ? item.branch.count : 1, {
+      await chatStore.switchMessageBranch(messageId, nextBranchIndex, {
         operationId,
       });
 
