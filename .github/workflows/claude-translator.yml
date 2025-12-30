@@ -44,7 +44,7 @@ jobs:
           github_token: ${{ secrets.GH_TOKEN }}
           allowed_non_write_users: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--allowed-tools Bash(gh issue:*),Bash(gh api:repos/*/issues:*),Bash(gh api:repos/*/pulls/*/reviews/*),Bash(gh api:repos/*/pulls/comments/*)"
+          claude_args: '--allowed-tools "Bash(gh issue:*),Bash(gh api:repos/*/issues:*),Bash(gh api:repos/*/pulls/*/reviews/*),Bash(gh api:repos/*/pulls/comments/*)"'
           prompt: |
             You are a multilingual translation assistant. You need to respond to the following four types of GitHub Webhook events:
 

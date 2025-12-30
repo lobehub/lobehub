@@ -30,7 +30,7 @@ jobs:
           github_token: ${{ secrets.GH_TOKEN }}
           allowed_non_write_users: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--allowed-tools Bash(gh *),Read"
+          claude_args: '--allowed-tools "Bash(gh *),Read"'
           prompt: |
             You're an issue triage assistant for GitHub issues. Your task is to analyze issues, apply appropriate labels, and mention the responsible team member.
 
