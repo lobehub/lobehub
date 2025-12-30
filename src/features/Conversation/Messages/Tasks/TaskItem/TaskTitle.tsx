@@ -2,7 +2,7 @@
 
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { ListTodoIcon, Loader2, XIcon } from 'lucide-react';
+import { ListChecksIcon, Loader2, XIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { ThreadStatus } from '@/types/index';
@@ -23,7 +23,7 @@ const TaskStatusIndicator = memo<{ status?: ThreadStatus }>(({ status }) => {
   let icon;
 
   if (isCompleted) {
-    icon = <Icon color={cssVar.colorSuccess} icon={ListTodoIcon} />;
+    icon = <Icon color={cssVar.colorSuccess} icon={ListChecksIcon} />;
   } else if (isError) {
     icon = <Icon color={cssVar.colorError} icon={XIcon} />;
   } else if (isProcessing || isInitializing) {
