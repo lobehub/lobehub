@@ -41,8 +41,10 @@ export const useWatchThemeUpdate = () => {
     if (!isAppStateInit || !isMac) return;
     document.documentElement.style.background = 'none';
 
-    // https://x.com/alanblogsooo/status/1939208908993896684
+    const lobeApp = document.querySelector('#lobe-ui-theme-app');
+    if (!lobeApp) return;
+    const hexColor = getComputedStyle(lobeApp).getPropertyValue('--ant-color-bg-layout');
 
-    document.body.style.background = `color-mix(in srgb, ${cssVar.colorBgLayout} 66%, transparent)`;
+    document.body.style.background = `color-mix(in srgb, ${hexColor} 86%, transparent)`;
   }, [systemAppearance, isAppStateInit, isMac]);
 };

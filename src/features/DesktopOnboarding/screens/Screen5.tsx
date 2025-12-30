@@ -53,7 +53,7 @@ const screen4Styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadius};
 
     font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextBase};
+    color: #fff;
 
     background: rgba(255, 255, 255, 5%);
     outline: none;
@@ -692,6 +692,12 @@ export const Screen5 = ({ onScreenConfigChange }: Screen5Props) => {
                 initial={{ opacity: 0, y: 30 }}
                 key="selfhost-input"
                 onChange={(e) => setEndpoint(e.target.value)}
+                onContextMenu={async (e) => {
+                  if (!isDesktop) return;
+                  e.preventDefault();
+                  const { electronSystemService } = await import('@/services/electron/system');
+                  await electronSystemService.showContextMenu('edit');
+                }}
                 placeholder={t('screen5.selfhost.endpointPlaceholder')}
                 transition={{ delay: 0.5, duration: 0.5 }}
                 type="text"
