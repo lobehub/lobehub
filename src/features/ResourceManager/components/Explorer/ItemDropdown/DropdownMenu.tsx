@@ -20,7 +20,7 @@ const DropdownMenu = memo<DropdownMenuProps>(
 
     // Only compute dropdown items when dropdown is actually open
     // This prevents expensive hook execution for all 20-25 visible items
-    const { menuItems, moveModal } = useFileItemDropdown({
+    const { menuItems } = useFileItemDropdown({
       enabled: isOpen,
       fileType,
       filename,
@@ -32,12 +32,9 @@ const DropdownMenu = memo<DropdownMenuProps>(
     });
 
     return (
-      <>
-        <Dropdown menu={{ items: menuItems }} onOpenChange={setIsOpen} open={isOpen}>
-          <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
-        </Dropdown>
-        {moveModal}
-      </>
+      <Dropdown menu={{ items: menuItems }} onOpenChange={setIsOpen} open={isOpen}>
+        <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
+      </Dropdown>
     );
   },
 );

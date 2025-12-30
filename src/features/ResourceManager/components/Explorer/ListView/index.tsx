@@ -250,7 +250,7 @@ const ListView = memo(() => {
               />
             );
           }}
-          overscan={600}
+          overscan={48 * 5}
           ref={virtuosoRef}
           style={{ height: '100%' }}
         />

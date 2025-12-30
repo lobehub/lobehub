@@ -1,4 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { ModalHost } from '@lobehub/ui';
 import { LazyMotion, domMax } from 'motion/react';
 import { type ReactNode, Suspense } from 'react';
 
@@ -66,6 +67,7 @@ const GlobalLayout = async ({
                 <DragUploadProvider>
                   <LazyMotion features={domMax}>
                     <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                    <ModalHost />
                   </LazyMotion>
                 </DragUploadProvider>
               </GroupWizardProvider>

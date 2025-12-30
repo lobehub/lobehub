@@ -8,6 +8,7 @@ import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as motion from 'motion/react-m';
 import React, { memo, useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { VList } from 'virtua';
 
 import {
   getTransparentDragImage,
@@ -130,13 +131,12 @@ interface TreeItem {
   url: string;
 }
 
-// Recursive component to render folder and file tree
-const FileTreeItem = memo<{
+// Row component for folder / file tree (virtualized by flattening visible nodes)
+const FileTreeRow = memo<{
   expandedFolders: Set<string>;
   folderChildrenCache: Map<string, TreeItem[]>;
   item: TreeItem;
   level?: number;
-  loadedFolders: Set<string>;
   loadingFolders: Set<string>;
   onLoadFolder: (_: string) => Promise<void>;
   onToggleFolder: (_: string) => void;
@@ -147,12 +147,11 @@ const FileTreeItem = memo<{
     item,
     level = 0,
     expandedFolders,
-    loadedFolders,
     loadingFolders,
     onToggleFolder,
     onLoadFolder,
     selectedKey,
-    updateKey,
+
     folderChildrenCache,
   }) => {
     const navigate = useNavigate();
@@ -215,7 +214,7 @@ const FileTreeItem = memo<{
       setRenamingValue(item.name);
     }, [item.name]);
 
-    const { menuItems, moveModal } = useFileItemDropdown({
+    const { menuItems } = useFileItemDropdown({
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
@@ -224,9 +223,6 @@ const FileTreeItem = memo<{
       sourceType: item.sourceType,
       url: item.url,
     });
-
-    // Dynamically look up children from cache instead of using static item.children
-    const children = folderChildrenCache.get(itemKey);
 
     const isDragActive = useDragActive();
     const { setCurrentDrag } = useDragState();
@@ -426,34 +422,6 @@ const FileTreeItem = memo<{
               </Flexbox>
             </Block>
           </Dropdown>
-          {moveModal}
-
-          {isExpanded && children && children.length > 0 && (
-            <motion.div
-              animate={{ height: 'auto', opacity: 1 }}
-              initial={false}
-              style={{ overflow: 'hidden' }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-            >
-              <Flexbox gap={2}>
-                {children.map((child) => (
-                  <FileTreeItem
-                    expandedFolders={expandedFolders}
-                    folderChildrenCache={folderChildrenCache}
-                    item={child}
-                    key={child.id}
-                    level={level + 1}
-                    loadedFolders={loadedFolders}
-                    loadingFolders={loadingFolders}
-                    onLoadFolder={onLoadFolder}
-                    onToggleFolder={onToggleFolder}
-                    selectedKey={selectedKey}
-                    updateKey={updateKey}
-                  />
-                ))}
-              </Flexbox>
-            </motion.div>
-          )}
         </Flexbox>
       );
     }
@@ -508,13 +476,12 @@ const FileTreeItem = memo<{
             </Flexbox>
           </Block>
         </Dropdown>
-        {moveModal}
       </Flexbox>
     );
   },
 );
 
-FileTreeItem.displayName = 'FileTreeItem';
+FileTreeRow.displayName = 'FileTreeRow';
 
 /**
  * As a sidebar along with the Explorer to work
@@ -536,7 +503,7 @@ const FileTree = memo(() => {
 
   // Get the persisted state for this knowledge base
   const state = React.useMemo(() => getTreeState(libraryId || ''), [libraryId]);
-  const { expandedFolders, loadedFolders, folderChildrenCache, loadingFolders } = state;
+  const { expandedFolders, folderChildrenCache, loadingFolders } = state;
 
   // Fetch breadcrumb for current folder
   const { data: folderBreadcrumb } = useFetchFolderBreadcrumb(currentFolderSlug);
@@ -581,6 +548,37 @@ const FileTree = memo(() => {
 
     return sortItems(mappedItems);
   }, [rootData, sortItems, updateKey]);
+
+  const visibleNodes = React.useMemo(() => {
+    interface VisibleNode {
+      item: TreeItem;
+      key: string;
+      level: number;
+    }
+
+    const result: VisibleNode[] = [];
+
+    const walk = (nodes: TreeItem[], level: number) => {
+      for (const node of nodes) {
+        const key = node.slug || node.id;
+
+        result.push({ item: node, key, level });
+
+        if (!node.isFolder) continue;
+        if (!expandedFolders.has(key)) continue;
+
+        const children = folderChildrenCache.get(key);
+        if (!children || children.length === 0) continue;
+
+        walk(children, level + 1);
+      }
+    };
+
+    walk(items, 0);
+
+    return result;
+    // NOTE: expandedFolders / folderChildrenCache are mutated in-place, so rely on updateKey for recompute
+  }, [items, expandedFolders, folderChildrenCache, updateKey]);
 
   const handleLoadFolder = useCallback(
     async (folderId: string) => {
@@ -751,21 +749,27 @@ const FileTree = memo(() => {
       : currentFolderSlug;
 
   return (
-    <Flexbox gap={2} paddingInline={4}>
-      {items.map((item) => (
-        <FileTreeItem
-          expandedFolders={expandedFolders}
-          folderChildrenCache={folderChildrenCache}
-          item={item}
-          key={item.id}
-          loadedFolders={loadedFolders}
-          loadingFolders={loadingFolders}
-          onLoadFolder={handleLoadFolder}
-          onToggleFolder={handleToggleFolder}
-          selectedKey={selectedKey}
-          updateKey={updateKey}
-        />
-      ))}
+    <Flexbox paddingInline={4} style={{ height: '100%' }}>
+      <VList
+        bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+        style={{ height: '100%' }}
+      >
+        {visibleNodes.map(({ item, key, level }) => (
+          <div key={key} style={{ paddingBottom: 2 }}>
+            <FileTreeRow
+              expandedFolders={expandedFolders}
+              folderChildrenCache={folderChildrenCache}
+              item={item}
+              level={level}
+              loadingFolders={loadingFolders}
+              onLoadFolder={handleLoadFolder}
+              onToggleFolder={handleToggleFolder}
+              selectedKey={selectedKey}
+              updateKey={updateKey}
+            />
+          </div>
+        ))}
+      </VList>
     </Flexbox>
   );
 });

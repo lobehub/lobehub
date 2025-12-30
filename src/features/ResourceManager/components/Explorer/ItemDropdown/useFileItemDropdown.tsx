@@ -1,4 +1,4 @@
-import { Icon, copyToClipboard } from '@lobehub/ui';
+import { Icon, copyToClipboard, createRawModal } from '@lobehub/ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
 import {
@@ -10,7 +10,7 @@ import {
   PencilIcon,
   Trash,
 } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RepoIcon from '@/components/LibIcon';
@@ -34,7 +34,6 @@ interface UseFileItemDropdownParams {
 
 interface UseFileItemDropdownReturn {
   menuItems: ItemType[];
-  moveModal: ReactNode;
 }
 
 export const useFileItemDropdown = ({
@@ -49,8 +48,6 @@ export const useFileItemDropdown = ({
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const { t } = useTranslation(['components', 'common', 'knowledgeBase']);
   const { message, modal } = App.useApp();
-
-  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
 
   const [removeFile, refreshFileList] = useFileStore((s) => [s.removeFileItem, s.refreshFileList]);
   const [removeFilesFromKnowledgeBase, addFilesToKnowledgeBase, useFetchKnowledgeBaseList] =
@@ -154,7 +151,11 @@ export const useFileItemDropdown = ({
           label: t('FileManager.actions.moveToFolder'),
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
-            setIsMoveModalOpen(true);
+
+            createRawModal(MoveToFolderModal, {
+              fileId: id,
+              knowledgeBaseId,
+            });
           },
         },
         isFolder && {
@@ -264,14 +265,5 @@ export const useFileItemDropdown = ({
     ).filter(Boolean);
   }, [enabled, inKnowledgeBase, isFolder, knowledgeBases, knowledgeBaseId, id]);
 
-  const moveModal = (
-    <MoveToFolderModal
-      fileId={id}
-      knowledgeBaseId={knowledgeBaseId}
-      onClose={() => setIsMoveModalOpen(false)}
-      open={isMoveModalOpen}
-    />
-  );
-
-  return { menuItems, moveModal };
+  return { menuItems };
 };
