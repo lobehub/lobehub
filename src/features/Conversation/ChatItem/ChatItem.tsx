@@ -49,6 +49,17 @@ const ChatItem = memo<ChatItemProps>(
       <ErrorContent customErrorRender={customErrorRender} error={error} id={id} />
     );
 
+    const avtarContent = (
+      <Avatar
+        alt={avatarProps?.alt || avatar.title || 'avatar'}
+        loading={loading}
+        onClick={onAvatarClick}
+        shape={'square'}
+        {...avatarProps}
+        avatar={avatar}
+      />
+    );
+
     return (
       <Flexbox
         align={isUser ? 'flex-end' : 'flex-start'}
@@ -73,18 +84,7 @@ const ChatItem = memo<ChatItemProps>(
           gap={8}
         >
           {showAvatar &&
-            (customAvatarRender ? (
-              customAvatarRender(avatar)
-            ) : (
-              <Avatar
-                alt={avatarProps?.alt || avatar.title || 'avatar'}
-                loading={loading}
-                onClick={onAvatarClick}
-                shape={'square'}
-                {...avatarProps}
-                avatar={avatar}
-              />
-            ))}
+            (customAvatarRender ? customAvatarRender(avatar, avtarContent) : avtarContent)}
           <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
         </Flexbox>
         <Flexbox

@@ -7,6 +7,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
 import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useAgentStore } from '@/store/agent';
@@ -73,6 +74,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
         <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
       }
       avatar={{ ...avatar, title }}
+      customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
       editing={editing}
       error={

@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
 
 import { useAgentMeta } from '../../hooks';
 import { dataSelectors, useConversationStore } from '../../store';
@@ -41,6 +42,7 @@ const TasksMessage = memo<TasksMessageProps>(({ id, index }) => {
         <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
       }
       avatar={avatar}
+      customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       id={id}
       message=""
       placement="left"
