@@ -127,6 +127,7 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
   const isReachingEnd = useMemo(() => {
     if (!pages || pages.length === 0) return false;
     const lastPage = pages.at(-1);
+    if (!lastPage) return false;
     return lastPage.length < PAGE_SIZE;
   }, [pages]);
   const isLoadingMore = isValidating && size > 0 && !!pages && pages.length < size;
