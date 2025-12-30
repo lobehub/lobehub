@@ -1,9 +1,8 @@
 'use client';
 
+import { OFFICIAL_URL } from '@lobechat/const';
 import { usePathname } from 'next/navigation';
 import { useCallback } from 'react';
-
-import { OFFICIAL_URL } from '@lobechat/const';
 
 import { isDesktop } from '@/const/version';
 import { getDesktopOnboardingCompleted } from '@/features/DesktopOnboarding/storage';
@@ -58,7 +57,7 @@ export const useDesktopUserStateRedirect = () => {
 
   return useCallback(
     (state: UserInitializationState) => {
-      if (state.isInWaitList === true) {
+      if (state.isInWaitList !== true) {
         void handleDesktopWaitlist();
         return;
       }
@@ -73,7 +72,7 @@ export const useDesktopUserStateRedirect = () => {
 export const useWebUserStateRedirect = (getCurrentPathname: () => string | null | undefined) =>
   useCallback(
     (state: UserInitializationState) => {
-      if (state.isInWaitList === true) {
+      if (state.isInWaitList !== true) {
         redirectIfNotOn(getCurrentPathname(), '/waitlist');
         return;
       }
