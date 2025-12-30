@@ -57,7 +57,7 @@ const resources = {
   file,
   home,
   hotkey,
-  'desktop-onboarding': desktopOnboarding,
+
   image,
   knowledgeBase,
 
