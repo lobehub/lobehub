@@ -34,12 +34,8 @@ const TaskItem = memo<TaskItemProps>(({ item }) => {
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
   const isInitializing = !taskDetail || !status;
 
-  const hasContent = content && content.trim().length > 0;
-  const allowExpand = !!(isCompleted && hasContent);
-
   return (
     <AccordionItem
-      allowExpand={allowExpand}
       expand={expanded}
       itemKey={id}
       onExpandChange={setExpanded}
@@ -50,7 +46,9 @@ const TaskItem = memo<TaskItemProps>(({ item }) => {
       <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
         {instruction && (
           <Block padding={12}>
-            <Text type={'secondary'}>{instruction}</Text>
+            <Text fontSize={13} type={'secondary'}>
+              {instruction}
+            </Text>
           </Block>
         )}
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleX, MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -13,14 +12,6 @@ import { MetricItem } from './CompletedState';
 import { formatCost, formatDuration } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-  `,
-  footer: css`
-    padding-block: 8px;
-    padding-inline: 16px;
-  `,
   separator: css`
     width: 3px;
     height: 3px;
@@ -61,9 +52,9 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
   const hasMetrics = formattedDuration || totalToolCalls || totalMessages || formattedCost;
 
   return (
-    <Flexbox>
+    <Flexbox gap={12}>
       {/* Error Content */}
-      <Flexbox className={styles.container} gap={8}>
+      <Flexbox gap={8}>
         <Flexbox align="center" gap={8} horizontal>
           <div className={styles.statusIcon}>
             <CircleX size={10} />
@@ -84,9 +75,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
 
       {/* Footer with metrics */}
       {hasMetrics && (
-        <>
-          <Divider dashed style={{ margin: 0 }} />
-          <Flexbox align="center" className={styles.footer} gap={12} horizontal wrap="wrap">
+        <Flexbox align="center" gap={12} horizontal wrap="wrap">
             {/* Duration */}
             {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
 
@@ -122,7 +111,6 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
               </>
             )}
           </Flexbox>
-        </>
       )}
     </Flexbox>
   );
