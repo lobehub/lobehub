@@ -1,4 +1,4 @@
-import { Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { Flexbox, type FlexboxProps, TooltipGroup } from '@lobehub/ui';
 import { type CSSProperties, type ReactNode, memo } from 'react';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
@@ -35,18 +35,20 @@ const NavHeader = memo<NavHeaderProps>(
         style={style}
         {...rest}
       >
-        <Flexbox align={'center'} gap={2} horizontal justify={'flex-start'} style={styles?.left}>
-          {showTogglePanelButton && !expand && <ToggleLeftPanelButton />}
-          {left}
-        </Flexbox>
-        {children && (
-          <Flexbox flex={1} style={styles?.center}>
-            {children}
+        <TooltipGroup>
+          <Flexbox align={'center'} gap={2} horizontal justify={'flex-start'} style={styles?.left}>
+            {showTogglePanelButton && !expand && <ToggleLeftPanelButton />}
+            {left}
           </Flexbox>
-        )}
-        <Flexbox align={'center'} gap={2} horizontal justify={'flex-end'} style={styles?.right}>
-          {right}
-        </Flexbox>
+          {children && (
+            <Flexbox flex={1} style={styles?.center}>
+              {children}
+            </Flexbox>
+          )}
+          <Flexbox align={'center'} gap={2} horizontal justify={'flex-end'} style={styles?.right}>
+            {right}
+          </Flexbox>
+        </TooltipGroup>
       </Flexbox>
     );
   },

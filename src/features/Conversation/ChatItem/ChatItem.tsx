@@ -49,7 +49,7 @@ const ChatItem = memo<ChatItemProps>(
       <ErrorContent customErrorRender={customErrorRender} error={error} id={id} />
     );
 
-    const avtarContent = (
+    const avatarContent = (
       <Avatar
         alt={avatarProps?.alt || avatar.title || 'avatar'}
         loading={loading}
@@ -84,7 +84,7 @@ const ChatItem = memo<ChatItemProps>(
           gap={8}
         >
           {showAvatar &&
-            (customAvatarRender ? customAvatarRender(avatar, avtarContent) : avtarContent)}
+            (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
           <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
         </Flexbox>
         <Flexbox
