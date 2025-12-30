@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
 import { getAgentStoreState } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import type { HomeStore } from '@/store/home/store';
@@ -39,28 +39,44 @@ export const createHomeInputSlice: StateCreator<
     set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
-      // 1. Create new Agent using useAgentStore.createAgent
       const agentState = getAgentStoreState();
+
+      // 1. Get model/provider config from inbox agent
+      const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
+      const inboxConfig = inboxAgentId
+        ? agentSelectors.getAgentConfigById(inboxAgentId)(agentState)
+        : null;
+      const model = inboxConfig?.model;
+      const provider = inboxConfig?.provider;
+
+      // 2. Create new Agent with inherited model/provider
       const result = await agentState.createAgent({
         config: {
+          model,
+          provider,
           systemRole: message,
           title: message?.slice(0, 50) || 'New Agent',
         },
       });
 
-      // 2. Navigate to Agent profile page
+      // 3. Navigate to Agent profile page
       const { navigate } = get();
       if (navigate) {
         navigate(`/agent/${result.agentId}/profile`);
       }
 
-      // 2. Refresh agent list
+      // 4. Refresh agent list
       get().refreshAgentList();
 
-      // 4. Send initial message with agentId context
+      // 5. Update agentBuilder's model config and send initial message
       if (result.agentId) {
         const { sendMessage } = useChatStore.getState();
         const agentBuilderId = builtinAgentSelectors.agentBuilderId(agentState);
+
+        // Update agentBuilder's model to match inbox selection
+        if (agentBuilderId && model && provider) {
+          await agentState.updateAgentConfigById(agentBuilderId, { model, provider });
+        }
 
         await sendMessage({
           context: { agentId: agentBuilderId!, scope: 'agent_builder' },
@@ -68,7 +84,7 @@ export const createHomeInputSlice: StateCreator<
         });
       }
 
-      // 5. Clear mode
+      // 6. Clear mode
       set({ inputActiveMode: null }, false, n('sendAsAgent/clearMode'));
 
       return result.agentId!;
@@ -81,30 +97,46 @@ export const createHomeInputSlice: StateCreator<
     set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
 
     try {
-      // 1. Create new Group with message as initial description
+      const agentState = getAgentStoreState();
+
+      // 1. Get model/provider config from inbox agent
+      const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
+      const inboxConfig = inboxAgentId
+        ? agentSelectors.getAgentConfigById(inboxAgentId)(agentState)
+        : null;
+      const model = inboxConfig?.model;
+      const provider = inboxConfig?.provider;
+
+      // 2. Create new Group with inherited model/provider for orchestrator
       const { group } = await chatGroupService.createGroup({
         config: {
+          orchestratorModel: model,
+          orchestratorProvider: provider,
           scene: 'productive',
           systemPrompt: message,
         },
         title: message?.slice(0, 50) || 'New Group',
       });
 
-      // 2. Load groups and refresh
+      // 3. Load groups and refresh
       const groupStore = getChatGroupStoreState();
       await groupStore.loadGroups();
 
-      // 3. Navigate to Group profile page
+      // 4. Navigate to Group profile page
       const { navigate } = get();
       if (navigate) {
         navigate(`/group/${group.id}/profile`);
       }
 
-      // 4. Send initial message to GroupAgentBuilder
-      const agentState = getAgentStoreState();
+      // 5. Update groupAgentBuilder's model config and send initial message
       const groupAgentBuilderId = builtinAgentSelectors.groupAgentBuilderId(agentState);
 
       if (groupAgentBuilderId) {
+        // Update groupAgentBuilder's model to match inbox selection
+        if (model && provider) {
+          await agentState.updateAgentConfigById(groupAgentBuilderId, { model, provider });
+        }
+
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
           context: { agentId: groupAgentBuilderId, scope: 'group_agent_builder' },
@@ -112,7 +144,7 @@ export const createHomeInputSlice: StateCreator<
         });
       }
 
-      // 5. Clear mode
+      // 6. Clear mode
       set({ inputActiveMode: null }, false, n('sendAsGroup/clearMode'));
 
       return group.id;
