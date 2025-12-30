@@ -107,7 +107,7 @@ const MessageItem = memo<MessageItemProps>(
 
     const onContextMenu = useCallback(
       async (event: MouseEvent<HTMLDivElement>) => {
-        if (!role || (role !== 'user' && role !== 'assistant')) return;
+        if (!role || (role !== 'user' && role !== 'assistant' && role !== 'assistantGroup')) return;
 
         if (!message) return;
 
@@ -118,7 +118,8 @@ const MessageItem = memo<MessageItemProps>(
             content: message.content,
             hasError: !!message.error,
             messageId: id,
-            role: message.role,
+            // For assistantGroup, we treat it as assistant for context menu purposes
+            role: message.role === 'assistantGroup' ? 'assistant' : message.role,
           });
 
           return;

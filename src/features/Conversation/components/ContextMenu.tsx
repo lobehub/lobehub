@@ -179,6 +179,26 @@ const ContextMenu = memo<ContextMenuProps>(
         return list.filter(Boolean) as MenuItem[];
       }
 
+      if (role === 'assistantGroup') {
+        if (error) {
+          return [edit, copy, divider, del, divider, regenerate].filter(Boolean) as MenuItem[];
+        }
+
+        const collapseAction = isCollapsed ? expand : collapse;
+        const list: MenuItem[] = [
+          edit,
+          copy,
+          collapseAction,
+          divider,
+          share,
+          divider,
+          regenerate,
+          del,
+        ];
+
+        return list.filter(Boolean) as MenuItem[];
+      }
+
       if (role === 'user') {
         const list: MenuItem[] = [edit, copy];
 
