@@ -59,7 +59,7 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
               i18n.language === 'en-US'
                 ? formatEnglishNumber(Number(data?.duration || 1))
                 : formatIntergerNumber(Number(data?.duration || 1)),
-            name: nickname || username,
+            username: nickname || username,
           }}
         />
         {!mobile && <FluentEmoji emoji={'🫶'} size={32} type={'anim'} />}

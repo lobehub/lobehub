@@ -53,12 +53,14 @@ export enum SettingsTabs {
   Storage = 'storage',
   TTS = 'tts',
 
+  /* eslint-disable typescript-sort-keys/string-enum */
   // business
   Plans = 'plans',
   Funds = 'funds',
   Usage = 'usage',
   Billing = 'billing',
   Referral = 'referral',
+  /* eslint-enable typescript-sort-keys/string-enum */
 }
 
 /**
