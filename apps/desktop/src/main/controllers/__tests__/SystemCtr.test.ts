@@ -57,7 +57,7 @@ const { spawnMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('node:child_process', () => ({
-  spawn: (...args: any[]) => spawnMock(...args),
+  spawn: (...args: any[]) => spawnMock.call(null, ...args),
 }));
 
 // Mock electron
@@ -229,7 +229,9 @@ describe('SystemController', () => {
 
       await invokeIpc('system.openFullDiskAccessSettings');
 
-      expect(shell.openExternal).toHaveBeenCalledWith('com.apple.settings:Privacy&path=FullDiskAccess');
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'com.apple.settings:Privacy&path=FullDiskAccess',
+      );
       expect(shell.openExternal).toHaveBeenCalledWith(
         'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
       );
