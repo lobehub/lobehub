@@ -1,6 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
+import { Block, Icon, Text } from '@lobehub/ui';
 import { Check, ChevronDown, Loader2, XCircle } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,8 +8,13 @@ import { useTranslation } from 'react-i18next';
 import { ThreadStatus } from '@/types/index';
 import type { UIChatMessage } from '@/types/index';
 
-import CompletedState from './CompletedState';
-import ProcessingState from './ProcessingState';
+import {
+  CompletedState,
+  ErrorState,
+  InitializingState,
+  ProcessingState,
+  isProcessingStatus,
+} from '../shared';
 import { styles } from './styles';
 
 interface TaskItemProps {
@@ -25,13 +30,8 @@ const TaskItem = memo<TaskItemProps>(({ item }) => {
   const instruction = metadata?.instruction;
   const status = taskDetail?.status;
 
-  // Check if task is processing
-  const isProcessing =
-    status === ThreadStatus.Processing ||
-    status === ThreadStatus.InReview ||
-    status === ThreadStatus.Pending ||
-    status === ThreadStatus.Active ||
-    status === ThreadStatus.Todo;
+  // Check if task is processing using shared utility
+  const isProcessing = isProcessingStatus(status);
 
   const isCompleted = status === ThreadStatus.Completed;
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
@@ -65,17 +65,38 @@ const TaskItem = memo<TaskItemProps>(({ item }) => {
   };
 
   return (
-    <div className={styles.container}>
+    <Block variant={'outlined'}>
       {/* Header Row: Status Icon + Title/Instruction + Expand Toggle */}
       <div className={styles.headerRow}>
         {getStatusIcon()}
         <div className={styles.titleRow}>
-          {title && <div className={styles.title}>{title}</div>}
-          {instruction && <div className={styles.instruction}>{instruction}</div>}
+          {title && (
+            <Text as={'h4'} fontSize={14} weight={500}>
+              {title}
+            </Text>
+          )}
+          {instruction && (
+            <Text as={'p'} ellipsis={{ rows: 2 }} fontSize={12} type={'secondary'}>
+              {instruction}
+            </Text>
+          )}
         </div>
         {/* Expand/Collapse Toggle - only show for completed tasks with content */}
         {isCompleted && hasContent && (
-          <div className={styles.expandToggle} onClick={() => setExpanded(!expanded)}>
+          <Text
+            as={'span'}
+            fontSize={12}
+            onClick={() => setExpanded(!expanded)}
+            style={{
+              alignItems: 'center',
+              cursor: 'pointer',
+              display: 'flex',
+              flexShrink: 0,
+              gap: 4,
+              marginInlineStart: 'auto',
+            }}
+            type={'secondary'}
+          >
             <ChevronDown
               size={14}
               style={{
@@ -84,28 +105,34 @@ const TaskItem = memo<TaskItemProps>(({ item }) => {
               }}
             />
             <span>{expanded ? t('messageAction.collapse') : t('messageAction.expand')}</span>
-          </div>
+          </Text>
         )}
       </div>
 
       {/* Main Content Area */}
       <div className={styles.mainContent}>
         {/* Initializing State - no taskDetail yet */}
-        {isInitializing && (
-          <div className={styles.initializingText}>{t('task.status.initializing')}</div>
-        )}
+        {isInitializing && <InitializingState />}
 
         {/* Processing State */}
         {!isInitializing && isProcessing && taskDetail && (
-          <ProcessingState messageId={id} taskDetail={taskDetail} />
+          <ProcessingState messageId={id} taskDetail={taskDetail} variant="compact" />
         )}
+
+        {/* Error State */}
+        {!isInitializing && isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
 
         {/* Completed State */}
         {!isInitializing && isCompleted && taskDetail && (
-          <CompletedState content={content} expanded={expanded} taskDetail={taskDetail} />
+          <CompletedState
+            content={content}
+            expanded={expanded}
+            taskDetail={taskDetail}
+            variant="compact"
+          />
         )}
       </div>
-    </div>
+    </Block>
   );
 }, Object.is);
 

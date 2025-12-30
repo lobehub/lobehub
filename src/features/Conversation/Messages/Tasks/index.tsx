@@ -1,8 +1,7 @@
 'use client';
 
 import { type UIChatMessage } from '@lobechat/types';
-import { Block, Tag } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,16 +12,6 @@ import { useAgentMeta } from '../../hooks';
 import { dataSelectors, useConversationStore } from '../../store';
 import { AssistantActionsBar } from '../Task/Actions';
 import TaskItem from './TaskItem';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  taskItem: css`
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-}));
 
 interface TasksMessageProps {
   id: string;
@@ -59,13 +48,11 @@ const TasksMessage = memo<TasksMessageProps>(({ id, index }) => {
       time={createdAt}
       titleAddon={<Tag>{t('task.batchTasks', { count: tasks.length })}</Tag>}
     >
-      <Block variant={'outlined'} width="100%">
+      <Flexbox gap={8} width={'100%'}>
         {tasks.map((task) => (
-          <div className={styles.taskItem} key={task.id}>
-            <TaskItem item={task} />
-          </div>
+          <TaskItem item={task} key={task.id} />
         ))}
-      </Block>
+      </Flexbox>
     </ChatItem>
   );
 }, isEqual);

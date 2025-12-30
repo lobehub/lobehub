@@ -14,6 +14,7 @@ import type { ExecTasksParams, ExecTasksState } from '../../../types';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   count: css`
     flex-shrink: 0;
+    margin-inline-start: 4px;
     color: ${cssVar.colorTextSecondary};
   `,
   description: css`
@@ -61,8 +62,7 @@ export const ExecTasksInspector = memo<BuiltinInspectorProps<ExecTasksParams, Ex
         )}
         {count > 1 && (
           <span className={styles.count}>
-            {' '}
-            <Icon icon={ListTodo} size={12} /> {count}
+            <Icon icon={ListTodo} size={14} /> {count}
           </span>
         )}
       </div>

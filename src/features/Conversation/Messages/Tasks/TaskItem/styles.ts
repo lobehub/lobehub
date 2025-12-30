@@ -25,14 +25,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 13px;
     line-height: 1.6;
   `,
-  container: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
 
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
   expandToggle: css`
     cursor: pointer;
 
@@ -58,6 +51,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     gap: 10px;
     align-items: flex-start;
+    padding: 12px;
   `,
   initializingText: css`
     font-size: 12px;
@@ -162,7 +156,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorPrimaryBg};
   `,
   title: css`
-    font-size: 13px;
     font-weight: 500;
     line-height: 1.4;
     color: ${cssVar.colorText};

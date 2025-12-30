@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, keyframes } from 'antd-style';
 import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
@@ -56,14 +56,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   spin: css`
     animation: ${spin} 1s linear infinite;
   `,
-  statusRow: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  statusText: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
 }));
 
 const InitializingState = memo(() => {
@@ -72,11 +64,11 @@ const InitializingState = memo(() => {
   return (
     <Flexbox className={styles.container} gap={12}>
       {/* Status Row */}
-      <Flexbox align="center" className={styles.statusRow} gap={8} horizontal>
+      <Flexbox align="center" gap={8} horizontal>
         <Loader2 className={styles.spin} size={14} />
-        <span className={styles.statusText}>
+        <Text fontSize={13} type={'secondary'} weight={500}>
           {t('task.status.initializing', { defaultValue: 'Starting task...' })}
-        </span>
+        </Text>
       </Flexbox>
 
       {/* Progress Bar (indeterminate) */}

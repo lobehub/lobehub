@@ -4,10 +4,13 @@ import { memo } from 'react';
 
 import { type TaskDetail, ThreadStatus } from '@/types/index';
 
-import CompletedState from './CompletedState';
-import ErrorState from './ErrorState';
-import InitializingState from './InitializingState';
-import ProcessingState from './ProcessingState';
+import {
+  CompletedState,
+  ErrorState,
+  InitializingState,
+  ProcessingState,
+  isProcessingStatus,
+} from '../../Tasks/shared';
 
 interface StatusContentProps {
   content?: string;
@@ -24,20 +27,13 @@ const StatusContent = memo<StatusContentProps>(({ taskDetail, content, messageId
   }
 
   // Processing states: Processing, InReview, Pending, Active, Todo
-  const isProcessing =
-    status === ThreadStatus.Processing ||
-    status === ThreadStatus.InReview ||
-    status === ThreadStatus.Pending ||
-    status === ThreadStatus.Active ||
-    status === ThreadStatus.Todo;
-
-  if (isProcessing) {
-    return <ProcessingState messageId={messageId} taskDetail={taskDetail!} />;
+  if (isProcessingStatus(status)) {
+    return <ProcessingState messageId={messageId} taskDetail={taskDetail!} variant="detail" />;
   }
 
   // Completed state
   if (status === ThreadStatus.Completed) {
-    return <CompletedState content={content} taskDetail={taskDetail!} />;
+    return <CompletedState content={content} taskDetail={taskDetail!} variant="detail" />;
   }
 
   // Error states: Failed, Cancel
