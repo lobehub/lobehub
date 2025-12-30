@@ -1,4 +1,8 @@
 {
+  "authResult.failed.desc": "Please try again or switch to a different login method",
+  "authResult.failed.title": "Authorization Failed",
+  "authResult.success.desc": "Please click the Start button below to continue using LobeHub Desktop",
+  "authResult.success.title": "Authorization Successful",
   "navigation.next": "Continue",
   "screen1.description": "AI-powered productivity platform with intelligent agents",
   "screen1.navigation.next": "Start Setting Up",

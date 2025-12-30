@@ -8,6 +8,7 @@ import process from 'node:process';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
+import fullDiskAccessAutoAddScript from './scripts/full-disk-access.applescript?raw';
 
 const logger = createLogger('controllers:SystemCtr');
 
@@ -143,12 +144,12 @@ export default class SystemController extends ControllerModule {
       // Older macOS (System Preferences)
       'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
     ];
+    if (autoAdd) this.tryAutoAddFullDiskAccess();
 
-    void (async () => {
+    (async () => {
       for (const url of candidates) {
         try {
           await shell.openExternal(url);
-          if (autoAdd) this.tryAutoAddFullDiskAccess();
           return;
         } catch (error) {
           logger.warn(`Failed to open Full Disk Access settings via ${url}`, error);
@@ -173,58 +174,7 @@ export default class SystemController extends ControllerModule {
     const appBundlePath = path.resolve(path.dirname(exePath), '..', '..');
 
     // Keep the script minimal and resilient; failure should not break onboarding flow.
-    const script = `
-on run argv
-  set appBundlePath to item 1 of argv
-
-  -- Bring System Settings to front (Ventura+). If it doesn't exist, ignore.
-  try
-    tell application "System Settings" to activate
-  end try
-
-  delay 0.8
-
-  tell application "System Events"
-    if not (exists process "System Settings") then return "no-system-settings"
-    tell process "System Settings"
-      set frontmost to true
-
-      -- Best-effort: find an "add" button in the front window and click it.
-      set clickedAdd to false
-      try
-        repeat with b in (buttons of window 1)
-          try
-            if (description of b is "Add") or (name of b is "+") or (title of b is "+") then
-              click b
-              set clickedAdd to true
-              exit repeat
-            end if
-          end try
-        end repeat
-      end try
-
-      if clickedAdd is false then return "no-add-button"
-
-      -- Wait for open panel / sheet
-      repeat 30 times
-        if exists sheet 1 of window 1 then exit repeat
-        delay 0.2
-      end repeat
-      if not (exists sheet 1 of window 1) then return "no-sheet"
-
-      -- Open "Go to the folder" and input the app bundle path, then confirm.
-      keystroke "G" using {command down, shift down}
-      delay 0.3
-      keystroke appBundlePath
-      key code 36
-      delay 0.6
-      -- Confirm "Open" in the panel (Enter usually triggers default)
-      key code 36
-      return "ok"
-    end tell
-  end tell
-end run
-`.trim();
+    const script = fullDiskAccessAutoAddScript.trim();
 
     try {
       const child = spawn('osascript', ['-e', script, appBundlePath], { env: process.env });

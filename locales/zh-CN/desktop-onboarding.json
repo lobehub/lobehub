@@ -1,4 +1,8 @@
 {
+  "authResult.failed.desc": "请重试，或切换其他登录方式",
+  "authResult.failed.title": "授权失败",
+  "authResult.success.desc": "点击下方「开始」继续使用 LobeHub 桌面端",
+  "authResult.success.title": "授权成功",
   "navigation.next": "继续",
   "screen1.description": "AI 驱动的生产力平台，内置智能助理",
   "screen1.navigation.next": "开始设置",

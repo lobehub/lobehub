@@ -1,6 +1,7 @@
 import { createStaticStyles, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslation } from 'react-i18next';
 
 import { LogoBrand } from './LogoBrand';
 
@@ -138,10 +139,10 @@ interface AuthResultProps {
 export const AuthResult = ({ success, title, description, animated = true }: AuthResultProps) => {
   const styles = authResultStyles;
 
-  const defaultTitle = success ? 'Authorization Successful' : 'Authorization Failed';
-  const defaultDescription = success
-    ? 'Please click the Start button below to continue using LobeHub Desktop'
-    : 'Please try again or switch to a different login method';
+  const { t } = useTranslation('desktop-onboarding');
+
+  const defaultTitle = t(success ? 'authResult.success.title' : 'authResult.failed.title');
+  const defaultDescription = t(success ? 'authResult.success.desc' : 'authResult.failed.desc');
 
   const content = (
     <>
