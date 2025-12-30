@@ -1,12 +1,15 @@
 import { ActionIcon, Dropdown, Flexbox, Icon, Text, TooltipGroup } from '@lobehub/ui';
 import type { ItemType } from 'antd/es/menu/interface';
+import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon, LucideCheck } from 'lucide-react';
 import type { AiProviderModelListItem } from 'model-bank';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWRInfinite from 'swr/infinite';
 
 import { aiModelService } from '@/services/aiModel';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -37,6 +40,10 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
     s.updateSystemStatus,
   ]);
 
+  // Only render at most PAGE_SIZE items from the store on first paint.
+  // As user scrolls, we reveal more store items in PAGE_SIZE steps, then start remote loading.
+  const [visibleBaseSize, setVisibleBaseSize] = useState(PAGE_SIZE);
+
   const updateSortType = useCallback(
     (newSortType: SortType) => {
       updateSystemStatus({ disabledModelsSortType: newSortType });
@@ -44,15 +51,34 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
     [updateSystemStatus],
   );
 
+  // initial render source: provider list already in store (typically built-in + user merged)
+  const disabledModels = useAiInfraStore(aiModelSelectors.disabledAiProviderModelList, isEqual);
+
+  const baseIds = useMemo(() => new Set(disabledModels.map((m) => m.id)), [disabledModels]);
+
+  useEffect(() => {
+    // reset visible window on provider change
+    setVisibleBaseSize(PAGE_SIZE);
+  }, [providerId]);
+
+  const visibleBaseModels = useMemo(
+    () => disabledModels.slice(0, visibleBaseSize),
+    [disabledModels, visibleBaseSize],
+  );
+
+  const hasMoreBase = visibleBaseSize < disabledModels.length;
+  const remoteEnabled = !!providerId && !hasMoreBase;
+
   const getKey = useCallback(
     (pageIndex: number, previousPageData: AiProviderModelListItem[] | null) => {
-      if (!providerId) return null;
+      if (!remoteEnabled) return null;
       if (previousPageData && previousPageData.length < PAGE_SIZE) return null;
 
-      const offset = pageIndex * PAGE_SIZE;
+      // start fetching after the initial list from store
+      const offset = disabledModels.length + pageIndex * PAGE_SIZE;
       return [FETCH_DISABLED_MODELS_PAGE_KEY, providerId, offset] as const;
     },
-    [providerId],
+    [disabledModels.length, providerId, remoteEnabled],
   );
 
   const {
@@ -70,20 +96,55 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
   });
 
   const pagedDisabledModels = useMemo(() => (pages ? pages.flat() : []), [pages]);
-  const isInitialLoading = !pages && !error;
-  const isReachingEnd = !!pages && pages.length > 0 && pages.at(-1).length < PAGE_SIZE;
+
+  // ensure "load more" pages do not duplicate the initial store list
+  const appendedDisabledModels = useMemo(() => {
+    if (!pagedDisabledModels.length) return [];
+    return pagedDisabledModels.filter((m) => !baseIds.has(m.id));
+  }, [baseIds, pagedDisabledModels]);
+
+  const mergedDisabledModels = useMemo(() => {
+    // keep store order for initial items; append new ones afterwards
+    const exists = new Set<string>();
+    const merged: AiProviderModelListItem[] = [];
+
+    visibleBaseModels.forEach((m) => {
+      if (exists.has(m.id)) return;
+      exists.add(m.id);
+      merged.push(m);
+    });
+
+    appendedDisabledModels.forEach((m) => {
+      if (exists.has(m.id)) return;
+      exists.add(m.id);
+      merged.push(m);
+    });
+
+    return merged;
+  }, [appendedDisabledModels, visibleBaseModels]);
+
+  const isInitialLoading = remoteEnabled && !pages && !error;
+  const isReachingEnd = useMemo(() => {
+    if (!pages || pages.length === 0) return false;
+    const lastPage = pages.at(-1);
+    return lastPage.length < PAGE_SIZE;
+  }, [pages]);
   const isLoadingMore = isValidating && size > 0 && !!pages && pages.length < size;
 
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const triggerLoadMore = useCallback(() => {
+    if (hasMoreBase) {
+      setVisibleBaseSize((v) => Math.min(v + PAGE_SIZE, disabledModels.length));
+      return;
+    }
     if (isReachingEnd) return;
     if (isValidating) return;
     setSize(size + 1);
-  }, [isReachingEnd, isValidating, setSize, size]);
+  }, [disabledModels.length, hasMoreBase, isReachingEnd, isValidating, setSize, size]);
 
   useEffect(() => {
-    if (isReachingEnd) return;
+    if (!hasMoreBase && isReachingEnd) return;
     if (!loadMoreRef.current) return;
 
     const observer = new IntersectionObserver(
@@ -104,11 +165,12 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
     return () => {
       observer.disconnect();
     };
-  }, [isReachingEnd, triggerLoadMore]);
+  }, [hasMoreBase, isReachingEnd, triggerLoadMore]);
 
-  const sourceDisabledModels = pagedDisabledModels;
+  const sourceDisabledModels = mergedDisabledModels;
 
-  const shouldRenderSection = isInitialLoading || sourceDisabledModels.length > 0;
+  const shouldRenderSection =
+    disabledModels.length > 0 || isInitialLoading || sourceDisabledModels.length > 0;
 
   // Filter models based on active tab
   const filteredDisabledModels = useMemo(() => {
