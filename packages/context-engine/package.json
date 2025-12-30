@@ -23,7 +23,7 @@
     "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",
     "immer": "^10.2.0",
-    "lodash-es": "^4.17.21",
+    "lodash-es": "^4.17.22",
     "ts-md5": "^2.0.1"
   },
   "devDependencies": {

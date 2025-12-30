@@ -10,9 +10,9 @@
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.8.0",
     "@lobechat/types": "workspace:*",
-    "@lobehub/ui": "^2.13.8",
+    "@lobehub/ui": "^2.24.3",
     "klavis": "^2.15.0",
-    "lodash-es": "^4.17.21",
+    "lodash-es": "^4.17.22",
     "model-bank": "workspace:*",
     "query-string": "^9.3.1",
     "url-join": "^5.0.0"

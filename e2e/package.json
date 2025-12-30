@@ -12,13 +12,13 @@
     "test:smoke": "cucumber-js --config cucumber.config.js --tags '@smoke'"
   },
   "dependencies": {
-    "@cucumber/cucumber": "^12.2.0",
+    "@cucumber/cucumber": "^12.5.0",
     "@playwright/test": "^1.57.0",
     "playwright": "^1.57.0"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "tsx": "^4.20.6",
+    "@types/node": "^24.10.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

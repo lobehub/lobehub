@@ -19,7 +19,7 @@
     "@lobechat/utils": "workspace:*",
     "random-words": "^2.0.1",
     "ts-md5": "^2.0.1",
-    "type-fest": "^5.2.0",
+    "type-fest": "^5.3.1",
     "ws": "^8.18.3"
   },
   "devDependencies": {

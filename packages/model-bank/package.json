@@ -80,7 +80,7 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "type-fest": "^5.2.0"
+    "type-fest": "^5.3.1"
   },
   "peerDependencies": {
     "zod": "^3.25.76"

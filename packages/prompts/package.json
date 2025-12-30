@@ -23,6 +23,6 @@
   },
   "devDependencies": {
     "promptfoo": "^0.118.17",
-    "tsx": "^4.20.6"
+    "tsx": "^4.21.0"
   }
 }
