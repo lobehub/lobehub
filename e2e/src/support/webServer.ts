@@ -109,6 +109,11 @@ export async function startWebServer(options: WebServerOptions): Promise<void> {
         NEXT_PUBLIC_ENABLE_BETTER_AUTH: '1',
         NODE_OPTIONS: '--max-old-space-size=6144',
         PORT: String(port),
+        // Mock S3 env vars to prevent initialization errors
+        S3_ACCESS_KEY_ID: 'e2e-mock-access-key',
+        S3_BUCKET: 'e2e-mock-bucket',
+        S3_ENDPOINT: 'https://e2e-mock-s3.localhost',
+        S3_SECRET_ACCESS_KEY: 'e2e-mock-secret-key',
         ...env,
       },
     });
