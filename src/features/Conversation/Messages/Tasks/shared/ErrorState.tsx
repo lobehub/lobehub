@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleX, MessageSquare, Timer, Wrench } from 'lucide-react';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -54,63 +54,54 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
   return (
     <Flexbox gap={12}>
       {/* Error Content */}
-      <Flexbox gap={8}>
-        <Flexbox align="center" gap={8} horizontal>
-          <div className={styles.statusIcon}>
-            <CircleX size={10} />
-          </div>
-          <Text fontSize={13} style={{ color: cssVar.colorErrorText }} weight={500}>
-            {isCancelled
-              ? t('task.status.cancelled', { defaultValue: 'Cancelled' })
-              : t('task.status.failed', { defaultValue: 'Failed' })}
-          </Text>
-        </Flexbox>
-
-        {error && (
-          <Text fontSize={13} style={{ color: cssVar.colorErrorText }}>
-            {error}
-          </Text>
-        )}
-      </Flexbox>
+      <Alert
+        description={error}
+        title={
+          isCancelled
+            ? t('task.status.cancelled', { defaultValue: 'Cancelled' })
+            : t('task.status.failed', { defaultValue: 'Failed' })
+        }
+        type={'secondary'}
+      />
 
       {/* Footer with metrics */}
       {hasMetrics && (
         <Flexbox align="center" gap={12} horizontal wrap="wrap">
-            {/* Duration */}
-            {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
+          {/* Duration */}
+          {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
 
-            {/* Tool Calls */}
-            {totalToolCalls !== undefined && totalToolCalls > 0 && (
-              <>
-                <div className={styles.separator} />
-                <MetricItem
-                  icon={Wrench}
-                  label={t('task.metrics.toolCallsShort', { defaultValue: 'tools' })}
-                  value={totalToolCalls}
-                />
-              </>
-            )}
+          {/* Tool Calls */}
+          {totalToolCalls !== undefined && totalToolCalls > 0 && (
+            <>
+              <div className={styles.separator} />
+              <MetricItem
+                icon={Wrench}
+                label={t('task.metrics.toolCallsShort', { defaultValue: 'tools' })}
+                value={totalToolCalls}
+              />
+            </>
+          )}
 
-            {/* Messages */}
-            {totalMessages !== undefined && totalMessages > 0 && (
-              <>
-                <div className={styles.separator} />
-                <MetricItem
-                  icon={MessageSquare}
-                  label={t('task.metrics.messagesShort', { defaultValue: 'messages' })}
-                  value={totalMessages}
-                />
-              </>
-            )}
+          {/* Messages */}
+          {totalMessages !== undefined && totalMessages > 0 && (
+            <>
+              <div className={styles.separator} />
+              <MetricItem
+                icon={MessageSquare}
+                label={t('task.metrics.messagesShort', { defaultValue: 'messages' })}
+                value={totalMessages}
+              />
+            </>
+          )}
 
-            {/* Cost */}
-            {formattedCost && (
-              <>
-                <div className={styles.separator} />
-                <MetricItem value={formattedCost} />
-              </>
-            )}
-          </Flexbox>
+          {/* Cost */}
+          {formattedCost && (
+            <>
+              <div className={styles.separator} />
+              <MetricItem value={formattedCost} />
+            </>
+          )}
+        </Flexbox>
       )}
     </Flexbox>
   );
