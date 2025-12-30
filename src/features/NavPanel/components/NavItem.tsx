@@ -70,7 +70,7 @@ const NavItem = memo<NavItemProps>(
 
         <Flexbox align={'center'} flex={1} gap={8} horizontal style={{ overflow: 'hidden' }}>
           <Text color={textColor} ellipsis style={{ flex: 1 }}>
-            {title}
+            {title || 'LobeHub'}
           </Text>
           <Flexbox
             align={'center'}

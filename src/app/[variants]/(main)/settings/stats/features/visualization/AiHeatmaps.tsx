@@ -53,6 +53,9 @@ const AiHeatmaps = memo<
       }}
       loading={isLoading || !data}
       maxLevel={4}
+      style={{
+        alignSelf: 'center',
+      }}
       {...rest}
     />
   );
