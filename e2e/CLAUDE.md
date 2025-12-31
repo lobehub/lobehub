@@ -263,6 +263,50 @@ S3_BUCKET=e2e-mock-bucket
 S3_ENDPOINT=https://e2e-mock-s3.localhost
 ```
 
+## 清理环境
+
+测试完成后或需要重置环境时，执行以下清理操作：
+
+### 停止服务器
+
+```bash
+# 查找并停止占用端口的进程
+lsof -ti:3006 | xargs kill -9 2> /dev/null
+lsof -ti:3010 | xargs kill -9 2> /dev/null
+```
+
+### 停止 Docker 容器
+
+```bash
+# 停止并删除 PostgreSQL 容器
+docker stop postgres-e2e 2> /dev/null
+docker rm postgres-e2e 2> /dev/null
+```
+
+### 一键清理（推荐）
+
+```bash
+# 清理所有 E2E 相关进程和容器
+docker stop postgres-e2e 2> /dev/null
+docker rm postgres-e2e 2> /dev/null
+lsof -ti:3006 | xargs kill -9 2> /dev/null
+lsof -ti:3010 | xargs kill -9 2> /dev/null
+lsof -ti:5433 | xargs kill -9 2> /dev/null
+echo "Cleanup done"
+```
+
+### 清理端口占用
+
+如果遇到端口被占用的错误，可以清理特定端口：
+
+```bash
+# 清理 Next.js 服务器端口
+lsof -ti:3006 | xargs kill -9
+
+# 清理 PostgreSQL 端口
+lsof -ti:5433 | xargs kill -9
+```
+
 ## 常见问题
 
 ### 1. 测试超时 (function timed out)
