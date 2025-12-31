@@ -1,8 +1,8 @@
-import { ActionIcon } from '@lobehub/ui';
-import { BotMessageSquareIcon, Loader2Icon } from 'lucide-react';
+import { BotMessageSquareIcon } from 'lucide-react';
 import { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useInitRecentTopic } from '@/hooks/useInitRecentTopic';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
@@ -26,7 +26,7 @@ const RecentTopic = memo(() => {
 
   return (
     <GroupBlock
-      action={isRevalidating && <ActionIcon icon={Loader2Icon} loading size={'small'} />}
+      action={isRevalidating && <NeuralNetworkLoading size={14} />}
       icon={BotMessageSquareIcon}
       title={t('topic.recent')}
     >

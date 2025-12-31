@@ -1,10 +1,10 @@
 'use client';
 
-import { AccordionItem, ActionIcon, Dropdown, Flexbox, Text } from '@lobehub/ui';
-import { Loader2Icon } from 'lucide-react';
+import { AccordionItem, Dropdown, Flexbox, Text } from '@lobehub/ui';
 import React, { Suspense, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
 import SkeletonList from '../../../../../../../features/NavPanel/components/SkeletonList';
@@ -56,7 +56,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t('navPanel.agent')}
           </Text>
-          {isRevalidating && <ActionIcon icon={Loader2Icon} loading size={'small'} />}
+          {isRevalidating && <NeuralNetworkLoading size={14} />}
         </Flexbox>
       }
     >
