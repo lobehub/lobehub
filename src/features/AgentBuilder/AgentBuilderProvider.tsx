@@ -1,4 +1,4 @@
-import { type ReactNode, memo, useEffect, useMemo } from 'react';
+import { type ReactNode, memo, useMemo } from 'react';
 
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -17,19 +17,6 @@ interface AgentBuilderProviderProps {
  */
 const AgentBuilderProvider = memo<AgentBuilderProviderProps>(({ agentId, children }) => {
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const switchTopic = useChatStore((s) => s.switchTopic);
-
-  // Reset topicId on mount and unmount to avoid stale topicId leaking
-  // when navigating from Profile page to agent conversation page
-  useEffect(() => {
-    // Mount: start with a fresh conversation (topicId = undefined)
-    switchTopic(undefined, true);
-
-    return () => {
-      // Unmount: clean up topicId to prevent state leakage
-      switchTopic(undefined, true);
-    };
-  }, [switchTopic]);
 
   // Build conversation context for agent builder
   // Using agent_builder scope for message management

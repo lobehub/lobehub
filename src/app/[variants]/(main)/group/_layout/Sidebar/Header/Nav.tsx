@@ -11,6 +11,7 @@ import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -23,6 +24,7 @@ const Nav = memo(() => {
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const switchTopic = useChatStore((s) => s.switchTopic);
 
   return (
     <Flexbox gap={1} paddingInline={4}>
@@ -31,6 +33,7 @@ const Nav = memo(() => {
           active={isProfileActive}
           icon={BotPromptIcon}
           onClick={() => {
+            switchTopic(undefined, true);
             router.push(urlJoin('/group', groupId!, 'profile'));
           }}
           title={t('tab.groupProfile')}
