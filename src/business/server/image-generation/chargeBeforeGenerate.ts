@@ -2,6 +2,7 @@ import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas'
 import type { CreateImageServicePayload } from '@/server/routers/lambda/image';
 
 interface ChargeParams {
+  clientIp?: string | null;
   configForDatabase: CreateImageServicePayload['params'];
   generationParams: CreateImageServicePayload['params'];
   generationTopicId: string;

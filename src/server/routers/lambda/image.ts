@@ -135,6 +135,7 @@ export const imageRouter = router({
     validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
 
     const chargeResult = await chargeBeforeGenerate({
+      clientIp: ctx.clientIp,
       configForDatabase,
       generationParams: params,
       generationTopicId,
