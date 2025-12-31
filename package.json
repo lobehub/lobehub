@@ -353,7 +353,7 @@
     "@types/pdfkit": "^0.17.4",
     "@types/pg": "^8.16.0",
     "@types/react": "19.2.2",
-    "@types/react-dom": "19.2.2",
+    "@types/react-dom": "19.2.3",
     "@types/rtl-detect": "^1.0.3",
     "@types/semver": "^7.7.1",
     "@types/systemjs": "^6.15.4",
