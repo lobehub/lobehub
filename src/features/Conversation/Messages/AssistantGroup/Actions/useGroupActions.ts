@@ -131,7 +131,9 @@ export const useGroupActions = ({
       },
       edit: {
         handleClick: () => {
-          toggleMessageEditing(id, true);
+          if (!contentBlock) return;
+
+          toggleMessageEditing(contentBlock.id, true);
         },
         icon: Edit,
         key: 'edit',
