@@ -52,7 +52,7 @@ export default class SystemController extends ControllerModule {
   }
 
   /**
-   * 检查可用性
+   * Check accessibility permissions
    */
   @IpcMethod()
   checkAccessibilityForMacOS() {
@@ -66,14 +66,14 @@ export default class SystemController extends ControllerModule {
   }
 
   /**
-   * 更新应用语言设置
+   * Update application language settings
    */
   @IpcMethod()
   async updateLocale(locale: string) {
-    // 保存语言设置
+    // Save language settings
     this.app.storeManager.set('locale', locale);
 
-    // 更新i18n实例的语言
+    // Update i18n instance language
     await this.app.i18n.changeLanguage(locale === 'auto' ? app.getLocale() : locale);
     this.app.browserManager.broadcastToAllWindows('localeChanged', { locale });
 

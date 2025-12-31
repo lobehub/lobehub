@@ -17,13 +17,13 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:NetworkProxyCtr');
 
 /**
- * 网络代理控制器
- * 处理桌面应用的网络代理相关功能
+ * Network proxy controller
+ * Handles network proxy-related functionality for desktop application
  */
 export default class NetworkProxyCtr extends ControllerModule {
   static override readonly groupName = 'networkProxy';
   /**
-   * 获取代理设置
+   * Get proxy settings
    */
   @IpcMethod()
   async getDesktopSettings(): Promise<NetworkProxySettings> {
@@ -44,18 +44,18 @@ export default class NetworkProxyCtr extends ControllerModule {
   }
 
   /**
-   * 设置代理配置
+   * Set proxy configuration
    */
   @IpcMethod()
   async setProxySettings(config: Partial<NetworkProxySettings>): Promise<void> {
     try {
-      // 获取当前配置
+      // Get current configuration
       const currentConfig = this.app.storeManager.get(
         'networkProxy',
         defaultProxySettings,
       ) as NetworkProxySettings;
 
-      // 合并配置并验证
+      // Merge and validate configuration
       const newConfig = merge({}, currentConfig, config);
 
       const validation = ProxyConfigValidator.validate(newConfig);
@@ -70,10 +70,10 @@ export default class NetworkProxyCtr extends ControllerModule {
         return;
       }
 
-      // 应用代理设置
+      // Apply proxy settings
       await ProxyDispatcherManager.applyProxySettings(newConfig);
 
-      // 保存到存储
+      // Save to storage
       this.app.storeManager.set('networkProxy', newConfig);
 
       logger.info('Proxy settings updated successfully', {
@@ -89,7 +89,7 @@ export default class NetworkProxyCtr extends ControllerModule {
   }
 
   /**
-   * 测试代理连接
+   * Test proxy connection
    */
   @IpcMethod()
   async testProxyConnection(url: string): Promise<{ message?: string; success: boolean }> {
@@ -109,7 +109,7 @@ export default class NetworkProxyCtr extends ControllerModule {
   }
 
   /**
-   * 测试指定代理配置
+   * Test specified proxy configuration
    */
   @IpcMethod()
   async testProxyConfig({
@@ -132,17 +132,17 @@ export default class NetworkProxyCtr extends ControllerModule {
   }
 
   /**
-   * 应用初始代理设置
+   * Apply initial proxy settings
    */
   async beforeAppReady(): Promise<void> {
     try {
-      // 获取存储的代理设置
+      // Get stored proxy settings
       const networkProxy = this.app.storeManager.get(
         'networkProxy',
         defaultProxySettings,
       ) as NetworkProxySettings;
 
-      // 验证配置
+      // Validate configuration
       const validation = ProxyConfigValidator.validate(networkProxy);
       if (!validation.isValid) {
         logger.warn('Invalid stored proxy configuration, using defaults:', validation.errors);
@@ -150,7 +150,7 @@ export default class NetworkProxyCtr extends ControllerModule {
         return;
       }
 
-      // 应用代理设置
+      // Apply proxy settings
       await ProxyDispatcherManager.applyProxySettings(networkProxy);
 
       logger.info('Initial proxy settings applied successfully', {
@@ -159,7 +159,7 @@ export default class NetworkProxyCtr extends ControllerModule {
       });
     } catch (error) {
       logger.error('Failed to apply initial proxy settings:', error);
-      // 出错时使用默认设置
+      // Use default settings on error
       try {
         await ProxyDispatcherManager.applyProxySettings(defaultProxySettings);
         logger.info('Fallback to default proxy settings');

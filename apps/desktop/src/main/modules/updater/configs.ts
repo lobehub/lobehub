@@ -1,22 +1,22 @@
 import { isDev } from '@/const/env';
 
-// 更新频道（stable, beta, alpha 等）
+// Update channel (stable, beta, alpha, etc.)
 export const UPDATE_CHANNEL = process.env.UPDATE_CHANNEL;
 
 export const updaterConfig = {
-  // 应用更新配置
+  // Application update configuration
   app: {
-    // 是否自动检查更新
+    // Whether to automatically check for updates
     autoCheckUpdate: true,
-    // 是否自动下载更新
+    // Whether to automatically download updates
     autoDownloadUpdate: true,
-    // 检查更新的时间间隔（毫秒）
-    checkUpdateInterval: 60 * 60 * 1000, // 1小时
+    // Update check interval (milliseconds)
+    checkUpdateInterval: 60 * 60 * 1000, // 1 hour
   },
 
-  // 是否启用应用更新
+  // Whether to enable application updates
   enableAppUpdate: !isDev,
 
-  // 是否启用渲染层热更新
+  // Whether to enable renderer hot updates
   enableRenderHotUpdate: !isDev,
 };
