@@ -131,7 +131,7 @@
     "@ant-design/icons": "^5.6.1",
     "@ant-design/pro-components": "^2.8.10",
     "@anthropic-ai/sdk": "^0.67.1",
-    "@auth/core": "^0.40.0",
+    "@auth/core": "^0.41.1",
     "@aws-sdk/client-s3": "~3.932.0",
     "@aws-sdk/s3-request-presigner": "~3.932.0",
     "@azure-rest/ai-inference": "1.0.0-beta.5",
