@@ -216,7 +216,7 @@
     "debug": "^4.4.3",
     "dexie": "^3.2.7",
     "diff": "^8.0.2",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.5.1",
     "epub2": "^3.0.2",
     "fast-deep-equal": "^3.1.3",
