@@ -12,7 +12,7 @@
     "@lobehub/market-types": "^1.11.4",
     "@lobehub/ui": "^2.13.8",
     "model-bank": "workspace:*",
-    "react": "19.2.0",
+    "react": "19.2.3",
     "type-fest": "^4.41.0",
     "zod": "^3.25.76",
     "zustand": "5.0.4"
