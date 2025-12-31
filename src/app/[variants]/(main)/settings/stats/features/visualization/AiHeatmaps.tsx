@@ -1,8 +1,7 @@
 import { Heatmaps, type HeatmapsProps } from '@lobehub/charts';
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
-import { cssVar, useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { FlameIcon } from 'lucide-react';
-import { readableColor } from 'polished';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +14,6 @@ const AiHeatmaps = memo<
   Omit<HeatmapsProps, 'data' | 'ref'> & { inShare?: boolean; mobile?: boolean }
 >(({ inShare, mobile, ...rest }) => {
   const { t } = useTranslation('auth');
-  const theme = useTheme();
   const { data, isLoading } = useClientDataSWR('stats-heatmaps', async () =>
     messageService.getHeatmaps(),
   );
@@ -60,39 +58,10 @@ const AiHeatmaps = memo<
     />
   );
 
-  const fillColor = readableColor(theme.gold);
   const tags = (
-    <Flexbox
-      gap={4}
-      horizontal
-      style={{
-        alignSelf: 'center',
-        flex: 'none',
-        zoom: 0.9,
-      }}
-    >
-      <Tag
-        style={{
-          background: cssVar.colorText,
-          color: cssVar.colorBgLayout,
-          fontWeight: 500,
-          margin: 0,
-        }}
-        variant={'filled'}
-      >
-        {[days, t('stats.days')].join(' ')}
-      </Tag>
-      <Tag
-        color={'gold'}
-        icon={<Icon color={fillColor} fill={fillColor} icon={FlameIcon} />}
-        style={{
-          background: cssVar.gold,
-          color: fillColor,
-          fontWeight: 500,
-          margin: 0,
-        }}
-        variant={'filled'}
-      >
+    <Flexbox gap={8} horizontal>
+      <Tag variant={'filled'}>{[days, t('stats.days')].join(' ')}</Tag>
+      <Tag color={'success'} icon={<Icon icon={FlameIcon} />} variant={'filled'}>
         {[hotDays, t('stats.days')].join(' ')}
       </Tag>
     </Flexbox>

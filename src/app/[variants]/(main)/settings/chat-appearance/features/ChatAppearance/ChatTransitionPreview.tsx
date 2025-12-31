@@ -1,11 +1,6 @@
-import { ActionIconGroup, Block } from '@lobehub/ui';
-import { ChatItem } from '@lobehub/ui/chat';
-import { useTheme } from 'antd-style';
-import { RotateCwIcon } from 'lucide-react';
+import { Flexbox, Markdown } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { type UserGeneralConfig } from '@/types/user/settings';
 
 const data = `
@@ -43,8 +38,6 @@ const ChatTransitionPreview = memo<ChatTransitionPreviewProps>(({ mode }) => {
   }, [mode]);
 
   const [isStreaming, setIsStreaming] = useState(true);
-  const { t } = useTranslation('common');
-  const token = useTheme();
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -70,42 +63,12 @@ const ChatTransitionPreview = memo<ChatTransitionPreviewProps>(({ mode }) => {
     return () => clearInterval(intervalId);
   }, [isStreaming, streamedContent.length, chunkStep]);
 
-  const handleReset = () => {
-    setStreamedContent('');
-    setIsStreaming(true);
-  };
-
   return (
-    <Block
-      style={{
-        background: token.colorBgContainerSecondary,
-        marginBlock: 16,
-        minHeight: 280,
-        paddingBottom: 16,
-      }}
-      variant={'outlined'}
-    >
-      <ChatItem
-        actions={
-          <ActionIconGroup
-            items={[
-              {
-                icon: RotateCwIcon,
-                key: 'reset',
-                onClick: handleReset,
-                title: t('retry'),
-              },
-            ]}
-            size="small"
-          />
-        }
-        avatar={{ avatar: DEFAULT_INBOX_AVATAR }}
-        markdownProps={{ animated: mode === 'fadeIn' }}
-        message={streamedContent}
-        variant="bubble"
-        width={'100%'}
-      />
-    </Block>
+    <Flexbox height={180}>
+      <Markdown animated={mode === 'fadeIn'} enableStream variant={'chat'}>
+        {streamedContent}
+      </Markdown>
+    </Flexbox>
   );
 });
 

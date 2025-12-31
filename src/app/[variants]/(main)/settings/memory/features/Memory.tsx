@@ -1,7 +1,6 @@
 'use client';
 
-import { Form, type FormGroupItemType, Icon, Select } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { Form, type FormGroupItemType, Icon, Skeleton } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -12,51 +11,41 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { sttOptions } from './const';
-
-const STT = memo(() => {
+const MemorySetting = memo(() => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
-  const { tts } = useUserStore(settingsSelectors.currentSettings, isEqual);
+  const { memory } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
 
-  const stt: FormGroupItemType = {
+  const memorySettings: FormGroupItemType = {
     children: [
       {
-        children: <Select options={sttOptions} />,
-        desc: t('settingTTS.sttService.desc'),
-        label: t('settingTTS.sttService.title'),
-        name: 'sttServer',
-      },
-      {
         children: <Switch />,
-        desc: t('settingTTS.sttAutoStop.desc'),
-        label: t('settingTTS.sttAutoStop.title'),
+        desc: t('memory.enabled.desc'),
+        label: t('memory.enabled.title'),
         layout: 'horizontal',
         minWidth: undefined,
-        name: 'sttAutoStop',
+        name: 'enabled',
         valuePropName: 'checked',
       },
     ],
     extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
-    title: t('settingTTS.stt'),
+    title: t('memory.title'),
   };
 
   return (
     <Form
       collapsible={false}
       form={form}
-      initialValues={tts}
-      items={[stt]}
+      initialValues={memory}
+      items={[memorySettings]}
       itemsType={'group'}
       onValuesChange={async (values) => {
         setLoading(true);
-        await setSettings({
-          tts: values,
-        });
+        await setSettings({ memory: values });
         setLoading(false);
       }}
       variant={'filled'}
@@ -65,4 +54,4 @@ const STT = memo(() => {
   );
 });
 
-export default STT;
+export default MemorySetting;

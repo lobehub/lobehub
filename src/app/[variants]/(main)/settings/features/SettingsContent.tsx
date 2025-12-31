@@ -3,7 +3,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import dynamic from 'next/dynamic';
 import { Fragment } from 'react';
-import { useLocation } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
@@ -98,21 +97,7 @@ interface SettingsContentProps {
   mobile?: boolean;
 }
 
-const secondaryBackgroundTabs = new Set([
-  SettingsTabs.Stats,
-  SettingsTabs.Plans,
-  SettingsTabs.Funds,
-  SettingsTabs.Usage,
-  SettingsTabs.Billing,
-  SettingsTabs.Referral,
-]);
-
 const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
-  const location = useLocation();
-  const isSecondaryBackgroundTabs = secondaryBackgroundTabs.has(
-    location.pathname?.split('/settings/').find(Boolean) as SettingsTabs,
-  );
-
   const renderComponent = (tab: string) => {
     const Component = componentMap[tab as keyof typeof componentMap] || componentMap.common;
     if (!Component) return null;
@@ -157,11 +142,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         return (
           <Fragment key={tabKey}>
             <NavHeader />
-            <SettingContainer
-              maxWidth={1024}
-              padding={24}
-              variant={isSecondaryBackgroundTabs ? 'secondary' : undefined}
-            >
+            <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
               {content}
             </SettingContainer>
           </Fragment>

@@ -186,6 +186,7 @@ const Common = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       initialValues={general}
       items={[theme]}
       itemsType={'group'}
@@ -194,7 +195,7 @@ const Common = memo(() => {
         await setSettings({ general: v });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

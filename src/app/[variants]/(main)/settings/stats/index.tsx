@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Grid, Icon, Segmented } from '@lobehub/ui';
+import { FormGroup, Grid, Icon, Segmented } from '@lobehub/ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import { DatePicker, type DatePickerProps, Divider } from 'antd';
 import dayjs from 'dayjs';
@@ -8,10 +8,10 @@ import { Brain } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import { useClientDataSWR } from '@/libs/swr';
 import { usageService } from '@/services/usage';
 
-import StatsFormGroup from './features/components/StatsFormGroup';
 import {
   ShareButton,
   TotalAssistants,
@@ -55,43 +55,36 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   return (
-    <Flexbox gap={16}>
+    <>
+      <SettingHeader title={t('tab.stats')} />
       {/* ========== Header Section ========== */}
-      {/* Welcome + Share Button */}
-      {mobile ? (
-        <Welcome mobile />
-      ) : (
-        <Flexbox
-          align={'flex-start'}
-          gap={16}
-          horizontal
-          justify={'space-between'}
-          style={{ marginTop: 12 }}
-        >
-          <Welcome />
-          <ShareButton />
-        </Flexbox>
-      )}
-      <div />
-      <Grid maxItemWidth={150} rows={4}>
-        <TotalAssistants mobile={mobile} />
-        <TotalTopics mobile={mobile} />
-        <TotalMessages mobile={mobile} />
-        <TotalWords />
-      </Grid>
-      <Block padding={16} variant={'outlined'}>
+      <FormGroup
+        collapsible={false}
+        extra={<ShareButton />}
+        gap={16}
+        title={<Welcome mobile={mobile} />}
+        variant={'filled'}
+      >
+        <Grid gap={8} maxItemWidth={150} rows={4}>
+          <TotalAssistants mobile={mobile} />
+          <TotalTopics mobile={mobile} />
+          <TotalMessages mobile={mobile} />
+          <TotalWords />
+        </Grid>
+        <Divider dashed />
         <AiHeatmaps mobile={mobile} />
         <Divider dashed />
-        <Grid gap={16} rows={3}>
+        <Grid gap={16} rows={3} style={{ paddingBottom: 12 }}>
           <ModelsRank />
           <AssistantsRank mobile={mobile} />
           <TopicsRank mobile={mobile} />
         </Grid>
-      </Block>
-      <div />
-      <StatsFormGroup
+      </FormGroup>
+      <FormGroup
+        collapsible={false}
         extra={
           <>
+            <DatePicker onChange={handleDateChange} picker="month" value={dateRange} />
             <Segmented
               onChange={(v) => setGroupBy(v as GroupBy)}
               options={[
@@ -106,21 +99,26 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
                   value: GroupBy.Provider,
                 },
               ]}
+              style={{ marginLeft: 8 }}
               value={groupBy}
+              variant={'outlined'}
             />
-            <DatePicker onChange={handleDateChange} picker="month" value={dateRange} />
           </>
         }
+        gap={16}
+        styles={{
+          title: { lineHeight: '35px' },
+        }}
         title={t('tab.usage')}
+        variant={'filled'}
       >
         <UsageCards data={data} groupBy={groupBy} isLoading={isLoading} />
-      </StatsFormGroup>
-      <Block padding={16} variant={'outlined'}>
-        <UsageTrends data={data} groupBy={groupBy} isLoading={isLoading} />
         <Divider />
+        <UsageTrends data={data} groupBy={groupBy} isLoading={isLoading} />
+        <div style={{ height: 24 }} />
         <UsageTable dateStrings={dateStrings} />
-      </Block>
-    </Flexbox>
+      </FormGroup>
+    </>
   );
 });
 

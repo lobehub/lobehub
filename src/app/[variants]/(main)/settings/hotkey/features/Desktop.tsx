@@ -57,7 +57,7 @@ const HotkeySetting = memo(() => {
         }}
         placeholder={t('hotkey.record')}
         resetValue={item.keys}
-value={hotkeys[item.id]}
+        value={hotkeys[item.id]}
       />
     ),
 
@@ -76,11 +76,12 @@ value={hotkeys[item.id]}
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={hotkeys}
       items={[desktop]}
       itemsType={'group'}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

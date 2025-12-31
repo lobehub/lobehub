@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
 
-import { ApiKeyDisplay, ApiKeyModal, EditableCell } from './features';
+import { ApiKeyDisplay, ApiKeyModal, EditableCell } from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -35,7 +35,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const Client: FC = () => {
+const ApiKey: FC = () => {
   const { t } = useTranslation('auth');
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -205,4 +205,4 @@ const Client: FC = () => {
   );
 };
 
-export default Client;
+export default ApiKey;

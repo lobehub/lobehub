@@ -1,6 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox, FluentEmoji, Skeleton } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Flexbox, Skeleton } from '@lobehub/ui';
 import { Clock3Icon, ClockArrowUp } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -32,13 +31,13 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
   );
 
   return (
-    <Flexbox gap={8} padding={mobile ? 16 : 0}>
+    <Flexbox padding={mobile ? 16 : 0}>
       <Flexbox
         align={'center'}
         gap={8}
         horizontal
         style={{
-          fontSize: mobile ? 16 : 20,
+          fontSize: 16,
           fontWeight: 500,
         }}
       >
@@ -62,16 +61,8 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
             username: nickname || username,
           }}
         />
-        {!mobile && <FluentEmoji emoji={'🫶'} size={32} type={'anim'} />}
       </Flexbox>
-      <Flexbox
-        gap={16}
-        horizontal
-        style={{
-          color: cssVar.colorTextDescription,
-        }}
-        wrap={'wrap'}
-      >
+      <Flexbox gap={16} horizontal wrap={'wrap'}>
         <TimeLabel date={data?.createdAt} icon={Clock3Icon} title={t('stats.createdAt')} />
         <TimeLabel date={data?.updatedAt} icon={ClockArrowUp} title={t('stats.updatedAt')} />
       </Flexbox>

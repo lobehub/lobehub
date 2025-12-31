@@ -112,7 +112,15 @@ const SystemAgentForm = memo(
     };
 
     return (
-      <Form form={form} initialValues={settings} items={[systemAgentSettings]} {...FORM_STYLE} />
+      <Form
+        collapsible={false}
+        form={form}
+        initialValues={settings}
+        items={[systemAgentSettings]}
+        itemsType={'group'}
+        variant={'filled'}
+        {...FORM_STYLE}
+      />
     );
   },
 );
