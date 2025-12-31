@@ -36,14 +36,14 @@ export const ExecuteCodeInspector = memo<
   if (isArgumentsStreaming && !description) {
     return (
       <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-cloud-code-interpreter.apiName.executeCode')}</span>
+        <span>{t('builtins.lobe-cloud-sandbox.apiName.executeCode')}</span>
       </div>
     );
   }
 
   return (
     <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
-      <span>{t('builtins.lobe-cloud-code-interpreter.apiName.executeCode')}: </span>
+      <span>{t('builtins.lobe-cloud-sandbox.apiName.executeCode')}: </span>
       {description && <span className={highlightTextStyles.gold}>{description}</span>}
     </div>
   );

@@ -1,5 +1,5 @@
 /**
- * API names for Cloud Code Interpreter tool
+ * API names for Cloud Sandbox tool
  */
 export const CodeInterpreterApiName = {
   editLocalFile: 'editLocalFile',

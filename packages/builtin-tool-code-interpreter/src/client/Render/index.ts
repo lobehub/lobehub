@@ -10,7 +10,7 @@ import SearchFiles from './SearchFiles';
 import WriteFile from './WriteFile';
 
 /**
- * Cloud Code Interpreter Render Components Registry
+ * Cloud Sandbox Render Components Registry
  */
 export const CodeInterpreterRenders = {
   [CodeInterpreterApiName.editLocalFile]: EditLocalFile,

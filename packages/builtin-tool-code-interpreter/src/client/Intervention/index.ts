@@ -6,7 +6,7 @@ import RunCommand from './RunCommand';
 import WriteFile from './WriteFile';
 
 /**
- * Cloud Code Interpreter Intervention Components Registry
+ * Cloud Sandbox Intervention Components Registry
  */
 export const CodeInterpreterInterventions = {
   [CodeInterpreterApiName.editLocalFile]: EditLocalFile,

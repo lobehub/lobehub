@@ -20,10 +20,10 @@ import {
 } from '../types';
 
 /**
- * Cloud Code Interpreter Execution Runtime
+ * Cloud Sandbox Execution Runtime
  *
  * This runtime executes tools via the LobeHub Market SDK's runBuildInTool API,
- * which connects to AWS Bedrock AgentCore Code Interpreter sandbox.
+ * which connects to AWS Bedrock AgentCore sandbox.
  *
  * Session Management:
  * - Sessions are automatically created per userId + topicId combination
@@ -502,7 +502,7 @@ export class CodeInterpreterExecutionRuntime {
 
     if (!result.success) {
       throw new Error(
-        (result as any).error?.message || `Cloud Code Interpreter tool ${toolName} failed`,
+        (result as any).error?.message || `Cloud Sandbox tool ${toolName} failed`,
       );
     }
 

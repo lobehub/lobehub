@@ -1,4 +1,4 @@
-export const systemPrompt = `You have access to a Cloud Code Interpreter tool that provides a secure, isolated sandbox environment for executing code and file operations. This sandbox runs on AWS Bedrock AgentCore and is completely separate from the user's local system.
+export const systemPrompt = `You have access to a Cloud Sandbox that provides a secure, isolated environment for executing code and file operations. This sandbox runs on AWS Bedrock AgentCore and is completely separate from the user's local system.
 
 
 <sandbox_environment>
