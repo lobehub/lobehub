@@ -256,7 +256,7 @@
     "officeparser": "5.1.1",
     "oidc-provider": "^9.6.0",
     "ollama": "^0.6.3",
-    "openai": "^4.104.0",
+    "openai": "^6.15.0",
     "openapi-fetch": "^0.14.1",
     "partial-json": "^0.1.7",
     "path-browserify-esm": "^1.0.6",

@@ -13,6 +13,6 @@
     "p-map": "^7.0.4"
   },
   "devDependencies": {
-    "openai": "^4.104.0"
+    "openai": "^6.15.0"
   }
 }
