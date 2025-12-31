@@ -514,7 +514,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
 
   // === Priority 3: Community Fine-tuned Models (48 models) ===
 
-  // 3.1 Jib Mix Flux系列
+  // 3.1 Jib Mix Flux series
   'Jib_Mix_Flux_v8_schnell.safetensors': {
     priority: 3,
     variant: 'schnell',
@@ -534,7 +534,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.2 Real Dream FLUX系列
+  // 3.2 Real Dream FLUX series
   'real_dream_flux_v1.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -566,7 +566,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.3 Vision Realistic FLUX系列
+  // 3.3 Vision Realistic FLUX series
   'vision_realistic_flux_dev_v2.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -598,7 +598,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.4 Flux Fusion系列
+  // 3.4 Flux Fusion series
   'flux_fusion_v2_4steps.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -618,7 +618,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.5 PixelWave FLUX系列
+  // 3.5 PixelWave FLUX series
   'PixelWave_FLUX.1-dev_03.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -632,7 +632,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.6 Fux Capacity系列
+  // 3.6 Fux Capacity series
   'Fux_Capacity_NSFW_v3.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -658,7 +658,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.7 Fluxmania系列
+  // 3.7 Fluxmania series
   'FluxMania_Kreamania_v1.safetensors': {
     priority: 3,
     variant: 'krea',
@@ -684,7 +684,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.8 Fluxed Up系列
+  // 3.8 Fluxed Up series
   'Fluxed_Up_NSFW_v2.safetensors': {
     priority: 3,
     variant: 'dev',
@@ -692,7 +692,7 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 
-  // 3.9 企业级LiblibAI模型
+  // 3.9 Enterprise-grade LiblibAI models
   'flux.1-ultra-realphoto-v2.safetensors': {
     priority: 3,
     variant: 'dev',
