@@ -311,7 +311,7 @@
     "url-join": "^5.0.0",
     "use-merge-value": "^1.2.0",
     "uuid": "^13.0.0",
-    "virtua": "^0.47.2",
+    "virtua": "^0.48.2",
     "word-extractor": "^1.0.4",
     "ws": "^8.18.3",
     "yaml": "^2.8.2",
