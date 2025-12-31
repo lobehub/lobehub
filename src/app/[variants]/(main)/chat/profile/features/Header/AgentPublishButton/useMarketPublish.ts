@@ -1,8 +1,9 @@
 import isEqual from 'fast-deep-equal';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
+import { checkOwnership } from '@/hooks/useAgentOwnershipCheck';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { marketApiService } from '@/services/marketApi';
@@ -24,7 +25,9 @@ interface UseMarketPublishOptions {
 export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions) => {
   const { t } = useTranslation('setting');
   const [isPublishing, setIsPublishing] = useState(false);
-  const { isAuthenticated, session } = useMarketAuth();
+  // 使用 ref 来同步跟踪发布状态，避免闭包导致的竞态问题
+  const isPublishingRef = useRef(false);
+  const { isAuthenticated, session, getCurrentUserInfo } = useMarketAuth();
   const enableMarketTrustedClient = useServerConfigStore(serverConfigSelectors.enableMarketTrustedClient);
 
   // Agent data from store
@@ -44,6 +47,11 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
   const isSubmit = action === 'submit';
 
   const publish = useCallback(async () => {
+    // 防止重复发布：使用 ref 同步检查，避免闭包导致的竞态问题
+    if (isPublishingRef.current) {
+      return { success: false };
+    }
+
     // 如果启用了 trustedClient，只需要检查 isAuthenticated
     // 因为后端会自动注入 trustedClientToken
     if (!isAuthenticated || (!enableMarketTrustedClient && !session?.accessToken)) {
@@ -60,6 +68,8 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
     const changelog = generateDefaultChangelog();
 
     try {
+      // 立即设置 ref，防止重复调用
+      isPublishingRef.current = true;
       setIsPublishing(true);
       message.loading({ content: loadingMessage, key: messageKey });
       // 只有在非 trustedClient 模式下才需要设置 accessToken
@@ -67,7 +77,36 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
         marketApiService.setAccessToken(session.accessToken);
       }
 
-      if (isSubmit) {
+      // 判断是否需要创建新 agent
+      let needsCreateAgent = false;
+
+      if (!identifier) {
+        // 没有 marketIdentifier，需要创建新 agent
+        needsCreateAgent = true;
+      } else if (isSubmit) {
+        // 有 marketIdentifier 且是 submit 操作，需要检查是否是自己的 agent
+        const userInfo = getCurrentUserInfo?.() ?? session?.userInfo;
+        const accountId = userInfo?.accountId;
+
+        if (accountId) {
+          const isOwner = await checkOwnership({
+            accessToken: session?.accessToken,
+            accountId,
+            enableMarketTrustedClient,
+            marketIdentifier: identifier,
+          });
+
+          if (!isOwner) {
+            // 不是自己的 agent，需要创建新的
+            needsCreateAgent = true;
+          }
+        } else {
+          // 无法获取用户 ID，为安全起见创建新 agent
+          needsCreateAgent = true;
+        }
+      }
+
+      if (needsCreateAgent) {
         identifier = generateMarketIdentifier();
 
         try {
@@ -140,7 +179,8 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
         return { success: false };
       }
 
-      if (isSubmit) {
+      // 只有在首次创建 agent 时才需要更新 meta
+      if (needsCreateAgent) {
         updateAgentMeta({ marketIdentifier: identifier });
       }
 
@@ -152,7 +192,6 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
       onSuccess?.(identifier!);
       return { identifier, success: true };
     } catch (error) {
-      console.error('Market publish failed:', error);
       const errorMessage =
         error instanceof Error ? error.message : t('unknownError', { ns: 'common' });
       message.error({
@@ -163,6 +202,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
       });
       return { success: false };
     } finally {
+      isPublishingRef.current = false;
       setIsPublishing(false);
     }
   }, [
@@ -172,6 +212,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
     chatConfig?.searchMode,
     editorData,
     enableMarketTrustedClient,
+    getCurrentUserInfo,
     isAuthenticated,
     isSubmit,
     language,
@@ -185,6 +226,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
     plugins,
     provider,
     session?.accessToken,
+    session?.userInfo,
     systemRole,
     tokenUsage,
     t,
