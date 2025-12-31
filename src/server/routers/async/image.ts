@@ -2,6 +2,7 @@ import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
@@ -11,6 +12,7 @@ import { createImageBusinessMiddleware } from '@/business/server/trpc-middleware
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
 import { GenerationModel } from '@/database/models/generation';
+import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
 import { GenerationService } from '@/server/services/generation';
@@ -28,6 +30,7 @@ const imageProcedure = asyncAuthedProcedure.use(async (opts) => {
     ctx: {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
+      generationBatchModel: new GenerationBatchModel(ctx.serverDB, ctx.userId),
       generationModel: new GenerationModel(ctx.serverDB, ctx.userId),
       generationService: new GenerationService(ctx.serverDB, ctx.userId),
     },
@@ -215,6 +218,13 @@ export const imageRouter = router({
         provider,
         taskId,
       });
+
+      // Check if generationBatch exists before processing
+      const generationBatch = await ctx.generationBatchModel.findById(generationBatchId);
+      if (!generationBatch) {
+        log('Generation batch not found: %s, skipping image generation', generationBatchId);
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid Request!' });
+      }
 
       log('Updating task status to Processing: %s', taskId);
       await ctx.asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
