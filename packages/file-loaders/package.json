@@ -25,7 +25,7 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.70",
+    "@napi-rs/canvas": "^0.1.88",
     "@xmldom/xmldom": "^0.9.8",
     "concat-stream": "^2.0.0",
     "debug": "^4.4.3",
