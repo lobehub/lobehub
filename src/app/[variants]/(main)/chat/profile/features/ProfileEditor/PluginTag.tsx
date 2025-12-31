@@ -59,8 +59,8 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
   // Extract identifier
   const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
 
-  // Get local plugin lists
-  const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
+  // Get local plugin lists (use allMetaList to include hidden tools)
+  const builtinList = useToolStore(builtinToolSelectors.allMetaList, isEqual);
   const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
   // Klavis 相关状态
@@ -79,6 +79,7 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
         // Check if this Klavis server is connected
         const connectedServer = allKlavisServers.find((s) => s.identifier === identifier);
         return {
+          availableInWeb: true,
           icon: klavisType.icon,
           isInstalled: !!connectedServer,
           label: klavisType.label,
@@ -91,6 +92,7 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
     const builtinMeta = builtinList.find((p) => p.identifier === identifier);
     if (builtinMeta) {
       return {
+        availableInWeb: builtinMeta.availableInWeb,
         avatar: builtinMeta.meta.avatar,
         isInstalled: true,
         title: builtinMeta.meta.title,
@@ -101,6 +103,7 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
     const installedMeta = installedPluginList.find((p) => p.identifier === identifier);
     if (installedMeta) {
       return {
+        availableInWeb: true,
         avatar: installedMeta.avatar,
         isInstalled: true,
         title: installedMeta.title,
@@ -120,6 +123,7 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
 
   // Determine final metadata
   const meta = localMeta || {
+    availableInWeb: true,
     avatar: remoteData?.avatar,
     isInstalled: false,
     title: remoteData?.title || identifier,
@@ -127,6 +131,7 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
   };
 
   const displayTitle = isLoading ? 'Loading...' : meta.title;
+  const isDesktopOnly = !meta.availableInWeb;
 
   // Render icon based on type
   const renderIcon = () => {
@@ -152,6 +157,18 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
     return null;
   };
 
+  // Build display text
+  const getDisplayText = () => {
+    let text = displayTitle;
+    if (isDesktopOnly) {
+      text += ` (${t('tools.desktopOnly', { defaultValue: 'Desktop Only' })})`;
+    }
+    if (!meta.isInstalled) {
+      text += ` (${t('tools.notInstalled', { defaultValue: 'Not Installed' })})`;
+    }
+    return text;
+  };
+
   return (
     <Tag
       className={styles.tag}
@@ -167,9 +184,7 @@ const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
       }
       variant={isDarkMode ? 'filled' : 'outlined'}
     >
-      {!meta.isInstalled
-        ? `${displayTitle} (${t('tools.notInstalled', { defaultValue: 'Not Installed' })})`
-        : displayTitle}
+      {getDisplayText()}
     </Tag>
   );
 });

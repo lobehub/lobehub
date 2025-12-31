@@ -6,7 +6,7 @@ import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, PlusIcon, Store, ToyBrick } from 'lucide-react';
 import Image from 'next/image';
-import React, { Suspense, memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -17,7 +17,7 @@ import PluginStore from '@/features/PluginStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -27,6 +27,8 @@ import {
 } from '@/store/tool/selectors';
 
 import PluginTag from './PluginTag';
+
+const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
 
 type TabType = 'all' | 'installed';
 
@@ -54,8 +56,12 @@ const AgentTool = memo(() => {
   const plugins = config?.plugins || [];
 
   const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
+  const updateAgentChatConfig = useAgentStore((s) => s.updateAgentChatConfig);
   const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
-  const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
+  const builtinList = useToolStore(builtinToolSelectors.allMetaList, isEqual);
+
+  // Web browsing uses searchMode instead of plugins array
+  const isSearchEnabled = useAgentStore(agentChatConfigSelectors.isAgentEnableSearch);
 
   // Klavis 相关状态
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
@@ -81,6 +87,35 @@ const AgentTool = memo(() => {
   // 使用 SWR 加载用户的 Klavis 集成（从数据库）
   useFetchUserKlavisServers(isKlavisEnabledInEnv);
 
+  // Toggle web browsing via searchMode
+  const toggleWebBrowsing = useCallback(async () => {
+    const nextMode = isSearchEnabled ? 'off' : 'auto';
+    await updateAgentChatConfig({ searchMode: nextMode });
+  }, [isSearchEnabled, updateAgentChatConfig]);
+
+  // Check if a tool is enabled (handles web browsing specially)
+  const isToolEnabled = useCallback(
+    (identifier: string) => {
+      if (identifier === WEB_BROWSING_IDENTIFIER) {
+        return isSearchEnabled;
+      }
+      return plugins.includes(identifier);
+    },
+    [plugins, isSearchEnabled],
+  );
+
+  // Toggle a tool (handles web browsing specially)
+  const handleToggleTool = useCallback(
+    async (identifier: string) => {
+      if (identifier === WEB_BROWSING_IDENTIFIER) {
+        await toggleWebBrowsing();
+      } else {
+        await toggleAgentPlugin(identifier);
+      }
+    },
+    [toggleWebBrowsing, toggleAgentPlugin],
+  );
+
   // Set default tab based on installed plugins (only on first load)
   useEffect(() => {
     if (!isInitializedRef.current && plugins.length >= 0) {
@@ -101,11 +136,14 @@ const AgentTool = memo(() => {
   );
 
   // 过滤掉 builtinList 中的 klavis 工具（它们会单独显示在 Klavis 区域）
+  // 同时过滤掉 availableInWeb: false 的工具（如 LocalSystem 仅桌面版可用）
   const filteredBuiltinList = useMemo(
     () =>
-      isKlavisEnabledInEnv
-        ? builtinList.filter((item) => !allKlavisTypeIdentifiers.has(item.identifier))
-        : builtinList,
+      builtinList
+        .filter((item) => item.availableInWeb)
+        .filter((item) =>
+          isKlavisEnabledInEnv ? !allKlavisTypeIdentifiers.has(item.identifier) : true,
+        ),
     [builtinList, allKlavisTypeIdentifiers, isKlavisEnabledInEnv],
   );
 
@@ -132,11 +170,15 @@ const AgentTool = memo(() => {
   // Handle plugin remove via Tag close
   const handleRemovePlugin =
     (pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> }) =>
-    (e: React.MouseEvent) => {
+    async (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
-      toggleAgentPlugin(identifier, false);
+      if (identifier === WEB_BROWSING_IDENTIFIER) {
+        await updateAgentChatConfig({ searchMode: 'off' });
+      } else {
+        toggleAgentPlugin(identifier, false);
+      }
     };
 
   // Build dropdown menu items (adapted from useControls)
@@ -153,12 +195,12 @@ const AgentTool = memo(() => {
         key: item.identifier,
         label: (
           <ToolItem
-            checked={plugins.includes(item.identifier)}
+            checked={isToolEnabled(item.identifier)}
             id={item.identifier}
             label={item.meta?.title}
             onUpdate={async () => {
               setUpdating(true);
-              await toggleAgentPlugin(item.identifier);
+              await handleToggleTool(item.identifier);
               setUpdating(false);
             }}
           />
@@ -167,7 +209,7 @@ const AgentTool = memo(() => {
       // Klavis 服务器
       ...klavisServerItems,
     ],
-    [filteredBuiltinList, klavisServerItems, plugins, toggleAgentPlugin],
+    [filteredBuiltinList, klavisServerItems, isToolEnabled, handleToggleTool],
   );
 
   // Plugin items for dropdown
@@ -242,7 +284,7 @@ const AgentTool = memo(() => {
 
     // 已启用的 builtin 工具
     const enabledBuiltinItems = filteredBuiltinList
-      .filter((item) => plugins.includes(item.identifier))
+      .filter((item) => isToolEnabled(item.identifier))
       .map((item) => ({
         icon: <Avatar avatar={item.meta.avatar} size={20} style={{ flex: 'none' }} />,
         key: item.identifier,
@@ -253,7 +295,7 @@ const AgentTool = memo(() => {
             label={item.meta?.title}
             onUpdate={async () => {
               setUpdating(true);
-              await toggleAgentPlugin(item.identifier);
+              await handleToggleTool(item.identifier);
               setUpdating(false);
             }}
           />
@@ -311,7 +353,16 @@ const AgentTool = memo(() => {
     }
 
     return items;
-  }, [filteredBuiltinList, klavisServerItems, installedPluginList, plugins, toggleAgentPlugin, t]);
+  }, [
+    filteredBuiltinList,
+    klavisServerItems,
+    installedPluginList,
+    plugins,
+    isToolEnabled,
+    handleToggleTool,
+    toggleAgentPlugin,
+    t,
+  ]);
 
   // Use effective tab for display (default to all while initializing)
   const effectiveTab = activeTab ?? 'all';
@@ -359,12 +410,22 @@ const AgentTool = memo(() => {
     </Button>
   );
 
+  // Combine plugins and web browsing for display
+  const allEnabledTools = useMemo(() => {
+    const tools = [...plugins];
+    // Add web browsing if enabled (it's not in plugins array)
+    if (isSearchEnabled && !tools.includes(WEB_BROWSING_IDENTIFIER)) {
+      tools.unshift(WEB_BROWSING_IDENTIFIER);
+    }
+    return tools;
+  }, [plugins, isSearchEnabled]);
+
   return (
     <>
       {/* Plugin Selector and Tags */}
       <Flexbox align="center" gap={8} horizontal wrap={'wrap'}>
         {/* Second Row: Selected Plugins as Tags */}
-        {plugins?.map((pluginId) => {
+        {allEnabledTools.map((pluginId) => {
           return (
             <PluginTag key={pluginId} onRemove={handleRemovePlugin(pluginId)} pluginId={pluginId} />
           );
