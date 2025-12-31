@@ -1,4 +1,4 @@
-import { ActionIcon, Flexbox, Icon, Skeleton, Tag, showContextMenu } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MessageSquareDashed, Star } from 'lucide-react';
 import { Suspense, memo, useCallback } from 'react';
@@ -95,6 +95,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
         active={active && !threadId && !isInAgentSubRoute}
+        contextMenuItems={dropdownMenu}
         disabled={editing}
         icon={
           <ActionIcon
@@ -110,10 +111,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         }
         loading={isLoading}
         onClick={handleClick}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          showContextMenu(dropdownMenu);
-        }}
         onDoubleClick={handleDoubleClick}
         title={title}
       />

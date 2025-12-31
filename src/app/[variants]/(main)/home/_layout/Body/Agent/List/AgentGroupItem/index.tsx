@@ -1,6 +1,6 @@
 import { GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Icon, type MenuProps, showContextMenu } from '@lobehub/ui';
+import { ActionIcon, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
@@ -85,7 +85,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
     return <GroupAvatar avatars={(avatar as any) || []} size={22} />;
   }, [isUpdating, avatar]);
 
-  const dropdownMenu: MenuProps['items'] = useDropdownMenu({
+  const dropdownMenu = useDropdownMenu({
     group: undefined,
     id,
     openCreateGroupModal: () => {}, // Groups don't need this
@@ -101,15 +101,12 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
         <NavItem
           actions={<Actions dropdownMenu={dropdownMenu} />}
           className={className}
+          contextMenuItems={dropdownMenu}
           disabled={editing || isUpdating}
           draggable={!editing && !isUpdating}
           extra={pinIcon}
           icon={avatarIcon}
           key={id}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            showContextMenu(dropdownMenu);
-          }}
           onDoubleClick={handleDoubleClick}
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}

@@ -1,7 +1,7 @@
 import { Icon, type MenuProps } from '@lobehub/ui';
 import { App } from 'antd';
 import { PencilLine, Trash } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
@@ -11,7 +11,7 @@ interface ActionProps {
   toggleEditing: (visible?: boolean) => void;
 }
 
-export const useDropdownMenu = ({ id, toggleEditing }: ActionProps): MenuProps['items'] => {
+export const useDropdownMenu = ({ id, toggleEditing }: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['file', 'common']);
   const { modal } = App.useApp();
   const removeKnowledgeBase = useKnowledgeBaseStore((s) => s.removeKnowledgeBase);
@@ -29,7 +29,7 @@ export const useDropdownMenu = ({ id, toggleEditing }: ActionProps): MenuProps['
     });
   };
 
-  return useMemo(
+  return useCallback(
     () =>
       [
         {

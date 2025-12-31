@@ -206,7 +206,7 @@
     "@lobehub/icons": "^4.0.2",
     "@lobehub/market-sdk": "^0.25.1",
     "@lobehub/tts": "^4.0.2",
-    "@lobehub/ui": "https://pkg.pr.new/lobehub/lobe-ui/@lobehub/ui@6a3af29",
+    "@lobehub/ui": "https://pkg.pr.new/lobehub/lobe-ui/@lobehub/ui@9d9918f",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@neondatabase/serverless": "^1.0.2",
     "@next/third-parties": "^16.1.1",

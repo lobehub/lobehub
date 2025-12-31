@@ -1,7 +1,7 @@
 import { Icon, type MenuProps } from '@lobehub/ui';
 import { App } from 'antd';
 import { PencilLine, Trash } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
@@ -14,12 +14,12 @@ interface ProjectItemDropdownMenuProps {
 export const useProjectItemDropdownMenu = ({
   id,
   toggleEditing,
-}: ProjectItemDropdownMenuProps): MenuProps['items'] => {
+}: ProjectItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['home', 'common']);
   const [removeKnowledgeBase] = useKnowledgeBaseStore((s) => [s.removeKnowledgeBase]);
   const { modal } = App.useApp();
 
-  return useMemo<MenuProps['items']>(
+  return useCallback(
     () => [
       {
         icon: <Icon icon={PencilLine} />,

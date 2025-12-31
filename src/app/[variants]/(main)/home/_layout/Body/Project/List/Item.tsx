@@ -1,4 +1,3 @@
-import { showContextMenu } from '@lobehub/ui';
 import { BoxIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
@@ -41,13 +40,10 @@ const ProjectItem = memo<ProjectItemProps>(({ id, name }) => {
     <>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
+        contextMenuItems={dropdownMenu}
         disabled={editing || isUpdating}
         icon={BoxIcon}
         loading={isLoading || isUpdating}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          showContextMenu(dropdownMenu);
-        }}
         title={name}
       />
       <Editing id={id} name={name} toggleEditing={toggleEditing} />

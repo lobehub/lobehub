@@ -1,18 +1,19 @@
-import { ActionIcon, DropdownMenuV2, type MenuProps } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo } from 'react';
 
 interface ActionsProps {
-  dropdownMenu: MenuProps['items'];
+  dropdownMenu: DropdownItem[] | (() => DropdownItem[]);
 }
 
 const Actions = memo<ActionsProps>(({ dropdownMenu }) => {
-  if (!dropdownMenu || dropdownMenu.length === 0) return null;
+  if (!dropdownMenu || (typeof dropdownMenu !== 'function' && dropdownMenu.length === 0))
+    return null;
 
   return (
-    <DropdownMenuV2 items={dropdownMenu}>
+    <DropdownMenu items={dropdownMenu}>
       <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
-    </DropdownMenuV2>
+    </DropdownMenu>
   );
 });
 

@@ -1,5 +1,4 @@
-import { ActionIcon, DropdownMenuV2 } from '@lobehub/ui';
-import { createStaticStyles, css, cx } from 'antd-style';
+import { ActionIcon, DropdownMenu as DropdownMenuUI } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -9,19 +8,11 @@ interface DropdownMenuProps {
   items: ItemType[] | (() => ItemType[]);
 }
 
-const styles = createStaticStyles(({ cssVar }) => ({
-  container: css`
-    &:has([data-popup-open]) {
-      background-color: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
-
 const DropdownMenu = memo<DropdownMenuProps>(({ items, className }) => {
   return (
-    <DropdownMenuV2 items={items} triggerProps={{ className: cx(styles.container) }}>
+    <DropdownMenuUI items={items}>
       <ActionIcon className={className} icon={MoreHorizontalIcon} size={'small'} />
-    </DropdownMenuV2>
+    </DropdownMenuUI>
   );
 });
 

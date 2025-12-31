@@ -1,7 +1,7 @@
 import { Icon, type MenuProps } from '@lobehub/ui';
 import { App } from 'antd';
 import { ExternalLink, LucideCopy, PencilLine, Trash, Wand2 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
@@ -17,7 +17,7 @@ interface TopicItemDropdownMenuProps {
 export const useTopicItemDropdownMenu = ({
   id,
   toggleEditing,
-}: TopicItemDropdownMenuProps): MenuProps['items'] => {
+}: TopicItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['topic', 'common']);
   const { modal } = App.useApp();
 
@@ -30,7 +30,7 @@ export const useTopicItemDropdownMenu = ({
     s.removeTopic,
   ]);
 
-  return useMemo(() => {
+  return useCallback(() => {
     if (!id) return [];
 
     return [

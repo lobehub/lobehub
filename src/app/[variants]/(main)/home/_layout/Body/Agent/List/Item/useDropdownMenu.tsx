@@ -1,5 +1,5 @@
 import { type MenuProps } from '@lobehub/ui';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 
 import { useSessionItemMenuItems } from '../../../../hooks';
 
@@ -21,7 +21,7 @@ export const useDropdownMenu = ({
   pinned,
   sessionType,
   toggleEditing,
-}: ActionProps): MenuProps['items'] => {
+}: ActionProps): (() => MenuProps['items']) => {
   const {
     pinMenuItem,
     renameMenuItem,
@@ -31,7 +31,7 @@ export const useDropdownMenu = ({
     deleteMenuItem,
   } = useSessionItemMenuItems();
 
-  return useMemo(
+  return useCallback(
     () =>
       [
         pinMenuItem(id, pinned, parentType),

@@ -1,7 +1,7 @@
 import { Icon, type MenuProps } from '@lobehub/ui';
 import { App } from 'antd';
 import { Trash2 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -12,7 +12,10 @@ interface UseDropdownMenuProps {
   topicTitle: string;
 }
 
-export const useDropdownMenu = ({ onClose, topicId }: UseDropdownMenuProps): MenuProps['items'] => {
+export const useDropdownMenu = ({
+  onClose,
+  topicId,
+}: UseDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'topic']);
   const { modal } = App.useApp();
   const removeTopic = useChatStore((s) => s.removeTopic);
@@ -32,7 +35,7 @@ export const useDropdownMenu = ({ onClose, topicId }: UseDropdownMenuProps): Men
     });
   };
 
-  return useMemo(
+  return useCallback(
     () =>
       [
         {
