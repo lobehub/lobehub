@@ -279,7 +279,7 @@
     "react-dom": "^19.2.3",
     "react-fast-marquee": "^1.6.5",
     "react-hotkeys-hook": "^5.2.1",
-    "react-i18next": "^15.7.4",
+    "react-i18next": "^16.5.0",
     "react-layout-kit": "^2.0.1",
     "react-lazy-load": "^4.0.1",
     "react-pdf": "^9.2.1",
