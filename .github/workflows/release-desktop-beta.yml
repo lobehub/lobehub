@@ -273,7 +273,7 @@ jobs:
 
       # 将构建产物上传到现有 release (现在包含合并后的 latest-mac.yml)
       - name: Upload to Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |

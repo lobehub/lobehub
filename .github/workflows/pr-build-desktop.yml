@@ -321,7 +321,7 @@ jobs:
 
       - name: Create Temporary Release for PR
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: PR Build v${{ needs.version.outputs.version }}
           tag_name: v${{ needs.version.outputs.version }}
