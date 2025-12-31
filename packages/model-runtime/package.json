@@ -14,7 +14,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
     "@aws-sdk/client-bedrock-runtime": "^3.941.0",
-    "@azure-rest/ai-inference": "1.0.0-beta.5",
+    "@azure-rest/ai-inference": "1.0.0-beta.6",
     "@azure/core-auth": "^1.10.1",
     "@fal-ai/client": "^1.7.2",
     "@google/genai": "^1.29.0",
