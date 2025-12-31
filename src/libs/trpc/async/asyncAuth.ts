@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
+import { validateInternalJWT } from '@/libs/trpc/utils/internalJwt';
 
 import { asyncTrpc } from './init';
 
@@ -12,6 +13,20 @@ export const asyncAuth = asyncTrpc.middleware(async (opts) => {
   const { ctx } = opts;
 
   log('Async auth middleware called for userId: %s', ctx.userId);
+
+  // Validate JWT token to verify request is from lambda
+  if (!ctx.authorizationToken) {
+    log('Async auth failed - missing authorization token');
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
+
+  log('Validating internal JWT token');
+  const isValid = await validateInternalJWT(ctx.authorizationToken);
+  if (!isValid) {
+    log('JWT validation failed');
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid JWT token' });
+  }
+  log('JWT validation successful');
 
   if (!ctx.userId) {
     log('Async auth failed - missing userId');

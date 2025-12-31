@@ -4,12 +4,12 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
 import { LOBE_CHAT_AUTH_HEADER } from '@/const/auth';
-import { validateInternalJWT } from '@/libs/trpc/utils/internalJwt';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 const log = debug('lobe-async:context');
 
 export interface AsyncAuthContext {
+  authorizationToken?: string;
   jwtPayload: ClientSecretPayload;
   serverDB?: LobeChatDatabase;
   userId?: string | null;
@@ -20,9 +20,11 @@ export interface AsyncAuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createAsyncContextInner = async (params?: {
+  authorizationToken?: string;
   jwtPayload?: ClientSecretPayload;
   userId?: string | null;
 }): Promise<AsyncAuthContext> => ({
+  authorizationToken: params?.authorizationToken,
   jwtPayload: params?.jwtPayload || {},
   userId: params?.userId,
 });
@@ -50,15 +52,6 @@ export const createAsyncRouteContext = async (request: NextRequest): Promise<Asy
     throw new Error('No LobeChat authorization header found');
   }
 
-  // Validate JWT token to verify request is from lambda
-  log('Validating internal JWT token');
-  const isValid = await validateInternalJWT(authorization);
-  if (!isValid) {
-    log('JWT validation failed');
-    throw new Error('Invalid JWT token');
-  }
-  log('JWT validation successful');
-
   try {
     log('Initializing KeyVaultsGateKeeper');
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -75,7 +68,7 @@ export const createAsyncRouteContext = async (request: NextRequest): Promise<Asy
       Object.keys(payload || {}),
     );
 
-    return createAsyncContextInner({ jwtPayload: payload, userId });
+    return createAsyncContextInner({ authorizationToken: authorization, jwtPayload: payload, userId });
   } catch (error) {
     log('Error creating async route context: %O', error);
     throw error;
