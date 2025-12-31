@@ -368,7 +368,7 @@
     "consola": "^3.4.2",
     "cross-env": "^10.1.0",
     "crypto-js": "^4.2.0",
-    "dbdocs": "^0.16.2",
+    "dbdocs": "^0.19.1",
     "dotenv": "^17.2.3",
     "dotenv-expand": "^12.0.3",
     "dpdm-fast": "^1.0.14",
