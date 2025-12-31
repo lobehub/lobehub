@@ -31,7 +31,6 @@ const ProfileEditor = memo(() => {
       <Flexbox
         onClick={(e) => {
           e.stopPropagation();
-          e.preventDefault();
         }}
         style={{ cursor: 'default', marginBottom: 12 }}
       >
@@ -48,7 +47,7 @@ const ProfileEditor = memo(() => {
           <ModelSelect
             onChange={updateConfig}
             value={{
-              model: config?.model, 
+              model: config?.model,
               provider: config?.provider,
             }}
           />

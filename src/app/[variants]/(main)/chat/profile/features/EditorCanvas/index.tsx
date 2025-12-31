@@ -20,7 +20,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { useMentionOptions } from '../ProfileEditor/MentionList';
-import PROMPT_TEMPLATE from '../ProfileEditor/promptTemplate.json';
+import { EMPTY_EDITOR_STATE } from '../constants';
 import { useProfileStore } from '../store';
 import TypoBar from './TypoBar';
 import { useSlashItems } from './useSlashItems';
@@ -33,7 +33,7 @@ const EditorCanvas = memo(() => {
   const editorData = config?.editorData;
   const systemRole = config?.systemRole;
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
-  const [initialLoad] = useState(editorData || PROMPT_TEMPLATE);
+  const [initialLoad] = useState(editorData || EMPTY_EDITOR_STATE);
   const mentionOptions = useMentionOptions();
   const editor = useProfileStore((s) => s.editor);
   const handleContentChange = useProfileStore((s) => s.handleContentChange);
@@ -90,12 +90,11 @@ const EditorCanvas = memo(() => {
     if (streamingInProgress) return;
     try {
       if (editorData) {
-        editor.setDocument('json', editorData || PROMPT_TEMPLATE);
+        editor.setDocument('json', editorData);
       } else if (systemRole) {
         editor.setDocument('markdown', systemRole);
-      } else {
-        editor.setDocument('json', PROMPT_TEMPLATE);
       }
+      // If no editorData and no systemRole, leave editor empty to show placeholder
       setContentInit(true);
     } catch (error) {
       console.error('[EditorCanvas] Failed to init editor content:', error);
@@ -106,7 +105,6 @@ const EditorCanvas = memo(() => {
     <div
       onClick={(e) => {
         e.stopPropagation();
-        e.preventDefault();
       }}
     >
       <Editor
@@ -116,7 +114,7 @@ const EditorCanvas = memo(() => {
         mentionOption={mentionOptions}
         onInit={() => setEditorInit(true)}
         onTextChange={handleChange}
-        placeholder={t('settingAgent.prompt.placeholder')}
+        placeholder={t('settingAgent.prompt.templatePlaceholder')}
         plugins={[
           ReactListPlugin,
           ReactCodePlugin,
