@@ -73,13 +73,11 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: GTDManifest.identifier,
     manifest: GTDManifest,
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: NotebookManifest.identifier,
     manifest: NotebookManifest,
     type: 'builtin',
