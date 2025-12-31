@@ -15,7 +15,7 @@
     "react": "19.2.0",
     "type-fest": "^4.41.0",
     "zod": "^3.25.76",
-    "zustand": "5.0.4"
+    "zustand": "5.0.9"
   },
   "peerDependencies": {
     "zod": "^3.25.76"
