@@ -60,7 +60,8 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
   }) => {
     const itemKey = item.slug || item.id;
     const isExpanded = expandedFolders.has(itemKey);
-    const isActive = selectedKey === itemKey;
+    // Compare selectedKey with item.id since selectedKey is always the ID
+    const isActive = selectedKey === item.id;
 
     const handleToggle = useCallback(async () => {
       // Toggle folder expansion

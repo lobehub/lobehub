@@ -238,21 +238,25 @@ describe('thinkingResolver', () => {
     describe('gemini-3-pro-preview (the original issue model)', () => {
       const model = 'gemini-3-pro-preview';
 
-      it('should enable includeThoughts by default (Gemini 3 models are thinking-enabled)', () => {
+      it('should not set thinkingBudget by default for Gemini 3 (let API decide)', () => {
         const result = resolveGoogleThinkingConfig(model, {});
 
+        // For Gemini 3 models, when neither thinkingLevel nor thinkingBudget is set,
+        // don't set any thinking params - let API use its default behavior
         expect(result).toEqual({
           includeThoughts: true,
-          thinkingBudget: -1,
+          thinkingBudget: undefined,
         });
       });
 
-      it('should enable includeThoughts with thinkingLevel', () => {
+      it('should enable includeThoughts with thinkingLevel (without thinkingBudget - mutually exclusive)', () => {
         const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'high' });
 
+        // thinkingLevel and thinkingBudget are mutually exclusive
+        // When thinkingLevel is set, thinkingBudget should be undefined
         expect(result).toEqual({
           includeThoughts: true,
-          thinkingBudget: -1,
+          thinkingBudget: undefined,
           thinkingLevel: 'high',
         });
       });
@@ -270,12 +274,13 @@ describe('thinkingResolver', () => {
     describe('gemini-3-pro-image-preview (thinking-enabled model)', () => {
       const model = 'gemini-3-pro-image-preview';
 
-      it('should enable includeThoughts by default (thinking-enabled model)', () => {
+      it('should not set thinkingBudget by default for Gemini 3 (let API decide)', () => {
         const result = resolveGoogleThinkingConfig(model, {});
 
+        // For Gemini 3 models, don't set thinkingBudget by default
         expect(result).toEqual({
           includeThoughts: true,
-          thinkingBudget: -1,
+          thinkingBudget: undefined,
         });
       });
     });
@@ -344,26 +349,31 @@ describe('thinkingResolver', () => {
     describe('gemini-3-flash (supports thinking and thinkingLevel)', () => {
       const model = 'gemini-3-flash';
 
-      it('should enable includeThoughts by default', () => {
+      it('should not set thinkingBudget by default for Gemini 3 (let API decide)', () => {
         const result = resolveGoogleThinkingConfig(model, {});
 
+        // For Gemini 3 models, don't set thinkingBudget by default
         expect(result).toEqual({
           includeThoughts: true,
-          thinkingBudget: -1,
+          thinkingBudget: undefined,
         });
       });
 
-      it('should include thinkingLevel for 3.0 models', () => {
+      it('should include thinkingLevel for 3.0 models (without thinkingBudget - mutually exclusive)', () => {
         const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'low' });
 
+        // thinkingLevel and thinkingBudget are mutually exclusive
         expect(result).toEqual({
           includeThoughts: true,
-          thinkingBudget: -1,
+          thinkingBudget: undefined,
           thinkingLevel: 'low',
         });
       });
 
-      it('should support both thinkingBudget and thinkingLevel', () => {
+      it('should prioritize thinkingLevel over thinkingBudget when both are provided (mutually exclusive)', () => {
+        // When both thinkingBudget and thinkingLevel are provided,
+        // thinkingLevel takes priority and thinkingBudget is ignored
+        // because Gemini API requires them to be mutually exclusive
         const result = resolveGoogleThinkingConfig(model, {
           thinkingBudget: 8000,
           thinkingLevel: 'high',
@@ -371,7 +381,7 @@ describe('thinkingResolver', () => {
 
         expect(result).toEqual({
           includeThoughts: true,
-          thinkingBudget: 8000,
+          thinkingBudget: undefined,
           thinkingLevel: 'high',
         });
       });
@@ -444,5 +454,85 @@ describe('resolveGoogleThinkingBudget', () => {
     expect(resolveGoogleThinkingBudget('unknown-model')).toBeUndefined();
     expect(resolveGoogleThinkingBudget('unknown-model', 999)).toBe(999);
     expect(resolveGoogleThinkingBudget('unknown-model', 99_999)).toBe(24_576);
+  });
+});
+
+/**
+ * Tests for mutual exclusivity of thinkingBudget and thinkingLevel
+ *
+ * Gemini API returns error if both are set:
+ * "You can only set only one of thinking budget and thinking level."
+ */
+describe('thinkingBudget and thinkingLevel mutual exclusivity', () => {
+  describe('Gemini 3.0+ models (supports thinkingLevel)', () => {
+    const models = ['gemini-3-pro', 'gemini-3-flash', 'gemini-3.0-pro-preview'];
+
+    it.each(models)('%s: should use thinkingLevel only when set', (model) => {
+      const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'high' });
+
+      expect(result.thinkingLevel).toBe('high');
+      expect(result.thinkingBudget).toBeUndefined();
+    });
+
+    it.each(models)('%s: should use thinkingBudget when thinkingLevel is not set', (model) => {
+      const result = resolveGoogleThinkingConfig(model, { thinkingBudget: 5000 });
+
+      expect(result.thinkingBudget).toBe(5000);
+      expect(result.thinkingLevel).toBeUndefined();
+    });
+
+    it.each(models)('%s: should prioritize thinkingLevel when both are provided', (model) => {
+      const result = resolveGoogleThinkingConfig(model, {
+        thinkingBudget: 10000,
+        thinkingLevel: 'low',
+      });
+
+      expect(result.thinkingLevel).toBe('low');
+      expect(result.thinkingBudget).toBeUndefined();
+    });
+
+    it.each(models)(
+      '%s: should not set thinkingBudget when neither is set (let API decide)',
+      (model) => {
+        const result = resolveGoogleThinkingConfig(model, {});
+
+        // For Gemini 3 models, don't set any thinking params by default
+        expect(result.thinkingBudget).toBeUndefined();
+        expect(result.thinkingLevel).toBeUndefined();
+      },
+    );
+  });
+
+  describe('Gemini 2.x models (does not support thinkingLevel)', () => {
+    const models = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-preview'];
+
+    it.each(models)('%s: should always use thinkingBudget', (model) => {
+      const result = resolveGoogleThinkingConfig(model, { thinkingBudget: 8000 });
+
+      expect(result.thinkingBudget).toBe(8000);
+      expect(result.thinkingLevel).toBeUndefined();
+    });
+
+    it.each(models)('%s: should ignore thinkingLevel (not supported)', (model) => {
+      // Even if thinkingLevel is provided, it should be ignored for 2.x models
+      const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'high' });
+
+      // thinkingLevel is not supported, so it falls back to default budget
+      expect(result.thinkingBudget).toBe(-1);
+      expect(result.thinkingLevel).toBeUndefined();
+    });
+
+    it.each(models)(
+      '%s: should use thinkingBudget when both are provided (thinkingLevel not supported)',
+      (model) => {
+        const result = resolveGoogleThinkingConfig(model, {
+          thinkingBudget: 12000,
+          thinkingLevel: 'low',
+        });
+
+        expect(result.thinkingBudget).toBe(12000);
+        expect(result.thinkingLevel).toBeUndefined();
+      },
+    );
   });
 });

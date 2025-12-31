@@ -149,6 +149,15 @@ declare global {
       ZITADEL_CLIENT_ID?: string;
       ZITADEL_CLIENT_SECRET?: string;
       ZITADEL_ISSUER?: string;
+
+      // ===== JWKS Key ===== //
+      /**
+       * Generic JWKS key for signing/verifying JWTs.
+       * Used for internal service authentication and other cryptographic operations.
+       * Must be a JWKS JSON string containing an RS256 RSA key pair.
+       * Can be generated using `node scripts/generate-oidc-jwk.mjs`.
+       */
+      JWKS_KEY?: string;
     }
   }
 }
@@ -272,6 +281,9 @@ export const getAuthConfig = () => {
 
       // Casdoor
       CASDOOR_WEBHOOK_SECRET: z.string().optional(),
+
+      // Generic JWKS key for signing/verifying JWTs
+      JWKS_KEY: z.string().optional(),
     },
 
     runtimeEnv: {
@@ -392,6 +404,9 @@ export const getAuthConfig = () => {
 
       // Casdoor
       CASDOOR_WEBHOOK_SECRET: process.env.CASDOOR_WEBHOOK_SECRET,
+
+      // Generic JWKS key (fallback to OIDC_JWKS_KEY for backward compatibility)
+      JWKS_KEY: process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY,
     },
   });
 };

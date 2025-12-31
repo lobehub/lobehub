@@ -143,12 +143,13 @@ const AdvancedActions = () => {
   };
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={settings}
       items={[analytics, system]}
       itemsType={'group'}
       onValuesChange={setSettings}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

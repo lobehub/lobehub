@@ -8,26 +8,30 @@ import { useConversationStore } from '../../../store';
 import ContentBlock from './ContentBlock';
 
 interface GroupItemProps extends AssistantContentBlock {
+  assistantId: string;
   contentId?: string;
   disableEditing?: boolean;
   messageIndex: number;
 }
 
-const GroupItem = memo<GroupItemProps>(({ contentId, disableEditing, error, ...item }) => {
-  const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
+const GroupItem = memo<GroupItemProps>(
+  ({ contentId, disableEditing, error, assistantId, ...item }) => {
+    const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
 
-  return item.id === contentId ? (
-    <Flexbox
-      onDoubleClick={(e) => {
-        if (disableEditing || error || !e.altKey) return;
-        toggleMessageEditing(item.id, true);
-      }}
-    >
-      <ContentBlock {...item} error={error} />
-    </Flexbox>
-  ) : (
-    <ContentBlock {...item} error={error} />
-  );
-}, isEqual);
+    return item.id === contentId ? (
+      <Flexbox
+        onDoubleClick={(e) => {
+          if (disableEditing || error || !e.altKey) return;
+          toggleMessageEditing(item.id, true);
+        }}
+      >
+        <ContentBlock {...item} assistantId={assistantId} error={error} />
+      </Flexbox>
+    ) : (
+      <ContentBlock {...item} assistantId={assistantId} error={error} />
+    );
+  },
+  isEqual,
+);
 
 export default GroupItem;

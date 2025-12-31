@@ -6,9 +6,12 @@ import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MarketSDK } from '@lobehub/market-sdk';
+
 import TextArea from '@/components/TextArea';
-import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
+import { userProfileSelectors } from '@/store/user/selectors';
+import { useUserStore } from '@/store/user/store';
 
 interface FeedbackModalProps {
   onClose: () => void;
@@ -30,6 +33,7 @@ const FeedbackModal = memo<FeedbackModalProps>(({ onClose, open }) => {
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
 
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
+  const userEmail = useUserStore(userProfileSelectors.email);
 
   const handleScreenshotUpload = useCallback(
     async (file: File) => {
@@ -65,20 +69,23 @@ const FeedbackModal = memo<FeedbackModalProps>(({ onClose, open }) => {
       const values = await form.validateFields();
       setLoading(true);
 
-      // Collect client information
-      const clientInfo = {
-        language: navigator.language,
-        screenResolution: `${window.screen.width}x${window.screen.height}`,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        url: window.location.href,
-        userAgent: navigator.userAgent,
-        viewport: `${window.innerWidth}x${window.innerHeight}`,
-      };
+      const sdk = new MarketSDK();
 
-      await lambdaClient.feedback.submitFeedback.mutate({
-        clientInfo,
-        message: values.message,
-        screenshotUrl: screenshotUrl || undefined,
+      // Build message with screenshot if available
+      let feedbackMessage = values.message;
+      if (screenshotUrl) {
+        feedbackMessage += `\n\n**Screenshot**: ${screenshotUrl}`;
+      }
+
+      const response = await sdk.feedback.submitFeedback({
+        clientInfo: {
+          language: navigator.language,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+        },
+        email: userEmail,
+        message: feedbackMessage,
         title: values.title,
       });
 
@@ -86,19 +93,18 @@ const FeedbackModal = memo<FeedbackModalProps>(({ onClose, open }) => {
       form.resetFields();
       setScreenshotUrl(null);
       onClose();
+
+      // Optionally show the issue URL to the user
+      if (response.issueUrl) {
+        console.log('Feedback submitted:', response.issueUrl);
+      }
     } catch (error: any) {
       console.error('[FeedbackModal] Submission failed:', error);
-
-      // Handle specific error types
-      if (error?.message?.includes('team')) {
-        message.error(t('feedback.errors.teamNotFound'));
-      } else {
-        message.error(t('feedback.errors.submitFailed'));
-      }
+      message.error(t('feedback.errors.submitFailed'));
     } finally {
       setLoading(false);
     }
-  }, [form, message, onClose, screenshotUrl, t]);
+  }, [form, message, onClose, screenshotUrl, t, userEmail]);
 
   const handleCancel = useCallback(() => {
     form.resetFields();

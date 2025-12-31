@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import { useErrorContent } from '@/features/Conversation/Error';
@@ -12,14 +12,26 @@ import Reasoning from '../../components/Reasoning';
 import { Tools } from '../Tools';
 import MessageContent from './MessageContent';
 
-const ContentBlock = memo<AssistantContentBlock>(
-  ({ id, tools, content, imageList, reasoning, error }) => {
+interface ContentBlockProps extends AssistantContentBlock {
+  assistantId: string;
+}
+const ContentBlock = memo<ContentBlockProps>(
+  ({ id, tools, content, imageList, reasoning, error, assistantId }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
-    const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
+    const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
+      messageStateSelectors.isMessageInReasoning(id)(s),
+      s.deleteDBMessage,
+      s.continueGeneration,
+    ]);
     const hasTools = tools && tools.length > 0;
     const showReasoning =
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+
+    const handleRegenerate = useCallback(async () => {
+      await deleteMessage(id);
+      continueGeneration(assistantId);
+    }, [id]);
 
     if (error && (content === LOADING_FLAT || !content))
       return (
@@ -30,6 +42,7 @@ const ContentBlock = memo<AssistantContentBlock>(
               : undefined
           }
           id={id}
+          onRegenerate={handleRegenerate}
         />
       );
 

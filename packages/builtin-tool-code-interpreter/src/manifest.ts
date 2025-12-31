@@ -210,6 +210,11 @@ export const CodeInterpreterManifest: BuiltinToolManifest = {
       name: CodeInterpreterApiName.runCommand,
       parameters: {
         properties: {
+          description: {
+            description:
+              'A brief description of what this code does (required for user understanding)',
+            type: 'string',
+          },
           background: {
             description: 'Set to true to run command in background and return commandId',
             type: 'boolean',
@@ -223,7 +228,7 @@ export const CodeInterpreterManifest: BuiltinToolManifest = {
             type: 'number',
           },
         },
-        required: ['command'],
+        required: ['description', 'command'],
         type: 'object',
       },
     },

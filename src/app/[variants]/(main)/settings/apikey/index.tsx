@@ -1,11 +1,19 @@
-'use client';
+import { useTranslation } from 'react-i18next';
 
-import { memo } from 'react';
+import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 
-import Client from './Client';
+import ApiKey from './features/ApiKey';
 
-const ApiKeySettings = memo(() => {
-  return <Client />;
-});
+const Page = () => {
+  const { t } = useTranslation('setting');
+  return (
+    <>
+      <SettingHeader title={t('tab.apikey')} />
+      <ApiKey />
+    </>
+  );
+};
 
-export default ApiKeySettings;
+Page.displayName = 'ApiKeySetting';
+
+export default Page;

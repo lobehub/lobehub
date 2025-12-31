@@ -53,6 +53,14 @@ LobeChat 在部署时提供了完善的身份验证服务能力，以下是相�
 - 默认值：`-`
 - 示例：`google,github,microsoft,cognito`
 
+#### `JWKS_KEY`
+
+- 类型：必选
+- 描述：用于签名和验证 JWT 的通用 JWKS（JSON Web Key Set）密钥。用于内部服务认证和其他加密操作。必须是包含 RS256 RSA 密钥对的 JWKS JSON 字符串。如果未设置，将回退到 `OIDC_JWKS_KEY`（向后兼容）。
+- 默认值：`-`
+
+<OIDCJWKs />
+
 ### 邮件服务（SMTP）
 
 启用邮箱验证和密码重置功能需要配置以下设置。

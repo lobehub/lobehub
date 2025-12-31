@@ -246,6 +246,13 @@ const shouldIncludeThoughts = (
 /**
  * Main resolver function - resolves complete Google thinking configuration
  *
+ * IMPORTANT: thinkingBudget and thinkingLevel are mutually exclusive.
+ * Gemini API returns error if both are set: "You can only set only one of thinking budget and thinking level."
+ *
+ * Priority rules:
+ * 1. If thinkingLevel is set AND model is Gemini 3.0+, use thinkingLevel only
+ * 2. Otherwise, use thinkingBudget only
+ *
  * @param model - The model identifier
  * @param options - Thinking options from the payload
  * @returns Resolved thinking configuration
@@ -253,12 +260,12 @@ const shouldIncludeThoughts = (
  * @example
  * // Gemini 2.5 Pro with default dynamic thinking
  * resolveGoogleThinkingConfig('gemini-2.5-pro', {})
- * // Returns: { includeThoughts: undefined, thinkingBudget: -1 }
+ * // Returns: { includeThoughts: true, thinkingBudget: -1 }
  *
  * @example
- * // Gemini 3.0 Pro with explicit thinking level
+ * // Gemini 3.0 Pro with explicit thinking level (thinkingBudget is NOT included)
  * resolveGoogleThinkingConfig('gemini-3-pro-preview', { thinkingLevel: 'high' })
- * // Returns: { includeThoughts: true, thinkingBudget: -1, thinkingLevel: 'high' }
+ * // Returns: { includeThoughts: true, thinkingLevel: 'high' }
  *
  * @example
  * // Gemini 2.5 Flash Lite with thinking disabled
@@ -271,22 +278,49 @@ export const resolveGoogleThinkingConfig = (
 ): ResolvedGoogleThinkingConfig => {
   const { thinkingBudget, thinkingLevel } = options;
 
-  // Resolve the thinking budget
-  const resolvedBudget = resolveGoogleThinkingBudget(model, thinkingBudget);
+  const isGemini3 = isGemini3Model(model);
+  const hasExplicitBudget = thinkingBudget !== undefined && thinkingBudget !== null;
 
-  // Determine includeThoughts
+  // IMPORTANT: thinkingBudget and thinkingLevel are mutually exclusive
+  // Gemini API returns error if both are set
+
+  // For Gemini 3.0+ models:
+  // - If thinkingLevel is set, use thinkingLevel only
+  // - If only thinkingBudget is set, use thinkingBudget (backwards compatible but suboptimal)
+  // - If neither is set, don't set any thinking params (let API decide)
+  if (isGemini3) {
+    if (thinkingLevel) {
+      const includeThoughts = shouldIncludeThoughts(model, options, undefined);
+      return {
+        includeThoughts,
+        thinkingBudget: undefined,
+        thinkingLevel,
+      };
+    }
+
+    if (hasExplicitBudget) {
+      const resolvedBudget = resolveGoogleThinkingBudget(model, thinkingBudget);
+      const includeThoughts = shouldIncludeThoughts(model, options, resolvedBudget);
+      return {
+        includeThoughts,
+        thinkingBudget: resolvedBudget,
+      };
+    }
+
+    // Neither thinkingLevel nor thinkingBudget set - let API use default
+    const includeThoughts = shouldIncludeThoughts(model, options, undefined);
+    return {
+      includeThoughts,
+      thinkingBudget: undefined,
+    };
+  }
+
+  // For Gemini 2.x and other models: use thinkingBudget (with defaults)
+  const resolvedBudget = resolveGoogleThinkingBudget(model, thinkingBudget);
   const includeThoughts = shouldIncludeThoughts(model, options, resolvedBudget);
 
-  // Build result
-  const result: ResolvedGoogleThinkingConfig = {
+  return {
     includeThoughts,
     thinkingBudget: resolvedBudget,
   };
-
-  // Add thinkingLevel for 3.0+ models
-  if (isGemini3Model(model) && thinkingLevel) {
-    result.thinkingLevel = thinkingLevel;
-  }
-
-  return result;
 };

@@ -37,12 +37,12 @@ export interface GenerationAction {
   /**
    * Continue generation from a message
    */
-  continueGeneration: (messageId: string) => Promise<void>;
+  continueGeneration: (displayMessageId: string) => Promise<void>;
 
   /**
    * Continue generation from a specific block
    */
-  continueGenerationMessage: (blockId: string, messageId: string) => Promise<void>;
+  continueGenerationMessage: (displayMessageId: string, messageId: string) => Promise<void>;
 
   /**
    * Delete and regenerate a message
@@ -135,30 +135,48 @@ export const generationSlice: StateCreator<
     await chatStore.clearTranslate(messageId);
   },
 
-  continueGeneration: async (messageId: string) => {
-    // Note: continueGenerationMessage takes (blockId, messageId)
-    // For now, we use messageId for both since we don't have block ID
-    // Hooks are handled in continueGenerationMessage
-    await get().continueGenerationMessage(messageId, messageId);
+  continueGeneration: async (groupMessageId: string) => {
+    const { displayMessages } = get();
+
+    // Find the message
+    const message = displayMessages.find((m) => m.id === groupMessageId);
+    if (!message) return;
+
+    // If it's an assistantGroup, find the last child's ID as blockId
+    let lastBlockId: string | undefined;
+
+    if (message.role !== 'assistantGroup') return;
+
+    if (message.children && message.children.length > 0) {
+      const lastChild = message.children.at(-1);
+
+      if (lastChild) {
+        lastBlockId = lastChild.id;
+      }
+    }
+
+    if (!lastBlockId) return;
+
+    await get().continueGenerationMessage(groupMessageId, lastBlockId);
   },
 
-  continueGenerationMessage: async (blockId: string, messageId: string) => {
+  continueGenerationMessage: async (displayMessageId: string, dbMessageId: string) => {
     const { context, displayMessages, hooks } = get();
     const chatStore = useChatStore.getState();
 
     // Find the message (blockId refers to the assistant message to continue from)
-    const message = displayMessages.find((m) => m.id === blockId);
+    const message = displayMessages.find((m) => m.id === displayMessageId);
     if (!message) return;
 
     // ===== Hook: onBeforeContinue =====
     if (hooks.onBeforeContinue) {
-      const shouldProceed = await hooks.onBeforeContinue(messageId);
+      const shouldProceed = await hooks.onBeforeContinue(displayMessageId);
       if (shouldProceed === false) return;
     }
 
     // Create continue operation with ConversationStore context (includes groupId)
     const { operationId } = chatStore.startOperation({
-      context: { ...context, messageId },
+      context: { ...context, messageId: displayMessageId },
       type: 'continue',
     });
 
@@ -167,7 +185,7 @@ export const generationSlice: StateCreator<
       await chatStore.internal_execAgentRuntime({
         context,
         messages: displayMessages,
-        parentMessageId: blockId,
+        parentMessageId: dbMessageId,
         parentMessageType: message.role as 'assistant' | 'tool' | 'user',
         parentOperationId: operationId,
       });
@@ -176,7 +194,7 @@ export const generationSlice: StateCreator<
 
       // ===== Hook: onContinueComplete =====
       if (hooks.onContinueComplete) {
-        hooks.onContinueComplete(messageId);
+        hooks.onContinueComplete(displayMessageId);
       }
     } catch (error) {
       chatStore.failOperation(operationId, {

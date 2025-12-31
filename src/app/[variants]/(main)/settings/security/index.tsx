@@ -2,9 +2,10 @@
 
 import { Skeleton } from '@lobehub/ui';
 import dynamic from 'next/dynamic';
-import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 
+import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import { enableClerk } from '@/const/auth';
 
 const ClerkProfile = dynamic(() => import('./features/ClerkProfile'), {
@@ -15,8 +16,17 @@ const ClerkProfile = dynamic(() => import('./features/ClerkProfile'), {
   ),
 });
 
-const SecuritySettings = memo(() => {
-  return enableClerk ? <ClerkProfile /> : <Navigate replace to="/settings" />;
-});
+const Page = () => {
+  const { t } = useTranslation('setting');
+  if (!enableClerk) return <Navigate replace to="/settings" />;
+  return (
+    <>
+      <SettingHeader title={t('tab.security')} />
+      <ClerkProfile />
+    </>
+  );
+};
 
-export default SecuritySettings;
+Page.displayName = 'SecuritySetting';
+
+export default Page;

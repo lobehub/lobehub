@@ -155,7 +155,7 @@ describe('Generation Actions', () => {
   });
 
   describe('continueGeneration', () => {
-    it('should continue generation from message with context including groupId', async () => {
+    it('should continue generation from assistantGroup message with last child as blockId', async () => {
       // Reset mock to ensure all required functions are available
       vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
         messagesMap: {},
@@ -175,7 +175,64 @@ describe('Generation Actions', () => {
 
       const store = createStore({ context });
 
-      // Set displayMessages after store creation
+      // Set displayMessages with assistantGroup message containing children
+      act(() => {
+        store.setState({
+          displayMessages: [
+            {
+              id: 'group-msg-1',
+              role: 'assistantGroup',
+              content: '',
+              children: [
+                { id: 'child-1', content: 'First response' },
+                { id: 'child-2', content: 'Second response' },
+              ],
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().continueGeneration('group-msg-1');
+      });
+
+      // Should create operation with groupMessageId
+      expect(mockStartOperation).toHaveBeenCalledWith({
+        context: { ...context, messageId: 'group-msg-1' },
+        type: 'continue',
+      });
+
+      // Should call internal_execAgentRuntime with last child id as parentMessageId
+      expect(mockInternalExecAgentRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          parentMessageId: 'child-2', // last child's id
+          parentMessageType: 'assistantGroup',
+          parentOperationId: 'test-op-id',
+        }),
+      );
+    });
+
+    it('should not continue if message is not assistantGroup', async () => {
+      // Reset mock to ensure all required functions are available
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        internal_execAgentRuntime: mockInternalExecAgentRuntime,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      // Set displayMessages with regular assistant message (not assistantGroup)
       act(() => {
         store.setState({
           displayMessages: [{ id: 'msg-1', role: 'assistant', content: 'Hello' }],
@@ -186,21 +243,46 @@ describe('Generation Actions', () => {
         await store.getState().continueGeneration('msg-1');
       });
 
-      // Should create operation with context including groupId
-      expect(mockStartOperation).toHaveBeenCalledWith({
-        context: { ...context, messageId: 'msg-1' },
-        type: 'continue',
+      // Should not create operation if message is not assistantGroup
+      expect(mockStartOperation).not.toHaveBeenCalled();
+      expect(mockInternalExecAgentRuntime).not.toHaveBeenCalled();
+    });
+
+    it('should not continue if assistantGroup has no children', async () => {
+      // Reset mock to ensure all required functions are available
+      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        internal_execAgentRuntime: mockInternalExecAgentRuntime,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      // Set displayMessages with assistantGroup but no children
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'group-msg-1', role: 'assistantGroup', content: '', children: [] },
+          ],
+        } as any);
       });
 
-      // Should call internal_execAgentRuntime with context including groupId
-      expect(mockInternalExecAgentRuntime).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context,
-          parentMessageId: 'msg-1',
-          parentMessageType: 'assistant',
-          parentOperationId: 'test-op-id',
-        }),
-      );
+      await act(async () => {
+        await store.getState().continueGeneration('group-msg-1');
+      });
+
+      // Should not create operation if no children
+      expect(mockStartOperation).not.toHaveBeenCalled();
+      expect(mockInternalExecAgentRuntime).not.toHaveBeenCalled();
     });
 
     it('should call onBeforeContinue hook and respect false return', async () => {
@@ -225,18 +307,25 @@ describe('Generation Actions', () => {
 
       const store = createStore({ context, hooks });
 
-      // Set displayMessages after store creation
+      // Set displayMessages with assistantGroup
       act(() => {
         store.setState({
-          displayMessages: [{ id: 'msg-1', role: 'assistant', content: 'Hello' }],
+          displayMessages: [
+            {
+              id: 'group-msg-1',
+              role: 'assistantGroup',
+              content: '',
+              children: [{ id: 'child-1', content: 'Response' }],
+            },
+          ],
         } as any);
       });
 
       await act(async () => {
-        await store.getState().continueGeneration('msg-1');
+        await store.getState().continueGeneration('group-msg-1');
       });
 
-      expect(onBeforeContinue).toHaveBeenCalledWith('msg-1');
+      expect(onBeforeContinue).toHaveBeenCalledWith('group-msg-1');
       // Should not call internal_execAgentRuntime if hook returns false
       expect(mockInternalExecAgentRuntime).not.toHaveBeenCalled();
     });
@@ -263,18 +352,25 @@ describe('Generation Actions', () => {
 
       const store = createStore({ context, hooks });
 
-      // Set displayMessages after store creation
+      // Set displayMessages with assistantGroup
       act(() => {
         store.setState({
-          displayMessages: [{ id: 'msg-1', role: 'assistant', content: 'Hello' }],
+          displayMessages: [
+            {
+              id: 'group-msg-1',
+              role: 'assistantGroup',
+              content: '',
+              children: [{ id: 'child-1', content: 'Response' }],
+            },
+          ],
         } as any);
       });
 
       await act(async () => {
-        await store.getState().continueGeneration('msg-1');
+        await store.getState().continueGeneration('group-msg-1');
       });
 
-      expect(onContinueComplete).toHaveBeenCalledWith('msg-1');
+      expect(onContinueComplete).toHaveBeenCalledWith('group-msg-1');
     });
 
     it('should not continue if message is not found', async () => {

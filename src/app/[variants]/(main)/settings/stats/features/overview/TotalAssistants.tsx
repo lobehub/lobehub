@@ -1,4 +1,3 @@
-import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,7 +11,7 @@ import { lastMonth } from '@/utils/time';
 
 import TotalCard from './ShareButton/TotalCard';
 
-const TotalMessages = memo<{ inShare?: boolean; mobile?: boolean }>(({ mobile, inShare }) => {
+const TotalMessages = memo<{ inShare?: boolean; mobile?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
   const { data, isLoading } = useClientDataSWR('stats-sessions', async () => ({
     count: await sessionService.countSessions(),
@@ -29,7 +28,6 @@ const TotalMessages = memo<{ inShare?: boolean; mobile?: boolean }>(({ mobile, i
 
   return (
     <StatisticCard
-      highlight={mobile ? undefined : cssVar.purple}
       loading={isLoading || !data}
       statistic={{
         description: (

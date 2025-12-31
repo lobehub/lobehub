@@ -35,7 +35,15 @@ const Analytics = memo(() => {
     title: t('analytics.title'),
   };
 
-  return <Form items={[items]} itemsType={'group'} variant={'borderless'} {...FORM_STYLE} />;
+  return (
+    <Form
+      collapsible={false}
+      items={[items]}
+      itemsType={'group'}
+      variant={'filled'}
+      {...FORM_STYLE}
+    />
+  );
 });
 
 export default Analytics;

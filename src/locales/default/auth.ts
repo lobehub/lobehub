@@ -153,6 +153,7 @@ export default {
   'loginGuide.f4': 'Explore powerful plugins',
   'loginGuide.title': 'After logging in, you can:',
   'loginOrSignup': 'Log In / Sign Up',
+  'profile.account': 'Account',
   'profile.authorizations.actions.revoke': 'Revoke',
   'profile.authorizations.revoke.description':
     'After revoking, the tool will no longer have access to your data. Re-authorization is required to use it again.',

@@ -50,6 +50,7 @@ const Group = memo<GroupChildrenProps>(
             return (
               <GroupItem
                 {...item}
+                assistantId={id}
                 contentId={contentId}
                 disableEditing={disableEditing}
                 key={id + '.' + item.id}

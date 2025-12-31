@@ -50,6 +50,7 @@ const Appearance = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       initialValues={general}
       items={[theme]}
       itemsType={'group'}
@@ -58,7 +59,7 @@ const Appearance = memo(() => {
         await setSettings({ general: value });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

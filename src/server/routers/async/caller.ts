@@ -3,19 +3,20 @@ import { createTRPCClient, httpLink } from '@trpc/client';
 import superjson from 'superjson';
 import urlJoin from 'url-join';
 
-import { serverDBEnv } from '@/config/db';
 import { LOBE_CHAT_AUTH_HEADER } from '@/const/auth';
 import { appEnv } from '@/envs/app';
 import { createAsyncCallerFactory } from '@/libs/trpc/async';
+import { signInternalJWT } from '@/libs/trpc/utils/internalJwt';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { asyncRouter } from './index';
 import type { AsyncRouter } from './index';
 
 export const createAsyncServerClient = async (userId: string, payload: ClientSecretPayload) => {
+  const token = await signInternalJWT();
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${serverDBEnv.KEY_VAULTS_SECRET}`,
+    Authorization: token,
     [LOBE_CHAT_AUTH_HEADER]: await gateKeeper.encrypt(JSON.stringify({ payload, userId })),
   };
 

@@ -39,7 +39,7 @@ const HotkeySetting = memo(() => {
           hotkeyConflicts={hotkeyConflicts}
           placeholder={t('hotkey.record')}
           resetValue={item.keys}
-/>
+        />
       ),
       desc: hotkeyMeta[`${item.id}.desc`] ? t(`${item.id}.desc`, { ns: 'hotkey' }) : undefined,
       label: t(`${item.id}.title`, { ns: 'hotkey' }),
@@ -57,6 +57,7 @@ const HotkeySetting = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={hotkey}
       items={[essential]}
@@ -66,7 +67,7 @@ const HotkeySetting = memo(() => {
         await setSettings({ hotkey: values });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

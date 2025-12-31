@@ -47,6 +47,7 @@ const STT = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={tts}
       items={[stt]}
@@ -58,7 +59,7 @@ const STT = memo(() => {
         });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

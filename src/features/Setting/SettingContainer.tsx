@@ -30,7 +30,7 @@ const SettingContainer = memo<PropsWithChildren<SettingContainerProps>>(
         {addonBefore}
         <Flexbox
           flex={1}
-          gap={64}
+          gap={36}
           style={{
             maxWidth,
           }}

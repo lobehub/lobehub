@@ -273,6 +273,100 @@ describe('Message CRUD Actions', () => {
     });
   });
 
+  describe('deleteDBMessage', () => {
+    it('should delete a single DB message directly', async () => {
+      const removeMessageSpy = vi
+        .spyOn(messageServiceModule.messageService, 'removeMessage')
+        .mockResolvedValue({
+          success: true,
+          messages: [],
+        });
+
+      const store = createTestStore();
+
+      const testMessage = {
+        id: 'msg-1',
+        content: 'Hello',
+        role: 'user' as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        meta: {},
+      };
+
+      act(() => {
+        store.getState().replaceMessages([testMessage]);
+      });
+
+      expect(store.getState().dbMessages.length).toBe(1);
+
+      await act(async () => {
+        await store.getState().deleteDBMessage('msg-1');
+      });
+
+      expect(removeMessageSpy).toHaveBeenCalledWith('msg-1', {
+        agentId: 'test-session',
+        threadId: null,
+        topicId: null,
+      });
+    });
+
+    it('should do nothing if message not found in dbMessages', async () => {
+      const removeMessageSpy = vi.spyOn(messageServiceModule.messageService, 'removeMessage');
+
+      const store = createTestStore();
+
+      await act(async () => {
+        await store.getState().deleteDBMessage('nonexistent');
+      });
+
+      expect(removeMessageSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not handle assistantGroup aggregation like deleteMessage does', async () => {
+      const removeMessageSpy = vi
+        .spyOn(messageServiceModule.messageService, 'removeMessage')
+        .mockResolvedValue({
+          success: true,
+          messages: [],
+        });
+
+      const store = createTestStore();
+
+      // Create raw DB messages (not aggregated)
+      const messages = [
+        {
+          id: 'assistant-1',
+          content: 'Response 1',
+          role: 'assistant' as const,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          meta: {},
+        },
+        {
+          id: 'assistant-2',
+          content: 'Response 2',
+          role: 'assistant' as const,
+          createdAt: Date.now() + 1,
+          updatedAt: Date.now() + 1,
+          meta: {},
+        },
+      ];
+
+      act(() => {
+        store.getState().replaceMessages(messages);
+      });
+
+      // Delete only assistant-1, should NOT delete assistant-2
+      await act(async () => {
+        await store.getState().deleteDBMessage('assistant-1');
+      });
+
+      // Should call removeMessage with only the single ID
+      expect(removeMessageSpy).toHaveBeenCalledWith('assistant-1', expect.any(Object));
+      expect(removeMessageSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('deleteMessages', () => {
     it('should delete multiple messages', async () => {
       const removeMessagesSpy = vi

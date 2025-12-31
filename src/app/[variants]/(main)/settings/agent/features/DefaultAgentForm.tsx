@@ -51,9 +51,12 @@ const DefaultAgentForm = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={{ defaultAgentConfig }}
       items={[defaultAgentSettings]}
+      itemsType={'group'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

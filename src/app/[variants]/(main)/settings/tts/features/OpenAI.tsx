@@ -1,7 +1,7 @@
 'use client';
 
 import { Form, type FormGroupItemType, Icon } from '@lobehub/ui';
-import { Select , Skeleton } from '@lobehub/ui';
+import { Select, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -41,6 +41,7 @@ const OpenAI = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={tts}
       items={[openai]}
@@ -52,7 +53,7 @@ const OpenAI = memo(() => {
         });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );
