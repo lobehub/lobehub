@@ -59,7 +59,7 @@
     "electron-builder": "^26.0.12",
     "electron-is": "^3.0.0",
     "electron-log": "^5.4.3",
-    "electron-store": "^8.2.0",
+    "electron-store": "^11.0.2",
     "electron-vite": "^4.0.1",
     "execa": "^9.6.1",
     "fast-glob": "^3.3.3",
