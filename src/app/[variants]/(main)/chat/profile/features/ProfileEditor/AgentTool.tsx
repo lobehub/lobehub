@@ -2,7 +2,7 @@
 
 import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
 import { Avatar, Button, Flexbox, Icon, type ItemType, Segmented } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, PlusIcon, Store, ToyBrick } from 'lucide-react';
 import Image from 'next/image';
@@ -31,6 +31,35 @@ import PluginTag from './PluginTag';
 const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
 
 type TabType = 'all' | 'installed';
+
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
+  dropdown: css`
+    overflow: hidden;
+
+    width: 100%;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
+
+    .${prefixCls}-dropdown-menu {
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+  `,
+  header: css`
+    padding: ${cssVar.paddingXS};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    background: transparent;
+  `,
+  scroller: css`
+    overflow: hidden auto;
+  `,
+}));
 
 /**
  * Klavis 服务器图标组件
@@ -368,36 +397,6 @@ const AgentTool = memo(() => {
   const effectiveTab = activeTab ?? 'all';
   const currentItems = effectiveTab === 'all' ? allTabItems : installedTabItems;
 
-  // Final menu items with tab segmented control
-  const menuItems: ItemType[] = useMemo(
-    () => [
-      {
-        key: 'tabs',
-        label: (
-          <Segmented
-            block
-            onChange={(v) => setActiveTab(v as TabType)}
-            options={[
-              {
-                label: t('tools.tabs.all', { defaultValue: 'All' }),
-                value: 'all',
-              },
-              {
-                label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
-                value: 'installed',
-              },
-            ]}
-            size="small"
-            value={effectiveTab}
-          />
-        ),
-        type: 'group',
-      },
-      ...currentItems,
-    ],
-    [currentItems, effectiveTab, t],
-  );
-
   const button = (
     <Button
       icon={PlusIcon}
@@ -436,10 +435,49 @@ const AgentTool = memo(() => {
           <ActionDropdown
             maxHeight={500}
             maxWidth={480}
-            menu={{ items: menuItems }}
+            menu={{
+              items: currentItems,
+              style: {
+                // let only the custom scroller scroll
+                maxHeight: 'unset',
+                overflowY: 'visible',
+              },
+            }}
             minHeight={isKlavisEnabledInEnv ? 500 : undefined}
             minWidth={320}
             placement={'bottomLeft'}
+            popupRender={(menu) => (
+              <div className={styles.dropdown}>
+                {/* stopPropagation prevents dropdown's onClick from calling preventDefault on Segmented */}
+                <div className={styles.header} onClick={(e) => e.stopPropagation()}>
+                  <Segmented
+                    block
+                    onChange={(v) => setActiveTab(v as TabType)}
+                    options={[
+                      {
+                        label: t('tools.tabs.all', { defaultValue: 'All' }),
+                        value: 'all',
+                      },
+                      {
+                        label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
+                        value: 'installed',
+                      },
+                    ]}
+                    size="small"
+                    value={effectiveTab}
+                  />
+                </div>
+                <div
+                  className={styles.scroller}
+                  style={{
+                    maxHeight: 500,
+                    minHeight: isKlavisEnabledInEnv ? 500 : undefined,
+                  }}
+                >
+                  {menu}
+                </div>
+              </div>
+            )}
             trigger={['click']}
           >
             {button}
@@ -447,8 +485,8 @@ const AgentTool = memo(() => {
         </Suspense>
       </Flexbox>
 
-      {/* PluginStore Modal */}
-      <PluginStore open={modalOpen} setOpen={setModalOpen} />
+      {/* PluginStore Modal - rendered outside Flexbox to avoid event interference */}
+      {modalOpen && <PluginStore open={modalOpen} setOpen={setModalOpen} />}
     </>
   );
 });

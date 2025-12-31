@@ -31,7 +31,6 @@ const ProfileEditor = memo(() => {
       <Flexbox
         onClick={(e) => {
           e.stopPropagation();
-          e.preventDefault();
         }}
         style={{ cursor: 'default', marginBottom: 12 }}
       >
