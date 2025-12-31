@@ -345,6 +345,160 @@ describe('topic action', () => {
       // Verify that the refreshMessages was called to update the messages
       expect(refreshMessagesSpy).toHaveBeenCalled();
     });
+
+    it('should support boolean as second parameter for backward compatibility', async () => {
+      const topicId = 'topic-id';
+      const { result } = renderHook(() => useChatStore());
+
+      const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages');
+
+      // Call with boolean (old API)
+      await act(async () => {
+        await result.current.switchTopic(topicId, true);
+      });
+
+      expect(useChatStore.getState().activeTopicId).toBe(topicId);
+      // Should not call refreshMessages when skipRefreshMessage is true
+      expect(refreshMessagesSpy).not.toHaveBeenCalled();
+    });
+
+    it('should support options object as second parameter', async () => {
+      const topicId = 'topic-id';
+      const { result } = renderHook(() => useChatStore());
+
+      const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages');
+
+      // Call with options object (new API)
+      await act(async () => {
+        await result.current.switchTopic(topicId, { skipRefreshMessage: true });
+      });
+
+      expect(useChatStore.getState().activeTopicId).toBe(topicId);
+      expect(refreshMessagesSpy).not.toHaveBeenCalled();
+    });
+
+    it('should clear new key data when switching to new state (main scope)', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-agent-id';
+      const newKey = messageMapKey({ agentId: activeAgentId, topicId: null });
+
+      // Setup initial state with some messages in the new key
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId,
+          activeTopicId: 'existing-topic',
+          dbMessagesMap: {
+            [newKey]: [{ id: 'msg-1' }, { id: 'msg-2' }] as any,
+          },
+          messagesMap: {
+            [newKey]: [{ id: 'msg-1' }, { id: 'msg-2' }] as any,
+          },
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      // Switch to new state (id = undefined)
+      await act(async () => {
+        await result.current.switchTopic(undefined, { skipRefreshMessage: true });
+      });
+
+      // Verify replaceMessages was called to clear the new key
+      expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
+        context: {
+          agentId: activeAgentId,
+          groupId: undefined,
+          scope: 'main',
+          topicId: null,
+        },
+        action: expect.any(String),
+      });
+
+      // Verify activeTopicId is now null
+      expect(useChatStore.getState().activeTopicId).toBeNull();
+    });
+
+    it('should clear new key data when switching to new state (group scope)', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-agent-id';
+      const activeGroupId = 'test-group-id';
+
+      // Setup initial state with group context
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId,
+          activeGroupId,
+          activeTopicId: 'existing-topic',
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      // Switch to new state
+      await act(async () => {
+        await result.current.switchTopic(undefined, { skipRefreshMessage: true });
+      });
+
+      // Verify replaceMessages was called with group scope
+      expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
+        context: {
+          agentId: activeAgentId,
+          groupId: activeGroupId,
+          scope: 'group',
+          topicId: null,
+        },
+        action: expect.any(String),
+      });
+    });
+
+    it('should use explicit scope from options when provided', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-agent-id';
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId,
+          activeTopicId: 'existing-topic',
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      // Switch to new state with explicit scope
+      await act(async () => {
+        await result.current.switchTopic(undefined, { skipRefreshMessage: true, scope: 'group' });
+      });
+
+      // Verify replaceMessages was called with explicit scope
+      expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
+        context: expect.objectContaining({
+          scope: 'group',
+        }),
+        action: expect.any(String),
+      });
+    });
+
+    it('should not clear new key data when switching to an existing topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-agent-id';
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId,
+          activeTopicId: undefined,
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      // Switch to an existing topic (not new state)
+      await act(async () => {
+        await result.current.switchTopic('existing-topic-id', { skipRefreshMessage: true });
+      });
+
+      // replaceMessages should not be called when switching to existing topic
+      expect(replaceMessagesSpy).not.toHaveBeenCalled();
+    });
   });
   describe('removeSessionTopics', () => {
     it('should remove all topics from the current session and refresh the topic list', async () => {

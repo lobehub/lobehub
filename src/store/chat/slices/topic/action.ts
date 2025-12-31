@@ -2,7 +2,7 @@
 // Note: To make the code more logic and readable, we just disable the auto sort key eslint rule
 // DON'T REMOVE THE FIRST LINE
 import { chainSummaryTitle } from '@lobechat/prompts';
-import { TraceNameMap, type UIChatMessage } from '@lobechat/types';
+import { type MessageMapScope, TraceNameMap, type UIChatMessage } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import useSWR, { type SWRResponse } from 'swr';
@@ -34,6 +34,22 @@ const n = setNamespace('t');
 const SWR_USE_FETCH_TOPIC = 'SWR_USE_FETCH_TOPIC';
 const SWR_USE_SEARCH_TOPIC = 'SWR_USE_SEARCH_TOPIC';
 
+/**
+ * Options for switchTopic action
+ */
+export interface SwitchTopicOptions {
+  /**
+   * Explicit scope for clearing new key data
+   * If not provided, will be inferred from store state (activeGroupId)
+   */
+  scope?: MessageMapScope;
+  /**
+   * Skip refreshing messages after switching topic
+   * @default false
+   */
+  skipRefreshMessage?: boolean;
+}
+
 export interface ChatTopicAction {
   closeAllTopicsDrawer: () => void;
   favoriteTopic: (id: string, favState: boolean) => Promise<void>;
@@ -53,7 +69,12 @@ export interface ChatTopicAction {
   autoRenameTopicTitle: (id: string) => Promise<void>;
   duplicateTopic: (id: string) => Promise<void>;
   summaryTopicTitle: (topicId: string, messages: UIChatMessage[]) => Promise<void>;
-  switchTopic: (id?: string, skipRefreshMessage?: boolean) => Promise<void>;
+  /**
+   * Switch to a topic or create new topic state
+   * @param id - Topic ID to switch to, or undefined/null to switch to "new" state
+   * @param options - Options object or boolean for backward compatibility (skipRefreshMessage)
+   */
+  switchTopic: (id?: string, options?: boolean | SwitchTopicOptions) => Promise<void>;
   updateTopicTitle: (id: string, title: string) => Promise<void>;
   useFetchTopics: (
     enable: boolean,
@@ -423,14 +444,37 @@ export const chatTopic: StateCreator<
       },
     ),
 
-  switchTopic: async (id, skipRefreshMessage) => {
+  switchTopic: async (id, options) => {
+    // Backward compatibility: support both boolean and options object
+    const opts: SwitchTopicOptions =
+      typeof options === 'boolean' ? { skipRefreshMessage: options } : (options ?? {});
+
+    const { activeAgentId, activeGroupId } = get();
+
+    // When switching to "new" state (id is undefined/null), clear the new key data
+    // This prevents stale data from previous conversations showing up
+    if (!id && activeAgentId) {
+      // Determine scope: use explicit scope from options, or infer from activeGroupId
+      const scope = opts.scope ?? (activeGroupId ? 'group' : 'main');
+
+      get().replaceMessages([], {
+        context: {
+          agentId: activeAgentId,
+          groupId: activeGroupId,
+          scope,
+          topicId: null,
+        },
+        action: n('clearNewKeyData'),
+      });
+    }
+
     set(
       { activeTopicId: !id ? (null as any) : id, activeThreadId: undefined },
       false,
       n('toggleTopic'),
     );
 
-    if (skipRefreshMessage) return;
+    if (opts.skipRefreshMessage) return;
     await get().refreshMessages();
   },
   // delete
