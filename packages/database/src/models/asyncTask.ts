@@ -5,7 +5,7 @@ import {
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@lobechat/types';
-import { and, eq, inArray, lt } from 'drizzle-orm';
+import { and, eq, inArray, lt, or } from 'drizzle-orm';
 
 import { AsyncTaskSelectItem, NewAsyncTaskItem, asyncTasks } from '../schemas';
 import { LobeChatDatabase } from '../type';
@@ -68,7 +68,10 @@ export class AsyncTaskModel {
       .where(
         and(
           inArray(asyncTasks.id, ids),
-          eq(asyncTasks.status, AsyncTaskStatus.Processing),
+          or(
+            eq(asyncTasks.status, AsyncTaskStatus.Pending),
+            eq(asyncTasks.status, AsyncTaskStatus.Processing),
+          ),
           lt(asyncTasks.createdAt, new Date(Date.now() - ASYNC_TASK_TIMEOUT)),
         ),
       );
