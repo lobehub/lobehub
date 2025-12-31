@@ -13,7 +13,7 @@
     "@lobehub/ui": "^2.13.8",
     "model-bank": "workspace:*",
     "react": "19.2.0",
-    "type-fest": "^4.41.0",
+    "type-fest": "^5.3.1",
     "zod": "^3.25.76",
     "zustand": "5.0.4"
   },
