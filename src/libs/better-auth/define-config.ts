@@ -1,16 +1,19 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { expo } from '@better-auth/expo';
 import { passkey } from '@better-auth/passkey';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { createNanoId, idGenerator, serverDB } from '@lobechat/database';
 import * as schema from '@lobechat/database/schemas';
 import bcrypt from 'bcryptjs';
 import { emailHarmony } from 'better-auth-harmony';
+import { validateEmail } from 'better-auth-harmony/email';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { verifyPassword as defaultVerifyPassword } from 'better-auth/crypto';
 import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
 
+import { businessEmailValidator } from '@/business/server/better-auth';
 import { authEnv } from '@/envs/auth';
 import {
   getMagicLinkEmailTemplate,
@@ -59,6 +62,13 @@ const enableMagicLink = authEnv.NEXT_PUBLIC_ENABLE_MAGIC_LINK;
 const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
+
+async function customEmailValidator(email: string): Promise<boolean> {
+  if (ENABLE_BUSINESS_FEATURES && !(await businessEmailValidator(email))) {
+    return false;
+  }
+  return validateEmail(email);
+}
 
 interface CustomBetterAuthOptions {
   plugins: BetterAuthPlugin[];
@@ -209,7 +219,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     plugins: [
       ...customOptions.plugins,
       expo(),
-      emailHarmony({ allowNormalizedSignin: false }),
+      emailHarmony({ allowNormalizedSignin: false, validator: customEmailValidator }),
       admin(),
       // Email OTP plugin for mobile verification
       emailOTP({
