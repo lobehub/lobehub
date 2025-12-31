@@ -260,7 +260,7 @@
     "openapi-fetch": "^0.14.1",
     "partial-json": "^0.1.7",
     "path-browserify-esm": "^1.0.6",
-    "pdf-parse": "^1.1.4",
+    "pdf-parse": "^2.4.5",
     "pdfjs-dist": "4.8.69",
     "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
