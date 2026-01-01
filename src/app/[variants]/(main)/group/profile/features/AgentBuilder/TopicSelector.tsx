@@ -1,6 +1,4 @@
-import { ActionIcon, Tag } from '@lobehub/ui';
-import { Dropdown } from 'antd';
-import type { ItemType } from 'antd/es/menu/interface';
+import { ActionIcon, DropdownMenu, type DropdownMenuCheckboxItem, Tag } from '@lobehub/ui';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,15 +30,23 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
     [topics, activeTopicId],
   );
 
-  const items = useMemo<ItemType[]>(
+  const items = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
       (topics || []).map((topic) => ({
+        checked: topic.id === activeTopicId,
+        closeOnClick: true,
         key: topic.id,
         label: topic.title,
-        onClick: () => switchTopic(topic.id),
+        onCheckedChange: (checked) => {
+          if (checked) {
+            switchTopic(topic.id);
+          }
+        },
+        type: 'checkbox',
       })),
-    [topics, t, switchTopic],
+    [topics, switchTopic, activeTopicId],
   );
+  const isEmpty = !topics || topics.length === 0;
 
   return (
     <NavHeader
@@ -53,22 +59,14 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
             size={DESKTOP_HEADER_ICON_SIZE}
             title={t('actions.addNewTopic')}
           />
-          <Dropdown
-            disabled={!topics || topics.length === 0}
-            menu={{
-              items,
-              selectedKeys: activeTopicId ? [activeTopicId] : [],
-            }}
-            overlayStyle={{
-              maxHeight: 600,
-              minWidth: 200,
-              overflowY: 'auto',
-            }}
+          <DropdownMenu
+            items={items}
             placement="bottomRight"
-            trigger={['click']}
+            popupProps={{ style: { maxHeight: 600, minWidth: 200, overflowY: 'auto' } }}
+            triggerProps={{ disabled: isEmpty }}
           >
-            <ActionIcon disabled={!topics || topics.length === 0} icon={Clock3Icon} />
-          </Dropdown>
+            <ActionIcon disabled={isEmpty} icon={Clock3Icon} />
+          </DropdownMenu>
         </>
       }
       showTogglePanelButton={false}
