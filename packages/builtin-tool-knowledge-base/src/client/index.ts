@@ -1,4 +1,4 @@
-export { KnowledgeBaseRenders, ReadKnowledge, SearchKnowledgeBase } from './Render';
+export { KnowledgeBaseRenders } from './Render';
 
 // Re-export types and manifest for convenience
 export { KnowledgeBaseManifest } from '../manifest';

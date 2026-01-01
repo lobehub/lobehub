@@ -3,6 +3,7 @@ import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
+import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
@@ -12,7 +13,6 @@ import { isDesktop } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
 import { ArtifactsManifest } from './artifacts';
-import { KnowledgeBaseManifest } from './knowledge-base';
 
 export const builtinTools: LobeBuiltinTool[] = [
   {

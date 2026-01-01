@@ -9,6 +9,7 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
+import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -16,7 +17,6 @@ import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
 
 import { builtinTools } from '@/tools';
-import { KnowledgeBaseManifest } from '@/tools/knowledge-base';
 
 import type {
   ServerAgentToolsContext,

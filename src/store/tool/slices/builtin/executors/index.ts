@@ -6,6 +6,8 @@
  */
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
 import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
+import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/executor';
+import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 import { notebookExecutor } from '@lobechat/builtin-tool-notebook/executor';
 
@@ -117,6 +119,8 @@ const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
 registerExecutors([
   groupManagementExecutor,
   gtdExecutor,
+  knowledgeBaseExecutor,
+  localSystemExecutor,
   memoryExecutor,
   notebookExecutor,
   pageAgentExecutor,
