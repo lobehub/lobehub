@@ -10,7 +10,10 @@ import { GroupManagementRenders } from '@lobechat/builtin-tool-group-management/
 // gtd
 import { GTDManifest, GTDRenders } from '@lobechat/builtin-tool-gtd/client';
 // local-system
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  LocalSystemIdentifier,
+  LocalSystemRenders,
+} from '@lobechat/builtin-tool-local-system/client';
 import { NotebookManifest, NotebookRenders } from '@lobechat/builtin-tool-notebook/client';
 // web-browsing
 import {
@@ -22,7 +25,6 @@ import { type BuiltinRender } from '@lobechat/types';
 // knowledge-base
 import { KnowledgeBaseManifest } from './knowledge-base';
 import { KnowledgeBaseRenders } from './knowledge-base/Render';
-import { LocalSystemRenders } from './local-system/Render';
 
 /**
  * Builtin tools renders registry
@@ -35,7 +37,7 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [GTDManifest.identifier]: GTDRenders as Record<string, BuiltinRender>,
   [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
-  [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
+  [LocalSystemIdentifier]: LocalSystemRenders as Record<string, BuiltinRender>,
   [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
 };
 
