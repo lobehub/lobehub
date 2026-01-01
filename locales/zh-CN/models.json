@@ -332,6 +332,7 @@
   "computer-use-preview.description": "computer-use-preview 是为“计算机使用工具”专门训练的模型，能够理解并执行与计算机相关的任务。",
   "dall-e-2.description": "第二代 DALL·E 模型，图像生成更真实、准确，分辨率是第一代的 4 倍。",
   "dall-e-3.description": "最新的 DALL·E 模型，于 2023 年 11 月发布，图像生成更真实、准确，细节表现更强。",
+  "databricks/dbrx-instruct.description": "DBRX Instruct 提供跨行业高度可靠的指令处理能力。",
   "gemini-flash-latest.description": "Latest release of Gemini Flash",
   "gemini-flash-lite-latest.description": "Latest release of Gemini Flash-Lite",
   "gemini-pro-latest.description": "Latest release of Gemini Pro",

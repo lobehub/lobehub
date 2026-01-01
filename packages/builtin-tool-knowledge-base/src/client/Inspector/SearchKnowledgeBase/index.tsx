@@ -1,7 +1,8 @@
 'use client';
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,18 +19,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     color: ${cssVar.colorTextSecondary};
   `,
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
-  `,
 }));
 
 export const SearchKnowledgeBaseInspector = memo<
   BuiltinInspectorProps<SearchKnowledgeBaseArgs, SearchKnowledgeBaseState>
->(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
   const query = args?.query || partialArgs?.query || '';
+  // Use fileResults length for display (aggregated by file)
+  const resultCount = pluginState?.fileResults?.length ?? 0;
+  const hasResults = resultCount > 0;
 
   // During argument streaming
   if (isArgumentsStreaming) {
@@ -53,6 +53,20 @@ export const SearchKnowledgeBaseInspector = memo<
       <span style={{ marginInlineStart: 2 }}>
         <span>{t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}: </span>
         {query && <span className={highlightTextStyles.gold}>{query}</span>}
+        {!isLoading &&
+          pluginState?.fileResults &&
+          (hasResults ? (
+            <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
+          ) : (
+            <Text
+              as={'span'}
+              color={cssVar.colorTextDescription}
+              fontSize={12}
+              style={{ marginInlineStart: 4 }}
+            >
+              ({t('builtins.lobe-knowledge-base.inspector.noResults')})
+            </Text>
+          ))}
       </span>
     </div>
   );

@@ -1,7 +1,12 @@
 'use client';
 
-import { type BuiltinInspectorProps, type SearchQuery } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  type BuiltinInspectorProps,
+  type SearchQuery,
+  type UniformSearchResponse,
+} from '@lobechat/types';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,11 +23,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery>>(
-  ({ args, partialArgs, isArgumentsStreaming }) => {
+export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSearchResponse>>(
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
     const query = args?.query || partialArgs?.query || '';
+    const resultCount = pluginState?.results?.length ?? 0;
+    const hasResults = resultCount > 0;
 
     if (isArgumentsStreaming && !query) {
       return (
@@ -33,9 +40,29 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery>>(
     }
 
     return (
-      <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+      <div
+        className={cx(
+          styles.root,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+        )}
+      >
         <span>{t('builtins.lobe-web-browsing.apiName.search')}: </span>
         {query && <span className={highlightTextStyles.gold}>{query}</span>}
+        {!isLoading &&
+          !isArgumentsStreaming &&
+          pluginState?.results &&
+          (hasResults ? (
+            <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
+          ) : (
+            <Text
+              as={'span'}
+              color={cssVar.colorTextDescription}
+              fontSize={12}
+              style={{ marginInlineStart: 4 }}
+            >
+              ({t('builtins.lobe-web-browsing.inspector.noResults')})
+            </Text>
+          ))}
       </div>
     );
   },
