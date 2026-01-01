@@ -107,7 +107,7 @@ export interface UIChatMessage {
   content: string;
   createdAt: number;
   error?: ChatMessageError | null;
-  // 扩展字段
+  // Extended fields
   extra?: ChatMessageExtra;
   fileList?: ChatFileItem[];
   /**
@@ -186,11 +186,11 @@ export interface UIChatMessage {
   tool_call_id?: string;
   tools?: ChatToolPayload[];
   /**
-   * 保存到主题的消息
+   * Messages saved to topic
    */
   topicId?: string;
   /**
-   * 观测链路 id
+   * Observation trace ID
    */
   traceId?: string;
   updatedAt: number;

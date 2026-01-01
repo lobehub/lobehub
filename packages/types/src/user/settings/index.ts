@@ -28,7 +28,7 @@ export * from './tool';
 export * from './tts';
 
 /**
- * 配置设置
+ * User configuration settings
  */
 export interface UserSettings {
   defaultAgent: UserDefaultAgent;
