@@ -6,9 +6,11 @@ import type { Header, Redirect } from 'next/dist/lib/load-custom-routes';
 import ReactComponentName from 'react-scan/react-component-name/webpack';
 
 interface CustomNextConfig {
+  experimental?: NextConfig['experimental'];
   headers?: Header[];
   redirects?: Redirect[];
   turbopack?: NextConfig['turbopack'];
+  webpack?: NextConfig['webpack'];
 }
 
 export function defineConfig(config: CustomNextConfig) {
@@ -56,6 +58,7 @@ export function defineConfig(config: CustomNextConfig) {
       webVitalsAttribution: ['CLS', 'LCP'],
       webpackBuildWorker: true,
       webpackMemoryOptimizations: true,
+      ...config.experimental,
     },
     async headers() {
       const securityHeaders = [
@@ -325,20 +328,20 @@ export function defineConfig(config: CustomNextConfig) {
       ignoreBuildErrors: true,
     },
 
-    webpack(config) {
-      config.experiments = {
+    webpack(baseWebpackConfig, options) {
+      baseWebpackConfig.experiments = {
         asyncWebAssembly: true,
         layers: true,
       };
 
       // 开启该插件会导致 pglite 的 fs bundler 被改表
       if (enableReactScan) {
-        config.plugins.push(ReactComponentName({}));
+        baseWebpackConfig.plugins.push(ReactComponentName({}));
       }
 
       // to fix shikiji compile error
       // refs: https://github.com/antfu/shikiji/issues/23
-      config.module.rules.push({
+      baseWebpackConfig.module.rules.push({
         resolve: {
           fullySpecified: false,
         },
@@ -347,14 +350,14 @@ export function defineConfig(config: CustomNextConfig) {
       });
 
       // https://github.com/pinojs/pino/issues/688#issuecomment-637763276
-      config.externals.push('pino-pretty');
+      baseWebpackConfig.externals.push('pino-pretty');
 
-      config.resolve.alias.canvas = false;
+      baseWebpackConfig.resolve.alias.canvas = false;
 
       // to ignore epub2 compile error
       // refs: https://github.com/lobehub/lobe-chat/discussions/6769
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
+      baseWebpackConfig.resolve.fallback = {
+        ...baseWebpackConfig.resolve.fallback,
         zipfile: false,
       };
 
@@ -364,7 +367,7 @@ export function defineConfig(config: CustomNextConfig) {
       ) {
         // fix the Worker URL cross-origin issue
         // refs: https://github.com/lobehub/lobe-chat/pull/9624
-        config.module.rules.push({
+        baseWebpackConfig.module.rules.push({
           generator: {
             // @see https://webpack.js.org/configuration/module/#rulegeneratorpublicpath
             publicPath: '/_next/',
@@ -375,7 +378,13 @@ export function defineConfig(config: CustomNextConfig) {
         });
       }
 
-      return config;
+      const updatedConfig = baseWebpackConfig;
+
+      if (config.webpack) {
+        return config.webpack(updatedConfig, options);
+      }
+
+      return updatedConfig;
     },
   };
 

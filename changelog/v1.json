@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.185"
+  },
+  {
+    "children": {
       "improvements": ["Improve loading and local-system render."]
     },
     "date": "2026-01-01",
