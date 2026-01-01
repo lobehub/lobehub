@@ -1,9 +1,9 @@
 'use client';
 
-import { Alert, Flexbox, Text } from '@lobehub/ui';
+import { Alert, Flexbox, MaterialFileTypeIcon, Text } from '@lobehub/ui';
 import { Descriptions } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { ComponentType, memo } from 'react';
+import { memo } from 'react';
 
 import { FileContentDetail } from '../../../types';
 
@@ -63,21 +63,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface FileCardProps {
-  FileIcon: ComponentType<{ fileName: string; size: number }>;
   file: FileContentDetail;
-  labels: {
-    chars: string;
-    lines: string;
-  };
 }
 
-const FileCard = memo<FileCardProps>(({ file, FileIcon, labels }) => {
+const FileCard = memo<FileCardProps>(({ file }) => {
   if (file.error) {
     return (
       <Flexbox className={styles.container} gap={8}>
         <Flexbox className={styles.cardBody} gap={8}>
           <Flexbox align={'center'} className={styles.titleRow} gap={8} horizontal>
-            <FileIcon fileName={file.filename} size={16} />
+            <MaterialFileTypeIcon
+              filename={file.filename}
+              size={16}
+              type={'file'}
+              variant={'raw'}
+            />
             <div className={styles.title}>{file.filename}</div>
           </Flexbox>
         </Flexbox>
@@ -92,7 +92,7 @@ const FileCard = memo<FileCardProps>(({ file, FileIcon, labels }) => {
     <Flexbox className={styles.container} justify={'space-between'}>
       <Flexbox className={styles.cardBody} gap={8}>
         <Flexbox align={'center'} className={styles.titleRow} gap={8} horizontal>
-          <FileIcon fileName={file.filename} size={16} />
+          <MaterialFileTypeIcon filename={file.filename} size={16} type={'file'} variant={'raw'} />
           <div className={styles.title}>{file.filename}</div>
         </Flexbox>
         {file.preview && (
@@ -118,11 +118,11 @@ const FileCard = memo<FileCardProps>(({ file, FileIcon, labels }) => {
           items={[
             {
               children: file.totalCharCount?.toLocaleString(),
-              label: labels.chars,
+              label: 'Chars',
             },
             {
               children: file.totalLineCount?.toLocaleString(),
-              label: labels.lines,
+              label: 'Lines',
             },
           ]}
           size="small"
