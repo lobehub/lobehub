@@ -23,11 +23,6 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     min-width: 32px;
 
-    &:has([data-popup-open]),
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
-
     .${ACTION_CLASS_NAME} {
       width: 0;
       margin-inline-end: 2px;
@@ -37,7 +32,6 @@ const styles = createStaticStyles(({ css }) => ({
       &:has([data-popup-open]) {
         width: unset;
         opacity: 1;
-        background: ${cssVar.colorFillTertiary};
       }
     }
 

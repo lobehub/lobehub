@@ -1,11 +1,4 @@
-import {
-  Button,
-  Center,
-  Checkbox,
-  ContextMenuTrigger,
-  Flexbox,
-  Icon,
-} from '@lobehub/ui';
+import { Button, Center, Checkbox, ContextMenuTrigger, Flexbox, Icon } from '@lobehub/ui';
 import { App, Input } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
@@ -46,11 +39,6 @@ const styles = createStaticStyles(({ css }) => {
       &:hover {
         background: ${cssVar.colorFillTertiary};
       }
-
-      &:has([data-popup-open]),
-      &[data-popup-open] {
-        background: ${cssVar.colorFillTertiary};
-      }
     `,
 
     dragOver: css`
@@ -73,10 +61,6 @@ const styles = createStaticStyles(({ css }) => {
       &[data-popup-open],
       .file-list-item-group:hover & {
         opacity: 1;
-      }
-
-      &[data-popup-open] {
-        background: ${cssVar.colorFillTertiary};
       }
     `,
     item: css`

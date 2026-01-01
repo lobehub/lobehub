@@ -4,6 +4,7 @@ import {
   Tag as AntTag,
   Avatar,
   Block,
+  DropdownMenu,
   Flexbox,
   Icon,
   Tag,
@@ -11,7 +12,7 @@ import {
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
-import { App, Dropdown } from 'antd';
+import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import {
   AlertTriangle,
@@ -258,14 +259,14 @@ const UserAgentCard = memo<UserAgentCardProps>(
         width={'100%'}
       >
         {isOwner && (
-          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+          <DropdownMenu items={menuItems}>
             <div
               className={cx('more-button', styles.moreButton)}
               onClick={(e) => e.stopPropagation()}
             >
               <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />
             </div>
-          </Dropdown>
+          </DropdownMenu>
         )}
         <Flexbox
           align={'flex-start'}

@@ -1,9 +1,7 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Dropdown } from 'antd';
-import type { MenuProps } from 'antd';
+import { Center, type DropdownItem, DropdownMenu, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDown } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -81,7 +79,7 @@ const Head = memo<{ id: string }>(({ id }) => {
     [navigate, setMode],
   );
 
-  const menuItems: MenuProps['items'] = useMemo(() => {
+  const menuItems = useMemo<DropdownItem[]>(() => {
     if (!libraries) return [];
 
     return libraries.map((library) => ({
@@ -120,14 +118,14 @@ const Head = memo<{ id: string }>(({ id }) => {
         </Flexbox>
       )}
       {name && (
-        <Dropdown menu={{ items: menuItems }} placement="bottomRight" trigger={['click']}>
+        <DropdownMenu items={menuItems} placement="bottomRight">
           <ChevronsUpDown
             className={styles.icon}
             onClick={(e) => e.stopPropagation()}
             size={16}
             style={{ cursor: 'pointer', flex: 'none' }}
           />
-        </Dropdown>
+        </DropdownMenu>
       )}
     </Flexbox>
   );

@@ -1,7 +1,7 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { App, Dropdown } from 'antd';
+import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -17,10 +17,17 @@ import { useHomeStore } from '@/store/home';
 import { useDetailContext } from '../../DetailProvider';
 
 const styles = createStaticStyles(({ css }) => ({
-  button: css`
-    button {
-      width: 100%;
-    }
+  buttonGroup: css`
+    width: 100%;
+  `,
+  menuButton: css`
+    padding-inline: 8px;
+    border-start-start-radius: 0 !important;
+    border-end-start-radius: 0 !important;
+  `,
+  primaryButton: css`
+    border-start-end-radius: 0 !important;
+    border-end-end-radius: 0 !important;
   `,
 }));
 
@@ -127,28 +134,41 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
     }
   };
 
+  const menuItems = [
+    {
+      key: 'addAgent',
+      label: t('assistants.addAgent'),
+      onClick: handleAddAgent,
+    },
+  ];
+
   return (
-    <Dropdown.Button
-      className={styles.button}
-      icon={<Icon icon={ChevronDownIcon} />}
-      loading={isLoading}
-      menu={{
-        items: [
-          {
-            key: 'addAgent',
-            label: t('assistants.addAgent'),
-            onClick: handleAddAgent,
-          },
-        ],
-      }}
-      onClick={handleAddAgentAndConverse}
-      overlayStyle={{ minWidth: 267 }}
-      size={'large'}
-      style={{ flex: 1, width: 'unset' }}
-      type={'primary'}
-    >
-      {t('assistants.addAgentAndConverse')}
-    </Dropdown.Button>
+    <Flexbox className={styles.buttonGroup} gap={0} horizontal>
+      <Button
+        block
+        className={styles.primaryButton}
+        loading={isLoading}
+        onClick={handleAddAgentAndConverse}
+        size={'large'}
+        style={{ flex: 1, width: 'unset' }}
+        type={'primary'}
+      >
+        {t('assistants.addAgentAndConverse')}
+      </Button>
+      <DropdownMenu
+        items={menuItems}
+        popupProps={{ style: { minWidth: 267 } }}
+        triggerProps={{ disabled: isLoading }}
+      >
+        <Button
+          className={styles.menuButton}
+          disabled={isLoading}
+          icon={<Icon icon={ChevronDownIcon} />}
+          size={'large'}
+          type={'primary'}
+        />
+      </DropdownMenu>
+    </Flexbox>
   );
 });
 
