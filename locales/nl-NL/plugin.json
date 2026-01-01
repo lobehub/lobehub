@@ -86,6 +86,8 @@
   "builtins.lobe-local-system.apiName.runCommand": "Opdracht uitvoeren",
   "builtins.lobe-local-system.apiName.searchLocalFiles": "Bestanden doorzoeken",
   "builtins.lobe-local-system.apiName.writeLocalFile": "Bestand schrijven",
+  "builtins.lobe-local-system.inspector.noResults": "Geen resultaten",
+  "builtins.lobe-local-system.inspector.rename.result": "<old>{{oldName}}</old> → <new>{{newName}}</new>",
   "builtins.lobe-local-system.title": "Lokaal Systeem",
   "builtins.lobe-page-agent.apiName.batchUpdate": "Meerdere knooppunten bijwerken",
   "builtins.lobe-page-agent.apiName.compareSnapshots": "Momentopnamen vergelijken",

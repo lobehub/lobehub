@@ -1,15 +1,16 @@
 'use client';
 
-import { type GrepContentParams } from '@lobechat/electron-client-ipc';
+import { type ListLocalFileParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { shinyTextStyles } from '@/styles';
 
-import { type GrepContentState } from '../../..';
+import { type LocalFileListState } from '../../..';
+import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
@@ -22,40 +23,40 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const GrepContentInspector = memo<
-  BuiltinInspectorProps<GrepContentParams, GrepContentState>
+export const ListLocalFilesInspector = memo<
+  BuiltinInspectorProps<ListLocalFileParams, LocalFileListState>
 >(({ args, partialArgs, isArgumentsStreaming, pluginState, isLoading }) => {
   const { t } = useTranslation('plugin');
 
-  const pattern = args?.pattern || partialArgs?.pattern || '';
+  const path = args?.path || partialArgs?.path || '';
 
   // During argument streaming
   if (isArgumentsStreaming) {
-    if (!pattern)
+    if (!path)
       return (
         <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-local-system.apiName.grepContent')}</span>
+          <span>{t('builtins.lobe-local-system.apiName.listLocalFiles')}</span>
         </div>
       );
 
     return (
       <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-local-system.apiName.grepContent')}: </span>
-        <span className={highlightTextStyles.primary}>{pattern}</span>
+        <span>{t('builtins.lobe-local-system.apiName.listLocalFiles')}: </span>
+        <FilePathDisplay filePath={path} isDirectory />
       </div>
     );
   }
 
-  // Check result count
-  const resultCount = pluginState?.result?.total_matches ?? 0;
+  // Show result count if available
+  const resultCount = pluginState?.listResults?.length ?? 0;
   const hasResults = resultCount > 0;
 
   return (
     <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
-      <span>{t('builtins.lobe-local-system.apiName.grepContent')}: </span>
-      {pattern && <span className={highlightTextStyles.primary}>{pattern}</span>}
+      <span>{t('builtins.lobe-local-system.apiName.listLocalFiles')}: </span>
+      <FilePathDisplay filePath={path} isDirectory />
       {!isLoading &&
-        pluginState?.result &&
+        pluginState?.listResults &&
         (hasResults ? (
           <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
         ) : (
@@ -72,4 +73,4 @@ export const GrepContentInspector = memo<
   );
 });
 
-GrepContentInspector.displayName = 'GrepContentInspector';
+ListLocalFilesInspector.displayName = 'ListLocalFilesInspector';

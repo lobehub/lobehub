@@ -86,6 +86,8 @@
   "builtins.lobe-local-system.apiName.runCommand": "코드 실행",
   "builtins.lobe-local-system.apiName.searchLocalFiles": "파일 검색",
   "builtins.lobe-local-system.apiName.writeLocalFile": "파일 쓰기",
+  "builtins.lobe-local-system.inspector.noResults": "결과 없음",
+  "builtins.lobe-local-system.inspector.rename.result": "<old>{{oldName}}</old> → <new>{{newName}}</new>",
   "builtins.lobe-local-system.title": "로컬 시스템",
   "builtins.lobe-page-agent.apiName.batchUpdate": "노드 일괄 업데이트",
   "builtins.lobe-page-agent.apiName.compareSnapshots": "스냅샷 비교",

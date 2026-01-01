@@ -86,6 +86,9 @@ export default {
   'builtins.lobe-local-system.apiName.runCommand': 'Run command',
   'builtins.lobe-local-system.apiName.searchLocalFiles': 'Search files',
   'builtins.lobe-local-system.apiName.writeLocalFile': 'Write file',
+  'builtins.lobe-local-system.inspector.noResults': 'No results',
+  'builtins.lobe-local-system.inspector.rename.result':
+    '<old>{{oldName}}</old> → <new>{{newName}}</new>',
   'builtins.lobe-local-system.title': 'Local System',
   'builtins.lobe-page-agent.apiName.batchUpdate': 'Batch update nodes',
   'builtins.lobe-page-agent.apiName.compareSnapshots': 'Compare snapshots',

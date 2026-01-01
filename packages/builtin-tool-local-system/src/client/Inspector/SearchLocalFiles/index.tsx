@@ -2,8 +2,8 @@
 
 import { type LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
+import { Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,10 +19,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     -webkit-line-clamp: 1;
 
     color: ${cssVar.colorTextSecondary};
-  `,
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
   `,
 }));
 
@@ -51,18 +47,28 @@ export const SearchLocalFilesInspector = memo<
   }
 
   // Check if search returned results
-  const hasResults = pluginState?.searchResults && pluginState.searchResults.length >= 0;
+  const resultCount = pluginState?.searchResults?.length ?? 0;
+  const hasResults = resultCount > 0;
 
   return (
     <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
       <span style={{ marginInlineStart: 2 }}>
         <span>{t('builtins.lobe-local-system.apiName.searchLocalFiles')}: </span>
         {keywords && <span className={highlightTextStyles.primary}>{keywords}</span>}
-        {isLoading ? null : pluginState?.searchResults ? (
-          hasResults ? (
-            <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
-          ) : null
-        ) : null}
+        {!isLoading &&
+          pluginState?.searchResults &&
+          (hasResults ? (
+            <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
+          ) : (
+            <Text
+              as={'span'}
+              color={cssVar.colorTextDescription}
+              fontSize={12}
+              style={{ marginInlineStart: 4 }}
+            >
+              ({t('builtins.lobe-local-system.inspector.noResults')})
+            </Text>
+          ))}
       </span>
     </div>
   );

@@ -29,6 +29,7 @@
   "internlm.description": "Büyük model araştırmaları ve araçları üzerine odaklanan açık kaynaklı bir organizasyon. En son modelleri ve algoritmaları erişilebilir kılan verimli ve kullanıcı dostu bir platform sağlar.",
   "jina.description": "2020 yılında kurulan Jina AI, önde gelen bir arama yapay zekası şirketidir. Vektör modelleri, yeniden sıralayıcılar ve küçük dil modelleri içeren arama yığını ile güvenilir ve yüksek kaliteli üretken ve çok modlu arama uygulamaları geliştirir.",
   "lmstudio.description": "LM Studio, bilgisayarınızda büyük dil modelleriyle geliştirme ve denemeler yapmanızı sağlayan bir masaüstü uygulamasıdır.",
+  "lobehub.description": "LobeHub Cloud, yapay zeka modellerine erişmek için resmi API'leri kullanır ve kullanım miktarını model jetonlarına bağlı Krediler ile ölçer.",
   "minimax.description": "2021 yılında kurulan MiniMax, çok modlu temel modellerle genel amaçlı yapay zeka geliştirir. Trilyon parametreli MoE metin modelleri, ses ve görsel modellerin yanı sıra Hailuo AI gibi uygulamalar sunar.",
   "mistral.description": "Mistral, karmaşık akıl yürütme, çok dilli görevler ve kod üretimi için gelişmiş genel, özel ve araştırma modelleri sunar. Özelleştirilmiş entegrasyonlar için işlev çağrısını destekler.",
   "modelscope.description": "ModelScope, Alibaba Cloud’un model-hizmet olarak sunduğu platformudur. Geniş bir yapay zeka modeli ve çıkarım hizmeti yelpazesi sunar.",

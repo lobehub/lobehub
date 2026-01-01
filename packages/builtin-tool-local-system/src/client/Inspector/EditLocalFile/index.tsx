@@ -2,15 +2,16 @@
 
 import { type EditLocalFileParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
+import { Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Check, X } from 'lucide-react';
-import path from 'path-browserify-esm';
-import { memo } from 'react';
+import { Minus, Plus } from 'lucide-react';
+import { type ReactNode, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { shinyTextStyles } from '@/styles';
 
 import { type EditLocalFileState } from '../../../types';
+import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
@@ -21,9 +22,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     color: ${cssVar.colorTextSecondary};
   `,
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
+  separator: css`
+    margin-inline: 2px;
+    color: ${cssVar.colorTextQuaternary};
   `,
 }));
 
@@ -32,18 +33,11 @@ export const EditLocalFileInspector = memo<
 >(({ args, partialArgs, isArgumentsStreaming, pluginState, isLoading }) => {
   const { t } = useTranslation('plugin');
 
-  // Show filename with parent directory for context
   const filePath = args?.file_path || partialArgs?.file_path || '';
-  let displayPath = '';
-  if (filePath) {
-    const { base, dir } = path.parse(filePath);
-    const parentDir = path.basename(dir);
-    displayPath = parentDir ? `${parentDir}/${base}` : base;
-  }
 
   // During argument streaming
   if (isArgumentsStreaming) {
-    if (!displayPath)
+    if (!filePath)
       return (
         <div className={cx(styles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}</span>
@@ -53,27 +47,48 @@ export const EditLocalFileInspector = memo<
     return (
       <div className={cx(styles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}: </span>
-        <span className={highlightTextStyles.primary}>{displayPath}</span>
+        <FilePathDisplay filePath={filePath} />
       </div>
     );
   }
 
-  // Check if edit was successful (has replacements count)
-  const isSuccess = pluginState?.replacements !== undefined && pluginState.replacements >= 0;
+  // Build stats parts with colors and icons
+  const linesAdded = pluginState?.linesAdded ?? 0;
+  const linesDeleted = pluginState?.linesDeleted ?? 0;
+
+  const statsParts: ReactNode[] = [];
+  if (linesAdded > 0) {
+    statsParts.push(
+      <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12} key="added">
+        <Icon icon={Plus} size={12} />
+        {linesAdded}
+      </Text>,
+    );
+  }
+  if (linesDeleted > 0) {
+    statsParts.push(
+      <Text as={'span'} code color={cssVar.colorError} fontSize={12} key="deleted">
+        <Icon icon={Minus} size={12} />
+        {linesDeleted}
+      </Text>,
+    );
+  }
 
   return (
     <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
-      <span style={{ marginInlineStart: 2 }}>
-        <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}: </span>
-        {displayPath && <span className={highlightTextStyles.primary}>{displayPath}</span>}
-        {isLoading ? null : pluginState ? (
-          isSuccess ? (
-            <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
-          ) : (
-            <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
-          )
-        ) : null}
-      </span>
+      <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}: </span>
+      <FilePathDisplay filePath={filePath} />
+      {!isLoading && statsParts.length > 0 && (
+        <>
+          {' '}
+          {statsParts.map((part, index) => (
+            <span key={index}>
+              {index > 0 && <span className={styles.separator}> / </span>}
+              {part}
+            </span>
+          ))}
+        </>
+      )}
     </div>
   );
 });

@@ -86,6 +86,8 @@
   "builtins.lobe-local-system.apiName.runCommand": "コードを実行する",
   "builtins.lobe-local-system.apiName.searchLocalFiles": "ファイルを検索する",
   "builtins.lobe-local-system.apiName.writeLocalFile": "ファイルに書き込む",
+  "builtins.lobe-local-system.inspector.noResults": "結果が見つかりません",
+  "builtins.lobe-local-system.inspector.rename.result": "<old>{{oldName}}</old> → <new>{{newName}}</new>",
   "builtins.lobe-local-system.title": "ローカルシステム",
   "builtins.lobe-page-agent.apiName.batchUpdate": "ノードを一括更新",
   "builtins.lobe-page-agent.apiName.compareSnapshots": "スナップショットを比較",

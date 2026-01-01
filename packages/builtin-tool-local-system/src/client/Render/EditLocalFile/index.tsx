@@ -50,7 +50,12 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
           <Flexbox data-theme={isDarkMode ? 'dark' : 'light'} gap={12}>
             {files.map((file, index) => (
               <div key={`${file.oldPath}-${index}`} style={{ fontSize: '12px' }}>
-                <Diff diffType={file.type} gutterType="default" hunks={file.hunks} viewType="split">
+                <Diff
+                  diffType={file.type}
+                  gutterType="default"
+                  hunks={file.hunks}
+                  viewType="unified"
+                >
                   {(hunks) => hunks.map((hunk) => <Hunk hunk={hunk} key={hunk.content} />)}
                 </Diff>
               </div>

@@ -33,7 +33,7 @@ export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => ({
   primary: css`
     padding-block-end: 1px;
     color: ${cssVar.colorText};
-    background: linear-gradient(to top, ${cssVar.colorPrimaryBg} 40%, transparent 40%);
+    background: linear-gradient(to top, ${cssVar.colorPrimaryBgHover} 40%, transparent 40%);
   `,
   warning: css`
     padding-block-end: 1px;
