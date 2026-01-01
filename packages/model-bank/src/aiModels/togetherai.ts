@@ -7,7 +7,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Meta Llama 3.3 多语言大语言模型 ( LLM ) 是 70B（文本输入/文本输出）中的预训练和指令调整生成模型。 Llama 3.3 指令调整的纯文本模型针对多语言对话用例进行了优化，并且在常见行业基准上优于许多可用的开源和封闭式聊天模型。',
+      'Meta Llama 3.3 multilingual LLM is a 70B (text-in/text-out) pretrained and instruction-tuned model. The instruction-tuned text-only version is optimized for multilingual chat and outperforms many open and closed chat models on common industry benchmarks.',
     displayName: 'Llama 3.3 70B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
@@ -16,7 +16,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'LLaMA 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 3B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Llama-3.2-3B-Instruct-Turbo',
@@ -28,7 +28,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'LLaMA 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 11B Vision Instruct Turbo (Free)',
     enabled: true,
     id: 'meta-llama/Llama-Vision-Free',
@@ -40,7 +40,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'LLaMA 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 11B Vision Instruct Turbo',
     id: 'meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo',
     type: 'chat',
@@ -51,7 +51,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'LLaMA 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 90B Vision Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo',
@@ -63,7 +63,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1 8B 模型采用FP8量化，支持高达131,072个上下文标记，是开源模型中的佼佼者，适合复杂任务，表现优异于许多行业基准。',
+      'Llama 3.1 8B uses FP8 quantization, supports up to 131,072 context tokens, and ranks among top open models for complex tasks across many benchmarks.',
     displayName: 'Llama 3.1 8B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
@@ -75,7 +75,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1 70B 模型经过精细调整，适用于高负载应用，量化至FP8提供更高效的计算能力和准确性，确保在复杂场景中的卓越表现。',
+      'Llama 3.1 70B is finely tuned for high-load applications; FP8 quantization delivers efficient compute and accuracy for complex scenarios.',
     displayName: 'Llama 3.1 70B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
@@ -87,7 +87,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 130_815,
     description:
-      '405B 的 Llama 3.1 Turbo 模型，为大数据处理提供超大容量的上下文支持，在超大规模的人工智能应用中表现突出。',
+      'The 405B Llama 3.1 Turbo model provides massive context capacity for big data processing and excels in ultra-scale AI applications.',
     displayName: 'Llama 3.1 405B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo',
@@ -96,7 +96,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Llama 3.1 Nemotron 70B 是由 NVIDIA 定制的大型语言模型，旨在提高 LLM 生成的响应对用户查询的帮助程度。该模型在 Arena Hard、AlpacaEval 2 LC 和 GPT-4-Turbo MT-Bench 等基准测试中表现出色，截至 2024 年 10 月 1 日，在所有三个自动对齐基准测试中排名第一。该模型使用 RLHF（特别是 REINFORCE）、Llama-3.1-Nemotron-70B-Reward 和 HelpSteer2-Preference 提示在 Llama-3.1-70B-Instruct 模型基础上进行训练',
+      'Llama 3.1 Nemotron 70B is an NVIDIA-customized LLM to improve helpfulness. It performs strongly on Arena Hard, AlpacaEval 2 LC, and GPT-4-Turbo MT-Bench, ranking #1 on all three auto-alignment benchmarks as of Oct 1, 2024. It is trained from Llama-3.1-70B-Instruct using RLHF (REINFORCE), Llama-3.1-Nemotron-70B-Reward, and HelpSteer2-Preference prompts.',
     displayName: 'Llama 3.1 Nemotron 70B',
     enabled: true,
     id: 'nvidia/Llama-3.1-Nemotron-70B-Instruct-HF',
@@ -104,56 +104,57 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 8B Instruct Turbo 是一款高效能的大语言模型，支持广泛的应用场景。',
+    description: 'Llama 3 8B Instruct Turbo is a high-performance LLM for a wide range of use cases.',
     displayName: 'Llama 3 8B Instruct Turbo',
     id: 'meta-llama/Meta-Llama-3-8B-Instruct-Turbo',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 70B Instruct Turbo 提供卓越的语言理解和生成能力，适合最苛刻的计算任务。',
+    description:
+      'Llama 3 70B Instruct Turbo delivers strong understanding and generation for the most demanding workloads.',
     displayName: 'Llama 3 70B Instruct Turbo',
     id: 'meta-llama/Meta-Llama-3-70B-Instruct-Turbo',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 8B Instruct Lite 适合资源受限的环境，提供出色的平衡性能。',
+    description: 'Llama 3 8B Instruct Lite balances performance for resource-constrained environments.',
     displayName: 'Llama 3 8B Instruct Lite',
     id: 'meta-llama/Meta-Llama-3-8B-Instruct-Lite',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 70B Instruct Lite 适合需要高效能和低延迟的环境。',
+    description: 'Llama 3 70B Instruct Lite is built for high performance with lower latency.',
     displayName: 'Llama 3 70B Instruct Lite',
     id: 'meta-llama/Meta-Llama-3-70B-Instruct-Lite',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 8B Instruct Reference 提供多语言支持，涵盖丰富的领域知识。',
+    description: 'Llama 3 8B Instruct Reference offers multilingual support and broad domain knowledge.',
     displayName: 'Llama 3 8B Instruct Reference',
     id: 'meta-llama/Llama-3-8b-chat-hf',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 70B Instruct Reference 是功能强大的聊天模型，支持复杂的对话需求。',
+    description: 'Llama 3 70B Instruct Reference is a powerful chat model for complex dialogues.',
     displayName: 'Llama 3 70B Instruct Reference',
     id: 'meta-llama/Llama-3-70b-chat-hf',
     type: 'chat',
   },
   {
     contextWindowTokens: 4096,
-    description: 'LLaMA-2 Chat (13B) 提供优秀的语言处理能力和出色的交互体验。',
+    description: 'LLaMA-2 Chat (13B) provides strong language handling and a solid chat experience.',
     displayName: 'LLaMA-2 Chat (13B)',
     id: 'meta-llama/Llama-2-13b-chat-hf',
     type: 'chat',
   },
   {
     contextWindowTokens: 4096,
-    description: 'LLaMA-2 提供优秀的语言处理能力和出色的交互体验。',
+    description: 'LLaMA-2 provides strong language handling and a solid interaction experience.',
     displayName: 'LLaMA-2 (70B)',
     id: 'meta-llama/Llama-2-70b-hf',
     type: 'chat',
@@ -161,14 +162,14 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 16_384,
     description:
-      'Code Llama 是一款专注于代码生成和讨论的 LLM，结合广泛的编程语言支持，适用于开发者环境。',
+      'Code Llama is an LLM focused on code generation and discussion, with broad language support for developer workflows.',
     displayName: 'CodeLlama 34B Instruct',
     id: 'codellama/CodeLlama-34b-Instruct-hf',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Gemma 2 9B 由Google开发，提供高效的指令响应和综合能力。',
+    description: 'Gemma 2 9B, developed by Google, offers efficient instruction following and solid overall capability.',
     displayName: 'Gemma 2 9B',
     enabled: true,
     id: 'google/gemma-2-9b-it',
@@ -176,7 +177,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Gemma 2 27B 是一款通用大语言模型，具有优异的性能和广泛的应用场景。',
+    description: 'Gemma 2 27B is a general-purpose LLM with strong performance across many scenarios.',
     displayName: 'Gemma 2 27B',
     enabled: true,
     id: 'google/gemma-2-27b-it',
@@ -184,14 +185,15 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Gemma Instruct (2B) 提供基本的指令处理能力，适合轻量级应用。',
+    description: 'Gemma Instruct (2B) provides basic instruction handling for lightweight applications.',
     displayName: 'Gemma Instruct (2B)',
     id: 'google/gemma-2b-it',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Mistral (7B) Instruct v0.3 提供高效的计算能力和自然语言理解，适合广泛的应用。',
+    description:
+      'Mistral (7B) Instruct v0.3 offers efficient compute and strong language understanding for many use cases.',
     displayName: 'Mistral (7B) Instruct v0.3',
     enabled: true,
     id: 'mistralai/Mistral-7B-Instruct-v0.3',
@@ -199,7 +201,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Mistral (7B) Instruct v0.2 提供改进的指令处理能力和更精确的结果。',
+    description: 'Mistral (7B) Instruct v0.2 improves instruction handling and result accuracy.',
     displayName: 'Mistral (7B) Instruct v0.2',
     id: 'mistralai/Mistral-7B-Instruct-v0.2',
     type: 'chat',
@@ -209,7 +211,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'Mistral (7B) Instruct 以高性能著称，适用于多种语言任务。',
+    description: 'Mistral (7B) Instruct is known for strong performance across language tasks.',
     displayName: 'Mistral (7B) Instruct',
     id: 'mistralai/Mistral-7B-Instruct-v0.1',
     type: 'chat',
@@ -217,7 +219,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Mistral 7B是一款紧凑但高性能的模型，擅长批量处理和简单任务，如分类和文本生成，具有良好的推理能力。',
+      'Mistral 7B is compact but high-performing, strong for batch processing and simple tasks like classification and text generation, with solid reasoning.',
     displayName: 'Mistral (7B)',
     id: 'mistralai/Mistral-7B-v0.1',
     type: 'chat',
@@ -227,7 +229,8 @@ const togetheraiChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Mixtral-8x7B Instruct (46.7B) 提供高容量的计算框架，适合大规模数据处理。',
+    description:
+      'Mixtral-8x7B Instruct (46.7B) provides high capacity suited for large-scale data processing.',
     displayName: 'Mixtral-8x7B Instruct (46.7B)',
     enabled: true,
     id: 'mistralai/Mixtral-8x7B-Instruct-v0.1',
@@ -236,14 +239,14 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Mixtral 8x7B是一个稀疏专家模型，利用多个参数提高推理速度，适合处理多语言和代码生成任务。',
+      'Mixtral 8x7B is a sparse MoE model that boosts inference speed, suitable for multilingual and code generation tasks.',
     displayName: 'Mixtral-8x7B (46.7B)',
     id: 'mistralai/Mixtral-8x7B-v0.1',
     type: 'chat',
   },
   {
     contextWindowTokens: 65_536,
-    description: 'Mixtral-8x22B Instruct (141B) 是一款超级大语言模型，支持极高的处理需求。',
+    description: 'Mixtral-8x22B Instruct (141B) is a very large LLM for heavy workloads.',
     displayName: 'Mixtral-8x22B Instruct (141B)',
     enabled: true,
     id: 'mistralai/Mixtral-8x22B-Instruct-v0.1',
@@ -252,7 +255,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 65_536,
     description:
-      'WizardLM 2 是微软AI提供的语言模型，在复杂对话、多语言、推理和智能助手领域表现尤为出色。',
+      'WizardLM 2 is a language model from Microsoft AI that excels at complex dialogue, multilingual tasks, reasoning, and assistants.',
     displayName: 'WizardLM-2 8x22B',
     id: 'microsoft/WizardLM-2-8x22B',
     type: 'chat',
@@ -263,7 +266,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'DeepSeek-R1 系列通过强化学习与冷启动数据优化推理性能，开源模型刷新多任务标杆，超越 OpenAI-o1-mini 水平。',
+      'DeepSeek-R1 improves reasoning with RL and cold-start data, setting new open-model multi-task benchmarks and surpassing OpenAI-o1-mini.',
     displayName: 'DeepSeek-R1',
     enabled: true,
     id: 'deepseek-ai/DeepSeek-R1',
@@ -275,7 +278,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-R1 蒸馏模型，通过强化学习与冷启动数据优化推理性能，开源模型刷新多任务标杆。',
+      'DeepSeek-R1 distilled models use RL and cold-start data to improve reasoning and set new open-model multi-task benchmarks.',
     displayName: 'DeepSeek R1 Distill Qwen 1.5B',
     id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B',
     type: 'chat',
@@ -286,7 +289,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-R1 蒸馏模型，通过强化学习与冷启动数据优化推理性能，开源模型刷新多任务标杆。',
+      'DeepSeek-R1 distilled models use RL and cold-start data to improve reasoning and set new open-model multi-task benchmarks.',
     displayName: 'DeepSeek R1 Distill Qwen 14B',
     id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B',
     type: 'chat',
@@ -297,7 +300,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-R1 蒸馏模型，通过强化学习与冷启动数据优化推理性能，开源模型刷新多任务标杆。',
+      'DeepSeek-R1 distilled models use RL and cold-start data to improve reasoning and set new open-model multi-task benchmarks.',
     displayName: 'DeepSeek R1 Distill Llama 70B',
     id: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B',
     type: 'chat',
@@ -305,7 +308,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 16_384,
     description:
-      '最新模型 DeepSeek-V3 多项评测成绩超越 Qwen2.5-72B 和 Llama-3.1-405B 等开源模型，性能对齐领军闭源模型 GPT-4o 与 Claude-3.5-Sonnet。',
+      'The latest DeepSeek-V3 surpasses open models like Qwen2.5-72B and Llama-3.1-405B on many benchmarks, aligning with leading closed models GPT-4o and Claude-3.5-Sonnet.',
     displayName: 'DeepSeek-V3',
     enabled: true,
     id: 'deepseek-ai/DeepSeek-V3',
@@ -313,7 +316,8 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'DeepSeek LLM Chat (67B) 是创新的 AI 模型 提供深度语言理解和互动能力。',
+    description:
+      'DeepSeek LLM Chat (67B) is an innovative model offering deep language understanding and interaction.',
     displayName: 'DeepSeek LLM Chat (67B)',
     id: 'deepseek-ai/deepseek-llm-67b-chat',
     type: 'chat',
@@ -323,7 +327,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 32_768,
-    description: 'QwQ模型是由 Qwen 团队开发的实验性研究模型，专注于增强 AI 推理能力。',
+    description: 'QwQ is an experimental research model from Qwen focused on enhanced reasoning.',
     displayName: 'QwQ 32B Preview',
     enabled: true,
     id: 'Qwen/QwQ-32B-Preview',
@@ -331,7 +335,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen2.5 是全新的大型语言模型系列，旨在优化指令式任务的处理。',
+    description: 'Qwen2.5 is a new LLM family optimized for instruction-style tasks.',
     displayName: 'Qwen 2.5 7B Instruct Turbo',
     enabled: true,
     id: 'Qwen/Qwen2.5-7B-Instruct-Turbo',
@@ -339,7 +343,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen2.5 是全新的大型语言模型系列，旨在优化指令式任务的处理。',
+    description: 'Qwen2.5 is a new LLM family optimized for instruction-style tasks.',
     displayName: 'Qwen 2.5 72B Instruct Turbo',
     enabled: true,
     id: 'Qwen/Qwen2.5-72B-Instruct-Turbo',
@@ -348,49 +352,52 @@ const togetheraiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5 Coder 32B Instruct 是阿里云发布的代码特定大语言模型系列的最新版本。该模型在 Qwen2.5 的基础上，通过 5.5 万亿个 tokens 的训练，显著提升了代码生成、推理和修复能力。它不仅增强了编码能力，还保持了数学和通用能力的优势。模型为代码智能体等实际应用提供了更全面的基础',
+      'Qwen2.5 Coder 32B Instruct is the latest Alibaba Cloud code-focused LLM. Built on Qwen2.5 and trained on 5.5T tokens, it significantly improves code generation, reasoning, and repair while retaining math and general strengths, providing a strong base for coding agents.',
     displayName: 'Qwen 2.5 Coder 32B Instruct',
     id: 'Qwen/Qwen2.5-Coder-32B-Instruct',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen 2 Instruct (72B) 为企业级应用提供精准的指令理解和响应。',
+    description: 'Qwen 2 Instruct (72B) delivers precise instruction following for enterprise workloads.',
     displayName: 'Qwen 2 Instruct (72B)',
     id: 'Qwen/Qwen2-72B-Instruct',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'DBRX Instruct 提供高可靠性的指令处理能力，支持多行业应用。',
+    description: 'DBRX Instruct offers highly reliable instruction handling across industries.',
     displayName: 'DBRX Instruct',
     id: 'databricks/dbrx-instruct',
     type: 'chat',
   },
   {
     contextWindowTokens: 4096,
-    description: 'Upstage SOLAR Instruct v1 (11B) 适用于精细化指令任务，提供出色的语言处理能力。',
+    description:
+      'Upstage SOLAR Instruct v1 (11B) is tuned for precise instruction tasks with strong language performance.',
     displayName: 'Upstage SOLAR Instruct v1 (11B)',
     id: 'upstage/SOLAR-10.7B-Instruct-v1.0',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Nous Hermes 2 - Mixtral 8x7B-DPO (46.7B) 是高精度的指令模型，适用于复杂计算。',
+    description:
+      'Nous Hermes 2 - Mixtral 8x7B-DPO (46.7B) is a high-precision instruction model for complex computation.',
     displayName: 'Nous Hermes 2 - Mixtral 8x7B-DPO (46.7B)',
     id: 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO',
     type: 'chat',
   },
   {
     contextWindowTokens: 4096,
-    description: 'MythoMax-L2 (13B) 是一种创新模型，适合多领域应用和复杂任务。',
+    description: 'MythoMax-L2 (13B) is an innovative model for diverse domains and complex tasks.',
     displayName: 'MythoMax-L2 (13B)',
     id: 'Gryphe/MythoMax-L2-13b',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'StripedHyena Nous (7B) 通过高效的策略和模型架构，提供增强的计算能力。',
+    description:
+      'StripedHyena Nous (7B) delivers enhanced compute efficiency through its architecture and strategy.',
     displayName: 'StripedHyena Nous (7B)',
     id: 'togethercomputer/StripedHyena-Nous-7B',
     type: 'chat',

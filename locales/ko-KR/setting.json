@@ -1,811 +1,539 @@
 {
-  "about": {
-    "title": "정보"
-  },
-  "agentInfoDescription": {
-    "basic": {
-      "avatar": "아바타",
-      "description": "설명",
-      "name": "이름",
-      "tags": "태그",
-      "title": "도우미 정보"
-    },
-    "chat": {
-      "displayMode": "표시 모드",
-      "enableHistoryCount": "이전 메시지 수 카운트 활성화",
-      "historyCount": "이전 메시지 수",
-      "no": "아니오",
-      "searchMode": "검색 모드",
-      "title": "채팅 환경설정",
-      "yes": "예"
-    },
-    "model": {
-      "maxTokens": "최대 토큰 수",
-      "model": "모델",
-      "provider": "서비스 제공자",
-      "temperature": "온도",
-      "title": "모델 설정",
-      "topP": "Top P 값"
-    },
-    "plugins": {
-      "count": "플러그인 설정 ({{count}})",
-      "empty": "아직 설치된 플러그인이 없습니다",
-      "title": "설치된 플러그인"
-    },
-    "role": {
-      "systemRole": "시스템 프롬프트",
-      "title": "역할 설정"
-    },
-    "value": {
-      "unset": "설정되지 않음",
-      "untitled": "제목 없는 도우미"
-    }
-  },
-  "agentTab": {
-    "chat": "채팅 환경설정",
-    "meta": "도우미 정보",
-    "modal": "모델 설정",
-    "opening": "시작 설정",
-    "plugin": "플러그인 설정",
-    "prompt": "역할 프롬프트",
-    "tts": "음성 서비스"
-  },
-  "analytics": {
-    "telemetry": {
-      "desc": "{{appName}}의 전반적인 사용자 경험을 개선할 수 있도록 익명 사용 데이터를 전송하는 데 동의해 주세요",
-      "title": "익명 사용 데이터 전송"
-    },
-    "title": "데이터 통계"
-  },
+  "_cloud.officialProvider": "{{name}} 공식 모델 서비스",
+  "about.title": "정보",
+  "advancedSettings": "고급 설정",
+  "agentInfoDescription.basic.avatar": "아바타",
+  "agentInfoDescription.basic.description": "설명",
+  "agentInfoDescription.basic.name": "이름",
+  "agentInfoDescription.basic.tags": "태그",
+  "agentInfoDescription.basic.title": "도우미 정보",
+  "agentInfoDescription.chat.enableHistoryCount": "이전 메시지 수 카운트 활성화",
+  "agentInfoDescription.chat.historyCount": "이전 메시지 수",
+  "agentInfoDescription.chat.no": "아니오",
+  "agentInfoDescription.chat.searchMode": "검색 모드",
+  "agentInfoDescription.chat.title": "채팅 환경설정",
+  "agentInfoDescription.chat.yes": "예",
+  "agentInfoDescription.model.maxTokens": "최대 토큰 수",
+  "agentInfoDescription.model.model": "모델",
+  "agentInfoDescription.model.provider": "서비스 제공자",
+  "agentInfoDescription.model.temperature": "온도",
+  "agentInfoDescription.model.title": "모델 설정",
+  "agentInfoDescription.model.topP": "Top P 값",
+  "agentInfoDescription.plugins.count": "기능 설정 ({{count}})",
+  "agentInfoDescription.plugins.empty": "아직 설치된 기능이 없습니다",
+  "agentInfoDescription.plugins.title": "설치된 기능",
+  "agentInfoDescription.role.systemRole": "시스템 프롬프트",
+  "agentInfoDescription.role.title": "역할 설정",
+  "agentInfoDescription.value.unset": "설정되지 않음",
+  "agentInfoDescription.value.untitled": "제목 없는 도우미",
+  "agentTab.chat": "채팅 환경설정",
+  "agentTab.meta": "도우미 정보",
+  "agentTab.modal": "모델 설정",
+  "agentTab.opening": "시작 설정",
+  "agentTab.plugin": "기능 설정",
+  "agentTab.prompt": "역할 프롬프트",
+  "agentTab.tts": "음성 서비스",
+  "analytics.telemetry.desc": "{{appName}}의 개선을 위해 익명 사용 데이터를 제공해 주세요",
+  "analytics.telemetry.title": "익명 사용 데이터 전송",
+  "analytics.title": "데이터 통계",
   "checking": "확인 중...",
   "checkingPermissions": "권한 확인 중...",
-  "danger": {
-    "clear": {
-      "action": "즉시 삭제",
-      "confirm": "모든 채팅 데이터를 삭제하시겠습니까?",
-      "desc": "도우미, 파일, 메시지, 플러그인 등 모든 세션 데이터를 삭제합니다",
-      "success": "모든 세션 메시지가 삭제되었습니다",
-      "title": "모든 세션 메시지 삭제"
-    },
-    "reset": {
-      "action": "즉시 초기화",
-      "confirm": "모든 설정을 초기화하시겠습니까?",
-      "currentVersion": "현재 버전",
-      "desc": "모든 설정을 기본값으로 초기화합니다",
-      "success": "모든 설정이 초기화되었습니다",
-      "title": "모든 설정 초기화"
-    }
-  },
-  "groupTab": {
-    "chat": "채팅",
-    "members": "구성원",
-    "meta": "기본 정보"
-  },
-  "header": {
-    "desc": "환경설정 및 모델 설정",
-    "global": "전역 설정",
-    "group": "팀 설정",
-    "groupDesc": "에이전트 팀 및 채팅 환경 설정 관리",
-    "session": "세션 설정",
-    "sessionDesc": "역할 프롬프트 및 세션 환경설정",
-    "sessionWithName": "세션 설정 · {{name}}",
-    "title": "설정"
-  },
-  "hotkey": {
-    "conflicts": "기존 단축키와 충돌",
-    "errors": {
-      "CONFLICT": "단축키 충돌: 해당 단축키는 다른 기능에 사용 중입니다",
-      "INVALID_FORMAT": "잘못된 단축키 형식: 올바른 형식을 사용하세요 (예: CommandOrControl+E)",
-      "INVALID_ID": "잘못된 단축키 ID",
-      "NO_MODIFIER": "단축키에는 반드시 Ctrl, Alt, Shift 등의 수정 키가 포함되어야 합니다",
-      "SYSTEM_OCCUPIED": "해당 단축키는 시스템 또는 다른 앱에서 사용 중입니다",
-      "UNKNOWN": "업데이트 실패: 알 수 없는 오류"
-    },
-    "group": {
-      "conversation": "대화",
-      "desktop": "데스크탑",
-      "essential": "기본"
-    },
-    "invalidCombination": "단축키는 최소한 하나의 수정 키(Ctrl, Alt, Shift)와 일반 키를 포함해야 합니다",
-    "record": "단축키를 녹음하려면 키를 누르세요",
-    "reset": "기본 단축키로 재설정",
-    "title": "단축키",
-    "updateError": "단축키 업데이트 실패: 네트워크 또는 시스템 오류",
-    "updateSuccess": "단축키가 성공적으로 업데이트되었습니다"
-  },
-  "llm": {
-    "aesGcm": "<1>AES-GCM</1> 암호화 알고리즘을 사용하여 API 키 및 프록시 주소 등을 암호화합니다",
-    "apiKey": {
-      "desc": "{{name}} API 키를 입력하세요",
-      "placeholder": "{{name}} API 키",
-      "title": "API 키"
-    },
-    "checker": {
-      "button": "확인",
-      "desc": "API 키 및 프록시 주소가 올바른지 테스트합니다",
-      "pass": "검사 통과",
-      "title": "연결 상태 확인"
-    },
-    "customModelCards": {
-      "addNew": "{{id}} 모델 생성 및 추가",
-      "config": "모델 구성",
-      "confirmDelete": "이 사용자 정의 모델을 삭제하려고 합니다. 삭제 후 복구할 수 없습니다. 신중히 진행하세요.",
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Azure OpenAI에서 실제 요청에 사용되는 필드",
-          "placeholder": "Azure에 배포된 모델 이름을 입력하세요",
-          "title": "모델 배포 이름"
-        },
-        "displayName": {
-          "placeholder": "모델 표시 이름을 입력하세요 (예: ChatGPT, GPT-4 등)",
-          "title": "모델 표시 이름"
-        },
-        "files": {
-          "extra": "현재 파일 업로드는 임시 해킹 방식으로 구현되어 있으며, 실험적 기능입니다. 정식 기능은 추후 제공 예정입니다.",
-          "title": "파일 업로드 지원"
-        },
-        "functionCall": {
-          "extra": "이 설정은 앱 내 함수 호출 기능만 활성화합니다. 함수 호출 지원 여부는 모델에 따라 다르므로 직접 테스트하세요.",
-          "title": "함수 호출 지원"
-        },
-        "id": {
-          "extra": "모델 태그로 표시됩니다",
-          "placeholder": "모델 ID를 입력하세요 (예: gpt-4-turbo-preview 또는 claude-2.1)",
-          "title": "모델 ID"
-        },
-        "modalTitle": "사용자 정의 모델 설정",
-        "tokens": {
-          "title": "최대 토큰 수"
-        },
-        "vision": {
-          "extra": "이 설정은 앱 내 이미지 업로드 기능만 활성화합니다. 시각 인식 지원 여부는 모델에 따라 다르므로 직접 테스트하세요.",
-          "title": "시각 인식 지원"
-        }
-      }
-    },
-    "fetchOnClient": {
-      "desc": "클라이언트 요청 모드는 브라우저에서 직접 세션 요청을 보내 응답 속도를 향상시킵니다",
-      "title": "클라이언트 요청 모드 사용"
-    },
-    "fetcher": {
-      "clear": "가져온 모델 삭제",
-      "fetch": "모델 목록 가져오기",
-      "fetching": "모델 목록을 가져오는 중...",
-      "latestTime": "마지막 업데이트 시간: {{time}}",
-      "noLatestTime": "아직 목록을 가져오지 않았습니다"
-    },
-    "helpDoc": "설정 가이드",
-    "modelList": {
-      "desc": "세션에서 표시할 모델을 선택하세요. 선택한 모델은 모델 목록에 표시됩니다.",
-      "placeholder": "목록에서 모델을 선택하세요",
-      "title": "모델 목록",
-      "total": "총 {{count}}개의 모델 사용 가능"
-    },
-    "proxyUrl": {
-      "desc": "기본 주소 외에는 http(s)://를 포함해야 합니다",
-      "title": "API 프록시 주소"
-    },
-    "waitingForMore": "더 많은 모델이 <1>도입 예정</1>입니다. 기대해 주세요."
-  },
-  "marketPublish": {
-    "modal": {
-      "changelog": {
-        "extra": "이 버전의 주요 변경 사항과 개선 사항을 설명하세요",
-        "label": "변경 로그",
-        "maxLengthError": "변경 로그는 500자 이내여야 합니다",
-        "placeholder": "변경 로그를 입력하세요",
-        "required": "변경 로그를 입력해 주세요"
-      },
-      "comparison": {
-        "local": "현재 로컬 버전",
-        "remote": "현재 게시된 버전"
-      },
-      "identifier": {
-        "extra": "식별자는 도우미의 고유 식별자로 사용되며, 소문자, 숫자, 하이픈을 사용하는 것이 좋습니다",
-        "label": "도우미 식별자",
-        "lengthError": "식별자는 3자에서 50자 사이여야 합니다",
-        "patternError": "식별자는 소문자, 숫자, 하이픈만 포함할 수 있습니다",
-        "placeholder": "예: web-development 와 같은 고유 식별자를 입력하세요",
-        "required": "도우미 식별자를 입력해 주세요"
-      },
-      "loading": {
-        "fetchingRemote": "원격 데이터를 불러오는 중...",
-        "submit": "도우미 게시 중...",
-        "upload": "새 버전 게시 중..."
-      },
-      "messages": {
-        "createVersionFailed": "버전 생성 실패: {{message}}",
-        "fetchRemoteFailed": "원격 도우미 데이터를 가져오는 데 실패했습니다",
-        "missingIdentifier": "현재 도우미에 마켓 식별자가 없습니다",
-        "notAuthenticated": "먼저 마켓 계정에 로그인해 주세요",
-        "publishFailed": "게시 실패: {{message}}"
-      },
-      "submitButton": "게시",
-      "title": {
-        "submit": "도우미 마켓에 공유",
-        "upload": "새 버전 게시"
-      }
-    },
-    "resultModal": {
-      "message": "도우미가 심사 대기 중입니다. 심사 통과 후 자동으로 게시됩니다. '마켓에서 보기'를 클릭하여 게시된 도우미를 확인하세요.",
-      "view": "마켓에서 보기"
-    },
-    "submit": {
-      "button": "마켓에 공유",
-      "tooltip": "도우미를 마켓에 공유합니다"
-    },
-    "upload": {
-      "button": "새 버전 게시",
-      "tooltip": "도우미 마켓에 새 버전을 게시합니다"
-    }
-  },
-  "message": {
-    "success": "업데이트 성공"
-  },
-  "plugin": {
-    "addMCPPlugin": "MCP 플러그인 추가",
-    "addTooltip": "사용자 정의 플러그인",
-    "clearDeprecated": "유효하지 않은 플러그인 제거",
-    "empty": "설치된 플러그인이 없습니다. <1>플러그인 스토어</1>에서 탐색해 보세요.",
-    "installStatus": {
-      "deprecated": "제거됨"
-    },
-    "settings": {
-      "hint": "설명에 따라 아래 설정을 입력하세요",
-      "title": "{{id}} 플러그인 설정",
-      "tooltip": "플러그인 설정"
-    },
-    "store": "플러그인 스토어"
-  },
-  "settingAgent": {
-    "avatar": {
-      "title": "도우미 아바타"
-    },
-    "backgroundColor": {
-      "title": "아바타 배경색"
-    },
-    "description": {
-      "desc": "도우미에 대한 간단한 설명입니다. 역할 프롬프트로 사용되지 않습니다.",
-      "placeholder": "도우미 설명을 입력하세요",
-      "title": "도우미 설명"
-    },
-    "name": {
-      "placeholder": "도우미 이름을 입력하세요",
-      "title": "이름"
-    },
-    "prompt": {
-      "placeholder": "역할 프롬프트를 입력하세요",
-      "title": "역할 프롬프트"
-    },
-    "submit": "도우미 정보 업데이트",
-    "tag": {
-      "desc": "도우미 마켓에 표시될 태그입니다",
-      "placeholder": "태그를 입력하세요",
-      "title": "태그"
-    },
-    "title": "도우미 정보"
-  },
-  "settingAppearance": {
-    "animationMode": {
-      "agile": "민첩",
-      "desc": "앱의 반응 애니메이션 속도를 선택하세요",
-      "disabled": "비활성화",
-      "elegant": "우아함",
-      "title": "반응 애니메이션"
-    },
-    "contextMenuMode": {
-      "default": "기본값",
-      "desc": "채팅 메시지 우클릭 메뉴 표시 방식을 선택하세요",
-      "disabled": "사용 안 함",
-      "title": "우클릭 메뉴 방식"
-    },
-    "neutralColor": {
-      "desc": "다양한 색상 경향의 회색조 사용자 정의",
-      "title": "중립 색상"
-    },
-    "noAnimation": {
-      "desc": "앱의 모든 애니메이션 효과를 비활성화합니다",
-      "title": "애니메이션 없음 모드"
-    },
-    "preview": {
-      "title": "색상 팔레트"
-    },
-    "primaryColor": {
-      "desc": "테마 색상 사용자 정의",
-      "title": "테마 색상"
-    },
-    "title": "응용 프로그램 외관"
-  },
-  "settingChat": {
-    "autoCreateTopicThreshold": {
-      "desc": "현재 메시지 수가이 값 이상이면 자동으로 주제가 생성됩니다",
-      "title": "메시지 임계값"
-    },
-    "chatStyleType": {
-      "title": "채팅 창 스타일",
-      "type": {
-        "chat": "대화 모드",
-        "docs": "문서 모드"
-      }
-    },
-    "compressThreshold": {
-      "desc": "압축되지 않은 이전 메시지가이 값 이상이면 압축됩니다",
-      "title": "이전 메시지 길이 압축 임계값"
-    },
-    "enableAutoCreateTopic": {
-      "desc": "대화 중에 자동으로 주제를 만들지 여부를 설정합니다. 일시적인 주제에서만 작동합니다",
-      "title": "자동 주제 생성 활성화"
-    },
-    "enableCompressHistory": {
-      "title": "역사 메시지 자동 요약 활성화"
-    },
-    "enableHistoryCount": {
-      "alias": "제한 없음",
-      "limited": "{{number}}개의 대화 메시지만 포함",
-      "setlimited": "사용할 메시지 수 설정",
-      "title": "이전 메시지 수 제한",
-      "unlimited": "이전 메시지 수 제한 없음"
-    },
-    "enableStreaming": {
-      "desc": "실시간으로 응답을 표시하려면 스트리밍 출력을 활성화하세요. 비활성화하면 전체 응답만 표시됩니다.",
-      "title": "스트리밍 출력 활성화"
-    },
-    "historyCount": {
-      "desc": "요청당 포함되는 이전 메시지 수",
-      "title": "이전 메시지 수"
-    },
-    "inputTemplate": {
-      "desc": "사용자의 최신 메시지가이 템플릿에 채워집니다",
-      "placeholder": "입력 템플릿 {{text}}은 실시간 입력 정보로 대체됩니다",
-      "title": "사용자 입력 전처리"
-    },
-    "submit": "채팅 선호도 업데이트",
-    "title": "채팅 설정"
-  },
-  "settingChatAppearance": {
-    "fontSize": {
-      "desc": "채팅 내용의 글꼴 크기",
-      "marks": {
-        "normal": "표준"
-      },
-      "title": "글꼴 크기"
-    },
-    "highlighterTheme": {
-      "title": "코드 하이라이트 테마"
-    },
-    "mermaidTheme": {
-      "title": "인어 테마"
-    },
-    "title": "채팅 외관",
-    "transitionMode": {
-      "desc": "채팅 메시지의 전환 애니메이션",
-      "options": {
-        "fadeIn": "서서히 나타남",
-        "none": {
-          "desc": "이는 모델의 응답 출력 방식에 따라 다르므로 직접 테스트해 보세요.",
-          "value": "없음"
-        },
-        "smooth": "부드럽게"
-      },
-      "title": "전환 애니메이션"
-    }
-  },
-  "settingCommon": {
-    "lang": {
-      "autoMode": "시스템 따르기",
-      "title": "언어"
-    },
-    "themeMode": {
-      "auto": "자동",
-      "dark": "어두운",
-      "light": "밝은",
-      "title": "테마"
-    },
-    "title": "일반 설정"
-  },
-  "settingGroup": {
-    "description": {
-      "placeholder": "팀 설명을 입력하세요",
-      "title": "팀 설명"
-    },
-    "name": {
-      "placeholder": "팀 이름을 입력하세요",
-      "title": "팀 이름"
-    },
-    "scene": {
-      "desc": "팀 시나리오 선택",
-      "options": {
-        "casual": "캐주얼",
-        "productive": "생산성"
-      },
-      "title": "팀 시나리오"
-    },
-    "submit": "팀 업데이트",
-    "systemPrompt": {
-      "placeholder": "호스트 시스템 프롬프트를 입력하세요",
-      "title": "호스트 시스템 프롬프트"
-    },
-    "title": "에이전트 팀 정보"
-  },
-  "settingGroupChat": {
-    "allowDM": {
-      "desc": "비활성화해도, 당신은 여전히 어시스턴트에게 직접 메시지를 보낼 수 있습니다",
-      "title": "어시스턴트의 DM 허용"
-    },
-    "enableSupervisor": {
-      "desc": "에이전트 팀 진행자 기능을 활성화하면, 진행자가 팀 대화 흐름을 관리합니다",
-      "title": "진행자 활성화"
-    },
-    "maxResponseInRow": {
-      "desc": "멤버가 연속으로 답변할 수 있는 메시지 수를 선택하세요. 0으로 설정하면 제한이 해제됩니다.",
-      "title": "연속 답변 메시지 수"
-    },
-    "model": {
-      "desc": "그룹 구성원의 발언에는 영향을 주지 않습니다. 일부 모델은 진행자 모델로 사용할 수 없습니다.",
-      "title": "호스트 모델"
-    },
-    "orchestratorTitle": "호스트 설정",
-    "responseOrder": {
-      "desc": "에이전트는 채팅에서 설정된 순서에 따라 응답합니다",
-      "options": {
-        "natural": "자연스러운",
-        "sequential": "순차적인"
-      },
-      "placeholder": "답변 순서 선택",
-      "title": "답변 순서"
-    },
-    "responseSpeed": {
-      "desc": "채팅의 전체 진행 속도를 제어합니다",
-      "options": {
-        "fast": "빠름",
-        "medium": "보통",
-        "slow": "느림"
-      },
-      "placeholder": "답변 속도 선택",
-      "title": "답변 속도"
-    },
-    "revealDM": {
-      "desc": "다른 멤버에게 보낸 비공개 메시지 내용을 볼 수 있게 합니다.",
-      "title": "비공개 메시지 내용 표시"
-    },
-    "submit": "설정 업데이트",
-    "systemPrompt": {
-      "desc": "그룹 채팅 대화 호스트의 맞춤 시스템 프롬프트입니다. 기본 호스트 동작에 영향을 줄 수 있습니다.",
-      "placeholder": "맞춤 호스트 시스템 프롬프트를 입력하세요...",
-      "title": "호스트 시스템 프롬프트"
-    },
-    "title": "채팅 설정"
-  },
-  "settingGroupMembers": {
-    "addToGroup": "그룹에 추가",
-    "availableAgents": "사용 가능한 어시스턴트",
-    "createMember": "구성원 생성",
-    "defaultAgent": "맞춤 어시스턴트",
-    "disableHost": "호스트 도우미 비활성화",
-    "edit": "멤버 편집",
-    "empty": "이 팀에는 아직 멤버가 없습니다. + 버튼을 눌러 멤버를 추가하세요.",
-    "enableHost": "호스트 도우미 활성화",
-    "groupHost": "그룹 호스트",
-    "groupMembers": "그룹 멤버",
-    "host": {
-      "description": "호스트가 그룹에 있을 때 그룹 채팅이 자동으로 운영되며, 창의적인 작업에 적합합니다.",
-      "title": "호스트"
-    },
-    "noAvailableAgents": "사용 가능한 어시스턴트가 없습니다",
-    "noDescription": "설명 없음",
-    "noMembersInGroup": "그룹에 멤버가 없습니다",
-    "owner": "당신 (소유자)",
-    "remove": "멤버 제거",
-    "removeFromGroup": "그룹에서 제거",
-    "you": "당신"
-  },
-  "settingImage": {
-    "defaultCount": {
-      "desc": "새 작업을 생성할 때 이미지 생성 패널의 기본 이미지 수를 설정합니다.",
-      "label": "기본 이미지 수",
-      "title": "AI 그림 설정"
-    }
-  },
-  "settingModel": {
-    "enableMaxTokens": {
-      "title": "단일 응답 제한 활성화"
-    },
-    "enableReasoningEffort": {
-      "title": "추론 강도 조정 활성화"
-    },
-    "frequencyPenalty": {
-      "desc": "값이 클수록 단어 선택이 더 다양하고 풍부해지며, 값이 작을수록 단어 선택이 더 간단하고 소박해집니다.",
-      "title": "어휘 다양성"
-    },
-    "maxTokens": {
-      "desc": "단일 상호 작용에 사용되는 최대 토큰 수",
-      "title": "단일 응답 제한"
-    },
-    "model": {
-      "desc": "{{provider}} 모델",
-      "title": "모델"
-    },
-    "params": {
-      "title": "고급 매개변수"
-    },
-    "presencePenalty": {
-      "desc": "값이 클수록 다양한 표현 방식으로 기울어져 개념의 반복을 피하고, 값이 작을수록 반복적인 개념이나 서술을 사용하는 경향이 있어 표현이 더 일관됩니다.",
-      "title": "표현의 다양성"
-    },
-    "reasoningEffort": {
-      "desc": "값이 클수록 추론 능력이 강해지지만, 응답 시간과 토큰 소모가 증가할 수 있습니다",
-      "options": {
-        "high": "높음",
-        "low": "낮음",
-        "medium": "중간"
-      },
-      "title": "추론 강도"
-    },
-    "submit": "모델 설정 업데이트",
-    "temperature": {
-      "desc": "값이 클수록 답변이 더 창의적이고 상상력이 풍부해지며, 값이 작을수록 답변이 더 엄격해집니다.",
-      "title": "창의성 활성화",
-      "warning": "창의성 활성화 값이 너무 크면 출력이 깨질 수 있습니다."
-    },
-    "title": "모델 설정",
-    "topP": {
-      "desc": "얼마나 많은 가능성을 고려할지, 값이 클수록 더 많은 가능성 있는 답변을 수용하고, 값이 작을수록 가장 가능성이 높은 답변을 선택하는 경향이 있습니다. 창의성 활성화와 함께 변경하는 것은 권장하지 않습니다.",
-      "title": "사고 개방성"
-    }
-  },
-  "settingOpening": {
-    "openingMessage": {
-      "desc": "대화 시작 시 표시되는 오프닝 메시지로, 어시스턴트의 기능을 소개합니다.",
-      "placeholder": "안녕하세요, 저는 맞춤형 어시스턴트입니다. 지금 바로 저와 대화를 시작하시거나, 어시스턴트 설정으로 가서 제 정보를 완성할 수 있습니다.",
-      "title": "오프닝 메시지"
-    },
-    "openingQuestions": {
-      "desc": "대화 시작 시 표시되는 안내 질문",
-      "empty": "질문이 없습니다",
-      "placeholder": "질문을 입력하세요",
-      "repeat": "질문이 이미 존재합니다",
-      "title": "오프닝 질문"
-    },
-    "title": "오프닝 설정"
-  },
-  "settingPlugin": {
-    "title": "플러그인 목록"
-  },
-  "settingSystem": {
-    "accessCode": {
-      "desc": "관리자가 암호화된 액세스를 활성화했습니다",
-      "placeholder": "액세스 암호를 입력하세요",
-      "title": "액세스 암호"
-    },
-    "oauth": {
-      "info": {
-        "desc": "로그인됨",
-        "title": "계정 정보"
-      },
-      "signin": {
-        "action": "로그인",
-        "desc": "SSO를 사용하여 앱 잠금 해제",
-        "title": "계정 로그인"
-      },
-      "signout": {
-        "action": "로그아웃",
-        "confirm": "로그아웃 하시겠습니까?",
-        "success": "로그아웃 성공"
-      }
-    },
-    "title": "시스템 설정"
-  },
-  "settingTTS": {
-    "openai": {
-      "sttModel": "OpenAI 음성 인식 모델",
-      "title": "OpenAI",
-      "ttsModel": "OpenAI 음성 합성 모델"
-    },
-    "showAllLocaleVoice": {
-      "desc": "현재 언어의 음성만 표시하려면 닫으세요",
-      "title": "모든 로캘 음성 표시"
-    },
-    "stt": "음성 인식 설정",
-    "sttAutoStop": {
-      "desc": "비활성화하면 음성 인식이 자동으로 종료되지 않으며 수동으로 종료 버튼을 클릭해야 합니다",
-      "title": "음성 인식 자동 중지"
-    },
-    "sttLocale": {
-      "desc": "음성 입력의 언어로 음성 인식 정확도를 향상시킬 수 있습니다",
-      "title": "음성 인식 언어"
-    },
-    "sttService": {
-      "desc": "브라우저는 기본 음성 인식 서비스입니다",
-      "title": "음성 인식 서비스"
-    },
-    "submit": "음성 서비스 업데이트",
-    "title": "음성 서비스",
-    "tts": "음성 합성 설정",
-    "ttsService": {
-      "desc": "OpenAI 음성 합성 서비스를 사용하는 경우 OpenAI 모델 서비스가 활성화되어 있어야 합니다",
-      "title": "음성 합성 서비스"
-    },
-    "voice": {
-      "desc": "현재 어시스턴트에 대한 음성을 선택하십시오. 각 TTS 서비스는 다른 음성을 지원합니다",
-      "preview": "음성 미리듣기",
-      "title": "음성 합성 음성"
-    }
-  },
-  "storage": {
-    "actions": {
-      "export": {
-        "button": "내보내기",
-        "exportType": {
-          "agent": "도우미 설정 내보내기",
-          "agentWithMessage": "도우미와 메시지 내보내기",
-          "all": "전체 설정 및 모든 도우미 데이터 내보내기",
-          "allAgent": "모든 도우미 설정 내보내기",
-          "allAgentWithMessage": "모든 도우미와 메시지 내보내기",
-          "globalSetting": "전체 설정 내보내기"
-        },
-        "title": "데이터 내보내기"
-      },
-      "import": {
-        "button": "가져오기",
-        "title": "데이터 가져오기"
-      },
-      "title": "고급 작업"
-    },
-    "desc": "현재 브라우저의 저장 용량",
-    "embeddings": {
-      "used": "벡터 저장소"
-    },
-    "title": "데이터 저장소",
-    "used": "저장 용량"
-  },
-  "submitAgentModal": {
-    "button": "에이전트 제출",
-    "identifier": "도우미 식별자(identifier)",
-    "metaMiss": "에이전트 정보를 입력한 후 제출하십시오. 이름, 설명 및 태그를 포함해야 합니다.",
-    "placeholder": "에이전트 식별자를 입력하세요. 고유해야 하며, 예: 웹 개발",
-    "tooltips": "에이전트 마켓에 공유"
-  },
-  "submitFooter": {
-    "reset": "초기화",
-    "submit": "저장",
-    "unSaved": "저장되지 않은 변경 사항",
-    "unSavedWarning": "현재 저장되지 않은 변경 사항이 있습니다."
-  },
-  "sync": {
-    "device": {
-      "deviceName": {
-        "hint": "추가 이름을 입력하여 식별할 수 있게 합니다",
-        "placeholder": "장치 이름을 입력하세요",
-        "title": "장치 이름"
-      },
-      "title": "장치 정보",
-      "unknownBrowser": "알 수 없는 브라우저",
-      "unknownOS": "알 수 없는 OS"
-    },
-    "warning": {
-      "tip": "커뮤니티 베타 테스트를 거친 후, WebRTC 동기화는 일반 데이터 동기화 요구를 안정적으로 충족시키지 못할 수 있습니다. <1>시그널링 서버를 배포</1>한 후 사용하십시오."
-    },
-    "webrtc": {
-      "channelName": {
-        "desc": "WebRTC는 이 이름을 사용하여 동기화 채널을 생성하며 채널 이름이 고유한지 확인하세요",
-        "placeholder": "동기화 채널 이름을 입력하세요",
-        "shuffle": "랜덤 생성",
-        "title": "동기화 채널 이름"
-      },
-      "channelPassword": {
-        "desc": "채널의 개인 정보를 보호하기 위해 비밀번호를 추가하고 장치가 채널에 참여하려면 올바른 비밀번호여야 합니다",
-        "placeholder": "동기화 채널 비밀번호를 입력하세요",
-        "title": "동기화 채널 비밀번호"
-      },
-      "desc": "실시간, 피어 투 피어 데이터 통신으로 장치가 동시에 온라인 상태여야만 동기화할 수 있습니다",
-      "enabled": {
-        "invalid": "시그널링 서버와 동기화 채널 이름을 입력한 후에 활성화하십시오.",
-        "title": "동기화 활성화"
-      },
-      "signaling": {
-        "desc": "WebRTC는 이 주소를 사용하여 동기화합니다.",
-        "placeholder": "시그널링 서버 주소를 입력하세요",
-        "title": "시그널링 서버"
-      },
-      "title": "WebRTC 동기화"
-    }
-  },
-  "systemAgent": {
-    "agentMeta": {
-      "label": "어시스턴트 메타 생성 모델",
-      "modelDesc": "어시스턴트 이름, 설명, 프로필 이미지, 레이블을 생성하는 데 사용되는 모델을 지정합니다.",
-      "title": "어시스턴트 정보 자동 생성"
-    },
-    "customPrompt": {
-      "addPrompt": "사용자 정의 프롬프트 추가",
-      "desc": "작성 후, 시스템 어시스턴트는 콘텐츠 생성 시 사용자 정의 프롬프트를 사용합니다.",
-      "placeholder": "사용자 정의 프롬프트 입력",
-      "title": "사용자 정의 프롬프트"
-    },
-    "generationTopic": {
-      "label": "AI 그림 주제 명명 모델",
-      "modelDesc": "AI 그림 자동 주제 명명에 사용되는 모델 지정",
-      "title": "AI 그림 자동 주제 명명"
-    },
-    "helpInfo": "새 도우미를 생성할 때 기본 도우미 설정이 기본값으로 사용됩니다.",
-    "historyCompress": {
-      "label": "대화 기록 모델",
-      "modelDesc": "대화 기록 압축에 사용되는 모델을 지정합니다",
-      "title": "대화 기록 자동 요약"
-    },
-    "queryRewrite": {
-      "label": "질문 재작성 모델",
-      "modelDesc": "사용자의 질문을 최적화하는 데 사용되는 모델 지정",
-      "title": "지식 베이스 질문 재작성"
-    },
-    "thread": {
-      "label": "하위 주제 명명 모델",
-      "modelDesc": "하위 주제 자동 이름 변경에 사용되는 모델 지정",
-      "title": "하위 주제 자동 명명"
-    },
-    "title": "시스템 도우미",
-    "topic": {
-      "label": "주제 명명 모델",
-      "modelDesc": "주제 자동 재명명에 사용되는 모델 지정",
-      "title": "주제 자동 명명"
-    },
-    "translation": {
-      "label": "번역 모델",
-      "modelDesc": "번역에 사용되는 모델 지정",
-      "title": "번역 도우미 설정"
-    }
-  },
-  "tab": {
-    "about": "소개",
-    "agent": "기본 에이전트",
-    "common": "일반 설정",
-    "experiment": "실험",
-    "hotkey": "단축키",
-    "image": "AI 그림",
-    "llm": "언어 모델",
-    "provider": "AI 서비스 제공자",
-    "proxy": "네트워크 프록시",
-    "storage": "데이터 저장소",
-    "sync": "클라우드 동기화",
-    "system-agent": "시스템 도우미",
-    "tts": "음성 서비스"
-  },
-  "tools": {
-    "builtins": {
-      "groupName": "내장"
-    },
-    "disabled": "현재 모델은 함수 호출을 지원하지 않으며 플러그인을 사용할 수 없습니다",
-    "klavis": {
-      "addServer": "서버 추가",
-      "authCompleted": "인증 완료",
-      "authFailed": "인증 실패",
-      "authRequired": "인증 필요",
-      "connected": "연결됨",
-      "error": "오류",
-      "groupName": "Klavis 도구",
-      "manage": "Klavis 관리",
-      "manageTitle": "Klavis 통합 관리",
-      "noServers": "연결된 서버 없음",
-      "notEnabled": "Klavis 서비스가 활성화되지 않음",
-      "oauthRequired": "새 창에서 OAuth 인증을 완료해 주세요",
-      "pendingAuth": "인증 대기 중",
-      "serverCreated": "서버 생성 성공",
-      "serverCreatedFailed": "서버 생성 실패",
-      "serverRemoved": "서버 삭제됨",
-      "servers": "개의 서버",
-      "tools": "개의 도구",
-      "verifyAuth": "인증을 완료했습니다"
-    },
-    "plugins": {
-      "enabled": "활성화됨 {{num}}",
-      "groupName": "플러그인",
-      "noEnabled": "활성화된 플러그인이 없음",
-      "store": "플러그인 스토어"
-    },
-    "tabs": {
-      "all": "전체",
-      "installed": "활성화됨"
-    },
-    "title": "확장 도구"
-  }
+  "danger.clear.action": "즉시 삭제",
+  "danger.clear.confirm": "모든 채팅 데이터를 삭제하시겠습니까?",
+  "danger.clear.desc": "에이전트, 파일, 메시지, 스킬을 포함한 모든 데이터를 삭제합니다. 계정은 삭제되지 않습니다.",
+  "danger.clear.success": "모든 세션 메시지가 삭제되었습니다",
+  "danger.clear.title": "데이터 초기화",
+  "danger.reset.action": "즉시 초기화",
+  "danger.reset.confirm": "모든 설정을 초기화하시겠습니까?",
+  "danger.reset.currentVersion": "현재 버전",
+  "danger.reset.desc": "모든 설정을 기본값으로 복원합니다. 데이터는 삭제되지 않습니다.",
+  "danger.reset.success": "모든 설정이 초기화되었습니다",
+  "danger.reset.title": "모든 설정 초기화",
+  "defaultAgent.model.desc": "새 도우미를 생성할 때 사용하는 기본 모델",
+  "defaultAgent.model.title": "모델",
+  "defaultAgent.title": "기본 도우미 설정",
+  "group.aiConfig": "AI 설정",
+  "group.common": "일반",
+  "group.profile": "계정",
+  "group.subscription": "구독",
+  "group.system": "시스템",
+  "groupTab.chat": "채팅",
+  "groupTab.members": "구성원",
+  "groupTab.meta": "기본 정보",
+  "header.desc": "환경설정 및 모델 설정",
+  "header.global": "전역 설정",
+  "header.group": "팀 설정",
+  "header.groupDesc": "그룹 및 채팅 환경 설정 관리",
+  "header.session": "세션 설정",
+  "header.sessionDesc": "역할 프롬프트 및 세션 환경설정",
+  "header.sessionWithName": "세션 설정 · {{name}}",
+  "header.title": "설정",
+  "hotkey.conflicts": "기존 단축키와 충돌",
+  "hotkey.errors.CONFLICT": "단축키 충돌: 해당 단축키는 다른 기능에 사용 중입니다",
+  "hotkey.errors.INVALID_FORMAT": "잘못된 단축키 형식: 올바른 형식을 사용하세요 (예: CommandOrControl+E)",
+  "hotkey.errors.INVALID_ID": "잘못된 단축키 ID",
+  "hotkey.errors.NO_MODIFIER": "단축키에는 반드시 Ctrl, Alt, Shift 등의 수정 키가 포함되어야 합니다",
+  "hotkey.errors.SYSTEM_OCCUPIED": "해당 단축키는 시스템 또는 다른 앱에서 사용 중입니다",
+  "hotkey.errors.UNKNOWN": "업데이트 실패: 알 수 없는 오류",
+  "hotkey.group.conversation": "대화",
+  "hotkey.group.desktop": "데스크탑",
+  "hotkey.group.essential": "기본",
+  "hotkey.invalidCombination": "단축키는 최소한 하나의 수정 키(Ctrl, Alt, Shift)와 일반 키를 포함해야 합니다",
+  "hotkey.record": "단축키를 녹음하려면 키를 누르세요",
+  "hotkey.reset": "기본 단축키로 재설정",
+  "hotkey.title": "단축키",
+  "hotkey.updateError": "단축키 업데이트 실패: 네트워크 또는 시스템 오류",
+  "hotkey.updateSuccess": "단축키가 성공적으로 업데이트되었습니다",
+  "llm.aesGcm": "<1>AES-GCM</1> 암호화 알고리즘을 사용하여 API 키 및 프록시 주소 등을 암호화합니다",
+  "llm.apiKey.desc": "{{name}} API 키를 입력하세요",
+  "llm.apiKey.placeholder": "{{name}} API 키",
+  "llm.apiKey.title": "API 키",
+  "llm.checker.button": "확인",
+  "llm.checker.desc": "API 키 및 프록시 주소가 올바른지 테스트합니다",
+  "llm.checker.pass": "검사 통과",
+  "llm.checker.title": "연결 상태 확인",
+  "llm.customModelCards.addNew": "{{id}} 모델 생성 및 추가",
+  "llm.customModelCards.config": "모델 구성",
+  "llm.customModelCards.confirmDelete": "이 사용자 정의 모델을 삭제하려고 합니다. 삭제 후 복구할 수 없습니다. 신중히 진행하세요.",
+  "llm.customModelCards.modelConfig.azureDeployName.extra": "Azure OpenAI에서 실제 요청에 사용되는 필드",
+  "llm.customModelCards.modelConfig.azureDeployName.placeholder": "Azure에 배포된 모델 이름을 입력하세요",
+  "llm.customModelCards.modelConfig.azureDeployName.title": "모델 배포 이름",
+  "llm.customModelCards.modelConfig.displayName.placeholder": "모델 표시 이름을 입력하세요 (예: ChatGPT, GPT-4 등)",
+  "llm.customModelCards.modelConfig.displayName.title": "모델 표시 이름",
+  "llm.customModelCards.modelConfig.files.extra": "현재 파일 업로드는 임시 해킹 방식으로 구현되어 있으며, 실험적 기능입니다. 정식 기능은 추후 제공 예정입니다.",
+  "llm.customModelCards.modelConfig.files.title": "파일 업로드 지원",
+  "llm.customModelCards.modelConfig.functionCall.extra": "이 설정은 앱 내 함수 호출 기능만 활성화합니다. 함수 호출 지원 여부는 모델에 따라 다르므로 직접 테스트하세요.",
+  "llm.customModelCards.modelConfig.functionCall.title": "함수 호출 지원",
+  "llm.customModelCards.modelConfig.id.extra": "모델 태그로 표시됩니다",
+  "llm.customModelCards.modelConfig.id.placeholder": "모델 ID를 입력하세요 (예: gpt-4-turbo-preview 또는 claude-2.1)",
+  "llm.customModelCards.modelConfig.id.title": "모델 ID",
+  "llm.customModelCards.modelConfig.modalTitle": "사용자 정의 모델 설정",
+  "llm.customModelCards.modelConfig.tokens.title": "최대 토큰 수",
+  "llm.customModelCards.modelConfig.vision.extra": "이 설정은 앱 내 이미지 업로드 기능만 활성화합니다. 시각 인식 지원 여부는 모델에 따라 다르므로 직접 테스트하세요.",
+  "llm.customModelCards.modelConfig.vision.title": "시각 인식 지원",
+  "llm.fetchOnClient.desc": "클라이언트 요청 모드는 브라우저에서 직접 세션 요청을 보내 응답 속도를 향상시킵니다",
+  "llm.fetchOnClient.title": "클라이언트 요청 모드 사용",
+  "llm.fetcher.clear": "가져온 모델 삭제",
+  "llm.fetcher.fetch": "모델 목록 가져오기",
+  "llm.fetcher.fetching": "모델 목록을 가져오는 중...",
+  "llm.fetcher.latestTime": "마지막 업데이트 시간: {{time}}",
+  "llm.fetcher.noLatestTime": "아직 목록을 가져오지 않았습니다",
+  "llm.helpDoc": "설정 가이드",
+  "llm.modelList.desc": "세션에서 표시할 모델을 선택하세요. 선택한 모델은 모델 목록에 표시됩니다.",
+  "llm.modelList.placeholder": "목록에서 모델을 선택하세요",
+  "llm.modelList.title": "모델 목록",
+  "llm.modelList.total": "총 {{count}}개의 모델 사용 가능",
+  "llm.proxyUrl.desc": "기본 주소 외에는 http(s)://를 포함해야 합니다",
+  "llm.proxyUrl.title": "API 프록시 주소",
+  "llm.waitingForMore": "더 많은 모델이 <1>도입 예정</1>입니다. 기대해 주세요.",
+  "llm.waitingForMoreLinkAriaLabel": "모델 서비스 제공업체 접속 요청 양식 열기",
+  "marketPublish.modal.changelog.extra": "이 버전의 주요 변경 사항과 개선 사항을 설명하세요",
+  "marketPublish.modal.changelog.label": "변경 로그",
+  "marketPublish.modal.changelog.maxLengthError": "변경 로그는 500자 이내여야 합니다",
+  "marketPublish.modal.changelog.placeholder": "변경 로그를 입력하세요",
+  "marketPublish.modal.changelog.required": "변경 로그를 입력해 주세요",
+  "marketPublish.modal.comparison.local": "현재 로컬 버전",
+  "marketPublish.modal.comparison.remote": "현재 게시된 버전",
+  "marketPublish.modal.identifier.extra": "식별자는 도우미의 고유 식별자로 사용되며, 소문자, 숫자, 하이픈을 사용하는 것이 좋습니다",
+  "marketPublish.modal.identifier.label": "도우미 식별자",
+  "marketPublish.modal.identifier.lengthError": "식별자는 3자에서 50자 사이여야 합니다",
+  "marketPublish.modal.identifier.patternError": "식별자는 소문자, 숫자, 하이픈만 포함할 수 있습니다",
+  "marketPublish.modal.identifier.placeholder": "예: web-development 와 같은 고유 식별자를 입력하세요",
+  "marketPublish.modal.identifier.required": "도우미 식별자를 입력해 주세요",
+  "marketPublish.modal.loading.fetchingRemote": "원격 데이터를 불러오는 중...",
+  "marketPublish.modal.loading.submit": "도우미 게시 중...",
+  "marketPublish.modal.loading.upload": "새 버전 게시 중...",
+  "marketPublish.modal.messages.createVersionFailed": "버전 생성 실패: {{message}}",
+  "marketPublish.modal.messages.fetchRemoteFailed": "원격 도우미 데이터를 가져오는 데 실패했습니다",
+  "marketPublish.modal.messages.missingIdentifier": "현재 도우미에 커뮤니티 식별자가 없습니다",
+  "marketPublish.modal.messages.notAuthenticated": "먼저 커뮤니티 계정에 로그인해 주세요",
+  "marketPublish.modal.messages.publishFailed": "게시 실패: {{message}}",
+  "marketPublish.modal.submitButton": "게시",
+  "marketPublish.modal.title.submit": "도우미 커뮤니티에 공유",
+  "marketPublish.modal.title.upload": "새 버전 게시",
+  "marketPublish.resultModal.message": "작성하신 도우미가 심사에 제출되었습니다. 심사 통과 후 자동으로 게시됩니다.",
+  "marketPublish.resultModal.title": "제출 완료",
+  "marketPublish.resultModal.view": "커뮤니티에서 보기",
+  "marketPublish.submit.button": "커뮤니티에 공유",
+  "marketPublish.submit.tooltip": "도우미를 커뮤니티에 공유합니다",
+  "marketPublish.upload.button": "새 버전 게시",
+  "marketPublish.upload.tooltip": "도우미 커뮤니티에 새 버전 게시",
+  "memory.enabled.desc": "LobeHub이 대화에서 선호도와 정보를 추출하여 이후에 활용할 수 있도록 허용합니다. 언제든지 메모리를 확인, 수정 또는 삭제할 수 있습니다.",
+  "memory.enabled.title": "기억 기능 활성화",
+  "memory.title": "기억 설정",
+  "message.success": "업데이트 성공",
+  "myAgents.actions.cancel": "취소",
+  "myAgents.actions.confirmDeprecate": "폐기 확인",
+  "myAgents.actions.deprecate": "영구 폐기",
+  "myAgents.actions.deprecateConfirmContent": "폐기 후 이 도우미는 마켓에서 영구적으로 제거되며, 다시 등록할 수 없습니다. 이 작업은 되돌릴 수 없으니 신중히 진행해 주세요.",
+  "myAgents.actions.deprecateConfirmTitle": "도우미를 폐기하시겠습니까?",
+  "myAgents.actions.deprecateError": "도우미 폐기에 실패했습니다",
+  "myAgents.actions.deprecateLoading": "도우미를 폐기하는 중...",
+  "myAgents.actions.deprecateSuccess": "도우미가 폐기되었습니다",
+  "myAgents.actions.edit": "도우미 편집하기",
+  "myAgents.actions.publish": "도우미 등록",
+  "myAgents.actions.publishError": "도우미 등록에 실패했습니다",
+  "myAgents.actions.publishLoading": "도우미를 등록하는 중...",
+  "myAgents.actions.publishSuccess": "도우미가 등록되었습니다",
+  "myAgents.actions.unpublish": "도우미 등록 해제",
+  "myAgents.actions.unpublishError": "도우미 등록 해제에 실패했습니다",
+  "myAgents.actions.unpublishLoading": "도우미 등록 해제 중...",
+  "myAgents.actions.unpublishSuccess": "도우미 등록이 해제되었습니다",
+  "myAgents.actions.viewDetail": "자세히 보기",
+  "myAgents.detail.category": "카테고리",
+  "myAgents.detail.description": "설명",
+  "myAgents.detail.identifier": "식별자",
+  "myAgents.detail.title": "도우미 상세 정보",
+  "myAgents.empty.description": "아직 마켓에 등록한 도우미가 없습니다",
+  "myAgents.empty.title": "등록된 도우미 없음",
+  "myAgents.errors.editFailed": "도우미 편집에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+  "myAgents.errors.fetchFailed": "도우미 상세 정보를 가져오는 데 실패했습니다",
+  "myAgents.errors.notAuthenticated": "먼저 마켓 계정에 로그인해 주세요",
+  "myAgents.loginRequired.button": "마켓 계정 로그인",
+  "myAgents.loginRequired.description": "등록한 도우미를 보려면 먼저 마켓 계정에 로그인해 주세요",
+  "myAgents.loginRequired.title": "로그인이 필요합니다",
+  "myAgents.status.archived": "보관됨",
+  "myAgents.status.deprecated": "폐기됨",
+  "myAgents.status.published": "등록됨",
+  "myAgents.status.unpublished": "미등록",
+  "myAgents.title": "내가 등록한 도우미",
+  "plugin.addMCPPlugin": "MCP 기능 추가",
+  "plugin.addTooltip": "사용자 정의 기능",
+  "plugin.clearDeprecated": "유효하지 않은 기능 제거",
+  "plugin.empty": "설치된 기능이 없습니다. <1>기능 스토어</1>에서 탐색해 보세요.",
+  "plugin.installStatus.deprecated": "제거됨",
+  "plugin.settings.hint": "설명에 따라 아래 설정을 입력하세요",
+  "plugin.settings.title": "{{id}} 기능 설정",
+  "plugin.settings.tooltip": "기능 설정",
+  "plugin.store": "기능 스토어",
+  "settingAgent.avatar.sizeExceeded": "이미지 크기가 1MB를 초과했습니다. 더 작은 이미지를 선택해 주세요.",
+  "settingAgent.avatar.title": "도우미 아바타",
+  "settingAgent.backgroundColor.title": "아바타 배경색",
+  "settingAgent.description.desc": "도우미에 대한 간단한 설명입니다. 역할 프롬프트로 사용되지 않습니다.",
+  "settingAgent.description.placeholder": "도우미 설명을 입력하세요",
+  "settingAgent.description.title": "도우미 설명",
+  "settingAgent.name.placeholder": "도우미 이름을 입력하세요",
+  "settingAgent.name.title": "이름",
+  "settingAgent.prompt.placeholder": "도우미 설정을 입력하세요. / 키를 눌러 명령 메뉴를 여세요",
+  "settingAgent.prompt.templatePlaceholder": "#### 목표\n이 에이전트의 주요 목적과 목표를 설명하세요.\n\n#### 기술\n- 핵심 기능 나열\n- 전문 지식 분야 포함\n\n#### 작업 흐름\n1. 단계별 절차\n2. 에이전트가 작업을 수행하는 방식\n3. 사용자와의 예상 상호작용\n\n#### 제약 사항\n- 반드시 지켜야 할 중요한 제한 사항\n- 행동 지침",
+  "settingAgent.prompt.title": "도우미 설정",
+  "settingAgent.submit": "도우미 정보 업데이트",
+  "settingAgent.tag.desc": "도우미 태그는 도우미 커뮤니티에 표시됩니다",
+  "settingAgent.tag.placeholder": "태그를 입력하세요",
+  "settingAgent.tag.title": "태그",
+  "settingAgent.title": "도우미 정보",
+  "settingAppearance.animationMode.agile": "민첩",
+  "settingAppearance.animationMode.desc": "앱의 반응 애니메이션 속도를 선택하세요",
+  "settingAppearance.animationMode.disabled": "비활성화",
+  "settingAppearance.animationMode.elegant": "우아함",
+  "settingAppearance.animationMode.title": "반응 애니메이션",
+  "settingAppearance.contextMenuMode.default": "기본값",
+  "settingAppearance.contextMenuMode.desc": "일부 목록 항목에 대해 마우스 오른쪽 클릭 메뉴를 활성화합니다.",
+  "settingAppearance.contextMenuMode.disabled": "사용 안 함",
+  "settingAppearance.contextMenuMode.title": "우클릭 메뉴 방식",
+  "settingAppearance.neutralColor.desc": "다양한 색상 경향의 회색조 사용자 정의",
+  "settingAppearance.neutralColor.title": "중립 색상",
+  "settingAppearance.noAnimation.desc": "앱의 모든 애니메이션 효과를 비활성화합니다",
+  "settingAppearance.noAnimation.title": "애니메이션 없음 모드",
+  "settingAppearance.preview.title": "색상 팔레트",
+  "settingAppearance.primaryColor.desc": "테마 색상 사용자 정의",
+  "settingAppearance.primaryColor.title": "테마 색상",
+  "settingAppearance.title": "응용 프로그램 외관",
+  "settingChat.autoCreateTopicThreshold.desc": "현재 메시지 수가이 값 이상이면 자동으로 주제가 생성됩니다",
+  "settingChat.autoCreateTopicThreshold.title": "메시지 임계값",
+  "settingChat.chatStyleType.title": "채팅 창 스타일",
+  "settingChat.chatStyleType.type.chat": "대화 모드",
+  "settingChat.chatStyleType.type.docs": "문서 모드",
+  "settingChat.compressThreshold.desc": "압축되지 않은 이전 메시지가이 값 이상이면 압축됩니다",
+  "settingChat.compressThreshold.title": "이전 메시지 길이 압축 임계값",
+  "settingChat.enableAutoCreateTopic.desc": "대화 중에 자동으로 주제를 만들지 여부를 설정합니다. 일시적인 주제에서만 작동합니다",
+  "settingChat.enableAutoCreateTopic.title": "자동 주제 생성 활성화",
+  "settingChat.enableCompressHistory.title": "역사 메시지 자동 요약 활성화",
+  "settingChat.enableHistoryCount.alias": "제한 없음",
+  "settingChat.enableHistoryCount.limited": "{{number}}개의 대화 메시지만 포함",
+  "settingChat.enableHistoryCount.setlimited": "사용할 메시지 수 설정",
+  "settingChat.enableHistoryCount.title": "이전 메시지 수 제한",
+  "settingChat.enableHistoryCount.unlimited": "이전 메시지 수 제한 없음",
+  "settingChat.enableStreaming.desc": "실시간으로 응답을 표시하려면 스트리밍 출력을 활성화하세요. 비활성화하면 전체 응답만 표시됩니다.",
+  "settingChat.enableStreaming.title": "스트리밍 출력 활성화",
+  "settingChat.historyCount.desc": "요청당 포함되는 이전 메시지 수",
+  "settingChat.historyCount.title": "이전 메시지 수",
+  "settingChat.inputTemplate.desc": "사용자의 최신 메시지가이 템플릿에 채워집니다",
+  "settingChat.inputTemplate.placeholder": "입력 템플릿 {{text}}은 실시간 입력 정보로 대체됩니다",
+  "settingChat.inputTemplate.title": "사용자 입력 전처리",
+  "settingChat.submit": "채팅 선호도 업데이트",
+  "settingChat.title": "채팅 설정",
+  "settingChatAppearance.fontSize.desc": "메시지의 글꼴 크기",
+  "settingChatAppearance.fontSize.marks.normal": "표준",
+  "settingChatAppearance.fontSize.title": "글꼴 크기",
+  "settingChatAppearance.highlighterTheme.title": "코드 하이라이트 테마",
+  "settingChatAppearance.mermaidTheme.title": "인어 테마",
+  "settingChatAppearance.title": "채팅 외관",
+  "settingChatAppearance.transitionMode.desc": "채팅 메시지가 표시되는 방식을 선택하세요",
+  "settingChatAppearance.transitionMode.options.fadeIn": "서서히 나타남",
+  "settingChatAppearance.transitionMode.options.none.desc": "이는 모델의 응답 출력 방식에 따라 다르므로 직접 테스트해 보세요.",
+  "settingChatAppearance.transitionMode.options.none.value": "없음",
+  "settingChatAppearance.transitionMode.options.smooth": "부드럽게",
+  "settingChatAppearance.transitionMode.title": "전환 애니메이션",
+  "settingCommon.devMode.desc": "활성화하면 개발자 관련 기능과 옵션이 표시됩니다",
+  "settingCommon.devMode.title": "개발자 모드",
+  "settingCommon.lang.autoMode": "시스템 따르기",
+  "settingCommon.lang.title": "언어",
+  "settingCommon.liteMode.desc": "인터페이스를 단순화하고 고급 기능을 숨깁니다",
+  "settingCommon.liteMode.title": "간소화 모드",
+  "settingCommon.responseLanguage.auto": "시스템 설정 따르기",
+  "settingCommon.responseLanguage.desc": "AI 응답에 사용할 언어를 설정합니다",
+  "settingCommon.responseLanguage.placeholder": "응답 언어 선택",
+  "settingCommon.responseLanguage.title": "응답 언어",
+  "settingCommon.themeMode.auto": "자동",
+  "settingCommon.themeMode.dark": "어두운",
+  "settingCommon.themeMode.light": "밝은",
+  "settingCommon.themeMode.title": "테마",
+  "settingCommon.title": "일반 설정",
+  "settingGroup.description.placeholder": "팀 설명을 입력하세요",
+  "settingGroup.description.title": "팀 설명",
+  "settingGroup.name.placeholder": "팀 이름을 입력하세요",
+  "settingGroup.name.title": "팀 이름",
+  "settingGroup.scene.desc": "팀 시나리오 선택",
+  "settingGroup.scene.options.casual": "캐주얼",
+  "settingGroup.scene.options.productive": "생산성",
+  "settingGroup.scene.title": "팀 시나리오",
+  "settingGroup.submit": "팀 업데이트",
+  "settingGroup.systemPrompt.placeholder": "호스트 시스템 프롬프트를 입력하세요",
+  "settingGroup.systemPrompt.title": "호스트 시스템 프롬프트",
+  "settingGroup.title": "그룹 정보",
+  "settingGroupChat.allowDM.desc": "비활성화해도, 당신은 여전히 도우미에게 직접 메시지를 보낼 수 있습니다",
+  "settingGroupChat.allowDM.title": "도우미의 DM 허용",
+  "settingGroupChat.enableSupervisor.desc": "그룹 진행자 기능을 활성화하면 진행자가 팀 대화 흐름을 관리합니다",
+  "settingGroupChat.enableSupervisor.title": "진행자 활성화",
+  "settingGroupChat.maxResponseInRow.desc": "구성원이 연속으로 답변할 수 있는 메시지 수를 선택하세요. 0으로 설정하면 제한이 해제됩니다.",
+  "settingGroupChat.maxResponseInRow.title": "연속 답변 메시지 수",
+  "settingGroupChat.model.desc": "그룹 구성원의 발언에는 영향을 주지 않습니다. 일부 모델은 진행자 모델로 사용할 수 없습니다.",
+  "settingGroupChat.model.title": "호스트 모델",
+  "settingGroupChat.orchestratorTitle": "호스트 설정",
+  "settingGroupChat.responseOrder.desc": "도우미는 채팅에서 설정된 순서에 따라 응답합니다",
+  "settingGroupChat.responseOrder.options.natural": "자연스러운",
+  "settingGroupChat.responseOrder.options.sequential": "순차적인",
+  "settingGroupChat.responseOrder.placeholder": "답변 순서 선택",
+  "settingGroupChat.responseOrder.title": "답변 순서",
+  "settingGroupChat.responseSpeed.desc": "채팅의 전체 진행 속도를 제어합니다",
+  "settingGroupChat.responseSpeed.options.fast": "빠름",
+  "settingGroupChat.responseSpeed.options.medium": "보통",
+  "settingGroupChat.responseSpeed.options.slow": "느림",
+  "settingGroupChat.responseSpeed.placeholder": "답변 속도 선택",
+  "settingGroupChat.responseSpeed.title": "답변 속도",
+  "settingGroupChat.revealDM.desc": "다른 구성원에게 보낸 비공개 메시지 내용을 볼 수 있게 합니다.",
+  "settingGroupChat.revealDM.title": "비공개 메시지 내용 표시",
+  "settingGroupChat.submit": "설정 업데이트",
+  "settingGroupChat.systemPrompt.desc": "그룹 채팅 대화 호스트의 맞춤 시스템 프롬프트입니다. 기본 호스트 동작에 영향을 줄 수 있습니다.",
+  "settingGroupChat.systemPrompt.placeholder": "맞춤 호스트 시스템 프롬프트를 입력하세요...",
+  "settingGroupChat.systemPrompt.title": "호스트 시스템 프롬프트",
+  "settingGroupChat.title": "채팅 설정",
+  "settingGroupMembers.addToGroup": "그룹에 추가",
+  "settingGroupMembers.availableAgents": "사용 가능한 도우미",
+  "settingGroupMembers.createMember": "구성원 생성",
+  "settingGroupMembers.defaultAgent": "맞춤 도우미",
+  "settingGroupMembers.disableHost": "호스트 도우미 비활성화",
+  "settingGroupMembers.edit": "구성원 편집",
+  "settingGroupMembers.empty": "이 팀에는 아직 구성원이 없습니다. + 버튼을 눌러 구성원을 추가하세요.",
+  "settingGroupMembers.enableHost": "호스트 도우미 활성화",
+  "settingGroupMembers.groupHost": "그룹 호스트",
+  "settingGroupMembers.groupMembers": "그룹 구성원",
+  "settingGroupMembers.host.description": "호스트가 그룹에 있을 때 그룹 채팅이 자동으로 운영되며, 창의적인 작업에 적합합니다.",
+  "settingGroupMembers.host.title": "호스트",
+  "settingGroupMembers.noAvailableAgents": "사용 가능한 도우미가 없습니다",
+  "settingGroupMembers.noDescription": "설명 없음",
+  "settingGroupMembers.noMembersInGroup": "그룹에 구성원이 없습니다",
+  "settingGroupMembers.owner": "당신 (소유자)",
+  "settingGroupMembers.remove": "구성원 제거",
+  "settingGroupMembers.removeFromGroup": "그룹에서 제거",
+  "settingGroupMembers.you": "당신",
+  "settingImage.defaultCount.desc": "새 작업을 생성할 때 이미지 생성 패널의 기본 이미지 수를 설정합니다.",
+  "settingImage.defaultCount.label": "기본 이미지 수",
+  "settingImage.defaultCount.title": "AI 그림 설정",
+  "settingModel.enableMaxTokens.title": "단일 응답 제한 활성화",
+  "settingModel.enableReasoningEffort.title": "추론 강도 조정 활성화",
+  "settingModel.frequencyPenalty.desc": "값이 클수록 단어 선택이 더 다양하고 풍부해지며, 값이 작을수록 단어 선택이 더 간단하고 소박해집니다.",
+  "settingModel.frequencyPenalty.title": "어휘 다양성",
+  "settingModel.maxTokens.desc": "단일 상호 작용에 사용되는 최대 토큰 수",
+  "settingModel.maxTokens.title": "단일 응답 제한",
+  "settingModel.model.desc": "{{provider}} 모델",
+  "settingModel.model.title": "모델",
+  "settingModel.params.title": "고급 매개변수",
+  "settingModel.presencePenalty.desc": "값이 클수록 다양한 표현 방식으로 기울어 개념의 반복을 피하고, 값이 작을수록 반복적인 개념이나 서술을 사용하는 경향이 있어 표현이 더 일관됩니다.",
+  "settingModel.presencePenalty.title": "표현의 다양성",
+  "settingModel.reasoningEffort.desc": "값이 클수록 추론 능력이 강해지지만, 응답 시간과 토큰 소모가 증가할 수 있습니다",
+  "settingModel.reasoningEffort.options.high": "높음",
+  "settingModel.reasoningEffort.options.low": "낮음",
+  "settingModel.reasoningEffort.options.medium": "중간",
+  "settingModel.reasoningEffort.title": "추론 강도",
+  "settingModel.submit": "모델 설정 업데이트",
+  "settingModel.temperature.desc": "값이 클수록 답변이 더 창의적이고 상상력이 풍부해지며, 값이 작을수록 답변이 더 엄격해집니다.",
+  "settingModel.temperature.title": "창의성 활성화",
+  "settingModel.temperature.warning": "창의성 활성화 값이 너무 크면 출력이 깨질 수 있습니다.",
+  "settingModel.title": "모델 설정",
+  "settingModel.topP.desc": "얼마나 많은 가능성을 고려할지, 값이 클수록 더 많은 가능성 있는 답변을 수용하고, 값이 작을수록 가장 가능성이 높은 답변을 선택하는 경향이 있습니다. 창의성 활성화와 함께 변경하는 것은 권장하지 않습니다.",
+  "settingModel.topP.title": "사고 개방성",
+  "settingOpening.openingMessage.desc": "대화 시작 시 표시되는 오프닝 메시지로, 도우미의 기능을 소개합니다.",
+  "settingOpening.openingMessage.placeholder": "안녕하세요, 저는 맞춤형 도우미입니다. 지금 바로 저와 대화를 시작하시거나, 도우미 설정으로 가서 제 정보를 완성할 수 있습니다.",
+  "settingOpening.openingMessage.title": "오프닝 메시지",
+  "settingOpening.openingQuestions.desc": "대화 시작 시 표시되는 안내 질문",
+  "settingOpening.openingQuestions.empty": "시작 질문을 추가하여 사용자가 대화를 빠르게 시작할 수 있도록 도와주세요",
+  "settingOpening.openingQuestions.placeholder": "질문을 입력하세요",
+  "settingOpening.openingQuestions.repeat": "질문이 이미 존재합니다",
+  "settingOpening.openingQuestions.title": "오프닝 질문",
+  "settingOpening.title": "오프닝 설정",
+  "settingPlugin.title": "기능 목록",
+  "settingSystem.accessCode.desc": "관리자가 암호화된 액세스를 활성화했습니다",
+  "settingSystem.accessCode.placeholder": "액세스 암호를 입력하세요",
+  "settingSystem.accessCode.title": "액세스 암호",
+  "settingSystem.oauth.info.desc": "로그인됨",
+  "settingSystem.oauth.info.title": "계정 정보",
+  "settingSystem.oauth.signin.action": "로그인",
+  "settingSystem.oauth.signin.desc": "SSO를 사용하여 앱 잠금 해제",
+  "settingSystem.oauth.signin.title": "계정 로그인",
+  "settingSystem.oauth.signout.action": "로그아웃",
+  "settingSystem.oauth.signout.confirm": "로그아웃 하시겠습니까?",
+  "settingSystem.oauth.signout.success": "로그아웃 성공",
+  "settingSystem.title": "시스템 설정",
+  "settingTTS.openai.sttModel": "OpenAI 음성 인식 모델",
+  "settingTTS.openai.title": "OpenAI",
+  "settingTTS.openai.ttsModel": "OpenAI 음성 합성 모델",
+  "settingTTS.showAllLocaleVoice.desc": "현재 언어의 음성만 표시하려면 닫으세요",
+  "settingTTS.showAllLocaleVoice.title": "모든 로캘 음성 표시",
+  "settingTTS.stt": "음성 인식 설정",
+  "settingTTS.sttAutoStop.desc": "비활성화하면 음성 인식이 자동으로 종료되지 않으며 수동으로 종료 버튼을 클릭해야 합니다",
+  "settingTTS.sttAutoStop.title": "음성 인식 자동 중지",
+  "settingTTS.sttLocale.desc": "음성 입력의 언어로 음성 인식 정확도를 향상시킬 수 있습니다",
+  "settingTTS.sttLocale.title": "음성 인식 언어",
+  "settingTTS.sttService.desc": "브라우저는 기본 음성 인식 서비스입니다",
+  "settingTTS.sttService.title": "음성 인식 서비스",
+  "settingTTS.submit": "음성 서비스 업데이트",
+  "settingTTS.title": "음성 서비스",
+  "settingTTS.tts": "음성 합성 설정",
+  "settingTTS.ttsService.desc": "OpenAI 음성 합성 서비스를 사용하는 경우 OpenAI 모델 서비스가 활성화되어 있어야 합니다",
+  "settingTTS.ttsService.title": "음성 합성 서비스",
+  "settingTTS.voice.desc": "현재 도우미에 대한 음성을 선택하십시오. 각 TTS 서비스는 다른 음성을 지원합니다",
+  "settingTTS.voice.preview": "음성 미리듣기",
+  "settingTTS.voice.title": "음성 합성 음성",
+  "startConversation": "대화를 시작하기",
+  "storage.actions.export.button": "내보내기",
+  "storage.actions.export.exportType.agent": "도우미 설정 내보내기",
+  "storage.actions.export.exportType.agentWithMessage": "도우미와 메시지 내보내기",
+  "storage.actions.export.exportType.all": "전체 설정 및 모든 도우미 데이터 내보내기",
+  "storage.actions.export.exportType.allAgent": "모든 도우미 설정 내보내기",
+  "storage.actions.export.exportType.allAgentWithMessage": "모든 도우미와 메시지 내보내기",
+  "storage.actions.export.exportType.globalSetting": "전체 설정 내보내기",
+  "storage.actions.export.title": "데이터 내보내기",
+  "storage.actions.import.button": "가져오기",
+  "storage.actions.import.title": "데이터 가져오기",
+  "storage.actions.title": "고급 작업",
+  "storage.desc": "현재 브라우저의 저장 용량",
+  "storage.embeddings.used": "벡터 저장소",
+  "storage.title": "데이터 저장소",
+  "storage.used": "저장 용량",
+  "submitAgentModal.button": "도우미 제출",
+  "submitAgentModal.identifier": "도우미 식별자(identifier)",
+  "submitAgentModal.metaMiss": "도우미 정보를 입력한 후 제출하십시오. 이름, 설명 및 태그를 포함해야 합니다.",
+  "submitAgentModal.placeholder": "도우미 식별자를 입력하세요. 고유해야 하며, 예: 웹 개발",
+  "submitAgentModal.success": "도우미 제출 완료",
+  "submitAgentModal.tooltips": "도우미를 도우미 커뮤니티에 공유",
+  "sync.device.deviceName.hint": "추가 이름을 입력하여 식별할 수 있게 합니다",
+  "sync.device.deviceName.placeholder": "장치 이름을 입력하세요",
+  "sync.device.deviceName.title": "장치 이름",
+  "sync.device.title": "장치 정보",
+  "sync.device.unknownBrowser": "알 수 없는 브라우저",
+  "sync.device.unknownOS": "알 수 없는 OS",
+  "sync.warning.tip": "커뮤니티 베타 테스트를 거친 후, WebRTC 동기화는 일반 데이터 동기화 요구를 안정적으로 충족시키지 못할 수 있습니다. <1>시그널링 서버를 배포</1>한 후 사용하십시오.",
+  "sync.webrtc.channelName.desc": "WebRTC는 이 이름을 사용하여 동기화 채널을 생성하며 채널 이름이 고유한지 확인하세요",
+  "sync.webrtc.channelName.placeholder": "동기화 채널 이름을 입력하세요",
+  "sync.webrtc.channelName.shuffle": "랜덤 생성",
+  "sync.webrtc.channelName.title": "동기화 채널 이름",
+  "sync.webrtc.channelPassword.desc": "채널의 개인 정보를 보호하기 위해 비밀번호를 추가하고 장치가 채널에 참여하려면 올바른 비밀번호여야 합니다",
+  "sync.webrtc.channelPassword.placeholder": "동기화 채널 비밀번호를 입력하세요",
+  "sync.webrtc.channelPassword.title": "동기화 채널 비밀번호",
+  "sync.webrtc.desc": "실시간, 피어 투 피어 데이터 통신으로 장치가 동시에 온라인 상태여야만 동기화할 수 있습니다",
+  "sync.webrtc.enabled.invalid": "시그널링 서버와 동기화 채널 이름을 입력한 후에 활성화하십시오.",
+  "sync.webrtc.enabled.title": "동기화 활성화",
+  "sync.webrtc.signaling.desc": "WebRTC는 이 주소를 사용하여 동기화합니다.",
+  "sync.webrtc.signaling.placeholder": "시그널링 서버 주소를 입력하세요",
+  "sync.webrtc.signaling.title": "시그널링 서버",
+  "sync.webrtc.title": "WebRTC 동기화",
+  "systemAgent.agentMeta.label": "모델",
+  "systemAgent.agentMeta.modelDesc": "도우미 이름, 설명, 프로필 이미지, 레이블을 생성하는 데 사용되는 모델을 지정합니다.",
+  "systemAgent.agentMeta.title": "도우미 정보 생성 도우미",
+  "systemAgent.customPrompt.addPrompt": "사용자 정의 프롬프트 추가",
+  "systemAgent.customPrompt.desc": "작성 후, 시스템 도우미는 콘텐츠 생성 시 사용자 정의 프롬프트를 사용합니다.",
+  "systemAgent.customPrompt.placeholder": "사용자 정의 프롬프트 입력",
+  "systemAgent.customPrompt.title": "사용자 정의 프롬프트",
+  "systemAgent.generationTopic.label": "모델",
+  "systemAgent.generationTopic.modelDesc": "AI 그림 자동 주제 명명에 사용되는 모델 지정",
+  "systemAgent.generationTopic.title": "AI 그림 주제 명명 도우미",
+  "systemAgent.helpInfo": "새 도우미를 생성할 때 기본 도우미 설정이 기본값으로 사용됩니다.",
+  "systemAgent.historyCompress.label": "모델",
+  "systemAgent.historyCompress.modelDesc": "대화 기록 압축에 사용되는 모델을 지정합니다",
+  "systemAgent.historyCompress.title": "대화 기록 압축 도우미",
+  "systemAgent.queryRewrite.label": "모델",
+  "systemAgent.queryRewrite.modelDesc": "사용자의 질문을 최적화하는 데 사용되는 모델 지정",
+  "systemAgent.queryRewrite.title": "자료실 질문 재작성 도우미",
+  "systemAgent.thread.label": "모델",
+  "systemAgent.thread.modelDesc": "하위 주제 자동 이름 변경에 사용되는 모델 지정",
+  "systemAgent.thread.title": "하위 주제 자동 명명 도우미",
+  "systemAgent.title": "시스템 도우미",
+  "systemAgent.topic.label": "모델",
+  "systemAgent.topic.modelDesc": "주제 자동 재명명에 사용되는 모델 지정",
+  "systemAgent.topic.title": "주제 자동 명명 도우미",
+  "systemAgent.translation.label": "모델",
+  "systemAgent.translation.modelDesc": "번역에 사용되는 모델 지정",
+  "systemAgent.translation.title": "메시지 내용 번역 도우미",
+  "tab.about": "소개",
+  "tab.agent": "기본 도우미",
+  "tab.apikey": "API 키 관리",
+  "tab.chatAppearance": "채팅 화면 설정",
+  "tab.common": "외관",
+  "tab.experiment": "실험",
+  "tab.hotkey": "단축키",
+  "tab.image": "그림 서비스",
+  "tab.llm": "언어 모델",
+  "tab.memory": "기억 설정",
+  "tab.profile": "내 계정",
+  "tab.provider": "AI 서비스 제공자",
+  "tab.proxy": "네트워크 프록시",
+  "tab.security": "보안",
+  "tab.stats": "데이터 통계",
+  "tab.storage": "데이터 저장소",
+  "tab.sync": "클라우드 동기화",
+  "tab.tts": "음성 서비스",
+  "tab.usage": "사용량 통계",
+  "tools.add": "기능 통합",
+  "tools.builtins.groupName": "내장",
+  "tools.disabled": "현재 모델은 함수 호출을 지원하지 않으며 기능을 사용할 수 없습니다",
+  "tools.klavis.addServer": "서버 추가",
+  "tools.klavis.authCompleted": "인증 완료",
+  "tools.klavis.authFailed": "인증 실패",
+  "tools.klavis.authRequired": "인증 필요",
+  "tools.klavis.connected": "연결됨",
+  "tools.klavis.error": "오류",
+  "tools.klavis.groupName": "Klavis 도구",
+  "tools.klavis.manage": "Klavis 관리",
+  "tools.klavis.manageTitle": "Klavis 통합 관리",
+  "tools.klavis.noServers": "연결된 서버 없음",
+  "tools.klavis.notEnabled": "Klavis 서비스가 활성화되지 않음",
+  "tools.klavis.oauthRequired": "새 창에서 OAuth 인증을 완료해 주세요",
+  "tools.klavis.pendingAuth": "인증 대기 중",
+  "tools.klavis.serverCreated": "서버 생성 성공",
+  "tools.klavis.serverCreatedFailed": "서버 생성 실패",
+  "tools.klavis.serverRemoved": "서버 삭제됨",
+  "tools.klavis.servers": "개의 서버",
+  "tools.klavis.tools": "개의 도구",
+  "tools.klavis.verifyAuth": "인증을 완료했습니다",
+  "tools.notInstalled": "설치되지 않음",
+  "tools.notInstalledWarning": "현재 기능이 설치되지 않아 도우미 사용에 영향을 줄 수 있습니다",
+  "tools.plugins.enabled": "활성화됨 {{num}}",
+  "tools.plugins.groupName": "기능",
+  "tools.plugins.noEnabled": "활성화된 기능이 없음",
+  "tools.plugins.store": "기능 스토어",
+  "tools.tabs.all": "전체",
+  "tools.tabs.installed": "활성화됨",
+  "tools.title": "확장 도구"
 }

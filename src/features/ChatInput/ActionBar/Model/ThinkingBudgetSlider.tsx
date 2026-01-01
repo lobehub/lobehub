@@ -1,7 +1,6 @@
-import { InputNumber } from '@lobehub/ui';
+import { Flexbox, InputNumber } from '@lobehub/ui';
 import { Slider } from 'antd';
 import { memo, useMemo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 import useMergeState from 'use-merge-value';
 
 // 定义特殊值映射

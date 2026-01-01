@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "Add the current input as a user message without triggering generation",
-    "title": "Add a User Message"
-  },
-  "clearCurrentMessages": {
-    "desc": "Clear the messages and uploaded files from the current conversation",
-    "title": "Clear Conversation Messages"
-  },
-  "commandPalette": {
-    "desc": "Open the global command palette for quick access to features",
-    "title": "Command Palette"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "Delete the last message and regenerate",
-    "title": "Delete and Regenerate"
-  },
-  "deleteLastMessage": {
-    "desc": "Delete the last message",
-    "title": "Delete Last Message"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "Open the application settings page",
-      "title": "Application Settings"
-    },
-    "showApp": {
-      "desc": "Toggle the main window visibility with a global shortcut",
-      "title": "Show/Hide Main Window"
-    }
-  },
-  "editMessage": {
-    "desc": "Enter edit mode by holding Alt and double-clicking the message",
-    "title": "Edit Message"
-  },
-  "navigateToChat": {
-    "desc": "Switch to the chat tab and start a casual conversation",
-    "title": "Switch to Default Chat"
-  },
-  "openChatSettings": {
-    "desc": "View and modify the settings for the current conversation",
-    "title": "Open Chat Settings"
-  },
-  "openHotkeyHelper": {
-    "desc": "View instructions for all keyboard shortcuts",
-    "title": "Open Hotkey Help"
-  },
-  "regenerateMessage": {
-    "desc": "Regenerate the last message",
-    "title": "Regenerate Message"
-  },
-  "saveTopic": {
-    "desc": "Save the current topic and open a new one",
-    "title": "Start a New Topic"
-  },
-  "search": {
-    "desc": "Activate the main search box on the current page",
-    "title": "Search"
-  },
-  "showApp": {
-    "desc": "Quickly open the main application window",
-    "title": "Show Main Window"
-  },
-  "switchAgent": {
-    "desc": "Switch between pinned assistants in the sidebar by holding Ctrl and pressing numbers 0-9",
-    "title": "Quick Switch Assistant"
-  },
-  "toggleLeftPanel": {
-    "desc": "Show or hide the left assistant panel",
-    "title": "Show/Hide Assistant Panel"
-  },
-  "toggleRightPanel": {
-    "desc": "Show or hide the right topics panel",
-    "title": "Show/Hide Topic Panel"
-  },
-  "toggleZenMode": {
-    "desc": "In focus mode, only display the current conversation and hide other UI elements",
-    "title": "Toggle Focus Mode"
-  }
+  "addUserMessage.desc": "Add the current input as a user message without triggering generation",
+  "addUserMessage.title": "Add a User Message",
+  "clearCurrentMessages.desc": "Clear the messages and uploaded files from the current conversation",
+  "clearCurrentMessages.title": "Clear Conversation Messages",
+  "commandPalette.desc": "Open the global command palette for quick access to features",
+  "commandPalette.title": "Command Palette",
+  "deleteAndRegenerateMessage.desc": "Delete the last message and regenerate",
+  "deleteAndRegenerateMessage.title": "Delete and Regenerate",
+  "deleteLastMessage.desc": "Delete the last message",
+  "deleteLastMessage.title": "Delete Last Message",
+  "desktop.openSettings.desc": "Open the application settings page",
+  "desktop.openSettings.title": "Application Settings",
+  "desktop.showApp.desc": "Toggle the main window visibility with a global shortcut",
+  "desktop.showApp.title": "Show/Hide Main Window",
+  "editMessage.desc": "Enter edit mode by holding Alt and double-clicking the message",
+  "editMessage.title": "Edit Message",
+  "navigateToChat.desc": "Switch to the Chat tab and enter Lobe AI",
+  "navigateToChat.title": "Switch to Default Chat",
+  "openChatSettings.desc": "View and modify the settings for the current conversation",
+  "openChatSettings.title": "Open Chat Settings",
+  "openHotkeyHelper.desc": "View instructions for all keyboard shortcuts",
+  "openHotkeyHelper.title": "Open Hotkey Help",
+  "regenerateMessage.desc": "Regenerate the last message",
+  "regenerateMessage.title": "Regenerate Message",
+  "saveDocument.desc": "Save all changes to the current page immediately",
+  "saveDocument.title": "Save Page",
+  "saveTopic.desc": "Save the current topic and open a new one",
+  "saveTopic.title": "Start a New Topic",
+  "search.desc": "Activate the main search box on the current page",
+  "search.title": "Search",
+  "showApp.desc": "Quickly open the main application window",
+  "showApp.title": "Show Main Window",
+  "switchAgent.desc": "Switch between pinned agents in the sidebar by holding Ctrl and pressing numbers 0-9",
+  "switchAgent.title": "Quick Switch Agent",
+  "toggleLeftPanel.desc": "Show or hide the left panel",
+  "toggleLeftPanel.title": "Toggle Left Panel",
+  "toggleRightPanel.desc": "Show or hide the right panel",
+  "toggleRightPanel.title": "Toggle Right Panel",
+  "toggleZenMode.desc": "In focus mode, only display the current conversation and hide other UI elements",
+  "toggleZenMode.title": "Toggle Focus Mode"
 }

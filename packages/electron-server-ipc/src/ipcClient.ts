@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { SOCK_FILE, SOCK_INFO_FILE, WINDOW_PIPE_FILE } from './const';
-import { ServerDispatchEventKey } from './events';
 
 const log = debug('electron-server-ipc:client');
 
@@ -178,7 +177,7 @@ export class ElectronIpcClient {
   }
 
   // Send request to Electron IPC server
-  public async sendRequest<T>(method: ServerDispatchEventKey, params: any = {}): Promise<T> {
+  public async sendRequest<T>(method: string, params: any = {}): Promise<T> {
     if (!this.socketPath) {
       console.error('Cannot send request: Electron IPC connection not available');
       throw new Error('Electron IPC connection not available');

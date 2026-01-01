@@ -15,5 +15,16 @@ export const setupElectronApi = () => {
     console.error(error);
   }
 
-  contextBridge.exposeInMainWorld('electronAPI', { invoke, onStreamInvoke });
+  contextBridge.exposeInMainWorld('electronAPI', {
+    invoke,
+    onStreamInvoke,
+  });
+
+  const os = require('node:os');
+  const osInfo = os.release();
+  const darwinMajorVersion = osInfo.split('.')[0];
+
+  contextBridge.exposeInMainWorld('lobeEnv', {
+    darwinMajorVersion: Number(darwinMajorVersion),
+  });
 };

@@ -1,0 +1,64 @@
+[
+  {
+    "id": "msg-user-1",
+    "role": "user",
+    "content": "Can you ask the backend developer about the API design?",
+    "parentId": null,
+    "createdAt": 1704067200000,
+    "updatedAt": 1704067200000,
+    "meta": {}
+  },
+  {
+    "id": "msg-supervisor-1",
+    "role": "assistant",
+    "agentId": "supervisor",
+    "content": "I'll ask the backend developer to explain the API design.",
+    "parentId": "msg-user-1",
+    "tools": [
+      {
+        "id": "call_speak_1",
+        "type": "function",
+        "function": {
+          "name": "speak",
+          "arguments": "{\"agentId\": \"agent-backend\", \"instruction\": \"Please explain the API design.\"}"
+        },
+        "identifier": "lobe-group-management",
+        "apiName": "speak"
+      }
+    ],
+    "createdAt": 1704067201000,
+    "updatedAt": 1704067201000,
+    "meta": {
+      "avatar": "supervisor",
+      "title": "Supervisor"
+    },
+    "metadata": {
+      "isSupervisor": true
+    }
+  },
+  {
+    "id": "msg-speak-tool-1",
+    "role": "tool",
+    "content": "Triggered agent \"agent-backend\" to respond.",
+    "parentId": "msg-supervisor-1",
+    "tool_call_id": "call_speak_1",
+    "createdAt": 1704067202000,
+    "updatedAt": 1704067202000,
+    "meta": {}
+  },
+  {
+    "id": "msg-agent-backend-1",
+    "role": "assistant",
+    "agentId": "agent-backend",
+    "content": "The API follows RESTful design principles. We have endpoints for users, products, and orders. Each endpoint supports CRUD operations with proper HTTP methods.",
+    "parentId": "msg-speak-tool-1",
+    "model": "gpt-4",
+    "provider": "openai",
+    "createdAt": 1704067205000,
+    "updatedAt": 1704067205000,
+    "meta": {
+      "avatar": "backend-dev",
+      "title": "Backend Developer"
+    }
+  }
+]

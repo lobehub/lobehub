@@ -1,57 +1,12 @@
-import { ToolNameResolver } from '@lobechat/context-engine';
-import { pluginPrompts } from '@lobechat/prompts';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type RenderDisplayControl } from '@lobechat/types';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
-import { MetaData } from '@/types/meta';
-import { LobeToolMeta } from '@/types/tool/tool';
-import { globalAgentContextManager } from '@/utils/client/GlobalAgentContextManager';
-import { hydrationPrompt } from '@/utils/promptTemplate';
+import { type MetaData } from '@/types/meta';
+import { type LobeToolMeta } from '@/types/tool/tool';
 
-import { pluginHelpers } from '../helpers';
-import { ToolStoreState } from '../initialState';
+import { type ToolStoreState } from '../initialState';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
 import { pluginSelectors } from '../slices/plugin/selectors';
-
-const toolNameResolver = new ToolNameResolver();
-
-const enabledSystemRoles =
-  (tools: string[] = []) =>
-  (s: ToolStoreState) => {
-    const toolsSystemRole = pluginSelectors
-      .installedPluginManifestList(s)
-      .concat(s.builtinTools.map((b) => b.manifest as LobeChatPluginManifest))
-      // 如果存在 enabledPlugins，那么只启用 enabledPlugins 中的插件
-      .filter((m) => m && tools.includes(m.identifier))
-      .map((manifest) => {
-        const meta = manifest.meta || {};
-
-        const title = pluginHelpers.getPluginTitle(meta) || manifest.identifier;
-        let systemRole = manifest.systemRole || pluginHelpers.getPluginDesc(meta);
-
-        // Use the global context manager to fill the template
-        if (systemRole) {
-          const context = globalAgentContextManager.getContext();
-
-          systemRole = hydrationPrompt(systemRole, context);
-        }
-
-        return {
-          apis: manifest.api.map((m) => ({
-            desc: m.description,
-            name: toolNameResolver.generate(manifest.identifier, m.name, manifest.type),
-          })),
-          identifier: manifest.identifier,
-          name: title,
-          systemRole,
-        };
-      });
-
-    if (toolsSystemRole.length > 0) {
-      return pluginPrompts({ tools: toolsSystemRole });
-    }
-
-    return '';
-  };
 
 const metaList = (s: ToolStoreState): LobeToolMeta[] => {
   const pluginList = pluginSelectors.installedPluginMetaList(s) as LobeToolMeta[];
@@ -107,11 +62,29 @@ const isToolHasUI = (id: string) => (s: ToolStoreState) => {
   return !!manifest.ui;
 };
 
+/**
+ * Get the renderDisplayControl configuration for a specific tool API
+ * Only works for builtin tools, plugins don't support this feature yet
+ * @param identifier - Tool identifier
+ * @param apiName - API name
+ * @returns RenderDisplayControl value, defaults to 'collapsed'
+ */
+const getRenderDisplayControl =
+  (identifier: string, apiName: string) =>
+  (s: ToolStoreState): RenderDisplayControl => {
+    // Only builtin tools support renderDisplayControl
+    const builtinTool = s.builtinTools.find((t) => t.identifier === identifier);
+    if (!builtinTool) return 'collapsed';
+
+    const api = builtinTool.manifest.api.find((a) => a.name === apiName);
+    return api?.renderDisplayControl ?? 'collapsed';
+  };
+
 export const toolSelectors = {
-  enabledSystemRoles,
   getManifestById,
   getManifestLoadingStatus,
   getMetaById,
+  getRenderDisplayControl,
   isToolHasUI,
   metaList,
 };

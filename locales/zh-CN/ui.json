@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "头像",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "超额",
+    "tokenTag.remained": "剩余",
+    "tokenTag.used": "已用"
+  },
+  "common": {
+    "common.cancel": "取消",
+    "common.confirm": "确认",
+    "common.delete": "删除",
+    "common.edit": "编辑"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "添加属性",
+    "editableMessage.delete": "删除",
+    "editableMessage.input": "输入",
+    "editableMessage.inputPlaceholder": "请输入示例输入内容",
+    "editableMessage.output": "输出",
+    "editableMessage.outputPlaceholder": "请输入示例输出内容",
+    "editableMessage.system": "系统"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "删除",
+    "emojiPicker.draggerDesc": "点击或拖动图片到此区域上传",
+    "emojiPicker.emoji": "表情",
+    "emojiPicker.fileTypeError": "只能上传图片文件！",
+    "emojiPicker.upload": "上传",
+    "emojiPicker.uploadBtn": "裁剪并上传"
+  },
+  "form": {
+    "form.reset": "重置",
+    "form.submit": "提交",
+    "form.unsavedChanges": "未保存的更改",
+    "form.unsavedWarning": "您有未保存的更改。确定要离开吗？"
+  },
+  "hotkey": {
+    "hotkey.conflict": "此快捷键与现有快捷键冲突。",
+    "hotkey.invalidCombination": "快捷键必须包含修饰键（Ctrl、Alt、Shift）且只能有一个普通键。",
+    "hotkey.placeholder": "按键录制快捷键",
+    "hotkey.reset": "重置为默认"
+  },
+  "messageModal": {
+    "messageModal.cancel": "取消",
+    "messageModal.confirm": "确认",
+    "messageModal.edit": "编辑"
+  },
+  "sideNav": {
+    "sideNav.collapse": "折叠侧边栏",
+    "sideNav.demoActiveLabel": "启用",
+    "sideNav.demoFeatureAutoCollapseDesc": "拖动到阈值以下智能折叠",
+    "sideNav.demoFeatureAutoCollapseTitle": "自动折叠",
+    "sideNav.demoFeaturePerformanceDesc": "无动画开销，性能更佳",
+    "sideNav.demoFeaturePerformanceTitle": "性能优化",
+    "sideNav.demoFeatureResizeDesc": "拖动调整面板宽度",
+    "sideNav.demoFeatureResizeTitle": "弹性调整",
+    "sideNav.demoFeatureSmartHandleDesc": "悬停显示切换按钮",
+    "sideNav.demoFeatureSmartHandleTitle": "智能手柄",
+    "sideNav.demoFeaturesTitle": "功能特色",
+    "sideNav.demoHint": "尝试拖动面板边缘并使用切换按钮 ->",
+    "sideNav.demoSubtitle": "可拖动调整的工作区风格侧边面板",
+    "sideNav.demoTitle": "DraggableSideNav 示范",
+    "sideNav.expand": "展开侧边栏"
+  }
+}

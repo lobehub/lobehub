@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '@/utils/logger';
 
-import { ControllerModule, ipcClientEvent } from './index';
+import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:ShellCommandCtr');
 
@@ -24,10 +24,11 @@ interface ShellProcess {
 }
 
 export default class ShellCommandCtr extends ControllerModule {
+  static override readonly groupName = 'shellCommand';
   // Shell process management
   private shellProcesses = new Map<string, ShellProcess>();
 
-  @ipcClientEvent('runCommand')
+  @IpcMethod()
   async handleRunCommand({
     command,
     description,
@@ -153,7 +154,7 @@ export default class ShellCommandCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('getCommandOutput')
+  @IpcMethod()
   async handleGetCommandOutput({
     filter,
     shell_id,
@@ -212,7 +213,7 @@ export default class ShellCommandCtr extends ControllerModule {
     };
   }
 
-  @ipcClientEvent('killCommand')
+  @IpcMethod()
   async handleKillCommand({ shell_id }: KillCommandParams): Promise<KillCommandResult> {
     const logPrefix = `[killCommand: ${shell_id}]`;
     logger.debug(`${logPrefix} Attempting to kill shell`);

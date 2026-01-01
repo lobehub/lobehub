@@ -1,15 +1,15 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { PluginItem, PluginListResponse } from '@lobehub/market-sdk';
-import { TRPCClientError } from '@trpc/client';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type PluginItem, type PluginListResponse } from '@lobehub/market-sdk';
+import { type TRPCClientError } from '@trpc/client';
 import debug from 'debug';
+import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import { uniqBy } from 'lodash-es';
 import { gt, valid } from 'semver';
-import useSWR, { SWRResponse } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import useSWR, { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { MCPErrorData } from '@/libs/mcp/types';
+import { type MCPErrorData } from '@/libs/mcp/types';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
@@ -17,18 +17,18 @@ import { globalHelpers } from '@/store/global/helpers';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
 import { McpConnectionType } from '@/types/discover';
 import {
-  CheckMcpInstallResult,
-  MCPErrorInfo,
-  MCPInstallProgress,
+  type CheckMcpInstallResult,
+  type MCPErrorInfo,
+  type MCPInstallProgress,
   MCPInstallStep,
-  MCPPluginListParams,
-  McpConnectionParams,
+  type MCPPluginListParams,
+  type McpConnectionParams,
 } from '@/types/plugins';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { ToolStore } from '../../store';
-import { MCPStoreState } from './initialState';
+import { type ToolStore } from '../../store';
+import { type MCPStoreState } from './initialState';
 
 const log = debug('lobe-mcp:store:action');
 
@@ -71,7 +71,7 @@ const toNonEmptyStringRecord = (input?: Record<string, any>) => {
  */
 const buildCloudMcpManifest = (params: {
   data: any;
-  plugin: { description?: string, icon?: string; identifier: string; };
+  plugin: { description?: string; icon?: string; identifier: string };
 }): LobeChatPluginManifest => {
   const { data, plugin } = params;
 

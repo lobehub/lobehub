@@ -886,7 +886,6 @@ describe('DataImporter', () => {
                 },
                 chatConfig: {
                   autoCreateTopicThreshold: 2,
-                  displayMode: 'chat',
                   enableAutoCreateTopic: true,
                   historyCount: 1,
                 },

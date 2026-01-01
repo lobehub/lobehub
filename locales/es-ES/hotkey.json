@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "Añadir el contenido actual como un mensaje de usuario, pero sin activar la generación",
-    "title": "Añadir un mensaje de usuario"
-  },
-  "clearCurrentMessages": {
-    "desc": "Eliminar los mensajes y archivos subidos de la conversación actual",
-    "title": "Eliminar mensajes de la conversación"
-  },
-  "commandPalette": {
-    "desc": "Abre el panel de comandos global para acceder rápidamente a las funciones",
-    "title": "Panel de Comandos"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "Eliminar el último mensaje y volver a generarlo",
-    "title": "Eliminar y regenerar"
-  },
-  "deleteLastMessage": {
-    "desc": "Eliminar el último mensaje",
-    "title": "Eliminar el último mensaje"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "Abrir la página de configuración de la aplicación",
-      "title": "Configuración de la aplicación"
-    },
-    "showApp": {
-      "desc": "Mostrar u ocultar la ventana principal mediante un atajo global",
-      "title": "Mostrar/Ocultar ventana principal"
-    }
-  },
-  "editMessage": {
-    "desc": "Entrar en modo de edición manteniendo presionada la tecla Alt y haciendo doble clic en el mensaje",
-    "title": "Editar mensaje"
-  },
-  "navigateToChat": {
-    "desc": "Cambiar a la pestaña de conversación y entrar en charla casual",
-    "title": "Cambiar a la conversación predeterminada"
-  },
-  "openChatSettings": {
-    "desc": "Ver y modificar la configuración de la conversación actual",
-    "title": "Abrir configuración de la conversación"
-  },
-  "openHotkeyHelper": {
-    "desc": "Ver las instrucciones de uso de todos los atajos de teclado",
-    "title": "Abrir ayuda de atajos de teclado"
-  },
-  "regenerateMessage": {
-    "desc": "Regenerar el último mensaje",
-    "title": "Regenerar mensaje"
-  },
-  "saveTopic": {
-    "desc": "Guardar el tema actual y abrir un nuevo tema",
-    "title": "Iniciar un nuevo tema"
-  },
-  "search": {
-    "desc": "Invocar el cuadro de búsqueda principal de la página actual",
-    "title": "Buscar"
-  },
-  "showApp": {
-    "desc": "Abrir rápidamente la ventana principal de la aplicación",
-    "title": "Mostrar ventana principal"
-  },
-  "switchAgent": {
-    "desc": "Cambiar el asistente fijado en la barra lateral manteniendo presionada la tecla Ctrl y pulsando un número del 0 al 9",
-    "title": "Cambio rápido de asistente"
-  },
-  "toggleLeftPanel": {
-    "desc": "Mostrar u ocultar el panel de asistente a la izquierda",
-    "title": "Mostrar/Ocultar panel de asistente"
-  },
-  "toggleRightPanel": {
-    "desc": "Mostrar u ocultar el panel de temas a la derecha",
-    "title": "Mostrar/Ocultar panel de temas"
-  },
-  "toggleZenMode": {
-    "desc": "En modo de enfoque, solo se muestra la conversación actual, ocultando otras interfaces",
-    "title": "Alternar modo de enfoque"
-  }
+  "addUserMessage.desc": "Agregar la entrada actual como un mensaje de usuario sin activar la generación",
+  "addUserMessage.title": "Agregar un mensaje de usuario",
+  "clearCurrentMessages.desc": "Borrar los mensajes y archivos subidos de la conversación actual",
+  "clearCurrentMessages.title": "Borrar mensajes de la conversación",
+  "commandPalette.desc": "Abrir el panel de comandos global para acceder rápidamente a las funciones",
+  "commandPalette.title": "Panel de comandos",
+  "deleteAndRegenerateMessage.desc": "Eliminar el último mensaje y regenerarlo",
+  "deleteAndRegenerateMessage.title": "Eliminar y regenerar",
+  "deleteLastMessage.desc": "Eliminar el último mensaje",
+  "deleteLastMessage.title": "Eliminar último mensaje",
+  "desktop.openSettings.desc": "Abrir la página de configuración de la aplicación",
+  "desktop.openSettings.title": "Configuración de la aplicación",
+  "desktop.showApp.desc": "Alternar la visibilidad de la ventana principal con un atajo global",
+  "desktop.showApp.title": "Mostrar/Ocultar ventana principal",
+  "editMessage.desc": "Entrar en modo de edición manteniendo Alt y haciendo doble clic en el mensaje",
+  "editMessage.title": "Editar mensaje",
+  "navigateToChat.desc": "Cambiar a la pestaña de Chat e ingresar a Lobe AI",
+  "navigateToChat.title": "Cambiar al chat predeterminado",
+  "openChatSettings.desc": "Ver y modificar la configuración de la conversación actual",
+  "openChatSettings.title": "Abrir configuración del chat",
+  "openHotkeyHelper.desc": "Ver instrucciones para todos los atajos de teclado",
+  "openHotkeyHelper.title": "Ayuda de atajos de teclado",
+  "regenerateMessage.desc": "Regenerar el último mensaje",
+  "regenerateMessage.title": "Regenerar mensaje",
+  "saveDocument.desc": "Guardar inmediatamente todos los cambios en la página actual",
+  "saveDocument.title": "Guardar página",
+  "saveTopic.desc": "Guardar el tema actual y abrir uno nuevo",
+  "saveTopic.title": "Iniciar un nuevo tema",
+  "search.desc": "Activar el cuadro de búsqueda principal en la página actual",
+  "search.title": "Buscar",
+  "showApp.desc": "Abrir rápidamente la ventana principal de la aplicación",
+  "showApp.title": "Mostrar ventana principal",
+  "switchAgent.desc": "Cambiar entre agentes fijados en la barra lateral manteniendo Ctrl y presionando los números del 0 al 9",
+  "switchAgent.title": "Cambio rápido de agente",
+  "toggleLeftPanel.desc": "Mostrar u ocultar el panel izquierdo",
+  "toggleLeftPanel.title": "Alternar panel izquierdo",
+  "toggleRightPanel.desc": "Mostrar u ocultar el panel derecho",
+  "toggleRightPanel.title": "Alternar panel derecho",
+  "toggleZenMode.desc": "En modo de enfoque, mostrar solo la conversación actual y ocultar otros elementos de la interfaz",
+  "toggleZenMode.title": "Alternar modo de enfoque"
 }

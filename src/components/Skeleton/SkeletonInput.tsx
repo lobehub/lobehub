@@ -1,5 +1,5 @@
 'use client';
 
-import { Skeleton } from 'antd';
+import { Skeleton } from '@lobehub/ui';
 
-export const SkeletonInput = () => <Skeleton.Input active block />;
+export const SkeletonInput = () => <Skeleton.Button active block />;

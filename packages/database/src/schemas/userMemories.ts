@@ -30,6 +30,7 @@ export const userMemories = pgTable(
 
     accessedCount: bigint('accessed_count', { mode: 'number' }).default(0),
     lastAccessedAt: timestamptz('last_accessed_at').notNull(),
+    capturedAt: timestamptz('captured_at').notNull().defaultNow(),
 
     ...timestamps,
   },
@@ -42,6 +43,7 @@ export const userMemories = pgTable(
       'hnsw',
       table.detailsVector1024.op('vector_cosine_ops'),
     ),
+    index('user_memories_user_id_index').on(table.userId),
   ],
 );
 
@@ -53,16 +55,15 @@ export const userMemoriesContexts = pgTable(
       .primaryKey(),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-    userMemoryIds: jsonb('user_memory_ids'),
+    userMemoryIds: jsonb('user_memory_ids').$type<string[]>(),
 
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     tags: text('tags').array(),
 
-    associatedObjects: jsonb('associated_objects'),
-    associatedSubjects: jsonb('associated_subjects'),
+    associatedObjects: jsonb('associated_objects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
+    associatedSubjects: jsonb('associated_subjects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
 
     title: text('title'),
-    titleVector: vector('title_vector', { dimensions: 1024 }),
     description: text('description'),
     descriptionVector: vector('description_vector', { dimensions: 1024 }),
 
@@ -72,18 +73,17 @@ export const userMemoriesContexts = pgTable(
     scoreImpact: numeric('score_impact', { mode: 'number' }).default(0),
     scoreUrgency: numeric('score_urgency', { mode: 'number' }).default(0),
 
+    capturedAt: timestamptz('captured_at').notNull().defaultNow(),
+
     ...timestamps,
   },
   (table) => [
-    index('user_memories_contexts_title_vector_index').using(
-      'hnsw',
-      table.titleVector.op('vector_cosine_ops'),
-    ),
     index('user_memories_contexts_description_vector_index').using(
       'hnsw',
       table.descriptionVector.op('vector_cosine_ops'),
     ),
     index('user_memories_contexts_type_index').on(table.type),
+    index('user_memories_contexts_user_id_index').on(table.userId),
   ],
 );
 
@@ -110,6 +110,8 @@ export const userMemoriesPreferences = pgTable(
 
     scorePriority: numeric('score_priority', { mode: 'number' }).default(0),
 
+    capturedAt: timestamptz('captured_at').notNull().defaultNow(),
+
     ...timestamps,
   },
   (table) => [
@@ -117,6 +119,8 @@ export const userMemoriesPreferences = pgTable(
       'hnsw',
       table.conclusionDirectivesVector.op('vector_cosine_ops'),
     ),
+    index('user_memories_preferences_user_id_index').on(table.userId),
+    index('user_memories_preferences_user_memory_id_index').on(table.userMemoryId),
   ],
 );
 
@@ -142,6 +146,8 @@ export const userMemoriesIdentities = pgTable(
     relationship: varchar255('relationship'),
     role: text('role'),
 
+    capturedAt: timestamptz('captured_at').notNull().defaultNow(),
+
     ...timestamps,
   },
   (table) => [
@@ -150,6 +156,8 @@ export const userMemoriesIdentities = pgTable(
       table.descriptionVector.op('vector_cosine_ops'),
     ),
     index('user_memories_identities_type_index').on(table.type),
+    index('user_memories_identities_user_id_index').on(table.userId),
+    index('user_memories_identities_user_memory_id_index').on(table.userMemoryId),
   ],
 );
 
@@ -180,6 +188,8 @@ export const userMemoriesExperiences = pgTable(
 
     scoreConfidence: real('score_confidence').default(0),
 
+    capturedAt: timestamptz('captured_at').notNull().defaultNow(),
+
     ...timestamps,
   },
   (table) => [
@@ -196,6 +206,8 @@ export const userMemoriesExperiences = pgTable(
       table.keyLearningVector.op('vector_cosine_ops'),
     ),
     index('user_memories_experiences_type_index').on(table.type),
+    index('user_memories_experiences_user_id_index').on(table.userId),
+    index('user_memories_experiences_user_memory_id_index').on(table.userMemoryId),
   ],
 );
 

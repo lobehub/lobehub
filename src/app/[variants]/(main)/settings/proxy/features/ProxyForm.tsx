@@ -1,12 +1,11 @@
 'use client';
 
-import { NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Alert, Block, Text } from '@lobehub/ui';
-import { App, Button, Divider, Form, Input, Radio, Skeleton, Space, Switch } from 'antd';
+import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
+import { Alert, Block, Flexbox, Skeleton, Text , Button } from '@lobehub/ui';
+import { App, Divider, Form, Input, Radio, Space, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { desktopSettingsService } from '@/services/electron/settings';
 import { useElectronStore } from '@/store/electron';
@@ -317,7 +316,7 @@ const ProxyForm = () => {
                 {!testResult ? null : testResult.success ? (
                   <Alert
                     closable
-                    message={
+                    title={
                       <Flexbox align="center" gap={8} horizontal>
                         {t('proxy.testSuccessWithTime', { time: testResult.responseTime })}
                       </Flexbox>
@@ -327,7 +326,7 @@ const ProxyForm = () => {
                 ) : (
                   <Alert
                     closable
-                    message={
+                    title={
                       <Flexbox align="center" gap={8} horizontal>
                         {t('proxy.testFailed')}: {testResult.message}
                       </Flexbox>

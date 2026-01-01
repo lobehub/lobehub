@@ -1,6 +1,4 @@
-import { css } from 'antd-style';
-import type { FullToken } from 'antd-style/lib/types';
-import { rgba } from 'polished';
+import { createStaticStyles, css, keyframes } from 'antd-style';
 
 export const dotLoading = css`
   &::after {
@@ -29,27 +27,29 @@ export const dotLoading = css`
   }
 `;
 
-export const shinyTextStylish = (token: FullToken) => css`
-  color: ${rgba(token.colorText, 0.45)};
+const shine = keyframes`
+  0% {
+    background-position: 100%;
+  }
 
-  background: linear-gradient(
-    120deg,
-    ${rgba(token.colorTextBase, 0)} 40%,
-    ${token.colorTextSecondary} 50%,
-    ${rgba(token.colorTextBase, 0)} 60%
-  );
-  background-clip: text;
-  background-size: 200% 100%;
-
-  animation: shine 1.5s linear infinite;
-
-  @keyframes shine {
-    0% {
-      background-position: 100%;
-    }
-
-    100% {
-      background-position: -100%;
-    }
+  100% {
+    background-position: -100%;
   }
 `;
+
+export const shinyTextStyles = createStaticStyles(({ css, cssVar }) => ({
+  shinyText: css`
+    color: color-mix(in srgb, ${cssVar.colorText} 45%, transparent);
+
+    background: linear-gradient(
+      120deg,
+      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 40%,
+      ${cssVar.colorTextSecondary} 50%,
+      color-mix(in srgb, ${cssVar.colorTextBase} 0%, transparent) 60%
+    );
+    background-clip: text;
+    background-size: 200% 100%;
+
+    animation: ${shine} 1.5s linear infinite;
+  `,
+}));

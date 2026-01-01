@@ -1,9 +1,8 @@
-import { ActionIcon, Hotkey } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Hotkey } from '@lobehub/ui';
 import { Popconfirm } from 'antd';
 import { LucideGalleryVerticalEnd, LucideMessageSquarePlus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useActionSWR } from '@/libs/swr';

@@ -1,4 +1,4 @@
-import { SemanticSearchChunk } from '@/types/chunk';
+import { type SemanticSearchChunk } from '@/types/chunk';
 
 export interface FileChunkState {
   chunkDetailId: string | null;

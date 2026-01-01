@@ -20,7 +20,6 @@ vi.mock('@/services/session', () => ({
     removeSession: vi.fn(),
     getAllSessions: vi.fn(),
     updateSession: vi.fn(),
-    updateSessionMeta: vi.fn(),
     updateSessionGroupId: vi.fn(),
     searchSessions: vi.fn(),
     updateSessionPinned: vi.fn(),
@@ -78,13 +77,13 @@ describe('SessionAction', () => {
 
       await act(async () => {
         createdSessionId = await result.current.createSession({
-          config: { chatConfig: { displayMode: 'docs' } },
+          config: { chatConfig: { enableHistoryCount: true } },
         });
       });
 
       const call = vi.mocked(sessionService.createSession).mock.calls[0];
       expect(call[0]).toEqual(LobeSessionType.Agent);
-      expect(call[1]).toMatchObject({ config: { chatConfig: { displayMode: 'docs' } } });
+      expect(call[1]).toMatchObject({ config: { chatConfig: { enableHistoryCount: true } } });
 
       expect(createdSessionId).toBe(newSessionId);
     });
@@ -98,14 +97,14 @@ describe('SessionAction', () => {
 
       await act(async () => {
         createdSessionId = await result.current.createSession(
-          { config: { chatConfig: { displayMode: 'docs' } } },
+          { config: { chatConfig: { enableHistoryCount: true } } },
           false,
         );
       });
 
       const call = vi.mocked(sessionService.createSession).mock.calls[0];
       expect(call[0]).toEqual(LobeSessionType.Agent);
-      expect(call[1]).toMatchObject({ config: { chatConfig: { displayMode: 'docs' } } });
+      expect(call[1]).toMatchObject({ config: { chatConfig: { enableHistoryCount: true } } });
 
       expect(createdSessionId).toBe(newSessionId);
     });
@@ -124,7 +123,7 @@ describe('SessionAction', () => {
       });
 
       expect(message.loading).toHaveBeenCalled();
-      expect(sessionService.cloneSession).toHaveBeenCalledWith(sessionId, undefined);
+      expect(sessionService.cloneSession).toHaveBeenCalledWith(sessionId, expect.any(String));
     });
   });
 
@@ -151,7 +150,7 @@ describe('SessionAction', () => {
         result.current.switchSession(sessionId);
       });
 
-      expect(result.current.activeId).toBe(sessionId);
+      expect(result.current.activeAgentId).toBe(sessionId);
     });
   });
 
@@ -246,47 +245,6 @@ describe('SessionAction', () => {
 
       expect(chatGroupService.updateGroup).toHaveBeenCalledWith(sessionId, { groupId: null });
       expect(mockRefresh).toHaveBeenCalled();
-    });
-  });
-
-  describe('updateAgentMeta', () => {
-    it('should not update meta if there is no current session', async () => {
-      const { result } = renderHook(() => useSessionStore());
-      const meta = { title: 'Test Agent' };
-      const updateSessionMock = vi.spyOn(sessionService, 'updateSession');
-      const refreshSessionsMock = vi.spyOn(result.current, 'refreshSessions');
-
-      // 模拟没有当前会话
-      vi.spyOn(sessionSelectors, 'currentSession').mockReturnValue(null as any);
-
-      await act(async () => {
-        await result.current.updateSessionMeta(meta as any);
-      });
-
-      expect(updateSessionMock).not.toHaveBeenCalled();
-      expect(refreshSessionsMock).not.toHaveBeenCalled();
-      updateSessionMock.mockRestore();
-      refreshSessionsMock.mockRestore();
-    });
-
-    it('should update session meta and refresh sessions', async () => {
-      const { result } = renderHook(() => useSessionStore());
-      const meta = { title: 'Test Agent' };
-      const updateSessionMock = vi.spyOn(sessionService, 'updateSessionMeta');
-      const refreshSessionsMock = vi.spyOn(result.current, 'refreshSessions');
-
-      // 模拟有当前会话
-      vi.spyOn(sessionSelectors, 'currentSession').mockReturnValue({ id: 'session-id' } as any);
-      vi.spyOn(result.current, 'activeId', 'get').mockReturnValue('session-id');
-
-      await act(async () => {
-        await result.current.updateSessionMeta(meta);
-      });
-
-      expect(updateSessionMock).toHaveBeenCalledWith('session-id', meta, expect.any(AbortSignal));
-      expect(refreshSessionsMock).toHaveBeenCalled();
-      updateSessionMock.mockRestore();
-      refreshSessionsMock.mockRestore();
     });
   });
 });

@@ -1,5 +1,5 @@
-import { AIModelsState, initialAIModelState } from './slices/aiModel';
-import { AIProviderState, initialAIProviderState } from './slices/aiProvider';
+import { type AIModelsState, initialAIModelState } from './slices/aiModel';
+import { type AIProviderState, initialAIProviderState } from './slices/aiProvider';
 
 export interface AIProviderStoreState extends AIProviderState, AIModelsState {
   /* empty */

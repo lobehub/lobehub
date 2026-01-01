@@ -1,8 +1,8 @@
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { ragService } from '@/services/rag';
 
-import { FileStore } from '../../store';
+import { type FileStore } from '../../store';
 
 export interface FileChunkAction {
   closeChunkDrawer: () => void;

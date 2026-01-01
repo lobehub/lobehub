@@ -4,6 +4,16 @@ import type { App } from '@/core/App';
 
 import MenuController from '../MenuCtr';
 
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+}));
+
 // 模拟 App 及其依赖项
 const mockRefreshMenus = vi.fn();
 const mockShowContextMenu = vi.fn();

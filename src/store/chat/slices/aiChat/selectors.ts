@@ -13,7 +13,7 @@ const isIntentUnderstanding = (id: string) => (s: ChatStoreState) =>
   isMessageInSearchWorkflow(id)(s);
 
 const isCurrentSendMessageLoading = (s: ChatStoreState) => {
-  const contextKey = messageMapKey(s.activeId, s.activeTopicId);
+  const contextKey = messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
   const operationIds = s.operationsByContext[contextKey] || [];
 
   // Check if there's any running sendMessage operation
@@ -24,7 +24,7 @@ const isCurrentSendMessageLoading = (s: ChatStoreState) => {
 };
 
 const isCurrentSendMessageError = (s: ChatStoreState) => {
-  const contextKey = messageMapKey(s.activeId, s.activeTopicId);
+  const contextKey = messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
   const operationIds = s.operationsByContext[contextKey] || [];
 
   // Find the latest sendMessage operation with error

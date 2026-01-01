@@ -4,7 +4,7 @@ import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useModelSupportVision } from '@/hooks/useModelSupportVision';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/slices/chat';
+import { agentSelectors } from '@/store/agent/selectors';
 
 import { getContainer, useDragUpload } from './useDragUpload';
 

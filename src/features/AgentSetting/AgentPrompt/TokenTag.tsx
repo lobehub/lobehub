@@ -3,7 +3,7 @@ import React, { memo } from 'react';
 
 import { useTokenCount } from '@/hooks/useTokenCount';
 
-const Tokens = memo<{ style?: React.CSSProperties, value: string; }>(({ value, style }) => {
+const Tokens = memo<{ style?: React.CSSProperties; value: string }>(({ value, style }) => {
   const systemTokenCount = useTokenCount(value);
   if (!value || !systemTokenCount) return;
 

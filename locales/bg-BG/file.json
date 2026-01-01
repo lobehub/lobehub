@@ -1,181 +1,134 @@
 {
-  "addFolder": "Създаване на папка",
-  "addKnowledge": "Добавяне на знание",
-  "addPage": "Създаване на документ",
-  "desc": "Управлявайте знанията си за работа, учене и живот.",
-  "detail": {
-    "basic": {
-      "createdAt": "Дата на създаване",
-      "filename": "Име на файла",
-      "size": "Размер на файла",
-      "title": "Основна информация",
-      "type": "Формат",
-      "updatedAt": "Дата на актуализация"
-    },
-    "data": {
-      "chunkCount": "Брой части",
-      "embedding": {
-        "default": "Все още не е векторизирано",
-        "error": "Неуспех",
-        "pending": "В очакване на стартиране",
-        "processing": "В процес на обработка",
-        "success": "Завършено"
-      },
-      "embeddingStatus": "Векторизация"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "Добавяне на икона",
-    "autoSaveMessage": "Документът се запазва автоматично, не е необходимо ръчно запазване",
-    "chooseIcon": "Избор на икона",
-    "deleteConfirm": {
-      "content": "Документът ще бъде изтрит и няма да може да бъде възстановен. Моля, бъдете внимателни.",
-      "title": "Изтриване на документ"
-    },
-    "deleteError": "Неуспешно изтриване на документа",
-    "deleteSuccess": "Документът беше изтрит успешно",
-    "editedAt": "Последна редакция на {{time}}",
-    "editedBy": "Последно редактиран от {{name}}",
-    "editorPlaceholder": "Въведете съдържанието на документа, натиснете / за меню с команди",
-    "empty": {
-      "createNewDocument": "Създаване на нов документ",
-      "title": "Изберете документ, за да започнете",
-      "uploadMarkdown": "Качване на Markdown файл"
-    },
-    "linkCopied": "Връзката е копирана",
-    "menu": {
-      "copyLink": "Копиране на връзка",
-      "exportDocument": "Експортиране на документ",
-      "importDocument": "Импортиране на документ",
-      "pin": "Закачане на документа"
-    },
-    "saving": "Запазване...",
-    "titlePlaceholder": "Без заглавие",
-    "wordCount": "{{wordCount}} думи"
-  },
-  "documentList": {
-    "copyContent": "Копиране на цялото съдържание",
-    "duplicate": "Създаване на копие",
-    "empty": "Все още няма документи. Щракнете върху бутона по-горе, за да създадете първия си документ.",
-    "noResults": "Няма намерени съвпадащи документи",
-    "pageCount": "Общо {{count}} документа",
-    "selectNote": "Изберете документ, за да започнете редактиране",
-    "untitled": "Без заглавие"
-  },
-  "empty": "Няма качени файлове/папки",
-  "header": {
-    "actions": {
-      "newFolder": "Нова папка",
-      "newPage": "Създаване на нов документ",
-      "uploadFile": "Качване на файл",
-      "uploadFolder": "Качване на папка"
-    },
-    "newNoteDialog": {
-      "cancel": "Отказ",
-      "editTitle": "Редактиране на документ",
-      "emptyContent": "Съдържанието на документа не може да бъде празно",
-      "loadError": "Неуспешно зареждане на документа, моля опитайте отново",
-      "loading": "Зареждане...",
-      "save": "Запази",
-      "saveError": "Неуспешно запазване на документа, моля опитайте отново",
-      "saveSuccess": "Документът беше запазен успешно",
-      "title": "Нов документ",
-      "updateSuccess": "Документът беше обновен успешно"
-    },
-    "newPageButton": "Създай нов документ",
-    "uploadButton": "Качване"
-  },
-  "home": {
-    "getStarted": "Започнете",
-    "greeting": "Начало",
-    "quickActions": "Бързи действия",
-    "recentFiles": "Скорошни файлове",
-    "recentPages": "Скорошни документи",
-    "subtitle": "Добре дошли в базата знания. Започнете да управлявате вашите документи оттук",
-    "uploadEntries": {
-      "files": {
-        "title": "Качване на файлове"
-      },
-      "folder": {
-        "title": "Качване на папка"
-      },
-      "knowledgeBase": {
-        "title": "Създай база знания"
-      },
-      "newPage": {
-        "title": "Създаване на нов документ"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "Сигурни ли сте, че искате да изтриете тази база знания? Файловете в нея няма да бъдат изтрити, а ще бъдат преместени в общите файлове. След изтриването на базата знания, тя не може да бъде възстановена, моля, действайте внимателно.",
-      "empty": "Кликнете <1>+</1>, за да започнете създаването на база знания"
-    },
-    "new": "Нова база знания",
-    "title": "База знания"
-  },
-  "menu": {
-    "allFiles": "Всички файлове",
-    "allPages": "Всички документи"
-  },
-  "networkError": "Неуспешно получаване на базата от знания, моля, проверете интернет връзката и опитайте отново",
-  "notSupportGuide": {
-    "desc": "Текущият инстанс е в режим на клиентска база данни и не поддържа функцията за управление на файлове. Моля, превключете на <1>режим на сървърна база данни</1> или използвайте директно <3>LobeChat Cloud</3>",
-    "features": {
-      "allKind": {
-        "desc": "Поддържа основни файлови формати, включително Word, PPT, Excel, PDF, TXT и други често срещани документи, както и основни кодови файлове като JS и Python",
-        "title": "Разширена поддръжка на файлови формати"
-      },
-      "embeddings": {
-        "desc": "Използва високопроизводителни векторни модели за векторизация на текстови части, позволявайки семантично търсене на съдържанието на файловете",
-        "title": "Семантична векторизация"
-      },
-      "repos": {
-        "desc": "Поддържа създаване на база знания и позволява добавяне на различни типове файлове, за да изградите собствена област на знание",
-        "title": "База знания"
-      }
-    },
-    "title": "Текущият режим на инсталация не поддържа управление на файлове"
-  },
-  "preview": {
-    "downloadFile": "Изтеглете файла",
-    "unsupportedFileAndContact": "Този формат на файла не поддържа онлайн преглед. Ако имате нужда от преглед, моля, <1>свържете се с нас</1>."
-  },
-  "searchFilePlaceholder": "Търсене на файл",
-  "searchPagePlaceholder": "Търсене на документи",
-  "tab": {
-    "all": "Всички",
-    "audios": "Аудио",
-    "documents": "Документи",
-    "home": "Начало",
-    "images": "Снимки",
-    "moreTypes": "Още типове",
-    "pages": "Документи",
-    "videos": "Видеа",
-    "websites": "Уебсайтове"
-  },
-  "title": "База знания",
-  "toggleLeftPanel": "Показване/скриване на лявия панел",
-  "uploadDock": {
-    "body": {
-      "collapse": "Скрий",
-      "item": {
-        "done": "Качено",
-        "error": "Качването не успя, моля, опитайте отново",
-        "pending": "Подготовка за качване...",
-        "processing": "Обработка на файла...",
-        "restTime": "Остава {{time}}"
-      }
-    },
-    "fileQueueInfo": "Качват се първите {{count}} файла, останалите {{remaining}} ще бъдат поставени в опашка за качване",
-    "totalCount": "Общо {{count}} елемента",
-    "uploadStatus": {
-      "error": "Грешка при качване",
-      "pending": "В очакване на качване",
-      "processing": "Качва се",
-      "success": "Качването е завършено",
-      "uploading": "Качва се"
-    }
-  }
+  "addFolder": "Създай папка",
+  "addLibrary": "Добави",
+  "addPage": "Създай страница",
+  "detail.basic.createdAt": "Време на създаване",
+  "detail.basic.filename": "Име на файл",
+  "detail.basic.size": "Размер на файла",
+  "detail.basic.title": "Основна информация",
+  "detail.basic.type": "Формат",
+  "detail.basic.updatedAt": "Време на обновяване",
+  "detail.data.chunkCount": "Частични елементи",
+  "detail.data.embedding.default": "Без вграждане",
+  "detail.data.embedding.error": "Неуспешно",
+  "detail.data.embedding.pending": "Очаква стартиране",
+  "detail.data.embedding.processing": "Обработка",
+  "detail.data.embedding.success": "Завършено",
+  "detail.data.embeddingStatus": "вграждане",
+  "empty": "Все още няма качени файлове или папки.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} файла филтрирани (от общо {{total}})",
+  "header.actions.connect": "Свържи се...",
+  "header.actions.gitignore.apply": "Приложи правилата",
+  "header.actions.gitignore.cancel": "Игнорирай правилата",
+  "header.actions.gitignore.content": "Открит е файл .gitignore (общо {{count}} файла). Искате ли да приложите правилата за игнориране?",
+  "header.actions.gitignore.filtered": "{{ignored}} файла филтрирани (от общо {{total}})",
+  "header.actions.gitignore.title": "Открит .gitignore",
+  "header.actions.newFolder": "Нова папка",
+  "header.actions.newPage": "Нова страница",
+  "header.actions.notion.error": "Неуспешен импорт на файлове от Notion",
+  "header.actions.notion.foundFiles": "намерени {{count}} файла",
+  "header.actions.notion.importing": "Импортиране на съдържание от Notion...",
+  "header.actions.notion.noMarkdownFiles": "В ZIP архива не са открити markdown файлове",
+  "header.actions.notion.partial": "Успешно импортирани {{success}} файла, {{failed}} неуспешни",
+  "header.actions.notion.success": "Успешно импортирани {{count}} файла",
+  "header.actions.notionGuide.cancel": "Не сега",
+  "header.actions.notionGuide.desc": "Първо експортирайте съдържанието си от Notion като Markdown (ZIP) файл. След това натиснете Продължи, за да изберете ZIP файла и да импортирате всички страници.",
+  "header.actions.notionGuide.ok": "Избери ZIP от Notion",
+  "header.actions.notionGuide.title": "Импортиране от Notion",
+  "header.actions.uploadFile": "Качи файл",
+  "header.actions.uploadFolder": "Качи папка",
+  "header.newPageButton": "Нова страница",
+  "header.uploadButton": "Качи",
+  "home.getStarted": "Започнете",
+  "home.greeting": "Да започнем",
+  "home.quickActions": "Бързи действия",
+  "home.recentFiles": "Последни файлове",
+  "home.recentPages": "Последни страници",
+  "home.uploadEntries.files.title": "Качване на файлове",
+  "home.uploadEntries.folder.title": "Качване на папка",
+  "home.uploadEntries.library.title": "Създай нова библиотека",
+  "home.uploadEntries.newPage.title": "Нова страница",
+  "library.list.confirmRemoveLibrary": "Ще изтриете тази библиотека. Файловете в нея няма да бъдат изтрити, а ще бъдат преместени в 'Всички файлове'. Това действие не може да бъде отменено, моля, бъдете внимателни.",
+  "library.list.empty": "Натиснете <1>+</1>, за да създадете нова библиотека",
+  "library.new": "Нова библиотека",
+  "library.title": "Библиотека",
+  "loadMore": "Зареди още",
+  "menu.allFiles": "Всички файлове",
+  "menu.allPages": "Всички страници",
+  "networkError": "Неуспешно зареждане на библиотеките. Проверете интернет връзката си и опитайте отново.",
+  "notSupportGuide.desc": "Текущият режим на внедряване не поддържа управление на файлове. Превключете към <1>режим със сървърна база данни</1> или използвайте <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "Поддържа основни типове файлове, включително формати като Word, PPT, Excel, PDF, TXT, както и популярни кодови файлове като JS и Python.",
+  "notSupportGuide.features.allKind.title": "Поддръжка на различни файлови формати",
+  "notSupportGuide.features.embeddings.desc": "Използва високоефективни векторни модели за векторизация на текстови части, позволявайки семантично търсене в съдържанието.",
+  "notSupportGuide.features.embeddings.title": "Семантика с вектори",
+  "notSupportGuide.features.libraries.desc": "Създавайте библиотеки и добавяйте файлове, за да изградите своя собствена колекция.",
+  "notSupportGuide.features.libraries.title": "Библиотека",
+  "notSupportGuide.title": "Текущият режим на внедряване не поддържа управление на файлове",
+  "pageEditor.addIcon": "Добави икона",
+  "pageEditor.autoSaveMessage": "Страницата се запазва автоматично. Не е нужно ръчно запазване.",
+  "pageEditor.chooseIcon": "Избери икона",
+  "pageEditor.deleteConfirm.content": "Тази страница ще бъде изтрита и не може да бъде възстановена. Моля, бъдете внимателни.",
+  "pageEditor.deleteConfirm.title": "Изтриване на страница",
+  "pageEditor.deleteError": "Неуспешно изтриване на страницата",
+  "pageEditor.deleteSuccess": "Страницата е изтрита успешно",
+  "pageEditor.duplicateError": "Неуспешно дублиране на страницата",
+  "pageEditor.duplicateSuccess": "Страницата е дублирана успешно",
+  "pageEditor.editedAt": "Последна редакция на {{time}}",
+  "pageEditor.editedBy": "Последна редакция от {{name}}",
+  "pageEditor.editorPlaceholder": "Започнете да пишете страницата си. Натиснете / за меню с команди",
+  "pageEditor.empty.createNewDocument": "Създай нова страница",
+  "pageEditor.empty.importNotion": "Импортиране от Notion",
+  "pageEditor.empty.title": "Изберете страница, за да започнете",
+  "pageEditor.empty.uploadFiles": "Качване на файлове",
+  "pageEditor.exportError": "Неуспешен експорт на страницата",
+  "pageEditor.exportSuccess": "Страницата е експортирана успешно",
+  "pageEditor.linkCopied": "Връзката е копирана",
+  "pageEditor.menu.copyLink": "Копирай връзка",
+  "pageEditor.menu.export": "Експортирай",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "Експортирай страница",
+  "pageEditor.menu.importDocument": "Импортирай страница",
+  "pageEditor.menu.pin": "Закачи страница",
+  "pageEditor.saving": "Запазване...",
+  "pageEditor.titlePlaceholder": "Без заглавие",
+  "pageEditor.wordCount": "{{wordCount}} думи",
+  "pageList.copyContent": "Копирай целия текст",
+  "pageList.duplicate": "Дублирай",
+  "pageList.empty": "Все още няма страници. Натиснете бутона по-горе, за да създадете първата.",
+  "pageList.filter.all": "Всички",
+  "pageList.filter.onlyInPages": "Само в страници",
+  "pageList.noResults": "Няма намерени съвпадащи страници",
+  "pageList.pageCount": "Общо {{count}} страници",
+  "pageList.pageSizeItem": "{{count}} елемента",
+  "pageList.title": "Страници",
+  "pageList.untitled": "Без заглавие",
+  "portal.openInPageEditor": "Редактирай в страница",
+  "preview.downloadFile": "Изтегли файл",
+  "preview.unsupportedFileAndContact": "Този файлов формат не се поддържа за онлайн преглед. Ако имате нужда от поддръжка, <1>свържете се с нас</1>.",
+  "searchFilePlaceholder": "Търсене на файлове",
+  "searchPagePlaceholder": "Търсене на страници",
+  "tab.all": "Всички",
+  "tab.audios": "Аудио",
+  "tab.documents": "Документи",
+  "tab.home": "Начало",
+  "tab.images": "Изображения",
+  "tab.moreTypes": "Още типове",
+  "tab.pages": "Страници",
+  "tab.videos": "Видео",
+  "tab.websites": "Уебсайтове",
+  "title": "Ресурси",
+  "toggleLeftPanel": "Показване/Скриване на ляв панел",
+  "uploadDock.body.collapse": "Свий",
+  "uploadDock.body.item.done": "Качено",
+  "uploadDock.body.item.error": "Грешка при качване, опитайте отново",
+  "uploadDock.body.item.pending": "Подготовка за качване...",
+  "uploadDock.body.item.processing": "Обработка на файл...",
+  "uploadDock.body.item.restTime": "Оставащо време: {{time}}",
+  "uploadDock.fileQueueInfo": "Качват се първите {{count}} файла, {{remaining}} остават в опашката",
+  "uploadDock.totalCount": "Общо {{count}} елемента",
+  "uploadDock.uploadStatus.error": "Грешка при качване",
+  "uploadDock.uploadStatus.pending": "Изчаква качване",
+  "uploadDock.uploadStatus.processing": "Качване",
+  "uploadDock.uploadStatus.success": "Качването е завършено",
+  "uploadDock.uploadStatus.uploading": "Качване"
 }

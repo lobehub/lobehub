@@ -3,7 +3,7 @@
 import { memo } from 'react';
 
 import Menu from '@/components/Menu';
-import { GroupSettingsTabs } from '@/store/global/initialState';
+import { type GroupSettingsTabs } from '@/store/global/initialState';
 
 import { useChatGroupSettingsCategory } from './useGroupCategory';
 

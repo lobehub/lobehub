@@ -10,6 +10,19 @@ concurrency:
     group: e2e-${{ github.ref }}
     cancel-in-progress: true
 
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+  DATABASE_DRIVER: node
+  KEY_VAULTS_SECRET: LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=
+  BETTER_AUTH_SECRET: e2e-test-secret-key-for-better-auth-32chars!
+  NEXT_PUBLIC_ENABLE_BETTER_AUTH: '1'
+  NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: '0'
+  # Mock S3 env vars to prevent initialization errors
+  S3_ACCESS_KEY_ID: e2e-mock-access-key
+  S3_SECRET_ACCESS_KEY: e2e-mock-secret-key
+  S3_BUCKET: e2e-mock-bucket
+  S3_ENDPOINT: https://e2e-mock-s3.localhost
+
 jobs:
     e2e:
         name: Test Web App
@@ -25,7 +38,7 @@ jobs:
             ports:
               - 5432:5432
 
-        timeout-minutes: 25
+        timeout-minutes: 30
         steps:
             - name: Checkout
               uses: actions/checkout@v5
@@ -41,12 +54,15 @@ jobs:
             - name: Install Playwright browsers (with system deps)
               run: bunx playwright install --with-deps chromium
 
-            - name: Run E2E tests
+            - name: Run database migrations
+              run: bun run db:migrate
+
+            - name: Build application
+              run: bun run build
               env:
-                  PORT: 3010
-                  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-                  DATABASE_DRIVER: node
-                  KEY_VAULTS_SECRET: LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=
+                SKIP_LINT: '1'
+
+            - name: Run E2E tests
               run: bun run e2e
 
             - name: Upload Cucumber HTML report (on failure)

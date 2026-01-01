@@ -1,7 +1,7 @@
-import { CheckMcpInstallResult, CustomPluginMetadata } from '@lobechat/types';
+import { type CheckMcpInstallResult, type CustomPluginMetadata } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import { LobeChatPluginApi, LobeChatPluginManifest, PluginSchema } from '@lobehub/chat-plugin-sdk';
-import { DeploymentOption } from '@lobehub/market-sdk';
+import type { LobeChatPluginApi, LobeChatPluginManifest, PluginSchema } from '@lobehub/chat-plugin-sdk';
+import { type DeploymentOption } from '@lobehub/market-sdk';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
 import retry from 'async-retry';
@@ -9,14 +9,14 @@ import debug from 'debug';
 
 import {
   MCPClient,
-  MCPClientParams,
-  McpPrompt,
-  McpResource,
-  McpTool,
-  StdioMCPParams,
+  type MCPClientParams,
+  type McpPrompt,
+  type McpResource,
+  type McpTool,
+  type StdioMCPParams,
 } from '@/libs/mcp';
 
-import { ProcessContentBlocksFn, contentBlocksToString } from './contentProcessor';
+import { type ProcessContentBlocksFn, contentBlocksToString } from './contentProcessor';
 import { mcpSystemDepsCheckService } from './deps';
 
 const log = debug('lobe-mcp:service');
@@ -368,6 +368,8 @@ export class MCPService {
     return {
       api: tools,
       identifier,
+      // @ts-ignore
+      mcpParams,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
         description:
@@ -384,13 +386,15 @@ export class MCPService {
     params: Omit<StdioMCPParams, 'type'>,
     metadata?: CustomPluginMetadata,
   ): Promise<LobeChatPluginManifest> {
-    const client = await this.getClient({
+    const mcpParams = {
       args: params.args,
       command: params.command,
       env: params.env,
       name: params.name,
-      type: 'stdio',
-    }); // Get client using params
+      type: 'stdio' as const,
+    };
+
+    const client = await this.getClient(mcpParams); // Get client using params
 
     const manifest = await client.listManifests();
 
@@ -411,6 +415,8 @@ export class MCPService {
         title: metadata?.name || identifier,
       },
       ...manifest,
+      // @ts-ignore
+      mcpParams,
       // TODO: temporary
       type: 'mcp' as any,
     } as LobeChatPluginManifest;

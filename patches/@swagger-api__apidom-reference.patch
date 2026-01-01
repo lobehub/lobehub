@@ -1,0 +1,26 @@
+diff --git a/node_modules/.cache/logger/umi.log b/node_modules/.cache/logger/umi.log
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/src/parse/parsers/binary/index-node.cjs b/src/parse/parsers/binary/index-node.cjs
+index a88ba4d8a0ddff6f4b545ed9368739d94f893eb2..b9b78a29e3c228e7d78e0861b38d734bdef2c854 100644
+--- a/src/parse/parsers/binary/index-node.cjs
++++ b/src/parse/parsers/binary/index-node.cjs
+@@ -3,7 +3,7 @@
+ var _interopRequireDefault = require("@babel/runtime-corejs3/helpers/interopRequireDefault").default;
+ exports.__esModule = true;
+ exports.default = void 0;
+-var _buffer = require("#buffer");
++var _buffer = require("buffer");
+ var _apidomCore = require("@swagger-api/apidom-core");
+ var _ParserError = _interopRequireDefault(require("../../../errors/ParserError.cjs"));
+ var _Parser = _interopRequireDefault(require("../Parser.cjs"));
+diff --git a/src/parse/parsers/binary/index-node.mjs b/src/parse/parsers/binary/index-node.mjs
+index 3abce8c52fd5eb7b92f33b66fccf6896ccbc89fe..4a3f957cf127a71c7f2b4dfa56512271b6f785ab 100644
+--- a/src/parse/parsers/binary/index-node.mjs
++++ b/src/parse/parsers/binary/index-node.mjs
+@@ -1,4 +1,4 @@
+-import { Buffer } from '#buffer'; // eslint-disable-line import/order
++import { Buffer } from 'buffer'; // eslint-disable-line import/order
+ import { ParseResultElement, StringElement } from '@swagger-api/apidom-core';
+ import ParserError from "../../../errors/ParserError.mjs";
+ import Parser from "../Parser.mjs";

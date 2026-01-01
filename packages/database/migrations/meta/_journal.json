@@ -420,6 +420,55 @@
       "when": 1764858574403,
       "tag": "0059_add_normalized_email_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1765437218969,
+      "tag": "0060_add_user_last_active_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1765540257262,
+      "tag": "0061_add_document_and_memory_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1765728439737,
+      "tag": "0062_add_more_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1766157362540,
+      "tag": "0063_add_columns_for_several_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1766297832021,
+      "tag": "0064_add_agents_session_group_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1766408202688,
+      "tag": "0065_add_passkey",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1766474494249,
+      "tag": "0066_add_document_fields",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Proporción",
-      "lock": "Bloquear relación de aspecto",
-      "unlock": "Desbloquear relación de aspecto"
-    },
-    "cfg": {
-      "label": "Intensidad de guía"
-    },
-    "header": {
-      "desc": "Descripción simple, crea al instante",
-      "title": "Pintura"
-    },
-    "height": {
-      "label": "Alto"
-    },
-    "imageNum": {
-      "label": "Cantidad de imágenes"
-    },
-    "imageUrl": {
-      "label": "Imagen de referencia"
-    },
-    "imageUrls": {
-      "label": "Imágenes de referencia"
-    },
-    "model": {
-      "label": "Modelo"
-    },
-    "prompt": {
-      "placeholder": "Describe el contenido que deseas generar"
-    },
-    "quality": {
-      "label": "Calidad de imagen",
-      "options": {
-        "hd": "Alta definición",
-        "standard": "Estándar"
-      }
-    },
-    "resolution": {
-      "label": "Resolución",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Semilla",
-      "random": "Semilla aleatoria"
-    },
-    "size": {
-      "label": "Tamaño"
-    },
-    "steps": {
-      "label": "Pasos"
-    },
-    "title": "Pintura AI",
-    "width": {
-      "label": "Ancho"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Aplicar semilla",
-      "copyError": "Copiar mensaje de error",
-      "copyPrompt": "Copiar indicación",
-      "copySeed": "Copiar semilla",
-      "delete": "Eliminar",
-      "deleteBatch": "Eliminar lote",
-      "download": "Descargar",
-      "downloadFailed": "Error al descargar la imagen",
-      "errorCopied": "Mensaje de error copiado al portapapeles",
-      "errorCopyFailed": "Error al copiar el mensaje de error",
-      "generate": "Generar",
-      "promptCopied": "Texto de indicación copiado al portapapeles",
-      "promptCopyFailed": "Error al copiar el texto de indicación",
-      "reuseSettings": "Reutilizar configuración",
-      "seedApplied": "Semilla aplicada a la configuración",
-      "seedApplyFailed": "Error al aplicar la semilla",
-      "seedCopied": "Semilla copiada al portapapeles",
-      "seedCopyFailed": "Error al copiar la semilla"
-    },
-    "metadata": {
-      "count": "{{count}} imágenes"
-    },
-    "status": {
-      "failed": "Generación fallida",
-      "generating": "Generando..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "La instancia desplegada actual está en modo base de datos cliente y no soporta la función de generación de imágenes AI. Por favor, cambia al <1>modo de despliegue con base de datos servidor</1> o utiliza directamente <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "Integración profunda con el sistema de gestión de archivos, las imágenes generadas se guardan automáticamente en el sistema de archivos para una gestión y organización unificada",
-        "title": "Interoperabilidad con sistema de archivos"
-      },
-      "llmAssisted": {
-        "desc": "Combinación con capacidades de modelos de lenguaje grandes para optimizar y expandir inteligentemente los textos de indicación, mejorando la calidad de generación de imágenes (Próximamente)",
-        "title": "Generación asistida por LLM"
-      },
-      "multiProviders": {
-        "desc": "Soporta múltiples proveedores de servicios de pintura AI, incluyendo OpenAI gpt-image-1, Google Imagen, FAL.ai, entre otros, ofreciendo una amplia selección de modelos",
-        "title": "Soporte para múltiples proveedores"
-      }
-    },
-    "title": "El modo de despliegue actual no soporta pintura AI"
-  },
-  "topic": {
-    "createNew": "Crear nuevo tema",
-    "deleteConfirm": "Eliminar tema generado",
-    "deleteConfirmDesc": "Estás a punto de eliminar este tema generado. Esta acción es irreversible, por favor procede con precaución.",
-    "empty": "No hay temas generados",
-    "title": "Tema de pintura",
-    "untitled": "Tema predeterminado"
-  }
+  "config.aspectRatio.label": "Relación de aspecto",
+  "config.aspectRatio.lock": "Bloquear relación de aspecto",
+  "config.aspectRatio.unlock": "Desbloquear relación de aspecto",
+  "config.cfg.label": "Intensidad de guía",
+  "config.header.desc": "Descripción breve, crea al instante",
+  "config.header.title": "Pintura",
+  "config.height.label": "Altura",
+  "config.imageNum.label": "Número de imágenes",
+  "config.imageUrl.label": "Imagen de referencia",
+  "config.imageUrls.label": "Imágenes de referencia",
+  "config.model.label": "Modelo",
+  "config.prompt.placeholder": "Describe lo que deseas generar",
+  "config.quality.label": "Calidad de imagen",
+  "config.quality.options.hd": "Alta definición",
+  "config.quality.options.standard": "Estándar",
+  "config.resolution.label": "Resolución",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Semilla",
+  "config.seed.random": "Semilla aleatoria",
+  "config.size.label": "Tamaño",
+  "config.steps.label": "Pasos",
+  "config.title": "Imagen con IA",
+  "config.width.label": "Anchura",
+  "generation.actions.applySeed": "Aplicar semilla",
+  "generation.actions.copyError": "Copiar mensaje de error",
+  "generation.actions.copyPrompt": "Copiar prompt",
+  "generation.actions.copySeed": "Copiar semilla",
+  "generation.actions.delete": "Eliminar",
+  "generation.actions.deleteBatch": "Eliminar lote",
+  "generation.actions.download": "Descargar",
+  "generation.actions.downloadFailed": "No se pudo descargar la imagen. Verifica tu conexión de red o la configuración CORS del almacenamiento S3.",
+  "generation.actions.errorCopied": "Mensaje de error copiado al portapapeles",
+  "generation.actions.errorCopyFailed": "No se pudo copiar el mensaje de error",
+  "generation.actions.generate": "Generar",
+  "generation.actions.promptCopied": "Prompt copiado al portapapeles",
+  "generation.actions.promptCopyFailed": "No se pudo copiar el prompt",
+  "generation.actions.reuseSettings": "Reutilizar configuración",
+  "generation.actions.seedApplied": "Semilla aplicada a la configuración",
+  "generation.actions.seedApplyFailed": "No se pudo aplicar la semilla",
+  "generation.actions.seedCopied": "Semilla copiada al portapapeles",
+  "generation.actions.seedCopyFailed": "No se pudo copiar la semilla",
+  "generation.metadata.count": "{{count}} imágenes",
+  "generation.status.failed": "Generación fallida",
+  "generation.status.generating": "Generando...",
+  "notSupportGuide.desc": "El modo de implementación actual no admite la generación de imágenes con IA. Cambia al <1>modo de implementación con base de datos en servidor</1> o utiliza <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Integración profunda con el sistema de gestión de archivos; las imágenes generadas se guardan automáticamente en el sistema de archivos para una gestión y organización unificadas.",
+  "notSupportGuide.features.fileIntegration.title": "Integración con el sistema de archivos",
+  "notSupportGuide.features.llmAssisted.desc": "Combina las capacidades de modelos de lenguaje grandes para optimizar e incrementar los prompts de forma inteligente, mejorando la calidad de generación de imágenes (Próximamente).",
+  "notSupportGuide.features.llmAssisted.title": "Generación de imágenes asistida por LLM",
+  "notSupportGuide.features.multiProviders.desc": "Admite múltiples proveedores de generación de imágenes con IA, incluyendo OpenAI gpt-image-1, Google Imagen, FAL.ai y más, ofreciendo una amplia selección de modelos.",
+  "notSupportGuide.features.multiProviders.title": "Compatibilidad con múltiples proveedores",
+  "notSupportGuide.title": "El modo de implementación actual no admite la generación de imágenes con IA",
+  "topic.createNew": "Nuevo tema",
+  "topic.deleteConfirm": "Eliminar tema de generación",
+  "topic.deleteConfirmDesc": "Estás a punto de eliminar este tema de generación. Esta acción no se puede deshacer, procede con precaución.",
+  "topic.empty": "No hay temas de generación",
+  "topic.title": "Tema de pintura",
+  "topic.untitled": "Tema predeterminado"
 }

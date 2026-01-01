@@ -1,7 +1,7 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { createStyles, cx, keyframes } from 'antd-style';
+import { createStaticStyles, cx, keyframes } from 'antd-style';
 import { WifiIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -16,7 +16,7 @@ const airdropPulse = keyframes`
     }
 `;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     position: relative;
 
@@ -26,7 +26,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 160px;
     height: 160px;
-    margin-block-end: ${token.marginXL}px;
+    margin-block-end: ${cssVar.marginXL};
   `,
 
   pulse1: css`
@@ -54,30 +54,30 @@ const useStyles = createStyles(({ css, token }) => ({
     border-radius: 50%;
 
     opacity: 0;
-    background-color: ${token.colorPrimaryBgHover};
+    background-color: ${cssVar.colorPrimaryBgHover};
   `,
 
   radarIcon: css`
     z-index: 1;
-    color: ${token.colorPrimary};
+    color: ${cssVar.colorPrimary};
   `,
 
   ring1: css`
     width: 80px;
     height: 80px;
-    border: 1px solid ${token.colorText};
+    border: 1px solid ${cssVar.colorText};
   `,
 
   ring2: css`
     width: 120px;
     height: 120px;
-    border: 1px solid ${token.colorTextQuaternary};
+    border: 1px solid ${cssVar.colorTextQuaternary};
   `,
 
   ring3: css`
     width: 160px;
     height: 160px;
-    border: 1px solid ${token.colorFillSecondary};
+    border: 1px solid ${cssVar.colorFillSecondary};
   `,
 
   ringBase: css`
@@ -93,8 +93,6 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 const WaitingAnim = memo(() => {
-  const { styles } = useStyles();
-
   return (
     <div className={styles.container}>
       {/* 新增：星环 */}

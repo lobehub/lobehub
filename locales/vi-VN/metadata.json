@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "Theo dõi các tính năng và cải tiến mới của {{appName}}",
-    "title": "Nhật ký cập nhật"
-  },
-  "chat": {
-    "description": "{{appName}} mang đến cho bạn trải nghiệm tốt nhất với ChatGPT, Claude, Gemini, OLLaMA WebUI",
-    "title": "{{appName}}: Công cụ AI cá nhân, giúp bạn có một bộ não thông minh hơn"
-  },
-  "discover": {
-    "assistants": {
-      "description": "Sáng tạo nội dung, viết quảng cáo, hỏi đáp, tạo hình ảnh, tạo video, tạo giọng nói, Agent thông minh, quy trình tự động hóa, tùy chỉnh trợ lý AI / GPTs / OLLaMA của riêng bạn",
-      "title": "Trợ lý AI"
-    },
-    "description": "Sáng tạo nội dung, viết quảng cáo, hỏi đáp, tạo hình ảnh, tạo video, tạo giọng nói, Agent thông minh, quy trình tự động hóa, ứng dụng AI tùy chỉnh, tùy chỉnh bảng điều khiển ứng dụng AI của riêng bạn",
-    "mcp": {
-      "description": "Tìm kiếm, so sánh và kết nối hàng nghìn MCP Servers, giúp hệ thống AI dễ dàng truy cập hệ thống tệp, cơ sở dữ liệu, API và các tài nguyên quan trọng khác, mở rộng toàn diện khả năng AI của bạn",
-      "title": "Thị trường MCP Servers"
-    },
-    "models": {
-      "description": "Khám phá các mô hình AI phổ biến như OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
-      "title": "Mô hình AI"
-    },
-    "plugins": {
-      "description": "Tìm kiếm biểu đồ, học thuật, tạo hình ảnh, tạo video, tạo giọng nói, tự động hóa quy trình làm việc, tích hợp khả năng phong phú của các plugin cho trợ lý của bạn",
-      "title": "Plugin AI"
-    },
-    "providers": {
-      "description": "Khám phá các nhà cung cấp mô hình phổ biến như OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
-      "title": "Nhà cung cấp dịch vụ mô hình AI"
-    },
-    "search": "Tìm kiếm",
-    "title": "Khám Phá"
-  },
-  "image": {
-    "description": "{{appName}} mang đến cho bạn trải nghiệm sử dụng GPT Image, Flux, Midjourney, Stable Diffusion tốt nhất",
-    "title": "Vẽ AI"
-  },
-  "plugins": {
-    "description": "Tìm kiếm, tạo biểu đồ, học thuật, tạo hình ảnh, tạo video, tạo giọng nói, quy trình tự động hóa, tùy chỉnh khả năng plugin ToolCall dành riêng cho ChatGPT / Claude",
-    "title": "Thị trường plugin"
-  },
-  "welcome": {
-    "description": "{{appName}} mang đến cho bạn trải nghiệm tốt nhất với ChatGPT, Claude, Gemini, OLLaMA WebUI",
-    "title": "Chào mừng bạn đến với {{appName}}: Công cụ AI cá nhân, giúp bạn có một bộ não thông minh hơn"
-  }
+  "changelog.description": "Luôn cập nhật những tính năng mới và cải tiến của {{appName}}",
+  "changelog.title": "Nhật ký thay đổi",
+  "chat.description": "{{appName}} mang đến cho bạn trải nghiệm giao diện người dùng tốt nhất với ChatGPT, Claude, Gemini và OLLaMA.",
+  "chat.title": "{{appName}} · Dành cho Tác nhân Hợp tác",
+  "discover.assistants.description": "Nội dung, Hỏi & Đáp, hình ảnh, video, giọng nói, quy trình làm việc — duyệt và thêm Tác nhân từ Cộng đồng.",
+  "discover.assistants.title": "Cộng đồng Tác nhân",
+  "discover.description": "Khám phá Tác nhân, Kỹ năng, Nhà cung cấp, mô hình và Máy chủ MCP.",
+  "discover.mcp.description": "Tìm kiếm, so sánh và kết nối với hàng ngàn Máy chủ MCP, giúp hệ thống AI dễ dàng truy cập hệ thống tệp, cơ sở dữ liệu, API và các tài nguyên thiết yếu khác, mở rộng toàn diện khả năng AI của bạn.",
+  "discover.mcp.title": "Cộng đồng Máy chủ MCP",
+  "discover.models.description": "Khám phá các mô hình AI phổ biến như OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "Cộng đồng Mô hình",
+  "discover.plugins.description": "Khám phá biểu đồ, công cụ học thuật, tạo hình ảnh/video/giọng nói và quy trình làm việc — thêm Kỹ năng vào Tác nhân của bạn.",
+  "discover.plugins.title": "Cộng đồng Kỹ năng",
+  "discover.providers.description": "Khám phá các nhà cung cấp mô hình hàng đầu như OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "Cộng đồng Nhà cung cấp",
+  "discover.search": "Tìm kiếm",
+  "discover.title": "Khám phá",
+  "image.description": "{{appName}} mang đến cho bạn trải nghiệm tốt nhất với GPT Image, Flux, Midjourney và Stable Diffusion",
+  "image.title": "Nghệ thuật AI",
+  "plugins.description": "Tìm kiếm, biểu đồ, công cụ học thuật, tạo hình ảnh/video/giọng nói, quy trình làm việc — thêm Kỹ năng vào Tác nhân của bạn.",
+  "plugins.title": "Cộng đồng Kỹ năng",
+  "welcome.description": "{{appName}} mang đến cho bạn trải nghiệm giao diện người dùng tốt nhất với ChatGPT, Claude, Gemini và OLLaMA.",
+  "welcome.title": "Chào mừng đến với {{appName}} · Dành cho Tác nhân Hợp tác"
 }

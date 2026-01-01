@@ -2,8 +2,37 @@ import { ThemeMode } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import type { IpcContext } from '@/utils/ipc';
+import { IpcHandler } from '@/utils/ipc/base';
 
 import SystemController from '../SystemCtr';
+
+const { ipcHandlers, ipcMainHandleMock } = vi.hoisted(() => {
+  const handlers = new Map<string, (event: any, ...args: any[]) => any>();
+  const handle = vi.fn((channel: string, handler: any) => {
+    handlers.set(channel, handler);
+  });
+  return { ipcHandlers: handlers, ipcMainHandleMock: handle };
+});
+
+const invokeIpc = async <T = any>(
+  channel: string,
+  payload?: any,
+  context?: Partial<IpcContext>,
+): Promise<T> => {
+  const handler = ipcHandlers.get(channel);
+  if (!handler) throw new Error(`IPC handler for ${channel} not found`);
+
+  const fakeEvent = {
+    sender: context?.sender ?? ({ id: 'test' } as any),
+  };
+
+  if (payload === undefined) {
+    return handler(fakeEvent);
+  }
+
+  return handler(fakeEvent, payload);
+};
 
 // Mock logger
 vi.mock('@/utils/logger', () => ({
@@ -15,11 +44,30 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(() => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    return {
+      on: vi.fn((event: string, cb: (...args: any[]) => void) => {
+        handlers.set(event, cb);
+        return undefined;
+      }),
+    } as any;
+  }),
+}));
+
+vi.mock('node:child_process', () => ({
+  spawn: (...args: any[]) => spawnMock.call(null, ...args),
+}));
+
 // Mock electron
 vi.mock('electron', () => ({
   app: {
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
+  },
+  ipcMain: {
+    handle: ipcMainHandleMock,
   },
   nativeTheme: {
     on: vi.fn(),
@@ -29,6 +77,8 @@ vi.mock('electron', () => ({
     openExternal: vi.fn().mockResolvedValue(undefined),
   },
   systemPreferences: {
+    askForMediaAccess: vi.fn(async () => true),
+    getMediaAccessStatus: vi.fn(() => 'not-determined'),
     isTrustedAccessibilityClient: vi.fn(() => true),
   },
 }));
@@ -38,22 +88,17 @@ vi.mock('electron-is', () => ({
   macOS: vi.fn(() => true),
 }));
 
-// Mock node:fs
-vi.mock('node:fs', () => ({
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-}));
-
-// Mock @/const/dir
-vi.mock('@/const/dir', () => ({
-  DB_SCHEMA_HASH_FILENAME: 'db-schema-hash.txt',
-  LOCAL_DATABASE_DIR: 'database',
-  userDataDir: '/mock/user/data',
-}));
-
 // Mock browserManager
 const mockBrowserManager = {
   broadcastToAllWindows: vi.fn(),
+  getMainWindow: vi.fn(() => ({
+    browserWindow: {
+      isDestroyed: vi.fn(() => false),
+      webContents: {
+        executeJavaScript: vi.fn(async () => true),
+      },
+    },
+  })),
   handleAppThemeChange: vi.fn(),
 };
 
@@ -80,12 +125,15 @@ describe('SystemController', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    ipcHandlers.clear();
+    ipcMainHandleMock.mockClear();
+    (IpcHandler.getInstance() as any).registeredChannels?.clear();
     controller = new SystemController(mockApp);
   });
 
   describe('getAppState', () => {
     it('should return app state with system info', async () => {
-      const result = await controller.getAppState();
+      const result = await invokeIpc('system.getAppState');
 
       expect(result).toMatchObject({
         arch: expect.any(String),
@@ -108,7 +156,7 @@ describe('SystemController', () => {
       const { nativeTheme } = await import('electron');
       Object.defineProperty(nativeTheme, 'shouldUseDarkColors', { value: true });
 
-      const result = await controller.getAppState();
+      const result = await invokeIpc('system.getAppState');
 
       expect(result.systemAppearance).toBe('dark');
 
@@ -117,25 +165,89 @@ describe('SystemController', () => {
     });
   });
 
-  describe('checkAccessibilityForMacOS', () => {
-    it('should check accessibility on macOS', async () => {
+  describe('accessibility', () => {
+    it('should request accessibility access on macOS', async () => {
       const { systemPreferences } = await import('electron');
 
-      controller.checkAccessibilityForMacOS();
+      await invokeIpc('system.requestAccessibilityAccess');
 
       expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(true);
     });
 
-    it('should return undefined on non-macOS', async () => {
+    it('should return true on non-macOS when requesting accessibility access', async () => {
       const { macOS } = await import('electron-is');
+      const { systemPreferences } = await import('electron');
       vi.mocked(macOS).mockReturnValue(false);
 
-      const result = controller.checkAccessibilityForMacOS();
+      const result = await invokeIpc('system.requestAccessibilityAccess');
 
-      expect(result).toBeUndefined();
+      expect(result).toBe(true);
+      expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
 
       // Reset
       vi.mocked(macOS).mockReturnValue(true);
+    });
+  });
+
+  describe('screen recording', () => {
+    it('should request screen recording access and open System Settings on macOS', async () => {
+      const { shell, systemPreferences } = await import('electron');
+
+      const result = await invokeIpc('system.requestScreenAccess');
+
+      expect(systemPreferences.getMediaAccessStatus).toHaveBeenCalledWith('screen');
+      expect(systemPreferences.askForMediaAccess).toHaveBeenCalledWith('screen');
+      expect(mockBrowserManager.getMainWindow).toHaveBeenCalled();
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+      );
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('should return true on non-macOS and not open settings', async () => {
+      const { macOS } = await import('electron-is');
+      const { shell, systemPreferences } = await import('electron');
+      vi.mocked(macOS).mockReturnValue(false);
+
+      const result = await invokeIpc('system.requestScreenAccess');
+
+      expect(result).toBe(true);
+      expect(systemPreferences.askForMediaAccess).not.toHaveBeenCalled();
+      expect(shell.openExternal).not.toHaveBeenCalled();
+
+      // Reset
+      vi.mocked(macOS).mockReturnValue(true);
+    });
+  });
+
+  describe('full disk access', () => {
+    it('should try to open Full Disk Access settings with fallbacks', async () => {
+      const { shell } = await import('electron');
+      vi.mocked(shell.openExternal)
+        .mockRejectedValueOnce(new Error('fail first'))
+        .mockResolvedValueOnce(undefined);
+
+      await invokeIpc('system.openFullDiskAccessSettings');
+
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'com.apple.settings:Privacy&path=FullDiskAccess',
+      );
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+      );
+    });
+
+    it('should spawn osascript when autoAdd is enabled', async () => {
+      const { shell } = await import('electron');
+      vi.mocked(shell.openExternal).mockResolvedValueOnce(undefined);
+
+      await invokeIpc('system.openFullDiskAccessSettings', { autoAdd: true });
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'osascript',
+        expect.arrayContaining(['-e', expect.any(String), expect.any(String)]),
+        expect.objectContaining({ env: expect.any(Object) }),
+      );
     });
   });
 
@@ -143,7 +255,7 @@ describe('SystemController', () => {
     it('should open external link', async () => {
       const { shell } = await import('electron');
 
-      await controller.openExternalLink('https://example.com');
+      await invokeIpc('system.openExternalLink', 'https://example.com');
 
       expect(shell.openExternal).toHaveBeenCalledWith('https://example.com');
     });
@@ -151,7 +263,7 @@ describe('SystemController', () => {
 
   describe('updateLocale', () => {
     it('should update locale and broadcast change', async () => {
-      const result = await controller.updateLocale('zh-CN');
+      const result = await invokeIpc('system.updateLocale', 'zh-CN');
 
       expect(mockStoreManager.set).toHaveBeenCalledWith('locale', 'zh-CN');
       expect(mockI18n.changeLanguage).toHaveBeenCalledWith('zh-CN');
@@ -162,7 +274,7 @@ describe('SystemController', () => {
     });
 
     it('should use system locale when set to auto', async () => {
-      await controller.updateLocale('auto');
+      await invokeIpc('system.updateLocale', 'auto');
 
       expect(mockI18n.changeLanguage).toHaveBeenCalledWith('en-US');
     });
@@ -172,65 +284,13 @@ describe('SystemController', () => {
     it('should update theme mode and broadcast change', async () => {
       const themeMode: ThemeMode = 'dark';
 
-      await controller.updateThemeModeHandler(themeMode);
+      await invokeIpc('system.updateThemeModeHandler', themeMode);
 
       expect(mockStoreManager.set).toHaveBeenCalledWith('themeMode', 'dark');
       expect(mockBrowserManager.broadcastToAllWindows).toHaveBeenCalledWith('themeChanged', {
         themeMode: 'dark',
       });
       expect(mockBrowserManager.handleAppThemeChange).toHaveBeenCalled();
-    });
-  });
-
-  describe('getDatabasePath', () => {
-    it('should return database path', async () => {
-      const result = await controller.getDatabasePath();
-
-      expect(result).toBe('/mock/storage/database');
-    });
-  });
-
-  describe('getDatabaseSchemaHash', () => {
-    it('should return schema hash when file exists', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue('abc123');
-
-      const result = await controller.getDatabaseSchemaHash();
-
-      expect(result).toBe('abc123');
-    });
-
-    it('should return undefined when file does not exist', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockImplementation(() => {
-        throw new Error('File not found');
-      });
-
-      const result = await controller.getDatabaseSchemaHash();
-
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('getUserDataPath', () => {
-    it('should return user data path', async () => {
-      const result = await controller.getUserDataPath();
-
-      expect(result).toBe('/mock/user/data');
-    });
-  });
-
-  describe('setDatabaseSchemaHash', () => {
-    it('should write schema hash to file', async () => {
-      const { writeFileSync } = await import('node:fs');
-
-      await controller.setDatabaseSchemaHash('newhash123');
-
-      expect(writeFileSync).toHaveBeenCalledWith(
-        '/mock/storage/db-schema-hash.txt',
-        'newhash123',
-        'utf8',
-      );
     });
   });
 

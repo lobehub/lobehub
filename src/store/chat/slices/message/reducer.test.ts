@@ -1,4 +1,5 @@
 import { ChatToolPayload, UIChatMessage } from '@lobechat/types';
+import i18n from 'i18next';
 
 import { MessageDispatch, messagesReducer } from './reducer';
 
@@ -64,7 +65,7 @@ describe('messagesReducer', () => {
       const payload: MessageDispatch = { type: 'unimplementedType' };
 
       expect(() => messagesReducer(initialState, payload)).toThrowError(
-        '暂未实现的 type，请检查 reducer',
+        i18n.t('errors.unimplementedType', { ns: 'common' }),
       );
     });
   });

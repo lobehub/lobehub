@@ -1,8 +1,8 @@
-import { dispatch } from '@lobechat/electron-client-ipc';
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class DevtoolsService {
   async openDevtools(): Promise<void> {
-    return dispatch('openDevtools');
+    return ensureElectronIpc().devtools.openDevtools();
   }
 }
 

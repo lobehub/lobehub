@@ -81,6 +81,10 @@
     },
     {
       "id": "msg-507",
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 2
+      },
       "role": "user",
       "content": "Can you explain the technical implementation details?",
       "parentId": "msg-502",

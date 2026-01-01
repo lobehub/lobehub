@@ -1,14 +1,13 @@
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import FileIcon from '@/components/FileIcon';
 import UploadDetail from '@/features/ChatInput/components/UploadDetail';
-import { UploadFileItem } from '@/types/files';
+import { type UploadFileItem } from '@/types/files';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     cursor: pointer;
 
@@ -20,10 +19,10 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 64px;
     padding-block: 4px;
     padding-inline: 8px 24px;
-    border: 1px solid ${token.colorBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: 8px;
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   deleteButton: css`
     position: absolute;
@@ -32,10 +31,10 @@ const useStyles = createStyles(({ css, token }) => ({
 
     color: #fff;
 
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
 
     &:hover {
-      background: ${token.colorError};
+      background: ${cssVar.colorError};
     }
   `,
 }));
@@ -45,8 +44,6 @@ interface FileItemProps extends UploadFileItem {
 }
 
 const FileItem = memo<FileItemProps>(({ id, onRemove, file, status, uploadState, tasks }) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox align={'center'} className={styles.container} gap={12} horizontal key={id}>
       <FileIcon fileName={file.name} fileType={file.type} />

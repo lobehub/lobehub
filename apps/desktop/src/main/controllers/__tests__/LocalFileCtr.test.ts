@@ -4,6 +4,10 @@ import type { App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
 // Mock logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
@@ -22,6 +26,9 @@ vi.mock('@lobechat/file-loaders', () => ({
 
 // Mock electron
 vi.mock('electron', () => ({
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
   shell: {
     openPath: vi.fn(),
   },

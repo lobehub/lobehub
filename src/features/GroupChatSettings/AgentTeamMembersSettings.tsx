@@ -1,23 +1,22 @@
 'use client';
 
-import { ActionIcon, Grid, Tag, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { ActionIcon, Flexbox, Grid, Tag, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { useChatGroupStore } from '@/store/chatGroup';
-import { chatGroupSelectors } from '@/store/chatGroup/selectors';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
-import { LobeAgentSession, LobeGroupSession, LobeSessionType } from '@/types/session';
+import { type LobeAgentSession, type LobeGroupSession, LobeSessionType } from '@/types/session';
 
 import AgentCard from './AgentCard';
 import HostMemberCard from './HostMemberCard';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     width: 100%;
   `,
@@ -27,17 +26,16 @@ const HOST_MEMBER_ID = 'supervisor';
 
 const AgentTeamMembersSettings = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [loadingAgentId, setLoadingAgentId] = useState<string | null>(null);
   const [isCreatingMember, setIsCreatingMember] = useState(false);
 
   const activeGroupId = useSessionStore((s) => s.activeId);
   const currentSession = useSessionStore(sessionSelectors.currentSession) as LobeGroupSession;
-  const groupConfig = useChatGroupStore(chatGroupSelectors.currentGroupConfig);
+  const groupConfig = useAgentGroupStore(agentGroupSelectors.currentGroupConfig);
 
-  const addAgentsToGroup = useChatGroupStore((s) => s.addAgentsToGroup);
-  const removeAgentFromGroup = useChatGroupStore((s) => s.removeAgentFromGroup);
-  const updateGroupConfig = useChatGroupStore((s) => s.updateGroupConfig);
+  const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
+  const removeAgentFromGroup = useAgentGroupStore((s) => s.removeAgentFromGroup);
+  const updateGroupConfig = useAgentGroupStore((s) => s.updateGroupConfig);
   const refreshSessions = useSessionStore((s) => s.refreshSessions);
   const createSession = useSessionStore((s) => s.createSession);
 

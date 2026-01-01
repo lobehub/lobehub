@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Ajouter",
-    "back": "Retour",
-    "cancel": "Annuler",
-    "close": "Fermer",
-    "confirm": "Confirmer",
-    "delete": "Supprimer",
-    "edit": "Éditer",
-    "more": "Plus",
-    "next": "Suivant",
-    "ok": "D'accord",
-    "previous": "Précédent",
-    "refresh": "Rafraîchir",
-    "remove": "Retirer",
-    "retry": "Réessayer",
-    "save": "Enregistrer",
-    "search": "Rechercher",
-    "submit": "Soumettre"
-  },
-  "app": {
-    "description": "Votre plateforme de collaboration avec l'assistant IA",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Erreur",
-    "info": "Information",
-    "loading": "Chargement",
-    "success": "Succès",
-    "warning": "Avertissement"
-  }
+  "actions.add": "Ajouter",
+  "actions.back": "Retour",
+  "actions.cancel": "Annuler",
+  "actions.close": "Fermer",
+  "actions.confirm": "Confirmer",
+  "actions.delete": "Supprimer",
+  "actions.edit": "Éditer",
+  "actions.more": "Plus",
+  "actions.next": "Suivant",
+  "actions.ok": "D'accord",
+  "actions.previous": "Précédent",
+  "actions.refresh": "Rafraîchir",
+  "actions.remove": "Retirer",
+  "actions.retry": "Réessayer",
+  "actions.save": "Enregistrer",
+  "actions.search": "Rechercher",
+  "actions.submit": "Soumettre",
+  "app.description": "Votre plateforme de collaboration avec l'assistant IA",
+  "app.name": "LobeHub",
+  "status.error": "Erreur",
+  "status.info": "Information",
+  "status.loading": "Chargement",
+  "status.success": "Succès",
+  "status.warning": "Avertissement"
 }

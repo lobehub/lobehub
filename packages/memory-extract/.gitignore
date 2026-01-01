@@ -1,8 +1,0 @@
-# Environment variables
-.env
-
-# Output files
-datasets
-!datasets/*/.gitkeep
-
-

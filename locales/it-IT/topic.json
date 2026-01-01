@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "Rinomina automaticamente",
-    "confirmRemoveAll": "Stai per eliminare tutti i temi. Dopo l'eliminazione, non sarà possibile recuperarli. Procedi con cautela.",
-    "confirmRemoveTopic": "Stai per eliminare questo tema. Dopo l'eliminazione, non sarà possibile recuperarlo. Procedi con cautela.",
-    "confirmRemoveUnstarred": "Stai per eliminare i temi non contrassegnati. Dopo l'eliminazione, non sarà possibile recuperarli. Procedi con cautela.",
-    "duplicate": "Crea una copia",
-    "export": "Esporta il tema",
-    "openInNewWindow": "Apri in una nuova finestra",
-    "removeAll": "Elimina tutti i temi",
-    "removeUnstarred": "Elimina i temi non contrassegnati"
-  },
-  "defaultTitle": "Tema predefinito",
-  "duplicateLoading": "Copia del tema in corso...",
-  "duplicateSuccess": "Copia del tema riuscita",
+  "actions.addNewTopic": "Avvia Nuovo Argomento",
+  "actions.autoRename": "Rinomina Intelligente",
+  "actions.confirmRemoveAll": "Stai per eliminare tutti gli argomenti. Questa azione non può essere annullata.",
+  "actions.confirmRemoveTopic": "Stai per eliminare questo argomento. Questa azione non può essere annullata.",
+  "actions.confirmRemoveUnstarred": "Stai per eliminare gli argomenti non contrassegnati. Questa azione non può essere annullata.",
+  "actions.duplicate": "Duplica",
+  "actions.export": "Esporta Argomenti",
+  "actions.import": "Importa Conversazione",
+  "actions.openInNewWindow": "Apri in una nuova finestra",
+  "actions.removeAll": "Elimina Tutti gli Argomenti",
+  "actions.removeUnstarred": "Elimina Argomenti Non Contrassegnati",
+  "defaultTitle": "Argomento Predefinito",
+  "displayItems": "Visualizza Elementi",
+  "duplicateLoading": "Copia dell'argomento in corso...",
+  "duplicateSuccess": "Argomento copiato con successo",
   "favorite": "Preferito",
-  "groupMode": {
-    "ascMessages": "In ordine crescente per numero di messaggi",
-    "byTime": "Raggruppa per tempo",
-    "descMessages": "In ordine decrescente per numero di messaggi",
-    "flat": "Non raggruppare"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "Questo mese",
-      "today": "Oggi",
-      "week": "Questa settimana",
-      "yesterday": "Ieri"
-    }
-  },
-  "guide": {
-    "desc": "Clicca sul pulsante a sinistra per salvare la conversazione attuale come tema storico e avviare una nuova conversazione.",
-    "title": "Elenco dei temi"
-  },
-  "searchPlaceholder": "Cerca temi...",
-  "searchResultEmpty": "Nessun risultato trovato",
+  "groupMode.ascMessages": "Ordina per Numero di Messaggi Crescente",
+  "groupMode.byTime": "Raggruppa per Tempo",
+  "groupMode.descMessages": "Ordina per Numero di Messaggi Decrescente",
+  "groupMode.flat": "Nessun Raggruppamento",
+  "groupTitle.byTime.month": "Questo Mese",
+  "groupTitle.byTime.today": "Oggi",
+  "groupTitle.byTime.week": "Questa Settimana",
+  "groupTitle.byTime.yesterday": "Ieri",
+  "guide.desc": "Fai clic sul pulsante a sinistra per salvare la conversazione corrente come argomento storico e iniziare una nuova conversazione.",
+  "guide.title": "Elenco Argomenti",
+  "importError": "Importazione Fallita",
+  "importInvalidFormat": "Formato file non valido. Assicurati che sia un file JSON valido.",
+  "importLoading": "Importazione della conversazione in corso...",
+  "importSuccess": "Importati con successo {{count}} messaggi",
+  "loadMore": "Carica Altri",
+  "searchPlaceholder": "Cerca Argomenti...",
+  "searchResultEmpty": "Nessun risultato trovato.",
   "temp": "Temporaneo",
-  "title": "Tema"
+  "title": "Argomento"
 }

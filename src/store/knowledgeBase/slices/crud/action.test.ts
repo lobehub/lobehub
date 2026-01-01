@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { mutate } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withSWR } from '~test-utils';
 
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
@@ -9,8 +9,17 @@ import { useKnowledgeBaseStore } from '../../store';
 
 vi.mock('zustand/traditional');
 
+vi.mock('swr', async (importOriginal) => {
+  const modules = await importOriginal();
+  return {
+    ...(modules as any),
+    mutate: vi.fn(),
+  };
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+
   useKnowledgeBaseStore.setState(
     {
       activeKnowledgeBaseId: null,
@@ -217,9 +226,9 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(mockItem);
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseItem('kb-1'),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-1'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mockItem);
@@ -244,9 +253,9 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(mockItem);
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseItem('kb-2'),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-2'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mockItem);
@@ -267,9 +276,9 @@ describe('KnowledgeBaseCrudAction', () => {
         });
       });
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseItem('kb-3'),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-3'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         expect(result.current.data).toBeUndefined();
@@ -317,9 +326,9 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(newItem);
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseItem('kb-new'),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-new'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         expect(result.current.data).toEqual(newItem);
@@ -362,9 +371,9 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue(mockList);
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseList(),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mockList);
@@ -376,9 +385,9 @@ describe('KnowledgeBaseCrudAction', () => {
     it('should use fallback data when service returns empty', async () => {
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue([]);
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseList(),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
+        wrapper: withSWR,
+      });
 
       // Wait for the SWR hook to settle
       await waitFor(() => {
@@ -402,6 +411,7 @@ describe('KnowledgeBaseCrudAction', () => {
         },
       ];
 
+      // Ensure initKnowledgeBaseList is false initially
       act(() => {
         useKnowledgeBaseStore.setState({
           initKnowledgeBaseList: false,
@@ -410,16 +420,20 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue(mockList);
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseList(),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
+        wrapper: withSWR,
+      });
 
+      // Wait for the SWR hook to settle and onSuccess to be called
       await waitFor(() => {
         expect(result.current.data).toEqual(mockList);
       });
 
-      const state = useKnowledgeBaseStore.getState();
-      expect(state.initKnowledgeBaseList).toBe(true);
+      // Verify initKnowledgeBaseList is set to true after onSuccess
+      await waitFor(() => {
+        const state = useKnowledgeBaseStore.getState();
+        expect(state.initKnowledgeBaseList).toBe(true);
+      });
     });
 
     it('should not re-initialize if already initialized', async () => {
@@ -433,9 +447,9 @@ describe('KnowledgeBaseCrudAction', () => {
 
       vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue(mockList);
 
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseList(),
-      );
+      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         expect(result.current.data).toEqual(mockList);
@@ -443,24 +457,6 @@ describe('KnowledgeBaseCrudAction', () => {
 
       const state = useKnowledgeBaseStore.getState();
       expect(state.initKnowledgeBaseList).toBe(true);
-    });
-
-    it('should support suspense parameter', async () => {
-      const mockList: KnowledgeBaseItem[] = [];
-
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue(mockList);
-
-      // Don't test suspense behavior directly as it requires a full React suspense boundary
-      // Just verify it accepts the parameter without error
-      const { result } = renderHook(() =>
-        useKnowledgeBaseStore.getState().useFetchKnowledgeBaseList({ suspense: false }),
-      );
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(knowledgeBaseService.getKnowledgeBaseList).toHaveBeenCalled();
     });
   });
 });

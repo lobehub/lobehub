@@ -1,6 +1,11 @@
-import { AgentItemDetail } from '@lobehub/market-sdk';
+import { type AgentItemDetail, type AgentListResponse } from '@lobehub/market-sdk';
 
 import { MARKET_ENDPOINTS } from '@/services/_url';
+
+interface GetOwnAgentsParams {
+  page?: number;
+  pageSize?: number;
+}
 
 export class MarketApiService {
   private accessToken?: string;
@@ -117,6 +122,43 @@ export class MarketApiService {
         ...rest,
       }),
       method: 'POST',
+    });
+  }
+
+  // Publish agent (make it visible in marketplace)
+  async publishAgent(identifier: string): Promise<void> {
+    return this.request(MARKET_ENDPOINTS.publishAgent(identifier), {
+      method: 'POST',
+    });
+  }
+
+  // Unpublish agent (hide from marketplace, can be republished)
+  async unpublishAgent(identifier: string): Promise<void> {
+    return this.request(MARKET_ENDPOINTS.unpublishAgent(identifier), {
+      method: 'POST',
+    });
+  }
+
+  // Deprecate agent (permanently hide, cannot be republished)
+  async deprecateAgent(identifier: string): Promise<void> {
+    return this.request(MARKET_ENDPOINTS.deprecateAgent(identifier), {
+      method: 'POST',
+    });
+  }
+
+  // Get own agents (requires authentication)
+  async getOwnAgents(params?: GetOwnAgentsParams): Promise<AgentListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', String(params.page));
+    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+
+    const queryString = searchParams.toString();
+    const url = queryString
+      ? `${MARKET_ENDPOINTS.getOwnAgents}?${queryString}`
+      : MARKET_ENDPOINTS.getOwnAgents;
+
+    return this.request(url, {
+      method: 'GET',
     });
   }
 }

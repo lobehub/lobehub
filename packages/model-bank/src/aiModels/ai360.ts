@@ -7,7 +7,7 @@ const ai360ChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8000,
     description:
-      '360zhinao2-o1 使用树搜索构建思维链，并引入了反思机制，使用强化学习训练，模型具备自我反思与纠错的能力。',
+      '360zhinao2-o1 builds chain-of-thought via tree search with a reflection mechanism and RL training, enabling self-reflection and self-correction.',
     displayName: '360Zhinao2 o1',
     enabled: true,
     id: '360zhinao2-o1',
@@ -26,7 +26,7 @@ const ai360ChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8000,
     description:
-      '360gpt2-o1 使用树搜索构建思维链，并引入了反思机制，使用强化学习训练，模型具备自我反思与纠错的能力。',
+      '360gpt2-o1 builds chain-of-thought via tree search with a reflection mechanism and RL training, enabling self-reflection and self-correction.',
     displayName: '360GPT2 o1',
     id: '360gpt2-o1',
     pricing: {
@@ -44,7 +44,8 @@ const ai360ChatModels: AIChatModelCard[] = [
       search: true,
     },
     contextWindowTokens: 8000,
-    description: '360智脑系列效果最好的主力千亿级大模型，广泛适用于各领域复杂任务场景。',
+    description:
+      'The flagship 100B-class model in the 360 Zhinao series, suitable for complex tasks across domains.',
     displayName: '360GPT2 Pro',
     enabled: true,
     id: '360gpt2-pro',
@@ -66,7 +67,8 @@ const ai360ChatModels: AIChatModelCard[] = [
       search: true,
     },
     contextWindowTokens: 8000,
-    description: '360智脑系列效果最好的主力千亿级大模型，广泛适用于各领域复杂任务场景。',
+    description:
+      'The flagship 100B-class model in the 360 Zhinao series, suitable for complex tasks across domains.',
     displayName: '360GPT Pro',
     id: '360gpt-pro',
     pricing: {
@@ -83,7 +85,7 @@ const ai360ChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_000,
-    description: '翻译专用模型，深度微调优化，翻译效果领先。',
+    description: 'A translation-specialized model, deeply fine-tuned for leading translation quality.',
     displayName: '360GPT Pro Trans',
     id: '360gpt-pro-trans',
     pricing: {
@@ -97,7 +99,8 @@ const ai360ChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 7000,
-    description: '兼顾性能和效果的百亿级大模型，适合对性能/成本要求较高 的场景。',
+    description:
+      'A 10B-class model balancing performance and quality, suited for performance/cost-sensitive scenarios.',
     displayName: '360GPT Turbo',
     enabled: true,
     id: '360gpt-turbo',
@@ -116,7 +119,7 @@ const ai360ChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     description:
-      '【360部署版】DeepSeek-R1在后训练阶段大规模使用了强化学习技术，在仅有极少标注数据的情况下，极大提升了模型推理能力。在数学、代码、自然语言推理等任务上，性能比肩 OpenAI o1 正式版。',
+      '360-deployed DeepSeek-R1 uses large-scale RL in post-training to greatly boost reasoning with minimal labels. It matches OpenAI o1 on math, code, and natural language reasoning tasks.',
     displayName: 'DeepSeek R1',
     id: '360/deepseek-r1',
     pricing: {

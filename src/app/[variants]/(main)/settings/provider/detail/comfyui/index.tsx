@@ -1,17 +1,17 @@
 'use client';
 
 import { Select } from '@lobehub/ui';
+import { ComfyUIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import KeyValueEditor from '@/components/KeyValueEditor';
 import { SkeletonInput } from '@/components/Skeleton';
-import { ComfyUIProviderCard } from '@/config/modelProviders';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { GlobalLLMProviderKey } from '@/types/user/settings';
+import { type GlobalLLMProviderKey } from '@/types/user/settings';
 
 import { KeyVaultsConfigKey } from '../../const';
-import { ProviderItem } from '../../type';
+import { type ProviderItem } from '../../type';
 import ProviderDetail from '../default';
 
 const providerKey: GlobalLLMProviderKey = 'comfyui';

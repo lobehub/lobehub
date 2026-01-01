@@ -32,7 +32,7 @@ pnpm install-isolated
 pnpm electron:dev
 
 # 类型检查
-pnpm typecheck
+pnpm type-check
 
 # 运行测试
 pnpm test
@@ -66,9 +66,9 @@ cp .env.desktop .env
 pnpm electron:dev # 启动热重载开发服务器
 
 # 2. 代码质量
-pnpm lint      # ESLint 检查
-pnpm format    # Prettier 格式化
-pnpm typecheck # TypeScript 验证
+pnpm lint       # ESLint 检查
+pnpm format     # Prettier 格式化
+pnpm type-check # TypeScript 验证
 
 # 3. 测试
 pnpm test # 运行 Vitest 测试
@@ -183,7 +183,7 @@ src/main/core/
 #### 🔌 依赖注入和事件系统
 
 - **IoC 容器** - 基于 WeakMap 的装饰控制器方法容器
-- **装饰器注册** - `@ipcClientEvent` 和 `@ipcServerEvent` 装饰器
+- **装饰器注册** - `@IpcMethod` 和 `@IpcServerMethod` 装饰器
 - **自动事件映射** - 控制器加载期间注册的事件
 - **服务定位器** - 类型安全的服务和控制器检索
 
@@ -256,6 +256,31 @@ src/main/core/
 - **上下文感知** - 事件包含用于窗口特定操作的发送者上下文
 - **错误传播** - 具有适当状态码的集中错误处理
 
+##### 🧩 渲染器 IPC 助手
+
+渲染端通过 `src/utils/electron/ipc.ts` 提供的 `ensureElectronIpc` 获得一个运行时代理，无需在 preload 中暴露 Proxy 对象即可获得类型安全的调用体验：
+
+```ts
+import { ensureElectronIpc } from '@/utils/electron/ipc';
+
+const ipc = ensureElectronIpc();
+await ipc.windows.openSettingsWindow({ tab: 'provider' });
+```
+
+##### 🖥️ Server IPC 助手
+
+Next.js 服务端模块可通过 `ensureElectronServerIpc`（位于 `src/server/modules/ElectronIPCClient`）获得同样的类型安全代理，并复用 socket IPC 通道：
+
+```ts
+import { ensureElectronServerIpc } from '@/server/modules/ElectronIPCClient';
+
+const ipc = ensureElectronServerIpc();
+const path = await ipc.system.getDatabasePath();
+await ipc.upload.deleteFiles(['foo.txt']);
+```
+
+所有 `@IpcServerMethod` 方法都放在独立的控制器中，这样渲染端的类型推导不会包含这些仅供服务器调用的通道。
+
 #### 🛡️ 安全功能
 
 - **OAuth 2.0 + PKCE** - 具有状态参数验证的安全认证
@@ -277,7 +302,7 @@ tests/                                       # 集成测试
 ```bash
 pnpm test       # 运行所有测试
 pnpm test:watch # 监视模式
-pnpm typecheck  # 类型验证
+pnpm type-check # 类型验证
 ```
 
 ### 测试覆盖

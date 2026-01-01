@@ -1,8 +1,8 @@
-import { createStyles } from 'antd-style';
+import { Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { type ReactNode, memo } from 'react';
-import { Flexbox, FlexboxProps } from 'react-layout-kit';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   header: css`
     z-index: 10;
   `,
@@ -15,17 +15,15 @@ interface SidebarHeaderProps extends Omit<FlexboxProps, 'title'> {
 }
 
 const SidebarHeader = memo<SidebarHeaderProps>(({ title, style, actions, onClick, ...rest }) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox
       align={'center'}
       className={styles.header}
       distribution={'space-between'}
+      flex={'none'}
       horizontal
       onClick={onClick}
-      paddingBlock={14}
-      paddingInline={16}
+      padding={8}
       style={style}
       {...rest}
     >

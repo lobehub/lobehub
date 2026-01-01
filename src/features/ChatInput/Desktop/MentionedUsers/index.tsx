@@ -1,7 +1,6 @@
-import { createStyles } from 'antd-style';
-import { lighten } from 'polished';
+import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useMentionStore } from '@/store/mention';
 import { mentionSelectors } from '@/store/mention/selectors';
@@ -10,7 +9,7 @@ import { sessionSelectors } from '@/store/session/selectors';
 
 import MentionedUserItem from './MentionedUserItem';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow-x: scroll;
 
@@ -18,13 +17,11 @@ const useStyles = createStyles(({ css, token }) => ({
     border-start-start-radius: 8px;
     border-start-end-radius: 8px;
 
-    background: ${lighten(0.01, token.colorBgLayout)};
+    background: color-mix(in srgb, ${cssVar.colorBgLayout} 99%, white);
   `,
 }));
 
 const MentionedUsers = memo(() => {
-  const { styles } = useStyles();
-
   const currentSession = useSessionStore(sessionSelectors.currentSession);
   const mentionedUsers = useMentionStore(mentionSelectors.mentionedUsers);
   const hasMentionedUsers = useMentionStore(mentionSelectors.hasMentionedUsers);

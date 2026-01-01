@@ -1,7 +1,6 @@
 import { MCP } from '@lobehub/icons';
 import { Avatar } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
-import { CSSProperties, memo } from 'react';
+import { type CSSProperties, memo } from 'react';
 
 interface PluginAvatarProps {
   alt?: string;
@@ -11,10 +10,10 @@ interface PluginAvatarProps {
 }
 
 const PluginAvatar = memo<PluginAvatarProps>(({ avatar, style, size = 40, alt }) => {
-  const theme = useTheme();
   return avatar === 'MCP_AVATAR' ? (
     <MCP.Avatar
-      className={`${theme.prefixCls}-avatar`}
+      className={'ant-avatar'}
+      shape={'square'}
       size={size}
       style={{ flex: 'none', overflow: 'hidden', ...style }}
     />
@@ -22,6 +21,7 @@ const PluginAvatar = memo<PluginAvatarProps>(({ avatar, style, size = 40, alt })
     <Avatar
       alt={alt}
       avatar={avatar}
+      shape={'square'}
       size={size}
       style={{ flex: 'none', overflow: 'hidden', ...style }}
     />

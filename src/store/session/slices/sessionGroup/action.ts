@@ -1,12 +1,12 @@
 import { t } from 'i18next';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { message } from '@/components/AntdStaticMethods';
 import { sessionService } from '@/services/session';
-import { SessionStore } from '@/store/session';
-import { SessionGroupItem } from '@/types/session';
+import { type SessionStore } from '@/store/session';
+import { type SessionGroupItem } from '@/types/session';
 
-import { SessionGroupsDispatch, sessionGroupsReducer } from './reducer';
+import { type SessionGroupsDispatch, sessionGroupsReducer } from './reducer';
 
 /* eslint-disable typescript-sort-keys/interface */
 export interface SessionGroupAction {

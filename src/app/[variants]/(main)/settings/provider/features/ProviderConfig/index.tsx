@@ -1,5 +1,6 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE, isDesktop } from '@lobechat/const';
 import { ProviderCombine } from '@lobehub/icons';
 import {
@@ -10,14 +11,14 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
+import { Center, Flexbox, Skeleton } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
-import { Skeleton, Switch } from 'antd';
-import { createStyles } from 'antd-style';
+import { Switch } from 'antd';
+import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
 import { Loader2Icon, LockIcon } from 'lucide-react';
 import Link from 'next/link';
-import { ReactNode, memo, useCallback, useLayoutEffect, useRef } from 'react';
+import { type ReactNode, memo, useCallback, useLayoutEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 import urlJoin from 'url-join';
 import { z } from 'zod';
 
@@ -25,17 +26,19 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import {
-  AiProviderDetailItem,
+  type AiProviderDetailItem,
   AiProviderSourceEnum,
-  AiProviderSourceType,
+  type AiProviderSourceType,
 } from '@/types/aiProvider';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
-import Checker, { CheckErrorRender } from './Checker';
+import Checker, { type CheckErrorRender } from './Checker';
 import EnableSwitch from './EnableSwitch';
 import UpdateProviderInfo from './UpdateProviderInfo';
 
-const useStyles = createStyles(({ css, prefixCls, responsive, token }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   aceGcm: css`
     padding-block: 0 !important;
     .${prefixCls}-form-item-label {
@@ -45,12 +48,12 @@ const useStyles = createStyles(({ css, prefixCls, responsive, token }) => ({
       width: 100%;
 
       font-size: 12px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
       text-align: center;
 
       opacity: 0.66;
 
-      transition: opacity 0.2s ${token.motionEaseInOut};
+      transition: opacity 0.2s ${cssVar.motionEaseInOut};
 
       &:hover {
         opacity: 1;
@@ -63,7 +66,7 @@ const useStyles = createStyles(({ css, prefixCls, responsive, token }) => ({
       width: min(70%, 800px);
       min-width: min(70%, 800px) !important;
     }
-    ${responsive.mobile} {
+    ${responsive.sm} {
       width: 100%;
       min-width: unset !important;
     }
@@ -76,13 +79,13 @@ const useStyles = createStyles(({ css, prefixCls, responsive, token }) => ({
 
     font-size: 12px;
     font-weight: 500;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
 
     &:hover {
-      color: ${token.colorText};
-      background: ${token.colorFill};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFill};
     }
   `,
   switchLoading: css`
@@ -122,11 +125,13 @@ const ProviderConfig = memo<ProviderConfigProps>(
     logo,
     className,
     checkErrorRender,
+    canDeactivate = true,
     name,
     showAceGcm = true,
     extra,
     source = AiProviderSourceEnum.Builtin,
     apiKeyUrl,
+    title,
   }) => {
     const {
       proxyUrl,
@@ -138,7 +143,6 @@ const ProviderConfig = memo<ProviderConfigProps>(
     } = settings || {};
     const { t } = useTranslation('modelProvider');
     const [form] = Form.useForm();
-    const { cx, styles, theme } = useStyles();
 
     const [
       data,
@@ -202,22 +206,23 @@ const ProviderConfig = memo<ProviderConfigProps>(
                 placeholder={t('providerModels.config.apiKey.placeholder', { name })}
                 suffix={
                   configUpdating && (
-                    <Icon icon={Loader2Icon} spin style={{ color: theme.colorTextTertiary }} />
+                    <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
                   )
                 }
               />
             ),
             desc: apiKeyUrl ? (
               <Trans
+                components={[
+                  <span key="0" />,
+                  <span key="1" />,
+                  <span key="2" />,
+                  <Link href={apiKeyUrl} key="3" target={'_blank'} />,
+                ]}
                 i18nKey="providerModels.config.apiKey.descWithUrl"
                 ns={'modelProvider'}
-                value={{ name }}
-              >
-                请填写你的 {{ name }} API Key,
-                <Link href={apiKeyUrl} target={'_blank'}>
-                  点此获取
-                </Link>
-              </Trans>
+                values={{ name }}
+              />
             ) : (
               t(`providerModels.config.apiKey.desc`, { name })
             ),
@@ -230,13 +235,14 @@ const ProviderConfig = memo<ProviderConfigProps>(
       children: (
         <>
           <Icon icon={LockIcon} style={{ marginRight: 4 }} />
-          <Trans i18nKey="providerModels.config.aesGcm" ns={'modelProvider'}>
-            您的秘钥与代理地址等将使用
-            <Link href={AES_GCM_URL} style={{ marginInline: 4 }} target={'_blank'}>
-              AES-GCM
-            </Link>
-            加密算法进行加密
-          </Trans>
+          <Trans
+            components={[
+              <span key="0" />,
+              <Link href={AES_GCM_URL} key="1" style={{ marginInline: 4 }} target={'_blank'} />,
+            ]}
+            i18nKey="providerModels.config.aesGcm"
+            ns={'modelProvider'}
+          />
         </>
       ),
       className: styles.aceGcm,
@@ -258,7 +264,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
               }
               suffix={
                 configUpdating && (
-                  <Icon icon={Loader2Icon} spin style={{ color: theme.colorTextTertiary }} />
+                  <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
                 )
               }
             />
@@ -363,7 +369,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
           {extra}
 
           {isCustom && <UpdateProviderInfo />}
-          <EnableSwitch id={id} />
+          {canDeactivate && !(ENABLE_BUSINESS_FEATURES && id === 'lobehub') && (
+            <EnableSwitch id={id} />
+          )}
         </Flexbox>
       ),
       title: (
@@ -388,7 +396,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
             </Flexbox>
           ) : (
             <>
-              <ProviderCombine provider={id} size={24} />
+              {title ?? <ProviderCombine provider={id} size={24} />}
               <Tooltip title={t('providerModels.config.helpDoc')}>
                 <Link
                   href={urlJoin(BASE_PROVIDER_DOC_URL, id)}

@@ -1,23 +1,21 @@
-import { Block } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { rgba } from 'polished';
+import { Block, Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     agent: css`
       padding: 4px;
       border-radius: 2px;
     `,
     agentActive: css`
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     `,
     bubble: css`
       padding: 6px;
-      border: 1px solid ${rgba(token.colorBorderSecondary, 0.66)};
+      border: 1px solid color-mix(in srgb, ${cssVar.colorBorderSecondary} 66%, transparent);
       border-radius: 3px;
-      background-color: ${token.colorBgContainer};
+      background-color: ${cssVar.colorBgContainer};
     `,
     container: css`
       overflow: hidden;
@@ -25,34 +23,34 @@ const useStyles = createStyles(({ css, token }) => {
 
       width: 332px;
       height: 200px;
-      border: 1px solid ${token.colorBorder};
-      border-radius: ${token.borderRadiusLG}px;
+      border: 1px solid ${cssVar.colorBorder};
+      border-radius: ${cssVar.borderRadiusLG};
 
-      background: ${token.colorBgLayout};
+      background: ${cssVar.colorBgLayout};
     `,
     conversation: css`
-      background: ${token.colorBgContainerSecondary};
+      background: ${cssVar.colorBgContainer};
     `,
     header: css`
-      border-block-end: 1px solid ${token.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     `,
     icon: css`
       flex: none;
       border-radius: 2px;
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     `,
     input: css`
-      border-block-start: 1px solid ${token.colorBorderSecondary};
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     `,
     nav: css`
       padding: 4px;
-      border-inline-end: 1px solid ${token.colorBorderSecondary};
-      background: ${token.colorBgLayout};
+      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+      background: ${cssVar.colorBgLayout};
     `,
     sidebar: css`
       padding: 4px;
-      border-inline-end: 1px solid ${token.colorBorderSecondary};
-      background: ${token.colorBgLayout};
+      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+      background: ${cssVar.colorBgLayout};
     `,
   };
 });
@@ -61,7 +59,6 @@ const AgentItem = memo<{
   active?: boolean;
   color?: string;
 }>(({ active, color }) => {
-  const { cx, styles, theme } = useStyles();
   return (
     <Flexbox
       align={'center'}
@@ -81,7 +78,7 @@ const AgentItem = memo<{
           className={styles.icon}
           height={2}
           style={{
-            background: theme.colorTextTertiary,
+            background: cssVar.colorTextTertiary,
           }}
           width={'66%'}
         />
@@ -89,7 +86,7 @@ const AgentItem = memo<{
           className={styles.icon}
           height={2}
           style={{
-            background: theme.colorTextQuaternary,
+            background: cssVar.colorTextQuaternary,
           }}
           width={'100%'}
         />
@@ -99,14 +96,12 @@ const AgentItem = memo<{
 });
 
 const Preview = memo(() => {
-  const { styles, theme } = useStyles();
-
   const nav = (
     <Flexbox align={'center'} className={styles.nav} gap={8} width={24}>
       <Flexbox
         className={styles.icon}
         height={14}
-        style={{ border: `2px solid ${theme.colorPrimary}`, borderRadius: '50%' }}
+        style={{ border: `2px solid ${cssVar.colorPrimary}`, borderRadius: '50%' }}
         width={14}
       />
       <Flexbox className={styles.icon} height={12} width={12} />
@@ -129,7 +124,7 @@ const Preview = memo(() => {
           className={styles.icon}
           height={8}
           style={{
-            background: theme.colorFillTertiary,
+            background: cssVar.colorFillTertiary,
           }}
           width={'100%'}
         />
@@ -172,7 +167,7 @@ const Preview = memo(() => {
         className={styles.icon}
         height={12}
         style={{
-          background: theme.colorPrimary,
+          background: cssVar.colorPrimary,
         }}
         width={32}
       />
@@ -192,7 +187,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'100%'}
               />
@@ -200,7 +195,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'66%'}
               />
@@ -224,7 +219,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'100%'}
               />
@@ -232,7 +227,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'66%'}
               />
@@ -240,7 +235,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'100%'}
               />
@@ -248,7 +243,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'100%'}
               />
@@ -256,7 +251,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'33%'}
               />
@@ -268,7 +263,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'100%'}
               />
@@ -276,7 +271,7 @@ const Preview = memo(() => {
                 className={styles.icon}
                 height={2}
                 style={{
-                  background: theme.colorTextQuaternary,
+                  background: cssVar.colorTextQuaternary,
                 }}
                 width={'66%'}
               />

@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Inklappen",
-      "on": "Uitklappen"
-    },
-    "typobar": {
-      "off": "Verberg opmaakwerkbalk",
-      "on": "Toon opmaakwerkbalk"
-    }
-  },
+  "actions.expand.off": "Samenvouwen",
+  "actions.expand.on": "Uitvouwen",
+  "actions.typobar.off": "Opmaakwerkbalk verbergen",
+  "actions.typobar.on": "Opmaakwerkbalk tonen",
+  "autoSave.latest": "Laatste versie geladen",
+  "autoSave.saved": "Opgeslagen",
+  "autoSave.saving": "Automatisch opslaan...",
   "cancel": "Annuleren",
+  "codemirror.copyFailed": "Kopiëren mislukt",
+  "codemirror.copySuccess": "Code gekopieerd naar klembord",
+  "codemirror.selectLanguage": "Selecteer taal",
+  "codemirror.selectTheme": "Selecteer thema",
+  "codemirror.showLineNumbers": "Regelnummers tonen",
+  "codemirror.tabSize": "Tabgrootte",
+  "codemirror.theme": "Thema",
+  "codemirror.useTabs": "Tabs gebruiken",
   "confirm": "Bevestigen",
-  "file": {
-    "error": "Fout: {{message}}",
-    "uploading": "Bestand wordt geüpload..."
-  },
-  "image": {
-    "broken": "Afbeelding beschadigd"
-  },
-  "link": {
-    "edit": "Link bewerken",
-    "open": "Link openen",
-    "placeholder": "Voer de URL van de link in",
-    "unlink": "Link verwijderen"
-  },
-  "math": {
-    "placeholder": "Voer TeX-formule in"
-  },
-  "slash": {
-    "h1": "Kop 1",
-    "h2": "Kop 2",
-    "h3": "Kop 3",
-    "hr": "Scheidingslijn",
-    "table": "Tabel",
-    "tex": "TeX-formule"
-  },
-  "table": {
-    "delete": "Tabel verwijderen",
-    "deleteColumn": "Kolom verwijderen",
-    "deleteRow": "Rij verwijderen",
-    "insertColumnLeft": "Voeg {{count}} kolommen links in",
-    "insertColumnRight": "Voeg {{count}} kolommen rechts in",
-    "insertRowAbove": "Voeg {{count}} rijen hierboven in",
-    "insertRowBelow": "Voeg {{count}} rijen hieronder in"
-  },
-  "typobar": {
-    "blockquote": "Citaat",
-    "bold": "Vet",
-    "bulletList": "Opsomming",
-    "code": "Inlinecode",
-    "codeblock": "Codeblok",
-    "italic": "Cursief",
-    "link": "Link",
-    "numberList": "Genummerde lijst",
-    "strikethrough": "Doorhalen",
-    "table": "tabel",
-    "taskList": "Takenlijst",
-    "tex": "TeX-formule",
-    "underline": "Onderstrepen"
-  }
+  "file.error": "Fout: {{message}}",
+  "file.uploading": "Bestand uploaden...",
+  "image.broken": "Afbeelding is beschadigd",
+  "link.edit": "Link bewerken",
+  "link.editLinkTitle": "Link",
+  "link.editTextTitle": "Titel",
+  "link.open": "Link openen",
+  "link.placeholder": "Voer de URL van de link in",
+  "link.unlink": "Link verwijderen",
+  "markdown.cancel": "Annuleren",
+  "markdown.confirm": "Converteren",
+  "markdown.parseMessage": "Converteren naar Markdown-indeling. Bestaande inhoud wordt overschreven. Weet je het zeker? (Sluit automatisch over 5 seconden)",
+  "markdown.parseTitle": "Opmaak als Markdown",
+  "math.placeholder": "Voer een TeX-formule in",
+  "modifier.accept": "Behouden",
+  "modifier.acceptAll": "Alles behouden",
+  "modifier.reject": "Ongedaan maken",
+  "modifier.rejectAll": "Alles ongedaan maken",
+  "slash.h1": "Kop 1",
+  "slash.h2": "Kop 2",
+  "slash.h3": "Kop 3",
+  "slash.hr": "Scheiding",
+  "slash.table": "Tabel",
+  "slash.tex": "TeX-formule",
+  "table.delete": "Tabel verwijderen",
+  "table.deleteColumn": "Kolom verwijderen",
+  "table.deleteRow": "Rij verwijderen",
+  "table.insertColumnLeft": "{{count}} kolom(men) links invoegen",
+  "table.insertColumnRight": "{{count}} kolom(men) rechts invoegen",
+  "table.insertRowAbove": "{{count}} rij(en) boven invoegen",
+  "table.insertRowBelow": "{{count}} rij(en) onder invoegen",
+  "typobar.blockquote": "Citaatblok",
+  "typobar.bold": "Vet",
+  "typobar.bulletList": "Opsommingstekens",
+  "typobar.code": "Inline code",
+  "typobar.codeblock": "Codeblok",
+  "typobar.image": "Afbeelding",
+  "typobar.italic": "Cursief",
+  "typobar.link": "Link",
+  "typobar.numberList": "Genummerde lijst",
+  "typobar.redo": "Opnieuw",
+  "typobar.strikethrough": "Doorhalen",
+  "typobar.table": "Tabel",
+  "typobar.taskList": "Takenlijst",
+  "typobar.tex": "TeX-formule",
+  "typobar.underline": "Onderstrepen",
+  "typobar.undo": "Ongedaan maken"
 }

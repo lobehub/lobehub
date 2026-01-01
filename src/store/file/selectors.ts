@@ -7,4 +7,5 @@ export const filesSelectors = {
 };
 
 export { fileChatSelectors } from './slices/chat/selectors';
+export { documentSelectors } from './slices/document';
 export * from './slices/fileManager/selectors';

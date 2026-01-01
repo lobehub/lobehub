@@ -1,38 +1,36 @@
 {
-  "actions": {
-    "autoRename": "智能重命名",
-    "confirmRemoveAll": "即将删除全部话题，删除后将不可恢复，请谨慎操作。",
-    "confirmRemoveTopic": "即将删除该话题，删除后将不可恢复，请谨慎操作。",
-    "confirmRemoveUnstarred": "即将删除未收藏话题，删除后将不可恢复，请谨慎操作。",
-    "duplicate": "创建副本",
-    "export": "导出话题",
-    "openInNewWindow": "单独打开页面",
-    "removeAll": "删除全部话题",
-    "removeUnstarred": "删除未收藏话题"
-  },
+  "actions.addNewTopic": "开启新话题",
+  "actions.autoRename": "智能重命名",
+  "actions.confirmRemoveAll": "您即将删除所有主题，此操作无法撤销。",
+  "actions.confirmRemoveTopic": "您即将删除此主题，此操作无法撤销。",
+  "actions.confirmRemoveUnstarred": "您即将删除未加星标的主题，此操作无法撤销。",
+  "actions.duplicate": "复制",
+  "actions.export": "导出主题",
+  "actions.import": "导入对话",
+  "actions.openInNewWindow": "打开独立窗口",
+  "actions.removeAll": "删除全部话题",
+  "actions.removeUnstarred": "删除未收藏话题",
   "defaultTitle": "默认话题",
-  "duplicateLoading": "话题复制中...",
+  "displayItems": "显示条目",
+  "duplicateLoading": "话题复制中…",
   "duplicateSuccess": "话题复制成功",
   "favorite": "收藏",
-  "groupMode": {
-    "ascMessages": "按消息总数顺序",
-    "byTime": "按时间分组",
-    "descMessages": "按消息总数倒序",
-    "flat": "不分组"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "本月",
-      "today": "今天",
-      "week": "本周",
-      "yesterday": "昨天"
-    }
-  },
-  "guide": {
-    "desc": "点击发送左侧按钮可将当前会话保存为历史话题，并开启新一轮会话",
-    "title": "话题列表"
-  },
-  "searchPlaceholder": "搜索话题...",
+  "groupMode.ascMessages": "按消息总数顺序",
+  "groupMode.byTime": "按时间分组",
+  "groupMode.descMessages": "按消息总数倒序",
+  "groupMode.flat": "不分组",
+  "groupTitle.byTime.month": "本月",
+  "groupTitle.byTime.today": "今天",
+  "groupTitle.byTime.week": "本周",
+  "groupTitle.byTime.yesterday": "昨天",
+  "guide.desc": "点击发送左侧按钮可将当前会话保存为历史话题，并开启新一轮会话",
+  "guide.title": "主题列表",
+  "importError": "导入遇到了问题",
+  "importInvalidFormat": "文件格式不正确。请确认这是有效的 JSON 文件",
+  "importLoading": "正在导入对话…",
+  "importSuccess": "已导入 {{count}} 条消息",
+  "loadMore": "更多",
+  "searchPlaceholder": "搜索话题…",
   "searchResultEmpty": "暂无搜索结果",
   "temp": "临时",
   "title": "话题"

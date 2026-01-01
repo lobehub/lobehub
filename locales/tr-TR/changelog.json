@@ -1,18 +1,14 @@
 {
-  "actions": {
-    "followOnX": "Bizi X'te takip edin",
-    "subscribeToUpdates": "Güncellemeleri abone olun",
-    "versions": "Sürüm detayları"
-  },
-  "addedWhileAway": "Siz yokken yeni özellikler ekledik.",
-  "allChangelog": "Tüm güncelleme günlüklerini görüntüle",
-  "description": "{{appName}}'in yeni özelliklerini ve iyileştirmelerini sürekli takip edin",
-  "pagination": {
-    "next": "Sonraki Sayfa",
-    "older": "Geçmiş değişiklikleri görüntüle"
-  },
-  "readDetails": "Detayları okuyun",
-  "title": "Güncelleme Günlüğü",
+  "actions.followOnX": "X'te bizi takip edin",
+  "actions.subscribeToUpdates": "Güncellemeler için abone olun",
+  "actions.versions": "Sürüm detayları",
+  "addedWhileAway": "Uzak kaldığınız sürede yeni özellikler ekledik.",
+  "allChangelog": "Tüm değişiklik kayıtlarını görüntüle",
+  "description": "{{appName}} uygulamasındaki yeni özellikler ve iyileştirmelerden haberdar olun",
+  "pagination.next": "Sonraki Sayfa",
+  "pagination.older": "Geçmiş Değişiklikleri Görüntüle",
+  "readDetails": "Detayları oku",
+  "title": "Değişiklik Günlüğü",
   "versionDetails": "Sürüm detayları",
-  "welcomeBack": "Hoş geldiniz!"
+  "welcomeBack": "Tekrar hoş geldiniz!"
 }

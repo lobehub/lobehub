@@ -1,4 +1,4 @@
-import { SessionStore } from '@/store/session';
+import { type SessionStore } from '@/store/session';
 
 const sessionGroupItems = (s: SessionStore) => s.sessionGroups;
 

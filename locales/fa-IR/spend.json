@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (توکن در ثانیه): تعداد توکن تولیدشده در هر ثانیه",
+  "duration.TTFT": "TTFT (زمان تا اولین توکن): تأخیر در دریافت اولین توکن",
+  "duration.completion": "زمان تکمیل خروجی",
+  "duration.latency": "مدت‌زمان",
+  "duration.stage.end": "پایان",
+  "duration.stage.firstToken": "اولین توکن",
+  "duration.stage.start": "شروع",
+  "table.columns.TTFT.tooltip": "زمان تا اولین توکن، واحد: ثانیه",
+  "table.columns.duration": "مدت‌زمان",
+  "table.columns.model": "مدل",
+  "table.columns.spend": "اعتبار مصرف‌شده",
+  "table.columns.startTime": "تاریخ ایجاد",
+  "table.columns.totalTokens": "میزان استفاده از توکن",
+  "table.columns.type.enums.chat": "تولید متن",
+  "table.columns.type.enums.imageGeneration": "تولید تصویر",
+  "table.columns.type.title": "نوع",
+  "table.desc": "جزئیات مصرف اعتبار محاسباتی برای تولید متن، جاسازی، تولید تصویر و غیره.",
+  "table.more": "مشاهده جزئیات",
+  "table.title": "جزئیات مصرف اعتبار محاسباتی",
+  "table.totalToken.input": "ورودی",
+  "table.totalToken.output": "خروجی"
+}

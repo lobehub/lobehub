@@ -1,55 +1,16 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, responsive } from 'antd-style';
 
-import { WidthMode } from './ShareImage/type';
+// Dynamic styles with widthMode prop - converted to CSS variables
+export { styles as containerStyles } from './useContainerStyles';
 
-export const useContainerStyles = createStyles(
-  ({ css, token, stylish, cx, responsive }, widthMode?: WidthMode) => {
-    const isNarrow = widthMode === WidthMode.Narrow;
-
-    return {
-      preview: cx(
-        stylish.noScrollbar,
-        css`
-          overflow: hidden scroll;
-
-          width: 100%;
-          max-width: ${isNarrow ? '480px' : 'none'};
-          max-height: 70dvh;
-          margin: ${isNarrow ? '0 auto' : '0'};
-          border: 1px solid ${token.colorBorder};
-          border-radius: ${token.borderRadiusLG}px;
-
-          background: ${token.colorBgLayout};
-
-          /* stylelint-disable selector-class-pattern */
-          .react-pdf__Document *,
-          .react-pdf__Page * {
-            pointer-events: none;
-          }
-          /* stylelint-enable selector-class-pattern */
-
-          ::-webkit-scrollbar {
-            width: 0 !important;
-            height: 0 !important;
-          }
-
-          ${responsive.mobile} {
-            max-height: 40dvh;
-          }
-        `,
-      ),
-    };
-  },
-);
-
-export const useStyles = createStyles(({ responsive, token, css }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
-    ${responsive.mobile} {
+    ${responsive.sm} {
       padding-block-end: 68px;
     }
   `,
   footer: css`
-    ${responsive.mobile} {
+    ${responsive.sm} {
       position: absolute;
       inset-block-end: 0;
       inset-inline: 0;
@@ -58,13 +19,13 @@ export const useStyles = createStyles(({ responsive, token, css }) => ({
       margin: 0;
       padding: 16px;
 
-      background: ${token.colorBgContainer};
+      background: ${cssVar.colorBgContainer};
     }
   `,
   sidebar: css`
     flex: none;
     width: max(240px, 25%);
-    ${responsive.mobile} {
+    ${responsive.sm} {
       flex: 1;
       width: unset;
       margin-inline: -16px;

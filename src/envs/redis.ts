@@ -14,7 +14,7 @@ const parseNumber = (value?: string) => {
 
 const parseRedisTls = (value?: string) => {
   if (!value) {
-    return false
+    return false;
   }
 
   const normalized = value.trim().toLowerCase();

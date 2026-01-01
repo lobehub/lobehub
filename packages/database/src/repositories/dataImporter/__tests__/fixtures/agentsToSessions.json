@@ -12,7 +12,6 @@
         "plugins": [],
         "chatConfig": {
           "searchMode": "off",
-          "displayMode": "chat",
           "historyCount": 8,
           "searchFCModel": {
             "model": "gpt-4o-mini",
@@ -57,7 +56,6 @@
         "backgroundColor": null,
         "plugins": [],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -96,7 +94,6 @@
         "backgroundColor": "rgba(0,0,0,0)",
         "plugins": [],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": false,
           "enableAutoCreateTopic": true,
@@ -135,7 +132,6 @@
         "backgroundColor": "rgba(0,0,0,0)",
         "plugins": ["web_search"],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": false,
           "enableAutoCreateTopic": true,
@@ -174,7 +170,6 @@
         "backgroundColor": null,
         "plugins": [],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -213,7 +208,6 @@
         "backgroundColor": "rgba(0,0,0,0)",
         "plugins": [],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": false,
           "enableAutoCreateTopic": true,
@@ -252,7 +246,6 @@
         "backgroundColor": null,
         "plugins": [],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -291,7 +284,6 @@
         "backgroundColor": null,
         "plugins": [],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -330,7 +322,6 @@
         "backgroundColor": null,
         "plugins": [],
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,

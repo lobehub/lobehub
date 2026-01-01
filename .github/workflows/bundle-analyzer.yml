@@ -1,0 +1,115 @@
+name: Bundle Analyzer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  NODE_VERSION: 24.11.1
+  BUN_VERSION: 1.2.23
+
+jobs:
+  bundle-analyzer:
+    name: Analyze Bundle Size
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm i
+
+      - name: Ensure lockfile exists
+        run: |
+          # Temporarily override .npmrc lockfile=false setting
+          # to generate pnpm-lock.yaml for reproducible builds
+          if [ ! -f "pnpm-lock.yaml" ]; then
+            echo "Generating pnpm-lock.yaml..."
+            # Create temporary .npmrc override
+            mv .npmrc .npmrc.bak
+            echo "lockfile=true" > .npmrc
+            cat .npmrc.bak >> .npmrc
+            pnpm i
+            mv .npmrc.bak .npmrc
+          fi
+
+      - name: Generate build secrets
+        id: generate-secret
+        run: echo "secret=$(openssl rand -base64 32)" >> $GITHUB_OUTPUT
+
+      - name: Build with bundle analyzer
+        run: bun run build:analyze || true
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+          KEY_VAULTS_SECRET: ${{ secrets.KEY_VAULTS_SECRET || steps.generate-secret.outputs.secret }}
+
+      - name: Prepare analyzer reports
+        run: |
+          mkdir -p bundle-report
+          # Copy analyzer HTML reports if they exist
+          if [ -d ".next/analyze" ]; then
+            cp -r .next/analyze/* bundle-report/ || true
+          fi
+          # Also check if reports are in .vercel/output
+          if [ -d ".vercel/output/.next/analyze" ]; then
+            cp -r .vercel/output/.next/analyze/* bundle-report/ || true
+          fi
+          # Include pnpm lockfile for reproducible builds
+          if [ -f "pnpm-lock.yaml" ]; then
+            cp pnpm-lock.yaml bundle-report/pnpm-lock.yaml
+            echo "Copied pnpm-lock.yaml to bundle-report"
+          else
+            echo "Warning: pnpm-lock.yaml not found"
+          fi
+          # Create a summary with build metadata
+          echo "# Bundle Analysis Report" > bundle-report/README.md
+          echo "" >> bundle-report/README.md
+          echo "**Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> bundle-report/README.md
+          echo "**Commit:** ${{ github.sha }}" >> bundle-report/README.md
+          echo "**Branch:** ${{ github.ref_name }}" >> bundle-report/README.md
+          echo "" >> bundle-report/README.md
+          echo "## How to view" >> bundle-report/README.md
+          echo "" >> bundle-report/README.md
+          echo "1. Download the \`bundle-report\` artifact from this workflow run" >> bundle-report/README.md
+          echo "2. Extract the archive" >> bundle-report/README.md
+          echo "3. Open \`client.html\` and \`server.html\` in your browser" >> bundle-report/README.md
+          echo "" >> bundle-report/README.md
+          echo "## Files in this report" >> bundle-report/README.md
+          echo "" >> bundle-report/README.md
+          echo "- \`client.html\` - Client-side bundle analysis" >> bundle-report/README.md
+          echo "- \`server.html\` - Server-side bundle analysis" >> bundle-report/README.md
+          echo "- \`pnpm-lock.yaml\` - pnpm lockfile (for reproducible builds)" >> bundle-report/README.md
+
+      - name: Upload bundle analyzer reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-report-${{ github.run_id }}
+          path: bundle-report/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Create summary comment
+        run: |
+          echo "## Bundle Analysis Complete :chart_with_upwards_trend:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact:** \`bundle-report-${{ github.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download the artifact to view the detailed bundle analysis reports." >> $GITHUB_STEP_SUMMARY

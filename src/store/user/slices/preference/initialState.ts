@@ -1,5 +1,5 @@
 import { DEFAULT_PREFERENCE } from '@/const/user';
-import { UserPreference } from '@/types/user';
+import { type UserPreference } from '@/types/user';
 
 export interface UserPreferenceState {
   /**

@@ -37,9 +37,9 @@ describe('chatSelectors - Backward Compatibility Layer', () => {
     it('should work as backward compatibility alias for getDisplayMessageById', () => {
       const state = merge(initialStore, {
         messagesMap: {
-          [messageMapKey('abc')]: mockMessages,
+          [messageMapKey({ agentId: 'abc' })]: mockMessages,
         },
-        activeId: 'abc',
+        activeAgentId: 'abc',
       });
       const message = chatSelectors.getMessageById('msg1')(state);
       expect(message?.id).toBe('msg1');
@@ -50,11 +50,11 @@ describe('chatSelectors - Backward Compatibility Layer', () => {
   describe('currentChatKey', () => {
     it('should work as backward compatibility alias for currentDisplayChatKey', () => {
       const state: Partial<ChatStore> = {
-        activeId: 'testId',
+        activeAgentId: 'testId',
         activeTopicId: 'topicId',
       };
       const result = chatSelectors.currentChatKey(state as ChatStore);
-      expect(result).toBe(messageMapKey('testId', 'topicId'));
+      expect(result).toBe(messageMapKey({ agentId: 'testId', topicId: 'topicId' }));
     });
   });
 
@@ -62,9 +62,9 @@ describe('chatSelectors - Backward Compatibility Layer', () => {
     it('should work as backward compatibility alias for activeDisplayMessages', () => {
       const state = merge(initialStore, {
         messagesMap: {
-          [messageMapKey('abc')]: mockMessages,
+          [messageMapKey({ agentId: 'abc' })]: mockMessages,
         },
-        activeId: 'abc',
+        activeAgentId: 'abc',
       });
       const chats = chatSelectors.activeBaseChats(state);
       expect(chats).toHaveLength(2);
@@ -79,9 +79,9 @@ describe('chatSelectors - Backward Compatibility Layer', () => {
         { id: '2', role: 'tool', content: 'Tool message' },
       ] as UIChatMessage[];
       const state: Partial<ChatStore> = {
-        activeId: 'test-id',
+        activeAgentId: 'test-id',
         dbMessagesMap: {
-          [messageMapKey('test-id')]: messages,
+          [messageMapKey({ agentId: 'test-id' })]: messages,
         },
       };
       const result = chatSelectors.currentToolMessages(state as ChatStore);

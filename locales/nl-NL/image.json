@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Verhouding",
-      "lock": "Vergrendel beeldverhouding",
-      "unlock": "Ontgrendel beeldverhouding"
-    },
-    "cfg": {
-      "label": "Leidende intensiteit"
-    },
-    "header": {
-      "desc": "Eenvoudige beschrijving, direct creëren",
-      "title": "Schilderen"
-    },
-    "height": {
-      "label": "Hoogte"
-    },
-    "imageNum": {
-      "label": "Aantal afbeeldingen"
-    },
-    "imageUrl": {
-      "label": "Referentieafbeelding"
-    },
-    "imageUrls": {
-      "label": "Referentieafbeeldingen"
-    },
-    "model": {
-      "label": "Model"
-    },
-    "prompt": {
-      "placeholder": "Beschrijf wat je wilt genereren"
-    },
-    "quality": {
-      "label": "Beeldkwaliteit",
-      "options": {
-        "hd": "Hoge resolutie",
-        "standard": "Standaard"
-      }
-    },
-    "resolution": {
-      "label": "Resolutie",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Zaad",
-      "random": "Willekeurige zaad"
-    },
-    "size": {
-      "label": "Afmeting"
-    },
-    "steps": {
-      "label": "Stappen"
-    },
-    "title": "AI Tekenen",
-    "width": {
-      "label": "Breedte"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Zaad toepassen",
-      "copyError": "Foutmelding kopiëren",
-      "copyPrompt": "Prompt kopiëren",
-      "copySeed": "Zaad kopiëren",
-      "delete": "Verwijderen",
-      "deleteBatch": "Batch verwijderen",
-      "download": "Downloaden",
-      "downloadFailed": "Afbeelding downloaden mislukt",
-      "errorCopied": "Foutmelding gekopieerd naar klembord",
-      "errorCopyFailed": "Foutmelding kopiëren mislukt",
-      "generate": "Genereren",
-      "promptCopied": "Prompt gekopieerd naar klembord",
-      "promptCopyFailed": "Prompt kopiëren mislukt",
-      "reuseSettings": "Instellingen hergebruiken",
-      "seedApplied": "Zaad is toegepast op de configuratie",
-      "seedApplyFailed": "Toepassen van zaad mislukt",
-      "seedCopied": "Zaad gekopieerd naar klembord",
-      "seedCopyFailed": "Zaad kopiëren mislukt"
-    },
-    "metadata": {
-      "count": "{{count}} afbeeldingen"
-    },
-    "status": {
-      "failed": "Generatie mislukt",
-      "generating": "Bezig met genereren..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "De huidige implementatie gebruikt een client-database modus en ondersteunt geen AI-beeldgeneratie. Schakel over naar de <1>server-database modus</1> of gebruik direct <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "Diepe integratie met het bestandsbeheersysteem, gegenereerde afbeeldingen worden automatisch opgeslagen in het bestandssysteem voor gecentraliseerd beheer en organisatie",
-        "title": "Bestandssysteem integratie"
-      },
-      "llmAssisted": {
-        "desc": "Combineert de kracht van grote taalmodellen om prompts intelligent te optimaliseren en uit te breiden, wat de beeldgeneratiekwaliteit verbetert (Binnenkort beschikbaar)",
-        "title": "LLM-ondersteunde beeldgeneratie"
-      },
-      "multiProviders": {
-        "desc": "Ondersteunt meerdere AI-tekenproviders, waaronder OpenAI gpt-image-1, Google Imagen, FAL.ai, enz., met een breed scala aan modelkeuzes",
-        "title": "Ondersteuning voor meerdere providers"
-      }
-    },
-    "title": "De huidige implementatiemodus ondersteunt geen AI-tekenen"
-  },
-  "topic": {
-    "createNew": "Nieuw onderwerp aanmaken",
-    "deleteConfirm": "Onderwerp verwijderen",
-    "deleteConfirmDesc": "U staat op het punt dit gegenereerde onderwerp te verwijderen. Verwijdering is onomkeerbaar, wees voorzichtig.",
-    "empty": "Geen gegenereerde onderwerpen",
-    "title": "Schilderthema",
-    "untitled": "Standaard onderwerp"
-  }
+  "config.aspectRatio.label": "Beeldverhouding",
+  "config.aspectRatio.lock": "Beeldverhouding vergrendelen",
+  "config.aspectRatio.unlock": "Beeldverhouding ontgrendelen",
+  "config.cfg.label": "Intensiteit van begeleiding",
+  "config.header.desc": "Korte beschrijving, direct creëren",
+  "config.header.title": "Schilderij",
+  "config.height.label": "Hoogte",
+  "config.imageNum.label": "Aantal afbeeldingen",
+  "config.imageUrl.label": "Referentieafbeelding",
+  "config.imageUrls.label": "Referentieafbeeldingen",
+  "config.model.label": "Model",
+  "config.prompt.placeholder": "Beschrijf wat je wilt genereren",
+  "config.quality.label": "Beeldkwaliteit",
+  "config.quality.options.hd": "Hoge definitie",
+  "config.quality.options.standard": "Standaard",
+  "config.resolution.label": "Resolutie",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Seed",
+  "config.seed.random": "Willekeurige seed",
+  "config.size.label": "Formaat",
+  "config.steps.label": "Stappen",
+  "config.title": "AI-afbeelding",
+  "config.width.label": "Breedte",
+  "generation.actions.applySeed": "Seed toepassen",
+  "generation.actions.copyError": "Foutmelding kopiëren",
+  "generation.actions.copyPrompt": "Prompt kopiëren",
+  "generation.actions.copySeed": "Seed kopiëren",
+  "generation.actions.delete": "Verwijderen",
+  "generation.actions.deleteBatch": "Batch verwijderen",
+  "generation.actions.download": "Downloaden",
+  "generation.actions.downloadFailed": "Afbeelding downloaden mislukt. Controleer je netwerkverbinding of de CORS-configuratie van S3-opslag.",
+  "generation.actions.errorCopied": "Foutmelding gekopieerd naar klembord",
+  "generation.actions.errorCopyFailed": "Foutmelding kopiëren mislukt",
+  "generation.actions.generate": "Genereren",
+  "generation.actions.promptCopied": "Prompt gekopieerd naar klembord",
+  "generation.actions.promptCopyFailed": "Prompt kopiëren mislukt",
+  "generation.actions.reuseSettings": "Instellingen hergebruiken",
+  "generation.actions.seedApplied": "Seed toegepast op configuratie",
+  "generation.actions.seedApplyFailed": "Seed toepassen mislukt",
+  "generation.actions.seedCopied": "Seed gekopieerd naar klembord",
+  "generation.actions.seedCopyFailed": "Seed kopiëren mislukt",
+  "generation.metadata.count": "{{count}} afbeeldingen",
+  "generation.status.failed": "Generatie mislukt",
+  "generation.status.generating": "Bezig met genereren...",
+  "notSupportGuide.desc": "De huidige implementatiemodus ondersteunt geen AI-afbeeldingsgeneratie. Schakel over naar de <1>serverdatabase-implementatiemodus</1> of gebruik <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Diepe integratie met het bestandsbeheersysteem; gegenereerde afbeeldingen worden automatisch opgeslagen in het bestandssysteem voor uniforme organisatie en beheer.",
+  "notSupportGuide.features.fileIntegration.title": "Bestandssysteemintegratie",
+  "notSupportGuide.features.llmAssisted.desc": "Combineert mogelijkheden van grote taalmodellen om prompts intelligent te optimaliseren en uit te breiden, wat de beeldkwaliteit verbetert (binnenkort beschikbaar).",
+  "notSupportGuide.features.llmAssisted.title": "LLM-ondersteunde afbeeldingsgeneratie",
+  "notSupportGuide.features.multiProviders.desc": "Ondersteunt meerdere AI-afbeeldingsgeneratoren, waaronder OpenAI gpt-image-1, Google Imagen, FAL.ai en meer, met een ruime keuze aan modellen.",
+  "notSupportGuide.features.multiProviders.title": "Ondersteuning voor meerdere providers",
+  "notSupportGuide.title": "Huidige implementatiemodus ondersteunt geen AI-afbeeldingsgeneratie",
+  "topic.createNew": "Nieuw onderwerp",
+  "topic.deleteConfirm": "Generatieonderwerp verwijderen",
+  "topic.deleteConfirmDesc": "Je staat op het punt dit generatieonderwerp te verwijderen. Deze actie kan niet ongedaan worden gemaakt, wees voorzichtig.",
+  "topic.empty": "Geen generatieonderwerpen",
+  "topic.title": "Schilderthema",
+  "topic.untitled": "Standaardonderwerp"
 }

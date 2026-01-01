@@ -8,7 +8,7 @@ const tencentCloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'DeepSeek-R1 为671B 模型，使用强化学习训练，推理过程包含大量反思和验证，思维链长度可达数万字。 该系列模型在数学、代码以及各种复杂逻辑推理任务上推理效果优异，并为用户展现了完整的思考过程。',
+      'DeepSeek-R1 is a 671B-parameter model trained with reinforcement learning. Its reasoning process includes extensive reflection and verification, with chains of thought that can reach tens of thousands of words. The series excels in math, code, and complex logical reasoning tasks, and exposes the full reasoning process to users.',
     displayName: 'DeepSeek R1',
     enabled: true,
     id: 'deepseek-r1',
@@ -25,7 +25,7 @@ const tencentCloudChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 65_536,
     description:
-      'DeepSeek-V3-0324 为671B 参数 MoE 模型，在编程与技术能力、上下文理解与长文本处理等方面优势突出。',
+      'DeepSeek-V3-0324 is a 671B-parameter MoE model with standout strengths in programming and technical capability, context understanding, and long-text handling.',
     displayName: 'DeepSeek V3 0324',
     enabled: true,
     id: 'deepseek-v3-0324',
@@ -41,7 +41,8 @@ const tencentCloudChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 65_536,
-    description: 'DeepSeek-V3 为671B 参数 MoE 模型，在百科知识、数学推理等多项任务上优势突出。',
+    description:
+      'DeepSeek-V3 is a 671B-parameter MoE model with strong performance in knowledge and math reasoning tasks.',
     displayName: 'DeepSeek V3',
     id: 'deepseek-v3',
     maxOutput: 16_000,

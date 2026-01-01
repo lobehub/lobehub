@@ -46,6 +46,7 @@ export enum ModelProvider {
   Perplexity = 'perplexity',
   Qiniu = 'qiniu',
   Qwen = 'qwen',
+  Replicate = 'replicate',
   SambaNova = 'sambanova',
   Search1API = 'search1api',
   SenseNova = 'sensenova',

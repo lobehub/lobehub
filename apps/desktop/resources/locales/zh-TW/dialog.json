@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "確定",
-    "detail": "一個基於大語言模型的聊天應用",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "關於"
-  },
-  "confirm": {
-    "cancel": "取消",
-    "no": "否",
-    "title": "確認",
-    "yes": "是"
-  },
-  "error": {
-    "button": "確定",
-    "detail": "操作過程中發生錯誤，請稍後重試",
-    "message": "發生錯誤",
-    "title": "錯誤"
-  },
-  "update": {
-    "downloadAndInstall": "下載並安裝",
-    "downloadComplete": "下載完成",
-    "downloadCompleteMessage": "更新包已下載完成，是否立即安裝？",
-    "installLater": "稍後安裝",
-    "installNow": "立即安裝",
-    "later": "稍後提醒",
-    "newVersion": "發現新版本",
-    "newVersionAvailable": "發現新版本: {{version}}",
-    "skipThisVersion": "跳過此版本"
-  }
+  "about.button": "確定",
+  "about.detail": "一個基於大語言模型的聊天應用",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "關於",
+  "confirm.cancel": "取消",
+  "confirm.no": "否",
+  "confirm.title": "確認",
+  "confirm.yes": "是",
+  "error.button": "確定",
+  "error.detail": "操作過程中發生錯誤，請稍後重試",
+  "error.message": "發生錯誤",
+  "error.title": "錯誤",
+  "update.downloadAndInstall": "下載並安裝",
+  "update.downloadComplete": "下載完成",
+  "update.downloadCompleteMessage": "更新包已下載完成，是否立即安裝？",
+  "update.installLater": "稍後安裝",
+  "update.installNow": "立即安裝",
+  "update.later": "稍後提醒",
+  "update.newVersion": "發現新版本",
+  "update.newVersionAvailable": "發現新版本: {{version}}",
+  "update.skipThisVersion": "跳過此版本"
 }

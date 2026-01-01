@@ -6,12 +6,6 @@ import { API_ENDPOINTS } from '@/services/_url';
 
 import { UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
 
-// Mock dependencies
-vi.mock('@lobechat/const', () => ({
-  isDesktop: false,
-  isServerMode: false,
-}));
-
 vi.mock('@lobechat/model-runtime', () => ({
   parseDataUri: vi.fn(),
 }));
@@ -27,22 +21,6 @@ vi.mock('@/libs/trpc/client', () => ({
         mutate: vi.fn(),
       },
     },
-  },
-}));
-
-vi.mock('@/store/electron', () => ({
-  getElectronStoreState: vi.fn(() => ({})),
-}));
-
-vi.mock('@/store/electron/selectors', () => ({
-  electronSyncSelectors: {
-    isSyncActive: vi.fn(() => false),
-  },
-}));
-
-vi.mock('@/services/electron/file', () => ({
-  desktopFileAPI: {
-    uploadFile: vi.fn(),
   },
 }));
 

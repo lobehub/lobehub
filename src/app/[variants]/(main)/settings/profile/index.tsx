@@ -1,0 +1,126 @@
+'use client';
+
+import { isDesktop } from '@lobechat/const';
+import { FormGroup, Skeleton, Text } from '@lobehub/ui';
+import { Divider } from 'antd';
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
+import { useUserStore } from '@/store/user';
+import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+
+import AvatarRow from './features/AvatarRow';
+import FullNameRow from './features/FullNameRow';
+import InterestsRow from './features/InterestsRow';
+import KlavisAuthorizationList from './features/KlavisAuthorizationList';
+import PasswordRow from './features/PasswordRow';
+import ProfileRow from './features/ProfileRow';
+import SSOProvidersList from './features/SSOProvidersList';
+import UsernameRow from './features/UsernameRow';
+
+interface ProfileSettingProps {
+  mobile?: boolean;
+}
+
+const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
+  const [isLoginWithNextAuth, isLoginWithBetterAuth] = useUserStore((s) => [
+    authSelectors.isLoginWithNextAuth(s),
+    authSelectors.isLoginWithBetterAuth(s),
+  ]);
+  const [userProfile, isUserLoaded] = useUserStore((s) => [
+    userProfileSelectors.userProfile(s),
+    s.isLoaded,
+  ]);
+  const isLoadedAuthProviders = useUserStore(authSelectors.isLoadedAuthProviders);
+  const fetchAuthProviders = useUserStore((s) => s.fetchAuthProviders);
+  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+
+  const isLoginWithAuth = isLoginWithNextAuth || isLoginWithBetterAuth;
+  const isLoading = !isUserLoaded || (isLoginWithAuth && !isLoadedAuthProviders);
+
+  useEffect(() => {
+    if (isLoginWithAuth) {
+      fetchAuthProviders();
+    }
+  }, [isLoginWithAuth, fetchAuthProviders]);
+
+  const { t } = useTranslation('auth');
+
+  if (isLoading)
+    return (
+      <Skeleton
+        active
+        paragraph={{ rows: 6 }}
+        style={{ padding: mobile ? 16 : undefined }}
+        title={false}
+      />
+    );
+
+  return (
+    <>
+      <SettingHeader title={t('profile.title')} />
+      <FormGroup collapsible={false} gap={16} title={t('profile.account')} variant={'filled'}>
+        {/* Avatar Row - Editable */}
+        <AvatarRow mobile={mobile} />
+
+        <Divider style={{ margin: 0 }} />
+
+        {/* Full Name Row - Editable */}
+        <FullNameRow mobile={mobile} />
+
+        <Divider style={{ margin: 0 }} />
+
+        {/* Username Row - Editable */}
+        <UsernameRow mobile={mobile} />
+
+        <Divider style={{ margin: 0 }} />
+
+        {/* Interests Row - Editable */}
+        <InterestsRow mobile={mobile} />
+
+        {/* Password Row - For Better Auth users to change or set password */}
+        {!isDesktop && isLoginWithBetterAuth && (
+          <>
+            <Divider style={{ margin: 0 }} />
+            <PasswordRow mobile={mobile} />
+          </>
+        )}
+
+        {/* Email Row - Read Only */}
+        {isLoginWithAuth && userProfile?.email && (
+          <>
+            <Divider style={{ margin: 0 }} />
+            <ProfileRow label={t('profile.email')} mobile={mobile}>
+              <Text>{userProfile.email}</Text>
+            </ProfileRow>
+          </>
+        )}
+
+        {/* SSO Providers Row */}
+        {isLoginWithAuth && (
+          <>
+            <Divider style={{ margin: 0 }} />
+            <ProfileRow label={t('profile.sso.providers')} mobile={mobile}>
+              <SSOProvidersList />
+            </ProfileRow>
+          </>
+        )}
+
+        {/* Klavis Authorizations Row */}
+        {enableKlavis && (
+          <>
+            <Divider style={{ margin: 0 }} />
+            <ProfileRow label={t('profile.authorizations.title')} mobile={mobile}>
+              <KlavisAuthorizationList />
+            </ProfileRow>
+          </>
+        )}
+      </FormGroup>
+    </>
+  );
+};
+
+export default ProfileSetting;

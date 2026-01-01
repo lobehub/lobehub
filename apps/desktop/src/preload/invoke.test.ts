@@ -1,4 +1,3 @@
-import { ClientDispatchEventKey } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock electron module
@@ -21,9 +20,9 @@ describe('invoke', () => {
     const expectedResult = { success: true };
     mockIpcRendererInvoke.mockResolvedValue(expectedResult);
 
-    const result = await invoke('getAppVersion' as ClientDispatchEventKey);
+    const result = await invoke('system.getAppVersion');
 
-    expect(mockIpcRendererInvoke).toHaveBeenCalledWith('getAppVersion');
+    expect(mockIpcRendererInvoke).toHaveBeenCalledWith('system.getAppVersion');
     expect(mockIpcRendererInvoke).toHaveBeenCalledTimes(1);
     expect(result).toEqual(expectedResult);
   });
@@ -33,9 +32,9 @@ describe('invoke', () => {
     const expectedResult = { navigated: true };
     mockIpcRendererInvoke.mockResolvedValue(expectedResult);
 
-    const result = await invoke('interceptRoute' as ClientDispatchEventKey, eventData);
+    const result = await invoke('windows.interceptRoute', eventData);
 
-    expect(mockIpcRendererInvoke).toHaveBeenCalledWith('interceptRoute', eventData);
+    expect(mockIpcRendererInvoke).toHaveBeenCalledWith('windows.interceptRoute', eventData);
     expect(mockIpcRendererInvoke).toHaveBeenCalledTimes(1);
     expect(result).toEqual(expectedResult);
   });
@@ -59,16 +58,14 @@ describe('invoke', () => {
     const error = new Error('IPC communication failed');
     mockIpcRendererInvoke.mockRejectedValue(error);
 
-    await expect(invoke('getAppVersion' as ClientDispatchEventKey)).rejects.toThrow(
-      'IPC communication failed',
-    );
-    expect(mockIpcRendererInvoke).toHaveBeenCalledWith('getAppVersion');
+    await expect(invoke('system.getAppVersion')).rejects.toThrow('IPC communication failed');
+    expect(mockIpcRendererInvoke).toHaveBeenCalledWith('system.getAppVersion');
   });
 
   it('should handle ipcRenderer returning undefined', async () => {
     mockIpcRendererInvoke.mockResolvedValue(undefined);
 
-    const result = await invoke('someEvent' as ClientDispatchEventKey);
+    const result = await invoke('someEvent');
 
     expect(mockIpcRendererInvoke).toHaveBeenCalledWith('someEvent');
     expect(result).toBeUndefined();
@@ -77,7 +74,7 @@ describe('invoke', () => {
   it('should handle ipcRenderer returning null', async () => {
     mockIpcRendererInvoke.mockResolvedValue(null);
 
-    const result = await invoke('someEvent' as ClientDispatchEventKey);
+    const result = await invoke('someEvent');
 
     expect(mockIpcRendererInvoke).toHaveBeenCalledWith('someEvent');
     expect(result).toBeNull();
@@ -96,7 +93,7 @@ describe('invoke', () => {
     };
     mockIpcRendererInvoke.mockResolvedValue(complexData);
 
-    const result = await invoke('getData' as ClientDispatchEventKey);
+    const result = await invoke('getData');
 
     expect(result).toEqual(complexData);
   });
@@ -125,9 +122,9 @@ describe('invoke', () => {
       .mockResolvedValueOnce({ id: 3 });
 
     const [result1, result2, result3] = await Promise.all([
-      invoke('event1' as ClientDispatchEventKey),
-      invoke('event2' as ClientDispatchEventKey),
-      invoke('event3' as ClientDispatchEventKey),
+      invoke('event1'),
+      invoke('event2'),
+      invoke('event3'),
     ]);
 
     expect(result1).toEqual({ id: 1 });
@@ -139,7 +136,7 @@ describe('invoke', () => {
   it('should handle empty string as data parameter', async () => {
     mockIpcRendererInvoke.mockResolvedValue({ received: '' });
 
-    const result = await invoke('sendData' as ClientDispatchEventKey, '');
+    const result = await invoke('sendData', '');
 
     expect(mockIpcRendererInvoke).toHaveBeenCalledWith('sendData', '');
     expect(result).toEqual({ received: '' });

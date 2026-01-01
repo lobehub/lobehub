@@ -1,6 +1,6 @@
-import { PluginItem } from '@lobehub/market-sdk';
+import { type PluginItem } from '@lobehub/market-sdk';
 
-import { MCPInstallProgressMap } from '@/types/plugins';
+import { type MCPInstallProgressMap } from '@/types/plugins';
 
 export interface MCPStoreState {
   activeMCPIdentifier?: string;

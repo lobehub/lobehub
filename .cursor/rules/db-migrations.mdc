@@ -5,20 +5,26 @@ alwaysApply: false
 
 # Database Migrations Guide
 
-## Step1: Generate migrations:
+## Step1: Generate migrations
 
 ```bash
 bun run db:generate
 ```
 
-this step will generate or update the following files:
+this step will generate following files:
 
-- packages/database/migrations/0046_xxx.sql
+- packages/database/migrations/0046_meaningless_file_name.sql
+- packages/database/migrations/0046_meaningless_file_name.sql
+
+and update the following files:
+
 - packages/database/migrations/meta/\_journal.json
+- packages/database/src/core/migrations.json
+- docs/development/database-schema.dbml
 
 ## Step2: optimize the migration sql fileName
 
-the migration sql file name is randomly generated, we need to optimize the file name to make it more readable and meaningful. For example, `0046_xxx.sql` -> `0046_better_auth.sql`
+the migration sql file name is randomly generated, we need to optimize the file name to make it more readable and meaningful. For example, `0046_meaningless_file_name.sql` -> `0046_user_add_avatar_column.sql`
 
 ## Step3: Defensive Programming - Use Idempotent Clauses
 

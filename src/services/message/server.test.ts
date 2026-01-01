@@ -1,44 +1,78 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { INBOX_SESSION_ID } from '@/const/session';
+import { lambdaClient } from '@/libs/trpc/client';
 
 import { MessageService } from './index';
 
+vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: {
+    message: {
+      createMessage: { mutate: vi.fn() },
+      getMessages: { query: vi.fn() },
+      removeMessagesByAssistant: { mutate: vi.fn() },
+    },
+  },
+}));
+
 describe('MessageService', () => {
-  describe('toDbSessionId', () => {
+  describe('createMessage', () => {
     const service = new MessageService();
-    // @ts-ignore access private method for testing
-    const toDbSessionId = service.toDbSessionId;
 
-    it('should return null for INBOX_SESSION_ID', () => {
-      expect(toDbSessionId(INBOX_SESSION_ID)).toBeNull();
+    afterEach(() => {
+      vi.clearAllMocks();
     });
 
-    it('should return the same session id for non-inbox sessions', () => {
-      const sessionId = 'test-session-123';
-      expect(toDbSessionId(sessionId)).toBe(sessionId);
+    it('should pass params directly to lambdaClient', async () => {
+      vi.mocked(lambdaClient.message.createMessage.mutate).mockResolvedValue({
+        id: 'msg-1',
+        messages: [],
+      });
+
+      await service.createMessage({
+        content: 'test',
+        role: 'user',
+        agentId: 'agent-123',
+      });
+
+      expect(lambdaClient.message.createMessage.mutate).toHaveBeenCalledWith({
+        content: 'test',
+        role: 'user',
+        agentId: 'agent-123',
+      });
+    });
+  });
+
+  describe('removeMessagesByAssistant', () => {
+    const service = new MessageService();
+
+    afterEach(() => {
+      vi.clearAllMocks();
     });
 
-    it('should handle undefined input', () => {
-      expect(toDbSessionId(undefined)).toBeUndefined(); // Updated to match the actual behavior
+    it('should pass sessionId to lambdaClient', async () => {
+      vi.mocked(lambdaClient.message.removeMessagesByAssistant.mutate).mockResolvedValue(
+        undefined as any,
+      );
+
+      await service.removeMessagesByAssistant('session-123');
+
+      expect(lambdaClient.message.removeMessagesByAssistant.mutate).toHaveBeenCalledWith({
+        sessionId: 'session-123',
+        topicId: undefined,
+      });
     });
 
-    it('should handle empty string input', () => {
-      expect(toDbSessionId('')).toBe(''); // No changes needed
-    });
+    it('should pass sessionId and topicId to lambdaClient', async () => {
+      vi.mocked(lambdaClient.message.removeMessagesByAssistant.mutate).mockResolvedValue(
+        undefined as any,
+      );
 
-    it('should handle special characters in session id', () => {
-      const specialSessionId = '!@#$%^&*()_+';
-      expect(toDbSessionId(specialSessionId)).toBe(specialSessionId);
-    });
+      await service.removeMessagesByAssistant('session-123', 'topic-1');
 
-    it('should handle numeric session id', () => {
-      const numericSessionId = '12345';
-      expect(toDbSessionId(numericSessionId)).toBe(numericSessionId);
-    });
-
-    it('should handle null session id', () => {
-      expect(toDbSessionId(null as any)).toBeNull(); // Cast null to any to bypass type errors
+      expect(lambdaClient.message.removeMessagesByAssistant.mutate).toHaveBeenCalledWith({
+        sessionId: 'session-123',
+        topicId: 'topic-1',
+      });
     });
   });
 });

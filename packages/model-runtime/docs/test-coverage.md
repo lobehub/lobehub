@@ -392,7 +392,7 @@ bunx vitest run --silent='passed-only' 'src/providers/{provider}/index.test.ts'
 # Check TypeScript types (from project root)
 cd ../../../ && bun run type-check
 
-# Or run typecheck for model-runtime only
+# Or run type-check for model-runtime only
 bunx tsc --noEmit
 
 # Fix any linting issues

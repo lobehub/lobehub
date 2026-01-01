@@ -67,31 +67,49 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
   ]);
 
   helperMaps.messageMap.forEach((message, id) => {
+    let processedMessage = message;
+
+    // Transform supervisor messages: convert role from 'assistant' to 'supervisor'
+    // This enables UI to render supervisor messages differently from regular assistant messages
+    // Note: context-engine has SupervisorRoleRestoreProcessor to restore role='assistant' before model API call
+    if (message.role === 'assistant' && message.metadata?.isSupervisor) {
+      processedMessage = { ...message, role: 'supervisor' as const };
+    }
+
     // For assistant messages with tools, clean metadata to keep only usage/performance fields
     if (
-      message.role === 'assistant' &&
-      message.tools &&
-      message.tools.length > 0 &&
-      message.metadata
+      processedMessage.role === 'assistant' &&
+      processedMessage.tools &&
+      processedMessage.tools.length > 0 &&
+      processedMessage.metadata
     ) {
       const cleanedMetadata: Record<string, any> = {};
-      Object.entries(message.metadata).forEach(([key, value]) => {
+      Object.entries(processedMessage.metadata).forEach(([key, value]) => {
         if (usagePerformanceFields.has(key)) {
           cleanedMetadata[key] = value;
         }
       });
       messageMapObj[id] = {
-        ...message,
+        ...processedMessage,
         metadata: Object.keys(cleanedMetadata).length > 0 ? cleanedMetadata : undefined,
       };
     } else {
-      messageMapObj[id] = message;
+      messageMapObj[id] = processedMessage;
     }
+  });
+
+  // Transform supervisor messages in flatList
+  // For non-grouped supervisor messages (e.g., supervisor summary without tools)
+  const processedFlatList = flatList.map((msg) => {
+    if (msg.role === 'assistant' && msg.metadata?.isSupervisor) {
+      return { ...msg, role: 'supervisor' as const };
+    }
+    return msg;
   });
 
   return {
     contextTree,
-    flatList,
+    flatList: processedFlatList,
     messageMap: messageMapObj,
   };
 }

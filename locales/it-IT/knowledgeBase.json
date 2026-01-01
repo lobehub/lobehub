@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "File aggiunto con successo, <1>visualizza subito</1>",
-    "confirm": "Aggiungi",
-    "id": {
-      "placeholder": "Seleziona il knowledge base da aggiungere",
-      "required": "Seleziona il knowledge base",
-      "title": "Knowledge base di destinazione"
-    },
-    "title": "Aggiungi al knowledge base",
-    "totalFiles": "Hai selezionato {{count}} file"
-  },
-  "createNew": {
-    "confirm": "Crea nuovo",
-    "description": {
-      "placeholder": "Descrizione del knowledge base (opzionale)"
-    },
-    "formTitle": "Informazioni di base",
-    "name": {
-      "placeholder": "Nome del knowledge base",
-      "required": "Per favore, inserisci il nome del knowledge base"
-    },
-    "title": "Crea knowledge base"
-  },
-  "tab": {
-    "evals": "Valutazioni",
-    "files": "Documenti",
-    "settings": "Impostazioni",
-    "testing": "Test di richiamo"
-  },
-  "title": "Knowledge base"
+  "addToKnowledgeBase.addSuccess": "File aggiunto con successo, <1>visualizza ora</1>",
+  "addToKnowledgeBase.confirm": "Aggiungi",
+  "addToKnowledgeBase.error": "Impossibile aggiungere il file alla Libreria",
+  "addToKnowledgeBase.id.placeholder": "Seleziona una libreria a cui aggiungere",
+  "addToKnowledgeBase.id.required": "Seleziona una libreria",
+  "addToKnowledgeBase.id.title": "Libreria di destinazione",
+  "addToKnowledgeBase.title": "Aggiungi alla Libreria",
+  "addToKnowledgeBase.totalFiles": "{{count}} file selezionati",
+  "createNew.confirm": "Crea nuova",
+  "createNew.description.placeholder": "Descrizione della libreria (facoltativa)",
+  "createNew.formTitle": "Informazioni di base",
+  "createNew.name.placeholder": "Nome della libreria",
+  "createNew.name.required": "Inserisci un nome per la libreria",
+  "createNew.title": "Crea nuova libreria",
+  "tab.evals": "Valutazioni",
+  "tab.files": "File",
+  "tab.settings": "Impostazioni",
+  "tab.testing": "Test di richiamo",
+  "title": "Libreria"
 }

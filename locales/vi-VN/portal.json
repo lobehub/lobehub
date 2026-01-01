@@ -1,30 +1,25 @@
 {
-  "Artifacts": "Tác Phẩm",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Phân đoạn",
-      "file": "Tập tin"
-    }
-  },
-  "Plugins": "Tiện ích",
-  "artifacts": {
-    "display": {
-      "code": "Mã",
-      "preview": "Xem trước"
-    },
-    "svg": {
-      "copyAsImage": "Sao chép dưới dạng hình ảnh",
-      "copyFail": "Sao chép thất bại, lý do lỗi: {{error}}",
-      "copySuccess": "Sao chép hình ảnh thành công",
-      "download": {
-        "png": "Tải xuống dưới dạng PNG",
-        "svg": "Tải xuống dưới dạng SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "Danh sách Tác Phẩm hiện tại đang trống, vui lòng sử dụng các plugin trong cuộc trò chuyện trước khi xem lại",
-  "emptyKnowledgeList": "Danh sách kiến thức hiện tại trống, vui lòng mở kho kiến thức khi cần trong cuộc trò chuyện trước khi xem",
-  "files": "Tập tin",
+  "Artifacts": "Tạo phẩm",
+  "FilePreview.tabs.chunk": "Phân đoạn",
+  "FilePreview.tabs.file": "Tệp",
+  "Plugins": "Kỹ năng",
+  "artifacts.display.code": "Mã",
+  "artifacts.display.preview": "Xem trước",
+  "artifacts.svg.copyAsImage": "Sao chép dưới dạng hình ảnh",
+  "artifacts.svg.copyFail": "Sao chép thất bại: {{error}}. Vui lòng thử lại.",
+  "artifacts.svg.copySuccess": "Đã sao chép hình ảnh thành công",
+  "artifacts.svg.download.png": "Tải xuống dưới dạng PNG",
+  "artifacts.svg.download.svg": "Tải xuống dưới dạng SVG",
+  "document.todos.allCompleted": "Tất cả nhiệm vụ đã hoàn thành",
+  "document.todos.title": "Nhiệm vụ",
+  "emptyArtifactList": "Chưa có tạo phẩm nào. Hãy sử dụng Kỹ năng trong cuộc trò chuyện, sau đó quay lại đây.",
+  "emptyKnowledgeList": "Danh sách này đang trống.",
+  "files": "Tệp",
   "messageDetail": "Chi tiết tin nhắn",
-  "title": "Cửa sổ mở rộng"
+  "notebook.confirmDelete": "Xóa trang này?",
+  "notebook.delete": "Xóa",
+  "notebook.empty": "Chưa có trang nào. Các trang liên kết với Chủ đề này sẽ hiển thị tại đây.",
+  "notebook.title": "Sổ tay",
+  "openInPageEditor": "Chỉnh sửa trong Trang",
+  "title": "Không gian làm việc"
 }

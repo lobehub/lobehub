@@ -149,50 +149,52 @@ export const createMainWindow = () => {
 
 1. **在主进程中注册 IPC 处理器**
    ```typescript
-   // BrowserWindowsCtr.ts
-   @ipcClientEvent('minimizeWindow')
-   handleMinimizeWindow() {
-     const focusedWindow = BrowserWindow.getFocusedWindow();
-     if (focusedWindow) {
-       focusedWindow.minimize();
-     }
-     return { success: true };
-   }
+   // apps/desktop/src/main/controllers/BrowserWindowsCtr.ts
+   import { BrowserWindow } from 'electron';
+   import { ControllerModule, IpcMethod } from '@/controllers';
 
-   @ipcClientEvent('maximizeWindow')
-   handleMaximizeWindow() {
-     const focusedWindow = BrowserWindow.getFocusedWindow();
-     if (focusedWindow) {
-       if (focusedWindow.isMaximized()) {
-         focusedWindow.restore();
-       } else {
-         focusedWindow.maximize();
-       }
-     }
-     return { success: true };
-   }
+   export default class BrowserWindowsCtr extends ControllerModule {
+     static override readonly groupName = 'windows';
 
-   @ipcClientEvent('closeWindow')
-   handleCloseWindow() {
-     const focusedWindow = BrowserWindow.getFocusedWindow();
-     if (focusedWindow) {
-       focusedWindow.close();
+     @IpcMethod()
+     minimizeWindow() {
+       const focusedWindow = BrowserWindow.getFocusedWindow();
+       focusedWindow?.minimize();
+       return { success: true };
      }
-     return { success: true };
+
+     @IpcMethod()
+     maximizeWindow() {
+       const focusedWindow = BrowserWindow.getFocusedWindow();
+       if (focusedWindow?.isMaximized()) focusedWindow.restore();
+       else focusedWindow?.maximize();
+       return { success: true };
+     }
+
+     @IpcMethod()
+     closeWindow() {
+       BrowserWindow.getFocusedWindow()?.close();
+       return { success: true };
+     }
    }
    ```
+   - `@IpcMethod()` 根据控制器的 `groupName` 自动将方法映射为 `windows.minimizeWindow` 形式的通道名称。
+   - 控制器需继承 `ControllerModule`，并在 `controllers/registry.ts` 中通过 `controllerIpcConstructors` 注册，便于类型生成。
 
 2. **在渲染进程中调用**
    ```typescript
    // src/services/electron/windowService.ts
-   import { dispatch } from '@lobechat/electron-client-ipc';
+   import { ensureElectronIpc } from '@/utils/electron/ipc';
+
+   const ipc = ensureElectronIpc();
 
    export const windowService = {
-     minimize: () => dispatch('minimizeWindow'),
-     maximize: () => dispatch('maximizeWindow'),
-     close: () => dispatch('closeWindow'),
+     minimize: () => ipc.windows.minimizeWindow(),
+     maximize: () => ipc.windows.maximizeWindow(),
+     close: () => ipc.windows.closeWindow(),
    };
    ```
+   - `ensureElectronIpc()` 会基于 `DesktopIpcServices` 运行时生成 Proxy，并通过 `window.electronAPI.invoke` 与主进程通信；不再直接使用 `dispatch`。
 
 ### 5. 自定义窗口控制 (无边框窗口)
 
@@ -252,45 +254,33 @@ export const createMainWindow = () => {
 
 ```typescript
 // apps/desktop/src/main/controllers/BrowserWindowsCtr.ts
+import type { OpenSettingsWindowOptions } from '@lobechat/electron-client-ipc';
+import { ControllerModule, IpcMethod } from '@/controllers';
 
-@ipcClientEvent('openSettings')
-handleOpenSettings() {
-  // 检查设置窗口是否已经存在
-  if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
-    // 如果窗口已存在，将其置于前台
-    this.settingsWindow.focus();
+export default class BrowserWindowsCtr extends ControllerModule {
+  static override readonly groupName = 'windows';
+
+  @IpcMethod()
+  async openSettingsWindow(options?: string | OpenSettingsWindowOptions) {
+    const normalizedOptions =
+      typeof options === 'string' || options === undefined
+        ? { tab: typeof options === 'string' ? options : undefined }
+        : options;
+
+    const mainWindow = this.app.browserManager.getMainWindow();
+    const query = new URLSearchParams();
+    if (normalizedOptions.tab) query.set('active', normalizedOptions.tab);
+    if (normalizedOptions.searchParams) {
+      for (const [key, value] of Object.entries(normalizedOptions.searchParams)) {
+        if (value) query.set(key, value);
+      }
+    }
+
+    const fullPath = `/settings${query.size ? `?${query.toString()}` : ''}`;
+    await mainWindow.loadUrl(fullPath);
+    mainWindow.show();
+
     return { success: true };
   }
-
-  // 创建新窗口
-  this.settingsWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    title: 'Settings',
-    parent: this.mainWindow, // 设置父窗口，使其成为模态窗口
-    modal: true,
-    webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
-  // 加载设置页面
-  if (isDev) {
-    this.settingsWindow.loadURL('http://localhost:3000/settings');
-  } else {
-    this.settingsWindow.loadFile(
-      path.join(__dirname, '../../renderer/index.html'),
-      { hash: 'settings' }
-    );
-  }
-
-  // 监听窗口关闭事件
-  this.settingsWindow.on('closed', () => {
-    this.settingsWindow = null;
-  });
-
-  return { success: true };
 }
 ```

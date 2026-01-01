@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "追加",
-    "back": "戻る",
-    "cancel": "キャンセル",
-    "close": "閉じる",
-    "confirm": "確認",
-    "delete": "削除",
-    "edit": "編集",
-    "more": "もっと見る",
-    "next": "次へ",
-    "ok": "OK",
-    "previous": "前へ",
-    "refresh": "更新",
-    "remove": "削除",
-    "retry": "再試行",
-    "save": "保存",
-    "search": "検索",
-    "submit": "送信"
-  },
-  "app": {
-    "description": "あなたのAIアシスタント協力プラットフォーム",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "エラー",
-    "info": "情報",
-    "loading": "読み込み中",
-    "success": "成功",
-    "warning": "警告"
-  }
+  "actions.add": "追加",
+  "actions.back": "戻る",
+  "actions.cancel": "キャンセル",
+  "actions.close": "閉じる",
+  "actions.confirm": "確認",
+  "actions.delete": "削除",
+  "actions.edit": "編集",
+  "actions.more": "もっと見る",
+  "actions.next": "次へ",
+  "actions.ok": "OK",
+  "actions.previous": "前へ",
+  "actions.refresh": "更新",
+  "actions.remove": "削除",
+  "actions.retry": "再試行",
+  "actions.save": "保存",
+  "actions.search": "検索",
+  "actions.submit": "送信",
+  "app.description": "あなたのAIアシスタント協力プラットフォーム",
+  "app.name": "LobeHub",
+  "status.error": "エラー",
+  "status.info": "情報",
+  "status.loading": "読み込み中",
+  "status.success": "成功",
+  "status.warning": "警告"
 }

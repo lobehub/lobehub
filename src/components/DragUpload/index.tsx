@@ -1,34 +1,32 @@
 /* eslint-disable no-undef */
-import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
-import { darken, lighten } from 'polished';
 import { memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { getContainer, useDragUpload } from './useDragUpload';
 
 const BLOCK_SIZE = 64;
 const ICON_SIZE = { size: 36, strokeWidth: 1.5 };
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       width: 320px;
       height: 200px;
-      padding: ${token.borderRadiusLG + 4}px;
+      padding: calc(${cssVar.borderRadiusLG} + 4px);
       border-radius: 16px;
 
-      background: ${token.geekblue};
+      background: ${cssVar.geekblue};
     `,
     content: css`
       width: 100%;
       height: 100%;
       padding: 16px;
       border: 1.5px dashed #fff;
-      border-radius: ${token.borderRadiusLG}px;
+      border-radius: ${cssVar.borderRadiusLG};
     `,
     desc: css`
       font-size: 14px;
@@ -36,9 +34,9 @@ const useStyles = createStyles(({ css, token }) => {
       color: #fff;
     `,
     icon: css`
-      border-radius: ${token.borderRadiusLG}px;
-      color: ${darken(0.05, token.geekblue)};
-      background: ${lighten(0.38, token.geekblue)};
+      border-radius: ${cssVar.borderRadiusLG};
+      color: color-mix(in srgb, ${cssVar.geekblue} 95%, black);
+      background: color-mix(in srgb, ${cssVar.geekblue} 38%, white);
     `,
     iconGroup: css`
       margin-block-start: -44px;
@@ -56,7 +54,7 @@ const useStyles = createStyles(({ css, token }) => {
       width: 100%;
       height: 100%;
 
-      background: ${token.colorBgMask};
+      background: ${cssVar.colorBgMask};
 
       transition: all 0.3s ease-in-out;
     `,
@@ -69,7 +67,6 @@ interface DragUploadProps {
 }
 
 const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }) => {
-  const { styles, theme } = useStyles();
   const { t } = useTranslation('components');
 
   const isDragging = useDragUpload(onUploadFiles);
@@ -85,7 +82,7 @@ const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }
               className={styles.icon}
               height={BLOCK_SIZE * 1.25}
               style={{
-                background: lighten(0.32, theme.geekblue),
+                background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
                 transform: 'rotateZ(-20deg) translateX(10px)',
               }}
               width={BLOCK_SIZE}
@@ -107,7 +104,7 @@ const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }
               className={styles.icon}
               height={BLOCK_SIZE * 1.25}
               style={{
-                background: lighten(0.32, theme.geekblue),
+                background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
                 transform: 'rotateZ(20deg) translateX(-10px)',
               }}
               width={BLOCK_SIZE}

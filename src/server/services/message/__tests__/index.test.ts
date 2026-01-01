@@ -274,9 +274,9 @@ describe('MessageService', () => {
   describe('createMessage', () => {
     it('should create message and return message list', async () => {
       const params = {
+        agentId: 'agent-1',
         content: 'Hello',
         role: 'user' as const,
-        sessionId: 'session-1',
       };
       const createdMessage = { id: 'msg-1', ...params };
       const mockMessages = [createdMessage, { id: 'msg-2', content: 'Hi' }];
@@ -289,14 +289,14 @@ describe('MessageService', () => {
       expect(mockMessageModel.create).toHaveBeenCalledWith(params);
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         {
+          agentId: 'agent-1',
           current: 0,
           groupId: undefined,
           pageSize: 9999,
-          sessionId: 'session-1',
           topicId: undefined,
         },
         expect.objectContaining({
-          groupAssistantMessages: false,
+          postProcessUrl: expect.any(Function),
         }),
       );
       expect(result).toEqual({
@@ -307,10 +307,10 @@ describe('MessageService', () => {
 
     it('should create message with topicId and groupId', async () => {
       const params = {
+        agentId: 'agent-1',
         content: 'Hello',
         groupId: 'group-1',
         role: 'user' as const,
-        sessionId: 'session-1',
         topicId: 'topic-1',
       };
       const createdMessage = { id: 'msg-1', ...params };
@@ -323,16 +323,162 @@ describe('MessageService', () => {
 
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         {
+          agentId: 'agent-1',
           current: 0,
           groupId: 'group-1',
           pageSize: 9999,
-          sessionId: 'session-1',
           topicId: 'topic-1',
         },
-        expect.anything(),
+        expect.objectContaining({
+          postProcessUrl: expect.any(Function),
+        }),
       );
       expect(result.id).toBe('msg-1');
       expect(result.messages).toEqual(mockMessages);
+    });
+  });
+
+  describe('groupId context support', () => {
+    const groupId = 'group-123';
+    const topicId = 'topic-456';
+
+    it('removeMessage should query with groupId when provided', async () => {
+      const messageId = 'msg-1';
+      const mockMessages = [{ id: 'msg-2', content: 'test' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.removeMessage(messageId, { groupId, topicId });
+
+      expect(mockMessageModel.deleteMessage).toHaveBeenCalledWith(messageId);
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { groupId, sessionId: undefined, topicId },
+        expect.objectContaining({
+          groupAssistantMessages: false,
+        }),
+      );
+      expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+
+    it('removeMessages should query with groupId when provided', async () => {
+      const messageIds = ['msg-1', 'msg-2'];
+      const mockMessages = [{ id: 'msg-3', content: 'test' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.removeMessages(messageIds, { groupId, topicId });
+
+      expect(mockMessageModel.deleteMessages).toHaveBeenCalledWith(messageIds);
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { groupId, sessionId: undefined, topicId },
+        expect.objectContaining({
+          groupAssistantMessages: false,
+        }),
+      );
+      expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+
+    it('updateMessage should query with groupId when provided', async () => {
+      const messageId = 'msg-1';
+      const value = { content: 'updated content' };
+      const mockMessages = [{ id: 'msg-1', content: 'updated content' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.updateMessage(messageId, value as any, {
+        groupId,
+        topicId,
+      });
+
+      expect(mockMessageModel.update).toHaveBeenCalledWith(messageId, value);
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { groupId, sessionId: undefined, topicId },
+        expect.objectContaining({
+          groupAssistantMessages: false,
+        }),
+      );
+      expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+
+    it('updateMetadata should query with groupId when provided', async () => {
+      const messageId = 'msg-1';
+      const metadata = { key: 'value' };
+      const mockMessages = [{ id: 'msg-1', content: 'test' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.updateMetadata(messageId, metadata, {
+        groupId,
+        topicId,
+      });
+
+      expect(mockMessageModel.updateMetadata).toHaveBeenCalledWith(messageId, metadata);
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { groupId, sessionId: undefined, topicId },
+        expect.objectContaining({
+          groupAssistantMessages: false,
+        }),
+      );
+      expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+
+    it('updatePluginState should query with groupId when provided', async () => {
+      const messageId = 'msg-1';
+      const state = { key: 'value' };
+      const mockMessages = [{ id: 'msg-1', content: 'test' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.updatePluginState(messageId, state, {
+        groupId,
+        topicId,
+      });
+
+      expect(mockMessageModel.updatePluginState).toHaveBeenCalledWith(messageId, state);
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { groupId, sessionId: undefined, topicId },
+        expect.objectContaining({
+          groupAssistantMessages: false,
+        }),
+      );
+      expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+
+    it('updatePluginError should query with groupId when provided', async () => {
+      const messageId = 'msg-1';
+      const error = { type: 'TestError', message: 'Test error message' };
+      const mockMessages = [{ id: 'msg-1', content: 'test' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.updatePluginError(messageId, error, {
+        groupId,
+        topicId,
+      });
+
+      expect(mockMessageModel.updateMessagePlugin).toHaveBeenCalledWith(messageId, { error });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { groupId, sessionId: undefined, topicId },
+        expect.objectContaining({
+          groupAssistantMessages: false,
+        }),
+      );
+      expect(result).toEqual({ messages: mockMessages, success: true });
+    });
+
+    it('updateMessageRAG should query with groupId when provided', async () => {
+      const messageId = 'msg-1';
+      const ragValue = { fileChunks: [{ id: 'chunk-1', similarity: 0.95 }] };
+      const mockMessages = [{ id: 'msg-1', content: 'test' }];
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.updateMessageRAG(messageId, ragValue, {
+        groupId,
+        topicId,
+      });
+
+      expect(mockMessageModel.updateMessageRAG).toHaveBeenCalledWith(messageId, ragValue);
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { groupId, sessionId: undefined, topicId },
+        expect.objectContaining({
+          groupAssistantMessages: false,
+        }),
+      );
+      expect(result).toEqual({ messages: mockMessages, success: true });
     });
   });
 });

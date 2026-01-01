@@ -5,11 +5,11 @@ import { ChatStreamPayload } from '../../types';
 type CacheTTL = Anthropic.Messages.CacheControlEphemeral['ttl'];
 
 const DEFAULT_CACHE_TTL = '5m' as const;
-
 /**
- * Resolves cache TTL from Anthropic payload or request settings.
- * Returns the first valid TTL found in system messages or content blocks.
+ * Resolves cache TTL from Anthropic payload or request settings
+ * Returns the first valid TTL found in system messages or content blocks
  */
+
 export const resolveCacheTTL = (
   requestPayload: ChatStreamPayload,
   anthropicPayload: {
@@ -30,6 +30,7 @@ export const resolveCacheTTL = (
     if (!Array.isArray(message.content)) continue;
 
     for (const block of message.content) {
+      // Message content blocks might have cache_control property
       const ttl = ('cache_control' in block && block.cache_control?.ttl) as CacheTTL | undefined;
       if (ttl) return ttl;
     }

@@ -1,10 +1,9 @@
-import { ActionIcon, Button, Dropdown, Text } from '@lobehub/ui';
-import { App, Skeleton, Space } from 'antd';
-import { useTheme } from 'antd-style';
+import { ActionIcon, Button, Dropdown, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { App, Space } from 'antd';
+import { cssVar } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -21,7 +20,6 @@ interface ModelFetcherProps {
 
 const ModelTitle = memo<ModelFetcherProps>(
   ({ provider, showAddNewModel = true, showModelFetcher = true }) => {
-    const theme = useTheme();
     const { t } = useTranslation('modelProvider');
     const { modal, message } = App.useApp();
     const [
@@ -57,7 +55,7 @@ const ModelTitle = memo<ModelFetcherProps>(
         gap={12}
         paddingBlock={8}
         style={{
-          background: theme.colorBgContainer,
+          background: cssVar.colorBgContainer,
           marginTop: mobile ? 0 : -12,
           paddingTop: mobile ? 0 : 20,
           position: 'sticky',

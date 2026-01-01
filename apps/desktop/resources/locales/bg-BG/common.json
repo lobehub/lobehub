@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Добави",
-    "back": "Назад",
-    "cancel": "Отмени",
-    "close": "Затвори",
-    "confirm": "Потвърди",
-    "delete": "Изтрий",
-    "edit": "Редактирай",
-    "more": "Повече",
-    "next": "Следващ",
-    "ok": "Добре",
-    "previous": "Предишен",
-    "refresh": "Освежи",
-    "remove": "Премахни",
-    "retry": "Опитай отново",
-    "save": "Запази",
-    "search": "Търси",
-    "submit": "Изпрати"
-  },
-  "app": {
-    "description": "Твоята платформа за сътрудничество с AI асистент",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Грешка",
-    "info": "Информация",
-    "loading": "Зареждане",
-    "success": "Успех",
-    "warning": "Предупреждение"
-  }
+  "actions.add": "Добави",
+  "actions.back": "Назад",
+  "actions.cancel": "Отмени",
+  "actions.close": "Затвори",
+  "actions.confirm": "Потвърди",
+  "actions.delete": "Изтрий",
+  "actions.edit": "Редактирай",
+  "actions.more": "Повече",
+  "actions.next": "Следващ",
+  "actions.ok": "Добре",
+  "actions.previous": "Предишен",
+  "actions.refresh": "Освежи",
+  "actions.remove": "Премахни",
+  "actions.retry": "Опитай отново",
+  "actions.save": "Запази",
+  "actions.search": "Търси",
+  "actions.submit": "Изпрати",
+  "app.description": "Твоята платформа за сътрудничество с AI асистент",
+  "app.name": "LobeHub",
+  "status.error": "Грешка",
+  "status.info": "Информация",
+  "status.loading": "Зареждане",
+  "status.success": "Успех",
+  "status.warning": "Предупреждение"
 }

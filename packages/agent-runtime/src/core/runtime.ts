@@ -170,13 +170,14 @@ export class AgentRuntime {
 
         // Special handling for batch tool execution
         if (instruction.type === 'call_tools_batch') {
-          result = await this.executeToolsBatch(instruction as any, currentState);
+          result = await this.executeToolsBatch(instruction as any, currentState, runtimeContext);
         } else {
           const executor = this.executors[instruction.type as keyof typeof this.executors];
           if (!executor) {
             throw new Error(`No executor found for instruction type: ${instruction.type}`);
           }
-          result = await executor(instruction, currentState);
+          // Pass runtimeContext to executor so it can access stepContext
+          result = await executor(instruction, currentState, runtimeContext);
         }
 
         // Accumulate events
@@ -379,7 +380,7 @@ export class AgentRuntime {
    * @returns Complete AgentState with defaults filled in
    */
   static createInitialState(
-    partialState?: Partial<AgentState> & { sessionId: string },
+    partialState?: Partial<AgentState> & { operationId: string },
   ): AgentState {
     const now = new Date().toISOString();
 
@@ -394,7 +395,7 @@ export class AgentRuntime {
       toolManifestMap: {},
       usage: AgentRuntime.createDefaultUsage(),
       // User provided values override defaults
-      ...(partialState || { sessionId: '' }),
+      ...(partialState || { operationId: '' }),
     };
   }
 
@@ -570,8 +571,8 @@ export class AgentRuntime {
 
       const events: AgentEvent[] = [
         {
+          operationId: newState.operationId,
           pendingToolsCalling,
-          sessionId: newState.sessionId,
           type: 'human_approve_required',
         },
       ];
@@ -596,8 +597,8 @@ export class AgentRuntime {
       const events: AgentEvent[] = [
         {
           metadata,
+          operationId: newState.operationId,
           prompt,
-          sessionId: newState.sessionId,
           type: 'human_prompt_required',
         },
       ];
@@ -623,9 +624,9 @@ export class AgentRuntime {
         {
           metadata,
           multi,
+          operationId: newState.operationId,
           options,
           prompt,
-          sessionId: newState.sessionId,
           type: 'human_select_required',
         },
       ];
@@ -663,6 +664,7 @@ export class AgentRuntime {
   private async executeToolsBatch(
     instruction: AgentInstructionCallToolsBatch,
     baseState: AgentState,
+    context?: AgentRuntimeContext,
   ): Promise<{
     events: AgentEvent[];
     newState: AgentState;
@@ -678,6 +680,7 @@ export class AgentRuntime {
           type: 'call_tool',
         } as AgentInstructionCallTool,
         structuredClone(baseState), // Each tool starts from the same base state
+        context, // Pass context to each tool call
       ),
     );
 
@@ -707,9 +710,16 @@ export class AgentRuntime {
     const allEvents: AgentEvent[] = [];
 
     // Merge all tool messages in order
+    // Get the set of tool_call_ids that already exist in baseState to avoid duplicates
+    const existingToolCallIds = new Set(
+      baseState.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id),
+    );
+
     for (const result of results) {
-      // Extract tool role messages
-      const toolMessages = result.newState.messages.filter((m) => m.role === 'tool');
+      // Extract only NEW tool role messages (not already in baseState)
+      const toolMessages = result.newState.messages.filter(
+        (m) => m.role === 'tool' && !existingToolCallIds.has(m.tool_call_id),
+      );
       newState.messages.push(...toolMessages);
 
       // Merge events
@@ -836,11 +846,12 @@ export class AgentRuntime {
 
   /**
    * Create session context metadata - reusable helper
+   * Note: Uses sessionId in context for backwards compatibility with AgentRuntimeContext
    */
   private createSessionContext(state: AgentState) {
     return {
       messageCount: state.messages.length,
-      sessionId: state.sessionId,
+      sessionId: state.operationId,
       status: state.status,
       stepCount: state.stepCount,
     };

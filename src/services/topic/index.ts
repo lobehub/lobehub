@@ -1,7 +1,13 @@
 import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
-import { BatchTaskResult } from '@/types/service';
-import { ChatTopic, CreateTopicParams, QueryTopicParams, TopicRankItem } from '@/types/topic';
+import { type BatchTaskResult } from '@/types/service';
+import {
+  type ChatTopic,
+  type CreateTopicParams,
+  type QueryTopicParams,
+  type RecentTopic,
+  type TopicRankItem,
+} from '@/types/topic';
 
 export class TopicService {
   createTopic = (params: CreateTopicParams): Promise<string> => {
@@ -19,10 +25,21 @@ export class TopicService {
     return lambdaClient.topic.cloneTopic.mutate({ id, newTitle });
   };
 
-  getTopics = (params: QueryTopicParams): Promise<ChatTopic[]> => {
+  importTopic = (params: {
+    agentId: string;
+    data: string;
+    groupId?: string | null;
+  }): Promise<{ messageCount: number; topicId: string }> => {
+    return lambdaClient.topic.importTopic.mutate(params);
+  };
+
+  getTopics = async (params: QueryTopicParams): Promise<{ items: ChatTopic[]; total: number }> => {
     return lambdaClient.topic.getTopics.query({
-      ...params,
-      containerId: this.toDbSessionId(params.containerId),
+      agentId: params.agentId,
+      current: params.current,
+      groupId: params.groupId,
+      isInbox: params.isInbox,
+      pageSize: params.pageSize,
     }) as any;
   };
 
@@ -31,6 +48,8 @@ export class TopicService {
   };
 
   countTopics = async (params?: {
+    agentId?: string;
+    containerId?: string | null;
     endDate?: string;
     range?: [string, string];
     startDate?: string;
@@ -42,11 +61,15 @@ export class TopicService {
     return lambdaClient.topic.rankTopics.query(limit);
   };
 
-  searchTopics = (keywords: string, sessionId?: string, groupId?: string): Promise<ChatTopic[]> => {
+  getRecentTopics = async (limit?: number): Promise<RecentTopic[]> => {
+    return lambdaClient.topic.recentTopics.query({ limit });
+  };
+
+  searchTopics = (keywords: string, agentId?: string, groupId?: string): Promise<ChatTopic[]> => {
     return lambdaClient.topic.searchTopics.query({
+      agentId,
       groupId,
       keywords,
-      sessionId: this.toDbSessionId(sessionId),
     }) as any;
   };
 

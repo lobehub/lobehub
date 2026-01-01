@@ -1,23 +1,23 @@
 import { CheckCircleFilled } from '@ant-design/icons';
-import { StorageModeEnum } from '@lobechat/electron-client-ipc';
-import { createStyles } from 'antd-style';
-import { ComponentType, ReactNode } from 'react';
-import { Center, Flexbox } from 'react-layout-kit';
+import { type StorageModeEnum } from '@lobechat/electron-client-ipc';
+import { Center, Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cx } from 'antd-style';
+import { type ComponentType, type ReactNode } from 'react';
 
-const useStyles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   checked: css`
     position: relative;
-    border: 1px solid ${token.colorPrimary};
+    border: 1px solid ${cssVar.colorPrimary};
   `,
   description: css`
     margin-block-start: 4px; /* Adjust spacing */
     font-size: 13px; /* Slightly larger description */
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   iconWrapper: css`
     margin-block-start: 2px;
     padding: 0;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     svg {
       display: block;
@@ -28,24 +28,24 @@ const useStyles = createStyles(({ token, css }) => ({
   label: css`
     font-size: 16px;
     font-weight: 600; /* Bolder label */
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   optionCard: css`
     cursor: pointer;
 
     width: 100%;
     padding: 16px;
-    border: 1px solid ${token.colorBorderSecondary}; /* Use secondary border */
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary}; /* Use secondary border */
+    border-radius: ${cssVar.borderRadiusLG};
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background-color: ${token.colorBgContainer};
+    background-color: ${cssVar.colorBgContainer};
 
-    transition: all 0.2s ${token.motionEaseInOut};
+    transition: all 0.2s ${cssVar.motionEaseInOut};
 
     :hover {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
   `,
   optionInner: css`
@@ -75,8 +75,6 @@ export const Option = ({
   onClick,
   children,
 }: OptionProps) => {
-  const { styles, cx } = useStyles();
-
   return (
     <Flexbox
       className={cx(styles.optionCard, isSelected && styles.checked)}

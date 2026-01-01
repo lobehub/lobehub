@@ -30,7 +30,8 @@ const fluxKontextSeriesParamsSchema: ModelParamsSchema = {
 const imageModels: AIImageModelCard[] = [
   // https://docs.bfl.ai/api-reference/tasks/edit-or-create-an-image-with-flux-kontext-pro
   {
-    description: '最先进的上下文图像生成和编辑——结合文本和图像以获得精确、连贯的结果。',
+    description:
+      'State-of-the-art contextual image generation and editing, combining text and images for precise, coherent results.',
     displayName: 'FLUX.1 Kontext [pro]',
     enabled: true,
     id: 'flux-kontext-pro',
@@ -44,7 +45,8 @@ const imageModels: AIImageModelCard[] = [
   },
   // https://docs.bfl.ai/api-reference/tasks/edit-or-create-an-image-with-flux-kontext-max
   {
-    description: '最先进的上下文图像生成和编辑——结合文本和图像以获得精确、连贯的结果。',
+    description:
+      'State-of-the-art contextual image generation and editing, combining text and images for precise, coherent results.',
     displayName: 'FLUX.1 Kontext [max]',
     enabled: true,
     id: 'flux-kontext-max',
@@ -57,7 +59,8 @@ const imageModels: AIImageModelCard[] = [
   },
   // https://docs.bfl.ai/api-reference/tasks/generate-an-image-with-flux-11-[pro]
   {
-    description: '升级版专业级AI图像生成模型——提供卓越的图像质量和精确的提示词遵循能力。',
+    description:
+      'Upgraded professional-grade image generation model with excellent image quality and precise prompt adherence.',
     displayName: 'FLUX1.1 [pro] ',
     enabled: true,
     id: 'flux-pro-1.1',
@@ -76,7 +79,8 @@ const imageModels: AIImageModelCard[] = [
   },
   // https://docs.bfl.ai/api-reference/tasks/generate-an-image-with-flux-11-[pro]-with-ultra-mode-and-optional-raw-mode
   {
-    description: '超高分辨率AI图像生成——支持4兆像素输出，10秒内生成超清图像。',
+    description:
+      'Ultra-high-resolution image generation with 4MP output, producing crisp images in 10 seconds.',
     displayName: 'FLUX1.1 [pro] Ultra',
     enabled: true,
     id: 'flux-pro-1.1-ultra',
@@ -97,7 +101,8 @@ const imageModels: AIImageModelCard[] = [
   },
   // https://docs.bfl.ai/api-reference/tasks/generate-an-image-with-flux1-[pro]
   {
-    description: '顶级商用AI图像生成模型——无与伦比的图像质量和多样化输出表现。',
+    description:
+      'Top-tier commercial image generation model with unmatched image quality and diverse outputs.',
     displayName: 'FLUX.1 [pro]',
     enabled: true,
     id: 'flux-pro',
@@ -118,7 +123,8 @@ const imageModels: AIImageModelCard[] = [
   },
   // https://docs.bfl.ai/api-reference/tasks/generate-an-image-with-flux1-[dev]
   {
-    description: '开源研发版AI图像生成模型——高效优化，适合非商业用途的创新研究。',
+    description:
+      'Open-source R&D image generation model, efficiently optimized for non-commercial innovation research.',
     displayName: 'FLUX.1 [dev]',
     enabled: true,
     id: 'flux-dev',

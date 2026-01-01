@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "Kullanılabilir ajan yok",
+  "agentSelection.noAvailable": "Şu anda eklenebilecek ajan yok",
+  "agentSelection.noSelected": "Seçili ajan yok",
+  "agentSelection.search": "Eşleşen ajan bulunamadı",
+  "project.create": "Yeni proje",
+  "project.deleteConfirm": "Bu proje silinecek ve geri alınamayacak. Devam etmek için onaylayın.",
+  "starter.createAgent": "Ajan Oluştur",
+  "starter.createGroup": "Grup Oluştur",
+  "starter.deepResearch": "Derin Araştırma",
+  "starter.developing": "Yakında geliyor",
+  "starter.image": "Görsel",
+  "starter.write": "Yaz"
+}

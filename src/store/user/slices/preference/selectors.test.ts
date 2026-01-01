@@ -29,19 +29,6 @@ describe('preferenceSelectors', () => {
     });
   });
 
-  describe('userAllowTrace', () => {
-    it('should return the value of telemetry preference', () => {
-      store.preference.telemetry = true;
-      expect(preferenceSelectors.userAllowTrace(store)).toBe(true);
-
-      store.preference.telemetry = false;
-      expect(preferenceSelectors.userAllowTrace(store)).toBe(false);
-
-      store.preference.telemetry = null;
-      expect(preferenceSelectors.userAllowTrace(store)).toBe(null);
-    });
-  });
-
   describe('hideSyncAlert', () => {
     it('should return the value of hideSyncAlert preference', () => {
       store.preference.hideSyncAlert = true;

@@ -1,24 +1,29 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
 export const MIN_IMAGE_SIZE = 64;
 export const MAX_SIZE_DESKTOP = 200;
 export const MAX_SIZE_MOBILE = 90;
-export const useStyles = createStyles(
-  ({ css }, { col, gap, max, min }: { col: number; gap: number; max: number; min: number }) => ({
-    container: css`
-      display: grid;
-      grid-gap: ${gap}px;
-      grid-template-columns: repeat(${col}, 1fr);
 
+export const styles = createStaticStyles(({ css }) => ({
+  container: css`
+    display: grid;
+    grid-gap: var(--galley-grid-gap, 6px);
+    grid-template-columns: repeat(var(--galley-grid-col, 3), 1fr);
+
+    width: 100%;
+    max-width: var(--galley-grid-max, 200px);
+
+    & > div {
       width: 100%;
-      max-width: ${max}px;
-
-      & > div {
-        width: 100%;
-        min-width: ${min}px;
-        min-height: ${min}px;
-        max-height: ${(max - gap * (col - 1)) / col}px;
-      }
-    `,
-  }),
-);
+      min-width: var(--galley-grid-min, 64px);
+      min-height: var(--galley-grid-min, 64px);
+      max-height: calc(
+        (
+            var(--galley-grid-max, 200px) - var(--galley-grid-gap, 6px) *
+              (var(--galley-grid-col, 3) - 1)
+          ) /
+          var(--galley-grid-col, 3)
+      );
+    }
+  `,
+}));

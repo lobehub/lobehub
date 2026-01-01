@@ -1,17 +1,15 @@
-import { Badge, ConfigProvider } from 'antd';
-import { PropsWithChildren, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox, Tag } from '@lobehub/ui';
+import { type PropsWithChildren, memo } from 'react';
 
 const UpgradeBadge = memo(({ children, showBadge }: PropsWithChildren<{ showBadge?: boolean }>) => {
   if (!showBadge) return children;
 
   return (
-    <Flexbox>
-      <ConfigProvider theme={{ components: { Badge: { dotSize: 8 } } }}>
-        <Badge dot offset={[-4, 4]}>
-          {children}
-        </Badge>
-      </ConfigProvider>
+    <Flexbox align={'center'} gap={2} horizontal>
+      {children}
+      <Tag color={'info'} size={'small'} style={{ borderRadius: 16, paddingInline: 8 }}>
+        new
+      </Tag>
     </Flexbox>
   );
 });

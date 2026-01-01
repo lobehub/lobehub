@@ -4,7 +4,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { insertKnowledgeBasesSchema } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { KnowledgeBaseItem } from '@/types/knowledgeBase';
+import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 const knowledgeBaseProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

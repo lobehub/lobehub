@@ -1,8 +1,8 @@
+import { DEFAULT_EMBEDDING_PROVIDER } from '@lobechat/business-const';
 import { FilesConfig, FilesConfigItem } from '@lobechat/types';
 
 import {
   DEFAULT_EMBEDDING_MODEL,
-  DEFAULT_EMBEDDING_PROVIDER,
   DEFAULT_RERANK_MODEL,
   DEFAULT_RERANK_PROVIDER,
   DEFAULT_RERANK_QUERY_MODE,

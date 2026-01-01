@@ -18,7 +18,7 @@ describe('call_tool executor', () => {
     it('should create tool message and execute tool successfully', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'test-session', topicId: 'test-topic' });
+      const context = createTestContext({ agentId: 'test-session', topicId: 'test-topic' });
 
       const assistantMessage = createAssistantMessage({ groupId: 'group_123' });
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
@@ -32,7 +32,7 @@ describe('call_tool executor', () => {
       };
 
       const instruction = createCallToolInstruction(toolCall, { parentMessageId: 'msg_parent' });
-      const state = createInitialState({ sessionId: 'test-session' });
+      const state = createInitialState({ operationId: 'test-session' });
 
       // When
       const result = await executeWithMockContext({
@@ -88,6 +88,7 @@ describe('call_tool executor', () => {
       expect(mockStore.internal_invokeDifferentTypePlugin).toHaveBeenCalledWith(
         createdMessage.id,
         toolCall,
+        undefined, // stepContext is undefined when not provided
       );
     });
 
@@ -128,7 +129,7 @@ describe('call_tool executor', () => {
     it('should create tool message with correct structure', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'sess_123', topicId: 'topic_456' });
+      const context = createTestContext({ agentId: 'sess_123', topicId: 'topic_456' });
 
       const assistantMessage = createAssistantMessage({ groupId: 'group_789' });
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
@@ -152,18 +153,18 @@ describe('call_tool executor', () => {
         instruction,
         state,
         mockStore,
-        context: { ...context, sessionId: 'sess_123', topicId: 'topic_456' },
+        context: { ...context, agentId: 'sess_123', topicId: 'topic_456' },
       });
 
       // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
         expect.objectContaining({
+          agentId: 'sess_123',
           content: '',
           groupId: 'group_789',
           parentId: 'msg_parent_123',
           plugin: toolCall,
           role: 'tool',
-          sessionId: 'sess_123',
           threadId: undefined,
           tool_call_id: 'tool_call_xyz',
           topicId: 'topic_456',
@@ -321,6 +322,7 @@ describe('call_tool executor', () => {
       expect(mockStore.internal_invokeDifferentTypePlugin).toHaveBeenCalledWith(
         'msg_existing_tool',
         expect.any(Object),
+        undefined, // stepContext is undefined when not provided
       );
     });
 
@@ -374,6 +376,7 @@ describe('call_tool executor', () => {
       expect(mockStore.internal_invokeDifferentTypePlugin).toHaveBeenCalledWith(
         'msg_tool_reuse',
         toolCall,
+        undefined, // stepContext is undefined when not provided
       );
     });
   });
@@ -431,7 +434,7 @@ describe('call_tool executor', () => {
     it('should create toolCalling operation as parent', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'sess_op', topicId: 'topic_op' });
+      const context = createTestContext({ agentId: 'sess_op', topicId: 'topic_op' });
 
       const assistantMessage = createAssistantMessage();
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
@@ -453,14 +456,14 @@ describe('call_tool executor', () => {
         instruction,
         state,
         mockStore,
-        context: { ...context, sessionId: 'sess_op', topicId: 'topic_op' },
+        context: { ...context, agentId: 'sess_op', topicId: 'topic_op' },
       });
 
       // Then
       expect(mockStore.startOperation).toHaveBeenNthCalledWith(1, {
         type: 'toolCalling',
         context: {
-          sessionId: 'sess_op',
+          agentId: 'sess_op',
           topicId: 'topic_op',
         },
         parentOperationId: context.operationId,
@@ -475,7 +478,7 @@ describe('call_tool executor', () => {
     it('should create createToolMessage operation as child of toolCalling', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'sess_child', topicId: 'topic_child' });
+      const context = createTestContext({ agentId: 'sess_child', topicId: 'topic_child' });
 
       const assistantMessage = createAssistantMessage();
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
@@ -497,7 +500,7 @@ describe('call_tool executor', () => {
         instruction,
         state,
         mockStore,
-        context: { ...context, sessionId: 'sess_child', topicId: 'topic_child' },
+        context: { ...context, agentId: 'sess_child', topicId: 'topic_child' },
       });
 
       // Then
@@ -506,7 +509,7 @@ describe('call_tool executor', () => {
       expect(mockStore.startOperation).toHaveBeenNthCalledWith(2, {
         type: 'createToolMessage',
         context: {
-          sessionId: 'sess_child',
+          agentId: 'sess_child',
           topicId: 'topic_child',
         },
         parentOperationId: toolCallingOpId,
@@ -711,7 +714,7 @@ describe('call_tool executor', () => {
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
 
       const instruction = createCallToolInstruction();
-      const state = createInitialState({ sessionId: 'test-session', stepCount: 5 });
+      const state = createInitialState({ operationId: 'test-session', stepCount: 5 });
 
       // Cancel parent during message creation
       mockStore.optimisticCreateMessage = vi.fn().mockImplementation(async (params) => {
@@ -1263,7 +1266,7 @@ describe('call_tool executor', () => {
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
 
       const instruction = createCallToolInstruction();
-      const state = createInitialState({ sessionId: 'test-session', stepCount: 10 });
+      const state = createInitialState({ operationId: 'test-session', stepCount: 10 });
 
       // When
       const result = await executeWithMockContext({
@@ -1332,7 +1335,7 @@ describe('call_tool executor', () => {
 
       const instruction = createCallToolInstruction();
       const state = createInitialState({
-        sessionId: 'preserve-session',
+        operationId: 'preserve-session',
         stepCount: 15,
         status: 'running',
         lastModified: '2024-01-01T00:00:00.000Z',
@@ -1348,7 +1351,7 @@ describe('call_tool executor', () => {
       });
 
       // Then
-      expect(result.newState.sessionId).toBe('preserve-session');
+      expect(result.newState.operationId).toBe('preserve-session');
       expect(result.newState.stepCount).toBe(15);
       expect(result.newState.status).toBe('running');
       expect(result.newState.lastModified).toBe('2024-01-01T00:00:00.000Z');
@@ -1363,7 +1366,7 @@ describe('call_tool executor', () => {
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
 
       const instruction = createCallToolInstruction();
-      const state = createInitialState({ sessionId: 'immutable-test', stepCount: 5 });
+      const state = createInitialState({ operationId: 'immutable-test', stepCount: 5 });
       const originalState = JSON.parse(JSON.stringify(state));
 
       // When
@@ -1633,13 +1636,14 @@ describe('call_tool executor', () => {
       expect(mockStore.internal_invokeDifferentTypePlugin).toHaveBeenCalledWith(
         expect.any(String),
         toolCall,
+        undefined, // stepContext is undefined when not provided
       );
     });
 
     it('should handle null topicId', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'test-session', topicId: null });
+      const context = createTestContext({ agentId: 'test-session', topicId: null });
 
       const assistantMessage = createAssistantMessage();
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
@@ -1653,7 +1657,7 @@ describe('call_tool executor', () => {
         instruction,
         state,
         mockStore,
-        context: { ...context, sessionId: 'test-session', topicId: null },
+        context: { ...context, agentId: 'test-session', topicId: null },
       });
 
       // Then
@@ -1805,7 +1809,7 @@ describe('call_tool executor', () => {
     it('should skip tool execution when parent operation is cancelled after message creation', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'cancel-test', topicId: 'topic-test' });
+      const context = createTestContext({ agentId: 'cancel-test', topicId: 'topic-test' });
 
       const assistantMessage = createAssistantMessage();
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
@@ -2000,6 +2004,426 @@ describe('call_tool executor', () => {
         const executeToolOp = mockStore.operations[executeToolOpId];
         expect(executeToolOp?.status).not.toBe('completed');
       }
+    });
+  });
+
+  describe('Tool Stop Execution (Group Management Tools)', () => {
+    it('should terminate execution when tool returns stop=true', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: JSON.stringify({ agentId: 'agent-1', message: 'Delegating to agent' }),
+          success: true,
+          stop: true,
+          state: { type: 'speak', agentId: 'agent-1' },
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_speak',
+        identifier: 'lobe-group-management',
+        apiName: 'speak',
+        arguments: JSON.stringify({ agentId: 'agent-1', instruction: 'Please respond' }),
+        type: 'builtin',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      // Should have tool_result event
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0].type).toBe('tool_result');
+
+      // Should mark state as done
+      expect(result.newState.status).toBe('done');
+
+      // Should NOT have nextContext (execution stops)
+      expect(result.nextContext).toBeUndefined();
+    });
+
+    it('should include stop state in result for group management speak tool', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: JSON.stringify({ agentId: 'agent-2' }),
+          success: true,
+          stop: true,
+          state: { type: 'speak', agentId: 'agent-2' },
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_speak_2',
+        identifier: 'lobe-group-management',
+        apiName: 'speak',
+        arguments: JSON.stringify({ agentId: 'agent-2' }),
+        type: 'builtin',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      const toolResultEvent = result.events[0] as any;
+      expect(toolResultEvent.result.stop).toBe(true);
+      expect(toolResultEvent.result.state).toEqual({ type: 'speak', agentId: 'agent-2' });
+    });
+
+    it('should terminate execution when broadcast tool returns stop=true', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: JSON.stringify({ agentIds: ['agent-1', 'agent-2'], message: 'Broadcasting' }),
+          success: true,
+          stop: true,
+          state: { type: 'broadcast', agentIds: ['agent-1', 'agent-2'] },
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_broadcast',
+        identifier: 'lobe-group-management',
+        apiName: 'broadcast',
+        arguments: JSON.stringify({ agentIds: ['agent-1', 'agent-2'], instruction: 'Discuss' }),
+        type: 'builtin',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(result.newState.status).toBe('done');
+      expect(result.nextContext).toBeUndefined();
+
+      const toolResultEvent = result.events[0] as any;
+      expect(toolResultEvent.result.state.type).toBe('broadcast');
+      expect(toolResultEvent.result.state.agentIds).toEqual(['agent-1', 'agent-2']);
+    });
+
+    it('should terminate execution when delegate tool returns stop=true', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: JSON.stringify({ agentId: 'agent-3', reason: 'User requested' }),
+          success: true,
+          stop: true,
+          state: { type: 'delegate', agentId: 'agent-3' },
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_delegate',
+        identifier: 'lobe-group-management',
+        apiName: 'delegate',
+        arguments: JSON.stringify({ agentId: 'agent-3', reason: 'User requested' }),
+        type: 'builtin',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(result.newState.status).toBe('done');
+      expect(result.nextContext).toBeUndefined();
+    });
+
+    it('should continue normally when stop is false or undefined', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: 'Search results',
+          success: true,
+          stop: false, // Explicitly false
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_search',
+        identifier: 'lobe-web-browsing',
+        apiName: 'search',
+        arguments: JSON.stringify({ query: 'test' }),
+        type: 'default',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      // Should NOT mark state as done
+      expect(result.newState.status).toBe('running');
+
+      // Should have nextContext to continue execution
+      expect(result.nextContext).toBeDefined();
+      expect(result.nextContext?.phase).toBe('tool_result');
+    });
+
+    it('should continue normally when result has no stop field', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: 'Some result',
+          success: true,
+          // No stop field
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const instruction = createCallToolInstruction();
+      const state = createInitialState();
+
+      // When
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(result.newState.status).toBe('running');
+      expect(result.nextContext).toBeDefined();
+      expect(result.nextContext?.phase).toBe('tool_result');
+    });
+
+    it('should still track usage when stop=true', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: JSON.stringify({ agentId: 'agent-1' }),
+          success: true,
+          stop: true,
+          state: { type: 'speak', agentId: 'agent-1' },
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_usage_stop',
+        identifier: 'lobe-group-management',
+        apiName: 'speak',
+        arguments: JSON.stringify({ agentId: 'agent-1' }),
+        type: 'builtin',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      const result = await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      // Should still track tool usage even when stopping
+      expect(result.newState.usage.tools.totalCalls).toBe(1);
+      expect(result.newState.usage.tools.byTool).toHaveLength(1);
+      expect(result.newState.usage.tools.byTool[0].name).toBe('lobe-group-management/speak');
+    });
+
+    it('should complete operations even when stop=true', async () => {
+      // Given
+      const mockStore = createMockStore({
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: JSON.stringify({ agentId: 'agent-1' }),
+          success: true,
+          stop: true,
+          state: { type: 'speak', agentId: 'agent-1' },
+        }),
+      });
+      const context = createTestContext();
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_op_complete',
+        identifier: 'lobe-group-management',
+        apiName: 'speak',
+        arguments: JSON.stringify({ agentId: 'agent-1' }),
+        type: 'builtin',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      // All 3 operations should be completed
+      expect(mockStore.completeOperation).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('Group Orchestration: subAgentId Support', () => {
+    it('should use subAgentId for tool message agentId when present', async () => {
+      // Given - Group orchestration scenario
+      const mockStore = createMockStore();
+      const context = createTestContext({
+        agentId: 'supervisor-agent',
+        subAgentId: 'worker-agent',
+        topicId: 'group-topic',
+      });
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_sub_agent',
+        identifier: 'lobe-web-browsing',
+        apiName: 'search',
+        arguments: JSON.stringify({ query: 'test' }),
+        type: 'default',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then - tool message should be created with subAgentId
+      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'worker-agent', // Should use subAgentId
+          role: 'tool',
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
+    });
+
+    it('should fall back to agentId for tool message when subAgentId is not present', async () => {
+      // Given - Normal scenario without subAgentId
+      const mockStore = createMockStore();
+      const context = createTestContext({
+        agentId: 'normal-agent',
+        topicId: 'normal-topic',
+      });
+
+      const assistantMessage = createAssistantMessage();
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        id: 'tool_normal',
+        identifier: 'lobe-web-browsing',
+        apiName: 'search',
+        arguments: JSON.stringify({ query: 'test' }),
+        type: 'default',
+      };
+
+      const instruction = createCallToolInstruction(toolCall);
+      const state = createInitialState();
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then - tool message should be created with agentId
+      expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'normal-agent', // Should use agentId
+          role: 'tool',
+        }),
+        expect.objectContaining({
+          operationId: expect.any(String),
+        }),
+      );
     });
   });
 });

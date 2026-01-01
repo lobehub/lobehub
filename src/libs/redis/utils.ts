@@ -1,6 +1,6 @@
 import type { SetCommandOptions } from '@upstash/redis';
 
-import { RedisKey, RedisMSetArgument, RedisValue, SetOptions } from './types';
+import { type RedisKey, type RedisMSetArgument, type RedisValue, type SetOptions } from './types';
 
 export const normalizeRedisKey = (key: RedisKey) =>
   typeof key === 'string' ? key : key.toString();

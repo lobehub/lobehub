@@ -1,4 +1,4 @@
-import { Skeleton } from 'antd';
+import { Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface SkeletonLoadingProps {

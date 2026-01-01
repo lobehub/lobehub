@@ -1,16 +1,17 @@
 import {
-  CreateNewEvalDatasets,
-  EvalDatasetRecord,
-  RAGEvalDataSetItem,
+  type CreateNewEvalDatasets,
+  type EvalDatasetRecord,
+  type RAGEvalDataSetItem,
   insertEvalDatasetRecordSchema,
 } from '@lobechat/types';
-import { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import i18n from 'i18next';
+import type { SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { notification } from '@/components/AntdStaticMethods';
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { ragEvalService } from '@/services/ragEval';
-import { KnowledgeBaseStore } from '@/store/knowledgeBase/store';
+import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
 
 const FETCH_DATASET_LIST_KEY = 'FETCH_DATASET_LIST';
 const FETCH_DATASET_RECORD_KEY = 'FETCH_DATASET_RECORD_KEY';
@@ -54,7 +55,10 @@ export const createRagEvalDatasetSlice: StateCreator<
         // if valid, send to backend
         await ragEvalService.importDatasetRecords(datasetId, file);
       } catch (e) {
-        notification.error({ description: (e as Error).message, message: '文件格式错误' });
+        notification.error({
+          description: (e as Error).message,
+          message: i18n.t('errors.invalidFileFormat', { ns: 'common' }),
+        });
       }
     }
 

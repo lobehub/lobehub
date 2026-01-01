@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "Slim hernoemen",
-    "confirmRemoveAll": "U staat op het punt om alle onderwerpen te verwijderen. Na verwijdering kunnen ze niet worden hersteld, wees voorzichtig.",
-    "confirmRemoveTopic": "U staat op het punt om dit onderwerp te verwijderen. Na verwijdering kan het niet worden hersteld, wees voorzichtig.",
-    "confirmRemoveUnstarred": "U staat op het punt om niet-gemarkeerde onderwerpen te verwijderen. Na verwijdering kunnen ze niet worden hersteld, wees voorzichtig.",
-    "duplicate": "Maak een kopie",
-    "export": "Exporteer onderwerp",
-    "openInNewWindow": "Pagina in een nieuw venster openen",
-    "removeAll": "Verwijder alle onderwerpen",
-    "removeUnstarred": "Verwijder niet-gemarkeerde onderwerpen"
-  },
-  "defaultTitle": "Standaard onderwerp",
+  "actions.addNewTopic": "Nieuw onderwerp starten",
+  "actions.autoRename": "Slim hernoemen",
+  "actions.confirmRemoveAll": "Je staat op het punt om alle onderwerpen te verwijderen. Deze actie kan niet ongedaan worden gemaakt.",
+  "actions.confirmRemoveTopic": "Je staat op het punt om dit onderwerp te verwijderen. Deze actie kan niet ongedaan worden gemaakt.",
+  "actions.confirmRemoveUnstarred": "Je staat op het punt om niet-gemarkeerde onderwerpen te verwijderen. Deze actie kan niet ongedaan worden gemaakt.",
+  "actions.duplicate": "Dupliceren",
+  "actions.export": "Onderwerpen exporteren",
+  "actions.import": "Gesprek importeren",
+  "actions.openInNewWindow": "Openen in een nieuw venster",
+  "actions.removeAll": "Alle onderwerpen verwijderen",
+  "actions.removeUnstarred": "Niet-gemarkeerde onderwerpen verwijderen",
+  "defaultTitle": "Standaardonderwerp",
+  "displayItems": "Items weergeven",
   "duplicateLoading": "Onderwerp wordt gekopieerd...",
   "duplicateSuccess": "Onderwerp succesvol gekopieerd",
   "favorite": "Favoriet",
-  "groupMode": {
-    "ascMessages": "Op volgorde van totaal aantal berichten",
-    "byTime": "Groeperen op tijd",
-    "descMessages": "Op volgorde van totaal aantal berichten (aflopend)",
-    "flat": "Niet groeperen"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "Deze maand",
-      "today": "Vandaag",
-      "week": "Deze week",
-      "yesterday": "Gisteren"
-    }
-  },
-  "guide": {
-    "desc": "Klik op de knop aan de linkerkant om de huidige conversatie op te slaan als een historisch onderwerp en een nieuwe conversatie te starten.",
-    "title": "Onderwerpenlijst"
-  },
-  "searchPlaceholder": "Zoek onderwerpen...",
-  "searchResultEmpty": "Geen zoekresultaten gevonden",
+  "groupMode.ascMessages": "Sorteren op aantal berichten oplopend",
+  "groupMode.byTime": "Groeperen op tijd",
+  "groupMode.descMessages": "Sorteren op aantal berichten aflopend",
+  "groupMode.flat": "Geen groepering",
+  "groupTitle.byTime.month": "Deze maand",
+  "groupTitle.byTime.today": "Vandaag",
+  "groupTitle.byTime.week": "Deze week",
+  "groupTitle.byTime.yesterday": "Gisteren",
+  "guide.desc": "Klik op de knop links om het huidige gesprek op te slaan als historisch onderwerp en een nieuw gesprek te starten.",
+  "guide.title": "Onderwerpenlijst",
+  "importError": "Importeren mislukt",
+  "importInvalidFormat": "Ongeldig bestandsformaat. Zorg ervoor dat het een geldig JSON-bestand is.",
+  "importLoading": "Gesprek wordt geïmporteerd...",
+  "importSuccess": "{{count}} berichten succesvol geïmporteerd",
+  "loadMore": "Meer laden",
+  "searchPlaceholder": "Onderwerpen zoeken...",
+  "searchResultEmpty": "Geen zoekresultaten gevonden.",
   "temp": "Tijdelijk",
   "title": "Onderwerp"
 }

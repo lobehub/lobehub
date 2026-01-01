@@ -5,7 +5,7 @@ const openrouterChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 2_000_000,
     description:
-      '根据上下文长度、主题和复杂性，你的请求将发送到 Llama 3 70B Instruct、Claude 3.5 Sonnet（自我调节）或 GPT-4o。',
+      'Based on context length, topic, and complexity, your request is routed to Llama 3 70B Instruct, Claude 3.5 Sonnet (self-moderated), or GPT-4o.',
     displayName: 'Auto (best for prompt)',
     enabled: true,
     id: 'openrouter/auto',
@@ -18,7 +18,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-V3.1是一款支持128K长上下文和高效模式切换的大型混合推理模型，它在工具调用、代码生成和复杂推理任务上实现了卓越的性能与速度。',
+      'DeepSeek-V3.1 is a large hybrid reasoning model with 128K context and efficient mode switching, delivering excellent performance and speed for tool use, code generation, and complex reasoning.',
     displayName: 'DeepSeek V3.1',
     id: 'deepseek/deepseek-chat-v3.1',
     pricing: {
@@ -36,7 +36,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768 + 8192,
-    description: 'Gemini 2.5 Flash 实验模型，支持图像生成',
+    description: 'Gemini 2.5 Flash experimental model with image generation support.',
     displayName: 'Nano Banana',
     id: 'google/gemini-2.5-flash-image-preview',
     maxOutput: 8192,
@@ -58,7 +58,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-V3.1是一款支持128K长上下文和高效模式切换的大型混合推理模型，它在工具调用、代码生成和复杂推理任务上实现了卓越的性能与速度。',
+      'DeepSeek-V3.1 is a large hybrid reasoning model with 128K context and efficient mode switching, delivering excellent performance and speed for tool use, code generation, and complex reasoning.',
     displayName: 'DeepSeek V3.1',
     id: 'deepseek/deepseek-chat-v3.1',
     pricing: {
@@ -76,7 +76,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3 是 Qwen 大型语言模型系列的最新一代，具有密集和专家混合 (MoE) 架构，在推理、多语言支持和高级代理任务方面表现出色。其在复杂推理的思考模式和高效对话的非思考模式之间无缝切换的独特能力确保了多功能、高质量的性能。\n\nQwen3 显著优于 QwQ 和 Qwen2.5 等先前模型，提供卓越的数学、编码、常识推理、创意写作和交互式对话能力。Qwen3-30B-A3B 变体包含 305 亿个参数（33 亿个激活参数）、48 层、128 个专家（每个任务激活 8 个），并支持高达 131K 令牌上下文（使用 YaRN），为开源模型树立了新标准。',
+      'Qwen3 is the latest Qwen LLM generation with dense and MoE architectures, excelling at reasoning, multilingual support, and advanced agent tasks. Its unique ability to switch between a thinking mode for complex reasoning and a non-thinking mode for efficient chat ensures versatile, high-quality performance.\n\nQwen3 significantly outperforms prior models like QwQ and Qwen2.5, delivering excellent math, coding, commonsense reasoning, creative writing, and interactive chat. The Qwen3-30B-A3B variant has 30.5B parameters (3.3B active), 48 layers, 128 experts (8 active per task), and supports up to 131K context with YaRN, setting a new bar for open models.',
     displayName: 'Qwen3 30B A3B (Free)',
     id: 'qwen/qwen3-30b-a3b:free',
     type: 'chat',
@@ -87,7 +87,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3 是 Qwen 大型语言模型系列的最新一代，具有密集和专家混合 (MoE) 架构，在推理、多语言支持和高级代理任务方面表现出色。其在复杂推理的思考模式和高效对话的非思考模式之间无缝切换的独特能力确保了多功能、高质量的性能。\n\nQwen3 显著优于 QwQ 和 Qwen2.5 等先前模型，提供卓越的数学、编码、常识推理、创意写作和交互式对话能力。Qwen3-30B-A3B 变体包含 305 亿个参数（33 亿个激活参数）、48 层、128 个专家（每个任务激活 8 个），并支持高达 131K 令牌上下文（使用 YaRN），为开源模型树立了新标准。',
+      'Qwen3 is the latest Qwen LLM generation with dense and MoE architectures, excelling at reasoning, multilingual support, and advanced agent tasks. Its unique ability to switch between a thinking mode for complex reasoning and a non-thinking mode for efficient chat ensures versatile, high-quality performance.\n\nQwen3 significantly outperforms prior models like QwQ and Qwen2.5, delivering excellent math, coding, commonsense reasoning, creative writing, and interactive chat. The Qwen3-30B-A3B variant has 30.5B parameters (3.3B active), 48 layers, 128 experts (8 active per task), and supports up to 131K context with YaRN, setting a new bar for open models.',
     displayName: 'Qwen3 30B A3B',
     id: 'qwen/qwen3-30b-a3b',
     maxOutput: 40_960,
@@ -105,7 +105,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3-8B 是 Qwen3 系列中一个密集的 82 亿参数因果语言模型，专为推理密集型任务和高效对话而设计。它支持在用于数学、编码和逻辑推理的“思考”模式与用于一般对话的“非思考”模式之间无缝切换。该模型经过微调，可用于指令遵循、代理集成、创意写作以及跨 100 多种语言和方言的多语言使用。它原生支持 32K 令牌上下文窗口，并可通过 YaRN 扩展到 131K 令牌。',
+      'Qwen3-8B is a dense 8.2B-parameter causal LLM built for reasoning-heavy tasks and efficient chat. It switches between a thinking mode for math, coding, and logic and a non-thinking mode for general chat. Fine-tuned for instruction following, agent integration, and creative writing across 100+ languages and dialects. It natively supports 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 8B (Free)',
     id: 'qwen/qwen3-8b:free',
     maxOutput: 40_960,
@@ -117,7 +117,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3-14B 是 Qwen3 系列中一个密集的 148 亿参数因果语言模型，专为复杂推理和高效对话而设计。它支持在用于数学、编程和逻辑推理等任务的“思考”模式与用于通用对话的“非思考”模式之间无缝切换。该模型经过微调，可用于指令遵循、代理工具使用、创意写作以及跨 100 多种语言和方言的多语言任务。它原生处理 32K 令牌上下文，并可使用基于 YaRN 的扩展扩展到 131K 令牌。',
+      'Qwen3-14B is a dense 14.8B-parameter causal LLM built for complex reasoning and efficient chat. It switches between a thinking mode for math, coding, and logic and a non-thinking mode for general chat. Fine-tuned for instruction following, agent tool use, and creative writing across 100+ languages and dialects. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 14B (Free)',
     id: 'qwen/qwen3-14b:free',
     type: 'chat',
@@ -128,7 +128,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3-14B 是 Qwen3 系列中一个密集的 148 亿参数因果语言模型，专为复杂推理和高效对话而设计。它支持在用于数学、编程和逻辑推理等任务的“思考”模式与用于通用对话的“非思考”模式之间无缝切换。该模型经过微调，可用于指令遵循、代理工具使用、创意写作以及跨 100 多种语言和方言的多语言任务。它原生处理 32K 令牌上下文，并可使用基于 YaRN 的扩展扩展到 131K 令牌。',
+      'Qwen3-14B is a dense 14.8B-parameter causal LLM built for complex reasoning and efficient chat. It switches between a thinking mode for math, coding, and logic and a non-thinking mode for general chat. Fine-tuned for instruction following, agent tool use, and creative writing across 100+ languages and dialects. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 14B',
     id: 'qwen/qwen3-14b',
     maxOutput: 40_960,
@@ -146,7 +146,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3-32B 是 Qwen3 系列中一个密集的 328 亿参数因果语言模型，针对复杂推理和高效对话进行了优化。它支持在用于数学、编码和逻辑推理等任务的“思考”模式与用于更快、通用对话的“非思考”模式之间无缝切换。该模型在指令遵循、代理工具使用、创意写作以及跨 100 多种语言和方言的多语言任务中表现出强大的性能。它原生处理 32K 令牌上下文，并可使用基于 YaRN 的扩展扩展到 131K 令牌。',
+      'Qwen3-32B is a dense 32.8B-parameter causal LLM optimized for complex reasoning and efficient chat. It switches between a thinking mode for math, coding, and logic and a non-thinking mode for faster general chat. It performs strongly on instruction following, agent tool use, and creative writing across 100+ languages and dialects. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 32B (Free)',
     id: 'qwen/qwen3-32b:free',
     type: 'chat',
@@ -157,7 +157,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3-32B 是 Qwen3 系列中一个密集的 328 亿参数因果语言模型，针对复杂推理和高效对话进行了优化。它支持在用于数学、编码和逻辑推理等任务的“思考”模式与用于更快、通用对话的“非思考”模式之间无缝切换。该模型在指令遵循、代理工具使用、创意写作以及跨 100 多种语言和方言的多语言任务中表现出强大的性能。它原生处理 32K 令牌上下文，并可使用基于 YaRN 的扩展扩展到 131K 令牌。',
+      'Qwen3-32B is a dense 32.8B-parameter causal LLM optimized for complex reasoning and efficient chat. It switches between a thinking mode for math, coding, and logic and a non-thinking mode for faster general chat. It performs strongly on instruction following, agent tool use, and creative writing across 100+ languages and dialects. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 32B',
     id: 'qwen/qwen3-32b',
     pricing: {
@@ -174,7 +174,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Qwen3-235B-A22B 是由 Qwen 开发的 235B 参数专家混合 (MoE) 模型，每次前向传递激活 22B 参数。它支持在用于复杂推理、数学和代码任务的“思考”模式与用于一般对话效率的“非思考”模式之间无缝切换。该模型展示了强大的推理能力、多语言支持（100 多种语言和方言）、高级指令遵循和代理工具调用能力。它原生处理 32K 令牌上下文窗口，并使用基于 YaRN 的扩展扩展到 131K 令牌。',
+      'Qwen3-235B-A22B is a 235B-parameter MoE model from Qwen with 22B active per forward pass. It switches between a thinking mode for complex reasoning, math, and code and a non-thinking mode for efficient chat. It offers strong reasoning, multilingual support (100+ languages/dialects), advanced instruction following, and agent tool use. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 235B A22B (Free)',
     id: 'qwen/qwen3-235b-a22b:free',
     type: 'chat',
@@ -185,7 +185,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3-235B-A22B 是由 Qwen 开发的 235B 参数专家混合 (MoE) 模型，每次前向传递激活 22B 参数。它支持在用于复杂推理、数学和代码任务的“思考”模式与用于一般对话效率的“非思考”模式之间无缝切换。该模型展示了强大的推理能力、多语言支持（100 多种语言和方言）、高级指令遵循和代理工具调用能力。它原生处理 32K 令牌上下文窗口，并使用基于 YaRN 的扩展扩展到 131K 令牌。',
+      'Qwen3-235B-A22B is a 235B-parameter MoE model from Qwen with 22B active per forward pass. It switches between a thinking mode for complex reasoning, math, and code and a non-thinking mode for efficient chat. It offers strong reasoning, multilingual support (100+ languages/dialects), advanced instruction following, and agent tool use. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 235B A22B',
     id: 'qwen/qwen3-235b-a22b',
     maxOutput: 40_960,
@@ -203,7 +203,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-R1T-Chimera 通过合并 DeepSeek-R1 和 DeepSeek-V3 (0324) 创建，结合了 R1 的推理能力和 V3 的令牌效率改进。它基于 DeepSeek-MoE Transformer 架构，并针对通用文本生成任务进行了优化。\n\n该模型合并了两个源模型的预训练权重，以平衡推理、效率和指令遵循任务的性能。它根据 MIT 许可证发布，旨在用于研究和商业用途。',
+      'DeepSeek-R1T-Chimera is created by merging DeepSeek-R1 and DeepSeek-V3 (0324), combining R1 reasoning with V3 token efficiency. It is based on the DeepSeek-MoE Transformer and optimized for general text generation.\n\nIt merges pretrained weights to balance reasoning, efficiency, and instruction following. Released under the MIT license for research and commercial use.',
     displayName: 'DeepSeek R1T Chimera (Free)',
     id: 'tngtech/deepseek-r1t-chimera:free',
     type: 'chat',
@@ -214,7 +214,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'GLM Z1 Rumination 32B 是 GLM-4-Z1 系列中的 32B 参数深度推理模型，针对需要长时间思考的复杂、开放式任务进行了优化。它建立在 glm-4-32b-0414 的基础上，增加了额外的强化学习阶段和多阶段对齐策略，引入了旨在模拟扩展认知处理的“反思”能力。这包括迭代推理、多跳分析和工具增强的工作流程，例如搜索、检索和引文感知合成。\n\n该模型在研究式写作、比较分析和复杂问答方面表现出色。它支持用于搜索和导航原语（`search`、`click`、`open`、`finish`）的函数调用，从而可以在代理式管道中使用。反思行为由具有基于规则的奖励塑造和延迟决策机制的多轮循环控制，并以 OpenAI 内部对齐堆栈等深度研究框架为基准。此变体适用于需要深度而非速度的场景。',
+      'GLM Z1 Rumination 32B is a 32B deep reasoning model in the GLM-4-Z1 series, optimized for complex open-ended tasks that require long thinking. Built on glm-4-32b-0414, it adds extra RL stages and multi-stage alignment, introducing a “rumination” capability that simulates extended cognitive processing. This includes iterative reasoning, multi-hop analysis, and tool-augmented workflows such as search, retrieval, and citation-aware synthesis.\n\nIt excels at research writing, comparative analysis, and complex QA. It supports function calling for search/navigation primitives (`search`, `click`, `open`, `finish`) for agent pipelines. Rumination behavior is controlled by multi-round loops with rule-based reward shaping and delayed decision mechanisms, benchmarked against deep research frameworks like OpenAI’s internal alignment stack. This variant is for depth over speed.',
     displayName: 'GLM Z1 Rumination 32B',
     id: 'thudm/glm-z1-rumination-32b',
     pricing: {
@@ -231,7 +231,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'GLM-Z1-32B-0414 是 GLM-4-32B 的增强推理变体，专为深度数学、逻辑和面向代码的问题解决而构建。它应用扩展强化学习（任务特定和基于通用成对偏好）来提高复杂多步骤任务的性能。与基础 GLM-4-32B 模型相比，Z1 显著提升了结构化推理和形式化领域的能力。\n\n该模型支持通过提示工程强制执行“思考”步骤，并为长格式输出提供改进的连贯性。它针对代理工作流进行了优化，并支持长上下文（通过 YaRN）、JSON 工具调用和用于稳定推理的细粒度采样配置。非常适合需要深思熟虑、多步骤推理或形式化推导的用例。',
+      'GLM-Z1-32B-0414 is an enhanced reasoning variant of GLM-4-32B, built for deep math, logic, and code-focused problem solving. It applies expanded RL (task-specific and general pairwise preference) to improve complex multi-step tasks. Compared to GLM-4-32B, Z1 significantly improves structured reasoning and formal-domain capability.\n\nIt supports enforcing “thinking” steps via prompt engineering, improved coherence for long outputs, and is optimized for agent workflows with long context (via YaRN), JSON tool calling, and fine-grained sampling for stable reasoning. Ideal for use cases requiring careful multi-step or formal derivations.',
     displayName: 'GLM Z1 32B',
     id: 'thudm/glm-z1-32b',
     pricing: {
@@ -248,7 +248,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'GLM-4-32B-0414 是一个 32B 双语（中英）开放权重语言模型，针对代码生成、函数调用和代理式任务进行了优化。它在 15T 高质量和重推理数据上进行了预训练，并使用人类偏好对齐、拒绝采样和强化学习进一步完善。该模型在复杂推理、工件生成和结构化输出任务方面表现出色，在多个基准测试中达到了与 GPT-4o 和 DeepSeek-V3-0324 相当的性能。',
+      'GLM-4-32B-0414 is a 32B bilingual (Chinese/English) open-weights model optimized for code generation, function calling, and agent tasks. It is pretrained on 15T high-quality and reasoning-heavy data and further refined with human preference alignment, rejection sampling, and RL. It excels at complex reasoning, artifact generation, and structured output, reaching GPT-4o and DeepSeek-V3-0324-level performance on multiple benchmarks.',
     displayName: 'GLM 4 32B (Free)',
     id: 'thudm/glm-4-32b:free',
     type: 'chat',
@@ -259,7 +259,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'GLM-4-32B-0414 是一个 32B 双语（中英）开放权重语言模型，针对代码生成、函数调用和代理式任务进行了优化。它在 15T 高质量和重推理数据上进行了预训练，并使用人类偏好对齐、拒绝采样和强化学习进一步完善。该模型在复杂推理、工件生成和结构化输出任务方面表现出色，在多个基准测试中达到了与 GPT-4o 和 DeepSeek-V3-0324 相当的性能。',
+      'GLM-4-32B-0414 is a 32B bilingual (Chinese/English) open-weights model optimized for code generation, function calling, and agent tasks. It is pretrained on 15T high-quality and reasoning-heavy data and further refined with human preference alignment, rejection sampling, and RL. It excels at complex reasoning, artifact generation, and structured output, reaching GPT-4o and DeepSeek-V3-0324-level performance on multiple benchmarks.',
     displayName: 'GLM 4 32B',
     id: 'thudm/glm-4-32b',
     pricing: {
@@ -278,7 +278,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.5 Pro 是 Google 最先进的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      'Gemini 2.5 Pro is Google’s most advanced thinking model for reasoning over complex problems in code, math, and STEM, and for analyzing large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro',
     id: 'google/gemini-2.5-pro',
     maxOutput: 65_536,
@@ -298,7 +298,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.5 Pro Preview 是 Google 最先进的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      'Gemini 2.5 Pro Preview is Google’s most advanced thinking model for reasoning over complex problems in code, math, and STEM, and for analyzing large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro Preview',
     id: 'google/gemini-2.5-pro-preview',
     maxOutput: 65_536,
@@ -318,7 +318,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.5 Flash 是 Google 最先进的主力模型，专为高级推理、编码、数学和科学任务而设计。它包含内置的“思考”能力，使其能够提供具有更高准确性和细致上下文处理的响应。\n\n注意：此模型有两个变体：思考和非思考。输出定价根据思考能力是否激活而有显著差异。如果您选择标准变体（不带“:thinking”后缀），模型将明确避免生成思考令牌。\n\n要利用思考能力并接收思考令牌，您必须选择“:thinking”变体，这将产生更高的思考输出定价。\n\n此外，Gemini 2.5 Flash 可通过“推理最大令牌数”参数进行配置，如文档中所述 (https://openrouter.ai/docs/use-cases/reasoning-tokens#max-tokens-for-reasoning)。',
+      'Gemini 2.5 Flash is Google’s most advanced flagship model, built for advanced reasoning, coding, math, and science tasks. It includes built-in “thinking” to deliver higher-accuracy responses with finer context processing.\n\nNote: This model has two variants—thinking and non-thinking. Output pricing differs significantly depending on whether thinking is enabled. If you choose the standard variant (without the “:thinking” suffix), the model will explicitly avoid generating thinking tokens.\n\nTo use thinking and receive thinking tokens, you must select the “:thinking” variant, which incurs higher thinking output pricing.\n\nGemini 2.5 Flash can also be configured via the “max reasoning tokens” parameter as documented (https://openrouter.ai/docs/use-cases/reasoning-tokens#max-tokens-for-reasoning).',
     displayName: 'Gemini 2.5 Flash',
     id: 'google/gemini-2.5-flash',
     maxOutput: 65_535,
@@ -338,7 +338,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.5 Flash 是 Google 最先进的主力模型，专为高级推理、编码、数学和科学任务而设计。它包含内置的“思考”能力，使其能够提供具有更高准确性和细致上下文处理的响应。\n\n注意：此模型有两个变体：思考和非思考。输出定价根据思考能力是否激活而有显著差异。如果您选择标准变体（不带“:thinking”后缀），模型将明确避免生成思考令牌。\n\n要利用思考能力并接收思考令牌，您必须选择“:thinking”变体，这将产生更高的思考输出定价。\n\n此外，Gemini 2.5 Flash 可通过“推理最大令牌数”参数进行配置，如文档中所述 (https://openrouter.ai/docs/use-cases/reasoning-tokens#max-tokens-for-reasoning)。',
+      'Gemini 2.5 Flash is Google’s most advanced flagship model, built for advanced reasoning, coding, math, and science tasks. It includes built-in “thinking” to deliver higher-accuracy responses with finer context processing.\n\nNote: This model has two variants—thinking and non-thinking. Output pricing differs significantly depending on whether thinking is enabled. If you choose the standard variant (without the “:thinking” suffix), the model will explicitly avoid generating thinking tokens.\n\nTo use thinking and receive thinking tokens, you must select the “:thinking” variant, which incurs higher thinking output pricing.\n\nGemini 2.5 Flash can also be configured via the “max reasoning tokens” parameter as documented (https://openrouter.ai/docs/use-cases/reasoning-tokens#max-tokens-for-reasoning).',
     displayName: 'Gemini 2.5 Flash Preview',
     id: 'google/gemini-2.5-flash-preview',
     maxOutput: 65_535,
@@ -358,7 +358,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.5 Flash 是 Google 最先进的主力模型，专为高级推理、编码、数学和科学任务而设计。它包含内置的“思考”能力，使其能够提供具有更高准确性和细致上下文处理的响应。\n\n注意：此模型有两个变体：思考和非思考。输出定价根据思考能力是否激活而有显著差异。如果您选择标准变体（不带“:thinking”后缀），模型将明确避免生成思考令牌。\n\n要利用思考能力并接收思考令牌，您必须选择“:thinking”变体，这将产生更高的思考输出定价。\n\n此外，Gemini 2.5 Flash 可通过“推理最大令牌数”参数进行配置，如文档中所述 (https://openrouter.ai/docs/use-cases/reasoning-tokens#max-tokens-for-reasoning)。',
+      'Gemini 2.5 Flash is Google’s most advanced flagship model, built for advanced reasoning, coding, math, and science tasks. It includes built-in “thinking” to deliver higher-accuracy responses with finer context processing.\n\nNote: This model has two variants—thinking and non-thinking. Output pricing differs significantly depending on whether thinking is enabled. If you choose the standard variant (without the “:thinking” suffix), the model will explicitly avoid generating thinking tokens.\n\nTo use thinking and receive thinking tokens, you must select the “:thinking” variant, which incurs higher thinking output pricing.\n\nGemini 2.5 Flash can also be configured via the “max reasoning tokens” parameter as documented (https://openrouter.ai/docs/use-cases/reasoning-tokens#max-tokens-for-reasoning).',
     displayName: 'Gemini 2.5 Flash Preview (thinking)',
     id: 'google/gemini-2.5-flash-preview:thinking',
     maxOutput: 65_535,
@@ -378,7 +378,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3 是一款全能强大的模型，在多个领域表现出色。它为数学、科学、编程和视觉推理任务树立了新标杆。它也擅长技术写作和指令遵循。用户可利用它分析文本、代码和图像，解决多步骤的复杂问题。',
+      'o3 is a powerful general-purpose model that excels across domains. It sets a new bar for math, science, coding, and vision reasoning, and is strong at technical writing and instruction following. Use it to analyze text, code, and images and solve complex multi-step problems.',
     displayName: 'o3',
     id: 'openai/o3',
     maxOutput: 100_000,
@@ -400,7 +400,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini 高推理等级版，专为快速有效的推理而优化，在编码和视觉任务中表现出极高的效率和性能。',
+      'o4-mini high reasoning tier, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini (high)',
     id: 'openai/o4-mini-high',
     maxOutput: 100_000,
@@ -421,7 +421,8 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 200_000,
-    description: 'o4-mini 专为快速有效的推理而优化，在编码和视觉任务中表现出极高的效率和性能。',
+    description:
+      'o4-mini is optimized for fast, effective reasoning with strong efficiency and performance in coding and vision tasks.',
     displayName: 'o4-mini',
     id: 'openai/o4-mini',
     maxOutput: 100_000,
@@ -441,7 +442,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 是我们用于复杂任务的旗舰模型。它非常适合跨领域解决问题。',
+    description: 'GPT-4.1 is the flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     id: 'openai/gpt-4.1',
     maxOutput: 32_768,
@@ -461,8 +462,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+    description: 'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
     displayName: 'GPT-4.1 mini',
     id: 'openai/gpt-4.1-mini',
     maxOutput: 32_768,
@@ -482,7 +482,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 nano 是最快，最具成本效益的GPT-4.1模型。',
+    description: 'GPT-4.1 nano is the fastest and most cost-effective GPT-4.1 model.',
     displayName: 'GPT-4.1 nano',
     id: 'openai/gpt-4.1-nano',
     maxOutput: 32_768,
@@ -502,7 +502,8 @@ const openrouterChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 200_000,
-    description: 'o3-mini 高推理等级版，在与 o1-mini 相同的成本和延迟目标下提供高智能。',
+    description:
+      'o3-mini (high reasoning) delivers higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini (high)',
     id: 'openai/o3-mini-high',
     maxOutput: 100_000,
@@ -522,7 +523,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 200_000,
-    description: 'o3-mini 在与 o1-mini 相同的成本和延迟目标下提供高智能。',
+    description: 'o3-mini delivers higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'openai/o3-mini',
     maxOutput: 100_000,
@@ -542,7 +543,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'o1-mini是一款针对编程、数学和科学应用场景而设计的快速、经济高效的推理模型。该模型具有128K上下文和2023年10月的知识截止日期。',
+      'o1-mini is a fast, cost-effective reasoning model designed for coding, math, and science. It has 128K context and an October 2023 knowledge cutoff.',
     displayName: 'o1-mini',
     id: 'openai/o1-mini',
     maxOutput: 65_536,
@@ -561,7 +562,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'o1是OpenAI新的推理模型，适用于需要广泛通用知识的复杂任务。该模型具有128K上下文和2023年10月的知识截止日期。',
+      'o1 is OpenAI’s new reasoning model for complex tasks requiring broad knowledge. It has 128K context and an October 2023 knowledge cutoff.',
     displayName: 'o1-preview',
     id: 'openai/o1-preview',
     maxOutput: 32_768,
@@ -581,7 +582,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4o mini是OpenAI在GPT-4 Omni之后推出的最新模型，支持图文输入并输出文本。作为他们最先进的小型模型，它比其他近期的前沿模型便宜很多，并且比GPT-3.5 Turbo便宜超过60%。它保持了最先进的智能，同时具有显著的性价比。GPT-4o mini在MMLU测试中获得了 82% 的得分，目前在聊天偏好上排名高于 GPT-4。',
+      'GPT-4o mini is OpenAI’s latest model after GPT-4 Omni, supporting image+text input with text output. As their most advanced small model, it is far cheaper than recent frontier models and over 60% cheaper than GPT-3.5 Turbo, while retaining top-tier intelligence. It scores 82% on MMLU and ranks above GPT-4 in chat preference.',
     displayName: 'GPT-4o mini',
     id: 'openai/gpt-4o-mini',
     maxOutput: 16_385,
@@ -600,7 +601,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'GPT-4o',
     id: 'openai/gpt-4o',
     pricing: {
@@ -618,7 +619,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-R1 在仅有极少标注数据的情况下，极大提升了模型推理能力。在输出最终回答之前，模型会先输出一段思维链内容，以提升最终答案的准确性。',
+      'DeepSeek-R1 greatly improves reasoning with minimal labeled data and outputs a chain-of-thought before the final answer to improve accuracy.',
     displayName: 'DeepSeek R1 0528',
     id: 'deepseek/deepseek-r1-0528',
     pricing: {
@@ -636,7 +637,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-R1 在仅有极少标注数据的情况下，极大提升了模型推理能力。在输出最终回答之前，模型会先输出一段思维链内容，以提升最终答案的准确性。',
+      'DeepSeek-R1 greatly improves reasoning with minimal labeled data and outputs a chain-of-thought before the final answer to improve accuracy.',
     displayName: 'DeepSeek R1 0528 (Free)',
     id: 'deepseek/deepseek-r1-0528:free',
     releasedAt: '2025-05-28',
@@ -648,7 +649,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-R1 在仅有极少标注数据的情况下，极大提升了模型推理能力。在输出最终回答之前，模型会先输出一段思维链内容，以提升最终答案的准确性。',
+      'DeepSeek-R1 greatly improves reasoning with minimal labeled data and outputs a chain-of-thought before the final answer to improve accuracy.',
     displayName: 'DeepSeek R1',
     id: 'deepseek/deepseek-r1',
     pricing: {
@@ -666,7 +667,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-R1 在仅有极少标注数据的情况下，极大提升了模型推理能力。在输出最终回答之前，模型会先输出一段思维链内容，以提升最终答案的准确性。',
+      'DeepSeek-R1 greatly improves reasoning with minimal labeled data and outputs a chain-of-thought before the final answer to improve accuracy.',
     displayName: 'DeepSeek R1 (Free)',
     id: 'deepseek/deepseek-r1:free',
     releasedAt: '2025-01-20',
@@ -675,7 +676,7 @@ const openrouterChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek V3 是一个 685B 参数的专家混合模型，是 DeepSeek 团队旗舰聊天模型系列的最新迭代。\n\n它继承了 [DeepSeek V3](/deepseek/deepseek-chat-v3) 模型，并在各种任务上表现出色。',
+      'DeepSeek V3 is a 685B-parameter MoE model and the latest iteration of DeepSeek’s flagship chat series.\n\nIt builds on [DeepSeek V3](/deepseek/deepseek-chat-v3) and performs strongly across tasks.',
     displayName: 'DeepSeek V3 0324',
     id: 'deepseek/deepseek-chat-v3-0324',
     pricing: {
@@ -690,7 +691,7 @@ const openrouterChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek V3 是一个 685B 参数的专家混合模型，是 DeepSeek 团队旗舰聊天模型系列的最新迭代。\n\n它继承了 [DeepSeek V3](/deepseek/deepseek-chat-v3) 模型，并在各种任务上表现出色。',
+      'DeepSeek V3 is a 685B-parameter MoE model and the latest iteration of DeepSeek’s flagship chat series.\n\nIt builds on [DeepSeek V3](/deepseek/deepseek-chat-v3) and performs strongly across tasks.',
     displayName: 'DeepSeek V3 0324 (Free)',
     id: 'deepseek/deepseek-chat-v3-0324:free',
     type: 'chat',
@@ -704,7 +705,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4.5 是 Anthropic 的旗舰模型，结合了卓越的智能与可扩展性能，适合需要最高质量回应和推理能力的复杂任务。',
+      'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
     displayName: 'Claude Opus 4.5',
     id: 'anthropic/claude-opus-4.5',
     maxOutput: 64_000,
@@ -731,7 +732,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 200_000,
-    description: 'Claude Sonnet 4.5 是 Anthropic 迄今为止最智能的模型。',
+    description: 'Claude Sonnet 4.5 is Anthropic’s most intelligent model to date.',
     displayName: 'Claude Sonnet 4.5',
     id: 'anthropic/claude-sonnet-4.5',
     maxOutput: 64_000,
@@ -757,7 +758,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3 Haiku 是 Anthropic 的最快且最紧凑的模型，旨在实现近乎即时的响应。它具有快速且准确的定向性能。',
+      'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
     displayName: 'Claude 3 Haiku',
     id: 'anthropic/claude-3-haiku',
     maxOutput: 4096,
@@ -783,7 +784,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Haiku 是 Anthropic 最快的下一代模型。与 Claude 3 Haiku 相比，Claude 3.5 Haiku 在各项技能上都有所提升，并在许多智力基准测试中超越了上一代最大的模型 Claude 3 Opus。',
+      'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous largest model Claude 3 Opus on many intelligence benchmarks.',
     displayName: 'Claude 3.5 Haiku',
     id: 'anthropic/claude-3.5-haiku',
     maxOutput: 8192,
@@ -810,7 +811,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Sonnet 提供了超越 Opus 的能力和比 Sonnet 更快的速度，同时保持与 Sonnet 相同的价格。Sonnet 特别擅长编程、数据科学、视觉处理、代理任务。',
+      'Claude 3.5 Sonnet offers capability beyond Opus and faster speed than Sonnet while keeping Sonnet pricing. It is especially strong at coding, data science, vision, and agent tasks.',
     displayName: 'Claude 3.5 Sonnet',
     id: 'anthropic/claude-3.5-sonnet',
     maxOutput: 8192,
@@ -838,7 +839,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.7 Sonnet 是 Anthropic 迄今为止最智能的模型，也是市场上首个混合推理模型。Claude 3.7 Sonnet 可以产生近乎即时的响应或延长的逐步思考，用户可以清晰地看到这些过程。Sonnet 特别擅长编程、数据科学、视觉处理、代理任务。',
+      'Claude 3.7 Sonnet is Anthropic’s most intelligent model and the first hybrid reasoning model on the market. It can produce near-instant responses or extended step-by-step reasoning that users can see. Sonnet is especially strong at coding, data science, vision, and agent tasks.',
     displayName: 'Claude 3.7 Sonnet',
     id: 'anthropic/claude-3.7-sonnet',
     maxOutput: 8192,
@@ -869,7 +870,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Sonnet 4 可以产生近乎即时的响应或延长的逐步思考，用户可以清晰地看到这些过程。API 用户还可以对模型思考的时间进行细致的控制',
+      'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
     displayName: 'Claude Sonnet 4',
     id: 'anthropic/claude-sonnet-4',
     maxOutput: 64_000,
@@ -893,7 +894,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4 是 Anthropic 用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+      'Claude Opus 4 is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4',
     id: 'anthropic/claude-opus-4',
     maxOutput: 32_000,
@@ -916,7 +917,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3 Opus 是 Anthropic 用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+      'Claude 3 Opus is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude 3 Opus',
     id: 'anthropic/claude-3-opus',
     maxOutput: 4096,
@@ -942,7 +943,8 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 提供了优化后的多模态处理能力，适用多种复杂任务场景。',
+    description:
+      'Gemini 1.5 Flash provides optimized multimodal processing for a range of complex tasks.',
     displayName: 'Gemini 1.5 Flash',
     id: 'google/gemini-flash-1.5',
     maxOutput: 8192,
@@ -961,7 +963,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 8192,
     description:
-      'Gemini 2.0 Flash 提供下一代功能和改进，包括卓越的速度、原生工具使用、多模态生成和1M令牌上下文窗口。',
+      'Gemini 2.0 Flash delivers next-gen capabilities, including excellent speed, native tool use, multimodal generation, and a 1M-token context window.',
     displayName: 'Gemini 2.0 Flash',
     id: 'google/gemini-2.0-flash-001',
     maxOutput: 8192,
@@ -981,7 +983,8 @@ const openrouterChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_008_192,
-    description: 'Gemini 1.5 Pro 结合最新优化技术，带来更高效的多模态数据处理能力。',
+    description:
+      'Gemini 1.5 Pro combines the latest optimizations for more efficient multimodal data processing.',
     displayName: 'Gemini 1.5 Pro',
     id: 'google/gemini-pro-1.5',
     maxOutput: 8192,
@@ -999,7 +1002,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'LLaMA 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 11B Vision',
     id: 'meta-llama/llama-3.2-11b-vision-instruct',
     pricing: {
@@ -1016,7 +1019,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'LLaMA 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 90B Vision',
     id: 'meta-llama/llama-3.2-90b-vision-instruct',
     pricing: {
@@ -1033,7 +1036,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.3 是 Llama 系列最先进的多语言开源大型语言模型，以极低成本体验媲美 405B 模型的性能。基于 Transformer 结构，并通过监督微调（SFT）和人类反馈强化学习（RLHF）提升有用性和安全性。其指令调优版本专为多语言对话优化，在多项行业基准上表现优于众多开源和封闭聊天模型。知识截止日期为 2023 年 12 月',
+      'Llama 3.3 is the most advanced multilingual open-source Llama model, delivering near-405B performance at very low cost. It is Transformer-based and improved with SFT and RLHF for usefulness and safety. The instruction-tuned version is optimized for multilingual chat and beats many open and closed chat models on industry benchmarks. Knowledge cutoff: Dec 2023.',
     displayName: 'Llama 3.3 70B Instruct',
     id: 'meta-llama/llama-3.3-70b-instruct',
     pricing: {
@@ -1050,28 +1053,28 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'Llama 3.3 是 Llama 系列最先进的多语言开源大型语言模型，以极低成本体验媲美 405B 模型的性能。基于 Transformer 结构，并通过监督微调（SFT）和人类反馈强化学习（RLHF）提升有用性和安全性。其指令调优版本专为多语言对话优化，在多项行业基准上表现优于众多开源和封闭聊天模型。知识截止日期为 2023 年 12 月',
+      'Llama 3.3 is the most advanced multilingual open-source Llama model, delivering near-405B performance at very low cost. It is Transformer-based and improved with SFT and RLHF for usefulness and safety. The instruction-tuned version is optimized for multilingual chat and beats many open and closed chat models on industry benchmarks. Knowledge cutoff: Dec 2023.',
     displayName: 'Llama 3.3 70B Instruct (Free)',
     id: 'meta-llama/llama-3.3-70b-instruct:free',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Qwen2 是全新的大型语言模型系列，具有更强的理解和生成能力。',
+    description: 'Qwen2 is a new large language model family with stronger understanding and generation.',
     displayName: 'Qwen2 7B (Free)',
     id: 'qwen/qwen-2-7b-instruct:free',
     type: 'chat',
   },
   {
     contextWindowTokens: 131_072,
-    description: 'LLaMA 3.1 提供多语言支持，是业界领先的生成模型之一。',
+    description: 'LLaMA 3.1 offers multilingual support and is one of the leading generative models.',
     displayName: 'Llama 3.1 8B (Free)',
     id: 'meta-llama/llama-3.1-8b-instruct:free',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'Gemma 2 是Google轻量化的开源文本模型系列。',
+    description: 'Gemma 2 is Google’s lightweight open-source text model family.',
     displayName: 'Gemma 2 9B (Free)',
     id: 'google/gemma-2-9b-it:free',
     type: 'chat',
@@ -1083,7 +1086,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 8192,
     description:
-      'Gemini 2.0 Flash Experimental 是 Google 最新的实验性多模态AI模型，与历史版本相比有一定的质量提升，特别是对于世界知识、代码和长上下文。',
+      'Gemini 2.0 Flash Experimental is Google’s latest experimental multimodal AI model with quality improvements over prior versions, especially in world knowledge, code, and long context.',
     displayName: 'Gemini 2.0 Flash Experimental (Free)',
     id: 'google/gemini-2.0-flash-exp:free',
     maxOutput: 8192,

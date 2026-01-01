@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "利用可能なアシスタントがありません",
+  "agentSelection.noAvailable": "現在追加できるアシスタントはありません",
+  "agentSelection.noSelected": "アシスタントがまだ選択されていません",
+  "agentSelection.search": "一致するアシスタントが見つかりませんでした",
+  "project.create": "新しいプロジェクトを作成",
+  "project.deleteConfirm": "このプロジェクトを削除しようとしています。削除すると元に戻せません。本当に削除してもよろしいですか？",
+  "starter.createAgent": "アシスタントを作成",
+  "starter.createGroup": "グループを作成",
+  "starter.deepResearch": "リサーチ",
+  "starter.developing": "開発中",
+  "starter.image": "イラスト作成",
+  "starter.write": "執筆"
+}

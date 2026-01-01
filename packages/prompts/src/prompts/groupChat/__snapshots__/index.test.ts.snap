@@ -12,16 +12,8 @@ Guidelines:
 - Keep your responses concise and relevant to the ongoing discussion
 
 <group_members>
-[
-  {
-    "id": "user",
-    "title": "User Name"
-  },
-  {
-    "id": "agent-1",
-    "title": "Agent One"
-  }
-]
+  <member id="user" title="User Name" />
+  <member id="agent-1" title="Agent One" />
 </group_members>
 
 Now it's your turn to respond.  You are sending message to the group publicly. Please respond as this agent would, considering the full conversation history provided above. Directly return the message content, no other text. You do not need add author name or anything else."

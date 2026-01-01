@@ -1,6 +1,6 @@
 import type { LobeCustomStylish, LobeCustomToken } from '@lobehub/ui';
 import 'antd-style';
-import { AntdToken } from 'antd-style/lib/types/theme';
+import { type AntdToken } from 'antd-style/lib/types/theme';
 
 declare module 'antd-style' {
   // eslint-disable-next-line @typescript-eslint/no-empty-interface
@@ -11,4 +11,12 @@ declare module 'antd-style' {
 
 declare module 'styled-components' {
   export interface DefaultTheme extends AntdToken, LobeCustomToken {}
+}
+
+declare global {
+  interface Window {
+    lobeEnv?: {
+      darwinMajorVersion?: number;
+    };
+  }
 }

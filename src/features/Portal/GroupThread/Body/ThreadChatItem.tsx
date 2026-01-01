@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 
-import { ChatItem } from '@/features/ChatList';
+import { MessageItem } from '@/features/Conversation';
 
 export interface ThreadChatItemProps {
   id: string;
@@ -14,7 +14,7 @@ const ThreadChatItem = memo<ThreadChatItemProps>(({ id, index }) => {
   const enableHistoryDivider = false;
 
   return (
-    <ChatItem
+    <MessageItem
       enableHistoryDivider={enableHistoryDivider}
       id={id}
       inPortalThread={true} // Mark this as thread context

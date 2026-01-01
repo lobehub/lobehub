@@ -1,17 +1,17 @@
-import { Block, Collapse, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Empty } from 'antd';
-import { CheckIcon, MinusIcon } from 'lucide-react';
+import { Block, Collapse, Empty, Highlighter, Icon, Markdown } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { CheckIcon, MessageSquare, MinusIcon } from 'lucide-react';
 import { markdownToTxt } from 'markdown-to-txt';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
 
-import Title from '../../../app/[variants]/(main)/discover/features/Title';
+import Title from '../../../app/[variants]/(main)/community/features/Title';
 import CollapseDesc from '../CollapseDesc';
 import CollapseLayout from '../CollapseLayout';
 import { useDetailContext } from '../DetailProvider';
-import { useStyles } from './style';
+import { styles } from './style';
 import { ModeType } from './types';
 
 interface PromptsProps {
@@ -21,16 +21,17 @@ interface PromptsProps {
 }
 
 const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
-  const { t } = useTranslation('discover');
+  const { t } = useTranslation(['discover', 'plugin']);
   const { prompts } = useDetailContext();
-  const { styles, theme } = useStyles();
 
   if (!prompts)
     return (
       <Block variant={'outlined'}>
         <Empty
-          description={t('mcp.details.schema.prompts.empty')}
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={t('plugin:mcpEmpty.prompts')}
+          descriptionProps={{ fontSize: 14 }}
+          icon={MessageSquare}
+          style={{ maxWidth: 400 }}
         />
       </Block>
     );
@@ -38,7 +39,7 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
   return (
     <Collapse
       activeKey={activeKey}
-      expandIconPosition={'end'}
+      expandIconPlacement={'end'}
       gap={8}
       items={prompts.map((item) => {
         return {
@@ -61,7 +62,7 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                               <span
                                 className={styles.code}
                                 style={{
-                                  color: theme.gold,
+                                  color: cssVar.gold,
                                 }}
                               >
                                 {record.name}
@@ -74,7 +75,9 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             render: (_, record) => (
                               <Icon
                                 color={
-                                  record.required ? theme.colorSuccess : theme.colorTextDescription
+                                  record.required
+                                    ? cssVar.colorSuccess
+                                    : cssVar.colorTextDescription
                                 }
                                 icon={record.required ? CheckIcon : MinusIcon}
                               />

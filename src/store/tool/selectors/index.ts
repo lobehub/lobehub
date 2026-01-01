@@ -1,4 +1,7 @@
-export { builtinToolSelectors } from '../slices/builtin/selectors';
+export {
+  builtinToolSelectors,
+  type LobeToolMetaWithAvailability,
+} from '../slices/builtin/selectors';
 export { customPluginSelectors } from '../slices/customPlugin/selectors';
 export { klavisStoreSelectors } from '../slices/klavisStore/selectors';
 export { mcpStoreSelectors } from '../slices/mcpStore/selectors';

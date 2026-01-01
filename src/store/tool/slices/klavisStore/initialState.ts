@@ -1,4 +1,4 @@
-import { KlavisServer } from './types';
+import { type KlavisServer } from './types';
 
 /**
  * Klavis Store 状态接口

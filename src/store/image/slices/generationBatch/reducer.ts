@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 
-import { Generation, GenerationBatch } from '@/types/generation';
+import { type Generation, type GenerationBatch } from '@/types/generation';
 
 interface UpdateGenerationInBatchAction {
   batchId: string;

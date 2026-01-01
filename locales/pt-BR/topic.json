@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "Renomeação automática",
-    "confirmRemoveAll": "Você está prestes a remover todos os tópicos. Após a exclusão, não será possível recuperar. Por favor, proceda com cautela.",
-    "confirmRemoveTopic": "Você está prestes a remover este tópico. Após a exclusão, não será possível recuperar. Por favor, proceda com cautela.",
-    "confirmRemoveUnstarred": "Você está prestes a remover tópicos não favoritos. Após a exclusão, não será possível recuperar. Por favor, proceda com cautela.",
-    "duplicate": "Criar cópia",
-    "export": "Exportar tópicos",
-    "openInNewWindow": "Abrir em uma nova janela",
-    "removeAll": "Remover todos os tópicos",
-    "removeUnstarred": "Remover tópicos não favoritos"
-  },
-  "defaultTitle": "Tópico padrão",
-  "duplicateLoading": "Copiando tópico...",
-  "duplicateSuccess": "Tópico copiado com sucesso",
-  "favorite": "Favoritar",
-  "groupMode": {
-    "ascMessages": "Por ordem de total de mensagens",
-    "byTime": "Agrupado por tempo",
-    "descMessages": "Por ordem decrescente de total de mensagens",
-    "flat": "Sem agrupamento"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "Este mês",
-      "today": "Hoje",
-      "week": "Esta semana",
-      "yesterday": "Ontem"
-    }
-  },
-  "guide": {
-    "desc": "Clique no botão à esquerda para salvar a conversa atual como um tópico histórico e iniciar uma nova conversa.",
-    "title": "Lista de tópicos"
-  },
-  "searchPlaceholder": "Pesquisar tópicos...",
-  "searchResultEmpty": "Nenhum resultado encontrado",
+  "actions.addNewTopic": "Iniciar Novo Tópico",
+  "actions.autoRename": "Renomear Inteligente",
+  "actions.confirmRemoveAll": "Você está prestes a excluir todos os tópicos. Esta ação não pode ser desfeita.",
+  "actions.confirmRemoveTopic": "Você está prestes a excluir este tópico. Esta ação não pode ser desfeita.",
+  "actions.confirmRemoveUnstarred": "Você está prestes a excluir os tópicos não favoritados. Esta ação não pode ser desfeita.",
+  "actions.duplicate": "Duplicar",
+  "actions.export": "Exportar Tópicos",
+  "actions.import": "Importar Conversa",
+  "actions.openInNewWindow": "Abrir em nova janela",
+  "actions.removeAll": "Excluir Todos os Tópicos",
+  "actions.removeUnstarred": "Excluir Tópicos Não Favoritados",
+  "defaultTitle": "Tópico Padrão",
+  "displayItems": "Exibir Itens",
+  "duplicateLoading": "Copiando Tópico...",
+  "duplicateSuccess": "Tópico Copiado com Sucesso",
+  "favorite": "Favorito",
+  "groupMode.ascMessages": "Ordenar por Total de Mensagens Crescente",
+  "groupMode.byTime": "Agrupar por Tempo",
+  "groupMode.descMessages": "Ordenar por Total de Mensagens Decrescente",
+  "groupMode.flat": "Sem Agrupamento",
+  "groupTitle.byTime.month": "Este Mês",
+  "groupTitle.byTime.today": "Hoje",
+  "groupTitle.byTime.week": "Esta Semana",
+  "groupTitle.byTime.yesterday": "Ontem",
+  "guide.desc": "Clique no botão à esquerda para salvar a conversa atual como um tópico histórico e iniciar uma nova conversa.",
+  "guide.title": "Lista de Tópicos",
+  "importError": "Falha na Importação",
+  "importInvalidFormat": "Formato de arquivo inválido. Certifique-se de que é um arquivo JSON válido.",
+  "importLoading": "Importando conversa...",
+  "importSuccess": "{{count}} mensagens importadas com sucesso",
+  "loadMore": "Carregar Mais",
+  "searchPlaceholder": "Buscar Tópicos...",
+  "searchResultEmpty": "Nenhum resultado encontrado.",
   "temp": "Temporário",
   "title": "Tópico"
 }

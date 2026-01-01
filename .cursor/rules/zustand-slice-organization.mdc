@@ -1,8 +1,9 @@
 ---
-description: 
+description:
 globs: src/store/**
 alwaysApply: false
 ---
+
 # LobeChat Zustand Store Slice 组织架构
 
 本文档描述了 LobeChat 项目中 Zustand Store 的模块化 Slice 组织方式，展示如何通过分片架构管理复杂的应用状态。
@@ -69,7 +70,7 @@ export const useChatStore = createWithEqualityFn<ChatStore>()(
 
 每个 slice 位于 `src/store/chat/slices/[sliceName]/` 目录下：
 
-```
+```plaintext
 src/store/chat/slices/
 └── [sliceName]/                 # 例如 message, topic, aiChat, builtinTool
     ├── action.ts                # 定义 actions (或者是一个 actions/ 目录)
@@ -159,15 +160,16 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
 // 典型的 selectors.ts 结构
 import { ChatStoreState } from '../../initialState';
 
-const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => 
-  s.topicMaps[s.activeId];
+const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => s.topicMaps[s.activeId];
 
 const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
   return currentTopics(s)?.find((topic) => topic.id === s.activeTopicId);
 };
 
-const getTopicById = (id: string) => (s: ChatStoreState): ChatTopic | undefined =>
-  currentTopics(s)?.find((topic) => topic.id === id);
+const getTopicById =
+  (id: string) =>
+  (s: ChatStoreState): ChatTopic | undefined =>
+    currentTopics(s)?.find((topic) => topic.id === id);
 
 // 核心模式：使用 xxxSelectors 聚合导出
 export const topicSelectors = {
@@ -219,13 +221,15 @@ src/store/chat/slices/builtinTool/
 ## 状态设计模式
 
 ### 1. Map 结构用于关联数据
+
 ```typescript
 // 以 sessionId 为 key，管理多个会话的数据
-topicMaps: Record<string, ChatTopic[]>
-messagesMap: Record<string, ChatMessage[]>
+topicMaps: Record<string, ChatTopic[]>;
+messagesMap: Record<string, ChatMessage[]>;
 ```
 
 ### 2. 数组用于加载状态管理
+
 ```typescript
 // 管理多个并发操作的加载状态
 messageLoadingIds: string[]
@@ -234,6 +238,7 @@ chatLoadingIds: string[]
 ```
 
 ### 3. 可选字段用于当前活动项
+
 ```typescript
 // 当前激活的实体 ID
 activeId: string
@@ -244,6 +249,7 @@ activeThreadId?: string
 ## Slice 集成到顶层 Store
 
 ### 1. 状态聚合
+
 ```typescript
 // 在 initialState.ts 中
 export type ChatStoreState = ChatTopicState &
@@ -253,6 +259,7 @@ export type ChatStoreState = ChatTopicState &
 ```
 
 ### 2. Action 接口聚合
+
 ```typescript
 // 在 store.ts 中
 export interface ChatStoreAction
@@ -263,6 +270,7 @@ export interface ChatStoreAction
 ```
 
 ### 3. Selector 统一导出
+
 ```typescript
 // 在 selectors.ts 中 - 统一聚合 selectors
 export { chatSelectors } from './slices/message/selectors';

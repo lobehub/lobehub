@@ -1,0 +1,12 @@
+description: Regression benchmark for identity (memory-user-memory)
+
+providers:
+  - id: openai:chat:gpt-5-mini
+    config:
+      response_format: file://../../../response-formats/identity.json
+
+prompts:
+  - file://./prompt.ts
+
+tests:
+  - file://./tests/cases.ts

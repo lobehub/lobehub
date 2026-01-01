@@ -11,7 +11,7 @@ describe('chatDockSelectors', () => {
       showPortal: false,
       portalToolMessage: undefined,
       dbMessagesMap: {},
-      activeId: 'test-id',
+      activeAgentId: 'test-id',
       activeTopicId: undefined,
       ...overrides,
     } as ChatStoreState;

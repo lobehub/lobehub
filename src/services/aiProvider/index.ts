@@ -1,9 +1,9 @@
 import {
-  AiProviderDetailItem,
-  AiProviderRuntimeState,
-  AiProviderSortMap,
-  CreateAiProviderParams,
-  UpdateAiProviderConfigParams,
+  type AiProviderDetailItem,
+  type AiProviderRuntimeState,
+  type AiProviderSortMap,
+  type CreateAiProviderParams,
+  type UpdateAiProviderConfigParams,
 } from '@/types/aiProvider';
 
 import { lambdaClient } from '@/libs/trpc/client';

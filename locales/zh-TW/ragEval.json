@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "新建",
-    "description": {
-      "placeholder": "數據集簡介（選填）"
-    },
-    "name": {
-      "placeholder": "數據集名稱",
-      "required": "請填寫數據集名稱"
-    },
-    "title": "添加數據集"
-  },
-  "dataset": {
-    "addNewButton": "創建數據集",
-    "emptyGuide": "當前數據集為空，請創建一個數據集。",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "導入數據"
-        },
-        "columns": {
-          "actions": "操作",
-          "ideal": {
-            "title": "期望回答"
-          },
-          "question": {
-            "title": "問題"
-          },
-          "referenceFiles": {
-            "title": "參考文件"
-          }
-        },
-        "notSelected": "請在左側選擇數據集",
-        "title": "數據集詳情"
-      },
-      "title": "數據集"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "新建",
-      "datasetId": {
-        "placeholder": "請選擇你的評測數據集",
-        "required": "請選擇評測數據集"
-      },
-      "description": {
-        "placeholder": "評測任務簡介（選填）"
-      },
-      "name": {
-        "placeholder": "評測任務名稱",
-        "required": "請填寫評測任務名稱"
-      },
-      "title": "添加評測任務"
-    },
-    "addNewButton": "創建評測",
-    "emptyGuide": "當前評測任務為空，開始創建評測。",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "檢查狀態",
-          "confirmDelete": "是否刪除本條評測",
-          "confirmRun": "是否開始運行？開始運行後將在後台異步執行評測任務，關閉頁面不影響異步任務的執行",
-          "downloadRecords": "下載評測",
-          "retry": "重試",
-          "run": "運行",
-          "title": "操作"
-        },
-        "datasetId": {
-          "title": "數據集"
-        },
-        "name": {
-          "title": "評測任務名稱"
-        },
-        "records": {
-          "title": "評測記錄數"
-        },
-        "referenceFiles": {
-          "title": "參考文件"
-        },
-        "status": {
-          "error": "執行出錯",
-          "pending": "待運行",
-          "processing": "運行中",
-          "success": "執行成功",
-          "title": "狀態"
-        }
-      },
-      "title": "評測任務列表"
-    }
-  }
+  "addDataset.confirm": "新建",
+  "addDataset.description.placeholder": "數據集簡介（選填）",
+  "addDataset.name.placeholder": "數據集名稱",
+  "addDataset.name.required": "請填寫數據集名稱",
+  "addDataset.title": "添加數據集",
+  "dataset.addNewButton": "創建數據集",
+  "dataset.emptyGuide": "當前數據集為空，請創建一個數據集。",
+  "dataset.list.table.actions.importData": "導入數據",
+  "dataset.list.table.columns.actions": "操作",
+  "dataset.list.table.columns.ideal.title": "期望回答",
+  "dataset.list.table.columns.question.title": "問題",
+  "dataset.list.table.columns.referenceFiles.title": "參考文件",
+  "dataset.list.table.notSelected": "請在左側選擇數據集",
+  "dataset.list.table.title": "數據集詳情",
+  "dataset.list.title": "數據集",
+  "evaluation.addEvaluation.confirm": "新建",
+  "evaluation.addEvaluation.datasetId.placeholder": "請選擇你的評測數據集",
+  "evaluation.addEvaluation.datasetId.required": "請選擇評測數據集",
+  "evaluation.addEvaluation.description.placeholder": "評測任務簡介（選填）",
+  "evaluation.addEvaluation.name.placeholder": "評測任務名稱",
+  "evaluation.addEvaluation.name.required": "請填寫評測任務名稱",
+  "evaluation.addEvaluation.title": "添加評測任務",
+  "evaluation.addNewButton": "創建評測",
+  "evaluation.emptyGuide": "當前評測任務為空，開始創建評測。",
+  "evaluation.table.columns.actions.checkStatus": "檢查狀態",
+  "evaluation.table.columns.actions.confirmDelete": "是否刪除本條評測",
+  "evaluation.table.columns.actions.confirmRun": "是否開始運行？開始運行後將在後台異步執行評測任務，關閉頁面不影響異步任務的執行",
+  "evaluation.table.columns.actions.downloadRecords": "下載評測",
+  "evaluation.table.columns.actions.retry": "重試",
+  "evaluation.table.columns.actions.run": "運行",
+  "evaluation.table.columns.actions.title": "操作",
+  "evaluation.table.columns.datasetId.title": "數據集",
+  "evaluation.table.columns.name.title": "評測任務名稱",
+  "evaluation.table.columns.records.title": "評測記錄數",
+  "evaluation.table.columns.referenceFiles.title": "參考文件",
+  "evaluation.table.columns.status.error": "執行出錯",
+  "evaluation.table.columns.status.pending": "待運行",
+  "evaluation.table.columns.status.processing": "運行中",
+  "evaluation.table.columns.status.success": "執行成功",
+  "evaluation.table.columns.status.title": "狀態",
+  "evaluation.table.title": "評測任務列表"
 }

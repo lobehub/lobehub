@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Wyczyść lokalne dane",
-      "downloadBackup": "Pobierz kopię zapasową",
-      "reUpgrade": "Ponowne uaktualnienie",
-      "start": "Rozpocznij korzystanie",
-      "upgrade": "Uaktualnij"
-    },
-    "clear": {
-      "confirm": "Czy na pewno chcesz wyczyścić lokalne dane (ustawienia globalne nie zostaną dotknięte)? Upewnij się, że masz pobraną kopię zapasową danych."
-    },
-    "description": "W nowej wersji, przechowywanie danych w {{appName}} przeszło ogromny skok. Dlatego musimy zaktualizować dane z poprzedniej wersji, aby zapewnić Ci lepsze doświadczenia użytkownika.",
-    "features": {
-      "capability": {
-        "desc": "Oparte na technologii IndexedDB, wystarczającej, aby pomieścić wszystkie Twoje wiadomości z życia.",
-        "title": "Duża pojemność"
-      },
-      "performance": {
-        "desc": "Automatyczne indeksowanie milionów wiadomości, z czasem odpowiedzi na zapytania w milisekundach.",
-        "title": "Wysoka wydajność"
-      },
-      "use": {
-        "desc": "Obsługuje wyszukiwanie według tytułów, opisów, tagów, treści wiadomości, a nawet tekstów tłumaczeń, znacznie zwiększając efektywność codziennego wyszukiwania.",
-        "title": "Łatwiejsze w użyciu"
-      }
-    },
-    "title": "Ewolucja danych {{appName}}",
-    "upgrade": {
-      "error": {
-        "subTitle": "Przykro nam, wystąpił błąd podczas procesu aktualizacji bazy danych. Proszę spróbować następujących rozwiązań: A. Wyczyść lokalne dane, a następnie ponownie zaimportuj dane z kopii zapasowej; B. Kliknij przycisk „Ponownie zaktualizuj”.<br><br> Jeśli problem nadal występuje, proszę <1>zgłosić problem</1>, a my jak najszybciej pomożemy Ci go rozwiązać.",
-        "title": "Aktualizacja bazy danych nie powiodła się"
-      },
-      "success": {
-        "subTitle": "Baza danych {{appName}} została zaktualizowana do najnowszej wersji, zacznij korzystać już teraz.",
-        "title": "Aktualizacja bazy danych powiodła się"
-      }
-    },
-    "upgradeTip": "Aktualizacja zajmuje zazwyczaj 10-20 sekund, w trakcie aktualizacji nie zamykaj {{appName}}."
-  },
-  "migrateError": {
-    "missVersion": "Importowane dane nie zawierają numeru wersji. Prosimy sprawdzić plik i spróbować ponownie.",
-    "noMigration": "Nie znaleziono planu migracji dla bieżącej wersji. Prosimy sprawdzić numer wersji i spróbować ponownie. Jeśli problem nadal występuje, prosimy zgłosić problem."
-  }
+  "dbV1.action.clearDB": "Wyczyść dane lokalne",
+  "dbV1.action.downloadBackup": "Pobierz kopię zapasową danych",
+  "dbV1.action.reUpgrade": "Ponów aktualizację",
+  "dbV1.action.start": "Rozpocznij",
+  "dbV1.action.upgrade": "Aktualizuj",
+  "dbV1.clear.confirm": "Zamierzasz wyczyścić dane lokalne (ustawienia globalne pozostaną bez zmian). Upewnij się, że pobrałeś kopię zapasową danych.",
+  "dbV1.description": "W nowej wersji przechowywanie danych w {{appName}} zostało znacznie ulepszone. Dlatego musimy zaktualizować stare dane, aby zapewnić Ci lepsze doświadczenie użytkownika.",
+  "dbV1.features.capability.desc": "W oparciu o technologię IndexedDB, umożliwia przechowywanie wiadomości czatowych z całego życia.",
+  "dbV1.features.capability.title": "Duża pojemność",
+  "dbV1.features.performance.desc": "Automatycznie indeksuje miliony wiadomości, zapewniając odpowiedzi na zapytania w ciągu milisekund.",
+  "dbV1.features.performance.title": "Wysoka wydajność",
+  "dbV1.features.use.desc": "Umożliwia wyszukiwanie po tytule, opisie, tagach, treści wiadomości, a nawet przetłumaczonym tekście, znacznie zwiększając efektywność codziennego wyszukiwania.",
+  "dbV1.features.use.title": "Bardziej przyjazny dla użytkownika",
+  "dbV1.title": "Ewolucja danych {{appName}}",
+  "dbV1.upgrade.error.subTitle": "Przepraszamy, wystąpił błąd podczas procesu aktualizacji bazy danych. Spróbuj następujących rozwiązań: A. Wyczyść dane lokalne i zaimportuj ponownie kopię zapasową; B. Kliknij przycisk „Ponów aktualizację”.<br><br> Jeśli problem będzie się powtarzał, <1>zgłoś problem</1>, a my pomożemy tak szybko, jak to możliwe.",
+  "dbV1.upgrade.error.title": "Nieudana aktualizacja bazy danych",
+  "dbV1.upgrade.success.subTitle": "Baza danych została zaktualizowana do najnowszej wersji. Możesz kontynuować.",
+  "dbV1.upgrade.success.title": "Pomyślna aktualizacja bazy danych",
+  "dbV1.upgradeTip": "Aktualizacja potrwa około 10–20 sekund. Nie zamykaj {{appName}} podczas procesu aktualizacji.",
+  "migrateError.missVersion": "Zaimportowane dane nie zawierają numeru wersji. Sprawdź plik i spróbuj ponownie.",
+  "migrateError.noMigration": "Nie znaleziono rozwiązania migracyjnego dla bieżącej wersji. Sprawdź numer wersji i spróbuj ponownie. Jeśli problem będzie się powtarzał, zgłoś opinię."
 }

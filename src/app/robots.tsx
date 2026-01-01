@@ -1,4 +1,4 @@
-import { MetadataRoute } from 'next';
+import { type MetadataRoute } from 'next';
 
 import { Sitemap } from '@/server/sitemap';
 import { getCanonicalUrl } from '@/server/utils/url';
@@ -13,15 +13,15 @@ const robots = (): MetadataRoute.Robots => {
     host: getCanonicalUrl(),
     rules: [
       {
-        allow: ['/discover/*'],
+        allow: ['/community/*'],
         userAgent: ['Facebot', 'facebookexternalhit'],
       },
       {
-        allow: ['/discover/*'],
+        allow: ['/community/*'],
         userAgent: 'LinkedInBot',
       },
       {
-        allow: ['/discover/*'],
+        allow: ['/community/*'],
         userAgent: 'Twitterbot',
       },
       {

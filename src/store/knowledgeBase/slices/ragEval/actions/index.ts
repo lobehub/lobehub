@@ -1,9 +1,9 @@
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { KnowledgeBaseStore } from '@/store/knowledgeBase/store';
+import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
 
-import { RAGEvalDatasetAction, createRagEvalDatasetSlice } from './dataset';
-import { RAGEvalEvaluationAction, createRagEvalEvaluationSlice } from './evaluation';
+import { type RAGEvalDatasetAction, createRagEvalDatasetSlice } from './dataset';
+import { type RAGEvalEvaluationAction, createRagEvalEvaluationSlice } from './evaluation';
 
 export interface RAGEvalAction extends RAGEvalDatasetAction, RAGEvalEvaluationAction {
   // empty

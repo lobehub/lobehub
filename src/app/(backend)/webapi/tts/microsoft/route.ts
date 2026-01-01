@@ -1,4 +1,4 @@
-import { MicrosoftSpeechPayload, MicrosoftSpeechTTS } from '@lobehub/tts';
+import { type MicrosoftSpeechPayload, MicrosoftSpeechTTS } from '@lobehub/tts';
 
 import { createSpeechResponse } from '@/server/utils/createSpeechResponse';
 

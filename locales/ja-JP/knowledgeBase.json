@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "ファイルが正常に追加されました。<1>今すぐ確認</1>",
-    "confirm": "追加",
-    "id": {
-      "placeholder": "追加する知識ベースを選択してください",
-      "required": "知識ベースを選択してください",
-      "title": "ターゲット知識ベース"
-    },
-    "title": "知識ベースに追加",
-    "totalFiles": "選択されたファイルは {{count}} 件です"
-  },
-  "createNew": {
-    "confirm": "新規作成",
-    "description": {
-      "placeholder": "知識ベースの説明（任意）"
-    },
-    "formTitle": "基本情報",
-    "name": {
-      "placeholder": "知識ベースの名前",
-      "required": "知識ベースの名前を入力してください"
-    },
-    "title": "新しい知識ベースを作成"
-  },
-  "tab": {
-    "evals": "評価",
-    "files": "ドキュメント",
-    "settings": "設定",
-    "testing": "リコールテスト"
-  },
-  "title": "知識ベース"
+  "addToKnowledgeBase.addSuccess": "ファイルが正常に追加されました。<1>今すぐ確認</1>",
+  "addToKnowledgeBase.confirm": "追加",
+  "addToKnowledgeBase.error": "ファイルのナレッジベースへの追加に失敗しました",
+  "addToKnowledgeBase.id.placeholder": "追加するナレッジベースを選択してください",
+  "addToKnowledgeBase.id.required": "ナレッジベースを選択してください",
+  "addToKnowledgeBase.id.title": "対象ナレッジベース",
+  "addToKnowledgeBase.title": "ナレッジベースに追加",
+  "addToKnowledgeBase.totalFiles": "選択されたファイルは {{count}} 件です",
+  "createNew.confirm": "新規作成",
+  "createNew.description.placeholder": "ナレッジベースの説明（任意）",
+  "createNew.formTitle": "基本情報",
+  "createNew.name.placeholder": "ナレッジベース名",
+  "createNew.name.required": "ナレッジベース名を入力してください",
+  "createNew.title": "新しいナレッジベースを作成",
+  "tab.evals": "評価",
+  "tab.files": "ドキュメント",
+  "tab.settings": "設定",
+  "tab.testing": "リコールテスト",
+  "title": "ナレッジベース"
 }

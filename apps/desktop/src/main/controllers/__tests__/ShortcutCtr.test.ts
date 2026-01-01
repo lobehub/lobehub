@@ -4,6 +4,16 @@ import type { App } from '@/core/App';
 
 import ShortcutController from '../ShortcutCtr';
 
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+}));
+
 // 模拟 App 及其依赖项
 const mockGetShortcutsConfig = vi.fn().mockReturnValue({
   toggleMainWindow: 'CommandOrControl+Shift+L',
@@ -26,6 +36,7 @@ describe('ShortcutController', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    ipcMainHandleMock.mockClear();
     shortcutController = new ShortcutController(mockApp);
   });
 

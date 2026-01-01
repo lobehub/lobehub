@@ -3,7 +3,7 @@ import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   INSERT_MATH_COMMAND,
   INSERT_TABLE_COMMAND,
-  SlashOptions,
+  type SlashOptions,
 } from '@lobehub/editor';
 import { Text } from '@lobehub/ui';
 import {

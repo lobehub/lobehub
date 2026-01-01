@@ -1,4 +1,4 @@
-import { ExportDatabaseData } from '@/types/export';
+import { type ExportDatabaseData } from '@/types/export';
 
 import { lambdaClient } from '@/libs/trpc/client';
 

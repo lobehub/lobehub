@@ -1,4 +1,4 @@
-import { ElectronState } from '@/store/electron/initialState';
+import { type ElectronState } from '@/store/electron/initialState';
 
 const userPath = (s: ElectronState) => s.appState.userPath;
 const userHomePath = (s: ElectronState) => userPath(s)?.home || '';

@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "添加助手",
-    "addAgentAndConverse": "添加助手並會話",
-    "addAgentSuccess": "添加成功",
-    "conversation": {
-      "l1": "你好，我是 **{{name}}**，你可以問我任何問題，我會盡力回答你 ~",
-      "l2": "以下是我的能力介紹: ",
-      "l3": "讓我們開始對話吧！"
-    },
-    "description": "助手介紹",
-    "detail": "詳情",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "助理內建以下知識庫，幫助你回答更多問題。",
-          "title": "知識庫"
-        },
-        "plugin": {
-          "desc": "助理內建以下外掛，幫助你完成更多任務。",
-          "title": "內建外掛"
-        },
-        "title": "助理能力"
-      },
-      "overview": {
-        "example": "助理示範",
-        "title": "概覽"
-      },
-      "related": {
-        "listTitle": "相關助理",
-        "more": "查看更多",
-        "title": "相關推薦"
-      },
-      "sidebar": {
-        "toc": "目錄"
-      },
-      "summary": {
-        "title": "你可以使用該助理做什麼？"
-      },
-      "systemRole": {
-        "openingMessage": "開場訊息",
-        "openingQuestions": "開場問題",
-        "title": "助理設定"
-      },
-      "version": {
-        "empty": "暫無歷史版本",
-        "status": {
-          "archived": "已封存",
-          "deprecated": "已拒絕",
-          "unpublished": "審核中"
-        },
-        "table": {
-          "isLatest": "最新版本",
-          "isValidated": "已驗證",
-          "publishAt": "發佈日期",
-          "version": "版本號"
-        },
-        "title": "版本歷史"
-      }
-    },
-    "list": "助手列表",
-    "marketSource": {
-      "label": "切換市集來源",
-      "legacy": "舊市集",
-      "new": "新市集"
-    },
-    "more": "更多",
-    "plugins": "集成插件",
-    "recentSubmits": "最近更新",
-    "sorts": {
-      "createdAt": "最近發布",
-      "identifier": "助理 ID",
-      "knowledgeCount": "知識庫數量",
-      "myown": "查看我的",
-      "pluginCount": "外掛數量",
-      "title": "助理名稱",
-      "tokenUsage": "Token 使用量"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "助手因安全／政治等問題被官方下架",
-          "owner": "開發助手的擁有者主動下架／封存該助手"
-        },
-        "subtitle": "當前訪問的助手已因以下可能原因被封存：",
-        "title": "助手已被封存"
-      },
-      "backToMarket": "返回助手市集",
-      "deprecated": {
-        "reasons": {
-          "official": "助手因安全／政治等問題被官方下架",
-          "owner": "開發助手的擁有者主動下架／拒絕該助手"
-        },
-        "subtitle": "當前訪問的助手已因以下可能原因被拒絕：",
-        "title": "助手已被拒絕"
-      },
-      "support": "如有任何問題，請複製連結並發送至 <1>support@lobehub.com</1> 進行諮詢。",
-      "unpublished": {
-        "subtitle": "當前訪問的助手正在進行版本審核中，如有疑問請複製連結並發送問題至 <1>support@lobehub.com</1> 進行諮詢。",
-        "title": "助手正在審核中"
-      }
-    },
-    "suggestions": "相關推薦",
-    "systemRole": "助手設定",
-    "tokenUsage": "助理提示詞 Token 使用量",
-    "try": "試一下",
-    "withKnowledge": "該助理附帶知識庫",
-    "withPlugin": "該助理附帶外掛"
-  },
+  "assistant.favorite": "收藏",
+  "assistant.favoriteFailed": "收藏失敗",
+  "assistant.favoriteSuccess": "已收藏",
+  "assistant.like": "按讚",
+  "assistant.likeFailed": "按讚失敗",
+  "assistant.likeSuccess": "已按讚",
+  "assistant.unfavorite": "取消收藏",
+  "assistant.unfavoriteFailed": "取消收藏失敗",
+  "assistant.unfavoriteSuccess": "已取消收藏",
+  "assistant.unlike": "取消按讚",
+  "assistant.unlikeSuccess": "已取消按讚",
+  "assistants.addAgent": "添加助手",
+  "assistants.addAgentAndConverse": "添加助手並會話",
+  "assistants.addAgentSuccess": "添加成功",
+  "assistants.conversation.l1": "你好，我是 **{{name}}**，你可以問我任何問題，我會盡力回答你 ~",
+  "assistants.conversation.l2": "以下是我的能力介紹: ",
+  "assistants.conversation.l3": "讓我們開始對話吧！",
+  "assistants.description": "助手介紹",
+  "assistants.detail": "詳情",
+  "assistants.details.capabilities.knowledge.desc": "助手內建了以下資源庫，幫助你解答更多問題。",
+  "assistants.details.capabilities.knowledge.title": "資源庫",
+  "assistants.details.capabilities.plugin.desc": "助理內建以下外掛，幫助你完成更多任務。",
+  "assistants.details.capabilities.plugin.title": "內建外掛",
+  "assistants.details.capabilities.title": "助理能力",
+  "assistants.details.overview.example": "助理示範",
+  "assistants.details.overview.title": "概覽",
+  "assistants.details.related.listTitle": "相關助理",
+  "assistants.details.related.more": "查看更多",
+  "assistants.details.related.title": "相似代理",
+  "assistants.details.sidebar.toc": "目錄",
+  "assistants.details.summary.title": "你可以使用該助理做什麼？",
+  "assistants.details.systemRole.openingMessage": "開場訊息",
+  "assistants.details.systemRole.openingQuestions": "開場問題",
+  "assistants.details.systemRole.title": "代理檔案",
+  "assistants.details.version.empty": "暫無歷史版本",
+  "assistants.details.version.status.archived": "已封存",
+  "assistants.details.version.status.deprecated": "已拒絕",
+  "assistants.details.version.status.unpublished": "審核中",
+  "assistants.details.version.table.isLatest": "最新版本",
+  "assistants.details.version.table.isValidated": "已驗證",
+  "assistants.details.version.table.publishAt": "發佈日期",
+  "assistants.details.version.table.version": "版本號",
+  "assistants.details.version.title": "版本歷史",
+  "assistants.downloads": "下載次數",
+  "assistants.duplicateAdd.content": "目前已經新增過「{{title}}」助理，是否仍要重複新增？",
+  "assistants.duplicateAdd.ok": "確認新增",
+  "assistants.duplicateAdd.title": "重複新增確認",
+  "assistants.empty.description": "嘗試調整篩選條件，或造訪社群探索更多助手",
+  "assistants.empty.search": "未找到符合的助手",
+  "assistants.empty.title": "暫無助手",
+  "assistants.list": "助手列表",
+  "assistants.marketSource.label": "切換社群來源",
+  "assistants.marketSource.legacy": "舊社群",
+  "assistants.marketSource.new": "新社群",
+  "assistants.more": "更多",
+  "assistants.plugins": "集成插件",
+  "assistants.recentSubmits": "最近更新",
+  "assistants.sorts.createdAt": "最近發布",
+  "assistants.sorts.identifier": "助理 ID",
+  "assistants.sorts.knowledgeCount": "資源庫數量",
+  "assistants.sorts.myown": "查看我的",
+  "assistants.sorts.pluginCount": "外掛數量",
+  "assistants.sorts.title": "助理名稱",
+  "assistants.sorts.tokenUsage": "Token 使用量",
+  "assistants.status.archived.reasons.official": "助手因安全／政治等問題被官方下架",
+  "assistants.status.archived.reasons.owner": "開發助手的擁有者主動下架／封存該助手",
+  "assistants.status.archived.subtitle": "當前訪問的助手已因以下可能原因被封存：",
+  "assistants.status.archived.title": "助手已被封存",
+  "assistants.status.backToMarket": "返回助手社群",
+  "assistants.status.deprecated.reasons.official": "助手因安全／政治等問題被官方下架",
+  "assistants.status.deprecated.reasons.owner": "開發助手的擁有者主動下架／拒絕該助手",
+  "assistants.status.deprecated.subtitle": "當前訪問的助手已因以下可能原因被拒絕：",
+  "assistants.status.deprecated.title": "助手已被拒絕",
+  "assistants.status.support": "如有任何問題，請複製連結並發送至 <email>support@lobehub.com</email> 進行諮詢。",
+  "assistants.status.unpublished.subtitle": "目前訪問的助手正在進行版本審核，如有疑問請複製連結並發送至 <email>support@lobehub.com</email> 進行諮詢。",
+  "assistants.status.unpublished.title": "助手正在審核中",
+  "assistants.suggestions": "相似代理",
+  "assistants.systemRole": "代理檔案",
+  "assistants.tokenUsage": "助理提示詞 Token 使用量",
+  "assistants.try": "試一下",
+  "assistants.withKnowledge": "此助手附帶資源庫",
+  "assistants.withPlugin": "該助理附帶外掛",
   "back": "返回發現",
-  "category": {
-    "assistant": {
-      "academic": "學術",
-      "all": "全部",
-      "career": "職業",
-      "copywriting": "文案",
-      "design": "設計",
-      "education": "教育",
-      "emotions": "情感",
-      "entertainment": "娛樂",
-      "games": "遊戲",
-      "general": "通用",
-      "life": "生活",
-      "marketing": "商業",
-      "office": "辦公",
-      "programming": "編程",
-      "translation": "翻譯"
-    },
-    "plugin": {
-      "all": "全部",
-      "gaming-entertainment": "遊戲娛樂",
-      "life-style": "生活方式",
-      "lifestyle": "生活方式",
-      "media-generate": "媒體生成",
-      "science-education": "科學教育",
-      "social": "社交媒體",
-      "stocks-finance": "股票金融",
-      "tools": "實用工具",
-      "web-search": "網路搜尋"
-    }
-  },
+  "category.assistant.academic": "學術",
+  "category.assistant.all": "全部",
+  "category.assistant.career": "職業",
+  "category.assistant.copywriting": "文案",
+  "category.assistant.design": "設計",
+  "category.assistant.education": "教育",
+  "category.assistant.emotions": "情感",
+  "category.assistant.entertainment": "娛樂",
+  "category.assistant.games": "遊戲",
+  "category.assistant.general": "通用",
+  "category.assistant.life": "生活",
+  "category.assistant.marketing": "商業",
+  "category.assistant.office": "辦公",
+  "category.assistant.programming": "編程",
+  "category.assistant.translation": "翻譯",
+  "category.plugin.all": "全部",
+  "category.plugin.gaming-entertainment": "遊戲娛樂",
+  "category.plugin.life-style": "生活方式",
+  "category.plugin.lifestyle": "生活方式",
+  "category.plugin.media-generate": "媒體生成",
+  "category.plugin.science-education": "科學教育",
+  "category.plugin.social": "社交媒體",
+  "category.plugin.stocks-finance": "股票金融",
+  "category.plugin.tools": "實用工具",
+  "category.plugin.web-search": "網路搜尋",
   "cleanFilter": "清除篩選",
   "create": "創作",
-  "createGuide": {
-    "func1": {
-      "desc1": "在會話窗口中通過右上角設置進入你想提交助手的設置頁面;",
-      "desc2": "點擊右上角提交到助手市場按鈕。",
-      "tag": "方法一",
-      "title": "通過 LobeChat 提交"
-    },
-    "func2": {
-      "button": "前往 Github 助手倉庫",
-      "desc": "如果您想將助手添加到索引中，請使用 agent-template.json 或 agent-template-full.json 在 plugins 目錄中創建一個條目，編寫簡短的描述並適當標記，然後創建一個拉取請求。",
-      "tag": "方法二",
-      "title": "通過 Github 提交"
-    }
-  },
+  "createGuide.func1.desc1": "在會話窗口中通過右上角設置進入你想提交助手的設置頁面;",
+  "createGuide.func1.desc2": "點擊右上角的提交至助手社群按鈕。",
+  "createGuide.func1.tag": "方法一",
+  "createGuide.func1.title": "通過 LobeChat 提交",
+  "createGuide.func2.button": "前往 Github 助手倉庫",
+  "createGuide.func2.desc": "如果您想將助手添加到索引中，請使用 agent-template.json 或 agent-template-full.json 在 plugins 目錄中創建一個條目，編寫簡短的描述並適當標記，然後創建一個拉取請求。",
+  "createGuide.func2.tag": "方法二",
+  "createGuide.func2.title": "通過 Github 提交",
   "dislike": "不喜歡",
   "filter": "篩選",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "所有作者",
-      "followed": "關注的作者",
-      "title": "作者範圍"
-    },
-    "contentLength": "最小上下文長度",
-    "maxToken": {
-      "title": "設定最大長度 (Token)",
-      "unlimited": "無限制"
-    },
-    "other": {
-      "functionCall": "支持函數調用",
-      "title": "其他",
-      "vision": "支持視覺識別",
-      "withKnowledge": "附帶知識庫",
-      "withTool": "附帶插件"
-    },
-    "pricing": "模型價格",
-    "timePeriod": {
-      "all": "全部時間",
-      "day": "近 24 小時",
-      "month": "近 30 天",
-      "title": "時間範圍",
-      "week": "近 7 天",
-      "year": "近一年"
-    }
-  },
-  "home": {
-    "featuredAssistants": "推薦助手",
-    "featuredModels": "推薦模型",
-    "featuredProviders": "推薦模型服務商",
-    "featuredTools": "推薦插件",
-    "more": "發現更多"
-  },
+  "filterBy.authorRange.everyone": "所有作者",
+  "filterBy.authorRange.followed": "關注的作者",
+  "filterBy.authorRange.title": "作者範圍",
+  "filterBy.contentLength": "最小上下文長度",
+  "filterBy.maxToken.title": "設定最大長度 (Token)",
+  "filterBy.maxToken.unlimited": "無限制",
+  "filterBy.other.functionCall": "支持函數調用",
+  "filterBy.other.title": "其他",
+  "filterBy.other.vision": "支持視覺識別",
+  "filterBy.other.withKnowledge": "附帶資源庫",
+  "filterBy.other.withTool": "附帶插件",
+  "filterBy.pricing": "模型價格",
+  "filterBy.timePeriod.all": "全部時間",
+  "filterBy.timePeriod.day": "近 24 小時",
+  "filterBy.timePeriod.month": "近 30 天",
+  "filterBy.timePeriod.title": "時間範圍",
+  "filterBy.timePeriod.week": "近 7 天",
+  "filterBy.timePeriod.year": "近一年",
+  "footer.desc": "與全球 AI 使用者一同進化。成為創作者，將你的代理與技能提交至 LobeHub 社群。",
+  "footer.title": "立即在 LobeHub 社群分享你的創作",
+  "home.communityAgents": "社群助手",
+  "home.featuredAssistants": "推薦助手",
+  "home.featuredModels": "推薦模型",
+  "home.featuredPlugins": "精選外掛",
+  "home.featuredProviders": "推薦模型服務商",
+  "home.featuredTools": "推薦插件",
+  "home.more": "發現更多",
   "isClaimed": "已認領",
   "isFeatured": "推薦",
   "isOfficial": "官方認證",
   "like": "喜歡",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "全部 MCP Servers",
-        "name": "全部"
-      },
-      "business": {
-        "description": "商業與企業服務",
-        "name": "商業服務"
-      },
-      "developer": {
-        "description": "開發相關的工具與服務",
-        "name": "開發工具"
-      },
-      "gaming-entertainment": {
-        "description": "遊戲、娛樂和休閒活動",
-        "name": "遊戲娛樂"
-      },
-      "health-wellness": {
-        "description": "健康、健身與身心養護",
-        "name": "健康養生"
-      },
-      "lifestyle": {
-        "description": "個人生活方式、習慣與日常活動",
-        "name": "生活方式"
-      },
-      "media-generate": {
-        "description": "媒體的生成、編輯與處理",
-        "name": "媒體生成"
-      },
-      "news": {
-        "description": "新聞聚合、報導與資訊服務",
-        "name": "新聞諮詢"
-      },
-      "productivity": {
-        "description": "任務管理、筆記與效率工具",
-        "name": "效率工具"
-      },
-      "science-education": {
-        "description": "科學研究、學習與教育工具",
-        "name": "科學教育"
-      },
-      "social": {
-        "description": "社交網絡與溝通交流",
-        "name": "社交媒體"
-      },
-      "stocks-finance": {
-        "description": "金融市場、交易與投資",
-        "name": "股票金融"
-      },
-      "tools": {
-        "description": "通用實用工具與服務",
-        "name": "實用工具"
-      },
-      "travel-transport": {
-        "description": "旅行規劃與交通出行",
-        "name": "旅行交通"
-      },
-      "weather": {
-        "description": "天氣預報與氣象服務",
-        "name": "氣象天氣"
-      },
-      "web-search": {
-        "description": "網頁搜尋與資訊檢索",
-        "name": "資訊檢索"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "該服務可根據配置或使用場景，在本地或雲端運行，具備雙重運行能力。",
-          "title": "混合型服務"
-        },
-        "local": {
-          "desc": "該伺服器只能在用戶端本地設備上運行，需安裝並依賴本地資源。",
-          "title": "本地服務"
-        },
-        "remote": {
-          "desc": "該伺服器託管於遠端運行，因為它主要依賴遠端服務，不依賴本地環境。",
-          "title": "雲服務"
-        }
-      },
-      "deployment": {
-        "args": "參數",
-        "checkCommand": "檢查命令",
-        "command": "命令",
-        "commandLine": "系統依賴",
-        "connection": "連接方式",
-        "connectionType": "連接類型",
-        "description": "外掛的安裝和部署方式",
-        "descriptionPlaceholder": "可選的描述資訊",
-        "empty": "暫無部署選項",
-        "env": "環境變數",
-        "guide": "安裝說明",
-        "installation": "透過 {{method}} 安裝",
-        "installationMethod": "安裝方式",
-        "other": "其他設定",
-        "packageName": "套件名稱",
-        "platform": {
-          "steps": {
-            "claude": "- 打開 **Claude Desktop** 應用\n- 前往 **設定**，然後選擇 **開發者**\n- 點擊 **編輯配置**\n- 打開 **claude_desktop_config.json** 檔案\n- 複製並貼上伺服器配置到現有檔案中，然後儲存",
-            "cline": "- 打開安裝了 Cline 擴充功能的 VS Code\n- 點擊側邊欄中的 Cline 圖示\n- 從下拉選單中選擇 **MCP Servers**\n- 在 **Remote Servers** 標籤頁中，輸入伺服器名稱和您的 MCP 伺服器 URL\n- 點擊 **Add Server** 進行連接",
-            "cursor": "- 導航到 **設定**，然後選擇 Cursor 設定\n- 在左側選擇 **MCP**\n- 點擊右上角的 **新增全域 MCP 伺服器**\n- 複製並貼上伺服器配置到現有檔案中，然後儲存",
-            "lobeChat": "- 打開 **LobeChat 桌面版** 應用\n- 前往 **設定** - **預設助理**\n- 然後選擇 **外掛設定** - **自訂外掛**\n- 點擊 **快速匯入 JSON 配置**\n- 複製並貼上伺服器配置到文字框，然後安裝",
-            "openai": "- 打開您的 **OpenAI 應用** 或開發環境\n- 在 **Responses API** 中配置 MCP 工具\n- 在 API 請求的 **tools** 陣列中新增 MCP 區塊\n- 設定 **server_url** 為您的 MCP 伺服器端點\n- 包含認證所需的標頭資訊（API 金鑰、令牌等）\n- 使用 `allowed_tools` 參數限制暴露的工具\n- 設定 `require_approval` 來控制工具執行審批",
-            "vscode": "- 打開 VS Code\n- 打開命令面板（`Ctrl+Shift+P` / `Cmd+Shift+P`）\n- 輸入 **MCP: Add Server** 並選擇它\n- 選擇新增到工作區或使用者設定\n- 複製並貼上伺服器配置"
-          },
-          "title": "在 {{platform}} 中安裝"
-        },
-        "recommended": "推薦",
-        "systemDependencies": "系統依賴",
-        "table": {
-          "description": "描述",
-          "name": "名稱",
-          "required": "必填",
-          "type": "類型"
-        },
-        "title": "安裝方式"
-      },
-      "githubBadge": {
-        "desc": "LobeHub 定期對程式庫和文件進行掃描，以便於：\n\n- 確認 MCP 伺服器正常運行。\n- 擷取伺服器特性，例如工具、資源、提示資訊以及所需參數。\n- 我們的徽章幫助使用者快速評估 MCP 伺服器的安全性、功能特性以及安裝指南。\n\n請將以下程式碼複製到你的 `README.md` 檔案中："
-      },
-      "nav": {
-        "needHelp": "需要幫助？",
-        "reportIssue": "回報問題",
-        "viewSourceCode": "查看原始碼"
-      },
-      "overview": {
-        "title": "概覽"
-      },
-      "related": {
-        "listTitle": "相關 MCP Server",
-        "more": "查看更多",
-        "title": "相關推薦"
-      },
-      "schema": {
-        "mode": {
-          "docs": "文件"
-        },
-        "prompts": {
-          "arguments": "參數配置",
-          "desc": "由使用者選擇觸發的互動式範本",
-          "empty": "暫無提示詞",
-          "instructions": "指令說明",
-          "table": {
-            "description": "描述",
-            "name": "名稱",
-            "required": "必填"
-          },
-          "title": "提示詞列表"
-        },
-        "resources": {
-          "desc": "由用戶端附加和管理的上下文資料",
-          "empty": "暫無資源",
-          "table": {
-            "description": "描述",
-            "mineType": "MIME 類型",
-            "name": "名稱",
-            "uri": "URI"
-          },
-          "title": "資源列表"
-        },
-        "title": "外掛功能",
-        "tools": {
-          "desc": "向大型語言模型（LLM）暴露的功能介面以執行操作",
-          "empty": "暫無工具",
-          "inputSchema": "輸入描述",
-          "instructions": "指令說明",
-          "table": {
-            "description": "描述",
-            "name": "名稱",
-            "required": "必填",
-            "type": "類型"
-          },
-          "title": "工具列表"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "此 MCP Server 已被所有者認領，確保其所有權和管理。",
-          "title": "已被所有者認領"
-        },
-        "deployMoreThanManual": {
-          "desc": "該 MCP Server 提供了除 Manual 外更友善的安裝方式，允許使用者輕鬆部署和使用。",
-          "title": "提供友善的安裝方式"
-        },
-        "deployment": {
-          "desc": "該 MCP Server 提供了至少一種安裝方式，允許使用者部署和使用。",
-          "descWithCount": "該 MCP Server 提供了 {{number}} 種安裝方式，允許使用者部署和使用。",
-          "title": "提供至少一種安裝方式"
-        },
-        "license": {
-          "desc": "該程式庫包含一個 LICENSE 檔案。",
-          "descWithlicense": "該程式庫授權為 {{license}}。",
-          "title": "具有 LICENSE"
-        },
-        "listTitle": "評分明細",
-        "notClaimed": {
-          "desc": "如果您是此 MCP Server 所有者，可透過以下方式認領。",
-          "title": "未被所有者認領"
-        },
-        "prompts": {
-          "desc": "該 MCP Server 提供了提示詞，允許使用者與服務進行互動。",
-          "descWithCount": "該 MCP Server 提供了 {{number}} 個提示詞，允許使用者與服務進行互動。",
-          "title": "包含提示詞"
-        },
-        "readme": {
-          "desc": "該程式庫包含一個 README.md 檔案。",
-          "title": "具有 README"
-        },
-        "resources": {
-          "desc": "該 MCP Server 提供了資源，允許使用者附加和管理上下文資料。",
-          "descWithCount": "該 MCP Server 提供了 {{number}} 個資源，允許使用者附加和管理上下文資料。",
-          "title": "包含資源"
-        },
-        "title": "評分",
-        "tools": {
-          "desc": "服務需提供至少一個工具，允許使用者執行特定操作。",
-          "descWithCount": "該 MCP Server 提供了 {{number}} 個工具功能，允許使用者執行特定操作。",
-          "title": "包含至少一個工具"
-        },
-        "validated": {
-          "desc": "該 MCP Server 已通過安裝驗證，確保其品質和可靠性。",
-          "title": "已通過驗證"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "該 MCP Server 經過嚴格驗證，提供了全面的功能和高品質的使用者體驗。",
-          "fullTitle": "優秀外掛",
-          "title": "優質"
-        },
-        "b": {
-          "desc": "該 MCP Server 提供了良好的功能和使用者體驗，但可能在某些方面需要改進。",
-          "fullTitle": "功能良好",
-          "title": "良好"
-        },
-        "f": {
-          "desc": "該 MCP Server 功能不完整或品質較低，建議使用者謹慎使用。",
-          "fullTitle": "品質欠佳",
-          "title": "欠佳"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "提示詞",
-          "resources": "資源",
-          "title": "外掛能力",
-          "tools": "工具"
-        },
-        "configuration": {
-          "title": "外掛配置"
-        },
-        "connection": {
-          "args": "啟動參數",
-          "command": "啟動命令",
-          "title": "連線資訊",
-          "type": "連線類型",
-          "url": "服務地址"
-        },
-        "saveSettings": "儲存設定",
-        "title": "外掛設定"
-      },
-      "sidebar": {
-        "install": "安裝 MCP Server",
-        "meta": {
-          "homepage": "官方首頁",
-          "installCount": "安裝數",
-          "language": "原始碼語言",
-          "license": "授權證書",
-          "published": "發布時間",
-          "repo": "原始碼倉庫",
-          "stars": "星標數",
-          "title": "詳細資訊",
-          "updated": "最近更新"
-        },
-        "moreServerConfig": "查看詳情",
-        "recommendServers": "相關 MCP",
-        "serverConfig": "安裝配置",
-        "toc": "目錄"
-      },
-      "summary": {
-        "title": "你可以使用該 MCP Server 做什麼？"
-      },
-      "totalScore": {
-        "description": "根據各項指標綜合計算得出的總分",
-        "legend": {
-          "aGrade": "A級 ({{minPercent}}-100%)",
-          "bGrade": "B級 ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "F級 (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} 分",
-        "popover": {
-          "completedOptional": "✅ 已完成可選項 ({{count}}項)",
-          "completedRequired": "✅ 已完成必需項 ({{count}}項)",
-          "incompleteOptional": "⏸️ 未完成可選項 ({{count}}項)",
-          "incompleteRequired": "❌ 未完成必需項 ({{count}}項)",
-          "title": "評分詳情"
-        },
-        "ratingFormat": "評級: {{level}}",
-        "scoreInfo": {
-          "items": "項",
-          "points": "分",
-          "requiredItems": "必需項"
-        },
-        "title": "總分"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "最新版本",
-          "isValidated": "通過驗證",
-          "publishAt": "發布時間",
-          "version": "版本"
-        },
-        "title": "版本歷史"
-      }
-    },
-    "hero": {
-      "desc": "開源、可部署的 MCP Servers 平台，幫助 AI 系統輕鬆存取檔案系統、資料庫、API 等關鍵資源，全面擴展你的 AI 能力。",
-      "subTitle": "開源 & 開箱即用",
-      "title": "面向 AI 的開源 MCP 市場"
-    },
-    "sorts": {
-      "createdAt": "最近新增",
-      "installCount": "安裝數",
-      "isFeatured": "推薦外掛",
-      "isValidated": "已驗證外掛",
-      "promptsCount": "提示詞數",
-      "ratingCount": "評分數",
-      "resourcesCount": "資源數",
-      "toolsCount": "工具數",
-      "updatedAt": "最近更新"
-    },
-    "title": "MCP 市場",
-    "unvalidated": {
-      "desc": "此 MCP Server 暫未經過驗證",
-      "title": "未驗證"
-    },
-    "validated": {
-      "desc": "此 MCP Server 經過驗證，確保其品質和可靠性。",
-      "descWithDate": "此 MCP Server 於 {{date}} 經過驗證，確保其品質和可靠性。",
-      "title": "已驗證"
-    }
-  },
-  "models": {
-    "abilities": "模型能力",
-    "chat": "開始會話",
-    "contentLength": "最大上下文長度",
-    "details": {
-      "overview": {
-        "title": "概覽"
-      },
-      "related": {
-        "listTitle": "相關模型",
-        "more": "查看更多",
-        "title": "相關推薦"
-      }
-    },
-    "free": "免費",
-    "guide": "配置指南",
-    "list": "模型列表",
-    "more": "更多",
-    "parameterList": {
-      "defaultValue": "默認值",
-      "docs": "查看文檔",
-      "frequency_penalty": {
-        "desc": "此設置調整模型重複使用輸入中已經出現的特定詞彙的頻率。較高的值使得這種重複出現的可能性降低，而負值則產生相反的效果。詞彙懲罰不隨出現次數增加而增加。負值將鼓勵詞彙的重複使用。",
-        "title": "頻率懲罰度"
-      },
-      "max_tokens": {
-        "desc": "此設定定義了模型在單次回覆中可以生成的最大長度。設定較高的值允許模型生成更長的回應，而較低的值則限制回應的長度，使其更簡潔。根據不同的應用場景，合理調整此值可以幫助達到預期的回應長度和詳細程度。",
-        "title": "單次回覆限制"
-      },
-      "presence_penalty": {
-        "desc": "此設置旨在根據詞彙在輸入中出現的頻率來控制詞彙的重複使用。它嘗試較少使用那些在輸入中出現較多的詞彙，其使用頻率與出現頻率成比例。詞彙懲罰隨出現次數而增加。負值將鼓勵重複使用詞彙。",
-        "title": "話題新鮮度"
-      },
-      "range": "範圍",
-      "reasoning_effort": {
-        "desc": "此設定用於控制模型在生成回答前的推理強度。低強度優先響應速度並節省 Token，高強度提供更完整的推理，但會消耗更多 Token 並降低響應速度。預設值為中，平衡推理準確性與響應速度。",
-        "title": "推理強度"
-      },
-      "temperature": {
-        "desc": "此設置影響模型回應的多樣性。較低的值會導致更可預測和典型的回應，而較高的值則鼓勵更多樣化和不常見的回應。當值設為0時，模型對於給定的輸入總是給出相同的回應。",
-        "title": "隨機性"
-      },
-      "title": "模型參數",
-      "top_p": {
-        "desc": "此設置將模型的選擇限制為可能性最高的一定比例的詞彙：只選擇那些累計概率達到P的頂尖詞彙。較低的值使得模型的回應更加可預測，而默認設置則允許模型從全部範圍的詞彙中進行選擇。",
-        "title": "核採樣"
-      },
-      "type": "類型"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChat 支持為此提供商使用自定義 API 密鑰。",
-      "input": "輸入價格",
-      "inputTooltip": "每百萬個 Token 的成本",
-      "latency": "延遲",
-      "latencyTooltip": "服務商發送第一個 Token 的平均響應時間",
-      "maxOutput": "最大輸出長度",
-      "maxOutputTooltip": "此端點可以生成的最大 Token 數",
-      "officialTooltip": "LobeHub 官方服務",
-      "output": "輸出價格",
-      "outputTooltip": "每百萬個 Token 的成本",
-      "streamCancellationTooltip": "此服務商支持流取消功能。",
-      "throughput": "吞吐量",
-      "throughputTooltip": "流請求每秒傳輸的平均 Token 數"
-    },
-    "sorts": {
-      "contextWindowTokens": "上下文長度",
-      "identifier": "模型 ID",
-      "inputPrice": "輸入價格",
-      "outputPrice": "輸出價格",
-      "providerCount": "服務商數量",
-      "releasedAt": "最近發布"
-    },
-    "suggestions": "相關模型",
-    "supportedProviders": "支持該模型的服務商"
-  },
-  "plugins": {
-    "builtinTag": "內建外掛",
-    "community": "社區插件",
-    "details": {
-      "settings": {
-        "title": "外掛設定"
-      },
-      "summary": {
-        "title": "你可以使用該外掛做什麼？"
-      },
-      "tools": {
-        "title": "外掛工具"
-      }
-    },
-    "install": "安裝插件",
-    "installed": "已安裝",
-    "legacyTag": "舊版外掛",
-    "list": "插件列表",
-    "meta": {
-      "description": "描述",
-      "parameter": "參數",
-      "title": "工具參數",
-      "type": "類型"
-    },
-    "more": "更多",
-    "official": "官方插件",
-    "recentSubmits": "最近更新",
-    "sorts": {
-      "createdAt": "最近發布",
-      "identifier": "外掛 ID",
-      "title": "外掛名稱"
-    },
-    "suggestions": "相關推薦"
-  },
-  "providers": {
-    "config": "配置服務商",
-    "details": {
-      "guide": {
-        "title": "接入指南"
-      },
-      "overview": {
-        "title": "概覽"
-      },
-      "related": {
-        "listTitle": "相關服務商",
-        "more": "查看更多",
-        "title": "相關推薦"
-      }
-    },
-    "list": "模型服務商列表",
-    "modelCount": "{{count}} 個模型",
-    "modelName": "模型名稱",
-    "modelSite": "模型文件",
-    "more": "更多",
-    "officialSite": "官方網站",
-    "showAllModels": "顯示所有模型",
-    "sorts": {
-      "default": "預設排序",
-      "identifier": "服務商 ID",
-      "modelCount": "模型數量"
-    },
-    "suggestions": "相關服務商",
-    "supportedModels": "支持模型"
-  },
+  "mcp.categories.all.description": "全部 MCP Servers",
+  "mcp.categories.all.name": "全部",
+  "mcp.categories.business.description": "商業與企業服務",
+  "mcp.categories.business.name": "商業服務",
+  "mcp.categories.developer.description": "開發相關的工具與服務",
+  "mcp.categories.developer.name": "開發工具",
+  "mcp.categories.gaming-entertainment.description": "遊戲、娛樂和休閒活動",
+  "mcp.categories.gaming-entertainment.name": "遊戲娛樂",
+  "mcp.categories.health-wellness.description": "健康、健身與身心養護",
+  "mcp.categories.health-wellness.name": "健康養生",
+  "mcp.categories.lifestyle.description": "個人生活方式、習慣與日常活動",
+  "mcp.categories.lifestyle.name": "生活方式",
+  "mcp.categories.media-generate.description": "媒體的生成、編輯與處理",
+  "mcp.categories.media-generate.name": "媒體生成",
+  "mcp.categories.news.description": "新聞聚合、報導與資訊服務",
+  "mcp.categories.news.name": "新聞諮詢",
+  "mcp.categories.productivity.description": "任務管理、筆記與效率工具",
+  "mcp.categories.productivity.name": "效率工具",
+  "mcp.categories.science-education.description": "科學研究、學習與教育工具",
+  "mcp.categories.science-education.name": "科學教育",
+  "mcp.categories.social.description": "社交網絡與溝通交流",
+  "mcp.categories.social.name": "社交媒體",
+  "mcp.categories.stocks-finance.description": "金融市場、交易與投資",
+  "mcp.categories.stocks-finance.name": "股票金融",
+  "mcp.categories.tools.description": "通用實用工具與服務",
+  "mcp.categories.tools.name": "實用工具",
+  "mcp.categories.travel-transport.description": "旅行規劃與交通出行",
+  "mcp.categories.travel-transport.name": "旅行交通",
+  "mcp.categories.weather.description": "天氣預報與氣象服務",
+  "mcp.categories.weather.name": "氣象天氣",
+  "mcp.categories.web-search.description": "網頁搜尋與資訊檢索",
+  "mcp.categories.web-search.name": "資訊檢索",
+  "mcp.details.connectionType.hybrid.desc": "該服務可根據配置或使用場景，在本地或雲端運行，具備雙重運行能力。",
+  "mcp.details.connectionType.hybrid.title": "混合型服務",
+  "mcp.details.connectionType.local.desc": "該伺服器只能在用戶端本地設備上運行，需安裝並依賴本地資源。",
+  "mcp.details.connectionType.local.title": "本地服務",
+  "mcp.details.connectionType.remote.desc": "該伺服器託管於遠端運行，因為它主要依賴遠端服務，不依賴本地環境。",
+  "mcp.details.connectionType.remote.title": "雲服務",
+  "mcp.details.deployment.args": "參數",
+  "mcp.details.deployment.checkCommand": "檢查命令",
+  "mcp.details.deployment.command": "命令",
+  "mcp.details.deployment.commandLine": "系統依賴",
+  "mcp.details.deployment.connection": "連接方式",
+  "mcp.details.deployment.connectionType": "連接類型",
+  "mcp.details.deployment.description": "外掛的安裝和部署方式",
+  "mcp.details.deployment.descriptionPlaceholder": "可選的描述資訊",
+  "mcp.details.deployment.empty": "暫無部署選項",
+  "mcp.details.deployment.env": "環境變數",
+  "mcp.details.deployment.guide": "安裝說明",
+  "mcp.details.deployment.installation": "透過 {{method}} 安裝",
+  "mcp.details.deployment.installationMethod": "安裝方式",
+  "mcp.details.deployment.other": "其他設定",
+  "mcp.details.deployment.packageName": "套件名稱",
+  "mcp.details.deployment.platform.steps.claude": "- 打開 **Claude Desktop** 應用\n- 前往 **設定**，然後選擇 **開發者**\n- 點擊 **編輯配置**\n- 打開 **claude_desktop_config.json** 檔案\n- 複製並貼上伺服器配置到現有檔案中，然後儲存",
+  "mcp.details.deployment.platform.steps.cline": "- 打開安裝了 Cline 擴充功能的 VS Code\n- 點擊側邊欄中的 Cline 圖示\n- 從下拉選單中選擇 **MCP Servers**\n- 在 **Remote Servers** 標籤頁中，輸入伺服器名稱和您的 MCP 伺服器 URL\n- 點擊 **Add Server** 進行連接",
+  "mcp.details.deployment.platform.steps.cursor": "- 導航到 **設定**，然後選擇 Cursor 設定\n- 在左側選擇 **MCP**\n- 點擊右上角的 **新增全域 MCP 伺服器**\n- 複製並貼上伺服器配置到現有檔案中，然後儲存",
+  "mcp.details.deployment.platform.steps.lobeChat": "- 打開 **LobeChat 桌面版** 應用\n- 前往 **設定** - **預設助理**\n- 然後選擇 **外掛設定** - **自訂外掛**\n- 點擊 **快速匯入 JSON 配置**\n- 複製並貼上伺服器配置到文字框，然後安裝",
+  "mcp.details.deployment.platform.steps.openai": "- 打開您的 **OpenAI 應用** 或開發環境\n- 在 **Responses API** 中配置 MCP 工具\n- 在 API 請求的 **tools** 陣列中新增 MCP 區塊\n- 設定 **server_url** 為您的 MCP 伺服器端點\n- 包含認證所需的標頭資訊（API 金鑰、令牌等）\n- 使用 `allowed_tools` 參數限制暴露的工具\n- 設定 `require_approval` 來控制工具執行審批",
+  "mcp.details.deployment.platform.steps.vscode": "- 打開 VS Code\n- 打開命令面板（`Ctrl+Shift+P` / `Cmd+Shift+P`）\n- 輸入 **MCP: Add Server** 並選擇它\n- 選擇新增到工作區或使用者設定\n- 複製並貼上伺服器配置",
+  "mcp.details.deployment.platform.title": "在 {{platform}} 中安裝",
+  "mcp.details.deployment.recommended": "推薦",
+  "mcp.details.deployment.systemDependencies": "系統依賴",
+  "mcp.details.deployment.table.description": "描述",
+  "mcp.details.deployment.table.name": "名稱",
+  "mcp.details.deployment.table.required": "必填",
+  "mcp.details.deployment.table.type": "類型",
+  "mcp.details.deployment.title": "安裝方式",
+  "mcp.details.githubBadge.desc": "LobeHub 定期對程式庫和文件進行掃描，以便於：\n\n- 確認 MCP 伺服器正常運行。\n- 擷取伺服器特性，例如工具、資源、提示資訊以及所需參數。\n- 我們的徽章幫助使用者快速評估 MCP 伺服器的安全性、功能特性以及安裝指南。\n\n請將以下程式碼複製到你的 `README.md` 檔案中：",
+  "mcp.details.nav.needHelp": "需要幫助？",
+  "mcp.details.nav.reportIssue": "回報問題",
+  "mcp.details.nav.viewSourceCode": "查看原始碼",
+  "mcp.details.overview.title": "概覽",
+  "mcp.details.related.listTitle": "相關 MCP Server",
+  "mcp.details.related.more": "查看更多",
+  "mcp.details.related.title": "相關推薦",
+  "mcp.details.schema.mode.docs": "文件",
+  "mcp.details.schema.prompts.arguments": "參數配置",
+  "mcp.details.schema.prompts.desc": "由使用者選擇觸發的互動式範本",
+  "mcp.details.schema.prompts.empty": "暫無提示詞",
+  "mcp.details.schema.prompts.instructions": "指令說明",
+  "mcp.details.schema.prompts.table.description": "描述",
+  "mcp.details.schema.prompts.table.name": "名稱",
+  "mcp.details.schema.prompts.table.required": "必填",
+  "mcp.details.schema.prompts.title": "提示詞列表",
+  "mcp.details.schema.resources.desc": "由用戶端附加和管理的上下文資料",
+  "mcp.details.schema.resources.empty": "暫無資源",
+  "mcp.details.schema.resources.table.description": "描述",
+  "mcp.details.schema.resources.table.mineType": "MIME 類型",
+  "mcp.details.schema.resources.table.name": "名稱",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "資源列表",
+  "mcp.details.schema.title": "外掛功能",
+  "mcp.details.schema.tools.desc": "向大型語言模型（LLM）暴露的功能介面以執行操作",
+  "mcp.details.schema.tools.empty": "暫無工具",
+  "mcp.details.schema.tools.inputSchema": "輸入描述",
+  "mcp.details.schema.tools.instructions": "指令說明",
+  "mcp.details.schema.tools.table.description": "描述",
+  "mcp.details.schema.tools.table.name": "名稱",
+  "mcp.details.schema.tools.table.required": "必填",
+  "mcp.details.schema.tools.table.type": "類型",
+  "mcp.details.schema.tools.title": "工具列表",
+  "mcp.details.score.claimed.desc": "此 MCP Server 已被所有者認領，確保其所有權和管理。",
+  "mcp.details.score.claimed.title": "已被所有者認領",
+  "mcp.details.score.deployMoreThanManual.desc": "該 MCP Server 提供了除 Manual 外更友善的安裝方式，允許使用者輕鬆部署和使用。",
+  "mcp.details.score.deployMoreThanManual.title": "提供友善的安裝方式",
+  "mcp.details.score.deployment.desc": "該 MCP Server 提供了至少一種安裝方式，允許使用者部署和使用。",
+  "mcp.details.score.deployment.descWithCount": "該 MCP Server 提供了 {{number}} 種安裝方式，允許使用者部署和使用。",
+  "mcp.details.score.deployment.title": "提供至少一種安裝方式",
+  "mcp.details.score.license.desc": "該程式庫包含一個 LICENSE 檔案。",
+  "mcp.details.score.license.descWithlicense": "該程式庫授權為 {{license}}。",
+  "mcp.details.score.license.title": "具有 LICENSE",
+  "mcp.details.score.listTitle": "評分明細",
+  "mcp.details.score.notClaimed.desc": "如果您是此 MCP Server 所有者，可透過以下方式認領。",
+  "mcp.details.score.notClaimed.title": "未被所有者認領",
+  "mcp.details.score.prompts.desc": "該 MCP Server 提供了提示詞，允許使用者與服務進行互動。",
+  "mcp.details.score.prompts.descWithCount": "該 MCP Server 提供了 {{number}} 個提示詞，允許使用者與服務進行互動。",
+  "mcp.details.score.prompts.title": "包含提示詞",
+  "mcp.details.score.readme.desc": "該程式庫包含一個 README.md 檔案。",
+  "mcp.details.score.readme.title": "具有 README",
+  "mcp.details.score.resources.desc": "該 MCP Server 提供了資源，允許使用者附加和管理上下文資料。",
+  "mcp.details.score.resources.descWithCount": "該 MCP Server 提供了 {{number}} 個資源，允許使用者附加和管理上下文資料。",
+  "mcp.details.score.resources.title": "包含資源",
+  "mcp.details.score.title": "評分",
+  "mcp.details.score.tools.desc": "服務需提供至少一個工具，允許使用者執行特定操作。",
+  "mcp.details.score.tools.descWithCount": "該 MCP Server 提供了 {{number}} 個工具功能，允許使用者執行特定操作。",
+  "mcp.details.score.tools.title": "包含至少一個工具",
+  "mcp.details.score.validated.desc": "該 MCP Server 已通過安裝驗證，確保其品質和可靠性。",
+  "mcp.details.score.validated.title": "已通過驗證",
+  "mcp.details.scoreLevel.a.desc": "該 MCP Server 經過嚴格驗證，提供了全面的功能和高品質的使用者體驗。",
+  "mcp.details.scoreLevel.a.fullTitle": "優秀外掛",
+  "mcp.details.scoreLevel.a.title": "優質",
+  "mcp.details.scoreLevel.b.desc": "該 MCP Server 提供了良好的功能和使用者體驗，但可能在某些方面需要改進。",
+  "mcp.details.scoreLevel.b.fullTitle": "功能良好",
+  "mcp.details.scoreLevel.b.title": "良好",
+  "mcp.details.scoreLevel.f.desc": "該 MCP Server 功能不完整或品質較低，建議使用者謹慎使用。",
+  "mcp.details.scoreLevel.f.fullTitle": "品質欠佳",
+  "mcp.details.scoreLevel.f.title": "欠佳",
+  "mcp.details.settings.capabilities.prompts": "提示詞",
+  "mcp.details.settings.capabilities.resources": "資源",
+  "mcp.details.settings.capabilities.title": "外掛能力",
+  "mcp.details.settings.capabilities.tools": "工具",
+  "mcp.details.settings.configuration.title": "外掛配置",
+  "mcp.details.settings.connection.args": "啟動參數",
+  "mcp.details.settings.connection.command": "啟動命令",
+  "mcp.details.settings.connection.title": "連線資訊",
+  "mcp.details.settings.connection.type": "連線類型",
+  "mcp.details.settings.connection.url": "服務地址",
+  "mcp.details.settings.saveSettings": "儲存設定",
+  "mcp.details.settings.title": "外掛設定",
+  "mcp.details.sidebar.install": "安裝 MCP Server",
+  "mcp.details.sidebar.meta.homepage": "官方首頁",
+  "mcp.details.sidebar.meta.installCount": "安裝數",
+  "mcp.details.sidebar.meta.language": "原始碼語言",
+  "mcp.details.sidebar.meta.license": "授權證書",
+  "mcp.details.sidebar.meta.published": "發布時間",
+  "mcp.details.sidebar.meta.repo": "原始碼倉庫",
+  "mcp.details.sidebar.meta.stars": "星標數",
+  "mcp.details.sidebar.meta.title": "詳細資訊",
+  "mcp.details.sidebar.meta.updated": "最近更新",
+  "mcp.details.sidebar.moreServerConfig": "查看詳情",
+  "mcp.details.sidebar.recommendServers": "相關 MCP",
+  "mcp.details.sidebar.serverConfig": "安裝配置",
+  "mcp.details.sidebar.toc": "目錄",
+  "mcp.details.summary.title": "你可以使用該 MCP Server 做什麼？",
+  "mcp.details.totalScore.description": "根據各項指標綜合計算得出的總分",
+  "mcp.details.totalScore.legend.aGrade": "A級 ({{minPercent}}-100%)",
+  "mcp.details.totalScore.legend.bGrade": "B級 ({{minPercent}}-{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "F級 (0-{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} 分",
+  "mcp.details.totalScore.popover.completedOptional": "✅ 已完成可選項 ({{count}}項)",
+  "mcp.details.totalScore.popover.completedRequired": "✅ 已完成必需項 ({{count}}項)",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ 未完成可選項 ({{count}}項)",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ 未完成必需項 ({{count}}項)",
+  "mcp.details.totalScore.popover.title": "評分詳情",
+  "mcp.details.totalScore.ratingFormat": "評級: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "項",
+  "mcp.details.totalScore.scoreInfo.points": "分",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "必需項",
+  "mcp.details.totalScore.title": "總分",
+  "mcp.details.versions.table.isLatest": "最新版本",
+  "mcp.details.versions.table.isValidated": "通過驗證",
+  "mcp.details.versions.table.publishAt": "發布時間",
+  "mcp.details.versions.table.version": "版本",
+  "mcp.details.versions.title": "版本歷史",
+  "mcp.hero.desc": "開源、可部署的 MCP Servers 平台，幫助 AI 系統輕鬆存取檔案系統、資料庫、API 等關鍵資源，全面擴展你的 AI 能力。",
+  "mcp.hero.subTitle": "開源 & 開箱即用",
+  "mcp.hero.title": "面向 AI 的開源 MCP 社群",
+  "mcp.sorts.createdAt": "最近新增",
+  "mcp.sorts.installCount": "安裝數",
+  "mcp.sorts.isFeatured": "推薦外掛",
+  "mcp.sorts.isValidated": "已驗證外掛",
+  "mcp.sorts.promptsCount": "提示詞數",
+  "mcp.sorts.ratingCount": "評分數",
+  "mcp.sorts.resourcesCount": "資源數",
+  "mcp.sorts.toolsCount": "工具數",
+  "mcp.sorts.updatedAt": "最近更新",
+  "mcp.title": "MCP 社群",
+  "mcp.unvalidated.desc": "此 MCP Server 暫未經過驗證",
+  "mcp.unvalidated.title": "未驗證",
+  "mcp.validated.desc": "此 MCP Server 經過驗證，確保其品質和可靠性。",
+  "mcp.validated.descWithDate": "此 MCP Server 於 {{date}} 經過驗證，確保其品質和可靠性。",
+  "mcp.validated.title": "已驗證",
+  "mcpEmpty.description": "嘗試調整篩選條件或搜尋關鍵字",
+  "mcpEmpty.search": "未找到符合的 MCP 伺服器",
+  "mcpEmpty.title": "暫無 MCP 伺服器",
+  "models.abilities": "模型能力",
+  "models.chat": "開始會話",
+  "models.contentLength": "最大上下文長度",
+  "models.details.overview.title": "概覽",
+  "models.details.related.listTitle": "相關模型",
+  "models.details.related.more": "查看更多",
+  "models.details.related.title": "相關推薦",
+  "models.empty.description": "嘗試調整篩選條件以查看更多模型",
+  "models.empty.search": "未找到符合的模型",
+  "models.empty.title": "暫無模型",
+  "models.free": "免費",
+  "models.guide": "配置指南",
+  "models.list": "模型列表",
+  "models.more": "更多",
+  "models.parameterList.defaultValue": "默認值",
+  "models.parameterList.docs": "查看文檔",
+  "models.parameterList.frequency_penalty.desc": "此設置調整模型重複使用輸入中已經出現的特定詞彙的頻率。較高的值使得這種重複出現的可能性降低，而負值則產生相反的效果。詞彙懲罰不隨出現次數增加而增加。負值將鼓勵詞彙的重複使用。",
+  "models.parameterList.frequency_penalty.title": "頻率懲罰度",
+  "models.parameterList.max_tokens.desc": "此設定定義了模型在單次回覆中可以生成的最大長度。設定較高的值允許模型生成更長的回應，而較低的值則限制回應的長度，使其更簡潔。根據不同的應用場景，合理調整此值可以幫助達到預期的回應長度和詳細程度。",
+  "models.parameterList.max_tokens.title": "單次回覆限制",
+  "models.parameterList.presence_penalty.desc": "此設置旨在根據詞彙在輸入中出現的頻率來控制詞彙的重複使用。它嘗試較少使用那些在輸入中出現較多的詞彙，其使用頻率與出現頻率成比例。詞彙懲罰隨出現次數而增加。負值將鼓勵重複使用詞彙。",
+  "models.parameterList.presence_penalty.title": "話題新鮮度",
+  "models.parameterList.range": "範圍",
+  "models.parameterList.reasoning_effort.desc": "此設定用於控制模型在生成回答前的推理強度。低強度優先響應速度並節省 Token，高強度提供更完整的推理，但會消耗更多 Token 並降低響應速度。預設值為中，平衡推理準確性與響應速度。",
+  "models.parameterList.reasoning_effort.title": "推理強度",
+  "models.parameterList.temperature.desc": "此設置影響模型回應的多樣性。較低的值會導致更可預測和典型的回應，而較高的值則鼓勵更多樣化和不常見的回應。當值設為0時，模型對於給定的輸入總是給出相同的回應。",
+  "models.parameterList.temperature.title": "隨機性",
+  "models.parameterList.title": "模型參數",
+  "models.parameterList.top_p.desc": "此設置將模型的選擇限制為可能性最高的一定比例的詞彙：只選擇那些累計概率達到P的頂尖詞彙。較低的值使得模型的回應更加可預測，而默認設置則允許模型從全部範圍的詞彙中進行選擇。",
+  "models.parameterList.top_p.title": "核採樣",
+  "models.parameterList.type": "類型",
+  "models.providerInfo.apiTooltip": "LobeChat 支持為此提供商使用自定義 API 密鑰。",
+  "models.providerInfo.input": "輸入價格",
+  "models.providerInfo.inputTooltip": "每百萬個 Token 的成本",
+  "models.providerInfo.latency": "延遲",
+  "models.providerInfo.latencyTooltip": "服務商發送第一個 Token 的平均響應時間",
+  "models.providerInfo.maxOutput": "最大輸出長度",
+  "models.providerInfo.maxOutputTooltip": "此端點可以生成的最大 Token 數",
+  "models.providerInfo.officialTooltip": "LobeHub 官方服務",
+  "models.providerInfo.output": "輸出價格",
+  "models.providerInfo.outputTooltip": "每百萬個 Token 的成本",
+  "models.providerInfo.streamCancellationTooltip": "此服務商支持流取消功能。",
+  "models.providerInfo.throughput": "吞吐量",
+  "models.providerInfo.throughputTooltip": "流請求每秒傳輸的平均 Token 數",
+  "models.sorts.contextWindowTokens": "上下文長度",
+  "models.sorts.identifier": "模型 ID",
+  "models.sorts.inputPrice": "輸入價格",
+  "models.sorts.outputPrice": "輸出價格",
+  "models.sorts.providerCount": "服務商數量",
+  "models.sorts.releasedAt": "最近發布",
+  "models.suggestions": "相關模型",
+  "models.supportedProviders": "支持該模型的服務商",
+  "plugins.builtinTag": "內建外掛",
+  "plugins.community": "社區插件",
+  "plugins.details.settings.title": "外掛設定",
+  "plugins.details.summary.title": "你可以使用該外掛做什麼？",
+  "plugins.details.tools.title": "外掛工具",
+  "plugins.install": "安裝插件",
+  "plugins.installed": "已安裝",
+  "plugins.legacyTag": "舊版外掛",
+  "plugins.list": "插件列表",
+  "plugins.meta.description": "描述",
+  "plugins.meta.parameter": "參數",
+  "plugins.meta.title": "工具參數",
+  "plugins.meta.type": "類型",
+  "plugins.more": "更多",
+  "plugins.official": "官方插件",
+  "plugins.recentSubmits": "最近更新",
+  "plugins.sorts.createdAt": "最近發布",
+  "plugins.sorts.identifier": "外掛 ID",
+  "plugins.sorts.title": "外掛名稱",
+  "plugins.suggestions": "相關推薦",
+  "providers.config": "配置服務商",
+  "providers.details.guide.title": "接入指南",
+  "providers.details.overview.title": "概覽",
+  "providers.details.related.listTitle": "相關服務商",
+  "providers.details.related.more": "查看更多",
+  "providers.details.related.title": "相關推薦",
+  "providers.empty.description": "嘗試調整篩選條件以查看更多服務商",
+  "providers.empty.search": "未找到符合的服務商",
+  "providers.empty.title": "暫無服務商",
+  "providers.list": "模型服務商列表",
+  "providers.modelCount": "{{count}} 個模型",
+  "providers.modelName": "模型名稱",
+  "providers.modelSite": "模型文件",
+  "providers.more": "更多",
+  "providers.officialSite": "官方網站",
+  "providers.showAllModels": "顯示所有模型",
+  "providers.sorts.default": "預設排序",
+  "providers.sorts.identifier": "服務商 ID",
+  "providers.sorts.modelCount": "模型數量",
+  "providers.suggestions": "相關服務商",
+  "providers.supportedModels": "支持模型",
   "publishedTime": "發布於",
-  "search": {
-    "placeholder": "搜索名稱介紹或關鍵詞...",
-    "result": "{{count}} 個關於 <highlight>{{keyword}}</highlight> 的搜索結果",
-    "searching": "搜索中..."
-  },
-  "tab": {
-    "assistant": "助理",
-    "home": "首頁",
-    "model": "模型",
-    "plugin": "外掛",
-    "provider": "模型服務商"
-  }
+  "search.placeholder": "搜索名稱介紹或關鍵詞...",
+  "search.result": "{{count}} 個關於 <highlight>{{keyword}}</highlight> 的搜索結果",
+  "search.searching": "搜索中...",
+  "tab.assistant": "助理",
+  "tab.home": "首頁",
+  "tab.model": "模型",
+  "tab.plugin": "外掛",
+  "tab.provider": "模型服務商",
+  "tab.user": "使用者",
+  "user.agents": "助理",
+  "user.downloads": "下載",
+  "user.editProfile": "編輯個人資料",
+  "user.favoriteAgents": "收藏的助理",
+  "user.favoritePlugins": "收藏的外掛",
+  "user.follow": "追蹤",
+  "user.followers": "粉絲",
+  "user.following": "追蹤中",
+  "user.login": "成為創作者",
+  "user.logout": "登出",
+  "user.myProfile": "我的主頁",
+  "user.noAgents": "該使用者尚未發布助理",
+  "user.noFavoriteAgents": "尚無收藏的助理",
+  "user.noFavoritePlugins": "尚無收藏的外掛",
+  "user.publishedAgents": "創作的助手",
+  "user.tabs.favorites": "收藏",
+  "user.tabs.publishedAgents": "創作",
+  "user.unfavorite": "取消收藏",
+  "user.unfavoriteFailed": "取消收藏失敗",
+  "user.unfavoriteSuccess": "已取消收藏",
+  "user.unfollow": "取消追蹤",
+  "user.website": "個人網站"
 }

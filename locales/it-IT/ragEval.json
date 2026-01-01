@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Nuovo",
-    "description": {
-      "placeholder": "Descrizione del dataset (opzionale)"
-    },
-    "name": {
-      "placeholder": "Nome del dataset",
-      "required": "Si prega di inserire il nome del dataset"
-    },
-    "title": "Aggiungi dataset"
-  },
-  "dataset": {
-    "addNewButton": "Crea dataset",
-    "emptyGuide": "Il dataset attuale è vuoto, si prega di crearne uno.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Importa dati"
-        },
-        "columns": {
-          "actions": "Operazioni",
-          "ideal": {
-            "title": "Risposta ideale"
-          },
-          "question": {
-            "title": "Domanda"
-          },
-          "referenceFiles": {
-            "title": "File di riferimento"
-          }
-        },
-        "notSelected": "Si prega di selezionare un dataset a sinistra",
-        "title": "Dettagli del dataset"
-      },
-      "title": "Dataset"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Nuovo",
-      "datasetId": {
-        "placeholder": "Seleziona il tuo dataset di valutazione",
-        "required": "Si prega di selezionare un dataset di valutazione"
-      },
-      "description": {
-        "placeholder": "Descrizione del compito di valutazione (opzionale)"
-      },
-      "name": {
-        "placeholder": "Nome del compito di valutazione",
-        "required": "Si prega di inserire il nome del compito di valutazione"
-      },
-      "title": "Aggiungi compito di valutazione"
-    },
-    "addNewButton": "Crea valutazione",
-    "emptyGuide": "Attualmente non ci sono compiti di valutazione, inizia a crearne uno.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Controlla stato",
-          "confirmDelete": "Sei sicuro di voler eliminare questa valutazione?",
-          "confirmRun": "Sei sicuro di voler avviare l'esecuzione? L'esecuzione avverrà in modo asincrono in background, chiudere la pagina non influenzerà l'esecuzione del compito asincrono.",
-          "downloadRecords": "Scarica valutazione",
-          "retry": "Riprova",
-          "run": "Esegui",
-          "title": "Operazioni"
-        },
-        "datasetId": {
-          "title": "Dataset"
-        },
-        "name": {
-          "title": "Nome del compito di valutazione"
-        },
-        "records": {
-          "title": "Numero di registrazioni di valutazione"
-        },
-        "referenceFiles": {
-          "title": "File di riferimento"
-        },
-        "status": {
-          "error": "Errore durante l'esecuzione",
-          "pending": "In attesa di esecuzione",
-          "processing": "In esecuzione",
-          "success": "Esecuzione riuscita",
-          "title": "Stato"
-        }
-      },
-      "title": "Elenco dei compiti di valutazione"
-    }
-  }
+  "addDataset.confirm": "Crea",
+  "addDataset.description.placeholder": "Descrizione del dataset (facoltativa)",
+  "addDataset.name.placeholder": "Nome del dataset",
+  "addDataset.name.required": "Inserisci il nome del dataset",
+  "addDataset.title": "Aggiungi Dataset",
+  "dataset.addNewButton": "Crea Dataset",
+  "dataset.emptyGuide": "Attualmente non ci sono dataset. Crea un nuovo dataset.",
+  "dataset.list.table.actions.importData": "Importa Dati",
+  "dataset.list.table.columns.actions": "Azioni",
+  "dataset.list.table.columns.ideal.title": "Risposta Attesa",
+  "dataset.list.table.columns.question.title": "Domanda",
+  "dataset.list.table.columns.referenceFiles.title": "File di Riferimento",
+  "dataset.list.table.notSelected": "Seleziona un dataset a sinistra",
+  "dataset.list.table.title": "Dettagli del Dataset",
+  "dataset.list.title": "Dataset",
+  "evaluation.addEvaluation.confirm": "Crea",
+  "evaluation.addEvaluation.datasetId.placeholder": "Seleziona il dataset di valutazione",
+  "evaluation.addEvaluation.datasetId.required": "Seleziona un dataset di valutazione",
+  "evaluation.addEvaluation.description.placeholder": "Descrizione del compito di valutazione (facoltativa)",
+  "evaluation.addEvaluation.name.placeholder": "Nome del compito di valutazione",
+  "evaluation.addEvaluation.name.required": "Inserisci il nome del compito di valutazione",
+  "evaluation.addEvaluation.title": "Aggiungi Compito di Valutazione",
+  "evaluation.addNewButton": "Crea Valutazione",
+  "evaluation.emptyGuide": "Attualmente non ci sono compiti di valutazione. Inizia creando una valutazione.",
+  "evaluation.table.columns.actions.checkStatus": "Verifica Stato",
+  "evaluation.table.columns.actions.confirmDelete": "Sei sicuro di voler eliminare questa valutazione?",
+  "evaluation.table.columns.actions.confirmRun": "Sei sicuro di voler avviare l'esecuzione? Il compito di valutazione verrà eseguito in background in modo asincrono e la chiusura della pagina non ne influenzerà l'esecuzione.",
+  "evaluation.table.columns.actions.downloadRecords": "Scarica Valutazione",
+  "evaluation.table.columns.actions.retry": "Riprova",
+  "evaluation.table.columns.actions.run": "Esegui",
+  "evaluation.table.columns.actions.title": "Azioni",
+  "evaluation.table.columns.datasetId.title": "Dataset",
+  "evaluation.table.columns.name.title": "Nome del Compito di Valutazione",
+  "evaluation.table.columns.records.title": "Numero di Record di Valutazione",
+  "evaluation.table.columns.referenceFiles.title": "File di Riferimento",
+  "evaluation.table.columns.status.error": "Errore di Esecuzione",
+  "evaluation.table.columns.status.pending": "In Attesa",
+  "evaluation.table.columns.status.processing": "In Corso",
+  "evaluation.table.columns.status.success": "Esecuzione Riuscita",
+  "evaluation.table.columns.status.title": "Stato",
+  "evaluation.table.title": "Elenco Compiti di Valutazione"
 }

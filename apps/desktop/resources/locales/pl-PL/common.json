@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Dodaj",
-    "back": "Wstecz",
-    "cancel": "Anuluj",
-    "close": "Zamknij",
-    "confirm": "Potwierdź",
-    "delete": "Usuń",
-    "edit": "Edytuj",
-    "more": "Więcej",
-    "next": "Dalej",
-    "ok": "OK",
-    "previous": "Cofnij",
-    "refresh": "Odśwież",
-    "remove": "Usuń",
-    "retry": "Spróbuj ponownie",
-    "save": "Zapisz",
-    "search": "Szukaj",
-    "submit": "Wyślij"
-  },
-  "app": {
-    "description": "Twoja platforma współpracy z asystentem AI",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Błąd",
-    "info": "Informacja",
-    "loading": "Ładowanie",
-    "success": "Sukces",
-    "warning": "Ostrzeżenie"
-  }
+  "actions.add": "Dodaj",
+  "actions.back": "Wstecz",
+  "actions.cancel": "Anuluj",
+  "actions.close": "Zamknij",
+  "actions.confirm": "Potwierdź",
+  "actions.delete": "Usuń",
+  "actions.edit": "Edytuj",
+  "actions.more": "Więcej",
+  "actions.next": "Dalej",
+  "actions.ok": "OK",
+  "actions.previous": "Cofnij",
+  "actions.refresh": "Odśwież",
+  "actions.remove": "Usuń",
+  "actions.retry": "Spróbuj ponownie",
+  "actions.save": "Zapisz",
+  "actions.search": "Szukaj",
+  "actions.submit": "Wyślij",
+  "app.description": "Twoja platforma współpracy z asystentem AI",
+  "app.name": "LobeHub",
+  "status.error": "Błąd",
+  "status.info": "Informacja",
+  "status.loading": "Ładowanie",
+  "status.success": "Sukces",
+  "status.warning": "Ostrzeżenie"
 }

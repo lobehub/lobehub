@@ -1,30 +1,25 @@
 {
   "Artifacts": "Artifacts",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Chunk",
-      "file": "File"
-    }
-  },
-  "Plugins": "Plugins",
-  "artifacts": {
-    "display": {
-      "code": "Code",
-      "preview": "Preview"
-    },
-    "svg": {
-      "copyAsImage": "Copy as Image",
-      "copyFail": "Copy failed, reason: {{error}}",
-      "copySuccess": "Image copied successfully",
-      "download": {
-        "png": "Download as PNG",
-        "svg": "Download as SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "The current Artifacts list is empty. Please use plugins in the session as needed before viewing.",
-  "emptyKnowledgeList": "The current knowledge list is empty. Please enable the knowledge base as needed during the conversation before viewing.",
+  "FilePreview.tabs.chunk": "Chunk",
+  "FilePreview.tabs.file": "File",
+  "Plugins": "Skills",
+  "artifacts.display.code": "Code",
+  "artifacts.display.preview": "Preview",
+  "artifacts.svg.copyAsImage": "Copy as Image",
+  "artifacts.svg.copyFail": "Copy failed: {{error}}. Try again.",
+  "artifacts.svg.copySuccess": "Image copied successfully",
+  "artifacts.svg.download.png": "Download as PNG",
+  "artifacts.svg.download.svg": "Download as SVG",
+  "document.todos.allCompleted": "All tasks completed",
+  "document.todos.title": "Tasks",
+  "emptyArtifactList": "No Artifacts yet. Use Skills in the conversation, then come back here.",
+  "emptyKnowledgeList": "This list is empty.",
   "files": "Files",
   "messageDetail": "Message Details",
-  "title": "Portal View"
+  "notebook.confirmDelete": "Delete this Page?",
+  "notebook.delete": "Delete",
+  "notebook.empty": "No pages yet. Pages linked to this Topic will show up here.",
+  "notebook.title": "Notebook",
+  "openInPageEditor": "Edit in Page",
+  "title": "Workspace"
 }

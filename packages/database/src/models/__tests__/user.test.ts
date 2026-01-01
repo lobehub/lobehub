@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { nextauthAccounts, userSettings, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
-import { UserModel, UserNotFoundError } from '../user';
+import { ListUsersForMemoryExtractorCursor, UserModel, UserNotFoundError } from '../user';
 import { getTestDB } from './_util';
 
 const userId = 'user-model-test';
@@ -366,6 +366,28 @@ describe('UserModel', () => {
         await expect(
           UserModel.getUserApiKeys(serverDB, 'non-existent', mockDecryptor),
         ).rejects.toThrow(UserNotFoundError);
+      });
+    });
+
+    describe('listUsersForMemoryExtractor', () => {
+      it('should paginate users by createdAt and id', async () => {
+        await serverDB.delete(users);
+        await serverDB.insert(users).values([
+          { id: 'u1', createdAt: new Date('2024-01-01T00:00:00Z') },
+          { id: 'u2', createdAt: new Date('2024-01-02T00:00:00Z') },
+          { id: 'u3', createdAt: new Date('2024-01-03T00:00:00Z') },
+        ]);
+
+        const page1 = await UserModel.listUsersForMemoryExtractor(serverDB, { limit: 1 });
+        expect(page1.map((u) => u.id)).toEqual(['u1']);
+
+        const cursor: ListUsersForMemoryExtractorCursor = {
+          createdAt: page1[0].createdAt,
+          id: page1[0].id,
+        };
+
+        const page2 = await UserModel.listUsersForMemoryExtractor(serverDB, { cursor, limit: 10 });
+        expect(page2.map((u) => u.id)).toEqual(['u2', 'u3']);
       });
     });
   });

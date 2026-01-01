@@ -15,10 +15,10 @@ describe('aiChatSelectors', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
         result.current.startOperation({
           type: 'reasoning',
-          context: { sessionId: 'session1', topicId: 'topic1', messageId: 'msg1' },
+          context: { agentId: 'session1', topicId: 'topic1', messageId: 'msg1' },
         });
       });
 
@@ -78,10 +78,10 @@ describe('aiChatSelectors', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
         result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         });
       });
 
@@ -92,7 +92,7 @@ describe('aiChatSelectors', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
       });
 
       expect(aiChatSelectors.isCurrentSendMessageLoading(result.current)).toBe(false);
@@ -104,10 +104,10 @@ describe('aiChatSelectors', () => {
       let opId: string;
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
         opId = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         }).operationId;
       });
 
@@ -122,10 +122,10 @@ describe('aiChatSelectors', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
         result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session2', topicId: 'topic2' },
+          context: { agentId: 'session2', topicId: 'topic2' },
         });
       });
 
@@ -140,10 +140,10 @@ describe('aiChatSelectors', () => {
       let opId: string;
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
         opId = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         }).operationId;
       });
 
@@ -160,10 +160,10 @@ describe('aiChatSelectors', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
         result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         });
       });
 
@@ -174,7 +174,7 @@ describe('aiChatSelectors', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
       });
 
       expect(aiChatSelectors.isCurrentSendMessageError(result.current)).toBeUndefined();
@@ -187,16 +187,16 @@ describe('aiChatSelectors', () => {
       let op2Id: string;
 
       act(() => {
-        useChatStore.setState({ activeId: 'session1', activeTopicId: 'topic1' });
+        useChatStore.setState({ activeAgentId: 'session1', activeTopicId: 'topic1' });
 
         op1Id = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         }).operationId;
 
         op2Id = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         }).operationId;
       });
 
@@ -221,21 +221,21 @@ describe('aiChatSelectors', () => {
       act(() => {
         result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         });
       });
 
-      expect(aiChatSelectors.isSendMessageLoadingForTopic('session1_topic1')(result.current)).toBe(
-        true,
-      );
+      expect(
+        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+      ).toBe(true);
     });
 
     it('should return false when no sendMessage operation exists', () => {
       const { result } = renderHook(() => useChatStore());
 
-      expect(aiChatSelectors.isSendMessageLoadingForTopic('session1_topic1')(result.current)).toBe(
-        false,
-      );
+      expect(
+        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+      ).toBe(false);
     });
 
     it('should return false when sendMessage operation is completed', () => {
@@ -246,7 +246,7 @@ describe('aiChatSelectors', () => {
       act(() => {
         opId = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         }).operationId;
       });
 
@@ -254,9 +254,9 @@ describe('aiChatSelectors', () => {
         result.current.completeOperation(opId);
       });
 
-      expect(aiChatSelectors.isSendMessageLoadingForTopic('session1_topic1')(result.current)).toBe(
-        false,
-      );
+      expect(
+        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+      ).toBe(false);
     });
 
     it('should distinguish between different topics', () => {
@@ -265,16 +265,16 @@ describe('aiChatSelectors', () => {
       act(() => {
         result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         });
       });
 
-      expect(aiChatSelectors.isSendMessageLoadingForTopic('session1_topic1')(result.current)).toBe(
-        true,
-      );
-      expect(aiChatSelectors.isSendMessageLoadingForTopic('session1_topic2')(result.current)).toBe(
-        false,
-      );
+      expect(
+        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic1')(result.current),
+      ).toBe(true);
+      expect(
+        aiChatSelectors.isSendMessageLoadingForTopic('main_session1_topic2')(result.current),
+      ).toBe(false);
     });
   });
 });

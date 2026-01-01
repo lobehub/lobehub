@@ -1,4 +1,4 @@
-import { LobeBuiltinTool } from '@lobechat/types';
+import { type LobeBuiltinTool } from '@lobechat/types';
 
 import { builtinTools } from '@/tools';
 

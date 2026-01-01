@@ -2,7 +2,7 @@ import { chainAnswerWithContext } from '@lobechat/prompts';
 import { EvalEvaluationStatus } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { ModelProvider } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { z } from 'zod';
 
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL } from '@/const/settings';

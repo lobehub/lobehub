@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { SOCK_FILE, SOCK_INFO_FILE, WINDOW_PIPE_FILE } from './const';
-import { ServerDispatchEventKey } from './events';
 import { ElectronIPCEventHandler } from './types';
 
 const log = debug('electron-server-ipc:server');
@@ -107,7 +106,7 @@ export class ElectronIPCServer {
     log('Handling request: %s (ID: %s)', method, id);
 
     // Execute corresponding operation based on request method
-    const eventHandler = this.eventHandler[method as ServerDispatchEventKey];
+    const eventHandler = this.eventHandler[method];
     if (!eventHandler) {
       console.error('No handler found for method: %s', method);
       return;

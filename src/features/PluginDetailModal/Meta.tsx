@@ -1,7 +1,6 @@
-import { Block, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import PluginAvatar from '@/features/PluginAvatar';
 import { pluginHelpers, useToolStore } from '@/store/tool';

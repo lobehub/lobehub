@@ -1,23 +1,28 @@
 import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { SessionStoreState, initialState } from './initialState';
-import { SessionAction, createSessionSlice } from './slices/session/action';
-import { SessionGroupAction, createSessionGroupSlice } from './slices/sessionGroup/action';
+import { type SessionStoreState, initialState } from './initialState';
+import { type HomeInputAction, createHomeInputSlice } from './slices/homeInput/action';
+import { type RecentAction, createRecentSlice } from './slices/recent/action';
+import { type SessionAction, createSessionSlice } from './slices/session/action';
+import { type SessionGroupAction, createSessionGroupSlice } from './slices/sessionGroup/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
-export interface SessionStore extends SessionAction, SessionGroupAction, SessionStoreState {}
+export interface SessionStore
+  extends SessionAction, SessionGroupAction, RecentAction, HomeInputAction, SessionStoreState {}
 
 const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (...parameters) => ({
   ...initialState,
   ...createSessionSlice(...parameters),
   ...createSessionGroupSlice(...parameters),
+  ...createRecentSlice(...parameters),
+  ...createHomeInputSlice(...parameters),
 });
 
 //  ===============  Implement useStore ============ //

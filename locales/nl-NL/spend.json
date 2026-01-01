@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Tokens per seconde): Tokenuitvoer per seconde",
+  "duration.TTFT": "TTFT (Time To First Token): Tijd tot eerste token",
+  "duration.completion": "Tijd tot voltooiing van uitvoer",
+  "duration.latency": "Duur",
+  "duration.stage.end": "Einde",
+  "duration.stage.firstToken": "Eerste token",
+  "duration.stage.start": "Start",
+  "table.columns.TTFT.tooltip": "Tijd tot eerste token, eenheid: seconden",
+  "table.columns.duration": "Duur",
+  "table.columns.model": "Model",
+  "table.columns.spend": "Credits",
+  "table.columns.startTime": "Aangemaakt op",
+  "table.columns.totalTokens": "Tokenverbruik",
+  "table.columns.type.enums.chat": "Tekstgeneratie",
+  "table.columns.type.enums.imageGeneration": "Afbeeldinggeneratie",
+  "table.columns.type.title": "Type",
+  "table.desc": "Details van het gebruik van rekencredits voor tekstgeneratie, embedding, afbeeldinggeneratie, enz.",
+  "table.more": "Bekijk details",
+  "table.title": "Details van rekencreditsgebruik",
+  "table.totalToken.input": "Invoer",
+  "table.totalToken.output": "Uitvoer"
+}

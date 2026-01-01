@@ -1,13 +1,13 @@
 'use client';
 
-import { createStyles } from 'antd-style';
-import { CSSProperties, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { type CSSProperties, memo } from 'react';
 
-const useStyles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   desc: css`
     line-height: 1.4;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   header: css`
     padding-block: 24px 0;
@@ -28,8 +28,6 @@ interface PanelTitleProps {
 }
 
 const PanelTitle = memo(({ title, desc, style }: PanelTitleProps) => {
-  const { styles } = useStyles();
-
   return (
     <Flexbox className={styles.header} gap={4} style={style}>
       <h1 className={styles.title}>{title}</h1>

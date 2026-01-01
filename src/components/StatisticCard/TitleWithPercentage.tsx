@@ -1,7 +1,6 @@
-import { Tag, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
-import { CSSProperties, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { type CSSProperties, memo } from 'react';
 
 import { calcGrowthPercentage } from './growthPercentage';
 
@@ -15,24 +14,19 @@ interface TitleWithPercentageProps {
 const TitleWithPercentage = memo<TitleWithPercentageProps>(
   ({ inverseColor, title, prvCount, count }) => {
     const percentage = calcGrowthPercentage(count || 0, prvCount || 0);
-    const theme = useTheme();
 
     const upStyle: CSSProperties = {
-      background: theme.colorSuccessBg,
-      borderColor: theme.colorSuccessBorder,
-      color: theme.colorSuccess,
+      color: cssVar.colorSuccess,
     };
 
     const downStyle: CSSProperties = {
-      backgroundColor: theme.colorWarningBg,
-      borderColor: theme.colorWarningBorder,
-      color: theme.colorWarning,
+      color: cssVar.colorWarning,
     };
 
     return (
       <Flexbox
         align={'center'}
-        gap={8}
+        gap={4}
         horizontal
         justify={'flex-start'}
         style={{
@@ -56,7 +50,6 @@ const TitleWithPercentage = memo<TitleWithPercentageProps>(
         {count && prvCount && percentage && percentage !== 0 ? (
           <Tag
             style={{
-              borderWidth: 0.5,
               ...(inverseColor
                 ? percentage > 0
                   ? downStyle
@@ -65,6 +58,7 @@ const TitleWithPercentage = memo<TitleWithPercentageProps>(
                   ? upStyle
                   : downStyle),
             }}
+            variant={'borderless'}
           >
             {percentage > 0 ? '+' : ''}
             {percentage.toFixed(1)}%

@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type { ChatTopicMetadata, ThreadMetadata } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import { boolean, index, jsonb, pgTable, primaryKey, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
@@ -63,7 +63,16 @@ export const threads = pgTable(
     editor_data: jsonb('editor_data'),
     type: text('type', { enum: ['continuation', 'standalone', 'isolation'] }).notNull(),
     status: text('status', {
-      enum: ['active', 'processing', 'pending', 'inReview', 'todo', 'cancel'],
+      enum: [
+        'active',
+        'processing',
+        'pending',
+        'inReview',
+        'todo',
+        'cancel',
+        'completed',
+        'failed',
+      ],
     }),
 
     topicId: text('topic_id')
@@ -73,6 +82,10 @@ export const threads = pgTable(
     // @ts-ignore
     parentThreadId: text('parent_thread_id').references(() => threads.id, { onDelete: 'set null' }),
     clientId: text('client_id'),
+
+    agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
+    groupId: text('group_id').references(() => chatGroups.id, { onDelete: 'cascade' }),
+    metadata: jsonb('metadata').$type<ThreadMetadata | undefined>(),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -84,6 +97,8 @@ export const threads = pgTable(
   (t) => [
     uniqueIndex('threads_client_id_user_id_unique').on(t.clientId, t.userId),
     index('threads_topic_id_idx').on(t.topicId),
+    index('threads_agent_id_idx').on(t.agentId),
+    index('threads_group_id_idx').on(t.groupId),
   ],
 );
 

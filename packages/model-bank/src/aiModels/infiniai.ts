@@ -33,7 +33,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      "Kimi K2 Thinking 是最新、最强大的开源思考模型。它通过大幅扩展多步推理深度，并在 200–300 次连续工具调用中保持稳定的工具使用，在 Humanity's Last Exam (HLE)、BrowseComp 及其他基准测试中树立了新的标杆。同时，K2 Thinking 在编程、数学、逻辑推理和 Agent 场景中表现卓越。该模型基于混合专家（MoE）架构，总参数约 1T，支持 256K 上下文窗口并支持工具调用。",
+      "Kimi K2 Thinking is the latest and most powerful open-source reasoning model. It significantly expands multi-step reasoning depth and maintains stable tool use across 200-300 consecutive tool calls, setting new records on Humanity's Last Exam (HLE), BrowseComp, and other benchmarks. It also excels in coding, math, logical reasoning, and agent scenarios. Built on a MoE architecture with about 1T total parameters, it supports a 256K context window and tool calling.",
     displayName: 'Kimi K2 Thinking',
     id: 'kimi-k2-thinking',
     maxOutput: 32_768,
@@ -53,7 +53,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'DeepSeek-OCR 是由深度求索（DeepSeek AI）推出的一个视觉语言模型，专注于光学字符识别（OCR）与"上下文光学压缩"。该模型旨在探索从图像中压缩上下文信息的边界，能够高效处理文档并将其转换为如 Markdown 等结构化文本格式。它能够准确识别图像中的文字内容，特别适用于文档数字化、文字提取和结构化处理等应用场景。',
+      'DeepSeek-OCR is a vision-language model from DeepSeek AI focused on OCR and "contextual optical compression." It explores compressing contextual information from images, efficiently processes documents, and converts them into structured text formats such as Markdown. It accurately recognizes text in images, making it ideal for document digitization, text extraction, and structured processing.',
     displayName: 'DeepSeek OCR',
     id: 'deepseek-ocr',
     maxOutput: 8192,
@@ -74,9 +74,29 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
+      'MiniMax-M2.1 是 MiniMax 系列的最新版本，专为多语言编程和真实世界复杂任务优化。作为一款 AI 原生模型，MiniMax-M2.1 在模型性能、智能体框架支持以及多场景适配方面实现了显著提升，旨在帮助企业和个人更快地找到 AI 原生的工作与生活方式。',
+    displayName: 'MiniMax M2.1',
+    enabled: true,
+    id: 'minimax-m2.1',
+    maxOutput: 200_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
       'MiniMax-M2 是一款专为编码与智能体工作流优化的专家混合（MoE）语言模型，具有约 230B 总参数与约 10B 活跃参数。它在保持强通用智能的同时，针对多文件编辑、代码-运行-修复闭环、测试校验修复等开发者场景进行深度增强，在终端、IDE 与 CI 等真实环境中表现稳定、高效。',
     displayName: 'MiniMax M2',
-    enabled: true,
     id: 'minimax-m2',
     maxOutput: 200_000,
     pricing: {
@@ -94,16 +114,16 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'GLM-4.6 是智谱AI推出的最新大语言模型，具备更强的推理和生成能力。',
-    displayName: 'GLM-4.6',
+    description: 'GLM-4.7 是智谱AI推出的最新大语言模型，具备更强的推理和生成能力。',
+    displayName: 'GLM-4.7',
     enabled: true,
-    id: 'glm-4.6',
+    id: 'glm-4.7',
     maxOutput: 4096,
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 14, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -117,9 +137,30 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'DeepSeek-V3.2-Exp 是深度求索推出的实验性大语言模型，具有更强的推理和生成能力。',
+    description: 'GLM-4.6 是智谱AI推出的最新大语言模型，具备更强的推理和生成能力。',
+    displayName: 'GLM-4.6',
+    id: 'glm-4.6',
+    maxOutput: 4096,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 14, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description: 'DeepSeek-V3.2-Exp is an experimental DeepSeek LLM with stronger reasoning and generation.',
     displayName: 'DeepSeek V3.2 Exp',
-    enabled: true,
     id: 'deepseek-v3.2-exp',
     maxOutput: 65_536,
     pricing: {
@@ -140,7 +181,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen3 VL 235B A22B Instruct 是通义千问推出的多模态模型，支持视觉理解和推理。',
+    description:
+      'Qwen3 VL 235B A22B Instruct is a multimodal model from Qwen, supporting vision understanding and reasoning.',
     displayName: 'Qwen3 VL 235B A22B Instruct',
     id: 'qwen3-vl-235b-a22b-instruct',
     maxOutput: 32_768,
@@ -160,7 +202,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen3 VL 235B A22B Thinking 是通义千问推出的多模态推理模型，支持视觉理解和推理。',
+    description:
+      'Qwen3 VL 235B A22B Thinking is a multimodal reasoning model from Qwen, supporting vision understanding and reasoning.',
     displayName: 'Qwen3 VL 235B A22B Thinking',
     id: 'qwen3-vl-235b-a22b-thinking',
     maxOutput: 32_768,
@@ -180,7 +223,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-V3.1-Terminus 是深度求索推出的终端优化版本大语言模型，专为终端设备优化。',
+      'DeepSeek-V3.1-Terminus is a terminal-optimized LLM from DeepSeek, tailored for terminal devices.',
     displayName: 'DeepSeek V3.1 Terminus',
     id: 'deepseek-v3.1-terminus',
     maxOutput: 65_536,
@@ -203,7 +246,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '基于 Qwen3 的新一代思考模式开源模型，相较上一版本（通义千问3-235B-A22B-Thinking-2507）指令遵循能力有提升、模型总结回复更加精简。',
+      'A next-generation thinking-mode open-source model based on Qwen3. Compared to the previous version (Qwen3-235B-A22B-Thinking-2507), it improves instruction following and provides more concise summaries.',
     displayName: 'Qwen3 Next 80B A3B Thinking',
     id: 'qwen3-next-80b-a3b-thinking',
     maxOutput: 32_768,
@@ -222,7 +265,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '基于 Qwen3 的新一代非思考模式开源模型，相较上一版本（通义千问3-235B-A22B-Instruct-2507）中文文本理解能力更佳、逻辑推理能力有增强、文本生成类任务表现更好。',
+      'A next-generation non-thinking open-source model based on Qwen3. Compared to the previous version (Qwen3-235B-A22B-Instruct-2507), it has better Chinese text understanding, stronger logical reasoning, and improved text generation performance.',
     displayName: 'Qwen3 Next 80B A3B Instruct',
     id: 'qwen3-next-80b-a3b-instruct',
     maxOutput: 32_768,
@@ -240,7 +283,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'DeepSeek V3.1 模型为混合推理架构模型，同时支持思考模式与非思考模式。',
+    description:
+      'DeepSeek V3.1 uses a hybrid reasoning architecture with both thinking and non-thinking modes.',
     displayName: 'DeepSeek V3.1',
     id: 'deepseek-v3.1',
     maxOutput: 32_768,
@@ -261,7 +305,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 64_000,
-    description: 'Baichuan M2 32B 是百川智能推出的混合专家模型，具备强大的推理能力。',
+    description: 'Baichuan M2 32B is a MoE model from Baichuan Intelligence with strong reasoning.',
     displayName: 'Baichuan M2 32B',
     id: 'baichuan-m2-32b',
     maxOutput: 8192,
@@ -280,7 +324,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'GLM-4.5V 是智谱AI推出的多模态模型，支持视觉理解和推理。',
+    description: 'GLM-4.5V is a multimodal model from Zhipu AI for vision understanding and reasoning.',
     displayName: 'GLM-4.5V',
     id: 'glm-4.5v',
     maxOutput: 4096,
@@ -301,7 +345,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'GLM-4.5系列模型是智谱AI专为智能体设计的混合推理模型，提供思考与非思考两种模式。',
+    description:
+      'GLM-4.5 is a hybrid reasoning model from Zhipu AI built for agents, with thinking and non-thinking modes.',
     displayName: 'GLM-4.5',
     id: 'glm-4.5',
     maxOutput: 4096,
@@ -319,7 +364,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'GLM-4.5-Air 是智谱AI推出的轻量级大语言模型，具备高效的推理能力。',
+    description: 'GLM-4.5-Air is a lightweight LLM from Zhipu AI with efficient reasoning.',
     displayName: 'GLM-4.5-Air',
     id: 'glm-4.5-air',
     maxOutput: 4096,
@@ -341,7 +386,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      '通义千问代码模型开源版。最新的 qwen3-coder-480b-a35b-instruct 是基于 Qwen3 的代码生成模型，具有强大的Coding Agent能力，擅长工具调用和环境交互，能够实现自主编程、代码能力卓越的同时兼具通用能力。',
+      'The open-source Qwen code model. The latest qwen3-coder-480b-a35b-instruct is a Qwen3-based code generation model with strong coding-agent capabilities, good at tool use and environment interaction, enabling autonomous programming while retaining strong general abilities.',
     displayName: 'Qwen3 Coder 480B A35B',
     id: 'qwen3-coder-480b-a35b-instruct',
     maxOutput: 32_768,
@@ -360,7 +405,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '基于Qwen3的非思考模式开源模型，相较上一版本（通义千问3-235B-A22B）主观创作能力与模型安全性均有小幅度提升。',
+      'A non-thinking open-source model based on Qwen3. Compared to the previous version (Qwen3-235B-A22B), it slightly improves subjective creative ability and model safety.',
     displayName: 'Qwen3 235B A22B Instruct 2507',
     id: 'qwen3-235b-a22b-instruct-2507',
     maxOutput: 8192,
@@ -378,7 +423,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Kimi K2 Instruct 是月之暗面推出的大语言模型，具有超长上下文处理能力。',
+    description:
+      'Kimi K2 Instruct is a Moonshot AI LLM with ultra-long context handling.',
     displayName: 'Kimi K2 Instruct',
     id: 'kimi-k2-instruct',
     maxOutput: 32_768,
@@ -396,7 +442,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 32_000,
-    description: 'ERNIE 4.5 300B A47B 是百度文心推出的超大规模混合专家模型，具备卓越的推理能力。',
+    description:
+      'ERNIE 4.5 300B A47B is Baidu ERNIE’s ultra-large MoE model with excellent reasoning.',
     displayName: 'ERNIE 4.5 300B A47B',
     id: 'ernie-4.5-300b-a47b',
     maxOutput: 8192,
@@ -411,7 +458,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 120_000,
-    description: 'ERNIE 4.5 21B A3B 是百度文心推出的混合专家模型，具备强大的推理和多语言能力。',
+    description:
+      'ERNIE 4.5 21B A3B is Baidu ERNIE’s MoE model with strong reasoning and multilingual abilities.',
     displayName: 'ERNIE 4.5 21B A3B',
     id: 'ernie-4.5-21b-a3b',
     maxOutput: 8192,
@@ -431,7 +479,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Qwen3-8B 是 Qwen 系列第三代的大型语言模型，拥有 82 亿参数，专为高效推理和多语言任务设计。支持无缝切换思维模式（复杂推理）和非思维模式（通用对话），在数学、编码、常识推理及多语言指令执行中表现出色。',
+      'Qwen3-8B is the third-generation Qwen LLM with 8.2B parameters, designed for efficient reasoning and multilingual tasks. It supports seamless switching between thinking mode (complex reasoning) and non-thinking mode (general chat), excelling in math, coding, commonsense reasoning, and multilingual instruction following.',
     displayName: 'Qwen3 8B',
     id: 'qwen3-8b',
     maxOutput: 8192,
@@ -454,7 +502,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Qwen3-14B 是 Qwen 系列第三代的大型语言模型，拥有 148 亿参数，专为高效推理和多语言任务设计。支持无缝切换思维模式（复杂推理）和非思维模式（通用对话），在数学、编码、常识推理及多语言指令执行中表现出色。',
+      'Qwen3-14B is the third-generation Qwen LLM with 14.8B parameters, designed for efficient reasoning and multilingual tasks. It supports seamless switching between thinking mode (complex reasoning) and non-thinking mode (general chat), excelling in math, coding, commonsense reasoning, and multilingual instruction following.',
     displayName: 'Qwen3 14B',
     id: 'qwen3-14b',
     maxOutput: 8192,
@@ -474,7 +522,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Qwen3-32B 是 Qwen 系列第三代的大型语言模型，拥有 328 亿参数，专为高效推理和多语言任务设计。支持无缝切换思考模式（复杂推理）和非思考模式（通用对话），在数学、编码、常识推理及多语言指令执行中表现出色。',
+      'Qwen3-32B is the third-generation Qwen LLM with 32.8B parameters, designed for efficient reasoning and multilingual tasks. It supports seamless switching between thinking mode (complex reasoning) and non-thinking mode (general chat), excelling in math, coding, commonsense reasoning, and multilingual instruction following.',
     displayName: 'Qwen3 32B',
     id: 'qwen3-32b',
     maxOutput: 8192,
@@ -497,7 +545,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Qwen3-30B-A3B 是 Qwen 系列第三代的大型语言模型，采用混合专家（MoE）架构，总计 305 亿参数，每 token 激活 33 亿参数。支持无缝切换思维模式（复杂推理）和非思维模式（通用对话），在数学、编码、常识推理及多语言指令执行中表现出色。',
+      'Qwen3-30B-A3B is a third-generation Qwen LLM using a MoE architecture with 30.5B total parameters and 3.3B active per token. It supports seamless switching between thinking mode (complex reasoning) and non-thinking mode (general chat), excelling in math, coding, commonsense reasoning, and multilingual instruction following.',
     displayName: 'Qwen3 30B A3B',
     id: 'qwen3-30b-a3b',
     maxOutput: 8192,
@@ -520,7 +568,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Qwen3-235B-A22B 是 Qwen 系列第三代的大型语言模型，采用混合专家（MoE）架构，总计 2350 亿参数，每 token 激活 220 亿参数。支持无缝切换思考模式（复杂推理）和非思维模式（通用对话），在数学、编码、常识推理及多语言指令执行中表现出色。',
+      'Qwen3-235B-A22B is a third-generation Qwen LLM using a MoE architecture with 235B total parameters and 22B active per token. It supports seamless switching between thinking mode (complex reasoning) and non-thinking mode (general chat), excelling in math, coding, commonsense reasoning, and multilingual instruction following.',
     displayName: 'Qwen3 235B A22B',
     id: 'qwen3-235b-a22b',
     maxOutput: 8192,
@@ -542,7 +590,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 125_000,
     description:
-      'Qwen2.5-VL 系列模型提升了模型的智能水平、实用性和适用性，使其在自然对话、内容创作、专业知识服务及代码开发等场景中表现更优。旗舰模型 Qwen2.5-VL-72B-Instruct 在涵盖多个领域和任务的基准测试中展现出强大的竞争力，包括大学水平的问题解答、数学、文档理解、通用问答、视频理解以及视觉代理任务等。',
+      'The Qwen2.5-VL series improves intelligence, practicality, and applicability, performing better in natural dialogue, content creation, professional knowledge services, and code development. The flagship Qwen2.5-VL-72B-Instruct is highly competitive across benchmarks spanning many domains and tasks, including college-level QA, math, document understanding, general QA, video understanding, and visual agent tasks.',
     displayName: 'Qwen2.5 VL 72B Instruct',
     id: 'qwen2.5-vl-72b-instruct',
     maxOutput: 4096,
@@ -561,7 +609,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 125_000,
     description:
-      'Qwen2.5-VL 系列模型提升了模型的智能水平、实用性和适用性，使其在自然对话、内容创作、专业知识服务及代码开发等场景中表现更优。模型 Qwen2.5-VL-32B-Instruct 在涵盖多个领域和任务的基准测试中展现出强大的竞争力，包括大学水平的问题解答、数学、文档理解、通用问答、视频理解以及视觉代理任务等。',
+      'The Qwen2.5-VL series improves intelligence, practicality, and applicability, performing better in natural dialogue, content creation, professional knowledge services, and code development. Qwen2.5-VL-32B-Instruct is highly competitive across benchmarks spanning many domains and tasks, including college-level QA, math, document understanding, general QA, video understanding, and visual agent tasks.',
     displayName: 'Qwen2.5 VL 32B Instruct',
     id: 'qwen2.5-vl-32b-instruct',
     maxOutput: 4096,
@@ -580,7 +628,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 125_000,
     description:
-      'Qwen2.5-VL 系列模型提升了模型的智能水平、实用性和适用性，使其在自然对话、内容创作、专业知识服务及代码开发等场景中表现更优。模型 Qwen2.5-VL-7B-Instruct 在涵盖多个领域和任务的基准测试中展现出强大的竞争力，包括大学水平的问题解答、数学、文档理解、通用问答、视频理解以及视觉代理任务等。',
+      'The Qwen2.5-VL series improves intelligence, practicality, and applicability, performing better in natural dialogue, content creation, professional knowledge services, and code development. Qwen2.5-VL-7B-Instruct is highly competitive across benchmarks spanning many domains and tasks, including college-level QA, math, document understanding, general QA, video understanding, and visual agent tasks.',
     displayName: 'Qwen2.5 VL 7B Instruct',
     id: 'qwen2.5-vl-7b-instruct',
     maxOutput: 4096,
@@ -598,7 +646,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 32_000,
-    description: 'QwQ 32B 是通义千问推出的推理专用模型，专注于推理任务。',
+    description: 'QwQ 32B is a Qwen reasoning-focused model built for reasoning tasks.',
     displayName: 'QwQ 32B',
     id: 'qwq-32b',
     maxOutput: 8192,
@@ -614,7 +662,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-V3-0324 是一个强大的专家混合（MoE）语言模型，总参数量为 671B，每个 Token 激活 37B 参数。该模型采用多头潜在注意力（MLA）和 DeepSeekMoE 架构，实现了高效推理和经济训练，并在前代 DeepSeek-V3 的基础上显著提升了性能。',
+      'DeepSeek-V3-0324 is a powerful MoE LLM with 671B total parameters and 37B active per token. It uses Multi-Head Latent Attention (MLA) and the DeepSeekMoE architecture for efficient reasoning and economical training, and significantly improves over the previous DeepSeek-V3.',
     displayName: 'DeepSeek V3 0324',
     id: 'deepseek-v3',
     maxOutput: 16_384,
@@ -634,7 +682,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-R1 是一个专注于推理能力的大语言模型，通过创新的训练流程实现了与 OpenAI-o1 相当的数学、代码和推理任务表现。该模型采用了冷启动数据和大规模强化学习相结合的方式进行训练。',
+      'DeepSeek-R1 is an LLM focused on reasoning, achieving performance comparable to OpenAI o1 on math, code, and reasoning tasks through an innovative training pipeline. It is trained with a combination of cold-start data and large-scale reinforcement learning.',
     displayName: 'DeepSeek R1',
     id: 'deepseek-r1',
     maxOutput: 32_768,
@@ -652,7 +700,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 32_000,
-    description: 'DeepSeek R1 Distill Qwen 32B 是深度求索基于Qwen蒸馏的高效模型。',
+    description: 'DeepSeek R1 Distill Qwen 32B is a DeepSeek distilled model based on Qwen.',
     displayName: 'DeepSeek R1 Distill Qwen 32B',
     id: 'deepseek-r1-distill-qwen-32b',
     maxOutput: 8192,
@@ -667,7 +715,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_000,
-    description: 'Megrez 3B Instruct 是无问芯穹推出的小参数量高效模型。',
+    description: 'Megrez 3B Instruct is a small, efficient model from Wuwen Xinqiong.',
     displayName: 'Megrez 3B Instruct',
     id: 'megrez-3b-instruct',
     maxOutput: 4096,
@@ -686,7 +734,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5 是 Qwen 大型语言模型系列的最新成果。Qwen2.5 发布了从 0.5 到 720 亿参数不等的基础语言模型及指令调优语言模型。Qwen2.5 相比 Qwen2 带来了以下改进：\n显著增加知识量，在编程与数学领域的能力得到极大提升。\n在遵循指令、生成长文本、理解结构化数据 (例如，表格) 以及生成结构化输出特别是 JSON 方面有显著提升。对系统提示的多样性更具韧性，增强了聊天机器人中的角色扮演实现和条件设定。\n支持长上下文处理。\n支持超过 29 种语言的多语言功能，包括中文、英语、法语、西班牙语、葡萄牙语、德语、意大利语、俄语、日语、韩语、越南语、泰语、阿拉伯语等。',
+      'Qwen2.5 is the latest in the Qwen LLM series. It releases base and instruction-tuned models ranging from 0.5B to 72B parameters. Compared with Qwen2, Qwen2.5 brings:\nSignificantly more knowledge, with major gains in coding and math.\nStronger instruction following, long-text generation, structured data understanding (e.g., tables), and structured output especially JSON. More robust to diverse system prompts, improving roleplay and conditioning in chatbots.\nLong-context support.\nMultilingual support for 29+ languages, including Chinese, English, French, Spanish, Portuguese, German, Italian, Russian, Japanese, Korean, Vietnamese, Thai, Arabic, and more.',
     displayName: 'Qwen2.5 32B Instruct',
     id: 'qwen2.5-32b-instruct',
     pricing: {
@@ -704,7 +752,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5 是 Qwen 大型语言模型系列的最新成果。Qwen2.5 发布了从 0.5 到 720 亿参数不等的基础语言模型及指令调优语言模型。Qwen2.5 相比 Qwen2 带来了以下改进：\n显著增加知识量，在编程与数学领域的能力得到极大提升。\n在遵循指令、生成长文本、理解结构化数据 (例如，表格) 以及生成结构化输出特别是 JSON 方面有显著提升。对系统提示的多样性更具韧性，增强了聊天机器人中的角色扮演实现和条件设定。\n支持长上下文处理。\n支持超过 29 种语言的多语言功能，包括中文、英语、法语、西班牙语、葡萄牙语、德语、意大利语、俄语、日语、韩语、越南语、泰语、阿拉伯语等。',
+      'Qwen2.5 is the latest in the Qwen LLM series. It releases base and instruction-tuned models ranging from 0.5B to 72B parameters. Compared with Qwen2, Qwen2.5 brings:\nSignificantly more knowledge, with major gains in coding and math.\nStronger instruction following, long-text generation, structured data understanding (e.g., tables), and structured output especially JSON. More robust to diverse system prompts, improving roleplay and conditioning in chatbots.\nLong-context support.\nMultilingual support for 29+ languages, including Chinese, English, French, Spanish, Portuguese, German, Italian, Russian, Japanese, Korean, Vietnamese, Thai, Arabic, and more.',
     displayName: 'Qwen2.5 72B Instruct',
     id: 'qwen2.5-72b-instruct',
     pricing: {
@@ -719,7 +767,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5 是 Qwen 大型语言模型系列的最新成果。Qwen2.5 发布了从 0.5 到 720 亿参数不等的基础语言模型及指令调优语言模型。Qwen2.5 相比 Qwen2 带来了以下改进：\n显著增加知识量，在编程与数学领域的能力得到极大提升。\n在遵循指令、生成长文本、理解结构化数据 (例如，表格) 以及生成结构化输出特别是 JSON 方面有显著提升。对系统提示的多样性更具韧性，增强了聊天机器人中的角色扮演实现和条件设定。\n支持长上下文处理。\n支持超过 29 种语言的多语言功能，包括中文、英语、法语、西班牙语、葡萄牙语、德语、意大利语、俄语、日语、韩语、越南语、泰语、阿拉伯语等。',
+      'Qwen2.5 is the latest in the Qwen LLM series. It releases base and instruction-tuned models ranging from 0.5B to 72B parameters. Compared with Qwen2, Qwen2.5 brings:\nSignificantly more knowledge, with major gains in coding and math.\nStronger instruction following, long-text generation, structured data understanding (e.g., tables), and structured output especially JSON. More robust to diverse system prompts, improving roleplay and conditioning in chatbots.\nLong-context support.\nMultilingual support for 29+ languages, including Chinese, English, French, Spanish, Portuguese, German, Italian, Russian, Japanese, Korean, Vietnamese, Thai, Arabic, and more.',
     displayName: 'Qwen2.5 14B Instruct',
     id: 'qwen2.5-14b-instruct',
     pricing: {
@@ -737,7 +785,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5 是 Qwen 大型语言模型系列的最新成果。Qwen2.5 发布了从 0.5 到 720 亿参数不等的基础语言模型及指令调优语言模型。Qwen2.5 相比 Qwen2 带来了以下改进：\n显著增加知识量，在编程与数学领域的能力得到极大提升。\n在遵循指令、生成长文本、理解结构化数据 (例如，表格) 以及生成结构化输出特别是 JSON 方面有显著提升。对系统提示的多样性更具韧性，增强了聊天机器人中的角色扮演实现和条件设定。\n支持长上下文处理。\n支持超过 29 种语言的多语言功能，包括中文、英语、法语、西班牙语、葡萄牙语、德语、意大利语、俄语、日语、韩语、越南语、泰语、阿拉伯语等。',
+      'Qwen2.5 is the latest in the Qwen LLM series. It releases base and instruction-tuned models ranging from 0.5B to 72B parameters. Compared with Qwen2, Qwen2.5 brings:\nSignificantly more knowledge, with major gains in coding and math.\nStronger instruction following, long-text generation, structured data understanding (e.g., tables), and structured output especially JSON. More robust to diverse system prompts, improving roleplay and conditioning in chatbots.\nLong-context support.\nMultilingual support for 29+ languages, including Chinese, English, French, Spanish, Portuguese, German, Italian, Russian, Japanese, Korean, Vietnamese, Thai, Arabic, and more.',
     displayName: 'Qwen2.5 7B Instruct',
     id: 'qwen2.5-7b-instruct',
     pricing: {
@@ -755,7 +803,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5-Coder 是最新的代码专用 Qwen 大型语言模型系列。Qwen2.5-Coder 在 CodeQwen1.5 的基础上带来了以下改进：\n显著提升代码生成、代码推理和代码修复能力。\n支持真实世界应用，例如代码代理，增强编码能力和数学及一般能力。\n支持长上下文处理。',
+      'Qwen2.5-Coder is the latest code-focused Qwen LLM series. Compared to CodeQwen1.5, it brings:\nSignificant improvements in code generation, code reasoning, and code repair.\nSupport for real-world applications such as code agents, improving coding plus math and general abilities.\nLong-context support.',
     displayName: 'Qwen2.5 Coder 32B Instruct',
     id: 'qwen2.5-coder-32b-instruct',
     maxOutput: 4096,
@@ -771,7 +819,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      '该模型需要申请体验。GPT-OSS-120B 是 OpenAI 推出的开源大规模语言模型，具备强大的文本生成能力。',
+      'Access requires an application. GPT-OSS-120B is an open-source large language model from OpenAI with strong text generation capability.',
     displayName: 'GPT-OSS-120B',
     id: 'gpt-oss-120b',
     maxOutput: 32_768,
@@ -787,7 +835,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      '该模型需要申请体验。GPT-OSS-20B 是 OpenAI 推出的开源中型语言模型，具备高效的文本生成能力。',
+      'Access requires an application. GPT-OSS-20B is an open-source mid-size language model from OpenAI with efficient text generation.',
     displayName: 'GPT-OSS-20B',
     id: 'gpt-oss-20b',
     maxOutput: 32_768,
@@ -805,7 +853,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: '企业专属服务专用模型，包并发服务。',
+    description: 'Enterprise dedicated service model with bundled concurrency.',
     displayName: 'DeepSeek R1 (Pro)',
     id: 'pro-deepseek-r1',
     maxOutput: 32_768,
@@ -820,7 +868,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: '企业专属服务专用模型，包并发服务。',
+    description: 'Enterprise dedicated service model with bundled concurrency.',
     displayName: 'DeepSeek V3 (Pro)',
     id: 'pro-deepseek-v3',
     maxOutput: 16_384,

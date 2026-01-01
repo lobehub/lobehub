@@ -156,24 +156,26 @@ apps/desktop/src/main/
    - 事件广播：向渲染进程通知授权状态变化
 
 ```typescript
-// 认证流程示例
-@ipcClientEvent('requestAuthorization')
-async requestAuthorization(config: DataSyncConfig) {
-  // 生成状态参数防止 CSRF 攻击
-  this.authRequestState = crypto.randomBytes(16).toString('hex');
+import { ControllerModule, IpcMethod } from '@/controllers';
 
-  // 构建授权 URL
-  const authUrl = new URL('/oidc/auth', remoteUrl);
-  authUrl.search = querystring.stringify({
-    client_id: 'lobe-chat',
-    response_type: 'code',
-    redirect_uri: `${protocolPrefix}://auth/callback`,
-    scope: 'openid profile',
-    state: this.authRequestState,
-  });
+export default class AuthCtr extends ControllerModule {
+  static override groupName = 'auth';
 
-  // 在默认浏览器中打开授权 URL
-  await shell.openExternal(authUrl.toString());
+  @IpcMethod()
+  async requestAuthorization(config: DataSyncConfig) {
+    this.authRequestState = crypto.randomBytes(16).toString('hex');
+
+    const authUrl = new URL('/oidc/auth', remoteUrl);
+    authUrl.search = querystring.stringify({
+      client_id: 'lobe-chat',
+      redirect_uri: `${protocolPrefix}://auth/callback`,
+      response_type: 'code',
+      scope: 'openid profile',
+      state: this.authRequestState,
+    });
+
+    await shell.openExternal(authUrl.toString());
+  }
 }
 ```
 
@@ -267,20 +269,27 @@ export class ShortcutManager {
    - 注入 App 实例
 
 ```typescript
-// 控制器基类和装饰器
+import { ControllerModule, IpcMethod, IpcServerMethod } from '@/controllers'
+
 export class ControllerModule implements IControllerModule {
   constructor(public app: App) {
-    this.app = app;
+    this.app = app
   }
 }
 
-// IPC 客户端事件装饰器
-export const ipcClientEvent = (method: keyof ClientDispatchEvents) =>
-  ipcDecorator(method, 'client');
+export class BrowserWindowsCtr extends ControllerModule {
+  static override readonly groupName = 'windows' // must be readonly
 
-// IPC 服务器事件装饰器
-export const ipcServerEvent = (method: keyof ServerDispatchEvents) =>
-  ipcDecorator(method, 'server');
+  @IpcMethod()
+  openSettingsWindow(params?: OpenSettingsWindowOptions) {
+    // ...
+  }
+
+  @IpcServerMethod()
+  handleServerCommand(payload: any) {
+    // ...
+  }
+}
 ```
 
 2. **IoC 容器**：
@@ -346,26 +355,13 @@ makeSureDirExist(storagePath);
    - 自动映射控制器方法到 IPC 事件
 
 ```typescript
-// IPC 事件初始化
-private initializeIPCEvents() {
-  // 注册客户端事件处理程序
-  this.ipcClientEventMap.forEach((eventInfo, key) => {
-    ipcMain.handle(key, async (e, ...data) => {
-      return await eventInfo.controller[eventInfo.methodName](...data);
-    });
-  });
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
-  // 注册服务器事件处理程序
-  const ipcServerEvents = {} as ElectronIPCEventHandler;
-  this.ipcServerEventMap.forEach((eventInfo, key) => {
-    ipcServerEvents[key] = async (payload) => {
-      return await eventInfo.controller[eventInfo.methodName](payload);
-    };
-  });
+// 渲染进程中使用 type-safe proxy 调用主进程方法
+const ipc = ensureElectronIpc();
 
-  // 创建 IPC 服务器
-  this.ipcServer = new ElectronIPCServer(name, ipcServerEvents);
-}
+await ipc.localSystem.readLocalFile({ path });
+await ipc.system.updateLocale('en-US');
 ```
 
 2. **事件广播**：

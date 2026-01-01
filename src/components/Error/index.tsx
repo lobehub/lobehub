@@ -1,10 +1,9 @@
 'use client';
 
-import { Button, FluentEmoji } from '@lobehub/ui';
+import { Button, Flexbox, FluentEmoji } from '@lobehub/ui';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { MAX_WIDTH } from '@/const/layoutTokens';
 

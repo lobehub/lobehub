@@ -7,7 +7,7 @@ import { URL } from 'node:url';
 import { createLogger } from '@/utils/logger';
 
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
-import { ControllerModule, ipcClientEvent } from './index';
+import { ControllerModule, IpcMethod } from './index';
 
 // Create logger
 const logger = createLogger('controllers:AuthCtr');
@@ -17,6 +17,7 @@ const logger = createLogger('controllers:AuthCtr');
  * Implements OAuth authorization flow using intermediate page + polling mechanism
  */
 export default class AuthCtr extends ControllerModule {
+  static override readonly groupName = 'auth';
   /**
    * Remote server configuration controller
    */
@@ -56,7 +57,7 @@ export default class AuthCtr extends ControllerModule {
   /**
    * Request OAuth authorization
    */
-  @ipcClientEvent('requestAuthorization')
+  @IpcMethod()
   async requestAuthorization(config: DataSyncConfig) {
     // Clear any old authorization state
     this.clearAuthorizationState();
@@ -119,7 +120,7 @@ export default class AuthCtr extends ControllerModule {
   /**
    * Request Market OAuth authorization (desktop)
    */
-  @ipcClientEvent('requestMarketAuthorization')
+  @IpcMethod()
   async requestMarketAuthorization(params: MarketAuthorizationParams) {
     const { authUrl } = params;
 
@@ -562,7 +563,7 @@ export default class AuthCtr extends ControllerModule {
     // Hash codeVerifier using SHA-256
     const encoder = new TextEncoder();
     const data = encoder.encode(codeVerifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
+    const digest = await crypto.subtle.digest('SHA-256', data as unknown as NodeJS.BufferSource);
 
     // Convert hash result to base64url encoding
     const challenge = Buffer.from(digest)

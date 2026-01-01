@@ -1,21 +1,23 @@
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles , responsive } from 'antd-style';
 import { XIcon } from 'lucide-react';
 
-export const useStyles = createStyles(({ css, token, prefixCls, isDarkMode, responsive }) => {
+const prefixCls = 'ant';
+
+export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     content: css`
-      .${prefixCls}-modal-content {
+      .${prefixCls}-modal-container {
         overflow: hidden;
 
         width: min(90vw, 450px);
         padding: 0;
-        border: 1px solid ${token.colorSplit};
-        border-radius: ${token.borderRadiusLG}px;
+        border: 1px solid ${cssVar.colorSplit};
+        border-radius: ${cssVar.borderRadiusLG};
 
-        background: ${isDarkMode ? token.colorBgElevated : token.colorBgLayout};
+        background: ${cssVar.colorBgLayout};
 
-        ${responsive.mobile} {
+        ${responsive.sm} {
           width: unset;
         }
       }

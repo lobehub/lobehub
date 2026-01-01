@@ -1,9 +1,8 @@
-import { Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { Loader2 } from 'lucide-react';
-import { DynamicOptions } from 'next/dist/shared/lib/dynamic';
+import { type DynamicOptions } from 'next/dist/shared/lib/dynamic';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { ProductLogo } from '@/components/Branding';
 

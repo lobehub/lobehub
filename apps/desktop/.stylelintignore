@@ -1,0 +1,39 @@
+# Stylelintignore for LobeHub
+################################################################
+
+# dependencies
+node_modules
+
+# ci
+coverage
+.coverage
+
+# production
+dist
+es
+lib
+logs
+
+# framework specific
+.next
+.umi
+.umi-production
+.umi-test
+.dumi/tmp*
+
+# temporary directories
+tmp
+temp
+.temp
+.local
+docs/.local
+
+# cache directories
+.cache
+
+# AI coding tools directories
+.claude
+.serena
+
+# MCP tools
+/.serena/**

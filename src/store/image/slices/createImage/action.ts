@@ -1,8 +1,10 @@
-import { StateCreator } from 'zustand';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { type StateCreator } from 'zustand';
 
+import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { imageService } from '@/services/image';
 
-import { ImageStore } from '../../store';
+import { type ImageStore } from '../../store';
 import { generationBatchSelectors } from '../generationBatch/selectors';
 import { imageGenerationConfigSelectors } from '../generationConfig/selectors';
 import { generationTopicSelectors } from '../generationTopic';
@@ -70,6 +72,10 @@ export const createCreateImageSlice: StateCreator<
       // 4. If it's a new topic, set the creating state after topic creation
       if (isNewTopic) {
         set({ isCreatingWithNewTopic: true }, false, 'createImage/startCreateImageWithNewTopic');
+      }
+
+      if (ENABLE_BUSINESS_FEATURES) {
+        markUserValidAction();
       }
 
       // 5. Create image via service

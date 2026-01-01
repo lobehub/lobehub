@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Токенов в секунду): Количество токенов в секунду",
+  "duration.TTFT": "TTFT (Время до первого токена): Задержка первого токена",
+  "duration.completion": "Время завершения вывода",
+  "duration.latency": "Длительность",
+  "duration.stage.end": "Конец",
+  "duration.stage.firstToken": "Первый токен",
+  "duration.stage.start": "Начало",
+  "table.columns.TTFT.tooltip": "Время до первого токена, единица измерения: секунды",
+  "table.columns.duration": "Длительность",
+  "table.columns.model": "Модель",
+  "table.columns.spend": "Кредиты",
+  "table.columns.startTime": "Создано",
+  "table.columns.totalTokens": "Использование токенов",
+  "table.columns.type.enums.chat": "Генерация текста",
+  "table.columns.type.enums.imageGeneration": "Генерация изображений",
+  "table.columns.type.title": "Тип",
+  "table.desc": "Подробности использования вычислительных кредитов для генерации текста, встраивания, генерации изображений и др.",
+  "table.more": "Подробнее",
+  "table.title": "Детали использования вычислительных кредитов",
+  "table.totalToken.input": "Ввод",
+  "table.totalToken.output": "Вывод"
+}

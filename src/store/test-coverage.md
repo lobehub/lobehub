@@ -25,7 +25,7 @@
 
 **All medium priority files now have tests! ✅**
 
-### 🎉 Achievement Unlocked: 100% Action File Coverage!
+### 🎉 Achievement Unlocked: 100% Action File Coverage
 
 All 40 action files in the store now have comprehensive test coverage!
 
@@ -56,7 +56,7 @@ Key principles:
 **Subagent workflow**:
 
 1. **One subagent per action file** - Each subagent focuses on testing ONE action file completely
-2. **Independent verification** - Each subagent runs its own type-check, lint, and test verification
+2. **Independent verification** - Each subagent runs its own typecheck, lint, and test verification
 3. **No commits from subagents** - Only the parent agent creates the final commit after all subagents complete
 4. **Parallel execution** - Launch all subagents in a single message using multiple Task tool calls
 5. **Consolidate results** - Parent agent reviews all results, runs final verification, updates docs, and commits
@@ -129,12 +129,12 @@ For files with multiple action files to test, use the Task tool to create subage
 2. **Launch one subagent per action file** using the Task tool
 3. **Each subagent independently**:
    - Writes tests for ONE action file only
-   - Runs type-check and lint
+   - Runs typecheck and lint
    - Verifies tests pass
    - Reports results back
    - **DOES NOT commit** (parent agent handles commits)
 4. **After all subagents complete**, review all results
-5. **Run final verification** (type-check, lint, tests)
+5. **Run final verification** (typecheck, lint, tests)
 6. **Update test-coverage.md** with combined results
 7. **Create single commit** with all new tests
 
@@ -146,7 +146,7 @@ Write comprehensive tests for src/store/discover/slices/plugin/action.ts followi
 Requirements:
 1. Write tests covering all actions in the file
 2. Follow SWR hooks testing pattern (if applicable)
-3. Run type-check and lint to verify
+3. run type-check and lint to verify
 4. Run tests to ensure they pass
 5. Report back with:
    - Number of tests written
@@ -163,7 +163,7 @@ DO NOT:
 
 - ✅ Parallel execution - multiple action files tested simultaneously
 - ✅ Focused scope - each subagent handles one file completely
-- ✅ Independent verification - each file gets type-check/lint/test verification
+- ✅ Independent verification - each file gets typecheck/lint/test verification
 - ✅ Clean commits - single commit after all work is done
 - ✅ Better organization - clear separation of concerns
 
@@ -320,7 +320,7 @@ Task({
 Requirements:
 1. Write tests covering all actions (usePluginCategories, usePluginDetail, usePluginList, usePluginIdentifiers)
 2. Follow SWR hooks testing pattern
-3. Run type-check and lint to verify
+3. run type-check and lint to verify
 4. Run tests to ensure they pass
 5. Report back with number of tests written and coverage areas
 
@@ -335,7 +335,7 @@ Task({
 Requirements:
 1. Write tests covering all actions (useFetchMcpDetail, useFetchMcpList, useMcpCategories)
 2. Follow SWR hooks testing pattern
-3. Run type-check and lint to verify
+3. run type-check and lint to verify
 4. Run tests to ensure they pass
 5. Report back with number of tests written and coverage areas
 
@@ -350,7 +350,7 @@ DO NOT commit changes or update test-coverage.md.`,
 Each subagent will:
 
 - Write tests
-- Run type-check and lint
+- run type-check and lint
 - Verify tests pass
 - Report results
 
@@ -365,7 +365,7 @@ After all subagents complete:
 **Step 4: Final Verification**
 
 ```bash
-# Run type-check on entire project
+# run type-check on entire project
 bun run type-check
 
 # Run lint on all new test files
@@ -396,7 +396,7 @@ git commit -m "✅ test(store): add comprehensive tests for discover store
 
 - Add tests for plugin, mcp, assistant, model, provider slices
 - Coverage: X% → Y% (+Z tests, 5 new test files)
-- All tests pass type-check and lint
+- All tests pass typecheck and lint
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
@@ -494,7 +494,7 @@ bunx eslint src/store/[domain]/
   - Semantic search and RAG integration testing
   - File upload with progress callbacks
 - **Development Method**: Used parallel subagents (9 subagents running simultaneously)
-- **Type Safety**: All tests pass type-check ✅
+- **Type Safety**: All tests pass typecheck ✅
 - **Lint**: All tests pass lint ✅
 - **Action Files Coverage**: 31/40 → 40/40 tested (100%, +9 files)
 - **🎉 MILESTONE**: All 40 action files now have comprehensive test coverage!
@@ -523,7 +523,7 @@ bunx eslint src/store/[domain]/
   - AbortController management testing
   - Mock return types matching actual services
 - **Development Method**: Used parallel subagents (2 subagents, one per file)
-- **Type Safety**: All tests pass type-check ✅
+- **Type Safety**: All tests pass typecheck ✅
 - **Lint**: All tests pass lint ✅
 - **Action Files Coverage**: 31/40 tested (77.5%, +2 files)
 - **Milestone**: 🏆 All high priority files (>200 LOC) now have comprehensive tests!
@@ -544,7 +544,7 @@ bunx eslint src/store/[domain]/
   - Successfully adapted zustand testing patterns for SWR hooks
   - Mock strategy: Synchronously return data from mock useSWR
   - Type safety: Used `as any` for test mock data where needed
-- **Type Safety**: All tests pass type-check
+- **Type Safety**: All tests pass typecheck
 - **Action Files Coverage**: 29/40 tested (72.5%, +2 files)
 
 **Session (2024-10-14)**: 📋 Store Testing Documentation Created

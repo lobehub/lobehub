@@ -36,11 +36,23 @@ describe('Message Router Integration Tests', () => {
   let userId: string;
   let testSessionId: string;
   let testTopicId: string;
+  let testAgentId: string;
 
   beforeEach(async () => {
     serverDB = await getTestDB();
     testDB = serverDB; // Set the test DB for the mock
     userId = await createTestUser(serverDB);
+
+    // 创建测试 agent
+    const { agents } = await import('@/database/schemas');
+    const [agent] = await serverDB
+      .insert(agents)
+      .values({
+        userId,
+        title: 'Test Agent',
+      })
+      .returning();
+    testAgentId = agent.id;
 
     // 创建测试 session
     const [session] = await serverDB
@@ -51,6 +63,14 @@ describe('Message Router Integration Tests', () => {
       })
       .returning();
     testSessionId = session.id;
+
+    // 创建 agent 到 session 的映射关系
+    const { agentsToSessions } = await import('@/database/schemas');
+    await serverDB.insert(agentsToSessions).values({
+      agentId: testAgentId,
+      sessionId: testSessionId,
+      userId,
+    });
 
     // 创建测试 topic
     const [topic] = await serverDB
@@ -88,7 +108,7 @@ describe('Message Router Integration Tests', () => {
       expect(createdMessage).toBeDefined();
       expect(createdMessage).toMatchObject({
         id: result.id,
-        sessionId: testSessionId,
+        agentId: testAgentId, // sessionId 会解析为 agentId 存储
         topicId: testTopicId,
         userId: userId,
         content: 'Test message',
@@ -129,7 +149,7 @@ describe('Message Router Integration Tests', () => {
       expect(createdMessage.threadId).toBe(thread.id);
       expect(createdMessage).toMatchObject({
         id: result.id,
-        sessionId: testSessionId,
+        agentId: testAgentId,
         topicId: testTopicId,
         threadId: thread.id,
         content: 'Test message in thread',
@@ -153,7 +173,7 @@ describe('Message Router Integration Tests', () => {
         .where(eq(messages.id, result.id));
 
       expect(createdMessage.topicId).toBeNull();
-      expect(createdMessage.sessionId).toBe(testSessionId);
+      expect(createdMessage.agentId).toBe(testAgentId);
     });
 
     it('should fail when sessionId does not exist', async () => {
@@ -199,6 +219,298 @@ describe('Message Router Integration Tests', () => {
           topicId: anotherTopic.id, // 这个 topic 不属于 testSessionId
         }),
       ).rejects.toThrow();
+    });
+  });
+
+  /**
+   * agentId 兼容性测试
+   *
+   * 测试 agentId → sessionId 解析功能
+   * 确保可以使用 agentId 替代 sessionId 进行操作
+   */
+  describe('agentId compatibility', () => {
+    describe('createMessage with agentId', () => {
+      it('should create message using agentId instead of sessionId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        const result = await caller.createMessage({
+          content: 'Message created with agentId',
+          role: 'user',
+          agentId: testAgentId,
+          // 不提供 sessionId，只使用 agentId
+        });
+
+        // 验证消息创建成功，且关联到正确的 sessionId
+        const [createdMessage] = await serverDB
+          .select()
+          .from(messages)
+          .where(eq(messages.id, result.id));
+
+        expect(createdMessage).toBeDefined();
+        expect(createdMessage.agentId).toBe(testAgentId);
+        expect(createdMessage.content).toBe('Message created with agentId');
+      });
+
+      it('should create message with agentId and topicId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        const result = await caller.createMessage({
+          content: 'Message with agentId and topicId',
+          role: 'user',
+          agentId: testAgentId,
+          topicId: testTopicId,
+        });
+
+        const [createdMessage] = await serverDB
+          .select()
+          .from(messages)
+          .where(eq(messages.id, result.id));
+
+        expect(createdMessage.agentId).toBe(testAgentId);
+        expect(createdMessage.topicId).toBe(testTopicId);
+      });
+
+      it('should prefer agentId over sessionId when both provided', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        // 创建另一个 session（不关联到 agent）
+        const [anotherSession] = await serverDB
+          .insert(sessions)
+          .values({
+            userId,
+            type: 'agent',
+          })
+          .returning();
+
+        const result = await caller.createMessage({
+          content: 'Message with both agentId and sessionId',
+          role: 'user',
+          agentId: testAgentId,
+          sessionId: anotherSession.id, // 这个会被 agentId 覆盖
+        });
+
+        const [createdMessage] = await serverDB
+          .select()
+          .from(messages)
+          .where(eq(messages.id, result.id));
+
+        // 应该使用提供的 agentId
+        expect(createdMessage.agentId).toBe(testAgentId);
+      });
+
+      it('should fail when agentId does not exist due to FK constraint', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        // 当 agentId 不存在时，应该因为外键约束而失败
+        await expect(
+          caller.createMessage({
+            content: 'Message with non-existent agentId',
+            role: 'user',
+            agentId: 'non-existent-agent-id',
+          }),
+        ).rejects.toThrow();
+      });
+    });
+
+    describe('removeMessage with agentId', () => {
+      it('should remove message using agentId and return updated list', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        // 创建两条消息
+        const msg1 = await caller.createMessage({
+          content: 'Message 1',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        const msg2 = await caller.createMessage({
+          content: 'Message 2',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        // 使用 agentId 删除消息
+        const result = await caller.removeMessage({
+          id: msg1.id,
+          agentId: testAgentId,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.messages).toHaveLength(1);
+        expect(result.messages?.[0].id).toBe(msg2.id);
+      });
+    });
+
+    describe('removeMessages with agentId', () => {
+      it('should remove multiple messages using agentId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        const msg1 = await caller.createMessage({
+          content: 'Message 1',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        const msg2 = await caller.createMessage({
+          content: 'Message 2',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        const msg3 = await caller.createMessage({
+          content: 'Message 3',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        const result = await caller.removeMessages({
+          ids: [msg1.id, msg2.id],
+          agentId: testAgentId,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.messages).toHaveLength(1);
+        expect(result.messages?.[0].id).toBe(msg3.id);
+      });
+    });
+
+    describe('update with agentId', () => {
+      it('should update message using agentId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        const msg = await caller.createMessage({
+          content: 'Original content',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        const result = await caller.update({
+          id: msg.id,
+          agentId: testAgentId,
+          value: { content: 'Updated via agentId' },
+        });
+
+        expect(result.success).toBe(true);
+
+        const [updatedMessage] = await serverDB
+          .select()
+          .from(messages)
+          .where(eq(messages.id, msg.id));
+
+        expect(updatedMessage.content).toBe('Updated via agentId');
+      });
+    });
+
+    describe('removeMessagesByAssistant with agentId', () => {
+      it('should remove messages by assistant using agentId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        await caller.createMessage({
+          content: 'Message 1',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        await caller.createMessage({
+          content: 'Message 2',
+          role: 'assistant',
+          sessionId: testSessionId,
+        });
+
+        // 使用 agentId 删除 session 中的所有消息
+        await caller.removeMessagesByAssistant({
+          agentId: testAgentId,
+        });
+
+        const remainingMessages = await serverDB
+          .select()
+          .from(messages)
+          .where(eq(messages.agentId, testAgentId));
+
+        expect(remainingMessages).toHaveLength(0);
+      });
+
+      it('should remove messages in specific topic using agentId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        // 在 topic 中创建消息
+        await caller.createMessage({
+          content: 'Message in topic',
+          role: 'user',
+          sessionId: testSessionId,
+          topicId: testTopicId,
+        });
+
+        // 在 session 中创建消息（不在 topic 中）
+        const msgOutside = await caller.createMessage({
+          content: 'Message outside topic',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        // 使用 agentId 和 topicId 删除
+        await caller.removeMessagesByAssistant({
+          agentId: testAgentId,
+          topicId: testTopicId,
+        });
+
+        const remainingMessages = await serverDB
+          .select()
+          .from(messages)
+          .where(eq(messages.agentId, testAgentId));
+
+        expect(remainingMessages).toHaveLength(1);
+        expect(remainingMessages[0].id).toBe(msgOutside.id);
+      });
+    });
+
+    describe('updatePluginState with agentId', () => {
+      it('should update plugin state using agentId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        const msg = await caller.createMessage({
+          content: 'Message with plugin',
+          role: 'assistant',
+          sessionId: testSessionId,
+        });
+
+        // 创建 plugin 记录
+        const { messagePlugins } = await import('@/database/schemas');
+        await serverDB.insert(messagePlugins).values({
+          id: msg.id,
+          userId,
+          toolCallId: 'test-tool-call-agentid',
+          type: 'default',
+        });
+
+        const result = await caller.updatePluginState({
+          id: msg.id,
+          agentId: testAgentId,
+          value: { testKey: 'testValue' },
+        });
+
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('updateMetadata with agentId', () => {
+      it('should update metadata using agentId', async () => {
+        const caller = messageRouter.createCaller(createTestContext(userId));
+
+        const msg = await caller.createMessage({
+          content: 'Message with metadata',
+          role: 'user',
+          sessionId: testSessionId,
+        });
+
+        const result = await caller.updateMetadata({
+          id: msg.id,
+          agentId: testAgentId,
+          value: { customField: 'customValue' },
+        });
+
+        expect(result.success).toBe(true);
+      });
     });
   });
 
@@ -384,7 +696,7 @@ describe('Message Router Integration Tests', () => {
       const remainingMessages = await serverDB
         .select()
         .from(messages)
-        .where(eq(messages.sessionId, testSessionId));
+        .where(eq(messages.agentId, testAgentId));
 
       expect(remainingMessages).toHaveLength(0);
     });
@@ -570,7 +882,7 @@ describe('Message Router Integration Tests', () => {
       const remainingMessages = await serverDB
         .select()
         .from(messages)
-        .where(eq(messages.sessionId, testSessionId));
+        .where(eq(messages.agentId, testAgentId));
 
       expect(remainingMessages).toHaveLength(0);
     });
@@ -599,11 +911,11 @@ describe('Message Router Integration Tests', () => {
         topicId: testTopicId,
       });
 
-      // 验证 topic 中的消息已删除，但 session 中的其他消息仍存在
+      // 验证 topic 中的消息已删除，但其他消息仍存在
       const remainingMessages = await serverDB
         .select()
         .from(messages)
-        .where(eq(messages.sessionId, testSessionId));
+        .where(eq(messages.agentId, testAgentId));
 
       expect(remainingMessages).toHaveLength(1);
       expect(remainingMessages[0].id).toBe(msgOutsideTopicResult.id);

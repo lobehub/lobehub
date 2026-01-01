@@ -1,11 +1,10 @@
-import { ActionIcon } from '@lobehub/ui';
-import { ConfigProvider, Popover, TooltipProps } from 'antd';
-import { createStyles, useTheme } from 'antd-style';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ConfigProvider, Popover, type TooltipProps } from 'antd';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { XIcon } from 'lucide-react';
-import { CSSProperties, type FC, type ReactNode } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { type CSSProperties, type FC, type ReactNode } from 'react';
 
-const useStyle = createStyles(({ css }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     close: css`
       color: white;
@@ -90,20 +89,17 @@ const TipGuide: FC<TipGuideProps> = ({
   open,
   onOpenChange: setOpen,
 }) => {
-  const token = useTheme();
-  const { styles, cx } = useStyle();
-
   return (
     <ConfigProvider
       theme={{
         components: {
           Badge: { fontSize: 12, lineHeight: 1 },
-          Button: { colorPrimary: token.blue7 },
+          Button: { colorPrimary: cssVar.blue7 },
           Checkbox: {
-            colorPrimary: token.blue7,
-            colorText: token.colorTextLightSolid,
+            colorPrimary: cssVar.blue7,
+            colorText: cssVar.colorTextLightSolid,
           },
-          Popover: { colorText: token.colorTextLightSolid },
+          Popover: { colorText: cssVar.colorTextLightSolid },
         },
       }}
     >

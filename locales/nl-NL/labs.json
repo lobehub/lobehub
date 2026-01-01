@@ -1,18 +1,10 @@
 {
-  "desc": "Hier worden regelmatig nieuwe functies bijgewerkt die we aan het verkennen zijn. Probeer ze gerust uit!",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "Assistentberichten en de resultaten van hulpoproepen gegroepeerd weergeven",
-      "title": "Gegroepeerde weergave van assistentberichten"
-    },
-    "groupChat": {
-      "desc": "Schakel de mogelijkheid in om groepschats met meerdere AI-agenten te organiseren.",
-      "title": "Groepschat (meerdere agenten)"
-    },
-    "inputMarkdown": {
-      "desc": "Render Markdown (vetgedrukte tekst, codeblokken, tabellen, enz.) in realtime in het invoerveld.",
-      "title": "Markdown-rendering in invoerveld"
-    }
-  },
-  "title": "Laboratorium"
+  "desc": "Hier vind je af en toe updates over nieuwe functies die we aan het verkennen zijn—voel je vrij om ze uit te proberen!",
+  "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
+  "features.assistantMessageGroup.title": "Agentberichtengroepering",
+  "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",
+  "features.groupChat.title": "Groepschat (Meerdere Agenten)",
+  "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",
+  "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
+  "title": "Labs"
 }

@@ -25,7 +25,7 @@ export const defaultProxySettings: NetworkProxySettings = {
  * 存储默认值
  */
 export const STORE_DEFAULTS: ElectronMainStore = {
-  dataSyncConfig: { storageMode: 'local' },
+  dataSyncConfig: { storageMode: 'cloud' },
   encryptedTokens: {},
   locale: 'auto',
   networkProxy: defaultProxySettings,
