@@ -1,9 +1,9 @@
 import { memo } from 'react';
 
-import { useChatGroupStore } from '@/store/chatGroup';
+import { useAgentGroupStore } from '@/store/agentGroup';
 
 const Title = memo(() => {
-  useChatGroupStore((s) => s.activeThreadAgentId);
+  useAgentGroupStore((s) => s.activeThreadAgentId);
   return <span>DM</span>;
 });
 

@@ -1,4 +1,4 @@
-import { get } from 'lodash-es';
+import { get } from 'es-toolkit/compat';
 
 export const hydrationPrompt = (prompt: string, context: any) => {
   const regex = /{{([\S\s]+?)}}/g;

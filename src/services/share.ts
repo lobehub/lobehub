@@ -1,7 +1,7 @@
 import type { PartialDeep } from 'type-fest';
 
 import { LOBE_URL_IMPORT_NAME } from '@/const/url';
-import { UserSettings } from '@/types/user/settings';
+import { type UserSettings } from '@/types/user/settings';
 
 class ShareService {
   /**

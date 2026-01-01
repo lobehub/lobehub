@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "持續追蹤 {{appName}} 的新功能和改進",
-    "title": "更新日誌"
-  },
-  "chat": {
-    "description": "{{appName}} 帶給你最好的 ChatGPT, Claude, Gemini, OLLaMA WebUI 使用體驗",
-    "title": "{{appName}}：個人 AI 效能工具，給自己一個更聰明的大腦"
-  },
-  "discover": {
-    "assistants": {
-      "description": "內容創作、文案、問答、圖像生成、視頻生成、語音生成、智能代理、自動化工作流程，定制你專屬的 AI / GPTs / OLLaMA 智能助手",
-      "title": "AI助手"
-    },
-    "description": "內容創作、文案、問答、圖像生成、視頻生成、語音生成、智能代理、自定義 AI 應用，定制你專屬的 AI 應用工作台",
-    "mcp": {
-      "description": "搜尋、比較並連接數千個 MCP 伺服器，幫助 AI 系統輕鬆存取檔案系統、資料庫、API 等關鍵資源，全面擴展你的 AI 能力",
-      "title": "MCP 伺服器市場"
-    },
-    "models": {
-      "description": "探索主流 AI 模型 OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
-      "title": "AI模型"
-    },
-    "plugins": {
-      "description": "搜尋圖表生成、學術、圖像生成、視頻生成、語音生成、自動化工作流程，為你的助手整合豐富的插件能力",
-      "title": "AI外掛"
-    },
-    "providers": {
-      "description": "探索主流模型供應商 OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
-      "title": "AI模型服務商"
-    },
-    "search": "搜尋",
-    "title": "發現"
-  },
-  "image": {
-    "description": "{{appName}} 帶給你最好的 GPT Image、Flux、Midjourney、Stable Diffusion 使用體驗",
-    "title": "AI 繪畫"
-  },
-  "plugins": {
-    "description": "搜尋、圖表生成、學術、圖像生成、視頻生成、語音生成、自動化工作流，定制 ChatGPT / Claude 專屬的 ToolCall 插件能力",
-    "title": "插件市場"
-  },
-  "welcome": {
-    "description": "{{appName}} 帶給你最好的 ChatGPT, Claude, Gemini, OLLaMA WebUI 使用體驗",
-    "title": "歡迎使用 {{appName}}：個人 AI 效能工具，給自己一個更聰明的大腦"
-  }
+  "changelog.description": "持續追蹤 {{appName}} 的新功能和改進",
+  "changelog.title": "更新日誌",
+  "chat.description": "{{appName}} 帶給你最好的 ChatGPT, Claude, Gemini, OLLaMA WebUI 使用體驗",
+  "chat.title": "{{appName}} · 協作代理的理想平台",
+  "discover.assistants.description": "內容創作、文案、問答、圖像生成、視頻生成、語音生成、智能代理、自動化工作流程，定制你專屬的 AI / GPTs / OLLaMA 智能助手",
+  "discover.assistants.title": "智慧體社群",
+  "discover.description": "內容創作、文案、問答、圖像生成、視頻生成、語音生成、智能代理、自定義 AI 應用，定制你專屬的 AI 應用工作台",
+  "discover.mcp.description": "搜尋、比較並連接數千個 MCP 伺服器，幫助 AI 系統輕鬆存取檔案系統、資料庫、API 等關鍵資源，全面擴展你的 AI 能力",
+  "discover.mcp.title": "MCP 伺服器社群",
+  "discover.models.description": "探索主流 AI 模型 OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "模型社群",
+  "discover.plugins.description": "搜尋圖表生成、學術、圖像生成、視頻生成、語音生成、自動化工作流程，為你的助手整合豐富的插件能力",
+  "discover.plugins.title": "外掛社群",
+  "discover.providers.description": "探索主流模型供應商 OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "模型服務社群",
+  "discover.search": "搜尋",
+  "discover.title": "發現",
+  "image.description": "{{appName}} 帶給你最好的 GPT Image、Flux、Midjourney、Stable Diffusion 使用體驗",
+  "image.title": "AI 繪畫",
+  "plugins.description": "搜尋、圖表生成、學術、圖像生成、視頻生成、語音生成、自動化工作流，定制 ChatGPT / Claude 專屬的 ToolCall 插件能力",
+  "plugins.title": "外掛社群",
+  "welcome.description": "{{appName}} 帶給你最好的 ChatGPT, Claude, Gemini, OLLaMA WebUI 使用體驗",
+  "welcome.title": "歡迎使用 {{appName}} · 協作代理的理想平台"
 }

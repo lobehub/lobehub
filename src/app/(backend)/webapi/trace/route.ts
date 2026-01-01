@@ -2,7 +2,7 @@ import { TraceEventType } from '@lobechat/types';
 import { after } from 'next/server';
 
 import { TraceClient } from '@/libs/traces';
-import { TraceEventBasePayload, TraceEventPayloads } from '@/types/trace';
+import { type TraceEventBasePayload, type TraceEventPayloads } from '@/types/trace';
 
 export const POST = async (req: Request) => {
   type RequestData = TraceEventPayloads & TraceEventBasePayload;

@@ -1,5 +1,5 @@
-import { PluginRenderProps } from '@lobehub/chat-plugin-sdk/client';
-import { Skeleton } from 'antd';
+import { type PluginRenderProps } from '@lobehub/chat-plugin-sdk/client';
+import { Skeleton } from '@lobehub/ui';
 import { memo, useRef, useState } from 'react';
 
 import { useOnPluginReadyForInteraction } from '../../utils/iframeOnReady';

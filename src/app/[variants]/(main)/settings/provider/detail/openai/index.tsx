@@ -1,4 +1,4 @@
-import { OpenAIProviderCard } from '@/config/modelProviders';
+import { OpenAIProviderCard } from 'model-bank/modelProviders';
 
 import { useSettingsContext } from '../../../_layout/ContextProvider';
 import ProviderDetail from '../default';

@@ -1,21 +1,21 @@
+import { CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
-  CodeInterpreterFileItem,
-  CodeInterpreterParams,
-  CodeInterpreterResponse,
+  type CodeInterpreterFileItem,
+  type CodeInterpreterParams,
+  type CodeInterpreterResponse,
 } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 import pMap from 'p-map';
-import { SWRResponse } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { fileService } from '@/services/file';
 import { pythonService } from '@/services/python';
 import { dbMessageSelectors } from '@/store/chat/selectors';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { useFileStore } from '@/store/file';
-import { CodeInterpreterIdentifier } from '@/tools/code-interpreter';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('codeInterpreter');
@@ -79,7 +79,7 @@ export const codeInterpreterSlice: StateCreator<
           files.push(new File([blob], image.alt));
         }
         for (const tool of message.tools ?? []) {
-          if (tool.identifier === CodeInterpreterIdentifier) {
+          if (tool.identifier === CloudSandboxIdentifier) {
             const message = dbMessageSelectors.getDbMessageByToolCallId(tool.id)(get());
             if (message?.content) {
               const content = JSON.parse(message.content) as CodeInterpreterResponse;

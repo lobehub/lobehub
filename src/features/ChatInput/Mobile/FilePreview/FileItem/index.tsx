@@ -1,7 +1,7 @@
-import { CSSProperties, memo } from 'react';
+import { type CSSProperties, memo } from 'react';
 
 import { useFileStore } from '@/store/file';
-import { UploadFileItem } from '@/types/files';
+import { type UploadFileItem } from '@/types/files';
 
 import File from './File';
 import Image from './Image';
@@ -19,6 +19,8 @@ interface FileItemProps extends UploadFileItem {
 const FileItem = memo<FileItemProps>((props) => {
   const { file, id, previewUrl, status } = props;
   const [removeFile] = useFileStore((s) => [s.removeChatUploadFile]);
+
+  console.log('file', file);
 
   if (file.type.startsWith('image')) {
     return (

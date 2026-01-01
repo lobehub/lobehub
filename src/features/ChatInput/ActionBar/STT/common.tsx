@@ -1,19 +1,18 @@
-import { ChatMessageError } from '@lobechat/types';
-import { Alert, Button, Highlighter } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { type ChatMessageError } from '@lobechat/types';
+import { Alert, Button, Flexbox, Highlighter } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Mic, MicOff } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import Action from '../components/Action';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   recording: css`
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: ${token.colorError};
+    background: ${cssVar.colorError};
   `,
 }));
 
@@ -42,7 +41,6 @@ const CommonSTT = memo<{
     desc,
   }) => {
     const { t } = useTranslation('chat');
-    const { styles } = useStyles();
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     const handleDropdownVisibleChange = (open: boolean) => {
@@ -99,9 +97,9 @@ const CommonSTT = memo<{
                       </Highlighter>
                     )
                   }
-                  message={error.message}
                   onClose={handleCloseError}
                   style={{ alignItems: 'center' }}
+                  title={error.message}
                   type="error"
                 />
               )

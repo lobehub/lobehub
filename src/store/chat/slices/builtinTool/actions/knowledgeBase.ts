@@ -1,9 +1,9 @@
 import debug from 'debug';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { agentSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { KnowledgeBaseExecutionRuntime } from '@/tools/knowledge-base/ExecutionRuntime';
 
 const log = debug('lobe-store:builtin-tool:knowledge-base');

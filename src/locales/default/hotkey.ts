@@ -1,86 +1,45 @@
-import { HotkeyI18nTranslations } from '@/types/hotkey';
-
-const hotkey: HotkeyI18nTranslations & {
-  desktop: Record<string, { desc?: string; title: string }>;
-} = {
-  addUserMessage: {
-    desc: '将当前输入内容添加为用户消息，但不触发生成',
-    title: '添加一条用户消息',
-  },
-  clearCurrentMessages: {
-    desc: '清空当前会话的消息和上传的文件',
-    title: '清空会话消息',
-  },
-  commandPalette: {
-    desc: '打开全局命令面板快速访问功能',
-    title: '命令面板',
-  },
-  deleteAndRegenerateMessage: {
-    desc: '删除最后一条消息并重新生成',
-    title: '删除并重新生成',
-  },
-  deleteLastMessage: {
-    desc: '删除最后一条消息',
-    title: '删除最后一条消息',
-  },
-  desktop: {
-    openSettings: {
-      desc: '打开应用设置页面',
-      title: '应用设置',
-    },
-    showApp: {
-      desc: '全局快捷键显示或隐藏主窗口',
-      title: '显示/隐藏主窗口',
-    },
-  },
-  editMessage: {
-    desc: '通过按住 Alt 并双击消息进入编辑模式',
-    title: '编辑消息',
-  },
-  navigateToChat: {
-    desc: '切换至会话标签并进入随便聊聊',
-    title: '切换至默认会话',
-  },
-  openChatSettings: {
-    desc: '查看和修改当前会话的设置',
-    title: '打开会话设置',
-  },
-  openHotkeyHelper: {
-    desc: '查看所有快捷键的使用说明',
-    title: '打开快捷键帮助',
-  },
-  regenerateMessage: {
-    desc: '重新生成最后一条消息',
-    title: '重新生成消息',
-  },
-  saveTopic: {
-    desc: '保存当前话题并打开新话题',
-    title: '开启新话题',
-  },
-  search: {
-    desc: '唤起当前页面主要搜索框',
-    title: '搜索',
-  },
-  showApp: {
-    desc: '快速唤起应用主窗口',
-    title: '显示主窗口',
-  },
-  switchAgent: {
-    desc: '通过按住 Ctrl 加数字 0~9 切换固定在侧边栏的助手',
-    title: '快捷切换助手',
-  },
-  toggleLeftPanel: {
-    desc: '显示或隐藏左侧助手面板',
-    title: '显示/隐藏助手面板',
-  },
-  toggleRightPanel: {
-    desc: '显示或隐藏右侧话题面板',
-    title: '显示/隐藏话题面板',
-  },
-  toggleZenMode: {
-    desc: '专注模式下，只显示当前会话，隐藏其他 UI',
-    title: '切换专注模式',
-  },
+export default {
+  'addUserMessage.desc': 'Add the current input as a user message without triggering generation',
+  'addUserMessage.title': 'Add a User Message',
+  'clearCurrentMessages.desc':
+    'Clear the messages and uploaded files from the current conversation',
+  'clearCurrentMessages.title': 'Clear Conversation Messages',
+  'commandPalette.desc': 'Open the global command palette for quick access to features',
+  'commandPalette.title': 'Command Palette',
+  'deleteAndRegenerateMessage.desc': 'Delete the last message and regenerate',
+  'deleteAndRegenerateMessage.title': 'Delete and Regenerate',
+  'deleteLastMessage.desc': 'Delete the last message',
+  'deleteLastMessage.title': 'Delete Last Message',
+  'desktop.openSettings.desc': 'Open the application settings page',
+  'desktop.openSettings.title': 'Application Settings',
+  'desktop.showApp.desc': 'Toggle the main window visibility with a global shortcut',
+  'desktop.showApp.title': 'Show/Hide Main Window',
+  'editMessage.desc': 'Enter edit mode by holding Alt and double-clicking the message',
+  'editMessage.title': 'Edit Message',
+  'navigateToChat.desc': 'Switch to the Chat tab and enter Lobe AI',
+  'navigateToChat.title': 'Switch to Default Chat',
+  'openChatSettings.desc': 'View and modify the settings for the current conversation',
+  'openChatSettings.title': 'Open Chat Settings',
+  'openHotkeyHelper.desc': 'View instructions for all keyboard shortcuts',
+  'openHotkeyHelper.title': 'Open Hotkey Help',
+  'regenerateMessage.desc': 'Regenerate the last message',
+  'regenerateMessage.title': 'Regenerate Message',
+  'saveDocument.desc': 'Save all changes to the current page immediately',
+  'saveDocument.title': 'Save Page',
+  'saveTopic.desc': 'Save the current topic and open a new one',
+  'saveTopic.title': 'Start a New Topic',
+  'search.desc': 'Activate the main search box on the current page',
+  'search.title': 'Search',
+  'showApp.desc': 'Quickly open the main application window',
+  'showApp.title': 'Show Main Window',
+  'switchAgent.desc':
+    'Switch between pinned agents in the sidebar by holding Ctrl and pressing numbers 0-9',
+  'switchAgent.title': 'Quick Switch Agent',
+  'toggleLeftPanel.desc': 'Show or hide the left panel',
+  'toggleLeftPanel.title': 'Toggle Left Panel',
+  'toggleRightPanel.desc': 'Show or hide the right panel',
+  'toggleRightPanel.title': 'Toggle Right Panel',
+  'toggleZenMode.desc':
+    'In focus mode, only display the current conversation and hide other UI elements',
+  'toggleZenMode.title': 'Toggle Focus Mode',
 };
-
-export default hotkey;

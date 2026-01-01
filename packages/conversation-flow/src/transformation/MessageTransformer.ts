@@ -20,6 +20,7 @@ export class MessageTransformer {
     return {
       content: message.content || '',
       error: message.error,
+      fileList: message.fileList,
       id: message.id,
       imageList: message.imageList,
       performance,

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { Plans } from '../subscription';
 import { TopicDisplayMode } from '../topic';
+import { UserOnboarding } from './onboarding';
 import { UserSettings } from './settings';
 
 export interface LobeUser {
@@ -11,6 +12,7 @@ export interface LobeUser {
   firstName?: string | null;
   fullName?: string | null;
   id: string;
+  interests?: string[];
   latestName?: string | null;
   username?: string | null;
 }
@@ -59,13 +61,18 @@ export interface UserPreference {
    * lab experimental features
    */
   lab?: UserLab;
-  telemetry: boolean | null;
+  /**
+   * @deprecated Use settings.general.telemetry instead
+   */
+  telemetry?: boolean | null;
   topicDisplayMode?: TopicDisplayMode;
   /**
    * whether to use cmd + enter to send message
    */
   useCmdEnterToSend?: boolean;
 }
+
+export type ReferralStatusString = 'registered' | 'suspected' | 'rewarded' | 'revoked';
 
 export interface UserInitializationState {
   avatar?: string;
@@ -75,9 +82,18 @@ export interface UserInitializationState {
   firstName?: string;
   fullName?: string;
   hasConversation?: boolean;
+  interests?: string[];
+  isFreePlan?: boolean;
+  isInWaitList?: boolean;
+  /** @deprecated Use onboarding field instead */
   isOnboard?: boolean;
   lastName?: string;
+  onboarding?: UserOnboarding;
   preference: UserPreference;
+  /**
+   * Referral lifecycle status for the current user (invitee side).
+   */
+  referralStatus?: ReferralStatusString;
   settings: PartialDeep<UserSettings>;
   subscriptionPlan?: Plans;
   userId?: string;

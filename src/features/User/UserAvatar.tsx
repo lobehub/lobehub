@@ -1,10 +1,10 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Avatar, type AvatarProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { forwardRef, useMemo } from 'react';
 
-import { BRANDING_NAME } from '@/const/branding';
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
 import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
@@ -12,7 +12,7 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   clickable: css`
     position: relative;
     transition: all 200ms ease-out 0s;
@@ -35,7 +35,7 @@ const useStyles = createStyles(({ css, token }) => ({
     }
 
     &:hover {
-      box-shadow: 0 0 0 2px ${token.colorPrimary};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimary};
 
       &::before {
         transform: skewX(-45deg) translateX(400%);
@@ -50,9 +50,9 @@ export interface UserAvatarProps extends AvatarProps {
 
 const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
   ({ size = 40, background, clickable, className, style, ...rest }, ref) => {
-    const { styles, cx } = useStyles();
-    const [avatar, username] = useUserStore((s) => [
+    const [avatar, nickName, username] = useUserStore((s) => [
       userProfileSelectors.userAvatar(s),
+      userProfileSelectors.nickName(s),
       userProfileSelectors.username(s),
     ]);
 
@@ -61,7 +61,8 @@ const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
 
     // Process avatar URL for desktop environment
     const avatarUrl = useMemo(() => {
-      if (!isSignedIn || !avatar) return DEFAULT_USER_AVATAR_URL;
+      if (!isSignedIn) return DEFAULT_USER_AVATAR_URL;
+      if (!avatar) return;
 
       // If in desktop environment and avatar starts with /, prepend the remote server URL
       if (isDesktop && avatar.startsWith('/') && remoteServerUrl) {
@@ -73,14 +74,14 @@ const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
 
     return (
       <Avatar
-        alt={isSignedIn && !!username ? username : BRANDING_NAME}
-        avatar={avatarUrl}
-        background={isSignedIn && avatar ? background : 'transparent'}
-        className={cx(clickable && styles.clickable, className)}
+        alt={isSignedIn ? nickName || username || 'User' : BRANDING_NAME}
+        avatar={avatarUrl || nickName || username}
+        background={background}
+        className={clickable ? styles.clickable : className}
         ref={ref}
+        shape={'square'}
         size={size}
-        style={{ flex: 'none', ...style }}
-        unoptimized
+        style={{ color: cssVar.colorText, flex: 'none', ...style }}
         {...rest}
       />
     );

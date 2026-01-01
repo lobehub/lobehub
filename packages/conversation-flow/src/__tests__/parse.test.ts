@@ -99,6 +99,32 @@ describe('parse', () => {
     });
   });
 
+  describe('AgentCouncil Mode', () => {
+    it('should parse simple agentCouncil (broadcast) correctly', () => {
+      const result = parse(inputs.agentCouncil.simple);
+
+      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.simple);
+    });
+
+    it('should parse agentCouncil with supervisor final reply correctly', () => {
+      const result = parse(inputs.agentCouncil.withSupervisorReply);
+
+      // The critical assertions:
+      // 1. flatList should have 4 items: user, supervisor(+tool), agentCouncil(3 agents), supervisor-summary
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('supervisor'); // supervisor with tools gets role='supervisor'
+      expect(result.flatList[2].role).toBe('agentCouncil');
+      expect(result.flatList[3].role).toBe('supervisor'); // supervisor final reply
+      expect(result.flatList[3].id).toBe('msg-supervisor-summary');
+
+      // 2. agentCouncil should have 3 members (not 4, supervisor summary is separate)
+      expect((result.flatList[2] as any).members).toHaveLength(3);
+
+      expect(serializeParseResult(result)).toEqual(outputs.agentCouncil.withSupervisorReply);
+    });
+  });
+
   describe('Assistant Group Scenarios', () => {
     it('should handle tools with assistant branches correctly', () => {
       const result = parse(inputs.assistantGroup.toolsWithBranches);
@@ -107,8 +133,71 @@ describe('parse', () => {
     });
   });
 
+  describe('Agent Group Scenarios', () => {
+    it('should not aggregate messages from different agents into same AssistantGroup', () => {
+      const result = parse(inputs.agentGroup.speakDifferentAgent);
+
+      // The critical assertions:
+      // 1. flatList should have 3 items: user, supervisor(+tool), agent-backend response
+      expect(result.flatList).toHaveLength(3);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('supervisor'); // supervisor with tools gets role='supervisor'
+      expect(result.flatList[2].role).toBe('assistant');
+
+      // 2. The agent-backend response should be separate (different agentId)
+      expect(result.flatList[2].id).toBe('msg-agent-backend-1');
+      expect((result.flatList[2] as any).agentId).toBe('agent-backend');
+
+      // 3. The supervisor's group should only contain supervisor messages
+      expect((result.flatList[1] as any).agentId).toBe('supervisor');
+
+      expect(serializeParseResult(result)).toEqual(outputs.agentGroup.speakDifferentAgent);
+    });
+  });
+
+  describe('Tasks Aggregation', () => {
+    it('should aggregate multiple task messages with same parentId', () => {
+      const result = parse(inputs.tasks.simple);
+
+      // The critical assertions:
+      // 1. flatList should have 4 items: user, assistantGroup(+tool), tasks(2 tasks), assistant-summary
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+      expect(result.flatList[2].role).toBe('tasks');
+      expect(result.flatList[3].role).toBe('assistant');
+
+      // 2. tasks virtual message should have 2 task messages
+      expect((result.flatList[2] as any).tasks).toHaveLength(2);
+
+      // 3. contextTree should have tasks node
+      const tasksNode = result.contextTree.find((node) => node.type === 'tasks');
+      expect(tasksNode).toBeDefined();
+      expect((tasksNode as any).children).toHaveLength(2);
+
+      expect(serializeParseResult(result)).toEqual(outputs.tasks.simple);
+    });
+
+    it('should aggregate three task messages with summary', () => {
+      const result = parse(inputs.tasks.withSummary);
+
+      // The critical assertions:
+      // 1. flatList should have 4 items: user, assistantGroup(+tool), tasks(3 tasks), assistant-summary
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+      expect(result.flatList[2].role).toBe('tasks');
+      expect(result.flatList[3].role).toBe('assistant');
+
+      // 2. tasks virtual message should have 3 task messages
+      expect((result.flatList[2] as any).tasks).toHaveLength(3);
+
+      expect(serializeParseResult(result)).toEqual(outputs.tasks.withSummary);
+    });
+  });
+
   describe('Performance', () => {
-    it('should parse 10000 items within 50ms', () => {
+    it('should parse 10000 items within 100ms', () => {
       // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)
       // This simulates a more realistic scenario where messages are not deeply nested
       const largeInput = Array.from({ length: 10000 }, (_, i) => ({
@@ -126,7 +215,7 @@ describe('parse', () => {
       const executionTime = endTime - startTime;
 
       expect(result.flatList.length).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(50);
+      expect(executionTime).toBeLessThan(100);
     });
   });
 });

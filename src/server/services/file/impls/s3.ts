@@ -1,19 +1,19 @@
 import urlJoin from 'url-join';
 
 import { fileEnv } from '@/envs/file';
-import { S3 } from '@/server/modules/S3';
+import { FileS3 } from '@/server/modules/S3';
 
-import { FileServiceImpl } from './type';
+import { type FileServiceImpl } from './type';
 import { extractKeyFromUrlOrReturnOriginal } from './utils';
 
 /**
  * S3-based file service implementation
  */
 export class S3StaticFileImpl implements FileServiceImpl {
-  private readonly s3: S3;
+  private readonly s3: FileS3;
 
   constructor() {
-    this.s3 = new S3();
+    this.s3 = new FileS3();
   }
 
   async deleteFile(key: string) {

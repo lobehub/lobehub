@@ -1,9 +1,9 @@
 'use client';
 
-import { ReactNode, memo } from 'react';
+import { type ReactNode, memo } from 'react';
 
-import { IFeatureFlags, mapFeatureFlagsEnvToState } from '@/config/featureFlags';
-import { GlobalServerConfig } from '@/types/serverConfig';
+import { type IFeatureFlags, mapFeatureFlagsEnvToState } from '@/config/featureFlags';
+import { type GlobalServerConfig } from '@/types/serverConfig';
 
 import { Provider, createServerConfigStore } from './store';
 

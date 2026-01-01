@@ -1,18 +1,14 @@
 {
-  "actions": {
-    "followOnX": "Volg ons op X",
-    "subscribeToUpdates": "Abonneer op updates",
-    "versions": "Versie details"
-  },
+  "actions.followOnX": "Volg ons op X",
+  "actions.subscribeToUpdates": "Abonneer je op updates",
+  "actions.versions": "Versiedetails",
   "addedWhileAway": "We hebben nieuwe functies toegevoegd terwijl je weg was.",
-  "allChangelog": "Bekijk alle changelogs",
-  "description": "Blijf op de hoogte van nieuwe functies en verbeteringen van {{appName}}",
-  "pagination": {
-    "next": "Volgende pagina",
-    "older": "Bekijk eerdere wijzigingen"
-  },
-  "readDetails": "Lees meer",
-  "title": "Changelog",
-  "versionDetails": "Versie details",
+  "allChangelog": "Bekijk alle wijzigingslogboeken",
+  "description": "Blijf op de hoogte van de nieuwe functies en verbeteringen van {{appName}}",
+  "pagination.next": "Volgende pagina",
+  "pagination.older": "Bekijk eerdere wijzigingen",
+  "readDetails": "Lees details",
+  "title": "Wijzigingslogboek",
+  "versionDetails": "Versiedetails",
   "welcomeBack": "Welkom terug!"
 }

@@ -9,7 +9,7 @@ const cerebrasModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '在编程与推理任务上表现优良，支持流式与工具调用，适合 agentic 编码与复杂推理场景。',
+      'Performs well on coding and reasoning tasks, supports streaming and tool calls, and fits agentic coding and complex reasoning.',
     displayName: 'GLM-4.6',
     enabled: true,
     id: 'zai-glm-4.6',
@@ -48,7 +48,8 @@ const cerebrasModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen 3 32B：Qwen 系列在多语言与编码任务上表现优良，适合中等规模生产化使用。',
+    description:
+      'Qwen 3 32B: strong at multilingual and coding tasks, suitable for mid-scale production use.',
     displayName: 'Qwen 3 32B',
     id: 'qwen-3-32b',
     pricing: {
@@ -79,7 +80,7 @@ const cerebrasModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Llama 3.3 70B：中大型 Llama 模型，兼顾推理能力与吞吐。',
+    description: 'Llama 3.3 70B: a mid-to-large Llama model balancing reasoning and throughput.',
     displayName: 'Llama 3.3 70B',
     id: 'llama-3.3-70b',
     pricing: {
@@ -95,7 +96,7 @@ const cerebrasModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Llama 3.1 8B：小体量、低延迟的 Llama 变体，适合轻量在线推理与交互场景。',
+    description: 'Llama 3.1 8B: a small, low-latency Llama variant for lightweight online inference and chat.',
     displayName: 'Llama 3.1 8B',
     id: 'llama3.1-8b',
     pricing: {

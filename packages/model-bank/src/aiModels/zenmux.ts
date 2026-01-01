@@ -3,7 +3,7 @@ import { AIChatModelCard } from '../types/aiModel';
 const zenmuxChatModels: AIChatModelCard[] = [
   {
     description:
-      'ZenMux 的自动路由功能会根据你的请求内容，在支持的模型中自动选择当前性价比最高、表现最好的模型。',
+      'ZenMux auto-routing selects the best-value, best-performing model from supported options based on your request.',
     displayName: 'Auto Router',
     id: 'zenmux/auto',
     type: 'chat',
@@ -17,7 +17,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5.2 — 面向编码与 agentic 工作流的旗舰模型，提供更强推理与长上下文能力。',
+    description:
+      'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
     enabled: true,
     id: 'gpt-5.2',
@@ -45,7 +46,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.2 pro：更聪明、更精确的 GPT-5.2 版本（Responses API Only），适合高难度问题与更长的多轮推理。',
+      'GPT-5.2 Pro: a smarter, more precise GPT-5.2 variant (Responses API only), suited for harder problems and longer multi-turn reasoning.',
     displayName: 'GPT-5.2 pro',
     id: 'gpt-5.2-pro',
     maxOutput: 128_000,
@@ -67,7 +68,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-5.2 Chat：ChatGPT 使用的 GPT-5.2 变体（chat-latest），用于体验最新对话改进。',
+    description:
+      'GPT-5.2 Chat is the ChatGPT variant (chat-latest) for experiencing the newest conversation improvements.',
     displayName: 'GPT-5.2 Chat',
     enabled: true,
     id: 'gpt-5.2-chat-latest',
@@ -91,7 +93,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。',
+      'Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model with multimodal conversation support.',
     displayName: 'Gemini 3 Pro Image (Nano Banana Pro)',
     id: 'google/gemini-3-pro-image-preview',
     maxOutput: 32_768,
@@ -113,7 +115,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 65_536,
-    description: 'Gemini 3 Pro Image 免费版，支持受限额度的多模态生成。',
+    description: 'Gemini 3 Pro Image free tier with limited-quota multimodal generation.',
     displayName: 'Gemini 3 Pro Image (Nano Banana) Free',
     enabled: true,
     id: 'google/gemini-3-pro-image-preview-free',
@@ -134,7 +136,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      'Gemini 3 Pro 是 Gemini 系列下一代多模态推理模型，可理解文本、音频、图像、视频等多种输入，并处理复杂任务与大型代码库。',
+      'Gemini 3 Pro is the next-generation multimodal reasoning model in the Gemini family, understanding text, audio, images, and video, and handling complex tasks and large codebases.',
     displayName: 'Gemini 3 Pro Preview',
     id: 'google/gemini-3-pro-preview',
     maxOutput: 65_530,
@@ -156,7 +158,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      'Gemini 3 Pro 免费预览版，具备与标准版相同的多模态理解与推理能力，但受免费额度与速率限制影响，更适合作为体验与低频使用。',
+      'Gemini 3 Pro Preview Free offers the same multimodal understanding and reasoning as the standard version, but with quota and rate limits, making it better for trials and low-frequency use.',
     displayName: 'Gemini 3 Pro Preview Free',
     enabled: true,
     id: 'google/gemini-3-pro-preview-free',
@@ -182,7 +184,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1 是 GPT-5 系列最新旗舰模型，相比 GPT-5 在通用推理、指令遵循和对话自然度上均有显著提升，适合广泛任务场景。',
+      'GPT-5.1 is the latest flagship in the GPT-5 series, with significant improvements over GPT-5 in general reasoning, instruction following, and conversational naturalness, suitable for broad tasks.',
     displayName: 'GPT-5.1',
     id: 'openai/gpt-5.1',
     maxOutput: 128_000,
@@ -205,7 +207,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-5.1 Chat 是 GPT-5.1 家族的轻量成员，针对低延迟对话进行优化，同时保留较强的推理与指令执行能力。',
+      'GPT-5.1 Chat is the lightweight member of the GPT-5.1 family, optimized for low-latency conversations while retaining strong reasoning and instruction execution.',
     displayName: 'GPT-5.1 Chat',
     id: 'openai/gpt-5.1-chat',
     maxOutput: 16_380,
@@ -225,7 +227,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1-Codex 是针对软件工程和编码工作流优化的 GPT-5.1 变体，适合大型重构、复杂调试与长时间自主编码任务。',
+      'GPT-5.1-Codex is a GPT-5.1 variant optimized for software engineering and coding workflows, suitable for large refactors, complex debugging, and long autonomous coding tasks.',
     displayName: 'GPT-5.1-Codex',
     id: 'openai/gpt-5.1-codex',
     maxOutput: 128_000,
@@ -248,7 +250,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1-Codex-Mini 是 GPT-5.1-Codex 的小型加速版本，更适合对延迟和成本敏感的编码场景。',
+      'GPT-5.1-Codex-Mini is a smaller, faster version of GPT-5.1-Codex, better for latency- and cost-sensitive coding scenarios.',
     displayName: 'GPT-5.1-Codex-Mini',
     id: 'openai/gpt-5.1-codex-mini',
     maxOutput: 100_000,
@@ -271,7 +273,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_000_000,
     description:
-      'Grok 4 Fast 是 xAI 的高吞吐、低成本模型（支持 2M 上下文窗口），适合需要高并发与长上下文的使用场景。',
+      'Grok 4 Fast is xAI’s high-throughput, low-cost model (supports a 2M context window), ideal for high-concurrency and long-context use cases.',
     displayName: 'Grok 4.1 Fast',
     id: 'x-ai/grok-4.1-fast',
     maxOutput: 30_000,
@@ -290,7 +292,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_000_000,
     description:
-      'Grok 4 Fast（Non-Reasoning）是 xAI 的高吞吐、低成本多模态模型（支持 2M 上下文窗口），面向对延迟和成本敏感但不需要启用模型内推理的场景。它与 Grok 4 Fast 的 reasoning 版本并列，可通过 API 的 reasoning enable 参数在需要时开启推理功能。Prompts 和 completions 可能会被 xAI 或 OpenRouter 用于改进未来模型。',
+      'Grok 4 Fast (Non-Reasoning) is xAI’s high-throughput, low-cost multimodal model (supports a 2M context window) for scenarios sensitive to latency and cost that do not require in-model reasoning. It sits alongside the reasoning version of Grok 4 Fast, and reasoning can be enabled via the API reasoning parameter when needed. Prompts and completions may be used by xAI or OpenRouter to improve future models.',
     displayName: 'Grok 4.1 Fast (Non-Reasoning)',
     id: 'x-ai/grok-4.1-fast-non-reasoning',
     maxOutput: 30_000,
@@ -310,7 +312,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_000_000,
     description:
-      'Grok 4 Fast 是 xAI 的高吞吐、低成本模型（支持 2M 上下文窗口），适合需要高并发与长上下文的使用场景。',
+      'Grok 4 Fast is xAI’s high-throughput, low-cost model (supports a 2M context window), ideal for high-concurrency and long-context use cases.',
     displayName: 'Grok 4 Fast',
     id: 'x-ai/grok-4-fast',
     maxOutput: 30_000,
@@ -329,7 +331,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_000_000,
     description:
-      'Grok 4 Fast（Non-Reasoning）是 xAI 的高吞吐、低成本多模态模型（支持 2M 上下文窗口），面向对延迟和成本敏感但不需要启用模型内推理的场景。它与 Grok 4 Fast 的 reasoning 版本并列，可通过 API 的 reasoning enable 参数在需要时开启推理功能。Prompts 和 completions 可能会被 xAI 或 OpenRouter 用于改进未来模型。',
+      'Grok 4 Fast (Non-Reasoning) is xAI’s high-throughput, low-cost multimodal model (supports a 2M context window) for scenarios sensitive to latency and cost that do not require in-model reasoning. It sits alongside the reasoning version of Grok 4 Fast, and reasoning can be enabled via the API reasoning parameter when needed. Prompts and completions may be used by xAI or OpenRouter to improve future models.',
     displayName: 'Grok 4 Fast (Non-Reasoning)',
     id: 'x-ai/grok-4-fast-non-reasoning',
     maxOutput: 30_000,
@@ -346,7 +348,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 256_000,
-    description: 'Grok 4 是 xAI 的旗舰推理模型，提供强大的推理与多模态能力。',
+    description: "Grok 4 is xAI's flagship reasoning model with strong reasoning and multimodal capability.",
     displayName: 'Grok 4',
     id: 'x-ai/grok-4',
     maxOutput: 256_000,
@@ -363,7 +365,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 256_000,
-    description: 'Grok Code Fast 1 是 xAI 的快速代码模型，输出具可读性与工程化适配。',
+    description:
+      "Grok Code Fast 1 is xAI's fast code model with readable, engineering-friendly output.",
     displayName: 'Grok Code Fast 1',
     id: 'x-ai/grok-code-fast-1',
     maxOutput: 10_000,
@@ -382,7 +385,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ERNIE 5.0 Thinking Preview 是百度新一代原生多模态文心模型，擅长多模态理解、指令遵循、创作、事实问答与工具调用。',
+      'ERNIE 5.0 Thinking Preview is Baidu’s next-generation native multimodal ERNIE model, strong in multimodal understanding, instruction following, creation, factual Q&A, and tool calling.',
     displayName: 'ERNIE-5.0-Thinking-Preview',
     id: 'baidu/ernie-5.0-thinking-preview',
     maxOutput: 64_000,
@@ -402,7 +405,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'Doubao-Seed-Code 是字节火山引擎面向 Agentic Programming 优化的大模型，在多项编程与代理基准上表现优异，支持 256K 上下文。',
+      'Doubao-Seed-Code is ByteDance Volcano Engine’s LLM optimized for agentic programming, performing strongly on programming and agent benchmarks with 256K context support.',
     displayName: 'Doubao-Seed-Code',
     id: 'volcengine/doubao-seed-code',
     maxOutput: 32_000,
@@ -422,7 +425,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Kimi K2 Thinking 是 Moonshot 针对深度推理任务优化的思考模型，具备通用 Agent 能力。',
+      'Kimi K2 Thinking is Moonshot’s reasoning model optimized for deep reasoning tasks, with general agent capabilities.',
     displayName: 'Kimi K2 Thinking',
     id: 'moonshotai/kimi-k2-thinking',
     maxOutput: 262_144,
@@ -442,7 +445,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Kimi K2 Thinking Turbo 是 Kimi K2 Thinking 的高速版本，在保持深度推理能力的同时，显著降低响应延迟。',
+      'Kimi K2 Thinking Turbo is a high-speed version of Kimi K2 Thinking, significantly lowering latency while retaining deep reasoning.',
     displayName: 'Kimi K2 Thinking Turbo',
     id: 'moonshotai/kimi-k2-thinking-turbo',
     maxOutput: 262_144,
@@ -462,7 +465,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'Ming-flash-omni Preview 是 inclusionAI 的多模态模型，支持语音、图像和视频输入，优化了图像渲染与语音识别能力。',
+      'Ming-flash-omni Preview is inclusionAI’s multimodal model, supporting speech, image, and video inputs, with improved image rendering and speech recognition.',
     displayName: 'Ming-flash-omini Preview',
     id: 'inclusionai/ming-flash-omini-preview',
     maxOutput: 32_000,
@@ -480,7 +483,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Ring-1T 是 inclusionAI 的 trillion-parameter MoE 思考模型，适合大规模推理与研究类任务。',
+      'Ring-1T is inclusionAI’s trillion-parameter MoE reasoning model, suited for large-scale reasoning and research tasks.',
     displayName: 'Ring-1T',
     id: 'inclusionai/ring-1t',
     maxOutput: 32_000,
@@ -498,7 +501,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Ling-1T 是 inclusionAI 的 1T MoE 大模型，针对高强度推理任务与大规模上下文进行了优化。',
+      'Ling-1T is inclusionAI’s 1T MoE model, optimized for high-intensity reasoning tasks and large-context workloads.',
     displayName: 'Ling-1T',
     id: 'inclusionai/ling-1t',
     maxOutput: 32_000,
@@ -516,7 +519,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Ling-flash-2.0 是 inclusionAI 的 MoE 模型，优化了效率与推理表现，适合中大型任务。',
+      'Ling-flash-2.0 is inclusionAI’s MoE model optimized for efficiency and reasoning performance, suitable for mid-to-large tasks.',
     displayName: 'Ling-flash-2.0',
     id: 'inclusionai/ling-flash-2.0',
     maxOutput: 32_000,
@@ -534,7 +537,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Ring-flash-2.0 是 inclusionAI 面向高吞吐场景的 Ring 模型变体，强调速度与成本效率。',
+      'Ring-flash-2.0 is a Ring model variant from inclusionAI for high-throughput scenarios, emphasizing speed and cost efficiency.',
     displayName: 'Ring-flash-2.0',
     id: 'inclusionai/ring-flash-2.0',
     maxOutput: 32_000,
@@ -552,7 +555,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Ling-mini-2.0 是 inclusionAI 的轻量化 MoE 模型，在保持推理能力的同时显著降低成本。',
+      'Ling-mini-2.0 is inclusionAI’s lightweight MoE model, significantly reducing cost while retaining reasoning capability.',
     displayName: 'Ling-mini-2.0',
     id: 'inclusionai/ling-mini-2.0',
     maxOutput: 32_000,
@@ -569,7 +572,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 128_000,
-    description: 'Ring-mini-2.0 是 inclusionAI 的高吞吐轻量化 MoE 版本，主要用于并发场景。',
+    description:
+      "Ring-mini-2.0 is inclusionAI's high-throughput lightweight MoE model, built for concurrency.",
     displayName: 'Ring-mini-2.0',
     id: 'inclusionai/ring-mini-2.0',
     maxOutput: 32_000,
@@ -586,7 +590,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description: 'MiniMax-M2 是一款在编码与代理任务上表现出色的高性价比模型，适合多种工程场景。',
+    description:
+      'MiniMax-M2 is a high-value model that excels at coding and agent tasks for many engineering scenarios.',
     displayName: 'MiniMax M2',
     id: 'minimax/minimax-m2',
     maxOutput: 128_000,
@@ -600,7 +605,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 256_000,
-    description: 'KAT-Coder-Pro-V1（限时免费）专注于代码理解与自动化编程，用于高效的编程代理任务。',
+    description:
+      'KAT-Coder-Pro-V1 (limited-time free) focuses on code understanding and automation for efficient coding agents.',
     displayName: 'KAT-Coder-Pro-V1 (Limited-time Free)',
     id: 'kuaishou/kat-coder-pro-v1',
     maxOutput: 32_000,
@@ -621,7 +627,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Haiku 4.5 是 Anthropic 的高性能快速模型，在保持较高准确性的同时具有极低延迟。',
+      'Claude Haiku 4.5 is Anthropic’s high-performance fast model, delivering very low latency while maintaining high accuracy.',
     displayName: 'Claude Haiku 4.5',
     id: 'anthropic/claude-haiku-4.5',
     maxOutput: 64_000,
@@ -642,7 +648,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 128_000,
-    description: 'DeepSeek-V3 是 DeepSeek 团队的一款高性能混合推理模型，适合复杂任务与工具集成。',
+    description:
+      'DeepSeek-V3 is DeepSeek’s high-performance hybrid reasoning model for complex tasks and tool integration.',
     displayName: 'DeepSeek-V3.2-Exp (Non-thinking Mode)',
     id: 'deepseek/deepseek-chat',
     maxOutput: 8000,
@@ -661,7 +668,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'DeepSeek-V3 Thinking（reasoner）是 DeepSeek 的实验 reasoning 模型，适合高复杂度推理任务。',
+      'DeepSeek-V3 Thinking (reasoner) is DeepSeek’s experimental reasoning model, suitable for high-complexity reasoning tasks.',
     displayName: 'DeepSeek-V3.2-Exp (Thinking Mode)',
     id: 'deepseek/deepseek-reasoner',
     maxOutput: 64_000,
@@ -678,7 +685,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 64_000,
-    description: 'DeepSeek R1 0528 是 DeepSeek 的更新变体，注重开源可用与推理深度。',
+    description:
+      'DeepSeek R1 0528 is an updated variant focused on open availability and deeper reasoning.',
     displayName: 'DeepSeek R1 0528',
     id: 'deepseek/deepseek-r1-0528',
     maxOutput: 64_000,
@@ -698,7 +706,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'Gemini 2.5 Pro 是 Google 的旗舰级推理模型，支持长上下文与复杂任务。',
+    description:
+      "Gemini 2.5 Pro is Google’s flagship reasoning model with long context support for complex tasks.",
     displayName: 'Gemini 2.5 Pro',
     id: 'google/gemini-2.5-pro',
     maxOutput: 65_530,
@@ -723,7 +732,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'Gemini 2.5 Pro 免费版，支持受限额度的多模态长上下文，适合试用与轻量工作流。',
+    description:
+      'Gemini 2.5 Pro free tier offers limited-quota multimodal long-context, suitable for trials and light workflows.',
     displayName: 'Gemini 2.5 Pro Free',
     id: 'google/gemini-2.5-pro-free',
     maxOutput: 65_530,
@@ -748,7 +758,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'Gemini 2.5 Flash（Lite/Pro/Flash）系列是 Google 的中低延迟到高性能推理模型。',
+    description:
+      "Gemini 2.5 Flash (Lite/Pro/Flash) is Google’s family spanning low latency to high-performance reasoning.",
     displayName: 'Gemini 2.5 Flash',
     id: 'google/gemini-2.5-flash',
     maxOutput: 65_530,
@@ -773,7 +784,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 Pro 是 OpenAI 的旗舰模型，提供更强的推理、代码生成与企业级功能，支持测试时路由与更严谨的安全策略。',
+      'GPT-5 Pro is OpenAI’s flagship model, providing stronger reasoning, code generation, and enterprise-grade features, with test-time routing and stricter safety policies.',
     displayName: 'GPT-5 Pro',
     id: 'openai/gpt-5-pro',
     maxOutput: 128_000,
@@ -795,7 +806,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 是 OpenAI 的高性能模型，适用广泛的生产与研究任务。',
+    description:
+      'GPT-5 is OpenAI’s high-performance model for a wide range of production and research tasks.',
     displayName: 'GPT-5',
     id: 'openai/gpt-5',
     maxOutput: 128_000,
@@ -816,7 +828,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-5 Chat 是为对话场景优化的 GPT-5 子型号，降低延迟以提升交互体验。',
+    description:
+      'GPT-5 Chat is a GPT-5 variant optimized for conversations with lower latency for better interactivity.',
     displayName: 'GPT-5 Chat',
     id: 'openai/gpt-5-chat',
     maxOutput: 16_380,
@@ -835,7 +848,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 Mini 是 GPT-5 家族的精简版，适用于低延迟低成本场景。',
+    description: 'GPT-5 Mini is a smaller GPT-5 variant for low-latency, low-cost scenarios.',
     displayName: 'GPT-5 Mini',
     id: 'openai/gpt-5-mini',
     maxOutput: 128_000,
@@ -856,7 +869,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 Nano 是家族中的超小型版本，适合对成本和延迟要求非常高的场景。',
+    description:
+      'GPT-5 Nano is the ultra-small variant for scenarios with strict cost and latency constraints.',
     displayName: 'GPT-5 Nano',
     id: 'openai/gpt-5-nano',
     maxOutput: 128_000,
@@ -877,7 +891,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5-Codex 是针对编码场景进一步优化的 GPT-5 变体，适合大规模代码工作流。',
+    description:
+      'GPT-5-Codex is a GPT-5 variant further optimized for coding and large-scale code workflows.',
     displayName: 'GPT-5 Codex',
     id: 'openai/gpt-5-codex',
     maxOutput: 128_000,
@@ -898,7 +913,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'GPT-4.1 系列提供了更大上下文与更强的工程与推理能力。',
+    description:
+      'The GPT-4.1 series provides larger context windows and stronger engineering and reasoning capabilities.',
     displayName: 'GPT-4.1',
     id: 'openai/gpt-4.1',
     maxOutput: 32_770,
@@ -915,7 +931,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'GPT-4.1 Mini 提供更低延迟与更佳性价比，适合中等上下文上下线路。',
+    description:
+      'GPT-4.1 Mini offers lower latency and better value for mid-context workloads.',
     displayName: 'GPT-4.1 Mini',
     id: 'openai/gpt-4.1-mini',
     maxOutput: 32_770,
@@ -932,7 +949,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'GPT-4.1 Nano 是极低成本低延迟选项，适合高频次短对话或分类场景。',
+    description:
+      'GPT-4.1 Nano is an ultra-low-cost, low-latency option for high-frequency short chats or classification.',
     displayName: 'GPT-4.1 Nano',
     id: 'openai/gpt-4.1-nano',
     maxOutput: 32_770,
@@ -949,7 +967,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 262_144,
-    description: 'Qwen3 Max (preview) 是 Qwen 系列面向高级推理与工具集成的 Max 版本（预览）。',
+    description:
+      'Qwen3 Max (preview) is the Max variant for advanced reasoning and tool integration.',
     displayName: 'Qwen3 Max Thinking Preview',
     id: 'qwen/qwen3-max-preview',
     maxOutput: 65_540,
@@ -966,7 +985,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 262_144,
-    description: 'Qwen3 Max 是 Qwen3 系列的高端推理模型，适合多语言推理和工具集成。',
+    description:
+      'Qwen3 Max is the high-end reasoning model in the Qwen3 series for multilingual reasoning and tool integration.',
     displayName: 'Qwen3 Max',
     id: 'qwen/qwen3-max',
     maxOutput: 65_540,
@@ -984,7 +1004,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 262_144,
-    description: 'Qwen3 VL-Plus 为 Qwen3 的视觉增强版本，提升了多模态推理与视频处理的能力。',
+    description:
+      'Qwen3 VL-Plus is the vision-enhanced Qwen3 variant with improved multimodal reasoning and video processing.',
     displayName: 'Qwen3-VL-Plus',
     id: 'qwen/qwen3-vl-plus',
     maxOutput: 32_770,
@@ -1002,7 +1023,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Qwen3-Coder-Plus 为 Qwen 系列特别优化的编码代理模型，支持更复杂的工具调用与长期会话。',
+      'Qwen3-Coder-Plus is a Qwen-series coding agent model optimized for more complex tool use and long-running sessions.',
     displayName: 'Qwen3-Coder-Plus',
     id: 'qwen/qwen3-coder-plus',
     maxOutput: 65_540,
@@ -1020,7 +1041,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 256_000,
-    description: 'Qwen3-Coder 是 Qwen3 的代码生成器家族，擅长长文档内的代码理解与生成。',
+    description:
+      'Qwen3-Coder is the Qwen3 code-generation family, strong at long-document code understanding and generation.',
     displayName: 'Qwen3-Coder',
     id: 'qwen/qwen3-coder',
     maxOutput: 261_000,
@@ -1037,7 +1059,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 32_000,
-    description: 'Qwen3-14B 是 Qwen 系列的 14B 版本，适合常规推理与对话场景。',
+    description: 'Qwen3-14B is the 14B variant for general reasoning and chat scenarios.',
     displayName: 'Qwen3 14B',
     id: 'qwen/qwen3-14b',
     maxOutput: 32_000,
@@ -1054,7 +1076,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 200_000,
-    description: 'GLM 4.6 是 Z.AI 的旗舰模型，扩展了上下文长度和编码能力。',
+    description: "GLM 4.6 is Z.AI's flagship model with extended context length and coding capability.",
     displayName: 'GLM 4.6',
     id: 'z-ai/glm-4.6',
     maxOutput: 128_000,
@@ -1076,7 +1098,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4.5 是 Anthropic 的旗舰模型，结合了卓越的智能与可扩展性能，适合需要最高质量回应和推理能力的复杂任务。',
+      'Claude Opus 4.5 is Anthropic’s flagship model, combining outstanding intelligence with scalable performance, ideal for complex tasks requiring the highest-quality responses and reasoning.',
     displayName: 'Claude Opus 4.5',
     id: 'claude-opus-4-5-20251101',
     maxOutput: 64_000,
@@ -1102,7 +1124,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 200_000,
-    description: 'Opus 4.1 是 Anthropic 的高端模型，优化于编程、复杂推理和持续任务。',
+    description:
+      "Opus 4.1 is Anthropic’s high-end model optimized for programming, complex reasoning, and long-running tasks.",
     displayName: 'Claude Opus 4.1',
     id: 'anthropic/claude-opus-4.1',
     maxOutput: 32_000,
@@ -1126,7 +1149,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 200_000,
-    description: 'Opus 4 是 Anthropic 的旗舰级模型，专为复杂任务和企业级应用设计。',
+    description:
+      "Opus 4 is Anthropic’s flagship model designed for complex tasks and enterprise applications.",
     displayName: 'Claude Opus 4',
     id: 'anthropic/claude-opus-4',
     maxOutput: 32_000,
@@ -1151,7 +1175,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Gemini 2.5 Flash Image（Nano Banana）是 Google 的图像生成模型，同时支持多模态对话。',
+      'Gemini 2.5 Flash Image (Nano Banana) is Google’s image generation model with multimodal conversation support.',
     displayName: 'Gemini 2.5 Flash Image (Nano Banana)',
     id: 'google/gemini-2.5-flash-image',
     maxOutput: 8192,
@@ -1173,7 +1197,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Gemini 2.5 Flash Image 免费版，支持受限额度的多模态生成。',
+    description: 'Gemini 2.5 Flash Image free tier with limited-quota multimodal generation.',
     displayName: 'Gemini 2.5 Flash Image (Nano Banana) Free',
     id: 'google/gemini-2.5-flash-image-free',
     maxOutput: 8192,
@@ -1193,7 +1217,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 200_000,
-    description: 'Claude Sonnet 4.5 是 Anthropic 最新的混合推理模型，优化于复杂推理和编码。',
+    description:
+      "Claude Sonnet 4.5 is Anthropic’s latest hybrid reasoning model optimized for complex reasoning and coding.",
     displayName: 'Claude Sonnet 4.5',
     id: 'anthropic/claude-sonnet-4.5',
     maxOutput: 64_000,
@@ -1215,7 +1240,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 1_000_000,
-    description: 'Claude Sonnet 4 是 Anthropic 的混合推理版本，提供思维/非思维混合能力。',
+    description:
+      'Claude Sonnet 4 is Anthropic’s hybrid reasoning model with mixed thinking and non-thinking capability.',
     displayName: 'Claude Sonnet 4',
     id: 'anthropic/claude-sonnet-4',
     maxOutput: 64_000,
@@ -1233,7 +1259,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 200_000,
-    description: 'OpenAI o4-mini 是 OpenAI 的小型高效推理模型，适合低延迟场景。',
+    description: "OpenAI o4-mini is a small, efficient reasoning model for low-latency scenarios.",
     displayName: 'o4 Mini',
     id: 'openai/o4-mini',
     maxOutput: 100_000,
@@ -1254,7 +1280,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o 系列是 OpenAI 的 Omni 模型，支持文本 + 图片输入与文本输出。',
+    description:
+      'The GPT-4o family is OpenAI’s Omni model with text + image input and text output.',
     displayName: 'GPT-4o',
     id: 'openai/gpt-4o',
     maxOutput: 16_380,
@@ -1272,7 +1299,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o-mini 是 GPT-4o 的快速小模型版本，适合低延迟图文混合场景。',
+    description: 'GPT-4o-mini is a fast, small GPT-4o variant for low-latency multimodal use.',
     displayName: 'GPT-4o-mini',
     id: 'openai/gpt-4o-mini',
     maxOutput: 16_380,
@@ -1289,7 +1316,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 128_000,
-    description: 'Kimi K2 0711 是 Kimi 系列的 Instruct 版本，适合高质量代码与工具调用场景。',
+    description:
+      'Kimi K2 0711 is the instruct variant in the Kimi series, suited for high-quality code and tool use.',
     displayName: 'Kimi K2 0711',
     id: 'moonshotai/kimi-k2-0711',
     maxOutput: 32_000,
@@ -1306,7 +1334,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GLM 4.5 Air 是 GLM 4.5 的轻量化版本，适合成本敏感场景但保留强推理能力。',
+    description:
+      'GLM 4.5 Air is a lightweight GLM 4.5 variant for cost-sensitive scenarios while retaining strong reasoning.',
     displayName: 'GLM 4.5 Air',
     id: 'z-ai/glm-4.5-air',
     maxOutput: 96_000,
@@ -1325,7 +1354,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Haiku features enhanced capabilities in speed, coding accuracy, and tool use. 适用于对速度与工具交互有高要求的场景。',
+      'Claude 3.5 Haiku features enhanced speed, coding accuracy, and tool use, suitable for scenarios with demanding requirements for speed and tool interaction.',
     displayName: 'Claude 3.5 Haiku',
     id: 'anthropic/claude-3.5-haiku',
     maxOutput: 8192,
@@ -1344,7 +1373,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Sonnet 是 Sonnet 家族的快速高效模型，提供更好的编码与推理性能，部分版本将逐步被 Sonnet 3.7 等替代。',
+      'Claude 3.5 Sonnet is the fast, efficient model in the Sonnet family, offering better coding and reasoning performance, with some versions gradually replaced by Sonnet 3.7 and later.',
     displayName: 'Claude 3.5 Sonnet',
     id: 'anthropic/claude-3.5-sonnet',
     maxOutput: 8192,
@@ -1363,7 +1392,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.7 Sonnet 是 Sonnet 系列的升级版，提供更强的推理与编码能力，适用于企业级复杂任务。',
+      'Claude 3.7 Sonnet is an upgraded Sonnet model with stronger reasoning and coding, suitable for enterprise-grade complex tasks.',
     displayName: 'Claude 3.7 Sonnet',
     id: 'anthropic/claude-3.7-sonnet',
     maxOutput: 64_000,
@@ -1383,7 +1412,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'DeepSeek-V3.1 是 DeepSeek 的长上下文混合推理模型，支持思考/非思考混合模式与工具集成。',
+      'DeepSeek-V3.1 is DeepSeek’s long-context hybrid reasoning model, supporting mixed thinking/non-thinking modes and tool integration.',
     displayName: 'DeepSeek V3.1',
     id: 'deepseek/deepseek-chat-v3.1',
     maxOutput: 65_540,
@@ -1402,7 +1431,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'Gemini 2.0 Flash 是 Google 的高性能推理模型，适用于延展的多模态任务。',
+    description:
+      'Gemini 2.0 Flash is Google’s high-performance reasoning model for extended multimodal tasks.',
     displayName: 'Gemini 2.0 Flash',
     id: 'google/gemini-2.0-flash',
     maxOutput: 8192,
@@ -1422,7 +1452,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      'Gemini 2.0 Flash Lite 是 Gemini 家族的轻量版本，默认不启用思考以提升延迟与成本表现，但可通过参数开启。',
+      'Gemini 2.0 Flash Lite is a lightweight Gemini variant with thinking disabled by default to improve latency and cost, but it can be enabled via parameters.',
     displayName: 'Gemini 2.0 Flash Lite',
     id: 'google/gemini-2.0-flash-lite-001',
     maxOutput: 8192,
@@ -1442,7 +1472,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      'Gemini 2.5 Flash Lite 是 Gemini 2.5 的轻量版本，优化了延迟与成本，适合高吞吐场景。',
+      'Gemini 2.5 Flash Lite is the lightweight Gemini 2.5 variant optimized for latency and cost, suitable for high-throughput scenarios.',
     displayName: 'Gemini 2.5 Flash Lite',
     id: 'google/gemini-2.5-flash-lite',
     maxOutput: 65_530,
@@ -1459,7 +1489,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 262_144,
-    description: 'Kimi K2 0905 是 Kimi 系列的 0905 更新，扩充了上下文与推理性能，优化了编码场景。',
+    description:
+      'Kimi K2 0905 is an update that expands context and reasoning performance with coding optimizations.',
     displayName: 'Kimi K2 0905',
     id: 'moonshotai/kimi-k2-0905',
     maxOutput: 262_144,
@@ -1477,7 +1508,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'Qwen3-235B-A22B-Instruct-2507 为 Qwen3 系列的 Instruct 版本，兼顾多语言指令与长上下文场景。',
+      'Qwen3-235B-A22B-Instruct-2507 is the Instruct variant in the Qwen3 series, balancing multilingual instruction use with long-context scenarios.',
     displayName: 'Qwen3 235B A22B Instruct 2507',
     id: 'qwen/qwen3-235b-a22b-2507',
     maxOutput: 262_100,
@@ -1495,7 +1526,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'Qwen3-235B-A22B-Thinking-2507 为 Qwen3 的 Thinking 变体，针对复杂数学与推理任务进行了强化。',
+      'Qwen3-235B-A22B-Thinking-2507 is the Thinking variant of Qwen3, strengthened for complex math and reasoning tasks.',
     displayName: 'Qwen3 235B A22B Thinking 2507',
     id: 'qwen/qwen3-235b-a22b-thinking-2507',
     maxOutput: 262_100,
@@ -1510,7 +1541,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
   {
     abilities: { reasoning: true },
     contextWindowTokens: 128_000,
-    description: 'GLM 4.5 是 Z.AI 的旗舰模型，支持混合推理模式并优化于工程与长上下文任务。',
+    description:
+      "GLM 4.5 is Z.AI’s flagship model with hybrid reasoning optimized for engineering and long-context tasks.",
     displayName: 'GLM 4.5',
     id: 'z-ai/glm-4.5',
     maxOutput: 96_000,

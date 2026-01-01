@@ -1,9 +1,8 @@
-import { ActionIcon, Text } from '@lobehub/ui';
+import { ActionIcon, Center, Flexbox, Text, TooltipGroup } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon, ToggleLeft } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
@@ -39,31 +38,33 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
           {t('providerModels.list.enabled')}
         </Text>
         {!isEmpty && (
-          <Flexbox horizontal>
-            <ActionIcon
-              icon={ToggleLeft}
-              loading={batchLoading}
-              onClick={async () => {
-                setBatchLoading(true);
-                await batchToggleAiModels(
-                  enabledModels.map((i) => i.id),
-                  false,
-                );
-                setBatchLoading(false);
-              }}
-              size={'small'}
-              title={t('providerModels.list.enabledActions.disableAll')}
-            />
+          <TooltipGroup>
+            <Flexbox horizontal>
+              <ActionIcon
+                icon={ToggleLeft}
+                loading={batchLoading}
+                onClick={async () => {
+                  setBatchLoading(true);
+                  await batchToggleAiModels(
+                    enabledModels.map((i) => i.id),
+                    false,
+                  );
+                  setBatchLoading(false);
+                }}
+                size={'small'}
+                title={t('providerModels.list.enabledActions.disableAll')}
+              />
 
-            <ActionIcon
-              icon={ArrowDownUpIcon}
-              onClick={() => {
-                setOpen(true);
-              }}
-              size={'small'}
-              title={t('providerModels.list.enabledActions.sort')}
-            />
-          </Flexbox>
+              <ActionIcon
+                icon={ArrowDownUpIcon}
+                onClick={() => {
+                  setOpen(true);
+                }}
+                size={'small'}
+                title={t('providerModels.list.enabledActions.sort')}
+              />
+            </Flexbox>
+          </TooltipGroup>
         )}
         {open && (
           <SortModelModal
@@ -89,12 +90,16 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
           </Text>
         </Center>
       ) : (
-        <Flexbox gap={2}>
-          {filteredModels.map(({ displayName, id, ...res }) => {
-            const label = displayName || id;
-            return <ModelItem displayName={label as string} id={id as string} key={id} {...res} />;
-          })}
-        </Flexbox>
+        <TooltipGroup>
+          <Flexbox gap={2}>
+            {filteredModels.map(({ displayName, id, ...res }) => {
+              const label = displayName || id;
+              return (
+                <ModelItem displayName={label as string} id={id as string} key={id} {...res} />
+              );
+            })}
+          </Flexbox>
+        </TooltipGroup>
       )}
     </>
   );

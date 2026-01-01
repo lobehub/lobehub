@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Contraer",
-      "on": "Expandir"
-    },
-    "typobar": {
-      "off": "Ocultar barra de herramientas de formato",
-      "on": "Mostrar barra de herramientas de formato"
-    }
-  },
+  "actions.expand.off": "Colapsar",
+  "actions.expand.on": "Expandir",
+  "actions.typobar.off": "Ocultar barra de formato",
+  "actions.typobar.on": "Mostrar barra de formato",
+  "autoSave.latest": "Última versión cargada",
+  "autoSave.saved": "Guardado",
+  "autoSave.saving": "Guardando automáticamente...",
   "cancel": "Cancelar",
+  "codemirror.copyFailed": "Error al copiar",
+  "codemirror.copySuccess": "Código copiado al portapapeles",
+  "codemirror.selectLanguage": "Seleccionar idioma",
+  "codemirror.selectTheme": "Seleccionar tema",
+  "codemirror.showLineNumbers": "Mostrar números de línea",
+  "codemirror.tabSize": "Tamaño de tabulación",
+  "codemirror.theme": "Tema",
+  "codemirror.useTabs": "Usar tabulaciones",
   "confirm": "Confirmar",
-  "file": {
-    "error": "Error: {{message}}",
-    "uploading": "Subiendo archivo..."
-  },
-  "image": {
-    "broken": "Imagen dañada"
-  },
-  "link": {
-    "edit": "Editar enlace",
-    "open": "Abrir enlace",
-    "placeholder": "Introduce la URL del enlace",
-    "unlink": "Quitar enlace"
-  },
-  "math": {
-    "placeholder": "Por favor, introduzca la fórmula TeX"
-  },
-  "slash": {
-    "h1": "Título de nivel 1",
-    "h2": "Título de nivel 2",
-    "h3": "Título de nivel 3",
-    "hr": "Línea divisoria",
-    "table": "Tabla",
-    "tex": "Fórmula TeX"
-  },
-  "table": {
-    "delete": "Eliminar tabla",
-    "deleteColumn": "Eliminar columna",
-    "deleteRow": "Eliminar fila",
-    "insertColumnLeft": "Insertar {{count}} columna(s) a la izquierda",
-    "insertColumnRight": "Insertar {{count}} columna(s) a la derecha",
-    "insertRowAbove": "Insertar {{count}} fila(s) encima",
-    "insertRowBelow": "Insertar {{count}} fila(s) debajo"
-  },
-  "typobar": {
-    "blockquote": "Cita",
-    "bold": "Negrita",
-    "bulletList": "Lista desordenada",
-    "code": "Código en línea",
-    "codeblock": "Bloque de código",
-    "italic": "Cursiva",
-    "link": "Enlace",
-    "numberList": "Lista ordenada",
-    "strikethrough": "Tachado",
-    "table": "tabla",
-    "taskList": "Lista de tareas",
-    "tex": "Fórmula TeX",
-    "underline": "Subrayado"
-  }
+  "file.error": "Error: {{message}}",
+  "file.uploading": "Subiendo archivo...",
+  "image.broken": "La imagen está dañada",
+  "link.edit": "Editar enlace",
+  "link.editLinkTitle": "Enlace",
+  "link.editTextTitle": "Título",
+  "link.open": "Abrir enlace",
+  "link.placeholder": "Introduce la URL del enlace",
+  "link.unlink": "Eliminar enlace",
+  "markdown.cancel": "Cancelar",
+  "markdown.confirm": "Convertir",
+  "markdown.parseMessage": "Convertir al formato Markdown. El contenido existente se sobrescribirá. ¿Estás seguro? (Se cerrará automáticamente en 5 segundos)",
+  "markdown.parseTitle": "Formatear como Markdown",
+  "math.placeholder": "Introduce una fórmula TeX",
+  "modifier.accept": "Conservar",
+  "modifier.acceptAll": "Conservar todo",
+  "modifier.reject": "Revertir",
+  "modifier.rejectAll": "Revertir todo",
+  "slash.h1": "Encabezado 1",
+  "slash.h2": "Encabezado 2",
+  "slash.h3": "Encabezado 3",
+  "slash.hr": "Separador",
+  "slash.table": "Tabla",
+  "slash.tex": "Fórmula TeX",
+  "table.delete": "Eliminar tabla",
+  "table.deleteColumn": "Eliminar columna",
+  "table.deleteRow": "Eliminar fila",
+  "table.insertColumnLeft": "Insertar {{count}} columna(s) a la izquierda",
+  "table.insertColumnRight": "Insertar {{count}} columna(s) a la derecha",
+  "table.insertRowAbove": "Insertar {{count}} fila(s) arriba",
+  "table.insertRowBelow": "Insertar {{count}} fila(s) abajo",
+  "typobar.blockquote": "Cita",
+  "typobar.bold": "Negrita",
+  "typobar.bulletList": "Lista con viñetas",
+  "typobar.code": "Código en línea",
+  "typobar.codeblock": "Bloque de código",
+  "typobar.image": "Imagen",
+  "typobar.italic": "Cursiva",
+  "typobar.link": "Enlace",
+  "typobar.numberList": "Lista numerada",
+  "typobar.redo": "Rehacer",
+  "typobar.strikethrough": "Tachado",
+  "typobar.table": "Tabla",
+  "typobar.taskList": "Lista de tareas",
+  "typobar.tex": "Fórmula TeX",
+  "typobar.underline": "Subrayado",
+  "typobar.undo": "Deshacer"
 }

@@ -1,12 +1,13 @@
 // @vitest-environment node
+import { LayersEnum, MemorySourceType, MergeStrategyEnum, TypesEnum } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { idGenerator } from '@/database/utils/idGenerator';
-import { LayersEnum, MergeStrategyEnum, TypesEnum } from '@/types/userMemory';
 
 import {
+  topics,
   userMemories,
   userMemoriesContexts,
   userMemoriesExperiences,
@@ -172,6 +173,51 @@ function generateRandomCreateUserMemoryPreferenceParams() {
 }
 
 describe('UserMemoryModel', () => {
+  describe('parseAssociatedObjects', () => {
+    it('returns null when input is not an array or contains no valid items', () => {
+      expect(UserMemoryModel.parseAssociatedObjects(undefined)).toHaveLength(0);
+      expect(UserMemoryModel.parseAssociatedObjects('not-array')).toHaveLength(0);
+      expect(UserMemoryModel.parseAssociatedObjects([null, undefined, '', '   ', 0])).toHaveLength(
+        0,
+      );
+    });
+
+    it('normalizes objects', () => {
+      const result = UserMemoryModel.parseAssociatedObjects([
+        { name: 'object' },
+        ' { "name": "json" } ',
+        'raw',
+        { another: true },
+      ]);
+
+      expect(result).toEqual([{ name: 'object' }]);
+    });
+  });
+
+  describe('parseDateFromString', () => {
+    it('returns null for empty, nullish, non-string, or invalid Date inputs', () => {
+      expect(UserMemoryModel.parseDateFromString()).toBeNull();
+      expect(UserMemoryModel.parseDateFromString(null)).toBeNull();
+      expect(UserMemoryModel.parseDateFromString('   ')).toBeNull();
+      expect(UserMemoryModel.parseDateFromString(123 as unknown as string)).toBeNull();
+      expect(UserMemoryModel.parseDateFromString(new Date('invalid'))).toBeNull();
+    });
+
+    it('parses valid dates from strings and returns the same valid Date instance', () => {
+      const date = new Date('2024-01-01T00:00:00.000Z');
+
+      expect(UserMemoryModel.parseDateFromString(' 2024-01-01T00:00:00.000Z ')).toEqual(date);
+      expect(UserMemoryModel.parseDateFromString(date)).toBe(date);
+    });
+
+    it('returns an invalid Date object when the input string cannot be parsed', () => {
+      const invalid = UserMemoryModel.parseDateFromString('not-a-date');
+
+      expect(invalid).toBeInstanceOf(Date);
+      expect(Number.isNaN(invalid!.getTime())).toBe(true);
+    });
+  });
+
   describe('create layered memories', () => {
     it('creates a context memory and links the base record', async () => {
       const params = generateRandomCreateUserMemoryContextParams();
@@ -316,6 +362,127 @@ describe('UserMemoryModel', () => {
 
       expect(user1Remaining).toHaveLength(0);
       expect(user2Remaining).toHaveLength(1);
+    });
+  });
+
+  describe('remove layered entries', () => {
+    it('removes context entry and linked base memories only for current user', async () => {
+      const experienceMemory = await userMemoryModel.create(
+        generateRandomCreateUserMemoryExperienceParams(),
+      );
+      const preferenceMemory = await userMemoryModel.create(
+        generateRandomCreateUserMemoryPreferenceParams(),
+      );
+
+      const anotherUserModel = new UserMemoryModel(serverDB, userId2);
+      const otherMemory = await anotherUserModel.create(
+        generateRandomCreateUserMemoryExperienceParams(),
+      );
+
+      const contextId = idGenerator('memory');
+      await serverDB.insert(userMemoriesContexts).values({
+        description: 'context to remove',
+        id: contextId,
+        userId,
+        userMemoryIds: [experienceMemory.id, preferenceMemory.id, otherMemory.id],
+      });
+
+      const removed = await userMemoryModel.removeContextEntry(contextId);
+
+      expect(removed).toBe(true);
+      const deletedContext = await serverDB.query.userMemoriesContexts.findFirst({
+        where: eq(userMemoriesContexts.id, contextId),
+      });
+      const deletedExperience = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, experienceMemory.id),
+      });
+      const deletedPreference = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, preferenceMemory.id),
+      });
+      const otherUserMemory = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, otherMemory.id),
+      });
+
+      expect(deletedContext).toBeUndefined();
+      expect(deletedExperience).toBeUndefined();
+      expect(deletedPreference).toBeUndefined();
+      expect(otherUserMemory).toBeDefined();
+    });
+
+    it('returns false when removing a context owned by another user', async () => {
+      const anotherUserModel = new UserMemoryModel(serverDB, userId2);
+      const { context } = await anotherUserModel.createContextMemory(
+        generateRandomCreateUserMemoryContextParams(),
+      );
+
+      const removed = await userMemoryModel.removeContextEntry(context.id);
+
+      expect(removed).toBe(false);
+      const persisted = await serverDB.query.userMemoriesContexts.findFirst({
+        where: eq(userMemoriesContexts.id, context.id),
+      });
+      expect(persisted).toBeDefined();
+    });
+
+    it('removes experience entry together with its base memory', async () => {
+      const baseMemory = await userMemoryModel.create(
+        generateRandomCreateUserMemoryExperienceParams(),
+      );
+      const experienceId = idGenerator('memory');
+      await serverDB.insert(userMemoriesExperiences).values({
+        ...generateRandomCreateUserMemoryExperienceParams().experience,
+        id: experienceId,
+        userId,
+        userMemoryId: baseMemory.id,
+      });
+
+      const removed = await userMemoryModel.removeExperienceEntry(experienceId);
+
+      expect(removed).toBe(true);
+      const persistedExperience = await serverDB.query.userMemoriesExperiences.findFirst({
+        where: eq(userMemoriesExperiences.id, experienceId),
+      });
+      const persistedBase = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, baseMemory.id),
+      });
+
+      expect(persistedExperience).toBeUndefined();
+      expect(persistedBase).toBeUndefined();
+    });
+
+    it('removes preference entry and keeps other users data intact', async () => {
+      const baseMemory = await userMemoryModel.create(
+        generateRandomCreateUserMemoryPreferenceParams(),
+      );
+      const preferenceId = idGenerator('memory');
+      await serverDB.insert(userMemoriesPreferences).values({
+        ...generateRandomCreateUserMemoryPreferenceParams().preference,
+        id: preferenceId,
+        userId,
+        userMemoryId: baseMemory.id,
+      });
+
+      const anotherUserModel = new UserMemoryModel(serverDB, userId2);
+      const otherPreference = await anotherUserModel.createPreferenceMemory(
+        generateRandomCreateUserMemoryPreferenceParams(),
+      );
+
+      const removed = await userMemoryModel.removePreferenceEntry(preferenceId);
+
+      expect(removed).toBe(true);
+      const persistedPreference = await serverDB.query.userMemoriesPreferences.findFirst({
+        where: eq(userMemoriesPreferences.id, preferenceId),
+      });
+      const persistedBase = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, baseMemory.id),
+      });
+      const otherUserPreference = await serverDB.query.userMemoriesPreferences.findFirst({
+        where: eq(userMemoriesPreferences.id, otherPreference.preference.id),
+      });
+
+      expect(persistedPreference).toBeUndefined();
+      expect(persistedBase).toBeUndefined();
+      expect(otherUserPreference).toBeDefined();
     });
   });
 
@@ -529,6 +696,374 @@ describe('UserMemoryModel', () => {
     });
   });
 
+  describe('search helpers', () => {
+    it('returns empty arrays when limit is zero or negative', async () => {
+      const contexts = await userMemoryModel.searchContexts({ limit: 0 });
+      const experiences = await userMemoryModel.searchExperiences({ limit: -1 });
+      const preferences = await userMemoryModel.searchPreferences({ limit: 0 });
+
+      expect(contexts).toEqual([]);
+      expect(experiences).toEqual([]);
+      expect(preferences).toEqual([]);
+    });
+
+    it('filters contexts by type and orders by newest when no embedding', async () => {
+      const oldContextId = idGenerator('memory');
+      const recentContextId = idGenerator('memory');
+      await serverDB.insert(userMemoriesContexts).values([
+        {
+          createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          description: 'old match',
+          id: oldContextId,
+          type: 'target',
+          updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+          userId,
+        },
+        {
+          createdAt: new Date('2024-02-01T00:00:00.000Z'),
+          description: 'recent match',
+          id: recentContextId,
+          type: 'target',
+          updatedAt: new Date('2024-02-01T00:00:00.000Z'),
+          userId,
+        },
+        {
+          description: 'different type',
+          id: idGenerator('memory'),
+          type: 'other',
+          userId,
+        },
+      ]);
+
+      const contexts = await userMemoryModel.searchContexts({ limit: 5, type: 'target' });
+
+      expect(contexts).toHaveLength(2);
+      expect(contexts[0]?.id).toBe(recentContextId);
+      expect(contexts[1]?.id).toBe(oldContextId);
+      contexts.forEach((context) => {
+        expect(context.type).toBe('target');
+      });
+    });
+  });
+
+  describe('queryIdentityRoles', () => {
+    it('aggregates identity tags and roles for the current user only', async () => {
+      const now = new Date('2024-04-02T00:00:00.000Z');
+      const anotherUserModel = new UserMemoryModel(serverDB, userId2);
+
+      await userMemoryModel.addIdentityEntry({
+        base: { lastAccessedAt: now, tags: [] },
+        identity: { role: 'engineer', tags: ['alpha', 'beta'] },
+      });
+      await userMemoryModel.addIdentityEntry({
+        base: { lastAccessedAt: now, tags: [] },
+        identity: { role: 'engineer', tags: ['alpha'] },
+      });
+      await userMemoryModel.addIdentityEntry({
+        base: { lastAccessedAt: now, tags: [] },
+        identity: { role: 'manager', tags: [] },
+      });
+
+      await anotherUserModel.addIdentityEntry({
+        base: { lastAccessedAt: now, tags: [] },
+        identity: { role: 'engineer', tags: ['alpha'] },
+      });
+
+      const result = await userMemoryModel.queryIdentityRoles({ size: 5 });
+
+      expect(result).toEqual({
+        roles: [
+          { count: 2, role: 'engineer' },
+          { count: 1, role: 'manager' },
+        ],
+        tags: [
+          { count: 2, tag: 'alpha' },
+          { count: 1, tag: 'beta' },
+        ],
+      });
+    });
+  });
+
+  describe('queryTags', () => {
+    it('aggregates tag counts by layer and ignores empty values', async () => {
+      const now = new Date('2024-04-01T00:00:00.000Z');
+      await serverDB.insert(userMemories).values([
+        {
+          id: idGenerator('memory'),
+          lastAccessedAt: now,
+          memoryLayer: 'identity',
+          tags: ['alpha', 'beta'],
+          userId,
+        },
+        {
+          id: idGenerator('memory'),
+          lastAccessedAt: now,
+          memoryLayer: 'identity',
+          tags: ['alpha', ''],
+          userId,
+        },
+        {
+          id: idGenerator('memory'),
+          lastAccessedAt: now,
+          memoryLayer: 'experience',
+          tags: ['beta'],
+          userId,
+        },
+      ]);
+
+      await serverDB.insert(userMemories).values({
+        id: idGenerator('memory'),
+        lastAccessedAt: now,
+        memoryLayer: 'identity',
+        tags: ['alpha'],
+        userId: userId2,
+      });
+
+      const tags = await userMemoryModel.queryTags({ layers: [LayersEnum.Identity], size: 2 });
+
+      expect(tags).toEqual([
+        { count: 2, tag: 'alpha' },
+        { count: 1, tag: 'beta' },
+      ]);
+    });
+  });
+
+  describe('queryMemories', () => {
+    it('supports filtering, sorting, and pagination for memories', async () => {
+      const baseTime = new Date('2024-04-05T00:00:00.000Z');
+      const newerId = idGenerator('memory');
+      const olderId = idGenerator('memory');
+
+      await serverDB.insert(userMemories).values([
+        {
+          createdAt: baseTime,
+          id: newerId,
+          lastAccessedAt: baseTime,
+          memoryCategory: 'work',
+          memoryLayer: LayersEnum.Context,
+          memoryType: TypesEnum.Topic,
+          summary: 'Atlas launch retrospective',
+          tags: ['atlas', 'project'],
+          title: 'Project Atlas retrospective',
+          updatedAt: new Date('2024-04-06T00:00:00.000Z'),
+          userId,
+        },
+        {
+          createdAt: baseTime,
+          id: olderId,
+          lastAccessedAt: baseTime,
+          memoryCategory: 'work',
+          memoryLayer: LayersEnum.Context,
+          memoryType: TypesEnum.Topic,
+          summary: 'Atlas kickoff planning',
+          tags: ['atlas'],
+          title: 'Atlas kickoff',
+          updatedAt: new Date('2024-04-05T12:00:00.000Z'),
+          userId,
+        },
+        {
+          createdAt: baseTime,
+          id: idGenerator('memory'),
+          lastAccessedAt: baseTime,
+          memoryCategory: 'personal',
+          memoryLayer: LayersEnum.Preference,
+          memoryType: TypesEnum.Preference,
+          summary: 'Atlas weekend plan',
+          tags: ['weekend'],
+          title: 'Weekend notes',
+          updatedAt: new Date('2024-04-07T00:00:00.000Z'),
+          userId,
+        },
+        {
+          createdAt: baseTime,
+          id: idGenerator('memory'),
+          lastAccessedAt: baseTime,
+          memoryCategory: 'work',
+          memoryLayer: LayersEnum.Context,
+          memoryType: TypesEnum.Topic,
+          summary: 'Atlas private note',
+          tags: ['atlas'],
+          title: 'Should not be visible',
+          updatedAt: new Date('2024-04-08T00:00:00.000Z'),
+          userId: userId2,
+        },
+      ]);
+
+      await serverDB.insert(userMemoriesContexts).values([
+        {
+          createdAt: baseTime,
+          description: 'Context newer',
+          id: idGenerator('memory'),
+          scoreImpact: 0.3,
+          title: 'Newer Context',
+          updatedAt: new Date('2024-04-06T00:00:00.000Z'),
+          userId,
+          userMemoryIds: [newerId],
+        },
+        {
+          createdAt: baseTime,
+          description: 'Context older',
+          id: idGenerator('memory'),
+          scoreImpact: 0.9,
+          title: 'Older Context',
+          updatedAt: new Date('2024-04-05T12:00:00.000Z'),
+          userId,
+          userMemoryIds: [olderId],
+        },
+      ]);
+
+      const firstPage = await userMemoryModel.queryMemories({
+        categories: ['work'],
+        layer: LayersEnum.Context,
+        order: 'desc',
+        page: 1,
+        pageSize: 1,
+        q: 'Atlas',
+        sort: 'scoreImpact',
+        tags: ['atlas'],
+        types: [TypesEnum.Topic],
+      });
+
+      expect(firstPage.total).toBe(2);
+      expect(firstPage.page).toBe(1);
+      expect(firstPage.pageSize).toBe(1);
+      expect(firstPage.items).toHaveLength(1);
+      expect(firstPage.items[0]?.memory.id).toBe(olderId);
+      expect(firstPage.items[0]?.layer).toBe(LayersEnum.Context);
+      expect((firstPage.items[0] as any).context.title).toBe('Older Context');
+
+      const secondPage = await userMemoryModel.queryMemories({
+        categories: ['work'],
+        layer: LayersEnum.Context,
+        order: 'desc',
+        page: 2,
+        pageSize: 1,
+        q: 'Atlas',
+        sort: 'scoreImpact',
+        tags: ['atlas'],
+        types: [TypesEnum.Topic],
+      });
+
+      expect(secondPage.items).toHaveLength(1);
+      expect(secondPage.items[0]?.memory.id).toBe(newerId);
+      expect((secondPage.items[0] as any).context.title).toBe('Newer Context');
+    });
+
+    it('returns defaults when no filters are provided', async () => {
+      const timestamp = new Date('2024-04-05T00:00:00.000Z');
+      const id = idGenerator('memory');
+
+      await serverDB.insert(userMemories).values({
+        createdAt: timestamp,
+        id,
+        lastAccessedAt: timestamp,
+        memoryCategory: 'misc',
+        memoryLayer: LayersEnum.Context,
+        memoryType: TypesEnum.Other,
+        summary: 'General note',
+        tags: ['general'],
+        title: 'Default',
+        updatedAt: timestamp,
+        userId,
+      });
+
+      await serverDB.insert(userMemoriesContexts).values({
+        createdAt: timestamp,
+        description: 'General context',
+        id: idGenerator('memory'),
+        title: 'Context title',
+        updatedAt: timestamp,
+        userId,
+        userMemoryIds: [id],
+      });
+
+      const result = await userMemoryModel.queryMemories();
+
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(20);
+      expect(result.total).toBe(1);
+      expect(result.items[0]?.memory.id).toBe(id);
+      expect(result.items[0]?.layer).toBe(LayersEnum.Context);
+    });
+
+    it('returns newly inserted layered memories when querying without filters', async () => {
+      const contextInput = generateRandomCreateUserMemoryContextParams();
+      const experienceInput = generateRandomCreateUserMemoryExperienceParams();
+      const preferenceInput = generateRandomCreateUserMemoryPreferenceParams();
+      const identityDescription = 'identity ' + nanoid();
+
+      const { context, memory: contextMemory } =
+        await userMemoryModel.createContextMemory(contextInput);
+      const { experience, memory: experienceMemory } =
+        await userMemoryModel.createExperienceMemory(experienceInput);
+      const { preference, memory: preferenceMemory } =
+        await userMemoryModel.createPreferenceMemory(preferenceInput);
+      const { identityId, userMemoryId: identityMemoryId } = await userMemoryModel.addIdentityEntry(
+        {
+          base: { summary: 'identity summary ' + nanoid(), tags: ['identity'] },
+          identity: {
+            description: identityDescription,
+            relationship: 'friend',
+            tags: ['identity'],
+            type: 'personal',
+          },
+        },
+      );
+
+      const identity = await serverDB.query.userMemoriesIdentities.findFirst({
+        where: eq(userMemoriesIdentities.id, identityId),
+      });
+
+      const contextResult = await userMemoryModel.queryMemories({
+        layer: LayersEnum.Context,
+        sort: 'scoreImpact',
+      });
+
+      expect(contextResult.total).toBe(1);
+      expect(contextResult.items).toHaveLength(1);
+      const contextItem = contextResult.items[0] as any;
+      expect(contextItem.layer).toBe(LayersEnum.Context);
+      expect(contextItem.context.description).toBe(context.description);
+      expect(contextItem.context.userMemoryIds).toEqual([contextMemory.id]);
+
+      const experienceResult = await userMemoryModel.queryMemories({
+        layer: LayersEnum.Experience,
+        sort: 'scoreConfidence',
+      });
+
+      expect(experienceResult.total).toBe(1);
+      expect(experienceResult.items).toHaveLength(1);
+      const experienceItem = experienceResult.items[0] as any;
+      expect(experienceItem.layer).toBe(LayersEnum.Experience);
+      expect(experienceItem.experience.situation).toBe(experience.situation);
+      expect(experienceItem.experience.userMemoryId).toBe(experienceMemory.id);
+
+      const preferenceResult = await userMemoryModel.queryMemories({
+        layer: LayersEnum.Preference,
+        sort: 'scorePriority',
+      });
+
+      expect(preferenceResult.total).toBe(1);
+      expect(preferenceResult.items).toHaveLength(1);
+      const preferenceItem = preferenceResult.items[0] as any;
+      expect(preferenceItem.layer).toBe(LayersEnum.Preference);
+      expect(preferenceItem.preference.conclusionDirectives).toBe(preference.conclusionDirectives);
+      expect(preferenceItem.preference.userMemoryId).toBe(preferenceMemory.id);
+
+      const identityResult = await userMemoryModel.queryMemories({
+        layer: LayersEnum.Identity,
+      });
+
+      expect(identityResult.total).toBe(1);
+      expect(identityResult.items).toHaveLength(1);
+      const identityItem = identityResult.items[0] as any;
+      expect(identityItem.layer).toBe(LayersEnum.Identity);
+      expect(identityItem.identity.description).toBe(identityDescription);
+      expect(identityItem.identity.userMemoryId).toBe(identityMemoryId);
+      expect(identityItem.identity.type).toBe(identity?.type);
+    });
+  });
+
   describe('findById', () => {
     it('returns own memories and updates access metrics', async () => {
       const created = await userMemoryModel.create(
@@ -569,6 +1104,86 @@ describe('UserMemoryModel', () => {
 
       const persisted = await serverDB.query.userMemories.findFirst({
         where: eq(userMemories.id, otherMemory.id),
+      });
+
+      expect(persisted?.accessedCount).toBe(0);
+    });
+  });
+
+  describe('getMemoryDetail', () => {
+    it('returns full context memory detail and bumps access metrics', async () => {
+      const params = generateRandomCreateUserMemoryContextParams();
+      params.context.metadata = { contextDetail: true };
+      params.context.associatedObjects = [{ name: 'Doc', extra: { url: 'https://example.com' } }];
+
+      const { context, memory } = await userMemoryModel.createContextMemory(params);
+
+      const detail = await userMemoryModel.getMemoryDetail({
+        id: context.id,
+        layer: LayersEnum.Context,
+      });
+
+      expect(detail?.layer).toBe(LayersEnum.Context);
+      expect(detail?.memory.id).toBe(memory.id);
+      expect(detail && 'context' in detail ? detail.context.id : undefined).toBe(context.id);
+      expect((detail as any).context.userMemoryIds).toEqual([memory.id]);
+      expect((detail as any).context.metadata).toEqual(params.context.metadata);
+      expect(detail?.memory.memoryLayer).toBe(LayersEnum.Context);
+      expect(detail?.source).toBeUndefined();
+      expect(detail?.sourceType).toBe(MemorySourceType.ChatTopic);
+
+      const persisted = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, memory.id),
+      });
+
+      expect(persisted?.accessedCount).toBe(0);
+    });
+
+    it('resolves topic source data for memory detail', async () => {
+      const topic = {
+        agentId: 'agent-1',
+        id: idGenerator('topics'),
+        sessionId: 'session-1',
+        title: 'Topic title',
+        userId,
+      };
+
+      const topicSpy = vi
+        .spyOn((userMemoryModel as any).topicModel, 'findById')
+        .mockResolvedValue(topic as any);
+
+      const params = generateRandomCreateUserMemoryContextParams();
+      params.context.metadata = { sourceId: topic.id };
+
+      const { context } = await userMemoryModel.createContextMemory(params);
+
+      const detail = await userMemoryModel.getMemoryDetail({
+        id: context.id,
+        layer: LayersEnum.Context,
+      });
+
+      expect(detail?.sourceType).toBe(MemorySourceType.ChatTopic);
+      expect(detail?.source?.id).toBe(topic.id);
+      expect(detail?.source?.title).toBe(topic.title);
+
+      topicSpy.mockRestore();
+    });
+
+    it('returns undefined for memories owned by another user', async () => {
+      const otherModel = new UserMemoryModel(serverDB, userId2);
+      const { experience, memory } = await otherModel.createExperienceMemory(
+        generateRandomCreateUserMemoryExperienceParams(),
+      );
+
+      const detail = await userMemoryModel.getMemoryDetail({
+        id: experience.id,
+        layer: LayersEnum.Experience,
+      });
+
+      expect(detail).toBeUndefined();
+
+      const persisted = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, memory.id),
       });
 
       expect(persisted?.accessedCount).toBe(0);
@@ -1347,40 +1962,6 @@ describe('UserMemoryModel', () => {
           expect(after!.accessedCount).toBe(before.accessedCount);
         }
       }
-    });
-
-    it('updates accessedAt on identity layer records when base memory is identity', async () => {
-      const { identityId, userMemoryId } = await userMemoryModel.addIdentityEntry({
-        base: {
-          memoryLayer: 'identity',
-          summary: 'identity base',
-        },
-        identity: {
-          description: 'identity description',
-          type: 'personal',
-        },
-      });
-
-      const past = new Date('2023-01-01T00:00:00.000Z');
-      await serverDB
-        .update(userMemoriesIdentities)
-        .set({ accessedAt: past })
-        .where(eq(userMemoriesIdentities.id, identityId));
-
-      const before = await serverDB.query.userMemoriesIdentities.findFirst({
-        where: eq(userMemoriesIdentities.id, identityId),
-      });
-      expect(before).toBeDefined();
-      expect(before?.accessedAt.getTime()).toBe(past.getTime());
-
-      await userMemoryModel.findById(userMemoryId);
-
-      const after = await serverDB.query.userMemoriesIdentities.findFirst({
-        where: eq(userMemoriesIdentities.id, identityId),
-      });
-
-      expect(after).toBeDefined();
-      expect(after!.accessedAt.getTime()).toBeGreaterThan(past.getTime());
     });
   });
 });

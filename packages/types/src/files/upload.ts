@@ -80,6 +80,12 @@ export const UploadFileSchema = z.object({
    * file size
    */
   size: z.number(),
+
+  /**
+   * file source
+   */
+  source: z.string().optional(),
+
   /**
    * file url if saveMode is url
    */

@@ -1,5 +1,13 @@
 import { relations } from 'drizzle-orm';
-import { index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import { users } from './user';
 
@@ -92,8 +100,32 @@ export const twoFactor = pgTable(
   ],
 );
 
+export const passkey = pgTable(
+  'passkey',
+  {
+    aaguid: text('aaguid'),
+    backedUp: boolean('backedUp'),
+    counter: integer('counter'),
+    createdAt: timestamp('createdAt').defaultNow(),
+    credentialID: text('credentialID').notNull(),
+    deviceType: text('deviceType'),
+    id: text('id').primaryKey(),
+    name: text('name'),
+    publicKey: text('publicKey').notNull(),
+    transports: text('transports'),
+    userId: text('userId')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    uniqueIndex('passkey_credential_id_unique').on(table.credentialID),
+    index('passkey_user_id_idx').on(table.userId),
+  ],
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(account),
+  passkeys: many(passkey),
   sessions: many(session),
   twoFactors: many(twoFactor),
 }));
@@ -115,6 +147,13 @@ export const accountRelations = relations(account, ({ one }) => ({
 export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
   users: one(users, {
     fields: [twoFactor.userId],
+    references: [users.id],
+  }),
+}));
+
+export const passkeysRelations = relations(passkey, ({ one }) => ({
+  users: one(users, {
+    fields: [passkey.userId],
     references: [users.id],
   }),
 }));

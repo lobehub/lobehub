@@ -1,13 +1,12 @@
-import { useTheme } from 'antd-style';
-import { ReactNode, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { type ReactNode, memo } from 'react';
 
 const Statistic = memo<{ title: ReactNode; value: ReactNode }>(({ value, title }) => {
-  const theme = useTheme();
   return (
-    <Flexbox gap={4} horizontal style={{ color: theme.colorTextSecondary, fontSize: 12 }}>
+    <Flexbox gap={4} horizontal style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>
       <span style={{ fontWeight: 'bold' }}>{value}</span>
-      <span>{title}</span>
+      <span style={{ fontWeight: 'normal' }}>{title}</span>
     </Flexbox>
   );
 });

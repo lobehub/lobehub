@@ -9,8 +9,6 @@ export interface WorkingModel {
 }
 
 export interface LobeAgentChatConfig {
-  displayMode?: 'chat' | 'docs';
-
   enableAutoCreateTopic?: boolean;
   autoCreateTopicThreshold: number;
 
@@ -77,7 +75,6 @@ export interface LobeAgentChatConfig {
 export const AgentChatConfigSchema = z.object({
   autoCreateTopicThreshold: z.number().default(2),
   disableContextCaching: z.boolean().optional(),
-  displayMode: z.enum(['chat', 'docs']).optional(),
   enableAutoCreateTopic: z.boolean().optional(),
   enableCompressHistory: z.boolean().optional(),
   enableHistoryCount: z.boolean().optional(),

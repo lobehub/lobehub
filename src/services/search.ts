@@ -1,4 +1,4 @@
-import { SearchQuery } from '@lobechat/types';
+import { type SearchQuery } from '@lobechat/types';
 
 import { toolsClient } from '@/libs/trpc/client';
 

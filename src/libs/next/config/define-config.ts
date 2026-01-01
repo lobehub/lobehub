@@ -1,0 +1,396 @@
+import analyzer from '@next/bundle-analyzer';
+import withSerwistInit from '@serwist/next';
+import { codeInspectorPlugin } from 'code-inspector-plugin';
+import type { NextConfig } from 'next';
+import type { Header, Redirect } from 'next/dist/lib/load-custom-routes';
+import ReactComponentName from 'react-scan/react-component-name/webpack';
+
+interface CustomNextConfig {
+  headers?: Header[];
+  redirects?: Redirect[];
+  turbopack?: NextConfig['turbopack'];
+}
+
+export function defineConfig(config: CustomNextConfig) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const buildWithDocker = process.env.DOCKER === 'true';
+  const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
+  const enableReactScan = !!process.env.REACT_SCAN_MONITOR_API_KEY;
+  const shouldUseCSP = process.env.ENABLED_CSP === '1';
+
+  const isTest =
+    process.env.NODE_ENV === 'test' || process.env.TEST === '1' || process.env.E2E === '1';
+
+  // if you need to proxy the api endpoint to remote server
+
+  const isStandaloneMode = buildWithDocker || isDesktop;
+
+  const standaloneConfig: NextConfig = {
+    output: 'standalone',
+    outputFileTracingIncludes: { '*': ['public/**/*', '.next/static/**/*'] },
+  };
+
+  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+
+  const nextConfig: NextConfig = {
+    ...(isStandaloneMode ? standaloneConfig : {}),
+    assetPrefix,
+    compiler: {
+      emotion: true,
+    },
+    compress: isProd,
+    experimental: {
+      optimizePackageImports: [
+        'emoji-mart',
+        '@emoji-mart/react',
+        '@emoji-mart/data',
+        '@icons-pack/react-simple-icons',
+        '@lobehub/ui',
+        '@lobehub/icons',
+      ],
+      // oidc provider depend on constructor.name
+      // but swc minification will remove the name
+      // so we need to disable it
+      // refs: https://github.com/lobehub/lobe-chat/pull/7430
+      serverMinification: false,
+      webVitalsAttribution: ['CLS', 'LCP'],
+      webpackBuildWorker: true,
+      webpackMemoryOptimizations: true,
+    },
+    async headers() {
+      const securityHeaders = [
+        {
+          key: 'x-robots-tag',
+          value: 'all',
+        },
+      ];
+
+      if (shouldUseCSP) {
+        securityHeaders.push(
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none';",
+          },
+        );
+      }
+
+      return [
+        {
+          headers: securityHeaders,
+          source: '/:path*',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'Vercel-CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/images/(.*).(png|jpe?g|gif|svg|ico|webp)',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'Vercel-CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/videos/(.*).(mp4|webm|ogg|avi|mov|wmv|flv|mkv)',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'Vercel-CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/screenshots/(.*).(png|jpe?g|gif|svg|ico|webp)',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'Vercel-CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/og/(.*).(png|jpe?g|gif|svg|ico|webp)',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/favicon.ico',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/favicon-32x32.ico',
+        },
+        {
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+            {
+              key: 'CDN-Cache-Control',
+              value: 'public, max-age=31536000, immutable',
+            },
+          ],
+          source: '/apple-touch-icon.png',
+        },
+        // Passkey configuration files for iOS and Android
+        {
+          headers: [
+            {
+              key: 'Content-Type',
+              value: 'application/json',
+            },
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=3600',
+            },
+          ],
+          source: '/.well-known/apple-app-site-association',
+        },
+        {
+          headers: [
+            {
+              key: 'Content-Type',
+              value: 'application/json',
+            },
+            {
+              key: 'Cache-Control',
+              value: 'public, max-age=3600',
+            },
+          ],
+          source: '/.well-known/assetlinks.json',
+        },
+        ...(config.headers ?? []),
+      ];
+    },
+    logging: {
+      fetches: {
+        fullUrl: true,
+        hmrRefreshes: true,
+      },
+    },
+    reactStrictMode: true,
+    redirects: async () => [
+      {
+        destination: '/sitemap-index.xml',
+        permanent: true,
+        source: '/sitemap.xml',
+      },
+      {
+        destination: '/sitemap-index.xml',
+        permanent: true,
+        source: '/sitemap-0.xml',
+      },
+      {
+        destination: '/sitemap/plugins-1.xml',
+        permanent: true,
+        source: '/sitemap/plugins.xml',
+      },
+      {
+        destination: '/sitemap/assistants-1.xml',
+        permanent: true,
+        source: '/sitemap/assistants.xml',
+      },
+      {
+        destination: '/manifest.webmanifest',
+        permanent: true,
+        source: '/manifest.json',
+      },
+      {
+        destination: '/community/assistant',
+        permanent: true,
+        source: '/community/assistants',
+      },
+      {
+        destination: '/community/plugin',
+        permanent: true,
+        source: '/community/plugins',
+      },
+      {
+        destination: '/community/model',
+        permanent: true,
+        source: '/community/models',
+      },
+      {
+        destination: '/community/provider',
+        permanent: true,
+        source: '/community/providers',
+      },
+      // Legacy redirects from /discover to /community
+      {
+        destination: '/community',
+        permanent: true,
+        source: '/discover',
+      },
+      {
+        destination: '/community/:path*',
+        permanent: true,
+        source: '/discover/:path*',
+      },
+      // {
+      //   destination: '/settings/common',
+      //   permanent: true,
+      //   source: '/settings',
+      // },
+      // we need back /repos url in the further
+      {
+        destination: '/files',
+        permanent: false,
+        source: '/repos',
+      },
+      ...(config.redirects ?? []),
+    ],
+
+    // when external packages in dev mode with turbopack, this config will lead to bundle error
+    serverExternalPackages: isProd ? ['@electric-sql/pglite', 'pdfkit'] : ['pdfkit'],
+
+    transpilePackages: ['pdfjs-dist', 'mermaid', 'better-auth-harmony'],
+    turbopack: {
+      rules: isTest
+        ? void 0
+        : codeInspectorPlugin({
+            bundler: 'turbopack',
+            hotKeys: ['altKey', 'ctrlKey'],
+          }),
+      ...config.turbopack,
+    },
+
+    typescript: {
+      ignoreBuildErrors: true,
+    },
+
+    webpack(config) {
+      config.experiments = {
+        asyncWebAssembly: true,
+        layers: true,
+      };
+
+      // 开启该插件会导致 pglite 的 fs bundler 被改表
+      if (enableReactScan) {
+        config.plugins.push(ReactComponentName({}));
+      }
+
+      // to fix shikiji compile error
+      // refs: https://github.com/antfu/shikiji/issues/23
+      config.module.rules.push({
+        resolve: {
+          fullySpecified: false,
+        },
+        test: /\.m?js$/,
+        type: 'javascript/auto',
+      });
+
+      // https://github.com/pinojs/pino/issues/688#issuecomment-637763276
+      config.externals.push('pino-pretty');
+
+      config.resolve.alias.canvas = false;
+
+      // to ignore epub2 compile error
+      // refs: https://github.com/lobehub/lobe-chat/discussions/6769
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        zipfile: false,
+      };
+
+      if (
+        assetPrefix &&
+        (assetPrefix.startsWith('http://') || assetPrefix.startsWith('https://'))
+      ) {
+        // fix the Worker URL cross-origin issue
+        // refs: https://github.com/lobehub/lobe-chat/pull/9624
+        config.module.rules.push({
+          generator: {
+            // @see https://webpack.js.org/configuration/module/#rulegeneratorpublicpath
+            publicPath: '/_next/',
+          },
+          test: /worker\.ts$/,
+          // @see https://webpack.js.org/guides/asset-modules/
+          type: 'asset/resource',
+        });
+      }
+
+      return config;
+    },
+  };
+
+  const noWrapper = (config: NextConfig) => config;
+
+  const withBundleAnalyzer = process.env.ANALYZE === 'true' ? analyzer() : noWrapper;
+
+  const withPWA =
+    isProd && !isDesktop
+      ? withSerwistInit({
+          register: false,
+          swDest: 'public/sw.js',
+          swSrc: 'src/app/sw.ts',
+        })
+      : noWrapper;
+
+  return withBundleAnalyzer(withPWA(nextConfig as NextConfig));
+}

@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Avatar",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Surcharge",
+    "tokenTag.remained": "Restant",
+    "tokenTag.used": "Utilisé"
+  },
+  "common": {
+    "common.cancel": "Annuler",
+    "common.confirm": "Confirmer",
+    "common.delete": "Supprimer",
+    "common.edit": "Modifier"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Ajouter des propriétés",
+    "editableMessage.delete": "Supprimer",
+    "editableMessage.input": "Entrée",
+    "editableMessage.inputPlaceholder": "Veuillez saisir un contenu d'entrée exemple",
+    "editableMessage.output": "Sortie",
+    "editableMessage.outputPlaceholder": "Veuillez saisir un contenu de sortie exemple",
+    "editableMessage.system": "Système"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Supprimer",
+    "emojiPicker.draggerDesc": "Cliquez ou faites glisser une image ici pour la téléverser",
+    "emojiPicker.emoji": "Émoji",
+    "emojiPicker.fileTypeError": "Vous ne pouvez téléverser que des fichiers image !",
+    "emojiPicker.upload": "Téléverser",
+    "emojiPicker.uploadBtn": "Rogner et téléverser"
+  },
+  "form": {
+    "form.reset": "Réinitialiser",
+    "form.submit": "Soumettre",
+    "form.unsavedChanges": "Modifications non enregistrées",
+    "form.unsavedWarning": "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir quitter ?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Ce raccourci est en conflit avec un autre existant.",
+    "hotkey.invalidCombination": "Le raccourci doit inclure une touche de modification (Ctrl, Alt, Maj) et une seule touche normale.",
+    "hotkey.placeholder": "Appuyez sur les touches pour enregistrer le raccourci",
+    "hotkey.reset": "Réinitialiser par défaut"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Annuler",
+    "messageModal.confirm": "Confirmer",
+    "messageModal.edit": "Modifier"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Réduire la barre latérale",
+    "sideNav.demoActiveLabel": "Actif",
+    "sideNav.demoFeatureAutoCollapseDesc": "Faites glisser sous le seuil pour réduire intelligemment",
+    "sideNav.demoFeatureAutoCollapseTitle": "Réduction automatique",
+    "sideNav.demoFeaturePerformanceDesc": "Aucune animation pour de meilleures performances",
+    "sideNav.demoFeaturePerformanceTitle": "Performance",
+    "sideNav.demoFeatureResizeDesc": "Faites glisser pour ajuster la largeur du panneau",
+    "sideNav.demoFeatureResizeTitle": "Redimensionnement flexible",
+    "sideNav.demoFeatureSmartHandleDesc": "Survolez pour afficher le bouton de bascule",
+    "sideNav.demoFeatureSmartHandleTitle": "Poignée intelligente",
+    "sideNav.demoFeaturesTitle": "Fonctionnalités",
+    "sideNav.demoHint": "Essayez de faire glisser le bord du panneau et d'utiliser le bouton de bascule ->",
+    "sideNav.demoSubtitle": "Un panneau latéral de type espace de travail avec redimensionnement par glissement",
+    "sideNav.demoTitle": "Démo DraggableSideNav",
+    "sideNav.expand": "Développer la barre latérale"
+  }
+}

@@ -12,6 +12,12 @@ vi.mock('@/config/db', () => ({
   },
 }));
 
+vi.mock('@/envs/app', () => ({
+  appEnv: {
+    APP_URL: 'https://lobehub.com',
+  },
+}));
+
 vi.mock('../impls', () => ({
   createFileServiceModule: () => ({
     deleteFile: vi.fn(),
@@ -246,5 +252,89 @@ describe('FileService', () => {
 
     expect(service['impl'].uploadMedia).toHaveBeenCalledWith(testKey, testBuffer);
     expect(result).toBe(expectedResult);
+  });
+
+  describe('createFileRecord', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn();
+      mockFileModel.create = vi.fn();
+    });
+
+    it('should return proxy URL format ${APP_URL}/f/:id', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: false });
+      mockFileModel.create.mockResolvedValue({ id: 'new-file-id' });
+
+      const result = await service.createFileRecord({
+        fileHash: 'test-hash',
+        fileType: 'image/png',
+        name: 'test.png',
+        size: 1024,
+        url: 'files/test.png',
+      });
+
+      expect(result).toEqual({
+        fileId: 'new-file-id',
+        url: 'https://lobehub.com/f/new-file-id',
+      });
+    });
+
+    it('should use custom id when provided', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true });
+      mockFileModel.create.mockResolvedValue({ id: 'custom-id' });
+
+      const result = await service.createFileRecord({
+        fileHash: 'test-hash',
+        fileType: 'image/png',
+        id: 'custom-id',
+        name: 'test.png',
+        size: 1024,
+        url: 'files/test.png',
+      });
+
+      expect(result).toEqual({
+        fileId: 'custom-id',
+        url: 'https://lobehub.com/f/custom-id',
+      });
+    });
+
+    it('should insert to global files when hash does not exist', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: false });
+      mockFileModel.create.mockResolvedValue({ id: 'file-id' });
+
+      await service.createFileRecord({
+        fileHash: 'new-hash',
+        fileType: 'text/plain',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: 'new-hash',
+        }),
+        true, // insertToGlobalFiles = true when hash doesn't exist
+      );
+    });
+
+    it('should not insert to global files when hash already exists', async () => {
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true });
+      mockFileModel.create.mockResolvedValue({ id: 'file-id' });
+
+      await service.createFileRecord({
+        fileHash: 'existing-hash',
+        fileType: 'text/plain',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: 'existing-hash',
+        }),
+        false, // insertToGlobalFiles = false when hash exists
+      );
+    });
   });
 });

@@ -639,7 +639,7 @@ describe('transformToChatModelCards', () => {
         config: { deploymentName: 'o1-mini' },
         contextWindowTokens: 128000,
         description:
-          'o1-mini是一款针对编程、数学和科学应用场景而设计的快速、经济高效的推理模型。该模型具有128K上下文和2023年10月的知识截止日期。',
+          'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
         displayName: 'OpenAI o1-mini',
         enabled: true,
         id: 'o1-mini',
@@ -680,7 +680,7 @@ describe('transformToChatModelCards', () => {
         config: { deploymentName: 'gpt-4o' },
         contextWindowTokens: 128000,
         description:
-          'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+          'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
         displayName: 'GPT-4o',
         enabled: true,
         id: 'gpt-4o',
@@ -702,7 +702,7 @@ describe('transformToChatModelCards', () => {
         abilities: { functionCall: true, vision: true },
         config: { deploymentName: 'gpt-4o-mini' },
         contextWindowTokens: 128000,
-        description: 'GPT-4o Mini，小型高效模型，具备与GPT-4o相似的卓越性能。',
+        description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
         displayName: 'GPT 4o Mini',
         enabled: true,
         id: 'gpt-4o-mini',
@@ -727,7 +727,7 @@ describe('transformToChatModelCards', () => {
         config: { deploymentName: 'id1' },
         contextWindowTokens: 128000,
         description:
-          'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+          'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
         displayName: 'GPT-4o',
         enabled: true,
         id: 'gpt-4o',
@@ -763,7 +763,7 @@ describe('transformToChatModelCards', () => {
         abilities: { functionCall: true, vision: true },
         config: { deploymentName: 'id2' },
         contextWindowTokens: 128000,
-        description: 'GPT-4o Mini，小型高效模型，具备与GPT-4o相似的卓越性能。',
+        description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
         displayName: 'GPT 4o Mini',
         providerId: 'azure',
         source: 'builtin',
@@ -799,7 +799,7 @@ describe('transformToChatModelCards', () => {
         config: { deploymentName: 'id3' },
         contextWindowTokens: 128000,
         description:
-          'o1-mini是一款针对编程、数学和科学应用场景而设计的快速、经济高效的推理模型。该模型具有128K上下文和2023年10月的知识截止日期。',
+          'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
         displayName: 'OpenAI o1-mini',
         enabled: true,
         providerId: 'azure',

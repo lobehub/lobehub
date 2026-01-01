@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "접기",
-      "on": "펼치기"
-    },
-    "typobar": {
-      "off": "서식 도구 모음 숨기기",
-      "on": "서식 도구 모음 표시"
-    }
-  },
+  "actions.expand.off": "접기",
+  "actions.expand.on": "펼치기",
+  "actions.typobar.off": "서식 도구 모음 숨기기",
+  "actions.typobar.on": "서식 도구 모음 표시",
+  "autoSave.latest": "최신 버전이 로드되었습니다",
+  "autoSave.saved": "저장되었습니다",
+  "autoSave.saving": "자동 저장 중...",
   "cancel": "취소",
+  "codemirror.copyFailed": "복사에 실패했습니다",
+  "codemirror.copySuccess": "코드가 클립보드에 복사되었습니다",
+  "codemirror.selectLanguage": "언어 선택",
+  "codemirror.selectTheme": "테마 선택",
+  "codemirror.showLineNumbers": "줄 번호 표시",
+  "codemirror.tabSize": "탭 크기",
+  "codemirror.theme": "테마",
+  "codemirror.useTabs": "탭 사용",
   "confirm": "확인",
-  "file": {
-    "error": "오류: {{message}}",
-    "uploading": "파일 업로드 중..."
-  },
-  "image": {
-    "broken": "이미지가 손상되었습니다"
-  },
-  "link": {
-    "edit": "링크 편집",
-    "open": "링크 열기",
-    "placeholder": "링크 URL 입력",
-    "unlink": "링크 제거"
-  },
-  "math": {
-    "placeholder": "TeX 수식을 입력하세요"
-  },
-  "slash": {
-    "h1": "제목 1",
-    "h2": "제목 2",
-    "h3": "제목 3",
-    "hr": "구분선",
-    "table": "표",
-    "tex": "TeX 수식"
-  },
-  "table": {
-    "delete": "표 삭제",
-    "deleteColumn": "열 삭제",
-    "deleteRow": "행 삭제",
-    "insertColumnLeft": "왼쪽에 {{count}}열 삽입",
-    "insertColumnRight": "오른쪽에 {{count}}열 삽입",
-    "insertRowAbove": "위에 {{count}}행 삽입",
-    "insertRowBelow": "아래에 {{count}}행 삽입"
-  },
-  "typobar": {
-    "blockquote": "인용",
-    "bold": "굵게",
-    "bulletList": "글머리 기호 목록",
-    "code": "인라인 코드",
-    "codeblock": "코드 블록",
-    "italic": "기울임꼴",
-    "link": "링크",
-    "numberList": "번호 매기기 목록",
-    "strikethrough": "취소선",
-    "table": "표",
-    "taskList": "작업 목록",
-    "tex": "TeX 수식",
-    "underline": "밑줄"
-  }
+  "file.error": "오류: {{message}}",
+  "file.uploading": "파일 업로드 중...",
+  "image.broken": "이미지가 손상되었습니다",
+  "link.edit": "링크 편집",
+  "link.editLinkTitle": "링크",
+  "link.editTextTitle": "제목",
+  "link.open": "링크 열기",
+  "link.placeholder": "링크 URL 입력",
+  "link.unlink": "링크 제거",
+  "markdown.cancel": "취소",
+  "markdown.confirm": "변환",
+  "markdown.parseMessage": "Markdown 형식으로 변환하면 기존 내용이 덮어쓰여집니다. 계속하시겠습니까? (5초 후 자동으로 닫힙니다)",
+  "markdown.parseTitle": "Markdown 서식 지정",
+  "math.placeholder": "TeX 수식을 입력하세요",
+  "modifier.accept": "보류",
+  "modifier.acceptAll": "모두 수락",
+  "modifier.reject": "취소",
+  "modifier.rejectAll": "모두 취소",
+  "slash.h1": "제목 1",
+  "slash.h2": "제목 2",
+  "slash.h3": "제목 3",
+  "slash.hr": "구분선",
+  "slash.table": "표",
+  "slash.tex": "TeX 수식",
+  "table.delete": "표 삭제",
+  "table.deleteColumn": "열 삭제",
+  "table.deleteRow": "행 삭제",
+  "table.insertColumnLeft": "왼쪽에 {{count}}열 삽입",
+  "table.insertColumnRight": "오른쪽에 {{count}}열 삽입",
+  "table.insertRowAbove": "위에 {{count}}행 삽입",
+  "table.insertRowBelow": "아래에 {{count}}행 삽입",
+  "typobar.blockquote": "인용",
+  "typobar.bold": "굵게",
+  "typobar.bulletList": "글머리 기호 목록",
+  "typobar.code": "인라인 코드",
+  "typobar.codeblock": "코드 블록",
+  "typobar.image": "이미지",
+  "typobar.italic": "기울임꼴",
+  "typobar.link": "링크",
+  "typobar.numberList": "번호 매기기 목록",
+  "typobar.redo": "다시 실행",
+  "typobar.strikethrough": "취소선",
+  "typobar.table": "표",
+  "typobar.taskList": "작업 목록",
+  "typobar.tex": "TeX 수식",
+  "typobar.underline": "밑줄",
+  "typobar.undo": "실행 취소"
 }

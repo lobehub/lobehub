@@ -7,9 +7,11 @@ import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
@@ -24,15 +26,19 @@ import ThinkingSlider from './ThinkingSlider';
 
 const ControlsForm = memo(() => {
   const { t } = useTranslation('chat');
-  const [model, provider, updateAgentChatConfig] = useAgentStore((s) => [
-    agentSelectors.currentAgentModel(s),
-    agentSelectors.currentAgentModelProvider(s),
-    s.updateAgentChatConfig,
+  const agentId = useAgentId();
+  const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const [model, provider] = useAgentStore((s) => [
+    agentByIdSelectors.getAgentModelById(agentId)(s),
+    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
   const [form] = Form.useForm();
   const enableReasoning = AntdForm.useWatch(['enableReasoning'], form);
 
-  const config = useAgentStore(agentChatConfigSelectors.currentChatConfig, isEqual);
+  const config = useAgentStore(
+    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
+    isEqual,
+  );
 
   const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
 

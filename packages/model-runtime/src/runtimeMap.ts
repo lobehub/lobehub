@@ -28,6 +28,7 @@ import { LobeInfiniAI } from './providers/infiniai';
 import { LobeInternLMAI } from './providers/internlm';
 import { LobeJinaAI } from './providers/jina';
 import { LobeLMStudioAI } from './providers/lmstudio';
+import { LobeHubAI } from './providers/lobehub';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMistralAI } from './providers/mistral';
 import { LobeModelScopeAI } from './providers/modelscope';
@@ -86,6 +87,7 @@ export const providerRuntimeMap = {
   deepseek: LobeDeepSeekAI,
   fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
+  lobehub: LobeHubAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
   google: LobeGoogleAI,

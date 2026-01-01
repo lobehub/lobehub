@@ -3,7 +3,7 @@
 import { memo } from 'react';
 
 import Menu from '@/components/Menu';
-import { ChatSettingsTabs } from '@/store/global/initialState';
+import { type ChatSettingsTabs } from '@/store/global/initialState';
 
 import { useCategory } from './useCategory';
 

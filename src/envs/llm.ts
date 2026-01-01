@@ -214,6 +214,8 @@ export const getLLMConfig = () => {
 
       ENABLED_ZENMUX: z.boolean(),
       ZENMUX_API_KEY: z.string().optional(),
+
+      ENABLED_LOBEHUB: z.boolean(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -426,6 +428,8 @@ export const getLLMConfig = () => {
 
       ENABLED_ZENMUX: !!process.env.ZENMUX_API_KEY,
       ZENMUX_API_KEY: process.env.ZENMUX_API_KEY,
+
+      ENABLED_LOBEHUB: !!process.env.ENABLED_LOBEHUB,
     },
   });
 };

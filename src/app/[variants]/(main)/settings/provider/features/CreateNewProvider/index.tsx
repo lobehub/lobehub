@@ -8,15 +8,15 @@ import {
   Select,
   TextArea,
 } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { App } from 'antd';
 import { BrainIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import { useNavigate } from 'react-router-dom';
 
 import { useAiInfraStore } from '@/store/aiInfra/store';
-import { CreateAiProviderParams } from '@/types/aiProvider';
+import { type CreateAiProviderParams } from '@/types/aiProvider';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
 import { CUSTOM_PROVIDER_SDK_OPTIONS } from '../customProviderSdkOptions';
@@ -53,7 +53,7 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
 
       await createNewAiProvider(finalValues);
       setLoading(false);
-      navigate(`/settings?active=provider&provider=${values.id}`);
+      navigate(`/settings/provider/${values.id}`);
       message.success(t('createNewAiProvider.createSuccess'));
       onClose?.();
     } catch (e) {
@@ -100,7 +100,13 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
       name: 'description',
     },
     {
-      children: <Input allowClear placeholder={'https://logo-url'} variant={'filled'} />,
+      children: (
+        <Input
+          allowClear
+          placeholder={t('createNewAiProvider.logo.placeholder')}
+          variant={'filled'}
+        />
+      ),
       label: t('createNewAiProvider.logo.title'),
       minWidth: 400,
       name: 'logo',
@@ -132,7 +138,7 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
       rules: [{ message: t('createNewAiProvider.sdkType.required'), required: true }],
     },
     {
-      children: <Input allowClear placeholder={'https://xxxx-proxy.com/v1'} />,
+      children: <Input allowClear placeholder={t('createNewAiProvider.proxyUrl.placeholder')} />,
       label: t('createNewAiProvider.proxyUrl.title'),
       minWidth: 400,
       name: [KeyVaultsConfigKey, LLMProviderBaseUrlKey],

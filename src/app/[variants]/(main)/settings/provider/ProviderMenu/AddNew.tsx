@@ -16,12 +16,8 @@ const AddNewProvider = () => {
       <ActionIcon
         icon={PlusIcon}
         onClick={() => setOpen(true)}
-        size={{
-          blockSize: 34,
-          size: 18,
-        }}
+        size={'small'}
         title={t('menu.addCustomProvider')}
-        variant={'filled'}
       />
       <CreateNewProvider onClose={() => setOpen(false)} open={open} />
     </>

@@ -122,11 +122,7 @@
       "parentId": "msg-504",
       "createdAt": 1704067210000,
       "updatedAt": 1704067210000,
-      "meta": {},
-      "branch": {
-        "activeBranchIndex": 0,
-        "count": 2
-      }
+      "meta": {}
     },
     {
       "id": "msg-506",
@@ -141,6 +137,10 @@
         "totalOutputTokens": 89,
         "totalTokens": 245,
         "cost": 0.000735
+      },
+      "branch": {
+        "activeBranchIndex": 0,
+        "count": 2
       }
     }
   ],

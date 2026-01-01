@@ -1,19 +1,19 @@
-import { isEqual } from 'lodash-es';
+import { isEqual } from 'es-toolkit/compat';
 import { useRef } from 'react';
-import { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand';
+import type { SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { GetGenerationStatusResult } from '@/server/routers/lambda/generation';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { type GetGenerationStatusResult } from '@/server/routers/lambda/generation';
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
 import { AsyncTaskStatus } from '@/types/asyncTask';
-import { GenerationBatch } from '@/types/generation';
+import { type GenerationBatch } from '@/types/generation';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { ImageStore } from '../../store';
+import { type ImageStore } from '../../store';
 import { generationTopicSelectors } from '../generationTopic/selectors';
-import { GenerationBatchDispatch, generationBatchReducer } from './reducer';
+import { type GenerationBatchDispatch, generationBatchReducer } from './reducer';
 
 const n = setNamespace('generationBatch');
 

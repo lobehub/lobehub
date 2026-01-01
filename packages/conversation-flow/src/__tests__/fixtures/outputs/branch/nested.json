@@ -111,11 +111,7 @@
       "parentId": null,
       "createdAt": 1704067200000,
       "updatedAt": 1704067200000,
-      "meta": {},
-      "branch": {
-        "activeBranchIndex": 0,
-        "count": 3
-      }
+      "meta": {}
     },
     {
       "id": "msg-302",
@@ -130,6 +126,10 @@
         "totalOutputTokens": 15,
         "totalTokens": 25,
         "cost": 0.00008
+      },
+      "branch": {
+        "activeBranchIndex": 0,
+        "count": 3
       }
     },
     {
@@ -142,10 +142,6 @@
       "meta": {},
       "metadata": {
         "activeBranchIndex": 1
-      },
-      "branch": {
-        "activeBranchIndex": 1,
-        "count": 2
       }
     },
     {
@@ -161,6 +157,10 @@
         "totalOutputTokens": 22,
         "totalTokens": 52,
         "cost": 0.00016
+      },
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 2
       }
     },
     {
@@ -170,11 +170,7 @@
       "parentId": "msg-307",
       "createdAt": 1704067220000,
       "updatedAt": 1704067220000,
-      "meta": {},
-      "branch": {
-        "activeBranchIndex": 0,
-        "count": 2
-      }
+      "meta": {}
     },
     {
       "id": "msg-311",
@@ -189,6 +185,10 @@
         "totalOutputTokens": 16,
         "totalTokens": 71,
         "cost": 0.00021
+      },
+      "branch": {
+        "activeBranchIndex": 0,
+        "count": 2
       }
     },
     {
@@ -201,10 +201,6 @@
       "meta": {},
       "metadata": {
         "activeBranchIndex": 1
-      },
-      "branch": {
-        "activeBranchIndex": 1,
-        "count": 2
       }
     },
     {
@@ -220,6 +216,10 @@
         "totalOutputTokens": 42,
         "totalTokens": 117,
         "cost": 0.00035
+      },
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 2
       }
     }
   ],

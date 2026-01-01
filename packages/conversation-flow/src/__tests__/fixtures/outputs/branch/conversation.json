@@ -63,11 +63,7 @@
       "parentId": null,
       "createdAt": 1704067200000,
       "updatedAt": 1704067200000,
-      "meta": {},
-      "branch": {
-        "activeBranchIndex": 0,
-        "count": 3
-      }
+      "meta": {}
     },
     {
       "id": "msg-202",
@@ -82,6 +78,10 @@
         "totalOutputTokens": 28,
         "totalTokens": 40,
         "cost": 0.00012
+      },
+      "branch": {
+        "activeBranchIndex": 0,
+        "count": 3
       }
     },
     {

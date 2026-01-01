@@ -27,22 +27,6 @@ describe('featureFlagsSelectors', () => {
 });
 
 describe('serverConfigSelectors', () => {
-  describe('enabledOAuthSSO', () => {
-    it('should return enabledOAuthSSO value from store', () => {
-      const store = initServerConfigStore({
-        serverConfig: {
-          enabledOAuthSSO: true,
-          telemetry: {},
-          aiProvider: {},
-        },
-      });
-
-      const result = serverConfigSelectors.enabledOAuthSSO(store.getState());
-
-      expect(result).toBe(true);
-    });
-  });
-
   describe('enabledTelemetryChat', () => {
     it('should return langfuse value from store when defined', () => {
       const store = initServerConfigStore({

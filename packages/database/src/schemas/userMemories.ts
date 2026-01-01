@@ -55,16 +55,15 @@ export const userMemoriesContexts = pgTable(
       .primaryKey(),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-    userMemoryIds: jsonb('user_memory_ids'),
+    userMemoryIds: jsonb('user_memory_ids').$type<string[]>(),
 
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     tags: text('tags').array(),
 
-    associatedObjects: jsonb('associated_objects'),
-    associatedSubjects: jsonb('associated_subjects'),
+    associatedObjects: jsonb('associated_objects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
+    associatedSubjects: jsonb('associated_subjects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
 
     title: text('title'),
-    titleVector: vector('title_vector', { dimensions: 1024 }),
     description: text('description'),
     descriptionVector: vector('description_vector', { dimensions: 1024 }),
 
@@ -79,10 +78,6 @@ export const userMemoriesContexts = pgTable(
     ...timestamps,
   },
   (table) => [
-    index('user_memories_contexts_title_vector_index').using(
-      'hnsw',
-      table.titleVector.op('vector_cosine_ops'),
-    ),
     index('user_memories_contexts_description_vector_index').using(
       'hnsw',
       table.descriptionVector.op('vector_cosine_ops'),

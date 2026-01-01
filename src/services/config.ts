@@ -1,8 +1,8 @@
-import { BRANDING_NAME } from '@lobechat/const';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { downloadFile, exportJSONFile } from '@lobechat/utils/client';
 import dayjs from 'dayjs';
 
-import { ImportPgDataStructure } from '@/types/export';
+import { type ImportPgDataStructure } from '@/types/export';
 
 import { exportService } from './export';
 

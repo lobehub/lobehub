@@ -1,8 +1,7 @@
+import { isOnServerSide } from '@lobechat/utils';
 import qs, { type ParsedQuery } from 'query-string';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-import { isOnServerSide } from '@/utils/env';
 
 interface QueryRouteOptions {
   hash?: string;

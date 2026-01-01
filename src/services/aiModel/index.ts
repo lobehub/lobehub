@@ -1,20 +1,29 @@
 import {
-  AiModelSortMap,
-  AiProviderModelListItem,
-  CreateAiModelParams,
-  ToggleAiModelEnableParams,
-  UpdateAiModelParams,
+  type AiModelSortMap,
+  type AiProviderModelListItem,
+  type CreateAiModelParams,
+  type ToggleAiModelEnableParams,
+  type UpdateAiModelParams,
 } from 'model-bank';
 
 import { lambdaClient } from '@/libs/trpc/client';
+
+export interface GetAiProviderModelListParams {
+  enabled?: boolean;
+  limit?: number;
+  offset?: number;
+}
 
 export class AiModelService {
   createAiModel = async (params: CreateAiModelParams) => {
     return lambdaClient.aiModel.createAiModel.mutate(params);
   };
 
-  getAiProviderModelList = async (id: string): Promise<AiProviderModelListItem[]> => {
-    return lambdaClient.aiModel.getAiProviderModelList.query({ id });
+  getAiProviderModelList = async (
+    id: string,
+    params?: GetAiProviderModelListParams,
+  ): Promise<AiProviderModelListItem[]> => {
+    return lambdaClient.aiModel.getAiProviderModelList.query({ id, ...params });
   };
 
   getAiModelById = async (id: string) => {

@@ -10,7 +10,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.5 Pro 是我们最先进的推理 Gemini 模型，能够解决复杂问题。它具有 200 万 token 的上下文窗口，支持包括文本、图像、音频、视频和 PDF 文档在内的多模态输入。',
+      'Gemini 2.5 Pro is our most advanced Gemini reasoning model for complex problems. It has a 2M-token context window and supports multimodal input including text, images, audio, video, and PDFs.',
     displayName: 'Gemini 2.5 Pro',
     enabled: true,
     id: 'google/gemini-2.5-pro',
@@ -30,7 +30,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4.1 是 Opus 4 的即插即用替代品，为实际编码和代理任务提供卓越的性能和精度。Opus 4.1 将最先进的编码性能提升到 SWE-bench Verified 的 74.5%，并以更高的严谨性和对细节的关注处理复杂的多步问题。',
+      'Claude Opus 4.1 is a drop-in replacement for Opus 4, delivering excellent performance and precision for real-world coding and agent tasks. It reaches 74.5% on SWE-bench Verified and handles complex multi-step problems with greater rigor and attention to detail.',
     displayName: 'Claude Opus 4.1',
     id: 'anthropic/claude-opus-4.1',
     pricing: {
@@ -51,7 +51,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4 是 Anthropic 迄今为止最强大的模型，也是世界上最好的编码模型，在 SWE-bench (72.5%) 和 Terminal-bench (43.2%) 上领先。它为需要专注努力和数千个步骤的长期任务提供持续性能，能够连续工作数小时——显著扩展了 AI 代理的能力。',
+      'Claude Opus 4 is Anthropic’s most powerful model and a top coding model, leading on SWE-bench (72.5%) and Terminal-bench (43.2%). It sustains performance on long tasks with thousands of steps and can work for hours, significantly extending agent capabilities.',
     displayName: 'Claude Opus 4',
     id: 'anthropic/claude-opus-4',
     pricing: {
@@ -71,7 +71,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Sonnet 4 在 Sonnet 3.7 的行业领先能力基础上进行了显著改进，在编码方面表现出色，在 SWE-bench 上达到了最先进的 72.7%。该模型在性能和效率之间取得了平衡，适用于内部和外部用例，并通过增强的可控性实现对实现的更大控制。',
+      'Claude Sonnet 4 significantly improves on Sonnet 3.7, excelling at coding with a 72.7% SWE-bench score. It balances performance and efficiency for internal and external use cases, with enhanced controllability.',
     displayName: 'Claude Sonnet 4',
     id: 'anthropic/claude-sonnet-4',
     pricing: {
@@ -91,7 +91,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 是 OpenAI 的旗舰语言模型，在复杂推理、广泛的现实世界知识、代码密集型和多步代理任务方面表现出色。',
+      'GPT-5 is OpenAI’s flagship language model, excelling at complex reasoning, broad real-world knowledge, code-heavy work, and multi-step agent tasks.',
     displayName: 'GPT-5',
     enabled: true,
     id: 'openai/gpt-5',
@@ -115,7 +115,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'OpenAI 的 o3 是最强大的推理模型，在编码、数学、科学和视觉感知方面设立了新的最先进水平。它擅长需要多方面分析的复杂查询，在分析图像、图表和图形方面具有特殊优势。',
+      'OpenAI o3 is the most powerful reasoning model, setting new SOTA in coding, math, science, and visual perception. It excels at complex, multi-faceted queries and is particularly strong at analyzing images, charts, and diagrams.',
     displayName: 'o3',
     id: 'openai/o3',
     pricing: {
@@ -138,7 +138,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'OpenAI 的 o1 是旗舰推理模型，专为需要深度思考的复杂问题而设计。它为复杂多步任务提供了强大的推理能力和更高的准确性。',
+      'OpenAI o1 is a flagship reasoning model built for complex problems that require deep thinking, delivering strong reasoning and higher accuracy on multi-step tasks.',
     displayName: 'o1',
     id: 'openai/o1',
     pricing: {
@@ -161,7 +161,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.7 Sonnet 是第一个混合推理模型，也是 Anthropic 迄今为止最智能的模型。它在编码、内容生成、数据分析和规划任务方面提供了最先进的性能，在其前身 Claude 3.5 Sonnet 的软件工程和计算机使用能力基础上进行了构建。',
+      'Claude 3.7 Sonnet is the first hybrid reasoning model and Anthropic’s most intelligent to date, delivering SOTA performance in coding, content creation, data analysis, and planning on top of Claude 3.5 Sonnet.',
     displayName: 'Claude 3.7 Sonnet',
     id: 'anthropic/claude-3.7-sonnet',
     pricing: {
@@ -182,7 +182,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Sonnet 在智能和速度之间达到了理想的平衡——特别是对于企业工作负载。与同类产品相比，它以更低的成本提供了强大的性能，并专为大规模 AI 部署中的高耐久性而设计。',
+      'Claude 3.5 Sonnet strikes an ideal balance between intelligence and speed, especially for enterprise workloads, offering strong performance at lower cost and durability for large-scale AI deployments.',
     displayName: 'Claude 3.5 Sonnet',
     id: 'anthropic/claude-3.5-sonnet',
     pricing: {
@@ -203,7 +203,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3 Opus 是 Anthropic 最智能的模型，在高度复杂的任务上具有市场领先的性能。它能够以卓越的流畅度和类人理解力驾驭开放式提示和前所未见的场景。',
+      'Claude 3 Opus is Anthropic’s most intelligent model with market-leading performance on highly complex tasks, handling open-ended prompts and novel scenarios with exceptional fluency and human-like understanding.',
     displayName: 'Claude 3 Opus',
     id: 'anthropic/claude-3-opus',
     pricing: {
@@ -224,7 +224,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4o 来自 OpenAI，具有广泛的通用知识和领域专长，能够遵循自然语言的复杂指令并准确解决难题。它以更快、更便宜的 API 匹配 GPT-4 Turbo 的性能。',
+      'GPT-4o from OpenAI combines broad general knowledge with domain expertise, follows complex natural-language instructions, and matches GPT-4 Turbo performance with a faster, cheaper API.',
     displayName: 'GPT-4o',
     id: 'openai/gpt-4o',
     pricing: {
@@ -243,7 +243,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 mini 是一个成本优化的模型，在推理/聊天任务方面表现出色。它在速度、成本和能力之间提供了最佳平衡。',
+      'GPT-5 mini is a cost-optimized model that excels at reasoning and chat, offering the best balance of speed, cost, and capability.',
     displayName: 'GPT-5 mini',
     id: 'openai/gpt-5-mini',
     pricing: {
@@ -264,7 +264,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 nano 是一个高吞吐量模型，在简单指令或分类任务方面表现出色。',
+    description:
+      'GPT-5 nano is a high-throughput model that performs well on simple instructions or classification tasks.',
     displayName: 'GPT-5 nano',
     id: 'openai/gpt-5-nano',
     pricing: {
@@ -285,7 +286,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: '极其能干的通用大型语言模型，具有强大、可控的推理能力',
+    description: 'A highly capable general-purpose LLM with strong, controllable reasoning.',
     displayName: 'gpt-oss-120b',
     id: 'openai/gpt-oss-120b',
     pricing: {
@@ -305,7 +306,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '一个紧凑、开源权重的语言模型，针对低延迟和资源受限环境进行了优化，包括本地和边缘部署',
+      'A compact, open-weights language model optimized for low latency and resource-constrained environments, including local and edge deployments.',
     displayName: 'gpt-oss-20b',
     id: 'openai/gpt-oss-20b',
     pricing: {
@@ -326,7 +327,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-mini 是 OpenAI 最新的小型推理模型，在 o1-mini 的相同成本和延迟目标下提供高智能。',
+      'o3-mini is OpenAI’s latest small reasoning model, delivering higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'openai/o3-mini',
     pricing: {
@@ -348,7 +349,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'OpenAI 的 o4-mini 提供快速、成本效益高的推理，在其尺寸上具有卓越性能，特别是在数学（AIME 基准测试中表现最佳）、编码和视觉任务方面。',
+      'OpenAI o4-mini delivers fast, cost-effective reasoning with outstanding performance for its size, especially in math (best on AIME), coding, and vision tasks.',
     displayName: 'o4-mini',
     id: 'openai/o4-mini',
     pricing: {
@@ -370,7 +371,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT 4.1 是 OpenAI 的旗舰模型，适用于复杂任务。它非常适合跨领域解决问题。',
+    description:
+      'GPT 4.1 is OpenAI’s flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     id: 'openai/gpt-4.1',
     pricing: {
@@ -389,7 +391,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Kimi K2 是由月之暗面 AI 开发的大规模混合专家 (MoE) 语言模型，具有 1 万亿总参数和每次前向传递 320 亿激活参数。它针对代理能力进行了优化，包括高级工具使用、推理和代码合成。',
+      'Kimi K2 is a large MoE model from Moonshot AI with 1T total parameters and 32B active per forward pass, optimized for agent capabilities including advanced tool use, reasoning, and code synthesis.',
     displayName: 'Kimi K2',
     enabled: true,
     id: 'moonshotai/kimi-k2',
@@ -407,7 +409,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Qwen3-Coder-480B-A35B-Instruct 是 Qwen 最具代理性的代码模型，在代理编码、代理浏览器使用和其他基础编码任务方面具有显著性能，达到了与 Claude Sonnet 相当的结果。',
+      'Qwen3-Coder-480B-A35B-Instruct is Qwen’s most agentic code model, performing strongly on agentic coding, agentic browser use, and other core coding tasks, matching Claude Sonnet-level results.',
     displayName: 'Qwen3 Coder 480B A35B Instruct',
     enabled: true,
     id: 'alibaba/qwen3-coder',
@@ -426,7 +428,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3 是 Qwen 系列中最新一代的大型语言模型，提供了一套全面的密集和混合专家 (MoE) 模型。基于广泛的训练构建，Qwen3 在推理、指令遵循、代理能力和多语言支持方面提供了突破性的进展。',
+      'Qwen3 is the latest generation in the Qwen series, offering a comprehensive set of dense and MoE models. Built on extensive training, it brings breakthroughs in reasoning, instruction following, agent capabilities, and multilingual support.',
     displayName: 'Qwen3 235B A22B Instruct 2507',
     id: 'alibaba/qwen-3-235b',
     pricing: {
@@ -444,7 +446,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'GLM-4.5 系列模型是专门为智能体设计的基础模型。旗舰 GLM-4.5 集成了 3550 亿总参数（320 亿活跃），统一了推理、编码和代理能力以解决复杂的应用需求。作为混合推理系统，它提供双重操作模式。',
+      'The GLM-4.5 series is designed for agents. The flagship GLM-4.5 combines reasoning, coding, and agent skills with 355B total params (32B active) and offers dual operation modes as a hybrid reasoning system.',
     displayName: 'GLM-4.5',
     id: 'zai/glm-4.5',
     pricing: {
@@ -462,7 +464,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GLM-4.5 和 GLM-4.5-Air 是我们最新的旗舰模型，专门设计为面向代理应用的基础模型。两者都利用混合专家 (MoE) 架构。GLM-4.5 的总参数数为 3550 亿，每次前向传递有 320 亿活跃参数，而 GLM-4.5-Air 采用更简化的设计，总参数数为 1060 亿，活跃参数为 120 亿。',
+      'GLM-4.5 and GLM-4.5-Air are our latest flagships for agent applications, both using MoE. GLM-4.5 has 355B total and 32B active per forward pass; GLM-4.5-Air is slimmer with 106B total and 12B active.',
     displayName: 'GLM 4.5 Air',
     id: 'zai/glm-4.5-air',
     pricing: {
@@ -481,7 +483,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'GLM-4.5V 基于 GLM-4.5-Air 基础模型构建，继承了 GLM-4.1V-Thinking 的经过验证的技术，同时通过强大的 1060 亿参数 MoE 架构实现了有效的扩展。',
+      'GLM-4.5V builds on GLM-4.5-Air, inheriting proven GLM-4.1V-Thinking techniques and scaling with a strong 106B-parameter MoE architecture.',
     displayName: 'GLM 4.5V',
     id: 'zai/glm-4.5v',
     pricing: {
@@ -499,7 +501,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3 是 Qwen 系列中最新一代的大型语言模型，提供了一套全面的密集和混合专家 (MoE) 模型。基于广泛的训练构建，Qwen3 在推理、指令遵循、代理能力和多语言支持方面提供了突破性的进展。',
+      'Qwen3 is the latest generation in the Qwen series, offering a comprehensive set of dense and MoE models. Built on extensive training, it brings breakthroughs in reasoning, instruction following, agent capabilities, and multilingual support.',
     displayName: 'Qwen3 32B',
     id: 'alibaba/qwen-3-32b',
     pricing: {
@@ -517,7 +519,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3 是 Qwen 系列中最新一代的大型语言模型，提供了一套全面的密集和混合专家 (MoE) 模型。基于广泛的训练构建，Qwen3 在推理、指令遵循、代理能力和多语言支持方面提供了突破性的进展。',
+      'Qwen3 is the latest generation in the Qwen series, offering a comprehensive set of dense and MoE models. Built on extensive training, it brings breakthroughs in reasoning, instruction following, agent capabilities, and multilingual support.',
     displayName: 'Qwen3 30B A3B',
     id: 'alibaba/qwen-3-30b',
     pricing: {
@@ -535,7 +537,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     description:
-      'Qwen3 是 Qwen 系列中最新一代的大型语言模型，提供了一套全面的密集和混合专家 (MoE) 模型。基于广泛的训练构建，Qwen3 在推理、指令遵循、代理能力和多语言支持方面提供了突破性的进展。',
+      'Qwen3 is the latest generation in the Qwen series, offering a comprehensive set of dense and MoE models. Built on extensive training, it brings breakthroughs in reasoning, instruction following, agent capabilities, and multilingual support.',
     displayName: 'Qwen3 14B',
     id: 'alibaba/qwen-3-14b',
     pricing: {
@@ -552,7 +554,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'Command A 是 Cohere 迄今为止性能最强的模型，在工具使用、代理、检索增强生成 (RAG) 和多语言用例方面表现出色。Command A 的上下文长度为 256K，仅需两个 GPU 即可运行，与 Command R+ 08-2024 相比吞吐量提高了 150%。',
+      'Command A is Cohere’s strongest model yet, excelling at tool use, agents, RAG, and multilingual use cases. It has a 256K context length, runs on just two GPUs, and delivers 150% higher throughput than Command R+ 08-2024.',
     displayName: 'Command A',
     id: 'cohere/command-a',
     pricing: {
@@ -569,7 +571,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Command R 是一个针对对话交互和长上下文任务优化的大型语言模型。它定位于"可扩展"类别的模型，在高性能和强准确性之间取得平衡，使公司能够超越概念验证并进入生产。',
+      'Command R is optimized for chat and long-context tasks, positioned as a “scalable” model that balances high performance and accuracy so companies can move beyond prototypes into production.',
     displayName: 'Command R',
     id: 'cohere/command-r',
     pricing: {
@@ -586,7 +588,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Command R+ 是 Cohere 最新的大型语言模型，针对对话交互和长上下文任务进行了优化。它的目标是在性能上极其出色，使公司能够超越概念验证并进入生产。',
+      'Command R+ is Cohere’s latest LLM optimized for chat and long context, aiming for exceptional performance so companies can move past prototypes into production.',
     displayName: 'Command R+',
     id: 'cohere/command-r-plus',
     pricing: {
@@ -604,7 +606,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'DeepSeek R1 模型已经进行了小版本升级，当前版本为 DeepSeek-R1-0528。在最新更新中，DeepSeek R1 通过利用增加的计算资源和在训练后引入算法优化机制，显著提高了推理深度和推理能力。该模型在数学、编程和一般逻辑等多个基准评估中表现出色，其整体性能现在正接近领先模型，如 O3 和 Gemini 2.5 Pro。',
+      'DeepSeek R1 has been updated to DeepSeek-R1-0528. With more compute and post-training algorithmic optimizations, it significantly improves reasoning depth and capability. It performs strongly across math, programming, and general logic benchmarks, approaching leaders like o3 and Gemini 2.5 Pro.',
     displayName: 'DeepSeek R1 0528',
     id: 'deepseek/deepseek-r1',
     pricing: {
@@ -620,7 +622,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 163_840,
-    description: '具有增强推理能力的快速通用大型语言模型',
+    description: 'A fast general-purpose LLM with enhanced reasoning.',
     displayName: 'DeepSeek V3 0324',
     id: 'deepseek/deepseek-v3',
     pricing: {
@@ -633,7 +635,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 128_000,
-    description: 'DeepSeek V3.1 Base 是 DeepSeek V3 模型的改进版本。',
+    description: 'DeepSeek V3.1 Base is an improved version of the DeepSeek V3 model.',
     displayName: 'DeepSeek V3.1 Base',
     id: 'deepseek/deepseek-v3.1-base',
     pricing: {
@@ -651,7 +653,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.0 Flash 提供下一代功能和改进的功能，包括卓越的速度、内置工具使用、多模态生成和 100 万 token 的上下文窗口。',
+      'Gemini 2.0 Flash delivers next-gen features including exceptional speed, built-in tool use, multimodal generation, and a 1M-token context window.',
     displayName: 'Gemini 2.0 Flash',
     id: 'google/gemini-2.0-flash',
     pricing: {
@@ -669,7 +671,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.0 Flash Lite 提供下一代功能和改进的功能，包括卓越的速度、内置工具使用、多模态生成和 100 万 token 的上下文窗口。',
+      'Gemini 2.0 Flash Lite delivers next-gen features including exceptional speed, built-in tool use, multimodal generation, and a 1M-token context window.',
     displayName: 'Gemini 2.0 Flash Lite',
     id: 'google/gemini-2.0-flash-lite',
     pricing: {
@@ -688,7 +690,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Gemini 2.5 Flash 是一个思考模型，提供出色的全面能力。它旨在价格和性能之间取得平衡，支持多模态和 100 万 token 的上下文窗口。',
+      'Gemini 2.5 Flash is a reasoning model with excellent overall capability, balancing price and performance with multimodal support and a 1M-token context window.',
     displayName: 'Gemini 2.5 Flash',
     id: 'google/gemini-2.5-flash',
     pricing: {
@@ -707,7 +709,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 2.5 Flash-Lite 是一个平衡、低延迟的模型，具有可配置的思考预算和工具连接性（例如，Google Search 接地和代码执行）。它支持多模态输入，并提供 100 万 token 的上下文窗口。',
+      'Gemini 2.5 Flash-Lite is a balanced, low-latency model with configurable thinking budget and tool connectivity (e.g., Google Search grounding and code execution). It supports multimodal input and a 1M-token context window.',
     displayName: 'Gemini 2.5 Flash Lite',
     id: 'google/gemini-2.5-flash-lite',
     pricing: {
@@ -724,7 +726,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      '由 Google 精心调整用于聊天目的的 90 亿参数开源模型。由 Groq 使用其自定义语言处理单元 (LPU) 硬件提供服务，以提供快速高效的推理。',
+      'A 9B open-source model fine-tuned by Google for chat, served by Groq on LPU hardware for fast, efficient inference.',
     displayName: 'Gemma 2 9B IT',
     id: 'google/gemma-2-9b',
     pricing: {
@@ -742,7 +744,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'xAI 最新和最伟大的旗舰模型，在自然语言、数学和推理方面提供无与伦比的性能——完美的全能选手。',
+      'xAI’s newest flagship model with unparalleled performance in natural language, math, and reasoning—an ideal all-rounder.',
     displayName: 'Grok 4',
     id: 'xai/grok-4',
     pricing: {
@@ -760,7 +762,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'xAI 的轻量级模型，在响应之前进行思考。非常适合不需要深厚领域知识的简单或基于逻辑的任务。原始思维轨迹可访问。快速模型变体在更快的基础设施上提供服务，提供比标准快得多的响应时间。增加的速度以每个输出 token 更高的成本为代价。',
+      'xAI’s lightweight model that thinks before responding, ideal for simple or logic-based tasks without deep domain knowledge. Raw reasoning traces are available. The fast variant runs on quicker infrastructure for much faster responses at higher per-token cost.',
     displayName: 'Grok 3 Mini Fast Beta',
     id: 'xai/grok-3-mini-fast',
     pricing: {
@@ -778,7 +780,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'xAI 的轻量级模型，在响应之前进行思考。非常适合不需要深厚领域知识的简单或基于逻辑的任务。原始思维轨迹可访问。',
+      'xAI’s lightweight model that thinks before responding, ideal for simple or logic-based tasks without deep domain knowledge. Raw reasoning traces are available.',
     displayName: 'Grok 3 Mini Beta',
     id: 'xai/grok-3-mini',
     pricing: {
@@ -796,7 +798,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'xAI 的旗舰模型，在企业用例方面表现出色，如数据提取、编码和文本摘要。在金融、医疗保健、法律和科学领域拥有深厚的领域知识。快速模型变体在更快的基础设施上提供服务，提供比标准快得多的响应时间。增加的速度以每个输出 token 更高的成本为代价。',
+      'xAI’s flagship model excels in enterprise use cases like data extraction, coding, and summarization, with deep domain knowledge in finance, healthcare, law, and science. The fast variant runs on quicker infrastructure for much faster responses at higher per-token cost.',
     displayName: 'Grok 3 Fast Beta',
     id: 'xai/grok-3-fast',
     pricing: {
@@ -814,7 +816,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'xAI 的旗舰模型，在企业用例方面表现出色，如数据提取、编码和文本摘要。在金融、医疗保健、法律和科学领域拥有深厚的领域知识。',
+      'xAI’s flagship model excels in enterprise use cases like data extraction, coding, and summarization, with deep domain knowledge in finance, healthcare, law, and science.',
     displayName: 'Grok 3 Beta',
     id: 'xai/grok-3',
     pricing: {
@@ -832,7 +834,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Grok 2 视觉模型在基于视觉的任务方面表现出色，在视觉数学推理 (MathVista) 和基于文档的问答 (DocVQA) 方面提供最先进的性能。它能够处理各种视觉信息，包括文档、图表、图表、屏幕截图和照片。',
+      'Grok 2 Vision excels at visual tasks, delivering SOTA performance on visual math reasoning (MathVista) and document QA (DocVQA). It handles documents, charts, graphs, screenshots, and photos.',
     displayName: 'Grok 2 Vision',
     id: 'xai/grok-2-vision',
     pricing: {
@@ -850,7 +852,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Grok 2 是一个具有最先进推理能力的前沿语言模型。它在聊天、编码和推理方面具有先进能力，在 LMSYS 排行榜上优于 Claude 3.5 Sonnet 和 GPT-4-Turbo。',
+      'Grok 2 is a frontier model with state-of-the-art reasoning, strong chat, coding, and reasoning performance, and ranks above Claude 3.5 Sonnet and GPT-4 Turbo on LMSYS.',
     displayName: 'Grok 2',
     id: 'xai/grok-2',
     pricing: {
@@ -867,7 +869,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      '由 Meta 精心调整用于指令遵循目的的 700 亿参数开源模型。由 Groq 使用其自定义语言处理单元 (LPU) 硬件提供服务，以提供快速高效的推理。',
+      'A 70B open-source model fine-tuned by Meta for instruction following, served by Groq on LPU hardware for fast, efficient inference.',
     displayName: 'Llama 3 70B Instruct',
     id: 'meta/llama-3-70b',
     pricing: {
@@ -884,7 +886,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      '由 Meta 精心调整用于指令遵循目的的 80 亿参数开源模型。由 Groq 使用其自定义语言处理单元 (LPU) 硬件提供服务，以提供快速高效的推理。',
+      'An 8B open-source model fine-tuned by Meta for instruction following, served by Groq on LPU hardware for fast, efficient inference.',
     displayName: 'Llama 3 8B Instruct',
     id: 'meta/llama-3-8b',
     pricing: {
@@ -901,7 +903,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Meta Llama 3 70B Instruct 的更新版本，包括扩展的 128K 上下文长度、多语言和改进的推理能力。',
+      'An updated Meta Llama 3 70B Instruct with 128K context, multilingual support, and improved reasoning.',
     displayName: 'Llama 3.1 70B Instruct',
     id: 'meta/llama-3.1-70b',
     pricing: {
@@ -918,7 +920,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_000,
     description:
-      'Llama 3.1 8B 支持 128K 上下文窗口，使其成为实时对话界面和数据分析的理想选择，同时与更大的模型相比提供显著的成本节约。由 Groq 使用其自定义语言处理单元 (LPU) 硬件提供服务，以提供快速高效的推理。',
+      'Llama 3.1 8B supports a 128K context window, ideal for real-time chat and data analysis, and offers significant cost savings versus larger models. Served by Groq on LPU hardware for fast, efficient inference.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'meta/llama-3.1-8b',
     pricing: {
@@ -936,7 +938,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '指令调整的图像推理生成模型（文本 + 图像输入 / 文本输出），针对视觉识别、图像推理、标题生成和回答关于图像的一般问题进行了优化。',
+      'An instruction-tuned image reasoning model (text+image input, text output) optimized for visual recognition, image reasoning, captioning, and general image QA.',
     displayName: 'Llama 3.2 11B Vision Instruct',
     id: 'meta/llama-3.2-11b',
     pricing: {
@@ -952,7 +954,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: '仅文本模型，支持设备上用例，如多语言本地知识检索、摘要和重写。',
+    description:
+      'Text-only model for on-device use cases like multilingual local retrieval, summarization, and rewriting.',
     displayName: 'Llama 3.2 1B Instruct',
     id: 'meta/llama-3.2-1b',
     pricing: {
@@ -968,7 +971,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: '仅文本模型，精心调整用于支持设备上用例，如多语言本地知识检索、摘要和重写。',
+    description:
+      'Text-only model fine-tuned for on-device use cases like multilingual local retrieval, summarization, and rewriting.',
     displayName: 'Llama 3.2 3B Instruct',
     id: 'meta/llama-3.2-3b',
     pricing: {
@@ -986,7 +990,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '指令调整的图像推理生成模型（文本 + 图像输入 / 文本输出），针对视觉识别、图像推理、标题生成和回答关于图像的一般问题进行了优化。',
+      'An instruction-tuned image reasoning model (text+image input, text output) optimized for visual recognition, image reasoning, captioning, and general image QA.',
     displayName: 'Llama 3.2 90B Vision Instruct',
     id: 'meta/llama-3.2-90b',
     pricing: {
@@ -1003,7 +1007,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '性能与效率的完美结合。该模型支持高性能对话 AI，专为内容创建、企业应用和研究而设计，提供先进的语言理解能力，包括文本摘要、分类、情感分析和代码生成。',
+      'A perfect balance of performance and efficiency. Built for high-performance conversational AI in content creation, enterprise apps, and research, with strong language understanding for summarization, classification, sentiment, and code generation.',
     displayName: 'Llama 3.3 70B Instruct',
     id: 'meta/llama-3.3-70b',
     pricing: {
@@ -1021,7 +1025,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 4 模型集合是原生多模态 AI 模型，支持文本和多模态体验。这些模型利用混合专家架构在文本和图像理解方面提供行业领先的性能。Llama 4 Maverick，一个 170 亿参数模型，具有 128 个专家。由 DeepInfra 提供服务。',
+      'The Llama 4 family is a native multimodal AI model set supporting text and multimodal experiences, using MoE for leading text and image understanding. Llama 4 Maverick is a 17B model with 128 experts, served by DeepInfra.',
     displayName: 'Llama 4 Maverick 17B 128E Instruct',
     id: 'meta/llama-4-maverick',
     pricing: {
@@ -1039,7 +1043,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 4 模型集合是原生多模态 AI 模型，支持文本和多模态体验。这些模型利用混合专家架构在文本和图像理解方面提供行业领先的性能。Llama 4 Scout，一个 170 亿参数模型，具有 16 个专家。由 DeepInfra 提供服务。',
+      'The Llama 4 family is a native multimodal AI model set supporting text and multimodal experiences, using MoE for leading text and image understanding. Llama 4 Scout is a 17B model with 16 experts, served by DeepInfra.',
     displayName: 'Llama 4 Scout 17B 16E Instruct',
     id: 'meta/llama-4-scout',
     pricing: {
@@ -1056,7 +1060,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'Mistral Codestral 25.01 是最先进的编码模型，针对低延迟、高频率用例进行了优化。精通 80 多种编程语言，它在中间填充 (FIM)、代码纠正和测试生成等任务上表现出色。',
+      'Mistral Codestral 25.01 is a state-of-the-art coding model optimized for low latency and high-frequency use. It supports 80+ languages and excels at FIM, code correction, and test generation.',
     displayName: 'Mistral Codestral 25.01',
     id: 'mistral/codestral',
     pricing: {
@@ -1073,7 +1077,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Devstral 是一个用于软件工程任务的代理大型语言模型，使其成为软件工程代理的绝佳选择。',
+      'Devstral is an agentic LLM for software engineering tasks, making it a strong choice for software engineering agents.',
     displayName: 'Devstral Small',
     id: 'mistral/devstral-small',
     pricing: {
@@ -1090,7 +1094,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '复杂思维，由深刻理解支持，具有您可以遵循和验证的透明推理。该模型即使在任务中途切换语言时，也能在众多语言中保持高保真推理。',
+      'Complex thinking supported by deep understanding with transparent reasoning you can follow and verify. It maintains high-fidelity reasoning across languages, even mid-task.',
     displayName: 'Magistral Medium 2509',
     id: 'mistral/magistral-medium',
     pricing: {
@@ -1107,7 +1111,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '复杂思维，由深刻理解支持，具有您可以遵循和验证的透明推理。该模型即使在任务中途切换语言时，也能在众多语言中保持高保真推理。',
+      'Complex thinking supported by deep understanding with transparent reasoning you can follow and verify. It maintains high-fidelity reasoning across languages, even mid-task.',
     displayName: 'Magistral Small 2506',
     id: 'mistral/magistral-small',
     pricing: {
@@ -1123,7 +1127,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: '一个紧凑、高效的模型，用于智能助手和本地分析等设备上任务，提供低延迟性能。',
+    description:
+      'A compact, efficient model for on-device tasks like assistants and local analytics, delivering low-latency performance.',
     displayName: 'Ministral 3B',
     id: 'mistral/ministral-3b',
     pricing: {
@@ -1140,7 +1145,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '一个更强大的模型，具有更快、内存高效的推理，是复杂工作流程和要求苛刻的边缘应用的理想选择。',
+      'A more powerful model with faster, memory-efficient inference, ideal for complex workflows and demanding edge applications.',
     displayName: 'Ministral 8B',
     id: 'mistral/ministral-8b',
     pricing: {
@@ -1157,7 +1162,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'Mistral Large 是复杂任务的理想选择，这些任务需要大型推理能力或高度专业化——如合成文本生成、代码生成、RAG 或代理。',
+      'Mistral Large is ideal for complex tasks that require strong reasoning or specialization—synthetic text generation, code generation, RAG, or agents.',
     displayName: 'Mistral Large',
     id: 'mistral/mistral-large',
     pricing: {
@@ -1174,7 +1179,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'Mistral Small 是简单任务的理想选择，这些任务可以批量完成——如分类、客户支持或文本生成。它以可承受的价格点提供出色的性能。',
+      'Mistral Small is ideal for simple, batchable tasks like classification, customer support, or text generation, delivering great performance at an affordable price.',
     displayName: 'Mistral Small',
     id: 'mistral/mistral-small',
     pricing: {
@@ -1190,7 +1195,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 65_536,
-    description: '8x22b Instruct 模型。8x22b 是由 Mistral 提供服务的混合专家开源模型。',
+    description: '8x22B Instruct model. 8x22B is an open MoE model served by Mistral.',
     displayName: 'Mixtral MoE 8x22B Instruct',
     id: 'mistral/mixtral-8x22b-instruct',
     pricing: {
@@ -1207,7 +1212,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: '一个具有图像理解能力的 12B 模型，以及文本。',
+    description: 'A 12B model with image understanding and text.',
     displayName: 'Pixtral 12B 2409',
     id: 'mistral/pixtral-12b',
     pricing: {
@@ -1225,7 +1230,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Pixtral Large 是我们多模态家族中的第二个模型，展示了前沿水平的图像理解。特别是，该模型能够理解文档、图表和自然图像，同时保持了 Mistral Large 2 的领先文本理解能力。',
+      'Pixtral Large is the second model in our multimodal family with frontier-level image understanding. It handles documents, charts, and natural images while retaining Mistral Large 2’s leading text understanding.',
     displayName: 'Pixtral Large',
     id: 'mistral/pixtral-large',
     pricing: {
@@ -1241,7 +1246,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Mercury Coder Small 是代码生成、调试和重构任务的理想选择，具有最小延迟。',
+    description:
+      'Mercury Coder Small is ideal for code generation, debugging, and refactoring with minimal latency.',
     displayName: 'Mercury Coder Small Beta',
     id: 'inception/mercury-coder-small',
     pricing: {
@@ -1258,7 +1264,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Morph 提供了一个专门的 AI 模型，将前沿模型（如 Claude 或 GPT-4o）建议的代码更改应用到您的现有代码文件中 FAST - 4500+ tokens/秒。它充当 AI 编码工作流程中的最后一步。支持 16k 输入 tokens 和 16k 输出 tokens。',
+      'Morph provides a specialized model to apply code changes suggested by frontier models (e.g., Claude or GPT-4o) to your existing files at FAST 4500+ tokens/sec. It is the final step in an AI coding workflow and supports 16k input/output tokens.',
     displayName: 'Morph V3 Fast',
     id: 'morph/morph-v3-fast',
     pricing: {
@@ -1275,7 +1281,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Morph 提供了一个专门的 AI 模型，将前沿模型（如 Claude 或 GPT-4o）建议的代码更改应用到您的现有代码文件中 FAST - 2500+ tokens/秒。它充当 AI 编码工作流程中的最后一步。支持 16k 输入 tokens 和 16k 输出 tokens。',
+      'Morph provides a specialized model to apply code changes suggested by frontier models (e.g., Claude or GPT-4o) to your existing files at FAST 2500+ tokens/sec. It is the final step in an AI coding workflow and supports 16k input/output tokens.',
     displayName: 'Morph V3 Large',
     id: 'morph/morph-v3-large',
     pricing: {
@@ -1292,7 +1298,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_385,
     description:
-      'OpenAI 在 GPT-3.5 系列中最能干且最具成本效益的模型，针对聊天目的进行了优化，但在传统完成任务中也表现良好。',
+      'OpenAI’s most capable and cost-effective GPT-3.5 model, optimized for chat but still strong on classic completions.',
     displayName: 'GPT-3.5 Turbo',
     id: 'openai/gpt-3.5-turbo',
     pricing: {
@@ -1308,7 +1314,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: '与 GPT-3 时代模型类似的能力。与传统的完成端点兼容，而不是聊天完成端点。',
+    description:
+      'Similar capabilities to GPT-3-era models, compatible with legacy completion endpoints rather than chat.',
     displayName: 'GPT-3.5 Turbo Instruct',
     id: 'openai/gpt-3.5-turbo-instruct',
     pricing: {
@@ -1325,7 +1332,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '来自 OpenAI 的 gpt-4-turbo 具有广泛的通用知识和领域专长，使其能够遵循自然语言的复杂指令并准确解决困难问题。它的知识截止日期为 2023 年 4 月，上下文窗口为 128,000 个 token。',
+      'OpenAI’s gpt-4-turbo has broad general knowledge and domain expertise, follows complex natural-language instructions, and solves difficult problems accurately. Knowledge cutoff is April 2023 with a 128k context window.',
     displayName: 'GPT-4 Turbo',
     id: 'openai/gpt-4-turbo',
     pricing: {
@@ -1343,7 +1350,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_047_576,
     description:
-      'GPT 4.1 mini 在智能、速度和成本之间取得了平衡，使其成为许多用例的有吸引力的模型。',
+      'GPT 4.1 mini balances intelligence, speed, and cost, making it attractive for many use cases.',
     displayName: 'GPT-4.1 mini',
     id: 'openai/gpt-4.1-mini',
     pricing: {
@@ -1361,7 +1368,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 nano 是最快、最具成本效益的 GPT 4.1 模型。',
+    description: 'GPT-4.1 nano is the fastest and most cost-effective GPT-4.1 model.',
     displayName: 'GPT-4.1 nano',
     id: 'openai/gpt-4.1-nano',
     pricing: {
@@ -1380,7 +1387,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4o mini 来自 OpenAI 是他们最先进且最具成本效益的小模型。它是多模态的（接受文本或图像输入并输出文本），并且比 gpt-3.5-turbo 具有更高的智能性，但速度同样快。',
+      'GPT-4o mini is OpenAI’s most advanced and cost-effective small model. It is multimodal (text or image input, text output) with higher intelligence than gpt-3.5-turbo at similar speed.',
     displayName: 'GPT-4o mini',
     id: 'openai/gpt-4o-mini',
     pricing: {
@@ -1397,7 +1404,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 127_000,
-    description: 'Perplexity 的轻量级产品，具有搜索接地能力，比 Sonar Pro 更快、更便宜。',
+    description:
+      'Perplexity’s lightweight product with search grounding, faster and cheaper than Sonar Pro.',
     displayName: 'Sonar',
     id: 'perplexity/sonar',
     pricing: {
@@ -1413,7 +1421,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 200_000,
-    description: 'Perplexity 的旗舰产品，具有搜索接地能力，支持高级查询和后续操作。',
+    description:
+      'Perplexity’s flagship product with search grounding, supporting advanced queries and follow-ups.',
     displayName: 'Sonar Pro',
     id: 'perplexity/sonar-pro',
     pricing: {
@@ -1430,7 +1439,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 127_000,
-    description: '一个专注于推理的模型，在响应中输出思维链 (CoT)，提供具有搜索接地的详细解释。',
+    description:
+      'A reasoning-focused model that outputs chain-of-thought (CoT) with detailed, search-grounded explanations.',
     displayName: 'Sonar Reasoning',
     id: 'perplexity/sonar-reasoning',
     pricing: {
@@ -1448,7 +1458,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 127_000,
     description:
-      '一个高级推理聚焦模型，在响应中输出思维链 (CoT)，提供具有增强搜索能力和每个请求多个搜索查询的综合解释。',
+      'An advanced reasoning-focused model that outputs CoT with enhanced search, including multiple search queries per request.',
     displayName: 'Sonar Reasoning Pro',
     id: 'perplexity/sonar-reasoning-pro',
     pricing: {
@@ -1465,7 +1475,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '访问 v0 背后的模型以生成、修复和优化现代 Web 应用，具有特定框架的推理和最新知识。',
+      'Access the models behind v0 to generate, fix, and optimize modern web apps with framework-specific reasoning and up-to-date knowledge.',
     displayName: 'v0-1.0-md',
     id: 'vercel/v0-1.0-md',
     pricing: {
@@ -1482,7 +1492,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '访问 v0 背后的模型以生成、修复和优化现代 Web 应用，具有特定框架的推理和最新知识。',
+      'Access the models behind v0 to generate, fix, and optimize modern web apps with framework-specific reasoning and up-to-date knowledge.',
     displayName: 'v0-1.5-md',
     id: 'vercel/v0-1.5-md',
     pricing: {
@@ -1498,7 +1508,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 300_000,
-    description: '一个非常低成本的多模态模型，处理图像、视频和文本输入的速度极快。',
+    description:
+      'A very low-cost multimodal model with extremely fast processing of image, video, and text inputs.',
     displayName: 'Nova Lite',
     id: 'amazon/nova-lite',
     pricing: {
@@ -1514,7 +1525,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: '一个仅文本模型，以非常低的成本提供最低延迟的响应。',
+    description: 'A text-only model offering ultra-low latency at very low cost.',
     displayName: 'Nova Micro',
     id: 'amazon/nova-micro',
     pricing: {
@@ -1532,7 +1543,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Haiku 是我们最快模型的下一代。与 Claude 3 Haiku 的速度相似，Claude 3.5 Haiku 在每个技能集上都得到了改进，并在许多智能基准测试中超越了我们上一代最大的模型 Claude 3 Opus。',
+      'Claude 3.5 Haiku is the next generation of our fastest model. It matches Claude 3 Haiku’s speed while improving across skills and surpassing the previous flagship Claude 3 Opus on many benchmarks.',
     displayName: 'Claude 3.5 Haiku',
     id: 'anthropic/claude-3.5-haiku',
     pricing: {
@@ -1552,7 +1563,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3 Haiku 是 Anthropic 迄今为止最快的模型，专为通常涉及较长提示的企业工作负载而设计。Haiku 可以快速分析大量文档，如季度文件、合同或法律案件，成本是其性能等级中其他模型的一半。',
+      'Claude 3 Haiku is Anthropic’s fastest model, designed for enterprise workloads with longer prompts. It can quickly analyze large documents like quarterly reports, contracts, or legal cases at half the cost of peers.',
     displayName: 'Claude 3 Haiku',
     id: 'anthropic/claude-3-haiku',
     pricing: {
@@ -1570,7 +1581,8 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 300_000,
-    description: '一个高度能干的多模态模型，具有准确性、速度和成本的最佳组合，适用于广泛的任务。',
+    description:
+      'A highly capable multimodal model with the best balance of accuracy, speed, and cost for a wide range of tasks.',
     displayName: 'Nova Pro',
     id: 'amazon/nova-pro',
     pricing: {
@@ -1586,7 +1598,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
 const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
   {
     description:
-      'Amazon Titan Text Embeddings V2 是一个轻量级、高效的多语言嵌入模型，支持 1024、512 和 256 维度。',
+      'Amazon Titan Text Embeddings V2 is a lightweight, efficient multilingual embedding model supporting 1024, 512, and 256 dimensions.',
     displayName: 'Titan Text Embeddings V2',
     id: 'amazon/titan-embed-text-v2',
     maxDimension: 1024,
@@ -1596,7 +1608,8 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: '最先进的嵌入模型，在英语、多语言和代码任务中具有出色的性能。',
+    description:
+      'A state-of-the-art embedding model with strong performance in English, multilingual, and code tasks.',
     displayName: 'Gemini Embedding 001',
     id: 'google/gemini-embedding-001',
     maxDimension: 768,
@@ -1606,7 +1619,8 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: '针对代码和英语语言任务优化的英语聚焦文本嵌入模型。',
+    description:
+      'An English-focused text embedding model optimized for code and English language tasks.',
     displayName: 'Text Embedding 005',
     id: 'google/text-embedding-005',
     maxDimension: 768,
@@ -1616,7 +1630,8 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: '针对跨语言任务优化的多语言文本嵌入模型，支持多种语言。',
+    description:
+      'A multilingual text embedding model optimized for cross-lingual tasks across many languages.',
     displayName: 'Text Multilingual Embedding 002',
     id: 'google/text-multilingual-embedding-002',
     maxDimension: 768,
@@ -1626,7 +1641,8 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: '一个允许对文本、图像或混合内容进行分类或转换为嵌入的模型。',
+    description:
+      'A model that classifies or converts text, images, or mixed content into embeddings.',
     displayName: 'Embed v4.0',
     id: 'cohere/embed-v4.0',
     maxDimension: 1024,
@@ -1636,7 +1652,8 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: '可以嵌入代码数据库和存储库以支持编码助手的代码嵌入模型。',
+    description:
+      'A code embedding model for embedding codebases and repositories to support coding assistants.',
     displayName: 'Codestral Embed',
     id: 'mistral/codestral-embed',
     maxDimension: 1024,
@@ -1646,7 +1663,8 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: '用于语义搜索、相似性、聚类和 RAG 工作流的通用文本嵌入模型。',
+    description:
+      'A general text embedding model for semantic search, similarity, clustering, and RAG workflows.',
     displayName: 'Mistral Embed',
     id: 'mistral/mistral-embed',
     maxDimension: 1024,
@@ -1656,7 +1674,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: 'OpenAI 最能干的嵌入模型，适用于英语和非英语任务。',
+    description: 'OpenAI’s most capable embedding model for English and non-English tasks.',
     displayName: 'text-embedding-3-large',
     id: 'openai/text-embedding-3-large',
     maxDimension: 3072,
@@ -1666,7 +1684,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: 'OpenAI 改进的、性能更高的 ada 嵌入模型版本。',
+    description: "OpenAI’s improved, higher-performance ada embedding model variant.",
     displayName: 'text-embedding-3-small',
     id: 'openai/text-embedding-3-small',
     maxDimension: 1536,
@@ -1676,7 +1694,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: 'OpenAI 的传统文本嵌入模型。',
+    description: "OpenAI’s legacy text embedding model.",
     displayName: 'text-embedding-ada-002',
     id: 'openai/text-embedding-ada-002',
     maxDimension: 1536,

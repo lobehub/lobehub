@@ -1,80 +1,21 @@
 'use client';
 
-import { ActionIcon, Dropdown, Icon, ScrollShadow } from '@lobehub/ui';
-import { Collapse } from 'antd';
-import { createStyles } from 'antd-style';
-import type { ItemType } from 'antd/es/menu/interface';
+import { Accordion, AccordionItem, ActionIcon, Dropdown, Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ArrowDownUpIcon, ChevronDownIcon, LucideCheck } from 'lucide-react';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { ArrowDownUpIcon } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { aiProviderSelectors } from '@/store/aiInfra';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import Actions from './Actions';
 import All from './All';
 import ProviderItem from './Item';
 import SortProviderModal from './SortProviderModal';
-
-// Sort type enumeration
-enum SortType {
-  Alphabetical = 'alphabetical',
-  AlphabeticalDesc = 'alphabeticalDesc',
-  Default = 'default',
-}
-
-const useStyles = createStyles(({ css, token }) => ({
-  collapse: css`
-    &.ant-collapse {
-      border: none;
-      border-radius: 0;
-      background: transparent;
-    }
-
-    .ant-collapse-item {
-      border: none !important;
-    }
-
-    .ant-collapse-header {
-      padding: 0 !important;
-      padding-block: 8px !important;
-
-      font-size: 12px !important;
-      color: ${token.colorTextSecondary} !important;
-
-      background: transparent !important;
-    }
-
-    .ant-collapse-content {
-      border: none !important;
-      background: transparent !important;
-    }
-
-    .ant-collapse-content-box {
-      padding: 0 !important;
-    }
-
-    .ant-collapse-expand-icon {
-      padding-inline-end: 4px !important;
-    }
-  `,
-  sectionHeader: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    margin-block-start: 8px;
-    padding-block: 4px;
-
-    font-size: 12px;
-    color: ${token.colorTextSecondary};
-  `,
-}));
+import { SortType, useProviderDropdownMenu } from './useDropdownMenu';
 
 const ProviderList = (props: {
   mobile?: boolean;
@@ -82,11 +23,10 @@ const ProviderList = (props: {
 }) => {
   const { onProviderSelect, mobile } = props;
   const { t } = useTranslation('modelProvider');
-  const { styles } = useStyles();
   const [open, setOpen] = useState(false);
 
-  // Collapse states - using array of active keys
-  const [activeKeys, setActiveKeys] = useState<string[]>(['enabled', 'custom', 'disabled']);
+  // Accordion states - using array of active keys
+  const [expandedKeys, setExpandedKeys] = useState<string[]>(['enabled', 'custom', 'disabled']);
 
   const [sortType, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.disabledModelProvidersSortType(s),
@@ -99,6 +39,11 @@ const ProviderList = (props: {
     },
     [updateSystemStatus],
   );
+
+  const dropdownMenu = useProviderDropdownMenu({
+    onSortChange: updateSortType,
+    sortType: (sortType || SortType.Default) as SortType,
+  });
 
   const enabledModelProviderList = useAiInfraStore(
     aiProviderSelectors.enabledAiProviderList,
@@ -118,7 +63,8 @@ const ProviderList = (props: {
   // Sort model providers based on sort type
   const sortedDisabledProviders = useMemo(() => {
     const providers = [...disabledModelProviderList];
-    switch (sortType) {
+    const currentSortType = (sortType || SortType.Default) as SortType;
+    switch (currentSortType) {
       case SortType.Alphabetical: {
         return providers.sort((a, b) => {
           const cmpDisplay = (a.name || a.id).localeCompare(b.name || b.id);
@@ -136,129 +82,11 @@ const ProviderList = (props: {
       case SortType.Default: {
         return providers;
       }
-      default: {
-        return providers;
-      }
     }
   }, [disabledModelProviderList, sortType]);
 
-  const collapseItems = useMemo(() => {
-    const items: {
-      children: ReactNode;
-      extra?: ReactNode;
-      key: string;
-      label: string;
-    }[] = [
-      {
-        children: (
-          <Flexbox gap={0}>
-            {enabledModelProviderList.map((item) => (
-              <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
-            ))}
-          </Flexbox>
-        ),
-        extra: (
-          <div onClick={(e) => e.stopPropagation()}>
-            <ActionIcon
-              icon={ArrowDownUpIcon}
-              onClick={() => setOpen(true)}
-              size={'small'}
-              title={t('menu.sort')}
-            />
-          </div>
-        ),
-        key: 'enabled',
-        label: t('menu.list.enabled'),
-      },
-    ];
-
-    // Add custom providers section if there are any
-    if (disabledCustomProviderList.length > 0) {
-      items.push({
-        children: (
-          <Flexbox gap={0}>
-            {disabledCustomProviderList.map((item) => (
-              <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
-            ))}
-          </Flexbox>
-        ),
-        key: 'custom',
-        label: t('menu.list.custom'),
-      });
-    }
-
-    // Add disabled providers section
-    items.push({
-      children: (
-        <Flexbox gap={0}>
-          {sortedDisabledProviders.map((item) => (
-            <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
-          ))}
-        </Flexbox>
-      ),
-      extra:
-        disabledModelProviderList.length > 1 ? (
-          <div onClick={(e) => e.stopPropagation()}>
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    icon: sortType === SortType.Default ? <Icon icon={LucideCheck} /> : <div />,
-                    key: 'default',
-                    label: t('menu.list.disabledActions.sortDefault'),
-                    onClick: () => updateSortType(SortType.Default),
-                  },
-                  {
-                    type: 'divider',
-                  },
-                  {
-                    icon:
-                      sortType === SortType.Alphabetical ? <Icon icon={LucideCheck} /> : <div />,
-                    key: 'alphabetical',
-                    label: t('menu.list.disabledActions.sortAlphabetical'),
-                    onClick: () => updateSortType(SortType.Alphabetical),
-                  },
-                  {
-                    icon:
-                      sortType === SortType.AlphabeticalDesc ? (
-                        <Icon icon={LucideCheck} />
-                      ) : (
-                        <div />
-                      ),
-                    key: 'alphabeticalDesc',
-                    label: t('menu.list.disabledActions.sortAlphabeticalDesc'),
-                    onClick: () => updateSortType(SortType.AlphabeticalDesc),
-                  },
-                ] as ItemType[],
-              }}
-              trigger={['click']}
-            >
-              <ActionIcon
-                icon={ArrowDownUpIcon}
-                size={'small'}
-                title={t('menu.list.disabledActions.sort')}
-              />
-            </Dropdown>
-          </div>
-        ) : undefined,
-      key: 'disabled',
-      label: t('menu.list.disabled'),
-    });
-
-    return items;
-  }, [
-    enabledModelProviderList,
-    disabledCustomProviderList,
-    sortedDisabledProviders,
-    disabledModelProviderList.length,
-    sortType,
-    t,
-    onProviderSelect,
-    updateSortType,
-  ]);
-
   return (
-    <ScrollShadow gap={4} height={'100%'} paddingInline={12} size={4} style={{ paddingBottom: 32 }}>
+    <Flexbox gap={4} paddingInline={4} style={{ paddingBottom: 32 }}>
       {!mobile && <All onClick={onProviderSelect} />}
       {open && (
         <SortProviderModal
@@ -269,24 +97,112 @@ const ProviderList = (props: {
           open={open}
         />
       )}
-      <Collapse
-        activeKey={activeKeys}
-        className={styles.collapse}
-        expandIcon={({ isActive }) => (
-          <Icon
-            icon={ChevronDownIcon}
-            size={'small'}
-            style={{
-              transform: isActive ? 'rotate(0deg)' : 'rotate(-90deg)',
-              transition: 'transform 0.2s ease',
-            }}
-          />
+      <Accordion
+        expandedKeys={expandedKeys}
+        onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
+      >
+        {/* Enabled Providers */}
+        <AccordionItem
+          action={
+            <div onClick={(e) => e.stopPropagation()}>
+              <ActionIcon
+                icon={ArrowDownUpIcon}
+                onClick={() => setOpen(true)}
+                size={'small'}
+                title={t('menu.sort')}
+              />
+            </div>
+          }
+          headerWrapper={(header) => (
+            <Dropdown
+              menu={{
+                items: [],
+              }}
+              trigger={['contextMenu']}
+            >
+              {header}
+            </Dropdown>
+          )}
+          itemKey="enabled"
+          paddingBlock={4}
+          paddingInline={'8px 4px'}
+          title={
+            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+              {t('menu.list.enabled')}
+            </Text>
+          }
+        >
+          <Flexbox gap={4} paddingBlock={1}>
+            {enabledModelProviderList.map((item) => (
+              <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
+            ))}
+          </Flexbox>
+        </AccordionItem>
+
+        {/* Custom Providers */}
+        {disabledCustomProviderList.length > 0 && (
+          <AccordionItem
+            headerWrapper={(header) => (
+              <Dropdown
+                menu={{
+                  items: [],
+                }}
+                trigger={['contextMenu']}
+              >
+                {header}
+              </Dropdown>
+            )}
+            itemKey="custom"
+            paddingBlock={4}
+            paddingInline={'8px 4px'}
+            title={
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {t('menu.list.custom')}
+              </Text>
+            }
+          >
+            <Flexbox gap={4} paddingBlock={1}>
+              {disabledCustomProviderList.map((item) => (
+                <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
+              ))}
+            </Flexbox>
+          </AccordionItem>
         )}
-        ghost
-        items={collapseItems}
-        onChange={(keys) => setActiveKeys(keys as string[])}
-      />
-    </ScrollShadow>
+
+        {/* Disabled Providers */}
+        <AccordionItem
+          action={
+            disabledModelProviderList.length > 1 ? (
+              <Actions dropdownMenu={dropdownMenu} />
+            ) : undefined
+          }
+          headerWrapper={(header) => (
+            <Dropdown
+              menu={{
+                items: disabledModelProviderList.length > 1 ? dropdownMenu : [],
+              }}
+              trigger={['contextMenu']}
+            >
+              {header}
+            </Dropdown>
+          )}
+          itemKey="disabled"
+          paddingBlock={4}
+          paddingInline={'8px 4px'}
+          title={
+            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+              {t('menu.list.disabled')}
+            </Text>
+          }
+        >
+          <Flexbox gap={4} paddingBlock={1}>
+            {sortedDisabledProviders.map((item) => (
+              <ProviderItem {...item} key={item.id} onClick={onProviderSelect} />
+            ))}
+          </Flexbox>
+        </AccordionItem>
+      </Accordion>
+    </Flexbox>
   );
 };
 

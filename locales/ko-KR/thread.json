@@ -1,10 +1,6 @@
 {
-  "actions": {
-    "confirmRemoveThread": "이 하위 주제를 삭제하려고 합니다. 삭제 후에는 복구할 수 없으니 신중하게 진행해 주세요."
-  },
-  "newPortalThread": {
-    "includeContext": "주제 맥락 포함",
-    "title": "새 하위 주제 시작"
-  },
+  "actions.confirmRemoveThread": "이 하위 주제를 삭제하려고 합니다. 삭제 후에는 복구할 수 없으니 신중하게 진행해 주세요.",
+  "newPortalThread.includeContext": "주제 맥락 포함",
+  "newPortalThread.title": "새 하위 주제 시작",
   "notSupportMultiModals": "하위 주제에서는 현재 파일/이미지 업로드를 지원하지 않습니다. 필요하신 경우 <1>💬 토론 구역</1>에 의견을 남겨 주세요."
 }

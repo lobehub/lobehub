@@ -2,10 +2,11 @@ import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import {
-  NewGeneration,
-  NewGenerationBatch,
+  type NewGeneration,
+  type NewGenerationBatch,
   asyncTasks,
   generationBatches,
   generations,
@@ -133,6 +134,20 @@ export const imageRouter = router({
     // 防御性检测：确保没有完整URL进入数据库
     validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
 
+    const chargeResult = await chargeBeforeGenerate({
+      clientIp: ctx.clientIp,
+      configForDatabase,
+      generationParams: params,
+      generationTopicId,
+      imageNum,
+      model,
+      provider,
+      userId,
+    });
+    if (chargeResult) {
+      return chargeResult;
+    }
+
     // 步骤 1: 在事务中原子性地创建所有数据库记录
     const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(async (tx) => {
       log('Starting database transaction for image generation');
@@ -235,7 +250,9 @@ export const imageRouter = router({
         log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
         asyncCaller.image.createImage({
+          generationBatchId: createdBatch.id,
           generationId: generation.id,
+          generationTopicId,
           model,
           params,
           provider,

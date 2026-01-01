@@ -1,22 +1,27 @@
 'use client';
 
-import { createStyles } from 'antd-style';
-import { rgba } from 'polished';
+import { createStaticStyles, useThemeMode } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(
-  ({ css, token, isDarkMode }) => css`
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  dividerDark: css`
     flex: none;
     width: 100%;
     height: 6px;
-    background: ${isDarkMode ? rgba(token.colorFillTertiary, 0.04) : token.colorFillTertiary};
+    background: color-mix(in srgb, ${cssVar.colorFillTertiary} 4%, transparent);
   `,
-);
+  dividerLight: css`
+    flex: none;
+    width: 100%;
+    height: 6px;
+    background: ${cssVar.colorFillTertiary};
+  `,
+}));
 
 const Divider = memo(() => {
-  const { styles } = useStyles();
+  const { isDarkMode } = useThemeMode();
 
-  return <div className={styles} />;
+  return <div className={isDarkMode ? styles.dividerDark : styles.dividerLight} />;
 });
 
 export default Divider;

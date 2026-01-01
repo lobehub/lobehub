@@ -1,15 +1,18 @@
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   LobeChatGroupChatConfig,
   LobeChatGroupFullConfig,
   LobeChatGroupMetaConfig,
 } from '@lobechat/types';
 
-import { DEFAULT_MODEL, DEFAULT_PROVIDER } from './llm';
+import { DEFAULT_MODEL } from './llm';
 
 export const DEFAULT_CHAT_GROUP_CHAT_CONFIG: LobeChatGroupChatConfig = {
   allowDM: true,
   enableSupervisor: true,
   maxResponseInRow: 10,
+  openingMessage: '',
+  openingQuestions: [],
   orchestratorModel: DEFAULT_MODEL,
   orchestratorProvider: DEFAULT_PROVIDER,
   responseOrder: 'natural',

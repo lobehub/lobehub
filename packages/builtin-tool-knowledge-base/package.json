@@ -1,0 +1,25 @@
+{
+  "name": "@lobechat/builtin-tool-knowledge-base",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/prompts": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^4",
+    "antd": "^6",
+    "antd-style": "*",
+    "polished": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

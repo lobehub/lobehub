@@ -1,28 +1,26 @@
-import { ActionIcon, Icon } from '@lobehub/ui';
-import { Button } from 'antd';
-import { createStyles } from 'antd-style';
+import { ActionIcon, Button, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import fastDeepEqual from 'fast-deep-equal';
 import { LucidePlus, LucideTrash } from 'lucide-react';
-import { CSSProperties, memo, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import { v4 as uuidv4 } from 'uuid';
 
 import { FormInput } from '@/components/FormInput';
 
-import { KeyValueItem, localListToRecord, recordToLocalList } from './utils';
+import { type KeyValueItem, localListToRecord, recordToLocalList } from './utils';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     position: relative;
 
     width: 100%;
     padding: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   input: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   row: css`
@@ -34,7 +32,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   title: css`
     margin-block-end: 8px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -60,7 +58,6 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     deleteTooltip,
     style,
   }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('components');
     const [items, setItems] = useState<KeyValueItem[]>(() => recordToLocalList(value));
     const prevValueRef = useRef<Record<string, string> | undefined>(undefined);

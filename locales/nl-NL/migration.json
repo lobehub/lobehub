@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Wis lokale gegevens op",
-      "downloadBackup": "Download gegevensback-up",
-      "reUpgrade": "Opnieuw upgraden",
-      "start": "Beginnen met gebruiken",
-      "upgrade": "Upgraden"
-    },
-    "clear": {
-      "confirm": "Lokale gegevens worden binnenkort gewist (globale instellingen blijven ongewijzigd). Zorg ervoor dat je een gegevensback-up hebt gedownload."
-    },
-    "description": "In de nieuwe versie heeft de gegevensopslag van {{appName}} een enorme sprong voorwaarts gemaakt. Daarom moeten we de oude gegevens upgraden om je een betere gebruikerservaring te bieden.",
-    "features": {
-      "capability": {
-        "desc": "Gebaseerd op IndexedDB-technologie, genoeg om al je levenslange chatberichten op te slaan.",
-        "title": "Grote capaciteit"
-      },
-      "performance": {
-        "desc": "Miljoenen berichten worden automatisch geïndexeerd, met milliseconde-respons op zoekopdrachten.",
-        "title": "Hoge prestaties"
-      },
-      "use": {
-        "desc": "Ondersteunt het doorzoeken van titels, beschrijvingen, labels, berichtinhoud en zelfs vertaalde teksten, waardoor de dagelijkse zoekefficiëntie aanzienlijk is verbeterd.",
-        "title": "Gebruiksvriendelijker"
-      }
-    },
-    "title": "Evolutie van {{appName}}-gegevens",
-    "upgrade": {
-      "error": {
-        "subTitle": "Het spijt ons, er is een fout opgetreden tijdens het upgraden van de database. Probeer de volgende oplossingen: A. Wis lokale gegevens en importeer de back-upgegevens opnieuw; B. Klik op de knop 'Opnieuw upgraden'.<br><br> Als het probleem aanhoudt, <1>dien een probleem in</1> en we zullen je zo snel mogelijk helpen.",
-        "title": "Database-upgrade mislukt"
-      },
-      "success": {
-        "subTitle": "De database van {{appName}} is succesvol geüpgraded naar de nieuwste versie, begin nu met ervaren!",
-        "title": "Database-upgrade succesvol"
-      }
-    },
-    "upgradeTip": "De upgrade duurt ongeveer 10-20 seconden, sluit {{appName}} niet tijdens het upgraden."
-  },
-  "migrateError": {
-    "missVersion": "De geïmporteerde gegevens missen een versienummer. Controleer het bestand en probeer het opnieuw.",
-    "noMigration": "Er is geen migratieplan gevonden voor de huidige versie. Controleer het versienummer en probeer het opnieuw. Als het probleem aanhoudt, dien dan een probleem in."
-  }
+  "dbV1.action.clearDB": "Lokale gegevens wissen",
+  "dbV1.action.downloadBackup": "Back-up van gegevens downloaden",
+  "dbV1.action.reUpgrade": "Opnieuw upgraden",
+  "dbV1.action.start": "Aan de slag",
+  "dbV1.action.upgrade": "Upgraden",
+  "dbV1.clear.confirm": "Je staat op het punt om lokale gegevens te wissen (globale instellingen blijven behouden). Bevestig dat je een back-up van de gegevens hebt gedownload.",
+  "dbV1.description": "In de nieuwe versie heeft de gegevensopslag van {{appName}} aanzienlijke verbeteringen ondergaan. Daarom moeten we de oude gegevens upgraden om je een betere gebruikerservaring te bieden.",
+  "dbV1.features.capability.desc": "Gebaseerd op IndexedDB-technologie, in staat om een leven lang aan chatberichten op te slaan.",
+  "dbV1.features.capability.title": "Grote Capaciteit",
+  "dbV1.features.performance.desc": "Indexeert automatisch miljoenen berichten, met zoekopdrachten die binnen milliseconden reageren.",
+  "dbV1.features.performance.title": "Hoge Prestaties",
+  "dbV1.features.use.desc": "Ondersteunt zoeken op titel, beschrijving, tags, berichtinhoud en zelfs vertaalde tekst, wat de dagelijkse zoekefficiëntie aanzienlijk verbetert.",
+  "dbV1.features.use.title": "Gebruiksvriendelijker",
+  "dbV1.title": "{{appName}} Gegevensontwikkeling",
+  "dbV1.upgrade.error.subTitle": "Onze excuses, er is een fout opgetreden tijdens het upgraden van de database. Probeer de volgende oplossingen: A. Wis lokale gegevens en importeer de back-up opnieuw; B. Klik op de knop 'Opnieuw upgraden'.<br><br> Als het probleem aanhoudt, <1>dien een probleemrapport in</1>, dan helpen we je zo snel mogelijk.",
+  "dbV1.upgrade.error.title": "Database-upgrade mislukt",
+  "dbV1.upgrade.success.subTitle": "De database is succesvol geüpgraded naar de nieuwste versie. Je kunt nu doorgaan.",
+  "dbV1.upgrade.success.title": "Database-upgrade geslaagd",
+  "dbV1.upgradeTip": "De upgrade duurt ongeveer 10 tot 20 seconden. Sluit {{appName}} niet tijdens het upgradeproces.",
+  "migrateError.missVersion": "De geïmporteerde gegevens bevatten geen versienummer. Controleer het bestand en probeer het opnieuw.",
+  "migrateError.noMigration": "Er is geen migratieoplossing gevonden voor de huidige versie. Controleer het versienummer en probeer het opnieuw. Als het probleem aanhoudt, dien dan een feedbackverzoek in."
 }

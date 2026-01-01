@@ -1,206 +1,70 @@
 {
-  "ai21": {
-    "description": "AI21 Labs 為企業構建基礎模型和人工智慧系統，加速生成性人工智慧在生產中的應用。"
-  },
-  "ai302": {
-    "description": "302.AI 是一個按需付費的 AI 應用平台，提供市面上最全的 AI API 和 AI 在線應用"
-  },
-  "ai360": {
-    "description": "360 AI 是 360 公司推出的 AI 模型和服務平台，提供多種先進的自然語言處理模型，包括 360GPT2 Pro、360GPT Pro、360GPT Turbo 和 360GPT Turbo Responsibility 8K。這些模型結合了大規模參數和多模態能力，廣泛應用於文本生成、語義理解、對話系統與代碼生成等領域。通過靈活的定價策略，360 AI 滿足多樣化用戶需求，支持開發者集成，推動智能化應用的革新和發展。"
-  },
-  "aihubmix": {
-    "description": "AiHubMix 透過統一的 API 介面提供對多種 AI 模型的存取。"
-  },
-  "akashchat": {
-    "description": "Akash 是一個無需許可的雲端資源市場，與傳統雲端供應商相比，其定價具有競爭力。"
-  },
-  "anthropic": {
-    "description": "Anthropic 是一家專注於人工智慧研究和開發的公司，提供了一系列先進的語言模型，如 Claude 3.5 Sonnet、Claude 3 Sonnet、Claude 3 Opus 和 Claude 3 Haiku。這些模型在智能、速度和成本之間取得了理想的平衡，適用於從企業級工作負載到快速響應的各種應用場景。Claude 3.5 Sonnet 作為其最新模型，在多項評估中表現優異，同時保持了較高的性價比。"
-  },
-  "azure": {
-    "description": "Azure 提供多種先進的 AI 模型，包括 GPT-3.5 和最新的 GPT-4 系列，支持多種數據類型和複雜任務，致力於安全、可靠和可持續的 AI 解決方案。"
-  },
-  "azureai": {
-    "description": "Azure 提供多種先進的 AI 模型，包括 GPT-3.5 和最新的 GPT-4 系列，支持多種數據類型和複雜任務，致力於安全、可靠和可持續的 AI 解決方案。"
-  },
-  "baichuan": {
-    "description": "百川智能是一家專注於人工智慧大模型研發的公司，其模型在國內知識百科、長文本處理和生成創作等中文任務上表現卓越，超越了國外主流模型。百川智能還具備行業領先的多模態能力，在多項權威評測中表現優異。其模型包括 Baichuan 4、Baichuan 3 Turbo 和 Baichuan 3 Turbo 128k 等，分別針對不同應用場景進行優化，提供高性價比的解決方案。"
-  },
-  "bedrock": {
-    "description": "Bedrock 是亞馬遜 AWS 提供的一項服務，專注於為企業提供先進的 AI 語言模型和視覺模型。其模型家族包括 Anthropic 的 Claude 系列、Meta 的 Llama 3.1 系列等，涵蓋從輕量級到高性能的多種選擇，支持文本生成、對話、圖像處理等多種任務，適用於不同規模和需求的企業應用。"
-  },
-  "bfl": {
-    "description": "領先的尖端人工智慧研究實驗室，打造明日的視覺基礎建設。"
-  },
-  "cerebras": {
-    "description": "Cerebras 是一個基於其專用 CS-3 系統的 AI 推理平台，旨在提供全球最快、即時回應、高吞吐量的 LLM 服務，專為消除延遲並加速複雜的 AI 工作流程（如即時程式碼生成與代理任務）而設計。"
-  },
-  "cloudflare": {
-    "description": "在 Cloudflare 的全球網絡上運行由無伺服器 GPU 驅動的機器學習模型。"
-  },
-  "cohere": {
-    "description": "Cohere 為您帶來最前沿的多語言模型、先進的檢索功能以及為現代企業量身定制的 AI 工作空間 — 一切都集成在一個安全的平台中。"
-  },
-  "cometapi": {
-    "description": "CometAPI 是一個提供多種前沿大型模型介面的服務平台，支援 OpenAI、Anthropic、Google 及更多，適合多樣化的開發和應用需求。使用者可根據自身需求靈活選擇最優的模型和價格，助力 AI 體驗的提升。"
-  },
-  "comfyui": {
-    "description": "強大的開源圖像、影片、音訊生成工作流程引擎，支援 SD、FLUX、Qwen、Hunyuan、WAN 等先進模型，提供節點化工作流程編輯與私有化部署能力"
-  },
-  "deepseek": {
-    "description": "DeepSeek 是一家專注於人工智慧技術研究和應用的公司，其最新模型 DeepSeek-V2.5 融合了通用對話和代碼處理能力，並在人類偏好對齊、寫作任務和指令跟隨等方面實現了顯著提升。"
-  },
-  "fal": {
-    "description": "面向開發者的生成式媒體平台"
-  },
-  "fireworksai": {
-    "description": "Fireworks AI 是一家領先的高級語言模型服務商，專注於功能調用和多模態處理。其最新模型 Firefunction V2 基於 Llama-3，優化用於函數調用、對話及指令跟隨。視覺語言模型 FireLLaVA-13B 支持圖像和文本混合輸入。其他 notable 模型包括 Llama 系列和 Mixtral 系列，提供高效的多語言指令跟隨與生成支持。"
-  },
-  "giteeai": {
-    "description": "Gitee AI 的 Serverless API 為 AI 開發者提供開箱即用的大模型推理 API 服務。"
-  },
-  "github": {
-    "description": "透過 GitHub 模型，開發者可以成為 AI 工程師，並使用業界領先的 AI 模型進行建設。"
-  },
-  "google": {
-    "description": "Google 的 Gemini 系列是其最先進、通用的 AI 模型，由 Google DeepMind 打造，專為多模態設計，支持文本、代碼、圖像、音頻和視頻的無縫理解與處理。適用於從數據中心到移動設備的多種環境，極大提升了 AI 模型的效率與應用廣泛性。"
-  },
-  "groq": {
-    "description": "Groq 的 LPU 推理引擎在最新的獨立大語言模型（LLM）基準測試中表現卓越，以其驚人的速度和效率重新定義了 AI 解決方案的標準。Groq 是一種即時推理速度的代表，在基於雲的部署中展現了良好的性能。"
-  },
-  "higress": {
-    "description": "Higress 是一款雲原生 API 網關，為了解決 Tengine reload 對長連接業務的影響，以及 gRPC/Dubbo 負載均衡能力不足而在阿里內部誕生。"
-  },
-  "huggingface": {
-    "description": "HuggingFace Inference API 提供了一種快速且免費的方式，讓您可以探索成千上萬種模型，適用於各種任務。無論您是在為新應用程式進行原型設計，還是在嘗試機器學習的功能，這個 API 都能讓您即時訪問多個領域的高性能模型。"
-  },
-  "hunyuan": {
-    "description": "由騰訊研發的大語言模型，具備強大的中文創作能力、複雜語境下的邏輯推理能力，以及可靠的任務執行能力"
-  },
-  "infiniai": {
-    "description": "為應用開發者提供高性能、易上手、安全可靠的大模型服務，覆蓋從大模型開發到大模型服務化部署的全流程。"
-  },
-  "internlm": {
-    "description": "致力於大模型研究與開發工具鏈的開源組織。為所有 AI 開發者提供高效、易用的開源平台，讓最前沿的大模型與算法技術觸手可及"
-  },
-  "jina": {
-    "description": "Jina AI 成立於 2020 年，是一家領先的搜索 AI 公司。我們的搜索底座平台包含了向量模型、重排器和小語言模型，可幫助企業構建可靠且高品質的生成式 AI 和多模態的搜索應用。"
-  },
-  "lmstudio": {
-    "description": "LM Studio 是一個用於在您的電腦上開發和實驗 LLMs 的桌面應用程式。"
-  },
-  "minimax": {
-    "description": "MiniMax 是 2021 年成立的通用人工智慧科技公司，致力於與用戶共創智能。MiniMax 自主研發了不同模態的通用大模型，其中包括萬億參數的 MoE 文本大模型、語音大模型以及圖像大模型。並推出了海螺 AI 等應用。"
-  },
-  "mistral": {
-    "description": "Mistral 提供先進的通用、專業和研究型模型，廣泛應用於複雜推理、多語言任務、代碼生成等領域，通過功能調用接口，用戶可以集成自定義功能，實現特定應用。"
-  },
-  "modelscope": {
-    "description": "ModelScope是阿里雲推出的模型即服務平台，提供豐富的AI模型和推理服務。"
-  },
-  "moonshot": {
-    "description": "Moonshot 是由北京月之暗面科技有限公司推出的開源平台，提供多種自然語言處理模型，應用領域廣泛，包括但不限於內容創作、學術研究、智能推薦、醫療診斷等，支持長文本處理和複雜生成任務。"
-  },
-  "nebius": {
-    "description": "Nebius 透過構建大規模GPU叢集及垂直整合的雲端平台，為全球AI創新者提供高效能基礎設施。"
-  },
-  "newapi": {
-    "description": "開源的多個 AI 服務聚合統一轉發平台"
-  },
-  "novita": {
-    "description": "Novita AI 是一個提供多種大語言模型與 AI 圖像生成的 API 服務的平台，靈活、可靠且具有成本效益。它支持 Llama3、Mistral 等最新的開源模型，並為生成式 AI 應用開發提供了全面、用戶友好且自動擴展的 API 解決方案，適合 AI 初創公司的快速發展。"
-  },
-  "nvidia": {
-    "description": "NVIDIA NIM™ 提供容器，可用於自托管 GPU 加速推理微服務，支持在雲端、數據中心、RTX™ AI 個人電腦和工作站上部署預訓練和自定義 AI 模型。"
-  },
-  "ollama": {
-    "description": "Ollama 提供的模型廣泛涵蓋代碼生成、數學運算、多語種處理和對話互動等領域，支持企業級和本地化部署的多樣化需求。"
-  },
-  "ollamacloud": {
-    "description": "Ollama Cloud 提供官方託管的推理服務，開箱即用地存取 Ollama 模型庫，並支援 OpenAI 相容介面。"
-  },
-  "openai": {
-    "description": "OpenAI 是全球領先的人工智慧研究機構，其開發的模型如 GPT 系列推動了自然語言處理的前沿。OpenAI 致力於透過創新和高效的 AI 解決方案改變多個行業。他們的產品具有顯著的性能和經濟性，廣泛用於研究、商業和創新應用。"
-  },
-  "openrouter": {
-    "description": "OpenRouter 是一個提供多種前沿大模型接口的服務平台，支持 OpenAI、Anthropic、LLaMA 及更多，適合多樣化的開發和應用需求。用戶可根據自身需求靈活選擇最優的模型和價格，助力 AI 體驗的提升。"
-  },
-  "perplexity": {
-    "description": "Perplexity 是一家領先的對話生成模型提供商，提供多種先進的 Llama 3.1 模型，支持在線和離線應用，特別適用於複雜的自然語言處理任務。"
-  },
-  "ppio": {
-    "description": "PPIO 派歐雲提供穩定、高性價比的開源模型 API 服務，支持 DeepSeek 全系列、Llama、Qwen 等行業領先的大模型。"
-  },
-  "qiniu": {
-    "description": "Qiniu 是領先的雲服務提供商，提供高性價比、穩定的實時和批量 AI 推理服務，包括 DeepSeek、Llama 和 Qwen 等行業領先的大模型。"
-  },
-  "qwen": {
-    "description": "通義千問是阿里雲自主研發的超大規模語言模型，具有強大的自然語言理解和生成能力。它可以回答各種問題、創作文字內容、表達觀點看法、撰寫代碼等，在多個領域發揮作用。"
-  },
-  "replicate": {
-    "description": "Replicate 透過簡單的雲端 API 執行 FLUX 和 Stable Diffusion 等開源影像模型。"
-  },
-  "sambanova": {
-    "description": "SambaNova Cloud 讓開發者輕鬆使用最佳的開源模型，並享受最快的推理速度。"
-  },
-  "search1api": {
-    "description": "Search1API 提供可根據需要自行聯網的 DeepSeek 系列模型的訪問，包括標準版和快速版本，支持多種參數規模的模型選擇。"
-  },
-  "sensenova": {
-    "description": "商湯日日新，依托商湯大裝置的強大基礎支撐，提供高效易用的全棧大模型服務。"
-  },
-  "siliconcloud": {
-    "description": "SiliconFlow 致力於加速 AGI，以惠及人類，通過易用與成本低的 GenAI 堆疊提升大規模 AI 效率。"
-  },
-  "spark": {
-    "description": "科大訊飛星火大模型提供多領域、多語言的強大 AI 能力，利用先進的自然語言處理技術，構建適用於智能硬體、智慧醫療、智慧金融等多種垂直場景的創新應用。"
-  },
-  "stepfun": {
-    "description": "階級星辰大模型具備行業領先的多模態及複雜推理能力，支持超長文本理解和強大的自主調度搜索引擎功能。"
-  },
-  "taichu": {
-    "description": "中科院自動化研究所和武漢人工智慧研究院推出新一代多模態大模型，支持多輪問答、文本創作、圖像生成、3D理解、信號分析等全面問答任務，擁有更強的認知、理解、創作能力，帶來全新互動體驗。"
-  },
-  "tencentcloud": {
-    "description": "知識引擎原子能力（LLM Knowledge Engine Atomic Power）基於知識引擎研發的知識問答全鏈路能力，面向企業及開發者，提供靈活組建及開發模型應用的能力。您可透過多款原子能力組建您專屬的模型服務，調用文檔解析、拆分、embedding、多輪改寫等服務進行組裝，定制企業專屬 AI 業務。"
-  },
-  "togetherai": {
-    "description": "Together AI 致力於透過創新的 AI 模型實現領先的性能，提供廣泛的自定義能力，包括快速擴展支持和直觀的部署流程，滿足企業的各種需求。"
-  },
-  "upstage": {
-    "description": "Upstage 專注於為各種商業需求開發 AI 模型，包括 Solar LLM 和文檔 AI，旨在實現工作的人工通用智能（AGI）。通過 Chat API 創建簡單的對話代理，並支持功能調用、翻譯、嵌入以及特定領域應用。"
-  },
-  "v0": {
-    "description": "v0 是一個配對程式設計助手，你只需用自然語言描述想法，它就能為你的專案生成程式碼和使用者介面（UI）"
-  },
-  "vercelaigateway": {
-    "description": "Vercel AI Gateway 提供統一的 API 來存取 100 多個模型，透過單一端點即可使用 OpenAI、Anthropic、Google 等多個供應商的模型。支援預算設定、使用監控、請求負載平衡和故障轉移。"
-  },
-  "vertexai": {
-    "description": "Google 的 Gemini 系列是其最先進、通用的 AI 模型，由 Google DeepMind 打造，專為多模態設計，支持文本、程式碼、圖像、音訊和視頻的無縫理解與處理。適用於從數據中心到行動裝置的多種環境，極大提升了 AI 模型的效率與應用廣泛性。"
-  },
-  "vllm": {
-    "description": "vLLM 是一個快速且易於使用的庫，用於 LLM 推理和服務。"
-  },
-  "volcengine": {
-    "description": "字節跳動推出的大模型服務的開發平台，提供功能豐富、安全以及具備價格競爭力的模型調用服務，同時提供模型數據、精調、推理、評測等端到端功能，全方位保障您的 AI 應用開發落地。"
-  },
-  "wenxin": {
-    "description": "企業級一站式大模型與AI原生應用開發及服務平台，提供最全面易用的生成式人工智慧模型開發、應用開發全流程工具鏈"
-  },
-  "xai": {
-    "description": "xAI 是一家致力於構建人工智慧以加速人類科學發現的公司。我們的使命是推動我們對宇宙的共同理解。"
-  },
-  "xinference": {
-    "description": "Xorbits推論（Xinference）是一個開源平台，用於簡化各種AI模型的運行與整合。透過Xinference，您可以在雲端或本地環境中使用任何開源LLM、嵌入模型和多模態模型進行推論，並創建強大的AI應用程式。"
-  },
-  "zenmux": {
-    "description": "ZenMux 是一個統一的 AI 服務整合平台，支援 OpenAI、Anthropic、Google VertexAI 等多種主流 AI 服務介面。提供靈活的路由功能，讓您可以輕鬆切換與管理不同的 AI 模型。"
-  },
-  "zeroone": {
-    "description": "01.AI 專注於 AI 2.0 時代的人工智慧技術，大力推動「人+人工智慧」的創新和應用，採用超強大模型和先進 AI 技術以提升人類生產力，實現技術賦能。"
-  },
-  "zhipu": {
-    "description": "智譜 AI 提供多模態與語言模型的開放平台，支持廣泛的 AI 應用場景，包括文本處理、圖像理解與編程輔助等。"
-  }
+  "ai21.description": "AI21 Labs 為企業打造基礎模型與 AI 系統，加速生成式 AI 的實際應用。",
+  "ai302.description": "302.AI 是一個按量計費的 AI 平台，提供多樣化的 AI API 與線上 AI 應用程式。",
+  "ai360.description": "360 AI 是來自 360 的模型與服務平台，提供 NLP 模型如 360GPT2 Pro、360GPT Pro 與 360GPT Turbo，結合大規模參數與多模態能力，支援文本生成、語意理解、對話與程式碼處理，並具備彈性定價以滿足多元需求。",
+  "aihubmix.description": "AiHubMix 透過統一的 API 提供多種 AI 模型的存取。",
+  "akashchat.description": "Akash 是一個無需許可的雲端資源市場，與傳統雲端供應商相比，其定價具有競爭力。",
+  "anthropic.description": "Anthropic 開發先進語言模型，如 Claude 3.5 Sonnet、Claude 3 Sonnet、Claude 3 Opus 與 Claude 3 Haiku，兼顧智慧、速度與成本，適用於企業與即時應用場景。",
+  "azure.description": "Azure 提供先進的 AI 模型，包括 GPT-3.5 與 GPT-4 系列，支援多樣資料類型與複雜任務，並強調安全、可靠與永續的 AI 發展。",
+  "azureai.description": "Azure 提供先進的 AI 模型，包括 GPT-3.5 與 GPT-4 系列，支援多樣資料類型與複雜任務，並強調安全、可靠與永續的 AI 發展。",
+  "baichuan.description": "百川智能專注於基礎模型，擅長中文知識、長文本處理與創意生成。其模型（如百川4、百川3 Turbo、百川3 Turbo 128k）針對不同場景優化，具備高性價比。",
+  "bedrock.description": "Amazon Bedrock 為企業提供先進的語言與視覺模型，包括 Anthropic Claude 與 Meta Llama 3.1，涵蓋從輕量到高效能的文本、對話與圖像任務。",
+  "bfl.description": "一家領先的前沿 AI 研究實驗室，致力於打造未來的視覺基礎設施。",
+  "cerebras.description": "Cerebras 是一個基於 CS-3 系統的推理平台，專注於超低延遲與高吞吐量的大型語言模型服務，適用於即時任務如程式碼生成與智能代理。",
+  "cloudflare.description": "在 Cloudflare 全球網路上運行無伺服器、GPU 加速的機器學習模型。",
+  "cohere.description": "Cohere 提供尖端的多語言模型、先進的檢索功能與 AI 工作空間，為現代企業打造一體化且安全的平台。",
+  "cometapi.description": "CometAPI 提供來自 OpenAI、Anthropic、Google 等前沿模型的存取，讓使用者可依需求選擇最佳模型與價格。",
+  "comfyui.description": "一個強大的開源工作流程引擎，支援圖像、影片與音訊生成，支援 SD、FLUX、Qwen、鴻源與 WAN 等模型，具備節點式編輯與私有部署功能。",
+  "deepseek.description": "DeepSeek 專注於 AI 研究與應用，其最新 DeepSeek-V3 基準表現超越 Qwen2.5-72B 與 Llama-3.1-405B 等開源模型，並與 GPT-4o、Claude-3.5-Sonnet 等封閉模型看齊。",
+  "fal.description": "為開發者打造的生成式媒體平台。",
+  "fireworksai.description": "Fireworks AI 提供先進語言模型服務，支援函式呼叫與多模態處理。Firefunction V2（基於 Llama-3）優化於函式呼叫、對話與指令執行，FireLLaVA-13B 則支援圖文混合輸入。其他知名模型包括 Llama 與 Mixtral 系列。",
+  "giteeai.description": "Gitee AI Serverless API 為開發者提供即插即用的大型語言模型推理服務。",
+  "github.description": "透過 GitHub 模型，開發者可如 AI 工程師般使用業界領先的模型進行開發。",
+  "google.description": "Google 的 Gemini 系列是其最先進的通用 AI，由 Google DeepMind 打造，支援文本、程式碼、圖像、音訊與影片的多模態應用，具備從資料中心到行動裝置的高效擴展能力。",
+  "groq.description": "Groq 的 LPU 推理引擎以卓越的速度與效率在基準測試中表現出色，為低延遲雲端 LLM 推理樹立新標準。",
+  "higress.description": "Higress 是阿里巴巴內部打造的雲原生 API 閘道，解決 Tengine 重載對長連線的影響與 gRPC/Dubbo 負載均衡的不足。",
+  "huggingface.description": "Hugging Face 推理 API 提供快速探索數千個模型的方式，讓原型設計與機器學習實驗更即時高效。",
+  "hunyuan.description": "由騰訊開發的大型語言模型，具備優秀的中文寫作能力、複雜語境推理與穩定的任務執行表現。",
+  "infiniai.description": "為應用開發者提供高效能、易用且安全的大型語言模型服務，涵蓋從模型開發到生產部署的完整流程。",
+  "internlm.description": "一個專注於大型模型研究與工具的開源組織，提供高效、易用的平台，讓尖端模型與演算法更易於取得。",
+  "jina.description": "Jina AI 成立於 2020 年，是領先的搜尋 AI 公司。其搜尋技術堆疊包含向量模型、重排序器與小型語言模型，打造可靠且高品質的生成式與多模態搜尋應用。",
+  "lmstudio.description": "LM Studio 是一款桌面應用程式，可在本機開發與實驗大型語言模型。",
+  "minimax.description": "MiniMax 成立於 2021 年，致力於打造通用 AI，擁有多模態基礎模型，包括兆級參數的 MoE 文本模型、語音模型與視覺模型，並推出如海螺 AI 等應用。",
+  "mistral.description": "Mistral 提供先進的通用、專業與研究模型，支援複雜推理、多語言任務與程式碼生成，並支援函式呼叫以實現自訂整合。",
+  "modelscope.description": "ModelScope 是阿里雲的模型即服務平台，提供多樣化的 AI 模型與推理服務。",
+  "moonshot.description": "Moonshot（來自北京月之暗科技）提供多種 NLP 模型，適用於內容創作、研究、推薦與醫療分析等場景，具備強大的長文本與複雜生成能力。",
+  "nebius.description": "Nebius 透過大規模 GPU 叢集與垂直整合雲平台，為全球 AI 創新者提供高效能基礎設施。",
+  "newapi.description": "一個開源的 AI 服務聚合與路由平台。",
+  "novita.description": "Novita AI 提供靈活、可靠且具成本效益的 LLM 與圖像生成 API，支援 Llama 3、Mistral 等模型，為生成式 AI 新創提供可擴展且友善的開發介面。",
+  "nvidia.description": "NVIDIA NIM 提供容器化的自託管 GPU 加速推理微服務，支援雲端、資料中心、RTX AI PC 與工作站上的預訓練與自訂模型。",
+  "ollama.description": "Ollama 提供涵蓋程式碼生成、數學、多語言處理與對話的模型，支援企業與本地部署。",
+  "ollamacloud.description": "Ollama Cloud 提供託管推理服務，內建存取 Ollama 模型庫與相容 OpenAI 的 API。",
+  "openai.description": "OpenAI 是領先的 AI 研究實驗室，其 GPT 模型推動自然語言處理的進步，廣泛應用於研究、商業與創新領域，展現高效能與高價值。",
+  "openrouter.description": "OpenRouter 提供來自 OpenAI、Anthropic、LLaMA 等多個前沿模型的存取，讓使用者可依需求選擇最佳模型與價格。",
+  "perplexity.description": "Perplexity 提供先進的對話模型，包括 Llama 3.1 變體，支援線上與離線使用及複雜 NLP 任務。",
+  "ppio.description": "PPIO 提供可靠且具成本效益的開源模型 API，包括 DeepSeek、Llama、Qwen 等領先模型。",
+  "qiniu.description": "七牛提供可靠、具成本效益的即時與批次 AI 推理服務，操作簡便。",
+  "qwen.description": "Qwen 是阿里雲的大型語言模型，具備強大的理解與生成能力，涵蓋問答、寫作、觀點表達與程式碼等多種領域。",
+  "replicate.description": "Replicate 透過簡單的雲端 API 執行如 FLUX 與 Stable Diffusion 等開源圖像模型。",
+  "sambanova.description": "SambaNova Cloud 讓開發者以極快速度使用頂尖開源模型進行推理。",
+  "search1api.description": "Search1API 提供 DeepSeek 模型的存取，支援可選的網路連接，涵蓋多種參數規模的標準與快速版本。",
+  "sensenova.description": "SenseNova 依託商湯基礎設施，提供高效、易用的全棧大型語言模型服務。",
+  "siliconcloud.description": "SiliconCloud 是一個具成本效益的生成式 AI 雲端服務，基於強大的開源基礎模型構建。",
+  "spark.description": "科大訊飛星火提供強大的多語言 AI 能力，推動智慧硬體、醫療、金融等垂直領域的創新。",
+  "stepfun.description": "Stepfun 模型具備領先的多模態與複雜推理能力，支援長文本理解與強大的自主搜尋編排。",
+  "taichu.description": "太初是中科院自動化所與武漢人工智慧研究院推出的新一代多模態模型，支援多輪問答、寫作、圖像生成、3D 理解與訊號分析，具備更強的認知與創造力。",
+  "tencentcloud.description": "騰訊雲 LLM 知識引擎原子能力為企業與開發者提供端到端的知識問答服務，包含文件解析、分段、嵌入與多輪重寫等模組化服務，打造客製化 AI 解決方案。",
+  "togetherai.description": "Together AI 提供領先效能的創新模型，支援廣泛自訂、快速擴展與簡易部署，滿足企業需求。",
+  "upstage.description": "Upstage 為商業需求打造 AI 模型，包括 Solar LLM 與 Document AI，提供支援函式呼叫、翻譯、嵌入與領域應用的對話 API。",
+  "v0.description": "v0 是一款配對程式設計助手，能將自然語言想法轉換為專案所需的程式碼與 UI。",
+  "vercelaigateway.description": "Vercel AI Gateway 提供統一 API，整合超過 100 款模型（來自 OpenAI、Anthropic、Google 等），支援預算控管、使用監控、負載平衡與故障轉移。",
+  "vertexai.description": "Google 的 Gemini 系列是其最先進的通用 AI，由 Google DeepMind 打造，支援文本、程式碼、圖像、音訊與影片的多模態應用，具備從資料中心到行動裝置的高效擴展能力。",
+  "vllm.description": "vLLM 是一個快速、易用的大型語言模型推理與服務庫。",
+  "volcengine.description": "字節跳動的模型服務平台，提供安全、功能豐富且具成本效益的模型存取，並支援資料、微調、推理與評估的端到端工具鏈。",
+  "wenxin.description": "文心是一個企業級的基礎模型與 AI 原生應用開發平台，提供生成式 AI 模型與應用流程的端到端工具。",
+  "xai.description": "xAI 致力於加速科學發現，目標是深化人類對宇宙的理解。",
+  "xinference.description": "Xorbits Inference（Xinference）是一個開源平台，簡化 AI 模型的運行與整合，支援在本地或雲端運行開源 LLM、嵌入模型與多模態模型，打造強大的 AI 應用。",
+  "zenmux.description": "ZenMux 是一個統一的 AI 聚合平台，支援 OpenAI、Anthropic、Google VertexAI 等，具備靈活路由功能，便於模型切換與管理。",
+  "zeroone.description": "01.AI 推動以人為本的 AI 2.0 革命，透過大型語言模型創造經濟與社會價值，構建全新 AI 生態與商業模式。",
+  "zhipu.description": "智譜 AI 提供開放平台，涵蓋文本處理、圖像理解與程式輔助等多模態與語言模型應用。"
 }

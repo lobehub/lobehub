@@ -1,60 +1,30 @@
 import { Ollama } from '@lobehub/icons';
-import { Button } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Center } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import Link from 'next/link';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Center } from 'react-layout-kit';
 
 import FormAction from '@/components/FormAction';
-import { useChatStore } from '@/store/chat';
 
-// TODO: 优化 Ollama setup 的流程，isDesktop 模式下可以直接做到端到端检测
-const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
-  const theme = useTheme();
+const OllamaDesktopSetupGuide = memo(() => {
   const { t } = useTranslation('components');
-
-  const [delAndRegenerateMessage, deleteMessage] = useChatStore((s) => [
-    s.delAndRegenerateMessage,
-    s.deleteMessage,
-  ]);
 
   return (
     <Center gap={16} paddingBlock={32} style={{ maxWidth: 300, width: '100%' }}>
       <FormAction
-        avatar={<Ollama color={theme.colorPrimary} size={64} />}
+        avatar={<Ollama color={cssVar.colorPrimary} size={64} />}
         description={
           <span>
-            <Trans i18nKey={'OllamaSetupGuide.install.description'} ns={'components'}>
-              请确认你已经开启 Ollama ，如果没有安装 Ollama ，请前往官网
-              <Link href={'https://ollama.com/download'}>下载</Link>
-            </Trans>
+            <Trans
+              components={[<span key="0" />, <Link href={'https://ollama.com/download'} key="1" />]}
+              i18nKey={'OllamaSetupGuide.install.description'}
+              ns={'components'}
+            />
           </span>
         }
         title={t('OllamaSetupGuide.install.title')}
       />
-      {id && (
-        <>
-          <Button
-            block
-            onClick={() => {
-              delAndRegenerateMessage(id);
-            }}
-            style={{ marginTop: 8 }}
-            type={'primary'}
-          >
-            {t('OllamaSetupGuide.action.start')}
-          </Button>
-          <Button
-            block
-            onClick={() => {
-              deleteMessage(id);
-            }}
-          >
-            {t('OllamaSetupGuide.action.close')}
-          </Button>
-        </>
-      )}
     </Center>
   );
 });

@@ -7,7 +7,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 是 CometAPI 提供的最新旗舰模型，适用于跨领域编码和代理任务。GPT-5 在准确性、速度、推理、上下文识别、结构化思维和问题解决方面实现了飞跃。',
+      'GPT-5 is CometAPI’s latest flagship model for cross-domain coding and agent tasks, with major gains in accuracy, speed, reasoning, context awareness, structured thinking, and problem solving.',
     displayName: 'GPT-5-Chat-Latest',
     enabled: true,
     id: 'gpt-5-chat-latest',
@@ -18,7 +18,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 迷你版本，性价比极高的智能模型。',
+    description: 'GPT-5 Mini is a highly cost-effective smart model.',
     displayName: 'GPT-5 Mini',
     enabled: true,
     id: 'gpt-5-mini',
@@ -28,7 +28,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 的纳米版本，适合轻量级任务。',
+    description: 'GPT-5 Nano is the nano variant for lightweight tasks.',
     displayName: 'GPT-5 Nano',
     enabled: true,
     id: 'gpt-5-nano',
@@ -50,7 +50,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 提供了更强大的推理和生成能力。',
+    description: 'GPT-4.1 provides stronger reasoning and generation.',
     displayName: 'GPT-4.1',
     enabled: true,
     id: 'gpt-4.1',
@@ -62,7 +62,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 1_047_576,
     description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+      'GPT-4.1 mini balances intelligence, speed, and cost, making it attractive for many use cases.',
     displayName: 'GPT-4.1 mini',
     enabled: true,
     id: 'gpt-4.1-mini',
@@ -73,7 +73,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 128_000,
-    description: 'GPT-4.1 nano 是最轻量级的版本，提供快速响应。',
+    description: 'GPT-4.1 nano is the lightest variant with fast responses.',
     displayName: 'GPT-4.1 Nano',
     enabled: true,
     id: 'gpt-4.1-nano',
@@ -84,7 +84,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o 的小型版本，提供更快的响应速度。',
+    description: 'A smaller GPT-4o variant with faster response speed.',
     displayName: 'GPT-4o Mini',
     enabled: true,
     id: 'gpt-4o-mini',
@@ -95,7 +95,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'ChatGPT-4o',
     enabled: true,
     id: 'chatgpt-4o-latest',
@@ -108,7 +108,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { vision: true },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini 是 OpenAI 的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务。该模型具有200K上下文',
+      'o4-mini is an OpenAI reasoning model with text+image input and text output, suited for complex tasks requiring broad knowledge, with a 200K context window.',
     displayName: 'o4-mini',
     enabled: true,
     id: 'o4-mini-2025-04-16',
@@ -120,7 +120,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { vision: true },
     contextWindowTokens: 200_000,
     description:
-      'o3 Pro 是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务',
+      'o3 Pro is OpenAI’s new reasoning model with text+image input and text output for complex tasks requiring broad knowledge.',
     displayName: 'o3 Pro',
     enabled: true,
     id: 'o3-pro-2025-06-10',
@@ -132,7 +132,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 200_000,
     description:
-      'o3 是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务',
+      'o3 is OpenAI’s new reasoning model with text+image input and text output for complex tasks requiring broad knowledge.',
     displayName: 'o3',
     enabled: true,
     id: 'o3-2025-04-16',
@@ -146,7 +146,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4.1 是 Anthropic 最新的用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+      'Claude Opus 4.1 is Anthropic’s latest and most capable model for highly complex tasks, excelling in performance, intelligence, fluency, and understanding.',
     displayName: 'Claude Opus 4.1',
     enabled: true,
     id: 'claude-opus-4-1-20250805',
@@ -157,7 +157,8 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 200_000,
-    description: 'Claude Opus 4.1 思考模型，可以展示其推理过程的高级版本。',
+    description:
+      'Claude Opus 4.1 Thinking is an advanced variant that can reveal its reasoning process.',
     displayName: 'Claude Opus 4.1 Thinking',
     enabled: true,
     id: 'claude-opus-4-1-20250805-thinking',
@@ -169,7 +170,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 200_000,
     description:
-      'Claude Sonnet 4 可以产生近乎即时的响应或延长的逐步思考，用户可以清晰地看到这些过程。',
+      'Claude Sonnet 4 can produce near-instant responses or extended step-by-step thinking with visible process.',
     displayName: 'Claude Sonnet 4',
     enabled: true,
     id: 'claude-sonnet-4-20250514',
@@ -181,7 +182,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 200_000,
     description:
-      'Claude Sonnet 4 思考模型可以产生近乎即时的响应或延长的逐步思考，用户可以清晰地看到这些过程。',
+      'Claude Sonnet 4 Thinking can produce near-instant responses or extended step-by-step thinking with visible process.',
     displayName: 'Claude Sonnet 4 Thinking',
     enabled: true,
     id: 'claude-sonnet-4-20250514-thinking',
@@ -193,7 +194,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.7 Sonnet 是 Anthropic 最新的用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+      'Claude 3.7 Sonnet is Anthropic’s latest and most capable model for highly complex tasks, excelling in performance, intelligence, fluency, and understanding.',
     displayName: 'Claude 3.7 Sonnet Latest',
     enabled: true,
     id: 'claude-3-7-sonnet-latest',
@@ -204,7 +205,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 200_000,
-    description: 'Claude 3.5 Haiku 提供快速响应，适合轻量级任务。',
+    description: 'Claude 3.5 Haiku delivers fast responses for lightweight tasks.',
     displayName: 'Claude 3.5 Haiku',
     enabled: true,
     id: 'claude-3-5-haiku-latest',
@@ -217,7 +218,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 1_114_112,
     description:
-      'Gemini 2.5 Pro 是 Google 最先进的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      "Gemini 2.5 Pro is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.",
     displayName: 'Gemini 2.5 Pro',
     enabled: true,
     id: 'gemini-2.5-pro',
@@ -229,7 +230,7 @@ const cometapiChatModels: AIChatModelCard[] = [
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 65_536,
     description:
-      'Gemini 2.5 flash 是 Google 快速响应的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      "Gemini 2.5 Flash is Google’s fast-response reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.",
     displayName: 'Gemini 2.5 flash',
     enabled: true,
     id: 'gemini-2.5-flash',
@@ -240,7 +241,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 1_048_576,
-    description: 'Gemini 2.5 Flash 模型，针对成本效益和低延迟等目标进行了优化。',
+    description: 'Gemini 2.5 Flash optimized for cost efficiency and low latency.',
     displayName: 'Gemini 2.5 Flash-Lite',
     enabled: true,
     id: 'gemini-2.5-flash-lite',
@@ -251,7 +252,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 1_000_000,
-    description: 'Google 最新的 Gemini 2.0 Flash 模型，拥有超大上下文窗口。',
+    description: 'Google’s latest Gemini 2.0 Flash model with a very large context window.',
     displayName: 'Gemini 2.0 Flash',
     enabled: true,
     id: 'gemini-2.0-flash',
@@ -263,7 +264,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 131_072,
-    description: 'xAI 的 Grok 4，具备强大的推理能力。',
+    description: "xAI’s Grok 4 with strong reasoning capability.",
     displayName: 'Grok 4',
     enabled: true,
     id: 'grok-4-0709',
@@ -273,7 +274,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 131_072,
-    description: 'xAI 的 Grok 3，具备强大的推理能力。',
+    description: "xAI’s Grok 3 with strong reasoning capability.",
     displayName: 'Grok 3',
     enabled: true,
     id: 'grok-3',
@@ -283,7 +284,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 100_000,
-    description: 'xAI 的 Grok 3 Mini，具备强大的推理能力和快速响应。',
+    description: "xAI’s Grok 3 Mini with strong reasoning and fast responses.",
     displayName: 'Grok 3 Mini',
     enabled: true,
     id: 'grok-3-mini',
@@ -304,7 +305,8 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true, vision: true },
     contextWindowTokens: 64_000,
-    description: 'DeepSeek V3 是最新的大规模语言模型，在推理、代码生成和多语言理解方面表现优异。',
+    description:
+      'DeepSeek V3 is a latest large language model with strong reasoning, code generation, and multilingual understanding.',
     displayName: 'DeepSeek V3',
     enabled: true,
     id: 'deepseek-v3',
@@ -314,7 +316,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true },
     contextWindowTokens: 64_000,
-    description: 'DeepSeek R1 推理模型，专门用于复杂的逻辑推理和数学计算任务。',
+    description: 'DeepSeek R1 is a reasoning model for complex logical reasoning and math tasks.',
     displayName: 'DeepSeek R1',
     enabled: true,
     id: 'deepseek-r1-0528',
@@ -325,7 +327,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true },
     contextWindowTokens: 64_000,
-    description: 'DeepSeek 推理模型，专注于复杂的逻辑推理任务。',
+    description: 'A DeepSeek reasoning model focused on complex logical reasoning tasks.',
     displayName: 'DeepSeek Reasoner',
     enabled: true,
     id: 'deepseek-reasoner',
@@ -335,7 +337,7 @@ const cometapiChatModels: AIChatModelCard[] = [
   {
     abilities: { functionCall: true },
     contextWindowTokens: 64_000,
-    description: 'DeepSeek 聊天模型，在代码和推理方面表现优秀。',
+    description: 'A DeepSeek chat model that performs strongly in coding and reasoning.',
     displayName: 'DeepSeek Chat',
     enabled: true,
     id: 'deepseek-chat',

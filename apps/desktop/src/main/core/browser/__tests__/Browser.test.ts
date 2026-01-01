@@ -107,7 +107,11 @@ describe('Browser', () => {
   let mockApp: AppCore;
   let mockStoreManagerGet: ReturnType<typeof vi.fn>;
   let mockStoreManagerSet: ReturnType<typeof vi.fn>;
-  let mockNextInterceptor: ReturnType<typeof vi.fn>;
+  let mockRemoteServerConfigCtr: {
+    getAccessToken: ReturnType<typeof vi.fn>;
+    getRemoteServerConfig: ReturnType<typeof vi.fn>;
+  };
+  let autoLoadUrlSpy: ReturnType<typeof vi.spyOn> | undefined;
 
   const defaultOptions: BrowserWindowOpts = {
     height: 600,
@@ -133,14 +137,34 @@ describe('Browser', () => {
     // Create mock App
     mockStoreManagerGet = vi.fn().mockReturnValue(undefined);
     mockStoreManagerSet = vi.fn();
-    mockNextInterceptor = vi.fn().mockReturnValue(vi.fn());
+
+    // Browser setup now installs protocol handlers that depend on RemoteServerConfigCtr
+    mockRemoteServerConfigCtr = {
+      getAccessToken: vi.fn().mockResolvedValue(null),
+      getRemoteServerConfig: vi.fn().mockResolvedValue({
+        remoteServerUrl: 'http://localhost:3000',
+      }),
+    };
+
+    // Ensure Browser can register protocol handlers on the session
+    (mockBrowserWindow.webContents.session as any).protocol = {
+      handle: vi.fn(),
+    };
 
     mockApp = {
       browserManager: {
         retrieveByIdentifier: vi.fn(),
       },
+      buildRendererUrl: vi.fn(async (path: string) => {
+        const cleanPath = path.startsWith('/') ? path : `/${path}`;
+        return `http://localhost:3000${cleanPath}`;
+      }),
+      getController: vi.fn((ctr: any) => {
+        // Only the remote server config controller is required in these unit tests
+        if (ctr?.name === 'RemoteServerConfigCtr') return mockRemoteServerConfigCtr;
+        throw new Error(`Unexpected controller requested in Browser tests: ${ctr?.name ?? ctr}`);
+      }),
       isQuiting: false,
-      nextInterceptor: mockNextInterceptor,
       nextServerUrl: 'http://localhost:3000',
       storeManager: {
         get: mockStoreManagerGet,
@@ -149,6 +173,8 @@ describe('Browser', () => {
     } as unknown as AppCore;
 
     browser = new Browser(defaultOptions, mockApp);
+    // The constructor triggers an async placeholder->loadUrl chain; stub it to avoid cross-test flakiness.
+    autoLoadUrlSpy = vi.spyOn(browser, 'loadUrl').mockResolvedValue(undefined as any);
   });
 
   afterEach(() => {
@@ -163,10 +189,6 @@ describe('Browser', () => {
 
     it('should create BrowserWindow on construction', () => {
       expect(MockBrowserWindow).toHaveBeenCalled();
-    });
-
-    it('should setup next interceptor', () => {
-      expect(mockNextInterceptor).toHaveBeenCalled();
     });
   });
 
@@ -344,12 +366,14 @@ describe('Browser', () => {
 
   describe('loadUrl', () => {
     it('should load full URL successfully', async () => {
+      autoLoadUrlSpy?.mockRestore();
       await browser.loadUrl('/test-path');
 
       expect(mockBrowserWindow.loadURL).toHaveBeenCalledWith('http://localhost:3000/test-path');
     });
 
     it('should load error page on failure', async () => {
+      autoLoadUrlSpy?.mockRestore();
       mockBrowserWindow.loadURL.mockRejectedValueOnce(new Error('Load failed'));
 
       await browser.loadUrl('/test-path');
@@ -358,6 +382,7 @@ describe('Browser', () => {
     });
 
     it('should setup retry handler on error', async () => {
+      autoLoadUrlSpy?.mockRestore();
       mockBrowserWindow.loadURL.mockRejectedValueOnce(new Error('Load failed'));
 
       await browser.loadUrl('/test-path');
@@ -367,9 +392,13 @@ describe('Browser', () => {
     });
 
     it('should load fallback HTML when error page fails', async () => {
+      autoLoadUrlSpy?.mockRestore();
       mockBrowserWindow.loadURL.mockRejectedValueOnce(new Error('Load failed'));
-      mockBrowserWindow.loadFile.mockRejectedValueOnce(new Error('Error page failed'));
       mockBrowserWindow.loadURL.mockResolvedValueOnce(undefined);
+      mockBrowserWindow.loadFile.mockImplementation(async (filePath: string) => {
+        if (filePath === '/mock/resources/error.html') throw new Error('Error page failed');
+        return undefined;
+      });
 
       await browser.loadUrl('/test-path');
 

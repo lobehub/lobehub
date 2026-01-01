@@ -1,15 +1,17 @@
+import { Flexbox } from '@lobehub/ui';
 import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+
+import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
 const ThinkingLevelSlider = memo(() => {
-  const [config, updateAgentChatConfig] = useAgentStore((s) => [
-    agentChatConfigSelectors.currentChatConfig(s),
-    s.updateAgentChatConfig,
-  ]);
+  const agentId = useAgentId();
+  const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
   const thinkingLevel = config.thinkingLevel || 'high'; // Default to 'high' if not set
 

@@ -8,13 +8,13 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
-  AiProviderDetailItem,
-  AiProviderRuntimeState,
+  type AiProviderDetailItem,
+  type AiProviderRuntimeState,
   CreateAiProviderSchema,
   UpdateAiProviderConfigSchema,
   UpdateAiProviderSchema,
 } from '@/types/aiProvider';
-import { ProviderConfig } from '@/types/user/settings';
+import { type ProviderConfig } from '@/types/user/settings';
 
 const aiProviderProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

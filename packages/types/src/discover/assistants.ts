@@ -35,8 +35,10 @@ export enum AssistantNavKey {
   Overview = 'overview',
   Related = 'related',
   SystemRole = 'systemRole',
-  Version = 'version'
+  Version = 'version',
 }
+
+export type AgentStatus = 'published' | 'unpublished' | 'archived' | 'deprecated';
 
 export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, MetaData {
   author: string;
@@ -44,9 +46,12 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   createdAt: string;
   homepage: string;
   identifier: string;
+  installCount?: number;
   knowledgeCount: number;
   pluginCount: number;
+  status?: AgentStatus;
   tokenUsage: number;
+  userName?: string;
 }
 
 export type AssistantMarketSource = 'legacy' | 'new';
@@ -73,6 +78,7 @@ export interface AssistantListResponse {
 
 export interface DiscoverAssistantDetail extends DiscoverAssistantItem {
   currentVersion?: string;
+  editorData?: any;
   examples?: FewShots;
   related: DiscoverAssistantItem[];
   summary?: string;
@@ -83,6 +89,6 @@ export interface DiscoverAssistantVersion {
   createdAt?: string;
   isLatest?: boolean;
   isValidated?: boolean;
-  status?: 'published' | 'unpublished' | 'archived' | 'deprecated';
+  status?: AgentStatus;
   version: string;
 }

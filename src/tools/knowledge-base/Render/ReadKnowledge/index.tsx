@@ -1,25 +1,27 @@
-import { BuiltinRenderProps } from '@lobechat/types';
-import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+'use client';
 
-import { ReadKnowledgeArgs } from '../../ExecutionRuntime';
-import { ReadKnowledgeState } from '../../type';
-import FileCard from './FileCard';
+import { ReadKnowledge as BaseReadKnowledge } from '@lobechat/builtin-tool-knowledge-base/client';
+import { type BuiltinRenderProps } from '@lobechat/types';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import FileIcon from '@/components/FileIcon';
+
+import type { ReadKnowledgeArgs, ReadKnowledgeState } from '../../index';
 
 const ReadKnowledge = memo<BuiltinRenderProps<ReadKnowledgeArgs, ReadKnowledgeState>>(
   ({ pluginState }) => {
-    const { files } = pluginState || {};
-
-    if (!files || files.length === 0) {
-      return null;
-    }
+    const { t } = useTranslation('tool');
 
     return (
-      <Flexbox gap={12} horizontal style={{ flexWrap: 'wrap' }}>
-        {files.map((file) => (
-          <FileCard file={file} key={file.fileId} />
-        ))}
-      </Flexbox>
+      <BaseReadKnowledge
+        FileIcon={FileIcon}
+        labels={{
+          chars: t('lobe-knowledge-base.readKnowledge.meta.chars'),
+          lines: t('lobe-knowledge-base.readKnowledge.meta.lines'),
+        }}
+        pluginState={pluginState}
+      />
     );
   },
 );

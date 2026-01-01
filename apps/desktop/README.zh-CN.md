@@ -32,7 +32,7 @@ pnpm install-isolated
 pnpm electron:dev
 
 # 类型检查
-pnpm typecheck
+pnpm type-check
 
 # 运行测试
 pnpm test
@@ -66,9 +66,9 @@ cp .env.desktop .env
 pnpm electron:dev # 启动热重载开发服务器
 
 # 2. 代码质量
-pnpm lint      # ESLint 检查
-pnpm format    # Prettier 格式化
-pnpm typecheck # TypeScript 验证
+pnpm lint       # ESLint 检查
+pnpm format     # Prettier 格式化
+pnpm type-check # TypeScript 验证
 
 # 3. 测试
 pnpm test # 运行 Vitest 测试
@@ -302,7 +302,7 @@ tests/                                       # 集成测试
 ```bash
 pnpm test       # 运行所有测试
 pnpm test:watch # 监视模式
-pnpm typecheck  # 类型验证
+pnpm type-check # 类型验证
 ```
 
 ### 测试覆盖

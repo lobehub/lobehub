@@ -1,4 +1,4 @@
-import { kebabCase } from 'lodash';
+import { kebabCase } from 'es-toolkit/compat';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

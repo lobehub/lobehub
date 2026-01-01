@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "Dodaj asystenta",
-    "addAgentAndConverse": "Dodaj asystenta i rozpocznij rozmowę",
-    "addAgentSuccess": "Dodano pomyślnie",
-    "conversation": {
-      "l1": "Cześć, jestem **{{name}}**, możesz zadać mi dowolne pytanie, postaram się odpowiedzieć ~",
-      "l2": "Oto moje umiejętności: ",
-      "l3": "Zacznijmy rozmowę!"
-    },
-    "description": "Opis asystenta",
-    "detail": "Szczegóły",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "Asystent ma wbudowane następujące bazy wiedzy, które pomogą Ci odpowiedzieć na więcej pytań.",
-          "title": "Baza wiedzy"
-        },
-        "plugin": {
-          "desc": "Asystent ma wbudowane następujące wtyczki, które pomogą Ci wykonać więcej zadań.",
-          "title": "Wbudowane wtyczki"
-        },
-        "title": "Możliwości asystenta"
-      },
-      "overview": {
-        "example": "Demonstracja asystenta",
-        "title": "Przegląd"
-      },
-      "related": {
-        "listTitle": "Powiązani asystenci",
-        "more": "Zobacz więcej",
-        "title": "Powiązane rekomendacje"
-      },
-      "sidebar": {
-        "toc": "Spis treści"
-      },
-      "summary": {
-        "title": "Co możesz zrobić z tym asystentem?"
-      },
-      "systemRole": {
-        "openingMessage": "Wiadomość powitalna",
-        "openingQuestions": "Pytania wstępne",
-        "title": "Ustawienia asystenta"
-      },
-      "version": {
-        "empty": "Brak dostępnych wersji historycznych",
-        "status": {
-          "archived": "Zarchiwizowano",
-          "deprecated": "Odrzucono",
-          "unpublished": "W trakcie przeglądu"
-        },
-        "table": {
-          "isLatest": "Najnowsza wersja",
-          "isValidated": "Zweryfikowano",
-          "publishAt": "Data publikacji",
-          "version": "Wersja"
-        },
-        "title": "Historia wersji"
-      }
-    },
-    "list": "Lista asystentów",
-    "marketSource": {
-      "label": "Przełącz źródło rynku",
-      "legacy": "Stary rynek",
-      "new": "Nowy rynek"
-    },
-    "more": "Więcej",
-    "plugins": "Zintegrowane wtyczki",
-    "recentSubmits": "Ostatnie aktualizacje",
-    "sorts": {
-      "createdAt": "Najnowsze publikacje",
-      "identifier": "ID asystenta",
-      "knowledgeCount": "Liczba baz wiedzy",
-      "myown": "Zobacz moje",
-      "pluginCount": "Liczba wtyczek",
-      "title": "Nazwa asystenta",
-      "tokenUsage": "Zużycie tokenów"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "Asystent został usunięty przez administratorów z powodu problemów z bezpieczeństwem lub polityką",
-          "owner": "Właściciel asystenta samodzielnie go usunął lub zarchiwizował"
-        },
-        "subtitle": "Asystent, którego próbujesz odwiedzić, został zarchiwizowany z jednego z poniższych powodów:",
-        "title": "Asystent został zarchiwizowany"
-      },
-      "backToMarket": "Powrót do rynku asystentów",
-      "deprecated": {
-        "reasons": {
-          "official": "Asystent został usunięty przez administratorów z powodu problemów z bezpieczeństwem lub polityką",
-          "owner": "Właściciel asystenta samodzielnie go usunął lub odrzucił"
-        },
-        "subtitle": "Asystent, którego próbujesz odwiedzić, został odrzucony z jednego z poniższych powodów:",
-        "title": "Asystent został odrzucony"
-      },
-      "support": "W przypadku jakichkolwiek problemów skopiuj link i wyślij zapytanie na adres <1>support@lobehub.com</1>.",
-      "unpublished": {
-        "subtitle": "Asystent, którego próbujesz odwiedzić, jest obecnie w trakcie przeglądu wersji. W razie pytań skopiuj link i wyślij zapytanie na adres <1>support@lobehub.com</1>.",
-        "title": "Asystent w trakcie przeglądu"
-      }
-    },
-    "suggestions": "Podobne rekomendacje",
-    "systemRole": "Ustawienia asystenta",
-    "tokenUsage": "Zużycie tokenów w promptach asystenta",
-    "try": "Spróbuj",
-    "withKnowledge": "Ten asystent zawiera bazę wiedzy",
-    "withPlugin": "Ten asystent zawiera wtyczki"
-  },
-  "back": "Powrót do odkryć",
-  "category": {
-    "assistant": {
-      "academic": "Akademicki",
-      "all": "Wszystko",
-      "career": "Kariera",
-      "copywriting": "Copywriting",
-      "design": "Projektowanie",
-      "education": "Edukacja",
-      "emotions": "Emocje",
-      "entertainment": "Rozrywka",
-      "games": "Gry",
-      "general": "Ogólne",
-      "life": "Życie",
-      "marketing": "Marketing",
-      "office": "Biuro",
-      "programming": "Programowanie",
-      "translation": "Tłumaczenie"
-    },
-    "plugin": {
-      "all": "Wszystko",
-      "gaming-entertainment": "Gry i rozrywka",
-      "life-style": "Styl życia",
-      "lifestyle": "Styl życia",
-      "media-generate": "Generowanie mediów",
-      "science-education": "Nauka i edukacja",
-      "social": "Media społecznościowe",
-      "stocks-finance": "Akcje i finanse",
-      "tools": "Narzędzia",
-      "web-search": "Wyszukiwanie w sieci"
-    }
-  },
-  "cleanFilter": "Wyczyść filtr",
+  "assistant.favorite": "Zapisz",
+  "assistant.favoriteFailed": "Nie udało się zapisać",
+  "assistant.favoriteSuccess": "Zapisano",
+  "assistant.like": "Lubię to",
+  "assistant.likeFailed": "Nie udało się polubić",
+  "assistant.likeSuccess": "Polubiono",
+  "assistant.unfavorite": "Usuń z zapisanych",
+  "assistant.unfavoriteFailed": "Nie udało się usunąć z zapisanych",
+  "assistant.unfavoriteSuccess": "Usunięto z zapisanych",
+  "assistant.unlike": "Cofnij polubienie",
+  "assistant.unlikeSuccess": "Polubienie cofnięte",
+  "assistants.addAgent": "Dodaj Agenta",
+  "assistants.addAgentAndConverse": "Dodaj Agenta i Rozmawiaj",
+  "assistants.addAgentSuccess": "Dodano",
+  "assistants.conversation.l1": "Cześć, jestem **{{name}}**. Podziel się swoim celem lub kontekstem — od tego zaczniemy współpracę.",
+  "assistants.conversation.l2": "Oto, co potrafię:",
+  "assistants.conversation.l3": "Rozpocznij rozmowę",
+  "assistants.description": "O tym Agencie",
+  "assistants.detail": "Szczegóły",
+  "assistants.details.capabilities.knowledge.desc": "Ten Agent zawiera następujące Biblioteki, które pomagają odpowiadać na więcej pytań.",
+  "assistants.details.capabilities.knowledge.title": "Biblioteka",
+  "assistants.details.capabilities.plugin.desc": "Ten Agent zawiera następujące Umiejętności, które pomagają w realizacji zadań.",
+  "assistants.details.capabilities.plugin.title": "Wbudowane Umiejętności",
+  "assistants.details.capabilities.title": "Możliwości Agenta",
+  "assistants.details.overview.example": "Demo Agenta",
+  "assistants.details.overview.title": "Przegląd",
+  "assistants.details.related.listTitle": "Powiązani Agenci",
+  "assistants.details.related.more": "Zobacz więcej",
+  "assistants.details.related.title": "Podobni Agenci",
+  "assistants.details.sidebar.toc": "Spis treści",
+  "assistants.details.summary.title": "Co możesz zrobić z tym Agentem?",
+  "assistants.details.systemRole.openingMessage": "Wiadomość powitalna",
+  "assistants.details.systemRole.openingQuestions": "Pytania początkowe",
+  "assistants.details.systemRole.title": "Profil Agenta",
+  "assistants.details.version.empty": "Brak wersji historycznych",
+  "assistants.details.version.status.archived": "Zarchiwizowano",
+  "assistants.details.version.status.deprecated": "Odrzucono",
+  "assistants.details.version.status.unpublished": "W trakcie przeglądu",
+  "assistants.details.version.table.isLatest": "Najnowsza wersja",
+  "assistants.details.version.table.isValidated": "Zatwierdzona",
+  "assistants.details.version.table.publishAt": "Data publikacji",
+  "assistants.details.version.table.version": "Wersja",
+  "assistants.details.version.title": "Historia wersji",
+  "assistants.downloads": "Pobrane",
+  "assistants.duplicateAdd.content": "„{{title}}” jest już w Twoich Agentach. Dodać kolejną kopię?",
+  "assistants.duplicateAdd.ok": "Dodaj kopię",
+  "assistants.duplicateAdd.title": "Dodać duplikat?",
+  "assistants.empty.description": "Spróbuj zmienić filtry lub odkryj więcej Agentów w Społeczności.",
+  "assistants.empty.search": "Nie znaleziono pasujących Agentów",
+  "assistants.empty.title": "Brak Agentów",
+  "assistants.list": "Lista Agentów",
+  "assistants.marketSource.label": "Przełącz źródło społeczności",
+  "assistants.marketSource.legacy": "Społeczność Legacy",
+  "assistants.marketSource.new": "Nowa Społeczność",
+  "assistants.more": "Więcej",
+  "assistants.plugins": "Zintegrowane Umiejętności",
+  "assistants.recentSubmits": "Ostatnie aktualizacje",
+  "assistants.sorts.createdAt": "Najnowsze publikacje",
+  "assistants.sorts.identifier": "ID Agenta",
+  "assistants.sorts.knowledgeCount": "Biblioteki",
+  "assistants.sorts.myown": "Zobacz Moich Agentów",
+  "assistants.sorts.pluginCount": "Umiejętności",
+  "assistants.sorts.title": "Nazwa Agenta",
+  "assistants.sorts.tokenUsage": "Zużycie tokenów",
+  "assistants.status.archived.reasons.official": "Platforma usunęła tego Agenta z powodów bezpieczeństwa, polityki lub innych.",
+  "assistants.status.archived.reasons.owner": "Twórca zarchiwizował lub usunął tego Agenta.",
+  "assistants.status.archived.subtitle": "Ten Agent został zarchiwizowany. Możliwe powody:",
+  "assistants.status.archived.title": "Agent zarchiwizowany",
+  "assistants.status.backToMarket": "Powrót do Społeczności Agentów",
+  "assistants.status.deprecated.reasons.official": "Platforma usunęła tego Agenta z powodów bezpieczeństwa, polityki lub innych.",
+  "assistants.status.deprecated.reasons.owner": "Twórca odrzucił lub usunął tego Agenta.",
+  "assistants.status.deprecated.subtitle": "Ten Agent jest obecnie niedostępny. Możliwe powody:",
+  "assistants.status.deprecated.title": "Agent niedostępny",
+  "assistants.status.support": "W razie pytań skopiuj link i wyślij go na adres <email>support@lobehub.com</email>.",
+  "assistants.status.unpublished.subtitle": "Ten Agent jest w trakcie przeglądu. Aby potwierdzić jego status, skopiuj link i wyślij go na adres <email>support@lobehub.com</email>.",
+  "assistants.status.unpublished.title": "Agent w trakcie przeglądu",
+  "assistants.suggestions": "Podobni Agenci",
+  "assistants.systemRole": "Profil Agenta",
+  "assistants.tokenUsage": "Zużycie tokenów przez Agenta",
+  "assistants.try": "Wypróbuj",
+  "assistants.withKnowledge": "Ten Agent zawiera Biblioteki",
+  "assistants.withPlugin": "Ten Agent zawiera Umiejętności",
+  "back": "Powrót do Odkrywania",
+  "category.assistant.academic": "Akademickie",
+  "category.assistant.all": "Wszystkie",
+  "category.assistant.career": "Kariera",
+  "category.assistant.copywriting": "Copywriting",
+  "category.assistant.design": "Projektowanie",
+  "category.assistant.education": "Edukacja",
+  "category.assistant.emotions": "Emocje",
+  "category.assistant.entertainment": "Rozrywka",
+  "category.assistant.games": "Gry",
+  "category.assistant.general": "Ogólne",
+  "category.assistant.life": "Życie",
+  "category.assistant.marketing": "Marketing",
+  "category.assistant.office": "Biuro",
+  "category.assistant.programming": "Programowanie",
+  "category.assistant.translation": "Tłumaczenie",
+  "category.plugin.all": "Wszystkie",
+  "category.plugin.gaming-entertainment": "Gry i Rozrywka",
+  "category.plugin.life-style": "Styl życia",
+  "category.plugin.lifestyle": "Styl życia",
+  "category.plugin.media-generate": "Generowanie Mediów",
+  "category.plugin.science-education": "Nauka i Edukacja",
+  "category.plugin.social": "Media społecznościowe",
+  "category.plugin.stocks-finance": "Giełda i Finanse",
+  "category.plugin.tools": "Narzędzia użytkowe",
+  "category.plugin.web-search": "Wyszukiwanie w sieci",
+  "cleanFilter": "Wyczyść filtry",
   "create": "Utwórz",
-  "createGuide": {
-    "func1": {
-      "desc1": "W oknie rozmowy przejdź do ustawień w prawym górnym rogu, aby wejść na stronę ustawień asystenta, który chcesz dodać;",
-      "desc2": "Kliknij przycisk 'Wyślij do rynku asystentów' w prawym górnym rogu.",
-      "tag": "Metoda pierwsza",
-      "title": "Zgłoś przez LobeChat"
-    },
-    "func2": {
-      "button": "Przejdź do repozytorium asystentów na Githubie",
-      "desc": "Jeśli chcesz dodać asystenta do indeksu, użyj agent-template.json lub agent-template-full.json, aby utworzyć wpis w katalogu plugins, napisz krótki opis i odpowiednio oznacz, a następnie utwórz prośbę o ściągnięcie.",
-      "tag": "Metoda druga",
-      "title": "Zgłoś przez Github"
-    }
-  },
+  "createGuide.func1.desc1": "W rozmowie otwórz ustawienia Agenta z menu w prawym górnym rogu.",
+  "createGuide.func1.desc2": "Następnie kliknij „Prześlij do Społeczności Agentów” w prawym górnym rogu.",
+  "createGuide.func1.tag": "Opcja 1",
+  "createGuide.func1.title": "Prześlij w LobeHub",
+  "createGuide.func2.button": "Otwórz repozytorium Agentów na GitHubie",
+  "createGuide.func2.desc": "Aby dodać Agenta do indeksu, utwórz wpis w `plugins/` używając `agent-template.json` lub `agent-template-full.json`, dodaj krótki opis i tagi, a następnie otwórz pull request.",
+  "createGuide.func2.tag": "Opcja 2",
+  "createGuide.func2.title": "Prześlij na GitHubie",
   "dislike": "Nie lubię",
-  "filter": "Filtr",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "Wszyscy autorzy",
-      "followed": "Obserwowani autorzy",
-      "title": "Zakres autorów"
-    },
-    "contentLength": "Minimalna długość kontekstu",
-    "maxToken": {
-      "title": "Ustaw maksymalną długość (Token)",
-      "unlimited": "Bez ograniczeń"
-    },
-    "other": {
-      "functionCall": "Obsługuje wywołania funkcji",
-      "title": "Inne",
-      "vision": "Obsługuje rozpoznawanie wizualne",
-      "withKnowledge": "Z dołączoną bazą wiedzy",
-      "withTool": "Z dołączoną wtyczką"
-    },
-    "pricing": "Cena modelu",
-    "timePeriod": {
-      "all": "Wszystkie czasy",
-      "day": "Ostatnie 24 godziny",
-      "month": "Ostatnie 30 dni",
-      "title": "Zakres czasowy",
-      "week": "Ostatnie 7 dni",
-      "year": "Ostatni rok"
-    }
-  },
-  "home": {
-    "featuredAssistants": "Polecani asystenci",
-    "featuredModels": "Polecane modele",
-    "featuredProviders": "Polecani dostawcy modeli",
-    "featuredTools": "Polecane wtyczki",
-    "more": "Odkryj więcej"
-  },
+  "filter": "Filtruj",
+  "filterBy.authorRange.everyone": "Wszyscy autorzy",
+  "filterBy.authorRange.followed": "Obserwowani autorzy",
+  "filterBy.authorRange.title": "Zakres autora",
+  "filterBy.contentLength": "Minimalna długość kontekstu",
+  "filterBy.maxToken.title": "Ustaw maksymalną długość (tokeny)",
+  "filterBy.maxToken.unlimited": "Bez limitu",
+  "filterBy.other.functionCall": "Obsługuje wywołania funkcji",
+  "filterBy.other.title": "Inne",
+  "filterBy.other.vision": "Obsługuje rozpoznawanie obrazu",
+  "filterBy.other.withKnowledge": "Zawiera Biblioteki",
+  "filterBy.other.withTool": "Zawiera Umiejętności",
+  "filterBy.pricing": "Cennik modelu",
+  "filterBy.timePeriod.all": "Cały czas",
+  "filterBy.timePeriod.day": "Ostatnie 24 godziny",
+  "filterBy.timePeriod.month": "Ostatnie 30 dni",
+  "filterBy.timePeriod.title": "Zakres czasu",
+  "filterBy.timePeriod.week": "Ostatnie 7 dni",
+  "filterBy.timePeriod.year": "Ostatni rok",
+  "footer.desc": "Rozwijaj się z użytkownikami AI na całym świecie. Zostań twórcą i przesyłaj swoich agentów i umiejętności do Społeczności LobeHub.",
+  "footer.title": "Podziel się swoją twórczością w Społeczności LobeHub już dziś",
+  "home.communityAgents": "Agenci Społeczności",
+  "home.featuredAssistants": "Polecani Agenci",
+  "home.featuredModels": "Polecane Modele",
+  "home.featuredPlugins": "Polecane Umiejętności",
+  "home.featuredProviders": "Polecani Dostawcy",
+  "home.featuredTools": "Polecane Umiejętności",
+  "home.more": "Odkryj więcej",
   "isClaimed": "Zgłoszono",
-  "isFeatured": "Polecane",
-  "isOfficial": "Oficjalne",
-  "like": "Lubię",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "Wszystkie serwery MCP",
-        "name": "Wszystkie"
-      },
-      "business": {
-        "description": "Usługi biznesowe i korporacyjne",
-        "name": "Usługi biznesowe"
-      },
-      "developer": {
-        "description": "Narzędzia i usługi dla programistów",
-        "name": "Narzędzia deweloperskie"
-      },
-      "gaming-entertainment": {
-        "description": "Gry, rozrywka i rekreacja",
-        "name": "Gry i rozrywka"
-      },
-      "health-wellness": {
-        "description": "Zdrowie, fitness i dobrostan",
-        "name": "Zdrowie i wellness"
-      },
-      "lifestyle": {
-        "description": "Styl życia, nawyki i codzienne aktywności",
-        "name": "Styl życia"
-      },
-      "media-generate": {
-        "description": "Tworzenie, edycja i przetwarzanie mediów",
-        "name": "Generowanie mediów"
-      },
-      "news": {
-        "description": "Agregacja wiadomości, raporty i serwisy informacyjne",
-        "name": "Informacje i wiadomości"
-      },
-      "productivity": {
-        "description": "Zarządzanie zadaniami, notatki i narzędzia produktywności",
-        "name": "Narzędzia produktywności"
-      },
-      "science-education": {
-        "description": "Narzędzia do badań naukowych, nauki i edukacji",
-        "name": "Nauka i edukacja"
-      },
-      "social": {
-        "description": "Sieci społecznościowe i komunikacja",
-        "name": "Media społecznościowe"
-      },
-      "stocks-finance": {
-        "description": "Rynki finansowe, handel i inwestycje",
-        "name": "Finanse i giełda"
-      },
-      "tools": {
-        "description": "Uniwersalne narzędzia i usługi",
-        "name": "Narzędzia"
-      },
-      "travel-transport": {
-        "description": "Planowanie podróży i transport",
-        "name": "Podróże i transport"
-      },
-      "weather": {
-        "description": "Prognozy pogody i usługi meteorologiczne",
-        "name": "Pogoda"
-      },
-      "web-search": {
-        "description": "Wyszukiwanie w sieci i pozyskiwanie informacji",
-        "name": "Wyszukiwanie informacji"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "Usługa może działać lokalnie lub w chmurze w zależności od konfiguracji lub scenariusza użycia, oferując podwójny tryb działania.",
-          "title": "Usługa hybrydowa"
-        },
-        "local": {
-          "desc": "Serwer działa wyłącznie na lokalnym urządzeniu klienta, wymaga instalacji i zależy od lokalnych zasobów.",
-          "title": "Usługa lokalna"
-        },
-        "remote": {
-          "desc": "Serwer jest hostowany zdalnie, głównie opiera się na usługach zdalnych, nie wymaga lokalnego środowiska.",
-          "title": "Usługa w chmurze"
-        }
-      },
-      "deployment": {
-        "args": "Argumenty",
-        "checkCommand": "Polecenie sprawdzające",
-        "command": "Polecenie",
-        "commandLine": "Zależności systemowe",
-        "connection": "Sposób połączenia",
-        "connectionType": "Typ połączenia",
-        "description": "Sposób instalacji i wdrożenia wtyczki",
-        "descriptionPlaceholder": "Opcjonalny opis",
-        "empty": "Brak opcji wdrożenia",
-        "env": "Zmienne środowiskowe",
-        "guide": "Instrukcja instalacji",
-        "installation": "Instalacja przez {{method}}",
-        "installationMethod": "Metoda instalacji",
-        "other": "Inne ustawienia",
-        "packageName": "Nazwa pakietu",
-        "platform": {
-          "steps": {
-            "claude": "- Otwórz aplikację **Claude Desktop**\n- Przejdź do **Ustawienia** i wybierz **Deweloper**\n- Kliknij **Edytuj konfigurację**\n- Otwórz plik **claude_desktop_config.json**\n- Skopiuj i wklej konfigurację serwera do istniejącego pliku, a następnie zapisz",
-            "cline": "- Otwórz VS Code z zainstalowanym rozszerzeniem Cline\n- Kliknij ikonę Cline na pasku bocznym\n- Z menu rozwijanego wybierz **MCP Servers**\n- Na karcie **Remote Servers** wpisz nazwę serwera i URL Twojego serwera MCP\n- Kliknij **Add Server**, aby połączyć",
-            "cursor": "- Przejdź do **Ustawienia** i wybierz ustawienia Cursor\n- Po lewej wybierz **MCP**\n- Kliknij w prawym górnym rogu **Dodaj nowy globalny serwer MCP**\n- Skopiuj i wklej konfigurację serwera do istniejącego pliku, a następnie zapisz",
-            "lobeChat": "- Otwórz aplikację **LobeChat Desktop**\n- Przejdź do **Ustawienia** - **Domyślny asystent**\n- Następnie wybierz **Ustawienia wtyczek** - **Wtyczki niestandardowe**\n- Kliknij **Szybki import konfiguracji JSON**\n- Skopiuj i wklej konfigurację serwera do pola tekstowego, a następnie zainstaluj",
-            "openai": "- Otwórz swoją aplikację **OpenAI** lub środowisko developerskie\n- Skonfiguruj narzędzia MCP w **Responses API**\n- Dodaj blok MCP do tablicy **tools** w żądaniu API\n- Ustaw **server_url** na punkt końcowy Twojego serwera MCP\n- Dołącz nagłówki autoryzacyjne (klucz API, token itp.)\n- Użyj parametru `allowed_tools` do ograniczenia dostępnych narzędzi\n- Ustaw `require_approval` do kontroli zatwierdzania wykonania narzędzi",
-            "vscode": "- Otwórz VS Code\n- Otwórz paletę poleceń (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Wpisz **MCP: Add Server** i wybierz tę opcję\n- Wybierz dodanie do ustawień obszaru roboczego lub użytkownika\n- Skopiuj i wklej konfigurację serwera"
-          },
-          "title": "Instalacja w {{platform}}"
-        },
-        "recommended": "Polecane",
-        "systemDependencies": "Zależności systemowe",
-        "table": {
-          "description": "Opis",
-          "name": "Nazwa",
-          "required": "Wymagane",
-          "type": "Typ"
-        },
-        "title": "Metoda instalacji"
-      },
-      "githubBadge": {
-        "desc": "LobeHub regularnie skanuje repozytoria kodu i dokumentację, aby:\n\n- Potwierdzić prawidłowe działanie serwera MCP.\n- Wyodrębnić cechy serwera, takie jak narzędzia, zasoby, prompt’y i wymagane parametry.\n- Nasza odznaka pomaga użytkownikom szybko ocenić bezpieczeństwo, funkcjonalność i instrukcje instalacji serwera MCP.\n\nSkopiuj poniższy kod do swojego pliku `README.md`:"
-      },
-      "nav": {
-        "needHelp": "Potrzebujesz pomocy?",
-        "reportIssue": "Zgłoś problem",
-        "viewSourceCode": "Zobacz kod źródłowy"
-      },
-      "overview": {
-        "title": "Przegląd"
-      },
-      "related": {
-        "listTitle": "Powiązane serwery MCP",
-        "more": "Zobacz więcej",
-        "title": "Powiązane rekomendacje"
-      },
-      "schema": {
-        "mode": {
-          "docs": "Dokumentacja"
-        },
-        "prompts": {
-          "arguments": "Konfiguracja argumentów",
-          "desc": "Interaktywne szablony wyzwalane przez użytkownika",
-          "empty": "Brak promptów",
-          "instructions": "Instrukcje",
-          "table": {
-            "description": "Opis",
-            "name": "Nazwa",
-            "required": "Wymagane"
-          },
-          "title": "Lista promptów"
-        },
-        "resources": {
-          "desc": "Dane kontekstowe dołączane i zarządzane przez klienta",
-          "empty": "Brak zasobów",
-          "table": {
-            "description": "Opis",
-            "mineType": "Typ MIME",
-            "name": "Nazwa",
-            "uri": "URI"
-          },
-          "title": "Lista zasobów"
-        },
-        "title": "Funkcje wtyczki",
-        "tools": {
-          "desc": "Interfejsy funkcjonalne udostępniane modelowi językowemu (LLM) do wykonywania operacji",
-          "empty": "Brak narzędzi",
-          "inputSchema": "Opis wejścia",
-          "instructions": "Instrukcje",
-          "table": {
-            "description": "Opis",
-            "name": "Nazwa",
-            "required": "Wymagane",
-            "type": "Typ"
-          },
-          "title": "Lista narzędzi"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "Ten serwer MCP został zarejestrowany przez właściciela, co potwierdza jego własność i zarządzanie.",
-          "title": "Zarejestrowany przez właściciela"
-        },
-        "deployMoreThanManual": {
-          "desc": "Ten serwer MCP oferuje przyjazne metody instalacji inne niż Manual, umożliwiające łatwe wdrożenie i użytkowanie.",
-          "title": "Oferuje przyjazne metody instalacji"
-        },
-        "deployment": {
-          "desc": "Ten serwer MCP oferuje co najmniej jedną metodę instalacji, umożliwiającą wdrożenie i użytkowanie.",
-          "descWithCount": "Ten serwer MCP oferuje {{number}} metod instalacji, umożliwiając wdrożenie i użytkowanie.",
-          "title": "Oferuje co najmniej jedną metodę instalacji"
-        },
-        "license": {
-          "desc": "To repozytorium zawiera plik LICENSE.",
-          "descWithlicense": "Licencja tego repozytorium to {{license}}.",
-          "title": "Posiada licencję"
-        },
-        "listTitle": "Szczegóły oceny",
-        "notClaimed": {
-          "desc": "Jeśli jesteś właścicielem tego serwera MCP, możesz go zarejestrować w następujący sposób.",
-          "title": "Nie zarejestrowany przez właściciela"
-        },
-        "prompts": {
-          "desc": "Ten serwer MCP oferuje prompt’y, umożliwiające interakcję z usługą.",
-          "descWithCount": "Ten serwer MCP oferuje {{number}} promptów, umożliwiających interakcję z usługą.",
-          "title": "Zawiera prompt’y"
-        },
-        "readme": {
-          "desc": "To repozytorium zawiera plik README.md.",
-          "title": "Posiada README"
-        },
-        "resources": {
-          "desc": "Ten serwer MCP oferuje zasoby, umożliwiające dołączanie i zarządzanie danymi kontekstowymi.",
-          "descWithCount": "Ten serwer MCP oferuje {{number}} zasobów, umożliwiających dołączanie i zarządzanie danymi kontekstowymi.",
-          "title": "Zawiera zasoby"
-        },
-        "title": "Ocena",
-        "tools": {
-          "desc": "Usługa musi udostępniać co najmniej jedno narzędzie, umożliwiające wykonywanie określonych operacji.",
-          "descWithCount": "Ten serwer MCP oferuje {{number}} narzędzi, umożliwiających wykonywanie określonych operacji.",
-          "title": "Zawiera co najmniej jedno narzędzie"
-        },
-        "validated": {
-          "desc": "Ten serwer MCP przeszedł weryfikację instalacji, co zapewnia jego jakość i niezawodność.",
-          "title": "Zweryfikowany"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "Ten serwer MCP został rygorystycznie zweryfikowany, oferując pełną funkcjonalność i wysoką jakość doświadczenia użytkownika.",
-          "fullTitle": "Doskonała wtyczka",
-          "title": "Wysoka jakość"
-        },
-        "b": {
-          "desc": "Ten serwer MCP oferuje dobrą funkcjonalność i doświadczenie użytkownika, ale może wymagać pewnych ulepszeń.",
-          "fullTitle": "Dobra funkcjonalność",
-          "title": "Dobra"
-        },
-        "f": {
-          "desc": "Ten serwer MCP ma niepełną funkcjonalność lub niską jakość, zaleca się ostrożność przy użyciu.",
-          "fullTitle": "Niska jakość",
-          "title": "Słaba"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "Podpowiedzi",
-          "resources": "Zasoby",
-          "title": "Funkcje wtyczki",
-          "tools": "Narzędzia"
-        },
-        "configuration": {
-          "title": "Konfiguracja wtyczki"
-        },
-        "connection": {
-          "args": "Parametry uruchomienia",
-          "command": "Polecenie uruchomienia",
-          "title": "Informacje o połączeniu",
-          "type": "Typ połączenia",
-          "url": "Adres usługi"
-        },
-        "saveSettings": "Zapisz ustawienia",
-        "title": "Ustawienia wtyczki"
-      },
-      "sidebar": {
-        "install": "Zainstaluj serwer MCP",
-        "meta": {
-          "homepage": "Strona główna",
-          "installCount": "Liczba instalacji",
-          "language": "Język źródłowy",
-          "license": "Licencja",
-          "published": "Data publikacji",
-          "repo": "Repozytorium kodu",
-          "stars": "Liczba gwiazdek",
-          "title": "Szczegóły",
-          "updated": "Ostatnia aktualizacja"
-        },
-        "moreServerConfig": "Zobacz szczegóły",
-        "recommendServers": "Powiązane MCP",
-        "serverConfig": "Konfiguracja instalacji",
-        "toc": "Spis treści"
-      },
-      "summary": {
-        "title": "Co możesz zrobić z tym serwerem MCP?"
-      },
-      "totalScore": {
-        "description": "Łączna ocena obliczona na podstawie różnych wskaźników",
-        "legend": {
-          "aGrade": "Ocena A ({{minPercent}}-100%)",
-          "bGrade": "Ocena B ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "Ocena F (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} punktów",
-        "popover": {
-          "completedOptional": "✅ Ukończono opcjonalne ({{count}} elementów)",
-          "completedRequired": "✅ Ukończono wymagane ({{count}} elementów)",
-          "incompleteOptional": "⏸️ Nieukończono opcjonalnych ({{count}} elementów)",
-          "incompleteRequired": "❌ Nieukończono wymaganych ({{count}} elementów)",
-          "title": "Szczegóły oceny"
-        },
-        "ratingFormat": "Ocena: {{level}}",
-        "scoreInfo": {
-          "items": "elementy",
-          "points": "punkty",
-          "requiredItems": "wymagane elementy"
-        },
-        "title": "Łączna ocena"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "Najnowsza wersja",
-          "isValidated": "Zweryfikowana",
-          "publishAt": "Data publikacji",
-          "version": "Wersja"
-        },
-        "title": "Historia wersji"
-      }
-    },
-    "hero": {
-      "desc": "Otwarte, możliwe do wdrożenia platformy serwerów MCP, które pomagają systemom AI łatwo uzyskać dostęp do systemów plików, baz danych, API i innych kluczowych zasobów, znacznie rozszerzając możliwości AI.",
-      "subTitle": "Otwarte i gotowe do użycia",
-      "title": "Otwarte rynki MCP dla AI"
-    },
-    "sorts": {
-      "createdAt": "Najnowsze",
-      "installCount": "Liczba instalacji",
-      "isFeatured": "Polecane wtyczki",
-      "isValidated": "Zweryfikowane wtyczki",
-      "promptsCount": "Liczba promptów",
-      "ratingCount": "Liczba ocen",
-      "resourcesCount": "Liczba zasobów",
-      "toolsCount": "Liczba narzędzi",
-      "updatedAt": "Ostatnia aktualizacja"
-    },
-    "title": "Rynek MCP",
-    "unvalidated": {
-      "desc": "Ten serwer MCP nie został jeszcze zweryfikowany",
-      "title": "Niezweryfikowany"
-    },
-    "validated": {
-      "desc": "Ten serwer MCP został zweryfikowany, co zapewnia jego jakość i niezawodność.",
-      "descWithDate": "Ten serwer MCP został zweryfikowany dnia {{date}}, co zapewnia jego jakość i niezawodność.",
-      "title": "Zweryfikowany"
-    }
-  },
-  "models": {
-    "abilities": "Możliwości modelu",
-    "chat": "Rozpocznij rozmowę",
-    "contentLength": "Maksymalna długość kontekstu",
-    "details": {
-      "overview": {
-        "title": "Przegląd"
-      },
-      "related": {
-        "listTitle": "Powiązane modele",
-        "more": "Zobacz więcej",
-        "title": "Powiązane rekomendacje"
-      }
-    },
-    "free": "Darmowe",
-    "guide": "Przewodnik konfiguracyjny",
-    "list": "Lista modeli",
-    "more": "Więcej",
-    "parameterList": {
-      "defaultValue": "Wartość domyślna",
-      "docs": "Zobacz dokumentację",
-      "frequency_penalty": {
-        "desc": "To ustawienie dostosowuje częstotliwość powtarzania określonych słów, które już pojawiły się w wejściu. Wyższa wartość zmniejsza prawdopodobieństwo powtórzeń, podczas gdy wartość ujemna ma odwrotny efekt. Kara za słownictwo nie wzrasta wraz z liczbą wystąpień. Wartości ujemne zachęcają do powtarzania słownictwa.",
-        "title": "Kara za częstotliwość"
-      },
-      "max_tokens": {
-        "desc": "To ustawienie definiuje maksymalną długość, jaką model może wygenerować w jednej odpowiedzi. Ustawienie wyższej wartości pozwala modelowi na generowanie dłuższych odpowiedzi, podczas gdy niższa wartość ogranicza długość odpowiedzi, czyniąc ją bardziej zwięzłą. W zależności od różnych scenariuszy zastosowania, odpowiednie dostosowanie tej wartości może pomóc osiągnąć oczekiwaną długość i szczegółowość odpowiedzi.",
-        "title": "Limit odpowiedzi na raz"
-      },
-      "presence_penalty": {
-        "desc": "To ustawienie ma na celu kontrolowanie powtarzania słownictwa w zależności od częstotliwości jego występowania w wejściu. Stara się rzadziej używać słów, które pojawiają się w wejściu, proporcjonalnie do ich częstotliwości. Kara za słownictwo wzrasta wraz z liczbą wystąpień. Wartości ujemne zachęcają do powtarzania słownictwa.",
-        "title": "Świeżość tematu"
-      },
-      "range": "Zakres",
-      "reasoning_effort": {
-        "desc": "To ustawienie kontroluje intensywność rozumowania modelu przed wygenerowaniem odpowiedzi. Niska intensywność priorytetowo traktuje szybkość odpowiedzi i oszczędza tokeny, podczas gdy wysoka intensywność zapewnia pełniejsze rozumowanie, ale zużywa więcej tokenów i obniża szybkość odpowiedzi. Wartość domyślna to średnia, co równoważy dokładność rozumowania z szybkością odpowiedzi.",
-        "title": "Intensywność rozumowania"
-      },
-      "temperature": {
-        "desc": "To ustawienie wpływa na różnorodność odpowiedzi modelu. Niższe wartości prowadzą do bardziej przewidywalnych i typowych odpowiedzi, podczas gdy wyższe wartości zachęcają do bardziej zróżnicowanych i rzadziej spotykanych odpowiedzi. Gdy wartość wynosi 0, model zawsze daje tę samą odpowiedź na dane wejście.",
-        "title": "Losowość"
-      },
-      "title": "Parametry modelu",
-      "top_p": {
-        "desc": "To ustawienie ogranicza wybór modelu do słów o najwyższej prawdopodobieństwie: wybiera tylko te słowa, których skumulowane prawdopodobieństwo osiąga P. Niższe wartości sprawiają, że odpowiedzi modelu są bardziej przewidywalne, podczas gdy domyślne ustawienie pozwala modelowi wybierać z całego zakresu słownictwa.",
-        "title": "Próbkowanie jądra"
-      },
-      "type": "Typ"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChat obsługuje użycie niestandardowego klucza API dla tego dostawcy.",
-      "input": "Cena wejściowa",
-      "inputTooltip": "Koszt za milion tokenów",
-      "latency": "Opóźnienie",
-      "latencyTooltip": "Średni czas odpowiedzi dostawcy na pierwszy token",
-      "maxOutput": "Maksymalna długość wyjścia",
-      "maxOutputTooltip": "Maksymalna liczba tokenów, które ten punkt końcowy może wygenerować",
-      "officialTooltip": "Oficjalna usługa LobeHub",
-      "output": "Cena wyjściowa",
-      "outputTooltip": "Koszt za milion tokenów",
-      "streamCancellationTooltip": "Ten dostawca obsługuje funkcję anulowania strumienia.",
-      "throughput": "Przepustowość",
-      "throughputTooltip": "Średnia liczba tokenów przesyłanych na sekundę w żądaniach strumieniowych"
-    },
-    "sorts": {
-      "contextWindowTokens": "Długość kontekstu",
-      "identifier": "ID modelu",
-      "inputPrice": "Cena wejścia",
-      "outputPrice": "Cena wyjścia",
-      "providerCount": "Liczba dostawców",
-      "releasedAt": "Najnowsza publikacja"
-    },
-    "suggestions": "Podobne modele",
-    "supportedProviders": "Dostawcy obsługujący ten model"
-  },
-  "plugins": {
-    "builtinTag": "Wbudowana wtyczka",
-    "community": "Wtyczki społecznościowe",
-    "details": {
-      "settings": {
-        "title": "Ustawienia wtyczek"
-      },
-      "summary": {
-        "title": "Co możesz zrobić z tą wtyczką?"
-      },
-      "tools": {
-        "title": "Narzędzia wtyczek"
-      }
-    },
-    "install": "Zainstaluj wtyczkę",
-    "installed": "Zainstalowane",
-    "legacyTag": "Starsza wersja wtyczki",
-    "list": "Lista wtyczek",
-    "meta": {
-      "description": "Opis",
-      "parameter": "Parametr",
-      "title": "Parametry narzędzia",
-      "type": "Typ"
-    },
-    "more": "Więcej",
-    "official": "Oficjalne wtyczki",
-    "recentSubmits": "Ostatnie aktualizacje",
-    "sorts": {
-      "createdAt": "Najnowsze publikacje",
-      "identifier": "ID wtyczki",
-      "title": "Nazwa wtyczki"
-    },
-    "suggestions": "Podobne rekomendacje"
-  },
-  "providers": {
-    "config": "Konfiguracja dostawcy",
-    "details": {
-      "guide": {
-        "title": "Przewodnik integracji"
-      },
-      "overview": {
-        "title": "Przegląd"
-      },
-      "related": {
-        "listTitle": "Powiązani dostawcy",
-        "more": "Zobacz więcej",
-        "title": "Powiązane rekomendacje"
-      }
-    },
-    "list": "Lista dostawców modeli",
-    "modelCount": "{{count}} modeli",
-    "modelName": "Nazwa modelu",
-    "modelSite": "Dokumentacja modeli",
-    "more": "Więcej",
-    "officialSite": "Oficjalna strona",
-    "showAllModels": "Pokaż wszystkie modele",
-    "sorts": {
-      "default": "Domyślne sortowanie",
-      "identifier": "ID dostawcy",
-      "modelCount": "Liczba modeli"
-    },
-    "suggestions": "Powiązani dostawcy",
-    "supportedModels": "Obsługiwane modele"
-  },
+  "isFeatured": "Wyróżniony",
+  "isOfficial": "Oficjalnie zweryfikowany",
+  "like": "Lubię to",
+  "mcp.categories.all.description": "Wszystkie serwery MCP",
+  "mcp.categories.all.name": "Wszystkie",
+  "mcp.categories.business.description": "Usługi biznesowe i korporacyjne",
+  "mcp.categories.business.name": "Usługi biznesowe",
+  "mcp.categories.developer.description": "Narzędzia i usługi dla programistów",
+  "mcp.categories.developer.name": "Narzędzia programistyczne",
+  "mcp.categories.gaming-entertainment.description": "Gry, rozrywka i czas wolny",
+  "mcp.categories.gaming-entertainment.name": "Gry i rozrywka",
+  "mcp.categories.health-wellness.description": "Zdrowie, fitness i dobre samopoczucie",
+  "mcp.categories.health-wellness.name": "Zdrowie i wellness",
+  "mcp.categories.lifestyle.description": "Styl życia, nawyki i codzienne aktywności",
+  "mcp.categories.lifestyle.name": "Styl życia",
+  "mcp.categories.media-generate.description": "Tworzenie, edycja i przetwarzanie mediów",
+  "mcp.categories.media-generate.name": "Generowanie mediów",
+  "mcp.categories.news.description": "Agregacja wiadomości, raportowanie i usługi informacyjne",
+  "mcp.categories.news.name": "Wiadomości i informacje",
+  "mcp.categories.productivity.description": "Zarządzanie zadaniami, notatki i narzędzia produktywności",
+  "mcp.categories.productivity.name": "Narzędzia produktywności",
+  "mcp.categories.science-education.description": "Badania naukowe, nauka i narzędzia edukacyjne",
+  "mcp.categories.science-education.name": "Nauka i edukacja",
+  "mcp.categories.social.description": "Sieci społecznościowe i komunikacja",
+  "mcp.categories.social.name": "Media społecznościowe",
+  "mcp.categories.stocks-finance.description": "Rynki finansowe, handel i inwestycje",
+  "mcp.categories.stocks-finance.name": "Giełda i finanse",
+  "mcp.categories.tools.description": "Narzędzia i usługi ogólnego zastosowania",
+  "mcp.categories.tools.name": "Narzędzia użytkowe",
+  "mcp.categories.travel-transport.description": "Planowanie podróży i transport",
+  "mcp.categories.travel-transport.name": "Podróże i transport",
+  "mcp.categories.weather.description": "Prognozy pogody i usługi meteorologiczne",
+  "mcp.categories.weather.name": "Pogoda",
+  "mcp.categories.web-search.description": "Wyszukiwanie w sieci i pozyskiwanie informacji",
+  "mcp.categories.web-search.name": "Pozyskiwanie informacji",
+  "mcp.details.connectionType.hybrid.desc": "Usługa ta może działać lokalnie lub w chmurze, w zależności od konfiguracji lub scenariusza użycia, oferując możliwość podwójnego działania.",
+  "mcp.details.connectionType.hybrid.title": "Usługa Hybrydowa",
+  "mcp.details.connectionType.local.desc": "Ten serwer może działać wyłącznie na lokalnym urządzeniu klienta, wymaga instalacji i korzysta z lokalnych zasobów.",
+  "mcp.details.connectionType.local.title": "Usługa Lokalna",
+  "mcp.details.connectionType.remote.desc": "Ten serwer jest hostowany zdalnie, ponieważ głównie opiera się na usługach zdalnych i nie wymaga środowiska lokalnego.",
+  "mcp.details.connectionType.remote.title": "Usługa Chmurowa",
+  "mcp.details.deployment.args": "Argumenty",
+  "mcp.details.deployment.checkCommand": "Komenda sprawdzająca",
+  "mcp.details.deployment.command": "Komenda",
+  "mcp.details.deployment.commandLine": "Zależności systemowe",
+  "mcp.details.deployment.connection": "Metoda połączenia",
+  "mcp.details.deployment.connectionType": "Typ połączenia",
+  "mcp.details.deployment.description": "Metoda instalacji i wdrożenia umiejętności",
+  "mcp.details.deployment.descriptionPlaceholder": "Opcjonalny opis",
+  "mcp.details.deployment.empty": "Brak dostępnych opcji wdrożenia",
+  "mcp.details.deployment.env": "Zmienne środowiskowe",
+  "mcp.details.deployment.guide": "Przewodnik instalacji",
+  "mcp.details.deployment.installation": "Zainstaluj przez {{method}}",
+  "mcp.details.deployment.installationMethod": "Metoda instalacji",
+  "mcp.details.deployment.other": "Inne ustawienia",
+  "mcp.details.deployment.packageName": "Nazwa pakietu",
+  "mcp.details.deployment.platform.steps.claude": "- Otwórz aplikację **Claude Desktop**\n- Przejdź do **Ustawienia**, a następnie wybierz **Deweloper**\n- Kliknij **Edytuj konfigurację**\n- Otwórz plik **claude_desktop_config.json**\n- Skopiuj i wklej konfigurację serwera do istniejącego pliku, a następnie zapisz",
+  "mcp.details.deployment.platform.steps.cline": "- Otwórz VS Code z zainstalowanym rozszerzeniem Cline\n- Kliknij ikonę Cline w pasku bocznym\n- Wybierz **MCP Servers** z menu rozwijanego\n- W zakładce **Remote Servers** wpisz nazwę serwera i adres URL serwera MCP\n- Kliknij **Add Server**, aby się połączyć",
+  "mcp.details.deployment.platform.steps.cursor": "- Przejdź do **Ustawienia**, a następnie wybierz ustawienia Cursor\n- Wybierz **MCP** po lewej stronie\n- Kliknij **Dodaj nowy globalny serwer MCP** w prawym górnym rogu\n- Skopiuj i wklej konfigurację serwera do istniejącego pliku, a następnie zapisz",
+  "mcp.details.deployment.platform.steps.lobeChat": "- Otwórz aplikację **LobeHub Desktop**\n- Przejdź do **Ustawienia** - **Domyślny Agent**\n- Następnie wybierz **Ustawienia umiejętności** - **Własne umiejętności**\n- Kliknij **Szybki import konfiguracji JSON**\n- Skopiuj i wklej konfigurację serwera do pola tekstowego, a następnie zainstaluj",
+  "mcp.details.deployment.platform.steps.openai": "- Otwórz swoją aplikację **OpenAI** lub środowisko deweloperskie\n- Skonfiguruj narzędzia MCP w **Responses API**\n- Dodaj bloki MCP do tablicy **tools** w żądaniach API\n- Ustaw **server_url** na adres końcowy serwera MCP\n- Dołącz wymagane nagłówki uwierzytelniające (klucz API, token itp.)\n- Użyj parametru `allowed_tools`, aby ograniczyć dostępne narzędzia\n- Ustaw `require_approval`, aby kontrolować zatwierdzanie wykonania narzędzi",
+  "mcp.details.deployment.platform.steps.vscode": "- Otwórz VS Code\n- Otwórz paletę poleceń (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Wpisz **MCP: Add Server** i wybierz\n- Wybierz dodanie do ustawień przestrzeni roboczej lub użytkownika\n- Skopiuj i wklej konfigurację serwera",
+  "mcp.details.deployment.platform.title": "Zainstaluj na {{platform}}",
+  "mcp.details.deployment.recommended": "Zalecane",
+  "mcp.details.deployment.systemDependencies": "Zależności systemowe",
+  "mcp.details.deployment.table.description": "Opis",
+  "mcp.details.deployment.table.name": "Nazwa",
+  "mcp.details.deployment.table.required": "Wymagane",
+  "mcp.details.deployment.table.type": "Typ",
+  "mcp.details.deployment.title": "Metoda instalacji",
+  "mcp.details.githubBadge.desc": "LobeHub regularnie skanuje repozytoria kodu i dokumentację, aby:\n- Potwierdzić status działania serwera MCP.\n- Wydobyć funkcje serwera, takie jak narzędzia, zasoby, podpowiedzi i wymagane parametry.\n- Nasza odznaka pomaga użytkownikom szybko ocenić bezpieczeństwo, funkcjonalność i instrukcje instalacji serwera MCP. Skopiuj poniższy kod do pliku `README.md`:",
+  "mcp.details.nav.needHelp": "Potrzebujesz pomocy?",
+  "mcp.details.nav.reportIssue": "Zgłoś problem",
+  "mcp.details.nav.viewSourceCode": "Zobacz kod źródłowy",
+  "mcp.details.overview.title": "Przegląd",
+  "mcp.details.related.listTitle": "Powiązane serwery MCP",
+  "mcp.details.related.more": "Zobacz więcej",
+  "mcp.details.related.title": "Powiązane rekomendacje",
+  "mcp.details.schema.mode.docs": "Dokumentacja",
+  "mcp.details.schema.prompts.arguments": "Konfiguracja parametrów",
+  "mcp.details.schema.prompts.desc": "Interaktywne szablony uruchamiane przez wybór użytkownika",
+  "mcp.details.schema.prompts.empty": "Brak dostępnych podpowiedzi",
+  "mcp.details.schema.prompts.instructions": "Opis instrukcji",
+  "mcp.details.schema.prompts.table.description": "Opis",
+  "mcp.details.schema.prompts.table.name": "Nazwa",
+  "mcp.details.schema.prompts.table.required": "Wymagane",
+  "mcp.details.schema.prompts.title": "Lista podpowiedzi",
+  "mcp.details.schema.resources.desc": "Dane kontekstowe dołączane i zarządzane przez klienta",
+  "mcp.details.schema.resources.empty": "Brak dostępnych zasobów",
+  "mcp.details.schema.resources.table.description": "Opis",
+  "mcp.details.schema.resources.table.mineType": "Typ MIME",
+  "mcp.details.schema.resources.table.name": "Nazwa",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "Lista zasobów",
+  "mcp.details.schema.title": "Funkcje umiejętności",
+  "mcp.details.schema.tools.desc": "Interfejsy funkcjonalne udostępniane dużym modelom językowym (LLM) do wykonywania operacji",
+  "mcp.details.schema.tools.empty": "Brak dostępnych narzędzi",
+  "mcp.details.schema.tools.inputSchema": "Opis wejścia",
+  "mcp.details.schema.tools.instructions": "Opis instrukcji",
+  "mcp.details.schema.tools.table.description": "Opis",
+  "mcp.details.schema.tools.table.name": "Nazwa",
+  "mcp.details.schema.tools.table.required": "Wymagane",
+  "mcp.details.schema.tools.table.type": "Typ",
+  "mcp.details.schema.tools.title": "Lista narzędzi",
+  "mcp.details.score.claimed.desc": "Ten serwer MCP został przejęty przez właściciela, co zapewnia jego zarządzanie i autentyczność.",
+  "mcp.details.score.claimed.title": "Przejęty przez właściciela",
+  "mcp.details.score.deployMoreThanManual.desc": "Ten serwer MCP oferuje metody instalacji bardziej przyjazne niż ręczna, umożliwiając łatwe wdrożenie i użycie.",
+  "mcp.details.score.deployMoreThanManual.title": "Oferuje przyjazne metody instalacji",
+  "mcp.details.score.deployment.desc": "Ten serwer MCP oferuje co najmniej jedną metodę instalacji, umożliwiając jego wdrożenie i użycie.",
+  "mcp.details.score.deployment.descWithCount": "Ten serwer MCP oferuje {{number}} metod(y) instalacji, umożliwiając jego wdrożenie i użycie.",
+  "mcp.details.score.deployment.title": "Oferuje co najmniej jedną metodę instalacji",
+  "mcp.details.score.license.desc": "To repozytorium zawiera plik LICENSE.",
+  "mcp.details.score.license.descWithlicense": "To repozytorium jest licencjonowane na podstawie {{license}}.",
+  "mcp.details.score.license.title": "Zawiera LICENSE",
+  "mcp.details.score.listTitle": "Szczegóły oceny",
+  "mcp.details.score.notClaimed.desc": "Jeśli jesteś właścicielem tego serwera MCP, możesz go przejąć za pomocą poniższych metod.",
+  "mcp.details.score.notClaimed.title": "Nieprzejęty przez właściciela",
+  "mcp.details.score.prompts.desc": "Ten serwer MCP udostępnia podpowiedzi, umożliwiając interakcję z usługą.",
+  "mcp.details.score.prompts.descWithCount": "Ten serwer MCP udostępnia {{number}} podpowiedzi, umożliwiając interakcję z usługą.",
+  "mcp.details.score.prompts.title": "Zawiera podpowiedzi",
+  "mcp.details.score.readme.desc": "To repozytorium zawiera plik README.md.",
+  "mcp.details.score.readme.title": "Zawiera README",
+  "mcp.details.score.resources.desc": "Ten serwer MCP udostępnia zasoby, umożliwiając dołączanie i zarządzanie danymi kontekstowymi.",
+  "mcp.details.score.resources.descWithCount": "Ten serwer MCP udostępnia {{number}} zasobów, umożliwiając dołączanie i zarządzanie danymi kontekstowymi.",
+  "mcp.details.score.resources.title": "Zawiera zasoby",
+  "mcp.details.score.title": "Ocena",
+  "mcp.details.score.tools.desc": "Usługa musi udostępniać co najmniej jedno narzędzie, umożliwiające wykonywanie określonych operacji.",
+  "mcp.details.score.tools.descWithCount": "Ten serwer MCP udostępnia {{number}} funkcji narzędziowych, umożliwiając wykonywanie określonych operacji.",
+  "mcp.details.score.tools.title": "Zawiera co najmniej jedno narzędzie",
+  "mcp.details.score.validated.desc": "Ten serwer MCP przeszedł walidację instalacji, co zapewnia jego jakość i niezawodność.",
+  "mcp.details.score.validated.title": "Zwalidowany",
+  "mcp.details.scoreLevel.a.desc": "Ten serwer MCP został dokładnie zweryfikowany, oferuje kompleksowe funkcje i wysoką jakość doświadczenia użytkownika.",
+  "mcp.details.scoreLevel.a.fullTitle": "Doskonałe Umiejętności",
+  "mcp.details.scoreLevel.a.title": "Premium",
+  "mcp.details.scoreLevel.b.desc": "Ten serwer MCP oferuje dobre funkcje i doświadczenie użytkownika, ale może wymagać ulepszeń w niektórych obszarach.",
+  "mcp.details.scoreLevel.b.fullTitle": "Dobra Funkcjonalność",
+  "mcp.details.scoreLevel.b.title": "Dobry",
+  "mcp.details.scoreLevel.f.desc": "Ten serwer MCP jest niekompletny lub niskiej jakości; zaleca się ostrożność przy jego używaniu.",
+  "mcp.details.scoreLevel.f.fullTitle": "Niska Jakość",
+  "mcp.details.scoreLevel.f.title": "Słaby",
+  "mcp.details.settings.capabilities.prompts": "Wskazówki",
+  "mcp.details.settings.capabilities.resources": "Zasoby",
+  "mcp.details.settings.capabilities.title": "Możliwości Umiejętności",
+  "mcp.details.settings.capabilities.tools": "Narzędzia",
+  "mcp.details.settings.configuration.title": "Konfiguracja Umiejętności",
+  "mcp.details.settings.connection.args": "Argumenty Startowe",
+  "mcp.details.settings.connection.command": "Polecenie Startowe",
+  "mcp.details.settings.connection.title": "Informacje o Połączeniu",
+  "mcp.details.settings.connection.type": "Typ Połączenia",
+  "mcp.details.settings.connection.url": "URL Usługi",
+  "mcp.details.settings.saveSettings": "Zapisz Ustawienia",
+  "mcp.details.settings.title": "Ustawienia Umiejętności",
+  "mcp.details.sidebar.install": "Zainstaluj Serwer MCP",
+  "mcp.details.sidebar.meta.homepage": "Oficjalna Strona",
+  "mcp.details.sidebar.meta.installCount": "Liczba Instalacji",
+  "mcp.details.sidebar.meta.language": "Język Źródłowy",
+  "mcp.details.sidebar.meta.license": "Licencja",
+  "mcp.details.sidebar.meta.published": "Data Publikacji",
+  "mcp.details.sidebar.meta.repo": "Repozytorium Źródłowe",
+  "mcp.details.sidebar.meta.stars": "Gwiazdki",
+  "mcp.details.sidebar.meta.title": "Szczegóły",
+  "mcp.details.sidebar.meta.updated": "Ostatnia Aktualizacja",
+  "mcp.details.sidebar.moreServerConfig": "Zobacz Szczegóły",
+  "mcp.details.sidebar.recommendServers": "Powiązane MCP",
+  "mcp.details.sidebar.serverConfig": "Konfiguracja Instalacji",
+  "mcp.details.sidebar.toc": "Spis Treści",
+  "mcp.details.summary.title": "Co możesz zrobić z tym serwerem MCP?",
+  "mcp.details.totalScore.description": "Łączny wynik obliczony na podstawie różnych wskaźników",
+  "mcp.details.totalScore.legend.aGrade": "Ocena A ({{minPercent}}–100%)",
+  "mcp.details.totalScore.legend.bGrade": "Ocena B ({{minPercent}}–{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "Ocena F (0–{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} punktów",
+  "mcp.details.totalScore.popover.completedOptional": "✅ Ukończone opcjonalne elementy ({{count}})",
+  "mcp.details.totalScore.popover.completedRequired": "✅ Ukończone wymagane elementy ({{count}})",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ Nieukończone opcjonalne elementy ({{count}})",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ Nieukończone wymagane elementy ({{count}})",
+  "mcp.details.totalScore.popover.title": "Szczegóły Wyniku",
+  "mcp.details.totalScore.ratingFormat": "Ocena: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "Elementy",
+  "mcp.details.totalScore.scoreInfo.points": "Punkty",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "Wymagane Elementy",
+  "mcp.details.totalScore.title": "Łączny Wynik",
+  "mcp.details.versions.table.isLatest": "Najnowsza Wersja",
+  "mcp.details.versions.table.isValidated": "Zweryfikowana",
+  "mcp.details.versions.table.publishAt": "Data Publikacji",
+  "mcp.details.versions.table.version": "Wersja",
+  "mcp.details.versions.title": "Historia Wersji",
+  "mcp.hero.desc": "Społeczność serwerów MCP typu open-source — umożliwiająca systemom AI dostęp do systemów plików, baz danych, API i innych kluczowych zasobów.",
+  "mcp.hero.subTitle": "Open-source, gotowe do uruchomienia",
+  "mcp.hero.title": "Społeczność MCP Open-source dla AI",
+  "mcp.sorts.createdAt": "Niedawno Dodane",
+  "mcp.sorts.installCount": "Liczba Instalacji",
+  "mcp.sorts.isFeatured": "Polecane Umiejętności",
+  "mcp.sorts.isValidated": "Zweryfikowane Umiejętności",
+  "mcp.sorts.promptsCount": "Liczba Wskazówek",
+  "mcp.sorts.ratingCount": "Liczba Ocen",
+  "mcp.sorts.resourcesCount": "Liczba Zasobów",
+  "mcp.sorts.toolsCount": "Liczba Narzędzi",
+  "mcp.sorts.updatedAt": "Ostatnio Zaktualizowane",
+  "mcp.title": "Społeczność MCP",
+  "mcp.unvalidated.desc": "Ten serwer MCP nie został jeszcze zweryfikowany",
+  "mcp.unvalidated.title": "Niezweryfikowany",
+  "mcp.validated.desc": "Ten serwer MCP został zweryfikowany pod kątem jakości i niezawodności.",
+  "mcp.validated.descWithDate": "Ten serwer MCP został zweryfikowany dnia {{date}} pod kątem jakości i niezawodności.",
+  "mcp.validated.title": "Zweryfikowany",
+  "mcpEmpty.description": "Spróbuj zmienić filtry lub wyszukać inne słowa kluczowe.",
+  "mcpEmpty.search": "Nie znaleziono pasujących serwerów MCP",
+  "mcpEmpty.title": "Brak serwerów MCP",
+  "models.abilities": "Możliwości Modelu",
+  "models.chat": "Rozpocznij Rozmowę",
+  "models.contentLength": "Maksymalna Długość Kontekstu",
+  "models.details.overview.title": "Przegląd",
+  "models.details.related.listTitle": "Powiązane Modele",
+  "models.details.related.more": "Zobacz Więcej",
+  "models.details.related.title": "Powiązane Rekomendacje",
+  "models.empty.description": "Spróbuj zmienić filtry, aby zobaczyć więcej modeli",
+  "models.empty.search": "Nie znaleziono pasujących modeli",
+  "models.empty.title": "Brak dostępnych modeli",
+  "models.free": "Darmowy",
+  "models.guide": "Przewodnik Konfiguracyjny",
+  "models.list": "Lista Modeli",
+  "models.more": "Więcej",
+  "models.parameterList.defaultValue": "Wartość Domyślna",
+  "models.parameterList.docs": "Zobacz Dokumentację",
+  "models.parameterList.frequency_penalty.desc": "To ustawienie reguluje częstotliwość, z jaką model powtarza słownictwo już występujące w wejściu. Wyższe wartości zmniejszają prawdopodobieństwo powtórzeń, a wartości ujemne je zwiększają. Kary za słownictwo nie rosną wraz z częstotliwością występowania. Wartości ujemne zachęcają do ponownego użycia słów.",
+  "models.parameterList.frequency_penalty.title": "Kara za Powtórzenia",
+  "models.parameterList.max_tokens.desc": "To ustawienie określa maksymalną długość odpowiedzi generowanej przez model. Wyższa wartość pozwala na dłuższe odpowiedzi, a niższa skraca je, czyniąc bardziej zwięzłymi. Dostosowanie tej wartości do scenariusza użycia pomaga osiągnąć pożądany poziom szczegółowości.",
+  "models.parameterList.max_tokens.title": "Limit Długości Odpowiedzi",
+  "models.parameterList.presence_penalty.desc": "To ustawienie kontroluje użycie słownictwa w zależności od jego częstotliwości w wejściu. Częściej występujące słowa są mniej chętnie używane. Kary rosną wraz z częstotliwością. Wartości ujemne zachęcają do ponownego użycia słów.",
+  "models.parameterList.presence_penalty.title": "Świeżość Tematu",
+  "models.parameterList.range": "Zakres",
+  "models.parameterList.reasoning_effort.desc": "To ustawienie kontroluje intensywność rozumowania modelu przed wygenerowaniem odpowiedzi. Niska intensywność zwiększa szybkość i oszczędza tokeny, wysoka zapewnia dokładniejsze rozumowanie kosztem czasu i tokenów. Domyślnie ustawione na średni poziom.",
+  "models.parameterList.reasoning_effort.title": "Intensywność Rozumowania",
+  "models.parameterList.temperature.desc": "To ustawienie wpływa na różnorodność odpowiedzi modelu. Niższe wartości dają bardziej przewidywalne odpowiedzi, wyższe zwiększają kreatywność. Wartość 0 powoduje, że model zawsze odpowiada tak samo na dane wejście.",
+  "models.parameterList.temperature.title": "Losowość",
+  "models.parameterList.title": "Parametry Modelu",
+  "models.parameterList.top_p.desc": "To ustawienie ogranicza wybór modelu do słów o łącznym prawdopodobieństwie P. Niższe wartości zwiększają przewidywalność, domyślne pozwala na większą różnorodność.",
+  "models.parameterList.top_p.title": "Próbkowanie Jądra",
+  "models.parameterList.type": "Typ",
+  "models.providerInfo.apiTooltip": "LobeHub obsługuje niestandardowy klucz API dla tego dostawcy.",
+  "models.providerInfo.input": "Cena Wejścia",
+  "models.providerInfo.inputTooltip": "Koszt za milion tokenów",
+  "models.providerInfo.latency": "Opóźnienie",
+  "models.providerInfo.latencyTooltip": "Średni czas odpowiedzi dostawcy na pierwszy token",
+  "models.providerInfo.maxOutput": "Maksymalna Długość Wyjścia",
+  "models.providerInfo.maxOutputTooltip": "Maksymalna liczba tokenów generowanych przez ten punkt końcowy",
+  "models.providerInfo.officialTooltip": "Oficjalna Usługa LobeHub",
+  "models.providerInfo.output": "Cena Wyjścia",
+  "models.providerInfo.outputTooltip": "Koszt za milion tokenów",
+  "models.providerInfo.streamCancellationTooltip": "Ten dostawca obsługuje anulowanie strumienia.",
+  "models.providerInfo.throughput": "Przepustowość",
+  "models.providerInfo.throughputTooltip": "Średnia liczba tokenów przesyłanych na sekundę w żądaniach strumieniowych",
+  "models.sorts.contextWindowTokens": "Długość Kontekstu",
+  "models.sorts.identifier": "ID Modelu",
+  "models.sorts.inputPrice": "Cena Wejścia",
+  "models.sorts.outputPrice": "Cena Wyjścia",
+  "models.sorts.providerCount": "Liczba Dostawców",
+  "models.sorts.releasedAt": "Niedawno Wydane",
+  "models.suggestions": "Powiązane Modele",
+  "models.supportedProviders": "Dostawcy Obsługujący Ten Model",
+  "plugins.builtinTag": "Wbudowane",
+  "plugins.community": "Umiejętności Społeczności",
+  "plugins.details.settings.title": "Ustawienia Umiejętności",
+  "plugins.details.summary.title": "Co możesz zrobić z tą umiejętnością?",
+  "plugins.details.tools.title": "Narzędzia Umiejętności",
+  "plugins.install": "Zainstaluj Umiejętność",
+  "plugins.installed": "Zainstalowano",
+  "plugins.legacyTag": "Przestarzałe",
+  "plugins.list": "Lista Umiejętności",
+  "plugins.meta.description": "Opis",
+  "plugins.meta.parameter": "Parametr",
+  "plugins.meta.title": "Parametry Narzędzia",
+  "plugins.meta.type": "Typ",
+  "plugins.more": "Więcej",
+  "plugins.official": "Oficjalne Umiejętności",
+  "plugins.recentSubmits": "Ostatnio Zaktualizowane",
+  "plugins.sorts.createdAt": "Niedawno Opublikowane",
+  "plugins.sorts.identifier": "ID Umiejętności",
+  "plugins.sorts.title": "Nazwa Umiejętności",
+  "plugins.suggestions": "Powiązane Rekomendacje",
+  "providers.config": "Skonfiguruj Dostawcę",
+  "providers.details.guide.title": "Przewodnik integracji",
+  "providers.details.overview.title": "Przegląd",
+  "providers.details.related.listTitle": "Powiązani Dostawcy",
+  "providers.details.related.more": "Zobacz Więcej",
+  "providers.details.related.title": "Powiązane Rekomendacje",
+  "providers.empty.description": "Spróbuj zmienić filtry, aby zobaczyć więcej dostawców.",
+  "providers.empty.search": "Nie znaleziono pasujących dostawców",
+  "providers.empty.title": "Brak Dostawców",
+  "providers.list": "Lista Dostawców",
+  "providers.modelCount": "{{count}} modeli",
+  "providers.modelName": "Nazwa Modelu",
+  "providers.modelSite": "Dokumentacja Modelu",
+  "providers.more": "Więcej",
+  "providers.officialSite": "Oficjalna Strona",
+  "providers.showAllModels": "Pokaż Wszystkie Modele",
+  "providers.sorts.default": "Domyślnie",
+  "providers.sorts.identifier": "ID Dostawcy",
+  "providers.sorts.modelCount": "Liczba Modeli",
+  "providers.suggestions": "Powiązani Dostawcy",
+  "providers.supportedModels": "Obsługiwane Modele",
   "publishedTime": "Opublikowano",
-  "search": {
-    "placeholder": "Szukaj nazwy, opisu lub słowa kluczowego...",
-    "result": "{{count}} wyników wyszukiwania dotyczących <highlight>{{keyword}}</highlight>",
-    "searching": "Wyszukiwanie..."
-  },
-  "tab": {
-    "assistant": "Asystent",
-    "home": "Strona główna",
-    "model": "Model",
-    "plugin": "Wtyczka",
-    "provider": "Dostawca modeli"
-  }
+  "search.placeholder": "Szukaj po nazwie, opisie lub słowach kluczowych...",
+  "search.result": "{{count}} wyników dla <highlight>{{keyword}}</highlight>",
+  "search.searching": "Wyszukiwanie...",
+  "tab.assistant": "Agent",
+  "tab.home": "Strona Główna",
+  "tab.model": "Model",
+  "tab.plugin": "Umiejętność",
+  "tab.provider": "Dostawca",
+  "tab.user": "Użytkownik",
+  "user.agents": "Agenci",
+  "user.downloads": "Pobrane",
+  "user.editProfile": "Edytuj Profil",
+  "user.favoriteAgents": "Zapisani Agenci",
+  "user.favoritePlugins": "Zapisane Umiejętności",
+  "user.follow": "Obserwuj",
+  "user.followers": "Obserwujący",
+  "user.following": "Obserwowani",
+  "user.login": "Zostań Twórcą",
+  "user.logout": "Wyloguj",
+  "user.myProfile": "Mój Profil",
+  "user.noAgents": "Ten użytkownik nie opublikował jeszcze żadnych agentów",
+  "user.noFavoriteAgents": "Brak zapisanych agentów",
+  "user.noFavoritePlugins": "Brak zapisanych umiejętności",
+  "user.publishedAgents": "Utworzeni Agenci",
+  "user.tabs.favorites": "Ulubione",
+  "user.tabs.publishedAgents": "Utworzone",
+  "user.unfavorite": "Usuń z ulubionych",
+  "user.unfavoriteFailed": "Nie udało się usunąć z ulubionych",
+  "user.unfavoriteSuccess": "Usunięto z ulubionych",
+  "user.unfollow": "Przestań Obserwować",
+  "user.website": "Strona Internetowa"
 }

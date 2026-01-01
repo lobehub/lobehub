@@ -4,7 +4,7 @@ import { memo } from 'react';
 
 import CustomPluginInstallModal from './CustomPluginInstallModal';
 import OfficialPluginInstallModal from './OfficialPluginInstallModal';
-import { McpInstallRequest, PluginSource } from './types';
+import { type McpInstallRequest, PluginSource } from './types';
 
 interface PluginInstallConfirmModalProps {
   installRequest: McpInstallRequest | null;

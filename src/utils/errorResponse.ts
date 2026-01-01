@@ -1,11 +1,16 @@
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { ChatErrorType, ErrorResponse, ErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { ChatErrorType, type ErrorResponse, type ErrorType } from '@lobechat/types';
 
 const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
   // InvalidAccessCode / InvalidAzureAPIKey / InvalidOpenAIAPIKey / InvalidZhipuAPIKey ....
   if (errorType.toString().includes('Invalid')) return 401;
 
   switch (errorType) {
+    case ChatErrorType.SubscriptionPlanLimit:
+    case ChatErrorType.FreePlanLimit: {
+      return 403;
+    }
+
     // TODO: Need to refactor to Invalid OpenAI API Key
     case AgentRuntimeErrorType.InvalidProviderAPIKey:
     case AgentRuntimeErrorType.NoOpenAIAPIKey: {

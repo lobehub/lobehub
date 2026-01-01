@@ -1,11 +1,11 @@
+import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import PluginTag from '@/components/Plugins/PluginTag';
 import { useToolStore } from '@/store/tool';
 import { customPluginSelectors } from '@/store/tool/selectors';
 
-import CheckboxItem, { CheckboxItemProps } from '../components/CheckbokWithLoading';
+import CheckboxItem, { type CheckboxItemProps } from '../components/CheckbokWithLoading';
 
 const ToolItem = memo<CheckboxItemProps>(({ id, onUpdate, label, checked }) => {
   const isCustom = useToolStore((s) => customPluginSelectors.isCustomPlugin(id)(s));

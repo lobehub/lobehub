@@ -1,18 +1,17 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Button, Highlighter, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Button, Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { ShieldX } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useElectronStore } from '@/store/electron';
 
 import WaitingAnim from './WaitingAnim';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     overflow: hidden;
     display: flex;
@@ -22,9 +21,9 @@ const useStyles = createStyles(({ css, token }) => ({
 
     min-height: 100vh;
 
-    color: ${token.colorTextBase};
+    color: ${cssVar.colorTextBase};
 
-    background-color: ${token.colorBgContainer};
+    background-color: ${cssVar.colorBgContainer};
   `,
 
   content: css`
@@ -35,30 +34,30 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 
   description: css`
-    margin-block-end: ${token.marginXL}px !important;
-    color: ${token.colorTextSecondary} !important;
+    margin-block-end: ${cssVar.marginXL} !important;
+    color: ${cssVar.colorTextSecondary} !important;
   `,
 
   errorIcon: css`
-    margin-block-end: ${token.marginXL}px;
-    color: ${token.colorError};
+    margin-block-end: ${cssVar.marginXL};
+    color: ${cssVar.colorError};
   `,
 
   errorMessage: css`
-    margin-block-end: ${token.marginXL}px !important;
-    color: ${token.colorError} !important;
+    margin-block-end: ${cssVar.marginXL} !important;
+    color: ${cssVar.colorError} !important;
     text-align: center;
   `,
 
   helpText: css`
-    margin-block-start: ${token.marginLG}px;
-    font-size: ${token.fontSizeSM}px;
-    color: ${token.colorTextTertiary};
+    margin-block-start: ${cssVar.marginLG};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextTertiary};
   `,
 
   title: css`
-    margin-block-end: ${token.marginSM}px !important;
-    color: ${token.colorText} !important;
+    margin-block-end: ${cssVar.marginSM} !important;
+    color: ${cssVar.colorText} !important;
   `,
 }));
 
@@ -68,31 +67,41 @@ interface WaitingOAuthProps {
 }
 
 const WaitingOAuth = memo<WaitingOAuthProps>(({ setWaiting, setIsOpen }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('electron');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [disconnect, refreshServerConfig, connectRemoteServer] = useElectronStore((s) => [
-    s.disconnectRemoteServer,
-    s.refreshServerConfig,
-    s.connectRemoteServer,
-  ]);
+  const remoteServerSyncError = useElectronStore((s) => s.remoteServerSyncError);
+  const [disconnect, refreshServerConfig, connectRemoteServer, clearRemoteServerSyncError] =
+    useElectronStore((s) => [
+      s.disconnectRemoteServer,
+      s.refreshServerConfig,
+      s.connectRemoteServer,
+      s.clearRemoteServerSyncError,
+    ]);
 
   const handleCancel = async () => {
     await disconnect();
     setWaiting(false);
     setErrorMessage(null);
+    clearRemoteServerSyncError();
   };
 
   const handleRetry = async () => {
     setErrorMessage(null);
+    clearRemoteServerSyncError();
     const { dataSyncConfig } = useElectronStore.getState();
     await connectRemoteServer(dataSyncConfig);
   };
+
+  useEffect(() => {
+    if (!remoteServerSyncError?.message) return;
+    setErrorMessage(remoteServerSyncError.message);
+  }, [remoteServerSyncError?.message]);
 
   useWatchBroadcast('authorizationSuccessful', async () => {
     setIsOpen(false);
     setWaiting(false);
     setErrorMessage(null);
+    clearRemoteServerSyncError();
     await refreshServerConfig();
   });
 

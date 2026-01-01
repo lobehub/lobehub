@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Comprimi",
-      "on": "Espandi"
-    },
-    "typobar": {
-      "off": "Nascondi barra degli strumenti di formattazione",
-      "on": "Mostra barra degli strumenti di formattazione"
-    }
-  },
+  "actions.expand.off": "Comprimi",
+  "actions.expand.on": "Espandi",
+  "actions.typobar.off": "Nascondi barra di formattazione",
+  "actions.typobar.on": "Mostra barra di formattazione",
+  "autoSave.latest": "Ultima versione caricata",
+  "autoSave.saved": "Salvato",
+  "autoSave.saving": "Salvataggio automatico in corso...",
   "cancel": "Annulla",
+  "codemirror.copyFailed": "Copia non riuscita",
+  "codemirror.copySuccess": "Codice copiato negli appunti",
+  "codemirror.selectLanguage": "Seleziona lingua",
+  "codemirror.selectTheme": "Seleziona tema",
+  "codemirror.showLineNumbers": "Mostra numeri di riga",
+  "codemirror.tabSize": "Dimensione tabulazione",
+  "codemirror.theme": "Tema",
+  "codemirror.useTabs": "Usa tabulazioni",
   "confirm": "Conferma",
-  "file": {
-    "error": "Errore: {{message}}",
-    "uploading": "Caricamento file in corso..."
-  },
-  "image": {
-    "broken": "Immagine danneggiata"
-  },
-  "link": {
-    "edit": "Modifica link",
-    "open": "Apri link",
-    "placeholder": "Inserisci URL del link",
-    "unlink": "Rimuovi link"
-  },
-  "math": {
-    "placeholder": "Inserisci la formula TeX"
-  },
-  "slash": {
-    "h1": "Titolo di primo livello",
-    "h2": "Titolo di secondo livello",
-    "h3": "Titolo di terzo livello",
-    "hr": "Linea di separazione",
-    "table": "Tabella",
-    "tex": "Formula TeX"
-  },
-  "table": {
-    "delete": "Elimina tabella",
-    "deleteColumn": "Elimina colonna",
-    "deleteRow": "Elimina riga",
-    "insertColumnLeft": "Inserisci {{count}} colonne a sinistra",
-    "insertColumnRight": "Inserisci {{count}} colonne a destra",
-    "insertRowAbove": "Inserisci {{count}} righe sopra",
-    "insertRowBelow": "Inserisci {{count}} righe sotto"
-  },
-  "typobar": {
-    "blockquote": "Citazione",
-    "bold": "Grassetto",
-    "bulletList": "Elenco puntato",
-    "code": "Codice in linea",
-    "codeblock": "Blocco di codice",
-    "italic": "Corsivo",
-    "link": "Collegamento",
-    "numberList": "Elenco numerato",
-    "strikethrough": "Testo barrato",
-    "table": "tabella",
-    "taskList": "Elenco attività",
-    "tex": "Formula TeX",
-    "underline": "Sottolineato"
-  }
+  "file.error": "Errore: {{message}}",
+  "file.uploading": "Caricamento file in corso...",
+  "image.broken": "Immagine danneggiata",
+  "link.edit": "Modifica link",
+  "link.editLinkTitle": "Link",
+  "link.editTextTitle": "Titolo",
+  "link.open": "Apri link",
+  "link.placeholder": "Inserisci URL del link",
+  "link.unlink": "Rimuovi link",
+  "markdown.cancel": "Annulla",
+  "markdown.confirm": "Converti",
+  "markdown.parseMessage": "Convertire in formato Markdown. Il contenuto esistente verrà sovrascritto. Sei sicuro? (Si chiude automaticamente in 5 secondi)",
+  "markdown.parseTitle": "Formatta come Markdown",
+  "math.placeholder": "Inserisci una formula TeX",
+  "modifier.accept": "Mantieni",
+  "modifier.acceptAll": "Mantieni tutto",
+  "modifier.reject": "Ripristina",
+  "modifier.rejectAll": "Ripristina tutto",
+  "slash.h1": "Titolo 1",
+  "slash.h2": "Titolo 2",
+  "slash.h3": "Titolo 3",
+  "slash.hr": "Separatore",
+  "slash.table": "Tabella",
+  "slash.tex": "Formula TeX",
+  "table.delete": "Elimina tabella",
+  "table.deleteColumn": "Elimina colonna",
+  "table.deleteRow": "Elimina riga",
+  "table.insertColumnLeft": "Inserisci {{count}} colonna(e) a sinistra",
+  "table.insertColumnRight": "Inserisci {{count}} colonna(e) a destra",
+  "table.insertRowAbove": "Inserisci {{count}} riga(e) sopra",
+  "table.insertRowBelow": "Inserisci {{count}} riga(e) sotto",
+  "typobar.blockquote": "Citazione",
+  "typobar.bold": "Grassetto",
+  "typobar.bulletList": "Elenco puntato",
+  "typobar.code": "Codice inline",
+  "typobar.codeblock": "Blocco di codice",
+  "typobar.image": "Immagine",
+  "typobar.italic": "Corsivo",
+  "typobar.link": "Link",
+  "typobar.numberList": "Elenco numerato",
+  "typobar.redo": "Ripeti",
+  "typobar.strikethrough": "Barrato",
+  "typobar.table": "Tabella",
+  "typobar.taskList": "Elenco attività",
+  "typobar.tex": "Formula TeX",
+  "typobar.underline": "Sottolineato",
+  "typobar.undo": "Annulla"
 }

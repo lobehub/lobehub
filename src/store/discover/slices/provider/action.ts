@@ -2,13 +2,13 @@ import useSWR, { type SWRResponse } from 'swr';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { discoverService } from '@/services/discover';
-import { DiscoverStore } from '@/store/discover';
+import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
 import {
-  DiscoverProviderDetail,
-  IdentifiersResponse,
-  ProviderListResponse,
-  ProviderQueryParams,
+  type DiscoverProviderDetail,
+  type IdentifiersResponse,
+  type ProviderListResponse,
+  type ProviderQueryParams,
 } from '@/types/discover';
 
 export interface ProviderAction {

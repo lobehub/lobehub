@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Proporcje",
-      "lock": "Zablokuj proporcje",
-      "unlock": "Odblokuj proporcje"
-    },
-    "cfg": {
-      "label": "Siła prowadzenia"
-    },
-    "header": {
-      "desc": "Prosty opis, twórz natychmiast",
-      "title": "Malarstwo"
-    },
-    "height": {
-      "label": "Wysokość"
-    },
-    "imageNum": {
-      "label": "Liczba obrazów"
-    },
-    "imageUrl": {
-      "label": "Obraz referencyjny"
-    },
-    "imageUrls": {
-      "label": "Obrazy referencyjne"
-    },
-    "model": {
-      "label": "Model"
-    },
-    "prompt": {
-      "placeholder": "Opisz, co chcesz wygenerować"
-    },
-    "quality": {
-      "label": "Jakość obrazu",
-      "options": {
-        "hd": "Wysoka rozdzielczość",
-        "standard": "Standardowa"
-      }
-    },
-    "resolution": {
-      "label": "Rozdzielczość",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Ziarno",
-      "random": "Losowy seed"
-    },
-    "size": {
-      "label": "Rozmiar"
-    },
-    "steps": {
-      "label": "Liczba kroków"
-    },
-    "title": "AI Rysowanie",
-    "width": {
-      "label": "Szerokość"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Zastosuj nasiono",
-      "copyError": "Kopiuj błąd",
-      "copyPrompt": "Kopiuj podpowiedź",
-      "copySeed": "Kopiuj ziarno",
-      "delete": "Usuń",
-      "deleteBatch": "Usuń partię",
-      "download": "Pobierz",
-      "downloadFailed": "Pobieranie obrazu nie powiodło się",
-      "errorCopied": "Informacja o błędzie skopiowana do schowka",
-      "errorCopyFailed": "Kopiowanie informacji o błędzie nie powiodło się",
-      "generate": "Generuj",
-      "promptCopied": "Tekst podpowiedzi skopiowany do schowka",
-      "promptCopyFailed": "Kopiowanie tekstu podpowiedzi nie powiodło się",
-      "reuseSettings": "Użyj ponownie ustawień",
-      "seedApplied": "Nasiono zostało zastosowane w konfiguracji",
-      "seedApplyFailed": "Nie udało się zastosować nasiona",
-      "seedCopied": "Ziarno skopiowane do schowka",
-      "seedCopyFailed": "Kopiowanie ziarna nie powiodło się"
-    },
-    "metadata": {
-      "count": "{{count}} obrazów"
-    },
-    "status": {
-      "failed": "Generowanie nie powiodło się",
-      "generating": "Generowanie..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "Aktualna instancja wdrożeniowa działa w trybie bazy danych klienta i nie obsługuje funkcji generowania obrazów AI. Proszę przełączyć się na <1>tryb wdrożenia bazy danych serwera</1> lub bezpośrednio skorzystać z <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "Głęboka integracja z systemem zarządzania plikami, generowane obrazy są automatycznie zapisywane w systemie plików, umożliwiając ich centralne zarządzanie i organizację",
-        "title": "Integracja z systemem plików"
-      },
-      "llmAssisted": {
-        "desc": "Wykorzystanie możliwości dużych modeli językowych do inteligentnej optymalizacji i rozszerzania tekstów podpowiedzi, poprawiając jakość generowanych obrazów (wkrótce)",
-        "title": "Wsparcie LLM przy generowaniu obrazów"
-      },
-      "multiProviders": {
-        "desc": "Obsługuje wielu dostawców usług AI do rysowania, w tym OpenAI gpt-image-1, Google Imagen, FAL.ai i innych, oferując szeroki wybór modeli",
-        "title": "Wsparcie wielu dostawców"
-      }
-    },
-    "title": "Aktualny tryb wdrożenia nie obsługuje AI Rysowania"
-  },
-  "topic": {
-    "createNew": "Utwórz nowy temat",
-    "deleteConfirm": "Usuń temat generowania",
-    "deleteConfirmDesc": "Temat generowania zostanie usunięty i nie będzie można go przywrócić. Proszę zachować ostrożność.",
-    "empty": "Brak wygenerowanych tematów",
-    "title": "Temat malarski",
-    "untitled": "Domyślny temat"
-  }
+  "config.aspectRatio.label": "Proporcje",
+  "config.aspectRatio.lock": "Zablokuj proporcje",
+  "config.aspectRatio.unlock": "Odblokuj proporcje",
+  "config.cfg.label": "Intensywność wskazówek",
+  "config.header.desc": "Krótki opis, twórz natychmiast",
+  "config.header.title": "Obraz",
+  "config.height.label": "Wysokość",
+  "config.imageNum.label": "Liczba obrazów",
+  "config.imageUrl.label": "Obraz referencyjny",
+  "config.imageUrls.label": "Obrazy referencyjne",
+  "config.model.label": "Model",
+  "config.prompt.placeholder": "Opisz, co chcesz wygenerować",
+  "config.quality.label": "Jakość obrazu",
+  "config.quality.options.hd": "Wysoka rozdzielczość",
+  "config.quality.options.standard": "Standardowa",
+  "config.resolution.label": "Rozdzielczość",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Ziarno",
+  "config.seed.random": "Losowe ziarno",
+  "config.size.label": "Rozmiar",
+  "config.steps.label": "Kroki",
+  "config.title": "Obraz AI",
+  "config.width.label": "Szerokość",
+  "generation.actions.applySeed": "Zastosuj ziarno",
+  "generation.actions.copyError": "Skopiuj komunikat o błędzie",
+  "generation.actions.copyPrompt": "Skopiuj prompt",
+  "generation.actions.copySeed": "Skopiuj ziarno",
+  "generation.actions.delete": "Usuń",
+  "generation.actions.deleteBatch": "Usuń partię",
+  "generation.actions.download": "Pobierz",
+  "generation.actions.downloadFailed": "Nie udało się pobrać obrazu. Sprawdź połączenie sieciowe lub konfigurację CORS magazynu S3.",
+  "generation.actions.errorCopied": "Komunikat o błędzie skopiowany do schowka",
+  "generation.actions.errorCopyFailed": "Nie udało się skopiować komunikatu o błędzie",
+  "generation.actions.generate": "Generuj",
+  "generation.actions.promptCopied": "Prompt skopiowany do schowka",
+  "generation.actions.promptCopyFailed": "Nie udało się skopiować promptu",
+  "generation.actions.reuseSettings": "Użyj ponownie ustawień",
+  "generation.actions.seedApplied": "Ziarno zastosowane do konfiguracji",
+  "generation.actions.seedApplyFailed": "Nie udało się zastosować ziarna",
+  "generation.actions.seedCopied": "Ziarno skopiowane do schowka",
+  "generation.actions.seedCopyFailed": "Nie udało się skopiować ziarna",
+  "generation.metadata.count": "{{count}} obrazów",
+  "generation.status.failed": "Generowanie nie powiodło się",
+  "generation.status.generating": "Generowanie...",
+  "notSupportGuide.desc": "Obecny tryb wdrożenia nie obsługuje generowania obrazów AI. Przełącz się na <1>tryb wdrożenia z bazą danych serwera</1> lub skorzystaj z <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Głęboka integracja z systemem zarządzania plikami; wygenerowane obrazy są automatycznie zapisywane w systemie plików w celu jednolitego zarządzania i organizacji.",
+  "notSupportGuide.features.fileIntegration.title": "Integracja z systemem plików",
+  "notSupportGuide.features.llmAssisted.desc": "Łączy możliwości dużych modeli językowych w celu inteligentnej optymalizacji i rozszerzania promptów, poprawiając jakość generowanych obrazów (Wkrótce dostępne).",
+  "notSupportGuide.features.llmAssisted.title": "Generowanie obrazów wspomagane LLM",
+  "notSupportGuide.features.multiProviders.desc": "Obsługuje wielu dostawców generowania obrazów AI, w tym OpenAI gpt-image-1, Google Imagen, FAL.ai i innych, oferując szeroki wybór modeli.",
+  "notSupportGuide.features.multiProviders.title": "Wsparcie wielu dostawców",
+  "notSupportGuide.title": "Obecny tryb wdrożenia nie obsługuje generowania obrazów AI",
+  "topic.createNew": "Nowy temat",
+  "topic.deleteConfirm": "Usuń temat generowania",
+  "topic.deleteConfirmDesc": "Zamierzasz usunąć ten temat generowania. Tej operacji nie można cofnąć, proszę zachować ostrożność.",
+  "topic.empty": "Brak tematów generowania",
+  "topic.title": "Temat obrazu",
+  "topic.untitled": "Domyślny temat"
 }

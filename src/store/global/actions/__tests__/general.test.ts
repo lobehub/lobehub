@@ -153,6 +153,36 @@ describe('generalActionSlice', () => {
     });
   });
 
+  describe('useInitSystemStatus', () => {
+    it('should reset transient UI states when loading from localStorage', async () => {
+      const mockStatus = {
+        ...initialState.status,
+        showCommandMenu: true,
+        showHotkeyHelper: true,
+        noWideScreen: false,
+      };
+
+      const { result } = renderHook(() => useGlobalStore());
+      const getFromLocalStorageSpy = vi
+        .spyOn(result.current.statusStorage, 'getFromLocalStorage')
+        .mockResolvedValueOnce(mockStatus);
+
+      const { result: hookResult } = renderHook(() => useGlobalStore().useInitSystemStatus(), {
+        wrapper: withSWR,
+      });
+
+      await act(async () => {
+        await hookResult.current.data;
+      });
+
+      expect(getFromLocalStorageSpy).toHaveBeenCalled();
+      expect(useGlobalStore.getState().isStatusInit).toBe(true);
+      expect(useGlobalStore.getState().status.showCommandMenu).toBe(false);
+      expect(useGlobalStore.getState().status.showHotkeyHelper).toBe(false);
+      expect(useGlobalStore.getState().status.noWideScreen).toBe(false);
+    });
+  });
+
   describe('useCheckLatestVersion', () => {
     it('should not fetch version when check is disabled', () => {
       const getLatestVersionSpy = vi.spyOn(globalService, 'getLatestVersion');

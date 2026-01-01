@@ -1,4 +1,4 @@
-import { DiscoverPluginItem } from '@/types/discover';
+import { type DiscoverPluginItem } from '@/types/discover';
 
 export type PluginInstallLoadingMap = Record<string, boolean | undefined>;
 

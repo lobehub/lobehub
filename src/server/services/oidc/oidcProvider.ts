@@ -1,6 +1,6 @@
 import { getDBInstance } from '@/database/core/web-server';
 import { oidcEnv } from '@/envs/oidc';
-import { OIDCProvider, createOIDCProvider } from '@/libs/oidc-provider/provider';
+import { type OIDCProvider, createOIDCProvider } from '@/libs/oidc-provider/provider';
 
 /**
  * OIDC Provider 实例

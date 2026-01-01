@@ -12,8 +12,8 @@
     "@mozilla/readability": "^0.6.0",
     "happy-dom": "^20.0.11",
     "node-html-markdown": "^1.3.0",
-    "ssrf-safe-fetch": "workspace:*",
     "query-string": "^9.3.1",
+    "ssrf-safe-fetch": "workspace:*",
     "url-join": "^5"
   }
 }

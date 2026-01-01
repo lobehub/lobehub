@@ -17,8 +17,8 @@ export interface ChatOperationState {
   operations: Record<string, Operation>;
 
   /**
-   * Operations indexed by session/topic
-   * key: messageMapKey(sessionId, topicId), value: operationId[]
+   * Operations indexed by agent/topic
+   * key: messageMapKey(agentId, topicId), value: operationId[]
    */
   operationsByContext: Record<string, string[]>;
 

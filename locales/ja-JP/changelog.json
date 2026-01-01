@@ -1,16 +1,12 @@
 {
-  "actions": {
-    "followOnX": "Xで私たちをフォロー",
-    "subscribeToUpdates": "更新を購読",
-    "versions": "バージョンの詳細"
-  },
+  "actions.followOnX": "Xで私たちをフォロー",
+  "actions.subscribeToUpdates": "更新を購読",
+  "actions.versions": "バージョンの詳細",
   "addedWhileAway": "あなたが離れている間に、新しい機能を追加しました。",
   "allChangelog": "すべての更新ログを見る",
   "description": "{{appName}}の新機能と改善を継続的に追跡",
-  "pagination": {
-    "next": "次のページ",
-    "older": "履歴の変更を表示"
-  },
+  "pagination.next": "次のページ",
+  "pagination.older": "履歴の変更を表示",
   "readDetails": "詳細を読む",
   "title": "更新ログ",
   "versionDetails": "バージョンの詳細",

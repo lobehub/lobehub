@@ -1,22 +1,28 @@
-import { BuiltinRenderProps } from '@lobechat/types';
+'use client';
+
+import { SearchKnowledgeBase as BaseSearchKnowledgeBase } from '@lobechat/builtin-tool-knowledge-base/client';
+import { type BuiltinRenderProps } from '@lobechat/types';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
-import { SearchKnowledgeBaseArgs, SearchKnowledgeBaseState } from '@/tools/knowledge-base/type';
+import FileIcon from '@/components/FileIcon';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useChatStore } from '@/store/chat';
 
-import FileItem from './Item';
+import type { SearchKnowledgeBaseArgs, SearchKnowledgeBaseState } from '../../index';
 
 const SearchKnowledgeBase = memo<
   BuiltinRenderProps<SearchKnowledgeBaseArgs, SearchKnowledgeBaseState>
 >(({ pluginState }) => {
-  const { fileResults } = pluginState || {};
+  const openFilePreview = useChatStore((s) => s.openFilePreview);
+  const isMobile = useIsMobile();
 
   return (
-    <Flexbox gap={8} horizontal wrap={'wrap'}>
-      {fileResults?.map((file, index) => {
-        return <FileItem index={index} key={file.fileId} {...file} />;
-      })}
-    </Flexbox>
+    <BaseSearchKnowledgeBase
+      FileIcon={FileIcon}
+      isMobile={isMobile}
+      onFileClick={openFilePreview}
+      pluginState={pluginState}
+    />
   );
 });
 

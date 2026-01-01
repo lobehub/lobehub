@@ -1,18 +1,10 @@
 {
-  "desc": "Hier werden wir regelmäßig neue Funktionen vorstellen, die wir gerade erforschen – probieren Sie sie gerne aus!",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "Assistentennachrichten und die Ergebnisse von Toolaufrufen werden gruppiert angezeigt",
-      "title": "Gruppierung von Assistentennachrichten"
-    },
-    "groupChat": {
-      "desc": "Aktivieren Sie die Koordination von Gruppenchats mit mehreren KI-Agenten.",
-      "title": "Gruppenchats (mehrere Agenten)"
-    },
-    "inputMarkdown": {
-      "desc": "Echtzeit-Rendering von Markdown im Eingabefeld (Fettdruck, Codeblöcke, Tabellen usw.).",
-      "title": "Markdown-Rendering im Eingabefeld"
-    }
-  },
-  "title": "Labor"
+  "desc": "Hier findest du gelegentliche Updates zu neuen Funktionen, die wir gerade testen – probiere sie gerne aus!",
+  "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
+  "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
+  "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",
+  "features.groupChat.title": "Gruppenchat (Multi-Agenten)",
+  "features.inputMarkdown.desc": "Markdown in Echtzeit im Eingabebereich rendern (fetter Text, Codeblöcke, Tabellen usw.).",
+  "features.inputMarkdown.title": "Markdown-Darstellung im Eingabefeld",
+  "title": "Labs"
 }

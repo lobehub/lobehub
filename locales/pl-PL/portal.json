@@ -1,30 +1,25 @@
 {
   "Artifacts": "Artefakty",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Część",
-      "file": "Plik"
-    }
-  },
-  "Plugins": "Wtyczki",
-  "artifacts": {
-    "display": {
-      "code": "Kod",
-      "preview": "Podgląd"
-    },
-    "svg": {
-      "copyAsImage": "Skopiuj jako obraz",
-      "copyFail": "Kopiowanie nie powiodło się, powód błędu: {{error}}",
-      "copySuccess": "Obraz skopiowany pomyślnie",
-      "download": {
-        "png": "Pobierz jako PNG",
-        "svg": "Pobierz jako SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "Obecna lista Artefaktów jest pusta. Proszę użyć wtyczek w trakcie sesji, a następnie sprawdzić ponownie.",
-  "emptyKnowledgeList": "Aktualna lista wiedzy jest pusta. Proszę otworzyć bazę wiedzy w trakcie rozmowy, aby ją przeglądać.",
+  "FilePreview.tabs.chunk": "Fragment",
+  "FilePreview.tabs.file": "Plik",
+  "Plugins": "Umiejętności",
+  "artifacts.display.code": "Kod",
+  "artifacts.display.preview": "Podgląd",
+  "artifacts.svg.copyAsImage": "Kopiuj jako obraz",
+  "artifacts.svg.copyFail": "Nie udało się skopiować: {{error}}. Spróbuj ponownie.",
+  "artifacts.svg.copySuccess": "Obraz skopiowany pomyślnie",
+  "artifacts.svg.download.png": "Pobierz jako PNG",
+  "artifacts.svg.download.svg": "Pobierz jako SVG",
+  "document.todos.allCompleted": "Wszystkie zadania ukończone",
+  "document.todos.title": "Zadania",
+  "emptyArtifactList": "Brak artefaktów. Użyj umiejętności w rozmowie, a następnie wróć tutaj.",
+  "emptyKnowledgeList": "Ta lista jest pusta.",
   "files": "Pliki",
   "messageDetail": "Szczegóły wiadomości",
-  "title": "Okno rozszerzenia"
+  "notebook.confirmDelete": "Usunąć tę stronę?",
+  "notebook.delete": "Usuń",
+  "notebook.empty": "Brak stron. Strony powiązane z tym tematem pojawią się tutaj.",
+  "notebook.title": "Notatnik",
+  "openInPageEditor": "Edytuj na stronie",
+  "title": "Przestrzeń robocza"
 }

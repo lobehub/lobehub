@@ -1,10 +1,9 @@
 'use client';
 
-import { Grid, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Grid, Tag, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 

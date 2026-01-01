@@ -1,12 +1,9 @@
-import { app } from 'electron';
-import { pathExistsSync, remove } from 'fs-extra';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { LOCAL_DATABASE_DIR } from '@/const/dir';
 
 // Import after mocks are set up
 import { App } from '../App';
+
+const mockPathExistsSync = vi.fn();
 
 // Mock electron modules
 vi.mock('electron', () => ({
@@ -36,6 +33,24 @@ vi.mock('electron', () => ({
   protocol: {
     registerSchemesAsPrivileged: vi.fn(),
   },
+  session: {
+    defaultSession: {
+      cookies: {
+        get: vi.fn(async () => []),
+      },
+    },
+  },
+}));
+
+// electron-devtools-installer accesses electron.app.getPath at import-time in node env;
+// mock it to avoid side effects in unit tests
+vi.mock('electron-devtools-installer', () => ({
+  REACT_DEVELOPER_TOOLS: 'REACT_DEVELOPER_TOOLS',
+  default: vi.fn(),
+}));
+
+vi.mock('fs-extra', () => ({
+  pathExistsSync: (...args: any[]) => mockPathExistsSync(...args),
 }));
 
 // Mock logger
@@ -47,16 +62,6 @@ vi.mock('@/utils/logger', () => ({
     error: vi.fn(),
   }),
 }));
-
-// Mock fs-extra module
-vi.mock('fs-extra', async () => {
-  const actual = await vi.importActual('fs-extra');
-  return {
-    ...actual,
-    pathExistsSync: vi.fn(),
-    remove: vi.fn(),
-  };
-});
 
 // Mock common/routes
 vi.mock('~common/routes', () => ({
@@ -80,11 +85,9 @@ vi.mock('@/const/env', () => ({
 
 vi.mock('@/const/dir', () => ({
   buildDir: '/mock/build',
-  nextStandaloneDir: '/mock/standalone',
-  LOCAL_DATABASE_DIR: 'lobehub-local-db',
+  nextExportDir: '/mock/export/out',
   appStorageDir: '/mock/storage/path',
   userDataDir: '/mock/user/data',
-  DB_SCHEMA_HASH_FILENAME: 'lobehub-local-db-schema-hash',
   FILE_STORAGE_DIR: 'file-storage',
   INSTALL_PLUGINS_DIR: 'plugins',
   LOCAL_STORAGE_URL_PREFIX: '/lobe-desktop-file',
@@ -159,116 +162,23 @@ vi.mock('../ui/TrayManager', () => ({
   })),
 }));
 
-vi.mock('@/utils/next-electron-rsc', () => ({
-  createHandler: vi.fn(() => ({
-    createInterceptor: vi.fn(),
-    registerCustomHandler: vi.fn(),
-  })),
-}));
-
 // Mock controllers and services
 vi.mock('../../controllers/*Ctr.ts', () => ({}));
 vi.mock('../../services/*Srv.ts', () => ({}));
 
-describe('App - Database Lock Cleanup', () => {
+describe('App', () => {
   let appInstance: App;
-  let mockLockPath: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPathExistsSync.mockReset();
 
     // Mock glob imports to return empty arrays
     import.meta.glob = vi.fn(() => ({}));
-
-    mockLockPath = join('/mock/storage/path', LOCAL_DATABASE_DIR) + '.lock';
   });
 
   afterEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe('bootstrap - database lock cleanup', () => {
-    it('should remove stale lock file if it exists during bootstrap', async () => {
-      // Setup: simulate existing lock file
-      vi.mocked(pathExistsSync).mockReturnValue(true);
-      vi.mocked(remove).mockResolvedValue(undefined);
-
-      // Create app instance
-      appInstance = new App();
-
-      // Call bootstrap which should trigger cleanup
-      await appInstance.bootstrap();
-
-      // Verify: lock file check was called
-      expect(pathExistsSync).toHaveBeenCalledWith(mockLockPath);
-
-      // Verify: lock file was removed
-      expect(remove).toHaveBeenCalledWith(mockLockPath);
-    });
-
-    it('should not attempt to remove lock file if it does not exist', async () => {
-      // Setup: no lock file exists
-      vi.mocked(pathExistsSync).mockReturnValue(false);
-
-      // Create app instance
-      appInstance = new App();
-
-      // Call bootstrap
-      await appInstance.bootstrap();
-
-      // Verify: lock file check was called
-      expect(pathExistsSync).toHaveBeenCalledWith(mockLockPath);
-
-      // Verify: remove was NOT called since file doesn't exist
-      expect(remove).not.toHaveBeenCalled();
-    });
-
-    it('should continue bootstrap even if lock cleanup fails', async () => {
-      // Setup: simulate lock file exists but cleanup fails
-      vi.mocked(pathExistsSync).mockReturnValue(true);
-      vi.mocked(remove).mockRejectedValue(new Error('Permission denied'));
-
-      // Create app instance
-      appInstance = new App();
-
-      // Bootstrap should not throw even if cleanup fails
-      await expect(appInstance.bootstrap()).resolves.not.toThrow();
-
-      // Verify: cleanup was attempted
-      expect(pathExistsSync).toHaveBeenCalledWith(mockLockPath);
-      expect(remove).toHaveBeenCalledWith(mockLockPath);
-    });
-
-    it('should clean up lock file before starting IPC server', async () => {
-      // Setup
-      vi.mocked(pathExistsSync).mockReturnValue(true);
-      const callOrder: string[] = [];
-
-      vi.mocked(remove).mockImplementation(async () => {
-        callOrder.push('remove');
-      });
-
-      // Mock IPC server start to track call order
-      const { ElectronIPCServer } = await import('@lobechat/electron-server-ipc');
-      const mockStart = vi.fn().mockImplementation(() => {
-        callOrder.push('ipcServer.start');
-        return Promise.resolve();
-      });
-
-      vi.mocked(ElectronIPCServer).mockImplementation(
-        () =>
-          ({
-            start: mockStart,
-          }) as any,
-      );
-
-      // Create app instance and bootstrap
-      appInstance = new App();
-      await appInstance.bootstrap();
-
-      // Verify: cleanup happens before IPC server starts
-      expect(callOrder).toEqual(['remove', 'ipcServer.start']);
-    });
   });
 
   describe('appStoragePath', () => {
@@ -278,6 +188,48 @@ describe('App - Database Lock Cleanup', () => {
       const storagePath = appInstance.appStoragePath;
 
       expect(storagePath).toBe('/mock/storage/path');
+    });
+  });
+
+  describe('resolveRendererFilePath', () => {
+    it('should retry missing .txt requests with variant-prefixed lookup', async () => {
+      appInstance = new App();
+
+      // Avoid touching the electron session cookie code path in this unit test
+      (appInstance as any).getRouteVariantFromCookies = vi.fn(async () => 'en-US__0__light');
+
+      mockPathExistsSync.mockImplementation((p: string) => {
+        // root miss
+        if (p === '/mock/export/out/__next._tree.txt') return false;
+        // variant hit
+        if (p === '/mock/export/out/en-US__0__light/__next._tree.txt') return true;
+        return false;
+      });
+
+      const resolved = await (appInstance as any).resolveRendererFilePath(
+        new URL('app://next/__next._tree.txt'),
+      );
+
+      expect(resolved).toBe('/mock/export/out/en-US__0__light/__next._tree.txt');
+    });
+
+    it('should keep direct lookup for existing root .txt assets (no variant retry)', async () => {
+      appInstance = new App();
+
+      (appInstance as any).getRouteVariantFromCookies = vi.fn(async () => {
+        throw new Error('should not be called');
+      });
+
+      mockPathExistsSync.mockImplementation((p: string) => {
+        if (p === '/mock/export/out/en-US__0__light.txt') return true;
+        return false;
+      });
+
+      const resolved = await (appInstance as any).resolveRendererFilePath(
+        new URL('app://next/en-US__0__light.txt'),
+      );
+
+      expect(resolved).toBe('/mock/export/out/en-US__0__light.txt');
     });
   });
 });

@@ -8,7 +8,7 @@ import { CustomWorld } from '../../support/world';
 // ============================================
 
 Given('I wait for the page to fully load', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
   await this.page.waitForTimeout(1000);
 });
 
@@ -17,7 +17,7 @@ Given('I wait for the page to fully load', async function (this: CustomWorld) {
 // ============================================
 
 When('I click the back button', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Try to find a back button
   const backButton = this.page
@@ -34,7 +34,7 @@ When('I click the back button', async function (this: CustomWorld) {
     await this.page.goBack();
   }
 
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 });
 
 // ============================================
@@ -43,7 +43,7 @@ When('I click the back button', async function (this: CustomWorld) {
 
 // Assistant Detail Page Assertions
 Then('I should be on an assistant detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches assistant detail page pattern
@@ -55,13 +55,13 @@ Then('I should be on an assistant detail page', async function (this: CustomWorl
 });
 
 Then('I should see the assistant title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Look for title element (h1, h2, or prominent text)
   const title = this.page
     .locator('h1, h2, [data-testid="detail-title"], [data-testid="assistant-title"]')
     .first();
-  await expect(title).toBeVisible({ timeout: 120_000 });
+  await expect(title).toBeVisible({ timeout: 30_000 });
 
   // Verify title has content
   const titleText = await title.textContent();
@@ -69,7 +69,7 @@ Then('I should see the assistant title', async function (this: CustomWorld) {
 });
 
 Then('I should see the assistant description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Look for description element
   const description = this.page
@@ -77,11 +77,11 @@ Then('I should see the assistant description', async function (this: CustomWorld
       'p, [data-testid="detail-description"], [data-testid="assistant-description"], .description',
     )
     .first();
-  await expect(description).toBeVisible({ timeout: 120_000 });
+  await expect(description).toBeVisible({ timeout: 30_000 });
 });
 
 Then('I should see the assistant author information', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Look for author information
   const author = this.page
@@ -95,7 +95,7 @@ Then('I should see the assistant author information', async function (this: Cust
 });
 
 Then('I should see the add to workspace button', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Look for add button (might be "Add", "Install", "Add to Workspace", etc.)
   const addButton = this.page
@@ -110,18 +110,19 @@ Then('I should see the add to workspace button', async function (this: CustomWor
 });
 
 Then('I should be on the assistant list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is assistant list (not detail page)
   const isListPage =
-    currentUrl.includes('/discover/assistant') && !/\/discover\/assistant\/[^#?]+/.test(currentUrl);
+    currentUrl.includes('/community/assistant') &&
+    !/\/discover\/assistant\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be assistant list page, but got: ${currentUrl}`).toBeTruthy();
 });
 
 // Model Detail Page Assertions
 Then('I should be on a model detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches model detail page pattern
@@ -133,30 +134,30 @@ Then('I should be on a model detail page', async function (this: CustomWorld) {
 });
 
 Then('I should see the model title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const title = this.page
     .locator('h1, h2, [data-testid="detail-title"], [data-testid="model-title"]')
     .first();
-  await expect(title).toBeVisible({ timeout: 120_000 });
+  await expect(title).toBeVisible({ timeout: 30_000 });
 
   const titleText = await title.textContent();
   expect(titleText?.trim().length).toBeGreaterThan(0);
 });
 
 Then('I should see the model description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const description = this.page
     .locator(
       'p, [data-testid="detail-description"], [data-testid="model-description"], .description',
     )
     .first();
-  await expect(description).toBeVisible({ timeout: 120_000 });
+  await expect(description).toBeVisible({ timeout: 30_000 });
 });
 
 Then('I should see the model parameters information', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Look for parameters or specs section
   const params = this.page
@@ -169,18 +170,18 @@ Then('I should see the model parameters information', async function (this: Cust
 });
 
 Then('I should be on the model list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is model list (not detail page)
   const isListPage =
-    currentUrl.includes('/discover/model') && !/\/discover\/model\/[^#?]+/.test(currentUrl);
+    currentUrl.includes('/community/model') && !/\/discover\/model\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be model list page, but got: ${currentUrl}`).toBeTruthy();
 });
 
 // Provider Detail Page Assertions
 Then('I should be on a provider detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches provider detail page pattern
@@ -192,30 +193,30 @@ Then('I should be on a provider detail page', async function (this: CustomWorld)
 });
 
 Then('I should see the provider title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const title = this.page
     .locator('h1, h2, [data-testid="detail-title"], [data-testid="provider-title"]')
     .first();
-  await expect(title).toBeVisible({ timeout: 120_000 });
+  await expect(title).toBeVisible({ timeout: 30_000 });
 
   const titleText = await title.textContent();
   expect(titleText?.trim().length).toBeGreaterThan(0);
 });
 
 Then('I should see the provider description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const description = this.page
     .locator(
       'p, [data-testid="detail-description"], [data-testid="provider-description"], .description',
     )
     .first();
-  await expect(description).toBeVisible({ timeout: 120_000 });
+  await expect(description).toBeVisible({ timeout: 30_000 });
 });
 
 Then('I should see the provider website link', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Look for website link
   const websiteLink = this.page
@@ -228,18 +229,18 @@ Then('I should see the provider website link', async function (this: CustomWorld
 });
 
 Then('I should be on the provider list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is provider list (not detail page)
   const isListPage =
-    currentUrl.includes('/discover/provider') && !/\/discover\/provider\/[^#?]+/.test(currentUrl);
+    currentUrl.includes('/community/provider') && !/\/discover\/provider\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be provider list page, but got: ${currentUrl}`).toBeTruthy();
 });
 
 // MCP Detail Page Assertions
 Then('I should be on an MCP detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches MCP detail page pattern
@@ -251,28 +252,28 @@ Then('I should be on an MCP detail page', async function (this: CustomWorld) {
 });
 
 Then('I should see the MCP title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const title = this.page
     .locator('h1, h2, [data-testid="detail-title"], [data-testid="mcp-title"]')
     .first();
-  await expect(title).toBeVisible({ timeout: 120_000 });
+  await expect(title).toBeVisible({ timeout: 30_000 });
 
   const titleText = await title.textContent();
   expect(titleText?.trim().length).toBeGreaterThan(0);
 });
 
 Then('I should see the MCP description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const description = this.page
     .locator('p, [data-testid="detail-description"], [data-testid="mcp-description"], .description')
     .first();
-  await expect(description).toBeVisible({ timeout: 120_000 });
+  await expect(description).toBeVisible({ timeout: 30_000 });
 });
 
 Then('I should see the install button', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   // Look for install button
   const installButton = this.page
@@ -285,11 +286,11 @@ Then('I should see the install button', async function (this: CustomWorld) {
 });
 
 Then('I should be on the MCP list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is MCP list (not detail page)
   const isListPage =
-    currentUrl.includes('/discover/mcp') && !/\/discover\/mcp\/[^#?]+/.test(currentUrl);
+    currentUrl.includes('/community/mcp') && !/\/discover\/mcp\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be MCP list page, but got: ${currentUrl}`).toBeTruthy();
 });

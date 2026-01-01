@@ -1,4 +1,4 @@
-import { DocumentItem } from '@lobechat/database/schemas';
+import { type DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -8,14 +8,18 @@ export interface CreateDocumentParams {
   fileType?: string;
   knowledgeBaseId?: string;
   metadata?: Record<string, any>;
+  parentId?: string;
+  slug?: string;
   title: string;
 }
 
 export interface UpdateDocumentParams {
   content?: string;
   editorData?: string;
+  fileType?: string;
   id: string;
   metadata?: Record<string, any>;
+  parentId?: string | null;
   title?: string;
 }
 
@@ -24,8 +28,13 @@ export class DocumentService {
     return lambdaClient.document.createDocument.mutate(params);
   }
 
-  async queryDocuments(): Promise<{ items: DocumentItem[]; total: number }> {
-    return lambdaClient.document.queryDocuments.query();
+  async queryDocuments(params?: {
+    current?: number;
+    fileTypes?: string[];
+    pageSize?: number;
+    sourceTypes?: string[];
+  }): Promise<{ items: DocumentItem[]; total: number }> {
+    return lambdaClient.document.queryDocuments.query(params);
   }
 
   async getDocumentById(id: string): Promise<DocumentItem | undefined> {
@@ -34,6 +43,10 @@ export class DocumentService {
 
   async deleteDocument(id: string): Promise<void> {
     await lambdaClient.document.deleteDocument.mutate({ id });
+  }
+
+  async deleteDocuments(ids: string[]): Promise<void> {
+    await lambdaClient.document.deleteDocuments.mutate({ ids });
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<void> {

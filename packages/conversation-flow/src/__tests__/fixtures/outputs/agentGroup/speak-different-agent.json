@@ -1,0 +1,155 @@
+{
+  "contextTree": [
+    {
+      "id": "msg-user-1",
+      "type": "message"
+    },
+    {
+      "id": "msg-supervisor-1",
+      "type": "assistantGroup",
+      "children": [
+        {
+          "id": "msg-supervisor-1",
+          "type": "message",
+          "tools": ["msg-speak-tool-1"]
+        }
+      ]
+    },
+    {
+      "id": "msg-agent-backend-1",
+      "type": "message"
+    }
+  ],
+  "flatList": [
+    {
+      "id": "msg-user-1",
+      "role": "user",
+      "content": "Can you ask the backend developer about the API design?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000,
+      "meta": {}
+    },
+    {
+      "id": "msg-supervisor-1",
+      "role": "supervisor",
+      "agentId": "supervisor",
+      "content": "",
+      "parentId": "msg-user-1",
+      "createdAt": 1704067201000,
+      "updatedAt": 1704067201000,
+      "meta": {
+        "avatar": "supervisor",
+        "title": "Supervisor"
+      },
+      "metadata": {
+        "isSupervisor": true
+      },
+      "children": [
+        {
+          "id": "msg-supervisor-1",
+          "content": "I'll ask the backend developer to explain the API design.",
+          "metadata": {
+            "isSupervisor": true
+          },
+          "tools": [
+            {
+              "apiName": "speak",
+              "function": {
+                "arguments": "{\"agentId\": \"agent-backend\", \"instruction\": \"Please explain the API design.\"}",
+                "name": "speak"
+              },
+              "id": "call_speak_1",
+              "identifier": "lobe-group-management",
+              "result": {
+                "content": "Triggered agent \"agent-backend\" to respond.",
+                "id": "msg-speak-tool-1"
+              },
+              "result_msg_id": "msg-speak-tool-1",
+              "type": "function"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "msg-agent-backend-1",
+      "role": "assistant",
+      "agentId": "agent-backend",
+      "content": "The API follows RESTful design principles. We have endpoints for users, products, and orders. Each endpoint supports CRUD operations with proper HTTP methods.",
+      "parentId": "msg-speak-tool-1",
+      "model": "gpt-4",
+      "provider": "openai",
+      "createdAt": 1704067205000,
+      "updatedAt": 1704067205000,
+      "meta": {
+        "avatar": "backend-dev",
+        "title": "Backend Developer"
+      }
+    }
+  ],
+  "messageMap": {
+    "msg-user-1": {
+      "id": "msg-user-1",
+      "role": "user",
+      "content": "Can you ask the backend developer about the API design?",
+      "parentId": null,
+      "createdAt": 1704067200000,
+      "updatedAt": 1704067200000,
+      "meta": {}
+    },
+    "msg-supervisor-1": {
+      "id": "msg-supervisor-1",
+      "role": "supervisor",
+      "agentId": "supervisor",
+      "content": "I'll ask the backend developer to explain the API design.",
+      "parentId": "msg-user-1",
+      "tools": [
+        {
+          "id": "call_speak_1",
+          "type": "function",
+          "function": {
+            "name": "speak",
+            "arguments": "{\"agentId\": \"agent-backend\", \"instruction\": \"Please explain the API design.\"}"
+          },
+          "identifier": "lobe-group-management",
+          "apiName": "speak"
+        }
+      ],
+      "createdAt": 1704067201000,
+      "updatedAt": 1704067201000,
+      "meta": {
+        "avatar": "supervisor",
+        "title": "Supervisor"
+      },
+      "metadata": {
+        "isSupervisor": true
+      }
+    },
+    "msg-speak-tool-1": {
+      "id": "msg-speak-tool-1",
+      "role": "tool",
+      "content": "Triggered agent \"agent-backend\" to respond.",
+      "parentId": "msg-supervisor-1",
+      "tool_call_id": "call_speak_1",
+      "createdAt": 1704067202000,
+      "updatedAt": 1704067202000,
+      "meta": {}
+    },
+    "msg-agent-backend-1": {
+      "id": "msg-agent-backend-1",
+      "role": "assistant",
+      "agentId": "agent-backend",
+      "content": "The API follows RESTful design principles. We have endpoints for users, products, and orders. Each endpoint supports CRUD operations with proper HTTP methods.",
+      "parentId": "msg-speak-tool-1",
+      "model": "gpt-4",
+      "provider": "openai",
+      "createdAt": 1704067205000,
+      "updatedAt": 1704067205000,
+      "meta": {
+        "avatar": "backend-dev",
+        "title": "Backend Developer"
+      }
+    }
+  }
+}

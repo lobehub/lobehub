@@ -1,22 +1,22 @@
 import {
-  EditLocalFileParams,
-  GetCommandOutputParams,
-  GlobFilesParams,
-  GrepContentParams,
-  KillCommandParams,
-  ListLocalFileParams,
-  LocalReadFileParams,
-  LocalReadFilesParams,
-  LocalSearchFilesParams,
-  MoveLocalFilesParams,
-  RenameLocalFileParams,
-  RunCommandParams,
-  WriteLocalFileParams,
+  type EditLocalFileParams,
+  type GetCommandOutputParams,
+  type GlobFilesParams,
+  type GrepContentParams,
+  type KillCommandParams,
+  type ListLocalFileParams,
+  type LocalReadFileParams,
+  type LocalReadFilesParams,
+  type LocalSearchFilesParams,
+  type MoveLocalFilesParams,
+  type RenameLocalFileParams,
+  type RunCommandParams,
+  type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import debug from 'debug';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { LocalSystemExecutionRuntime } from '@/tools/local-system/ExecutionRuntime';
 
 const log = debug('lobe-store:builtin-tool');

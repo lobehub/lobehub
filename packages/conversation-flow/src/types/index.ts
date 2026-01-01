@@ -11,11 +11,13 @@
 
 // Context Tree Types
 export type {
+  AgentCouncilNode,
   AssistantGroupNode,
   BranchNode,
   CompareNode,
   ContextNode,
   MessageNode,
+  TasksNode,
 } from './contextTree';
 
 // Flat Message List Types

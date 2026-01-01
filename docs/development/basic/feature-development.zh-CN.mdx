@@ -239,7 +239,7 @@ export const agentSelectors = {
 
 - [ant-design](https://ant.design/) 和 [lobe-ui：](https://github.com/lobehub/lobe-ui)组件库
 - [antd-style](https://ant-design.github.io/antd-style) ： css-in-js 方案
-- [react-layout-kit](https://github.com/arvinxx/react-layout-kit)：响应式布局组件
+- [@lobehub/ui](https://ui.lobehub.com/)：UI 组件库（包含 Flexbox 和 Center 用于响应式布局）
 - [@ant-design/icons](https://ant.design/components/icon-cn) 和 [lucide](https://lucide.dev/icons/): 图标库
 - [react-i18next](https://github.com/i18next/react-i18next) 和 [lobe-i18n](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n) ：i18n 框架和多语言自动翻译工具
 
@@ -252,12 +252,11 @@ lobe-chat 是个国际化项目，新加的文案需要更新默认的 `locale` 
 'use client';
 
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { SortableList } from '@lobehub/ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
 import { Button, Empty, Input } from 'antd';
 import { createStyles } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';

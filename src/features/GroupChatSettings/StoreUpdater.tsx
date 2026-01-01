@@ -1,15 +1,14 @@
 'use client';
 
-import { ForwardedRef, memo, useImperativeHandle } from 'react';
+import { type ForwardedRef, memo, useImperativeHandle } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
-import { GroupChatSettingsInstance, useGroupChatSettings } from './hooks/useGroupChatSettings';
-import { State, useStoreApi } from './store';
+import { type GroupChatSettingsInstance, useGroupChatSettings } from './hooks/useGroupChatSettings';
+import { type State, useStoreApi } from './store';
 
-export interface StoreUpdaterProps
-  extends Partial<
-    Pick<State, 'onMetaChange' | 'onConfigChange' | 'meta' | 'config' | 'id' | 'loading'>
-  > {
+export interface StoreUpdaterProps extends Partial<
+  Pick<State, 'onMetaChange' | 'onConfigChange' | 'meta' | 'config' | 'id' | 'loading'>
+> {
   instanceRef?: ForwardedRef<GroupChatSettingsInstance> | null;
 }
 

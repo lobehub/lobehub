@@ -1,5 +1,5 @@
 import { AgentItem, LobeAgentConfig } from '../agent';
-import { NewChatGroupAgent } from '../chatGroup';
+import { NewChatGroupAgent } from '../agentGroup';
 import { MetaData } from '../meta';
 
 export enum LobeSessionType {

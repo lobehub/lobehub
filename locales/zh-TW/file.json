@@ -1,181 +1,134 @@
 {
   "addFolder": "建立資料夾",
-  "addKnowledge": "新增知識",
+  "addLibrary": "新增",
   "addPage": "建立文稿",
-  "desc": "管理你的工作、學習與生活知識。",
-  "detail": {
-    "basic": {
-      "createdAt": "創建時間",
-      "filename": "檔案名稱",
-      "size": "檔案大小",
-      "title": "基本資訊",
-      "type": "格式",
-      "updatedAt": "更新時間"
-    },
-    "data": {
-      "chunkCount": "分塊數",
-      "embedding": {
-        "default": "暫未向量化",
-        "error": "失敗",
-        "pending": "待啟動",
-        "processing": "進行中",
-        "success": "已完成"
-      },
-      "embeddingStatus": "向量化"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "新增圖示",
-    "autoSaveMessage": "文件會自動儲存，無需手動儲存",
-    "chooseIcon": "選擇圖示",
-    "deleteConfirm": {
-      "content": "即將刪除此文件，刪除後將無法恢復，請謹慎操作。",
-      "title": "刪除文件"
-    },
-    "deleteError": "刪除文件失敗",
-    "deleteSuccess": "文件刪除成功",
-    "editedAt": "最後編輯於 {{time}}",
-    "editedBy": "最後編輯者 {{name}}",
-    "editorPlaceholder": "輸入文件內容，按 / 開啟指令選單",
-    "empty": {
-      "createNewDocument": "建立新文件",
-      "title": "選擇一個文件以開始",
-      "uploadMarkdown": "上傳 Markdown 檔案"
-    },
-    "linkCopied": "連結已複製",
-    "menu": {
-      "copyLink": "複製連結",
-      "exportDocument": "匯出文件",
-      "importDocument": "匯入文件",
-      "pin": "置頂文件"
-    },
-    "saving": "儲存中...",
-    "titlePlaceholder": "無標題",
-    "wordCount": "{{wordCount}} 字"
-  },
-  "documentList": {
-    "copyContent": "複製全文",
-    "duplicate": "建立副本",
-    "empty": "尚無文稿，點擊上方按鈕建立你的第一篇文稿",
-    "noResults": "未找到符合的文稿",
-    "pageCount": "共 {{count}} 篇文稿",
-    "selectNote": "選擇一篇文稿開始編輯",
-    "untitled": "無標題"
-  },
+  "detail.basic.createdAt": "創建時間",
+  "detail.basic.filename": "檔案名稱",
+  "detail.basic.size": "檔案大小",
+  "detail.basic.title": "基本資訊",
+  "detail.basic.type": "格式",
+  "detail.basic.updatedAt": "更新時間",
+  "detail.data.chunkCount": "分塊數",
+  "detail.data.embedding.default": "暫未向量化",
+  "detail.data.embedding.error": "失敗",
+  "detail.data.embedding.pending": "待啟動",
+  "detail.data.embedding.processing": "進行中",
+  "detail.data.embedding.success": "已完成",
+  "detail.data.embeddingStatus": "向量化",
   "empty": "暫無已上傳文件/文件夾",
-  "header": {
-    "actions": {
-      "newFolder": "新建資料夾",
-      "newPage": "新增文件",
-      "uploadFile": "上傳檔案",
-      "uploadFolder": "上傳資料夾"
-    },
-    "newNoteDialog": {
-      "cancel": "取消",
-      "editTitle": "編輯文件",
-      "emptyContent": "文件內容不可為空",
-      "loadError": "載入文件失敗，請重試",
-      "loading": "載入中...",
-      "save": "儲存",
-      "saveError": "儲存文件失敗，請重試",
-      "saveSuccess": "文件儲存成功",
-      "title": "新增文件",
-      "updateSuccess": "文件更新成功"
-    },
-    "newPageButton": "新增文件",
-    "uploadButton": "上傳"
-  },
-  "home": {
-    "getStarted": "開始使用",
-    "greeting": "開始",
-    "quickActions": "快速操作",
-    "recentFiles": "最近檔案",
-    "recentPages": "最近文件",
-    "subtitle": "歡迎使用知識庫，從這裡開始管理你的文件與資料",
-    "uploadEntries": {
-      "files": {
-        "title": "上傳檔案"
-      },
-      "folder": {
-        "title": "上傳資料夾"
-      },
-      "knowledgeBase": {
-        "title": "新增知識庫"
-      },
-      "newPage": {
-        "title": "新增文稿"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "即將刪除該知識庫，其中的檔案不會刪除，將移入全部檔案中。知識庫刪除後將不可恢復，請謹慎操作。",
-      "empty": "點擊 <1>+</1> 開始創建知識庫"
-    },
-    "new": "新建知識庫",
-    "title": "知識庫"
-  },
-  "menu": {
-    "allFiles": "所有檔案",
-    "allPages": "全部文件"
-  },
-  "networkError": "獲取知識庫失敗，請檢查網路連接後重試",
-  "notSupportGuide": {
-    "desc": "當前部署實例為客戶端資料庫模式，無法使用檔案管理功能。請切換到<1>伺服器端資料庫部署模式</1>，或直接使用 <3>LobeChat Cloud</3>",
-    "features": {
-      "allKind": {
-        "desc": "支持主流檔案類型，包括 Word、PPT、Excel、PDF、TXT 等常見文檔格式，以及JS、Python 等主流程式碼檔案",
-        "title": "多種檔案類型解析"
-      },
-      "embeddings": {
-        "desc": "使用高性能向量模型，對文本分塊進行向量化，實現檔案內容的語義化檢索",
-        "title": "向量語義化"
-      },
-      "repos": {
-        "desc": "支持創建知識庫，並允許添加不同類型的檔案，構建屬於你的領域知識",
-        "title": "知識庫"
-      }
-    },
-    "title": "當前部署模式不支持檔案管理"
-  },
-  "preview": {
-    "downloadFile": "下載檔案",
-    "unsupportedFileAndContact": "此檔案格式暫不支援線上預覽，如有預覽需求，歡迎<1>反饋給我們</1>"
-  },
+  "header.actions.builtInBlockList.filtered": "已過濾 {{ignored}} 個檔案（共 {{total}} 個檔案）",
+  "header.actions.connect": "連接...",
+  "header.actions.gitignore.apply": "套用規則",
+  "header.actions.gitignore.cancel": "忽略規則",
+  "header.actions.gitignore.content": "偵測到 .gitignore 檔案（共 {{count}} 個檔案），是否套用忽略規則？",
+  "header.actions.gitignore.filtered": "已過濾 {{ignored}} 個檔案（共 {{total}} 個檔案）",
+  "header.actions.gitignore.title": "偵測到 .gitignore",
+  "header.actions.newFolder": "新建資料夾",
+  "header.actions.newPage": "新增文件",
+  "header.actions.notion.error": "匯入 Notion 檔案失敗",
+  "header.actions.notion.foundFiles": "找到 {{count}} 個檔案",
+  "header.actions.notion.importing": "正在匯入 Notion 內容...",
+  "header.actions.notion.noMarkdownFiles": "在 ZIP 檔案中未找到 Markdown 檔案",
+  "header.actions.notion.partial": "已成功匯入 {{success}} 個檔案，失敗 {{failed}} 個",
+  "header.actions.notion.success": "成功匯入 {{count}} 個檔案",
+  "header.actions.notionGuide.cancel": "稍後再說",
+  "header.actions.notionGuide.desc": "請先在 Notion 中匯出 Markdown（ZIP），點擊繼續選擇壓縮檔即可匯入其中所有頁面。",
+  "header.actions.notionGuide.ok": "選擇 Notion ZIP",
+  "header.actions.notionGuide.title": "匯入 Notion 內容",
+  "header.actions.uploadFile": "上傳檔案",
+  "header.actions.uploadFolder": "上傳資料夾",
+  "header.newPageButton": "新增文件",
+  "header.uploadButton": "上傳",
+  "home.getStarted": "開始使用",
+  "home.greeting": "開始",
+  "home.quickActions": "快速操作",
+  "home.recentFiles": "最近檔案",
+  "home.recentPages": "最近文件",
+  "home.uploadEntries.files.title": "上傳檔案",
+  "home.uploadEntries.folder.title": "上傳資料夾",
+  "home.uploadEntries.library.title": "新增資源庫",
+  "home.uploadEntries.newPage.title": "新增文稿",
+  "library.list.confirmRemoveLibrary": "即將刪除該資源庫，當中的檔案不會被刪除，將移至全部檔案中。資源庫刪除後將無法恢復，請謹慎操作。",
+  "library.list.empty": "點擊 <1>+</1> 開始建立資源庫",
+  "library.new": "新增資源庫",
+  "library.title": "庫",
+  "loadMore": "載入更多",
+  "menu.allFiles": "所有檔案",
+  "menu.allPages": "全部文件",
+  "networkError": "無法取得資源庫，請檢查網路連線後重試",
+  "notSupportGuide.desc": "當前部署實例為客戶端資料庫模式，無法使用檔案管理功能。請切換到<1>伺服器端資料庫部署模式</1>，或直接使用 <3>LobeChat Cloud</3>",
+  "notSupportGuide.features.allKind.desc": "支持主流檔案類型，包括 Word、PPT、Excel、PDF、TXT 等常見文檔格式，以及JS、Python 等主流程式碼檔案",
+  "notSupportGuide.features.allKind.title": "多種檔案類型解析",
+  "notSupportGuide.features.embeddings.desc": "使用高性能向量模型，對文本分塊進行向量化，實現檔案內容的語義化檢索",
+  "notSupportGuide.features.embeddings.title": "向量語義化",
+  "notSupportGuide.features.libraries.desc": "支援建立資源庫，並可新增不同類型的檔案，打造屬於你的專業資源",
+  "notSupportGuide.features.libraries.title": "資源庫",
+  "notSupportGuide.title": "當前部署模式不支持檔案管理",
+  "pageEditor.addIcon": "新增圖示",
+  "pageEditor.autoSaveMessage": "文稿會自動儲存，無需手動儲存",
+  "pageEditor.chooseIcon": "選擇圖示",
+  "pageEditor.deleteConfirm.content": "即將刪除此文稿，刪除後將無法恢復，請謹慎操作。",
+  "pageEditor.deleteConfirm.title": "刪除文稿",
+  "pageEditor.deleteError": "刪除文稿失敗",
+  "pageEditor.deleteSuccess": "文稿刪除成功",
+  "pageEditor.duplicateError": "頁面複製失敗",
+  "pageEditor.duplicateSuccess": "頁面複製成功",
+  "pageEditor.editedAt": "最後編輯於 {{time}}",
+  "pageEditor.editedBy": "最後編輯者 {{name}}",
+  "pageEditor.editorPlaceholder": "輸入文稿內容，按 / 開啟指令選單",
+  "pageEditor.empty.createNewDocument": "建立新文稿",
+  "pageEditor.empty.importNotion": "從 Notion 匯入",
+  "pageEditor.empty.title": "選擇一篇文稿以開始",
+  "pageEditor.empty.uploadFiles": "上傳檔案",
+  "pageEditor.exportError": "頁面匯出失敗",
+  "pageEditor.exportSuccess": "頁面匯出成功",
+  "pageEditor.linkCopied": "連結已複製",
+  "pageEditor.menu.copyLink": "複製連結",
+  "pageEditor.menu.export": "匯出",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "匯出文稿",
+  "pageEditor.menu.importDocument": "匯入文稿",
+  "pageEditor.menu.pin": "置頂文稿",
+  "pageEditor.saving": "儲存中...",
+  "pageEditor.titlePlaceholder": "無標題",
+  "pageEditor.wordCount": "{{wordCount}} 字",
+  "pageList.copyContent": "複製全文",
+  "pageList.duplicate": "建立副本",
+  "pageList.empty": "尚無文稿，點擊上方按鈕建立你的第一篇文稿",
+  "pageList.filter.all": "全部",
+  "pageList.filter.onlyInPages": "僅在文稿中",
+  "pageList.noResults": "找不到符合的文稿",
+  "pageList.pageCount": "共 {{count}} 篇文稿",
+  "pageList.pageSizeItem": "{{count}} 個項目",
+  "pageList.title": "文稿",
+  "pageList.untitled": "無標題",
+  "portal.openInPageEditor": "在文件中編輯",
+  "preview.downloadFile": "下載檔案",
+  "preview.unsupportedFileAndContact": "此檔案格式暫不支援線上預覽，如有預覽需求，歡迎<1>反饋給我們</1>",
   "searchFilePlaceholder": "搜索檔案",
   "searchPagePlaceholder": "搜尋文稿",
-  "tab": {
-    "all": "全部",
-    "audios": "語音",
-    "documents": "文檔",
-    "home": "首頁",
-    "images": "圖片",
-    "moreTypes": "更多類型",
-    "pages": "文稿",
-    "videos": "視頻",
-    "websites": "網頁"
-  },
-  "title": "知識庫",
+  "tab.all": "全部",
+  "tab.audios": "語音",
+  "tab.documents": "文件",
+  "tab.home": "首頁",
+  "tab.images": "圖片",
+  "tab.moreTypes": "更多類型",
+  "tab.pages": "文稿",
+  "tab.videos": "視頻",
+  "tab.websites": "網頁",
+  "title": "資源",
   "toggleLeftPanel": "顯示/隱藏左側面板",
-  "uploadDock": {
-    "body": {
-      "collapse": "收起",
-      "item": {
-        "done": "已上傳",
-        "error": "上傳失敗，請重試",
-        "pending": "準備上傳...",
-        "processing": "檔案處理中...",
-        "restTime": "剩餘 {{time}}"
-      }
-    },
-    "fileQueueInfo": "正在上傳前 {{count}} 個檔案，剩餘 {{remaining}} 個檔案將排隊上傳",
-    "totalCount": "共 {{count}} 項",
-    "uploadStatus": {
-      "error": "上傳出錯",
-      "pending": "等待上傳",
-      "processing": "正在上傳",
-      "success": "上傳完成",
-      "uploading": "正在上傳"
-    }
-  }
+  "uploadDock.body.collapse": "收起",
+  "uploadDock.body.item.done": "已上傳",
+  "uploadDock.body.item.error": "上傳失敗，請重試",
+  "uploadDock.body.item.pending": "準備上傳...",
+  "uploadDock.body.item.processing": "檔案處理中...",
+  "uploadDock.body.item.restTime": "剩餘 {{time}}",
+  "uploadDock.fileQueueInfo": "正在上傳前 {{count}} 個檔案，剩餘 {{remaining}} 個檔案將排隊上傳",
+  "uploadDock.totalCount": "共 {{count}} 項",
+  "uploadDock.uploadStatus.error": "上傳出錯",
+  "uploadDock.uploadStatus.pending": "等待上傳",
+  "uploadDock.uploadStatus.processing": "正在上傳",
+  "uploadDock.uploadStatus.success": "上傳完成",
+  "uploadDock.uploadStatus.uploading": "正在上傳"
 }

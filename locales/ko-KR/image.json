@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "가로세로 비율",
-      "lock": "가로세로 비율 잠금",
-      "unlock": "가로세로 비율 잠금 해제"
-    },
-    "cfg": {
-      "label": "가이던스 강도"
-    },
-    "header": {
-      "desc": "간단한 설명으로 바로 창작 시작",
-      "title": "그림 그리기"
-    },
-    "height": {
-      "label": "높이"
-    },
-    "imageNum": {
-      "label": "이미지 수"
-    },
-    "imageUrl": {
-      "label": "참고 이미지"
-    },
-    "imageUrls": {
-      "label": "참고 이미지"
-    },
-    "model": {
-      "label": "모델"
-    },
-    "prompt": {
-      "placeholder": "생성하고 싶은 내용을 설명하세요"
-    },
-    "quality": {
-      "label": "이미지 품질",
-      "options": {
-        "hd": "고화질",
-        "standard": "표준"
-      }
-    },
-    "resolution": {
-      "label": "해상도",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "시드",
-      "random": "무작위 시드"
-    },
-    "size": {
-      "label": "크기"
-    },
-    "steps": {
-      "label": "단계 수"
-    },
-    "title": "AI 그림 그리기",
-    "width": {
-      "label": "너비"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "시드 적용",
-      "copyError": "오류 정보 복사",
-      "copyPrompt": "프롬프트 복사",
-      "copySeed": "시드 복사",
-      "delete": "삭제",
-      "deleteBatch": "일괄 삭제",
-      "download": "다운로드",
-      "downloadFailed": "이미지 다운로드 실패. 네트워크 연결 또는 S3 저장소의 CORS 설정을 확인하세요.",
-      "errorCopied": "오류 정보가 클립보드에 복사되었습니다",
-      "errorCopyFailed": "오류 정보 복사 실패",
-      "generate": "생성",
-      "promptCopied": "프롬프트가 클립보드에 복사되었습니다",
-      "promptCopyFailed": "프롬프트 복사 실패",
-      "reuseSettings": "설정 재사용",
-      "seedApplied": "시드가 설정에 적용되었습니다",
-      "seedApplyFailed": "시드 적용 실패",
-      "seedCopied": "시드가 클립보드에 복사되었습니다",
-      "seedCopyFailed": "시드 복사 실패"
-    },
-    "metadata": {
-      "count": "{{count}}장의 이미지"
-    },
-    "status": {
-      "failed": "생성 실패",
-      "generating": "생성 중..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "현재 배포 인스턴스는 클라이언트 데이터베이스 모드로, AI 이미지 생성 기능을 사용할 수 없습니다. <1>서버 데이터베이스 배포 모드</1>로 전환하거나 <3>LobeChat Cloud</3>를 직접 사용하세요.",
-    "features": {
-      "fileIntegration": {
-        "desc": "파일 관리 시스템과 깊이 통합되어 생성된 이미지를 자동으로 파일 시스템에 저장하고, 통합된 관리 및 정리가 가능합니다.",
-        "title": "파일 시스템 연동"
-      },
-      "llmAssisted": {
-        "desc": "대형 언어 모델의 기능을 활용하여 프롬프트를 지능적으로 최적화하고 확장하여 이미지 생성 품질을 향상시킵니다 (곧 출시 예정)",
-        "title": "LLM 보조 이미지 생성"
-      },
-      "multiProviders": {
-        "desc": "OpenAI gpt-image-1, Google Imagen, FAL.ai 등 다양한 AI 이미지 생성 서비스를 지원하여 풍부한 모델 선택이 가능합니다.",
-        "title": "다양한 Provider 지원"
-      }
-    },
-    "title": "현재 배포 모드는 AI 그림 그리기를 지원하지 않습니다"
-  },
-  "topic": {
-    "createNew": "새 주제 만들기",
-    "deleteConfirm": "생성된 주제 삭제",
-    "deleteConfirmDesc": "이 생성 주제를 삭제하려고 합니다. 삭제 후 복구할 수 없으니 신중히 진행하세요.",
-    "empty": "생성된 주제가 없습니다",
-    "title": "그림 주제",
-    "untitled": "기본 주제"
-  }
+  "config.aspectRatio.label": "가로세로 비율",
+  "config.aspectRatio.lock": "가로세로 비율 잠금",
+  "config.aspectRatio.unlock": "가로세로 비율 잠금 해제",
+  "config.cfg.label": "가이던스 강도",
+  "config.header.desc": "간단한 설명으로 바로 창작 시작",
+  "config.header.title": "그림 그리기",
+  "config.height.label": "높이",
+  "config.imageNum.label": "이미지 수",
+  "config.imageUrl.label": "참고 이미지",
+  "config.imageUrls.label": "참고 이미지",
+  "config.model.label": "모델",
+  "config.prompt.placeholder": "생성하고 싶은 내용을 설명하세요",
+  "config.quality.label": "이미지 품질",
+  "config.quality.options.hd": "고화질",
+  "config.quality.options.standard": "표준",
+  "config.resolution.label": "해상도",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "시드",
+  "config.seed.random": "무작위 시드",
+  "config.size.label": "크기",
+  "config.steps.label": "단계 수",
+  "config.title": "AI 그림 그리기",
+  "config.width.label": "너비",
+  "generation.actions.applySeed": "시드 적용",
+  "generation.actions.copyError": "오류 정보 복사",
+  "generation.actions.copyPrompt": "프롬프트 복사",
+  "generation.actions.copySeed": "시드 복사",
+  "generation.actions.delete": "삭제",
+  "generation.actions.deleteBatch": "일괄 삭제",
+  "generation.actions.download": "다운로드",
+  "generation.actions.downloadFailed": "이미지 다운로드 실패. 네트워크 연결 또는 S3 저장소의 CORS 설정을 확인하세요.",
+  "generation.actions.errorCopied": "오류 정보가 클립보드에 복사되었습니다",
+  "generation.actions.errorCopyFailed": "오류 정보 복사 실패",
+  "generation.actions.generate": "생성",
+  "generation.actions.promptCopied": "프롬프트가 클립보드에 복사되었습니다",
+  "generation.actions.promptCopyFailed": "프롬프트 복사 실패",
+  "generation.actions.reuseSettings": "설정 재사용",
+  "generation.actions.seedApplied": "시드가 설정에 적용되었습니다",
+  "generation.actions.seedApplyFailed": "시드 적용 실패",
+  "generation.actions.seedCopied": "시드가 클립보드에 복사되었습니다",
+  "generation.actions.seedCopyFailed": "시드 복사 실패",
+  "generation.metadata.count": "{{count}}장의 이미지",
+  "generation.status.failed": "생성 실패",
+  "generation.status.generating": "생성 중...",
+  "notSupportGuide.desc": "현재 배포 인스턴스는 클라이언트 데이터베이스 모드로, AI 이미지 생성 기능을 사용할 수 없습니다. <1>서버 데이터베이스 배포 모드</1>로 전환하거나 <3>LobeChat Cloud</3>를 직접 사용하세요.",
+  "notSupportGuide.features.fileIntegration.desc": "파일 관리 시스템과 깊이 통합되어 생성된 이미지를 자동으로 파일 시스템에 저장하고, 통합된 관리 및 정리가 가능합니다.",
+  "notSupportGuide.features.fileIntegration.title": "파일 시스템 연동",
+  "notSupportGuide.features.llmAssisted.desc": "대형 언어 모델의 기능을 활용하여 프롬프트를 지능적으로 최적화하고 확장하여 이미지 생성 품질을 향상시킵니다 (곧 출시 예정)",
+  "notSupportGuide.features.llmAssisted.title": "LLM 보조 이미지 생성",
+  "notSupportGuide.features.multiProviders.desc": "OpenAI gpt-image-1, Google Imagen, FAL.ai 등 다양한 AI 이미지 생성 서비스를 지원하여 풍부한 모델 선택이 가능합니다.",
+  "notSupportGuide.features.multiProviders.title": "다양한 Provider 지원",
+  "notSupportGuide.title": "현재 배포 모드는 AI 그림 그리기를 지원하지 않습니다",
+  "topic.createNew": "새 주제 만들기",
+  "topic.deleteConfirm": "생성된 주제 삭제",
+  "topic.deleteConfirmDesc": "이 생성 주제를 삭제하려고 합니다. 삭제 후 복구할 수 없으니 신중히 진행하세요.",
+  "topic.empty": "생성된 주제가 없습니다",
+  "topic.title": "그림 주제",
+  "topic.untitled": "기본 주제"
 }

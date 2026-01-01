@@ -1,19 +1,18 @@
-import { Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { Puzzle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding-block: ${token.paddingXL}px;
-padding-inline: ${token.paddingLG}px;
+    padding-block: ${cssVar.paddingXL};
+    padding-inline: ${cssVar.paddingLG};
   `,
   description: css`
     max-width: 240px;
     line-height: 1.5;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
   iconWrapper: css`
@@ -23,23 +22,22 @@ padding-inline: ${token.paddingLG}px;
 
     width: 64px;
     height: 64px;
-    margin-block-end: ${token.marginMD}px;
+    margin-block-end: ${cssVar.marginMD};
     border-radius: 50%;
 
-    background-color: ${token.colorPrimaryBg};
+    background-color: ${cssVar.colorPrimaryBg};
   `,
   title: css`
-    margin-block-end: ${token.marginSM}px;
+    margin-block-end: ${cssVar.marginSM};
 
-    font-size: ${token.fontSizeLG}px;
+    font-size: ${cssVar.fontSizeLG};
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
     text-align: center;
   `,
 }));
 
 const EmptyState = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('plugin');
 
   return (

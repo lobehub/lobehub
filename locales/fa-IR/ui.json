@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "آواتار",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "بیش‌بار",
+    "tokenTag.remained": "باقی‌مانده",
+    "tokenTag.used": "استفاده‌شده"
+  },
+  "common": {
+    "common.cancel": "لغو",
+    "common.confirm": "تأیید",
+    "common.delete": "حذف",
+    "common.edit": "ویرایش"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "افزودن ویژگی‌ها",
+    "editableMessage.delete": "حذف",
+    "editableMessage.input": "ورودی",
+    "editableMessage.inputPlaceholder": "لطفاً محتوای نمونه ورودی را وارد کنید",
+    "editableMessage.output": "خروجی",
+    "editableMessage.outputPlaceholder": "لطفاً محتوای نمونه خروجی را وارد کنید",
+    "editableMessage.system": "سیستم"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "حذف",
+    "emojiPicker.draggerDesc": "برای بارگذاری، تصویر را کلیک یا به این ناحیه بکشید",
+    "emojiPicker.emoji": "ایموجی",
+    "emojiPicker.fileTypeError": "فقط می‌توانید فایل‌های تصویری بارگذاری کنید!",
+    "emojiPicker.upload": "بارگذاری",
+    "emojiPicker.uploadBtn": "برش و بارگذاری"
+  },
+  "form": {
+    "form.reset": "بازنشانی",
+    "form.submit": "ارسال",
+    "form.unsavedChanges": "تغییرات ذخیره‌نشده",
+    "form.unsavedWarning": "تغییرات ذخیره‌نشده دارید. آیا مطمئن هستید که می‌خواهید خارج شوید؟"
+  },
+  "hotkey": {
+    "hotkey.conflict": "این کلید میانبر با یک کلید دیگر تداخل دارد.",
+    "hotkey.invalidCombination": "کلید میانبر باید شامل یک کلید ترکیبی (Ctrl، Alt، Shift) و فقط یک کلید عادی باشد.",
+    "hotkey.placeholder": "برای ضبط کلید میانبر، کلیدها را فشار دهید",
+    "hotkey.reset": "بازنشانی به پیش‌فرض"
+  },
+  "messageModal": {
+    "messageModal.cancel": "لغو",
+    "messageModal.confirm": "تأیید",
+    "messageModal.edit": "ویرایش"
+  },
+  "sideNav": {
+    "sideNav.collapse": "بستن نوار کناری",
+    "sideNav.demoActiveLabel": "فعال",
+    "sideNav.demoFeatureAutoCollapseDesc": "برای جمع شدن هوشمند، کمتر از حد آستانه بکشید",
+    "sideNav.demoFeatureAutoCollapseTitle": "جمع شدن خودکار",
+    "sideNav.demoFeaturePerformanceDesc": "بدون انیمیشن برای عملکرد بهتر",
+    "sideNav.demoFeaturePerformanceTitle": "عملکرد",
+    "sideNav.demoFeatureResizeDesc": "برای تنظیم عرض پنل بکشید",
+    "sideNav.demoFeatureResizeTitle": "تغییر اندازه انعطاف‌پذیر",
+    "sideNav.demoFeatureSmartHandleDesc": "برای نمایش دکمه تغییر وضعیت، نشانگر را نگه دارید",
+    "sideNav.demoFeatureSmartHandleTitle": "دسته هوشمند",
+    "sideNav.demoFeaturesTitle": "ویژگی‌ها",
+    "sideNav.demoHint": "لبه پنل را بکشید و از دکمه تغییر وضعیت استفاده کنید ->",
+    "sideNav.demoSubtitle": "پنل کناری به سبک محیط کاری با قابلیت تغییر اندازه با کشیدن",
+    "sideNav.demoTitle": "دموی DraggableSideNav",
+    "sideNav.expand": "باز کردن نوار کناری"
+  }
+}

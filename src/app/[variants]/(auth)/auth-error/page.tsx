@@ -1,14 +1,13 @@
 'use client';
 
 import { SiDiscord } from '@icons-pack/react-simple-icons';
-import { Button, Icon } from '@lobehub/ui';
-import { Result, Tag, Typography } from 'antd';
-import { ShieldAlert } from 'lucide-react';
+import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
 import Link from 'next/link';
 import { parseAsString, useQueryState } from 'nuqs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
+
+import AuthCard from '@/features/AuthCard';
 
 const DISCORD_URL = 'https://discord.gg/AYFPHvv2jT';
 
@@ -23,34 +22,31 @@ const AuthErrorPage = memo(() => {
   const description = t(`codes.${code}`, { defaultValue: t('codes.UNKNOWN') });
 
   return (
-    <Result
-      extra={
-        <Flexbox align="center" gap={16}>
-          <Flexbox gap={12} horizontal justify="center" wrap="wrap">
-            <Link href="/signin">
-              <Button type="primary">{t('actions.retry')}</Button>
-            </Link>
-            <Link href="/">
-              <Button>{t('actions.home')}</Button>
-            </Link>
-          </Flexbox>
+    <AuthCard
+      footer={
+        <Flexbox gap={12} justify="center" wrap="wrap">
+          <Link href="/signin">
+            <Button block size={'large'} type="primary">
+              {t('actions.retry')}
+            </Button>
+          </Link>
+          <Link href="/">
+            <Button block size={'large'}>
+              {t('actions.home')}
+            </Button>
+          </Link>
           <Link href={DISCORD_URL} rel="noopener noreferrer" target="_blank">
-            <Button icon={<Icon icon={SiDiscord} />} type="text">
+            <Button block icon={<Icon icon={SiDiscord} />} type="text">
               {t('actions.discord')}
             </Button>
           </Link>
         </Flexbox>
       }
-      icon={<Icon icon={ShieldAlert} />}
-      status="error"
-      subTitle={
-        <Flexbox align="center" gap={8}>
-          <Tag color="red">{error || 'UNKNOWN'}</Tag>
-          <Typography.Text type="secondary">{description}</Typography.Text>
-        </Flexbox>
-      }
+      subtitle={description}
       title={t('title')}
-    />
+    >
+      <Alert title={error || 'UNKNOWN'} type={'error'} />
+    </AuthCard>
   );
 });
 

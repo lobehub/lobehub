@@ -1,18 +1,14 @@
 {
-  "actions": {
-    "followOnX": "Suivez-nous sur X",
-    "subscribeToUpdates": "Abonnez-vous aux mises à jour",
-    "versions": "Détails de la version"
-  },
+  "actions.followOnX": "Suivez-nous sur X",
+  "actions.subscribeToUpdates": "Abonnez-vous pour recevoir les mises à jour",
+  "actions.versions": "Détails de la version",
   "addedWhileAway": "Nous avons ajouté de nouvelles fonctionnalités pendant votre absence.",
-  "allChangelog": "Voir tous les journaux de mise à jour",
-  "description": "Suivez en continu les nouvelles fonctionnalités et améliorations de {{appName}}",
-  "pagination": {
-    "next": "Page suivante",
-    "older": "Voir les modifications antérieures"
-  },
+  "allChangelog": "Voir tous les journaux de modifications",
+  "description": "Restez informé des nouvelles fonctionnalités et améliorations de {{appName}}",
+  "pagination.next": "Page suivante",
+  "pagination.older": "Voir les modifications précédentes",
   "readDetails": "Lire les détails",
-  "title": "Journal des mises à jour",
+  "title": "Journal des modifications",
   "versionDetails": "Détails de la version",
-  "welcomeBack": "Bienvenue de nouveau!"
+  "welcomeBack": "Bon retour parmi nous !"
 }

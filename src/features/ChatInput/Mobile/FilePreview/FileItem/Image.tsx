@@ -1,22 +1,22 @@
 import { ActionIcon, Image } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { memo } from 'react';
 
 import { MIN_IMAGE_SIZE } from './style';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   deleteButton: css`
     color: #fff;
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
 
     &:hover {
-      background: ${token.colorError};
+      background: ${cssVar.colorError};
     }
   `,
   editableImage: css`
-    background: ${token.colorBgContainer};
-    box-shadow: 0 0 0 1px ${token.colorFill} inset;
+    background: ${cssVar.colorBgContainer};
+    box-shadow: 0 0 0 1px ${cssVar.colorFill} inset;
   `,
   image: css`
     width: 64px !important;
@@ -34,7 +34,6 @@ interface FileItemProps {
 
 const FileItem = memo<FileItemProps>(({ alt, onRemove, src, loading }) => {
   const IMAGE_SIZE = MIN_IMAGE_SIZE;
-  const { styles, cx } = useStyles();
 
   return (
     <Image
@@ -52,13 +51,13 @@ const FileItem = memo<FileItemProps>(({ alt, onRemove, src, loading }) => {
       }
       alt={alt || ''}
       alwaysShowActions
+      classNames={{ wrapper: cx(styles.image, styles.editableImage) }}
       height={64}
       isLoading={loading}
       objectFit={'cover'}
       size={IMAGE_SIZE as any}
       src={src}
       width={64}
-      wrapperClassName={cx(styles.image, styles.editableImage)}
     />
   );
 });

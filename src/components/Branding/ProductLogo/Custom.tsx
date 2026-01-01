@@ -1,13 +1,12 @@
+import { BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
 import type { IconType } from '@lobehub/icons';
+import { Flexbox, type FlexboxProps } from '@lobehub/ui';
 import type { LobeChatProps } from '@lobehub/ui/brand';
-import { createStyles, useTheme } from 'antd-style';
-import Image, { ImageProps } from 'next/image';
-import { ReactNode, forwardRef, memo } from 'react';
-import { Flexbox, FlexboxProps } from 'react-layout-kit';
+import { createStaticStyles, cssVar } from 'antd-style';
+import Image, { type ImageProps } from 'next/image';
+import { type ReactNode, forwardRef, memo } from 'react';
 
-import { BRANDING_LOGO_URL, BRANDING_NAME } from '@/const/branding';
-
-const useStyles = createStyles(({ css }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     extraTitle: css`
       font-weight: 300;
@@ -67,8 +66,6 @@ const Divider: IconType = forwardRef(({ size = '1em', style, ...rest }, ref) => 
 ));
 
 const CustomLogo = memo<LobeChatProps>(({ extra, size = 32, className, style, type, ...rest }) => {
-  const theme = useTheme();
-  const { styles } = useStyles();
   let logoComponent: ReactNode;
 
   switch (type) {
@@ -117,7 +114,7 @@ const CustomLogo = memo<LobeChatProps>(({ extra, size = 32, className, style, ty
   return (
     <Flexbox align={'center'} className={className} flex={'none'} horizontal {...rest}>
       {logoComponent}
-      <Divider size={extraSize} style={{ color: theme.colorFill }} />
+      <Divider size={extraSize} style={{ color: cssVar.colorFill }} />
       <div className={styles.extraTitle} style={{ fontSize: extraSize }}>
         {extra}
       </div>

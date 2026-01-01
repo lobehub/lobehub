@@ -102,11 +102,12 @@ describe('I18nManager', () => {
 
       expect(mockI18nextInstance.init).toHaveBeenCalledWith({
         defaultNS: 'menu',
-        fallbackLng: 'en-US',
+        fallbackLng: 'en',
         initAsync: true,
         interpolation: {
           escapeValue: false,
         },
+        keySeparator: false,
         lng: 'en-US',
         ns: ['menu', 'dialog', 'common'],
         partialBundledLanguages: true,

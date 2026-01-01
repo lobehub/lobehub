@@ -1,35 +1,46 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Button, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
-import { CircleIcon, DotIcon, DownloadIcon, ScaleIcon, StarIcon } from 'lucide-react';
-import Link from 'next/link';
+import { ActionIcon, Avatar, Button, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { App } from 'antd';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import {
+  BookmarkIcon,
+  BookmarkMinusIcon,
+  CircleIcon,
+  DotIcon,
+  DownloadIcon,
+  ScaleIcon,
+  StarIcon,
+} from 'lucide-react';
 import qs from 'query-string';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
+import { Link } from 'react-router-dom';
+import useSWR from 'swr';
 
 import OfficialIcon from '@/components/OfficialIcon';
 import Scores from '@/features/MCP/Scores';
 import { getLanguageColor, getRecommendedDeployment } from '@/features/MCP/utils';
 import { useCategory } from '@/hooks/useMCPCategory';
+import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { socialService } from '@/services/social';
 
 import InstallationIcon from '../../components/MCPDepsIcon';
 import PublishedTime from '../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     desc: css`
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     time: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     version: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 13px;
     `,
   };
@@ -37,6 +48,7 @@ const useStyles = createStyles(({ css, token }) => {
 
 const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile, inModal }) => {
   const { t } = useTranslation('discover');
+  const { message } = App.useApp();
   const {
     name,
     author,
@@ -57,8 +69,49 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
     isClaimed,
     isOfficial,
   } = useDetailContext();
-  const { styles, theme } = useStyles();
   const { mobile = isMobile } = useResponsive();
+  const { isAuthenticated, signIn, session } = useMarketAuth();
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  // Set access token for social service
+  if (session?.accessToken) {
+    socialService.setAccessToken(session.accessToken);
+  }
+
+  // Fetch favorite status
+  const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
+    identifier && isAuthenticated ? ['favorite-status', 'plugin', identifier] : null,
+    () => socialService.checkFavoriteStatus('plugin', identifier!),
+    { revalidateOnFocus: false },
+  );
+
+  const isFavorited = favoriteStatus?.isFavorited ?? false;
+
+  const handleFavoriteClick = async () => {
+    if (!isAuthenticated) {
+      await signIn();
+      return;
+    }
+
+    if (!identifier) return;
+
+    setFavoriteLoading(true);
+    try {
+      if (isFavorited) {
+        await socialService.removeFavorite('plugin', identifier);
+        message.success(t('assistant.unfavoriteSuccess'));
+      } else {
+        await socialService.addFavorite('plugin', identifier);
+        message.success(t('assistant.favoriteSuccess'));
+      }
+      await mutateFavorite();
+    } catch (error) {
+      console.error('Favorite action failed:', error);
+      message.error(t('assistant.favoriteFailed'));
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
 
   const recommendedDeployment = getRecommendedDeployment(deploymentOptions);
   const categories = useCategory();
@@ -80,9 +133,9 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
 
   const cateButton = (
     <Link
-      href={qs.stringifyUrl({
+      to={qs.stringifyUrl({
         query: { category: cate?.key },
-        url: '/discover/mcp',
+        url: '/community/mcp',
       })}
     >
       <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>
@@ -94,7 +147,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
   return (
     <Flexbox gap={12}>
       <Flexbox align={'flex-start'} gap={16} horizontal width={'100%'}>
-        <Avatar avatar={icon} size={mobile ? 48 : 64} />
+        <Avatar avatar={icon} shape={'square'} size={mobile ? 48 : 64} />
         <Flexbox
           flex={1}
           gap={4}
@@ -142,19 +195,32 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
                 <InstallationIcon type={recommendedDeployment.installationMethod} />
               )}
               {github?.url && (
-                <Link href={github.url} onClick={(e) => e.stopPropagation()} target={'_blank'}>
-                  <ActionIcon fill={theme.colorTextDescription} icon={Github} />
-                </Link>
+                <a
+                  href={github.url}
+                  onClick={(e) => e.stopPropagation()}
+                  rel="noreferrer"
+                  target={'_blank'}
+                >
+                  <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
+                </a>
               )}
+              <Tooltip title={isFavorited ? t('assistant.unfavorite') : t('assistant.favorite')}>
+                <ActionIcon
+                  icon={isFavorited ? BookmarkMinusIcon : BookmarkIcon}
+                  loading={favoriteLoading}
+                  onClick={handleFavoriteClick}
+                  variant={isFavorited ? 'outlined' : undefined}
+                />
+              </Tooltip>
             </Flexbox>
           </Flexbox>
           <Flexbox align={'center'} gap={4} horizontal>
             <div className={styles.version}>{version}</div>
             <Icon icon={DotIcon} />
             {author?.url ? (
-              <Link href={author?.url} target={'_blank'}>
+              <a href={author?.url} rel="noreferrer" target={'_blank'}>
                 {author?.name}
-              </Link>
+              </a>
             ) : (
               <span>{author?.name}</span>
             )}
@@ -173,7 +239,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
         gap={mobile ? 12 : 24}
         horizontal
         style={{
-          color: theme.colorTextSecondary,
+          color: cssVar.colorTextSecondary,
         }}
         wrap={'wrap'}
       >
@@ -183,7 +249,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
           {Boolean(github?.language) && (
             <Flexbox align={'center'} gap={6} horizontal>
               <Icon
-                color={theme.colorFillTertiary}
+                color={cssVar.colorFillTertiary}
                 fill={getLanguageColor(github?.language)}
                 icon={CircleIcon}
                 size={12}

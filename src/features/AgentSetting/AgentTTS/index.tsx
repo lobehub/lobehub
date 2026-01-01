@@ -95,16 +95,7 @@ const AgentTTS = memo(() => {
 
   return (
     <Form
-      footer={
-        <Form.SubmitFooter
-          texts={{
-            reset: t('submitFooter.reset'),
-            submit: t('settingTTS.submit'),
-            unSaved: t('submitFooter.unSaved'),
-            unSavedWarning: t('submitFooter.unSavedWarning'),
-          }}
-        />
-      }
+      footer={<Form.SubmitFooter />}
       form={form}
       initialValues={{
         [TTS_SETTING_KEY]: config,

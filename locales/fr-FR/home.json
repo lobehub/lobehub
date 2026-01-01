@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "Aucun agent disponible",
+  "agentSelection.noAvailable": "Aucun agent ne peut être ajouté pour le moment",
+  "agentSelection.noSelected": "Aucun agent sélectionné",
+  "agentSelection.search": "Aucun agent correspondant trouvé",
+  "project.create": "Nouveau projet",
+  "project.deleteConfirm": "Ce projet sera supprimé et ne pourra pas être récupéré. Confirmez pour continuer.",
+  "starter.createAgent": "Créer un agent",
+  "starter.createGroup": "Créer un groupe",
+  "starter.deepResearch": "Recherche approfondie",
+  "starter.developing": "Bientôt disponible",
+  "starter.image": "Image",
+  "starter.write": "Écrire"
+}

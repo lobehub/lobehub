@@ -563,7 +563,7 @@ export default class AuthCtr extends ControllerModule {
     // Hash codeVerifier using SHA-256
     const encoder = new TextEncoder();
     const data = encoder.encode(codeVerifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
+    const digest = await crypto.subtle.digest('SHA-256', data as unknown as NodeJS.BufferSource);
 
     // Convert hash result to base64url encoding
     const challenge = Buffer.from(digest)

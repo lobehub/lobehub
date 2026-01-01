@@ -66,7 +66,7 @@ export interface StreamProtocolChunk {
   data: any;
   id?: string;
   type: // pure text
-  | 'text'
+    | 'text'
     // base64 format image
     | 'base64_image'
     // Tools use
@@ -241,6 +241,8 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
   let speed: ModelPerformance | undefined;
   let grounding: any;
   let toolsCalling: any;
+  // Track base64 images for accumulation
+  let base64Images: Array<{ data: string; id: string }> = [];
 
   let currentType = '' as unknown as StreamProtocolChunk['type'];
   const callbacks = cb || {};
@@ -298,6 +300,41 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
 
             aggregatedThinking += data;
             await callbacks.onThinking?.(data);
+            break;
+          }
+
+          case 'base64_image': {
+            // data format: { image: { id, data }, images: [...] }
+            const imageData = data as { image: { data: string; id: string }; images: any[] };
+            base64Images.push(imageData.image);
+            await callbacks.onBase64Image?.({
+              image: imageData.image,
+              images: base64Images,
+            });
+            break;
+          }
+
+          case 'content_part': {
+            // data format: StreamPartChunkData
+            const partData = data as StreamPartChunkData;
+            await callbacks.onContentPart?.({
+              content: partData.content,
+              mimeType: partData.mimeType,
+              partType: partData.partType,
+              thoughtSignature: partData.thoughtSignature,
+            });
+            break;
+          }
+
+          case 'reasoning_part': {
+            // data format: StreamPartChunkData
+            const partData = data as StreamPartChunkData;
+            await callbacks.onReasoningPart?.({
+              content: partData.content,
+              mimeType: partData.mimeType,
+              partType: partData.partType,
+              thoughtSignature: partData.thoughtSignature,
+            });
             break;
           }
 

@@ -1,4 +1,4 @@
-import { Theme, css } from 'antd-style';
+import { type Theme, css } from 'antd-style';
 
 // fix ios input keyboard
 // overflow: hidden;
@@ -50,5 +50,9 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     ::-webkit-scrollbar-track {
       background-color: transparent;
     }
+  }
+
+  button {
+    -webkit-app-region: no-drag;
   }
 `;

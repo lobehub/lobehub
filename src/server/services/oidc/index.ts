@@ -1,7 +1,7 @@
 import debug from 'debug';
 
 import { createContextForInteractionDetails } from '@/libs/oidc-provider/http-adapter';
-import { OIDCProvider } from '@/libs/oidc-provider/provider';
+import { type OIDCProvider } from '@/libs/oidc-provider/provider';
 
 import { getOIDCProvider } from './oidcProvider';
 

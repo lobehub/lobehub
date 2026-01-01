@@ -1,18 +1,10 @@
 {
   "desc": "這裡會不定期更新我們正在探索的新功能，歡迎試用！",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "將助手訊息及其工具調用結果彙整成群組顯示",
-      "title": "助手訊息彙整群組"
-    },
-    "groupChat": {
-      "desc": "啟用多智能體群組聊天編排功能。",
-      "title": "群組聊天（多智能體）"
-    },
-    "inputMarkdown": {
-      "desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",
-      "title": "輸入框 Markdown 渲染"
-    }
-  },
+  "features.assistantMessageGroup.desc": "將助手訊息及其工具調用結果彙整成群組顯示",
+  "features.assistantMessageGroup.title": "助手訊息彙整群組",
+  "features.groupChat.desc": "啟用多智能體群組聊天編排功能。",
+  "features.groupChat.title": "群組聊天（多智能體）",
+  "features.inputMarkdown.desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",
+  "features.inputMarkdown.title": "輸入框 Markdown 渲染",
   "title": "實驗室"
 }

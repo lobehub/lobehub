@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { URL } from 'node:url';
 
 import { oidcEnv } from '@/envs/oidc';

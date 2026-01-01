@@ -1,6 +1,6 @@
 import {
   AiModelTypeSchema,
-  AiProviderModelListItem,
+  type AiProviderModelListItem,
   CreateAiModelSchema,
   ToggleAiModelEnableSchema,
   UpdateAiModelSchema,
@@ -14,7 +14,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { ProviderConfig } from '@/types/user/settings';
+import { type ProviderConfig } from '@/types/user/settings';
 
 const aiModelProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -85,9 +85,20 @@ export const aiModelRouter = router({
     }),
 
   getAiProviderModelList: aiModelProcedure
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        enabled: z.boolean().optional(),
+        id: z.string(),
+        limit: z.number().int().min(1).max(200).optional(),
+        offset: z.number().int().min(0).optional(),
+      }),
+    )
     .query(async ({ ctx, input }): Promise<AiProviderModelListItem[]> => {
-      return ctx.aiInfraRepos.getAiProviderModelList(input.id);
+      return ctx.aiInfraRepos.getAiProviderModelList(input.id, {
+        enabled: input.enabled,
+        limit: input.limit,
+        offset: input.offset,
+      });
     }),
 
   removeAiModel: aiModelProcedure

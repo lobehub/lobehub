@@ -1,10 +1,13 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
-  banner: css`
-    opacity: ${isDarkMode ? 0.9 : 0.4};
+export const styles = createStaticStyles(({ css, cssVar }) => ({
+  bannerDark: css`
+    opacity: 0.9;
   `,
-  container: css`
+  bannerLight: css`
+    opacity: 0.4;
+  `,
+  containerDark: css`
     position: relative;
 
     overflow: hidden;
@@ -12,31 +15,47 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     height: 100%;
     border-radius: 12px;
 
-    background: ${token.colorBgContainer};
-    box-shadow: 0 0 1px 1px ${isDarkMode ? token.colorFillQuaternary : token.colorFillSecondary}
-      inset;
+    background: ${cssVar.colorBgContainer};
+    box-shadow: 0 0 1px 1px ${cssVar.colorFillQuaternary} inset;
 
-    transition: box-shadow 0.2s ${token.motionEaseInOut};
+    transition: box-shadow 0.2s ${cssVar.motionEaseInOut};
 
     &:hover {
-      box-shadow: 0 0 1px 1px ${isDarkMode ? token.colorFillSecondary : token.colorFill} inset;
+      box-shadow: 0 0 1px 1px ${cssVar.colorFillSecondary} inset;
+    }
+  `,
+  containerLight: css`
+    position: relative;
+
+    overflow: hidden;
+
+    height: 100%;
+    border-radius: 12px;
+
+    background: ${cssVar.colorBgContainer};
+    box-shadow: 0 0 1px 1px ${cssVar.colorFillSecondary} inset;
+
+    transition: box-shadow 0.2s ${cssVar.motionEaseInOut};
+
+    &:hover {
+      box-shadow: 0 0 1px 1px ${cssVar.colorFill} inset;
     }
   `,
   desc: css`
     min-height: 44px;
     margin-block-end: 0 !important;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   tagBlue: css`
-    color: ${token.geekblue};
-    background: ${token.geekblue1};
+    color: ${cssVar.geekblue};
+    background: ${cssVar.geekblue1};
   `,
   tagGreen: css`
-    color: ${token.green};
-    background: ${token.green1};
+    color: ${cssVar.green};
+    background: ${cssVar.green1};
   `,
   time: css`
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   title: css`
     zoom: 1.2;
@@ -45,6 +64,6 @@ export const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     font-weight: bold;
   `,
   token: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
   `,
 }));

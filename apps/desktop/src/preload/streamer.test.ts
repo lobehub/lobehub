@@ -1,4 +1,4 @@
-import type { ProxyTRPCRequestParams } from '@lobechat/electron-client-ipc';
+import type { StreamInvokeRequestParams } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock electron module
@@ -29,7 +29,7 @@ describe('onStreamInvoke', () => {
   });
 
   it('should set up stream listeners and send start event', () => {
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: { 'content-type': 'application/json' },
       method: 'POST',
       urlPath: '/trpc/lambda/test.endpoint',
@@ -77,7 +77,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',
@@ -105,7 +105,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',
@@ -137,7 +137,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',
@@ -178,7 +178,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',
@@ -220,7 +220,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',
@@ -254,7 +254,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',
@@ -289,7 +289,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       body: JSON.stringify({
         filters: { active: true },
         query: 'complex query',
@@ -316,7 +316,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',
@@ -346,7 +346,7 @@ describe('onStreamInvoke', () => {
       onResponse: vi.fn(),
     };
 
-    const params: ProxyTRPCRequestParams = {
+    const params: StreamInvokeRequestParams = {
       headers: {},
       method: 'GET',
       urlPath: '/trpc/test',

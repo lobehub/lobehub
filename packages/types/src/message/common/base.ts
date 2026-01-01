@@ -1,7 +1,7 @@
-import type { ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import { z } from 'zod';
 
+import type { ILobeAgentRuntimeErrorType } from '../../agentRuntime';
 import { ErrorType } from '../../fetch';
 
 /**

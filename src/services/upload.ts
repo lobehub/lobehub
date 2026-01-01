@@ -1,4 +1,3 @@
-import { isDesktop } from '@lobechat/const';
 import { parseDataUri } from '@lobechat/model-runtime';
 import { uuid } from '@lobechat/utils';
 import dayjs from 'dayjs';
@@ -7,8 +6,8 @@ import { sha256 } from 'js-sha256';
 import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
 import { API_ENDPOINTS } from '@/services/_url';
-import { FileMetadata, UploadBase64ToS3Result } from '@/types/files';
-import { FileUploadState, FileUploadStatus } from '@/types/files/upload';
+import { type FileMetadata, type UploadBase64ToS3Result } from '@/types/files';
+import { type FileUploadState, type FileUploadStatus } from '@/types/files/upload';
 
 export const UPLOAD_NETWORK_ERROR = 'NetWorkError';
 
@@ -61,18 +60,6 @@ class UploadService {
     file: File,
     { onProgress, directory, pathname }: UploadFileToS3Options,
   ): Promise<{ data: FileMetadata; success: boolean }> => {
-    const { getElectronStoreState } = await import('@/store/electron');
-    const { electronSyncSelectors } = await import('@/store/electron/selectors');
-    // only if not enable sync
-    const state = getElectronStoreState();
-    const isSyncActive = electronSyncSelectors.isSyncActive(state);
-
-    // Desktop upload logic (when sync is not enabled)
-    if (isDesktop && !isSyncActive) {
-      const data = await this.uploadToDesktopS3(file, { directory, pathname });
-      return { data, success: true };
-    }
-
     // Server-side upload logic
 
     // if is server mode, upload to server s3,
@@ -194,21 +181,6 @@ class UploadService {
     });
 
     return result;
-  };
-
-  private uploadToDesktopS3 = async (
-    file: File,
-    options: { directory?: string; pathname?: string } = {},
-  ) => {
-    const fileArrayBuffer = await file.arrayBuffer();
-    const hash = sha256(fileArrayBuffer);
-
-    // Generate file path metadata
-    const { pathname } = generateFilePathMetadata(file.name, options);
-
-    const { desktopFileAPI } = await import('@/services/electron/file');
-    const { metadata } = await desktopFileAPI.uploadFile(file, hash, pathname);
-    return metadata;
   };
 
   /**

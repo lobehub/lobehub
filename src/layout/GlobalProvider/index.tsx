@@ -1,6 +1,11 @@
-import { ReactNode, Suspense } from 'react';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { ModalHost } from '@lobehub/ui';
+import { LazyMotion, domMax } from 'motion/react';
+import { type ReactNode, Suspense } from 'react';
 
+import { ReferralProvider } from '@/business/client/ReferralProvider';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
+import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { getServerFeatureFlagsValue } from '@/config/featureFlags';
 import { appEnv } from '@/envs/app';
 import DevPanel from '@/features/DevPanel';
@@ -8,9 +13,8 @@ import { getServerGlobalConfig } from '@/server/globalConfig';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import { getAntdLocale } from '@/utils/locale';
 
-import AntdV5MonkeyPatch from './AntdV5MonkeyPatch';
 import AppTheme from './AppTheme';
-import CmdkLazy from './CmdkLazy';
+import { GroupWizardProvider } from './GroupWizardProvider';
 import ImportSettings from './ImportSettings';
 import Locale from './Locale';
 import QueryProvider from './Query';
@@ -59,18 +63,24 @@ const GlobalLayout = async ({
             serverConfig={serverConfig}
           >
             <QueryProvider>
-              <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+              <GroupWizardProvider>
+                <DragUploadProvider>
+                  <LazyMotion features={domMax}>
+                    <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                    <ModalHost />
+                  </LazyMotion>
+                </DragUploadProvider>
+              </GroupWizardProvider>
             </QueryProvider>
             <StoreInitialization />
             <Suspense>
+              {ENABLE_BUSINESS_FEATURES ? <ReferralProvider /> : null}
               <ImportSettings />
               {process.env.NODE_ENV === 'development' && <DevPanel />}
             </Suspense>
-            <CmdkLazy />
           </ServerConfigStoreProvider>
         </AppTheme>
       </Locale>
-      <AntdV5MonkeyPatch />
     </StyleRegistry>
   );
 };

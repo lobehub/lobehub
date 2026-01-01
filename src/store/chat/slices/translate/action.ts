@@ -1,13 +1,13 @@
 import { chainLangDetect, chainTranslate } from '@lobechat/prompts';
-import { ChatTranslate, TraceNameMap, TracePayload } from '@lobechat/types';
+import { type ChatTranslate, TraceNameMap, type TracePayload } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { supportLocales } from '@/locales/resources';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { dbMessageSelectors } from '@/store/chat/selectors';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
@@ -31,7 +31,7 @@ export const chatTranslate: StateCreator<
     await get().updateMessageTranslate(id, false);
   },
   getCurrentTracePayload: (data) => ({
-    sessionId: get().activeId,
+    sessionId: get().activeAgentId,
     topicId: get().activeTopicId,
     ...data,
   }),
@@ -50,7 +50,12 @@ export const chatTranslate: StateCreator<
 
     // Create translate operation
     const { operationId } = get().startOperation({
-      context: { messageId: id, sessionId: message.sessionId, topicId: message.topicId },
+      context: {
+        agentId: message.agentId,
+        messageId: id,
+        sessionId: message.sessionId,
+        topicId: message.topicId,
+      },
       label: 'Translating message',
       type: 'translate',
     });

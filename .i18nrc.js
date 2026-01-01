@@ -1,14 +1,14 @@
 const { defineConfig } = require('@lobehub/i18n-cli');
 
 module.exports = defineConfig({
-  entry: 'locales/zh-CN',
-  entryLocale: 'zh-CN',
+  entry: 'locales/en-US',
+  entryLocale: 'en-US',
   output: 'locales',
   outputLocales: [
     'ar',
     'bg-BG',
+    'zh-CN',
     'zh-TW',
-    'en-US',
     'ru-RU',
     'ja-JP',
     'ko-KR',
@@ -30,7 +30,9 @@ module.exports = defineConfig({
     jsonMode: true,
   },
   markdown: {
-    reference: '你需要保持 mdx 的组件格式，输出文本不需要在最外层包裹任何代码块语法',
+    reference:
+      '你需要保持 mdx 的组件格式，输出文本不需要在最外层包裹任何代码块语法。以下是一些词汇的固定翻译：\n' +
+      JSON.stringify(require('./glossary.json'), null, 2),
     entry: ['./README.zh-CN.md', './contributing/**/*.zh-CN.md', './docs/**/*.zh-CN.mdx'],
     entryLocale: 'zh-CN',
     outputLocales: ['en-US'],

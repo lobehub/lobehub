@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "تأیید",
-    "detail": "یک برنامه چت مبتنی بر مدل‌های زبانی بزرگ",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "درباره"
-  },
-  "confirm": {
-    "cancel": "لغو",
-    "no": "خیر",
-    "title": "تأیید",
-    "yes": "بله"
-  },
-  "error": {
-    "button": "تأیید",
-    "detail": "در حین انجام عملیات خطایی رخ داده است، لطفاً بعداً دوباره تلاش کنید",
-    "message": "خطا رخ داده است",
-    "title": "خطا"
-  },
-  "update": {
-    "downloadAndInstall": "دانلود و نصب",
-    "downloadComplete": "دانلود کامل شد",
-    "downloadCompleteMessage": "بسته به‌روزرسانی دانلود شده است، آیا می‌خواهید بلافاصله نصب کنید؟",
-    "installLater": "نصب بعداً",
-    "installNow": "نصب اکنون",
-    "later": "یادآوری بعداً",
-    "newVersion": "نسخه جدیدی پیدا شد",
-    "newVersionAvailable": "نسخه جدید پیدا شد: {{version}}",
-    "skipThisVersion": "این نسخه را نادیده بگیرید"
-  }
+  "about.button": "تأیید",
+  "about.detail": "یک برنامه چت مبتنی بر مدل‌های زبانی بزرگ",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "درباره",
+  "confirm.cancel": "لغو",
+  "confirm.no": "خیر",
+  "confirm.title": "تأیید",
+  "confirm.yes": "بله",
+  "error.button": "تأیید",
+  "error.detail": "در حین انجام عملیات خطایی رخ داده است، لطفاً بعداً دوباره تلاش کنید",
+  "error.message": "خطا رخ داده است",
+  "error.title": "خطا",
+  "update.downloadAndInstall": "دانلود و نصب",
+  "update.downloadComplete": "دانلود کامل شد",
+  "update.downloadCompleteMessage": "بسته به‌روزرسانی دانلود شده است، آیا می‌خواهید بلافاصله نصب کنید؟",
+  "update.installLater": "نصب بعداً",
+  "update.installNow": "نصب اکنون",
+  "update.later": "یادآوری بعداً",
+  "update.newVersion": "نسخه جدیدی پیدا شد",
+  "update.newVersionAvailable": "نسخه جدید پیدا شد: {{version}}",
+  "update.skipThisVersion": "این نسخه را نادیده بگیرید"
 }

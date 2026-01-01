@@ -1,8 +1,8 @@
 import {
   DEFAULT_ASPECT_RATIO,
   PRESET_ASPECT_RATIOS,
-  RuntimeImageGenParams,
-  RuntimeImageGenParamsKeys,
+  type RuntimeImageGenParams,
+  type RuntimeImageGenParamsKeys,
 } from 'model-bank';
 import { useCallback, useMemo } from 'react';
 

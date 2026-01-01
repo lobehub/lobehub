@@ -222,7 +222,7 @@ export const customSdI2iParamsSchema: ModelParamsSchema = {
 const comfyuiImageModels: AIImageModelCard[] = [
   {
     description:
-      'FLUX.1 Schnell - 超快速文生图模型，1-4步即可生成高质量图像，适合实时应用和快速原型制作',
+      'FLUX.1 Schnell is an ultra-fast text-to-image model that generates high-quality images in 1-4 steps, ideal for real-time use and rapid prototyping.',
     displayName: 'FLUX.1 Schnell',
     enabled: true,
     id: 'comfyui/flux-schnell',
@@ -231,7 +231,8 @@ const comfyuiImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    description: 'FLUX.1 Dev - 高质量文生图模型，10-50步生成，适合高质量创作和艺术作品生成',
+    description:
+      'FLUX.1 Dev is a high-quality text-to-image model (10–50 steps), ideal for premium creative and artistic output.',
     displayName: 'FLUX.1 Dev',
     enabled: true,
     id: 'comfyui/flux-dev',
@@ -240,7 +241,8 @@ const comfyuiImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    description: 'FLUX.1 Krea-dev - 增强安全的文生图模型，与 Krea 合作开发，内置安全过滤',
+    description:
+      'FLUX.1 Krea-dev is a safety-enhanced text-to-image model co-developed with Krea, with built-in safety filters.',
     displayName: 'FLUX.1 Krea-dev',
     enabled: false,
     id: 'comfyui/flux-krea-dev',
@@ -250,7 +252,7 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'FLUX.1 Kontext-dev - 图像编辑模型，支持基于文本指令修改现有图像，支持局部修改和风格迁移',
+      'FLUX.1 Kontext-dev is an image editing model that supports text-guided edits, including local edits and style transfer.',
     displayName: 'FLUX.1 Kontext-dev',
     enabled: true,
     id: 'comfyui/flux-kontext-dev',
@@ -260,7 +262,7 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Stable Diffusion 3.5 新一代文生图模型，支持 Large 和 Medium 两个版本，需要外部 CLIP 编码器文件，提供卓越的图像质量和提示词匹配度。',
+      'Stable Diffusion 3.5 is a next-generation text-to-image model with Large and Medium variants. It requires external CLIP encoder files and delivers excellent image quality and prompt adherence.',
     displayName: 'Stable Diffusion 3.5',
     enabled: true,
     id: 'comfyui/stable-diffusion-35',
@@ -270,8 +272,8 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Stable Diffusion 3.5 内置 CLIP/T5 编码器版本，无需外部编码器文件，适用于 sd3.5_medium_incl_clips 等模型，资源占用更少。',
-    displayName: 'Stable Diffusion 3.5 (内置编码器)',
+      'Stable Diffusion 3.5 with built-in CLIP/T5 encoders needs no external encoder files, suitable for models like sd3.5_medium_incl_clips with lower resource usage.',
+    displayName: 'Stable Diffusion 3.5 (Built-in Encoder)',
     enabled: false,
     id: 'comfyui/stable-diffusion-35-inclclip',
     parameters: sd35ParamsSchema,
@@ -280,7 +282,7 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Stable Diffusion 1.5 文生图模型，经典的512x512分辨率文本到图像生成，适合快速原型和创意实验',
+      'Stable Diffusion 1.5 is a classic 512x512 text-to-image model, ideal for rapid prototyping and creative experiments.',
     displayName: 'SD 1.5',
     enabled: false,
     id: 'comfyui/stable-diffusion-15',
@@ -290,8 +292,8 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'SDXL 文生图模型，支持1024x1024高分辨率文本到图像生成，提供更好的图像质量和细节表现',
-    displayName: 'SDXL 文生图',
+      'SDXL is a text-to-image model supporting 1024x1024 high-resolution generation with better image quality and detail.',
+    displayName: 'SDXL Text-to-Image',
     enabled: true,
     id: 'comfyui/stable-diffusion-xl',
     parameters: sdxlT2iParamsSchema,
@@ -300,7 +302,7 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'SDXL 图生图模型，基于输入图像进行高质量的图像到图像转换，支持风格迁移、图像修复和创意变换。',
+      'SDXL image-to-image model performs high-quality transformations from input images, supporting style transfer, restoration, and creative variations.',
     displayName: 'SDXL Refiner',
     enabled: true,
     id: 'comfyui/stable-diffusion-refiner',
@@ -310,8 +312,8 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      '自定义 SD 文生图模型，模型文件名请使用 custom_sd_lobe.safetensors，如有 VAE 请使用 custom_sd_vae_lobe.safetensors，模型文件需要按照 Comfy 的要求放入对应文件夹',
-    displayName: '自定义 SD 文生图',
+      'Custom SD text-to-image model. Use custom_sd_lobe.safetensors as the model filename; if you have a VAE, use custom_sd_vae_lobe.safetensors. Place model files in the required Comfy folders.',
+    displayName: 'Custom SD Text-to-Image',
     enabled: false,
     id: 'comfyui/stable-diffusion-custom',
     parameters: customSdT2iParamsSchema,
@@ -320,8 +322,8 @@ const comfyuiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      '自定义 SDXL 图生图模型，模型文件名请使用 custom_sd_lobe.safetensors，如有 VAE 请使用 custom_sd_vae_lobe.safetensors，模型文件需要按照 Comfy 的要求放入对应文件夹',
-    displayName: '自定义 SDXL Refiner',
+      'Custom SDXL image-to-image model. Use custom_sd_lobe.safetensors as the model filename; if you have a VAE, use custom_sd_vae_lobe.safetensors. Place model files in the required Comfy folders.',
+    displayName: 'Custom SDXL Refiner',
     enabled: false,
     id: 'comfyui/stable-diffusion-custom-refiner',
     parameters: customSdI2iParamsSchema,

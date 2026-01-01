@@ -1,9 +1,9 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import {
-  EvalDatasetRecord,
+  type EvalDatasetRecord,
   EvalEvaluationStatus,
-  InsertEvalDatasetRecord,
-  RAGEvalDataSetItem,
+  type InsertEvalDatasetRecord,
+  type RAGEvalDataSetItem,
   insertEvalDatasetRecordSchema,
   insertEvalDatasetsSchema,
   insertEvalEvaluationSchema,

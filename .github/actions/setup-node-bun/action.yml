@@ -1,0 +1,30 @@
+name: Setup Node and Bun
+description: Setup Node.js and Bun for workflows
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: true
+  bun-version:
+    description: Bun version
+    required: true
+  package-manager-cache:
+    description: Pass-through to actions/setup-node package-manager-cache
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        package-manager-cache: ${{ inputs.package-manager-cache }}
+
+    - name: Install bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+

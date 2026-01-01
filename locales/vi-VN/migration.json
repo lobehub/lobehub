@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Xóa dữ liệu cục bộ",
-      "downloadBackup": "Tải sao lưu dữ liệu",
-      "reUpgrade": "Tái nâng cấp",
-      "start": "Bắt đầu sử dụng",
-      "upgrade": "Nâng cấp ngay"
-    },
-    "clear": {
-      "confirm": "Dữ liệu cục bộ sẽ được xóa (cài đặt toàn cầu không bị ảnh hưởng), vui lòng xác nhận bạn đã tải sao lưu dữ liệu."
-    },
-    "description": "Trong phiên bản mới, việc lưu trữ dữ liệu của {{appName}} đã có bước nhảy vọt lớn. Do đó, chúng tôi cần nâng cấp dữ liệu cũ để mang đến cho bạn trải nghiệm sử dụng tốt hơn.",
-    "features": {
-      "capability": {
-        "desc": "Dựa trên công nghệ IndexedDB, đủ sức chứa tất cả các tin nhắn trò chuyện trong suốt cuộc đời bạn",
-        "title": "Dung lượng lớn"
-      },
-      "performance": {
-        "desc": "Tự động lập chỉ mục hàng triệu tin nhắn, truy vấn phản hồi trong mili giây",
-        "title": "Hiệu suất cao"
-      },
-      "use": {
-        "desc": "Hỗ trợ tìm kiếm theo tiêu đề, mô tả, thẻ, nội dung tin nhắn và cả văn bản dịch, hiệu quả tìm kiếm hàng ngày được nâng cao đáng kể",
-        "title": "Dễ sử dụng hơn"
-      }
-    },
-    "title": "Sự tiến hóa dữ liệu của {{appName}}",
-    "upgrade": {
-      "error": {
-        "subTitle": "Chúng tôi rất tiếc, đã xảy ra sự cố trong quá trình nâng cấp cơ sở dữ liệu. Vui lòng thử các giải pháp sau: A. Xóa dữ liệu cục bộ và nhập lại dữ liệu sao lưu; B. Nhấn nút 'Nâng cấp lại'.<br><br> Nếu vẫn gặp lỗi, vui lòng <1>gửi vấn đề</1>, chúng tôi sẽ giúp bạn kiểm tra ngay lập tức.",
-        "title": "Nâng cấp cơ sở dữ liệu thất bại"
-      },
-      "success": {
-        "subTitle": "Cơ sở dữ liệu của {{appName}} đã được nâng cấp lên phiên bản mới nhất, hãy bắt đầu trải nghiệm ngay!",
-        "title": "Nâng cấp cơ sở dữ liệu thành công"
-      }
-    },
-    "upgradeTip": "Việc nâng cấp sẽ mất khoảng 10~20 giây, trong quá trình nâng cấp, vui lòng không đóng {{appName}}."
-  },
-  "migrateError": {
-    "missVersion": "Dữ liệu nhập không có số phiên bản, vui lòng kiểm tra lại tệp và thử lại",
-    "noMigration": "Không tìm thấy phương án di chuyển tương ứng với phiên bản hiện tại, vui lòng kiểm tra lại số phiên bản. Nếu vẫn gặp vấn đề, vui lòng gửi phản hồi về vấn đề"
-  }
+  "dbV1.action.clearDB": "Xóa Dữ Liệu Cục Bộ",
+  "dbV1.action.downloadBackup": "Tải Sao Lưu Dữ Liệu",
+  "dbV1.action.reUpgrade": "Nâng Cấp Lại",
+  "dbV1.action.start": "Bắt Đầu",
+  "dbV1.action.upgrade": "Nâng Cấp",
+  "dbV1.clear.confirm": "Bạn sắp xóa dữ liệu cục bộ (cài đặt toàn cục sẽ không bị ảnh hưởng). Vui lòng xác nhận rằng bạn đã tải xuống bản sao lưu dữ liệu.",
+  "dbV1.description": "Trong phiên bản mới, hệ thống lưu trữ dữ liệu của {{appName}} đã có những cải tiến đáng kể. Do đó, chúng tôi cần nâng cấp dữ liệu cũ để mang đến cho bạn trải nghiệm người dùng tốt hơn.",
+  "dbV1.features.capability.desc": "Dựa trên công nghệ IndexedDB, có khả năng lưu trữ lượng tin nhắn trò chuyện khổng lồ suốt đời.",
+  "dbV1.features.capability.title": "Dung Lượng Lớn",
+  "dbV1.features.performance.desc": "Tự động lập chỉ mục hàng triệu tin nhắn, truy vấn tìm kiếm phản hồi chỉ trong vài mili giây.",
+  "dbV1.features.performance.title": "Hiệu Suất Cao",
+  "dbV1.features.use.desc": "Hỗ trợ tìm kiếm theo tiêu đề, mô tả, thẻ, nội dung tin nhắn và cả văn bản đã dịch, giúp nâng cao hiệu quả tìm kiếm hàng ngày.",
+  "dbV1.features.use.title": "Thân Thiện Hơn Với Người Dùng",
+  "dbV1.title": "Tiến Hóa Dữ Liệu {{appName}}",
+  "dbV1.upgrade.error.subTitle": "Chúng tôi xin lỗi, đã xảy ra lỗi trong quá trình nâng cấp cơ sở dữ liệu. Vui lòng thử các giải pháp sau: A. Xóa dữ liệu cục bộ và nhập lại dữ liệu sao lưu; B. Nhấn nút 'Thử Nâng Cấp Lại'.<br><br> Nếu sự cố vẫn tiếp diễn, vui lòng <1>gửi báo cáo sự cố</1>, chúng tôi sẽ hỗ trợ bạn sớm nhất có thể.",
+  "dbV1.upgrade.error.title": "Nâng Cấp Cơ Sở Dữ Liệu Thất Bại",
+  "dbV1.upgrade.success.subTitle": "Cơ sở dữ liệu đã được nâng cấp lên phiên bản mới nhất. Bạn có thể tiếp tục sử dụng ngay bây giờ.",
+  "dbV1.upgrade.success.title": "Nâng Cấp Cơ Sở Dữ Liệu Thành Công",
+  "dbV1.upgradeTip": "Quá trình nâng cấp sẽ mất khoảng 10 đến 20 giây. Vui lòng không đóng {{appName}} trong khi nâng cấp.",
+  "migrateError.missVersion": "Dữ liệu được nhập không có số phiên bản. Vui lòng kiểm tra tệp và thử lại.",
+  "migrateError.noMigration": "Không tìm thấy giải pháp di chuyển cho phiên bản hiện tại. Vui lòng kiểm tra số phiên bản và thử lại. Nếu sự cố vẫn tiếp diễn, vui lòng gửi phản hồi."
 }

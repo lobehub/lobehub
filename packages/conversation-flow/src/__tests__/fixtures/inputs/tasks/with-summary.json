@@ -1,0 +1,115 @@
+[
+  {
+    "id": "msg-user-1",
+    "role": "user",
+    "content": "Create three parallel tasks to research AI topics.",
+    "parentId": null,
+    "createdAt": 1735526559382,
+    "updatedAt": 1735526559382,
+    "meta": {}
+  },
+  {
+    "id": "msg-assistant-1",
+    "role": "assistant",
+    "content": "Creating three parallel research tasks.",
+    "parentId": "msg-user-1",
+    "createdAt": 1735526560163,
+    "updatedAt": 1735526585550,
+    "meta": {},
+    "model": "gpt-4",
+    "provider": "openai",
+    "tools": [
+      {
+        "id": "call_exec_tasks_1",
+        "type": "builtin",
+        "apiName": "execTasks",
+        "arguments": "{\"tasks\": [{\"description\": \"Research LLM architectures\"}, {\"description\": \"Research AI agents\"}, {\"description\": \"Research RAG systems\"}]}",
+        "identifier": "lobe-gtd"
+      }
+    ]
+  },
+  {
+    "id": "msg-tool-1",
+    "role": "tool",
+    "content": "Triggered 3 async tasks",
+    "parentId": "msg-assistant-1",
+    "tool_call_id": "call_exec_tasks_1",
+    "createdAt": 1735526588116,
+    "updatedAt": 1735526591337,
+    "meta": {},
+    "pluginState": {
+      "type": "execTasks",
+      "tasks": [
+        { "description": "Research LLM architectures" },
+        { "description": "Research AI agents" },
+        { "description": "Research RAG systems" }
+      ],
+      "parentMessageId": "msg-tool-1"
+    }
+  },
+  {
+    "id": "msg-task-llm",
+    "role": "task",
+    "content": "# LLM Architectures\n\nTransformer-based models dominate...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526594643,
+    "updatedAt": 1735526756262,
+    "meta": {},
+    "taskDetail": {
+      "duration": 120000,
+      "status": "completed",
+      "threadId": "thd_llm",
+      "title": "Research LLM architectures",
+      "totalCost": 0.015,
+      "totalMessages": 15,
+      "totalTokens": 100000
+    }
+  },
+  {
+    "id": "msg-task-agents",
+    "role": "task",
+    "content": "# AI Agents\n\nAutonomous agents using LLMs...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526595647,
+    "updatedAt": 1735526792430,
+    "meta": {},
+    "taskDetail": {
+      "duration": 150000,
+      "status": "completed",
+      "threadId": "thd_agents",
+      "title": "Research AI agents",
+      "totalCost": 0.018,
+      "totalMessages": 20,
+      "totalTokens": 120000
+    }
+  },
+  {
+    "id": "msg-task-rag",
+    "role": "task",
+    "content": "# RAG Systems\n\nRetrieval Augmented Generation combines...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526596000,
+    "updatedAt": 1735526800000,
+    "meta": {},
+    "taskDetail": {
+      "duration": 130000,
+      "status": "completed",
+      "threadId": "thd_rag",
+      "title": "Research RAG systems",
+      "totalCost": 0.016,
+      "totalMessages": 18,
+      "totalTokens": 110000
+    }
+  },
+  {
+    "id": "msg-assistant-summary",
+    "role": "assistant",
+    "content": "All three research tasks completed successfully. Here's a summary of the findings...",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526810000,
+    "updatedAt": 1735526820000,
+    "meta": {},
+    "model": "gpt-4",
+    "provider": "openai"
+  }
+]

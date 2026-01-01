@@ -1,0 +1,12 @@
+{
+  "name": "@lobechat/business-model-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "model-bank": "workspace:*"
+  }
+}

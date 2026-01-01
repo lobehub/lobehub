@@ -10,7 +10,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5.2 — 面向编码与 agentic 工作流的旗舰模型，提供更强推理与长上下文能力。',
+    description:
+      'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
     enabled: true,
     id: 'gpt-5.2',
@@ -38,7 +39,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.2 pro：更聪明、更精确的 GPT-5.2 版本（Responses API Only），适合高难度问题与更长的多轮推理。',
+      'GPT-5.2 pro: smarter, more precise GPT-5.2 (Responses API only), for hard problems and longer multi-turn reasoning.',
     displayName: 'GPT-5.2 pro',
     id: 'gpt-5.2-pro',
     maxOutput: 128_000,
@@ -60,7 +61,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-5.2 Chat：ChatGPT 使用的 GPT-5.2 变体（chat-latest），用于体验最新对话改进。',
+    description:
+      'GPT-5.2 Chat is the ChatGPT variant (chat-latest) for the latest conversation improvements.',
     displayName: 'GPT-5.2 Chat',
     enabled: true,
     id: 'gpt-5.2-chat-latest',
@@ -85,7 +87,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1 — 针对编码和 agent 任务优化的旗舰模型，支持可配置的推理强度与更长上下文。',
+      'GPT-5.1 is the flagship model optimized for coding and agent tasks, with configurable reasoning intensity and longer context.',
     displayName: 'GPT-5.1',
     id: 'gpt-5.1',
     maxOutput: 128_000,
@@ -109,7 +111,7 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-5.1 Chat：用于 ChatGPT 的 GPT-5.1 变体，适合聊天场景。',
+    description: 'GPT-5.1 Chat: the ChatGPT variant of GPT-5.1, built for chat scenarios.',
     displayName: 'GPT-5.1 Chat',
     id: 'gpt-5.1-chat-latest',
     maxOutput: 16_384,
@@ -133,7 +135,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1 Codex：针对 agentic 编码任务优化的 GPT-5.1 版本，可在 Responses API 中用于更复杂的代码/代理工作流。',
+      'GPT-5.1 Codex: GPT-5.1 optimized for agentic coding tasks, for more complex code/agent workflows in the Responses API.',
     displayName: 'GPT-5.1 Codex',
     id: 'gpt-5.1-codex',
     maxOutput: 128_000,
@@ -161,7 +163,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1 Codex mini：体积更小、成本更低的 Codex 变体，针对 agentic 编码任务进行了优化。',
+      'GPT-5.1 Codex mini: smaller, lower-cost Codex variant optimized for agentic coding.',
     displayName: 'GPT-5.1 Codex mini',
     id: 'gpt-5.1-codex-mini',
     maxOutput: 128_000,
@@ -187,7 +189,7 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 pro 使用更多计算来更深入地思考，并持续提供更好的答案。',
+    description: 'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
     displayName: 'GPT-5 pro',
     id: 'gpt-5-pro',
     maxOutput: 272_000,
@@ -212,7 +214,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 Codex 是一个针对 Codex 或类似环境中的代理编码任务优化的 GPT-5 版本。',
+    description:
+      'GPT-5 Codex is a GPT-5 variant optimized for agentic coding tasks in Codex-like environments.',
     displayName: 'GPT-5 Codex',
     id: 'gpt-5-codex',
     maxOutput: 128_000,
@@ -240,7 +243,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      '跨领域编码和代理任务的最佳模型。GPT-5 在准确性、速度、推理、上下文识别、结构化思维和问题解决方面实现了飞跃。',
+      'Best model for cross-domain coding and agent tasks. GPT-5 delivers leaps in accuracy, speed, reasoning, context awareness, structured thinking, and problem solving.',
     displayName: 'GPT-5',
     id: 'gpt-5',
     maxOutput: 128_000,
@@ -268,7 +271,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      '更快、更经济高效的 GPT-5 版本，适用于明确定义的任务。在保持高质量输出的同时，提供更快的响应速度。',
+      'A faster, more cost-effective GPT-5 variant for well-defined tasks, delivering faster responses while maintaining quality.',
     displayName: 'GPT-5 mini',
     enabled: true,
     id: 'gpt-5-mini',
@@ -294,7 +297,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: '最快、最经济高效的 GPT-5 版本。非常适合需要快速响应且成本敏感的应用场景。',
+    description:
+      'The fastest and most cost-effective GPT-5 variant, ideal for latency- and cost-sensitive applications.',
     displayName: 'GPT-5 nano',
     id: 'gpt-5-nano',
     maxOutput: 128_000,
@@ -319,7 +323,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'ChatGPT 中使用的 GPT-5 模型。结合了强大的语言理解与生成能力，适合对话式交互应用。',
+      'The GPT-5 model used in ChatGPT, combining strong language understanding and generation for conversational apps.',
     displayName: 'GPT-5 Chat',
     id: 'gpt-5-chat-latest',
     maxOutput: 128_000,
@@ -342,7 +346,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini 是我们最新的小型 o 系列模型。 它专为快速有效的推理而优化，在编码和视觉任务中表现出极高的效率和性能。',
+      'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini',
     id: 'o4-mini',
     maxOutput: 100_000,
@@ -369,7 +373,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini-deep-research 是我们更快速、更实惠的深度研究模型——非常适合处理复杂的多步骤研究任务。它可以从互联网上搜索和综合信息，也可以通过 MCP 连接器访问并利用你的自有数据。',
+      'o4-mini-deep-research is a faster, more affordable deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
     displayName: 'o4-mini Deep Research',
     id: 'o4-mini-deep-research',
     maxOutput: 100_000,
@@ -396,7 +400,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-pro 模型使用更多的计算来更深入地思考并始终提供更好的答案，仅支持 Responses API 下使用。',
+      'o3-pro uses more compute to think deeper and consistently deliver better answers, available only via the Responses API.',
     displayName: 'o3-pro',
     id: 'o3-pro',
     maxOutput: 100_000,
@@ -422,7 +426,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3 是一款全能强大的模型，在多个领域表现出色。它为数学、科学、编程和视觉推理任务树立了新标杆。它也擅长技术写作和指令遵循。用户可利用它分析文本、代码和图像，解决多步骤的复杂问题。',
+      'o3 is a powerful general-purpose model that excels across domains. It sets a new bar for math, science, coding, and vision reasoning, and is strong at technical writing and instruction following. Use it to analyze text, code, and images and solve complex multi-step problems.',
     displayName: 'o3',
     id: 'o3',
     maxOutput: 100_000,
@@ -449,7 +453,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-deep-research 是我们最先进的深度研究模型，专为处理复杂的多步骤研究任务而设计。它可以从互联网上搜索和综合信息，也可以通过 MCP 连接器访问并利用你的自有数据。',
+      'o3-deep-research is our most advanced deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
     displayName: 'o3 Deep Research',
     id: 'o3-deep-research',
     maxOutput: 100_000,
@@ -474,7 +478,7 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 是我们用于复杂任务的旗舰模型。它非常适合跨领域解决问题。',
+    description: 'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     id: 'gpt-4.1',
     maxOutput: 32_768,
@@ -499,7 +503,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_047_576,
     description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+      'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
     displayName: 'GPT-4.1 mini',
     id: 'gpt-4.1-mini',
     maxOutput: 32_768,
@@ -522,7 +526,7 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 nano 是最快，最具成本效益的GPT-4.1模型。',
+    description: 'GPT-4.1 nano is the fastest and most cost-effective GPT-4.1 model.',
     displayName: 'GPT-4.1 nano',
     id: 'gpt-4.1-nano',
     maxOutput: 32_768,
@@ -542,7 +546,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'ChatGPT-4o',
     id: 'chatgpt-4o-latest',
     pricing: {
@@ -560,7 +564,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description: '我们很高兴发布 Grok 4 Fast，这是我们在成本效益推理模型方面的最新进展。',
+    description:
+      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
     displayName: 'Grok 4 Fast (Non-Reasoning)',
     id: 'grok-4-fast-non-reasoning',
     pricing: {
@@ -583,7 +588,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description: '我们很高兴发布 Grok 4 Fast，这是我们在成本效益推理模型方面的最新进展。',
+    description:
+      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
     displayName: 'Grok 4 Fast',
     id: 'grok-4-fast-reasoning',
     pricing: {
@@ -606,7 +612,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'Grok最新旗舰模型，在自然语言、数学和推理方面提供了无与伦比的性能——堪称完美的‘多面手’。 当前指向模型版本为grok-4-0709；注意该模型由于资源有限暂时比官方贵 10% 预计后续会降至官方原价。',
+      'Latest Grok flagship with unmatched performance in language, math, and reasoning — a true all-rounder. Currently points to grok-4-0709; due to limited resources it is temporarily 10% higher than official pricing and is expected to return to official price later.',
     displayName: 'Grok 4 0709',
     enabled: true,
     id: 'grok-4',
@@ -625,7 +631,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '旗舰级模型，擅长数据提取、编程和文本摘要等企业级应用，拥有金融、医疗、法律和科学等领域的深厚知识。',
+      'Flagship model for enterprise use cases like data extraction, coding, and summarization, with deep knowledge in finance, healthcare, law, and science.',
     displayName: 'Grok 3',
     id: 'grok-3',
     pricing: {
@@ -645,7 +651,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '轻量级模型，回话前会先思考。运行快速、智能，适用于不需要深层领域知识的逻辑任务，并能获取原始的思维轨迹。',
+      'Lightweight model that thinks before responding. Fast and smart for logic tasks not requiring deep domain knowledge, with access to raw reasoning traces.',
     displayName: 'Grok 3 Mini',
     id: 'grok-3-mini',
     pricing: {
@@ -670,7 +676,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4.5 是 Anthropic 的旗舰模型，结合了卓越的智能与可扩展性能，适合需要最高质量回应和推理能力的复杂任务。',
+      'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
     displayName: 'Claude Opus 4.5',
     enabled: true,
     id: 'claude-opus-4-5-20251101',
@@ -705,7 +711,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4.1 是 Anthropic 最新的用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+      'Claude Opus 4.1 is Anthropic’s newest and most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4.1',
     id: 'claude-opus-4-1-20250805',
     maxOutput: 32_000,
@@ -739,7 +745,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Opus 4 是 Anthropic 用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+      'Claude Opus 4 is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4',
     id: 'claude-opus-4-20250514',
     maxOutput: 32_000,
@@ -773,7 +779,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Sonnet 4.5 是世界上最好的代理、编码和计算机使用模型。它也是我们在长时间运行任务中最准确、最详细的模型，具有增强的编码、金融和网络安全领域知识。',
+      'Sonnet 4.5 is the world’s best model for agents, coding, and computer use. It is also our most accurate and detailed model on long-running tasks, with enhanced knowledge in coding, finance, and cybersecurity.',
     displayName: 'Claude Sonnet 4.5',
     enabled: true,
     id: 'claude-sonnet-4-5-20250929',
@@ -807,7 +813,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Sonnet 4 可以产生近乎即时的响应或延长的逐步思考，用户可以清晰地看到这些过程。API 用户还可以对模型思考的时间进行细致的控制',
+      'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
     displayName: 'Claude Sonnet 4',
     id: 'claude-sonnet-4-20250514',
     maxOutput: 64_000,
@@ -840,7 +846,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.7 Sonnet 是 Anthropic 迄今为止最智能的模型，也是市场上首个混合推理模型。Claude 3.7 Sonnet 可以产生近乎即时的响应或延长的逐步思考，用户可以清晰地看到这些过程。Sonnet 特别擅长编程、数据科学、视觉处理、代理任务。',
+      'Claude 3.7 Sonnet is Anthropic’s most intelligent model and the first hybrid reasoning model on the market. It can produce near-instant responses or extended step-by-step reasoning that users can see. Sonnet is especially strong at coding, data science, vision, and agent tasks.',
     displayName: 'Claude 3.7 Sonnet',
     id: 'claude-3-7-sonnet-20250219',
     maxOutput: 64_000,
@@ -874,7 +880,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude Haiku 4.5 是 Anthropic 最快且最智能的 Haiku 模型，具有闪电般的速度和扩展思考能力。',
+      'Claude Haiku 4.5 is Anthropic’s fastest and smartest Haiku model, with lightning speed and extended reasoning.',
     displayName: 'Claude Haiku 4.5',
     enabled: true,
     id: 'claude-haiku-4-5-20251001',
@@ -906,7 +912,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Haiku 是 Anthropic 最快的下一代模型。与 Claude 3 Haiku 相比，Claude 3.5 Haiku 在各项技能上都有所提升，并在许多智力基准测试中超越了上一代最大的模型 Claude 3 Opus。',
+      'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous largest model Claude 3 Opus on many intelligence benchmarks.',
     displayName: 'Claude 3.5 Haiku',
     id: 'claude-3-5-haiku-20241022',
     maxOutput: 8192,
@@ -935,7 +941,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-V3.2 是一款高效的大语言模型，具备 DSA 稀疏注意力与强化推理能力，其核心亮点在于强大的 Agent 能力——通过大规模任务合成，将推理与真实工具调用深度融合，实现更稳健、合规、可泛化的智能体表现。',
+      'DeepSeek-V3.2 is an efficient LLM with DSA sparse attention and strengthened reasoning. Its key strength is agent capability, combining reasoning with real tool use through large-scale task synthesis for more robust, compliant, and generalizable agents.',
     displayName: 'DeepSeek V3.2',
     id: 'deepseek-chat',
     maxOutput: 8192,
@@ -956,7 +962,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek V3.2 思考模式。在输出最终回答之前，模型会先输出一段思维链内容，以提升最终答案的准确性。',
+      'DeepSeek V3.2 thinking mode outputs a chain-of-thought before the final answer to improve accuracy.',
     displayName: 'DeepSeek V3.2 Thinking',
     enabled: true,
     id: 'deepseek-reasoner',
@@ -978,7 +984,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-V3.1-思考模式；DeepSeek-V3.1 是深度求索全新推出的混合推理模型，支持思考与非思考2种推理模式，较 DeepSeek-R1-0528 思考效率更高。经 Post-Training 优化，Agent 工具使用与智能体任务表现大幅提升。',
+      'DeepSeek-V3.1 thinking mode: a new hybrid reasoning model with thinking and non-thinking modes, more efficient than DeepSeek-R1-0528. Post-training optimizations significantly improve agent tool use and agent task performance.',
     displayName: 'DeepSeek V3.1 (Think)',
     id: 'DeepSeek-V3.1-Think',
     pricing: {
@@ -996,7 +1002,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek V3.1 Fast 是 DeepSeek V3.1版本的高TPS极速版。 混合思考模式：通过更改聊天模板，一个模型可以同时支持思考模式和非思考模式。 更智能的工具调用：通过后训练优化，模型在工具使用和代理任务中的表现显著提升。',
+      'DeepSeek V3.1 Fast is the high-TPS fast variant of DeepSeek V3.1. Hybrid thinking mode: via chat templates, one model supports both thinking and non-thinking. Smarter tool use: post-training boosts tool and agent task performance.',
     displayName: 'DeepSeek V3.1 (Fast)',
     id: 'DeepSeek-V3.1-Fast',
     pricing: {
@@ -1015,7 +1021,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '已升级至最新版本250528；字节火山云开源部署的满血 R1，总参数量 671B，输入最高 64k。目前最稳定，推荐用这个。',
+      'Upgraded to version 250528; a fully-capable R1 deployed on ByteDance Volcano Cloud, 671B total parameters with up to 64K input. Currently the most stable and recommended.',
     displayName: 'DeepSeek R1',
     id: 'DeepSeek-R1',
     pricing: {
@@ -1033,7 +1039,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      '由微软部署提供； DeepSeek R1型号已进行小版本升级，当前版本为DeepSeek-R1-0528。在最新的更新中，DeepSeek R1通过增加计算资源和引入后训练阶段的算法优化机制，大幅提升了推理深度和推断能力。该模型在数学、编程和通用逻辑等多个基准测试中表现出色，其整体性能已接近领先模型，如O3和Gemini 2.5 Pro 。',
+      'Deployed by Microsoft; DeepSeek R1 has been upgraded to DeepSeek-R1-0528. The update increases compute and post-training algorithm optimizations, significantly improving reasoning depth and inference. It performs strongly on math, coding, and general logic benchmarks, approaching leading models like O3 and Gemini 2.5 Pro.',
     displayName: 'DeepSeek R1 0528 (Azure)',
     id: 'azure-DeepSeek-R1-0528',
     pricing: {
@@ -1049,7 +1055,8 @@ const aihubmixModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: '字节火山云开源部署目前最稳定，推荐用这个。已经自动升级为最新发布的版本 250324 。',
+    description:
+      'ByteDance Volcengine’s open deployment is currently the most stable; recommended. It has been auto-upgraded to the latest release (250324).',
     displayName: 'DeepSeek V3',
     id: 'DeepSeek-V3',
     pricing: {
@@ -1066,7 +1073,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      '模型供应商为：sophnet平台。DeepSeek V3 Fast 是 DeepSeek V3 0324 版本的高TPS极速版，满血非量化，代码与数学能力更强，响应更快！',
+      'Provider: sophnet. DeepSeek V3 Fast is the high-TPS version of DeepSeek V3 0324, full-precision (non-quantized) with stronger code and math and faster responses.',
     displayName: 'DeepSeek V3 (Fast)',
     id: 'DeepSeek-V3-Fast',
     pricing: {
@@ -1087,7 +1094,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      'Gemini 3 Pro 是 Google 最智能的模型，具有 SOTA 推理和多模式理解，以及强大的代理和氛围编码功能。',
+      'Gemini 3 Pro is Google’s most intelligent model with SOTA reasoning and multimodal understanding, plus strong agent and vibe-coding capabilities.',
     displayName: 'Gemini 3 Pro Preview',
     enabled: true,
     id: 'gemini-3-pro-preview',
@@ -1181,7 +1188,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072 + 32_768,
     description:
-      'Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。',
+      'Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model with multimodal chat support.',
     displayName: 'Nano Banana Pro',
     enabled: true,
     id: 'gemini-3-pro-image-preview',
@@ -1211,7 +1218,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      'Gemini 2.5 Pro 是 Google 最先进的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      'Gemini 2.5 Pro is Google’s most advanced thinking model for reasoning over complex problems in code, math, and STEM, and for analyzing large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro',
     id: 'gemini-2.5-pro',
     maxOutput: 65_536,
@@ -1238,7 +1245,7 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Gemini 2.5 Flash 是 Google 性价比最高的模型，提供全面的功能。',
+    description: "Gemini 2.5 Flash is Google’s best-value model with full capabilities.",
     displayName: 'Gemini 2.5 Flash',
     id: 'gemini-2.5-flash',
     maxOutput: 65_536,
@@ -1264,7 +1271,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768 + 8192,
     description:
-      'Nano Banana 是 Google 最新、最快、最高效的原生多模态模型，它允许您通过对话生成和编辑图像。',
+      'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, allowing image generation and editing through conversation.',
     displayName: 'Nano Banana',
     id: 'gemini-2.5-flash-image',
     maxOutput: 8192,
@@ -1288,7 +1295,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Gemini 2.5 Flash-Lite 是 Google 最小、性价比最高的模型，专为大规模使用而设计。',
+    description:
+      "Gemini 2.5 Flash-Lite is Google’s smallest, best-value model, designed for large-scale use.",
     displayName: 'Gemini 2.5 Flash-Lite',
     id: 'gemini-2.5-flash-lite',
     maxOutput: 65_536,
@@ -1314,7 +1322,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '基于Qwen3的思考模式开源模型，相较上一版本（通义千问3-235B-A22B）逻辑能力、通用能力、知识增强及创作能力均有大幅提升，适用于高难度强推理场景。',
+      'Qwen3 thinking-mode open-source model. Compared to the previous version (Qwen3-235B-A22B), it significantly improves logic, general ability, knowledge, and creativity, suitable for hard reasoning scenarios.',
     displayName: 'Qwen3 235B A22B Thinking 2507',
     id: 'qwen3-235b-a22b-thinking-2507',
     maxOutput: 32_768,
@@ -1335,7 +1343,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '基于Qwen3的非思考模式开源模型，相较上一版本（通义千问3-235B-A22B）主观创作能力与模型安全性均有小幅度提升。',
+      'Qwen3 non-thinking open-source model. Compared to the previous version (Qwen3-235B-A22B), it slightly improves subjective creativity and model safety.',
     displayName: 'Qwen3 235B A22B Instruct 2507',
     id: 'qwen3-235b-a22b-instruct-2507',
     maxOutput: 32_768,
@@ -1357,7 +1365,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '基于Qwen3的思考模式开源模型，相较上一版本（通义千问3-30B-A3B）逻辑能力、通用能力、知识增强及创作能力均有大幅提升，适用于高难度强推理场景。',
+      'Qwen3 thinking-mode open-source model. Compared to the previous version (Qwen3-30B-A3B), it significantly improves logic, general ability, knowledge, and creativity, suitable for hard reasoning scenarios.',
     displayName: 'Qwen3 30B A3B Thinking 2507',
     id: 'qwen3-30b-a3b-thinking-2507',
     maxOutput: 32_768,
@@ -1378,7 +1386,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '相较上一版本（Qwen3-30B-A3B）中英文和多语言整体通用能力有大幅提升。主观开放类任务专项优化，显著更加符合用户偏好，能够提供更有帮助性的回复。',
+      'Compared to the previous version (Qwen3-30B-A3B), overall Chinese/English and multilingual general ability is significantly improved. Subjective open-ended tasks are specially optimized for stronger preference alignment and more helpful responses.',
     displayName: 'Qwen3 30B A3B Instruct 2507',
     id: 'qwen3-30b-a3b-instruct-2507',
     maxOutput: 32_768,

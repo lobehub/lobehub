@@ -1,12 +1,11 @@
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Tag, Text, copyToClipboard } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Tag, Text, copyToClipboard } from '@lobehub/ui';
 import { App, Switch } from 'antd';
-import { createStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { LucidePencil, TrashIcon } from 'lucide-react';
-import { AiModelSourceEnum, AiProviderModelListItem } from 'model-bank';
+import { AiModelSourceEnum, type AiProviderModelListItem } from 'model-bank';
 import React, { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { ModelInfoTags } from '@/components/ModelSelect';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
@@ -22,7 +21,7 @@ import {
 import ModelConfigModal from './ModelConfigModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
-export const useStyles = createStyles(({ css, token, cx }) => {
+const styles = createStaticStyles(({ css, cx }) => {
   const config = css`
     opacity: 0;
     transition: all 100ms ease-in-out;
@@ -32,11 +31,11 @@ export const useStyles = createStyles(({ css, token, cx }) => {
     config,
     container: css`
       position: relative;
-      border-radius: ${token.borderRadiusLG}px;
+      border-radius: ${cssVar.borderRadiusLG}px;
       transition: all 200ms ease-in-out;
 
       &:hover {
-        background-color: ${token.colorFillTertiary};
+        background-color: ${cssVar.colorFillTertiary};
 
         .${cx(config)} {
           opacity: 1;
@@ -77,9 +76,7 @@ const ModelItem = memo<ModelItemProps>(
     abilities,
     type,
   }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation(['modelProvider', 'components', 'models', 'common']);
-    const theme = useTheme();
     const { modelEditable } = use(ProviderSettingsContext);
 
     const [activeAiProvider, isModelLoading, toggleModelEnabled, removeAiModel] = useAiInfraStore(
@@ -286,7 +283,7 @@ const ModelItem = memo<ModelItemProps>(
             </Flexbox>
             <Flexbox align={'baseline'} gap={8} horizontal>
               {content.length > 0 && (
-                <Text style={{ color: theme.colorTextSecondary, fontSize: 12, marginBottom: 0 }}>
+                <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12, marginBottom: 0 }}>
                   {content.join(' · ')}
                 </Text>
               )}

@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "사용 가능한 도우미가 없습니다",
+  "agentSelection.noAvailable": "현재 추가할 수 있는 도우미가 없습니다",
+  "agentSelection.noSelected": "선택된 도우미가 없습니다",
+  "agentSelection.search": "일치하는 도우미를 찾을 수 없습니다",
+  "project.create": "새 프로젝트 만들기",
+  "project.deleteConfirm": "이 프로젝트를 삭제하려고 합니다. 삭제 후에는 복구할 수 없습니다. 계속하시겠습니까?",
+  "starter.createAgent": "도우미 만들기",
+  "starter.createGroup": "그룹 만들기",
+  "starter.deepResearch": "심층 연구",
+  "starter.developing": "개발 중",
+  "starter.image": "그림 그리기",
+  "starter.write": "글쓰기"
+}

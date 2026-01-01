@@ -1,22 +1,20 @@
-import { Icon, Tooltip, TooltipProps } from '@lobehub/ui';
-import { IconSizeType } from '@lobehub/ui/es/Icon';
-import { useTheme } from 'antd-style';
+import { Icon, type IconSize, Tooltip, type TooltipProps } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { CircleHelp } from 'lucide-react';
-import { CSSProperties, memo } from 'react';
+import { type CSSProperties, memo } from 'react';
 
 interface InfoTooltipProps extends Omit<TooltipProps, 'children'> {
   iconStyle?: CSSProperties;
-  size?: IconSizeType;
+  size?: IconSize;
 }
 
 const InfoTooltip = memo<InfoTooltipProps>(({ size, iconStyle, ...res }) => {
-  const theme = useTheme();
   return (
     <Tooltip {...res}>
       <Icon
         icon={CircleHelp}
         size={size}
-        style={{ color: theme.colorTextTertiary, ...iconStyle }}
+        style={{ color: cssVar.colorTextTertiary, ...iconStyle }}
       />
     </Tooltip>
   );

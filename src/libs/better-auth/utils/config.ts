@@ -1,14 +1,23 @@
 import { authEnv } from '@/envs/auth';
 import { getRedisConfig } from '@/envs/redis';
 import { initializeRedis, isRedisEnabled } from '@/libs/redis';
+import { isDev } from '@/utils/env';
 
 const APPLE_TRUSTED_ORIGIN = 'https://appleid.apple.com';
+const MOBILE_APP_SCHEME = 'com.lobehub.app://';
+const EXPO_DEV_SCHEME = 'exp://*/*';
 
 /**
  * Normalize a URL-like string to an origin with https fallback.
+ * Returns the original string if it's a custom scheme (e.g., com.lobehub.app://).
  */
 export const normalizeOrigin = (url?: string) => {
   if (!url) return undefined;
+
+  // Handle custom schemes (e.g., mobile app deep links)
+  if (url.includes('://') && !url.startsWith('http')) {
+    return url;
+  }
 
   try {
     const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
@@ -25,7 +34,14 @@ export const normalizeOrigin = (url?: string) => {
 export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
   if (authEnv.AUTH_TRUSTED_ORIGINS) {
     const originsFromEnv = authEnv.AUTH_TRUSTED_ORIGINS.split(',')
-      .map((item) => normalizeOrigin(item.trim()))
+      .map((item) => {
+        const trimmed = item.trim();
+        // Handle custom schemes directly
+        if (trimmed.includes('://') && !trimmed.startsWith('http')) {
+          return trimmed;
+        }
+        return normalizeOrigin(trimmed);
+      })
       .filter(Boolean) as string[];
 
     if (originsFromEnv.length > 0) return Array.from(new Set(originsFromEnv));
@@ -36,6 +52,9 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
     normalizeOrigin(process.env.APP_URL),
     normalizeOrigin(process.env.VERCEL_BRANCH_URL),
     normalizeOrigin(process.env.VERCEL_URL),
+    MOBILE_APP_SCHEME,
+    // Add expo URL in development
+    ...(isDev ? [EXPO_DEV_SCHEME] : []),
   ].filter(Boolean) as string[];
 
   const baseTrustedOrigins = defaults.length > 0 ? Array.from(new Set(defaults)) : undefined;

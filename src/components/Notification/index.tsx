@@ -1,13 +1,11 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { ActionIcon, Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import { XIcon } from 'lucide-react';
-import { rgba } from 'polished';
 import { memo } from 'react';
-import { Flexbox, FlexboxProps } from 'react-layout-kit';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css }) => ({
   cancelIcon: css`
     position: absolute;
     z-index: 100;
@@ -22,11 +20,11 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
 
     overflow: hidden;
 
-    border: 1px solid ${token.colorSplit};
+    border: 1px solid ${cssVar.colorSplit};
     border-radius: 8px;
 
-    background: ${token.colorBgContainer};
-    box-shadow: ${token.boxShadowSecondary};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   mobileContainer: css`
     inset-block-end: 8px;
@@ -36,10 +34,16 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     background:
       linear-gradient(
         180deg,
-        ${rgba(token.colorBgContainer, 0)},
-        ${token.colorBgContainer} ${isDarkMode ? '80' : '140'}px
+        color-mix(in srgb, ${cssVar.colorBgContainer} 0%, transparent),
+        ${cssVar.colorBgContainer} var(--gradient-stop, 140px)
       ),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cg fill='${token.colorFillTertiary}' %3E %3Cpolygon fill-rule='evenodd' points='8 4 12 6 8 8 6 12 4 8 0 6 4 4 6 0 8 4'/%3E%3C/g%3E%3C/svg%3E");
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cg fill='${cssVar.colorFillTertiary}' %3E %3Cpolygon fill-rule='evenodd' points='8 4 12 6 8 8 6 12 4 8 0 6 4 4 6 0 8 4'/%3E%3C/g%3E%3C/svg%3E");
+  `,
+  wrapperDark: css`
+    --gradient-stop: 80px;
+  `,
+  wrapperLight: css`
+    --gradient-stop: 140px;
   `,
 }));
 
@@ -66,7 +70,7 @@ const Notification = memo<NotificationProps>(
     className,
     ...rest
   }) => {
-    const { styles, cx } = useStyles();
+    const { isDarkMode } = useThemeMode();
     const { className: wrapperClassName, ...restWrapper } = wrapper;
     return (
       show && (
@@ -80,7 +84,11 @@ const Notification = memo<NotificationProps>(
             <ActionIcon className={styles.cancelIcon} icon={XIcon} onClick={() => onCancel?.()} />
           )}
           <Flexbox
-            className={cx(styles.wrapper, wrapperClassName)}
+            className={cx(
+              styles.wrapper,
+              isDarkMode ? styles.wrapperDark : styles.wrapperLight,
+              wrapperClassName,
+            )}
             gap={16}
             horizontal
             padding={'20px 20px 16px'}

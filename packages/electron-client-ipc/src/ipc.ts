@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-interface */
-import type { DispatchInvoke } from './types/dispatch';
-import type { ProxyTRPCRequestParams } from './types/proxyTRPCRequest';
+import type { StreamInvokeRequestParams } from './types';
+
+type IpcInvoke = <T = unknown>(event: string, ...data: unknown[]) => Promise<T>;
 
 interface StreamerCallbacks {
   onData: (chunk: Uint8Array) => void;
@@ -17,7 +18,7 @@ export interface DesktopIpcServicesMap {}
 export type DesktopIpcServices = DesktopIpcServicesMap;
 export type ElectronDesktopIpc = DesktopIpcServices | null;
 
-const createInvokeProxy = <IpcServices>(invoke: DispatchInvoke): IpcServices =>
+const createInvokeProxy = <IpcServices>(invoke: IpcInvoke): IpcServices =>
   new Proxy(
     {},
     {
@@ -45,8 +46,8 @@ let cachedProxy: DesktopIpcServices | null = null;
 declare global {
   interface Window {
     electronAPI?: {
-      invoke?: DispatchInvoke;
-      onStreamInvoke: (params: ProxyTRPCRequestParams, callbacks: StreamerCallbacks) => () => void;
+      invoke?: IpcInvoke;
+      onStreamInvoke: (params: StreamInvokeRequestParams, callbacks: StreamerCallbacks) => () => void;
     };
   }
 }

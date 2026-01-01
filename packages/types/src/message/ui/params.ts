@@ -1,6 +1,7 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import { z } from 'zod';
 
+import { ConversationContext } from '../../conversation';
 import { UploadFileItem } from '../../files';
 import { MessageSemanticSearchChunk } from '../../rag';
 import { ChatMessageError, ChatMessageErrorSchema } from '../common/base';
@@ -8,10 +9,12 @@ import { ChatPluginPayload, ToolInterventionSchema } from '../common/tools';
 import { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
 
-export type CreateMessageRoleType = 'user' | 'assistant' | 'tool' | 'supervisor';
+export type CreateMessageRoleType = 'user' | 'assistant' | 'tool' | 'task' | 'supervisor';
 
-export interface CreateMessageParams
-  extends Partial<Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>> {
+export interface CreateMessageParams extends Partial<
+  Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
+> {
+  agentId?: string;
   content: string;
   error?: ChatMessageError | null;
   fileChunks?: MessageSemanticSearchChunk[];
@@ -20,7 +23,10 @@ export interface CreateMessageParams
   provider?: string;
   groupId?: string;
   role: CreateMessageRoleType;
-  sessionId: string;
+  /**
+   * @deprecated Use agentId instead
+   */
+  sessionId?: string;
   targetId?: string | null;
   threadId?: string | null;
   topicId?: string;
@@ -35,7 +41,7 @@ export interface CreateNewMessageParams {
   // ========== Required fields ==========
   role: CreateMessageRoleType;
   content: string;
-  sessionId: string;
+  agentId: string;
 
   // ========== Tool related ==========
   tool_call_id?: string;
@@ -65,9 +71,25 @@ export interface CreateNewMessageParams {
   fileChunks?: MessageSemanticSearchChunk[];
 }
 
+export interface ChatContextContent {
+  content: string;
+  /**
+   * Format of the content. Defaults to text.
+   */
+  format?: 'xml' | 'text' | 'markdown';
+  id: string;
+  /**
+   * Optional short preview for displaying in UI.
+   */
+  preview?: string;
+  title?: string;
+  type: 'text';
+}
+
 export interface SendMessageParams {
   /**
    * create a thread
+   * @deprecated Use ConversationContext.newThread instead
    */
   createThread?: boolean;
   files?: UploadFileItem[];
@@ -82,27 +104,33 @@ export interface SendMessageParams {
    */
   metadata?: Record<string, any>;
   onlyAddUserMessage?: boolean;
-}
 
-export interface SendThreadMessageParams {
   /**
-   * create a thread
+   * Display messages for the current conversation context.
+   * If provided, sendMessage will use these messages instead of querying from store.
+   * This decouples sendMessage from store selectors.
    */
-  createNewThread?: boolean;
-  // files?: UploadFileItem[];
-  message: string;
-  onlyAddUserMessage?: boolean;
+  messages?: UIChatMessage[];
+
+  /**
+   * Parent message ID for the new message.
+   * If not provided, will be calculated from messages list.
+   */
+  parentId?: string;
+  /**
+   * Additional contextual snippets (e.g., text selections) attached to the request.
+   */
+  contexts?: ChatContextContent[];
 }
 
 export interface SendGroupMessageParams {
   files?: UploadFileItem[];
-  groupId: string;
+  context: ConversationContext;
   message: string;
   /**
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
-  onlyAddUserMessage?: boolean;
   /**
    * for group chat
    */
@@ -111,7 +139,7 @@ export interface SendGroupMessageParams {
 
 // ========== Zod Schemas ========== //
 
-const UIMessageRoleTypeSchema = z.enum(['user', 'assistant', 'tool', 'supervisor']);
+const UIMessageRoleTypeSchema = z.enum(['user', 'assistant', 'tool', 'task', 'supervisor']);
 
 const ChatPluginPayloadSchema = z.object({
   apiName: z.string(),
@@ -125,6 +153,11 @@ export const CreateNewMessageParamsSchema = z
     // Required fields
     role: UIMessageRoleTypeSchema,
     content: z.string(),
+    // agentId is required, but can be resolved from sessionId in the router
+    agentId: z.string().optional(),
+    /**
+     * @deprecated Use agentId instead. Will be resolved to agentId in the router.
+     */
     sessionId: z.string().nullable().optional(),
     // Tool related
     tool_call_id: z.string().optional(),

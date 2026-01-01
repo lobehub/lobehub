@@ -1,8 +1,6 @@
-import { Icon } from '@lobehub/ui';
-import { Checkbox } from 'antd';
+import { Center, Flexbox, Icon , Checkbox } from '@lobehub/ui';
 import { Loader2 } from 'lucide-react';
-import { ReactNode, memo, useState } from 'react';
-import { Center, Flexbox } from 'react-layout-kit';
+import { type ReactNode, memo, useState } from 'react';
 
 export interface CheckboxItemProps {
   checked?: boolean;
@@ -22,6 +20,7 @@ const CheckboxItem = memo<CheckboxItemProps>(({ id, onUpdate, label, checked }) 
 
   return (
     <Flexbox
+      align={'center'}
       gap={24}
       horizontal
       justify={'space-between'}

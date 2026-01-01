@@ -1,4 +1,4 @@
-import { Skeleton } from 'antd';
+import { Skeleton } from '@lobehub/ui';
 import dynamic from 'next/dynamic';
 import { Suspense, memo } from 'react';
 

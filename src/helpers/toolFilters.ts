@@ -2,9 +2,8 @@
  * Shared tool filtering logic used across both runtime (ToolsEngine)
  * and display layer (selectors)
  */
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { isDesktop } from '@lobechat/const';
-
-import { LocalSystemManifest } from '@/tools/local-system';
 
 /**
  * Check if a tool should be enabled based on platform-specific constraints

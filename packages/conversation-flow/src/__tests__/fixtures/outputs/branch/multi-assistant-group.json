@@ -80,11 +80,7 @@
       },
       "parentId": null,
       "role": "user",
-      "updatedAt": 1704067200000,
-      "branch": {
-        "activeBranchIndex": 2,
-        "count": 3
-      }
+      "updatedAt": 1704067200000
     },
     {
       "id": "msg-assistant-6",
@@ -94,6 +90,10 @@
       "createdAt": 1704067240000,
       "updatedAt": 1704067240000,
       "meta": {},
+      "branch": {
+        "activeBranchIndex": 2,
+        "count": 3
+      },
       "children": [
         {
           "content": "",

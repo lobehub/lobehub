@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Avatar",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Sobrecarga",
+    "tokenTag.remained": "Restante",
+    "tokenTag.used": "Usado"
+  },
+  "common": {
+    "common.cancel": "Cancelar",
+    "common.confirm": "Confirmar",
+    "common.delete": "Excluir",
+    "common.edit": "Editar"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Adicionar Propriedades",
+    "editableMessage.delete": "Excluir",
+    "editableMessage.input": "Entrada",
+    "editableMessage.inputPlaceholder": "Por favor, insira o conteúdo de entrada de exemplo",
+    "editableMessage.output": "Saída",
+    "editableMessage.outputPlaceholder": "Por favor, insira o conteúdo de saída de exemplo",
+    "editableMessage.system": "Sistema"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Excluir",
+    "emojiPicker.draggerDesc": "Clique ou arraste a imagem para esta área para fazer o upload",
+    "emojiPicker.emoji": "Emoji",
+    "emojiPicker.fileTypeError": "Você só pode enviar arquivos de imagem!",
+    "emojiPicker.upload": "Enviar",
+    "emojiPicker.uploadBtn": "Cortar e enviar"
+  },
+  "form": {
+    "form.reset": "Redefinir",
+    "form.submit": "Enviar",
+    "form.unsavedChanges": "Alterações não salvas",
+    "form.unsavedWarning": "Você tem alterações não salvas. Tem certeza de que deseja sair?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Este atalho entra em conflito com um já existente.",
+    "hotkey.invalidCombination": "O atalho deve incluir uma tecla modificadora (Ctrl, Alt, Shift) e apenas uma tecla normal.",
+    "hotkey.placeholder": "Pressione as teclas para gravar o atalho",
+    "hotkey.reset": "Redefinir para padrão"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Cancelar",
+    "messageModal.confirm": "Confirmar",
+    "messageModal.edit": "Editar"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Recolher barra lateral",
+    "sideNav.demoActiveLabel": "Ativo",
+    "sideNav.demoFeatureAutoCollapseDesc": "Arraste abaixo do limite para recolhimento inteligente",
+    "sideNav.demoFeatureAutoCollapseTitle": "Recolhimento automático",
+    "sideNav.demoFeaturePerformanceDesc": "Sem animações para melhor desempenho",
+    "sideNav.demoFeaturePerformanceTitle": "Desempenho",
+    "sideNav.demoFeatureResizeDesc": "Arraste para ajustar a largura do painel",
+    "sideNav.demoFeatureResizeTitle": "Redimensionamento flexível",
+    "sideNav.demoFeatureSmartHandleDesc": "Passe o mouse para mostrar o botão de alternância",
+    "sideNav.demoFeatureSmartHandleTitle": "Manipulador inteligente",
+    "sideNav.demoFeaturesTitle": "Recursos",
+    "sideNav.demoHint": "Tente arrastar a borda do painel e usar o botão de alternância ->",
+    "sideNav.demoSubtitle": "Um painel lateral estilo área de trabalho com redimensionamento arrastável",
+    "sideNav.demoTitle": "Demonstração do DraggableSideNav",
+    "sideNav.expand": "Expandir barra lateral"
+  }
+}

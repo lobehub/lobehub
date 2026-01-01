@@ -239,4 +239,111 @@ describe('messageRouter', () => {
       fileChunks: [{ id: 'c1', similarity: 0.9 }],
     });
   });
+
+  describe('agentId support', () => {
+    it('should handle createMessage with agentId', async () => {
+      const mockCreate = vi.fn().mockResolvedValue({ id: 'msg1' });
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            create: mockCreate,
+          }) as any,
+      );
+
+      const input: CreateMessageParams = {
+        agentId: 'agent1',
+        content: 'test',
+        role: 'user',
+        sessionId: 'session1',
+      };
+
+      const ctx = {
+        messageModel: new MessageModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.messageModel.create(input);
+
+      expect(mockCreate).toHaveBeenCalledWith(input);
+      expect(result.id).toBe('msg1');
+    });
+
+    it('should handle getMessages with agentId', async () => {
+      const mockQuery = vi.fn().mockResolvedValue([{ id: 'msg1' }]);
+      const mockGetFullFileUrl = vi
+        .fn()
+        .mockImplementation((path: string | null) => Promise.resolve('url'));
+
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            query: mockQuery,
+          }) as any,
+      );
+
+      vi.mocked(FileService).mockImplementation(
+        () =>
+          ({
+            getFullFileUrl: mockGetFullFileUrl,
+          }) as any,
+      );
+
+      const input = { agentId: 'agent1', sessionId: 'session1' };
+      const ctx = {
+        messageModel: new MessageModel({} as any, 'user1'),
+        fileService: new FileService({} as any, 'user1'),
+      };
+
+      const result = await ctx.messageModel.query(input, {
+        postProcessUrl: mockGetFullFileUrl,
+      });
+
+      expect(mockQuery).toHaveBeenCalledWith(input, expect.any(Object));
+      expect(result).toEqual([{ id: 'msg1' }]);
+    });
+
+    it('should handle getMessages with agentId only (no sessionId)', async () => {
+      const mockQuery = vi.fn().mockResolvedValue([{ id: 'msg1' }]);
+      const mockGetFullFileUrl = vi
+        .fn()
+        .mockImplementation((path: string | null) => Promise.resolve('url'));
+
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            query: mockQuery,
+          }) as any,
+      );
+
+      const input = { agentId: 'agent1' };
+      const ctx = {
+        messageModel: new MessageModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.messageModel.query(input, {
+        postProcessUrl: mockGetFullFileUrl,
+      });
+
+      expect(mockQuery).toHaveBeenCalledWith(input, expect.any(Object));
+      expect(result).toEqual([{ id: 'msg1' }]);
+    });
+
+    it('should handle batchDeleteByAgentId', async () => {
+      const mockBatchDeleteByAgentId = vi.fn().mockResolvedValue({ rowCount: 5 });
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            batchDeleteByAgentId: mockBatchDeleteByAgentId,
+          }) as any,
+      );
+
+      const ctx = {
+        messageModel: new MessageModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.messageModel.batchDeleteByAgentId('agent1');
+
+      expect(mockBatchDeleteByAgentId).toHaveBeenCalledWith('agent1');
+      expect(result.rowCount).toBe(5);
+    });
+  });
 });

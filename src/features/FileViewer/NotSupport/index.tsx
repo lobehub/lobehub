@@ -1,38 +1,36 @@
-import { IDocument } from '@cyntler/react-doc-viewer';
-import { Button, FluentEmoji } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Button, Center, Flexbox, FluentEmoji } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import Link from 'next/link';
-import React, { ComponentType, useState } from 'react';
+import { type CSSProperties, type ComponentType, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { MORE_FILE_PREVIEW_REQUEST_URL } from '@/const/url';
 import { downloadFile } from '@/utils/client/downloadFile';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     width: 100%;
     margin: 12px;
     padding: 24px;
     border-radius: 4px;
 
-    background: ${token.colorBgContainer};
-    box-shadow: ${token.boxShadowTertiary};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
-const NotSupport: ComponentType<{
-  document: IDocument | undefined;
-  fileName: string;
-}> = ({ fileName, document: doc }) => {
-  const { styles } = useStyles();
+interface NotSupportProps {
+  fileName?: string;
+  style?: CSSProperties;
+  url?: string | null;
+}
 
+const NotSupport: ComponentType<NotSupportProps> = ({ fileName, url, style }) => {
   const { t } = useTranslation('file');
-
   const [loading, setLoading] = useState(false);
 
   return (
-    <Flexbox className={styles.page} id="txt-renderer">
+    <Flexbox className={styles.page} id="not-support-renderer" style={style}>
       <Center height={'100%'}>
         <Flexbox align={'center'} gap={12}>
           <FluentEmoji emoji={'👀'} size={64} />
@@ -44,17 +42,18 @@ const NotSupport: ComponentType<{
               </Link>
             </Trans>
           </Flexbox>
-          <Button
-            loading={loading}
-            onClick={async () => {
-              if (!doc) return;
-              setLoading(true);
-              await downloadFile(doc.uri, fileName);
-              setLoading(false);
-            }}
-          >
-            {t('preview.downloadFile')}
-          </Button>
+          {url && (
+            <Button
+              loading={loading}
+              onClick={async () => {
+                setLoading(true);
+                await downloadFile(url, fileName || 'download');
+                setLoading(false);
+              }}
+            >
+              {t('preview.downloadFile')}
+            </Button>
+          )}
         </Flexbox>
       </Center>
     </Flexbox>

@@ -1,50 +1,49 @@
-import { Button, Markdown, Snippet, Text } from '@lobehub/ui';
+import { Button, Flexbox, Markdown, Snippet, Text } from '@lobehub/ui';
 import { Card, Space } from 'antd';
-import { createStyles } from 'antd-style';
-import { motion } from 'framer-motion';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { AlertTriangle, CheckCircle, ExternalLink, Terminal } from 'lucide-react';
+import * as motion from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useToolStore } from '@/store/tool';
-import { SystemDependencyCheckResult } from '@/types/plugins';
+import { type SystemDependencyCheckResult } from '@/types/plugins';
 
 interface MCPDependenciesGuideProps {
   identifier: string;
   systemDependencies: SystemDependencyCheckResult[];
 }
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   commandBlock: css`
     position: relative;
 
-    padding-block: ${token.paddingXS}px;
-    padding-inline: ${token.paddingSM}px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusSM}px;
+    padding-block: ${cssVar.paddingXS};
+    padding-inline: ${cssVar.paddingSM};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusSM};
 
-    font-family: ${token.fontFamilyCode};
-    font-size: ${token.fontSizeSM}px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
 
-    background-color: ${token.colorFillTertiary};
+    background-color: ${cssVar.colorFillTertiary};
 
     &:hover {
-      background-color: ${token.colorFillSecondary};
+      background-color: ${cssVar.colorFillSecondary};
     }
   `,
   container: css`
-    margin-block-start: ${token.marginXS}px;
-    padding: ${token.padding}px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadius}px;
+    margin-block-start: ${cssVar.marginXS};
+    padding: ${cssVar.padding};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius};
 
-    background-color: ${token.colorBgContainer};
+    background-color: ${cssVar.colorBgContainer};
   `,
   copyButton: css`
     position: absolute;
-    inset-block-start: ${token.paddingXXS}px;
-    inset-inline-end: ${token.paddingXXS}px;
+    inset-block-start: ${cssVar.paddingXXS};
+    inset-inline-end: ${cssVar.paddingXXS};
 
     height: auto;
     min-height: auto;
@@ -54,25 +53,24 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 12px;
   `,
   dependencyCard: css`
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusSM}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusSM};
   `,
   footer: css`
     display: flex;
-    gap: ${token.marginXS}px;
+    gap: ${cssVar.marginXS};
     justify-content: flex-end;
-    margin-block-start: ${token.marginXS}px;
+    margin-block-start: ${cssVar.marginXS};
   `,
   statusIcon: css`
     display: flex;
-    gap: ${token.marginXXS}px;
+    gap: ${cssVar.marginXXS};
     align-items: center;
   `,
 }));
 
 const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
   ({ identifier, systemDependencies }) => {
-    const { styles, theme } = useStyles();
     const { t } = useTranslation(['plugin', 'common']);
     const [installMCPPlugin, cancelInstallMCPPlugin] = useToolStore((s) => [
       s.installMCPPlugin,
@@ -108,7 +106,7 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
         >
           <Flexbox gap={8}>
             <Flexbox align="center" gap={8} horizontal>
-              <AlertTriangle color={theme.colorWarning} size={16} />
+              <AlertTriangle color={cssVar.colorWarning} size={16} />
               <Text as={'h5'} style={{ margin: 0 }}>
                 {t('mcpInstall.dependenciesRequired')}
               </Text>
@@ -142,14 +140,14 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
                     <div className={styles.statusIcon}>
                       {dep.meetRequirement ? (
                         <>
-                          <CheckCircle color={theme.colorSuccess} size={14} />
+                          <CheckCircle color={cssVar.colorSuccess} size={14} />
                           <Text style={{ fontSize: 12 }} type="success">
                             {t('mcpInstall.dependencyStatus.installed')}
                           </Text>
                         </>
                       ) : (
                         <>
-                          <AlertTriangle color={theme.colorWarning} size={14} />
+                          <AlertTriangle color={cssVar.colorWarning} size={14} />
                           <Text style={{ fontSize: 12 }} type="warning">
                             {t('mcpInstall.dependencyStatus.notInstalled')}
                           </Text>

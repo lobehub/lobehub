@@ -1,5 +1,5 @@
-import { PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
-import { Skeleton } from 'antd';
+import { type PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
+import { Skeleton } from '@lobehub/ui';
 import { memo, useRef, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';

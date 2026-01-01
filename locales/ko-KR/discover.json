@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "도우미 추가",
-    "addAgentAndConverse": "도우미 추가 및 대화 시작",
-    "addAgentSuccess": "성공적으로 추가되었습니다",
-    "conversation": {
-      "l1": "안녕하세요, 저는 **{{name}}**입니다. 무엇이든 물어보세요. 최선을 다해 답변드릴게요~",
-      "l2": "다음은 제 기능 소개입니다:",
-      "l3": "지금 바로 대화를 시작해볼까요!"
-    },
-    "description": "도우미 소개",
-    "detail": "상세 정보",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "이 도우미는 다음과 같은 지식 기반을 내장하고 있어 더 많은 질문에 답할 수 있습니다.",
-          "title": "지식 기반"
-        },
-        "plugin": {
-          "desc": "이 도우미는 다음과 같은 플러그인을 내장하고 있어 다양한 작업을 수행할 수 있습니다.",
-          "title": "내장 플러그인"
-        },
-        "title": "도우미 기능"
-      },
-      "overview": {
-        "example": "도우미 데모",
-        "title": "개요"
-      },
-      "related": {
-        "listTitle": "관련 도우미",
-        "more": "더 보기",
-        "title": "추천 도우미"
-      },
-      "sidebar": {
-        "toc": "목차"
-      },
-      "summary": {
-        "title": "이 도우미로 무엇을 할 수 있나요?"
-      },
-      "systemRole": {
-        "openingMessage": "시작 메시지",
-        "openingQuestions": "시작 질문",
-        "title": "도우미 설정"
-      },
-      "version": {
-        "empty": "이전 버전이 없습니다",
-        "status": {
-          "archived": "보관됨",
-          "deprecated": "거부됨",
-          "unpublished": "검토 중"
-        },
-        "table": {
-          "isLatest": "최신 버전",
-          "isValidated": "검증됨",
-          "publishAt": "출시일",
-          "version": "버전 번호"
-        },
-        "title": "버전 기록"
-      }
-    },
-    "list": "도우미 목록",
-    "marketSource": {
-      "label": "마켓 소스 전환",
-      "legacy": "이전 마켓",
-      "new": "신규 마켓"
-    },
-    "more": "더 보기",
-    "plugins": "통합 플러그인",
-    "recentSubmits": "최근 업데이트",
-    "sorts": {
-      "createdAt": "최신 등록",
-      "identifier": "도우미 ID",
-      "knowledgeCount": "지식 기반 수",
-      "myown": "내가 만든 것 보기",
-      "pluginCount": "플러그인 수",
-      "title": "도우미 이름",
-      "tokenUsage": "토큰 사용량"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "보안 또는 정치적 문제로 인해 공식적으로 마켓에서 제거됨",
-          "owner": "개발자가 자발적으로 보관 또는 제거함"
-        },
-        "subtitle": "현재 접근 중인 어시스턴트는 다음과 같은 이유로 보관되었습니다:",
-        "title": "어시스턴트가 보관되었습니다"
-      },
-      "backToMarket": "어시스턴트 마켓으로 돌아가기",
-      "deprecated": {
-        "reasons": {
-          "official": "보안 또는 정치적 문제로 인해 공식적으로 마켓에서 제거됨",
-          "owner": "개발자가 자발적으로 거부 또는 제거함"
-        },
-        "subtitle": "현재 접근 중인 어시스턴트는 다음과 같은 이유로 거부되었습니다:",
-        "title": "어시스턴트가 거부되었습니다"
-      },
-      "support": "문제가 있으시면 링크를 복사하여 <1>support@lobehub.com</1> 으로 문의해 주세요.",
-      "unpublished": {
-        "subtitle": "현재 접근 중인 어시스턴트는 버전 검토 중입니다. 문의 사항이 있으시면 링크를 복사하여 <1>support@lobehub.com</1> 으로 문의해 주세요.",
-        "title": "어시스턴트 검토 중"
-      }
-    },
-    "suggestions": "추천 도우미",
-    "systemRole": "도우미 설정",
-    "tokenUsage": "도우미 프롬프트 토큰 사용량",
-    "try": "시도해보기",
-    "withKnowledge": "이 도우미는 지식 기반을 포함합니다",
-    "withPlugin": "이 도우미는 플러그인을 포함합니다"
-  },
+  "assistant.favorite": "즐겨찾기",
+  "assistant.favoriteFailed": "즐겨찾기에 실패했습니다",
+  "assistant.favoriteSuccess": "즐겨찾기에 추가되었습니다",
+  "assistant.like": "좋아요",
+  "assistant.likeFailed": "좋아요 실패",
+  "assistant.likeSuccess": "좋아요 완료",
+  "assistant.unfavorite": "즐겨찾기 해제",
+  "assistant.unfavoriteFailed": "즐겨찾기 해제 실패",
+  "assistant.unfavoriteSuccess": "즐겨찾기에서 제거되었습니다",
+  "assistant.unlike": "좋아요 취소",
+  "assistant.unlikeSuccess": "좋아요가 취소되었습니다",
+  "assistants.addAgent": "도우미 추가",
+  "assistants.addAgentAndConverse": "도우미 추가 및 대화 시작",
+  "assistants.addAgentSuccess": "성공적으로 추가되었습니다",
+  "assistants.conversation.l1": "안녕하세요, 저는 **{{name}}**입니다. 무엇이든 물어보세요. 최선을 다해 답변드릴게요~",
+  "assistants.conversation.l2": "다음은 제 기능 소개입니다:",
+  "assistants.conversation.l3": "지금 바로 대화를 시작해볼까요!",
+  "assistants.description": "도우미 소개",
+  "assistants.detail": "상세 정보",
+  "assistants.details.capabilities.knowledge.desc": "도우미에는 더 많은 질문에 답할 수 있도록 다음 자료 라이브러리가 내장되어 있습니다.",
+  "assistants.details.capabilities.knowledge.title": "자료 라이브러리",
+  "assistants.details.capabilities.plugin.desc": "이 도우미는 다음과 같은 기능을 내장하고 있어 다양한 작업을 수행할 수 있습니다.",
+  "assistants.details.capabilities.plugin.title": "내장 기능",
+  "assistants.details.capabilities.title": "도우미 기능",
+  "assistants.details.overview.example": "도우미 데모",
+  "assistants.details.overview.title": "개요",
+  "assistants.details.related.listTitle": "관련 도우미",
+  "assistants.details.related.more": "더 보기",
+  "assistants.details.related.title": "유사한 에이전트",
+  "assistants.details.sidebar.toc": "목차",
+  "assistants.details.summary.title": "이 도우미로 무엇을 할 수 있나요?",
+  "assistants.details.systemRole.openingMessage": "시작 메시지",
+  "assistants.details.systemRole.openingQuestions": "시작 질문",
+  "assistants.details.systemRole.title": "에이전트 프로필",
+  "assistants.details.version.empty": "이전 버전이 없습니다",
+  "assistants.details.version.status.archived": "보관됨",
+  "assistants.details.version.status.deprecated": "거부됨",
+  "assistants.details.version.status.unpublished": "검토 중",
+  "assistants.details.version.table.isLatest": "최신 버전",
+  "assistants.details.version.table.isValidated": "검증됨",
+  "assistants.details.version.table.publishAt": "출시일",
+  "assistants.details.version.table.version": "버전 번호",
+  "assistants.details.version.title": "버전 기록",
+  "assistants.downloads": "다운로드 수",
+  "assistants.duplicateAdd.content": "이미 「{{title}}」 어시스턴트를 추가하셨습니다. 그래도 다시 추가하시겠습니까?",
+  "assistants.duplicateAdd.ok": "추가 확인",
+  "assistants.duplicateAdd.title": "중복 추가 확인",
+  "assistants.empty.description": "필터 조건을 조정하거나 커뮤니티를 방문하여 더 많은 도우미를 찾아보세요",
+  "assistants.empty.search": "일치하는 도우미를 찾을 수 없습니다",
+  "assistants.empty.title": "도우미 없음",
+  "assistants.list": "도우미 목록",
+  "assistants.marketSource.label": "커뮤니티 소스 전환",
+  "assistants.marketSource.legacy": "구 커뮤니티",
+  "assistants.marketSource.new": "신 커뮤니티",
+  "assistants.more": "더 보기",
+  "assistants.plugins": "통합 기능",
+  "assistants.recentSubmits": "최근 업데이트",
+  "assistants.sorts.createdAt": "최신 등록",
+  "assistants.sorts.identifier": "도우미 ID",
+  "assistants.sorts.knowledgeCount": "자료 라이브러리 수",
+  "assistants.sorts.myown": "내가 만든 것 보기",
+  "assistants.sorts.pluginCount": "기능 수",
+  "assistants.sorts.title": "도우미 이름",
+  "assistants.sorts.tokenUsage": "토큰 사용량",
+  "assistants.status.archived.reasons.official": "보안 또는 정치적 문제로 인해 공식적으로 마켓에서 제거됨",
+  "assistants.status.archived.reasons.owner": "개발자가 자발적으로 보관 또는 제거함",
+  "assistants.status.archived.subtitle": "현재 접근 중인 도우미는 다음과 같은 이유로 보관되었습니다:",
+  "assistants.status.archived.title": "도우미가 보관되었습니다",
+  "assistants.status.backToMarket": "도우미 커뮤니티로 돌아가기",
+  "assistants.status.deprecated.reasons.official": "보안 또는 정치적 문제로 인해 공식적으로 마켓에서 제거됨",
+  "assistants.status.deprecated.reasons.owner": "개발자가 자발적으로 거부 또는 제거함",
+  "assistants.status.deprecated.subtitle": "현재 접근 중인 도우미는 다음과 같은 이유로 거부되었습니다:",
+  "assistants.status.deprecated.title": "도우미가 거부되었습니다",
+  "assistants.status.support": "문제가 있으시면 링크를 복사하여 <email>support@lobehub.com</email> 으로 문의해 주세요.",
+  "assistants.status.unpublished.subtitle": "현재 접속 중인 도우미는 버전 심사 중입니다. 문의 사항이 있으시면 링크를 복사하여 <email>support@lobehub.com</email> 으로 보내 주세요.",
+  "assistants.status.unpublished.title": "도우미 검토 중",
+  "assistants.suggestions": "유사한 에이전트",
+  "assistants.systemRole": "에이전트 프로필",
+  "assistants.tokenUsage": "도우미 프롬프트 토큰 사용량",
+  "assistants.try": "시도해보기",
+  "assistants.withKnowledge": "이 도우미에는 자료 라이브러리가 포함되어 있습니다",
+  "assistants.withPlugin": "이 도우미는 기능을 포함합니다",
   "back": "탐색으로 돌아가기",
-  "category": {
-    "assistant": {
-      "academic": "학술",
-      "all": "전체",
-      "career": "커리어",
-      "copywriting": "카피라이팅",
-      "design": "디자인",
-      "education": "교육",
-      "emotions": "감정",
-      "entertainment": "엔터테인먼트",
-      "games": "게임",
-      "general": "일반",
-      "life": "생활",
-      "marketing": "비즈니스",
-      "office": "오피스",
-      "programming": "프로그래밍",
-      "translation": "번역"
-    },
-    "plugin": {
-      "all": "전체",
-      "gaming-entertainment": "게임 및 엔터테인먼트",
-      "life-style": "라이프스타일",
-      "lifestyle": "라이프스타일",
-      "media-generate": "미디어 생성",
-      "science-education": "과학 및 교육",
-      "social": "소셜 미디어",
-      "stocks-finance": "주식 및 금융",
-      "tools": "유틸리티 도구",
-      "web-search": "웹 검색"
-    }
-  },
+  "category.assistant.academic": "학술",
+  "category.assistant.all": "전체",
+  "category.assistant.career": "커리어",
+  "category.assistant.copywriting": "카피라이팅",
+  "category.assistant.design": "디자인",
+  "category.assistant.education": "교육",
+  "category.assistant.emotions": "감정",
+  "category.assistant.entertainment": "엔터테인먼트",
+  "category.assistant.games": "게임",
+  "category.assistant.general": "일반",
+  "category.assistant.life": "생활",
+  "category.assistant.marketing": "비즈니스",
+  "category.assistant.office": "오피스",
+  "category.assistant.programming": "프로그래밍",
+  "category.assistant.translation": "번역",
+  "category.plugin.all": "전체",
+  "category.plugin.gaming-entertainment": "게임 및 엔터테인먼트",
+  "category.plugin.life-style": "라이프스타일",
+  "category.plugin.lifestyle": "라이프스타일",
+  "category.plugin.media-generate": "미디어 생성",
+  "category.plugin.science-education": "과학 및 교육",
+  "category.plugin.social": "소셜 미디어",
+  "category.plugin.stocks-finance": "주식 및 금융",
+  "category.plugin.tools": "유틸리티 도구",
+  "category.plugin.web-search": "웹 검색",
   "cleanFilter": "필터 초기화",
   "create": "창작하기",
-  "createGuide": {
-    "func1": {
-      "desc1": "대화창 우측 상단의 설정을 통해 제출할 도우미의 설정 페이지로 이동하세요.",
-      "desc2": "우측 상단의 '도우미 마켓에 제출' 버튼을 클릭하세요.",
-      "tag": "방법 1",
-      "title": "LobeChat을 통해 제출"
-    },
-    "func2": {
-      "button": "Github 도우미 저장소로 이동",
-      "desc": "도우미를 인덱스에 추가하려면 plugins 디렉토리에 agent-template.json 또는 agent-template-full.json을 사용하여 항목을 생성하고, 간단한 설명과 적절한 태그를 작성한 후 Pull Request를 생성하세요.",
-      "tag": "방법 2",
-      "title": "Github을 통해 제출"
-    }
-  },
+  "createGuide.func1.desc1": "대화창 우측 상단의 설정을 통해 제출할 도우미의 설정 페이지로 이동하세요.",
+  "createGuide.func1.desc2": "오른쪽 상단의 도우미 커뮤니티 제출 버튼을 클릭하세요.",
+  "createGuide.func1.tag": "방법 1",
+  "createGuide.func1.title": "LobeChat을 통해 제출",
+  "createGuide.func2.button": "Github 도우미 저장소로 이동",
+  "createGuide.func2.desc": "도우미를 인덱스에 추가하려면 plugins 디렉토리에 agent-template.json 또는 agent-template-full.json을 사용하여 항목을 생성하고, 간단한 설명과 적절한 태그를 작성한 후 Pull Request를 생성하세요.",
+  "createGuide.func2.tag": "방법 2",
+  "createGuide.func2.title": "Github을 통해 제출",
   "dislike": "좋지 않음",
   "filter": "필터",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "모든 작성자",
-      "followed": "팔로우한 작성자",
-      "title": "작성자 범위"
-    },
-    "contentLength": "최소 컨텍스트 길이",
-    "maxToken": {
-      "title": "최대 길이 설정 (토큰)",
-      "unlimited": "제한 없음"
-    },
-    "other": {
-      "functionCall": "함수 호출 지원",
-      "title": "기타",
-      "vision": "비전 인식 지원",
-      "withKnowledge": "지식 기반 포함",
-      "withTool": "플러그인 포함"
-    },
-    "pricing": "모델 가격",
-    "timePeriod": {
-      "all": "전체 기간",
-      "day": "최근 24시간",
-      "month": "최근 30일",
-      "title": "기간",
-      "week": "최근 7일",
-      "year": "최근 1년"
-    }
-  },
-  "home": {
-    "featuredAssistants": "추천 도우미",
-    "featuredModels": "추천 모델",
-    "featuredProviders": "추천 모델 제공자",
-    "featuredTools": "추천 플러그인",
-    "more": "더 알아보기"
-  },
+  "filterBy.authorRange.everyone": "모든 작성자",
+  "filterBy.authorRange.followed": "팔로우한 작성자",
+  "filterBy.authorRange.title": "작성자 범위",
+  "filterBy.contentLength": "최소 컨텐스트 길이",
+  "filterBy.maxToken.title": "최대 길이 설정 (토큰)",
+  "filterBy.maxToken.unlimited": "제한 없음",
+  "filterBy.other.functionCall": "함수 호출 지원",
+  "filterBy.other.title": "기타",
+  "filterBy.other.vision": "비전 인식 지원",
+  "filterBy.other.withKnowledge": "자료 라이브러리 포함",
+  "filterBy.other.withTool": "기능 포함",
+  "filterBy.pricing": "모델 가격",
+  "filterBy.timePeriod.all": "전체 기간",
+  "filterBy.timePeriod.day": "최근 24시간",
+  "filterBy.timePeriod.month": "최근 30일",
+  "filterBy.timePeriod.title": "기간",
+  "filterBy.timePeriod.week": "최근 7일",
+  "filterBy.timePeriod.year": "최근 1년",
+  "footer.desc": "전 세계 AI 사용자와 함께 발전하세요. 크리에이터가 되어 LobeHub 커뮤니티에 에이전트와 스킬을 제출해보세요.",
+  "footer.title": "오늘 LobeHub 커뮤니티에 당신의 창작물을 공유하세요",
+  "home.communityAgents": "커뮤니티 도우미",
+  "home.featuredAssistants": "추천 도우미",
+  "home.featuredModels": "추천 모델",
+  "home.featuredPlugins": "추천 기능",
+  "home.featuredProviders": "추천 모델 제공자",
+  "home.featuredTools": "추천 기능",
+  "home.more": "더 알아보기",
   "isClaimed": "인증됨",
   "isFeatured": "추천됨",
   "isOfficial": "공식 인증",
   "like": "좋아요",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "모든 MCP 서버",
-        "name": "전체"
-      },
-      "business": {
-        "description": "비즈니스 및 기업 서비스",
-        "name": "비즈니스 서비스"
-      },
-      "developer": {
-        "description": "개발 관련 도구 및 서비스",
-        "name": "개발 도구"
-      },
-      "gaming-entertainment": {
-        "description": "게임, 엔터테인먼트 및 여가 활동",
-        "name": "게임 & 엔터테인먼트"
-      },
-      "health-wellness": {
-        "description": "건강, 피트니스 및 웰빙",
-        "name": "건강 & 웰빙"
-      },
-      "lifestyle": {
-        "description": "개인 라이프스타일, 습관 및 일상 활동",
-        "name": "라이프스타일"
-      },
-      "media-generate": {
-        "description": "미디어 생성, 편집 및 처리",
-        "name": "미디어 생성"
-      },
-      "news": {
-        "description": "뉴스 수집, 보도 및 정보 서비스",
-        "name": "뉴스 & 정보"
-      },
-      "productivity": {
-        "description": "작업 관리, 노트 및 생산성 도구",
-        "name": "생산성 도구"
-      },
-      "science-education": {
-        "description": "과학 연구, 학습 및 교육 도구",
-        "name": "과학 & 교육"
-      },
-      "social": {
-        "description": "소셜 네트워크 및 커뮤니케이션",
-        "name": "소셜 미디어"
-      },
-      "stocks-finance": {
-        "description": "금융 시장, 거래 및 투자",
-        "name": "금융 & 투자"
-      },
-      "tools": {
-        "description": "범용 유틸리티 도구 및 서비스",
-        "name": "유틸리티 도구"
-      },
-      "travel-transport": {
-        "description": "여행 계획 및 교통 수단",
-        "name": "여행 & 교통"
-      },
-      "weather": {
-        "description": "일기예보 및 기상 서비스",
-        "name": "날씨 & 기상"
-      },
-      "web-search": {
-        "description": "웹 검색 및 정보 검색",
-        "name": "정보 검색"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "이 서비스는 설정 또는 사용 시나리오에 따라 로컬 또는 클라우드에서 실행될 수 있으며, 이중 실행 기능을 갖추고 있습니다.",
-          "title": "하이브리드 서비스"
-        },
-        "local": {
-          "desc": "이 서버는 클라이언트의 로컬 장치에서만 실행되며, 로컬 리소스에 의존합니다.",
-          "title": "로컬 서비스"
-        },
-        "remote": {
-          "desc": "이 서버는 원격에서 호스팅되며, 주로 원격 서비스에 의존하고 로컬 환경에는 의존하지 않습니다.",
-          "title": "클라우드 서비스"
-        }
-      },
-      "deployment": {
-        "args": "매개변수",
-        "checkCommand": "확인 명령어",
-        "command": "명령어",
-        "commandLine": "시스템 의존성",
-        "connection": "연결 방식",
-        "connectionType": "연결 유형",
-        "description": "플러그인의 설치 및 배포 방식",
-        "descriptionPlaceholder": "선택 사항 설명",
-        "empty": "배포 옵션 없음",
-        "env": "환경 변수",
-        "guide": "설치 가이드",
-        "installation": "{{method}} 방식으로 설치",
-        "installationMethod": "설치 방식",
-        "other": "기타 설정",
-        "packageName": "패키지 이름",
-        "platform": {
-          "steps": {
-            "claude": "- **Claude Desktop** 앱을 엽니다\n- **설정**으로 이동한 후 **개발자**를 선택합니다\n- **구성 편집**을 클릭합니다\n- **claude_desktop_config.json** 파일을 엽니다\n- 서버 구성을 복사하여 기존 파일에 붙여넣고 저장합니다",
-            "cline": "- Cline 확장이 설치된 VS Code를 엽니다\n- 사이드바에서 Cline 아이콘을 클릭합니다\n- 드롭다운 메뉴에서 **MCP Servers**를 선택합니다\n- **Remote Servers** 탭에서 서버 이름과 MCP 서버 URL을 입력합니다\n- **Add Server**를 클릭하여 연결합니다",
-            "cursor": "- **설정**으로 이동한 후 Cursor 설정을 선택합니다\n- 왼쪽에서 **MCP**를 선택합니다\n- 오른쪽 상단의 **새 글로벌 MCP 서버 추가**를 클릭합니다\n- 서버 구성을 복사하여 기존 파일에 붙여넣고 저장합니다",
-            "lobeChat": "- **LobeChat 데스크탑** 앱을 엽니다\n- **설정** - **기본 어시스턴트**로 이동합니다\n- **플러그인 설정** - **사용자 정의 플러그인**을 선택합니다\n- **JSON 구성 빠른 가져오기**를 클릭합니다\n- 서버 구성을 텍스트 상자에 붙여넣고 설치합니다",
-            "openai": "- **OpenAI 앱** 또는 개발 환경을 엽니다\n- **Responses API**에서 MCP 도구를 구성합니다\n- API 요청의 **tools** 배열에 MCP 블록을 추가합니다\n- **server_url**을 MCP 서버 엔드포인트로 설정합니다\n- 인증에 필요한 헤더 정보(API 키, 토큰 등)를 포함합니다\n- `allowed_tools` 매개변수로 노출 도구를 제한합니다\n- `require_approval`을 설정하여 도구 실행 승인 여부를 제어합니다",
-            "vscode": "- VS Code를 엽니다\n- 명령 팔레트(`Ctrl+Shift+P` / `Cmd+Shift+P`)를 엽니다\n- **MCP: Add Server**를 입력하고 선택합니다\n- 워크스페이스 또는 사용자 설정에 추가를 선택합니다\n- 서버 구성을 복사하여 붙여넣습니다"
-          },
-          "title": "{{platform}}에서 설치"
-        },
-        "recommended": "추천",
-        "systemDependencies": "시스템 의존성",
-        "table": {
-          "description": "설명",
-          "name": "이름",
-          "required": "필수",
-          "type": "유형"
-        },
-        "title": "설치 방식"
-      },
-      "githubBadge": {
-        "desc": "LobeHub는 코드베이스와 문서를 정기적으로 스캔하여 다음을 수행합니다:\n\n- MCP 서버가 정상적으로 작동하는지 확인합니다.\n- 도구, 리소스, 프롬프트 및 필요한 매개변수와 같은 서버 기능을 추출합니다.\n- 우리의 배지는 사용자가 MCP 서버의 보안성, 기능 및 설치 가이드를 빠르게 평가할 수 있도록 도와줍니다.\n\n아래 코드를 `README.md` 파일에 복사하여 붙여넣으세요:"
-      },
-      "nav": {
-        "needHelp": "도움이 필요하신가요?",
-        "reportIssue": "문제 보고",
-        "viewSourceCode": "소스 코드 보기"
-      },
-      "overview": {
-        "title": "개요"
-      },
-      "related": {
-        "listTitle": "관련 MCP 서버",
-        "more": "더 보기",
-        "title": "추천"
-      },
-      "schema": {
-        "mode": {
-          "docs": "문서"
-        },
-        "prompts": {
-          "arguments": "매개변수 설정",
-          "desc": "사용자가 선택하여 트리거하는 인터랙티브 템플릿",
-          "empty": "프롬프트 없음",
-          "instructions": "지침 설명",
-          "table": {
-            "description": "설명",
-            "name": "이름",
-            "required": "필수"
-          },
-          "title": "프롬프트 목록"
-        },
-        "resources": {
-          "desc": "클라이언트가 첨부하고 관리하는 컨텍스트 데이터",
-          "empty": "리소스 없음",
-          "table": {
-            "description": "설명",
-            "mineType": "MIME 유형",
-            "name": "이름",
-            "uri": "URI"
-          },
-          "title": "리소스 목록"
-        },
-        "title": "플러그인 기능",
-        "tools": {
-          "desc": "대형 언어 모델(LLM)에 노출되는 기능 인터페이스로 작업을 수행합니다",
-          "empty": "도구 없음",
-          "inputSchema": "입력 설명",
-          "instructions": "지침 설명",
-          "table": {
-            "description": "설명",
-            "name": "이름",
-            "required": "필수",
-            "type": "유형"
-          },
-          "title": "도구 목록"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "이 MCP 서버는 소유자가 소유권을 주장하여 관리되고 있습니다.",
-          "title": "소유자 확인됨"
-        },
-        "deployMoreThanManual": {
-          "desc": "이 MCP 서버는 수동 설치 외에도 더 편리한 설치 방법을 제공하여 사용자가 쉽게 배포하고 사용할 수 있습니다.",
-          "title": "편리한 설치 방식 제공"
-        },
-        "deployment": {
-          "desc": "이 MCP 서버는 최소 하나 이상의 설치 방법을 제공하여 사용자가 배포하고 사용할 수 있습니다.",
-          "descWithCount": "이 MCP 서버는 {{number}}개의 설치 방법을 제공하여 사용자가 배포하고 사용할 수 있습니다.",
-          "title": "설치 방법 제공"
-        },
-        "license": {
-          "desc": "이 저장소에는 LICENSE 파일이 포함되어 있습니다.",
-          "descWithlicense": "이 저장소의 라이선스는 {{license}}입니다.",
-          "title": "라이선스 포함"
-        },
-        "listTitle": "평가 세부사항",
-        "notClaimed": {
-          "desc": "이 MCP 서버의 소유자라면 아래 방법으로 소유권을 주장할 수 있습니다.",
-          "title": "소유자 미확인"
-        },
-        "prompts": {
-          "desc": "이 MCP 서버는 프롬프트를 제공하여 사용자가 서비스와 상호작용할 수 있습니다.",
-          "descWithCount": "이 MCP 서버는 {{number}}개의 프롬프트를 제공하여 사용자가 서비스와 상호작용할 수 있습니다.",
-          "title": "프롬프트 포함"
-        },
-        "readme": {
-          "desc": "이 저장소에는 README.md 파일이 포함되어 있습니다.",
-          "title": "README 포함"
-        },
-        "resources": {
-          "desc": "이 MCP 서버는 리소스를 제공하여 사용자가 컨텍스트 데이터를 첨부하고 관리할 수 있습니다.",
-          "descWithCount": "이 MCP 서버는 {{number}}개의 리소스를 제공하여 사용자가 컨텍스트 데이터를 첨부하고 관리할 수 있습니다.",
-          "title": "리소스 포함"
-        },
-        "title": "평가",
-        "tools": {
-          "desc": "서비스는 사용자가 특정 작업을 수행할 수 있도록 최소 하나 이상의 도구를 제공해야 합니다.",
-          "descWithCount": "이 MCP 서버는 {{number}}개의 도구 기능을 제공하여 사용자가 특정 작업을 수행할 수 있습니다.",
-          "title": "도구 포함"
-        },
-        "validated": {
-          "desc": "이 MCP 서버는 설치 검증을 통과하여 품질과 신뢰성이 보장됩니다.",
-          "title": "검증 완료"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "이 MCP 서버는 철저한 검증을 거쳐 완전한 기능과 높은 품질의 사용자 경험을 제공합니다.",
-          "fullTitle": "우수 플러그인",
-          "title": "우수"
-        },
-        "b": {
-          "desc": "이 MCP 서버는 양호한 기능과 사용자 경험을 제공하지만 일부 개선이 필요할 수 있습니다.",
-          "fullTitle": "기능 양호",
-          "title": "양호"
-        },
-        "f": {
-          "desc": "이 MCP 서버는 기능이 불완전하거나 품질이 낮아 사용 시 주의가 필요합니다.",
-          "fullTitle": "품질 미흡",
-          "title": "미흡"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "프롬프트",
-          "resources": "리소스",
-          "title": "플러그인 기능",
-          "tools": "도구"
-        },
-        "configuration": {
-          "title": "플러그인 설정"
-        },
-        "connection": {
-          "args": "시작 매개변수",
-          "command": "시작 명령어",
-          "title": "연결 정보",
-          "type": "연결 유형",
-          "url": "서비스 주소"
-        },
-        "saveSettings": "설정 저장",
-        "title": "플러그인 설정"
-      },
-      "sidebar": {
-        "install": "MCP 서버 설치",
-        "meta": {
-          "homepage": "공식 홈페이지",
-          "installCount": "설치 수",
-          "language": "소스 언어",
-          "license": "라이선스",
-          "published": "출시일",
-          "repo": "소스 저장소",
-          "stars": "스타 수",
-          "title": "상세 정보",
-          "updated": "최근 업데이트"
-        },
-        "moreServerConfig": "자세히 보기",
-        "recommendServers": "관련 MCP",
-        "serverConfig": "설치 구성",
-        "toc": "목차"
-      },
-      "summary": {
-        "title": "이 MCP 서버로 무엇을 할 수 있나요?"
-      },
-      "totalScore": {
-        "description": "각 항목을 종합하여 계산된 총점",
-        "legend": {
-          "aGrade": "A등급 ({{minPercent}}-100%)",
-          "bGrade": "B등급 ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "F등급 (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} 점",
-        "popover": {
-          "completedOptional": "✅ 선택 항목 완료 ({{count}}개)",
-          "completedRequired": "✅ 필수 항목 완료 ({{count}}개)",
-          "incompleteOptional": "⏸️ 선택 항목 미완료 ({{count}}개)",
-          "incompleteRequired": "❌ 필수 항목 미완료 ({{count}}개)",
-          "title": "평가 세부사항"
-        },
-        "ratingFormat": "등급: {{level}}",
-        "scoreInfo": {
-          "items": "항목",
-          "points": "점수",
-          "requiredItems": "필수 항목"
-        },
-        "title": "총점"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "최신 버전",
-          "isValidated": "검증됨",
-          "publishAt": "출시일",
-          "version": "버전"
-        },
-        "title": "버전 기록"
-      }
-    },
-    "hero": {
-      "desc": "오픈소스 및 배포 가능한 MCP 서버 플랫폼으로, AI 시스템이 파일 시스템, 데이터베이스, API 등 핵심 리소스에 쉽게 접근할 수 있도록 도와주며 AI 기능을 확장합니다.",
-      "subTitle": "오픈소스 & 즉시 사용 가능",
-      "title": "AI를 위한 오픈소스 MCP 마켓플레이스"
-    },
-    "sorts": {
-      "createdAt": "최근 추가됨",
-      "installCount": "설치 수",
-      "isFeatured": "추천 플러그인",
-      "isValidated": "검증된 플러그인",
-      "promptsCount": "프롬프트 수",
-      "ratingCount": "평가 수",
-      "resourcesCount": "리소스 수",
-      "toolsCount": "도구 수",
-      "updatedAt": "최근 업데이트"
-    },
-    "title": "MCP 마켓플레이스",
-    "unvalidated": {
-      "desc": "이 MCP 서버는 아직 검증되지 않았습니다",
-      "title": "미검증"
-    },
-    "validated": {
-      "desc": "이 MCP 서버는 검증을 통과하여 품질과 신뢰성이 보장됩니다.",
-      "descWithDate": "이 MCP 서버는 {{date}}에 검증을 통과하여 품질과 신뢰성이 보장됩니다.",
-      "title": "검증됨"
-    }
-  },
-  "models": {
-    "abilities": "모델 기능",
-    "chat": "대화 시작",
-    "contentLength": "최대 맥락 길이",
-    "details": {
-      "overview": {
-        "title": "개요"
-      },
-      "related": {
-        "listTitle": "관련 모델",
-        "more": "더 보기",
-        "title": "관련 추천"
-      }
-    },
-    "free": "무료",
-    "guide": "설정 가이드",
-    "list": "모델 목록",
-    "more": "더 보기",
-    "parameterList": {
-      "defaultValue": "기본값",
-      "docs": "문서 보기",
-      "frequency_penalty": {
-        "desc": "이 설정은 모델이 입력에서 이미 나타난 특정 단어의 사용 빈도를 조정합니다. 높은 값은 이러한 반복의 가능성을 줄이고, 음수 값은 반대의 효과를 생성합니다. 단어 처벌은 출현 횟수에 따라 증가하지 않습니다. 음수 값은 단어의 반복 사용을 장려합니다.",
-        "title": "빈도 처벌"
-      },
-      "max_tokens": {
-        "desc": "이 설정은 모델이 한 번의 응답에서 생성할 수 있는 최대 길이를 정의합니다. 높은 값을 설정하면 모델이 더 긴 응답을 생성할 수 있으며, 낮은 값은 응답의 길이를 제한하여 더 간결하게 만듭니다. 다양한 응용 프로그램에 따라 이 값을 적절히 조정하면 예상되는 응답 길이와 세부 사항을 달성하는 데 도움이 될 수 있습니다.",
-        "title": "한 번의 응답 제한"
-      },
-      "presence_penalty": {
-        "desc": "이 설정은 입력에서 단어의 출현 빈도에 따라 단어의 반복 사용을 제어하는 데 목적이 있습니다. 입력에서 많이 나타나는 단어는 덜 사용하려고 하며, 사용 빈도는 출현 빈도와 비례합니다. 단어 처벌은 출현 횟수에 따라 증가합니다. 음수 값은 단어의 반복 사용을 장려합니다.",
-        "title": "주제 신선도"
-      },
-      "range": "범위",
-      "reasoning_effort": {
-        "desc": "이 설정은 모델이 응답을 생성하기 전에 추론 강도를 제어하는 데 사용됩니다. 낮은 강도는 응답 속도를 우선시하고 토큰을 절약하며, 높은 강도는 더 완전한 추론을 제공하지만 더 많은 토큰을 소모하고 응답 속도를 저하시킵니다. 기본값은 중간으로, 추론 정확성과 응답 속도의 균형을 맞춥니다.",
-        "title": "추론 강도"
-      },
-      "temperature": {
-        "desc": "이 설정은 모델 응답의 다양성에 영향을 미칩니다. 낮은 값은 더 예측 가능하고 전형적인 응답을 유도하며, 높은 값은 더 다양하고 드문 응답을 장려합니다. 값이 0으로 설정되면 모델은 주어진 입력에 대해 항상 동일한 응답을 제공합니다.",
-        "title": "무작위성"
-      },
-      "title": "모델 매개변수",
-      "top_p": {
-        "desc": "이 설정은 모델의 선택을 가능성이 가장 높은 특정 비율의 단어로 제한합니다: 누적 확률이 P에 도달하는 최상위 단어만 선택합니다. 낮은 값은 모델의 응답을 더 예측 가능하게 만들고, 기본 설정은 모델이 전체 범위의 단어에서 선택할 수 있도록 허용합니다.",
-        "title": "핵 샘플링"
-      },
-      "type": "유형"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChat은 이 제공자에 대해 사용자 정의 API 키를 지원합니다.",
-      "input": "입력 가격",
-      "inputTooltip": "백만 개의 Token당 비용",
-      "latency": "지연",
-      "latencyTooltip": "제공자가 첫 번째 Token을 보내는 평균 응답 시간",
-      "maxOutput": "최대 출력 길이",
-      "maxOutputTooltip": "이 엔드포인트가 생성할 수 있는 최대 Token 수",
-      "officialTooltip": "LobeHub 공식 서비스",
-      "output": "출력 가격",
-      "outputTooltip": "백만 개의 Token당 비용",
-      "streamCancellationTooltip": "이 제공자는 스트림 취소 기능을 지원합니다.",
-      "throughput": "처리량",
-      "throughputTooltip": "스트림 요청당 초당 전송되는 평균 Token 수"
-    },
-    "sorts": {
-      "contextWindowTokens": "컨텍스트 길이",
-      "identifier": "모델 ID",
-      "inputPrice": "입력 가격",
-      "outputPrice": "출력 가격",
-      "providerCount": "서비스 제공자 수",
-      "releasedAt": "최근 게시"
-    },
-    "suggestions": "관련 모델",
-    "supportedProviders": "이 모델을 지원하는 서비스 제공자"
-  },
-  "plugins": {
-    "builtinTag": "내장 플러그인",
-    "community": "커뮤니티 플러그인",
-    "details": {
-      "settings": {
-        "title": "플러그인 설정"
-      },
-      "summary": {
-        "title": "이 플러그인으로 할 수 있는 일"
-      },
-      "tools": {
-        "title": "플러그인 도구"
-      }
-    },
-    "install": "플러그인 설치",
-    "installed": "설치됨",
-    "legacyTag": "구버전 플러그인",
-    "list": "플러그인 목록",
-    "meta": {
-      "description": "설명",
-      "parameter": "매개변수",
-      "title": "도구 매개변수",
-      "type": "유형"
-    },
-    "more": "더보기",
-    "official": "공식 플러그인",
-    "recentSubmits": "최근 업데이트",
-    "sorts": {
-      "createdAt": "최근 게시",
-      "identifier": "플러그인 ID",
-      "title": "플러그인 이름"
-    },
-    "suggestions": "추천 항목"
-  },
-  "providers": {
-    "config": "서비스 제공자 설정",
-    "details": {
-      "guide": {
-        "title": "접속 가이드"
-      },
-      "overview": {
-        "title": "개요"
-      },
-      "related": {
-        "listTitle": "관련 서비스 제공자",
-        "more": "더 보기",
-        "title": "관련 추천"
-      }
-    },
-    "list": "모델 서비스 제공자 목록",
-    "modelCount": "{{count}} 개 모델",
-    "modelName": "모델 이름",
-    "modelSite": "모델 문서",
-    "more": "더보기",
-    "officialSite": "공식 웹사이트",
-    "showAllModels": "모든 모델 보기",
-    "sorts": {
-      "default": "기본 정렬",
-      "identifier": "서비스 제공자 ID",
-      "modelCount": "모델 수"
-    },
-    "suggestions": "관련 서비스 제공자",
-    "supportedModels": "지원되는 모델"
-  },
+  "mcp.categories.all.description": "모든 MCP 서버",
+  "mcp.categories.all.name": "전체",
+  "mcp.categories.business.description": "비즈니스 및 기업 서비스",
+  "mcp.categories.business.name": "비즈니스 서비스",
+  "mcp.categories.developer.description": "개발 관련 도구 및 서비스",
+  "mcp.categories.developer.name": "개발 도구",
+  "mcp.categories.gaming-entertainment.description": "게임, 엔터테인먼트 및 여가 활동",
+  "mcp.categories.gaming-entertainment.name": "게임 & 엔터테인먼트",
+  "mcp.categories.health-wellness.description": "건강, 피트니스 및 웰빙",
+  "mcp.categories.health-wellness.name": "건강 & 웰빙",
+  "mcp.categories.lifestyle.description": "개인 라이프스타일, 습관 및 일상 활동",
+  "mcp.categories.lifestyle.name": "라이프스타일",
+  "mcp.categories.media-generate.description": "미디어 생성, 편집 및 처리",
+  "mcp.categories.media-generate.name": "미디어 생성",
+  "mcp.categories.news.description": "뉴스 수집, 보도 및 정보 서비스",
+  "mcp.categories.news.name": "뉴스 & 정보",
+  "mcp.categories.productivity.description": "작업 관리, 노트 및 생산성 도구",
+  "mcp.categories.productivity.name": "생산성 도구",
+  "mcp.categories.science-education.description": "과학 연구, 학습 및 교육 도구",
+  "mcp.categories.science-education.name": "과학 & 교육",
+  "mcp.categories.social.description": "소셜 네트워크 및 커뮤니케이션",
+  "mcp.categories.social.name": "소셜 미디어",
+  "mcp.categories.stocks-finance.description": "금융 시장, 거래 및 투자",
+  "mcp.categories.stocks-finance.name": "금융 & 투자",
+  "mcp.categories.tools.description": "범용 유틸리티 도구 및 서비스",
+  "mcp.categories.tools.name": "유틸리티 도구",
+  "mcp.categories.travel-transport.description": "여행 계획 및 교통 수단",
+  "mcp.categories.travel-transport.name": "여행 & 교통",
+  "mcp.categories.weather.description": "일기예보 및 기상 서비스",
+  "mcp.categories.weather.name": "날씨 & 기상",
+  "mcp.categories.web-search.description": "웹 검색 및 정보 검색",
+  "mcp.categories.web-search.name": "정보 검색",
+  "mcp.details.connectionType.hybrid.desc": "이 서비스는 설정 또는 사용 시나리오에 따라 로컬 또는 클라우드에서 실행될 수 있으며, 이중 실행 기능을 갖추고 있습니다.",
+  "mcp.details.connectionType.hybrid.title": "하이브리드 서비스",
+  "mcp.details.connectionType.local.desc": "이 서버는 클라이언트의 로컬 장치에서만 실행되며, 로컬 리소스에 의존합니다.",
+  "mcp.details.connectionType.local.title": "로컬 서비스",
+  "mcp.details.connectionType.remote.desc": "이 서버는 원격에서 호스팅되며, 주로 원격 서비스에 의존하고 로컬 환경에는 의존하지 않습니다.",
+  "mcp.details.connectionType.remote.title": "클라우드 서비스",
+  "mcp.details.deployment.args": "매개변수",
+  "mcp.details.deployment.checkCommand": "확인 명령어",
+  "mcp.details.deployment.command": "명령어",
+  "mcp.details.deployment.commandLine": "시스템 의존성",
+  "mcp.details.deployment.connection": "연결 방식",
+  "mcp.details.deployment.connectionType": "연결 유형",
+  "mcp.details.deployment.description": "기능의 설치 및 배포 방식",
+  "mcp.details.deployment.descriptionPlaceholder": "선택 사항 설명",
+  "mcp.details.deployment.empty": "배포 옵션 없음",
+  "mcp.details.deployment.env": "환경 변수",
+  "mcp.details.deployment.guide": "설치 가이드",
+  "mcp.details.deployment.installation": "{{method}} 방식으로 설치",
+  "mcp.details.deployment.installationMethod": "설치 방식",
+  "mcp.details.deployment.other": "기타 설정",
+  "mcp.details.deployment.packageName": "패키지 이름",
+  "mcp.details.deployment.platform.steps.claude": "- **Claude Desktop** 앱을 엽니다\n- **설정**으로 이동한 후 **개발자**를 선택합니다\n- **구성 편집**을 클릭합니다\n- **claude_desktop_config.json** 파일을 엽니다\n- 서버 구성을 복사하여 기존 파일에 붙여넣고 저장합니다",
+  "mcp.details.deployment.platform.steps.cline": "- Cline 확장이 설치된 VS Code를 엽니다\n- 사이드바에서 Cline 아이콘을 클릭합니다\n- 드롭다운 메뉴에서 **MCP Servers**를 선택합니다\n- **Remote Servers** 탭에서 서버 이름과 MCP 서버 URL을 입력합니다\n- **Add Server**를 클릭하여 연결합니다",
+  "mcp.details.deployment.platform.steps.cursor": "- **설정**으로 이동한 후 Cursor 설정을 선택합니다\n- 왼쪽에서 **MCP**를 선택합니다\n- 오른쪽 상단의 **새 글로벌 MCP 서버 추가**를 클릭합니다\n- 서버 구성을 복사하여 기존 파일에 붙여넣고 저장합니다",
+  "mcp.details.deployment.platform.steps.lobeChat": "- **LobeChat 데스크탑** 앱을 엽니다\n- **설정** - **기본 도우미**로 이동합니다\n- **기능 설정** - **사용자 정의 기능**을 선택합니다\n- **JSON 구성 빠른 가져오기**를 클릭합니다\n- 서버 구성을 텍스트 상자에 붙여넣고 설치합니다",
+  "mcp.details.deployment.platform.steps.openai": "- **OpenAI 앱** 또는 개발 환경을 엽니다\n- **Responses API**에서 MCP 도구를 구성합니다\n- API 요청의 **tools** 배열에 MCP 블록을 추가합니다\n- **server_url**을 MCP 서버 엔드포인트로 설정합니다\n- 인증에 필요한 헤더 정보(API 키, 토큰 등)를 포함합니다\n- `allowed_tools` 매개변수로 노출 도구를 제한합니다\n- `require_approval`을 설정하여 도구 실행 승인 여부를 제어합니다",
+  "mcp.details.deployment.platform.steps.vscode": "- VS Code를 엽니다\n- 명령 팔레트(`Ctrl+Shift+P` / `Cmd+Shift+P`)를 엽니다\n- **MCP: Add Server**를 입력하고 선택합니다\n- 워크스페이스 또는 사용자 설정에 추가를 선택합니다\n- 서버 구성을 복사하여 붙여넣습니다",
+  "mcp.details.deployment.platform.title": "{{platform}}에서 설치",
+  "mcp.details.deployment.recommended": "추천",
+  "mcp.details.deployment.systemDependencies": "시스템 의존성",
+  "mcp.details.deployment.table.description": "설명",
+  "mcp.details.deployment.table.name": "이름",
+  "mcp.details.deployment.table.required": "필수",
+  "mcp.details.deployment.table.type": "유형",
+  "mcp.details.deployment.title": "설치 방식",
+  "mcp.details.githubBadge.desc": "LobeHub는 코드베이스와 문서를 정기적으로 스캔하여 다음을 수행합니다:\n\n- MCP 서버가 정상적으로 작동하는지 확인합니다.\n- 도구, 리소스, 프롬프트 및 필요한 매개변수와 같은 서버 기능을 추출합니다.\n- 우리의 배지는 사용자가 MCP 서버의 보안성, 기능 및 설치 가이드를 빠르게 평가할 수 있도록 도와줍니다.\n\n아래 코드를 `README.md` 파일에 복사하여 붙여넣으세요:",
+  "mcp.details.nav.needHelp": "도움이 필요하신가요?",
+  "mcp.details.nav.reportIssue": "문제 보고",
+  "mcp.details.nav.viewSourceCode": "소스 코드 보기",
+  "mcp.details.overview.title": "개요",
+  "mcp.details.related.listTitle": "관련 MCP 서버",
+  "mcp.details.related.more": "더 보기",
+  "mcp.details.related.title": "추천",
+  "mcp.details.schema.mode.docs": "문서",
+  "mcp.details.schema.prompts.arguments": "매개변수 설정",
+  "mcp.details.schema.prompts.desc": "사용자가 선택하여 트리거하는 인터랙티브 템플릿",
+  "mcp.details.schema.prompts.empty": "프롬프트 없음",
+  "mcp.details.schema.prompts.instructions": "지침 설명",
+  "mcp.details.schema.prompts.table.description": "설명",
+  "mcp.details.schema.prompts.table.name": "이름",
+  "mcp.details.schema.prompts.table.required": "필수",
+  "mcp.details.schema.prompts.title": "프롬프트 목록",
+  "mcp.details.schema.resources.desc": "클라이언트가 첨부하고 관리하는 컨텍스트 데이터",
+  "mcp.details.schema.resources.empty": "리소스 없음",
+  "mcp.details.schema.resources.table.description": "설명",
+  "mcp.details.schema.resources.table.mineType": "MIME 유형",
+  "mcp.details.schema.resources.table.name": "이름",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "리소스 목록",
+  "mcp.details.schema.title": "기능 기능",
+  "mcp.details.schema.tools.desc": "대형 언어 모델(LLM)에 노출되는 기능 인터페이스로 작업을 수행합니다",
+  "mcp.details.schema.tools.empty": "도구 없음",
+  "mcp.details.schema.tools.inputSchema": "입력 설명",
+  "mcp.details.schema.tools.instructions": "지침 설명",
+  "mcp.details.schema.tools.table.description": "설명",
+  "mcp.details.schema.tools.table.name": "이름",
+  "mcp.details.schema.tools.table.required": "필수",
+  "mcp.details.schema.tools.table.type": "유형",
+  "mcp.details.schema.tools.title": "도구 목록",
+  "mcp.details.score.claimed.desc": "이 MCP 서버는 소유자가 소유권을 주장하여 관리되고 있습니다.",
+  "mcp.details.score.claimed.title": "소유자 확인됨",
+  "mcp.details.score.deployMoreThanManual.desc": "이 MCP 서버는 수동 설치 외에도 더 편리한 설치 방법을 제공하여 사용자가 쉽게 배포하고 사용할 수 있습니다.",
+  "mcp.details.score.deployMoreThanManual.title": "편리한 설치 방식 제공",
+  "mcp.details.score.deployment.desc": "이 MCP 서버는 최소 하나 이상의 설치 방법을 제공하여 사용자가 배포하고 사용할 수 있습니다.",
+  "mcp.details.score.deployment.descWithCount": "이 MCP 서버는 {{number}}개의 설치 방법을 제공하여 사용자가 배포하고 사용할 수 있습니다.",
+  "mcp.details.score.deployment.title": "설치 방법 제공",
+  "mcp.details.score.license.desc": "이 저장소에는 LICENSE 파일이 포함되어 있습니다.",
+  "mcp.details.score.license.descWithlicense": "이 저장소의 라이선스는 {{license}}입니다.",
+  "mcp.details.score.license.title": "라이선스 포함",
+  "mcp.details.score.listTitle": "평가 세부사항",
+  "mcp.details.score.notClaimed.desc": "이 MCP 서버의 소유자라면 아래 방법으로 소유권을 주장할 수 있습니다.",
+  "mcp.details.score.notClaimed.title": "소유자 미확인",
+  "mcp.details.score.prompts.desc": "이 MCP 서버는 프롬프트를 제공하여 사용자가 서비스와 상호작용할 수 있습니다.",
+  "mcp.details.score.prompts.descWithCount": "이 MCP 서버는 {{number}}개의 프롬프트를 제공하여 사용자가 서비스와 상호작용할 수 있습니다.",
+  "mcp.details.score.prompts.title": "프롬프트 포함",
+  "mcp.details.score.readme.desc": "이 저장소에는 README.md 파일이 포함되어 있습니다.",
+  "mcp.details.score.readme.title": "README 포함",
+  "mcp.details.score.resources.desc": "이 MCP 서버는 리소스를 제공하여 사용자가 컨텍스트 데이터를 첨부하고 관리할 수 있습니다.",
+  "mcp.details.score.resources.descWithCount": "이 MCP 서버는 {{number}}개의 리소스를 제공하여 사용자가 컨텍스트 데이터를 첨부하고 관리할 수 있습니다.",
+  "mcp.details.score.resources.title": "리소스 포함",
+  "mcp.details.score.title": "평가",
+  "mcp.details.score.tools.desc": "서비스는 사용자가 특정 작업을 수행할 수 있도록 최소 하나 이상의 도구를 제공해야 합니다.",
+  "mcp.details.score.tools.descWithCount": "이 MCP 서버는 {{number}}개의 도구 기능을 제공하여 사용자가 특정 작업을 수행할 수 있습니다.",
+  "mcp.details.score.tools.title": "도구 포함",
+  "mcp.details.score.validated.desc": "이 MCP 서버는 설치 검증을 통과하여 품질과 신뢰성이 보장됩니다.",
+  "mcp.details.score.validated.title": "검증 완료",
+  "mcp.details.scoreLevel.a.desc": "이 MCP 서버는 철저한 검증을 거쳐 완전한 기능과 높은 품질의 사용자 경험을 제공합니다.",
+  "mcp.details.scoreLevel.a.fullTitle": "우수 기능",
+  "mcp.details.scoreLevel.a.title": "우수",
+  "mcp.details.scoreLevel.b.desc": "이 MCP 서버는 양호한 기능과 사용자 경험을 제공하지만 일부 개선이 필요할 수 있습니다.",
+  "mcp.details.scoreLevel.b.fullTitle": "기능 양호",
+  "mcp.details.scoreLevel.b.title": "양호",
+  "mcp.details.scoreLevel.f.desc": "이 MCP 서버는 기능이 불완전하거나 품질이 낮아 사용 시 주의가 필요합니다.",
+  "mcp.details.scoreLevel.f.fullTitle": "품질 미흡",
+  "mcp.details.scoreLevel.f.title": "미흡",
+  "mcp.details.settings.capabilities.prompts": "프롬프트",
+  "mcp.details.settings.capabilities.resources": "리소스",
+  "mcp.details.settings.capabilities.title": "기능 기능",
+  "mcp.details.settings.capabilities.tools": "도구",
+  "mcp.details.settings.configuration.title": "기능 설정",
+  "mcp.details.settings.connection.args": "시작 매개변수",
+  "mcp.details.settings.connection.command": "시작 명령어",
+  "mcp.details.settings.connection.title": "연결 정보",
+  "mcp.details.settings.connection.type": "연결 유형",
+  "mcp.details.settings.connection.url": "서비스 주소",
+  "mcp.details.settings.saveSettings": "설정 저장",
+  "mcp.details.settings.title": "기능 설정",
+  "mcp.details.sidebar.install": "MCP 서버 설치",
+  "mcp.details.sidebar.meta.homepage": "공식 홈페이지",
+  "mcp.details.sidebar.meta.installCount": "설치 수",
+  "mcp.details.sidebar.meta.language": "소스 언어",
+  "mcp.details.sidebar.meta.license": "라이선스",
+  "mcp.details.sidebar.meta.published": "출시일",
+  "mcp.details.sidebar.meta.repo": "소스 저장소",
+  "mcp.details.sidebar.meta.stars": "스타 수",
+  "mcp.details.sidebar.meta.title": "상세 정보",
+  "mcp.details.sidebar.meta.updated": "최근 업데이트",
+  "mcp.details.sidebar.moreServerConfig": "자세히 보기",
+  "mcp.details.sidebar.recommendServers": "관련 MCP",
+  "mcp.details.sidebar.serverConfig": "설치 구성",
+  "mcp.details.sidebar.toc": "목차",
+  "mcp.details.summary.title": "이 MCP 서버로 무엇을 할 수 있나요?",
+  "mcp.details.totalScore.description": "각 항목을 종합하여 계산된 총점",
+  "mcp.details.totalScore.legend.aGrade": "A등급 ({{minPercent}}-100%)",
+  "mcp.details.totalScore.legend.bGrade": "B등급 ({{minPercent}}-{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "F등급 (0-{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} 점",
+  "mcp.details.totalScore.popover.completedOptional": "✅ 선택 항목 완료 ({{count}}개)",
+  "mcp.details.totalScore.popover.completedRequired": "✅ 필수 항목 완료 ({{count}}개)",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ 선택 항목 미완료 ({{count}}개)",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ 필수 항목 미완료 ({{count}}개)",
+  "mcp.details.totalScore.popover.title": "평가 세부사항",
+  "mcp.details.totalScore.ratingFormat": "등급: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "항목",
+  "mcp.details.totalScore.scoreInfo.points": "점수",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "필수 항목",
+  "mcp.details.totalScore.title": "총점",
+  "mcp.details.versions.table.isLatest": "최신 버전",
+  "mcp.details.versions.table.isValidated": "검증됨",
+  "mcp.details.versions.table.publishAt": "출시일",
+  "mcp.details.versions.table.version": "버전",
+  "mcp.details.versions.title": "버전 기록",
+  "mcp.hero.desc": "오픈소스 및 배포 가능한 MCP 서버 플랫폼으로, AI 시스템이 파일 시스템, 데이터베이스, API 등 핵심 리소스에 쉽게 접근할 수 있도록 도와주며 AI 기능을 확장합니다.",
+  "mcp.hero.subTitle": "오픈소스 & 즉시 사용 가능",
+  "mcp.hero.title": "AI 중심의 오픈소스 MCP 커뮤니티",
+  "mcp.sorts.createdAt": "최근 추가됨",
+  "mcp.sorts.installCount": "설치 수",
+  "mcp.sorts.isFeatured": "추천 기능",
+  "mcp.sorts.isValidated": "검증된 기능",
+  "mcp.sorts.promptsCount": "프롬프트 수",
+  "mcp.sorts.ratingCount": "평가 수",
+  "mcp.sorts.resourcesCount": "리소스 수",
+  "mcp.sorts.toolsCount": "도구 수",
+  "mcp.sorts.updatedAt": "최근 업데이트",
+  "mcp.title": "MCP 커뮤니티",
+  "mcp.unvalidated.desc": "이 MCP 서버는 아직 검증되지 않았습니다",
+  "mcp.unvalidated.title": "미검증",
+  "mcp.validated.desc": "이 MCP 서버는 검증을 통과하여 품질과 신뢰성이 보장됩니다.",
+  "mcp.validated.descWithDate": "이 MCP 서버는 {{date}}에 검증을 통과하여 품질과 신뢰성이 보장됩니다.",
+  "mcp.validated.title": "검증됨",
+  "mcpEmpty.description": "필터 조건을 조정하거나 검색어를 입력해보세요",
+  "mcpEmpty.search": "일치하는 MCP 서버를 찾을 수 없습니다",
+  "mcpEmpty.title": "MCP 서버 없음",
+  "models.abilities": "모델 기능",
+  "models.chat": "대화 시작",
+  "models.contentLength": "최대 맥락 길이",
+  "models.details.overview.title": "개요",
+  "models.details.related.listTitle": "관련 모델",
+  "models.details.related.more": "더 보기",
+  "models.details.related.title": "관련 추천",
+  "models.empty.description": "필터 조건을 조정하여 더 많은 모델을 확인해보세요",
+  "models.empty.search": "일치하는 모델을 찾을 수 없습니다",
+  "models.empty.title": "모델 없음",
+  "models.free": "무료",
+  "models.guide": "설정 가이드",
+  "models.list": "모델 목록",
+  "models.more": "더 보기",
+  "models.parameterList.defaultValue": "기본값",
+  "models.parameterList.docs": "문서 보기",
+  "models.parameterList.frequency_penalty.desc": "이 설정은 모델이 입력에서 이미 나타난 특정 단어의 사용 빈도를 조정합니다. 높은 값은 이러한 반복의 가능성을 줄이고, 음수 값은 반대의 효과를 생성합니다. 단어 처벌은 출현 횟수에 따라 증가하지 않습니다. 음수 값은 단어의 반복 사용을 장려합니다.",
+  "models.parameterList.frequency_penalty.title": "빈도 처벌",
+  "models.parameterList.max_tokens.desc": "이 설정은 모델이 한 번의 응답에서 생성할 수 있는 최대 길이를 정의합니다. 높은 값을 설정하면 모델이 더 긴 응답을 생성할 수 있으며, 낮은 값은 응답의 길이를 제한하여 더 간결하게 만듭니다. 다양한 응용 프로그램에 따라 이 값을 적절히 조정하면 예상되는 응답 길이와 세부 사항을 달성하는 데 도움이 될 수 있습니다.",
+  "models.parameterList.max_tokens.title": "한 번의 응답 제한",
+  "models.parameterList.presence_penalty.desc": "이 설정은 입력에서 단어의 출현 빈도에 따라 단어의 반복 사용을 제어하는 데 목적이 있습니다. 입력에서 많이 나타나는 단어는 덜 사용하려고 하며, 사용 빈도는 출현 빈도와 비례합니다. 단어 처벌은 출현 횟수에 따라 증가합니다. 음수 값은 단어의 반복 사용을 장려합니다.",
+  "models.parameterList.presence_penalty.title": "주제 신선도",
+  "models.parameterList.range": "범위",
+  "models.parameterList.reasoning_effort.desc": "이 설정은 모델이 응답을 생성하기 전에 추론 강도를 제어하는 데 사용됩니다. 낮은 강도는 응답 속도를 우선시하고 토큰을 절약하며, 높은 강도는 더 완전한 추론을 제공하지만 더 많은 토큰을 소모하고 응답 속도를 저하시킵니다. 기본값은 중간으로, 추론 정확성과 응답 속도의 균형을 맞춥니다.",
+  "models.parameterList.reasoning_effort.title": "추론 강도",
+  "models.parameterList.temperature.desc": "이 설정은 모델 응답의 다양성에 영향을 미칩니다. 낮은 값은 더 예측 가능하고 전형적인 응답을 유도하며, 높은 값은 더 다양하고 드문 응답을 장려합니다. 값이 0으로 설정되면 모델은 주어진 입력에 대해 항상 동일한 응답을 제공합니다.",
+  "models.parameterList.temperature.title": "무작위성",
+  "models.parameterList.title": "모델 매개변수",
+  "models.parameterList.top_p.desc": "이 설정은 모델의 선택을 가능성이 가장 높은 특정 비율의 단어로 제한합니다: 누적 확률이 P에 도달하는 최상위 단어만 선택합니다. 낮은 값은 모델의 응답을 더 예측 가능하게 만들고, 기본 설정은 모델이 전체 범위의 단어에서 선택할 수 있도록 허용합니다.",
+  "models.parameterList.top_p.title": "핵 샘플링",
+  "models.parameterList.type": "유형",
+  "models.providerInfo.apiTooltip": "LobeChat은 이 제공자에 대해 사용자 정의 API 키를 지원합니다.",
+  "models.providerInfo.input": "입력 가격",
+  "models.providerInfo.inputTooltip": "백만 개의 Token당 비용",
+  "models.providerInfo.latency": "지연",
+  "models.providerInfo.latencyTooltip": "제공자가 첫 번째 Token을 보내는 평균 응답 시간",
+  "models.providerInfo.maxOutput": "최대 출력 길이",
+  "models.providerInfo.maxOutputTooltip": "이 엔드포인트가 생성할 수 있는 최대 Token 수",
+  "models.providerInfo.officialTooltip": "LobeHub 공식 서비스",
+  "models.providerInfo.output": "출력 가격",
+  "models.providerInfo.outputTooltip": "백만 개의 Token당 비용",
+  "models.providerInfo.streamCancellationTooltip": "이 제공자는 스트림 취소 기능을 지원합니다.",
+  "models.providerInfo.throughput": "처리량",
+  "models.providerInfo.throughputTooltip": "스트림 요청당 초당 전송되는 평균 Token 수",
+  "models.sorts.contextWindowTokens": "컨텍스트 길이",
+  "models.sorts.identifier": "모델 ID",
+  "models.sorts.inputPrice": "입력 가격",
+  "models.sorts.outputPrice": "출력 가격",
+  "models.sorts.providerCount": "서비스 제공자 수",
+  "models.sorts.releasedAt": "최근 게시",
+  "models.suggestions": "관련 모델",
+  "models.supportedProviders": "이 모델을 지원하는 서비스 제공자",
+  "plugins.builtinTag": "내장 기능",
+  "plugins.community": "커뮤니티 기능",
+  "plugins.details.settings.title": "기능 설정",
+  "plugins.details.summary.title": "이 기능으로 할 수 있는 일",
+  "plugins.details.tools.title": "기능 도구",
+  "plugins.install": "기능 설치",
+  "plugins.installed": "설치됨",
+  "plugins.legacyTag": "구버전 기능",
+  "plugins.list": "기능 목록",
+  "plugins.meta.description": "설명",
+  "plugins.meta.parameter": "매개변수",
+  "plugins.meta.title": "도구 매개변수",
+  "plugins.meta.type": "유형",
+  "plugins.more": "더보기",
+  "plugins.official": "공식 기능",
+  "plugins.recentSubmits": "최근 업데이트",
+  "plugins.sorts.createdAt": "최근 게시",
+  "plugins.sorts.identifier": "기능 ID",
+  "plugins.sorts.title": "기능 이름",
+  "plugins.suggestions": "추천 항목",
+  "providers.config": "서비스 제공자 설정",
+  "providers.details.guide.title": "접속 가이드",
+  "providers.details.overview.title": "개요",
+  "providers.details.related.listTitle": "관련 서비스 제공자",
+  "providers.details.related.more": "더 보기",
+  "providers.details.related.title": "관련 추천",
+  "providers.empty.description": "필터 조건을 조정하여 더 많은 서비스 제공업체를 확인해보세요",
+  "providers.empty.search": "일치하는 서비스 제공업체를 찾을 수 없습니다",
+  "providers.empty.title": "서비스 제공업체 없음",
+  "providers.list": "모델 서비스 제공자 목록",
+  "providers.modelCount": "{{count}} 개 모델",
+  "providers.modelName": "모델 이름",
+  "providers.modelSite": "모델 문서",
+  "providers.more": "더보기",
+  "providers.officialSite": "공식 웹사이트",
+  "providers.showAllModels": "모든 모델 보기",
+  "providers.sorts.default": "기본 정렬",
+  "providers.sorts.identifier": "서비스 제공자 ID",
+  "providers.sorts.modelCount": "모델 수",
+  "providers.suggestions": "관련 서비스 제공자",
+  "providers.supportedModels": "지원되는 모델",
   "publishedTime": "게시일",
-  "search": {
-    "placeholder": "이름, 소개 또는 키워드 검색...",
-    "result": "{{count}} 개의 <highlight>{{keyword}}</highlight>에 대한 검색 결과",
-    "searching": "검색 중..."
-  },
-  "tab": {
-    "assistant": "도우미",
-    "home": "홈",
-    "model": "모델",
-    "plugin": "플러그인",
-    "provider": "모델 서비스 제공자"
-  }
+  "search.placeholder": "이름, 소개 또는 키워드 검색...",
+  "search.result": "{{count}} 개의 <highlight>{{keyword}}</highlight>에 대한 검색 결과",
+  "search.searching": "검색 중...",
+  "tab.assistant": "도우미",
+  "tab.home": "홈",
+  "tab.model": "모델",
+  "tab.plugin": "기능",
+  "tab.provider": "모델 서비스 제공자",
+  "tab.user": "사용자",
+  "user.agents": "도우미",
+  "user.downloads": "다운로드",
+  "user.editProfile": "프로필 편집",
+  "user.favoriteAgents": "즐겨찾는 어시스턴트",
+  "user.favoritePlugins": "즐겨찾는 플러그인",
+  "user.follow": "팔로우",
+  "user.followers": "팔로워",
+  "user.following": "팔로잉",
+  "user.login": "크리에이터 되기",
+  "user.logout": "로그아웃",
+  "user.myProfile": "내 프로필",
+  "user.noAgents": "이 사용자가 아직 도우미를 게시하지 않았습니다",
+  "user.noFavoriteAgents": "즐겨찾는 어시스턴트가 없습니다",
+  "user.noFavoritePlugins": "즐겨찾는 플러그인이 없습니다",
+  "user.publishedAgents": "제작한 도우미",
+  "user.tabs.favorites": "즐겨찾기",
+  "user.tabs.publishedAgents": "창작",
+  "user.unfavorite": "즐겨찾기 해제",
+  "user.unfavoriteFailed": "즐겨찾기 해제 실패",
+  "user.unfavoriteSuccess": "즐겨찾기에서 제거되었습니다",
+  "user.unfollow": "언팔로우",
+  "user.website": "개인 웹사이트"
 }

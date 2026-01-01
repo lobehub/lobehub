@@ -1,7 +1,7 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { uniq } from 'lodash-es';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { uniq } from 'es-toolkit/compat';
 
-import { InstallPluginMeta, LobeToolCustomPlugin } from '@/types/tool/plugin';
+import { type InstallPluginMeta, type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import type { ToolStoreState } from '../../initialState';
 

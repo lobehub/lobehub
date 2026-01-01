@@ -1,4 +1,4 @@
-import { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { NextResponse } from 'next/server';
@@ -34,6 +34,10 @@ export const GET = checkAuth(async (req, { params, jwtPayload }) => {
     // track the error at server side
     console.error(`Route: [${provider}] ${errorType}:`, error);
 
-    return createErrorResponse(errorType, { error, ...res, provider });
+    // Sanitize error to avoid exposing stack traces to users
+    const sanitizedError =
+      error instanceof Error ? { message: error.message, name: error.name } : error;
+
+    return createErrorResponse(errorType, { error: sanitizedError, ...res, provider });
   }
 });

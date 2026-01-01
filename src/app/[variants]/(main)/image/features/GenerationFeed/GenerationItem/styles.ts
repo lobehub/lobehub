@@ -1,6 +1,6 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 
-export const useStyles = createStyles(({ cx, css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   // 图片操作按钮的公共样式
   generationActionButton: cx(
     'generation-actions',
@@ -12,7 +12,7 @@ export const useStyles = createStyles(({ cx, css, token }) => ({
 
       opacity: 0;
 
-      transition: opacity 0.1s ${token.motionEaseInOut};
+      transition: opacity 0.1s ${cssVar.motionEaseInOut};
     `,
   ),
 
@@ -33,7 +33,7 @@ export const useStyles = createStyles(({ cx, css, token }) => ({
     justify-content: center;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   placeholderContainer: css`
     position: relative;
@@ -46,6 +46,6 @@ export const useStyles = createStyles(({ cx, css, token }) => ({
   `,
 
   spinIcon: css`
-    color: ${token.colorPrimary};
+    color: ${cssVar.colorPrimary};
   `,
 }));

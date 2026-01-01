@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "Agregar asistente",
-    "addAgentAndConverse": "Agregar asistente y conversar",
-    "addAgentSuccess": "Agregado con éxito",
-    "conversation": {
-      "l1": "Hola, soy **{{name}}**, puedes preguntarme cualquier cosa y haré lo posible por responderte ~",
-      "l2": "Aquí tienes una introducción a mis capacidades: ",
-      "l3": "¡Comencemos la conversación!"
-    },
-    "description": "Introducción al asistente",
-    "detail": "Detalles",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "El asistente incluye las siguientes bases de conocimiento para ayudarte a responder más preguntas.",
-          "title": "Base de Conocimiento"
-        },
-        "plugin": {
-          "desc": "El asistente incluye los siguientes complementos para ayudarte a completar más tareas.",
-          "title": "Complementos Integrados"
-        },
-        "title": "Capacidades del Asistente"
-      },
-      "overview": {
-        "example": "Demostración del Asistente",
-        "title": "Resumen"
-      },
-      "related": {
-        "listTitle": "Asistentes Relacionados",
-        "more": "Ver más",
-        "title": "Recomendaciones Relacionadas"
-      },
-      "sidebar": {
-        "toc": "Índice"
-      },
-      "summary": {
-        "title": "¿Qué puedes hacer con este asistente?"
-      },
-      "systemRole": {
-        "openingMessage": "Mensaje de apertura",
-        "openingQuestions": "Preguntas iniciales",
-        "title": "Configuración del Asistente"
-      },
-      "version": {
-        "empty": "No hay versiones históricas",
-        "status": {
-          "archived": "Archivado",
-          "deprecated": "Rechazado",
-          "unpublished": "En revisión"
-        },
-        "table": {
-          "isLatest": "Última versión",
-          "isValidated": "Validado",
-          "publishAt": "Fecha de publicación",
-          "version": "Número de versión"
-        },
-        "title": "Historial de versiones"
-      }
-    },
-    "list": "Lista de asistentes",
-    "marketSource": {
-      "label": "Cambiar fuente del mercado",
-      "legacy": "Mercado antiguo",
-      "new": "Nuevo mercado"
-    },
-    "more": "Más",
-    "plugins": "Integrar complementos",
-    "recentSubmits": "Actualizaciones recientes",
-    "sorts": {
-      "createdAt": "Publicado recientemente",
-      "identifier": "ID del Asistente",
-      "knowledgeCount": "Cantidad de bases de conocimiento",
-      "myown": "Ver mis asistentes",
-      "pluginCount": "Cantidad de complementos",
-      "title": "Nombre del Asistente",
-      "tokenUsage": "Uso de Tokens"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "El asistente fue retirado por problemas de seguridad/política por parte del equipo oficial",
-          "owner": "El propietario del asistente lo retiró o archivó voluntariamente"
-        },
-        "subtitle": "El asistente al que estás accediendo ha sido archivado por una de las siguientes razones:",
-        "title": "Asistente archivado"
-      },
-      "backToMarket": "Volver al mercado de asistentes",
-      "deprecated": {
-        "reasons": {
-          "official": "El asistente fue retirado por problemas de seguridad/política por parte del equipo oficial",
-          "owner": "El propietario del asistente lo retiró o rechazó voluntariamente"
-        },
-        "subtitle": "El asistente al que estás accediendo ha sido rechazado por una de las siguientes razones:",
-        "title": "Asistente rechazado"
-      },
-      "support": "Si tienes algún problema, copia el enlace y envíalo a <1>support@lobehub.com</1> para recibir asistencia.",
-      "unpublished": {
-        "subtitle": "El asistente al que estás accediendo está en proceso de revisión. Si tienes dudas, copia el enlace y envía tu consulta a <1>support@lobehub.com</1>.",
-        "title": "Asistente en revisión"
-      }
-    },
-    "suggestions": "Recomendaciones relacionadas",
-    "systemRole": "Configuración del asistente",
-    "tokenUsage": "Uso de Tokens en el prompt del asistente",
-    "try": "Prueba",
-    "withKnowledge": "Este asistente incluye bases de conocimiento",
-    "withPlugin": "Este asistente incluye complementos"
-  },
-  "back": "Volver a Descubrir",
-  "category": {
-    "assistant": {
-      "academic": "Académico",
-      "all": "Todo",
-      "career": "Carrera",
-      "copywriting": "Redacción",
-      "design": "Diseño",
-      "education": "Educación",
-      "emotions": "Emociones",
-      "entertainment": "Entretenimiento",
-      "games": "Juegos",
-      "general": "General",
-      "life": "Vida",
-      "marketing": "Marketing",
-      "office": "Oficina",
-      "programming": "Programación",
-      "translation": "Traducción"
-    },
-    "plugin": {
-      "all": "Todo",
-      "gaming-entertainment": "Juegos y entretenimiento",
-      "life-style": "Estilo de vida",
-      "lifestyle": "Estilo de vida",
-      "media-generate": "Generación de medios",
-      "science-education": "Ciencia y educación",
-      "social": "Redes sociales",
-      "stocks-finance": "Acciones y finanzas",
-      "tools": "Herramientas útiles",
-      "web-search": "Búsqueda en la web"
-    }
-  },
-  "cleanFilter": "Limpiar filtro",
+  "assistant.favorite": "Guardar",
+  "assistant.favoriteFailed": "Error al guardar",
+  "assistant.favoriteSuccess": "Guardado",
+  "assistant.like": "Me gusta",
+  "assistant.likeFailed": "Error al dar me gusta",
+  "assistant.likeSuccess": "Te gustó",
+  "assistant.unfavorite": "Eliminar de guardados",
+  "assistant.unfavoriteFailed": "Error al eliminar de guardados",
+  "assistant.unfavoriteSuccess": "Eliminado de guardados",
+  "assistant.unlike": "Quitar me gusta",
+  "assistant.unlikeSuccess": "Ya no te gusta",
+  "assistants.addAgent": "Agregar Agente",
+  "assistants.addAgentAndConverse": "Agregar Agente y Chatear",
+  "assistants.addAgentSuccess": "Agregado",
+  "assistants.conversation.l1": "Hola, soy **{{name}}**. Comparte tu objetivo o contexto y colaboraremos desde aquí.",
+  "assistants.conversation.l2": "Esto es lo que puedo hacer:",
+  "assistants.conversation.l3": "Iniciar conversación",
+  "assistants.description": "Acerca de este Agente",
+  "assistants.detail": "Detalles",
+  "assistants.details.capabilities.knowledge.desc": "Este Agente incluye las siguientes Bibliotecas para ayudarte a responder más preguntas.",
+  "assistants.details.capabilities.knowledge.title": "Biblioteca",
+  "assistants.details.capabilities.plugin.desc": "Este Agente incluye las siguientes Habilidades para ayudarte a completar más tareas.",
+  "assistants.details.capabilities.plugin.title": "Habilidades Integradas",
+  "assistants.details.capabilities.title": "Capacidades del Agente",
+  "assistants.details.overview.example": "Demostración del Agente",
+  "assistants.details.overview.title": "Resumen",
+  "assistants.details.related.listTitle": "Agentes Relacionados",
+  "assistants.details.related.more": "Ver más",
+  "assistants.details.related.title": "Agentes Similares",
+  "assistants.details.sidebar.toc": "Tabla de Contenidos",
+  "assistants.details.summary.title": "¿Qué puedes hacer con este Agente?",
+  "assistants.details.systemRole.openingMessage": "Mensaje de Bienvenida",
+  "assistants.details.systemRole.openingQuestions": "Preguntas Iniciales",
+  "assistants.details.systemRole.title": "Perfil del Agente",
+  "assistants.details.version.empty": "Aún no hay versiones históricas",
+  "assistants.details.version.status.archived": "Archivado",
+  "assistants.details.version.status.deprecated": "Rechazado",
+  "assistants.details.version.status.unpublished": "En Revisión",
+  "assistants.details.version.table.isLatest": "Última Versión",
+  "assistants.details.version.table.isValidated": "Validado",
+  "assistants.details.version.table.publishAt": "Fecha de Publicación",
+  "assistants.details.version.table.version": "Versión",
+  "assistants.details.version.title": "Historial de Versiones",
+  "assistants.downloads": "Descargas",
+  "assistants.duplicateAdd.content": "“{{title}}” ya está en tus Agentes. ¿Agregar otra copia?",
+  "assistants.duplicateAdd.ok": "Agregar copia",
+  "assistants.duplicateAdd.title": "¿Agregar duplicado?",
+  "assistants.empty.description": "Intenta ajustar los filtros o explora más Agentes en la Comunidad.",
+  "assistants.empty.search": "No se encontraron Agentes coincidentes",
+  "assistants.empty.title": "No se encontraron Agentes",
+  "assistants.list": "Lista de Agentes",
+  "assistants.marketSource.label": "Cambiar Fuente de Comunidad",
+  "assistants.marketSource.legacy": "Comunidad Legada",
+  "assistants.marketSource.new": "Nueva Comunidad",
+  "assistants.more": "Más",
+  "assistants.plugins": "Habilidades Integradas",
+  "assistants.recentSubmits": "Actualizaciones Recientes",
+  "assistants.sorts.createdAt": "Recientemente Publicado",
+  "assistants.sorts.identifier": "ID del Agente",
+  "assistants.sorts.knowledgeCount": "Bibliotecas",
+  "assistants.sorts.myown": "Ver Mis Agentes",
+  "assistants.sorts.pluginCount": "Habilidades",
+  "assistants.sorts.title": "Nombre del Agente",
+  "assistants.sorts.tokenUsage": "Uso de Tokens",
+  "assistants.status.archived.reasons.official": "La plataforma eliminó este Agente por motivos de seguridad, políticas u otras preocupaciones.",
+  "assistants.status.archived.reasons.owner": "El creador archivó o eliminó este Agente.",
+  "assistants.status.archived.subtitle": "Este Agente ha sido archivado. Posibles razones:",
+  "assistants.status.archived.title": "Agente Archivado",
+  "assistants.status.backToMarket": "Volver a la Comunidad de Agentes",
+  "assistants.status.deprecated.reasons.official": "La plataforma eliminó este Agente por motivos de seguridad, políticas u otras preocupaciones.",
+  "assistants.status.deprecated.reasons.owner": "El creador rechazó o eliminó este Agente.",
+  "assistants.status.deprecated.subtitle": "Este Agente no está disponible actualmente. Posibles razones:",
+  "assistants.status.deprecated.title": "Agente No Disponible",
+  "assistants.status.support": "Si tienes preguntas, copia el enlace y envíalo a <email>support@lobehub.com</email> para recibir ayuda.",
+  "assistants.status.unpublished.subtitle": "Este Agente está en revisión. Para confirmar su estado, copia el enlace y envíalo por correo a <email>support@lobehub.com</email>.",
+  "assistants.status.unpublished.title": "Agente en Revisión",
+  "assistants.suggestions": "Agentes Similares",
+  "assistants.systemRole": "Perfil del Agente",
+  "assistants.tokenUsage": "Uso de Tokens del Agente",
+  "assistants.try": "Probar",
+  "assistants.withKnowledge": "Este Agente incluye Bibliotecas",
+  "assistants.withPlugin": "Este Agente incluye Habilidades",
+  "back": "Volver al Descubrimiento",
+  "category.assistant.academic": "Académico",
+  "category.assistant.all": "Todos",
+  "category.assistant.career": "Carrera",
+  "category.assistant.copywriting": "Redacción",
+  "category.assistant.design": "Diseño",
+  "category.assistant.education": "Educación",
+  "category.assistant.emotions": "Emociones",
+  "category.assistant.entertainment": "Entretenimiento",
+  "category.assistant.games": "Juegos",
+  "category.assistant.general": "General",
+  "category.assistant.life": "Vida",
+  "category.assistant.marketing": "Marketing",
+  "category.assistant.office": "Oficina",
+  "category.assistant.programming": "Programación",
+  "category.assistant.translation": "Traducción",
+  "category.plugin.all": "Todos",
+  "category.plugin.gaming-entertainment": "Juegos y Entretenimiento",
+  "category.plugin.life-style": "Estilo de Vida",
+  "category.plugin.lifestyle": "Estilo de Vida",
+  "category.plugin.media-generate": "Generación de Medios",
+  "category.plugin.science-education": "Ciencia y Educación",
+  "category.plugin.social": "Redes Sociales",
+  "category.plugin.stocks-finance": "Acciones y Finanzas",
+  "category.plugin.tools": "Herramientas Útiles",
+  "category.plugin.web-search": "Búsqueda Web",
+  "cleanFilter": "Limpiar Filtros",
   "create": "Crear",
-  "createGuide": {
-    "func1": {
-      "desc1": "En la ventana de conversación, accede a la página de configuración del asistente que deseas enviar a través de la esquina superior derecha;",
-      "desc2": "Haz clic en el botón de enviar al mercado de asistentes en la esquina superior derecha.",
-      "tag": "Método uno",
-      "title": "Enviar a través de LobeChat"
-    },
-    "func2": {
-      "button": "Ir al repositorio de asistentes de Github",
-      "desc": "Si deseas agregar un asistente al índice, utiliza agent-template.json o agent-template-full.json para crear una entrada en el directorio de plugins, escribe una breve descripción y etiquétala adecuadamente, luego crea una solicitud de extracción.",
-      "tag": "Método dos",
-      "title": "Enviar a través de Github"
-    }
-  },
+  "createGuide.func1.desc1": "En una conversación, abre la configuración del Agente desde el menú superior derecho.",
+  "createGuide.func1.desc2": "Luego haz clic en Enviar a la Comunidad de Agentes en la esquina superior derecha.",
+  "createGuide.func1.tag": "Opción 1",
+  "createGuide.func1.title": "Enviar desde LobeHub",
+  "createGuide.func2.button": "Abrir repositorio de Agentes en GitHub",
+  "createGuide.func2.desc": "Para agregar un Agente al índice, crea una entrada en `plugins/` usando `agent-template.json` o `agent-template-full.json`, añade una breve descripción y etiquetas, luego abre un pull request.",
+  "createGuide.func2.tag": "Opción 2",
+  "createGuide.func2.title": "Enviar en GitHub",
   "dislike": "No me gusta",
   "filter": "Filtrar",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "Todos los autores",
-      "followed": "Autores seguidos",
-      "title": "Rango de autores"
-    },
-    "contentLength": "Longitud mínima del contexto",
-    "maxToken": {
-      "title": "Establecer longitud máxima (Token)",
-      "unlimited": "Sin límite"
-    },
-    "other": {
-      "functionCall": "Soporte para llamadas a funciones",
-      "title": "Otros",
-      "vision": "Soporte para reconocimiento visual",
-      "withKnowledge": "Con base de conocimientos",
-      "withTool": "Con plugins"
-    },
-    "pricing": "Precio del modelo",
-    "timePeriod": {
-      "all": "Todo el tiempo",
-      "day": "Últimas 24 horas",
-      "month": "Últimos 30 días",
-      "title": "Rango de tiempo",
-      "week": "Últimos 7 días",
-      "year": "Último año"
-    }
-  },
-  "home": {
-    "featuredAssistants": "Asistentes recomendados",
-    "featuredModels": "Modelos recomendados",
-    "featuredProviders": "Proveedores de modelos recomendados",
-    "featuredTools": "Plugins recomendados",
-    "more": "Descubre más"
-  },
+  "filterBy.authorRange.everyone": "Todos los Autores",
+  "filterBy.authorRange.followed": "Autores Seguidos",
+  "filterBy.authorRange.title": "Rango de Autor",
+  "filterBy.contentLength": "Longitud Mínima del Contexto",
+  "filterBy.maxToken.title": "Establecer Longitud Máxima (Tokens)",
+  "filterBy.maxToken.unlimited": "Ilimitado",
+  "filterBy.other.functionCall": "Soporta Llamadas a Funciones",
+  "filterBy.other.title": "Otros",
+  "filterBy.other.vision": "Soporta Reconocimiento Visual",
+  "filterBy.other.withKnowledge": "Incluye Bibliotecas",
+  "filterBy.other.withTool": "Incluye Habilidades",
+  "filterBy.pricing": "Precio del Modelo",
+  "filterBy.timePeriod.all": "Todo el Tiempo",
+  "filterBy.timePeriod.day": "Últimas 24 Horas",
+  "filterBy.timePeriod.month": "Últimos 30 Días",
+  "filterBy.timePeriod.title": "Rango de Tiempo",
+  "filterBy.timePeriod.week": "Últimos 7 Días",
+  "filterBy.timePeriod.year": "Último Año",
+  "footer.desc": "Evoluciona con usuarios de IA de todo el mundo. Conviértete en creador y publica tus agentes y habilidades en la Comunidad LobeHub.",
+  "footer.title": "Comparte tu creación hoy en la Comunidad LobeHub",
+  "home.communityAgents": "Agentes de la Comunidad",
+  "home.featuredAssistants": "Agentes Destacados",
+  "home.featuredModels": "Modelos Destacados",
+  "home.featuredPlugins": "Habilidades Destacadas",
+  "home.featuredProviders": "Proveedores Destacados",
+  "home.featuredTools": "Habilidades Destacadas",
+  "home.more": "Descubrir Más",
   "isClaimed": "Reclamado",
   "isFeatured": "Destacado",
-  "isOfficial": "Certificado oficial",
+  "isOfficial": "Verificado Oficialmente",
   "like": "Me gusta",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "Todos los servidores MCP",
-        "name": "Todos"
-      },
-      "business": {
-        "description": "Servicios comerciales y empresariales",
-        "name": "Servicios Comerciales"
-      },
-      "developer": {
-        "description": "Herramientas y servicios relacionados con el desarrollo",
-        "name": "Herramientas de Desarrollo"
-      },
-      "gaming-entertainment": {
-        "description": "Juegos, entretenimiento y actividades recreativas",
-        "name": "Juegos y Entretenimiento"
-      },
-      "health-wellness": {
-        "description": "Salud, fitness y bienestar mental y físico",
-        "name": "Salud y Bienestar"
-      },
-      "lifestyle": {
-        "description": "Estilo de vida personal, hábitos y actividades diarias",
-        "name": "Estilo de Vida"
-      },
-      "media-generate": {
-        "description": "Generación, edición y procesamiento de medios",
-        "name": "Generación de Medios"
-      },
-      "news": {
-        "description": "Agregación de noticias, reportajes y servicios informativos",
-        "name": "Noticias e Información"
-      },
-      "productivity": {
-        "description": "Gestión de tareas, notas y herramientas de productividad",
-        "name": "Herramientas de Productividad"
-      },
-      "science-education": {
-        "description": "Investigación científica, aprendizaje y herramientas educativas",
-        "name": "Ciencia y Educación"
-      },
-      "social": {
-        "description": "Redes sociales y comunicación",
-        "name": "Medios Sociales"
-      },
-      "stocks-finance": {
-        "description": "Mercados financieros, trading e inversión",
-        "name": "Finanzas y Bolsa"
-      },
-      "tools": {
-        "description": "Herramientas y servicios prácticos generales",
-        "name": "Herramientas Útiles"
-      },
-      "travel-transport": {
-        "description": "Planificación de viajes y transporte",
-        "name": "Viajes y Transporte"
-      },
-      "weather": {
-        "description": "Pronósticos meteorológicos y servicios climáticos",
-        "name": "Clima y Meteorología"
-      },
-      "web-search": {
-        "description": "Búsqueda web y recuperación de información",
-        "name": "Recuperación de Información"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "Este servicio puede ejecutarse localmente o en la nube según la configuración o el escenario de uso, ofreciendo capacidades duales.",
-          "title": "Servicio Híbrido"
-        },
-        "local": {
-          "desc": "Este servidor solo puede ejecutarse en el dispositivo local del cliente, requiere instalación y depende de recursos locales.",
-          "title": "Servicio Local"
-        },
-        "remote": {
-          "desc": "Este servidor está alojado y ejecutado remotamente, ya que depende principalmente de servicios remotos y no del entorno local.",
-          "title": "Servicio en la Nube"
-        }
-      },
-      "deployment": {
-        "args": "Argumentos",
-        "checkCommand": "Comando de verificación",
-        "command": "Comando",
-        "commandLine": "Dependencias del sistema",
-        "connection": "Conexión",
-        "connectionType": "Tipo de conexión",
-        "description": "Método de instalación y despliegue del complemento",
-        "descriptionPlaceholder": "Descripción opcional",
-        "empty": "No hay opciones de despliegue disponibles",
-        "env": "Variables de entorno",
-        "guide": "Instrucciones de instalación",
-        "installation": "Instalado mediante {{method}}",
-        "installationMethod": "Método de instalación",
-        "other": "Configuraciones adicionales",
-        "packageName": "Nombre del paquete",
-        "platform": {
-          "steps": {
-            "claude": "- Abre la aplicación **Claude Desktop**\n- Ve a **Configuración** y luego selecciona **Desarrollador**\n- Haz clic en **Editar configuración**\n- Abre el archivo **claude_desktop_config.json**\n- Copia y pega la configuración del servidor en el archivo existente y guarda",
-            "cline": "- Abre VS Code con la extensión Cline instalada\n- Haz clic en el icono de Cline en la barra lateral\n- Selecciona **MCP Servers** en el menú desplegable\n- En la pestaña **Remote Servers**, introduce el nombre del servidor y la URL de tu servidor MCP\n- Haz clic en **Add Server** para conectar",
-            "cursor": "- Navega a **Configuración** y selecciona la configuración de Cursor\n- En el panel izquierdo, elige **MCP**\n- Haz clic en **Agregar nuevo servidor MCP global** en la esquina superior derecha\n- Copia y pega la configuración del servidor en el archivo existente y guarda",
-            "lobeChat": "- Abre la aplicación de escritorio **LobeChat**\n- Ve a **Configuración** - **Asistente predeterminado**\n- Luego selecciona **Configuración de complementos** - **Complementos personalizados**\n- Haz clic en **Importar configuración JSON rápidamente**\n- Copia y pega la configuración del servidor en el cuadro de texto y procede a instalar",
-            "openai": "- Abre tu aplicación o entorno de desarrollo de **OpenAI**\n- Configura la herramienta MCP en la **API de respuestas**\n- Añade el bloque MCP en el array **tools** de la solicitud API\n- Establece **server_url** al endpoint de tu servidor MCP\n- Incluye los encabezados necesarios para autenticación (clave API, token, etc.)\n- Usa el parámetro `allowed_tools` para limitar las herramientas expuestas\n- Configura `require_approval` para controlar la aprobación de ejecución de herramientas",
-            "vscode": "- Abre VS Code\n- Abre la paleta de comandos (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Escribe **MCP: Add Server** y selecciónalo\n- Elige agregar a la configuración del espacio de trabajo o del usuario\n- Copia y pega la configuración del servidor"
-          },
-          "title": "Instalación en {{platform}}"
-        },
-        "recommended": "Recomendado",
-        "systemDependencies": "Dependencias del sistema",
-        "table": {
-          "description": "Descripción",
-          "name": "Nombre",
-          "required": "Obligatorio",
-          "type": "Tipo"
-        },
-        "title": "Método de instalación"
-      },
-      "githubBadge": {
-        "desc": "LobeHub escanea periódicamente repositorios y documentación para:\n\n- Confirmar que el servidor MCP está funcionando correctamente.\n- Extraer características del servidor, como herramientas, recursos, prompts y parámetros requeridos.\n- Nuestra insignia ayuda a los usuarios a evaluar rápidamente la seguridad, características y guía de instalación del servidor MCP.\n\nPor favor, copia el siguiente código en tu archivo `README.md`:"
-      },
-      "nav": {
-        "needHelp": "¿Necesitas ayuda?",
-        "reportIssue": "Reportar un problema",
-        "viewSourceCode": "Ver código fuente"
-      },
-      "overview": {
-        "title": "Resumen"
-      },
-      "related": {
-        "listTitle": "Servidores MCP relacionados",
-        "more": "Ver más",
-        "title": "Recomendaciones relacionadas"
-      },
-      "schema": {
-        "mode": {
-          "docs": "Documentación"
-        },
-        "prompts": {
-          "arguments": "Configuración de parámetros",
-          "desc": "Plantillas interactivas activadas por el usuario",
-          "empty": "No hay prompts disponibles",
-          "instructions": "Instrucciones",
-          "table": {
-            "description": "Descripción",
-            "name": "Nombre",
-            "required": "Obligatorio"
-          },
-          "title": "Lista de Prompts"
-        },
-        "resources": {
-          "desc": "Datos contextuales adjuntados y gestionados por el cliente",
-          "empty": "No hay recursos disponibles",
-          "table": {
-            "description": "Descripción",
-            "mineType": "Tipo MIME",
-            "name": "Nombre",
-            "uri": "URI"
-          },
-          "title": "Lista de Recursos"
-        },
-        "title": "Funciones del complemento",
-        "tools": {
-          "desc": "Interfaces funcionales expuestas al modelo de lenguaje (LLM) para realizar operaciones",
-          "empty": "No hay herramientas disponibles",
-          "inputSchema": "Descripción de entrada",
-          "instructions": "Instrucciones",
-          "table": {
-            "description": "Descripción",
-            "name": "Nombre",
-            "required": "Obligatorio",
-            "type": "Tipo"
-          },
-          "title": "Lista de Herramientas"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "Este servidor MCP ha sido reclamado por su propietario, asegurando su propiedad y gestión.",
-          "title": "Reclamado por el propietario"
-        },
-        "deployMoreThanManual": {
-          "desc": "Este servidor MCP ofrece métodos de instalación más amigables que el manual, permitiendo un despliegue y uso sencillo.",
-          "title": "Ofrece métodos de instalación amigables"
-        },
-        "deployment": {
-          "desc": "Este servidor MCP ofrece al menos un método de instalación para permitir su despliegue y uso.",
-          "descWithCount": "Este servidor MCP ofrece {{number}} métodos de instalación para permitir su despliegue y uso.",
-          "title": "Ofrece al menos un método de instalación"
-        },
-        "license": {
-          "desc": "Este repositorio contiene un archivo LICENSE.",
-          "descWithlicense": "La licencia de este repositorio es {{license}}.",
-          "title": "Con licencia"
-        },
-        "listTitle": "Detalles de puntuación",
-        "notClaimed": {
-          "desc": "Si eres el propietario de este servidor MCP, puedes reclamarlo mediante los siguientes métodos.",
-          "title": "No reclamado por el propietario"
-        },
-        "prompts": {
-          "desc": "Este servidor MCP ofrece prompts que permiten la interacción con el servicio.",
-          "descWithCount": "Este servidor MCP ofrece {{number}} prompts que permiten la interacción con el servicio.",
-          "title": "Incluye prompts"
-        },
-        "readme": {
-          "desc": "Este repositorio contiene un archivo README.md.",
-          "title": "Con README"
-        },
-        "resources": {
-          "desc": "Este servidor MCP ofrece recursos que permiten adjuntar y gestionar datos contextuales.",
-          "descWithCount": "Este servidor MCP ofrece {{number}} recursos que permiten adjuntar y gestionar datos contextuales.",
-          "title": "Incluye recursos"
-        },
-        "title": "Puntuación",
-        "tools": {
-          "desc": "El servicio debe proporcionar al menos una herramienta que permita a los usuarios realizar operaciones específicas.",
-          "descWithCount": "Este servidor MCP ofrece {{number}} herramientas que permiten a los usuarios realizar operaciones específicas.",
-          "title": "Incluye al menos una herramienta"
-        },
-        "validated": {
-          "desc": "Este servidor MCP ha sido validado en su instalación, asegurando su calidad y fiabilidad.",
-          "title": "Validado"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "Este servidor MCP ha sido rigurosamente validado, ofreciendo funcionalidades completas y una experiencia de usuario de alta calidad.",
-          "fullTitle": "Complemento Excelente",
-          "title": "Excelente"
-        },
-        "b": {
-          "desc": "Este servidor MCP ofrece buenas funcionalidades y experiencia de usuario, aunque puede requerir mejoras en algunos aspectos.",
-          "fullTitle": "Funcionalidad Buena",
-          "title": "Bueno"
-        },
-        "f": {
-          "desc": "Este servidor MCP tiene funcionalidades incompletas o baja calidad, se recomienda precaución al usarlo.",
-          "fullTitle": "Calidad Deficiente",
-          "title": "Deficiente"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "Indicaciones",
-          "resources": "Recursos",
-          "title": "Capacidades del complemento",
-          "tools": "Herramientas"
-        },
-        "configuration": {
-          "title": "Configuración del complemento"
-        },
-        "connection": {
-          "args": "Parámetros de inicio",
-          "command": "Comando de inicio",
-          "title": "Información de conexión",
-          "type": "Tipo de conexión",
-          "url": "Dirección del servicio"
-        },
-        "saveSettings": "Guardar configuración",
-        "title": "Configuración del complemento"
-      },
-      "sidebar": {
-        "install": "Instalar servidor MCP",
-        "meta": {
-          "homepage": "Página principal",
-          "installCount": "Número de instalaciones",
-          "language": "Lenguaje del código fuente",
-          "license": "Licencia",
-          "published": "Fecha de publicación",
-          "repo": "Repositorio de código fuente",
-          "stars": "Número de estrellas",
-          "title": "Información detallada",
-          "updated": "Última actualización"
-        },
-        "moreServerConfig": "Ver detalles",
-        "recommendServers": "MCP relacionados",
-        "serverConfig": "Configuración de instalación",
-        "toc": "Índice"
-      },
-      "summary": {
-        "title": "¿Qué puedes hacer con este servidor MCP?"
-      },
-      "totalScore": {
-        "description": "Puntuación total calculada en base a varios indicadores",
-        "legend": {
-          "aGrade": "Grado A ({{minPercent}}-100%)",
-          "bGrade": "Grado B ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "Grado F (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} puntos",
-        "popover": {
-          "completedOptional": "✅ Opcionales completados ({{count}} ítems)",
-          "completedRequired": "✅ Obligatorios completados ({{count}} ítems)",
-          "incompleteOptional": "⏸️ Opcionales no completados ({{count}} ítems)",
-          "incompleteRequired": "❌ Obligatorios no completados ({{count}} ítems)",
-          "title": "Detalles de la puntuación"
-        },
-        "ratingFormat": "Calificación: {{level}}",
-        "scoreInfo": {
-          "items": "ítems",
-          "points": "puntos",
-          "requiredItems": "ítems obligatorios"
-        },
-        "title": "Puntuación total"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "Última versión",
-          "isValidated": "Validado",
-          "publishAt": "Fecha de publicación",
-          "version": "Versión"
-        },
-        "title": "Historial de versiones"
-      }
-    },
-    "hero": {
-      "desc": "Plataforma de servidores MCP de código abierto y desplegable que ayuda a los sistemas de IA a acceder fácilmente a sistemas de archivos, bases de datos, APIs y otros recursos clave, ampliando completamente tus capacidades de IA.",
-      "subTitle": "Código abierto y listo para usar",
-      "title": "Mercado MCP de código abierto para IA"
-    },
-    "sorts": {
-      "createdAt": "Añadido recientemente",
-      "installCount": "Número de instalaciones",
-      "isFeatured": "Complemento recomendado",
-      "isValidated": "Complemento validado",
-      "promptsCount": "Número de prompts",
-      "ratingCount": "Número de valoraciones",
-      "resourcesCount": "Número de recursos",
-      "toolsCount": "Número de herramientas",
-      "updatedAt": "Última actualización"
-    },
-    "title": "Mercado MCP",
-    "unvalidated": {
-      "desc": "Este servidor MCP no ha sido validado aún",
-      "title": "No validado"
-    },
-    "validated": {
-      "desc": "Este servidor MCP ha sido validado, asegurando su calidad y fiabilidad.",
-      "descWithDate": "Este servidor MCP fue validado el {{date}}, asegurando su calidad y fiabilidad.",
-      "title": "Validado"
-    }
-  },
-  "models": {
-    "abilities": "Capacidades del modelo",
-    "chat": "Iniciar conversación",
-    "contentLength": "Longitud máxima del contexto",
-    "details": {
-      "overview": {
-        "title": "Resumen"
-      },
-      "related": {
-        "listTitle": "Modelos relacionados",
-        "more": "Ver más",
-        "title": "Recomendaciones relacionadas"
-      }
-    },
-    "free": "Gratis",
-    "guide": "Guía de configuración",
-    "list": "Lista de modelos",
-    "more": "Más",
-    "parameterList": {
-      "defaultValue": "Valor por defecto",
-      "docs": "Ver documentación",
-      "frequency_penalty": {
-        "desc": "Esta configuración ajusta la frecuencia con la que el modelo reutiliza vocabulario específico que ya ha aparecido en la entrada. Un valor más alto reduce la probabilidad de que esto ocurra, mientras que un valor negativo produce el efecto contrario. La penalización de vocabulario no aumenta con la frecuencia de aparición. Un valor negativo alentará la reutilización del vocabulario.",
-        "title": "Penalización de frecuencia"
-      },
-      "max_tokens": {
-        "desc": "Esta configuración define la longitud máxima que el modelo puede generar en una sola respuesta. Establecer un valor más alto permite al modelo generar respuestas más largas, mientras que un valor más bajo limita la longitud de la respuesta, haciéndola más concisa. Ajustar este valor de manera razonable según el contexto de la aplicación puede ayudar a alcanzar la longitud y el nivel de detalle de respuesta deseados.",
-        "title": "Límite de Respuesta Única"
-      },
-      "presence_penalty": {
-        "desc": "Esta configuración está diseñada para controlar la reutilización del vocabulario según la frecuencia con la que aparece en la entrada. Intenta usar menos aquellas palabras que aparecen con más frecuencia en la entrada, siendo su uso proporcional a la frecuencia de aparición. La penalización de vocabulario aumenta con la frecuencia de aparición. Un valor negativo alentará la reutilización del vocabulario.",
-        "title": "Novedad del tema"
-      },
-      "range": "Rango",
-      "reasoning_effort": {
-        "desc": "Esta configuración se utiliza para controlar la intensidad de razonamiento del modelo antes de generar una respuesta. Una baja intensidad prioriza la velocidad de respuesta y ahorra tokens, mientras que una alta intensidad proporciona un razonamiento más completo, pero consume más tokens y reduce la velocidad de respuesta. El valor predeterminado es medio, equilibrando la precisión del razonamiento con la velocidad de respuesta.",
-        "title": "Intensidad de razonamiento"
-      },
-      "temperature": {
-        "desc": "Esta configuración afecta la diversidad de las respuestas del modelo. Un valor más bajo resultará en respuestas más predecibles y típicas, mientras que un valor más alto alentará respuestas más diversas y menos comunes. Cuando el valor se establece en 0, el modelo siempre dará la misma respuesta para una entrada dada.",
-        "title": "Aleatoriedad"
-      },
-      "title": "Parámetros del modelo",
-      "top_p": {
-        "desc": "Esta configuración limita la selección del modelo a un cierto porcentaje de vocabulario con la mayor probabilidad: solo selecciona aquellas palabras que alcanzan una probabilidad acumulativa de P. Un valor más bajo hace que las respuestas del modelo sean más predecibles, mientras que la configuración predeterminada permite al modelo elegir de todo el rango de vocabulario.",
-        "title": "Muestreo de núcleo"
-      },
-      "type": "Tipo"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChat admite el uso de claves API personalizadas para este proveedor.",
-      "input": "Precio de entrada",
-      "inputTooltip": "Costo por millón de Tokens",
-      "latency": "Latencia",
-      "latencyTooltip": "Tiempo promedio de respuesta del proveedor para enviar el primer Token",
-      "maxOutput": "Longitud máxima de salida",
-      "maxOutputTooltip": "Número máximo de Tokens que este punto final puede generar",
-      "officialTooltip": "Servicio oficial de LobeHub",
-      "output": "Precio de salida",
-      "outputTooltip": "Costo por millón de Tokens",
-      "streamCancellationTooltip": "Este proveedor admite la función de cancelación de flujo.",
-      "throughput": "Rendimiento",
-      "throughputTooltip": "Número promedio de Tokens transmitidos por segundo en solicitudes de flujo"
-    },
-    "sorts": {
-      "contextWindowTokens": "Longitud del contexto",
-      "identifier": "ID del modelo",
-      "inputPrice": "Precio de entrada",
-      "outputPrice": "Precio de salida",
-      "providerCount": "Número de proveedores",
-      "releasedAt": "Publicado recientemente"
-    },
-    "suggestions": "Modelos relacionados",
-    "supportedProviders": "Proveedores que admiten este modelo"
-  },
-  "plugins": {
-    "builtinTag": "Complemento incorporado",
-    "community": "Complementos de la comunidad",
-    "details": {
-      "settings": {
-        "title": "Configuración del complemento"
-      },
-      "summary": {
-        "title": "¿Qué puedes hacer con este complemento?"
-      },
-      "tools": {
-        "title": "Herramientas del complemento"
-      }
-    },
-    "install": "Instalar complemento",
-    "installed": "Instalado",
-    "legacyTag": "Complemento heredado",
-    "list": "Lista de complementos",
-    "meta": {
-      "description": "Descripción",
-      "parameter": "Parámetro",
-      "title": "Parámetros de la herramienta",
-      "type": "Tipo"
-    },
-    "more": "Más",
-    "official": "Complementos oficiales",
-    "recentSubmits": "Actualizaciones recientes",
-    "sorts": {
-      "createdAt": "Publicado recientemente",
-      "identifier": "ID del complemento",
-      "title": "Nombre del complemento"
-    },
-    "suggestions": "Recomendaciones relacionadas"
-  },
-  "providers": {
-    "config": "Configurar proveedor",
-    "details": {
-      "guide": {
-        "title": "Guía de integración"
-      },
-      "overview": {
-        "title": "Resumen"
-      },
-      "related": {
-        "listTitle": "Proveedores relacionados",
-        "more": "Ver más",
-        "title": "Recomendaciones relacionadas"
-      }
-    },
-    "list": "Lista de proveedores de modelos",
-    "modelCount": "{{count}} modelos",
-    "modelName": "Nombre del modelo",
-    "modelSite": "Documentación del modelo",
-    "more": "Más",
-    "officialSite": "Sitio web oficial",
-    "showAllModels": "Mostrar todos los modelos",
-    "sorts": {
-      "default": "Orden predeterminado",
-      "identifier": "ID del proveedor",
-      "modelCount": "Cantidad de modelos"
-    },
-    "suggestions": "Proveedores relacionados",
-    "supportedModels": "Modelos soportados"
-  },
-  "publishedTime": "Publicado en",
-  "search": {
-    "placeholder": "Buscar nombre, descripción o palabras clave...",
-    "result": "{{count}} resultados de búsqueda sobre <highlight>{{keyword}}</highlight>",
-    "searching": "Buscando..."
-  },
-  "tab": {
-    "assistant": "Asistente",
-    "home": "Inicio",
-    "model": "Modelo",
-    "plugin": "Complemento",
-    "provider": "Proveedor de modelos"
-  }
+  "mcp.categories.all.description": "Todos los servidores MCP",
+  "mcp.categories.all.name": "Todos",
+  "mcp.categories.business.description": "Servicios empresariales y corporativos",
+  "mcp.categories.business.name": "Servicios empresariales",
+  "mcp.categories.developer.description": "Herramientas y servicios para desarrolladores",
+  "mcp.categories.developer.name": "Herramientas para desarrolladores",
+  "mcp.categories.gaming-entertainment.description": "Juegos, entretenimiento y actividades recreativas",
+  "mcp.categories.gaming-entertainment.name": "Juegos y entretenimiento",
+  "mcp.categories.health-wellness.description": "Salud, ejercicio y bienestar",
+  "mcp.categories.health-wellness.name": "Salud y bienestar",
+  "mcp.categories.lifestyle.description": "Estilo de vida personal, hábitos y actividades diarias",
+  "mcp.categories.lifestyle.name": "Estilo de vida",
+  "mcp.categories.media-generate.description": "Generación, edición y procesamiento de medios",
+  "mcp.categories.media-generate.name": "Generación de medios",
+  "mcp.categories.news.description": "Agregación de noticias, reportajes y servicios informativos",
+  "mcp.categories.news.name": "Noticias e información",
+  "mcp.categories.productivity.description": "Gestión de tareas, notas y herramientas de productividad",
+  "mcp.categories.productivity.name": "Herramientas de productividad",
+  "mcp.categories.science-education.description": "Investigación científica, aprendizaje y herramientas educativas",
+  "mcp.categories.science-education.name": "Ciencia y educación",
+  "mcp.categories.social.description": "Redes sociales y comunicación",
+  "mcp.categories.social.name": "Redes sociales",
+  "mcp.categories.stocks-finance.description": "Mercados financieros, comercio e inversión",
+  "mcp.categories.stocks-finance.name": "Acciones y finanzas",
+  "mcp.categories.tools.description": "Herramientas y servicios prácticos de uso general",
+  "mcp.categories.tools.name": "Herramientas utilitarias",
+  "mcp.categories.travel-transport.description": "Planificación de viajes y transporte",
+  "mcp.categories.travel-transport.name": "Viajes y transporte",
+  "mcp.categories.weather.description": "Pronóstico del tiempo y servicios meteorológicos",
+  "mcp.categories.weather.name": "Clima",
+  "mcp.categories.web-search.description": "Búsqueda web y recuperación de información",
+  "mcp.categories.web-search.name": "Recuperación de información",
+  "mcp.details.connectionType.hybrid.desc": "Este servicio puede ejecutarse localmente o en la nube según la configuración o el escenario de uso, ofreciendo capacidad de operación dual.",
+  "mcp.details.connectionType.hybrid.title": "Servicio Híbrido",
+  "mcp.details.connectionType.local.desc": "Este servidor solo puede ejecutarse en el dispositivo local del cliente, requiere instalación y depende de recursos locales.",
+  "mcp.details.connectionType.local.title": "Servicio Local",
+  "mcp.details.connectionType.remote.desc": "Este servidor está alojado de forma remota porque depende principalmente de servicios remotos y no del entorno local.",
+  "mcp.details.connectionType.remote.title": "Servicio en la Nube",
+  "mcp.details.deployment.args": "Argumentos",
+  "mcp.details.deployment.checkCommand": "Comando de Verificación",
+  "mcp.details.deployment.command": "Comando",
+  "mcp.details.deployment.commandLine": "Dependencias del Sistema",
+  "mcp.details.deployment.connection": "Método de Conexión",
+  "mcp.details.deployment.connectionType": "Tipo de Conexión",
+  "mcp.details.deployment.description": "Método de Instalación y Despliegue de la Skill",
+  "mcp.details.deployment.descriptionPlaceholder": "Descripción opcional",
+  "mcp.details.deployment.empty": "No hay opciones de despliegue disponibles",
+  "mcp.details.deployment.env": "Variables de Entorno",
+  "mcp.details.deployment.guide": "Guía de Instalación",
+  "mcp.details.deployment.installation": "Instalar vía {{method}}",
+  "mcp.details.deployment.installationMethod": "Método de Instalación",
+  "mcp.details.deployment.other": "Otros Ajustes",
+  "mcp.details.deployment.packageName": "Nombre del Paquete",
+  "mcp.details.deployment.platform.steps.claude": "- Abre la aplicación **Claude Desktop**\n- Ve a **Configuración**, luego selecciona **Desarrollador**\n- Haz clic en **Editar Configuración**\n- Abre el archivo **claude_desktop_config.json**\n- Copia y pega la configuración del servidor en el archivo existente y guarda",
+  "mcp.details.deployment.platform.steps.cline": "- Abre VS Code con la extensión Cline instalada\n- Haz clic en el ícono de Cline en la barra lateral\n- Selecciona **MCP Servers** del menú desplegable\n- En la pestaña **Remote Servers**, ingresa el nombre del servidor y la URL de tu servidor MCP\n- Haz clic en **Agregar Servidor** para conectar",
+  "mcp.details.deployment.platform.steps.cursor": "- Ve a **Configuración**, luego selecciona Configuración de Cursor\n- Elige **MCP** en el menú izquierdo\n- Haz clic en **Agregar Nuevo Servidor MCP Global** en la parte superior derecha\n- Copia y pega la configuración del servidor en el archivo existente y guarda",
+  "mcp.details.deployment.platform.steps.lobeChat": "- Abre la aplicación **LobeHub Desktop**\n- Ve a **Configuración** - **Agente Predeterminado**\n- Luego selecciona **Configuración de Skills** - **Skills Personalizadas**\n- Haz clic en **Importación Rápida de Configuración JSON**\n- Copia y pega la configuración del servidor en el cuadro de texto y luego instala",
+  "mcp.details.deployment.platform.steps.openai": "- Abre tu **aplicación de OpenAI** o entorno de desarrollo\n- Configura las herramientas MCP en la **API de Respuestas**\n- Agrega bloques MCP al arreglo **tools** en las solicitudes de API\n- Establece **server_url** con el endpoint de tu servidor MCP\n- Incluye los encabezados de autenticación requeridos (clave API, token, etc.)\n- Usa el parámetro `allowed_tools` para restringir las herramientas expuestas\n- Establece `require_approval` para controlar la aprobación de ejecución de herramientas",
+  "mcp.details.deployment.platform.steps.vscode": "- Abre VS Code\n- Abre la paleta de comandos (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Escribe **MCP: Add Server** y selecciónalo\n- Elige agregar a la configuración del espacio de trabajo o del usuario\n- Copia y pega la configuración del servidor",
+  "mcp.details.deployment.platform.title": "Instalar en {{platform}}",
+  "mcp.details.deployment.recommended": "Recomendado",
+  "mcp.details.deployment.systemDependencies": "Dependencias del Sistema",
+  "mcp.details.deployment.table.description": "Descripción",
+  "mcp.details.deployment.table.name": "Nombre",
+  "mcp.details.deployment.table.required": "Requerido",
+  "mcp.details.deployment.table.type": "Tipo",
+  "mcp.details.deployment.title": "Método de Instalación",
+  "mcp.details.githubBadge.desc": "LobeHub escanea regularmente los repositorios de código y documentación para:\n- Confirmar el estado operativo del servidor MCP.\n- Extraer características del servidor como herramientas, recursos, prompts y parámetros requeridos.\n- Nuestra insignia ayuda a los usuarios a evaluar rápidamente la seguridad, funcionalidades e instrucciones de instalación del servidor MCP. Por favor, copia el siguiente código en tu archivo `README.md`:",
+  "mcp.details.nav.needHelp": "¿Necesitas ayuda?",
+  "mcp.details.nav.reportIssue": "Reportar un problema",
+  "mcp.details.nav.viewSourceCode": "Ver código fuente",
+  "mcp.details.overview.title": "Resumen",
+  "mcp.details.related.listTitle": "Servidores MCP Relacionados",
+  "mcp.details.related.more": "Ver más",
+  "mcp.details.related.title": "Recomendaciones Relacionadas",
+  "mcp.details.schema.mode.docs": "Documentación",
+  "mcp.details.schema.prompts.arguments": "Configuración de Parámetros",
+  "mcp.details.schema.prompts.desc": "Plantillas interactivas activadas por la selección del usuario",
+  "mcp.details.schema.prompts.empty": "No hay prompts disponibles",
+  "mcp.details.schema.prompts.instructions": "Descripción de Instrucciones",
+  "mcp.details.schema.prompts.table.description": "Descripción",
+  "mcp.details.schema.prompts.table.name": "Nombre",
+  "mcp.details.schema.prompts.table.required": "Requerido",
+  "mcp.details.schema.prompts.title": "Lista de Prompts",
+  "mcp.details.schema.resources.desc": "Datos de contexto adjuntos y gestionados por el cliente",
+  "mcp.details.schema.resources.empty": "No hay recursos disponibles",
+  "mcp.details.schema.resources.table.description": "Descripción",
+  "mcp.details.schema.resources.table.mineType": "Tipo MIME",
+  "mcp.details.schema.resources.table.name": "Nombre",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "Lista de Recursos",
+  "mcp.details.schema.title": "Características de la Skill",
+  "mcp.details.schema.tools.desc": "Interfaces funcionales expuestas a modelos de lenguaje (LLM) para realizar operaciones",
+  "mcp.details.schema.tools.empty": "No hay herramientas disponibles",
+  "mcp.details.schema.tools.inputSchema": "Descripción de Entrada",
+  "mcp.details.schema.tools.instructions": "Descripción de Instrucciones",
+  "mcp.details.schema.tools.table.description": "Descripción",
+  "mcp.details.schema.tools.table.name": "Nombre",
+  "mcp.details.schema.tools.table.required": "Requerido",
+  "mcp.details.schema.tools.table.type": "Tipo",
+  "mcp.details.schema.tools.title": "Lista de Herramientas",
+  "mcp.details.score.claimed.desc": "Este servidor MCP ha sido reclamado por su propietario, garantizando su gestión y autenticidad.",
+  "mcp.details.score.claimed.title": "Reclamado por el Propietario",
+  "mcp.details.score.deployMoreThanManual.desc": "Este servidor MCP ofrece métodos de instalación más amigables que el manual, permitiendo a los usuarios desplegarlo y usarlo fácilmente.",
+  "mcp.details.score.deployMoreThanManual.title": "Ofrece Métodos de Instalación Amigables",
+  "mcp.details.score.deployment.desc": "Este servidor MCP proporciona al menos un método de instalación, permitiendo a los usuarios desplegarlo y utilizarlo.",
+  "mcp.details.score.deployment.descWithCount": "Este servidor MCP proporciona {{number}} métodos de instalación, permitiendo a los usuarios desplegarlo y utilizarlo.",
+  "mcp.details.score.deployment.title": "Proporciona al Menos un Método de Instalación",
+  "mcp.details.score.license.desc": "Este repositorio contiene un archivo LICENSE.",
+  "mcp.details.score.license.descWithlicense": "Este repositorio está licenciado bajo {{license}}.",
+  "mcp.details.score.license.title": "Tiene LICENSE",
+  "mcp.details.score.listTitle": "Detalles de la Puntuación",
+  "mcp.details.score.notClaimed.desc": "Si eres el propietario de este servidor MCP, puedes reclamarlo mediante los siguientes métodos.",
+  "mcp.details.score.notClaimed.title": "No Reclamado por el Propietario",
+  "mcp.details.score.prompts.desc": "Este servidor MCP proporciona prompts, permitiendo a los usuarios interactuar con el servicio.",
+  "mcp.details.score.prompts.descWithCount": "Este servidor MCP proporciona {{number}} prompts, permitiendo a los usuarios interactuar con el servicio.",
+  "mcp.details.score.prompts.title": "Incluye Prompts",
+  "mcp.details.score.readme.desc": "Este repositorio contiene un archivo README.md.",
+  "mcp.details.score.readme.title": "Tiene README",
+  "mcp.details.score.resources.desc": "Este servidor MCP proporciona recursos, permitiendo a los usuarios adjuntar y gestionar datos de contexto.",
+  "mcp.details.score.resources.descWithCount": "Este servidor MCP proporciona {{number}} recursos, permitiendo a los usuarios adjuntar y gestionar datos de contexto.",
+  "mcp.details.score.resources.title": "Incluye Recursos",
+  "mcp.details.score.title": "Puntuación",
+  "mcp.details.score.tools.desc": "El servicio debe proporcionar al menos una herramienta, permitiendo a los usuarios realizar operaciones específicas.",
+  "mcp.details.score.tools.descWithCount": "Este servidor MCP proporciona {{number}} funcionalidades de herramientas, permitiendo a los usuarios realizar operaciones específicas.",
+  "mcp.details.score.tools.title": "Incluye al Menos una Herramienta",
+  "mcp.details.score.validated.desc": "Este servidor MCP ha pasado la validación de instalación, garantizando su calidad y fiabilidad.",
+  "mcp.details.score.validated.title": "Validado",
+  "mcp.details.scoreLevel.a.desc": "Este servidor MCP ha sido rigurosamente validado, ofreciendo características completas y una experiencia de usuario de alta calidad.",
+  "mcp.details.scoreLevel.a.fullTitle": "Skill Excelente",
+  "mcp.details.scoreLevel.a.title": "Premium",
+  "mcp.details.scoreLevel.b.desc": "Este servidor MCP ofrece buenas características y experiencia de usuario, aunque puede requerir mejoras en algunas áreas.",
+  "mcp.details.scoreLevel.b.fullTitle": "Funcionalidad Buena",
+  "mcp.details.scoreLevel.b.title": "Bueno",
+  "mcp.details.scoreLevel.f.desc": "Este servidor MCP está incompleto o es de baja calidad; se recomienda precaución al usarlo.",
+  "mcp.details.scoreLevel.f.fullTitle": "Calidad Deficiente",
+  "mcp.details.scoreLevel.f.title": "Deficiente",
+  "mcp.details.settings.capabilities.prompts": "Indicaciones",
+  "mcp.details.settings.capabilities.resources": "Recursos",
+  "mcp.details.settings.capabilities.title": "Capacidades de la Habilidad",
+  "mcp.details.settings.capabilities.tools": "Herramientas",
+  "mcp.details.settings.configuration.title": "Configuración de la Habilidad",
+  "mcp.details.settings.connection.args": "Argumentos de Inicio",
+  "mcp.details.settings.connection.command": "Comando de Inicio",
+  "mcp.details.settings.connection.title": "Información de Conexión",
+  "mcp.details.settings.connection.type": "Tipo de Conexión",
+  "mcp.details.settings.connection.url": "URL del Servicio",
+  "mcp.details.settings.saveSettings": "Guardar Configuración",
+  "mcp.details.settings.title": "Configuración de la Habilidad",
+  "mcp.details.sidebar.install": "Instalar Servidor MCP",
+  "mcp.details.sidebar.meta.homepage": "Página Oficial",
+  "mcp.details.sidebar.meta.installCount": "Número de Instalaciones",
+  "mcp.details.sidebar.meta.language": "Lenguaje Fuente",
+  "mcp.details.sidebar.meta.license": "Licencia",
+  "mcp.details.sidebar.meta.published": "Fecha de Publicación",
+  "mcp.details.sidebar.meta.repo": "Repositorio Fuente",
+  "mcp.details.sidebar.meta.stars": "Estrellas",
+  "mcp.details.sidebar.meta.title": "Detalles",
+  "mcp.details.sidebar.meta.updated": "Última Actualización",
+  "mcp.details.sidebar.moreServerConfig": "Ver Detalles",
+  "mcp.details.sidebar.recommendServers": "MCP Relacionados",
+  "mcp.details.sidebar.serverConfig": "Configuración de Instalación",
+  "mcp.details.sidebar.toc": "Tabla de Contenidos",
+  "mcp.details.summary.title": "¿Qué puedes hacer con este Servidor MCP?",
+  "mcp.details.totalScore.description": "Puntuación total calculada en base a varios indicadores",
+  "mcp.details.totalScore.legend.aGrade": "Calificación A ({{minPercent}}-100%)",
+  "mcp.details.totalScore.legend.bGrade": "Calificación B ({{minPercent}}-{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "Calificación F (0-{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} puntos",
+  "mcp.details.totalScore.popover.completedOptional": "✅ Elementos Opcionales Completados ({{count}})",
+  "mcp.details.totalScore.popover.completedRequired": "✅ Elementos Requeridos Completados ({{count}})",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ Elementos Opcionales Incompletos ({{count}})",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ Elementos Requeridos Incompletos ({{count}})",
+  "mcp.details.totalScore.popover.title": "Detalles de la Puntuación",
+  "mcp.details.totalScore.ratingFormat": "Calificación: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "Elementos",
+  "mcp.details.totalScore.scoreInfo.points": "Puntos",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "Elementos Requeridos",
+  "mcp.details.totalScore.title": "Puntuación Total",
+  "mcp.details.versions.table.isLatest": "Última Versión",
+  "mcp.details.versions.table.isValidated": "Validado",
+  "mcp.details.versions.table.publishAt": "Fecha de Publicación",
+  "mcp.details.versions.table.version": "Versión",
+  "mcp.details.versions.title": "Historial de Versiones",
+  "mcp.hero.desc": "Una comunidad de Servidores MCP de código abierto y desplegables—ayudando a los sistemas de IA a acceder a sistemas de archivos, bases de datos, APIs y otros recursos clave.",
+  "mcp.hero.subTitle": "Código abierto, listo para usar",
+  "mcp.hero.title": "Comunidad MCP de Código Abierto para IA",
+  "mcp.sorts.createdAt": "Recientemente Añadidos",
+  "mcp.sorts.installCount": "Número de Instalaciones",
+  "mcp.sorts.isFeatured": "Habilidades Destacadas",
+  "mcp.sorts.isValidated": "Habilidades Validadas",
+  "mcp.sorts.promptsCount": "Número de Indicaciones",
+  "mcp.sorts.ratingCount": "Número de Calificaciones",
+  "mcp.sorts.resourcesCount": "Número de Recursos",
+  "mcp.sorts.toolsCount": "Número de Herramientas",
+  "mcp.sorts.updatedAt": "Recientemente Actualizados",
+  "mcp.title": "Comunidad MCP",
+  "mcp.unvalidated.desc": "Este Servidor MCP aún no ha sido validado",
+  "mcp.unvalidated.title": "No Validado",
+  "mcp.validated.desc": "Este Servidor MCP ha sido validado para garantizar su calidad y fiabilidad.",
+  "mcp.validated.descWithDate": "Este Servidor MCP fue validado el {{date}} para garantizar su calidad y fiabilidad.",
+  "mcp.validated.title": "Validado",
+  "mcpEmpty.description": "Intenta ajustar los filtros o buscar con diferentes palabras clave.",
+  "mcpEmpty.search": "No se encontraron Servidores MCP coincidentes",
+  "mcpEmpty.title": "No se encontraron Servidores MCP",
+  "models.abilities": "Capacidades del Modelo",
+  "models.chat": "Iniciar Conversación",
+  "models.contentLength": "Longitud Máxima del Contexto",
+  "models.details.overview.title": "Resumen",
+  "models.details.related.listTitle": "Modelos Relacionados",
+  "models.details.related.more": "Ver Más",
+  "models.details.related.title": "Recomendaciones Relacionadas",
+  "models.empty.description": "Intenta ajustar los filtros para ver más modelos",
+  "models.empty.search": "No se encontraron modelos coincidentes",
+  "models.empty.title": "No hay modelos disponibles",
+  "models.free": "Gratis",
+  "models.guide": "Guía de Configuración",
+  "models.list": "Lista de Modelos",
+  "models.more": "Más",
+  "models.parameterList.defaultValue": "Valor Predeterminado",
+  "models.parameterList.docs": "Ver Documentación",
+  "models.parameterList.frequency_penalty.desc": "Este ajuste modifica la frecuencia con la que el modelo reutiliza vocabulario que ya ha aparecido en la entrada. Valores más altos reducen la probabilidad de repetición, mientras que valores negativos la aumentan. Las penalizaciones no aumentan con la frecuencia de aparición. Los valores negativos fomentan la reutilización del vocabulario.",
+  "models.parameterList.frequency_penalty.title": "Penalización por Frecuencia",
+  "models.parameterList.max_tokens.desc": "Este ajuste define la longitud máxima que el modelo puede generar en una sola respuesta. Un valor más alto permite respuestas más largas, mientras que uno más bajo las limita, haciéndolas más concisas. Ajustar este valor según el caso de uso puede ayudar a lograr la longitud y nivel de detalle deseado.",
+  "models.parameterList.max_tokens.title": "Límite de Respuesta Única",
+  "models.parameterList.presence_penalty.desc": "Este ajuste controla la reutilización del vocabulario según su frecuencia en la entrada. Intenta usar menos aquellas palabras que aparecen con mayor frecuencia. Las penalizaciones aumentan con la frecuencia de aparición. Los valores negativos fomentan la reutilización del vocabulario.",
+  "models.parameterList.presence_penalty.title": "Novedad Temática",
+  "models.parameterList.range": "Rango",
+  "models.parameterList.reasoning_effort.desc": "Este ajuste controla la intensidad del razonamiento que el modelo aplica antes de generar una respuesta. Una intensidad baja prioriza la velocidad y ahorro de tokens, mientras que una alta proporciona razonamientos más completos pero consume más tokens y tiempo. El valor predeterminado es medio, equilibrando precisión y velocidad.",
+  "models.parameterList.reasoning_effort.title": "Intensidad de Razonamiento",
+  "models.parameterList.temperature.desc": "Este ajuste afecta la diversidad de las respuestas del modelo. Valores bajos generan respuestas más predecibles, mientras que valores altos fomentan respuestas más variadas. Si se establece en 0, el modelo siempre dará la misma respuesta para una entrada dada.",
+  "models.parameterList.temperature.title": "Aleatoriedad",
+  "models.parameterList.title": "Parámetros del Modelo",
+  "models.parameterList.top_p.desc": "Este ajuste limita la selección del modelo a un cierto porcentaje del vocabulario más probable: solo selecciona aquellas palabras cuya probabilidad acumulada alcanza P. Valores bajos hacen las respuestas más predecibles, mientras que el valor predeterminado permite mayor variedad.",
+  "models.parameterList.top_p.title": "Muestreo de Núcleo",
+  "models.parameterList.type": "Tipo",
+  "models.providerInfo.apiTooltip": "LobeHub permite usar una clave API personalizada para este proveedor.",
+  "models.providerInfo.input": "Precio de Entrada",
+  "models.providerInfo.inputTooltip": "Costo por millón de tokens",
+  "models.providerInfo.latency": "Latencia",
+  "models.providerInfo.latencyTooltip": "Tiempo promedio de respuesta para enviar el primer token",
+  "models.providerInfo.maxOutput": "Longitud Máxima de Salida",
+  "models.providerInfo.maxOutputTooltip": "Número máximo de tokens que este endpoint puede generar",
+  "models.providerInfo.officialTooltip": "Servicio Oficial de LobeHub",
+  "models.providerInfo.output": "Precio de Salida",
+  "models.providerInfo.outputTooltip": "Costo por millón de tokens",
+  "models.providerInfo.streamCancellationTooltip": "Este proveedor permite cancelar transmisiones.",
+  "models.providerInfo.throughput": "Rendimiento",
+  "models.providerInfo.throughputTooltip": "Promedio de tokens transmitidos por segundo en solicitudes de transmisión",
+  "models.sorts.contextWindowTokens": "Longitud del Contexto",
+  "models.sorts.identifier": "ID del Modelo",
+  "models.sorts.inputPrice": "Precio de Entrada",
+  "models.sorts.outputPrice": "Precio de Salida",
+  "models.sorts.providerCount": "Número de Proveedores",
+  "models.sorts.releasedAt": "Recientemente Lanzados",
+  "models.suggestions": "Modelos Relacionados",
+  "models.supportedProviders": "Proveedores Compatibles con este Modelo",
+  "plugins.builtinTag": "Integrado",
+  "plugins.community": "Habilidades de la Comunidad",
+  "plugins.details.settings.title": "Configuración de la Habilidad",
+  "plugins.details.summary.title": "¿Qué puedes hacer con esta habilidad?",
+  "plugins.details.tools.title": "Herramientas de la Habilidad",
+  "plugins.install": "Instalar Habilidad",
+  "plugins.installed": "Instalada",
+  "plugins.legacyTag": "Legado",
+  "plugins.list": "Lista de Habilidades",
+  "plugins.meta.description": "Descripción",
+  "plugins.meta.parameter": "Parámetro",
+  "plugins.meta.title": "Parámetros de la Herramienta",
+  "plugins.meta.type": "Tipo",
+  "plugins.more": "Más",
+  "plugins.official": "Habilidades Oficiales",
+  "plugins.recentSubmits": "Actualizadas Recientemente",
+  "plugins.sorts.createdAt": "Publicadas Recientemente",
+  "plugins.sorts.identifier": "ID de la Habilidad",
+  "plugins.sorts.title": "Nombre de la Habilidad",
+  "plugins.suggestions": "Recomendaciones Relacionadas",
+  "providers.config": "Configurar Proveedor",
+  "providers.details.guide.title": "Guía de Integración",
+  "providers.details.overview.title": "Resumen",
+  "providers.details.related.listTitle": "Proveedores Relacionados",
+  "providers.details.related.more": "Ver Más",
+  "providers.details.related.title": "Recomendaciones Relacionadas",
+  "providers.empty.description": "Intenta ajustar los filtros para ver más proveedores.",
+  "providers.empty.search": "No se encontraron proveedores coincidentes",
+  "providers.empty.title": "No se encontraron Proveedores",
+  "providers.list": "Lista de Proveedores",
+  "providers.modelCount": "{{count}} modelos",
+  "providers.modelName": "Nombre del Modelo",
+  "providers.modelSite": "Documentación del Modelo",
+  "providers.more": "Más",
+  "providers.officialSite": "Sitio Oficial",
+  "providers.showAllModels": "Mostrar Todos los Modelos",
+  "providers.sorts.default": "Predeterminado",
+  "providers.sorts.identifier": "ID del Proveedor",
+  "providers.sorts.modelCount": "Número de Modelos",
+  "providers.suggestions": "Proveedores Relacionados",
+  "providers.supportedModels": "Modelos Compatibles",
+  "publishedTime": "Publicado",
+  "search.placeholder": "Buscar por nombre, descripción o palabras clave...",
+  "search.result": "{{count}} resultados sobre <highlight>{{keyword}}</highlight>",
+  "search.searching": "Buscando...",
+  "tab.assistant": "Agente",
+  "tab.home": "Inicio",
+  "tab.model": "Modelo",
+  "tab.plugin": "Habilidad",
+  "tab.provider": "Proveedor",
+  "tab.user": "Usuario",
+  "user.agents": "Agentes",
+  "user.downloads": "Descargas",
+  "user.editProfile": "Editar Perfil",
+  "user.favoriteAgents": "Agentes Guardados",
+  "user.favoritePlugins": "Habilidades Guardadas",
+  "user.follow": "Seguir",
+  "user.followers": "Seguidores",
+  "user.following": "Siguiendo",
+  "user.login": "Conviértete en Creador",
+  "user.logout": "Cerrar Sesión",
+  "user.myProfile": "Mi Perfil",
+  "user.noAgents": "Este usuario aún no ha publicado ningún Agente",
+  "user.noFavoriteAgents": "Aún no hay Agentes guardados",
+  "user.noFavoritePlugins": "Aún no hay Habilidades guardadas",
+  "user.publishedAgents": "Agentes Creados",
+  "user.tabs.favorites": "Favoritos",
+  "user.tabs.publishedAgents": "Creados",
+  "user.unfavorite": "Eliminar de Favoritos",
+  "user.unfavoriteFailed": "No se pudo eliminar de favoritos",
+  "user.unfavoriteSuccess": "Eliminado de Favoritos",
+  "user.unfollow": "Dejar de Seguir",
+  "user.website": "Sitio Web"
 }

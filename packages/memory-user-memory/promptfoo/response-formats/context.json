@@ -1,0 +1,210 @@
+{
+  "json_schema": {
+    "type": "object",
+    "properties": {
+      "memories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "details": {
+              "type": "string",
+              "description": "Optional detailed information"
+            },
+            "memoryCategory": {
+              "type": "string",
+              "description": "Memory category"
+            },
+            "memoryLayer": {
+              "type": "string",
+              "const": "context",
+              "description": "Memory layer"
+            },
+            "memoryType": {
+              "type": "string",
+              "enum": [
+                "activity",
+                "context",
+                "event",
+                "fact",
+                "location",
+                "other",
+                "people",
+                "preference",
+                "technology",
+                "topic"
+              ],
+              "description": "Memory type"
+            },
+            "summary": {
+              "type": "string",
+              "description": "Concise overview of this specific memory"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "User defined tags that summarize the context facets"
+            },
+            "title": {
+              "type": "string",
+              "description": "Brief descriptive title"
+            },
+            "withContext": {
+              "type": "object",
+              "properties": {
+                "associatedObjects": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "extra": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Additional metadata about the object, should always be a valid JSON string if present"
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "Name of the associated object"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "application",
+                          "item",
+                          "knowledge",
+                          "other",
+                          "person",
+                          "place"
+                        ],
+                        "description": "Type/category of the associated object"
+                      }
+                    },
+                    "required": [
+                      "extra",
+                      "name",
+                      "type"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "Array of objects describing involved roles, entities, or resources, [] empty if none"
+                },
+                "associatedSubjects": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "extra": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Additional metadata about the subject, should always be a valid JSON string if present"
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "Name of the associated subject"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "item",
+                          "other",
+                          "person",
+                          "pet"
+                        ],
+                        "description": "Type/category of the associated subject"
+                      }
+                    },
+                    "required": [
+                      "extra",
+                      "name",
+                      "type"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "Array of JSON objects describing involved subjects or participants, [] empty if none"
+                },
+                "currentStatus": {
+                  "type": "string",
+                  "enum": [
+                    "aborted",
+                    "cancelled",
+                    "completed",
+                    "on_hold",
+                    "ongoing",
+                    "planned"
+                  ],
+                  "description": "High level status markers (must be one of 'planned', 'ongoing', 'completed', 'aborted', 'on_hold', 'cancelled')"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Rich narrative describing the situation, timeline, or environment"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Model generated tags that summarize the context themes"
+                },
+                "scoreImpact": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Numeric score (0-1 (0% to 100%)) describing importance"
+                },
+                "scoreUrgency": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Numeric score (0-1 (0% to 100%)) describing urgency"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Optional synthesized context headline"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "High level context archetype (e.g., 'project', 'relationship', 'goal')"
+                }
+              },
+              "required": [
+                "associatedObjects",
+                "associatedSubjects",
+                "currentStatus",
+                "description",
+                "labels",
+                "scoreImpact",
+                "scoreUrgency",
+                "title",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "details",
+            "memoryCategory",
+            "memoryLayer",
+            "memoryType",
+            "summary",
+            "tags",
+            "title",
+            "withContext"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Array of extracted context memory items, could be empty if decided no relevant context to extract"
+      }
+    },
+    "required": [
+      "memories"
+    ],
+    "additionalProperties": false
+  },
+  "type": "json_schema"
+}

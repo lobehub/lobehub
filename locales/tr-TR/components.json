@@ -1,197 +1,137 @@
 {
-  "ArgsInput": {
-    "addArgument": "Parametre ekle",
-    "argumentPlaceholder": "Parametre {{index}}",
-    "enterFirstArgument": "İlk parametreyi girin..."
-  },
-  "DragUpload": {
-    "dragDesc": "Dosyaları buraya sürükleyin, birden fazla resim yüklemeyi destekler.",
-    "dragFileDesc": "Resimleri ve dosyaları buraya sürükleyin, birden fazla resim ve dosya yüklemeyi destekler.",
-    "dragFileTitle": "Dosya Yükle",
-    "dragTitle": "Resim Yükle"
-  },
-  "FileManager": {
-    "actions": {
-      "addToKnowledgeBase": "Bilgi tabanına ekle",
-      "addToOtherKnowledgeBase": "Diğer bilgi tabanına ekle",
-      "batchChunking": "Toplu parçalara ayırma",
-      "chunking": "Parçalara ayırma",
-      "chunkingTooltip": "Dosyayı birden fazla metin parçasına ayırıp vektörleştirdikten sonra, anlamsal arama ve dosya diyalogları için kullanılabilir",
-      "chunkingUnsupported": "Bu dosya parça parça yüklemeyi desteklemiyor.",
-      "confirmDelete": "Bu dosya silinecek, silindikten sonra geri alınamaz, lütfen işleminizi onaylayın",
-      "confirmDeleteMultiFiles": "Seçilen {{count}} dosya silinecek, silindikten sonra geri alınamaz, lütfen işleminizi onaylayın",
-      "confirmRemoveFromKnowledgeBase": "Seçilen {{count}} dosya bilgi tabanından kaldırılacak, kaldırıldıktan sonra dosyalar tüm dosyalar arasında görüntülenebilir, lütfen işleminizi onaylayın",
-      "copyUrl": "Bağlantıyı kopyala",
-      "copyUrlSuccess": "Dosya adresi başarıyla kopyalandı",
-      "createChunkingTask": "Hazırlanıyor...",
-      "deleteSuccess": "Dosya başarıyla silindi",
-      "downloading": "Dosya indiriliyor...",
-      "removeFromKnowledgeBase": "Bilgi tabanından kaldır",
-      "removeFromKnowledgeBaseSuccess": "Dosya başarıyla kaldırıldı"
-    },
-    "bottom": "Artık sona geldik",
-    "config": {
-      "showFilesInKnowledgeBase": "Bilgi tabanındaki içeriği göster"
-    },
-    "emptyStatus": {
-      "actions": {
-        "file": "Dosya yükle",
-        "folder": "Klasör yükle",
-        "knowledgeBase": "Yeni bilgi tabanı oluştur"
-      },
-      "or": "veya",
-      "title": "Dosyayı veya klasörü buraya sürükleyin"
-    },
-    "title": {
-      "createdAt": "Oluşturulma zamanı",
-      "size": "Boyut",
-      "title": "Dosya"
-    },
-    "total": {
-      "fileCount": "Toplam {{count}} öğe",
-      "selectedCount": "Seçilen {{count}} öğe"
-    },
-    "view": {
-      "list": "Liste Görünümü",
-      "masonry": "Karo Görünümü"
-    }
-  },
-  "FileParsingStatus": {
-    "chunks": {
-      "embeddingStatus": {
-        "empty": "Metin parçaları henüz tamamen vektörleştirilmedi, bu durum anlamsal arama işlevinin kullanılamamasına neden olabilir, arama kalitesini artırmak için lütfen metin parçalarını vektörleştirin",
-        "error": "Vektörleştirme başarısız oldu",
-        "errorResult": "Vektörleştirme başarısız oldu, lütfen kontrol edip tekrar deneyin. Başarısız olma nedeni:",
-        "processing": "Metin parçaları vektörleştiriliyor, lütfen bekleyin",
-        "success": "Mevcut metin parçaları tamamen vektörleştirildi"
-      },
-      "embeddings": "Vektörleştirme",
-      "status": {
-        "error": "Parçalara ayırma başarısız oldu",
-        "errorResult": "Parçalara ayırma başarısız oldu, lütfen kontrol edip tekrar deneyin. Başarısız olma nedeni:",
-        "processing": "Parçalara ayırma işlemi devam ediyor",
-        "processingTip": "Sunucu metin parçalarını ayırıyor, sayfayı kapatmak parçalama ilerlemesini etkilemez"
-      }
-    }
-  },
-  "GoBack": {
-    "back": "Geri dön"
-  },
-  "HtmlPreview": {
-    "actions": {
-      "download": "İndir",
-      "preview": "Önizleme"
-    },
-    "iframeTitle": "HTML Önizlemesi",
-    "mode": {
-      "code": "Kod",
-      "preview": "Önizleme"
-    },
-    "title": "HTML Önizlemesi"
-  },
-  "ImageUpload": {
-    "actions": {
-      "changeImage": "Resmi değiştirmek için tıklayın",
-      "dropMultipleFiles": "Birden fazla dosya yükleme desteklenmiyor, sadece ilk dosya kullanılacak"
-    },
-    "placeholder": {
-      "primary": "Resim ekle",
-      "secondary": "Tıklayın veya sürükleyip bırakın yüklemek için"
-    }
-  },
-  "KeyValueEditor": {
-    "addButton": "Yeni bir satır ekle",
-    "deleteTooltip": "Sil",
-    "duplicateKeyError": "Anahtar adı benzersiz olmalıdır",
-    "keyPlaceholder": "Anahtar",
-    "valuePlaceholder": "Değer"
-  },
-  "LocalFile": {
-    "action": {
-      "open": "Aç",
-      "showInFolder": "Klasörde Göster"
-    }
-  },
-  "MaxTokenSlider": {
-    "unlimited": "Sınırsız"
-  },
-  "ModelSelect": {
-    "featureTag": {
-      "custom": "Özel model, varsayılan olarak hem fonksiyon çağrısını hem de görüntü tanımayı destekler, yukarıdaki yeteneklerin kullanılabilirliğini doğrulamak için lütfen gerçek durumu kontrol edin",
-      "file": "Bu model dosya yükleme ve tanımayı destekler",
-      "functionCall": "Bu model fonksiyon çağrısını destekler",
-      "imageOutput": "Bu model resim oluşturmayı destekler",
-      "reasoning": "Bu model derin düşünmeyi destekler",
-      "search": "Bu model çevrimiçi aramayı destekler",
-      "tokens": "Bu model tek bir oturumda en fazla {{tokens}} Token destekler",
-      "video": "Bu model video tanımayı destekler",
-      "vision": "Bu model görüntü tanımıyı destekler"
-    },
-    "removed": "Bu model listeden çıkarıldı, seçiminizi kaldırırsanız otomatik olarak kaldırılacaktır"
-  },
-  "ModelSwitchPanel": {
-    "emptyModel": "Etkinleştirilmiş model bulunmamaktadır, lütfen ayarlara giderek açın",
-    "emptyProvider": "Etkinleştirilmiş bir sağlayıcı yok, lütfen ayarlara gidin",
-    "goToSettings": "Ayrıntılara git",
-    "provider": "Sağlayıcı",
-    "title": "Model"
-  },
-  "MultiImagesUpload": {
-    "actions": {
-      "uploadMore": "Daha fazla yüklemek için tıklayın veya sürükleyin"
-    },
-    "modal": {
-      "complete": "Tamamla",
-      "newFileIndicator": "Yeni",
-      "selectImageToPreview": "Önizlemek için resim seçin",
-      "title": "Resimleri Yönet ({{count}})",
-      "upload": "Resim Yükle"
-    },
-    "placeholder": {
-      "primary": "Resim yüklemek için tıklayın veya sürükleyin",
-      "secondary": "Birden fazla resim seçimi desteklenir"
-    },
-    "progress": {
-      "uploadingWithCount": "{{completed}}/{{total}} yüklendi"
-    },
-    "validation": {
-      "fileSizeExceeded": "Dosya boyutu sınırı aşıldı",
-      "fileSizeExceededDetail": "{{fileName}} ({{actualSize}}) maksimum boyut sınırı olan {{maxSize}}'yi aşıyor",
-      "fileSizeExceededMultiple": "{{count}} dosya, maksimum boyut sınırı olan {{maxSize}}'yi aşıyor: {{fileList}}",
-      "imageCountExceeded": "Resim sayısı sınırı aşıldı"
-    }
-  },
-  "OllamaSetupGuide": {
-    "action": {
-      "close": "Uyarıyı Kapat",
-      "start": "Yüklendi ve çalışıyor, sohbete başla"
-    },
-    "cors": {
-      "description": "Tarayıcı güvenlik kısıtlamaları nedeniyle, Ollama'yı düzgün bir şekilde kullanabilmek için çapraz alan yapılandırması yapmanız gerekmektedir.",
-      "linux": {
-        "env": "[Service] bölümüne `Environment` ekleyin ve OLLAMA_ORIGINS ortam değişkenini ekleyin:",
-        "reboot": "systemd'yi yeniden yükleyin ve Ollama'yı yeniden başlatın",
-        "systemd": "ollama hizmetini düzenlemek için systemd'yi çağırın:"
-      },
-      "macos": "Lütfen 'Terminal' uygulamasını açın, aşağıdaki komutu yapıştırın ve çalıştırmak için Enter tuşuna basın",
-      "reboot": "İşlem tamamlandıktan sonra Ollama hizmetini yeniden başlatın",
-      "title": "Ollama'nın çapraz alan erişimine izin vermek için yapılandırma",
-      "windows": "Windows'ta, 'Denetim Masası'na tıklayın ve sistem ortam değişkenlerini düzenleyin. Kullanıcı hesabınız için 'OLLAMA_ORIGINS' adında bir ortam değişkeni oluşturun, değeri * olarak ayarlayın ve 'Tamam/Uygula'ya tıklayarak kaydedin."
-    },
-    "install": {
-      "description": "Lütfen Ollama'nın açık olduğundan emin olun, eğer Ollama'yı indirmediyseniz, lütfen resmi web sitesinden <1>indirin</1>",
-      "docker": "Eğer Docker kullanmayı tercih ediyorsanız, Ollama'nın resmi Docker imajı da mevcuttur, aşağıdaki komutla çekebilirsiniz:",
-      "linux": {
-        "command": "Aşağıdaki komutla kurulum yapın:",
-        "manual": "Alternatif olarak, <1>Linux Manuel Kurulum Kılavuzu</1>'na başvurarak kendiniz de kurulum yapabilirsiniz."
-      },
-      "title": "Ollama uygulamasını yerel olarak kurun ve başlatın",
-      "windowsTab": "Windows (önizleme sürümü)"
-    }
-  },
-  "Thinking": {
-    "thinking": "Derin düşünme aşamasında...",
-    "thought": "Derinlemesine düşündüm (geçen süre {{duration}} saniye)",
-    "thoughtWithDuration": "Derinlemesine düşündüm"
-  }
+  "ArgsInput.addArgument": "Argüman Ekle",
+  "ArgsInput.argumentPlaceholder": "Argüman {{index}}",
+  "ArgsInput.enterFirstArgument": "İlk argümanı girin...",
+  "DragUpload.dragDesc": "Birden fazla görsel yüklemek için dosyaları buraya sürükleyip bırakın.",
+  "DragUpload.dragFileDesc": "Birden fazla görsel ve dosya yüklemek için buraya sürükleyip bırakın.",
+  "DragUpload.dragFileTitle": "Dosya Yükle",
+  "DragUpload.dragTitle": "Görsel Yükle",
+  "FileManager.actions.addToKnowledgeBase": "Kütüphaneye Ekle",
+  "FileManager.actions.addToOtherKnowledgeBase": "Başka Bir Kütüphaneye Ekle",
+  "FileManager.actions.batchChunking": "Toplu Parçalama",
+  "FileManager.actions.chunking": "Parçalama",
+  "FileManager.actions.chunkingTooltip": "Dosyayı birden fazla metin parçasına bölerek semantik arama ve dosya diyaloğu için gömülü hale getirir.",
+  "FileManager.actions.chunkingUnsupported": "Bu dosya parçalamayı desteklemiyor.",
+  "FileManager.actions.confirmDelete": "Bu dosyayı silmek üzeresiniz. Silindikten sonra geri alınamaz. Lütfen işlemi onaylayın.",
+  "FileManager.actions.confirmDeleteFolder": "Bu klasörü ve içindeki tüm öğeleri silmek üzeresiniz. Bu işlem geri alınamaz. Lütfen kararınızı onaylayın.",
+  "FileManager.actions.confirmDeleteMultiFiles": "Seçilen {{count}} dosyayı silmek üzeresiniz. Silindikten sonra geri alınamazlar. Lütfen işlemi onaylayın.",
+  "FileManager.actions.confirmRemoveFromKnowledgeBase": "{{count}} dosyayı Kütüphane'den kaldırmak üzeresiniz. Dosyalar Tüm Dosyalar bölümünde kalmaya devam edecek. Devam etmek için onaylayın.",
+  "FileManager.actions.copyUrl": "Bağlantıyı Kopyala",
+  "FileManager.actions.copyUrlSuccess": "Dosya bağlantısı başarıyla kopyalandı.",
+  "FileManager.actions.createChunkingTask": "Hazırlanıyor...",
+  "FileManager.actions.deleteSuccess": "Dosya başarıyla silindi.",
+  "FileManager.actions.downloading": "Dosya indiriliyor...",
+  "FileManager.actions.goBack": "Önceki sayfaya git",
+  "FileManager.actions.goForward": "Sonraki sayfaya git",
+  "FileManager.actions.goToParent": "Üst klasöre git",
+  "FileManager.actions.moveError": "Dosya taşınamadı",
+  "FileManager.actions.moveHere": "Buraya taşı",
+  "FileManager.actions.moveSuccess": "Dosya başarıyla taşındı",
+  "FileManager.actions.moveToFolder": "Şuraya taşı...",
+  "FileManager.actions.moveToRoot": "Ana dizine taşı",
+  "FileManager.actions.moving": "Taşınıyor...",
+  "FileManager.actions.removeFromKnowledgeBase": "Kütüphaneden Kaldır",
+  "FileManager.actions.removeFromKnowledgeBaseSuccess": "Dosya başarıyla kaldırıldı.",
+  "FileManager.actions.rename": "Yeniden Adlandır",
+  "FileManager.actions.renameError": "Yeniden adlandırma başarısız",
+  "FileManager.actions.renameSuccess": "Yeniden adlandırma başarılı",
+  "FileManager.bottom": "Sonuna geldiniz.",
+  "FileManager.config.showFilesInKnowledgeBase": "Kütüphanedeki içeriği göster",
+  "FileManager.emptyStatus.actions.file": "Dosya Yükle",
+  "FileManager.emptyStatus.actions.folder": "Klasör Yükle",
+  "FileManager.emptyStatus.actions.knowledgeBase": "Kütüphane Oluştur",
+  "FileManager.emptyStatus.or": "veya",
+  "FileManager.emptyStatus.title": "Dosya veya klasörleri buraya sürükleyin",
+  "FileManager.noFolders": "Klasör bulunamadı",
+  "FileManager.sort.dateAdded": "Eklenme Tarihi",
+  "FileManager.sort.name": "Ad",
+  "FileManager.sort.size": "Boyut",
+  "FileManager.title.createdAt": "Oluşturulma Tarihi",
+  "FileManager.title.size": "Boyut",
+  "FileManager.title.title": "Dosya",
+  "FileManager.total.fileCount": "Toplam {{count}} öğe",
+  "FileManager.total.selectedCount": "Seçilen {{count}} öğe",
+  "FileManager.view.list": "Liste Görünümü",
+  "FileManager.view.masonry": "Izgara Görünümü",
+  "FileParsingStatus.chunks.embeddingStatus.empty": "Metin parçaları henüz tamamen gömülmedi, bu da semantik arama özelliğini devre dışı bırakır. Arama kalitesini artırmak için lütfen metin parçalarını gömün.",
+  "FileParsingStatus.chunks.embeddingStatus.error": "Gömme işlemi başarısız",
+  "FileParsingStatus.chunks.embeddingStatus.errorResult": "Vektörleştirme başarısız oldu, lütfen kontrol edip tekrar deneyin. Hata detayı:",
+  "FileParsingStatus.chunks.embeddingStatus.processing": "Metin parçaları gömülüyor, lütfen sabırlı olun.",
+  "FileParsingStatus.chunks.embeddingStatus.success": "Tüm mevcut metin parçaları başarıyla gömüldü",
+  "FileParsingStatus.chunks.embeddings": "Gömme",
+  "FileParsingStatus.chunks.status.error": "Parçalama başarısız",
+  "FileParsingStatus.chunks.status.errorResult": "Parçalama başarısız oldu, lütfen kontrol edip tekrar deneyin. Hata detayı:",
+  "FileParsingStatus.chunks.status.processing": "Parçalanıyor",
+  "FileParsingStatus.chunks.status.processingTip": "Sunucu metin parçalarını bölüyor; sayfayı kapatmak işlemi etkilemez.",
+  "GoBack.back": "Geri",
+  "HtmlPreview.actions.download": "İndir",
+  "HtmlPreview.actions.preview": "Önizleme",
+  "HtmlPreview.iframeTitle": "HTML Önizleme",
+  "HtmlPreview.mode.code": "Kod",
+  "HtmlPreview.mode.preview": "Önizleme",
+  "HtmlPreview.title": "HTML Önizleme",
+  "ImageUpload.actions.changeImage": "Görseli değiştirmek için tıklayın",
+  "ImageUpload.actions.dropMultipleFiles": "Aynı anda birden fazla dosya yükleme desteklenmiyor; yalnızca ilk dosya kullanılacak",
+  "ImageUpload.placeholder.primary": "Görsel Ekle",
+  "ImageUpload.placeholder.secondary": "Yüklemek için tıklayın veya sürükleyin",
+  "KeyValueEditor.addButton": "Satır Ekle",
+  "KeyValueEditor.deleteTooltip": "Sil",
+  "KeyValueEditor.duplicateKeyError": "Anahtar benzersiz olmalıdır",
+  "KeyValueEditor.keyPlaceholder": "Anahtar",
+  "KeyValueEditor.valuePlaceholder": "Değer",
+  "LocalFile.action.open": "Aç",
+  "LocalFile.action.showInFolder": "Klasörde Göster",
+  "MaxTokenSlider.unlimited": "Sınırsız",
+  "ModelSelect.featureTag.custom": "Özel model, varsayılan olarak fonksiyon çağrıları ve görsel tanımayı destekler. Yukarıdaki yeteneklerin kullanılabilirliğini gerçek duruma göre doğrulayın.",
+  "ModelSelect.featureTag.file": "Bu model dosya yüklemeyi destekler.",
+  "ModelSelect.featureTag.functionCall": "Bu model fonksiyon çağrılarını destekler.",
+  "ModelSelect.featureTag.imageOutput": "Bu model görsel üretimini destekler.",
+  "ModelSelect.featureTag.reasoning": "Bu model derin düşünmeyi destekler.",
+  "ModelSelect.featureTag.search": "Bu model çevrimiçi aramayı destekler.",
+  "ModelSelect.featureTag.tokens": "Bu model bir oturumda en fazla {{tokens}} token destekler.",
+  "ModelSelect.featureTag.video": "Bu model video tanımayı destekler",
+  "ModelSelect.featureTag.vision": "Bu model görsel tanımayı destekler.",
+  "ModelSelect.removed": "Model listede değil. Seçimi kaldırırsanız otomatik olarak silinecek.",
+  "ModelSwitchPanel.emptyModel": "Etkinleştirilmiş model yok. Lütfen ayarlardan etkinleştirin.",
+  "ModelSwitchPanel.emptyProvider": "Etkinleştirilmiş sağlayıcı yok. Lütfen ayarlardan birini etkinleştirin.",
+  "ModelSwitchPanel.goToSettings": "Ayarlar'a git",
+  "ModelSwitchPanel.provider": "Sağlayıcı",
+  "ModelSwitchPanel.title": "Model",
+  "MultiImagesUpload.actions.uploadMore": "Daha fazla yüklemek için tıklayın veya sürükleyin",
+  "MultiImagesUpload.modal.complete": "Tamamlandı",
+  "MultiImagesUpload.modal.newFileIndicator": "Yeni",
+  "MultiImagesUpload.modal.selectImageToPreview": "Önizlemek için bir görsel seçin",
+  "MultiImagesUpload.modal.title": "Görselleri Yönet ({{count}})",
+  "MultiImagesUpload.modal.upload": "Görsel Yükle",
+  "MultiImagesUpload.placeholder.primary": "Görsel yüklemek için tıklayın veya sürükleyin",
+  "MultiImagesUpload.placeholder.secondary": "Birden fazla görsel seçimi desteklenir",
+  "MultiImagesUpload.progress.uploadingWithCount": "{{completed}}/{{total}} yüklendi",
+  "MultiImagesUpload.validation.fileSizeExceeded": "Dosya boyutu izin verilen sınırı aşıyor",
+  "MultiImagesUpload.validation.fileSizeExceededDetail": "{{fileName}} ({{actualSize}}), izin verilen maksimum boyut olan {{maxSize}} değerini aşıyor",
+  "MultiImagesUpload.validation.fileSizeExceededMultiple": "{{count}} dosya, izin verilen maksimum boyut olan {{maxSize}} değerini aşıyor: {{fileList}}",
+  "MultiImagesUpload.validation.imageCountExceeded": "Maksimum görsel sayısı aşıldı",
+  "OllamaSetupGuide.action.close": "İpucunu Kapat",
+  "OllamaSetupGuide.action.start": "Kuruldu",
+  "OllamaSetupGuide.cors.description": "Tarayıcı güvenlik kısıtlamaları nedeniyle, Ollama'nın düzgün çalışabilmesi için çapraz kaynak ayarlarını yapılandırmanız gerekir.",
+  "OllamaSetupGuide.cors.linux.env": "[Service] bölümüne `Environment` ekleyin ve OLLAMA_ORIGINS ortam değişkenini şu şekilde ayarlayın:",
+  "OllamaSetupGuide.cors.linux.reboot": "systemd'yi yeniden yükleyin ve Ollama'yı yeniden başlatın",
+  "OllamaSetupGuide.cors.linux.systemd": "systemd kullanarak ollama servisini düzenleyin:",
+  "OllamaSetupGuide.cors.macos": "'Terminal' uygulamasını açın, aşağıdaki komutu yapıştırın ve çalıştırmak için Enter tuşuna basın.",
+  "OllamaSetupGuide.cors.reboot": "İşlem tamamlandıktan sonra Ollama servisini yeniden başlatın.",
+  "OllamaSetupGuide.cors.title": "Ollama için Çapraz Kaynak Erişimini Yapılandır",
+  "OllamaSetupGuide.cors.windows": "Windows'ta, 'Denetim Masası'nı açın ve sistem ortam değişkenlerini düzenleyin. Kullanıcı hesabınız için 'OLLAMA_ORIGINS' adında yeni bir ortam değişkeni oluşturun, değerini * olarak ayarlayın ve 'Tamam/Uygula'ya tıklayın.",
+  "OllamaSetupGuide.install.description": "Lütfen Ollama'nın başlatıldığından emin olun. Henüz indirmediyseniz, resmi web sitesinden <1>indirmeniz</1> gerekir.",
+  "OllamaSetupGuide.install.docker": "Docker kullanmayı tercih ediyorsanız, Ollama'nın resmi Docker imajını aşağıdaki komutla çekebilirsiniz:",
+  "OllamaSetupGuide.install.linux.command": "Aşağıdaki komutla kurun:",
+  "OllamaSetupGuide.install.linux.manual": "Alternatif olarak, <1>Linux Manuel Kurulum Kılavuzu</1>'na başvurabilirsiniz.",
+  "OllamaSetupGuide.install.title": "Ollama Uygulamasını Yerel Olarak Kur ve Başlat",
+  "OllamaSetupGuide.install.windowsTab": "Windows (Önizleme)",
+  "Thinking.thinking": "Derin Düşünülüyor...",
+  "Thinking.thought": "{{duration}} saniyede Derinlemesine Düşünüldü",
+  "Thinking.thoughtWithDuration": "Derinlemesine Düşünüldü",
+  "devTools.cache.empty": "Önbellek boş",
+  "devTools.metadata.empty": "Meta veri bulunamadı",
+  "knowledgeBase.empty.description": "Kaynaklarınızı düzenlemek ve yönetmek için bir Kütüphane oluşturun",
+  "knowledgeBase.empty.search": "Eşleşen Kütüphane bulunamadı",
+  "knowledgeBase.empty.title": "Kütüphane bulunamadı"
 }

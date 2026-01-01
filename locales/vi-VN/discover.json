@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "Thêm trợ lý",
-    "addAgentAndConverse": "Thêm trợ lý và trò chuyện",
-    "addAgentSuccess": "Thêm thành công",
-    "conversation": {
-      "l1": "Xin chào, tôi là **{{name}}**, bạn có thể hỏi tôi bất kỳ câu hỏi nào, tôi sẽ cố gắng trả lời bạn ~",
-      "l2": "Dưới đây là giới thiệu về khả năng của tôi: ",
-      "l3": "Hãy bắt đầu cuộc trò chuyện nào!"
-    },
-    "description": "Giới thiệu trợ lý",
-    "detail": "Chi tiết",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "Trợ lý được tích hợp các kho tri thức sau, giúp bạn trả lời nhiều câu hỏi hơn.",
-          "title": "Kho tri thức"
-        },
-        "plugin": {
-          "desc": "Trợ lý được tích hợp các plugin sau, giúp bạn hoàn thành nhiều nhiệm vụ hơn.",
-          "title": "Plugin tích hợp"
-        },
-        "title": "Khả năng của trợ lý"
-      },
-      "overview": {
-        "example": "Trình diễn trợ lý",
-        "title": "Tổng quan"
-      },
-      "related": {
-        "listTitle": "Trợ lý liên quan",
-        "more": "Xem thêm",
-        "title": "Gợi ý liên quan"
-      },
-      "sidebar": {
-        "toc": "Mục lục"
-      },
-      "summary": {
-        "title": "Bạn có thể làm gì với trợ lý này?"
-      },
-      "systemRole": {
-        "openingMessage": "Tin nhắn mở đầu",
-        "openingQuestions": "Câu hỏi mở đầu",
-        "title": "Cài đặt trợ lý"
-      },
-      "version": {
-        "empty": "Chưa có phiên bản lịch sử",
-        "status": {
-          "archived": "Đã lưu trữ",
-          "deprecated": "Đã từ chối",
-          "unpublished": "Đang chờ duyệt"
-        },
-        "table": {
-          "isLatest": "Phiên bản mới nhất",
-          "isValidated": "Đã xác minh",
-          "publishAt": "Ngày phát hành",
-          "version": "Số phiên bản"
-        },
-        "title": "Lịch sử phiên bản"
-      }
-    },
-    "list": "Danh sách trợ lý",
-    "marketSource": {
-      "label": "Chuyển đổi nguồn thị trường",
-      "legacy": "Thị trường cũ",
-      "new": "Thị trường mới"
-    },
-    "more": "Thêm",
-    "plugins": "Tích hợp plugin",
-    "recentSubmits": "Cập nhật gần đây",
-    "sorts": {
-      "createdAt": "Mới phát hành",
-      "identifier": "ID trợ lý",
-      "knowledgeCount": "Số kho tri thức",
-      "myown": "Xem của tôi",
-      "pluginCount": "Số plugin",
-      "title": "Tên trợ lý",
-      "tokenUsage": "Lượng Token sử dụng"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "Trợ lý bị gỡ bỏ do vấn đề an toàn/chính trị bởi cơ quan chính thức",
-          "owner": "Chủ sở hữu của trợ lý đã chủ động gỡ bỏ/lưu trữ trợ lý này"
-        },
-        "subtitle": "Trợ lý bạn đang truy cập đã bị lưu trữ vì một trong các lý do sau:",
-        "title": "Trợ lý đã bị lưu trữ"
-      },
-      "backToMarket": "Quay lại thị trường trợ lý",
-      "deprecated": {
-        "reasons": {
-          "official": "Trợ lý bị gỡ bỏ do vấn đề an toàn/chính trị bởi cơ quan chính thức",
-          "owner": "Chủ sở hữu của trợ lý đã chủ động gỡ bỏ/từ chối trợ lý này"
-        },
-        "subtitle": "Trợ lý bạn đang truy cập đã bị từ chối vì một trong các lý do sau:",
-        "title": "Trợ lý đã bị từ chối"
-      },
-      "support": "Nếu gặp bất kỳ vấn đề nào, vui lòng sao chép liên kết và gửi đến <1>support@lobehub.com</1> để được hỗ trợ.",
-      "unpublished": {
-        "subtitle": "Trợ lý bạn đang truy cập hiện đang trong quá trình kiểm duyệt phiên bản. Nếu có thắc mắc, vui lòng sao chép liên kết và gửi câu hỏi đến <1>support@lobehub.com</1> để được hỗ trợ.",
-        "title": "Trợ lý đang chờ duyệt"
-      }
-    },
-    "suggestions": "Gợi ý liên quan",
-    "systemRole": "Cài đặt trợ lý",
-    "tokenUsage": "Lượng Token sử dụng cho lời nhắc trợ lý",
-    "try": "Thử ngay",
-    "withKnowledge": "Trợ lý này đi kèm kho tri thức",
-    "withPlugin": "Trợ lý này đi kèm plugin"
-  },
-  "back": "Quay lại khám phá",
-  "category": {
-    "assistant": {
-      "academic": "Học thuật",
-      "all": "Tất cả",
-      "career": "Nghề nghiệp",
-      "copywriting": "Viết nội dung",
-      "design": "Thiết kế",
-      "education": "Giáo dục",
-      "emotions": "Cảm xúc",
-      "entertainment": "Giải trí",
-      "games": "Trò chơi",
-      "general": "Chung",
-      "life": "Cuộc sống",
-      "marketing": "Tiếp thị",
-      "office": "Văn phòng",
-      "programming": "Lập trình",
-      "translation": "Dịch thuật"
-    },
-    "plugin": {
-      "all": "Tất cả",
-      "gaming-entertainment": "Giải trí trò chơi",
-      "life-style": "Phong cách sống",
-      "lifestyle": "Lối sống",
-      "media-generate": "Tạo nội dung truyền thông",
-      "science-education": "Khoa học và giáo dục",
-      "social": "Mạng xã hội",
-      "stocks-finance": "Chứng khoán và tài chính",
-      "tools": "Công cụ hữu ích",
-      "web-search": "Tìm kiếm trên web"
-    }
-  },
+  "assistant.favorite": "Lưu",
+  "assistant.favoriteFailed": "Lưu thất bại",
+  "assistant.favoriteSuccess": "Đã lưu",
+  "assistant.like": "Thích",
+  "assistant.likeFailed": "Thích thất bại",
+  "assistant.likeSuccess": "Đã thích",
+  "assistant.unfavorite": "Bỏ lưu",
+  "assistant.unfavoriteFailed": "Bỏ lưu thất bại",
+  "assistant.unfavoriteSuccess": "Đã bỏ lưu",
+  "assistant.unlike": "Bỏ thích",
+  "assistant.unlikeSuccess": "Đã bỏ thích",
+  "assistants.addAgent": "Thêm Tác nhân",
+  "assistants.addAgentAndConverse": "Thêm Tác nhân & Trò chuyện",
+  "assistants.addAgentSuccess": "Đã thêm",
+  "assistants.conversation.l1": "Chào bạn, tôi là **{{name}}**. Hãy chia sẻ mục tiêu hoặc bối cảnh của bạn — chúng ta sẽ cùng hợp tác từ đây.",
+  "assistants.conversation.l2": "Tôi có thể giúp bạn với những việc sau:",
+  "assistants.conversation.l3": "Bắt đầu trò chuyện",
+  "assistants.description": "Giới thiệu về Tác nhân này",
+  "assistants.detail": "Chi tiết",
+  "assistants.details.capabilities.knowledge.desc": "Tác nhân này bao gồm các Thư viện sau để hỗ trợ trả lời nhiều câu hỏi hơn.",
+  "assistants.details.capabilities.knowledge.title": "Thư viện",
+  "assistants.details.capabilities.plugin.desc": "Tác nhân này bao gồm các Kỹ năng sau để giúp bạn hoàn thành nhiều tác vụ hơn.",
+  "assistants.details.capabilities.plugin.title": "Kỹ năng tích hợp",
+  "assistants.details.capabilities.title": "Khả năng của Tác nhân",
+  "assistants.details.overview.example": "Bản trình diễn Tác nhân",
+  "assistants.details.overview.title": "Tổng quan",
+  "assistants.details.related.listTitle": "Tác nhân liên quan",
+  "assistants.details.related.more": "Xem thêm",
+  "assistants.details.related.title": "Tác nhân tương tự",
+  "assistants.details.sidebar.toc": "Mục lục",
+  "assistants.details.summary.title": "Bạn có thể làm gì với Tác nhân này?",
+  "assistants.details.systemRole.openingMessage": "Tin nhắn mở đầu",
+  "assistants.details.systemRole.openingQuestions": "Câu hỏi mở đầu",
+  "assistants.details.systemRole.title": "Hồ sơ Tác nhân",
+  "assistants.details.version.empty": "Chưa có phiên bản lịch sử",
+  "assistants.details.version.status.archived": "Đã lưu trữ",
+  "assistants.details.version.status.deprecated": "Đã từ chối",
+  "assistants.details.version.status.unpublished": "Đang xem xét",
+  "assistants.details.version.table.isLatest": "Phiên bản mới nhất",
+  "assistants.details.version.table.isValidated": "Đã xác thực",
+  "assistants.details.version.table.publishAt": "Ngày phát hành",
+  "assistants.details.version.table.version": "Phiên bản",
+  "assistants.details.version.title": "Lịch sử phiên bản",
+  "assistants.downloads": "Tải xuống",
+  "assistants.duplicateAdd.content": "“{{title}}” đã có trong danh sách Tác nhân của bạn. Thêm một bản sao khác?",
+  "assistants.duplicateAdd.ok": "Thêm bản sao",
+  "assistants.duplicateAdd.title": "Thêm bản sao?",
+  "assistants.empty.description": "Hãy thử điều chỉnh bộ lọc hoặc khám phá thêm Tác nhân trong Cộng đồng.",
+  "assistants.empty.search": "Không tìm thấy Tác nhân phù hợp",
+  "assistants.empty.title": "Không tìm thấy Tác nhân",
+  "assistants.list": "Danh sách Tác nhân",
+  "assistants.marketSource.label": "Chuyển nguồn Cộng đồng",
+  "assistants.marketSource.legacy": "Cộng đồng cũ",
+  "assistants.marketSource.new": "Cộng đồng mới",
+  "assistants.more": "Xem thêm",
+  "assistants.plugins": "Kỹ năng tích hợp",
+  "assistants.recentSubmits": "Cập nhật gần đây",
+  "assistants.sorts.createdAt": "Phát hành gần đây",
+  "assistants.sorts.identifier": "ID Tác nhân",
+  "assistants.sorts.knowledgeCount": "Số Thư viện",
+  "assistants.sorts.myown": "Xem Tác nhân của tôi",
+  "assistants.sorts.pluginCount": "Số Kỹ năng",
+  "assistants.sorts.title": "Tên Tác nhân",
+  "assistants.sorts.tokenUsage": "Lượng token sử dụng",
+  "assistants.status.archived.reasons.official": "Nền tảng đã gỡ bỏ Tác nhân này do lo ngại về bảo mật, chính sách hoặc lý do khác.",
+  "assistants.status.archived.reasons.owner": "Người tạo đã lưu trữ hoặc gỡ bỏ Tác nhân này.",
+  "assistants.status.archived.subtitle": "Tác nhân này đã được lưu trữ. Các lý do có thể bao gồm:",
+  "assistants.status.archived.title": "Tác nhân đã lưu trữ",
+  "assistants.status.backToMarket": "Quay lại Cộng đồng Tác nhân",
+  "assistants.status.deprecated.reasons.official": "Nền tảng đã gỡ bỏ Tác nhân này do lo ngại về bảo mật, chính sách hoặc lý do khác.",
+  "assistants.status.deprecated.reasons.owner": "Người tạo đã từ chối hoặc gỡ bỏ Tác nhân này.",
+  "assistants.status.deprecated.subtitle": "Tác nhân này hiện không khả dụng. Các lý do có thể bao gồm:",
+  "assistants.status.deprecated.title": "Tác nhân không khả dụng",
+  "assistants.status.support": "Nếu bạn có bất kỳ câu hỏi nào, vui lòng sao chép liên kết và gửi đến <email>support@lobehub.com</email> để được hỗ trợ.",
+  "assistants.status.unpublished.subtitle": "Tác nhân này đang được xem xét. Để xác nhận trạng thái, hãy sao chép liên kết và gửi email đến <email>support@lobehub.com</email>.",
+  "assistants.status.unpublished.title": "Tác nhân đang được xem xét",
+  "assistants.suggestions": "Tác nhân tương tự",
+  "assistants.systemRole": "Hồ sơ Tác nhân",
+  "assistants.tokenUsage": "Lượng token sử dụng cho lời nhắc Tác nhân",
+  "assistants.try": "Dùng thử",
+  "assistants.withKnowledge": "Tác nhân này bao gồm Thư viện",
+  "assistants.withPlugin": "Tác nhân này bao gồm Kỹ năng",
+  "back": "Quay lại Khám phá",
+  "category.assistant.academic": "Học thuật",
+  "category.assistant.all": "Tất cả",
+  "category.assistant.career": "Nghề nghiệp",
+  "category.assistant.copywriting": "Viết nội dung",
+  "category.assistant.design": "Thiết kế",
+  "category.assistant.education": "Giáo dục",
+  "category.assistant.emotions": "Cảm xúc",
+  "category.assistant.entertainment": "Giải trí",
+  "category.assistant.games": "Trò chơi",
+  "category.assistant.general": "Chung",
+  "category.assistant.life": "Cuộc sống",
+  "category.assistant.marketing": "Tiếp thị",
+  "category.assistant.office": "Văn phòng",
+  "category.assistant.programming": "Lập trình",
+  "category.assistant.translation": "Dịch thuật",
+  "category.plugin.all": "Tất cả",
+  "category.plugin.gaming-entertainment": "Trò chơi & Giải trí",
+  "category.plugin.life-style": "Phong cách sống",
+  "category.plugin.lifestyle": "Phong cách sống",
+  "category.plugin.media-generate": "Tạo nội dung",
+  "category.plugin.science-education": "Khoa học & Giáo dục",
+  "category.plugin.social": "Mạng xã hội",
+  "category.plugin.stocks-finance": "Chứng khoán & Tài chính",
+  "category.plugin.tools": "Công cụ tiện ích",
+  "category.plugin.web-search": "Tìm kiếm web",
   "cleanFilter": "Xóa bộ lọc",
   "create": "Tạo mới",
-  "createGuide": {
-    "func1": {
-      "desc1": "Vào trang cài đặt của trợ lý bạn muốn gửi thông qua biểu tượng cài đặt ở góc trên bên phải trong cửa sổ trò chuyện;",
-      "desc2": "Nhấn nút gửi đến thị trường trợ lý ở góc trên bên phải.",
-      "tag": "Phương pháp một",
-      "title": "Gửi qua LobeChat"
-    },
-    "func2": {
-      "button": "Đi đến kho trợ lý trên Github",
-      "desc": "Nếu bạn muốn thêm trợ lý vào chỉ mục, hãy sử dụng agent-template.json hoặc agent-template-full.json để tạo một mục trong thư mục plugins, viết mô tả ngắn gọn và gán thẻ phù hợp, sau đó tạo một yêu cầu kéo.",
-      "tag": "Phương pháp hai",
-      "title": "Gửi qua Github"
-    }
-  },
+  "createGuide.func1.desc1": "Trong cuộc trò chuyện, mở cài đặt Tác nhân từ menu góc trên bên phải.",
+  "createGuide.func1.desc2": "Sau đó nhấn Gửi lên Cộng đồng Tác nhân ở góc trên bên phải.",
+  "createGuide.func1.tag": "Cách 1",
+  "createGuide.func1.title": "Gửi từ LobeHub",
+  "createGuide.func2.button": "Mở kho GitHub của Tác nhân",
+  "createGuide.func2.desc": "Để thêm Tác nhân vào danh mục, hãy tạo mục trong `plugins/` sử dụng `agent-template.json` hoặc `agent-template-full.json`, thêm mô tả ngắn và thẻ, sau đó mở pull request.",
+  "createGuide.func2.tag": "Cách 2",
+  "createGuide.func2.title": "Gửi qua GitHub",
   "dislike": "Không thích",
   "filter": "Bộ lọc",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "Tất cả tác giả",
-      "followed": "Tác giả đã theo dõi",
-      "title": "Phạm vi tác giả"
-    },
-    "contentLength": "Độ dài ngữ cảnh tối thiểu",
-    "maxToken": {
-      "title": "Đặt độ dài tối đa (Token)",
-      "unlimited": "Không giới hạn"
-    },
-    "other": {
-      "functionCall": "Hỗ trợ gọi hàm",
-      "title": "Khác",
-      "vision": "Hỗ trợ nhận diện hình ảnh",
-      "withKnowledge": "Kèm theo kho kiến thức",
-      "withTool": "Kèm theo plugin"
-    },
-    "pricing": "Giá mô hình",
-    "timePeriod": {
-      "all": "Tất cả thời gian",
-      "day": "24 giờ qua",
-      "month": "30 ngày qua",
-      "title": "Phạm vi thời gian",
-      "week": "7 ngày qua",
-      "year": "1 năm qua"
-    }
-  },
-  "home": {
-    "featuredAssistants": "Trợ lý nổi bật",
-    "featuredModels": "Mô hình nổi bật",
-    "featuredProviders": "Nhà cung cấp mô hình nổi bật",
-    "featuredTools": "Plugin nổi bật",
-    "more": "Khám phá thêm"
-  },
-  "isClaimed": "Đã nhận",
-  "isFeatured": "Đề xuất",
-  "isOfficial": "Chính thức",
+  "filterBy.authorRange.everyone": "Tất cả tác giả",
+  "filterBy.authorRange.followed": "Tác giả đang theo dõi",
+  "filterBy.authorRange.title": "Phạm vi tác giả",
+  "filterBy.contentLength": "Độ dài bối cảnh tối thiểu",
+  "filterBy.maxToken.title": "Đặt độ dài tối đa (Token)",
+  "filterBy.maxToken.unlimited": "Không giới hạn",
+  "filterBy.other.functionCall": "Hỗ trợ gọi hàm",
+  "filterBy.other.title": "Khác",
+  "filterBy.other.vision": "Hỗ trợ nhận diện hình ảnh",
+  "filterBy.other.withKnowledge": "Bao gồm Thư viện",
+  "filterBy.other.withTool": "Bao gồm Kỹ năng",
+  "filterBy.pricing": "Giá mô hình",
+  "filterBy.timePeriod.all": "Tất cả thời gian",
+  "filterBy.timePeriod.day": "24 giờ qua",
+  "filterBy.timePeriod.month": "30 ngày qua",
+  "filterBy.timePeriod.title": "Khoảng thời gian",
+  "filterBy.timePeriod.week": "7 ngày qua",
+  "filterBy.timePeriod.year": "Năm qua",
+  "footer.desc": "Cùng phát triển với người dùng AI toàn cầu. Trở thành người sáng tạo để chia sẻ Tác nhân và Kỹ năng của bạn với Cộng đồng LobeHub.",
+  "footer.title": "Chia sẻ sáng tạo của bạn với Cộng đồng LobeHub ngay hôm nay",
+  "home.communityAgents": "Tác nhân cộng đồng",
+  "home.featuredAssistants": "Tác nhân nổi bật",
+  "home.featuredModels": "Mô hình nổi bật",
+  "home.featuredPlugins": "Kỹ năng nổi bật",
+  "home.featuredProviders": "Nhà cung cấp nổi bật",
+  "home.featuredTools": "Kỹ năng nổi bật",
+  "home.more": "Khám phá thêm",
+  "isClaimed": "Đã xác nhận",
+  "isFeatured": "Nổi bật",
+  "isOfficial": "Đã xác minh chính thức",
   "like": "Thích",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "Tất cả MCP Servers",
-        "name": "Tất cả"
-      },
-      "business": {
-        "description": "Dịch vụ kinh doanh và doanh nghiệp",
-        "name": "Dịch vụ kinh doanh"
-      },
-      "developer": {
-        "description": "Công cụ và dịch vụ liên quan đến phát triển",
-        "name": "Công cụ phát triển"
-      },
-      "gaming-entertainment": {
-        "description": "Trò chơi, giải trí và hoạt động thư giãn",
-        "name": "Giải trí trò chơi"
-      },
-      "health-wellness": {
-        "description": "Sức khỏe, thể dục và chăm sóc tinh thần",
-        "name": "Sức khỏe và chăm sóc"
-      },
-      "lifestyle": {
-        "description": "Lối sống cá nhân, thói quen và hoạt động hàng ngày",
-        "name": "Lối sống"
-      },
-      "media-generate": {
-        "description": "Tạo, chỉnh sửa và xử lý phương tiện truyền thông",
-        "name": "Tạo phương tiện"
-      },
-      "news": {
-        "description": "Tổng hợp tin tức, báo cáo và dịch vụ thông tin",
-        "name": "Tin tức và thông tin"
-      },
-      "productivity": {
-        "description": "Quản lý công việc, ghi chú và công cụ hiệu suất",
-        "name": "Công cụ hiệu suất"
-      },
-      "science-education": {
-        "description": "Nghiên cứu khoa học, học tập và công cụ giáo dục",
-        "name": "Khoa học và giáo dục"
-      },
-      "social": {
-        "description": "Mạng xã hội và giao tiếp",
-        "name": "Mạng xã hội"
-      },
-      "stocks-finance": {
-        "description": "Thị trường tài chính, giao dịch và đầu tư",
-        "name": "Chứng khoán và tài chính"
-      },
-      "tools": {
-        "description": "Công cụ và dịch vụ tiện ích chung",
-        "name": "Công cụ tiện ích"
-      },
-      "travel-transport": {
-        "description": "Lập kế hoạch du lịch và phương tiện đi lại",
-        "name": "Du lịch và giao thông"
-      },
-      "weather": {
-        "description": "Dự báo thời tiết và dịch vụ khí tượng",
-        "name": "Thời tiết và khí tượng"
-      },
-      "web-search": {
-        "description": "Tìm kiếm web và truy xuất thông tin",
-        "name": "Tìm kiếm thông tin"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "Dịch vụ này có thể chạy cả trên thiết bị cục bộ hoặc trên đám mây tùy theo cấu hình hoặc tình huống sử dụng, có khả năng vận hành kép.",
-          "title": "Dịch vụ hỗn hợp"
-        },
-        "local": {
-          "desc": "Máy chủ này chỉ chạy trên thiết bị cục bộ của khách hàng, cần cài đặt và phụ thuộc vào tài nguyên cục bộ.",
-          "title": "Dịch vụ cục bộ"
-        },
-        "remote": {
-          "desc": "Máy chủ này được lưu trữ và vận hành từ xa, chủ yếu dựa vào dịch vụ từ xa, không phụ thuộc môi trường cục bộ.",
-          "title": "Dịch vụ đám mây"
-        }
-      },
-      "deployment": {
-        "args": "Tham số",
-        "checkCommand": "Lệnh kiểm tra",
-        "command": "Lệnh",
-        "commandLine": "Phụ thuộc hệ thống",
-        "connection": "Phương thức kết nối",
-        "connectionType": "Loại kết nối",
-        "description": "Cách cài đặt và triển khai plugin",
-        "descriptionPlaceholder": "Mô tả tùy chọn",
-        "empty": "Chưa có tùy chọn triển khai",
-        "env": "Biến môi trường",
-        "guide": "Hướng dẫn cài đặt",
-        "installation": "Cài đặt qua {{method}}",
-        "installationMethod": "Phương thức cài đặt",
-        "other": "Cài đặt khác",
-        "packageName": "Tên gói",
-        "platform": {
-          "steps": {
-            "claude": "- Mở ứng dụng **Claude Desktop**\n- Vào **Cài đặt**, chọn **Nhà phát triển**\n- Nhấn **Chỉnh sửa cấu hình**\n- Mở file **claude_desktop_config.json**\n- Sao chép và dán cấu hình máy chủ vào file hiện có, sau đó lưu lại",
-            "cline": "- Mở VS Code đã cài tiện ích mở rộng Cline\n- Nhấn biểu tượng Cline ở thanh bên\n- Chọn **MCP Servers** từ menu thả xuống\n- Trong tab **Remote Servers**, nhập tên máy chủ và URL MCP Server của bạn\n- Nhấn **Add Server** để kết nối",
-            "cursor": "- Vào **Cài đặt**, chọn phần cài đặt Cursor\n- Chọn **MCP** ở bên trái\n- Nhấn **Thêm MCP Server toàn cục mới** ở góc trên bên phải\n- Sao chép và dán cấu hình máy chủ vào file hiện có, sau đó lưu lại",
-            "lobeChat": "- Mở ứng dụng **LobeChat Desktop**\n- Vào **Cài đặt** - **Trợ lý mặc định**\n- Chọn **Cài đặt plugin** - **Plugin tùy chỉnh**\n- Nhấn **Nhập nhanh cấu hình JSON**\n- Sao chép và dán cấu hình máy chủ vào ô văn bản, sau đó cài đặt",
-            "openai": "- Mở ứng dụng hoặc môi trường phát triển **OpenAI** của bạn\n- Cấu hình MCP tool trong **Responses API**\n- Thêm khối MCP vào mảng **tools** trong yêu cầu API\n- Đặt **server_url** thành điểm cuối MCP Server của bạn\n- Bao gồm các header xác thực cần thiết (API key, token, v.v.)\n- Sử dụng tham số `allowed_tools` để giới hạn công cụ được phơi bày\n- Đặt `require_approval` để kiểm soát phê duyệt thực thi công cụ",
-            "vscode": "- Mở VS Code\n- Mở bảng lệnh (Ctrl+Shift+P / Cmd+Shift+P)\n- Gõ **MCP: Add Server** và chọn\n- Chọn thêm vào workspace hoặc cài đặt người dùng\n- Sao chép và dán cấu hình máy chủ"
-          },
-          "title": "Cài đặt trên {{platform}}"
-        },
-        "recommended": "Đề xuất",
-        "systemDependencies": "Phụ thuộc hệ thống",
-        "table": {
-          "description": "Mô tả",
-          "name": "Tên",
-          "required": "Bắt buộc",
-          "type": "Loại"
-        },
-        "title": "Phương thức cài đặt"
-      },
-      "githubBadge": {
-        "desc": "LobeHub định kỳ quét kho mã và tài liệu để:\n\n- Xác nhận MCP Server hoạt động bình thường.\n- Trích xuất đặc tính máy chủ như công cụ, tài nguyên, lời nhắc và tham số cần thiết.\n- Badge của chúng tôi giúp người dùng nhanh chóng đánh giá độ an toàn, tính năng và hướng dẫn cài đặt MCP Server.\n\nVui lòng sao chép đoạn mã sau vào file `README.md` của bạn:"
-      },
-      "nav": {
-        "needHelp": "Cần trợ giúp?",
-        "reportIssue": "Báo cáo sự cố",
-        "viewSourceCode": "Xem mã nguồn"
-      },
-      "overview": {
-        "title": "Tổng quan"
-      },
-      "related": {
-        "listTitle": "MCP Server liên quan",
-        "more": "Xem thêm",
-        "title": "Gợi ý liên quan"
-      },
-      "schema": {
-        "mode": {
-          "docs": "Tài liệu"
-        },
-        "prompts": {
-          "arguments": "Cấu hình tham số",
-          "desc": "Mẫu tương tác do người dùng chọn để kích hoạt",
-          "empty": "Chưa có lời nhắc",
-          "instructions": "Hướng dẫn",
-          "table": {
-            "description": "Mô tả",
-            "name": "Tên",
-            "required": "Bắt buộc"
-          },
-          "title": "Danh sách lời nhắc"
-        },
-        "resources": {
-          "desc": "Dữ liệu ngữ cảnh được đính kèm và quản lý bởi client",
-          "empty": "Chưa có tài nguyên",
-          "table": {
-            "description": "Mô tả",
-            "mineType": "Loại MIME",
-            "name": "Tên",
-            "uri": "URI"
-          },
-          "title": "Danh sách tài nguyên"
-        },
-        "title": "Chức năng plugin",
-        "tools": {
-          "desc": "Giao diện chức năng phơi bày cho mô hình ngôn ngữ lớn (LLM) để thực thi thao tác",
-          "empty": "Chưa có công cụ",
-          "inputSchema": "Mô tả đầu vào",
-          "instructions": "Hướng dẫn",
-          "table": {
-            "description": "Mô tả",
-            "name": "Tên",
-            "required": "Bắt buộc",
-            "type": "Loại"
-          },
-          "title": "Danh sách công cụ"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "MCP Server này đã được chủ sở hữu xác nhận, đảm bảo quyền sở hữu và quản lý.",
-          "title": "Đã được chủ sở hữu xác nhận"
-        },
-        "deployMoreThanManual": {
-          "desc": "MCP Server này cung cấp phương thức cài đặt thân thiện hơn Manual, giúp người dùng dễ dàng triển khai và sử dụng.",
-          "title": "Cung cấp phương thức cài đặt thân thiện"
-        },
-        "deployment": {
-          "desc": "MCP Server này cung cấp ít nhất một phương thức cài đặt, cho phép người dùng triển khai và sử dụng.",
-          "descWithCount": "MCP Server này cung cấp {{number}} phương thức cài đặt, cho phép người dùng triển khai và sử dụng.",
-          "title": "Cung cấp ít nhất một phương thức cài đặt"
-        },
-        "license": {
-          "desc": "Kho mã này có tệp LICENSE.",
-          "descWithlicense": "Giấy phép kho mã này là {{license}}.",
-          "title": "Có giấy phép"
-        },
-        "listTitle": "Chi tiết đánh giá",
-        "notClaimed": {
-          "desc": "Nếu bạn là chủ sở hữu MCP Server này, có thể xác nhận bằng cách sau.",
-          "title": "Chưa được chủ sở hữu xác nhận"
-        },
-        "prompts": {
-          "desc": "MCP Server này cung cấp lời nhắc, cho phép người dùng tương tác với dịch vụ.",
-          "descWithCount": "MCP Server này cung cấp {{number}} lời nhắc, cho phép người dùng tương tác với dịch vụ.",
-          "title": "Có lời nhắc"
-        },
-        "readme": {
-          "desc": "Kho mã này có tệp README.md.",
-          "title": "Có README"
-        },
-        "resources": {
-          "desc": "MCP Server này cung cấp tài nguyên, cho phép người dùng đính kèm và quản lý dữ liệu ngữ cảnh.",
-          "descWithCount": "MCP Server này cung cấp {{number}} tài nguyên, cho phép người dùng đính kèm và quản lý dữ liệu ngữ cảnh.",
-          "title": "Có tài nguyên"
-        },
-        "title": "Đánh giá",
-        "tools": {
-          "desc": "Dịch vụ cần cung cấp ít nhất một công cụ, cho phép người dùng thực hiện thao tác cụ thể.",
-          "descWithCount": "MCP Server này cung cấp {{number}} công cụ, cho phép người dùng thực hiện thao tác cụ thể.",
-          "title": "Có ít nhất một công cụ"
-        },
-        "validated": {
-          "desc": "MCP Server này đã được xác minh cài đặt, đảm bảo chất lượng và độ tin cậy.",
-          "title": "Đã được xác minh"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "MCP Server này được kiểm tra nghiêm ngặt, cung cấp đầy đủ chức năng và trải nghiệm người dùng chất lượng cao.",
-          "fullTitle": "Plugin xuất sắc",
-          "title": "Xuất sắc"
-        },
-        "b": {
-          "desc": "MCP Server này cung cấp chức năng và trải nghiệm người dùng tốt, nhưng có thể cần cải thiện một số điểm.",
-          "fullTitle": "Chức năng tốt",
-          "title": "Tốt"
-        },
-        "f": {
-          "desc": "MCP Server này có chức năng chưa đầy đủ hoặc chất lượng thấp, khuyến nghị người dùng cân nhắc khi sử dụng.",
-          "fullTitle": "Chất lượng kém",
-          "title": "Kém"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "Từ khóa gợi ý",
-          "resources": "Tài nguyên",
-          "title": "Khả năng plugin",
-          "tools": "Công cụ"
-        },
-        "configuration": {
-          "title": "Cấu hình plugin"
-        },
-        "connection": {
-          "args": "Tham số khởi động",
-          "command": "Lệnh khởi động",
-          "title": "Thông tin kết nối",
-          "type": "Loại kết nối",
-          "url": "Địa chỉ dịch vụ"
-        },
-        "saveSettings": "Lưu cài đặt",
-        "title": "Cài đặt plugin"
-      },
-      "sidebar": {
-        "install": "Cài đặt MCP Server",
-        "meta": {
-          "homepage": "Trang chủ",
-          "installCount": "Số lượt cài đặt",
-          "language": "Ngôn ngữ nguồn",
-          "license": "Giấy phép",
-          "published": "Ngày phát hành",
-          "repo": "Kho mã nguồn",
-          "stars": "Số sao",
-          "title": "Thông tin chi tiết",
-          "updated": "Cập nhật gần nhất"
-        },
-        "moreServerConfig": "Xem chi tiết",
-        "recommendServers": "MCP liên quan",
-        "serverConfig": "Cấu hình cài đặt",
-        "toc": "Mục lục"
-      },
-      "summary": {
-        "title": "Bạn có thể làm gì với MCP Server này?"
-      },
-      "totalScore": {
-        "description": "Tổng điểm được tính dựa trên các chỉ số tổng hợp",
-        "legend": {
-          "aGrade": "Cấp A ({{minPercent}}-100%)",
-          "bGrade": "Cấp B ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "Cấp F (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} điểm",
-        "popover": {
-          "completedOptional": "✅ Đã hoàn thành mục tùy chọn ({{count}} mục)",
-          "completedRequired": "✅ Đã hoàn thành mục bắt buộc ({{count}} mục)",
-          "incompleteOptional": "⏸️ Chưa hoàn thành mục tùy chọn ({{count}} mục)",
-          "incompleteRequired": "❌ Chưa hoàn thành mục bắt buộc ({{count}} mục)",
-          "title": "Chi tiết đánh giá"
-        },
-        "ratingFormat": "Xếp hạng: {{level}}",
-        "scoreInfo": {
-          "items": "mục",
-          "points": "điểm",
-          "requiredItems": "mục bắt buộc"
-        },
-        "title": "Tổng điểm"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "Phiên bản mới nhất",
-          "isValidated": "Đã xác minh",
-          "publishAt": "Ngày phát hành",
-          "version": "Phiên bản"
-        },
-        "title": "Lịch sử phiên bản"
-      }
-    },
-    "hero": {
-      "desc": "Nền tảng MCP Servers mã nguồn mở, có thể triển khai, giúp hệ thống AI dễ dàng truy cập hệ thống tập tin, cơ sở dữ liệu, API và các tài nguyên quan trọng khác, mở rộng toàn diện khả năng AI của bạn.",
-      "subTitle": "Mã nguồn mở & Sẵn sàng sử dụng",
-      "title": "Thị trường MCP mã nguồn mở dành cho AI"
-    },
-    "sorts": {
-      "createdAt": "Mới thêm",
-      "installCount": "Số lượt cài đặt",
-      "isFeatured": "Plugin đề xuất",
-      "isValidated": "Plugin đã xác minh",
-      "promptsCount": "Số lời nhắc",
-      "ratingCount": "Số đánh giá",
-      "resourcesCount": "Số tài nguyên",
-      "toolsCount": "Số công cụ",
-      "updatedAt": "Cập nhật gần nhất"
-    },
-    "title": "Thị trường MCP",
-    "unvalidated": {
-      "desc": "MCP Server này chưa được xác minh",
-      "title": "Chưa xác minh"
-    },
-    "validated": {
-      "desc": "MCP Server này đã được xác minh, đảm bảo chất lượng và độ tin cậy.",
-      "descWithDate": "MCP Server này đã được xác minh vào {{date}}, đảm bảo chất lượng và độ tin cậy.",
-      "title": "Đã xác minh"
-    }
-  },
-  "models": {
-    "abilities": "Khả năng mô hình",
-    "chat": "Bắt đầu cuộc trò chuyện",
-    "contentLength": "Độ dài ngữ cảnh tối đa",
-    "details": {
-      "overview": {
-        "title": "Tổng quan"
-      },
-      "related": {
-        "listTitle": "Mô hình liên quan",
-        "more": "Xem thêm",
-        "title": "Gợi ý liên quan"
-      }
-    },
-    "free": "Miễn phí",
-    "guide": "Hướng dẫn cấu hình",
-    "list": "Danh sách mô hình",
-    "more": "Thêm",
-    "parameterList": {
-      "defaultValue": "Giá trị mặc định",
-      "docs": "Xem tài liệu",
-      "frequency_penalty": {
-        "desc": "Cài đặt này điều chỉnh tần suất mà mô hình lặp lại các từ cụ thể đã xuất hiện trong đầu vào. Giá trị cao hơn làm giảm khả năng lặp lại này, trong khi giá trị âm tạo ra hiệu ứng ngược lại. Hình phạt từ vựng không tăng theo số lần xuất hiện. Giá trị âm sẽ khuyến khích việc lặp lại từ vựng.",
-        "title": "Hình phạt tần suất"
-      },
-      "max_tokens": {
-        "desc": "Cài đặt này xác định độ dài tối đa mà mô hình có thể tạo ra trong một lần phản hồi. Việc đặt giá trị cao hơn cho phép mô hình tạo ra những phản hồi dài hơn, trong khi giá trị thấp hơn sẽ giới hạn độ dài của phản hồi, giúp nó ngắn gọn hơn. Tùy thuộc vào các tình huống ứng dụng khác nhau, điều chỉnh giá trị này một cách hợp lý có thể giúp đạt được độ dài và mức độ chi tiết mong muốn của phản hồi.",
-        "title": "Giới hạn phản hồi một lần"
-      },
-      "presence_penalty": {
-        "desc": "Cài đặt này nhằm kiểm soát việc lặp lại từ vựng dựa trên tần suất xuất hiện của từ trong đầu vào. Nó cố gắng sử dụng ít hơn những từ đã xuất hiện nhiều trong đầu vào, với tần suất sử dụng tỷ lệ thuận với tần suất xuất hiện. Hình phạt từ vựng tăng theo số lần xuất hiện. Giá trị âm sẽ khuyến khích việc lặp lại từ vựng.",
-        "title": "Độ mới của chủ đề"
-      },
-      "range": "Phạm vi",
-      "reasoning_effort": {
-        "desc": "Cài đặt này được sử dụng để kiểm soát mức độ suy luận của mô hình trước khi tạo câu trả lời. Mức độ thấp ưu tiên tốc độ phản hồi và tiết kiệm Token, trong khi mức độ cao cung cấp suy luận đầy đủ hơn nhưng tiêu tốn nhiều Token hơn và làm giảm tốc độ phản hồi. Giá trị mặc định là trung bình, cân bằng giữa độ chính xác của suy luận và tốc độ phản hồi.",
-        "title": "Mức độ suy luận"
-      },
-      "temperature": {
-        "desc": "Cài đặt này ảnh hưởng đến sự đa dạng trong phản hồi của mô hình. Giá trị thấp hơn dẫn đến phản hồi dễ đoán và điển hình hơn, trong khi giá trị cao hơn khuyến khích phản hồi đa dạng và không thường gặp. Khi giá trị được đặt là 0, mô hình sẽ luôn đưa ra cùng một phản hồi cho đầu vào nhất định.",
-        "title": "Ngẫu nhiên"
-      },
-      "title": "Tham số mô hình",
-      "top_p": {
-        "desc": "Cài đặt này giới hạn lựa chọn của mô hình chỉ trong một tỷ lệ từ có khả năng cao nhất: chỉ chọn những từ hàng đầu có xác suất tích lũy đạt P. Giá trị thấp hơn làm cho phản hồi của mô hình dễ đoán hơn, trong khi cài đặt mặc định cho phép mô hình chọn từ toàn bộ phạm vi từ vựng.",
-        "title": "Lấy mẫu hạt nhân"
-      },
-      "type": "Loại"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChat hỗ trợ sử dụng khóa API tùy chỉnh cho nhà cung cấp này.",
-      "input": "Giá đầu vào",
-      "inputTooltip": "Chi phí cho mỗi triệu Token",
-      "latency": "Độ trễ",
-      "latencyTooltip": "Thời gian phản hồi trung bình để nhà cung cấp gửi Token đầu tiên",
-      "maxOutput": "Độ dài đầu ra tối đa",
-      "maxOutputTooltip": "Số Token tối đa mà điểm cuối này có thể tạo ra",
-      "officialTooltip": "Dịch vụ chính thức của LobeHub",
-      "output": "Giá đầu ra",
-      "outputTooltip": "Chi phí cho mỗi triệu Token",
-      "streamCancellationTooltip": "Nhà cung cấp này hỗ trợ chức năng hủy luồng.",
-      "throughput": "Thông lượng",
-      "throughputTooltip": "Số Token trung bình được truyền trong mỗi yêu cầu luồng mỗi giây"
-    },
-    "sorts": {
-      "contextWindowTokens": "Độ dài ngữ cảnh",
-      "identifier": "ID mô hình",
-      "inputPrice": "Giá đầu vào",
-      "outputPrice": "Giá đầu ra",
-      "providerCount": "Số nhà cung cấp",
-      "releasedAt": "Mới phát hành"
-    },
-    "suggestions": "Mô hình liên quan",
-    "supportedProviders": "Nhà cung cấp hỗ trợ mô hình này"
-  },
-  "plugins": {
-    "builtinTag": "Plugin tích hợp sẵn",
-    "community": "Plugin cộng đồng",
-    "details": {
-      "settings": {
-        "title": "Cài đặt plugin"
-      },
-      "summary": {
-        "title": "Bạn có thể làm gì với plugin này?"
-      },
-      "tools": {
-        "title": "Công cụ plugin"
-      }
-    },
-    "install": "Cài đặt plugin",
-    "installed": "Đã cài đặt",
-    "legacyTag": "Plugin phiên bản cũ",
-    "list": "Danh sách plugin",
-    "meta": {
-      "description": "Mô tả",
-      "parameter": "Tham số",
-      "title": "Tham số công cụ",
-      "type": "Loại"
-    },
-    "more": "Thêm",
-    "official": "Plugin chính thức",
-    "recentSubmits": "Cập nhật gần đây",
-    "sorts": {
-      "createdAt": "Mới phát hành",
-      "identifier": "ID plugin",
-      "title": "Tên plugin"
-    },
-    "suggestions": "Gợi ý liên quan"
-  },
-  "providers": {
-    "config": "Cấu hình nhà cung cấp",
-    "details": {
-      "guide": {
-        "title": "Hướng dẫn kết nối"
-      },
-      "overview": {
-        "title": "Tổng quan"
-      },
-      "related": {
-        "listTitle": "Nhà cung cấp liên quan",
-        "more": "Xem thêm",
-        "title": "Gợi ý liên quan"
-      }
-    },
-    "list": "Danh sách nhà cung cấp mô hình",
-    "modelCount": "{{count}} mô hình",
-    "modelName": "Tên mô hình",
-    "modelSite": "Tài liệu mô hình",
-    "more": "Thêm",
-    "officialSite": "Trang web chính thức",
-    "showAllModels": "Hiển thị tất cả các mô hình",
-    "sorts": {
-      "default": "Sắp xếp mặc định",
-      "identifier": "ID nhà cung cấp",
-      "modelCount": "Số mô hình"
-    },
-    "suggestions": "Nhà cung cấp liên quan",
-    "supportedModels": "Mô hình được hỗ trợ"
-  },
-  "publishedTime": "Đã phát hành",
-  "search": {
-    "placeholder": "Tìm kiếm tên, mô tả hoặc từ khóa...",
-    "result": "{{count}} kết quả tìm kiếm về <highlight>{{keyword}}</highlight>",
-    "searching": "Đang tìm kiếm..."
-  },
-  "tab": {
-    "assistant": "Trợ lý",
-    "home": "Trang chủ",
-    "model": "Mô hình",
-    "plugin": "Plugin",
-    "provider": "Nhà cung cấp mô hình"
-  }
+  "mcp.categories.all.description": "Tất cả máy chủ MCP",
+  "mcp.categories.all.name": "Tất cả",
+  "mcp.categories.business.description": "Dịch vụ Doanh nghiệp và Doanh nghiệp lớn",
+  "mcp.categories.business.name": "Dịch vụ Doanh nghiệp",
+  "mcp.categories.developer.description": "Công cụ và dịch vụ dành cho nhà phát triển",
+  "mcp.categories.developer.name": "Công cụ Nhà phát triển",
+  "mcp.categories.gaming-entertainment.description": "Trò chơi, Giải trí và Hoạt động thư giãn",
+  "mcp.categories.gaming-entertainment.name": "Trò chơi & Giải trí",
+  "mcp.categories.health-wellness.description": "Sức khỏe, Thể hình và Lối sống lành mạnh",
+  "mcp.categories.health-wellness.name": "Sức khỏe & Lối sống",
+  "mcp.categories.lifestyle.description": "Phong cách sống cá nhân, thói quen và hoạt động hàng ngày",
+  "mcp.categories.lifestyle.name": "Phong cách sống",
+  "mcp.categories.media-generate.description": "Tạo, chỉnh sửa và xử lý phương tiện",
+  "mcp.categories.media-generate.name": "Tạo phương tiện",
+  "mcp.categories.news.description": "Tổng hợp tin tức, báo cáo và dịch vụ thông tin",
+  "mcp.categories.news.name": "Tin tức & Thông tin",
+  "mcp.categories.productivity.description": "Quản lý công việc, ghi chú và công cụ tăng năng suất",
+  "mcp.categories.productivity.name": "Công cụ Năng suất",
+  "mcp.categories.science-education.description": "Nghiên cứu khoa học, học tập và công cụ giáo dục",
+  "mcp.categories.science-education.name": "Khoa học & Giáo dục",
+  "mcp.categories.social.description": "Mạng xã hội và giao tiếp",
+  "mcp.categories.social.name": "Mạng xã hội",
+  "mcp.categories.stocks-finance.description": "Thị trường tài chính, giao dịch và đầu tư",
+  "mcp.categories.stocks-finance.name": "Chứng khoán & Tài chính",
+  "mcp.categories.tools.description": "Công cụ và dịch vụ thực tiễn đa năng",
+  "mcp.categories.tools.name": "Công cụ Tiện ích",
+  "mcp.categories.travel-transport.description": "Lập kế hoạch du lịch và phương tiện di chuyển",
+  "mcp.categories.travel-transport.name": "Du lịch & Vận chuyển",
+  "mcp.categories.weather.description": "Dự báo thời tiết và dịch vụ khí tượng",
+  "mcp.categories.weather.name": "Thời tiết",
+  "mcp.categories.web-search.description": "Tìm kiếm web và truy xuất thông tin",
+  "mcp.categories.web-search.name": "Truy xuất Thông tin",
+  "mcp.details.connectionType.hybrid.desc": "Dịch vụ này có thể chạy cục bộ hoặc trên đám mây tùy theo cấu hình hoặc kịch bản sử dụng, mang lại khả năng hoạt động kép.",
+  "mcp.details.connectionType.hybrid.title": "Dịch vụ Kết hợp",
+  "mcp.details.connectionType.local.desc": "Máy chủ này chỉ có thể chạy trên thiết bị cục bộ của người dùng, yêu cầu cài đặt và phụ thuộc vào tài nguyên cục bộ.",
+  "mcp.details.connectionType.local.title": "Dịch vụ Cục bộ",
+  "mcp.details.connectionType.remote.desc": "Máy chủ này được lưu trữ từ xa vì chủ yếu phụ thuộc vào các dịch vụ từ xa và không dựa vào môi trường cục bộ.",
+  "mcp.details.connectionType.remote.title": "Dịch vụ Đám mây",
+  "mcp.details.deployment.args": "Tham số",
+  "mcp.details.deployment.checkCommand": "Lệnh Kiểm tra",
+  "mcp.details.deployment.command": "Lệnh",
+  "mcp.details.deployment.commandLine": "Phụ thuộc Hệ thống",
+  "mcp.details.deployment.connection": "Phương thức Kết nối",
+  "mcp.details.deployment.connectionType": "Loại Kết nối",
+  "mcp.details.deployment.description": "Phương thức Cài đặt và Triển khai Kỹ năng",
+  "mcp.details.deployment.descriptionPlaceholder": "Mô tả tùy chọn",
+  "mcp.details.deployment.empty": "Không có tùy chọn triển khai",
+  "mcp.details.deployment.env": "Biến Môi trường",
+  "mcp.details.deployment.guide": "Hướng dẫn Cài đặt",
+  "mcp.details.deployment.installation": "Cài đặt qua {{method}}",
+  "mcp.details.deployment.installationMethod": "Phương thức Cài đặt",
+  "mcp.details.deployment.other": "Cài đặt Khác",
+  "mcp.details.deployment.packageName": "Tên Gói",
+  "mcp.details.deployment.platform.steps.claude": "- Mở ứng dụng **Claude Desktop**\n- Vào **Cài đặt**, chọn **Nhà phát triển**\n- Nhấn **Chỉnh sửa Cấu hình**\n- Mở tệp **claude_desktop_config.json**\n- Sao chép và dán cấu hình máy chủ vào tệp hiện có, sau đó lưu lại",
+  "mcp.details.deployment.platform.steps.cline": "- Mở VS Code với tiện ích mở rộng Cline đã cài đặt\n- Nhấn vào biểu tượng Cline ở thanh bên\n- Chọn **MCP Servers** từ menu thả xuống\n- Trong tab **Remote Servers**, nhập tên máy chủ và URL máy chủ MCP của bạn\n- Nhấn **Add Server** để kết nối",
+  "mcp.details.deployment.platform.steps.cursor": "- Vào **Cài đặt**, chọn phần cài đặt Cursor\n- Chọn **MCP** ở bên trái\n- Nhấn **Thêm Máy chủ MCP Toàn cục Mới** ở góc trên bên phải\n- Sao chép và dán cấu hình máy chủ vào tệp hiện có, sau đó lưu lại",
+  "mcp.details.deployment.platform.steps.lobeChat": "- Mở ứng dụng **LobeHub Desktop**\n- Vào **Cài đặt** - **Tác nhân Mặc định**\n- Sau đó chọn **Cài đặt Kỹ năng** - **Kỹ năng Tùy chỉnh**\n- Nhấn **Nhập nhanh Cấu hình JSON**\n- Sao chép và dán cấu hình máy chủ vào ô văn bản, sau đó cài đặt",
+  "mcp.details.deployment.platform.steps.openai": "- Mở ứng dụng **OpenAI** hoặc môi trường phát triển của bạn\n- Cấu hình công cụ MCP trong **API Phản hồi**\n- Thêm các khối MCP vào mảng **tools** trong yêu cầu API\n- Đặt **server_url** là điểm cuối máy chủ MCP của bạn\n- Bao gồm các tiêu đề xác thực cần thiết (API key, token, v.v.)\n- Sử dụng tham số `allowed_tools` để giới hạn công cụ được hiển thị\n- Đặt `require_approval` để kiểm soát việc phê duyệt thực thi công cụ",
+  "mcp.details.deployment.platform.steps.vscode": "- Mở VS Code\n- Mở bảng lệnh (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Gõ **MCP: Add Server** và chọn\n- Chọn thêm vào không gian làm việc hoặc cài đặt người dùng\n- Sao chép và dán cấu hình máy chủ",
+  "mcp.details.deployment.platform.title": "Cài đặt trên {{platform}}",
+  "mcp.details.deployment.recommended": "Đề xuất",
+  "mcp.details.deployment.systemDependencies": "Phụ thuộc Hệ thống",
+  "mcp.details.deployment.table.description": "Mô tả",
+  "mcp.details.deployment.table.name": "Tên",
+  "mcp.details.deployment.table.required": "Bắt buộc",
+  "mcp.details.deployment.table.type": "Loại",
+  "mcp.details.deployment.title": "Phương thức Cài đặt",
+  "mcp.details.githubBadge.desc": "LobeHub thường xuyên quét kho mã và tài liệu để:\n- Xác nhận trạng thái hoạt động của máy chủ MCP.\n- Trích xuất các tính năng như công cụ, tài nguyên, gợi ý và tham số cần thiết.\n- Huy hiệu của chúng tôi giúp người dùng nhanh chóng đánh giá độ an toàn, tính năng và hướng dẫn cài đặt của máy chủ MCP. Vui lòng sao chép đoạn mã sau vào tệp `README.md` của bạn:",
+  "mcp.details.nav.needHelp": "Cần trợ giúp?",
+  "mcp.details.nav.reportIssue": "Báo cáo sự cố",
+  "mcp.details.nav.viewSourceCode": "Xem mã nguồn",
+  "mcp.details.overview.title": "Tổng quan",
+  "mcp.details.related.listTitle": "Máy chủ MCP liên quan",
+  "mcp.details.related.more": "Xem thêm",
+  "mcp.details.related.title": "Gợi ý liên quan",
+  "mcp.details.schema.mode.docs": "Tài liệu",
+  "mcp.details.schema.prompts.arguments": "Cấu hình Tham số",
+  "mcp.details.schema.prompts.desc": "Mẫu tương tác được kích hoạt khi người dùng lựa chọn",
+  "mcp.details.schema.prompts.empty": "Không có gợi ý nào",
+  "mcp.details.schema.prompts.instructions": "Mô tả Hướng dẫn",
+  "mcp.details.schema.prompts.table.description": "Mô tả",
+  "mcp.details.schema.prompts.table.name": "Tên",
+  "mcp.details.schema.prompts.table.required": "Bắt buộc",
+  "mcp.details.schema.prompts.title": "Danh sách Gợi ý",
+  "mcp.details.schema.resources.desc": "Dữ liệu ngữ cảnh được đính kèm và quản lý bởi người dùng",
+  "mcp.details.schema.resources.empty": "Không có tài nguyên nào",
+  "mcp.details.schema.resources.table.description": "Mô tả",
+  "mcp.details.schema.resources.table.mineType": "Loại MIME",
+  "mcp.details.schema.resources.table.name": "Tên",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "Danh sách Tài nguyên",
+  "mcp.details.schema.title": "Tính năng Kỹ năng",
+  "mcp.details.schema.tools.desc": "Giao diện chức năng được cung cấp cho mô hình ngôn ngữ lớn (LLM) để thực hiện thao tác",
+  "mcp.details.schema.tools.empty": "Không có công cụ nào",
+  "mcp.details.schema.tools.inputSchema": "Mô tả Đầu vào",
+  "mcp.details.schema.tools.instructions": "Mô tả Hướng dẫn",
+  "mcp.details.schema.tools.table.description": "Mô tả",
+  "mcp.details.schema.tools.table.name": "Tên",
+  "mcp.details.schema.tools.table.required": "Bắt buộc",
+  "mcp.details.schema.tools.table.type": "Loại",
+  "mcp.details.schema.tools.title": "Danh sách Công cụ",
+  "mcp.details.score.claimed.desc": "Máy chủ MCP này đã được xác nhận bởi chủ sở hữu, đảm bảo quyền sở hữu và quản lý.",
+  "mcp.details.score.claimed.title": "Đã được xác nhận bởi chủ sở hữu",
+  "mcp.details.score.deployMoreThanManual.desc": "Máy chủ MCP này cung cấp phương thức cài đặt thân thiện hơn so với thủ công, giúp người dùng dễ dàng triển khai và sử dụng.",
+  "mcp.details.score.deployMoreThanManual.title": "Cung cấp phương thức cài đặt thân thiện",
+  "mcp.details.score.deployment.desc": "Máy chủ MCP này cung cấp ít nhất một phương thức cài đặt, cho phép người dùng triển khai và sử dụng.",
+  "mcp.details.score.deployment.descWithCount": "Máy chủ MCP này cung cấp {{number}} phương thức cài đặt, cho phép người dùng triển khai và sử dụng.",
+  "mcp.details.score.deployment.title": "Cung cấp ít nhất một phương thức cài đặt",
+  "mcp.details.score.license.desc": "Kho lưu trữ này có tệp LICENSE.",
+  "mcp.details.score.license.descWithlicense": "Kho lưu trữ này được cấp phép theo {{license}}.",
+  "mcp.details.score.license.title": "Có LICENSE",
+  "mcp.details.score.listTitle": "Chi tiết Điểm số",
+  "mcp.details.score.notClaimed.desc": "Nếu bạn là chủ sở hữu của máy chủ MCP này, bạn có thể xác nhận bằng các phương thức sau.",
+  "mcp.details.score.notClaimed.title": "Chưa được xác nhận bởi chủ sở hữu",
+  "mcp.details.score.prompts.desc": "Máy chủ MCP này cung cấp các gợi ý, cho phép người dùng tương tác với dịch vụ.",
+  "mcp.details.score.prompts.descWithCount": "Máy chủ MCP này cung cấp {{number}} gợi ý, cho phép người dùng tương tác với dịch vụ.",
+  "mcp.details.score.prompts.title": "Bao gồm Gợi ý",
+  "mcp.details.score.readme.desc": "Kho lưu trữ này có tệp README.md.",
+  "mcp.details.score.readme.title": "Có README",
+  "mcp.details.score.resources.desc": "Máy chủ MCP này cung cấp tài nguyên, cho phép người dùng đính kèm và quản lý dữ liệu ngữ cảnh.",
+  "mcp.details.score.resources.descWithCount": "Máy chủ MCP này cung cấp {{number}} tài nguyên, cho phép người dùng đính kèm và quản lý dữ liệu ngữ cảnh.",
+  "mcp.details.score.resources.title": "Bao gồm Tài nguyên",
+  "mcp.details.score.title": "Điểm số",
+  "mcp.details.score.tools.desc": "Dịch vụ phải cung cấp ít nhất một công cụ, cho phép người dùng thực hiện các thao tác cụ thể.",
+  "mcp.details.score.tools.descWithCount": "Máy chủ MCP này cung cấp {{number}} tính năng công cụ, cho phép người dùng thực hiện các thao tác cụ thể.",
+  "mcp.details.score.tools.title": "Bao gồm ít nhất một công cụ",
+  "mcp.details.score.validated.desc": "Máy chủ MCP này đã vượt qua kiểm tra cài đặt, đảm bảo chất lượng và độ tin cậy.",
+  "mcp.details.score.validated.title": "Đã xác thực",
+  "mcp.details.scoreLevel.a.desc": "Máy chủ MCP này đã được kiểm định nghiêm ngặt, cung cấp đầy đủ tính năng và trải nghiệm người dùng chất lượng cao.",
+  "mcp.details.scoreLevel.a.fullTitle": "Kỹ năng xuất sắc",
+  "mcp.details.scoreLevel.a.title": "Cao cấp",
+  "mcp.details.scoreLevel.b.desc": "Máy chủ MCP này có tính năng và trải nghiệm người dùng tốt nhưng có thể cần cải thiện ở một số khía cạnh.",
+  "mcp.details.scoreLevel.b.fullTitle": "Chức năng tốt",
+  "mcp.details.scoreLevel.b.title": "Tốt",
+  "mcp.details.scoreLevel.f.desc": "Máy chủ MCP này chưa hoàn thiện hoặc có chất lượng thấp; người dùng nên sử dụng cẩn trọng.",
+  "mcp.details.scoreLevel.f.fullTitle": "Chất lượng kém",
+  "mcp.details.scoreLevel.f.title": "Kém",
+  "mcp.details.settings.capabilities.prompts": "Gợi ý",
+  "mcp.details.settings.capabilities.resources": "Tài nguyên",
+  "mcp.details.settings.capabilities.title": "Khả năng của kỹ năng",
+  "mcp.details.settings.capabilities.tools": "Công cụ",
+  "mcp.details.settings.configuration.title": "Cấu hình kỹ năng",
+  "mcp.details.settings.connection.args": "Tham số khởi động",
+  "mcp.details.settings.connection.command": "Lệnh khởi động",
+  "mcp.details.settings.connection.title": "Thông tin kết nối",
+  "mcp.details.settings.connection.type": "Loại kết nối",
+  "mcp.details.settings.connection.url": "URL dịch vụ",
+  "mcp.details.settings.saveSettings": "Lưu cài đặt",
+  "mcp.details.settings.title": "Cài đặt kỹ năng",
+  "mcp.details.sidebar.install": "Cài đặt máy chủ MCP",
+  "mcp.details.sidebar.meta.homepage": "Trang chủ chính thức",
+  "mcp.details.sidebar.meta.installCount": "Lượt cài đặt",
+  "mcp.details.sidebar.meta.language": "Ngôn ngữ nguồn",
+  "mcp.details.sidebar.meta.license": "Giấy phép",
+  "mcp.details.sidebar.meta.published": "Ngày phát hành",
+  "mcp.details.sidebar.meta.repo": "Kho mã nguồn",
+  "mcp.details.sidebar.meta.stars": "Lượt đánh giá",
+  "mcp.details.sidebar.meta.title": "Chi tiết",
+  "mcp.details.sidebar.meta.updated": "Cập nhật lần cuối",
+  "mcp.details.sidebar.moreServerConfig": "Xem chi tiết",
+  "mcp.details.sidebar.recommendServers": "MCP liên quan",
+  "mcp.details.sidebar.serverConfig": "Cấu hình cài đặt",
+  "mcp.details.sidebar.toc": "Mục lục",
+  "mcp.details.summary.title": "Bạn có thể làm gì với máy chủ MCP này?",
+  "mcp.details.totalScore.description": "Tổng điểm được tính dựa trên nhiều chỉ số khác nhau",
+  "mcp.details.totalScore.legend.aGrade": "Hạng A ({{minPercent}}-100%)",
+  "mcp.details.totalScore.legend.bGrade": "Hạng B ({{minPercent}}-{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "Hạng F (0-{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} điểm",
+  "mcp.details.totalScore.popover.completedOptional": "✅ Đã hoàn thành mục tùy chọn ({{count}})",
+  "mcp.details.totalScore.popover.completedRequired": "✅ Đã hoàn thành mục bắt buộc ({{count}})",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ Chưa hoàn thành mục tùy chọn ({{count}})",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ Chưa hoàn thành mục bắt buộc ({{count}})",
+  "mcp.details.totalScore.popover.title": "Chi tiết điểm số",
+  "mcp.details.totalScore.ratingFormat": "Xếp hạng: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "Mục",
+  "mcp.details.totalScore.scoreInfo.points": "Điểm",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "Mục bắt buộc",
+  "mcp.details.totalScore.title": "Tổng điểm",
+  "mcp.details.versions.table.isLatest": "Phiên bản mới nhất",
+  "mcp.details.versions.table.isValidated": "Đã kiểm định",
+  "mcp.details.versions.table.publishAt": "Ngày phát hành",
+  "mcp.details.versions.table.version": "Phiên bản",
+  "mcp.details.versions.title": "Lịch sử phiên bản",
+  "mcp.hero.desc": "Cộng đồng máy chủ MCP mã nguồn mở, có thể triển khai—giúp hệ thống AI truy cập hệ thống tệp, cơ sở dữ liệu, API và các tài nguyên quan trọng khác.",
+  "mcp.hero.subTitle": "Mã nguồn mở, sẵn sàng sử dụng",
+  "mcp.hero.title": "Cộng đồng MCP mã nguồn mở cho AI",
+  "mcp.sorts.createdAt": "Mới thêm gần đây",
+  "mcp.sorts.installCount": "Lượt cài đặt",
+  "mcp.sorts.isFeatured": "Kỹ năng nổi bật",
+  "mcp.sorts.isValidated": "Kỹ năng đã kiểm định",
+  "mcp.sorts.promptsCount": "Số lượng gợi ý",
+  "mcp.sorts.ratingCount": "Số lượt đánh giá",
+  "mcp.sorts.resourcesCount": "Số lượng tài nguyên",
+  "mcp.sorts.toolsCount": "Số lượng công cụ",
+  "mcp.sorts.updatedAt": "Cập nhật gần đây",
+  "mcp.title": "Cộng đồng MCP",
+  "mcp.unvalidated.desc": "Máy chủ MCP này chưa được kiểm định",
+  "mcp.unvalidated.title": "Chưa kiểm định",
+  "mcp.validated.desc": "Máy chủ MCP này đã được kiểm định để đảm bảo chất lượng và độ tin cậy.",
+  "mcp.validated.descWithDate": "Máy chủ MCP này đã được kiểm định vào ngày {{date}} để đảm bảo chất lượng và độ tin cậy.",
+  "mcp.validated.title": "Đã kiểm định",
+  "mcpEmpty.description": "Hãy thử điều chỉnh bộ lọc hoặc tìm kiếm với từ khóa khác.",
+  "mcpEmpty.search": "Không tìm thấy máy chủ MCP phù hợp",
+  "mcpEmpty.title": "Không có máy chủ MCP",
+  "models.abilities": "Khả năng của mô hình",
+  "models.chat": "Bắt đầu hội thoại",
+  "models.contentLength": "Độ dài ngữ cảnh tối đa",
+  "models.details.overview.title": "Tổng quan",
+  "models.details.related.listTitle": "Mô hình liên quan",
+  "models.details.related.more": "Xem thêm",
+  "models.details.related.title": "Gợi ý liên quan",
+  "models.empty.description": "Hãy thử điều chỉnh bộ lọc để xem thêm mô hình",
+  "models.empty.search": "Không tìm thấy mô hình phù hợp",
+  "models.empty.title": "Không có mô hình",
+  "models.free": "Miễn phí",
+  "models.guide": "Hướng dẫn cấu hình",
+  "models.list": "Danh sách mô hình",
+  "models.more": "Xem thêm",
+  "models.parameterList.defaultValue": "Giá trị mặc định",
+  "models.parameterList.docs": "Xem tài liệu",
+  "models.parameterList.frequency_penalty.desc": "Thiết lập này điều chỉnh tần suất mô hình sử dụng lại từ vựng đã xuất hiện trong đầu vào. Giá trị cao hơn làm giảm khả năng lặp lại, trong khi giá trị âm khuyến khích sử dụng lại từ vựng.",
+  "models.parameterList.frequency_penalty.title": "Phạt tần suất",
+  "models.parameterList.max_tokens.desc": "Thiết lập này xác định độ dài tối đa mà mô hình có thể tạo ra trong một phản hồi. Giá trị cao cho phép phản hồi dài hơn, trong khi giá trị thấp giúp phản hồi ngắn gọn hơn.",
+  "models.parameterList.max_tokens.title": "Giới hạn phản hồi",
+  "models.parameterList.presence_penalty.desc": "Thiết lập này kiểm soát việc sử dụng lại từ vựng dựa trên tần suất xuất hiện trong đầu vào. Giá trị cao hơn làm giảm việc sử dụng từ xuất hiện nhiều, trong khi giá trị âm khuyến khích sử dụng lại.",
+  "models.parameterList.presence_penalty.title": "Độ mới chủ đề",
+  "models.parameterList.range": "Phạm vi",
+  "models.parameterList.reasoning_effort.desc": "Thiết lập này điều chỉnh mức độ suy luận của mô hình trước khi phản hồi. Mức thấp ưu tiên tốc độ, mức cao cung cấp suy luận sâu hơn nhưng chậm hơn.",
+  "models.parameterList.reasoning_effort.title": "Cường độ suy luận",
+  "models.parameterList.temperature.desc": "Thiết lập này ảnh hưởng đến sự đa dạng trong phản hồi của mô hình. Giá trị thấp tạo phản hồi dự đoán được, giá trị cao tạo phản hồi đa dạng hơn.",
+  "models.parameterList.temperature.title": "Mức ngẫu nhiên",
+  "models.parameterList.title": "Tham số mô hình",
+  "models.parameterList.top_p.desc": "Thiết lập này giới hạn lựa chọn từ vựng của mô hình trong một phần trăm xác suất tích lũy. Giá trị thấp làm phản hồi dễ đoán hơn.",
+  "models.parameterList.top_p.title": "Lấy mẫu hạt nhân",
+  "models.parameterList.type": "Loại",
+  "models.providerInfo.apiTooltip": "LobeHub hỗ trợ sử dụng khóa API tùy chỉnh cho nhà cung cấp này.",
+  "models.providerInfo.input": "Giá đầu vào",
+  "models.providerInfo.inputTooltip": "Chi phí cho mỗi triệu token",
+  "models.providerInfo.latency": "Độ trễ",
+  "models.providerInfo.latencyTooltip": "Thời gian phản hồi trung bình để gửi token đầu tiên",
+  "models.providerInfo.maxOutput": "Độ dài đầu ra tối đa",
+  "models.providerInfo.maxOutputTooltip": "Số token tối đa mà điểm cuối này có thể tạo ra",
+  "models.providerInfo.officialTooltip": "Dịch vụ chính thức của LobeHub",
+  "models.providerInfo.output": "Giá đầu ra",
+  "models.providerInfo.outputTooltip": "Chi phí cho mỗi triệu token",
+  "models.providerInfo.streamCancellationTooltip": "Nhà cung cấp này hỗ trợ hủy luồng.",
+  "models.providerInfo.throughput": "Thông lượng",
+  "models.providerInfo.throughputTooltip": "Số token trung bình truyền mỗi giây cho yêu cầu luồng",
+  "models.sorts.contextWindowTokens": "Độ dài ngữ cảnh",
+  "models.sorts.identifier": "ID mô hình",
+  "models.sorts.inputPrice": "Giá đầu vào",
+  "models.sorts.outputPrice": "Giá đầu ra",
+  "models.sorts.providerCount": "Số lượng nhà cung cấp",
+  "models.sorts.releasedAt": "Phát hành gần đây",
+  "models.suggestions": "Mô hình liên quan",
+  "models.supportedProviders": "Nhà cung cấp hỗ trợ mô hình này",
+  "plugins.builtinTag": "Tích hợp sẵn",
+  "plugins.community": "Kỹ năng cộng đồng",
+  "plugins.details.settings.title": "Cài đặt kỹ năng",
+  "plugins.details.summary.title": "Bạn có thể làm gì với kỹ năng này?",
+  "plugins.details.tools.title": "Công cụ kỹ năng",
+  "plugins.install": "Cài đặt kỹ năng",
+  "plugins.installed": "Đã cài đặt",
+  "plugins.legacyTag": "Cũ",
+  "plugins.list": "Danh sách kỹ năng",
+  "plugins.meta.description": "Mô tả",
+  "plugins.meta.parameter": "Tham số",
+  "plugins.meta.title": "Tham số công cụ",
+  "plugins.meta.type": "Loại",
+  "plugins.more": "Xem thêm",
+  "plugins.official": "Kỹ năng chính thức",
+  "plugins.recentSubmits": "Cập nhật gần đây",
+  "plugins.sorts.createdAt": "Phát hành gần đây",
+  "plugins.sorts.identifier": "ID kỹ năng",
+  "plugins.sorts.title": "Tên kỹ năng",
+  "plugins.suggestions": "Gợi ý liên quan",
+  "providers.config": "Cấu hình nhà cung cấp",
+  "providers.details.guide.title": "Hướng dẫn tích hợp",
+  "providers.details.overview.title": "Tổng quan",
+  "providers.details.related.listTitle": "Nhà cung cấp liên quan",
+  "providers.details.related.more": "Xem thêm",
+  "providers.details.related.title": "Gợi ý liên quan",
+  "providers.empty.description": "Hãy thử điều chỉnh bộ lọc để xem thêm nhà cung cấp.",
+  "providers.empty.search": "Không tìm thấy nhà cung cấp phù hợp",
+  "providers.empty.title": "Không có nhà cung cấp",
+  "providers.list": "Danh sách nhà cung cấp",
+  "providers.modelCount": "{{count}} mô hình",
+  "providers.modelName": "Tên mô hình",
+  "providers.modelSite": "Tài liệu mô hình",
+  "providers.more": "Xem thêm",
+  "providers.officialSite": "Trang chính thức",
+  "providers.showAllModels": "Hiển thị tất cả mô hình",
+  "providers.sorts.default": "Mặc định",
+  "providers.sorts.identifier": "ID nhà cung cấp",
+  "providers.sorts.modelCount": "Số lượng mô hình",
+  "providers.suggestions": "Nhà cung cấp liên quan",
+  "providers.supportedModels": "Mô hình được hỗ trợ",
+  "publishedTime": "Ngày phát hành",
+  "search.placeholder": "Tìm theo tên, mô tả hoặc từ khóa...",
+  "search.result": "{{count}} kết quả cho <highlight>{{keyword}}</highlight>",
+  "search.searching": "Đang tìm kiếm...",
+  "tab.assistant": "Tác vụ",
+  "tab.home": "Trang chủ",
+  "tab.model": "Mô hình",
+  "tab.plugin": "Kỹ năng",
+  "tab.provider": "Nhà cung cấp",
+  "tab.user": "Người dùng",
+  "user.agents": "Tác vụ",
+  "user.downloads": "Tải xuống",
+  "user.editProfile": "Chỉnh sửa hồ sơ",
+  "user.favoriteAgents": "Tác vụ đã lưu",
+  "user.favoritePlugins": "Kỹ năng đã lưu",
+  "user.follow": "Theo dõi",
+  "user.followers": "Người theo dõi",
+  "user.following": "Đang theo dõi",
+  "user.login": "Trở thành người sáng tạo",
+  "user.logout": "Đăng xuất",
+  "user.myProfile": "Hồ sơ của tôi",
+  "user.noAgents": "Người dùng này chưa xuất bản tác vụ nào",
+  "user.noFavoriteAgents": "Chưa lưu tác vụ nào",
+  "user.noFavoritePlugins": "Chưa lưu kỹ năng nào",
+  "user.publishedAgents": "Tác vụ đã tạo",
+  "user.tabs.favorites": "Yêu thích",
+  "user.tabs.publishedAgents": "Đã tạo",
+  "user.unfavorite": "Bỏ lưu",
+  "user.unfavoriteFailed": "Bỏ lưu thất bại",
+  "user.unfavoriteSuccess": "Đã bỏ lưu",
+  "user.unfollow": "Bỏ theo dõi",
+  "user.website": "Trang web"
 }

@@ -1,6 +1,6 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     min-height: 100%;
   `,
@@ -9,12 +9,12 @@ export const useStyles = createStyles(({ css, token }) => ({
   `,
   documentContainer: css`
     padding-block: 10px;
-    background-color: ${token.colorBgLayout};
+    background-color: ${cssVar.colorBgLayout};
   `,
   page: css`
     overflow: hidden;
     margin-block-end: 12px;
     border-radius: 4px;
-    box-shadow: ${token.boxShadowTertiary};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));

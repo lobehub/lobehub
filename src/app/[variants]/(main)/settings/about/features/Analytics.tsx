@@ -1,19 +1,19 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Form, type FormGroupItemType } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { BRANDING_NAME } from '@/const/branding';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const Analytics = memo(() => {
   const { t } = useTranslation('setting');
-  const checked = useUserStore(preferenceSelectors.userAllowTrace);
-  const [updatePreference] = useUserStore((s) => [s.updatePreference]);
+  const checked = useUserStore(userGeneralSettingsSelectors.telemetry);
+  const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
   const items: FormGroupItemType = {
     children: [
@@ -22,7 +22,7 @@ const Analytics = memo(() => {
           <Switch
             checked={!!checked}
             onChange={(e) => {
-              updatePreference({ telemetry: e });
+              updateGeneralConfig({ telemetry: e });
             }}
           />
         ),
@@ -35,7 +35,15 @@ const Analytics = memo(() => {
     title: t('analytics.title'),
   };
 
-  return <Form items={[items]} itemsType={'group'} variant={'borderless'} {...FORM_STYLE} />;
+  return (
+    <Form
+      collapsible={false}
+      items={[items]}
+      itemsType={'group'}
+      variant={'filled'}
+      {...FORM_STYLE}
+    />
+  );
 });
 
 export default Analytics;

@@ -1,6 +1,6 @@
-import { FC, PropsWithChildren, ReactNode } from 'react';
+import { type FC, type PropsWithChildren, type ReactNode } from 'react';
 
-import { DynamicLayoutProps } from '@/types/next';
+import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
 interface ServerLayoutProps<T> {

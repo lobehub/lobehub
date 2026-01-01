@@ -1,13 +1,12 @@
 'use client';
 
-import { Icon, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleDashedIcon, HammerIcon, LayersIcon, MessageSquareQuoteIcon } from 'lucide-react';
 import Link from 'next/link';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 import urlJoin from 'url-join';
 
 import { McpNavKey } from '@/types/discover';
@@ -16,43 +15,42 @@ import {
   calculateScore,
   calculateScoreFlags,
   createScoreItems,
-  getGradeColor,
   getGradeStyleClass,
 } from './calculateScore';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     active: css`
-      background: ${token.colorSuccessBgHover};
+      background: ${cssVar.colorSuccessBgHover};
     `,
     disable: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     extraTag: css`
       padding-block: 4px;
       padding-inline: 10px 12px;
       border-radius: 16px;
 
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
 
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     `,
     extraTagActive: css`
       &:hover {
-        color: ${token.colorText};
+        color: ${cssVar.colorText};
       }
     `,
     gradeA: css`
-      color: ${token.colorSuccess};
-      background: ${token.colorSuccessBg};
+      color: ${cssVar.colorSuccess};
+      background: ${cssVar.colorSuccessBg};
     `,
     gradeB: css`
-      color: ${token.colorWarning};
-      background: ${token.colorWarningBg};
+      color: ${cssVar.colorWarning};
+      background: ${cssVar.colorWarningBg};
     `,
     gradeF: css`
-      color: ${token.colorError};
-      background: ${token.colorErrorBg};
+      color: ${cssVar.colorError};
+      background: ${cssVar.colorErrorBg};
     `,
     gradeIcon: css`
       flex: none;
@@ -69,7 +67,7 @@ const useStyles = createStyles(({ css, token }) => {
       padding-block: 4px;
       padding-inline: 8px 12px;
       border-radius: 16px;
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     `,
   };
 });
@@ -108,7 +106,6 @@ const Scores = memo<ScoresProps>(
     isClaimed = false,
     installationMethods,
   }) => {
-    const { cx, styles, theme } = useStyles();
     const { t } = useTranslation('discover');
 
     // 使用工具函数计算所有的 has* 值，但需要处理类型转换
@@ -160,7 +157,19 @@ const Scores = memo<ScoresProps>(
             paddingLeft: 4,
           }}
         >
-          <Center className={styles.gradeIcon} style={{ borderColor: getGradeColor(grade, theme) }}>
+          <Center
+            className={styles.gradeIcon}
+            style={{
+              borderColor:
+                grade === 'a'
+                  ? cssVar.colorSuccess
+                  : grade === 'b'
+                    ? cssVar.colorWarning
+                    : grade === 'f'
+                      ? cssVar.colorError
+                      : cssVar.colorTextSecondary,
+            }}
+          >
             {grade.toUpperCase()}
           </Center>
           <span style={{ fontWeight: 500 }}>
@@ -178,11 +187,11 @@ const Scores = memo<ScoresProps>(
           gap={8}
           horizontal
           style={{
-            color: theme.colorTextDescription,
+            color: cssVar.colorTextDescription,
             paddingLeft: 4,
           }}
         >
-          <Icon color={theme.colorTextQuaternary} icon={CircleDashedIcon} size={22} />
+          <Icon color={cssVar.colorTextQuaternary} icon={CircleDashedIcon} size={22} />
           {t('mcp.unvalidated.title')}
         </Flexbox>
       </Tooltip>
@@ -202,7 +211,7 @@ const Scores = memo<ScoresProps>(
               query: {
                 activeTab: McpNavKey.Score,
               },
-              url: urlJoin('/discover/mcp', identifier),
+              url: urlJoin('/community/mcp', identifier),
             })}
           >
             {isValidated ? scoreTag : unvalidatedTag}
@@ -214,7 +223,7 @@ const Scores = memo<ScoresProps>(
               query: {
                 activeTab: McpNavKey.Schema,
               },
-              url: urlJoin('/discover/mcp', identifier),
+              url: urlJoin('/community/mcp', identifier),
             })}
           >
             <Flexbox align={'center'} className={styles.extraTag} gap={16} horizontal>

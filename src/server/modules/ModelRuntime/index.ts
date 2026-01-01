@@ -1,7 +1,7 @@
-import { GoogleGenAIOptions } from '@google/genai';
+import { type GoogleGenAIOptions } from '@google/genai';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
-import { ClientSecretPayload } from '@lobechat/types';
+import { type ClientSecretPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
 
@@ -23,6 +23,10 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
   const llmConfig = getLLMConfig() as Record<string, any>;
 
   switch (provider) {
+    case ModelProvider.LobeHub: {
+      return { apikey: payload.apiKey, baseURL: payload.baseURL, ...payload };
+    }
+
     case ModelProvider.VertexAI: {
       return {};
     }
@@ -171,7 +175,10 @@ const buildVertexOptions = (
 
   const project = projectFromParams || projectFromCredentials || projectFromEnv;
   const location =
-    (params.location as string | undefined) || payload.vertexAIRegion || process.env.VERTEXAI_LOCATION || undefined;
+    (params.location as string | undefined) ||
+    payload.vertexAIRegion ||
+    process.env.VERTEXAI_LOCATION ||
+    undefined;
 
   const googleAuthOptions = params.googleAuthOptions || (credentials ? { credentials } : undefined);
 

@@ -90,7 +90,11 @@ describe('aiModelRouter', () => {
     const result = await caller.getAiProviderModelList({ id: 'provider-1' });
 
     expect(result).toEqual(mockModelList);
-    expect(mockGetList).toHaveBeenCalledWith('provider-1');
+    expect(mockGetList).toHaveBeenCalledWith('provider-1', {
+      enabled: undefined,
+      limit: undefined,
+      offset: undefined,
+    });
   });
 
   it('should remove ai model', async () => {

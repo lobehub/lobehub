@@ -1,6 +1,6 @@
 import { ChunkMetadata, FileChunk } from '@lobechat/types';
 import { and, asc, cosineDistance, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { chunk } from 'lodash-es';
+import { chunk } from 'es-toolkit/compat';
 
 import {
   NewChunkItem,

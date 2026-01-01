@@ -27,7 +27,8 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5.2 — 面向编码与 agentic 工作流的旗舰模型，提供更强推理与长上下文能力。',
+    description:
+      'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
     enabled: true,
     id: 'gpt-5.2',
@@ -55,7 +56,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.2 pro：更聪明、更精确的 GPT-5.2 版本（Responses API Only），适合高难度问题与更长的多轮推理。',
+      'GPT-5.2 pro: a smarter, more precise GPT-5.2 variant (Responses API only), suited for hard problems and longer multi-turn reasoning.',
     displayName: 'GPT-5.2 pro',
     id: 'gpt-5.2-pro',
     maxOutput: 128_000,
@@ -77,7 +78,8 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-5.2 Chat：ChatGPT 使用的 GPT-5.2 变体（chat-latest），用于体验最新对话改进。',
+    description:
+      'GPT-5.2 Chat is the ChatGPT variant (chat-latest) for the latest conversation improvements.',
     displayName: 'GPT-5.2 Chat',
     enabled: true,
     id: 'gpt-5.2-chat-latest',
@@ -101,7 +103,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1 — 针对编码和 agent 任务优化的旗舰模型，支持可配置的推理强度与更长上下文。',
+      'GPT-5.1 — a flagship model optimized for coding and agent tasks with configurable reasoning effort and longer context.',
     displayName: 'GPT-5.1',
     id: 'gpt-5.1',
     maxOutput: 128_000,
@@ -125,7 +127,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-5.1 Chat：用于 ChatGPT 的 GPT-5.1 变体，适合聊天场景。',
+    description: 'GPT-5.1 Chat: the ChatGPT variant of GPT-5.1, built for chat scenarios.',
     displayName: 'GPT-5.1 Chat',
     id: 'gpt-5.1-chat-latest',
     maxOutput: 16_384,
@@ -148,7 +150,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1 Codex：针对 agentic 编码任务优化的 GPT-5.1 版本，可在 Responses API 中用于更复杂的代码/代理工作流。',
+      'GPT-5.1 Codex: a GPT-5.1 variant optimized for agentic coding tasks, for complex code/agent workflows in the Responses API.',
     displayName: 'GPT-5.1 Codex',
     id: 'gpt-5.1-codex',
     maxOutput: 128_000,
@@ -175,7 +177,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5.1 Codex mini：体积更小、成本更低的 Codex 变体，针对 agentic 编码任务进行了优化。',
+      'GPT-5.1 Codex mini: a smaller, lower-cost Codex variant optimized for agentic coding tasks.',
     displayName: 'GPT-5.1 Codex mini',
     id: 'gpt-5.1-codex-mini',
     maxOutput: 128_000,
@@ -201,7 +203,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 pro 使用更多计算来更深入地思考，并持续提供更好的答案。',
+    description: 'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
     displayName: 'GPT-5 pro',
     id: 'gpt-5-pro',
     maxOutput: 272_000,
@@ -226,7 +228,8 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 Codex 是一个针对 Codex 或类似环境中的代理编码任务优化的 GPT-5 版本。',
+    description:
+      'GPT-5 Codex is a GPT-5 variant optimized for agentic coding tasks in Codex-like environments.',
     displayName: 'GPT-5 Codex',
     id: 'gpt-5-codex',
     maxOutput: 128_000,
@@ -254,7 +257,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      '跨领域编码和代理任务的最佳模型。GPT-5 在准确性、速度、推理、上下文识别、结构化思维和问题解决方面实现了飞跃。',
+      'The best model for cross-domain coding and agent tasks. GPT-5 leaps in accuracy, speed, reasoning, context awareness, structured thinking, and problem solving.',
     displayName: 'GPT-5',
     id: 'gpt-5',
     maxOutput: 128_000,
@@ -282,7 +285,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      '更快、更经济高效的 GPT-5 版本，适用于明确定义的任务。在保持高质量输出的同时，提供更快的响应速度。',
+      'A faster, more cost-efficient GPT-5 variant for well-defined tasks, delivering quicker responses while maintaining quality.',
     displayName: 'GPT-5 mini',
     enabled: true,
     id: 'gpt-5-mini',
@@ -308,7 +311,8 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: '最快、最经济高效的 GPT-5 版本。非常适合需要快速响应且成本敏感的应用场景。',
+    description:
+      'The fastest and most cost-effective GPT-5 variant, ideal for latency- and cost-sensitive applications.',
     displayName: 'GPT-5 nano',
     id: 'gpt-5-nano',
     maxOutput: 128_000,
@@ -331,7 +335,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'ChatGPT 中使用的 GPT-5 模型。结合了强大的语言理解与生成能力，适合对话式交互应用。',
+      'The GPT-5 model used in ChatGPT, combining strong understanding and generation for conversational applications.',
     displayName: 'GPT-5 Chat',
     id: 'gpt-5-chat-latest',
     maxOutput: 128_000,
@@ -354,7 +358,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini 是我们最新的小型 o 系列模型。 它专为快速有效的推理而优化，在编码和视觉任务中表现出极高的效率和性能。',
+      'o4-mini is the latest small o-series model, optimized for fast, effective reasoning with high efficiency in coding and vision tasks.',
     displayName: 'o4-mini',
     id: 'o4-mini',
     maxOutput: 100_000,
@@ -381,7 +385,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini-deep-research 是我们更快速、更实惠的深度研究模型——非常适合处理复杂的多步骤研究任务。它可以从互联网上搜索和综合信息，也可以通过 MCP 连接器访问并利用你的自有数据。',
+      'o4-mini-deep-research is a faster, more affordable deep research model for complex multi-step research. It can search the web and also access your data via MCP connectors.',
     displayName: 'o4-mini Deep Research',
     id: 'o4-mini-deep-research',
     maxOutput: 100_000,
@@ -408,7 +412,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-pro 模型使用更多的计算来更深入地思考并始终提供更好的答案，仅支持 Responses API 下使用。',
+      'o3-pro uses more compute to think deeper and consistently deliver better answers; available only via the Responses API.',
     displayName: 'o3-pro',
     id: 'o3-pro',
     maxOutput: 100_000,
@@ -434,7 +438,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3 是一款全能强大的模型，在多个领域表现出色。它为数学、科学、编程和视觉推理任务树立了新标杆。它也擅长技术写作和指令遵循。用户可利用它分析文本、代码和图像，解决多步骤的复杂问题。',
+      'o3 is a powerful all-round model that sets a new bar for math, science, programming, and visual reasoning. It excels at technical writing and instruction following and can analyze text, code, and images for multi-step problems.',
     displayName: 'o3',
     id: 'o3',
     maxOutput: 100_000,
@@ -461,7 +465,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-deep-research 是我们最先进的深度研究模型，专为处理复杂的多步骤研究任务而设计。它可以从互联网上搜索和综合信息，也可以通过 MCP 连接器访问并利用你的自有数据。',
+      'o3-deep-research is our most advanced deep research model for complex multi-step tasks. It can search the web and access your data via MCP connectors.',
     displayName: 'o3 Deep Research',
     id: 'o3-deep-research',
     maxOutput: 100_000,
@@ -486,7 +490,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-mini 是我们最新的小型推理模型，在与 o1-mini 相同的成本和延迟目标下提供高智能。',
+      'o3-mini is our latest small reasoning model, delivering higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'o3-mini',
     maxOutput: 100_000,
@@ -511,7 +515,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o1 系列模型经过强化学习训练，能够在回答前进行思考，并执行复杂的推理任务。o1-pro 模型使用了更多计算资源，以进行更深入的思考，从而持续提供更优质的回答。',
+      'The o1 series is trained with reinforcement learning to think before answering and handle complex reasoning. o1-pro uses more compute for deeper thinking and consistently higher-quality answers.',
     displayName: 'o1-pro',
     id: 'o1-pro',
     maxOutput: 100_000,
@@ -535,7 +539,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o1是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务。该模型具有200K上下文和2023年10月的知识截止日期。',
+      'o1 is OpenAI’s new reasoning model with text+image input and text output, suited for complex tasks requiring broad knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
     id: 'o1',
     maxOutput: 100_000,
@@ -559,7 +563,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 是我们用于复杂任务的旗舰模型。它非常适合跨领域解决问题。',
+    description: 'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     id: 'gpt-4.1',
     maxOutput: 32_768,
@@ -584,7 +588,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_047_576,
     description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+      'GPT-4.1 mini balances intelligence, speed, and cost, making it attractive for many use cases.',
     displayName: 'GPT-4.1 mini',
     id: 'gpt-4.1-mini',
     maxOutput: 32_768,
@@ -607,7 +611,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 nano 是最快，最具成本效益的GPT-4.1模型。',
+    description: 'GPT-4.1 nano is the fastest and most cost-effective GPT-4.1 model.',
     displayName: 'GPT-4.1 nano',
     id: 'gpt-4.1-nano',
     maxOutput: 32_768,
@@ -629,7 +633,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4o mini是OpenAI在GPT-4 Omni之后推出的最新模型，支持图文输入并输出文本。作为他们最先进的小型模型，它比其他近期的前沿模型便宜很多，并且比GPT-3.5 Turbo便宜超过60%。它保持了最先进的智能，同时具有显著的性价比。GPT-4o mini在MMLU测试中获得了 82% 的得分，目前在聊天偏好上排名高于 GPT-4。',
+      'GPT-4o mini is OpenAI’s latest model after GPT-4 Omni, supporting text+image input with text output. It is their most advanced small model, far cheaper than recent frontier models and over 60% cheaper than GPT-3.5 Turbo, while maintaining top-tier intelligence (82% MMLU).',
     displayName: 'GPT-4o mini',
     id: 'gpt-4o-mini',
     maxOutput: 16_384,
@@ -652,7 +656,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4o mini 搜索预览版是一个专门训练用于理解和执行网页搜索查询的模型，使用的是 Chat Completions API。除了令牌费用之外，网页搜索查询还会按每次工具调用收取费用。',
+      'GPT-4o mini Search Preview is trained to understand and execute web search queries via the Chat Completions API. Web search is billed per tool call in addition to token costs.',
     displayName: 'GPT-4o mini Search Preview',
     id: 'gpt-4o-mini-search-preview',
     maxOutput: 16_384,
@@ -676,7 +680,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'GPT-4o',
     id: 'gpt-4o',
     pricing: {
@@ -698,7 +702,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4o 搜索预览版是一个专门训练用于理解和执行网页搜索查询的模型，使用的是 Chat Completions API。除了令牌费用之外，网页搜索查询还会按每次工具调用收取费用。',
+      'GPT-4o Search Preview is trained to understand and execute web search queries via the Chat Completions API. Web search is billed per tool call in addition to token costs.',
     displayName: 'GPT-4o Search Preview',
     id: 'gpt-4o-search-preview',
     maxOutput: 16_384,
@@ -722,7 +726,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'GPT-4o 1120',
     id: 'gpt-4o-2024-11-20',
     pricing: {
@@ -746,7 +750,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'GPT-4o 0513',
     id: 'gpt-4o-2024-05-13',
     pricing: {
@@ -767,7 +771,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT Audio 是面向音频输入输出的通用聊天模型，支持在 Chat Completions API 中使用音频 I/O。',
+      'GPT Audio is a general chat model for audio input/output, supported in the Chat Completions API.',
     displayName: 'GPT Audio',
     id: 'gpt-audio',
     maxOutput: 16_384,
@@ -789,7 +793,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       //search: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o Audio Preview 模型，支持音频输入输出',
+    description: 'GPT-4o Audio Preview model with audio input and output.',
     displayName: 'GPT-4o Audio Preview',
     id: 'gpt-4o-audio-preview',
     maxOutput: 16_384,
@@ -813,7 +817,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       //search: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o mini Audio 模型，支持音频输入输出',
+    description: 'GPT-4o mini Audio model with audio input and output.',
     displayName: 'GPT-4o mini Audio',
     id: 'gpt-4o-mini-audio-preview',
     maxOutput: 16_384,
@@ -837,7 +841,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time, combining strong understanding and generation for large-scale use cases like customer support, education, and technical support.',
     displayName: 'ChatGPT-4o',
     id: 'chatgpt-4o-latest',
     pricing: {
@@ -856,7 +860,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo',
     id: 'gpt-4-turbo',
     pricing: {
@@ -874,7 +878,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo Vision 0409',
     id: 'gpt-4-turbo-2024-04-09',
     pricing: {
@@ -892,7 +896,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo Preview',
     id: 'gpt-4-turbo-preview',
     pricing: {
@@ -909,7 +913,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo Preview 0125',
     id: 'gpt-4-0125-preview',
     pricing: {
@@ -927,7 +931,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
     displayName: 'GPT-4 Turbo Preview 1106',
     id: 'gpt-4-1106-preview',
     pricing: {
@@ -945,7 +949,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'GPT-4 提供了一个更大的上下文窗口，能够处理更长的文本输入，适用于需要广泛信息整合和数据分析的场景。',
+      'GPT-4 provides a larger context window to handle longer inputs, suitable for broad information synthesis and data analysis.',
     displayName: 'GPT-4',
     id: 'gpt-4',
     pricing: {
@@ -962,7 +966,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'GPT-4 提供了一个更大的上下文窗口，能够处理更长的文本输入，适用于需要广泛信息整合和数据分析的场景。',
+      'GPT-4 provides a larger context window to handle longer inputs, suitable for broad information synthesis and data analysis.',
     displayName: 'GPT-4 0613',
     id: 'gpt-4-0613',
     pricing: {
@@ -980,7 +984,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_384,
     description:
-      'GPT 3.5 Turbo，适用于各种文本生成和理解任务，Currently points to gpt-3.5-turbo-0125',
+      'GPT 3.5 Turbo for text generation and understanding; currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo',
     id: 'gpt-3.5-turbo',
     pricing: {
@@ -997,7 +1001,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_384,
     description:
-      'GPT 3.5 Turbo，适用于各种文本生成和理解任务，Currently points to gpt-3.5-turbo-0125',
+      'GPT 3.5 Turbo for text generation and understanding; currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo 0125',
     id: 'gpt-3.5-turbo-0125',
     pricing: {
@@ -1015,7 +1019,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_384,
     description:
-      'GPT 3.5 Turbo，适用于各种文本生成和理解任务，Currently points to gpt-3.5-turbo-0125',
+      'GPT 3.5 Turbo for text generation and understanding; currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo 1106',
     id: 'gpt-3.5-turbo-1106',
     pricing: {
@@ -1029,7 +1033,8 @@ export const openaiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'GPT 3.5 Turbo，适用于各种文本生成和理解任务，对指令遵循的优化',
+    description:
+      'GPT 3.5 Turbo for text generation and understanding tasks, optimized for instruction following.',
     displayName: 'GPT-3.5 Turbo Instruct',
     id: 'gpt-3.5-turbo-instruct',
     pricing: {
@@ -1048,7 +1053,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'codex-mini-latest 是 o4-mini 的微调版本，专门用于 Codex CLI。对于直接通过 API 使用，我们推荐从 gpt-4.1 开始。',
+      'codex-mini-latest is a fine-tuned o4-mini model for the Codex CLI. For direct API use, we recommend starting with gpt-4.1.',
     displayName: 'Codex mini',
     id: 'codex-mini-latest',
     maxOutput: 100_000,
@@ -1073,7 +1078,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'computer-use-preview 模型是专为“计算机使用工具”设计的专用模型，经过训练以理解并执行计算机相关任务。',
+      'computer-use-preview is a specialized model for the "computer use tool," trained to understand and execute computer-related tasks.',
     displayName: 'Computer Use Preview',
     id: 'computer-use-preview',
     maxOutput: 1024,
@@ -1094,7 +1099,7 @@ export const openaiChatModels: AIChatModelCard[] = [
 export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
   {
     contextWindowTokens: 8192,
-    description: '最强大的向量化模型，适用于英文和非英文任务',
+    description: 'The most capable embedding model for English and non-English tasks.',
     displayName: 'Text Embedding 3 Large',
     id: 'text-embedding-3-large',
     maxDimension: 3072,
@@ -1107,7 +1112,8 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: '高效且经济的新一代 Embedding 模型，适用于知识检索、RAG 应用等场景',
+    description:
+      'An efficient, cost-effective next-generation embedding model for retrieval and RAG scenarios.',
     displayName: 'Text Embedding 3 Small',
     id: 'text-embedding-3-small',
     maxDimension: 1536,
@@ -1123,7 +1129,7 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
 // Text-to-speech models
 export const openaiTTSModels: AITTSModelCard[] = [
   {
-    description: '最新的文本转语音模型，针对实时场景优化速度',
+    description: 'The latest text-to-speech model optimized for real-time speed.',
     displayName: 'TTS-1',
     id: 'tts-1',
     pricing: {
@@ -1132,7 +1138,7 @@ export const openaiTTSModels: AITTSModelCard[] = [
     type: 'tts',
   },
   {
-    description: '最新的文本转语音模型，针对质量进行优化',
+    description: 'The latest text-to-speech model optimized for quality.',
     displayName: 'TTS-1 HD',
     id: 'tts-1-hd',
     pricing: {
@@ -1142,7 +1148,7 @@ export const openaiTTSModels: AITTSModelCard[] = [
   },
   {
     description:
-      'GPT-4o mini TTS 是一个基于 GPT-4o mini 构建的文本转语音模型，这是一种快速且强大的语言模型。使用它可以将文本转换为自然听起来的语音文本。最大输入标记数为 2000。',
+      'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens.',
     displayName: 'GPT-4o Mini TTS',
     id: 'gpt-4o-mini-tts',
     pricing: {
@@ -1158,7 +1164,8 @@ export const openaiTTSModels: AITTSModelCard[] = [
 // Speech recognition models
 export const openaiSTTModels: AISTTModelCard[] = [
   {
-    description: '通用语音识别模型，支持多语言语音识别、语音翻译和语言识别。',
+    description:
+      'A general speech recognition model supporting multilingual ASR, speech translation, and language identification.',
     displayName: 'Whisper',
     id: 'whisper-1',
     pricing: {
@@ -1176,7 +1183,7 @@ export const openaiSTTModels: AISTTModelCard[] = [
   {
     contextWindowTokens: 16_000,
     description:
-      'GPT-4o Transcribe 是一种使用 GPT-4o 转录音频的语音转文本模型。与原始 Whisper 模型相比，它提高了单词错误率，并提高了语言识别和准确性。使用它来获得更准确的转录。',
+      'GPT-4o Transcribe is a speech-to-text model that transcribes audio with GPT-4o, improving word error rate, language ID, and accuracy over the original Whisper model.',
     displayName: 'GPT-4o Transcribe',
     id: 'gpt-4o-transcribe',
     maxOutput: 2000,
@@ -1192,7 +1199,7 @@ export const openaiSTTModels: AISTTModelCard[] = [
   {
     contextWindowTokens: 16_000,
     description:
-      'GPT-4o Mini Transcribe 是一种使用 GPT-4o 转录音频的语音转文本模型。与原始 Whisper 模型相比，它提高了单词错误率，并提高了语言识别和准确性。使用它来获得更准确的转录。',
+      'GPT-4o Mini Transcribe is a speech-to-text model that transcribes audio with GPT-4o, improving word error rate, language ID, and accuracy over the original Whisper model.',
     displayName: 'GPT-4o Mini Transcribe',
     id: 'gpt-4o-mini-transcribe',
     maxOutput: 2000,
@@ -1211,7 +1218,7 @@ export const openaiSTTModels: AISTTModelCard[] = [
 export const openaiImageModels: AIImageModelCard[] = [
   // https://platform.openai.com/docs/models/gpt-image-1
   {
-    description: 'ChatGPT 原生多模态图片生成模型',
+    description: 'ChatGPT native multimodal image generation model.',
     displayName: 'GPT Image 1',
     enabled: true,
     id: 'gpt-image-1',
@@ -1230,7 +1237,8 @@ export const openaiImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    description: '成本更低的 GPT Image 1 版本，原生支持文本与图像输入并生成图像输出。',
+    description:
+      'A lower-cost GPT Image 1 variant with native text and image input and image output.',
     displayName: 'GPT Image 1 Mini',
     enabled: true,
     id: 'gpt-image-1-mini',
@@ -1251,7 +1259,7 @@ export const openaiImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      '最新的 DALL·E 模型，于2023年11月发布。支持更真实、准确的图像生成，具有更强的细节表现力',
+      'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
     displayName: 'DALL·E 3',
     id: 'dall-e-3',
     parameters: {
@@ -1289,7 +1297,8 @@ export const openaiImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    description: '第二代 DALL·E 模型，支持更真实、准确的图像生成，分辨率是第一代的4倍',
+    description:
+      'Second-generation DALL·E model with more realistic, accurate image generation and 4× the resolution of the first generation.',
     displayName: 'DALL·E 2',
     id: 'dall-e-2',
     parameters: {
@@ -1330,7 +1339,8 @@ export const openaiRealtimeModels: AIRealtimeModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_000,
-    description: '通用实时模型，支持文本与音频的实时输入输出，并支持图像输入。',
+    description:
+      'A general real-time model supporting real-time text and audio I/O, plus image input.',
     displayName: 'GPT Realtime',
     id: 'gpt-realtime',
     maxOutput: 4096,
@@ -1353,7 +1363,7 @@ export const openaiRealtimeModels: AIRealtimeModelCard[] = [
   },
   {
     contextWindowTokens: 16_000,
-    description: 'GPT-4o 实时版本，支持音频和文本实时输入输出',
+    description: 'GPT-4o realtime variant with audio and text real-time I/O.',
     displayName: 'GPT-4o Realtime 241217',
     id: 'gpt-4o-realtime-preview',
     maxOutput: 4096,
@@ -1372,7 +1382,7 @@ export const openaiRealtimeModels: AIRealtimeModelCard[] = [
   },
   {
     contextWindowTokens: 32_000,
-    description: 'GPT-4o 实时版本，支持音频和文本实时输入输出',
+    description: 'GPT-4o realtime variant with audio and text real-time I/O.',
     displayName: 'GPT-4o Realtime 250603',
     id: 'gpt-4o-realtime-preview-2025-06-03',
     maxOutput: 4096,
@@ -1391,7 +1401,7 @@ export const openaiRealtimeModels: AIRealtimeModelCard[] = [
   },
   {
     contextWindowTokens: 16_000,
-    description: 'GPT-4o 实时版本，支持音频和文本实时输入输出',
+    description: 'GPT-4o realtime variant with audio and text real-time I/O.',
     displayName: 'GPT-4o Realtime 241001',
     id: 'gpt-4o-realtime-preview-2024-10-01', // deprecated on 2025-10-10
     maxOutput: 4096,
@@ -1410,7 +1420,7 @@ export const openaiRealtimeModels: AIRealtimeModelCard[] = [
   },
   {
     contextWindowTokens: 128_000,
-    description: 'GPT-4o-mini 实时版本，支持音频和文本实时输入输出',
+    description: 'GPT-4o-mini realtime variant with audio and text real-time I/O.',
     displayName: 'GPT-4o Mini Realtime',
     id: 'gpt-4o-mini-realtime-preview',
     maxOutput: 4096,

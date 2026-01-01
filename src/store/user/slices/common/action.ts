@@ -1,19 +1,20 @@
+import { isDesktop } from '@lobechat/const';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
-import useSWR, { SWRResponse, mutate } from 'swr';
+import useSWR, { type SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
-import { useOnlyFetchOnceSWR } from '@/libs/swr';
+import { mutate, useOnlyFetchOnceSWR } from '@/libs/swr';
 import { userService } from '@/services/user';
 import type { UserStore } from '@/store/user';
 import type { GlobalServerConfig } from '@/types/serverConfig';
-import { LobeUser, UserInitializationState } from '@/types/user';
+import { type LobeUser, type UserInitializationState } from '@/types/user';
 import type { UserSettings } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { preferenceSelectors } from '../preference/selectors';
+import { userGeneralSettingsSelectors } from '../settings/selectors';
 
 const n = setNamespace('common');
 
@@ -25,6 +26,7 @@ export interface CommonAction {
   refreshUserState: () => Promise<void>;
   updateAvatar: (avatar: string) => Promise<void>;
   updateFullName: (fullName: string) => Promise<void>;
+  updateInterests: (interests: string[]) => Promise<void>;
   updateKeyVaultConfig: (provider: string, config: any) => Promise<void>;
   updateUsername: (username: string) => Promise<void>;
   useCheckTrace: (shouldFetch: boolean) => SWRResponse;
@@ -57,6 +59,11 @@ export const createCommonSlice: StateCreator<
     await get().refreshUserState();
   },
 
+  updateInterests: async (interests) => {
+    await userService.updateInterests(interests);
+    await get().refreshUserState();
+  },
+
   updateKeyVaultConfig: async (provider, config) => {
     await get().setSettings({ keyVaults: { [provider]: config } });
   },
@@ -70,10 +77,10 @@ export const createCommonSlice: StateCreator<
     useSWR<boolean>(
       shouldFetch ? 'checkTrace' : null,
       () => {
-        const userAllowTrace = preferenceSelectors.userAllowTrace(get());
+        const telemetry = userGeneralSettingsSelectors.telemetry(get());
 
-        // if user have set the trace, return false
-        if (typeof userAllowTrace === 'boolean') return Promise.resolve(false);
+        // if user have set the telemetry, return false
+        if (typeof telemetry === 'boolean') return Promise.resolve(false);
 
         return Promise.resolve(get().isUserCanEnableTrace);
       },
@@ -83,7 +90,7 @@ export const createCommonSlice: StateCreator<
     ),
   useInitUserState: (isLogin, serverConfig, options) =>
     useOnlyFetchOnceSWR<UserInitializationState>(
-      !!isLogin ? GET_USER_STATE_KEY : null,
+      !!isLogin || isDesktop ? GET_USER_STATE_KEY : null,
       () => userService.getUserState(),
       {
         onError: (error) => {
@@ -115,6 +122,7 @@ export const createCommonSlice: StateCreator<
                     firstName: data.firstName,
                     fullName: data.fullName,
                     id: data.userId,
+                    interests: data.interests,
                     latestName: data.lastName,
                     username: data.username,
                   } as LobeUser)
@@ -123,12 +131,15 @@ export const createCommonSlice: StateCreator<
             set(
               {
                 defaultSettings,
+                isFreePlan: data.isFreePlan,
                 isOnboard: data.isOnboard,
                 isShowPWAGuide: data.canEnablePWAGuide,
                 isUserCanEnableTrace: data.canEnableTrace,
                 isUserHasConversation: data.hasConversation,
                 isUserStateInit: true,
+                onboarding: data.onboarding,
                 preference,
+                referralStatus: data.referralStatus,
                 settings: data.settings || {},
                 subscriptionPlan: data.subscriptionPlan,
                 user,

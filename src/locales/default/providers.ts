@@ -1,16 +1,10 @@
-import { DEFAULT_MODEL_PROVIDER_LIST } from '@/config/modelProviders';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
-const locales: {
-  [key: string]: {
-    description?: string;
-  };
-} = {};
+const locales: Record<`${string}.description`, string> = {};
 
 DEFAULT_MODEL_PROVIDER_LIST.forEach((provider) => {
   if (!provider.description) return;
-  locales[provider.id] = {
-    description: provider.description,
-  };
+  locales[`${provider.id}.description`] = provider.description;
 });
 
 export default locales;

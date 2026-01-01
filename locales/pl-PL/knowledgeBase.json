@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "Plik dodany pomyślnie, <1>zobacz teraz</1>",
-    "confirm": "Dodaj",
-    "id": {
-      "placeholder": "Wybierz bazę wiedzy do dodania",
-      "required": "Wybierz bazę wiedzy",
-      "title": "Docelowa baza wiedzy"
-    },
-    "title": "Dodaj do bazy wiedzy",
-    "totalFiles": "Wybrano {{count}} plików"
-  },
-  "createNew": {
-    "confirm": "Utwórz",
-    "description": {
-      "placeholder": "Opis bazy wiedzy (opcjonalnie)"
-    },
-    "formTitle": "Podstawowe informacje",
-    "name": {
-      "placeholder": "Nazwa bazy wiedzy",
-      "required": "Proszę wpisać nazwę bazy wiedzy"
-    },
-    "title": "Utwórz nową bazę wiedzy"
-  },
-  "tab": {
-    "evals": "Oceny",
-    "files": "Dokumenty",
-    "settings": "Ustawienia",
-    "testing": "Testowanie przypomnienia"
-  },
-  "title": "Baza wiedzy"
+  "addToKnowledgeBase.addSuccess": "Plik został pomyślnie dodany, <1>zobacz teraz</1>",
+  "addToKnowledgeBase.confirm": "Dodaj",
+  "addToKnowledgeBase.error": "Nie udało się dodać pliku do biblioteki",
+  "addToKnowledgeBase.id.placeholder": "Wybierz bibliotekę, do której chcesz dodać",
+  "addToKnowledgeBase.id.required": "Wybierz bibliotekę",
+  "addToKnowledgeBase.id.title": "Docelowa biblioteka",
+  "addToKnowledgeBase.title": "Dodaj do biblioteki",
+  "addToKnowledgeBase.totalFiles": "Wybrano {{count}} plików",
+  "createNew.confirm": "Utwórz nową",
+  "createNew.description.placeholder": "Opis biblioteki (opcjonalnie)",
+  "createNew.formTitle": "Informacje podstawowe",
+  "createNew.name.placeholder": "Nazwa biblioteki",
+  "createNew.name.required": "Wprowadź nazwę biblioteki",
+  "createNew.title": "Utwórz nową bibliotekę",
+  "tab.evals": "Ewaluacje",
+  "tab.files": "Pliki",
+  "tab.settings": "Ustawienia",
+  "tab.testing": "Testowanie pamięci",
+  "title": "Biblioteka"
 }

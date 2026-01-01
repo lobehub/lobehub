@@ -25,22 +25,23 @@ lobe-chat/
 │   └── zh-CN/
 ├── packages/
 │   ├── agent-runtime/
+│   ├── builtin-agents/
+│   ├── builtin-tool-*/           # builtin tool packages
 │   ├── const/
 │   ├── context-engine/
 │   ├── conversation-flow/
 │   ├── database/
-│   │   ├── src/
-│   │   │   ├── models/
-│   │   │   ├── schemas/
-│   │   │   └── repositories/
+│   │   └── src/
+│   │       ├── models/
+│   │       ├── schemas/
+│   │       └── repositories/
+│   ├── desktop-bridge/
 │   ├── electron-client-ipc/
 │   ├── electron-server-ipc/
 │   ├── fetch-sse/
 │   ├── file-loaders/
-│   ├── memory-extract/
+│   ├── memory-user-memory/
 │   ├── model-bank/
-│   │   └── src/
-│   │       └── aiModels/
 │   ├── model-runtime/
 │   │   └── src/
 │   │       ├── core/
@@ -50,9 +51,6 @@ lobe-chat/
 │   ├── python-interpreter/
 │   ├── ssrf-safe-fetch/
 │   ├── types/
-│   │   └── src/
-│   │       ├── message/
-│   │       └── user/
 │   ├── utils/
 │   └── web-crawler/
 ├── public/
@@ -61,24 +59,25 @@ lobe-chat/
 │   ├── app/
 │   │   ├── (backend)/
 │   │   │   ├── api/
-│   │   │   │   ├── auth/
-│   │   │   │   └── webhooks/
+│   │   │   ├── f/
+│   │   │   ├── market/
 │   │   │   ├── middleware/
 │   │   │   ├── oidc/
 │   │   │   ├── trpc/
 │   │   │   └── webapi/
-│   │   │       ├── chat/
-│   │   │       └── tts/
 │   │   ├── [variants]/
+│   │   │   ├── (auth)/
 │   │   │   ├── (main)/
-│   │   │   │   ├── chat/
-│   │   │   │   └── settings/
-│   │   │   └── @modal/
-│   │   └── manifest.ts
+│   │   │   ├── (mobile)/
+│   │   │   ├── onboarding/
+│   │   │   └── router/
+│   │   └── desktop/
 │   ├── components/
 │   ├── config/
+│   ├── const/
+│   ├── envs/
 │   ├── features/
-│   │   └── ChatInput/
+│   ├── helpers/
 │   ├── hooks/
 │   ├── layout/
 │   │   ├── AuthProvider/
@@ -90,23 +89,23 @@ lobe-chat/
 │   ├── locales/
 │   │   └── default/
 │   ├── server/
+│   │   ├── featureFlags/
+│   │   ├── globalConfig/
 │   │   ├── modules/
 │   │   ├── routers/
 │   │   │   ├── async/
-│   │   │   ├── desktop/
-│   │   │   ├── edge/
-│   │   │   └── lambda/
+│   │   │   ├── lambda/
+│   │   │   ├── mobile/
+│   │   │   └── tools/
 │   │   └── services/
 │   ├── services/
-│   │   ├── user/
-│   │   │   ├── client.ts
-│   │   │   └── server.ts
-│   │   └── message/
 │   ├── store/
 │   │   ├── agent/
 │   │   ├── chat/
 │   │   └── user/
 │   ├── styles/
+│   ├── tools/
+│   ├── types/
 │   └── utils/
 └── package.json
 ```
@@ -116,25 +115,22 @@ lobe-chat/
 - UI Components: `src/components`, `src/features`
 - Global providers: `src/layout`
 - Zustand stores: `src/store`
-- Client Services: `src/services/` cross-platform services
-  - clientDB: `src/services/<domain>/client.ts`
-  - serverDB: `src/services/<domain>/server.ts`
+- Client Services: `src/services/`
 - API Routers:
   - `src/app/(backend)/webapi` (REST)
-  - `src/server/routers/{edge|lambda|async|desktop|tools}` (tRPC)
+  - `src/server/routers/{async|lambda|mobile|tools}` (tRPC)
 - Server:
-  - Services(can access serverDB): `src/server/services` server-used-only services
-  - Modules(can't access db): `src/server/modules` (Server only Third-party Service Module)
+  - Services (can access serverDB): `src/server/services`
+  - Modules (can't access db): `src/server/modules`
+  - Feature Flags: `src/server/featureFlags`
+  - Global Config: `src/server/globalConfig`
 - Database:
   - Schema (Drizzle): `packages/database/src/schemas`
   - Model (CRUD): `packages/database/src/models`
   - Repository (bff-queries): `packages/database/src/repositories`
 - Third-party Integrations: `src/libs` — analytics, oidc etc.
+- Builtin Tools: `src/tools`, `packages/builtin-tool-*`
 
 ## Data Flow Architecture
 
-- **Web with ClientDB**: React UI → Client Service → Direct Model Access → PGLite (Web WASM)
-- **Web with ServerDB**: React UI → Client Service → tRPC Lambda → Server Services → PostgreSQL (Remote)
-- **Desktop**:
-  - Cloud sync disabled: Electron UI → Client Service → tRPC Lambda → Local Server Services → PGLite (Node WASM)
-  - Cloud sync enabled: Electron UI → Client Service → tRPC Lambda → Cloud Server Services → PostgreSQL (Remote)
+React UI → Store Actions → Client Service → TRPC Lambda → Server Services -> DB Model → PostgreSQL (Remote)

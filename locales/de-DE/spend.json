@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Token pro Sekunde): Token-Ausgabe pro Sekunde",
+  "duration.TTFT": "TTFT (Time To First Token): Latenz bis zum ersten Token",
+  "duration.completion": "Ausgabeabschlusszeit",
+  "duration.latency": "Dauer",
+  "duration.stage.end": "Ende",
+  "duration.stage.firstToken": "Erstes Token",
+  "duration.stage.start": "Start",
+  "table.columns.TTFT.tooltip": "Zeit bis zum ersten Token, Einheit: Sekunden",
+  "table.columns.duration": "Dauer",
+  "table.columns.model": "Modell",
+  "table.columns.spend": "Credits",
+  "table.columns.startTime": "Erstellt am",
+  "table.columns.totalTokens": "Token-Nutzung",
+  "table.columns.type.enums.chat": "Textgenerierung",
+  "table.columns.type.enums.imageGeneration": "Bildgenerierung",
+  "table.columns.type.title": "Typ",
+  "table.desc": "Details zur Nutzung von Rechen-Credits für Textgenerierung, Einbettung, Bildgenerierung usw.",
+  "table.more": "Details anzeigen",
+  "table.title": "Details zur Nutzung von Rechen-Credits",
+  "table.totalToken.input": "Eingabe",
+  "table.totalToken.output": "Ausgabe"
+}

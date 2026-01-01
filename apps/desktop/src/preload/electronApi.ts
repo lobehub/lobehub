@@ -19,4 +19,12 @@ export const setupElectronApi = () => {
     invoke,
     onStreamInvoke,
   });
+
+  const os = require('node:os');
+  const osInfo = os.release();
+  const darwinMajorVersion = osInfo.split('.')[0];
+
+  contextBridge.exposeInMainWorld('lobeEnv', {
+    darwinMajorVersion: Number(darwinMajorVersion),
+  });
 };

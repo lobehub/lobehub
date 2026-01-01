@@ -1,9 +1,8 @@
-import { ActionIcon, Button, Dropdown, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Dropdown, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { InfoIcon, MoreVerticalIcon, PackageSearch, Settings, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import PluginDetailModal from '@/features/PluginDetailModal';
 import { useAgentStore } from '@/store/agent';
@@ -11,7 +10,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { pluginSelectors, pluginStoreSelectors } from '@/store/tool/selectors';
-import { LobeToolType } from '@/types/tool/tool';
+import { type LobeToolType } from '@/types/tool/tool';
 
 import EditCustomPlugin from '../../EditCustomPlugin';
 

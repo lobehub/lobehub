@@ -1,14 +1,14 @@
-import { CreateImageState, initialCreateImageState } from './slices/createImage/initialState';
+import { type CreateImageState, initialCreateImageState } from './slices/createImage/initialState';
 import {
-  GenerationBatchState,
+  type GenerationBatchState,
   initialGenerationBatchState,
 } from './slices/generationBatch/initialState';
 import {
-  GenerationConfigState,
+  type GenerationConfigState,
   initialGenerationConfigState,
 } from './slices/generationConfig/initialState';
 import {
-  GenerationTopicState,
+  type GenerationTopicState,
   initialGenerationTopicState,
 } from './slices/generationTopic/initialState';
 
