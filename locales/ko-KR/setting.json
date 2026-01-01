@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "도우미 이름을 입력하세요",
   "settingAgent.name.title": "이름",
   "settingAgent.prompt.placeholder": "도우미 설정을 입력하세요. / 키를 눌러 명령 메뉴를 여세요",
+  "settingAgent.prompt.templatePlaceholder": "#### 목표\n이 에이전트의 주요 목적과 목표를 설명하세요.\n\n#### 기술\n- 핵심 기능 나열\n- 전문 지식 분야 포함\n\n#### 작업 흐름\n1. 단계별 절차\n2. 에이전트가 작업을 수행하는 방식\n3. 사용자와의 예상 상호작용\n\n#### 제약 사항\n- 반드시 지켜야 할 중요한 제한 사항\n- 행동 지침",
   "settingAgent.prompt.title": "도우미 설정",
   "settingAgent.submit": "도우미 정보 업데이트",
   "settingAgent.tag.desc": "도우미 태그는 도우미 커뮤니티에 표시됩니다",

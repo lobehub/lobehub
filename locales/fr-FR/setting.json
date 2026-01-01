@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "Saisissez le nom de l’agent",
   "settingAgent.name.title": "Nom",
   "settingAgent.prompt.placeholder": "Saisissez les paramètres de l’agent, appuyez sur / pour ouvrir le menu de commandes",
+  "settingAgent.prompt.templatePlaceholder": "#### Objectif\nDécrivez le but principal et l’objectif de cet agent.\n\n#### Compétences\n- Listez les principales capacités\n- Et les domaines de connaissance spécialisés\n\n#### Flux de travail\n1. Processus étape par étape\n2. Comment l’agent doit aborder les tâches\n3. Interactions attendues avec les utilisateurs\n\n#### Contraintes\n- Limitations importantes à respecter\n- Lignes directrices pour le comportement",
   "settingAgent.prompt.title": "Profil de l’agent",
   "settingAgent.submit": "Mettre à jour l’agent",
   "settingAgent.tag.desc": "Les étiquettes de l’agent seront visibles dans la communauté",

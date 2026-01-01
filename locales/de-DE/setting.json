@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "Agentennamen eingeben",
   "settingAgent.name.title": "Name",
   "settingAgent.prompt.placeholder": "Agenteneinstellungen eingeben, / drücken, um das Befehlsmenü zu öffnen",
+  "settingAgent.prompt.templatePlaceholder": "#### Ziel\nBeschreiben Sie den Hauptzweck und das Hauptziel dieses Agents.\n\n#### Fähigkeiten\n- Wichtige Kompetenzen auflisten\n- Und spezialisierte Wissensgebiete\n\n#### Arbeitsablauf\n1. Schritt-für-Schritt-Prozess\n2. Wie der Agent Aufgaben angehen soll\n3. Erwartete Interaktionen mit Nutzern\n\n#### Einschränkungen\n- Wichtige zu beachtende Begrenzungen\n- Verhaltensrichtlinien",
   "settingAgent.prompt.title": "Agentenprofil",
   "settingAgent.submit": "Agent aktualisieren",
   "settingAgent.tag.desc": "Agenten-Tags werden in der Agenten-Community angezeigt",

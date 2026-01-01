@@ -215,7 +215,7 @@
   "settingAgent.name.placeholder": "请输入助理名称",
   "settingAgent.name.title": "名称",
   "settingAgent.prompt.placeholder": "输入助理设定，按 / 打开命令菜单",
-  "settingAgent.prompt.templatePlaceholder": "#### 目标\n描述助理的主要目的和目标。\n\n#### 技能\n- 列出关键能力\n- 以及专业知识领域\n\n#### 工作流程\n1. 逐步处理流程\n2. 助理应如何处理任务\n3. 与用户的预期交互\n\n#### 约束\n- 需要遵循的重要限制\n- 行为准则",
+  "settingAgent.prompt.templatePlaceholder": "#### 目标\n描述该智能体的主要用途和目标。\n\n#### 技能\n- 列出关键能力\n- 以及专业知识领域\n\n#### 工作流程\n1. 分步骤的执行流程\n2. 智能体应如何处理任务\n3. 与用户的预期互动方式\n\n#### 限制条件\n- 需要遵守的重要限制\n- 行为准则",
   "settingAgent.prompt.title": "助理设定",
   "settingAgent.submit": "更新助理信息",
   "settingAgent.tag.desc": "助理标签将在助理社区中展示",

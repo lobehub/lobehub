@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "Voer agentnaam in",
   "settingAgent.name.title": "Naam",
   "settingAgent.prompt.placeholder": "Voer agentinstellingen in, druk op / om het opdrachtmenu te openen",
+  "settingAgent.prompt.templatePlaceholder": "#### Doel\nBeschrijf het hoofddoel en de belangrijkste doelstelling van deze agent.\n\n#### Vaardigheden\n- Noem de kerncompetenties\n- En gespecialiseerde kennisgebieden\n\n#### Werkwijze\n1. Stapsgewijs proces\n2. Hoe de agent taken moet benaderen\n3. Verwachte interacties met gebruikers\n\n#### Beperkingen\n- Belangrijke beperkingen om te respecteren\n- Richtlijnen voor gedrag",
   "settingAgent.prompt.title": "Agentprofiel",
   "settingAgent.submit": "Agent bijwerken",
   "settingAgent.tag.desc": "Agenttags worden weergegeven in de Agent Community",
