@@ -7,15 +7,16 @@ import {
   GroupManagementManifest,
 } from '@lobechat/builtin-tool-group-management/client';
 import { GTDInspectors, GTDManifest } from '@lobechat/builtin-tool-gtd/client';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
-import { PageAgentIdentifier, PageAgentInspectors } from '@lobechat/builtin-tool-page-agent/client';
+import {
+  LocalSystemInspectors,
+  LocalSystemManifest,
+} from '@lobechat/builtin-tool-local-system/client';
+import { PageAgentInspectors, PageAgentManifest } from '@lobechat/builtin-tool-page-agent/client';
 import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
 } from '@lobechat/builtin-tool-web-browsing/client';
 import { type BuiltinInspector } from '@lobechat/types';
-
-import { LocalSystemInspectors } from './local-system/Inspector';
 
 /**
  * Builtin tools inspector registry
@@ -32,7 +33,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   >,
   [GTDManifest.identifier]: GTDInspectors as Record<string, BuiltinInspector>,
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
-  [PageAgentIdentifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
+  [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
 };
 

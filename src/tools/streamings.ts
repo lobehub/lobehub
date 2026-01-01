@@ -1,5 +1,5 @@
 import {
-  CloudSandboxIdentifier,
+  CloudSandboxManifest,
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
 import {
@@ -7,10 +7,11 @@ import {
   GroupManagementStreamings,
 } from '@lobechat/builtin-tool-group-management/client';
 import { GTDManifest, GTDStreamings } from '@lobechat/builtin-tool-gtd/client';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  LocalSystemManifest,
+  LocalSystemStreamings,
+} from '@lobechat/builtin-tool-local-system/client';
 import { type BuiltinStreaming } from '@lobechat/types';
-
-import { LocalSystemStreamings } from './local-system/Streaming';
 
 /**
  * Builtin tools streaming renderer registry
@@ -21,7 +22,7 @@ import { LocalSystemStreamings } from './local-system/Streaming';
  * The component should fetch streaming content from store internally.
  */
 const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
-  [CloudSandboxIdentifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
+  [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
   [GroupManagementManifest.identifier]: GroupManagementStreamings as Record<
     string,
     BuiltinStreaming

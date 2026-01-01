@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "Wprowadź nazwę agenta",
   "settingAgent.name.title": "Nazwa",
   "settingAgent.prompt.placeholder": "Wprowadź ustawienia agenta, naciśnij /, aby otworzyć menu poleceń",
+  "settingAgent.prompt.templatePlaceholder": "#### Cel\nOpisz główny cel i zadanie tego agenta.\n\n#### Umiejętności\n- Wypisz kluczowe zdolności\n- Oraz obszary specjalistycznej wiedzy\n\n#### Przebieg pracy\n1. Proces krok po kroku\n2. Jak agent powinien podchodzić do zadań\n3. Oczekiwane interakcje z użytkownikami\n\n#### Ograniczenia\n- Ważne ograniczenia, których należy przestrzegać\n- Wytyczne dotyczące zachowania",
   "settingAgent.prompt.title": "Profil agenta",
   "settingAgent.submit": "Zaktualizuj agenta",
   "settingAgent.tag.desc": "Tagi agenta będą widoczne w Społeczności Agentów",

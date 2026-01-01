@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.0.0-next.184](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.183...v2.0.0-next.184)
+
+<sup>Released on **2026-01-01**</sup>
+
+#### 💄 Styles
+
+- **misc**: Improve loading and local-system render.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Improve loading and local-system render, closes [#11087](https://github.com/lobehub/lobe-chat/issues/11087) ([44630bc](https://github.com/lobehub/lobe-chat/commit/44630bc))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.183](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.182...v2.0.0-next.183)
 
 <sup>Released on **2025-12-31**</sup>

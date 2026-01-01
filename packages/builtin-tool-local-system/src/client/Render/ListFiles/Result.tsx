@@ -5,7 +5,8 @@ import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { chatToolSelectors } from '@/store/chat/selectors';
-import FileItem from '@/tools/local-system/components/FileItem';
+
+import FileItem from '../../components/FileItem';
 
 interface SearchFilesProps {
   listResults?: LocalFileItem[];

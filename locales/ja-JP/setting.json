@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "アシスタントの名前を入力してください",
   "settingAgent.name.title": "名前",
   "settingAgent.prompt.placeholder": "アシスタントの設定を入力し、「/」でコマンドメニューを開く",
+  "settingAgent.prompt.templatePlaceholder": "#### 目的\nこのエージェントの主な目的と目標を記述してください。\n\n#### スキル\n- 主要な能力を列挙\n- 専門的な知識分野も含めてください\n\n#### ワークフロー\n1. ステップごとのプロセス\n2. タスクへの取り組み方\n3. ユーザーとの想定されるやり取り\n\n#### 制約\n- 守るべき重要な制限事項\n- 行動に関するガイドライン",
   "settingAgent.prompt.title": "アシスタント設定",
   "settingAgent.submit": "アシスタント情報を更新",
   "settingAgent.tag.desc": "アシスタントのタグはコミュニティ内で表示されます",

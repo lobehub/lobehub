@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "Temsilci adı girin",
   "settingAgent.name.title": "Ad",
   "settingAgent.prompt.placeholder": "Temsilci ayarlarını girin, komut menüsünü açmak için / tuşuna basın",
+  "settingAgent.prompt.templatePlaceholder": "#### Amaç\nBu ajanın ana amacı ve hedefini açıklayın.\n\n#### Yetenekler\n- Temel yetenekleri listeleyin\n- Uzmanlık alanlarını belirtin\n\n#### İş Akışı\n1. Adım adım süreç\n2. Ajanın görevleri nasıl ele alacağı\n3. Kullanıcılarla beklenen etkileşimler\n\n#### Kısıtlamalar\n- Uyulması gereken önemli sınırlamalar\n- Davranış kuralları",
   "settingAgent.prompt.title": "Temsilci Profili",
   "settingAgent.submit": "Temsilciyi Güncelle",
   "settingAgent.tag.desc": "Temsilci etiketleri, Temsilci Topluluğunda görüntülenecektir",

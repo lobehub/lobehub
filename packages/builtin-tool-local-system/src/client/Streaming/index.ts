@@ -1,5 +1,4 @@
-import { LocalSystemApiName } from '@lobechat/builtin-tool-local-system';
-
+import { LocalSystemApiName } from '../..';
 import { RunCommandStreaming } from './RunCommand';
 
 /**

@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "請輸入助手名稱",
   "settingAgent.name.title": "名稱",
   "settingAgent.prompt.placeholder": "輸入助手設定，按 / 開啟指令選單",
+  "settingAgent.prompt.templatePlaceholder": "#### 目標\n描述此代理的主要目的與目標。\n\n#### 技能\n- 列出主要能力\n- 以及專業知識領域\n\n#### 工作流程\n1. 步驟式流程\n2. 代理執行任務的方式\n3. 與使用者的預期互動方式\n\n#### 限制\n- 必須遵守的重要限制\n- 行為準則",
   "settingAgent.prompt.title": "助手設定",
   "settingAgent.submit": "更新助手資訊",
   "settingAgent.tag.desc": "助手標籤將會在助手社群中顯示",

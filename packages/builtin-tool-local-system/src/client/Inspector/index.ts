@@ -1,5 +1,4 @@
-import { LocalSystemApiName } from '@lobechat/builtin-tool-local-system';
-
+import { LocalSystemApiName } from '../..';
 import { EditLocalFileInspector } from './EditLocalFile';
 import { GlobLocalFilesInspector } from './GlobLocalFiles';
 import { GrepContentInspector } from './GrepContent';

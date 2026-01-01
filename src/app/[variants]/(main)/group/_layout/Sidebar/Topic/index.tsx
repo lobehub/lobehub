@@ -1,10 +1,10 @@
 'use client';
 
-import { AccordionItem, ActionIcon, Dropdown, Flexbox, Text } from '@lobehub/ui';
-import { Loader2Icon } from 'lucide-react';
+import { AccordionItem, Dropdown, Flexbox, Text } from '@lobehub/ui';
 import React, { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useChatStore } from '@/store/chat';
@@ -45,7 +45,7 @@ const Topic = memo<TopicProps>(({ itemKey }) => {
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {`${t('title')} ${topicCount > 0 ? topicCount : ''}`}
           </Text>
-          {isRevalidating && <ActionIcon icon={Loader2Icon} loading size={'small'} />}
+          {isRevalidating && <NeuralNetworkLoading size={14} />}
         </Flexbox>
       }
     >

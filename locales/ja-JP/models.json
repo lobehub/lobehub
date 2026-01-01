@@ -295,6 +295,7 @@
   "codeqwen.description": "CodeQwen1.5は、大規模なコードデータで学習されたLLMで、複雑なプログラミングタスクに対応します。",
   "codestral-latest.description": "Codestralは、最も高度なコーディングモデルで、v2（2025年1月）はFIM、コード修正、テスト生成などの低レイテンシ・高頻度タスクに最適化されています。",
   "codestral.description": "Codestralは、Mistral AIによる初のコードモデルで、強力なコード生成をサポートします。",
+  "codex-mini-latest.description": "codex-mini-latest は Codex CLI 用にファインチューニングされた o4-mini モデルです。API を直接使用する場合は、gpt-4.1 から始めることを推奨します。",
   "gemini-flash-latest.description": "Gemini Flash の最新リリース",
   "gemini-flash-lite-latest.description": "Gemini Flash-Lite の最新リリース",
   "gemini-pro-latest.description": "Gemini Pro の最新リリース",

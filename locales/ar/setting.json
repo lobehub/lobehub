@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "أدخل اسم الوكيل",
   "settingAgent.name.title": "الاسم",
   "settingAgent.prompt.placeholder": "أدخل إعدادات الوكيل، اضغط / لفتح قائمة الأوامر",
+  "settingAgent.prompt.templatePlaceholder": "#### الهدف\nوصف الغرض الرئيسي والهدف من هذا الوكيل.\n\n#### المهارات\n- سرد القدرات الرئيسية\n- ومجالات المعرفة المتخصصة\n\n#### سير العمل\n1. عملية خطوة بخطوة\n2. كيفية تعامل الوكيل مع المهام\n3. التفاعلات المتوقعة مع المستخدمين\n\n#### القيود\n- القيود المهمة التي يجب الالتزام بها\n- إرشادات السلوك",
   "settingAgent.prompt.title": "ملف تعريف الوكيل",
   "settingAgent.submit": "تحديث الوكيل",
   "settingAgent.tag.desc": "سيتم عرض علامات الوكيل في مجتمع الوكلاء",

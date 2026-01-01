@@ -215,6 +215,7 @@
   "settingAgent.name.placeholder": "Nhập tên tác nhân",
   "settingAgent.name.title": "Tên",
   "settingAgent.prompt.placeholder": "Nhập thiết lập tác nhân, nhấn / để mở menu lệnh",
+  "settingAgent.prompt.templatePlaceholder": "#### Mục tiêu\nMô tả mục đích chính và mục tiêu của tác nhân này.\n\n#### Kỹ năng\n- Liệt kê các năng lực chính\n- Và các lĩnh vực kiến thức chuyên môn\n\n#### Quy trình làm việc\n1. Quy trình từng bước\n2. Cách tác nhân nên tiếp cận các nhiệm vụ\n3. Tương tác mong đợi với người dùng\n\n#### Hạn chế\n- Những giới hạn quan trọng cần tuân thủ\n- Nguyên tắc hành vi",
   "settingAgent.prompt.title": "Hồ sơ tác nhân",
   "settingAgent.submit": "Cập nhật tác nhân",
   "settingAgent.tag.desc": "Thẻ tác nhân sẽ hiển thị trong Cộng đồng Tác nhân",

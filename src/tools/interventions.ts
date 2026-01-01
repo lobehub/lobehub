@@ -9,12 +9,13 @@ import {
   GroupManagementManifest,
 } from '@lobechat/builtin-tool-group-management/client';
 import { GTDInterventions, GTDManifest } from '@lobechat/builtin-tool-gtd/client';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  LocalSystemIdentifier,
+  LocalSystemInterventions,
+} from '@lobechat/builtin-tool-local-system/client';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { NotebookInterventions } from '@lobechat/builtin-tool-notebook/client';
 import { type BuiltinIntervention } from '@lobechat/types';
-
-import { LocalSystemInterventions } from './local-system/Intervention';
 
 /**
  * Builtin tools interventions registry
@@ -26,7 +27,7 @@ export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [CloudSandboxManifest.identifier]: CloudSandboxInterventions,
   [GroupManagementManifest.identifier]: GroupManagementInterventions,
   [GTDManifest.identifier]: GTDInterventions,
-  [LocalSystemManifest.identifier]: LocalSystemInterventions,
+  [LocalSystemIdentifier]: LocalSystemInterventions,
   [NotebookManifest.identifier]: NotebookInterventions,
 };
 
