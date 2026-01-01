@@ -6,7 +6,7 @@ import { MaterialFileTypeIcon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, shinyTextStyles } from '@/styles';
 
@@ -42,6 +42,7 @@ export const RenameLocalFileInspector = memo<
     <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
       {oldName && newName ? (
         <>
+          {t('builtins.lobe-local-system.apiName.renameLocalFile')} {oldName} →{' '}
           <MaterialFileTypeIcon
             className={styles.icon}
             filename={newName}
@@ -49,15 +50,7 @@ export const RenameLocalFileInspector = memo<
             type={'file'}
             variant={'raw'}
           />
-          <Trans
-            components={{
-              new: <span className={highlightTextStyles.gold} />,
-              old: <span className={highlightTextStyles.primary} />,
-            }}
-            i18nKey="builtins.lobe-local-system.inspector.rename.result"
-            ns="plugin"
-            values={{ newName, oldName }}
-          />
+          <span className={highlightTextStyles.primary}>{newName}</span>
         </>
       ) : (
         <span>{t('builtins.lobe-local-system.apiName.renameLocalFile')}</span>

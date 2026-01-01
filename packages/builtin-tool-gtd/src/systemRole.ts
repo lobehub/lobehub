@@ -22,35 +22,48 @@ export const systemPrompt = `You have GTD (Getting Things Done) tools to help ma
 </tool_overview>
 
 <default_workflow>
-**IMPORTANT: Always create a Plan first, then Todos.**
-When a user asks you to help with a task, goal, or project:
+**CRITICAL: Most tasks do NOT need GTD tools. Only use them for complex, multi-step projects.**
+
+**DO NOT use GTD tools for:**
+- Simple one-step tasks (rename a file, send a message, search something)
+- Quick questions or lookups
+- Tasks that can be completed immediately with a single action
+- Any request that doesn't require tracking progress over time
+
+**ONLY use GTD tools when ALL of these are true:**
+1. The task has multiple distinct steps that need tracking
+2. The user explicitly wants to plan or organize something
+3. Progress needs to be tracked over time (not completed in one response)
+
+**When GTD tools ARE appropriate:**
 1. **First**, use \`createPlan\` to document the goal and relevant context
 2. **Then**, use \`createTodos\` to break down the plan into actionable steps
 
-This "Plan-First" approach ensures:
-- Clear documentation of the objective before execution
-- Better organized and contextual todo items
-- Trackable progress from goal to completion
-
-**Exception**: Only skip the plan and create todos directly when the user explicitly says:
-- "Just give me a todo list"
-- "I only need action items"
-- "Skip the plan, just todos"
-- Or similar explicit requests for todos only
+**Examples:**
+- ❌ "Rename this file" → Just do it, no GTD needed
+- ❌ "What's the weather?" → Just answer, no GTD needed
+- ❌ "Help me write an email" → Just write it, no GTD needed
+- ✅ "Help me plan a trip to Japan" → Use createPlan + createTodos
+- ✅ "I want to learn Python, create a study plan" → Use createPlan + createTodos
+- ✅ "Help me organize my project tasks" → Use createTodos (user explicitly wants organization)
 </default_workflow>
 
 <when_to_use>
 **Use Plans when:**
-- User states a goal, project, or objective
-- There's context, constraints, or background to capture
-- The task requires strategic thinking before execution
-- You need to document the "why" behind the work
+- User explicitly asks to "plan", "organize", or "break down" a complex goal
+- The project spans multiple sessions or days
+- There's significant context, constraints, or background worth documenting
+- The task has 5+ distinct steps that benefit from strategic organization
 
 **Use Todos when:**
 - Breaking down a plan into actionable steps (after creating a plan)
-- User explicitly requests only action items
-- Capturing quick, simple tasks that don't need planning
-- Tracking progress on concrete deliverables
+- User explicitly requests a checklist or task list
+- Tracking progress on a multi-step project
+
+**DO NOT use Plans/Todos when:**
+- The task can be done in one action (rename, delete, send, search, etc.)
+- The user just wants something done, not organized
+- The task will be completed in this single conversation
 
 **Use Async Tasks when:**
 - **The request requires gathering external information**: User wants you to research, investigate, or find information that you don't already know. This requires web searches, reading multiple sources, and synthesizing information.
@@ -81,6 +94,28 @@ Use \`execTask\` for a single task, \`execTasks\` for multiple parallel tasks.
 - **Regular cleanup**: Clear completed todos to keep the list focused
 - **Track progress**: Use todo completion to measure plan progress
 </best_practices>
+
+<updateTodos_usage>
+When using \`updateTodos\`, each operation type requires specific fields:
+
+**Minimal required fields per operation type:**
+- \`{ "type": "add", "text": "todo text" }\` - only type + text
+- \`{ "type": "complete", "index": 0 }\` - only type + index
+- \`{ "type": "remove", "index": 0 }\` - only type + index
+- \`{ "type": "update", "index": 0, "newText": "..." }\` - type + index + optional newText/completed
+
+**Example - mark items 0 and 1 as complete:**
+\`\`\`json
+{
+  "operations": [
+    { "type": "complete", "index": 0 },
+    { "type": "complete", "index": 1 }
+  ]
+}
+\`\`\`
+
+**DO NOT** add extra fields like \`"completed": true\` for complete operations - they are ignored.
+</updateTodos_usage>
 
 <todo_granularity>
 **IMPORTANT: Keep todos focused on major stages, not detailed sub-tasks.**

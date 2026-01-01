@@ -82,36 +82,41 @@ export const GTDManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'Update todo items with batch operations. Each operation specifies a type (add, update, remove, complete) and the relevant data.',
+      description: `Update todo items with batch operations. Each operation type requires specific fields:
+- "add": requires "text" (the todo text to add)
+- "update": requires "index", optional "newText" and/or "completed"
+- "remove": requires "index" only
+- "complete": requires "index" only (marks item as completed)`,
       name: GTDApiName.updateTodos,
       renderDisplayControl: 'expand',
       parameters: {
         properties: {
           operations: {
-            description: 'Array of update operations to apply.',
+            description:
+              'Array of update operations. IMPORTANT: For "complete" and "remove" operations, only pass "type" and "index" - no other fields needed.',
             items: {
               properties: {
                 type: {
-                  description: 'Operation type: add, update, remove, or complete.',
+                  description:
+                    'Operation type. "add" needs text, "update" needs index + optional newText/completed, "remove" and "complete" need index only.',
                   enum: ['add', 'update', 'remove', 'complete'],
                   type: 'string',
                 },
                 text: {
-                  description: 'For "add": the text to add.',
+                  description: 'Required for "add" only: the text to add.',
                   type: 'string',
                 },
                 index: {
                   description:
-                    'For "update", "remove", "complete": the index of the item (0-based).',
+                    'Required for "update", "remove", "complete": the item index (0-based).',
                   type: 'number',
                 },
                 newText: {
-                  description: 'For "update": the new text.',
+                  description: 'Optional for "update" only: the new text.',
                   type: 'string',
                 },
                 completed: {
-                  description: 'For "update": the new completed status.',
+                  description: 'Optional for "update" only: set completed status.',
                   type: 'boolean',
                 },
               },
