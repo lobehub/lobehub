@@ -297,7 +297,8 @@ export const useChatItemContextMenu = ({
   );
 
   const contextMenuItems = useMemo<GenericItemType[]>(() => {
-    return (menuItems ?? []).filter(Boolean).map((item) => {
+    if (!menuItems) return [];
+    return menuItems.filter(Boolean).map((item) => {
       if ('type' in item && item.type === 'divider') return { type: 'divider' as const };
 
       const actionItem = item as ActionMenuItem;
@@ -353,6 +354,7 @@ export const useChatItemContextMenu = ({
       const selection = window.getSelection();
       selectedTextRef.current = selection?.toString().trim() || '';
 
+      console.log(contextMenuItems);
       showContextMenu(contextMenuItems);
     },
     [contextMenuItems, contextMenuMode, editing],
