@@ -205,7 +205,7 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
 
     if (error) return <ErrorActionsBar actions={defaultActions} onActionClick={handleAction} />;
 
-    return <ActionIconGroup items={items} menu={{ items: menu }} onActionClick={handleAction} />;
+    return <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />;
   },
 );
 

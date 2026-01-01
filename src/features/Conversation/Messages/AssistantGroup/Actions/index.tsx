@@ -158,7 +158,7 @@ const WithContentId = memo<GroupActionsProps>(({ actionsConfig, id, data, conten
     [allActions],
   );
 
-  return <ActionIconGroup items={items} menu={{ items: menu }} onActionClick={handleAction} />;
+  return <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />;
 });
 
 WithContentId.displayName = 'GroupActionsWithContentId';
