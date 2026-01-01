@@ -1,6 +1,5 @@
 import useSWR, { type SWRHook } from 'swr';
 
-import { isDesktop } from '@/const/version';
 
 /**
  * This type of request method is relatively flexible data, which will be triggered on the first time
@@ -27,13 +26,7 @@ export const useClientDataSWR: SWRHook = (key, fetch, config) =>
     // Cause issue like this: https://github.com/lobehub/lobe-chat/issues/532
     // we need to set it to 0.
     dedupingInterval: 0,
-    focusThrottleInterval:
-      // FIXME: desktop 云同步模式也是走 edge 请求，也应该增大延迟
-      // desktop 1.5s
-      isDesktop
-        ? 1500
-        : // web 300s
-          5 * 60 * 1000,
+    focusThrottleInterval: 5 * 60 * 1000,
     // Custom error retry logic: don't retry on 401 errors
     onErrorRetry: (error: any, key: any, config: any, revalidate: any, { retryCount }: any) => {
       // Check if error is marked as non-retryable (e.g., 401 authentication errors)
