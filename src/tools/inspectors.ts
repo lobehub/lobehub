@@ -8,6 +8,10 @@ import {
 } from '@lobechat/builtin-tool-group-management/client';
 import { GTDInspectors, GTDManifest } from '@lobechat/builtin-tool-gtd/client';
 import {
+  KnowledgeBaseInspectors,
+  KnowledgeBaseManifest,
+} from '@lobechat/builtin-tool-knowledge-base/client';
+import {
   LocalSystemInspectors,
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system/client';
@@ -32,6 +36,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     BuiltinInspector
   >,
   [GTDManifest.identifier]: GTDInspectors as Record<string, BuiltinInspector>,
+  [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
