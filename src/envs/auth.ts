@@ -284,6 +284,7 @@ export const getAuthConfig = () => {
 
       // Generic JWKS key for signing/verifying JWTs
       JWKS_KEY: z.string().optional(),
+      ENABLE_OIDC: z.boolean(),
     },
 
     runtimeEnv: {
@@ -407,6 +408,7 @@ export const getAuthConfig = () => {
 
       // Generic JWKS key (fallback to OIDC_JWKS_KEY for backward compatibility)
       JWKS_KEY: process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY,
+      ENABLE_OIDC: !!(process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY),
     },
   });
 };

@@ -1,17 +1,17 @@
-import { type ClientSecretPayload } from '@lobechat/types';
-import { parse } from 'cookie';
-import debug from 'debug';
-import { type User } from 'next-auth';
-import { type NextRequest } from 'next/server';
-
 import {
   LOBE_CHAT_AUTH_HEADER,
   LOBE_CHAT_OIDC_AUTH_HEADER,
   enableBetterAuth,
   enableClerk,
   enableNextAuth,
-} from '@/const/auth';
-import { oidcEnv } from '@/envs/oidc';
+} from '@lobechat/const';
+import { type ClientSecretPayload } from '@lobechat/types';
+import { parse } from 'cookie';
+import debug from 'debug';
+import { type User } from 'next-auth';
+import { type NextRequest } from 'next/server';
+
+import { authEnv } from '@/envs/auth';
 import { ClerkAuth, type IClerkAuth } from '@/libs/clerk-auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 
@@ -129,11 +129,9 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   let oidcAuth = null;
 
   // Prioritize checking for OIDC authentication (both standard Authorization and custom Oidc-Auth headers)
-  if (oidcEnv.ENABLE_OIDC) {
+  if (authEnv.ENABLE_OIDC) {
     log('OIDC enabled, attempting OIDC authentication');
-    const standardAuthorization = request.headers.get('Authorization');
     const oidcAuthToken = request.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
-    log('Standard Authorization header: %s', standardAuthorization ? 'exists' : 'not found');
     log('Oidc-Auth header: %s', oidcAuthToken ? 'exists' : 'not found');
 
     try {

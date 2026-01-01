@@ -12,7 +12,6 @@ import { LOBE_THEME_APPEARANCE } from '@/const/theme';
 import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
-import { oidcEnv } from '@/envs/oidc';
 import NextAuth from '@/libs/next-auth';
 import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
@@ -236,7 +235,7 @@ export function defineConfig() {
       response.headers.set(OAUTH_AUTHORIZED, 'true');
 
       // If OIDC is enabled and user is logged in, add OIDC session pre-sync header
-      if (oidcEnv.ENABLE_OIDC && session?.user?.id) {
+      if (authEnv.ENABLE_OIDC && session?.user?.id) {
         logNextAuth('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, session.user.id);
         response.headers.set(OIDC_SESSION_HEADER, session.user.id);
       }
@@ -285,10 +284,10 @@ export function defineConfig() {
       });
 
       // If OIDC is enabled and Clerk user is logged in, add OIDC session pre-sync header
-      if (oidcEnv.ENABLE_OIDC && data.userId) {
+      if (authEnv.ENABLE_OIDC && data.userId) {
         logClerk('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, data.userId);
         response.headers.set(OIDC_SESSION_HEADER, data.userId);
-      } else if (oidcEnv.ENABLE_OIDC) {
+      } else if (authEnv.ENABLE_OIDC) {
         logClerk('No Clerk user detected, not setting OIDC session sync header');
       }
 
@@ -351,7 +350,7 @@ export function defineConfig() {
     enableBetterAuth: authEnv.NEXT_PUBLIC_ENABLE_BETTER_AUTH,
     enableClerk: authEnv.NEXT_PUBLIC_ENABLE_CLERK_AUTH,
     enableNextAuth: authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH,
-    enableOIDC: oidcEnv.ENABLE_OIDC,
+    enableOIDC: authEnv.ENABLE_OIDC,
   });
 
   return {

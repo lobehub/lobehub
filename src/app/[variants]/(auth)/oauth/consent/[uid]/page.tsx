@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { oidcEnv } from '@/envs/oidc';
+import { authEnv } from '@/envs/auth';
 import { defaultClients } from '@/libs/oidc-provider/config';
 import { OIDCService } from '@/server/services/oidc';
 
@@ -9,7 +9,7 @@ import Consent from './Consent';
 import Login from './Login';
 
 const InteractionPage = async (props: { params: Promise<{ uid: string }> }) => {
-  if (!oidcEnv.ENABLE_OIDC) return notFound();
+  if (!authEnv.ENABLE_OIDC) return notFound();
 
   const params = await props.params;
   const uid = params.uid;

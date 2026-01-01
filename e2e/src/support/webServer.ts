@@ -101,7 +101,6 @@ export async function startWebServer(options: WebServerOptions): Promise<void> {
         ...process.env,
         // E2E test secret keys
         BETTER_AUTH_SECRET: 'e2e-test-secret-key-for-better-auth-32chars!',
-        ENABLE_OIDC: '0',
         KEY_VAULTS_SECRET: 'LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=',
         // Disable email verification for e2e
         NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: '0',
