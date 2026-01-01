@@ -42,7 +42,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -68,6 +68,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
+      extendParams: ['gpt5_2ProReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -203,7 +204,8 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
+    description:
+      'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
     displayName: 'GPT-5 pro',
     id: 'gpt-5-pro',
     maxOutput: 272_000,
@@ -563,7 +565,8 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
+    description:
+      'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     id: 'gpt-4.1',
     maxOutput: 32_768,

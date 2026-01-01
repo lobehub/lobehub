@@ -15,6 +15,8 @@ import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
+import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
+import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
 import ImageAspectRatioSelect from './ImageAspectRatioSelect';
 import ImageResolutionSlider from './ImageResolutionSlider';
 import ReasoningEffortSlider from './ReasoningEffortSlider';
@@ -137,6 +139,28 @@ const ControlsForm = memo(() => {
       layout: 'horizontal',
       minWidth: undefined,
       name: 'gpt5_1ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <GPT52ReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'gpt5_2ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <GPT52ProReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'gpt5_2ProReasoningEffort',
       style: {
         paddingBottom: 0,
       },

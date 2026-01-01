@@ -39,7 +39,7 @@ const TextVerbositySlider = memo(() => {
       gap={12}
       horizontal
       paddingInline={'0 20px'}
-      style={{ minWidth: 200, width: '100%' }}
+      style={{ minWidth: 160, width: '100%' }}
     >
       <Flexbox flex={1}>
         <Slider

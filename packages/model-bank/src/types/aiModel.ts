@@ -239,6 +239,8 @@ export type ExtendParamsType =
   | 'reasoningEffort'
   | 'gpt5ReasoningEffort'
   | 'gpt5_1ReasoningEffort'
+  | 'gpt5_2ReasoningEffort'
+  | 'gpt5_2ProReasoningEffort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'

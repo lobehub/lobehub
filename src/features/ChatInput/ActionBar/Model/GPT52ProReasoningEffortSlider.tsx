@@ -8,26 +8,27 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
-const ThinkingLevel2Slider = memo(() => {
+const GPT52ProReasoningEffortSlider = memo(() => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const thinkingLevel = config.thinkingLevel || 'high'; // Default to 'high' if not set
+  const gpt5_2ProReasoningEffort = config.gpt5_2ProReasoningEffort || 'medium';
 
   const marks = {
-    0: 'low',
+    0: 'medium',
     1: 'high',
+    2: 'xhigh',
   };
 
-  const levelValues = ['low', 'high'];
-  const indexValue = levelValues.indexOf(thinkingLevel as any);
-  const currentValue = indexValue === -1 ? 1 : indexValue;
+  const effortValues = ['medium', 'high', 'xhigh'];
+  const indexValue = effortValues.indexOf(gpt5_2ProReasoningEffort);
+  const currentValue = indexValue === -1 ? 0 : indexValue;
 
-  const updateThinkingLevel = useCallback(
+  const updateGPT52ProReasoningEffort = useCallback(
     (value: number) => {
-      const level = levelValues[value] as 'low' | 'high';
-      updateAgentChatConfig({ thinkingLevel: level });
+      const effort = effortValues[value] as 'medium' | 'high' | 'xhigh';
+      updateAgentChatConfig({ gpt5_2ProReasoningEffort: effort });
     },
     [updateAgentChatConfig],
   );
@@ -38,14 +39,14 @@ const ThinkingLevel2Slider = memo(() => {
       gap={12}
       horizontal
       paddingInline={'0 20px'}
-      style={{ minWidth: 110, width: '100%' }}
+      style={{ minWidth: 160, width: '100%' }}
     >
       <Flexbox flex={1}>
         <Slider
           marks={marks}
-          max={1}
+          max={2}
           min={0}
-          onChange={updateThinkingLevel}
+          onChange={updateGPT52ProReasoningEffort}
           step={1}
           tooltip={{ open: false }}
           value={currentValue}
@@ -55,4 +56,4 @@ const ThinkingLevel2Slider = memo(() => {
   );
 });
 
-export default ThinkingLevel2Slider;
+export default GPT52ProReasoningEffortSlider;
