@@ -36,7 +36,7 @@ export interface LobeAgentChatConfig {
    */
   textVerbosity?: 'low' | 'medium' | 'high';
   thinking?: 'disabled' | 'auto' | 'enabled';
-  thinkingLevel?: 'low' | 'high';
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   thinkingBudget?: number;
   /**
    * Image aspect ratio for image generation models
@@ -99,7 +99,7 @@ export const AgentChatConfigSchema = z.object({
   textVerbosity: z.enum(['low', 'medium', 'high']).optional(),
   thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
   thinkingBudget: z.number().optional(),
-  thinkingLevel: z.enum(['low', 'high']).optional(),
+  thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   urlContext: z.boolean().optional(),
   useModelBuiltinSearch: z.boolean().optional(),
 });

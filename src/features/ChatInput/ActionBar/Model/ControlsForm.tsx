@@ -21,6 +21,7 @@ import ReasoningEffortSlider from './ReasoningEffortSlider';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
 import TextVerbositySlider from './TextVerbositySlider';
 import ThinkingBudgetSlider from './ThinkingBudgetSlider';
+import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
@@ -173,7 +174,7 @@ const ControlsForm = memo(() => {
       layout: isNarrow ? 'vertical' : 'horizontal',
       minWidth: undefined,
       name: 'urlContext',
-      style: isNarrow ? undefined : { width: 445 },
+      style: isNarrow ? undefined : { minWidth: 360 },
       tag: 'urlContext',
     },
     {
@@ -193,8 +194,22 @@ const ControlsForm = memo(() => {
       minWidth: undefined,
       name: 'thinkingLevel',
       style: {
+        minWidth: 400,
         paddingBottom: 0,
       },
+      tag: 'thinkingLevel',
+    },
+    {
+      children: <ThinkingLevel2Slider />,
+      label: t('extendParams.thinkingLevel.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'thinkingLevel2',
+      style: {
+        minWidth: 400,
+        paddingBottom: 0,
+      },
+      tag: 'thinkingLevel',
     },
     {
       children: <ImageAspectRatioSelect />,

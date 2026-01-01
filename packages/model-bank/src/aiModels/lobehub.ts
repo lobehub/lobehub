@@ -12,7 +12,8 @@ const lobehubChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: "GPT-5.2 — OpenAI's flagship model optimized for coding and agent tasks across industries.",
+    description:
+      "GPT-5.2 — OpenAI's flagship model optimized for coding and agent tasks across industries.",
     displayName: 'GPT-5.2',
     enabled: true,
     id: 'gpt-5.2',
@@ -164,7 +165,8 @@ const lobehubChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
+    description:
+      'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
     id: 'gpt-4.1',
@@ -628,7 +630,7 @@ const lobehubChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      "Gemini 3 Pro is Google’s most powerful agent and vibe-coding model, delivering richer visuals and deeper interaction on top of state-of-the-art reasoning.",
+      'Gemini 3 Pro is Google’s most powerful agent and vibe-coding model, delivering richer visuals and deeper interaction on top of state-of-the-art reasoning.',
     displayName: 'Gemini 3 Pro Preview',
     enabled: true,
     id: 'gemini-3-pro-preview',
@@ -672,7 +674,7 @@ const lobehubChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-18',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['thinkingLevel2', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -728,7 +730,7 @@ const lobehubChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      "Gemini 2.5 Pro is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.",
+      'Gemini 2.5 Pro is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro',
     enabled: true,
     id: 'gemini-2.5-pro',
@@ -780,7 +782,7 @@ const lobehubChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: "Gemini 2.5 Flash is Google’s best-value model with full capabilities.",
+    description: 'Gemini 2.5 Flash is Google’s best-value model with full capabilities.',
     displayName: 'Gemini 2.5 Flash',
     enabled: true,
     id: 'gemini-2.5-flash',
@@ -819,7 +821,7 @@ const lobehubChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072 + 32_768,
     description:
-      "Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model and also supports multimodal chat.",
+      'Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model and also supports multimodal chat.',
     displayName: 'Nano Banana Pro',
     enabled: true,
     id: 'gemini-3-pro-image-preview',
@@ -845,7 +847,7 @@ const lobehubChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768 + 32_768,
     description:
-      "Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.",
+      'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     displayName: 'Nano Banana',
     enabled: true,
     id: 'gemini-2.5-flash-image-preview',
@@ -1039,7 +1041,7 @@ export const nanoBananaProParameters: ModelParamsSchema = {
 const lobehubImageModels: AIImageModelCard[] = [
   {
     description:
-      "Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model and also supports multimodal chat.",
+      'Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model and also supports multimodal chat.',
     displayName: 'Nano Banana Pro',
     enabled: true,
     id: 'gemini-3-pro-image-preview:image',
@@ -1057,7 +1059,7 @@ const lobehubImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      "Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.",
+      'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     displayName: 'Nano Banana',
     enabled: true,
     id: 'gemini-2.5-flash-image-preview:image',

@@ -189,7 +189,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 400_000,
-    description: 'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
+    description:
+      'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
     displayName: 'GPT-5 pro',
     id: 'gpt-5-pro',
     maxOutput: 272_000,
@@ -478,7 +479,8 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
+    description:
+      'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     id: 'gpt-4.1',
     maxOutput: 32_768,
@@ -502,8 +504,7 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description:
-      'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
+    description: 'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
     displayName: 'GPT-4.1 mini',
     id: 'gpt-4.1-mini',
     maxOutput: 32_768,
@@ -1138,7 +1139,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-18',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['thinkingLevel2', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -1245,7 +1246,7 @@ const aihubmixModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: "Gemini 2.5 Flash is Google’s best-value model with full capabilities.",
+    description: 'Gemini 2.5 Flash is Google’s best-value model with full capabilities.',
     displayName: 'Gemini 2.5 Flash',
     id: 'gemini-2.5-flash',
     maxOutput: 65_536,
@@ -1296,7 +1297,7 @@ const aihubmixModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      "Gemini 2.5 Flash-Lite is Google’s smallest, best-value model, designed for large-scale use.",
+      'Gemini 2.5 Flash-Lite is Google’s smallest, best-value model, designed for large-scale use.',
     displayName: 'Gemini 2.5 Flash-Lite',
     id: 'gemini-2.5-flash-lite',
     maxOutput: 65_536,

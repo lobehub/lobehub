@@ -147,6 +147,11 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-11-20',
+    settings: {
+      extendParams: ['thinkingLevel2', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
     type: 'chat',
   },
   {
@@ -170,7 +175,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['thinkingLevel2', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -348,7 +353,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 256_000,
-    description: "Grok 4 is xAI's flagship reasoning model with strong reasoning and multimodal capability.",
+    description:
+      "Grok 4 is xAI's flagship reasoning model with strong reasoning and multimodal capability.",
     displayName: 'Grok 4',
     id: 'x-ai/grok-4',
     maxOutput: 256_000,
@@ -707,7 +713,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      "Gemini 2.5 Pro is Google’s flagship reasoning model with long context support for complex tasks.",
+      'Gemini 2.5 Pro is Google’s flagship reasoning model with long context support for complex tasks.',
     displayName: 'Gemini 2.5 Pro',
     id: 'google/gemini-2.5-pro',
     maxOutput: 65_530,
@@ -759,7 +765,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      "Gemini 2.5 Flash (Lite/Pro/Flash) is Google’s family spanning low latency to high-performance reasoning.",
+      'Gemini 2.5 Flash (Lite/Pro/Flash) is Google’s family spanning low latency to high-performance reasoning.',
     displayName: 'Gemini 2.5 Flash',
     id: 'google/gemini-2.5-flash',
     maxOutput: 65_530,
@@ -931,8 +937,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 1_050_000,
-    description:
-      'GPT-4.1 Mini offers lower latency and better value for mid-context workloads.',
+    description: 'GPT-4.1 Mini offers lower latency and better value for mid-context workloads.',
     displayName: 'GPT-4.1 Mini',
     id: 'openai/gpt-4.1-mini',
     maxOutput: 32_770,
@@ -1076,7 +1081,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 200_000,
-    description: "GLM 4.6 is Z.AI's flagship model with extended context length and coding capability.",
+    description:
+      "GLM 4.6 is Z.AI's flagship model with extended context length and coding capability.",
     displayName: 'GLM 4.6',
     id: 'z-ai/glm-4.6',
     maxOutput: 128_000,
@@ -1125,7 +1131,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "Opus 4.1 is Anthropic’s high-end model optimized for programming, complex reasoning, and long-running tasks.",
+      'Opus 4.1 is Anthropic’s high-end model optimized for programming, complex reasoning, and long-running tasks.',
     displayName: 'Claude Opus 4.1',
     id: 'anthropic/claude-opus-4.1',
     maxOutput: 32_000,
@@ -1150,7 +1156,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "Opus 4 is Anthropic’s flagship model designed for complex tasks and enterprise applications.",
+      'Opus 4 is Anthropic’s flagship model designed for complex tasks and enterprise applications.',
     displayName: 'Claude Opus 4',
     id: 'anthropic/claude-opus-4',
     maxOutput: 32_000,
@@ -1218,7 +1224,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "Claude Sonnet 4.5 is Anthropic’s latest hybrid reasoning model optimized for complex reasoning and coding.",
+      'Claude Sonnet 4.5 is Anthropic’s latest hybrid reasoning model optimized for complex reasoning and coding.',
     displayName: 'Claude Sonnet 4.5',
     id: 'anthropic/claude-sonnet-4.5',
     maxOutput: 64_000,
@@ -1259,7 +1265,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 200_000,
-    description: "OpenAI o4-mini is a small, efficient reasoning model for low-latency scenarios.",
+    description: 'OpenAI o4-mini is a small, efficient reasoning model for low-latency scenarios.',
     displayName: 'o4 Mini',
     id: 'openai/o4-mini',
     maxOutput: 100_000,
@@ -1542,7 +1548,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     abilities: { reasoning: true },
     contextWindowTokens: 128_000,
     description:
-      "GLM 4.5 is Z.AI’s flagship model with hybrid reasoning optimized for engineering and long-context tasks.",
+      'GLM 4.5 is Z.AI’s flagship model with hybrid reasoning optimized for engineering and long-context tasks.',
     displayName: 'GLM 4.5',
     id: 'z-ai/glm-4.5',
     maxOutput: 96_000,

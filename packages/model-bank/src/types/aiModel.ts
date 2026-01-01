@@ -243,6 +243,7 @@ export type ExtendParamsType =
   | 'thinking'
   | 'thinkingBudget'
   | 'thinkingLevel'
+  | 'thinkingLevel2'
   | 'imageAspectRatio'
   | 'imageResolution'
   | 'urlContext';
