@@ -1,0 +1,173 @@
+name: next-docker-build
+
+on:
+  workflow_run:
+    workflows: ["upstream-sync"]
+    types: [completed]
+    branches: [next]
+  workflow_dispatch:
+    inputs:
+      extra_build_args:
+        description: 'Extra Docker build-args'
+        required: false
+        default: ''
+
+# 确保同一时间只运行一个相同的 workflow,取消正在进行的旧的运行
+concurrency:
+  group: next-docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+# Add default permissions
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  REGISTRY_IMAGE: pigeonszz/lobe-chat-database
+  DOCKER_REGISTRY: docker.io
+  # 默认值，会被 repo 变量或 workflow_dispatch 覆盖
+  EXTRA_BUILD_ARG: ""
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} Docker Image
+    # 只在 upstream-sync 成功完成时运行
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    env:
+      FINAL_EXTRA_BUILD_ARG: ${{ github.event.inputs.extra_build_args || vars.EXTRA_BUILD_ARG || env.EXTRA_BUILD_ARG }}
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-latest
+          - platform: linux/arm64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+          echo "Using extra build args: ${{ env.FINAL_EXTRA_BUILD_ARG }}"
+
+      - name: Checkout next branch
+        uses: actions/checkout@v5
+        with:
+          ref: next
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 从 package.json 读取版本号
+      - name: Get package.json version
+        id: package_version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Package version: $VERSION"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=next
+            type=raw,value=latest
+            type=raw,value=${{ steps.package_version.outputs.version }}
+
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_REGISTRY_USER }}
+          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+
+      - name: Build and export
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: ${{ matrix.platform }}
+          context: .
+          file: ./Dockerfile
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SHA=${{ github.sha }}
+            ${{ env.FINAL_EXTRA_BUILD_ARG }}
+          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          rm -rf /tmp/digests
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: digest-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge and Publish
+    needs: build
+    runs-on: ubuntu-latest
+    # 只在 upstream-sync 成功完成时运行
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout next branch
+        uses: actions/checkout@v5
+        with:
+          ref: next
+          fetch-depth: 0
+
+      - name: Download digests
+        uses: actions/download-artifact@v6
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 从 package.json 读取版本号
+      - name: Get package.json version
+        id: package_version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Package version: $VERSION"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=next
+            type=raw,value=latest
+            type=raw,value=${{ steps.package_version.outputs.version }}
+
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_REGISTRY_USER }}
+          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.DOCKER_REGISTRY }}/${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.DOCKER_REGISTRY }}/${{ env.REGISTRY_IMAGE }}:next
