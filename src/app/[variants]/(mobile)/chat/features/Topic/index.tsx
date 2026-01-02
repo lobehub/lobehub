@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 
 import TopicSearchBar from '@/app/[variants]/(main)/chat/_layout/Sidebar/Topic/TopicSearchBar';
+import TopicList from '@/app/[variants]/(main)/chat/_layout/Sidebar/Topic/List';
 
 import TopicModal from './features/TopicModal';
 
@@ -14,7 +15,7 @@ const Topic = () => {
           style={{ marginInline: -8, overflow: 'hidden', position: 'relative' }}
           width={'calc(100% + 16px)'}
         >
-          <Topic />
+          <TopicList />
         </Flexbox>
       </Flexbox>
     </TopicModal>
