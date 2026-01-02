@@ -82,6 +82,7 @@ export const getAppConfig = () => {
        * @default false
        */
       enableQueueAgentRuntime: z.boolean().optional(),
+      TELEMETRY_DISABLED: z.boolean().optional(),
     },
     runtimeEnv: {
       // Sentry
@@ -121,6 +122,7 @@ export const getAppConfig = () => {
       MARKET_TRUSTED_CLIENT_ID: process.env.MARKET_TRUSTED_CLIENT_ID,
 
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
+      TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
     },
   });
 };
