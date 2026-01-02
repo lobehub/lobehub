@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Yerel Verileri Temizle",
-      "downloadBackup": "Yedeğini İndir",
-      "reUpgrade": "Yeniden Yükselt",
-      "start": "Başla",
-      "upgrade": "Yükselt"
-    },
-    "clear": {
-      "confirm": "Yerel verileri temizlemek üzeresiniz (global ayarlar etkilenmeyecek). Lütfen yedeği indirdiğinizi onaylayın."
-    },
-    "description": "{{appName}}'in yeni versiyonunda veri depolama alanında büyük bir sıçrama yaşandı. Bu nedenle, eski verileri güncelleyerek size daha iyi bir kullanım deneyimi sunmak istiyoruz.",
-    "features": {
-      "capability": {
-        "desc": "IndexedDB teknolojisine dayalı, hayatınız boyunca saklayabileceğiniz sohbet mesajlarını barındıracak kadar geniş",
-        "title": "Büyük Kapasite"
-      },
-      "performance": {
-        "desc": "Milyonlarca mesaj otomatik olarak indekslenir, sorgulama yanıt süresi milisaniye seviyesindedir",
-        "title": "Yüksek Performans"
-      },
-      "use": {
-        "desc": "Başlık, açıklama, etiket, mesaj içeriği ve hatta çeviri metni aramalarını destekler, günlük arama verimliliği büyük ölçüde artar",
-        "title": "Daha Kullanışlı"
-      }
-    },
-    "title": "{{appName}} Veri Evrimi",
-    "upgrade": {
-      "error": {
-        "subTitle": "Üzgünüz, veritabanı güncelleme sürecinde bir hata oluştu. Lütfen aşağıdaki çözümleri deneyin: A. Yerel verileri temizleyip yedek verileri yeniden içe aktarın; B. 'Yeniden Güncelle' butonuna tıklayın.<br><br> Hala hata alıyorsanız, lütfen <1>sorun bildirin</1>, size en kısa sürede yardımcı olacağız.",
-        "title": "Veritabanı Güncellemesi Başarısız"
-      },
-      "success": {
-        "subTitle": "{{appName}}'in veritabanı en son sürüme güncellendi, hemen deneyimlemeye başlayın.",
-        "title": "Veritabanı Güncellemesi Başarılı"
-      }
-    },
-    "upgradeTip": "Güncelleme yaklaşık 10-20 saniye sürecektir, lütfen güncelleme sırasında {{appName}}'i kapatmayın."
-  },
-  "migrateError": {
-    "missVersion": "İçe aktarılan verilerde bir sürüm numarası eksik. Lütfen dosyayı kontrol edin ve tekrar deneyin.",
-    "noMigration": "Mevcut sürüm için bir geçiş çözümü bulunamadı. Lütfen sürüm numarasını kontrol edin ve tekrar deneyin. Sorun devam ederse, lütfen bir geri bildirim isteği gönderin."
-  }
+  "dbV1.action.clearDB": "Yerel Verileri Temizle",
+  "dbV1.action.downloadBackup": "Veri Yedeğini İndir",
+  "dbV1.action.reUpgrade": "Yeniden Yükselt",
+  "dbV1.action.start": "Başla",
+  "dbV1.action.upgrade": "Yükselt",
+  "dbV1.clear.confirm": "Yerel verileri temizlemek üzeresiniz (genel ayarlar etkilenmeyecektir). Lütfen veri yedeğini indirdiğinizden emin olun.",
+  "dbV1.description": "Yeni sürümde, {{appName}} veri depolama konusunda önemli gelişmeler kaydetti. Bu nedenle, size daha iyi bir kullanıcı deneyimi sunabilmek için eski verilerinizi yükseltmemiz gerekiyor.",
+  "dbV1.features.capability.desc": "IndexedDB teknolojisine dayanarak, ömür boyu sohbet mesajlarını saklayabilecek kapasiteye sahiptir.",
+  "dbV1.features.capability.title": "Geniş Kapasite",
+  "dbV1.features.performance.desc": "Milyonlarca mesajı otomatik olarak indeksler, sorgular milisaniyeler içinde yanıt verir.",
+  "dbV1.features.performance.title": "Yüksek Performans",
+  "dbV1.features.use.desc": "Başlık, açıklama, etiketler, mesaj içeriği ve hatta çevrilmiş metin üzerinden arama yapmayı destekler, günlük arama verimliliğini büyük ölçüde artırır.",
+  "dbV1.features.use.title": "Daha Kullanıcı Dostu",
+  "dbV1.title": "{{appName}} Veri Evrimi",
+  "dbV1.upgrade.error.subTitle": "Üzgünüz, veritabanı yükseltme işlemi sırasında bir hata oluştu. Lütfen aşağıdaki çözümleri deneyin: A. Yerel verileri temizleyin ve yedek verileri yeniden içe aktarın; B. 'Yükseltmeyi Yeniden Dene' butonuna tıklayın.<br><br> Sorun devam ederse, lütfen <1>bir sorun bildirimi gönderin</1>, size en kısa sürede yardımcı olacağız.",
+  "dbV1.upgrade.error.title": "Veritabanı Yükseltme Başarısız",
+  "dbV1.upgrade.success.subTitle": "Veritabanı en son sürüme başarıyla yükseltildi. Devam edebilirsiniz.",
+  "dbV1.upgrade.success.title": "Veritabanı Yükseltme Başarılı",
+  "dbV1.upgradeTip": "Yükseltme yaklaşık 10 ila 20 saniye sürecektir. Lütfen {{appName}} uygulamasını bu süreçte kapatmayın.",
+  "migrateError.missVersion": "İçe aktarılan veride sürüm numarası eksik. Lütfen dosyayı kontrol edip tekrar deneyin.",
+  "migrateError.noMigration": "Mevcut sürüm için bir geçiş çözümü bulunamadı. Lütfen sürüm numarasını kontrol edip tekrar deneyin. Sorun devam ederse, lütfen geri bildirim gönderin."
 }

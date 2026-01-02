@@ -1,18 +1,10 @@
 {
   "desc": "Here you'll find occasional updates on new features we're exploring—feel free to try them out!",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "Group assistant messages and their tool call results together for display",
-      "title": "Assistant Message Grouping"
-    },
-    "groupChat": {
-      "desc": "Enable multi-agent group chat coordination.",
-      "title": "Group Chat (Multi-Agent)"
-    },
-    "inputMarkdown": {
-      "desc": "Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).",
-      "title": "Input Markdown Rendering"
-    }
-  },
+  "features.assistantMessageGroup.desc": "Group agent messages and their tool call results together for display",
+  "features.assistantMessageGroup.title": "Agent Message Grouping",
+  "features.groupChat.desc": "Enable multi-agent group chat coordination.",
+  "features.groupChat.title": "Group Chat (Multi-Agent)",
+  "features.inputMarkdown.desc": "Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).",
+  "features.inputMarkdown.title": "Input Markdown Rendering",
   "title": "Labs"
 }

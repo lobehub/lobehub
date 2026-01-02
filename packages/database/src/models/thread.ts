@@ -5,8 +5,11 @@ import { ThreadItem, threads } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
 const queryColumns = {
+  agentId: threads.agentId,
   createdAt: threads.createdAt,
+  groupId: threads.groupId,
   id: threads.id,
+  metadata: threads.metadata,
   parentThreadId: threads.parentThreadId,
   sourceMessageId: threads.sourceMessageId,
   status: threads.status,

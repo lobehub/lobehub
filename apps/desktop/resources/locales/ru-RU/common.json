@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Добавить",
-    "back": "Назад",
-    "cancel": "Отмена",
-    "close": "Закрыть",
-    "confirm": "Подтвердить",
-    "delete": "Удалить",
-    "edit": "Редактировать",
-    "more": "Больше",
-    "next": "Далее",
-    "ok": "ОК",
-    "previous": "Назад",
-    "refresh": "Обновить",
-    "remove": "Удалить",
-    "retry": "Повторить",
-    "save": "Сохранить",
-    "search": "Поиск",
-    "submit": "Отправить"
-  },
-  "app": {
-    "description": "Ваша платформа для совместной работы с ИИ",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Ошибка",
-    "info": "Информация",
-    "loading": "Загрузка",
-    "success": "Успех",
-    "warning": "Предупреждение"
-  }
+  "actions.add": "Добавить",
+  "actions.back": "Назад",
+  "actions.cancel": "Отмена",
+  "actions.close": "Закрыть",
+  "actions.confirm": "Подтвердить",
+  "actions.delete": "Удалить",
+  "actions.edit": "Редактировать",
+  "actions.more": "Больше",
+  "actions.next": "Далее",
+  "actions.ok": "ОК",
+  "actions.previous": "Назад",
+  "actions.refresh": "Обновить",
+  "actions.remove": "Удалить",
+  "actions.retry": "Повторить",
+  "actions.save": "Сохранить",
+  "actions.search": "Поиск",
+  "actions.submit": "Отправить",
+  "app.description": "Ваша платформа для совместной работы с ИИ",
+  "app.name": "LobeHub",
+  "status.error": "Ошибка",
+  "status.info": "Информация",
+  "status.loading": "Загрузка",
+  "status.success": "Успех",
+  "status.warning": "Предупреждение"
 }

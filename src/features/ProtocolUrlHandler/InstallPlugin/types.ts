@@ -1,4 +1,4 @@
-import { McpInstallSchema } from '@lobechat/electron-client-ipc';
+import { type McpInstallSchema } from '@lobechat/electron-client-ipc';
 
 export enum PluginSource {
   CUSTOM = 'custom',

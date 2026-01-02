@@ -1,18 +1,19 @@
 import { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, nativeTheme, shell, systemPreferences } from 'electron';
 import { macOS } from 'electron-is';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
 import process from 'node:process';
 
-import { DB_SCHEMA_HASH_FILENAME, LOCAL_DATABASE_DIR, userDataDir } from '@/const/dir';
 import { createLogger } from '@/utils/logger';
 
-import { ControllerModule, ipcClientEvent, ipcServerEvent } from './index';
+import { ControllerModule, IpcMethod } from './index';
+import fullDiskAccessAutoAddScript from './scripts/full-disk-access.applescript?raw';
 
 const logger = createLogger('controllers:SystemCtr');
 
 export default class SystemController extends ControllerModule {
+  static override readonly groupName = 'system';
   private systemThemeListenerInitialized = false;
 
   /**
@@ -26,7 +27,7 @@ export default class SystemController extends ControllerModule {
    * Handles the 'getDesktopAppState' IPC request.
    * Gathers essential application and system information.
    */
-  @ipcClientEvent('getDesktopAppState')
+  @IpcMethod()
   async getAppState(): Promise<ElectronAppState> {
     const platform = process.platform;
     const arch = process.arch;
@@ -53,16 +54,142 @@ export default class SystemController extends ControllerModule {
     };
   }
 
-  /**
-   * 检查可用性
-   */
-  @ipcClientEvent('checkSystemAccessibility')
-  checkAccessibilityForMacOS() {
-    if (!macOS()) return;
+  @IpcMethod()
+  requestAccessibilityAccess() {
+    if (!macOS()) return true;
     return systemPreferences.isTrustedAccessibilityClient(true);
   }
 
-  @ipcClientEvent('openExternalLink')
+  @IpcMethod()
+  getAccessibilityStatus() {
+    if (!macOS()) return true;
+    return systemPreferences.isTrustedAccessibilityClient(false);
+  }
+
+  @IpcMethod()
+  async getMediaAccessStatus(mediaType: 'microphone' | 'screen'): Promise<string> {
+    if (!macOS()) return 'granted';
+    return systemPreferences.getMediaAccessStatus(mediaType);
+  }
+
+  @IpcMethod()
+  async requestMicrophoneAccess(): Promise<boolean> {
+    if (!macOS()) return true;
+    return systemPreferences.askForMediaAccess('microphone');
+  }
+
+  @IpcMethod()
+  async requestScreenAccess(): Promise<boolean> {
+    if (!macOS()) return true;
+
+    // IMPORTANT:
+    // On macOS, the app may NOT appear in "Screen Recording" list until it actually
+    // requests the permission once (TCC needs to register this app).
+    // So we try to proactively request it first, then open System Settings for manual toggle.
+    // 1) Best-effort: try Electron runtime API if available (not typed in Electron 38).
+    try {
+      const status = systemPreferences.getMediaAccessStatus('screen');
+      if (status !== 'granted') {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        await (systemPreferences as any).askForMediaAccess?.('screen');
+      }
+    } catch (error) {
+      logger.warn('Failed to request screen recording access via systemPreferences', error);
+    }
+
+    // 2) Reliable trigger: run a one-shot getDisplayMedia in renderer to register TCC entry.
+    // This will show the OS capture picker; once the user selects/cancels, we stop tracks immediately.
+    try {
+      const status = systemPreferences.getMediaAccessStatus('screen');
+      if (status !== 'granted') {
+        const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const script = `
+(() => {
+  const stop = (stream) => {
+    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+  };
+  return navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+    .then((stream) => { stop(stream); return true; })
+    .catch(() => false);
+})()
+          `.trim();
+
+          await mainWindow.webContents.executeJavaScript(script, true);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to request screen recording access via getDisplayMedia', error);
+    }
+
+    await shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    );
+
+    return systemPreferences.getMediaAccessStatus('screen') === 'granted';
+  }
+
+  @IpcMethod()
+  openFullDiskAccessSettings(payload?: { autoAdd?: boolean }) {
+    if (!macOS()) return;
+    const { autoAdd = false } = payload || {};
+
+    // NOTE:
+    // - Full Disk Access cannot be requested programmatically like microphone/screen.
+    // - On macOS 13+ (Ventura), System Preferences is replaced by System Settings,
+    //   and deep links may differ. We try multiple known schemes for compatibility.
+    const candidates = [
+      // macOS 13+ (System Settings)
+      'com.apple.settings:Privacy&path=FullDiskAccess',
+      // Older macOS (System Preferences)
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+    ];
+    if (autoAdd) this.tryAutoAddFullDiskAccess();
+
+    (async () => {
+      for (const url of candidates) {
+        try {
+          await shell.openExternal(url);
+          return;
+        } catch (error) {
+          logger.warn(`Failed to open Full Disk Access settings via ${url}`, error);
+        }
+      }
+    })();
+  }
+
+  /**
+   * Best-effort UI automation to add this app into Full Disk Access list.
+   *
+   * Limitations:
+   * - This uses AppleScript UI scripting (System Events) and may require the user to grant
+   *   additional "Automation" permission (to control System Settings).
+   * - UI structure differs across macOS versions/languages; we fall back silently.
+   */
+  private tryAutoAddFullDiskAccess() {
+    if (!macOS()) return;
+
+    const exePath = app.getPath('exe');
+    // /Applications/App.app/Contents/MacOS/App -> /Applications/App.app
+    const appBundlePath = path.resolve(path.dirname(exePath), '..', '..');
+
+    // Keep the script minimal and resilient; failure should not break onboarding flow.
+    const script = fullDiskAccessAutoAddScript.trim();
+
+    try {
+      const child = spawn('osascript', ['-e', script, appBundlePath], { env: process.env });
+      child.on('error', (error) => {
+        logger.warn('Full Disk Access auto-add (osascript) failed to start', error);
+      });
+      child.on('exit', (code) => {
+        logger.debug('Full Disk Access auto-add (osascript) exited', { code });
+      });
+    } catch (error) {
+      logger.warn('Full Disk Access auto-add failed', error);
+    }
+  }
+
+  @IpcMethod()
   openExternalLink(url: string) {
     return shell.openExternal(url);
   }
@@ -70,7 +197,7 @@ export default class SystemController extends ControllerModule {
   /**
    * 更新应用语言设置
    */
-  @ipcClientEvent('updateLocale')
+  @IpcMethod()
   async updateLocale(locale: string) {
     // 保存语言设置
     this.app.storeManager.set('locale', locale);
@@ -82,41 +209,26 @@ export default class SystemController extends ControllerModule {
     return { success: true };
   }
 
-  @ipcClientEvent('updateThemeMode')
+  @IpcMethod()
   async updateThemeModeHandler(themeMode: ThemeMode) {
     this.app.storeManager.set('themeMode', themeMode);
     this.app.browserManager.broadcastToAllWindows('themeChanged', { themeMode });
 
     // Apply visual effects to all browser windows when theme mode changes
     this.app.browserManager.handleAppThemeChange();
+    // Set app theme mode to the system theme mode
+
+    this.setSystemThemeMode(themeMode);
   }
 
-  @ipcServerEvent('getDatabasePath')
-  async getDatabasePath() {
-    return join(this.app.appStoragePath, LOCAL_DATABASE_DIR);
+  @IpcMethod()
+  async getSystemThemeMode() {
+    return nativeTheme.themeSource;
   }
 
-  @ipcServerEvent('getDatabaseSchemaHash')
-  async getDatabaseSchemaHash() {
-    try {
-      return readFileSync(this.DB_SCHEMA_HASH_PATH, 'utf8');
-    } catch {
-      return undefined;
-    }
-  }
-
-  @ipcServerEvent('getUserDataPath')
-  async getUserDataPath() {
-    return userDataDir;
-  }
-
-  @ipcServerEvent('setDatabaseSchemaHash')
-  async setDatabaseSchemaHash(hash: string) {
-    writeFileSync(this.DB_SCHEMA_HASH_PATH, hash, 'utf8');
-  }
-
-  private get DB_SCHEMA_HASH_PATH() {
-    return join(this.app.appStoragePath, DB_SCHEMA_HASH_FILENAME);
+  @IpcMethod()
+  async setSystemThemeMode(themeMode: ThemeMode) {
+    nativeTheme.themeSource = themeMode === 'auto' ? 'system' : themeMode;
   }
 
   /**

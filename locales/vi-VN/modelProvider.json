@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "Phiên bản API của Azure, tuân theo định dạng YYYY-MM-DD, tham khảo [phiên bản mới nhất](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Lấy danh sách",
-      "title": "Phiên bản API Azure"
-    },
-    "empty": "Vui lòng nhập ID mô hình để thêm mô hình đầu tiên",
-    "endpoint": {
-      "desc": "Kiểm tra tài nguyên từ cổng Azure, bạn có thể tìm thấy giá trị này trong phần 'Khóa và điểm cuối'",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "Địa chỉ API Azure"
-    },
-    "modelListPlaceholder": "Chọn hoặc thêm mô hình OpenAI bạn đã triển khai",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Kiểm tra tài nguyên từ cổng Azure, bạn có thể tìm thấy giá trị này trong phần 'Khóa và điểm cuối'. Có thể sử dụng KEY1 hoặc KEY2",
-      "placeholder": "Azure API Key",
-      "title": "API Key"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "Phiên bản API của Azure, theo định dạng YYYY-MM-DD, tham khảo [phiên bản mới nhất](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Lấy danh sách",
-      "title": "Phiên bản API Azure"
-    },
-    "endpoint": {
-      "desc": "Tìm điểm kết thúc suy diễn mô hình Azure AI từ tổng quan dự án Azure AI",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "Điểm kết thúc Azure AI"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Tìm khóa API từ tổng quan dự án Azure AI",
-      "placeholder": "Khóa Azure",
-      "title": "Khóa"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "Nhập AWS Access Key Id",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key Id"
-    },
-    "checker": {
-      "desc": "Kiểm tra AccessKeyId / SecretAccessKey có được nhập chính xác không"
-    },
-    "region": {
-      "desc": "Nhập AWS Region",
-      "placeholder": "AWS Region",
-      "title": "AWS Region"
-    },
-    "secretAccessKey": {
-      "desc": "Nhập AWS Secret Access Key",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "Nếu bạn đang sử dụng AWS SSO/STS, hãy nhập AWS Session Token của bạn",
-      "placeholder": "AWS Session Token",
-      "title": "AWS Session Token (tùy chọn)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "Vùng Dịch vụ Tùy chỉnh",
-      "customSessionToken": "Mã thông báo phiên tùy chỉnh",
-      "description": "Nhập AWS AccessKeyId / SecretAccessKey của bạn để bắt đầu phiên làm việc. Ứng dụng sẽ không lưu trữ cấu hình xác thực của bạn",
-      "imageGenerationDescription": "Nhập AWS AccessKeyId / SecretAccessKey của bạn để bắt đầu tạo. Ứng dụng sẽ không lưu trữ cấu hình xác thực của bạn",
-      "title": "Sử dụng Thông tin Xác thực Bedrock tùy chỉnh"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "Vui lòng nhập Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "Nhập ID tài khoản Cloudflare hoặc địa chỉ API tùy chỉnh",
-      "placeholder": "ID tài khoản Cloudflare / địa chỉ API tùy chỉnh",
-      "title": "ID tài khoản Cloudflare / địa chỉ API"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "Khóa API cần thiết để xác thực Bearer Token",
-      "placeholder": "Vui lòng nhập khóa API",
-      "required": "Vui lòng nhập khóa API",
-      "title": "Khóa API"
-    },
-    "authType": {
-      "desc": "Chọn phương thức xác thực với máy chủ ComfyUI",
-      "options": {
-        "basic": "Tài khoản/Mật khẩu",
-        "bearer": "Bearer (Khóa API)",
-        "custom": "Tiêu đề yêu cầu tùy chỉnh",
-        "none": "Không cần xác thực"
-      },
-      "placeholder": "Vui lòng chọn loại xác thực",
-      "title": "Loại xác thực"
-    },
-    "baseURL": {
-      "desc": "Địa chỉ truy cập web của ComfyUI",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "Vui lòng nhập địa chỉ dịch vụ ComfyUI",
-      "title": "Địa chỉ dịch vụ ComfyUI"
-    },
-    "checker": {
-      "desc": "Kiểm tra kết nối đã được cấu hình đúng chưa",
-      "title": "Kiểm tra kết nối"
-    },
-    "customHeaders": {
-      "addButton": "Thêm tiêu đề yêu cầu",
-      "deleteTooltip": "Xóa tiêu đề yêu cầu này",
-      "desc": "Tiêu đề yêu cầu cần thiết cho phương thức xác thực tùy chỉnh, định dạng cặp khóa-giá trị",
-      "duplicateKeyError": "Tên khóa tiêu đề yêu cầu không được trùng lặp",
-      "keyPlaceholder": "Tên khóa",
-      "required": "Vui lòng nhập tiêu đề yêu cầu tùy chỉnh",
-      "title": "Tiêu đề yêu cầu tùy chỉnh",
-      "valuePlaceholder": "Giá trị"
-    },
-    "password": {
-      "desc": "Mật khẩu cần thiết cho xác thực cơ bản",
-      "placeholder": "Vui lòng nhập mật khẩu",
-      "required": "Vui lòng nhập mật khẩu",
-      "title": "Mật khẩu"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "Tên người dùng cần thiết cho xác thực cơ bản",
-      "placeholder": "Vui lòng nhập tên người dùng",
-      "required": "Vui lòng nhập tên người dùng",
-      "title": "Tên người dùng"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "Vui lòng nhập API Key của bạn",
-      "title": "API Key"
-    },
-    "basicTitle": "Thông tin cơ bản",
-    "configTitle": "Thông tin cấu hình",
-    "confirm": "Tạo mới",
-    "createSuccess": "Tạo mới thành công",
-    "description": {
-      "placeholder": "Giới thiệu về nhà cung cấp (tùy chọn)",
-      "title": "Giới thiệu về nhà cung cấp"
-    },
-    "id": {
-      "desc": "Là định danh duy nhất của nhà cung cấp dịch vụ, không thể sửa đổi sau khi tạo",
-      "format": "Chỉ có thể chứa số, chữ cái thường, dấu gạch ngang (-) và dấu gạch dưới (_) ",
-      "placeholder": "Nên viết toàn bộ bằng chữ thường, ví dụ openai, không thể sửa sau khi tạo",
-      "required": "Vui lòng nhập ID nhà cung cấp",
-      "title": "ID nhà cung cấp"
-    },
-    "logo": {
-      "required": "Vui lòng tải lên Logo nhà cung cấp hợp lệ",
-      "title": "Logo nhà cung cấp"
-    },
-    "name": {
-      "placeholder": "Vui lòng nhập tên hiển thị của nhà cung cấp",
-      "required": "Vui lòng nhập tên nhà cung cấp",
-      "title": "Tên nhà cung cấp"
-    },
-    "proxyUrl": {
-      "required": "Vui lòng nhập địa chỉ proxy",
-      "title": "Địa chỉ proxy"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "Vui lòng chọn loại SDK",
-      "title": "Định dạng yêu cầu"
-    },
-    "title": "Tạo nhà cung cấp AI tùy chỉnh"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "Nhập mã truy cập cá nhân Github của bạn, nhấp vào [đây](https://github.com/settings/tokens) để tạo",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "Nhập mã thông báo HuggingFace của bạn, nhấp vào [đây](https://huggingface.co/settings/tokens) để tạo",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "Mã thông báo HuggingFace"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "Chưa kích hoạt nhà cung cấp tùy chỉnh",
-      "disabled": "Nhà cung cấp chưa được kích hoạt",
-      "enabled": "Nhà cung cấp đã được kích hoạt"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "Thêm nhà cung cấp tùy chỉnh",
-    "all": "Tất cả",
-    "list": {
-      "custom": "Tùy chỉnh chưa được kích hoạt",
-      "disabled": "Chưa kích hoạt",
-      "disabledActions": {
-        "sort": "Cách sắp xếp",
-        "sortAlphabetical": "Sắp xếp theo chữ cái",
-        "sortAlphabeticalDesc": "Sắp xếp theo chữ cái (Z-A)",
-        "sortDefault": "Sắp xếp mặc định"
-      },
-      "enabled": "Đã kích hoạt"
-    },
-    "notFound": "Không tìm thấy kết quả tìm kiếm",
-    "searchProviders": "Tìm kiếm nhà cung cấp...",
-    "sort": "Sắp xếp tùy chỉnh"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "Khóa API do nền tảng New API cung cấp",
-      "placeholder": "Khóa API New API",
-      "required": "Khóa API là bắt buộc",
-      "title": "Khóa API"
-    },
-    "apiUrl": {
-      "desc": "Địa chỉ API của dịch vụ New API, thường cần kèm theo /v1",
-      "title": "Địa chỉ API"
-    },
-    "enabled": {
-      "title": "Kích hoạt New API"
-    },
-    "models": {
-      "batchSelect": "Chọn nhiều mô hình ({{count}} cái)",
-      "fetch": "Lấy danh sách mô hình",
-      "selected": "Mô hình đã chọn",
-      "title": "Mô hình khả dụng"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "Kiểm tra địa chỉ proxy có được nhập chính xác không",
-      "title": "Kiểm tra tính liên thông"
-    },
-    "customModelName": {
-      "desc": "Thêm mô hình tùy chỉnh, sử dụng dấu phẩy (,) để tách biệt nhiều mô hình",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "Tên mô hình tùy chỉnh"
-    },
-    "download": {
-      "desc": "Ollama đang tải xuống mô hình này, vui lòng không đóng trang này. Quá trình tải xuống sẽ tiếp tục từ nơi đã bị gián đoạn khi tải lại",
-      "failed": "Tải mô hình không thành công, vui lòng kiểm tra kết nối mạng hoặc cài đặt Ollama và thử lại",
-      "remainingTime": "Thời gian còn lại",
-      "speed": "Tốc độ tải xuống",
-      "title": "Đang tải mô hình {{model}}"
-    },
-    "endpoint": {
-      "desc": "Phải bao gồm http(s)://, có thể để trống nếu không chỉ định thêm cho địa phương",
-      "title": "Địa chỉ proxy API"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "Hủy tải xuống",
-      "confirm": "Tải xuống",
-      "description": "Nhập nhãn mô hình Ollama của bạn để tiếp tục phiên làm việc",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "Bắt đầu tải xuống...",
-      "title": "Tải xuống mô hình Ollama đã chỉ định"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "Đã chọn {{count}} mô hình",
-      "title": "Chọn nhiều"
-    },
-    "config": {
-      "aesGcm": "Khóa của bạn và địa chỉ proxy sẽ được mã hóa bằng thuật toán <1>AES-GCM</1>",
-      "apiKey": {
-        "desc": "Vui lòng nhập {{name}} API Key của bạn",
-        "descWithUrl": "Vui lòng nhập {{name}} API Key của bạn, <3>nhấn vào đây để lấy</3>",
-        "placeholder": "{{name}} API Key",
-        "title": "API Key"
-      },
-      "baseURL": {
-        "desc": "Phải bao gồm http(s)://",
-        "invalid": "Vui lòng nhập một URL hợp lệ",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "Địa chỉ proxy API"
-      },
-      "checker": {
-        "button": "Kiểm tra",
-        "desc": "Kiểm tra xem API Key và địa chỉ proxy có được nhập đúng không",
-        "pass": "Kiểm tra thành công",
-        "title": "Kiểm tra kết nối"
-      },
-      "fetchOnClient": {
-        "desc": "Chế độ yêu cầu từ khách hàng sẽ phát động yêu cầu phiên trực tiếp từ trình duyệt, có thể cải thiện tốc độ phản hồi",
-        "title": "Sử dụng chế độ yêu cầu từ khách hàng"
-      },
-      "helpDoc": "Hướng dẫn cấu hình",
-      "responsesApi": {
-        "desc": "Áp dụng định dạng yêu cầu thế hệ mới của OpenAI, mở khóa các tính năng nâng cao như chuỗi tư duy (chỉ hỗ trợ mô hình OpenAI)",
-        "title": "Sử dụng chuẩn Responses API"
-      },
-      "waitingForMore": "Nhiều mô hình hơn đang <1>được lên kế hoạch</1>, xin hãy chờ đợi"
-    },
-    "createNew": {
-      "title": "Tạo mô hình AI tùy chỉnh"
-    },
-    "item": {
-      "config": "Cấu hình mô hình",
-      "customModelCards": {
-        "addNew": "Tạo và thêm mô hình {{id}}",
-        "confirmDelete": "Sắp xóa mô hình tùy chỉnh này, sau khi xóa sẽ không thể khôi phục, xin hãy cẩn thận."
-      },
-      "delete": {
-        "confirm": "Xác nhận xóa mô hình {{displayName}}?",
-        "success": "Xóa thành công",
-        "title": "Xóa mô hình"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Trường thực tế được yêu cầu trong Azure OpenAI",
-          "placeholder": "Vui lòng nhập tên triển khai mô hình trong Azure",
-          "title": "Tên triển khai mô hình"
-        },
-        "deployName": {
-          "extra": "Trường này sẽ được sử dụng làm ID mô hình khi gửi yêu cầu",
-          "placeholder": "Vui lòng nhập tên hoặc ID thực tế của mô hình đã triển khai",
-          "title": "Tên triển khai mô hình"
-        },
-        "displayName": {
-          "placeholder": "Vui lòng nhập tên hiển thị của mô hình, ví dụ ChatGPT, GPT-4, v.v.",
-          "title": "Tên hiển thị mô hình"
-        },
-        "files": {
-          "extra": "Hiện tại, việc tải lên tệp chỉ là một giải pháp Hack, chỉ dành cho thử nghiệm cá nhân. Vui lòng chờ đợi khả năng tải lên tệp hoàn chỉnh trong các bản cập nhật sau.",
-          "title": "Hỗ trợ tải lên tệp"
-        },
-        "functionCall": {
-          "extra": "Cấu hình này chỉ kích hoạt khả năng sử dụng công cụ của mô hình, từ đó có thể thêm các plugin loại công cụ cho mô hình. Tuy nhiên, việc hỗ trợ sử dụng công cụ thực sự hoàn toàn phụ thuộc vào chính mô hình, vui lòng tự kiểm tra tính khả dụng",
-          "title": "Hỗ trợ sử dụng công cụ"
-        },
-        "id": {
-          "extra": "Không thể sửa đổi sau khi tạo, sẽ được sử dụng làm id mô hình khi gọi AI",
-          "placeholder": "Vui lòng nhập id mô hình, ví dụ gpt-4o hoặc claude-3.5-sonnet",
-          "title": "ID mô hình"
-        },
-        "imageOutput": {
-          "extra": "Cấu hình này chỉ bật khả năng tạo hình ảnh của mô hình, hiệu quả cụ thể hoàn toàn phụ thuộc vào bản thân mô hình, vui lòng tự kiểm tra xem mô hình có khả năng tạo hình ảnh khả dụng hay không",
-          "title": "Hỗ trợ tạo hình ảnh"
-        },
-        "modalTitle": "Cấu hình mô hình tùy chỉnh",
-        "reasoning": {
-          "extra": "Cấu hình này sẽ chỉ kích hoạt khả năng suy nghĩ sâu của mô hình, hiệu quả cụ thể hoàn toàn phụ thuộc vào chính mô hình, vui lòng tự kiểm tra xem mô hình này có khả năng suy nghĩ sâu có thể sử dụng hay không",
-          "title": "Hỗ trợ suy nghĩ sâu"
-        },
-        "search": {
-          "extra": "Cấu hình này chỉ bật khả năng tìm kiếm trực tuyến của công cụ tìm kiếm tích hợp trong mô hình, việc có hỗ trợ công cụ tìm kiếm tích hợp hay không phụ thuộc vào bản thân mô hình, vui lòng tự kiểm tra khả năng sử dụng của công cụ tìm kiếm tích hợp trong mô hình",
-          "title": "Hỗ trợ tìm kiếm trực tuyến"
-        },
-        "tokens": {
-          "extra": "Cài đặt số Token tối đa mà mô hình hỗ trợ",
-          "title": "Cửa sổ ngữ cảnh tối đa",
-          "unlimited": "Không giới hạn"
-        },
-        "type": {
-          "extra": "Các loại mô hình khác nhau có các kịch bản sử dụng và khả năng khác biệt",
-          "options": {
-            "chat": "Đối thoại",
-            "embedding": "Vector hóa",
-            "image": "Tạo hình ảnh",
-            "realtime": "Đối thoại thời gian thực",
-            "stt": "Chuyển giọng nói thành văn bản",
-            "text2music": "Chuyển văn bản thành nhạc",
-            "text2video": "Chuyển văn bản thành video",
-            "tts": "Tổng hợp giọng nói"
-          },
-          "placeholder": "Vui lòng chọn loại mô hình",
-          "title": "Loại mô hình"
-        },
-        "video": {
-          "extra": "Cấu hình này chỉ bật cấu hình nhận diện video trong ứng dụng, việc có hỗ trợ nhận diện hay không hoàn toàn phụ thuộc vào bản thân mô hình, vui lòng tự kiểm tra khả năng nhận diện video của mô hình",
-          "title": "Hỗ trợ nhận diện video"
-        },
-        "vision": {
-          "extra": "Cấu hình này chỉ mở khả năng tải lên hình ảnh trong ứng dụng, việc hỗ trợ nhận diện hoàn toàn phụ thuộc vào mô hình, xin hãy tự kiểm tra khả năng nhận diện hình ảnh của mô hình này.",
-          "title": "Hỗ trợ nhận diện hình ảnh"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/Hình ảnh",
-        "inputCharts": "${{amount}}/Ký tự M",
-        "inputMinutes": "${{amount}}/Phút",
-        "inputTokens": "Nhập ${{amount}}/M",
-        "outputTokens": "Xuất ${{amount}}/M"
-      },
-      "releasedAt": "Phát hành vào {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "Thêm mô hình",
-      "disabled": "Chưa được kích hoạt",
-      "disabledActions": {
-        "showMore": "Hiển thị tất cả",
-        "sort": "Cách sắp xếp",
-        "sortAlphabetical": "Sắp xếp theo chữ cái",
-        "sortAlphabeticalDesc": "Sắp xếp theo chữ cái (Z-A)",
-        "sortDefault": "Sắp xếp mặc định",
-        "sortReleasedAt": "Sắp xếp theo ngày phát hành sớm nhất",
-        "sortReleasedAtDesc": "Sắp xếp theo ngày phát hành mới nhất"
-      },
-      "empty": {
-        "desc": "Vui lòng tạo mô hình tùy chỉnh hoặc kéo mô hình để bắt đầu sử dụng",
-        "title": "Chưa có mô hình nào khả dụng"
-      },
-      "enabled": "Đã được kích hoạt",
-      "enabledActions": {
-        "disableAll": "Vô hiệu hóa tất cả",
-        "enableAll": "Kích hoạt tất cả",
-        "sort": "Sắp xếp mô hình tùy chỉnh"
-      },
-      "enabledEmpty": "Chưa có mô hình nào được kích hoạt, hãy kích hoạt mô hình bạn yêu thích từ danh sách bên dưới nhé~",
-      "fetcher": {
-        "clear": "Xóa mô hình đã lấy",
-        "fetch": "Lấy danh sách mô hình",
-        "fetching": "Đang lấy danh sách mô hình...",
-        "latestTime": "Thời gian cập nhật lần cuối: {{time}}",
-        "noLatestTime": "Chưa lấy danh sách"
-      },
-      "noModelsInCategory": "Không có mô hình nào được kích hoạt trong danh mục này",
-      "resetAll": {
-        "conform": "Xác nhận việc đặt lại tất cả các thay đổi của mô hình hiện tại? Sau khi đặt lại, danh sách mô hình hiện tại sẽ trở về trạng thái mặc định",
-        "success": "Đặt lại thành công",
-        "title": "Đặt lại tất cả các thay đổi"
-      },
-      "search": "Tìm kiếm mô hình...",
-      "searchResult": "Tìm thấy {{count}} mô hình",
-      "title": "Danh sách mô hình",
-      "total": "Có tổng cộng {{count}} mô hình khả dụng"
-    },
-    "searchNotFound": "Không tìm thấy kết quả tìm kiếm",
-    "tabs": {
-      "all": "Tất cả",
-      "chat": "Đối thoại",
-      "embedding": "Nhúng",
-      "image": "Hình ảnh",
-      "stt": "Nhận dạng giọng nói",
-      "tts": "Chuyển văn bản thành giọng nói"
-    }
-  },
-  "sortModal": {
-    "success": "Cập nhật sắp xếp thành công",
-    "title": "Sắp xếp tùy chỉnh",
-    "update": "Cập nhật"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "Sắp xóa nhà cung cấp AI này, sau khi xóa sẽ không thể khôi phục, xác nhận có xóa không?",
-    "deleteSuccess": "Xóa thành công",
-    "tooltip": "Cập nhật cấu hình cơ bản của nhà cung cấp",
-    "updateSuccess": "Cập nhật thành công"
-  },
-  "updateCustomAiProvider": {
-    "title": "Cập nhật cấu hình nhà cung cấp AI tùy chỉnh"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "Nhập khóa Vertex AI của bạn",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "Khóa Vertex AI"
-    },
-    "region": {
-      "desc": "Chọn khu vực cho dịch vụ Vertex AI. Một số mô hình như Gemini 2.5 chỉ khả dụng ở các khu vực cụ thể (ví dụ: global)",
-      "placeholder": "Chọn khu vực",
-      "title": "Khu vực Vertex AI"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI Zero One"
-  },
-  "zhipu": {
-    "title": "Zhipu"
-  }
+  "azure.azureApiVersion.desc": "Phiên bản API Azure, theo định dạng YYYY-MM-DD, kiểm tra [phiên bản mới nhất](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "Lấy danh sách",
+  "azure.azureApiVersion.title": "Phiên bản API Azure",
+  "azure.empty": "Vui lòng nhập ID mô hình để thêm mô hình đầu tiên",
+  "azure.endpoint.desc": "Khi kiểm tra tài nguyên từ cổng Azure, bạn có thể tìm thấy giá trị này trong phần 'Khóa và Điểm cuối'",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "Địa chỉ API Azure",
+  "azure.modelListPlaceholder": "Chọn hoặc thêm mô hình OpenAI bạn đã triển khai",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "Khi kiểm tra tài nguyên từ cổng Azure, bạn có thể tìm thấy giá trị này trong phần 'Khóa và Điểm cuối'. Bạn có thể sử dụng KEY1 hoặc KEY2",
+  "azure.token.placeholder": "Khóa API Azure",
+  "azure.token.title": "Khóa API",
+  "azureai.azureApiVersion.desc": "Phiên bản API cho Azure, theo định dạng YYYY-MM-DD. Tham khảo [phiên bản mới nhất](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "Lấy danh sách",
+  "azureai.azureApiVersion.title": "Phiên bản API Azure",
+  "azureai.endpoint.desc": "Tìm điểm cuối suy luận mô hình Azure AI từ phần tổng quan dự án Azure AI",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "Điểm cuối Azure AI",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "Tìm khóa API từ phần tổng quan dự án Azure AI",
+  "azureai.token.placeholder": "Khóa Azure",
+  "azureai.token.title": "Khóa",
+  "bedrock.accessKeyId.desc": "Nhập AWS Access Key Id",
+  "bedrock.accessKeyId.placeholder": "AWS Access Key Id",
+  "bedrock.accessKeyId.title": "AWS Access Key Id",
+  "bedrock.checker.desc": "Kiểm tra xem AccessKeyId / SecretAccessKey đã được nhập đúng chưa",
+  "bedrock.region.desc": "Nhập khu vực AWS",
+  "bedrock.region.placeholder": "Khu vực AWS",
+  "bedrock.region.title": "Khu vực AWS",
+  "bedrock.secretAccessKey.desc": "Nhập AWS Secret Access Key",
+  "bedrock.secretAccessKey.placeholder": "AWS Secret Access Key",
+  "bedrock.secretAccessKey.title": "AWS Secret Access Key",
+  "bedrock.sessionToken.desc": "Nếu bạn đang sử dụng AWS SSO/STS, vui lòng nhập AWS Session Token của bạn",
+  "bedrock.sessionToken.placeholder": "AWS Session Token",
+  "bedrock.sessionToken.title": "AWS Session Token (tùy chọn)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "Khu vực dịch vụ tùy chỉnh",
+  "bedrock.unlock.customSessionToken": "Session Token tùy chỉnh",
+  "bedrock.unlock.description": "Nhập AccessKeyId / SecretAccessKey của bạn để bắt đầu phiên. Ứng dụng sẽ không lưu trữ cấu hình xác thực của bạn",
+  "bedrock.unlock.imageGenerationDescription": "Nhập AccessKeyId / SecretAccessKey của bạn để bắt đầu tạo ảnh. Ứng dụng sẽ không lưu trữ thông tin xác thực của bạn.",
+  "bedrock.unlock.title": "Sử dụng thông tin xác thực Bedrock tùy chỉnh",
+  "cloudflare.apiKey.desc": "Vui lòng nhập Cloudflare API Key",
+  "cloudflare.apiKey.placeholder": "Cloudflare API Key",
+  "cloudflare.apiKey.title": "Cloudflare API Key",
+  "cloudflare.baseURLOrAccountID.desc": "Nhập ID tài khoản Cloudflare hoặc địa chỉ API tùy chỉnh",
+  "cloudflare.baseURLOrAccountID.placeholder": "Cloudflare Account ID / URL API tùy chỉnh",
+  "cloudflare.baseURLOrAccountID.title": "Cloudflare Account ID / Địa chỉ API",
+  "comfyui.apiKey.desc": "Khóa API cho xác thực Bearer Token",
+  "comfyui.apiKey.placeholder": "Nhập khóa API",
+  "comfyui.apiKey.required": "Vui lòng nhập khóa API",
+  "comfyui.apiKey.title": "Khóa API",
+  "comfyui.authType.desc": "Chọn phương thức xác thực để kết nối với máy chủ ComfyUI",
+  "comfyui.authType.options.basic": "Xác thực cơ bản",
+  "comfyui.authType.options.bearer": "Bearer Token",
+  "comfyui.authType.options.custom": "Xác thực tùy chỉnh",
+  "comfyui.authType.options.none": "Không xác thực",
+  "comfyui.authType.placeholder": "Vui lòng chọn loại xác thực",
+  "comfyui.authType.title": "Loại xác thực",
+  "comfyui.baseURL.desc": "Địa chỉ truy cập máy chủ ComfyUI, ví dụ: http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "Vui lòng nhập URL dịch vụ ComfyUI",
+  "comfyui.baseURL.title": "URL dịch vụ ComfyUI",
+  "comfyui.checker.desc": "Kiểm tra xem kết nối đã được cấu hình đúng chưa",
+  "comfyui.checker.title": "Kiểm tra kết nối",
+  "comfyui.customHeaders.addButton": "Thêm Header",
+  "comfyui.customHeaders.deleteTooltip": "Xóa header này",
+  "comfyui.customHeaders.desc": "Header yêu cầu cần thiết cho xác thực tùy chỉnh, định dạng cặp khóa-giá trị",
+  "comfyui.customHeaders.duplicateKeyError": "Tên header không được trùng lặp",
+  "comfyui.customHeaders.keyPlaceholder": "Khóa",
+  "comfyui.customHeaders.required": "Vui lòng nhập header yêu cầu tùy chỉnh",
+  "comfyui.customHeaders.title": "Header tùy chỉnh",
+  "comfyui.customHeaders.valuePlaceholder": "Giá trị",
+  "comfyui.password.desc": "Mật khẩu cho xác thực cơ bản",
+  "comfyui.password.placeholder": "Nhập mật khẩu",
+  "comfyui.password.required": "Vui lòng nhập mật khẩu",
+  "comfyui.password.title": "Mật khẩu",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "Tên người dùng cho xác thực cơ bản",
+  "comfyui.username.placeholder": "Nhập tên người dùng",
+  "comfyui.username.required": "Vui lòng nhập tên người dùng",
+  "comfyui.username.title": "Tên người dùng",
+  "createNewAiProvider.apiKey.placeholder": "Vui lòng nhập khóa API của bạn",
+  "createNewAiProvider.apiKey.title": "Khóa API",
+  "createNewAiProvider.basicTitle": "Thông tin cơ bản",
+  "createNewAiProvider.configTitle": "Thông tin cấu hình",
+  "createNewAiProvider.confirm": "Tạo mới",
+  "createNewAiProvider.createSuccess": "Tạo thành công",
+  "createNewAiProvider.description.placeholder": "Mô tả nhà cung cấp (tùy chọn)",
+  "createNewAiProvider.description.title": "Mô tả nhà cung cấp",
+  "createNewAiProvider.id.desc": "Định danh duy nhất cho nhà cung cấp dịch vụ, không thể thay đổi sau khi tạo",
+  "createNewAiProvider.id.format": "Chỉ được chứa số, chữ thường, dấu gạch ngang (-) và dấu gạch dưới (_)",
+  "createNewAiProvider.id.placeholder": "Nên viết thường, ví dụ: openai, không thể thay đổi sau khi tạo",
+  "createNewAiProvider.id.required": "Vui lòng nhập ID nhà cung cấp",
+  "createNewAiProvider.id.title": "ID nhà cung cấp",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "Vui lòng tải lên logo hợp lệ của nhà cung cấp",
+  "createNewAiProvider.logo.title": "Logo nhà cung cấp",
+  "createNewAiProvider.name.placeholder": "Vui lòng nhập tên hiển thị của nhà cung cấp",
+  "createNewAiProvider.name.required": "Vui lòng nhập tên nhà cung cấp",
+  "createNewAiProvider.name.title": "Tên nhà cung cấp",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "Vui lòng nhập địa chỉ proxy",
+  "createNewAiProvider.proxyUrl.title": "URL Proxy",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "Vui lòng chọn loại SDK",
+  "createNewAiProvider.sdkType.title": "Định dạng yêu cầu",
+  "createNewAiProvider.title": "Tạo nhà cung cấp AI tùy chỉnh",
+  "github.personalAccessToken.desc": "Nhập GitHub PAT của bạn. Nhấn [vào đây](https://github.com/settings/tokens) để tạo.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "GitHub PAT",
+  "huggingface.accessToken.desc": "Nhập Token HuggingFace của bạn, nhấn [vào đây](https://huggingface.co/settings/tokens) để tạo",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "Token HuggingFace",
+  "list.title.custom": "Nhà cung cấp tùy chỉnh chưa được bật",
+  "list.title.disabled": "Đã tắt",
+  "list.title.enabled": "Đã bật",
+  "menu.addCustomProvider": "Thêm nhà cung cấp tùy chỉnh",
+  "menu.all": "Tất cả",
+  "menu.list.custom": "Tùy chỉnh chưa được bật",
+  "menu.list.disabled": "Đã tắt",
+  "menu.list.disabledActions.sort": "Sắp xếp theo",
+  "menu.list.disabledActions.sortAlphabetical": "Sắp xếp theo thứ tự chữ cái",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "Sắp xếp theo thứ tự chữ cái ngược",
+  "menu.list.disabledActions.sortDefault": "Sắp xếp mặc định",
+  "menu.list.enabled": "Đã bật",
+  "menu.notFound": "Không tìm thấy kết quả tìm kiếm",
+  "menu.searchProviders": "Tìm kiếm nhà cung cấp...",
+  "menu.sort": "Sắp xếp tùy chỉnh",
+  "newapi.apiKey.desc": "Khóa API được cung cấp bởi nền tảng New API",
+  "newapi.apiKey.placeholder": "Khóa API của New API",
+  "newapi.apiKey.required": "Cần nhập khóa API",
+  "newapi.apiKey.title": "Khóa API",
+  "newapi.apiUrl.desc": "Điểm cuối API cho dịch vụ New API, thường bao gồm /v1",
+  "newapi.apiUrl.title": "URL API",
+  "newapi.enabled.title": "Bật New API",
+  "newapi.models.batchSelect": "Chọn hàng loạt mô hình ({{count}} mục)",
+  "newapi.models.fetch": "Lấy danh sách mô hình",
+  "newapi.models.selected": "Mô hình đã chọn",
+  "newapi.models.title": "Các mô hình khả dụng",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "Kiểm tra xem địa chỉ proxy đã được điền đúng chưa",
+  "ollama.checker.title": "Kiểm tra kết nối",
+  "ollama.customModelName.desc": "Thêm mô hình tùy chỉnh, phân tách nhiều mô hình bằng dấu phẩy",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "Tên mô hình tùy chỉnh",
+  "ollama.download.desc": "Ollama đang tải mô hình. Vui lòng không đóng trang này. Nếu bị gián đoạn, quá trình tải sẽ tiếp tục từ vị trí đã dừng.",
+  "ollama.download.failed": "Tải mô hình thất bại. Vui lòng kiểm tra kết nối mạng hoặc cài đặt Ollama và thử lại.",
+  "ollama.download.remainingTime": "Thời gian còn lại",
+  "ollama.download.speed": "Tốc độ",
+  "ollama.download.title": "Đang tải mô hình {{model}}",
+  "ollama.endpoint.desc": "Phải bao gồm http(s)://; có thể để trống nếu không cấu hình cục bộ.",
+  "ollama.endpoint.title": "Địa chỉ proxy giao diện",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "Hủy tải",
+  "ollama.unlock.confirm": "Tải xuống",
+  "ollama.unlock.description": "Nhập thẻ mô hình Ollama của bạn để tiếp tục phiên",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "Đang bắt đầu tải...",
+  "ollama.unlock.title": "Tải mô hình Ollama được chỉ định",
+  "providerModels.batchSelect.selected": "Đã chọn {{count}} mô hình",
+  "providerModels.batchSelect.title": "Chọn hàng loạt",
+  "providerModels.config.aesGcm": "Khóa và URL proxy của bạn sẽ được mã hóa bằng thuật toán <1>AES-GCM</1>",
+  "providerModels.config.apiKey.desc": "Vui lòng nhập khóa API {{name}} của bạn",
+  "providerModels.config.apiKey.descWithUrl": "Vui lòng nhập khóa API {{name}} của bạn. <3>Nhấn vào đây để lấy</3>",
+  "providerModels.config.apiKey.placeholder": "Khóa API {{name}}",
+  "providerModels.config.apiKey.title": "Khóa API",
+  "providerModels.config.baseURL.desc": "Phải bao gồm http(s)://",
+  "providerModels.config.baseURL.invalid": "Vui lòng nhập URL hợp lệ",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "URL Proxy API",
+  "providerModels.config.checker.button": "Kiểm tra",
+  "providerModels.config.checker.desc": "Kiểm tra xem khóa API và URL proxy đã được điền đúng chưa",
+  "providerModels.config.checker.pass": "Kiểm tra thành công",
+  "providerModels.config.checker.title": "Kiểm tra kết nối",
+  "providerModels.config.fetchOnClient.desc": "Chế độ yêu cầu từ phía trình duyệt sẽ gửi yêu cầu trực tiếp từ trình duyệt, giúp cải thiện tốc độ phản hồi",
+  "providerModels.config.fetchOnClient.title": "Sử dụng chế độ yêu cầu từ phía trình duyệt",
+  "providerModels.config.helpDoc": "Hướng dẫn cấu hình",
+  "providerModels.config.responsesApi.desc": "Sử dụng định dạng yêu cầu thế hệ mới của OpenAI để mở khóa các tính năng nâng cao như chuỗi suy nghĩ (chỉ hỗ trợ mô hình OpenAI)",
+  "providerModels.config.responsesApi.title": "Sử dụng đặc tả Responses API",
+  "providerModels.config.waitingForMore": "Nhiều mô hình hơn đang được <1>lên kế hoạch tích hợp</1>, vui lòng theo dõi",
+  "providerModels.createNew.title": "Tạo mô hình AI tùy chỉnh",
+  "providerModels.item.config": "Cấu hình mô hình",
+  "providerModels.item.customModelCards.addNew": "Tạo và thêm mô hình {{id}}",
+  "providerModels.item.customModelCards.confirmDelete": "Bạn sắp xóa mô hình tùy chỉnh này. Sau khi xóa sẽ không thể khôi phục. Vui lòng cẩn trọng.",
+  "providerModels.item.delete.confirm": "Bạn có chắc muốn xóa mô hình {{displayName}} không?",
+  "providerModels.item.delete.success": "Xóa thành công",
+  "providerModels.item.delete.title": "Xóa mô hình",
+  "providerModels.item.modelConfig.azureDeployName.extra": "Trường được sử dụng cho các yêu cầu thực tế trong Azure OpenAI",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "Vui lòng nhập tên triển khai mô hình trong Azure",
+  "providerModels.item.modelConfig.azureDeployName.title": "Tên triển khai mô hình",
+  "providerModels.item.modelConfig.deployName.extra": "Trường này sẽ được sử dụng làm ID mô hình khi gửi yêu cầu",
+  "providerModels.item.modelConfig.deployName.placeholder": "Vui lòng nhập tên triển khai hoặc ID thực tế của mô hình",
+  "providerModels.item.modelConfig.deployName.title": "Tên triển khai mô hình",
+  "providerModels.item.modelConfig.displayName.placeholder": "Vui lòng nhập tên hiển thị của mô hình, ví dụ: ChatGPT, GPT-4, v.v.",
+  "providerModels.item.modelConfig.displayName.title": "Tên hiển thị mô hình",
+  "providerModels.item.modelConfig.files.extra": "Việc tải tệp hiện tại chỉ là giải pháp tạm thời, chỉ dùng cho thử nghiệm cá nhân. Vui lòng chờ tính năng tải tệp đầy đủ trong các bản cập nhật sau.",
+  "providerModels.item.modelConfig.files.title": "Hỗ trợ tải tệp",
+  "providerModels.item.modelConfig.functionCall.extra": "Cấu hình này chỉ bật khả năng sử dụng công cụ của mô hình, cho phép thêm kỹ năng dạng công cụ. Tuy nhiên, việc mô hình có thực sự sử dụng được công cụ hay không phụ thuộc hoàn toàn vào chính mô hình; vui lòng tự kiểm tra.",
+  "providerModels.item.modelConfig.functionCall.title": "Hỗ trợ sử dụng công cụ",
+  "providerModels.item.modelConfig.id.extra": "Không thể chỉnh sửa sau khi tạo và sẽ được dùng làm ID mô hình khi gọi AI",
+  "providerModels.item.modelConfig.id.placeholder": "Vui lòng nhập ID mô hình, ví dụ: gpt-4o hoặc claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "ID mô hình",
+  "providerModels.item.modelConfig.imageOutput.extra": "Cài đặt này chỉ bật khả năng tạo hình ảnh của mô hình. Hiệu suất thực tế phụ thuộc hoàn toàn vào mô hình. Vui lòng kiểm tra xem mô hình có hỗ trợ tạo hình ảnh không.",
+  "providerModels.item.modelConfig.imageOutput.title": "Hỗ trợ tạo hình ảnh",
+  "providerModels.item.modelConfig.modalTitle": "Cấu hình mô hình tùy chỉnh",
+  "providerModels.item.modelConfig.reasoning.extra": "Cấu hình này sẽ bật khả năng suy luận sâu của mô hình, hiệu quả cụ thể phụ thuộc vào mô hình. Vui lòng kiểm tra xem mô hình có khả năng suy luận sâu không.",
+  "providerModels.item.modelConfig.reasoning.title": "Hỗ trợ suy luận sâu",
+  "providerModels.item.modelConfig.search.extra": "Cài đặt này bật khả năng tìm kiếm web tích hợp của mô hình. Việc có hỗ trợ công cụ tìm kiếm tích hợp hay không phụ thuộc vào mô hình. Vui lòng kiểm tra mô hình để xác minh tính năng này.",
+  "providerModels.item.modelConfig.search.title": "Hỗ trợ tìm kiếm web",
+  "providerModels.item.modelConfig.tokens.extra": "Thiết lập số lượng token tối đa mà mô hình hỗ trợ",
+  "providerModels.item.modelConfig.tokens.title": "Cửa sổ ngữ cảnh tối đa",
+  "providerModels.item.modelConfig.tokens.unlimited": "Không giới hạn",
+  "providerModels.item.modelConfig.type.extra": "Các loại mô hình khác nhau có mục đích sử dụng và khả năng riêng biệt",
+  "providerModels.item.modelConfig.type.options.chat": "Trò chuyện",
+  "providerModels.item.modelConfig.type.options.embedding": "Embedding",
+  "providerModels.item.modelConfig.type.options.image": "Tạo hình ảnh",
+  "providerModels.item.modelConfig.type.options.realtime": "Trò chuyện thời gian thực",
+  "providerModels.item.modelConfig.type.options.stt": "Chuyển giọng nói thành văn bản",
+  "providerModels.item.modelConfig.type.options.text2music": "Văn bản thành nhạc",
+  "providerModels.item.modelConfig.type.options.text2video": "Văn bản thành video",
+  "providerModels.item.modelConfig.type.options.tts": "Chuyển văn bản thành giọng nói",
+  "providerModels.item.modelConfig.type.placeholder": "Vui lòng chọn loại mô hình",
+  "providerModels.item.modelConfig.type.title": "Loại mô hình",
+  "providerModels.item.modelConfig.video.extra": "Cài đặt này bật cấu hình nhận diện video trong ứng dụng. Việc có hỗ trợ nhận diện video hay không phụ thuộc vào mô hình. Vui lòng kiểm tra mô hình để xác minh tính năng này.",
+  "providerModels.item.modelConfig.video.title": "Hỗ trợ nhận diện video",
+  "providerModels.item.modelConfig.vision.extra": "Cấu hình này chỉ bật khả năng tải hình ảnh trong ứng dụng. Việc có hỗ trợ nhận diện hình ảnh hay không phụ thuộc vào mô hình. Vui lòng tự kiểm tra khả năng nhận diện hình ảnh của mô hình.",
+  "providerModels.item.modelConfig.vision.title": "Hỗ trợ thị giác",
+  "providerModels.item.pricing.image": "${{amount}}/Hình ảnh",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/Triệu ký tự",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/Phút",
+  "providerModels.item.pricing.inputTokens": "Đầu vào ${{amount}}/Triệu",
+  "providerModels.item.pricing.outputTokens": "Đầu ra ${{amount}}/Triệu",
+  "providerModels.item.releasedAt": "Phát hành vào {{releasedAt}}",
+  "providerModels.list.addNew": "Thêm mô hình",
+  "providerModels.list.disabled": "Đã tắt",
+  "providerModels.list.disabledActions.showMore": "Hiển thị tất cả",
+  "providerModels.list.disabledActions.sort": "Sắp xếp theo",
+  "providerModels.list.disabledActions.sortAlphabetical": "Sắp xếp theo bảng chữ cái",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "Sắp xếp ngược bảng chữ cái",
+  "providerModels.list.disabledActions.sortDefault": "Sắp xếp mặc định",
+  "providerModels.list.disabledActions.sortReleasedAt": "Sắp xếp theo ngày phát hành sớm nhất",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "Sắp xếp theo ngày phát hành mới nhất",
+  "providerModels.list.empty.desc": "Vui lòng tạo mô hình tùy chỉnh hoặc lấy mô hình để bắt đầu.",
+  "providerModels.list.empty.title": "Không có mô hình khả dụng",
+  "providerModels.list.enabled": "Đã bật",
+  "providerModels.list.enabledActions.disableAll": "Tắt tất cả",
+  "providerModels.list.enabledActions.enableAll": "Bật tất cả",
+  "providerModels.list.enabledActions.sort": "Sắp xếp mô hình tùy chỉnh",
+  "providerModels.list.enabledEmpty": "Không có mô hình nào được bật. Vui lòng bật các mô hình bạn muốn sử dụng từ danh sách bên dưới~",
+  "providerModels.list.fetcher.clear": "Xóa mô hình đã lấy",
+  "providerModels.list.fetcher.fetch": "Lấy mô hình",
+  "providerModels.list.fetcher.fetching": "Đang lấy danh sách mô hình...",
+  "providerModels.list.fetcher.latestTime": "Cập nhật lần cuối: {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "Chưa lấy danh sách mô hình",
+  "providerModels.list.noModelsInCategory": "Không có mô hình nào được bật trong danh mục này",
+  "providerModels.list.resetAll.conform": "Bạn có chắc muốn đặt lại tất cả thay đổi với mô hình hiện tại không? Sau khi đặt lại, danh sách mô hình sẽ trở về trạng thái mặc định.",
+  "providerModels.list.resetAll.success": "Đặt lại thành công",
+  "providerModels.list.resetAll.title": "Đặt lại tất cả thay đổi",
+  "providerModels.list.search": "Tìm kiếm mô hình...",
+  "providerModels.list.searchResult": "Tìm thấy {{count}} mô hình",
+  "providerModels.list.title": "Danh sách mô hình",
+  "providerModels.list.total": "Có {{count}} mô hình",
+  "providerModels.searchNotFound": "Không tìm thấy kết quả tìm kiếm",
+  "providerModels.tabs.all": "Tất cả",
+  "providerModels.tabs.chat": "Trò chuyện",
+  "providerModels.tabs.embedding": "Embedding",
+  "providerModels.tabs.image": "Hình ảnh",
+  "providerModels.tabs.stt": "ASR",
+  "providerModels.tabs.tts": "TTS",
+  "sortModal.success": "Cập nhật sắp xếp thành công",
+  "sortModal.title": "Thứ tự tùy chỉnh",
+  "sortModal.update": "Cập nhật",
+  "updateAiProvider.confirmDelete": "Bạn sắp xóa nhà cung cấp AI này. Sau khi xóa sẽ không thể khôi phục. Bạn có chắc chắn muốn xóa không?",
+  "updateAiProvider.deleteSuccess": "Xóa thành công",
+  "updateAiProvider.tooltip": "Cập nhật cấu hình cơ bản của nhà cung cấp",
+  "updateAiProvider.updateSuccess": "Cập nhật thành công",
+  "updateCustomAiProvider.title": "Cập nhật cấu hình nhà cung cấp AI tùy chỉnh",
+  "vertexai.apiKey.desc": "Nhập khóa Vertex AI của bạn",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "Khóa Vertex AI",
+  "vertexai.region.desc": "Chọn khu vực cho dịch vụ Vertex AI. Một số mô hình như Gemini 2.5 chỉ khả dụng ở các khu vực cụ thể (ví dụ: global)",
+  "vertexai.region.placeholder": "Chọn khu vực",
+  "vertexai.region.title": "Khu vực Vertex AI",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

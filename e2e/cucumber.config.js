@@ -10,11 +10,11 @@ export default {
   formatOptions: {
     snippetInterface: 'async-await',
   },
-  parallel: process.env.CI ? 1 : 4,
+  parallel: 1,
   paths: ['src/features/**/*.feature'],
   publishQuiet: true,
   require: ['src/steps/**/*.ts', 'src/support/**/*.ts'],
   requireModule: ['tsx/cjs'],
   retry: 0,
-  timeout: 120_000,
+  timeout: 30_000,
 };

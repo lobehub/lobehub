@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Nuevo",
-    "description": {
-      "placeholder": "Descripción del conjunto de datos (opcional)"
-    },
-    "name": {
-      "placeholder": "Nombre del conjunto de datos",
-      "required": "Por favor, complete el nombre del conjunto de datos"
-    },
-    "title": "Agregar conjunto de datos"
-  },
-  "dataset": {
-    "addNewButton": "Crear conjunto de datos",
-    "emptyGuide": "El conjunto de datos actual está vacío, por favor crea un conjunto de datos.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Importar datos"
-        },
-        "columns": {
-          "actions": "Acciones",
-          "ideal": {
-            "title": "Respuesta ideal"
-          },
-          "question": {
-            "title": "Pregunta"
-          },
-          "referenceFiles": {
-            "title": "Archivos de referencia"
-          }
-        },
-        "notSelected": "Por favor, selecciona un conjunto de datos a la izquierda",
-        "title": "Detalles del conjunto de datos"
-      },
-      "title": "Conjunto de datos"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Nuevo",
-      "datasetId": {
-        "placeholder": "Por favor, selecciona tu conjunto de datos de evaluación",
-        "required": "Por favor, selecciona un conjunto de datos de evaluación"
-      },
-      "description": {
-        "placeholder": "Descripción de la tarea de evaluación (opcional)"
-      },
-      "name": {
-        "placeholder": "Nombre de la tarea de evaluación",
-        "required": "Por favor, complete el nombre de la tarea de evaluación"
-      },
-      "title": "Agregar tarea de evaluación"
-    },
-    "addNewButton": "Crear evaluación",
-    "emptyGuide": "La tarea de evaluación actual está vacía, comienza a crear una evaluación.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Verificar estado",
-          "confirmDelete": "¿Deseas eliminar esta evaluación?",
-          "confirmRun": "¿Deseas comenzar a ejecutar? Al comenzar, la tarea de evaluación se ejecutará de forma asíncrona en segundo plano, cerrar la página no afectará la ejecución de la tarea asíncrona.",
-          "downloadRecords": "Descargar evaluación",
-          "retry": "Reintentar",
-          "run": "Ejecutar",
-          "title": "Acciones"
-        },
-        "datasetId": {
-          "title": "Conjunto de datos"
-        },
-        "name": {
-          "title": "Nombre de la tarea de evaluación"
-        },
-        "records": {
-          "title": "Número de registros de evaluación"
-        },
-        "referenceFiles": {
-          "title": "Archivos de referencia"
-        },
-        "status": {
-          "error": "Error en la ejecución",
-          "pending": "Pendiente de ejecución",
-          "processing": "Ejecutando",
-          "success": "Ejecución exitosa",
-          "title": "Estado"
-        }
-      },
-      "title": "Lista de tareas de evaluación"
-    }
-  }
+  "addDataset.confirm": "Crear",
+  "addDataset.description.placeholder": "Descripción del conjunto de datos (opcional)",
+  "addDataset.name.placeholder": "Nombre del conjunto de datos",
+  "addDataset.name.required": "Por favor, introduce el nombre del conjunto de datos",
+  "addDataset.title": "Agregar Conjunto de Datos",
+  "dataset.addNewButton": "Crear Conjunto de Datos",
+  "dataset.emptyGuide": "Actualmente no hay conjuntos de datos. Por favor, crea uno.",
+  "dataset.list.table.actions.importData": "Importar Datos",
+  "dataset.list.table.columns.actions": "Acciones",
+  "dataset.list.table.columns.ideal.title": "Respuesta Esperada",
+  "dataset.list.table.columns.question.title": "Pregunta",
+  "dataset.list.table.columns.referenceFiles.title": "Archivos de Referencia",
+  "dataset.list.table.notSelected": "Por favor, selecciona un conjunto de datos a la izquierda",
+  "dataset.list.table.title": "Detalles del Conjunto de Datos",
+  "dataset.list.title": "Conjunto de Datos",
+  "evaluation.addEvaluation.confirm": "Crear",
+  "evaluation.addEvaluation.datasetId.placeholder": "Por favor, selecciona tu conjunto de datos para evaluación",
+  "evaluation.addEvaluation.datasetId.required": "Por favor, selecciona un conjunto de datos para evaluación",
+  "evaluation.addEvaluation.description.placeholder": "Descripción de la tarea de evaluación (opcional)",
+  "evaluation.addEvaluation.name.placeholder": "Nombre de la tarea de evaluación",
+  "evaluation.addEvaluation.name.required": "Por favor, introduce el nombre de la tarea de evaluación",
+  "evaluation.addEvaluation.title": "Agregar Tarea de Evaluación",
+  "evaluation.addNewButton": "Crear Evaluación",
+  "evaluation.emptyGuide": "Actualmente no hay tareas de evaluación. Comienza creando una.",
+  "evaluation.table.columns.actions.checkStatus": "Ver Estado",
+  "evaluation.table.columns.actions.confirmDelete": "¿Estás seguro de que deseas eliminar esta evaluación?",
+  "evaluation.table.columns.actions.confirmRun": "¿Estás seguro de que deseas iniciar la ejecución? La tarea de evaluación se ejecutará de forma asíncrona en segundo plano, y cerrar la página no afectará su ejecución.",
+  "evaluation.table.columns.actions.downloadRecords": "Descargar Evaluación",
+  "evaluation.table.columns.actions.retry": "Reintentar",
+  "evaluation.table.columns.actions.run": "Ejecutar",
+  "evaluation.table.columns.actions.title": "Acciones",
+  "evaluation.table.columns.datasetId.title": "Conjunto de Datos",
+  "evaluation.table.columns.name.title": "Nombre de la Tarea de Evaluación",
+  "evaluation.table.columns.records.title": "Número de Registros de Evaluación",
+  "evaluation.table.columns.referenceFiles.title": "Archivos de Referencia",
+  "evaluation.table.columns.status.error": "Error de Ejecución",
+  "evaluation.table.columns.status.pending": "Pendiente",
+  "evaluation.table.columns.status.processing": "En Proceso",
+  "evaluation.table.columns.status.success": "Ejecución Exitosa",
+  "evaluation.table.columns.status.title": "Estado",
+  "evaluation.table.title": "Lista de Tareas de Evaluación"
 }

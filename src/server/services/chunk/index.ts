@@ -1,9 +1,9 @@
-import { LobeChatDatabase } from '@lobechat/database';
-import { ClientSecretPayload } from '@lobechat/types';
+import { type LobeChatDatabase } from '@lobechat/database';
+import { type ClientSecretPayload } from '@lobechat/types';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
-import { ChunkContentParams, ContentChunk } from '@/server/modules/ContentChunk';
+import { type ChunkContentParams, ContentChunk } from '@/server/modules/ContentChunk';
 import { createAsyncCaller } from '@/server/routers/async';
 import {
   AsyncTaskError,

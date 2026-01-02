@@ -1,4 +1,4 @@
-import { PropsWithChildren } from 'react';
+import { type PropsWithChildren } from 'react';
 import { SWRConfig } from 'swr';
 
 // 全局的 SWR 配置

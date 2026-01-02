@@ -9,55 +9,50 @@ import { CustomWorld } from '../../support/world';
 
 // Home Page Steps
 Then('I should see the featured assistants section', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // Look for featured assistants section by data-testid or heading
+  // Look for "Featured Agents" heading text (i18n key: home.featuredAssistants)
+  // Supports: en-US "Featured Agents", zh-CN "推荐助理"
   const featuredSection = this.page
-    .locator(
-      '[data-testid="featured-assistants"], h2:has-text("Featured"), h3:has-text("Featured")',
-    )
+    .getByRole('heading', { name: /featured agents|推荐助理/i })
     .first();
-  await expect(featuredSection).toBeVisible({ timeout: 120_000 });
+  await expect(featuredSection).toBeVisible({ timeout: 10_000 });
 });
 
 Then('I should see the featured MCP tools section', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // Look for featured MCP section by data-testid or heading
-  const mcpSection = this.page
-    .locator('[data-testid="featured-mcp"], h2:has-text("MCP"), h3:has-text("MCP")')
-    .first();
-  await expect(mcpSection).toBeVisible({ timeout: 120_000 });
+  // Look for "Featured Skills" heading text (i18n key: home.featuredTools)
+  // Supports: en-US "Featured Skills", zh-CN "推荐技能"
+  const mcpSection = this.page.getByRole('heading', { name: /featured skills|推荐技能/i }).first();
+  await expect(mcpSection).toBeVisible({ timeout: 10_000 });
 });
 
 // Assistant List Page Steps
 Then('I should see the search bar', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // The SearchBar component from @lobehub/ui may not pass through data-testid
-  // Try to find the input element within the search component
-  const searchBar = this.page.locator('input[type="text"]').first();
-  await expect(searchBar).toBeVisible({ timeout: 120_000 });
+  // SearchBar component has data-testid="search-bar"
+  const searchBar = this.page.locator('[data-testid="search-bar"]').first();
+  await expect(searchBar).toBeVisible({ timeout: 10_000 });
 });
 
 Then('I should see the category menu', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // Look for category menu/filter by data-testid or role
-  const categoryMenu = this.page
-    .locator('[data-testid="category-menu"], [role="menu"], nav[aria-label*="categor" i]')
-    .first();
-  await expect(categoryMenu).toBeVisible({ timeout: 120_000 });
+  // CategoryMenu component has data-testid="category-menu"
+  const categoryMenu = this.page.locator('[data-testid="category-menu"]').first();
+  await expect(categoryMenu).toBeVisible({ timeout: 10_000 });
 });
 
 Then('I should see assistant cards', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
   // Look for assistant items by data-testid
   const assistantItems = this.page.locator('[data-testid="assistant-item"]');
 
   // Wait for at least one item to be visible
-  await expect(assistantItems.first()).toBeVisible({ timeout: 120_000 });
+  await expect(assistantItems.first()).toBeVisible({ timeout: 10_000 });
 
   // Check we have multiple items
   const count = await assistantItems.count();
@@ -65,26 +60,22 @@ Then('I should see assistant cards', async function (this: CustomWorld) {
 });
 
 Then('I should see pagination controls', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // Look for pagination controls by data-testid, role, or common pagination elements
-  const pagination = this.page
-    .locator(
-      '[data-testid="pagination"], nav[aria-label*="pagination" i], .pagination, button:has-text("Next"), button:has-text("Previous")',
-    )
-    .first();
-  await expect(pagination).toBeVisible({ timeout: 120_000 });
+  // Pagination component has data-testid="pagination"
+  const pagination = this.page.locator('[data-testid="pagination"]').first();
+  await expect(pagination).toBeVisible({ timeout: 10_000 });
 });
 
 // Model List Page Steps
 Then('I should see model cards', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // Look for model items by data-testid
+  // Model items have data-testid="model-item"
   const modelItems = this.page.locator('[data-testid="model-item"]');
 
   // Wait for at least one item to be visible
-  await expect(modelItems.first()).toBeVisible({ timeout: 120_000 });
+  await expect(modelItems.first()).toBeVisible({ timeout: 10_000 });
 
   // Check we have multiple items
   const count = await modelItems.count();
@@ -92,26 +83,22 @@ Then('I should see model cards', async function (this: CustomWorld) {
 });
 
 Then('I should see the sort dropdown', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // Look for sort dropdown by data-testid, role, or select element
-  const sortDropdown = this.page
-    .locator(
-      '[data-testid="sort-dropdown"], select, button[aria-label*="sort" i], [role="combobox"]',
-    )
-    .first();
-  await expect(sortDropdown).toBeVisible({ timeout: 120_000 });
+  // SortButton has data-testid="sort-dropdown"
+  const sortDropdown = this.page.locator('[data-testid="sort-dropdown"]').first();
+  await expect(sortDropdown).toBeVisible({ timeout: 10_000 });
 });
 
 // Provider List Page Steps
 Then('I should see provider cards', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
   // Look for provider items by data-testid
   const providerItems = this.page.locator('[data-testid="provider-item"]');
 
   // Wait for at least one item to be visible
-  await expect(providerItems.first()).toBeVisible({ timeout: 120_000 });
+  await expect(providerItems.first()).toBeVisible({ timeout: 10_000 });
 
   // Check we have multiple items
   const count = await providerItems.count();
@@ -120,13 +107,13 @@ Then('I should see provider cards', async function (this: CustomWorld) {
 
 // MCP List Page Steps
 Then('I should see MCP cards', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
   // Look for MCP items by data-testid
   const mcpItems = this.page.locator('[data-testid="mcp-item"]');
 
   // Wait for at least one item to be visible
-  await expect(mcpItems.first()).toBeVisible({ timeout: 120_000 });
+  await expect(mcpItems.first()).toBeVisible({ timeout: 10_000 });
 
   // Check we have multiple items
   const count = await mcpItems.count();
@@ -134,13 +121,9 @@ Then('I should see MCP cards', async function (this: CustomWorld) {
 });
 
 Then('I should see the category filter', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 120_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
 
-  // Look for category filter by data-testid or similar to category menu
-  const categoryFilter = this.page
-    .locator(
-      '[data-testid="category-filter"], [data-testid="category-menu"], [role="menu"], nav[aria-label*="categor" i]',
-    )
-    .first();
-  await expect(categoryFilter).toBeVisible({ timeout: 120_000 });
+  // CategoryMenu component has data-testid="category-menu" (shared across list pages)
+  const categoryFilter = this.page.locator('[data-testid="category-menu"]').first();
+  await expect(categoryFilter).toBeVisible({ timeout: 10_000 });
 });

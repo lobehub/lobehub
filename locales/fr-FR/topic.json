@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "Renommage intelligent",
-    "confirmRemoveAll": "Vous allez supprimer tous les sujets. Cette action est irréversible, veuillez agir avec prudence.",
-    "confirmRemoveTopic": "Vous allez supprimer ce sujet. Cette action est irréversible, veuillez agir avec prudence.",
-    "confirmRemoveUnstarred": "Vous allez supprimer les sujets non favoris. Cette action est irréversible, veuillez agir avec prudence.",
-    "duplicate": "Créer une copie",
-    "export": "Exporter le sujet",
-    "openInNewWindow": "Ouvrir dans une nouvelle fenêtre",
-    "removeAll": "Supprimer tous les sujets",
-    "removeUnstarred": "Supprimer les sujets non favoris"
-  },
+  "actions.addNewTopic": "Démarrer un nouveau sujet",
+  "actions.autoRename": "Renommage intelligent",
+  "actions.confirmRemoveAll": "Vous êtes sur le point de supprimer tous les sujets. Cette action est irréversible.",
+  "actions.confirmRemoveTopic": "Vous êtes sur le point de supprimer ce sujet. Cette action est irréversible.",
+  "actions.confirmRemoveUnstarred": "Vous êtes sur le point de supprimer les sujets non favoris. Cette action est irréversible.",
+  "actions.duplicate": "Dupliquer",
+  "actions.export": "Exporter les sujets",
+  "actions.import": "Importer une conversation",
+  "actions.openInNewWindow": "Ouvrir dans une nouvelle fenêtre",
+  "actions.removeAll": "Supprimer tous les sujets",
+  "actions.removeUnstarred": "Supprimer les sujets non favoris",
   "defaultTitle": "Sujet par défaut",
+  "displayItems": "Afficher les éléments",
   "duplicateLoading": "Copie du sujet en cours...",
-  "duplicateSuccess": "Copie du sujet réussie",
+  "duplicateSuccess": "Sujet copié avec succès",
   "favorite": "Favori",
-  "groupMode": {
-    "ascMessages": "Par ordre croissant du nombre de messages",
-    "byTime": "Groupé par temps",
-    "descMessages": "Par ordre décroissant du nombre de messages",
-    "flat": "Non groupé"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "Ce mois-ci",
-      "today": "Aujourd'hui",
-      "week": "Cette semaine",
-      "yesterday": "Hier"
-    }
-  },
-  "guide": {
-    "desc": "Cliquez sur le bouton à gauche pour enregistrer la conversation actuelle en tant que sujet historique et commencer une nouvelle conversation.",
-    "title": "Liste des sujets"
-  },
+  "groupMode.ascMessages": "Trier par nombre de messages croissant",
+  "groupMode.byTime": "Grouper par date",
+  "groupMode.descMessages": "Trier par nombre de messages décroissant",
+  "groupMode.flat": "Aucun regroupement",
+  "groupTitle.byTime.month": "Ce mois-ci",
+  "groupTitle.byTime.today": "Aujourd'hui",
+  "groupTitle.byTime.week": "Cette semaine",
+  "groupTitle.byTime.yesterday": "Hier",
+  "guide.desc": "Cliquez sur le bouton à gauche pour enregistrer la conversation actuelle comme sujet historique et démarrer une nouvelle conversation.",
+  "guide.title": "Liste des sujets",
+  "importError": "Échec de l'importation",
+  "importInvalidFormat": "Format de fichier invalide. Veuillez vous assurer qu'il s'agit d'un fichier JSON valide.",
+  "importLoading": "Importation de la conversation en cours...",
+  "importSuccess": "{{count}} messages importés avec succès",
+  "loadMore": "Charger plus",
   "searchPlaceholder": "Rechercher des sujets...",
-  "searchResultEmpty": "Aucun résultat de recherche disponible",
+  "searchResultEmpty": "Aucun résultat trouvé.",
   "temp": "Temporaire",
   "title": "Sujet"
 }

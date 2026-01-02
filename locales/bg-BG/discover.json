@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "Добави асистент",
-    "addAgentAndConverse": "Добави асистент и започни разговор",
-    "addAgentSuccess": "Успешно добавен",
-    "conversation": {
-      "l1": "Здравей, аз съм **{{name}}**, можеш да ми зададеш всякакви въпроси и ще се постарая да ти отговоря ~",
-      "l2": "Ето какви са моите способности: ",
-      "l3": "Нека започнем разговора!"
-    },
-    "description": "Представяне на асистента",
-    "detail": "Детайли",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "Асистентът включва следните бази знания, които ще ви помогнат да отговаряте на повече въпроси.",
-          "title": "База знания"
-        },
-        "plugin": {
-          "desc": "Асистентът включва следните плъгини, които ще ви помогнат да изпълнявате повече задачи.",
-          "title": "Вградени плъгини"
-        },
-        "title": "Възможности на асистента"
-      },
-      "overview": {
-        "example": "Демонстрация на асистента",
-        "title": "Преглед"
-      },
-      "related": {
-        "listTitle": "Свързани асистенти",
-        "more": "Виж още",
-        "title": "Свързани препоръки"
-      },
-      "sidebar": {
-        "toc": "Съдържание"
-      },
-      "summary": {
-        "title": "Какво можете да правите с този асистент?"
-      },
-      "systemRole": {
-        "openingMessage": "Начално съобщение",
-        "openingQuestions": "Начални въпроси",
-        "title": "Настройки на асистента"
-      },
-      "version": {
-        "empty": "Няма налични предишни версии",
-        "status": {
-          "archived": "Архивиран",
-          "deprecated": "Отхвърлен",
-          "unpublished": "В процес на преглед"
-        },
-        "table": {
-          "isLatest": "Последна версия",
-          "isValidated": "Потвърдена",
-          "publishAt": "Дата на публикуване",
-          "version": "Версия"
-        },
-        "title": "История на версиите"
-      }
-    },
-    "list": "Списък с асистенти",
-    "marketSource": {
-      "label": "Превключване на източник на пазара",
-      "legacy": "Стар пазар",
-      "new": "Нов пазар"
-    },
-    "more": "Още",
-    "plugins": "Интегрирани плъгини",
-    "recentSubmits": "Наскоро обновено",
-    "sorts": {
-      "createdAt": "Последно публикуван",
-      "identifier": "ID на асистента",
-      "knowledgeCount": "Брой бази знания",
-      "myown": "Виж моите",
-      "pluginCount": "Брой плъгини",
-      "title": "Име на асистента",
-      "tokenUsage": "Използване на токени"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "Асистентът е премахнат от официалните лица поради проблеми със сигурността/политиката",
-          "owner": "Собственикът на асистента доброволно го е премахнал/архивирал"
-        },
-        "subtitle": "Асистентът, който се опитвате да достъпите, е архивиран поради една от следните възможни причини:",
-        "title": "Асистентът е архивиран"
-      },
-      "backToMarket": "Обратно към пазара на асистенти",
-      "deprecated": {
-        "reasons": {
-          "official": "Асистентът е премахнат от официалните лица поради проблеми със сигурността/политиката",
-          "owner": "Собственикът на асистента доброволно го е премахнал/отхвърлил"
-        },
-        "subtitle": "Асистентът, който се опитвате да достъпите, е отхвърлен поради една от следните възможни причини:",
-        "title": "Асистентът е отхвърлен"
-      },
-      "support": "Ако имате въпроси, моля копирайте линка и го изпратете на <1>support@lobehub.com</1> за съдействие.",
-      "unpublished": {
-        "subtitle": "Асистентът, който се опитвате да достъпите, е в процес на преглед. Ако имате въпроси, копирайте линка и го изпратете на <1>support@lobehub.com</1> за съдействие.",
-        "title": "Асистентът е в процес на преглед"
-      }
-    },
-    "suggestions": "Свързани предложения",
-    "systemRole": "Настройки на асистента",
-    "tokenUsage": "Използване на токени в подсказките на асистента",
-    "try": "Опитай",
-    "withKnowledge": "Този асистент включва база знания",
-    "withPlugin": "Този асистент включва плъгин"
-  },
-  "back": "Назад към открития",
-  "category": {
-    "assistant": {
-      "academic": "Академичен",
-      "all": "Всички",
-      "career": "Кариерен",
-      "copywriting": "Копирайтинг",
-      "design": "Дизайн",
-      "education": "Образование",
-      "emotions": "Емоции",
-      "entertainment": "Развлечение",
-      "games": "Игри",
-      "general": "Общ",
-      "life": "Живот",
-      "marketing": "Маркетинг",
-      "office": "Офис",
-      "programming": "Програмиране",
-      "translation": "Превод"
-    },
-    "plugin": {
-      "all": "Всички",
-      "gaming-entertainment": "Игри и развлечения",
-      "life-style": "Начин на живот",
-      "lifestyle": "Начин на живот",
-      "media-generate": "Генериране на медии",
-      "science-education": "Наука и образование",
-      "social": "Социални медии",
-      "stocks-finance": "Акции и финанси",
-      "tools": "Практически инструменти",
-      "web-search": "Уеб търсене"
-    }
-  },
+  "assistant.favorite": "Запази",
+  "assistant.favoriteFailed": "Неуспешно запазване",
+  "assistant.favoriteSuccess": "Запазено",
+  "assistant.like": "Харесай",
+  "assistant.likeFailed": "Неуспешно харесване",
+  "assistant.likeSuccess": "Харесано",
+  "assistant.unfavorite": "Премахни от запазени",
+  "assistant.unfavoriteFailed": "Неуспешно премахване от запазени",
+  "assistant.unfavoriteSuccess": "Премахнато от запазени",
+  "assistant.unlike": "Премахни харесване",
+  "assistant.unlikeSuccess": "Харесването е премахнато",
+  "assistants.addAgent": "Добави агент",
+  "assistants.addAgentAndConverse": "Добави агент и започни разговор",
+  "assistants.addAgentSuccess": "Добавен",
+  "assistants.conversation.l1": "Здравей, аз съм **{{name}}**. Сподели своята цел или контекст — ще работим заедно оттук нататък.",
+  "assistants.conversation.l2": "Ето какво мога да направя:",
+  "assistants.conversation.l3": "Започни разговора",
+  "assistants.description": "За този агент",
+  "assistants.detail": "Детайли",
+  "assistants.details.capabilities.knowledge.desc": "Този агент включва следните библиотеки, за да отговаря на повече въпроси.",
+  "assistants.details.capabilities.knowledge.title": "Библиотека",
+  "assistants.details.capabilities.plugin.desc": "Този агент включва следните умения, за да ти помогне с повече задачи.",
+  "assistants.details.capabilities.plugin.title": "Вградени умения",
+  "assistants.details.capabilities.title": "Възможности на агента",
+  "assistants.details.overview.example": "Демо на агент",
+  "assistants.details.overview.title": "Общ преглед",
+  "assistants.details.related.listTitle": "Свързани агенти",
+  "assistants.details.related.more": "Виж още",
+  "assistants.details.related.title": "Подобни агенти",
+  "assistants.details.sidebar.toc": "Съдържание",
+  "assistants.details.summary.title": "Какво можеш да правиш с този агент?",
+  "assistants.details.systemRole.openingMessage": "Начално съобщение",
+  "assistants.details.systemRole.openingQuestions": "Начални въпроси",
+  "assistants.details.systemRole.title": "Профил на агента",
+  "assistants.details.version.empty": "Все още няма предишни версии",
+  "assistants.details.version.status.archived": "Архивиран",
+  "assistants.details.version.status.deprecated": "Отхвърлен",
+  "assistants.details.version.status.unpublished": "В процес на преглед",
+  "assistants.details.version.table.isLatest": "Последна версия",
+  "assistants.details.version.table.isValidated": "Потвърдена",
+  "assistants.details.version.table.publishAt": "Дата на публикуване",
+  "assistants.details.version.table.version": "Версия",
+  "assistants.details.version.title": "История на версиите",
+  "assistants.downloads": "Изтегляния",
+  "assistants.duplicateAdd.content": "„{{title}}“ вече е в твоите агенти. Да добавя копие?",
+  "assistants.duplicateAdd.ok": "Добави копие",
+  "assistants.duplicateAdd.title": "Добавяне на дубликат?",
+  "assistants.empty.description": "Опитай да промениш филтрите или разгледай още агенти в Общността.",
+  "assistants.empty.search": "Няма намерени съвпадащи агенти",
+  "assistants.empty.title": "Няма намерени агенти",
+  "assistants.list": "Списък с агенти",
+  "assistants.marketSource.label": "Превключи източник на общността",
+  "assistants.marketSource.legacy": "Стара общност",
+  "assistants.marketSource.new": "Нова общност",
+  "assistants.more": "Още",
+  "assistants.plugins": "Интегрирани умения",
+  "assistants.recentSubmits": "Последни актуализации",
+  "assistants.sorts.createdAt": "Наскоро публикувани",
+  "assistants.sorts.identifier": "ID на агента",
+  "assistants.sorts.knowledgeCount": "Библиотеки",
+  "assistants.sorts.myown": "Виж моите агенти",
+  "assistants.sorts.pluginCount": "Умения",
+  "assistants.sorts.title": "Име на агента",
+  "assistants.sorts.tokenUsage": "Използване на токени",
+  "assistants.status.archived.reasons.official": "Платформата премахна този агент поради съображения за сигурност, политика или други причини.",
+  "assistants.status.archived.reasons.owner": "Създателят е архивирал или премахнал този агент.",
+  "assistants.status.archived.subtitle": "Този агент е архивиран. Възможни причини:",
+  "assistants.status.archived.title": "Агентът е архивиран",
+  "assistants.status.backToMarket": "Обратно към общността на агентите",
+  "assistants.status.deprecated.reasons.official": "Платформата премахна този агент поради съображения за сигурност, политика или други причини.",
+  "assistants.status.deprecated.reasons.owner": "Създателят е отхвърлил или премахнал този агент.",
+  "assistants.status.deprecated.subtitle": "Този агент в момента не е наличен. Възможни причини:",
+  "assistants.status.deprecated.title": "Агентът не е наличен",
+  "assistants.status.support": "При въпроси, моля копирай линка и го изпрати на <email>support@lobehub.com</email> за помощ.",
+  "assistants.status.unpublished.subtitle": "Този агент е в процес на преглед. За да потвърдиш статуса му, копирай линка и го изпрати на <email>support@lobehub.com</email>.",
+  "assistants.status.unpublished.title": "Агент в преглед",
+  "assistants.suggestions": "Подобни агенти",
+  "assistants.systemRole": "Профил на агента",
+  "assistants.tokenUsage": "Използване на токени от подканата на агента",
+  "assistants.try": "Опитай",
+  "assistants.withKnowledge": "Този агент включва библиотеки",
+  "assistants.withPlugin": "Този агент включва умения",
+  "back": "Обратно към откриване",
+  "category.assistant.academic": "Академичен",
+  "category.assistant.all": "Всички",
+  "category.assistant.career": "Кариера",
+  "category.assistant.copywriting": "Копирайтинг",
+  "category.assistant.design": "Дизайн",
+  "category.assistant.education": "Образование",
+  "category.assistant.emotions": "Емоции",
+  "category.assistant.entertainment": "Забавление",
+  "category.assistant.games": "Игри",
+  "category.assistant.general": "Общи",
+  "category.assistant.life": "Живот",
+  "category.assistant.marketing": "Маркетинг",
+  "category.assistant.office": "Офис",
+  "category.assistant.programming": "Програмиране",
+  "category.assistant.translation": "Превод",
+  "category.plugin.all": "Всички",
+  "category.plugin.gaming-entertainment": "Игри и забавление",
+  "category.plugin.life-style": "Лайфстайл",
+  "category.plugin.lifestyle": "Лайфстайл",
+  "category.plugin.media-generate": "Генериране на медия",
+  "category.plugin.science-education": "Наука и образование",
+  "category.plugin.social": "Социални мрежи",
+  "category.plugin.stocks-finance": "Финанси и инвестиции",
+  "category.plugin.tools": "Инструменти",
+  "category.plugin.web-search": "Уеб търсене",
   "cleanFilter": "Изчисти филтъра",
   "create": "Създай",
-  "createGuide": {
-    "func1": {
-      "desc1": "Влез в настройките на асистента, който искаш да добавиш, чрез иконата в горния десен ъгъл на прозореца за разговор;",
-      "desc2": "Натисни бутона за добавяне на асистент в горния десен ъгъл.",
-      "tag": "Метод 1",
-      "title": "Добавяне чрез LobeChat"
-    },
-    "func2": {
-      "button": "Отиди на хранилището на асистенти в Github",
-      "desc": "Ако искаш да добавиш асистент в индекса, създай запис с agent-template.json или agent-template-full.json в директорията plugins, напиши кратко описание и подходящи тагове, след което създай pull request.",
-      "tag": "Метод 2",
-      "title": "Добавяне чрез Github"
-    }
-  },
+  "createGuide.func1.desc1": "В разговор отвори настройките на агента от менюто горе вдясно.",
+  "createGuide.func1.desc2": "След това кликни върху „Изпрати към общността на агентите“ в горния десен ъгъл.",
+  "createGuide.func1.tag": "Вариант 1",
+  "createGuide.func1.title": "Изпрати в LobeHub",
+  "createGuide.func2.button": "Отвори GitHub хранилището на агента",
+  "createGuide.func2.desc": "За да добавиш агент в индекса, създай запис в `plugins/` с помощта на `agent-template.json` или `agent-template-full.json`, добави кратко описание и тагове, след което отвори pull request.",
+  "createGuide.func2.tag": "Вариант 2",
+  "createGuide.func2.title": "Изпрати в GitHub",
   "dislike": "Не харесвам",
   "filter": "Филтър",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "Всички автори",
-      "followed": "Следвани автори",
-      "title": "Обхват на авторите"
-    },
-    "contentLength": "Минимална дължина на контекста",
-    "maxToken": {
-      "title": "Настрой максимална дължина (Token)",
-      "unlimited": "Без ограничения"
-    },
-    "other": {
-      "functionCall": "Поддържа извикване на функции",
-      "title": "Други",
-      "vision": "Поддържа визуално разпознаване",
-      "withKnowledge": "С включена база данни",
-      "withTool": "С включени инструменти"
-    },
-    "pricing": "Цени на модела",
-    "timePeriod": {
-      "all": "Всички времена",
-      "day": "Последни 24 часа",
-      "month": "Последни 30 дни",
-      "title": "Обхват на времето",
-      "week": "Последни 7 дни",
-      "year": "Последна година"
-    }
-  },
-  "home": {
-    "featuredAssistants": "Препоръчани асистенти",
-    "featuredModels": "Препоръчани модели",
-    "featuredProviders": "Препоръчани доставчици на модели",
-    "featuredTools": "Препоръчани инструменти",
-    "more": "Открий повече"
-  },
-  "isClaimed": "Претендирано",
-  "isFeatured": "Препоръчано",
-  "isOfficial": "Официално удостоверено",
-  "like": "Харесвам",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "Всички MCP сървъри",
-        "name": "Всички"
-      },
-      "business": {
-        "description": "Бизнес и корпоративни услуги",
-        "name": "Бизнес услуги"
-      },
-      "developer": {
-        "description": "Инструменти и услуги за разработчици",
-        "name": "Инструменти за разработчици"
-      },
-      "gaming-entertainment": {
-        "description": "Игри, забавления и свободно време",
-        "name": "Игри и забавления"
-      },
-      "health-wellness": {
-        "description": "Здраве, фитнес и грижа за тялото и ума",
-        "name": "Здраве и уелнес"
-      },
-      "lifestyle": {
-        "description": "Личен начин на живот, навици и ежедневни дейности",
-        "name": "Начин на живот"
-      },
-      "media-generate": {
-        "description": "Създаване, редактиране и обработка на медия",
-        "name": "Генериране на медия"
-      },
-      "news": {
-        "description": "Новинарски агрегатори, репортажи и информационни услуги",
-        "name": "Новини и информация"
-      },
-      "productivity": {
-        "description": "Управление на задачи, бележки и инструменти за продуктивност",
-        "name": "Инструменти за продуктивност"
-      },
-      "science-education": {
-        "description": "Научни изследвания, обучение и образователни инструменти",
-        "name": "Наука и образование"
-      },
-      "social": {
-        "description": "Социални мрежи и комуникация",
-        "name": "Социални медии"
-      },
-      "stocks-finance": {
-        "description": "Финансови пазари, търговия и инвестиции",
-        "name": "Финанси и акции"
-      },
-      "tools": {
-        "description": "Общи полезни инструменти и услуги",
-        "name": "Полезни инструменти"
-      },
-      "travel-transport": {
-        "description": "Планиране на пътувания и транспорт",
-        "name": "Пътувания и транспорт"
-      },
-      "weather": {
-        "description": "Прогнози за времето и метеорологични услуги",
-        "name": "Време и метеорология"
-      },
-      "web-search": {
-        "description": "Уеб търсене и информационно извличане",
-        "name": "Информационно търсене"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "Тази услуга може да работи локално или в облака според конфигурацията или сценария на използване, осигурявайки двойна възможност за работа.",
-          "title": "Хибридна услуга"
-        },
-        "local": {
-          "desc": "Този сървър може да работи само на локалното клиентско устройство, изисква инсталация и зависи от локални ресурси.",
-          "title": "Локална услуга"
-        },
-        "remote": {
-          "desc": "Този сървър се хоства и работи отдалечено, тъй като основно разчита на отдалечени услуги и не зависи от локална среда.",
-          "title": "Облачна услуга"
-        }
-      },
-      "deployment": {
-        "args": "Аргументи",
-        "checkCommand": "Проверка на команда",
-        "command": "Команда",
-        "commandLine": "Системни зависимости",
-        "connection": "Тип връзка",
-        "connectionType": "Тип връзка",
-        "description": "Начин на инсталация и разгръщане на плъгина",
-        "descriptionPlaceholder": "По избор описание",
-        "empty": "Няма налични опции за разгръщане",
-        "env": "Променливи на средата",
-        "guide": "Инструкции за инсталация",
-        "installation": "Инсталиране чрез {{method}}",
-        "installationMethod": "Метод на инсталация",
-        "other": "Други настройки",
-        "packageName": "Име на пакета",
-        "platform": {
-          "steps": {
-            "claude": "- Отворете приложението **Claude Desktop**\n- Отидете в **Настройки**, след това изберете **Разработчик**\n- Кликнете върху **Редактиране на конфигурация**\n- Отворете файла **claude_desktop_config.json**\n- Копирайте и поставете конфигурацията на сървъра във файла и запазете",
-            "cline": "- Отворете VS Code с инсталирано разширение Cline\n- Кликнете върху иконата на Cline в страничната лента\n- Изберете **MCP Servers** от падащото меню\n- В раздела **Remote Servers** въведете името на сървъра и URL на вашия MCP сървър\n- Кликнете върху **Add Server**, за да се свържете",
-            "cursor": "- Отидете в **Настройки**, след това изберете настройките на Cursor\n- Изберете **MCP** от лявата страна\n- Кликнете върху **Добавяне на нов глобален MCP сървър** в горния десен ъгъл\n- Копирайте и поставете конфигурацията на сървъра във файла и запазете",
-            "lobeChat": "- Отворете приложението **LobeChat Desktop**\n- Отидете в **Настройки** - **По подразбиране асистент**\n- Изберете **Настройки на плъгини** - **Потребителски плъгини**\n- Кликнете върху **Бърз импорт на JSON конфигурация**\n- Копирайте и поставете конфигурацията на сървъра в текстовото поле и инсталирайте",
-            "openai": "- Отворете вашето **OpenAI приложение** или среда за разработка\n- Конфигурирайте MCP инструментите в **Responses API**\n- Добавете MCP блока в масива **tools** на API заявката\n- Задайте **server_url** към вашия MCP сървърен край\n- Включете необходимите заглавки за удостоверяване (API ключ, токени и др.)\n- Използвайте параметъра `allowed_tools`, за да ограничите достъпа до инструментите\n- Задайте `require_approval`, за да контролирате одобрението за изпълнение на инструментите",
-            "vscode": "- Отворете VS Code\n- Отворете командния панел (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Въведете **MCP: Add Server** и го изберете\n- Изберете дали да добавите към работната област или потребителските настройки\n- Копирайте и поставете конфигурацията на сървъра"
-          },
-          "title": "Инсталиране в {{platform}}"
-        },
-        "recommended": "Препоръчано",
-        "systemDependencies": "Системни зависимости",
-        "table": {
-          "description": "Описание",
-          "name": "Име",
-          "required": "Задължително",
-          "type": "Тип"
-        },
-        "title": "Метод на инсталация"
-      },
-      "githubBadge": {
-        "desc": "LobeHub редовно сканира хранилищата с код и документация, за да:\n\n- Потвърди, че MCP сървърът работи правилно.\n- Извлече характеристики на сървъра, като инструменти, ресурси, подсказки и необходими параметри.\n- Нашият Badge помага на потребителите бързо да оценят сигурността, функционалността и инструкциите за инсталация на MCP сървъра.\n\nМоля, копирайте следния код във вашия файл `README.md`:"
-      },
-      "nav": {
-        "needHelp": "Нуждаете се от помощ?",
-        "reportIssue": "Докладвайте проблем",
-        "viewSourceCode": "Вижте изходния код"
-      },
-      "overview": {
-        "title": "Преглед"
-      },
-      "related": {
-        "listTitle": "Свързани MCP сървъри",
-        "more": "Виж още",
-        "title": "Свързани препоръки"
-      },
-      "schema": {
-        "mode": {
-          "docs": "Документация"
-        },
-        "prompts": {
-          "arguments": "Конфигурация на параметрите",
-          "desc": "Интерактивни шаблони, задействани от потребителя",
-          "empty": "Няма подсказки",
-          "instructions": "Инструкции",
-          "table": {
-            "description": "Описание",
-            "name": "Име",
-            "required": "Задължително"
-          },
-          "title": "Списък с подсказки"
-        },
-        "resources": {
-          "desc": "Контекстуални данни, добавяни и управлявани от клиента",
-          "empty": "Няма ресурси",
-          "table": {
-            "description": "Описание",
-            "mineType": "MIME тип",
-            "name": "Име",
-            "uri": "URI"
-          },
-          "title": "Списък с ресурси"
-        },
-        "title": "Функции на плъгина",
-        "tools": {
-          "desc": "Интерфейси за функции, изложени на големия езиков модел (LLM) за изпълнение на операции",
-          "empty": "Няма инструменти",
-          "inputSchema": "Описание на входа",
-          "instructions": "Инструкции",
-          "table": {
-            "description": "Описание",
-            "name": "Име",
-            "required": "Задължително",
-            "type": "Тип"
-          },
-          "title": "Списък с инструменти"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "Този MCP сървър е заявен от собственика, което гарантира собствеността и управлението му.",
-          "title": "Заявено от собственика"
-        },
-        "deployMoreThanManual": {
-          "desc": "Този MCP сървър предлага по-удобни методи за инсталация, различни от ръчната, позволяващи лесно разгръщане и използване.",
-          "title": "Предлага удобни методи за инсталация"
-        },
-        "deployment": {
-          "desc": "Този MCP сървър предлага поне един метод за инсталация, позволяващ разгръщане и използване.",
-          "descWithCount": "Този MCP сървър предлага {{number}} метода за инсталация, позволяващи разгръщане и използване.",
-          "title": "Предлага поне един метод за инсталация"
-        },
-        "license": {
-          "desc": "Това хранилище съдържа LICENSE файл.",
-          "descWithlicense": "Лицензът на това хранилище е {{license}}.",
-          "title": "Съдържа LICENSE"
-        },
-        "listTitle": "Детайли за оценката",
-        "notClaimed": {
-          "desc": "Ако сте собственик на този MCP сървър, можете да го заявите по следния начин.",
-          "title": "Не е заявен от собственик"
-        },
-        "prompts": {
-          "desc": "Този MCP сървър предоставя подсказки, позволяващи взаимодействие с услугата.",
-          "descWithCount": "Този MCP сървър предоставя {{number}} подсказки, позволяващи взаимодействие с услугата.",
-          "title": "Включва подсказки"
-        },
-        "readme": {
-          "desc": "Това хранилище съдържа README.md файл.",
-          "title": "Съдържа README"
-        },
-        "resources": {
-          "desc": "Този MCP сървър предоставя ресурси, позволяващи добавяне и управление на контекстуални данни.",
-          "descWithCount": "Този MCP сървър предоставя {{number}} ресурси, позволяващи добавяне и управление на контекстуални данни.",
-          "title": "Включва ресурси"
-        },
-        "title": "Оценка",
-        "tools": {
-          "desc": "Услугата трябва да предоставя поне един инструмент, позволяващ изпълнение на определени операции.",
-          "descWithCount": "Този MCP сървър предоставя {{number}} инструмента, позволяващи изпълнение на определени операции.",
-          "title": "Включва поне един инструмент"
-        },
-        "validated": {
-          "desc": "Този MCP сървър е преминал проверка на инсталацията, гарантираща качество и надеждност.",
-          "title": "Преминал проверка"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "Този MCP сървър е строго проверен, предоставя пълна функционалност и висококачествен потребителски опит.",
-          "fullTitle": "Отличен плъгин",
-          "title": "Висококачествен"
-        },
-        "b": {
-          "desc": "Този MCP сървър предлага добри функции и потребителски опит, но може да се нуждае от подобрения в някои области.",
-          "fullTitle": "Добра функционалност",
-          "title": "Добър"
-        },
-        "f": {
-          "desc": "Този MCP сървър е с непълна функционалност или ниско качество, препоръчва се потребителите да бъдат внимателни при използване.",
-          "fullTitle": "Ниско качество",
-          "title": "Слаб"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "Подсказки",
-          "resources": "Ресурси",
-          "title": "Възможности на приставката",
-          "tools": "Инструменти"
-        },
-        "configuration": {
-          "title": "Конфигурация на приставката"
-        },
-        "connection": {
-          "args": "Аргументи за стартиране",
-          "command": "Команда за стартиране",
-          "title": "Информация за връзка",
-          "type": "Тип връзка",
-          "url": "Адрес на услугата"
-        },
-        "saveSettings": "Запази настройките",
-        "title": "Настройки на приставката"
-      },
-      "sidebar": {
-        "install": "Инсталиране на MCP сървър",
-        "meta": {
-          "homepage": "Официален уебсайт",
-          "installCount": "Брой инсталации",
-          "language": "Език на изходния код",
-          "license": "Лиценз",
-          "published": "Дата на публикуване",
-          "repo": "Хранилище с изходен код",
-          "stars": "Брой звезди",
-          "title": "Подробна информация",
-          "updated": "Последна актуализация"
-        },
-        "moreServerConfig": "Виж подробности",
-        "recommendServers": "Свързани MCP",
-        "serverConfig": "Конфигурация за инсталация",
-        "toc": "Съдържание"
-      },
-      "summary": {
-        "title": "Какво можете да правите с този MCP сървър?"
-      },
-      "totalScore": {
-        "description": "Общ резултат, изчислен въз основа на различни показатели",
-        "legend": {
-          "aGrade": "Ниво A ({{minPercent}}-100%)",
-          "bGrade": "Ниво B ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "Ниво F (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} точки",
-        "popover": {
-          "completedOptional": "✅ Завършени незадължителни елементи ({{count}})",
-          "completedRequired": "✅ Завършени задължителни елементи ({{count}})",
-          "incompleteOptional": "⏸️ Незавършени незадължителни елементи ({{count}})",
-          "incompleteRequired": "❌ Незавършени задължителни елементи ({{count}})",
-          "title": "Детайли за оценката"
-        },
-        "ratingFormat": "Оценка: {{level}}",
-        "scoreInfo": {
-          "items": "елементи",
-          "points": "точки",
-          "requiredItems": "задължителни елементи"
-        },
-        "title": "Общ резултат"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "Последна версия",
-          "isValidated": "Преминала проверка",
-          "publishAt": "Дата на публикуване",
-          "version": "Версия"
-        },
-        "title": "История на версиите"
-      }
-    },
-    "hero": {
-      "desc": "Отворена и разгръщаема платформа MCP сървъри, която помага на AI системите лесно да имат достъп до файлови системи, бази данни, API и други ключови ресурси, разширявайки вашите AI възможности.",
-      "subTitle": "Отворен код & готово за използване",
-      "title": "Отворен MCP пазар за AI"
-    },
-    "sorts": {
-      "createdAt": "Последно добавено",
-      "installCount": "Брой инсталации",
-      "isFeatured": "Препоръчани плъгини",
-      "isValidated": "Проверени плъгини",
-      "promptsCount": "Брой подсказки",
-      "ratingCount": "Брой оценки",
-      "resourcesCount": "Брой ресурси",
-      "toolsCount": "Брой инструменти",
-      "updatedAt": "Последна актуализация"
-    },
-    "title": "MCP пазар",
-    "unvalidated": {
-      "desc": "Този MCP сървър все още не е проверен",
-      "title": "Непроверен"
-    },
-    "validated": {
-      "desc": "Този MCP сървър е проверен, гарантирайки качество и надеждност.",
-      "descWithDate": "Този MCP сървър е проверен на {{date}}, гарантирайки качество и надеждност.",
-      "title": "Проверен"
-    }
-  },
-  "models": {
-    "abilities": "Възможности на модела",
-    "chat": "Започни разговор",
-    "contentLength": "Максимална дължина на контекста",
-    "details": {
-      "overview": {
-        "title": "Преглед"
-      },
-      "related": {
-        "listTitle": "Свързани модели",
-        "more": "Виж още",
-        "title": "Свързани препоръки"
-      }
-    },
-    "free": "Безплатно",
-    "guide": "Ръководство за конфигурация",
-    "list": "Списък на моделите",
-    "more": "Още",
-    "parameterList": {
-      "defaultValue": "Стойност по подразбиране",
-      "docs": "Прегледай документацията",
-      "frequency_penalty": {
-        "desc": "Тази настройка регулира честотата на повторно използване на определени думи, които вече са се появили в входа. По-високи стойности намаляват вероятността за повторение, докато отрицателните стойности имат обратен ефект. Наказанието за думи не се увеличава с увеличаване на честотата на появата. Отрицателните стойности насърчават повторното използване на думи.",
-        "title": "Наказание за честота"
-      },
-      "max_tokens": {
-        "desc": "Тази настройка определя максималната дължина, която моделът може да генерира в един отговор. По-високата стойност позволява на модела да генерира по-дълги отговори, докато по-ниската стойност ограничава дължината на отговора, правейки го по-кратък. Разумното регулиране на тази стойност в зависимост от различните приложения може да помогне за постигане на желаната дължина и детайлност на отговора.",
-        "title": "Ограничение за един отговор"
-      },
-      "presence_penalty": {
-        "desc": "Тази настройка е предназначена да контролира повторното използване на думи в зависимост от честотата на появата им в входа. Тя се опитва да използва по-малко думи, които се появяват често, като честотата на използване е пропорционална на честотата на появата. Наказанието за думи нараства с увеличаване на честотата на появата. Отрицателните стойности насърчават повторното използване на думи.",
-        "title": "Свежест на темата"
-      },
-      "range": "Обхват",
-      "reasoning_effort": {
-        "desc": "Тази настройка контролира интензивността на разсъжденията на модела преди генерирането на отговор. Ниска интензивност приоритизира скоростта на отговор и спестява токени, докато висока интензивност предоставя по-пълни разсъждения, но изразходва повече токени и намалява скоростта на отговор. Стойността по подразбиране е средна, което балансира точността на разсъжденията и скоростта на отговор.",
-        "title": "Интензивност на разсъжденията"
-      },
-      "temperature": {
-        "desc": "Тази настройка влияе на разнообразието на отговорите на модела. По-ниски стойности водят до по-предсказуеми и типични отговори, докато по-високи стойности насърчават по-разнообразни и необичайни отговори. Когато стойността е 0, моделът винаги дава един и същ отговор на даден вход.",
-        "title": "Случайност"
-      },
-      "title": "Параметри на модела",
-      "top_p": {
-        "desc": "Тази настройка ограничава избора на модела до определен процент от най-вероятните думи: избират се само тези думи, чиято кумулативна вероятност достига P. По-ниски стойности правят отговорите на модела по-предсказуеми, докато настройката по подразбиране позволява на модела да избира от целия обхват на думите.",
-        "title": "Ядро на пробата"
-      },
-      "type": "Тип"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChat поддържа използването на персонализиран API ключ за този доставчик.",
-      "input": "Цена на входа",
-      "inputTooltip": "Цена на всеки милион Token",
-      "latency": "Забавяне",
-      "latencyTooltip": "Средно време за отговор на доставчика за изпращане на първия Token",
-      "maxOutput": "Максимална дължина на изхода",
-      "maxOutputTooltip": "Максимален брой Token, които този крайна точка може да генерира",
-      "officialTooltip": "Официална услуга на LobeHub",
-      "output": "Цена на изхода",
-      "outputTooltip": "Цена на всеки милион Token",
-      "streamCancellationTooltip": "Този доставчик поддържа функция за анулиране на потока.",
-      "throughput": "Пропускателна способност",
-      "throughputTooltip": "Среден брой Token, предавани на секунда за поточни заявки"
-    },
-    "sorts": {
-      "contextWindowTokens": "Дължина на контекста",
-      "identifier": "ID на модела",
-      "inputPrice": "Цена за вход",
-      "outputPrice": "Цена за изход",
-      "providerCount": "Брой доставчици",
-      "releasedAt": "Последно публикуван"
-    },
-    "suggestions": "Свързани модели",
-    "supportedProviders": "Доставчици, поддържащи този модел"
-  },
-  "plugins": {
-    "builtinTag": "Вграден плъгин",
-    "community": "Обществени плъгини",
-    "details": {
-      "settings": {
-        "title": "Настройки на приставката"
-      },
-      "summary": {
-        "title": "Какво можете да правите с този плъгин?"
-      },
-      "tools": {
-        "title": "Инструменти на приставката"
-      }
-    },
-    "install": "Инсталирай плъгин",
-    "installed": "Инсталиран",
-    "legacyTag": "Остарял плъгин",
-    "list": "Списък с плъгини",
-    "meta": {
-      "description": "Описание",
-      "parameter": "Параметър",
-      "title": "Инструментални параметри",
-      "type": "Тип"
-    },
-    "more": "Още",
-    "official": "Официални плъгини",
-    "recentSubmits": "Наскоро обновени",
-    "sorts": {
-      "createdAt": "Последно публикуван",
-      "identifier": "ID на плъгина",
-      "title": "Име на плъгина"
-    },
-    "suggestions": "Свързани предложения"
-  },
-  "providers": {
-    "config": "Конфигуриране на доставчици",
-    "details": {
-      "guide": {
-        "title": "Ръководство за интеграция"
-      },
-      "overview": {
-        "title": "Преглед"
-      },
-      "related": {
-        "listTitle": "Свързани доставчици",
-        "more": "Виж още",
-        "title": "Свързани препоръки"
-      }
-    },
-    "list": "Списък на доставчиците на модели",
-    "modelCount": "{{count}} модела",
-    "modelName": "Име на модела",
-    "modelSite": "Документация на моделите",
-    "more": "Още",
-    "officialSite": "Официален сайт",
-    "showAllModels": "Покажи всички модели",
-    "sorts": {
-      "default": "Подредба по подразбиране",
-      "identifier": "ID на доставчика",
-      "modelCount": "Брой модели"
-    },
-    "suggestions": "Свързани доставчици",
-    "supportedModels": "Поддържани модели"
-  },
-  "publishedTime": "Публикувано на",
-  "search": {
-    "placeholder": "Търсене по име, описание или ключови думи...",
-    "result": "{{count}} резултата за <highlight>{{keyword}}</highlight>",
-    "searching": "Търсене..."
-  },
-  "tab": {
-    "assistant": "Асистент",
-    "home": "Начална страница",
-    "model": "Модел",
-    "plugin": "Плъгин",
-    "provider": "Доставчик на модели"
-  }
+  "filterBy.authorRange.everyone": "Всички автори",
+  "filterBy.authorRange.followed": "Последвани автори",
+  "filterBy.authorRange.title": "Обхват на автора",
+  "filterBy.contentLength": "Минимална дължина на контекста",
+  "filterBy.maxToken.title": "Задай максимална дължина (токени)",
+  "filterBy.maxToken.unlimited": "Неограничено",
+  "filterBy.other.functionCall": "Поддържа извикване на функции",
+  "filterBy.other.title": "Други",
+  "filterBy.other.vision": "Поддържа визуално разпознаване",
+  "filterBy.other.withKnowledge": "Включва библиотеки",
+  "filterBy.other.withTool": "Включва умения",
+  "filterBy.pricing": "Ценообразуване на модела",
+  "filterBy.timePeriod.all": "Цялото време",
+  "filterBy.timePeriod.day": "Последните 24 часа",
+  "filterBy.timePeriod.month": "Последните 30 дни",
+  "filterBy.timePeriod.title": "Времеви период",
+  "filterBy.timePeriod.week": "Последните 7 дни",
+  "filterBy.timePeriod.year": "Последната година",
+  "footer.desc": "Развивай се с потребители на ИИ по целия свят. Стани създател и изпрати своите агенти и умения в общността на LobeHub.",
+  "footer.title": "Сподели своето творение в общността на LobeHub още днес",
+  "home.communityAgents": "Агенти от общността",
+  "home.featuredAssistants": "Препоръчани агенти",
+  "home.featuredModels": "Препоръчани модели",
+  "home.featuredPlugins": "Препоръчани умения",
+  "home.featuredProviders": "Препоръчани доставчици",
+  "home.featuredTools": "Препоръчани умения",
+  "home.more": "Открий още",
+  "isClaimed": "Притежаван",
+  "isFeatured": "Препоръчан",
+  "isOfficial": "Официално потвърден",
+  "like": "Харесай",
+  "mcp.categories.all.description": "Всички MCP сървъри",
+  "mcp.categories.all.name": "Всички",
+  "mcp.categories.business.description": "Бизнес и корпоративни услуги",
+  "mcp.categories.business.name": "Бизнес услуги",
+  "mcp.categories.developer.description": "Инструменти и услуги за разработчици",
+  "mcp.categories.developer.name": "Инструменти за разработчици",
+  "mcp.categories.gaming-entertainment.description": "Игри, забавления и свободно време",
+  "mcp.categories.gaming-entertainment.name": "Игри и забавления",
+  "mcp.categories.health-wellness.description": "Здраве, фитнес и благосъстояние",
+  "mcp.categories.health-wellness.name": "Здраве и благосъстояние",
+  "mcp.categories.lifestyle.description": "Личен начин на живот, навици и ежедневни дейности",
+  "mcp.categories.lifestyle.name": "Начин на живот",
+  "mcp.categories.media-generate.description": "Генериране, редактиране и обработка на медии",
+  "mcp.categories.media-generate.name": "Генериране на медии",
+  "mcp.categories.news.description": "Агрегиране на новини, репортажи и информационни услуги",
+  "mcp.categories.news.name": "Новини и информация",
+  "mcp.categories.productivity.description": "Управление на задачи, бележки и инструменти за продуктивност",
+  "mcp.categories.productivity.name": "Инструменти за продуктивност",
+  "mcp.categories.science-education.description": "Научни изследвания, обучение и образователни инструменти",
+  "mcp.categories.science-education.name": "Наука и образование",
+  "mcp.categories.social.description": "Социални мрежи и комуникация",
+  "mcp.categories.social.name": "Социални медии",
+  "mcp.categories.stocks-finance.description": "Финансови пазари, търговия и инвестиции",
+  "mcp.categories.stocks-finance.name": "Акции и финанси",
+  "mcp.categories.tools.description": "Общи практични инструменти и услуги",
+  "mcp.categories.tools.name": "Помощни инструменти",
+  "mcp.categories.travel-transport.description": "Планиране на пътувания и транспорт",
+  "mcp.categories.travel-transport.name": "Пътуване и транспорт",
+  "mcp.categories.weather.description": "Прогноза за времето и метеорологични услуги",
+  "mcp.categories.weather.name": "Времето",
+  "mcp.categories.web-search.description": "Уеб търсене и извличане на информация",
+  "mcp.categories.web-search.name": "Извличане на информация",
+  "mcp.details.connectionType.hybrid.desc": "Тази услуга може да работи локално или в облака в зависимост от конфигурацията или сценария на използване, предлагайки възможност за двойна работа.",
+  "mcp.details.connectionType.hybrid.title": "Хибридна услуга",
+  "mcp.details.connectionType.local.desc": "Този сървър може да работи само на локалното устройство на клиента, изисква инсталация и разчита на локални ресурси.",
+  "mcp.details.connectionType.local.title": "Локална услуга",
+  "mcp.details.connectionType.remote.desc": "Този сървър се хоства отдалечено, тъй като основно разчита на отдалечени услуги и не зависи от локалната среда.",
+  "mcp.details.connectionType.remote.title": "Облачна услуга",
+  "mcp.details.deployment.args": "Аргументи",
+  "mcp.details.deployment.checkCommand": "Команда за проверка",
+  "mcp.details.deployment.command": "Команда",
+  "mcp.details.deployment.commandLine": "Системни зависимости",
+  "mcp.details.deployment.connection": "Метод на свързване",
+  "mcp.details.deployment.connectionType": "Тип на свързване",
+  "mcp.details.deployment.description": "Метод за инсталиране и разгръщане на умението",
+  "mcp.details.deployment.descriptionPlaceholder": "Незадължително описание",
+  "mcp.details.deployment.empty": "Няма налични опции за разгръщане",
+  "mcp.details.deployment.env": "Променливи на средата",
+  "mcp.details.deployment.guide": "Ръководство за инсталация",
+  "mcp.details.deployment.installation": "Инсталиране чрез {{method}}",
+  "mcp.details.deployment.installationMethod": "Метод на инсталация",
+  "mcp.details.deployment.other": "Други настройки",
+  "mcp.details.deployment.packageName": "Име на пакета",
+  "mcp.details.deployment.platform.steps.claude": "- Отворете приложението **Claude Desktop**\n- Отидете в **Настройки**, след това изберете **Разработчик**\n- Кликнете върху **Редактиране на конфигурацията**\n- Отворете файла **claude_desktop_config.json**\n- Копирайте и поставете конфигурацията на сървъра във файла и запазете",
+  "mcp.details.deployment.platform.steps.cline": "- Отворете VS Code с инсталирано разширение Cline\n- Кликнете върху иконата на Cline в страничната лента\n- Изберете **MCP Servers** от падащото меню\n- В раздела **Remote Servers** въведете името на сървъра и URL адреса на вашия MCP сървър\n- Кликнете върху **Add Server**, за да се свържете",
+  "mcp.details.deployment.platform.steps.cursor": "- Отидете в **Настройки**, след това изберете Cursor настройки\n- Изберете **MCP** отляво\n- Кликнете върху **Добави нов глобален MCP сървър** в горния десен ъгъл\n- Копирайте и поставете конфигурацията на сървъра във файла и запазете",
+  "mcp.details.deployment.platform.steps.lobeChat": "- Отворете приложението **LobeHub Desktop**\n- Отидете в **Настройки** - **Стандартен агент**\n- След това изберете **Настройки на уменията** - **Потребителски умения**\n- Кликнете върху **Бърз внос на JSON конфигурация**\n- Копирайте и поставете конфигурацията на сървъра в текстовото поле и инсталирайте",
+  "mcp.details.deployment.platform.steps.openai": "- Отворете вашето **OpenAI приложение** или среда за разработка\n- Конфигурирайте MCP инструментите в **Responses API**\n- Добавете MCP блокове в масива **tools** в API заявките\n- Задайте **server_url** към вашия MCP сървър\n- Включете необходимите заглавки за удостоверяване (API ключ, токен и др.)\n- Използвайте параметъра `allowed_tools`, за да ограничите достъпните инструменти\n- Задайте `require_approval`, за да контролирате одобрението за изпълнение на инструменти",
+  "mcp.details.deployment.platform.steps.vscode": "- Отворете VS Code\n- Отворете палитрата с команди (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Въведете **MCP: Add Server** и го изберете\n- Изберете дали да добавите към работното пространство или потребителските настройки\n- Копирайте и поставете конфигурацията на сървъра",
+  "mcp.details.deployment.platform.title": "Инсталиране на {{platform}}",
+  "mcp.details.deployment.recommended": "Препоръчано",
+  "mcp.details.deployment.systemDependencies": "Системни зависимости",
+  "mcp.details.deployment.table.description": "Описание",
+  "mcp.details.deployment.table.name": "Име",
+  "mcp.details.deployment.table.required": "Задължително",
+  "mcp.details.deployment.table.type": "Тип",
+  "mcp.details.deployment.title": "Метод на инсталация",
+  "mcp.details.githubBadge.desc": "LobeHub редовно сканира хранилища с код и документация, за да:\n- Потвърди работоспособността на MCP сървъра.\n- Извлече характеристики на сървъра като инструменти, ресурси, подсказки и необходими параметри.\n- Нашият знак помага на потребителите бързо да оценят сигурността, функционалността и инструкциите за инсталация на MCP сървъра. Моля, копирайте следния код във вашия файл `README.md`:",
+  "mcp.details.nav.needHelp": "Нужда от помощ?",
+  "mcp.details.nav.reportIssue": "Докладвай проблем",
+  "mcp.details.nav.viewSourceCode": "Преглед на изходния код",
+  "mcp.details.overview.title": "Общ преглед",
+  "mcp.details.related.listTitle": "Свързани MCP сървъри",
+  "mcp.details.related.more": "Виж повече",
+  "mcp.details.related.title": "Свързани препоръки",
+  "mcp.details.schema.mode.docs": "Документация",
+  "mcp.details.schema.prompts.arguments": "Конфигурация на параметри",
+  "mcp.details.schema.prompts.desc": "Интерактивни шаблони, задействани от избора на потребителя",
+  "mcp.details.schema.prompts.empty": "Няма налични подсказки",
+  "mcp.details.schema.prompts.instructions": "Описание на инструкциите",
+  "mcp.details.schema.prompts.table.description": "Описание",
+  "mcp.details.schema.prompts.table.name": "Име",
+  "mcp.details.schema.prompts.table.required": "Задължително",
+  "mcp.details.schema.prompts.title": "Списък с подсказки",
+  "mcp.details.schema.resources.desc": "Контекстни данни, прикачени и управлявани от клиента",
+  "mcp.details.schema.resources.empty": "Няма налични ресурси",
+  "mcp.details.schema.resources.table.description": "Описание",
+  "mcp.details.schema.resources.table.mineType": "MIME тип",
+  "mcp.details.schema.resources.table.name": "Име",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "Списък с ресурси",
+  "mcp.details.schema.title": "Характеристики на умението",
+  "mcp.details.schema.tools.desc": "Функционални интерфейси, достъпни за големи езикови модели (LLM) за извършване на операции",
+  "mcp.details.schema.tools.empty": "Няма налични инструменти",
+  "mcp.details.schema.tools.inputSchema": "Описание на входа",
+  "mcp.details.schema.tools.instructions": "Описание на инструкциите",
+  "mcp.details.schema.tools.table.description": "Описание",
+  "mcp.details.schema.tools.table.name": "Име",
+  "mcp.details.schema.tools.table.required": "Задължително",
+  "mcp.details.schema.tools.table.type": "Тип",
+  "mcp.details.schema.tools.title": "Списък с инструменти",
+  "mcp.details.score.claimed.desc": "Този MCP сървър е заявен от собственика, което гарантира неговата собственост и управление.",
+  "mcp.details.score.claimed.title": "Заявено от собственика",
+  "mcp.details.score.deployMoreThanManual.desc": "Този MCP сървър предлага по-удобни методи за инсталация от ръчната, което улеснява потребителите при разгръщане и използване.",
+  "mcp.details.score.deployMoreThanManual.title": "Предлага удобни методи за инсталация",
+  "mcp.details.score.deployment.desc": "Този MCP сървър предоставя поне един метод за инсталация, което позволява на потребителите да го разгръщат и използват.",
+  "mcp.details.score.deployment.descWithCount": "Този MCP сървър предоставя {{number}} метода за инсталация, което позволява на потребителите да го разгръщат и използват.",
+  "mcp.details.score.deployment.title": "Предоставя поне един метод за инсталация",
+  "mcp.details.score.license.desc": "Това хранилище съдържа файл LICENSE.",
+  "mcp.details.score.license.descWithlicense": "Това хранилище е лицензирано под {{license}}.",
+  "mcp.details.score.license.title": "Има лиценз",
+  "mcp.details.score.listTitle": "Детайли за оценката",
+  "mcp.details.score.notClaimed.desc": "Ако сте собственик на този MCP сървър, можете да го заявите чрез следните методи.",
+  "mcp.details.score.notClaimed.title": "Не е заявено от собственика",
+  "mcp.details.score.prompts.desc": "Този MCP сървър предоставя подкани, които позволяват на потребителите да взаимодействат с услугата.",
+  "mcp.details.score.prompts.descWithCount": "Този MCP сървър предоставя {{number}} подкани, които позволяват на потребителите да взаимодействат с услугата.",
+  "mcp.details.score.prompts.title": "Включва подкани",
+  "mcp.details.score.readme.desc": "Това хранилище съдържа файл README.md.",
+  "mcp.details.score.readme.title": "Има README",
+  "mcp.details.score.resources.desc": "Този MCP сървър предоставя ресурси, които позволяват на потребителите да прикачват и управляват контекстуални данни.",
+  "mcp.details.score.resources.descWithCount": "Този MCP сървър предоставя {{number}} ресурса, които позволяват на потребителите да прикачват и управляват контекстуални данни.",
+  "mcp.details.score.resources.title": "Включва ресурси",
+  "mcp.details.score.title": "Оценка",
+  "mcp.details.score.tools.desc": "Услугата трябва да предоставя поне един инструмент, който позволява на потребителите да извършват конкретни действия.",
+  "mcp.details.score.tools.descWithCount": "Този MCP сървър предоставя {{number}} инструмента, които позволяват на потребителите да извършват конкретни действия.",
+  "mcp.details.score.tools.title": "Включва поне един инструмент",
+  "mcp.details.score.validated.desc": "Този MCP сървър е преминал проверка на инсталацията, което гарантира неговото качество и надеждност.",
+  "mcp.details.score.validated.title": "Проверен",
+  "mcp.details.scoreLevel.a.desc": "Този MCP сървър е щателно проверен, предлага пълни функционалности и висококачествено потребителско изживяване.",
+  "mcp.details.scoreLevel.a.fullTitle": "Отлично умение",
+  "mcp.details.scoreLevel.a.title": "Премиум",
+  "mcp.details.scoreLevel.b.desc": "Този MCP сървър предлага добри функционалности и потребителско изживяване, но може да се нуждае от подобрения в някои области.",
+  "mcp.details.scoreLevel.b.fullTitle": "Добра функционалност",
+  "mcp.details.scoreLevel.b.title": "Добро",
+  "mcp.details.scoreLevel.f.desc": "Този MCP сървър е непълен или с ниско качество; препоръчва се внимателна употреба.",
+  "mcp.details.scoreLevel.f.fullTitle": "Ниско качество",
+  "mcp.details.scoreLevel.f.title": "Слабо",
+  "mcp.details.settings.capabilities.prompts": "Подкани",
+  "mcp.details.settings.capabilities.resources": "Ресурси",
+  "mcp.details.settings.capabilities.title": "Възможности на умението",
+  "mcp.details.settings.capabilities.tools": "Инструменти",
+  "mcp.details.settings.configuration.title": "Конфигурация на умението",
+  "mcp.details.settings.connection.args": "Аргументи за стартиране",
+  "mcp.details.settings.connection.command": "Команда за стартиране",
+  "mcp.details.settings.connection.title": "Информация за връзка",
+  "mcp.details.settings.connection.type": "Тип връзка",
+  "mcp.details.settings.connection.url": "URL на услугата",
+  "mcp.details.settings.saveSettings": "Запази настройките",
+  "mcp.details.settings.title": "Настройки на умението",
+  "mcp.details.sidebar.install": "Инсталирай MCP сървър",
+  "mcp.details.sidebar.meta.homepage": "Официална страница",
+  "mcp.details.sidebar.meta.installCount": "Брой инсталации",
+  "mcp.details.sidebar.meta.language": "Изходен език",
+  "mcp.details.sidebar.meta.license": "Лиценз",
+  "mcp.details.sidebar.meta.published": "Дата на публикуване",
+  "mcp.details.sidebar.meta.repo": "Изходно хранилище",
+  "mcp.details.sidebar.meta.stars": "Звезди",
+  "mcp.details.sidebar.meta.title": "Детайли",
+  "mcp.details.sidebar.meta.updated": "Последна актуализация",
+  "mcp.details.sidebar.moreServerConfig": "Виж детайли",
+  "mcp.details.sidebar.recommendServers": "Свързани MCP",
+  "mcp.details.sidebar.serverConfig": "Конфигурация на инсталацията",
+  "mcp.details.sidebar.toc": "Съдържание",
+  "mcp.details.summary.title": "Какво можете да правите с този MCP сървър?",
+  "mcp.details.totalScore.description": "Обща оценка, изчислена на база различни показатели",
+  "mcp.details.totalScore.legend.aGrade": "Оценка A ({{minPercent}}–100%)",
+  "mcp.details.totalScore.legend.bGrade": "Оценка B ({{minPercent}}–{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "Оценка F (0–{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} точки",
+  "mcp.details.totalScore.popover.completedOptional": "✅ Завършени незадължителни елементи ({{count}})",
+  "mcp.details.totalScore.popover.completedRequired": "✅ Завършени задължителни елементи ({{count}})",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ Незавършени незадължителни елементи ({{count}})",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ Незавършени задължителни елементи ({{count}})",
+  "mcp.details.totalScore.popover.title": "Детайли за оценката",
+  "mcp.details.totalScore.ratingFormat": "Оценка: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "Елементи",
+  "mcp.details.totalScore.scoreInfo.points": "Точки",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "Задължителни елементи",
+  "mcp.details.totalScore.title": "Обща оценка",
+  "mcp.details.versions.table.isLatest": "Последна версия",
+  "mcp.details.versions.table.isValidated": "Проверена",
+  "mcp.details.versions.table.publishAt": "Дата на публикуване",
+  "mcp.details.versions.table.version": "Версия",
+  "mcp.details.versions.title": "История на версиите",
+  "mcp.hero.desc": "Общност за отворен код на MCP сървъри — помага на AI системите да имат достъп до файлови системи, бази данни, API и други ключови ресурси.",
+  "mcp.hero.subTitle": "Отворен код, готов за използване",
+  "mcp.hero.title": "Общност за отворен код на MCP за AI",
+  "mcp.sorts.createdAt": "Наскоро добавени",
+  "mcp.sorts.installCount": "Брой инсталации",
+  "mcp.sorts.isFeatured": "Препоръчани умения",
+  "mcp.sorts.isValidated": "Проверени умения",
+  "mcp.sorts.promptsCount": "Брой подкани",
+  "mcp.sorts.ratingCount": "Брой оценки",
+  "mcp.sorts.resourcesCount": "Брой ресурси",
+  "mcp.sorts.toolsCount": "Брой инструменти",
+  "mcp.sorts.updatedAt": "Наскоро актуализирани",
+  "mcp.title": "MCP Общност",
+  "mcp.unvalidated.desc": "Този MCP сървър все още не е проверен",
+  "mcp.unvalidated.title": "Непроверен",
+  "mcp.validated.desc": "Този MCP сървър е проверен, за да се гарантира неговото качество и надеждност.",
+  "mcp.validated.descWithDate": "Този MCP сървър е проверен на {{date}}, за да се гарантира неговото качество и надеждност.",
+  "mcp.validated.title": "Проверен",
+  "mcpEmpty.description": "Опитайте да промените филтрите или да търсите с различни ключови думи.",
+  "mcpEmpty.search": "Няма намерени съвпадащи MCP сървъри",
+  "mcpEmpty.title": "Няма намерени MCP сървъри",
+  "models.abilities": "Възможности на модела",
+  "models.chat": "Започни разговор",
+  "models.contentLength": "Максимална дължина на контекста",
+  "models.details.overview.title": "Общ преглед",
+  "models.details.related.listTitle": "Свързани модели",
+  "models.details.related.more": "Виж повече",
+  "models.details.related.title": "Свързани препоръки",
+  "models.empty.description": "Опитайте да промените филтрите, за да видите повече модели",
+  "models.empty.search": "Няма намерени съвпадащи модели",
+  "models.empty.title": "Няма налични модели",
+  "models.free": "Безплатно",
+  "models.guide": "Ръководство за конфигурация",
+  "models.list": "Списък с модели",
+  "models.more": "Още",
+  "models.parameterList.defaultValue": "Стойност по подразбиране",
+  "models.parameterList.docs": "Виж документацията",
+  "models.parameterList.frequency_penalty.desc": "Тази настройка регулира честотата, с която моделът повтаря определени думи, които вече са се появили във входа. По-високите стойности намаляват вероятността от повторение, докато отрицателните стойности имат обратен ефект. Наказанията за речник не се увеличават с честотата на срещане. Отрицателните стойности насърчават повторната употреба на думи.",
+  "models.parameterList.frequency_penalty.title": "Наказание за честота",
+  "models.parameterList.max_tokens.desc": "Тази настройка определя максималната дължина, която моделът може да генерира в един отговор. По-високата стойност позволява по-дълги отговори, докато по-ниската ограничава дължината, правейки отговора по-кратък. Подходящото настройване на тази стойност според различни сценарии може да помогне за постигане на желаната дължина и ниво на детайлност.",
+  "models.parameterList.max_tokens.title": "Ограничение на отговора",
+  "models.parameterList.presence_penalty.desc": "Тази настройка контролира повторната употреба на думи въз основа на честотата им във входа. Стреми се да използва по-малко думи, които се срещат по-често, като честотата на употреба е пропорционална на честотата на срещане. Наказанията за речник се увеличават с честотата. Отрицателните стойности насърчават повторната употреба.",
+  "models.parameterList.presence_penalty.title": "Новост на темата",
+  "models.parameterList.range": "Обхват",
+  "models.parameterList.reasoning_effort.desc": "Тази настройка контролира интензивността на разсъждение, която моделът прилага преди да генерира отговор. Ниска интензивност дава приоритет на скоростта и пести токени, докато висока интензивност осигурява по-задълбочено разсъждение, но използва повече токени и забавя отговора. Стойността по подразбиране е средна, балансирайки точността и скоростта.",
+  "models.parameterList.reasoning_effort.title": "Интензивност на разсъждение",
+  "models.parameterList.temperature.desc": "Тази настройка влияе върху разнообразието на отговорите на модела. По-ниските стойности водят до по-предсказуеми и типични отговори, докато по-високите насърчават по-разнообразни и нестандартни отговори. При стойност 0 моделът винаги дава един и същ отговор на даден вход.",
+  "models.parameterList.temperature.title": "Случайност",
+  "models.parameterList.title": "Параметри на модела",
+  "models.parameterList.top_p.desc": "Тази настройка ограничава избора на модела до определен процент от най-вероятните думи: избира само тези, чиято кумулативна вероятност достига P. По-ниските стойности правят отговорите по-предсказуеми, докато стойността по подразбиране позволява избор от целия речник.",
+  "models.parameterList.top_p.title": "Ядрено семплиране",
+  "models.parameterList.type": "Тип",
+  "models.providerInfo.apiTooltip": "LobeHub поддържа използване на персонален API ключ за този доставчик.",
+  "models.providerInfo.input": "Цена на вход",
+  "models.providerInfo.inputTooltip": "Цена на милион токени",
+  "models.providerInfo.latency": "Закъснение",
+  "models.providerInfo.latencyTooltip": "Средно време за отговор до първия токен от доставчика",
+  "models.providerInfo.maxOutput": "Максимална дължина на изхода",
+  "models.providerInfo.maxOutputTooltip": "Максимален брой токени, които този крайна точка може да генерира",
+  "models.providerInfo.officialTooltip": "Официална услуга на LobeHub",
+  "models.providerInfo.output": "Цена на изход",
+  "models.providerInfo.outputTooltip": "Цена на милион токени",
+  "models.providerInfo.streamCancellationTooltip": "Този доставчик поддържа прекъсване на потока.",
+  "models.providerInfo.throughput": "Пропускателна способност",
+  "models.providerInfo.throughputTooltip": "Среден брой токени в секунда при заявки с поток",
+  "models.sorts.contextWindowTokens": "Дължина на контекста",
+  "models.sorts.identifier": "ID на модела",
+  "models.sorts.inputPrice": "Цена на вход",
+  "models.sorts.outputPrice": "Цена на изход",
+  "models.sorts.providerCount": "Брой доставчици",
+  "models.sorts.releasedAt": "Наскоро пуснати",
+  "models.suggestions": "Свързани модели",
+  "models.supportedProviders": "Доставчици, поддържащи този модел",
+  "plugins.builtinTag": "Вградено",
+  "plugins.community": "Умения от общността",
+  "plugins.details.settings.title": "Настройки на умението",
+  "plugins.details.summary.title": "Какво можете да правите с това умение?",
+  "plugins.details.tools.title": "Инструменти на умението",
+  "plugins.install": "Инсталирай умение",
+  "plugins.installed": "Инсталирано",
+  "plugins.legacyTag": "Остаряло",
+  "plugins.list": "Списък с умения",
+  "plugins.meta.description": "Описание",
+  "plugins.meta.parameter": "Параметър",
+  "plugins.meta.title": "Параметри на инструмента",
+  "plugins.meta.type": "Тип",
+  "plugins.more": "Още",
+  "plugins.official": "Официални умения",
+  "plugins.recentSubmits": "Наскоро обновени",
+  "plugins.sorts.createdAt": "Наскоро публикувани",
+  "plugins.sorts.identifier": "ID на умението",
+  "plugins.sorts.title": "Име на умението",
+  "plugins.suggestions": "Свързани препоръки",
+  "providers.config": "Конфигурирай доставчик",
+  "providers.details.guide.title": "Ръководство за интеграция",
+  "providers.details.overview.title": "Общ преглед",
+  "providers.details.related.listTitle": "Свързани доставчици",
+  "providers.details.related.more": "Виж повече",
+  "providers.details.related.title": "Свързани препоръки",
+  "providers.empty.description": "Опитайте да промените филтрите, за да видите повече доставчици.",
+  "providers.empty.search": "Няма намерени съвпадащи доставчици",
+  "providers.empty.title": "Няма намерени доставчици",
+  "providers.list": "Списък с доставчици",
+  "providers.modelCount": "{{count}} модела",
+  "providers.modelName": "Име на модела",
+  "providers.modelSite": "Документация на модела",
+  "providers.more": "Още",
+  "providers.officialSite": "Официален сайт",
+  "providers.showAllModels": "Покажи всички модели",
+  "providers.sorts.default": "По подразбиране",
+  "providers.sorts.identifier": "ID на доставчика",
+  "providers.sorts.modelCount": "Брой модели",
+  "providers.suggestions": "Свързани доставчици",
+  "providers.supportedModels": "Поддържани модели",
+  "publishedTime": "Публикувано",
+  "search.placeholder": "Търсене по име, описание или ключови думи...",
+  "search.result": "{{count}} резултата за <highlight>{{keyword}}</highlight>",
+  "search.searching": "Търсене...",
+  "tab.assistant": "Агент",
+  "tab.home": "Начало",
+  "tab.model": "Модел",
+  "tab.plugin": "Умение",
+  "tab.provider": "Доставчик",
+  "tab.user": "Потребител",
+  "user.agents": "Агенти",
+  "user.downloads": "Изтегляния",
+  "user.editProfile": "Редактирай профил",
+  "user.favoriteAgents": "Запазени агенти",
+  "user.favoritePlugins": "Запазени умения",
+  "user.follow": "Последвай",
+  "user.followers": "Последователи",
+  "user.following": "Следва",
+  "user.login": "Стани създател",
+  "user.logout": "Изход",
+  "user.myProfile": "Моят профил",
+  "user.noAgents": "Този потребител все още не е публикувал агенти",
+  "user.noFavoriteAgents": "Няма запазени агенти",
+  "user.noFavoritePlugins": "Няма запазени умения",
+  "user.publishedAgents": "Създадени агенти",
+  "user.tabs.favorites": "Любими",
+  "user.tabs.publishedAgents": "Създадени",
+  "user.unfavorite": "Премахни от любими",
+  "user.unfavoriteFailed": "Неуспешно премахване от любими",
+  "user.unfavoriteSuccess": "Премахнато от любими",
+  "user.unfollow": "Спри да следваш",
+  "user.website": "Уебсайт"
 }

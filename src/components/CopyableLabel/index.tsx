@@ -1,37 +1,41 @@
-import { CopyButton, Text } from '@lobehub/ui';
-import { CSSProperties, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { CopyButton, Flexbox, Text } from '@lobehub/ui';
+import { type CSSProperties, memo } from 'react';
 
-const CopyableLabel = memo<{ style?: CSSProperties; value?: string | null }>(
-  ({ style, value = '--' }) => {
-    return (
-      <Flexbox
-        align={'center'}
-        gap={4}
-        horizontal
+interface CopyableLabelProps {
+  className?: string;
+  style?: CSSProperties;
+  value?: string | null;
+}
+
+const CopyableLabel = memo<CopyableLabelProps>(({ className, style, value = '--' }) => {
+  return (
+    <Flexbox
+      align={'center'}
+      className={className}
+      gap={4}
+      horizontal
+      style={{
+        overflow: 'hidden',
+        position: 'relative',
+        ...style,
+      }}
+    >
+      <Text
+        ellipsis
         style={{
+          color: 'inherit',
+          fontFamily: 'inherit',
+          fontSize: 'inherit',
+          margin: 0,
           overflow: 'hidden',
-          position: 'relative',
-          ...style,
+          width: '100%',
         }}
       >
-        <Text
-          ellipsis
-          style={{
-            color: 'inherit',
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-            margin: 0,
-            overflow: 'hidden',
-            width: '100%',
-          }}
-        >
-          {value || '--'}
-        </Text>
-        <CopyButton content={value || '--'} size={'small'} />
-      </Flexbox>
-    );
-  },
-);
+        {value || '--'}
+      </Text>
+      <CopyButton content={value || '--'} size={'small'} />
+    </Flexbox>
+  );
+});
 
 export default CopyableLabel;

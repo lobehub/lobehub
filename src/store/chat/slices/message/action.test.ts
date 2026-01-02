@@ -1,15 +1,24 @@
 import { TraceEventType } from '@lobechat/types';
-import { UIChatMessage } from '@lobechat/types';
+import type { UIChatMessage } from '@lobechat/types';
 import * as lobeUIModules from '@lobehub/ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { mutate } from 'swr';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mutate } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useChatStore } from '../../store';
+
+// Mock @/libs/swr mutate
+vi.mock('@/libs/swr', async () => {
+  const actual = await vi.importActual('@/libs/swr');
+  return {
+    ...actual,
+    mutate: vi.fn(),
+  };
+});
 
 vi.stubGlobal(
   'fetch',
@@ -44,7 +53,7 @@ vi.mock('@/services/topic', () => ({
 const realRefreshMessages = useChatStore.getState().refreshMessages;
 // Mock state
 const mockState = {
-  activeId: 'session-id',
+  activeAgentId: 'session-id',
   activeTopicId: 'topic-id',
   messages: [],
   refreshMessages: vi.fn(),
@@ -67,7 +76,7 @@ afterEach(() => {
 describe('chatMessage actions', () => {
   describe('addAIMessage', () => {
     it('should return early if activeId is undefined', async () => {
-      useChatStore.setState({ activeId: undefined });
+      useChatStore.setState({ activeAgentId: undefined });
       const { result } = renderHook(() => useChatStore());
       const updateMessageInputSpy = vi.spyOn(result.current, 'updateMessageInput');
 
@@ -91,7 +100,7 @@ describe('chatMessage actions', () => {
       expect(messageService.createMessage).toHaveBeenCalledWith({
         content: inputMessage,
         role: 'assistant',
-        sessionId: mockState.activeId,
+        agentId: mockState.activeAgentId,
         topicId: mockState.activeTopicId,
       });
     });
@@ -109,7 +118,7 @@ describe('chatMessage actions', () => {
 
   describe('addUserMessage', () => {
     it('should return early if activeId is undefined', async () => {
-      useChatStore.setState({ activeId: undefined });
+      useChatStore.setState({ activeAgentId: undefined });
       const { result } = renderHook(() => useChatStore());
       const updateMessageInputSpy = vi.spyOn(result.current, 'updateMessageInput');
 
@@ -125,7 +134,7 @@ describe('chatMessage actions', () => {
       const message = 'Test user message';
       const fileList = ['file-id-1', 'file-id-2'];
       useChatStore.setState({
-        activeId: mockState.activeId,
+        activeAgentId: mockState.activeAgentId,
         activeTopicId: mockState.activeTopicId,
       });
       const { result } = renderHook(() => useChatStore());
@@ -138,7 +147,7 @@ describe('chatMessage actions', () => {
         content: message,
         files: fileList,
         role: 'user',
-        sessionId: mockState.activeId,
+        agentId: mockState.activeAgentId,
         topicId: mockState.activeTopicId,
         threadId: undefined,
       });
@@ -148,7 +157,7 @@ describe('chatMessage actions', () => {
       const message = 'Test user message';
       const activeThreadId = 'thread-123';
       useChatStore.setState({
-        activeId: mockState.activeId,
+        activeAgentId: mockState.activeAgentId,
         activeTopicId: mockState.activeTopicId,
         activeThreadId,
       });
@@ -162,7 +171,7 @@ describe('chatMessage actions', () => {
         content: message,
         files: undefined,
         role: 'user',
-        sessionId: mockState.activeId,
+        agentId: mockState.activeAgentId,
         topicId: mockState.activeTopicId,
         threadId: activeThreadId,
       });
@@ -181,7 +190,7 @@ describe('chatMessage actions', () => {
 
     it('should handle message without fileList', async () => {
       const message = 'Test user message without files';
-      useChatStore.setState({ activeId: mockState.activeId });
+      useChatStore.setState({ activeAgentId: mockState.activeAgentId });
       const { result } = renderHook(() => useChatStore());
 
       await act(async () => {
@@ -192,7 +201,7 @@ describe('chatMessage actions', () => {
         content: message,
         files: undefined,
         role: 'user',
-        sessionId: mockState.activeId,
+        agentId: mockState.activeAgentId,
         topicId: mockState.activeTopicId,
         threadId: undefined,
       });
@@ -216,10 +225,10 @@ describe('chatMessage actions', () => {
 
       act(() => {
         useChatStore.setState({
-          activeId: 'session-id',
+          activeAgentId: 'session-id',
           activeTopicId: undefined,
           messagesMap: {
-            [messageMapKey('session-id')]: [{ id: messageId } as UIChatMessage],
+            [messageMapKey({ agentId: 'session-id' })]: [{ id: messageId } as UIChatMessage],
           },
         });
       });
@@ -229,8 +238,7 @@ describe('chatMessage actions', () => {
 
       expect(deleteSpy).toHaveBeenCalledWith(messageId);
       expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
-        sessionId: 'session-id',
-        topicId: undefined,
+        context: { agentId: 'session-id', topicId: undefined, threadId: undefined },
       });
     });
 
@@ -253,10 +261,10 @@ describe('chatMessage actions', () => {
 
       act(() => {
         useChatStore.setState({
-          activeId: 'session-id',
+          activeAgentId: 'session-id',
           activeTopicId: undefined,
           messagesMap: {
-            [messageMapKey('session-id')]: [
+            [messageMapKey({ agentId: 'session-id' })]: [
               { id: messageId, tools: [{ id: 'tool1' }, { id: 'tool2' }] } as UIChatMessage,
               { id: '2', tool_call_id: 'tool1', role: 'tool' } as UIChatMessage,
               { id: '3', tool_call_id: 'tool2', role: 'tool' } as UIChatMessage,
@@ -270,12 +278,11 @@ describe('chatMessage actions', () => {
 
       // Only the message itself should be deleted, tool messages remain as orphaned
       expect(removeMessagesSpy).toHaveBeenCalledWith([messageId], {
-        sessionId: 'session-id',
+        agentId: 'session-id',
         topicId: undefined,
       });
       expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
-        sessionId: 'session-id',
-        topicId: undefined,
+        context: { agentId: 'session-id', topicId: undefined, threadId: undefined },
       });
     });
 
@@ -295,10 +302,10 @@ describe('chatMessage actions', () => {
 
       act(() => {
         useChatStore.setState({
-          activeId: 'session-id',
+          activeAgentId: 'session-id',
           activeTopicId: undefined,
           messagesMap: {
-            [messageMapKey('session-id')]: [
+            [messageMapKey({ agentId: 'session-id' })]: [
               {
                 id: groupMessageId,
                 role: 'assistantGroup',
@@ -324,12 +331,11 @@ describe('chatMessage actions', () => {
       });
 
       expect(removeMessagesSpy).toHaveBeenCalledWith([groupMessageId, 'child-1', 'child-2'], {
-        sessionId: 'session-id',
+        agentId: 'session-id',
         topicId: undefined,
       });
       expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
-        sessionId: 'session-id',
-        topicId: undefined,
+        context: { agentId: 'session-id', topicId: undefined, threadId: undefined },
       });
     });
 
@@ -349,10 +355,10 @@ describe('chatMessage actions', () => {
 
       act(() => {
         useChatStore.setState({
-          activeId: 'session-id',
+          activeAgentId: 'session-id',
           activeTopicId: undefined,
           messagesMap: {
-            [messageMapKey('session-id')]: [
+            [messageMapKey({ agentId: 'session-id' })]: [
               {
                 id: groupMessageId,
                 role: 'assistantGroup',
@@ -390,13 +396,12 @@ describe('chatMessage actions', () => {
       expect(removeMessagesSpy).toHaveBeenCalledWith(
         [groupMessageId, 'child-1', 'child-2', 'tool-result-1'],
         {
-          sessionId: 'session-id',
+          agentId: 'session-id',
           topicId: undefined,
         },
       );
       expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
-        sessionId: 'session-id',
-        topicId: undefined,
+        context: { agentId: 'session-id', topicId: undefined, threadId: undefined },
       });
     });
   });
@@ -452,10 +457,10 @@ describe('chatMessage actions', () => {
         { id: '3', tool_call_id: 'tool2', role: 'tool' } as UIChatMessage,
       ];
 
-      const key = messageMapKey(sessionId, topicId);
+      const key = messageMapKey({ agentId: sessionId, topicId });
       act(() => {
         useChatStore.setState({
-          activeId: sessionId,
+          activeAgentId: sessionId,
           activeTopicId: topicId as unknown as string,
           dbMessagesMap: {
             [key]: rawMessages,
@@ -509,7 +514,7 @@ describe('chatMessage actions', () => {
           tools: [{ id: 'tool2' }],
         },
         {
-          sessionId,
+          agentId: sessionId,
           topicId,
         },
       );
@@ -674,8 +679,8 @@ describe('chatMessage actions', () => {
 
       expect(spy).toHaveBeenCalledWith(
         messageId,
-        { content: newContent },
-        { sessionId: 'session-id', topicId: 'topic-id' },
+        expect.objectContaining({ content: newContent }),
+        { agentId: 'session-id', topicId: 'topic-id' },
       );
     });
 
@@ -709,13 +714,10 @@ describe('chatMessage actions', () => {
         await result.current.optimisticUpdateMessageContent(messageId, newContent);
       });
 
-      expect(replaceMessagesSpy).toHaveBeenCalledWith(
-        [],
-        expect.objectContaining({
-          sessionId: 'session-id',
-          topicId: 'topic-id',
-        }),
-      );
+      expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
+        action: 'optimisticUpdateMessageContent',
+        context: { agentId: 'session-id', topicId: 'topic-id', threadId: undefined },
+      });
     });
   });
 
@@ -737,7 +739,7 @@ describe('chatMessage actions', () => {
       useChatStore.setState({ refreshMessages: realRefreshMessages });
 
       const { result } = renderHook(() => useChatStore());
-      const activeId = useChatStore.getState().activeId;
+      const activeId = useChatStore.getState().activeAgentId;
       const activeTopicId = useChatStore.getState().activeTopicId;
 
       // 在这里，我们不需要再次模拟 mutate，因为它已经在顶部被模拟了
@@ -775,30 +777,6 @@ describe('chatMessage actions', () => {
 
       // 确保恢复 mutate 的模拟，以免影响其他测试
       (mutate as Mock).mockReset();
-    });
-  });
-
-  describe('useFetchMessages hook', () => {
-    // beforeEach(() => {
-    //   vi.mocked(useSWR).mockRestore();
-    // });
-
-    it('should fetch messages for given session and topic ids', async () => {
-      const sessionId = 'session-id';
-      const topicId = 'topic-id';
-      const messages = [{ id: 'message-id', content: 'Hello' }];
-
-      // 设置模拟返回值
-      (messageService.getMessages as Mock).mockResolvedValue(messages);
-
-      const { result } = renderHook(() =>
-        useChatStore().useFetchMessages(true, sessionId, topicId),
-      );
-
-      // 等待异步操作完成
-      await waitFor(() => {
-        expect(result.current.data).toEqual(messages);
-      });
     });
   });
 
@@ -881,7 +859,7 @@ describe('chatMessage actions', () => {
         // Create operation with desired context
         const op = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: contextSessionId, topicId: contextTopicId },
+          context: { agentId: contextSessionId, topicId: contextTopicId },
         });
         operationId = op.operationId;
 
@@ -892,8 +870,8 @@ describe('chatMessage actions', () => {
 
       expect(updateMessageSpy).toHaveBeenCalledWith(
         messageId,
-        { content, tools: undefined },
-        { sessionId: contextSessionId, topicId: contextTopicId },
+        expect.objectContaining({ content, tools: undefined }),
+        { agentId: contextSessionId, topicId: contextTopicId },
       );
     });
 
@@ -911,7 +889,7 @@ describe('chatMessage actions', () => {
         // Create operation with desired context
         const op = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: contextSessionId, topicId: contextTopicId },
+          context: { agentId: contextSessionId, topicId: contextTopicId },
         });
         operationId = op.operationId;
 
@@ -923,7 +901,7 @@ describe('chatMessage actions', () => {
       expect(updateMessageSpy).toHaveBeenCalledWith(
         messageId,
         { error },
-        { sessionId: contextSessionId, topicId: contextTopicId },
+        { agentId: contextSessionId, topicId: contextTopicId },
       );
     });
 
@@ -940,7 +918,7 @@ describe('chatMessage actions', () => {
         // Create operation with desired context
         const op = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: contextSessionId, topicId: contextTopicId },
+          context: { agentId: contextSessionId, topicId: contextTopicId },
         });
         operationId = op.operationId;
 
@@ -950,7 +928,7 @@ describe('chatMessage actions', () => {
       });
 
       expect(removeMessageSpy).toHaveBeenCalledWith(messageId, {
-        sessionId: contextSessionId,
+        agentId: contextSessionId,
         topicId: contextTopicId,
       });
     });
@@ -968,7 +946,7 @@ describe('chatMessage actions', () => {
         // Create operation with desired context
         const op = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: contextSessionId, topicId: contextTopicId },
+          context: { agentId: contextSessionId, topicId: contextTopicId },
         });
         operationId = op.operationId;
 
@@ -978,7 +956,7 @@ describe('chatMessage actions', () => {
       });
 
       expect(removeMessagesSpy).toHaveBeenCalledWith(ids, {
-        sessionId: contextSessionId,
+        agentId: contextSessionId,
         topicId: contextTopicId,
       });
     });
@@ -1016,7 +994,7 @@ describe('chatMessage actions', () => {
       });
 
       expect(updateMessagePluginSpy).toHaveBeenCalledWith(messageId, pluginValue, {
-        sessionId: 'session-id',
+        agentId: 'session-id',
         topicId: 'topic-id',
       });
     });
@@ -1031,13 +1009,9 @@ describe('chatMessage actions', () => {
         await result.current.optimisticUpdateMessagePlugin(messageId, pluginValue);
       });
 
-      expect(replaceMessagesSpy).toHaveBeenCalledWith(
-        [],
-        expect.objectContaining({
-          sessionId: 'session-id',
-          topicId: 'topic-id',
-        }),
-      );
+      expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
+        context: { agentId: 'session-id', topicId: 'topic-id', threadId: undefined },
+      });
     });
 
     it('should use context operationId when provided', async () => {
@@ -1054,7 +1028,7 @@ describe('chatMessage actions', () => {
         // Create operation with desired context
         const op = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: contextSessionId, topicId: contextTopicId },
+          context: { agentId: contextSessionId, topicId: contextTopicId },
         });
         operationId = op.operationId;
 
@@ -1064,8 +1038,524 @@ describe('chatMessage actions', () => {
       });
 
       expect(updateMessagePluginSpy).toHaveBeenCalledWith(messageId, pluginValue, {
-        sessionId: contextSessionId,
+        agentId: contextSessionId,
         topicId: contextTopicId,
+      });
+    });
+  });
+
+  describe('replaceMessages with groupId context', () => {
+    it('should use groupId from context params when provided', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const messages = [
+        { id: 'msg1', role: 'user', content: 'Hello' },
+        { id: 'msg2', role: 'assistant', content: 'Hi' },
+      ] as any;
+
+      await act(async () => {
+        result.current.replaceMessages(messages, {
+          context: {
+            agentId: 'agent1',
+            groupId: 'group1',
+            topicId: 'topic1',
+          },
+        });
+      });
+
+      // Verify the messages are stored with the group context
+      const key = messageMapKey({
+        agentId: 'agent1',
+        groupId: 'group1',
+        topicId: 'topic1',
+      });
+
+      expect(result.current.messagesMap[key]).toEqual(messages);
+    });
+
+    it('should use activeGroupId from global state when no context provided', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent1',
+          activeGroupId: 'group1',
+          activeTopicId: 'topic1',
+        });
+      });
+
+      const messages = [{ id: 'msg1', role: 'user', content: 'Hello' }] as any;
+
+      await act(async () => {
+        result.current.replaceMessages(messages);
+      });
+
+      // Verify the messages are stored with the group context from global state
+      const key = messageMapKey({
+        agentId: 'agent1',
+        groupId: 'group1',
+        topicId: 'topic1',
+      });
+
+      expect(result.current.messagesMap[key]).toEqual(messages);
+    });
+
+    it('should preserve groupId from operation context', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      await act(async () => {
+        // Create operation with group context
+        const op = result.current.startOperation({
+          type: 'sendMessage',
+          context: {
+            agentId: 'agent1',
+            groupId: 'group1',
+            topicId: 'topic1',
+          },
+        });
+        operationId = op.operationId;
+
+        const messages = [{ id: 'msg1', role: 'user', content: 'Hello' }] as any;
+
+        // Use operation context via replaceMessages
+        result.current.replaceMessages(messages, {
+          context: {
+            agentId: 'agent1',
+            groupId: 'group1',
+            topicId: 'topic1',
+          },
+        });
+      });
+
+      const key = messageMapKey({
+        agentId: 'agent1',
+        groupId: 'group1',
+        topicId: 'topic1',
+      });
+
+      expect(result.current.messagesMap[key]).toBeDefined();
+    });
+
+    it('should generate different keys for same agent in different groups', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const messages1 = [{ id: 'msg1', role: 'user', content: 'Group 1' }] as any;
+      const messages2 = [{ id: 'msg2', role: 'user', content: 'Group 2' }] as any;
+
+      await act(async () => {
+        result.current.replaceMessages(messages1, {
+          context: {
+            agentId: 'agent1',
+            groupId: 'group1',
+            topicId: 'topic1',
+          },
+        });
+
+        result.current.replaceMessages(messages2, {
+          context: {
+            agentId: 'agent1',
+            groupId: 'group2',
+            topicId: 'topic1',
+          },
+        });
+      });
+
+      const key1 = messageMapKey({
+        agentId: 'agent1',
+        groupId: 'group1',
+        topicId: 'topic1',
+      });
+
+      const key2 = messageMapKey({
+        agentId: 'agent1',
+        groupId: 'group2',
+        topicId: 'topic1',
+      });
+
+      // Different groups should have different keys and different messages
+      expect(key1).not.toBe(key2);
+      expect(result.current.messagesMap[key1]).toEqual(messages1);
+      expect(result.current.messagesMap[key2]).toEqual(messages2);
+    });
+  });
+
+  describe('Public API with context parameter', () => {
+    describe('deleteMessage with context', () => {
+      it('should pass context to optimisticDeleteMessages', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const messageId = 'message-id';
+
+        // Setup: use the same agentId for both global state and message
+        // This ensures the message can be found by the selector
+        const agentId = 'session-id';
+        const topicId = 'topic-123';
+        const key = messageMapKey({ agentId, topicId });
+
+        const messages = [{ id: messageId, role: 'user', content: 'Test message' }] as any;
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            messagesMap: {
+              [key]: messages,
+            },
+          });
+        });
+
+        // Create operation with context
+        let operationId: string;
+        act(() => {
+          const op = result.current.startOperation({
+            type: 'regenerate',
+            context: { agentId, topicId },
+          });
+          operationId = op.operationId;
+        });
+
+        // Spy on optimisticDeleteMessages to verify context is passed
+        const optimisticDeleteSpy = vi.spyOn(result.current, 'optimisticDeleteMessages');
+
+        // Use vi.spyOn to mock the service response
+        vi.spyOn(messageService, 'removeMessages').mockResolvedValue({
+          success: true,
+          messages: [],
+        } as any);
+
+        // Delete message with operationId context
+        await act(async () => {
+          await result.current.deleteMessage(messageId, { operationId: operationId! });
+        });
+
+        // Verify: optimisticDeleteMessages was called with the context
+        expect(optimisticDeleteSpy).toHaveBeenCalledWith([messageId], {
+          operationId: operationId!,
+        });
+      });
+    });
+
+    describe('modifyMessageContent with context', () => {
+      it('should use operationId context for optimistic update', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const messageId = 'message-id';
+        const newContent = 'Modified content';
+
+        // Group context
+        const groupContext = {
+          agentId: 'agent-in-group',
+          groupId: 'group-123',
+          topicId: 'topic-in-group',
+        };
+        const groupKey = messageMapKey(groupContext);
+
+        // Global state - different from group context
+        const globalAgentId = 'global-agent';
+        const globalKey = messageMapKey({ agentId: globalAgentId });
+
+        // Setup: messages in both contexts
+        const groupMessages = [
+          { id: messageId, role: 'user', content: 'Original group content' },
+        ] as any;
+        const globalMessages = [
+          { id: 'global-msg', role: 'user', content: 'Global message' },
+        ] as any;
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: globalAgentId,
+            activeTopicId: undefined,
+            dbMessagesMap: {
+              [groupKey]: groupMessages,
+              [globalKey]: globalMessages,
+            },
+            messagesMap: {
+              [groupKey]: groupMessages,
+              [globalKey]: globalMessages,
+            },
+          });
+        });
+
+        // Create operation with group context
+        let operationId: string;
+        act(() => {
+          const op = result.current.startOperation({
+            type: 'regenerate',
+            context: groupContext,
+          });
+          operationId = op.operationId;
+        });
+
+        // Use vi.spyOn to mock the service response
+        const updateMessageSpy = vi.spyOn(messageService, 'updateMessage').mockResolvedValue({
+          success: true,
+          messages: [{ id: messageId, role: 'user', content: newContent }],
+        } as any);
+
+        // Modify message with operationId context
+        await act(async () => {
+          await result.current.modifyMessageContent(messageId, newContent, {
+            operationId: operationId!,
+          });
+        });
+
+        // Verify: service was called with the message update
+        // Note: updateMessage is called with all fields, we just check that it was called with the id and content
+        expect(updateMessageSpy).toHaveBeenCalledWith(
+          messageId,
+          expect.objectContaining({ content: newContent }),
+          expect.anything(),
+        );
+
+        // Verify: global messages should remain untouched
+        expect(result.current.messagesMap[globalKey]).toEqual(globalMessages);
+      });
+    });
+
+    describe('switchMessageBranch with context', () => {
+      it('should use operationId context for optimistic update', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const messageId = 'message-id';
+        const branchIndex = 2;
+
+        // Group context
+        const groupContext = {
+          agentId: 'agent-in-group',
+          groupId: 'group-123',
+          topicId: 'topic-in-group',
+        };
+        const groupKey = messageMapKey(groupContext);
+
+        // Global state - different from group context
+        const globalAgentId = 'global-agent';
+        const globalKey = messageMapKey({ agentId: globalAgentId });
+
+        // Setup: messages in both contexts
+        const groupMessages = [
+          { id: messageId, role: 'user', content: 'Group message', metadata: {} },
+        ] as any;
+        const globalMessages = [
+          { id: 'global-msg', role: 'user', content: 'Global message', metadata: {} },
+        ] as any;
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: globalAgentId,
+            activeTopicId: undefined,
+            dbMessagesMap: {
+              [groupKey]: groupMessages,
+              [globalKey]: globalMessages,
+            },
+            messagesMap: {
+              [groupKey]: groupMessages,
+              [globalKey]: globalMessages,
+            },
+          });
+        });
+
+        // Create operation with group context
+        let operationId: string;
+        act(() => {
+          const op = result.current.startOperation({
+            type: 'regenerate',
+            context: groupContext,
+          });
+          operationId = op.operationId;
+        });
+
+        // Use vi.spyOn to mock the service response
+        const updateMetadataSpy = vi
+          .spyOn(messageService, 'updateMessageMetadata')
+          .mockResolvedValue({
+            success: true,
+            messages: [
+              {
+                id: messageId,
+                role: 'user',
+                content: 'Group message',
+                metadata: { activeBranchIndex: branchIndex },
+              },
+            ],
+          } as any);
+
+        // Switch branch with operationId context
+        await act(async () => {
+          await result.current.switchMessageBranch(messageId, branchIndex, {
+            operationId: operationId!,
+          });
+        });
+
+        // Verify: service was called with the metadata update
+        // Note: service is called with 3 args: (id, metadata, context)
+        // The context includes all fields from internal_getConversationContext
+        expect(updateMetadataSpy).toHaveBeenCalledWith(
+          messageId,
+          { activeBranchIndex: branchIndex },
+          expect.objectContaining({
+            agentId: groupContext.agentId,
+            groupId: groupContext.groupId,
+            topicId: groupContext.topicId,
+          }),
+        );
+
+        // Verify: global messages should remain untouched
+        expect(result.current.messagesMap[globalKey]).toEqual(globalMessages);
+      });
+    });
+
+    describe('optimistic updates with groupId in operation context', () => {
+      const groupContext = {
+        agentId: 'agent-in-group',
+        groupId: 'group-456',
+        topicId: 'topic-in-group',
+      };
+      const groupKey = messageMapKey(groupContext);
+      const messageId = 'message-id';
+      const messages = [{ id: messageId, role: 'user', content: 'Test' }] as any;
+
+      beforeEach(() => {
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: 'global-agent',
+            activeTopicId: undefined,
+            dbMessagesMap: { [groupKey]: messages },
+            messagesMap: { [groupKey]: messages },
+          });
+        });
+      });
+
+      it('optimisticUpdateMessageContent should pass groupId via ctx', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        let operationId: string;
+        act(() => {
+          const op = result.current.startOperation({
+            type: 'regenerate',
+            context: groupContext,
+          });
+          operationId = op.operationId;
+        });
+
+        const updateSpy = vi
+          .spyOn(messageService, 'updateMessage')
+          .mockResolvedValue({ success: true, messages: [] } as any);
+
+        await act(async () => {
+          await result.current.optimisticUpdateMessageContent(messageId, 'new content', undefined, {
+            operationId: operationId!,
+          });
+        });
+
+        expect(updateSpy).toHaveBeenCalledWith(
+          messageId,
+          expect.objectContaining({ content: 'new content' }),
+          expect.objectContaining({
+            agentId: groupContext.agentId,
+            groupId: groupContext.groupId,
+            topicId: groupContext.topicId,
+          }),
+        );
+      });
+
+      it('optimisticDeleteMessage should pass groupId via ctx', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        let operationId: string;
+        act(() => {
+          const op = result.current.startOperation({
+            type: 'regenerate',
+            context: groupContext,
+          });
+          operationId = op.operationId;
+        });
+
+        const removeSpy = vi
+          .spyOn(messageService, 'removeMessage')
+          .mockResolvedValue({ success: true, messages: [] } as any);
+
+        await act(async () => {
+          await result.current.optimisticDeleteMessage(messageId, { operationId: operationId! });
+        });
+
+        expect(removeSpy).toHaveBeenCalledWith(
+          messageId,
+          expect.objectContaining({
+            agentId: groupContext.agentId,
+            groupId: groupContext.groupId,
+            topicId: groupContext.topicId,
+          }),
+        );
+      });
+
+      it('optimisticUpdateMessageError should pass groupId via ctx', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        let operationId: string;
+        act(() => {
+          const op = result.current.startOperation({
+            type: 'regenerate',
+            context: groupContext,
+          });
+          operationId = op.operationId;
+        });
+
+        const error = { type: 'TestError', message: 'Test' };
+
+        const updateSpy = vi
+          .spyOn(messageService, 'updateMessage')
+          .mockResolvedValue({ success: true, messages: [] } as any);
+
+        await act(async () => {
+          await result.current.optimisticUpdateMessageError(messageId, error as any, {
+            operationId: operationId!,
+          });
+        });
+
+        expect(updateSpy).toHaveBeenCalledWith(
+          messageId,
+          expect.objectContaining({ error }),
+          expect.objectContaining({
+            agentId: groupContext.agentId,
+            groupId: groupContext.groupId,
+            topicId: groupContext.topicId,
+          }),
+        );
+      });
+
+      it('optimisticUpdateMessageMetadata should pass groupId via ctx', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        let operationId: string;
+        act(() => {
+          const op = result.current.startOperation({
+            type: 'regenerate',
+            context: groupContext,
+          });
+          operationId = op.operationId;
+        });
+
+        const metadata = { collapsed: true };
+
+        const updateSpy = vi
+          .spyOn(messageService, 'updateMessageMetadata')
+          .mockResolvedValue({ success: true, messages: [] } as any);
+
+        await act(async () => {
+          await result.current.optimisticUpdateMessageMetadata(messageId, metadata, {
+            operationId: operationId!,
+          });
+        });
+
+        expect(updateSpy).toHaveBeenCalledWith(
+          messageId,
+          metadata,
+          expect.objectContaining({
+            agentId: groupContext.agentId,
+            groupId: groupContext.groupId,
+            topicId: groupContext.topicId,
+          }),
+        );
       });
     });
   });

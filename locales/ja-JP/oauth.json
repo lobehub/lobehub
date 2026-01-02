@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "承認",
-      "deny": "拒否"
-    },
-    "description": "アプリケーション {{clientName}} があなたのアカウントの承認を要求しています",
-    "error": {
-      "sessionInvalid": {
-        "message": "承認セッションが期限切れまたは無効です。再度承認プロセスを開始してください。",
-        "title": "承認セッションが無効です"
-      },
-      "title": "エラーが発生しました",
-      "unsupportedInteraction": {
-        "message": "サポートされていないインタラクションタイプ: {promptName}",
-        "title": "サポートされていないインタラクションタイプ"
-      }
-    },
-    "permissionsTitle": "以下の権限をリクエストします：",
-    "redirectUri": "承認が成功した後、次の場所にリダイレクトされます",
-    "redirecting": "認証に成功しました。リダイレクト中です...",
-    "scope": {
-      "email": "あなたのメールアドレスにアクセス",
-      "offline_access": "クライアントがあなたのデータにアクセスすることを許可",
-      "openid": "あなたの LobeChat アカウントで認証",
-      "profile": "基本的なプロフィール情報（名前、アバターなど）にアクセス",
-      "sync-read": "あなたの同期データを読み取る",
-      "sync-write": "あなたの同期データを書き込み、更新する"
-    },
-    "title": "{{clientName}} の承認"
-  },
-  "error": {
-    "backToHome": "ホームに戻る",
-    "desc": "OAuth認証に失敗しました。失敗理由：{{reason}}",
-    "reason": {
-      "internal_error": "サーバーエラー",
-      "invalid_request": "無効なリクエストパラメータ"
-    },
-    "title": "認証失敗"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "アプリケーションは認証を処理中です。次のページに移動します...",
-      "success": "デスクトップアプリを開こうとしました。アプリが自動的に開かない場合は、手動で切り替えてください。このブラウザウィンドウは後で閉じることができます。"
-    },
-    "title": {
-      "processing": "認証処理中...",
-      "success": "認証が完了しました"
-    }
-  },
-  "login": {
-    "button": "ログインを確認",
-    "description": "アプリ {{clientName}} があなたのアカウントを使用してログインすることを要求しています",
-    "title": "{{clientName}} にログイン",
-    "userWelcome": "お帰りなさい、"
-  },
-  "success": {
-    "subTitle": "アプリがアカウントへのアクセスを正常に許可されました。このページを閉じてください。",
-    "title": "承認成功"
-  }
+  "consent.buttons.accept": "承認",
+  "consent.buttons.deny": "拒否",
+  "consent.description": "アプリケーション {{clientName}} があなたのアカウントの承認を要求しています",
+  "consent.error.sessionInvalid.message": "承認セッションが期限切れまたは無効です。再度承認プロセスを開始してください。",
+  "consent.error.sessionInvalid.title": "承認セッションが無効です",
+  "consent.error.title": "エラーが発生しました",
+  "consent.error.unknown.message": "認可の詳細を取得中に不明なエラーが発生しました",
+  "consent.error.unsupportedInteraction.message": "サポートされていないインタラクションタイプ: {promptName}",
+  "consent.error.unsupportedInteraction.title": "サポートされていないインタラクションタイプ",
+  "consent.permissionsTitle": "以下の権限をリクエストします：",
+  "consent.redirectUri": "承認が成功した後、次の場所にリダイレクトされます",
+  "consent.redirecting": "認証に成功しました。リダイレクト中です...",
+  "consent.scope.email": "あなたのメールアドレスにアクセス",
+  "consent.scope.offline_access": "クライアントがあなたのデータにアクセスすることを許可",
+  "consent.scope.openid": "あなたの LobeChat アカウントで認証",
+  "consent.scope.profile": "基本的なプロフィール情報（名前、アバターなど）にアクセス",
+  "consent.scope.sync-read": "あなたの同期データを読み取る",
+  "consent.scope.sync-write": "あなたの同期データを書き込み、更新する",
+  "consent.title": "{{clientName}} の承認",
+  "error.backToHome": "ホームに戻る",
+  "error.desc": "OAuth認証に失敗しました。失敗理由：{{reason}}",
+  "error.reason.internal_error": "サーバーエラー",
+  "error.reason.invalid_request": "無効なリクエストパラメータ",
+  "error.title": "認証失敗",
+  "handoff.desc.processing": "アプリケーションは認証を処理中です。次のページに移動します...",
+  "handoff.desc.success": "デスクトップアプリを開こうとしました。アプリが自動的に開かない場合は、手動で切り替えてください。このブラウザウィンドウは後で閉じることができます。",
+  "handoff.title.processing": "認証処理中...",
+  "handoff.title.success": "認証が完了しました",
+  "login.button": "ログインを確認",
+  "login.description": "アプリ {{clientName}} があなたのアカウントを使用してログインすることを要求しています",
+  "login.title": "{{clientName}} にログイン",
+  "login.userWelcome": "お帰りなさい、",
+  "success.subTitle": "アプリがアカウントへのアクセスを正常に許可されました。このページを閉じてください。",
+  "success.title": "承認成功"
 }

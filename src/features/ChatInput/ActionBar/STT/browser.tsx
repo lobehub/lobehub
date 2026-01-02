@@ -1,13 +1,13 @@
 import { getMessageError } from '@lobechat/fetch-sse';
-import { ChatMessageError } from '@lobechat/types';
-import { SpeechRecognitionOptions, useSpeechRecognition } from '@lobehub/tts/react';
+import { type ChatMessageError } from '@lobechat/types';
+import { type SpeechRecognitionOptions, useSpeechRecognition } from '@lobehub/tts/react';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SWRConfiguration } from 'swr';
+import { type SWRConfiguration } from 'swr';
 
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/slices/chat';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -15,6 +15,7 @@ import { globalGeneralSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import CommonSTT from './common';
 
 interface STTConfig extends SWRConfiguration {
@@ -23,7 +24,11 @@ interface STTConfig extends SWRConfiguration {
 
 const useBrowserSTT = (config: STTConfig) => {
   const ttsSettings = useUserStore(settingsSelectors.currentTTS, isEqual);
-  const ttsAgentSettings = useAgentStore(agentSelectors.currentAgentTTS, isEqual);
+  const agentId = useAgentId();
+  const ttsAgentSettings = useAgentStore(
+    (s) => agentByIdSelectors.getAgentTTSById(agentId)(s),
+    isEqual,
+  );
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   const autoStop = ttsSettings.sttAutoStop;

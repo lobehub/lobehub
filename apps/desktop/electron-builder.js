@@ -17,6 +17,10 @@ console.log(`🏗️ Building for architecture: ${arch}`);
 const isNightly = channel === 'nightly';
 const isBeta = packageJSON.name.includes('beta');
 
+// Keep only these Electron Framework localization folders (*.lproj)
+// (aligned with previous Electron Forge build config)
+const keepLanguages = new Set(['en', 'en_GB', 'en-US', 'en_US']);
+
 // https://www.electron.build/code-signing-mac#how-to-disable-code-signing-during-the-build-process-on-macos
 if (!hasAppleCertificate) {
   // Disable auto discovery to keep electron-builder from searching unavailable signing identities
@@ -54,7 +58,7 @@ const config = {
    */
   afterPack: async (context) => {
     // Only process macOS builds
-    if (context.electronPlatformName !== 'darwin') {
+    if (!['darwin', 'mas'].includes(context.electronPlatformName)) {
       return;
     }
 
@@ -67,6 +71,36 @@ const config = {
       'Resources',
     );
     const assetsCarDest = path.join(resourcesPath, 'Assets.car');
+
+    // Remove unused Electron Framework localizations to reduce app size
+    // Equivalent to:
+    // ../../Frameworks/Electron Framework.framework/Versions/A/Resources/*.lproj
+    const frameworkResourcePath = path.join(
+      context.appOutDir,
+      `${context.packager.appInfo.productFilename}.app`,
+      'Contents',
+      'Frameworks',
+      'Electron Framework.framework',
+      'Versions',
+      'A',
+      'Resources',
+    );
+
+    try {
+      const entries = await fs.readdir(frameworkResourcePath);
+      await Promise.all(
+        entries.map(async (file) => {
+          if (!file.endsWith('.lproj')) return;
+
+          const lang = file.split('.')[0];
+          if (keepLanguages.has(lang)) return;
+
+          await fs.rm(path.join(frameworkResourcePath, file), { force: true, recursive: true });
+        }),
+      );
+    } catch {
+      // Non-critical: folder may not exist depending on packaging details
+    }
 
     try {
       await fs.access(assetsCarSource);
@@ -106,6 +140,8 @@ const config = {
   files: [
     'dist',
     'resources',
+    // Ensure Next export assets are packaged
+    'dist/next/**/*',
     '!resources/locales',
     '!dist/next/docs',
     '!dist/next/packages',
@@ -129,12 +165,16 @@ const config = {
           CFBundleURLSchemes: [protocolScheme],
         },
       ],
+      NSAppleEventsUsageDescription:
+        'Application needs to control System Settings to help you grant Full Disk Access automatically.',
       NSCameraUsageDescription: "Application requests access to the device's camera.",
       NSDocumentsFolderUsageDescription:
         "Application requests access to the user's Documents folder.",
       NSDownloadsFolderUsageDescription:
         "Application requests access to the user's Downloads folder.",
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+      NSScreenCaptureUsageDescription:
+        'Application requests access to record and analyze screen content for AI assistance.',
     },
     gatekeeperAssess: false,
     hardenedRuntime: hasAppleCertificate,

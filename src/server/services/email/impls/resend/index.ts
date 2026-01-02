@@ -5,7 +5,7 @@ import type { CreateEmailOptions } from 'resend';
 
 import { emailEnv } from '@/envs/email';
 
-import { EmailPayload, EmailResponse, EmailServiceImpl } from '../type';
+import { type EmailPayload, type EmailResponse, type EmailServiceImpl } from '../type';
 
 const log = debug('lobe-email:Resend');
 

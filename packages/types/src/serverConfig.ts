@@ -10,6 +10,30 @@ import {
   UserSystemAgentConfig,
 } from './user/settings';
 
+export type GlobalMemoryLayer = 'context' | 'experience' | 'identity' | 'preference';
+
+export interface MemoryAgentPublicConfig {
+  baseURL?: string;
+  contextLimit?: number;
+  model?: string;
+  provider?: string;
+}
+
+export interface MemoryLayerExtractorPublicConfig extends MemoryAgentPublicConfig {
+  layers?: Partial<Record<GlobalMemoryLayer, string>>;
+}
+
+export interface GlobalMemoryExtractionConfig {
+  agentGateKeeper: MemoryAgentPublicConfig;
+  agentLayerExtractor: MemoryLayerExtractorPublicConfig;
+  concurrency?: number;
+  embedding?: MemoryAgentPublicConfig;
+}
+
+export interface GlobalMemoryConfig {
+  userMemory?: GlobalMemoryExtractionConfig;
+}
+
 export interface ServerModelProviderConfig {
   enabled?: boolean;
   enabledModels?: string[];
@@ -26,6 +50,7 @@ export interface GlobalServerConfig {
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   enableKlavis?: boolean;
+  enableMarketTrustedClient?: boolean;
   enableUploadFileToServer?: boolean;
   enabledAccessCode?: boolean;
   /**
@@ -33,6 +58,7 @@ export interface GlobalServerConfig {
    */
   enabledOAuthSSO?: boolean;
   image?: PartialDeep<UserImageConfig>;
+  memory?: GlobalMemoryConfig;
   oAuthSSOProviders?: string[];
   systemAgent?: PartialDeep<UserSystemAgentConfig>;
   telemetry: {

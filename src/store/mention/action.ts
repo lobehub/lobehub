@@ -1,6 +1,6 @@
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { MentionState, initialMentionState } from './initialState';
+import { type MentionState, initialMentionState } from './initialState';
 
 export interface MentionAction {
   addMentionedUser: (userId: string) => void;

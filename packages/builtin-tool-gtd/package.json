@@ -1,0 +1,25 @@
+{
+  "name": "@lobechat/builtin-tool-gtd",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./executor": "./src/executor/index.ts",
+    "./client": "./src/client/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/prompts": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/editor": "^3",
+    "@lobehub/ui": "^4",
+    "antd": "^6",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "react": "*"
+  }
+}

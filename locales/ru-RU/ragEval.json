@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Создать",
-    "description": {
-      "placeholder": "Описание набора данных (необязательно)"
-    },
-    "name": {
-      "placeholder": "Название набора данных",
-      "required": "Пожалуйста, укажите название набора данных"
-    },
-    "title": "Добавить набор данных"
-  },
-  "dataset": {
-    "addNewButton": "Создать набор данных",
-    "emptyGuide": "Текущий набор данных пуст, пожалуйста, создайте новый набор данных.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Импортировать данные"
-        },
-        "columns": {
-          "actions": "Действия",
-          "ideal": {
-            "title": "Ожидаемый ответ"
-          },
-          "question": {
-            "title": "Вопрос"
-          },
-          "referenceFiles": {
-            "title": "Справочные файлы"
-          }
-        },
-        "notSelected": "Пожалуйста, выберите набор данных слева",
-        "title": "Детали набора данных"
-      },
-      "title": "Набор данных"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Создать",
-      "datasetId": {
-        "placeholder": "Пожалуйста, выберите ваш набор данных для оценки",
-        "required": "Пожалуйста, выберите набор данных для оценки"
-      },
-      "description": {
-        "placeholder": "Описание задачи оценки (необязательно)"
-      },
-      "name": {
-        "placeholder": "Название задачи оценки",
-        "required": "Пожалуйста, укажите название задачи оценки"
-      },
-      "title": "Добавить задачу оценки"
-    },
-    "addNewButton": "Создать оценку",
-    "emptyGuide": "Текущая задача оценки пуста, начните создание оценки.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Проверить статус",
-          "confirmDelete": "Вы уверены, что хотите удалить эту оценку?",
-          "confirmRun": "Вы уверены, что хотите запустить? После запуска задача оценки будет выполняться асинхронно в фоновом режиме, закрытие страницы не повлияет на выполнение асинхронной задачи.",
-          "downloadRecords": "Скачать оценки",
-          "retry": "Повторить",
-          "run": "Запустить",
-          "title": "Действия"
-        },
-        "datasetId": {
-          "title": "Набор данных"
-        },
-        "name": {
-          "title": "Название задачи оценки"
-        },
-        "records": {
-          "title": "Количество записей оценки"
-        },
-        "referenceFiles": {
-          "title": "Справочные файлы"
-        },
-        "status": {
-          "error": "Ошибка выполнения",
-          "pending": "Ожидание выполнения",
-          "processing": "В процессе выполнения",
-          "success": "Выполнение успешно",
-          "title": "Статус"
-        }
-      },
-      "title": "Список задач оценки"
-    }
-  }
+  "addDataset.confirm": "Создать",
+  "addDataset.description.placeholder": "Описание набора данных (необязательно)",
+  "addDataset.name.placeholder": "Название набора данных",
+  "addDataset.name.required": "Пожалуйста, введите название набора данных",
+  "addDataset.title": "Добавить набор данных",
+  "dataset.addNewButton": "Создать набор данных",
+  "dataset.emptyGuide": "В настоящее время нет наборов данных. Пожалуйста, создайте набор данных.",
+  "dataset.list.table.actions.importData": "Импортировать данные",
+  "dataset.list.table.columns.actions": "Действия",
+  "dataset.list.table.columns.ideal.title": "Ожидаемый ответ",
+  "dataset.list.table.columns.question.title": "Вопрос",
+  "dataset.list.table.columns.referenceFiles.title": "Референсные файлы",
+  "dataset.list.table.notSelected": "Пожалуйста, выберите набор данных слева",
+  "dataset.list.table.title": "Детали набора данных",
+  "dataset.list.title": "Набор данных",
+  "evaluation.addEvaluation.confirm": "Создать",
+  "evaluation.addEvaluation.datasetId.placeholder": "Пожалуйста, выберите набор данных для оценки",
+  "evaluation.addEvaluation.datasetId.required": "Пожалуйста, выберите набор данных для оценки",
+  "evaluation.addEvaluation.description.placeholder": "Описание задачи оценки (необязательно)",
+  "evaluation.addEvaluation.name.placeholder": "Название задачи оценки",
+  "evaluation.addEvaluation.name.required": "Пожалуйста, введите название задачи оценки",
+  "evaluation.addEvaluation.title": "Добавить задачу оценки",
+  "evaluation.addNewButton": "Создать задачу оценки",
+  "evaluation.emptyGuide": "В настоящее время нет задач оценки. Начните с создания новой задачи.",
+  "evaluation.table.columns.actions.checkStatus": "Проверить статус",
+  "evaluation.table.columns.actions.confirmDelete": "Вы уверены, что хотите удалить эту задачу оценки?",
+  "evaluation.table.columns.actions.confirmRun": "Вы уверены, что хотите запустить выполнение? Задача оценки будет выполняться асинхронно в фоновом режиме, и закрытие страницы не повлияет на выполнение.",
+  "evaluation.table.columns.actions.downloadRecords": "Скачать результаты оценки",
+  "evaluation.table.columns.actions.retry": "Повторить",
+  "evaluation.table.columns.actions.run": "Запустить",
+  "evaluation.table.columns.actions.title": "Действия",
+  "evaluation.table.columns.datasetId.title": "Набор данных",
+  "evaluation.table.columns.name.title": "Название задачи оценки",
+  "evaluation.table.columns.records.title": "Количество записей оценки",
+  "evaluation.table.columns.referenceFiles.title": "Референсные файлы",
+  "evaluation.table.columns.status.error": "Ошибка выполнения",
+  "evaluation.table.columns.status.pending": "В ожидании",
+  "evaluation.table.columns.status.processing": "В процессе",
+  "evaluation.table.columns.status.success": "Успешно выполнено",
+  "evaluation.table.columns.status.title": "Статус",
+  "evaluation.table.title": "Список задач оценки"
 }

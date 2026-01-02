@@ -1,18 +1,10 @@
 {
-  "desc": "Nous mettons à jour régulièrement cette section avec de nouvelles fonctionnalités en cours d'exploration. N'hésitez pas à les essayer !",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "Regrouper les messages de l'assistant et les résultats des appels d'outils pour les afficher ensemble",
-      "title": "Regroupement des messages de l'assistant"
-    },
-    "groupChat": {
-      "desc": "Activez la coordination de discussions de groupe avec plusieurs agents intelligents.",
-      "title": "Discussion de groupe (multi-agents)"
-    },
-    "inputMarkdown": {
-      "desc": "Rendu en temps réel du Markdown dans la zone de saisie (gras, blocs de code, tableaux, etc.).",
-      "title": "Rendu Markdown dans le champ de saisie"
-    }
-  },
-  "title": "Laboratoire"
+  "desc": "Vous trouverez ici des mises à jour occasionnelles sur les nouvelles fonctionnalités que nous explorons — n'hésitez pas à les essayer !",
+  "features.assistantMessageGroup.desc": "Regroupez les messages de l'agent et les résultats de leurs appels d'outils pour les afficher ensemble",
+  "features.assistantMessageGroup.title": "Regroupement des messages de l'agent",
+  "features.groupChat.desc": "Activez la coordination de discussions de groupe multi-agents.",
+  "features.groupChat.title": "Discussion de groupe (multi-agents)",
+  "features.inputMarkdown.desc": "Affichez le Markdown dans la zone de saisie en temps réel (texte en gras, blocs de code, tableaux, etc.).",
+  "features.inputMarkdown.title": "Rendu Markdown dans la saisie",
+  "title": "Laboratoires"
 }

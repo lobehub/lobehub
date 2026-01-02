@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "Arquivo adicionado com sucesso, <1>ver agora</1>",
-    "confirm": "Adicionar",
-    "id": {
-      "placeholder": "Selecione o conhecimento a ser adicionado",
-      "required": "Selecione o conhecimento",
-      "title": "Conhecimento alvo"
-    },
-    "title": "Adicionar ao conhecimento",
-    "totalFiles": "Foram selecionados {{count}} arquivos"
-  },
-  "createNew": {
-    "confirm": "Criar novo",
-    "description": {
-      "placeholder": "Descrição do conhecimento (opcional)"
-    },
-    "formTitle": "Informações básicas",
-    "name": {
-      "placeholder": "Nome do conhecimento",
-      "required": "Por favor, preencha o nome do conhecimento"
-    },
-    "title": "Criar conhecimento"
-  },
-  "tab": {
-    "evals": "Avaliações",
-    "files": "Documentos",
-    "settings": "Configurações",
-    "testing": "Teste de recuperação"
-  },
-  "title": "Conhecimento"
+  "addToKnowledgeBase.addSuccess": "Arquivo adicionado com sucesso, <1>ver agora</1>",
+  "addToKnowledgeBase.confirm": "Adicionar",
+  "addToKnowledgeBase.error": "Falha ao adicionar o arquivo à Biblioteca",
+  "addToKnowledgeBase.id.placeholder": "Selecione uma biblioteca para adicionar",
+  "addToKnowledgeBase.id.required": "Por favor, selecione uma biblioteca",
+  "addToKnowledgeBase.id.title": "Biblioteca de Destino",
+  "addToKnowledgeBase.title": "Adicionar à Biblioteca",
+  "addToKnowledgeBase.totalFiles": "{{count}} arquivos selecionados",
+  "createNew.confirm": "Criar Nova",
+  "createNew.description.placeholder": "Descrição da biblioteca (opcional)",
+  "createNew.formTitle": "Informações Básicas",
+  "createNew.name.placeholder": "Nome da biblioteca",
+  "createNew.name.required": "Por favor, insira um nome para a biblioteca",
+  "createNew.title": "Criar Nova Biblioteca",
+  "tab.evals": "Avaliações",
+  "tab.files": "Arquivos",
+  "tab.settings": "Configurações",
+  "tab.testing": "Teste de Memorização",
+  "title": "Biblioteca"
 }

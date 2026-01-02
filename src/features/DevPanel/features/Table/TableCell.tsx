@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { get, isDate } from 'lodash-es';
+import { get, isDate } from 'es-toolkit/compat';
 import React, { useMemo } from 'react';
 
 // import TooltipContent from './TooltipContent';

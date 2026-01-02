@@ -1,6 +1,6 @@
-import { AdapterAuthenticator, AdapterUser } from 'next-auth/adapters';
+import { type AdapterAuthenticator, type AdapterUser } from 'next-auth/adapters';
 
-import { NewUser } from '@/database/schemas';
+import { type NewUser } from '@/database/schemas';
 
 export const mapAdapterUserToLobeUser = (adapterUser: AdapterUser): NewUser => {
   const { id, email, name, image, emailVerified } = adapterUser;

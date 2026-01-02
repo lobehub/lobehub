@@ -1,9 +1,9 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { CreateMessageParams } from '@lobechat/types';
-import { StateCreator } from 'zustand/vanilla';
+import { type CreateMessageParams } from '@lobechat/types';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { messageService } from '@/services/message';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
 import { dbMessageSelectors, displayMessageSelectors } from '../../message/selectors';
 import { threadSelectors } from '../../thread/selectors';
@@ -37,39 +37,39 @@ export const pluginWorkflow: StateCreator<
   PluginWorkflowAction
 > = (set, get) => ({
   createAssistantMessageByPlugin: async (content, parentId) => {
-    // Get parent message to extract sessionId/topicId
+    // Get parent message to extract agentId/topicId
     const parentMessage = dbMessageSelectors.getDbMessageById(parentId)(get());
 
     const newMessage: CreateMessageParams = {
       content,
       parentId,
       role: 'assistant',
-      sessionId: parentMessage?.sessionId ?? get().activeId,
+      agentId: parentMessage?.agentId ?? get().activeAgentId,
       topicId: parentMessage?.topicId !== undefined ? parentMessage.topicId : get().activeTopicId,
     };
 
     const result = await messageService.createMessage(newMessage);
     get().replaceMessages(result.messages, {
-      sessionId: newMessage.sessionId,
-      topicId: newMessage.topicId,
+      context: { agentId: newMessage.agentId, topicId: newMessage.topicId },
     });
   },
 
-  triggerAIMessage: async ({ parentId, traceId, threadId, inPortalThread, inSearchWorkflow }) => {
-    const { internal_execAgentRuntime } = get();
+  triggerAIMessage: async ({ parentId, threadId, inPortalThread, inSearchWorkflow }) => {
+    const { internal_execAgentRuntime, activeAgentId, activeTopicId } = get();
 
     const chats = inPortalThread
       ? threadSelectors.portalAIChatsWithHistoryConfig(get())
       : displayMessageSelectors.mainAIChatsWithHistoryConfig(get());
 
     await internal_execAgentRuntime({
+      context: {
+        agentId: activeAgentId,
+        topicId: activeTopicId,
+        threadId,
+      },
       messages: chats,
       parentMessageId: parentId ?? chats.at(-1)!.id,
       parentMessageType: 'user',
-      sessionId: get().activeId,
-      topicId: get().activeTopicId,
-      traceId,
-      threadId,
       inPortalThread,
       inSearchWorkflow,
     });

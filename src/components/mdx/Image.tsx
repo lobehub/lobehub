@@ -3,7 +3,7 @@
 import { Image } from '@lobehub/ui/mdx';
 import Img from 'next/image';
 import { getPlaiceholder } from 'plaiceholder';
-import { FC } from 'react';
+import { type FC } from 'react';
 
 const DEFAULT_WIDTH = 800;
 

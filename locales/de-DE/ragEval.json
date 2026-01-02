@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Neu erstellen",
-    "description": {
-      "placeholder": "Beschreibung des Datensatzes (optional)"
-    },
-    "name": {
-      "placeholder": "Name des Datensatzes",
-      "required": "Bitte geben Sie den Namen des Datensatzes ein"
-    },
-    "title": "Datensatz hinzufügen"
-  },
-  "dataset": {
-    "addNewButton": "Datensatz erstellen",
-    "emptyGuide": "Der aktuelle Datensatz ist leer, bitte erstellen Sie einen Datensatz.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Daten importieren"
-        },
-        "columns": {
-          "actions": "Aktionen",
-          "ideal": {
-            "title": "Erwartete Antwort"
-          },
-          "question": {
-            "title": "Frage"
-          },
-          "referenceFiles": {
-            "title": "Referenzdateien"
-          }
-        },
-        "notSelected": "Bitte wählen Sie einen Datensatz auf der linken Seite aus",
-        "title": "Details zum Datensatz"
-      },
-      "title": "Datensatz"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Neu erstellen",
-      "datasetId": {
-        "placeholder": "Bitte wählen Sie Ihren Bewertungsdatensatz aus",
-        "required": "Bitte wählen Sie einen Bewertungsdatensatz aus"
-      },
-      "description": {
-        "placeholder": "Beschreibung der Bewertungsaufgabe (optional)"
-      },
-      "name": {
-        "placeholder": "Name der Bewertungsaufgabe",
-        "required": "Bitte geben Sie den Namen der Bewertungsaufgabe ein"
-      },
-      "title": "Bewertungsaufgabe hinzufügen"
-    },
-    "addNewButton": "Bewertung erstellen",
-    "emptyGuide": "Aktuell sind keine Bewertungsaufgaben vorhanden, beginnen Sie mit der Erstellung einer Bewertung.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Status überprüfen",
-          "confirmDelete": "Möchten Sie diese Bewertungsaufgabe wirklich löschen?",
-          "confirmRun": "Möchten Sie die Ausführung starten? Nach dem Start wird die Bewertungsaufgabe im Hintergrund asynchron ausgeführt, das Schließen der Seite hat keinen Einfluss auf die Ausführung der asynchronen Aufgabe.",
-          "downloadRecords": "Bewertung herunterladen",
-          "retry": "Erneut versuchen",
-          "run": "Ausführen",
-          "title": "Aktionen"
-        },
-        "datasetId": {
-          "title": "Datensatz"
-        },
-        "name": {
-          "title": "Name der Bewertungsaufgabe"
-        },
-        "records": {
-          "title": "Anzahl der Bewertungsaufzeichnungen"
-        },
-        "referenceFiles": {
-          "title": "Referenzdateien"
-        },
-        "status": {
-          "error": "Fehler bei der Ausführung",
-          "pending": "Warten auf Ausführung",
-          "processing": "Wird ausgeführt",
-          "success": "Erfolgreich ausgeführt",
-          "title": "Status"
-        }
-      },
-      "title": "Liste der Bewertungsaufgaben"
-    }
-  }
+  "addDataset.confirm": "Erstellen",
+  "addDataset.description.placeholder": "Datensatzbeschreibung (optional)",
+  "addDataset.name.placeholder": "Name des Datensatzes",
+  "addDataset.name.required": "Bitte geben Sie den Namen des Datensatzes ein",
+  "addDataset.title": "Datensatz hinzufügen",
+  "dataset.addNewButton": "Datensatz erstellen",
+  "dataset.emptyGuide": "Derzeit sind keine Datensätze vorhanden. Bitte erstellen Sie einen Datensatz.",
+  "dataset.list.table.actions.importData": "Daten importieren",
+  "dataset.list.table.columns.actions": "Aktionen",
+  "dataset.list.table.columns.ideal.title": "Erwartete Antwort",
+  "dataset.list.table.columns.question.title": "Frage",
+  "dataset.list.table.columns.referenceFiles.title": "Referenzdateien",
+  "dataset.list.table.notSelected": "Bitte wählen Sie links einen Datensatz aus",
+  "dataset.list.table.title": "Datensatzdetails",
+  "dataset.list.title": "Datensatz",
+  "evaluation.addEvaluation.confirm": "Erstellen",
+  "evaluation.addEvaluation.datasetId.placeholder": "Bitte wählen Sie Ihren Evaluierungsdatensatz",
+  "evaluation.addEvaluation.datasetId.required": "Bitte wählen Sie einen Evaluierungsdatensatz",
+  "evaluation.addEvaluation.description.placeholder": "Beschreibung der Evaluierungsaufgabe (optional)",
+  "evaluation.addEvaluation.name.placeholder": "Name der Evaluierungsaufgabe",
+  "evaluation.addEvaluation.name.required": "Bitte geben Sie den Namen der Evaluierungsaufgabe ein",
+  "evaluation.addEvaluation.title": "Evaluierungsaufgabe hinzufügen",
+  "evaluation.addNewButton": "Evaluierung erstellen",
+  "evaluation.emptyGuide": "Derzeit sind keine Evaluierungsaufgaben vorhanden. Beginnen Sie mit der Erstellung einer Evaluierung.",
+  "evaluation.table.columns.actions.checkStatus": "Status prüfen",
+  "evaluation.table.columns.actions.confirmDelete": "Möchten Sie diese Evaluierung wirklich löschen?",
+  "evaluation.table.columns.actions.confirmRun": "Möchten Sie die Ausführung wirklich starten? Die Evaluierungsaufgabe wird asynchron im Hintergrund ausgeführt. Das Schließen der Seite hat keinen Einfluss auf die Ausführung.",
+  "evaluation.table.columns.actions.downloadRecords": "Evaluierung herunterladen",
+  "evaluation.table.columns.actions.retry": "Erneut versuchen",
+  "evaluation.table.columns.actions.run": "Ausführen",
+  "evaluation.table.columns.actions.title": "Aktionen",
+  "evaluation.table.columns.datasetId.title": "Datensatz",
+  "evaluation.table.columns.name.title": "Name der Evaluierungsaufgabe",
+  "evaluation.table.columns.records.title": "Anzahl der Evaluierungsdatensätze",
+  "evaluation.table.columns.referenceFiles.title": "Referenzdateien",
+  "evaluation.table.columns.status.error": "Ausführungsfehler",
+  "evaluation.table.columns.status.pending": "Ausstehend",
+  "evaluation.table.columns.status.processing": "In Bearbeitung",
+  "evaluation.table.columns.status.success": "Erfolgreich ausgeführt",
+  "evaluation.table.columns.status.title": "Status",
+  "evaluation.table.title": "Liste der Evaluierungsaufgaben"
 }

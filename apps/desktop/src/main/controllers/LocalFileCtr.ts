@@ -30,19 +30,20 @@ import { FileResult, SearchOptions } from '@/types/fileSearch';
 import { makeSureDirExist } from '@/utils/file-system';
 import { createLogger } from '@/utils/logger';
 
-import { ControllerModule, ipcClientEvent } from './index';
+import { ControllerModule, IpcMethod } from './index';
 
 // Create logger
 const logger = createLogger('controllers:LocalFileCtr');
 
 export default class LocalFileCtr extends ControllerModule {
+  static override readonly groupName = 'localSystem';
   private get searchService() {
     return this.app.getService(FileSearchService);
   }
 
   // ==================== File Operation ====================
 
-  @ipcClientEvent('openLocalFile')
+  @IpcMethod()
   async handleOpenLocalFile({ path: filePath }: OpenLocalFileParams): Promise<{
     error?: string;
     success: boolean;
@@ -59,7 +60,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('openLocalFolder')
+  @IpcMethod()
   async handleOpenLocalFolder({ path: targetPath, isDirectory }: OpenLocalFolderParams): Promise<{
     error?: string;
     success: boolean;
@@ -77,7 +78,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('readLocalFiles')
+  @IpcMethod()
   async readFiles({ paths }: LocalReadFilesParams): Promise<LocalReadFileResult[]> {
     logger.debug('Starting batch file reading:', { count: paths.length });
 
@@ -94,7 +95,7 @@ export default class LocalFileCtr extends ControllerModule {
     return results;
   }
 
-  @ipcClientEvent('readLocalFile')
+  @IpcMethod()
   async readFile({
     path: filePath,
     loc,
@@ -192,7 +193,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('listLocalFiles')
+  @IpcMethod()
   async listLocalFiles({ path: dirPath }: ListLocalFileParams): Promise<FileResult[]> {
     logger.debug('Listing directory contents:', { dirPath });
 
@@ -250,7 +251,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('moveLocalFiles')
+  @IpcMethod()
   async handleMoveFiles({ items }: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {
     logger.debug('Starting batch file move:', { itemsCount: items?.length });
 
@@ -355,7 +356,7 @@ export default class LocalFileCtr extends ControllerModule {
     return results;
   }
 
-  @ipcClientEvent('renameLocalFile')
+  @IpcMethod()
   async handleRenameFile({
     path: currentPath,
     newName,
@@ -440,7 +441,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('writeLocalFile')
+  @IpcMethod()
   async handleWriteFile({ path: filePath, content }: WriteLocalFileParams) {
     const logPrefix = `[Writing file ${filePath}]`;
     logger.debug(`${logPrefix} Starting to write file`, { contentLength: content?.length });
@@ -485,7 +486,7 @@ export default class LocalFileCtr extends ControllerModule {
   /**
    * Handle IPC event for local file search
    */
-  @ipcClientEvent('searchLocalFiles')
+  @IpcMethod()
   async handleLocalFilesSearch(params: LocalSearchFilesParams): Promise<FileResult[]> {
     logger.debug('Received file search request:', {
       directory: params.directory,
@@ -523,7 +524,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('grepContent')
+  @IpcMethod()
   async handleGrepContent(params: GrepContentParams): Promise<GrepContentResult> {
     const {
       pattern,
@@ -639,7 +640,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
   }
 
-  @ipcClientEvent('globLocalFiles')
+  @IpcMethod()
   async handleGlobFiles({
     path: searchPath = process.cwd(),
     pattern,
@@ -680,7 +681,7 @@ export default class LocalFileCtr extends ControllerModule {
 
   // ==================== File Editing ====================
 
-  @ipcClientEvent('editLocalFile')
+  @IpcMethod()
   async handleEditFile({
     file_path: filePath,
     new_string,

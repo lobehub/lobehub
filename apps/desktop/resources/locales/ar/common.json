@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "إضافة",
-    "back": "عودة",
-    "cancel": "إلغاء",
-    "close": "إغلاق",
-    "confirm": "تأكيد",
-    "delete": "حذف",
-    "edit": "تعديل",
-    "more": "المزيد",
-    "next": "التالي",
-    "ok": "حسناً",
-    "previous": "السابق",
-    "refresh": "تحديث",
-    "remove": "إزالة",
-    "retry": "إعادة المحاولة",
-    "save": "حفظ",
-    "search": "بحث",
-    "submit": "إرسال"
-  },
-  "app": {
-    "description": "منصة تعاون مساعدك الذكي",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "خطأ",
-    "info": "معلومات",
-    "loading": "جارٍ التحميل",
-    "success": "نجاح",
-    "warning": "تحذير"
-  }
+  "actions.add": "إضافة",
+  "actions.back": "عودة",
+  "actions.cancel": "إلغاء",
+  "actions.close": "إغلاق",
+  "actions.confirm": "تأكيد",
+  "actions.delete": "حذف",
+  "actions.edit": "تعديل",
+  "actions.more": "المزيد",
+  "actions.next": "التالي",
+  "actions.ok": "حسناً",
+  "actions.previous": "السابق",
+  "actions.refresh": "تحديث",
+  "actions.remove": "إزالة",
+  "actions.retry": "إعادة المحاولة",
+  "actions.save": "حفظ",
+  "actions.search": "بحث",
+  "actions.submit": "إرسال",
+  "app.description": "منصة تعاون مساعدك الذكي",
+  "app.name": "LobeHub",
+  "status.error": "خطأ",
+  "status.info": "معلومات",
+  "status.loading": "جارٍ التحميل",
+  "status.success": "نجاح",
+  "status.warning": "تحذير"
 }

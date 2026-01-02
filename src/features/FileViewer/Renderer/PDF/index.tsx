@@ -1,8 +1,8 @@
 'use client';
 
+import { Flexbox } from '@lobehub/ui';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { Fragment, memo, useCallback, useState } from 'react';
-import { Flexbox } from 'react-layout-kit';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
@@ -10,7 +10,7 @@ import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import HighlightLayer from './HighlightLayer';
-import { useStyles } from './style';
+import { styles } from './style';
 import useResizeObserver from './useResizeObserver';
 
 // 如果海外的地址： https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs
@@ -29,7 +29,6 @@ interface PDFViewerProps {
 }
 
 const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
-  const { styles } = useStyles();
   const [numPages, setNumPages] = useState<number>(0);
   const [containerRef, setContainerRef] = useState<HTMLElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>();

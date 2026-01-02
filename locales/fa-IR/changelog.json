@@ -1,18 +1,14 @@
 {
-  "actions": {
-    "followOnX": "ما را در X دنبال کنید",
-    "subscribeToUpdates": "برای دریافت به‌روزرسانی‌ها مشترک شوید",
-    "versions": "جزئیات نسخه"
-  },
-  "addedWhileAway": "در زمان غیبت شما، ویژگی‌های جدیدی اضافه کردیم.",
-  "allChangelog": "تمام تغییرات را مشاهده کنید",
-  "description": "به‌روزرسانی‌های جدید و بهبودهای {{appName}} را دنبال کنید",
-  "pagination": {
-    "next": "صفحه بعدی",
-    "older": "مشاهده تغییرات قبلی"
-  },
-  "readDetails": "جزئیات را بخوانید",
-  "title": "تغییرات",
+  "actions.followOnX": "ما را در X دنبال کنید",
+  "actions.subscribeToUpdates": "اشتراک در به‌روزرسانی‌ها",
+  "actions.versions": "جزئیات نسخه",
+  "addedWhileAway": "در زمانی که نبودید، ویژگی‌های جدیدی اضافه کرده‌ایم.",
+  "allChangelog": "مشاهده تمام تغییرات",
+  "description": "از ویژگی‌ها و بهبودهای جدید {{appName}} باخبر بمانید",
+  "pagination.next": "صفحه بعد",
+  "pagination.older": "مشاهده تغییرات گذشته",
+  "readDetails": "مطالعه جزئیات",
+  "title": "تغییرات نسخه",
   "versionDetails": "جزئیات نسخه",
   "welcomeBack": "خوش آمدید!"
 }

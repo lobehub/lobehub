@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { enableBetterAuth, enableClerk } from '@/const/auth';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
-import { DynamicLayoutProps } from '@/types/next';
+import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
 import BetterAuthSignUpForm from './BetterAuthSignUpForm';

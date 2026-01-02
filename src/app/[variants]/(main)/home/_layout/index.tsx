@@ -1,0 +1,66 @@
+import { Flexbox } from '@lobehub/ui';
+import { useTheme, useThemeMode } from 'antd-style';
+import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+
+import { useHomeStore } from '@/store/home';
+
+import RecentHydration from './RecentHydration';
+import Sidebar from './Sidebar';
+import { styles } from './style';
+
+interface LayoutProps {
+  children?: ReactNode;
+}
+
+const Layout: FC<LayoutProps> = ({ children }) => {
+  const { isDarkMode } = useThemeMode();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isHomeRoute = pathname === '/';
+  const [hasActivated, setHasActivated] = useState(isHomeRoute);
+  const setNavigate = useHomeStore((s) => s.setNavigate);
+  const content = children ?? <Outlet />;
+
+  useEffect(() => {
+    setNavigate(navigate);
+  }, [navigate, setNavigate]);
+
+  useEffect(() => {
+    if (isHomeRoute) setHasActivated(true);
+  }, [isHomeRoute]);
+
+  // CSS 变量用于动态背景色（colorBgContainerSecondary 不在 cssVar 中）
+  const cssVariables = useMemo<Record<string, string>>(
+    () => ({
+      '--content-bg-secondary': theme.colorBgContainerSecondary,
+    }),
+    [theme.colorBgContainerSecondary],
+  );
+
+  if (!hasActivated) return null;
+
+  // Keep the Home layout alive and render it offscreen when inactive.
+  return (
+    <Activity mode={isHomeRoute ? 'visible' : 'hidden'} name="DesktopHomeLayout">
+      <Flexbox className={styles.absoluteContainer} height={'100%'} width={'100%'}>
+        <Sidebar />
+        <Flexbox
+          className={isDarkMode ? styles.contentDark : styles.contentLight}
+          flex={1}
+          height={'100%'}
+          style={cssVariables}
+        >
+          {content}
+        </Flexbox>
+
+        <RecentHydration />
+      </Flexbox>
+    </Activity>
+  );
+};
+
+Layout.displayName = 'DesktopHomeLayout';
+
+export default Layout;

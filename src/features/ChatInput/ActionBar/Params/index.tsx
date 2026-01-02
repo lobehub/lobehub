@@ -3,13 +3,17 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/slices/chat';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
 import Controls from './Controls';
 
 const Params = memo(() => {
-  const [isLoading] = useAgentStore((s) => [agentSelectors.isAgentConfigLoading(s)]);
+  const agentId = useAgentId();
+  const [isLoading] = useAgentStore((s) => [
+    agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
+  ]);
   const [updating, setUpdating] = useState(false);
   const { t } = useTranslation('setting');
 

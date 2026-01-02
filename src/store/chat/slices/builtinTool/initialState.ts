@@ -1,4 +1,4 @@
-import { FileItem } from '@/types/files';
+import { type FileItem } from '@/types/files';
 
 export interface ChatToolState {
   activePageContentUrl?: string;

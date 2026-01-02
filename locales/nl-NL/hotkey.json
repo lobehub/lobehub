@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "Voeg de huidige invoer toe als gebruikersbericht, maar activeer geen generatie",
-    "title": "Voeg een gebruikersbericht toe"
-  },
-  "clearCurrentMessages": {
-    "desc": "Verwijder de berichten en geüploade bestanden van de huidige sessie",
-    "title": "Verwijder sessieberichten"
-  },
-  "commandPalette": {
-    "desc": "Open het globale opdrachtpaneel voor snelle toegang tot functies",
-    "title": "Opdrachtpaneel"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "Verwijder het laatste bericht en genereer opnieuw",
-    "title": "Verwijderen en opnieuw genereren"
-  },
-  "deleteLastMessage": {
-    "desc": "Verwijder het laatste bericht",
-    "title": "Laatste bericht verwijderen"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "Open de applicatie-instellingenpagina",
-      "title": "Applicatie-instellingen"
-    },
-    "showApp": {
-      "desc": "Toon of verberg het hoofdvenster met een globale sneltoets",
-      "title": "Toon/verberg hoofdvenster"
-    }
-  },
-  "editMessage": {
-    "desc": "Ga naar de bewerkingsmodus door Alt ingedrukt te houden en op het bericht te dubbelklikken",
-    "title": "Bewerk bericht"
-  },
-  "navigateToChat": {
-    "desc": "Schakel over naar het gesprekstabblad en begin een willekeurig gesprek",
-    "title": "Schakel over naar het standaardgesprek"
-  },
-  "openChatSettings": {
-    "desc": "Bekijk en wijzig de instellingen van de huidige sessie",
-    "title": "Open gespreksinstellingen"
-  },
-  "openHotkeyHelper": {
-    "desc": "Bekijk de gebruiksaanwijzing voor alle sneltoetsen",
-    "title": "Open sneltoets hulp"
-  },
-  "regenerateMessage": {
-    "desc": "Genereer het laatste bericht opnieuw",
-    "title": "Genereer bericht opnieuw"
-  },
-  "saveTopic": {
-    "desc": "Sla het huidige onderwerp op en open een nieuw onderwerp",
-    "title": "Start nieuw onderwerp"
-  },
-  "search": {
-    "desc": "Roep het hoofdzoekvak van de huidige pagina op",
-    "title": "Zoeken"
-  },
-  "showApp": {
-    "desc": "Snel het hoofdvenster van de applicatie openen",
-    "title": "Hoofdvenster weergeven"
-  },
-  "switchAgent": {
-    "desc": "Schakel tussen de in de zijbalk vastgezette assistenten door Ctrl ingedrukt te houden en een cijfer van 0~9 te drukken",
-    "title": "Snel wisselen van assistent"
-  },
-  "toggleLeftPanel": {
-    "desc": "Toon of verberg het linker assistentpaneel",
-    "title": "Toon/verberg assistentpaneel"
-  },
-  "toggleRightPanel": {
-    "desc": "Toon of verberg het rechter onderwerp paneel",
-    "title": "Toon/verberg onderwerp paneel"
-  },
-  "toggleZenMode": {
-    "desc": "In de focusmodus wordt alleen de huidige sessie weergegeven, andere UI-elementen worden verborgen",
-    "title": "Schakel focusmodus in"
-  }
+  "addUserMessage.desc": "Voeg de huidige invoer toe als een gebruikersbericht zonder generatie te starten",
+  "addUserMessage.title": "Gebruikersbericht Toevoegen",
+  "clearCurrentMessages.desc": "Wis de berichten en geüploade bestanden van het huidige gesprek",
+  "clearCurrentMessages.title": "Gespreksberichten Wissen",
+  "commandPalette.desc": "Open de globale opdrachtpalet voor snelle toegang tot functies",
+  "commandPalette.title": "Opdrachtpalet",
+  "deleteAndRegenerateMessage.desc": "Verwijder het laatste bericht en genereer opnieuw",
+  "deleteAndRegenerateMessage.title": "Verwijderen en Opnieuw Genereren",
+  "deleteLastMessage.desc": "Verwijder het laatste bericht",
+  "deleteLastMessage.title": "Laatste Bericht Verwijderen",
+  "desktop.openSettings.desc": "Open de instellingenpagina van de applicatie",
+  "desktop.openSettings.title": "Applicatie-instellingen",
+  "desktop.showApp.desc": "Toon of verberg het hoofdvenster met een globale sneltoets",
+  "desktop.showApp.title": "Hoofdvenster Tonen/Verbergen",
+  "editMessage.desc": "Ga naar bewerkmodus door Alt ingedrukt te houden en dubbel te klikken op het bericht",
+  "editMessage.title": "Bericht Bewerken",
+  "navigateToChat.desc": "Schakel naar het tabblad Chat en open Lobe AI",
+  "navigateToChat.title": "Schakel naar Standaardchat",
+  "openChatSettings.desc": "Bekijk en wijzig de instellingen van het huidige gesprek",
+  "openChatSettings.title": "Chatinstellingen Openen",
+  "openHotkeyHelper.desc": "Bekijk instructies voor alle sneltoetsen",
+  "openHotkeyHelper.title": "Sneltoetsen Hulp Openen",
+  "regenerateMessage.desc": "Genereer het laatste bericht opnieuw",
+  "regenerateMessage.title": "Bericht Opnieuw Genereren",
+  "saveDocument.desc": "Sla alle wijzigingen op de huidige pagina direct op",
+  "saveDocument.title": "Pagina Opslaan",
+  "saveTopic.desc": "Sla het huidige onderwerp op en begin een nieuw onderwerp",
+  "saveTopic.title": "Nieuw Onderwerp Starten",
+  "search.desc": "Activeer het hoofdzoekveld op de huidige pagina",
+  "search.title": "Zoeken",
+  "showApp.desc": "Open snel het hoofdvenster van de applicatie",
+  "showApp.title": "Hoofdvenster Tonen",
+  "switchAgent.desc": "Schakel tussen vastgezette agenten in de zijbalk door Ctrl ingedrukt te houden en op de cijfers 0-9 te drukken",
+  "switchAgent.title": "Snel Wisselen van Agent",
+  "toggleLeftPanel.desc": "Toon of verberg het linker paneel",
+  "toggleLeftPanel.title": "Linker Paneel Wisselen",
+  "toggleRightPanel.desc": "Toon of verberg het rechter paneel",
+  "toggleRightPanel.title": "Rechter Paneel Wisselen",
+  "toggleZenMode.desc": "Toon in focusmodus alleen het huidige gesprek en verberg andere UI-elementen",
+  "toggleZenMode.title": "Focusmodus Wisselen"
 }

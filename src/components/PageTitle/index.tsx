@@ -1,6 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { memo, useEffect } from 'react';
-
-import { BRANDING_NAME } from '@/const/branding';
 
 const PageTitle = memo<{ title: string }>(({ title }) => {
   useEffect(() => {

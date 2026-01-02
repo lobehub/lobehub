@@ -1,18 +1,10 @@
 {
   "desc": "이곳에서는 우리가 탐색 중인 새로운 기능들을 수시로 업데이트합니다. 사용해보시고 의견을 들려주세요!",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "도우미 메시지와 해당 도구 호출 결과를 그룹으로 묶어 표시합니다",
-      "title": "도우미 메시지 그룹화"
-    },
-    "groupChat": {
-      "desc": "다중 에이전트 그룹 채팅 조정 기능을 활성화합니다.",
-      "title": "그룹 채팅 (다중 에이전트)"
-    },
-    "inputMarkdown": {
-      "desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
-      "title": "입력창 Markdown 렌더링"
-    }
-  },
+  "features.assistantMessageGroup.desc": "도우미 메시지와 해당 도구 호출 결과를 그룹으로 묶어 표시합니다",
+  "features.assistantMessageGroup.title": "도우미 메시지 그룹화",
+  "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
+  "features.groupChat.title": "그룹 채팅 (다중 도우미)",
+  "features.inputMarkdown.desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
+  "features.inputMarkdown.title": "입력창 Markdown 렌더링",
   "title": "실험실"
 }

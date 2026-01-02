@@ -1,9 +1,9 @@
 'use client';
 
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh.js';
-import { CSSProperties, FC } from 'react';
+import { type CSSProperties, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const LAST_MODIFIED = new Date().toISOString();
@@ -17,11 +17,11 @@ const formatTime = (time?: string) => {
   }
 };
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     time: css`
       font-size: 12px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
       letter-spacing: 0.02em;
     `,
   };
@@ -42,7 +42,6 @@ const PublishedTime: FC<PrivacyUpdatedProps> = ({
   showPrefix = true,
 }) => {
   const { t, i18n } = useTranslation('discover');
-  const { styles, cx } = useStyles();
   const time = dayjs(date).locale(i18n.language).format(template);
 
   if (showPrefix) {

@@ -3,7 +3,7 @@ import { colors } from 'consola/utils';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import prettier from "@prettier/sync";
-import i18nConfig from '../../.i18nrc';
+import i18nConfig from './i18nConfig';
 
 let prettierOptions = prettier.resolveConfig(
   resolve(__dirname, '../../.prettierrc.js')

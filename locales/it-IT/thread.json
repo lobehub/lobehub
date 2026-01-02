@@ -1,10 +1,6 @@
 {
-  "actions": {
-    "confirmRemoveThread": "Stai per eliminare questo sottoargomento. Una volta eliminato, non potrà essere ripristinato. Ti preghiamo di procedere con cautela."
-  },
-  "newPortalThread": {
-    "includeContext": "Includi il contesto della discussione",
-    "title": "Avvia un nuovo sottoargomento"
-  },
-  "notSupportMultiModals": "Attualmente i sottoargomenti non supportano il caricamento di file/immagini. Se hai bisogno, sentiti libero di lasciare un messaggio: <1>💬 Discussione</1>"
+  "actions.confirmRemoveThread": "Stai per eliminare questo sottoargomento. Una volta eliminato, non potrà essere recuperato. Procedi con cautela.",
+  "newPortalThread.includeContext": "Includi il contesto dell'argomento",
+  "newPortalThread.title": "Avvia un nuovo sottoargomento",
+  "notSupportMultiModals": "Attualmente i sottoargomenti non supportano il caricamento di file/immagini. Se hai richieste, sentiti libero di lasciare un messaggio: <1>💬 Area di discussione</1>"
 }

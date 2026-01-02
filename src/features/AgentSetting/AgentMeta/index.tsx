@@ -113,7 +113,7 @@ const AgentMeta = memo(() => {
         <Button
           disabled={!hasSystemRole}
           icon={Wand2}
-          iconPosition={'end'}
+          iconPlacement={'end'}
           iconProps={{
             size: 12,
           }}
@@ -134,16 +134,7 @@ const AgentMeta = memo(() => {
   return (
     <Form
       disabled={!isAgentEditable}
-      footer={
-        <Form.SubmitFooter
-          texts={{
-            reset: t('submitFooter.reset'),
-            submit: t('settingAgent.submit'),
-            unSaved: t('submitFooter.unSaved'),
-            unSavedWarning: t('submitFooter.unSavedWarning'),
-          }}
-        />
-      }
+      footer={<Form.SubmitFooter />}
       form={form}
       initialValues={meta}
       items={[metaData]}

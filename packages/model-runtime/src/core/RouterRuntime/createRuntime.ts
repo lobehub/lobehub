@@ -141,7 +141,7 @@ export const createRouterRuntime = ({
         baseURL: options.baseURL?.trim(),
       };
 
-      // 保存配置但不创建 runtimes
+      // Save configuration without creating runtimes
       this._routers = routers;
       this._params = params;
       this._id = id;
@@ -263,13 +263,11 @@ export const createRouterRuntime = ({
 
     async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
       const runtime = await this.getRuntimeByModel(payload.model);
-
       return runtime.embeddings!(payload, options);
     }
 
     async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
       const runtime = await this.getRuntimeByModel(payload.model);
-
       return runtime.textToSpeech!(payload, options);
     }
   };

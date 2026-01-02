@@ -1,15 +1,14 @@
-import { UpdateInfo, useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Button, Icon } from '@lobehub/ui';
-import { Modal, theme } from 'antd';
-import { createStyles } from 'antd-style';
+import { type UpdateInfo, useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { Modal } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleFadingArrowUp } from 'lucide-react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     position: fixed;
     z-index: 1000;
@@ -24,14 +23,12 @@ const useStyles = createStyles(({ css, token }) => ({
     padding: 8px;
     border-radius: 8px;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
 }));
 
 export const UpdateNotification: React.FC = () => {
   const { t } = useTranslation('electron');
-  const { styles } = useStyles();
-  const { token } = theme.useToken();
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -62,11 +59,11 @@ export const UpdateNotification: React.FC = () => {
     return (
       <div
         style={{
-          backgroundColor: token.colorBgElevated,
-          borderRadius: token.borderRadius,
+          backgroundColor: cssVar.colorBgElevated,
+          borderRadius: cssVar.borderRadius,
           bottom: 20,
-          boxShadow: token.boxShadow,
-          color: token.colorText,
+          boxShadow: cssVar.boxShadow,
+          color: cssVar.colorText,
           left: 16,
           padding: '10px 16px',
           position: 'fixed',
@@ -85,11 +82,11 @@ export const UpdateNotification: React.FC = () => {
           <div
             style={{
               alignItems: 'center',
-              background: token.colorBgElevated,
-              border: `1px solid ${token.colorBorderSecondary}`,
+              background: cssVar.colorBgElevated,
+              border: `1px solid ${cssVar.colorBorderSecondary}`,
               borderRadius: 12,
-              boxShadow: token.boxShadow,
-              color: token.colorText,
+              boxShadow: cssVar.boxShadow,
+              color: cssVar.colorText,
               display: 'flex',
               gap: 8,
               padding: '8px 10px',
@@ -133,7 +130,7 @@ export const UpdateNotification: React.FC = () => {
           width={520}
         >
           <Flexbox gap={12} style={{ maxWidth: 480 }}>
-            <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+            <div style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
               {updateInfo?.version}
             </div>
             {updateInfo?.releaseNotes && (
@@ -155,7 +152,7 @@ export const UpdateNotification: React.FC = () => {
                 size="small"
                 type="primary"
               >
-                {t('updater.restartAndInstall', '立即安装')}
+                {t('updater.restartAndInstall')}
               </Button>
             </div>
           </Flexbox>

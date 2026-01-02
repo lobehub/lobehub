@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
+import UpdaterCtr from '../UpdaterCtr';
+
 // 模拟 logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
@@ -9,7 +11,15 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-import UpdaterCtr from '../UpdaterCtr';
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+}));
 
 // 模拟 App 及其依赖项
 const mockCheckForUpdates = vi.fn();
@@ -31,6 +41,7 @@ describe('UpdaterCtr', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    ipcMainHandleMock.mockClear();
     updaterCtr = new UpdaterCtr(mockApp);
   });
 
@@ -79,4 +90,4 @@ describe('UpdaterCtr', () => {
       await expect(updaterCtr.downloadUpdate()).rejects.toThrow(error);
     });
   });
-}); 
+});

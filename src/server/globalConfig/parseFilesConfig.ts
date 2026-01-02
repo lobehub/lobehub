@@ -1,6 +1,6 @@
 import { DEFAULT_FILES_CONFIG } from '@/const/settings/knowledge';
-import { SystemEmbeddingConfig } from '@/types/knowledgeBase';
-import { FilesConfig } from '@/types/user/settings/filesConfig';
+import { type SystemEmbeddingConfig } from '@/types/knowledgeBase';
+import { type FilesConfig } from '@/types/user/settings/filesConfig';
 
 const protectedKeys = Object.keys({
   embedding_model: null,

@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "Azure'un API versiyonu, YYYY-AA-GG formatına uygun, [en son versiyonu](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions) kontrol edin",
-      "fetch": "Listeyi al",
-      "title": "Azure API Versiyonu"
-    },
-    "empty": "İlk modeli eklemek için model kimliğini girin",
-    "endpoint": {
-      "desc": "Azure portalından kaynağı kontrol ederken, bu değeri \"Anahtarlar ve uç noktalar\" bölümünde bulabilirsiniz",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "Azure API Adresi"
-    },
-    "modelListPlaceholder": "Dağıttığınız OpenAI modelini seçin veya ekleyin",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Azure portalından kaynağı kontrol ederken, bu değeri \"Anahtarlar ve uç noktalar\" bölümünde bulabilirsiniz. KEY1 veya KEY2 kullanabilirsiniz",
-      "placeholder": "Azure API Key",
-      "title": "API Key"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "Azure API sürümü, YYYY-AA-GG formatına uymaktadır, [en son sürümü](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions) kontrol edin",
-      "fetch": "Listeyi al",
-      "title": "Azure API Sürümü"
-    },
-    "endpoint": {
-      "desc": "Azure AI proje özetinden Azure AI model çıkarım uç noktasını bulun",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "Azure AI Uç Noktası"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Azure AI proje özetinden API anahtarını bulun",
-      "placeholder": "Azure Anahtarı",
-      "title": "Anahtar"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "AWS Access Key Id girin",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key Id"
-    },
-    "checker": {
-      "desc": "AccessKeyId / SecretAccessKey'in doğru girilip girilmediğini test edin"
-    },
-    "region": {
-      "desc": "AWS Bölgesi girin",
-      "placeholder": "AWS Region",
-      "title": "AWS Bölgesi"
-    },
-    "secretAccessKey": {
-      "desc": "AWS Secret Access Key girin",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "AWS SSO/STS kullanıyorsanız, lütfen AWS Oturum Tokeninizi girin",
-      "placeholder": "AWS Oturum Tokeni",
-      "title": "AWS Oturum Tokeni (isteğe bağlı)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "Özel Bölge",
-      "customSessionToken": "Özel Oturum Tokeni",
-      "description": "AWS AccessKeyId / SecretAccessKey bilgilerinizi girerek oturumu başlatabilirsiniz. Uygulama kimlik doğrulama bilgilerinizi kaydetmez.",
-      "imageGenerationDescription": "AWS AccessKeyId / SecretAccessKey bilgilerinizi girerek üretime başlayabilirsiniz. Uygulama kimlik doğrulama yapılandırmanızı kaydetmez",
-      "title": "Özel Bedrock Kimlik Bilgilerini Kullan"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "Lütfen doldurun Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "Cloudflare hesabınızın ID'sini veya özel API adresinizi girin",
-      "placeholder": "Cloudflare Hesap ID / Özel API Adresi",
-      "title": "Cloudflare Hesap ID / API Adresi"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "Bearer Token kimlik doğrulaması için gerekli API anahtarı",
-      "placeholder": "Lütfen API anahtarını girin",
-      "required": "Lütfen API anahtarını girin",
-      "title": "API Anahtarı"
-    },
-    "authType": {
-      "desc": "ComfyUI sunucusuyla kimlik doğrulama yöntemini seçin",
-      "options": {
-        "basic": "Kullanıcı adı/Şifre",
-        "bearer": "Bearer (API Anahtarı)",
-        "custom": "Özel Başlık",
-        "none": "Kimlik doğrulama gerekmez"
-      },
-      "placeholder": "Lütfen kimlik doğrulama türünü seçin",
-      "title": "Kimlik Doğrulama Türü"
-    },
-    "baseURL": {
-      "desc": "ComfyUI web erişim adresi",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "Lütfen ComfyUI sunucu adresini girin",
-      "title": "ComfyUI Sunucu Adresi"
-    },
-    "checker": {
-      "desc": "Bağlantının doğru yapılandırılıp yapılandırılmadığını test edin",
-      "title": "Bağlantı Kontrolü"
-    },
-    "customHeaders": {
-      "addButton": "Başlık Ekle",
-      "deleteTooltip": "Bu başlığı sil",
-      "desc": "Özel kimlik doğrulama için gerekli başlıklar, anahtar-değer çifti formatında",
-      "duplicateKeyError": "Başlık anahtarları benzersiz olmalıdır",
-      "keyPlaceholder": "Anahtar",
-      "required": "Lütfen özel başlıkları girin",
-      "title": "Özel Başlıklar",
-      "valuePlaceholder": "Değer"
-    },
-    "password": {
-      "desc": "Temel kimlik doğrulama için gerekli şifre",
-      "placeholder": "Lütfen şifreyi girin",
-      "required": "Lütfen şifreyi girin",
-      "title": "Şifre"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "Temel kimlik doğrulama için gerekli kullanıcı adı",
-      "placeholder": "Lütfen kullanıcı adını girin",
-      "required": "Lütfen kullanıcı adını girin",
-      "title": "Kullanıcı Adı"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "Lütfen API Anahtarınızı girin",
-      "title": "API Anahtarı"
-    },
-    "basicTitle": "Temel Bilgiler",
-    "configTitle": "Yapılandırma Bilgileri",
-    "confirm": "Yeni Oluştur",
-    "createSuccess": "Başarıyla oluşturuldu",
-    "description": {
-      "placeholder": "Hizmet sağlayıcı tanımı (isteğe bağlı)",
-      "title": "Hizmet Sağlayıcı Tanımı"
-    },
-    "id": {
-      "desc": "Hizmet sağlayıcının benzersiz kimliği, oluşturulduktan sonra değiştirilemez",
-      "format": "Sadece rakamlar, küçük harfler, tire (-) ve alt çizgi (_) içerebilir",
-      "placeholder": "Küçük harflerle yazılması önerilir, örneğin openai, oluşturduktan sonra değiştirilemez",
-      "required": "Lütfen hizmet sağlayıcı ID'sini girin",
-      "title": "Hizmet Sağlayıcı ID"
-    },
-    "logo": {
-      "required": "Lütfen geçerli bir hizmet sağlayıcı logosu yükleyin",
-      "title": "Hizmet Sağlayıcı Logosu"
-    },
-    "name": {
-      "placeholder": "Lütfen hizmet sağlayıcının gösterim adını girin",
-      "required": "Lütfen hizmet sağlayıcı adını girin",
-      "title": "Hizmet Sağlayıcı Adı"
-    },
-    "proxyUrl": {
-      "required": "Lütfen proxy adresini girin",
-      "title": "Proxy Adresi"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "Lütfen SDK türünü seçin",
-      "title": "İstek Formatı"
-    },
-    "title": "Özel AI Hizmet Sağlayıcısı Oluştur"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "Github PAT'nizi girin, [buraya](https://github.com/settings/tokens) tıklayarak oluşturun",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "HuggingFace Token'inizi buraya girin, [buraya](https://huggingface.co/settings/tokens) tıklayarak oluşturun",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "HuggingFace Token"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "Özel hizmet sağlayıcısı etkin değil",
-      "disabled": "Hizmet sağlayıcı devre dışı",
-      "enabled": "Hizmet sağlayıcı etkin"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "Özel Hizmet Sağlayıcı Ekle",
-    "all": "Tümü",
-    "list": {
-      "custom": "Özel ayar etkin değil",
-      "disabled": "Devre Dışı",
-      "disabledActions": {
-        "sort": "Sıralama Yöntemi",
-        "sortAlphabetical": "Alfabetik Sırala",
-        "sortAlphabeticalDesc": "Alfabetik Ters Sırala",
-        "sortDefault": "Varsayılan Sıralama"
-      },
-      "enabled": "Aktif"
-    },
-    "notFound": "Arama sonuçları bulunamadı",
-    "searchProviders": "Hizmet sağlayıcıları ara...",
-    "sort": "Özel Sıralama"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "New API platformu tarafından sağlanan API anahtarı",
-      "placeholder": "New API API anahtarı",
-      "required": "API anahtarı gereklidir",
-      "title": "API Anahtarı"
-    },
-    "apiUrl": {
-      "desc": "New API servisinin API adresi, çoğu zaman /v1 ile başlamalıdır",
-      "title": "API Adresi"
-    },
-    "enabled": {
-      "title": "New API'yi Etkinleştir"
-    },
-    "models": {
-      "batchSelect": "Toplu model seçimi ({{count}} adet)",
-      "fetch": "Model listesi alınıyor",
-      "selected": "Seçilen modeller",
-      "title": "Kullanılabilir Modeller"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "Proxy adresinin doğru girilip girilmediğini test edin",
-      "title": "Bağlantı Kontrolü"
-    },
-    "customModelName": {
-      "desc": "Özel modeller ekleyin, birden fazla model için virgül (,) kullanın",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "Özel Model Adları"
-    },
-    "download": {
-      "desc": "Ollama 正在下载该模型，请尽量不要关闭本页面。重新下载时将会中断处继续",
-      "failed": "Model indirme başarısız oldu, lütfen ağı veya Ollama ayarlarını kontrol edip tekrar deneyin",
-      "remainingTime": "剩余时间",
-      "speed": "下载速度",
-      "title": "正在下载模型 {{model}} "
-    },
-    "endpoint": {
-      "desc": "http(s):// içermelidir, yerel olarak belirtilmemişse boş bırakılabilir",
-      "title": "Arayüz Proxy Adresi"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "取消下载",
-      "confirm": "下载",
-      "description": "输入你的 Ollama 模型标签，完成即可继续会话",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "开始下载...",
-      "title": "下载指定的 Ollama 模型"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "{{count}} model seçildi",
-      "title": "Toplu Seçim"
-    },
-    "config": {
-      "aesGcm": "Anahtarınız ve proxy adresi gibi bilgiler <1>AES-GCM</1> şifreleme algoritması ile şifrelenecektir",
-      "apiKey": {
-        "desc": "{{name}} API Anahtarınızı girin",
-        "descWithUrl": "Lütfen {{name}} API Anahtarınızı girin, <3>buraya tıklayarak alın</3>",
-        "placeholder": "{{name}} API Anahtarı",
-        "title": "API Anahtarı"
-      },
-      "baseURL": {
-        "desc": "http(s):// içermelidir",
-        "invalid": "Lütfen geçerli bir URL girin",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "API Proxy Adresi"
-      },
-      "checker": {
-        "button": "Kontrol Et",
-        "desc": "API Anahtarı ve proxy adresinin doğru girilip girilmediğini test edin",
-        "pass": "Kontrol başarılı",
-        "title": "Bağlantı Kontrolü"
-      },
-      "fetchOnClient": {
-        "desc": "İstemci istek modu, tarayıcıdan doğrudan oturum isteği başlatır, yanıt hızını artırabilir",
-        "title": "İstemci İstek Modunu Kullan"
-      },
-      "helpDoc": "Yapılandırma Kılavuzu",
-      "responsesApi": {
-        "desc": "OpenAI'nin yeni nesil istek formatı standardını kullanır, düşünce zinciri gibi gelişmiş özelliklerin kilidini açar (yalnızca OpenAI modelleri desteklenir)",
-        "title": "Responses API Standardını Kullan"
-      },
-      "waitingForMore": "Daha fazla model <1>planlanıyor</1>, lütfen bekleyin"
-    },
-    "createNew": {
-      "title": "Özel AI Modeli Oluştur"
-    },
-    "item": {
-      "config": "Modeli Yapılandır",
-      "customModelCards": {
-        "addNew": "{{id}} modelini oluştur ve ekle",
-        "confirmDelete": "Bu özel modeli silmek üzeresiniz, silindikten sonra geri alınamaz, lütfen dikkatli olun."
-      },
-      "delete": {
-        "confirm": "{{displayName}} modelini silmek istediğinize emin misiniz?",
-        "success": "Silme işlemi başarılı",
-        "title": "Modeli Sil"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Azure OpenAI'de gerçek istek için alan",
-          "placeholder": "Lütfen Azure'daki model dağıtım adını girin",
-          "title": "Model Dağıtım Adı"
-        },
-        "deployName": {
-          "extra": "Bu alan, isteği gönderirken model kimliği olarak kullanılacaktır",
-          "placeholder": "Modelin gerçek dağıtım adını veya kimliğini girin",
-          "title": "Model Dağıtım Adı"
-        },
-        "displayName": {
-          "placeholder": "Lütfen modelin gösterim adını girin, örneğin ChatGPT, GPT-4 vb.",
-          "title": "Model Gösterim Adı"
-        },
-        "files": {
-          "extra": "Mevcut dosya yükleme uygulaması yalnızca bir Hack çözümüdür, yalnızca denemek için geçerlidir. Tam dosya yükleme yeteneği için lütfen sonraki uygulamayı bekleyin.",
-          "title": "Dosya Yüklemeyi Destekle"
-        },
-        "functionCall": {
-          "extra": "Bu yapılandırma, modelin araçları kullanma yeteneğini açacak ve böylece modele araç sınıfı eklentileri eklenebilecektir. Ancak, gerçek araç kullanımı tamamen modele bağlıdır, kullanılabilirliğini kendiniz test etmelisiniz.",
-          "title": "Araç kullanımını destekle"
-        },
-        "id": {
-          "extra": "Oluşturulduktan sonra değiştirilemez, AI çağrıldığında model kimliği olarak kullanılacaktır",
-          "placeholder": "Model kimliğini girin, örneğin gpt-4o veya claude-3.5-sonnet",
-          "title": "Model ID"
-        },
-        "imageOutput": {
-          "extra": "Bu yapılandırma yalnızca modelin görsel oluşturma yeteneğini etkinleştirir. Gerçek performans tamamen modele bağlıdır, lütfen bu modelin kullanılabilir görsel oluşturma yeteneğini kendiniz test edin.",
-          "title": "Görsel Oluşturmayı Destekler"
-        },
-        "modalTitle": "Özel Model Yapılandırması",
-        "reasoning": {
-          "extra": "Bu yapılandırma yalnızca modelin derin düşünme yeteneğini açacaktır, belirli etkiler tamamen modelin kendisine bağlıdır, lütfen bu modelin kullanılabilir derin düşünme yeteneğine sahip olup olmadığını kendiniz test edin",
-          "title": "Derin düşünmeyi destekler"
-        },
-        "search": {
-          "extra": "Bu yapılandırma yalnızca modelin yerleşik arama motoru ile internet arama yeteneğini etkinleştirir. Yerleşik arama motorunun desteklenip desteklenmediği modele bağlıdır, lütfen bu modelin yerleşik arama motoru yeteneğini kendiniz test edin.",
-          "title": "İnternet Aramasını Destekler"
-        },
-        "tokens": {
-          "extra": "Modelin desteklediği maksimum Token sayısını ayarlayın",
-          "title": "Maksimum bağlam penceresi",
-          "unlimited": "Sınırsız"
-        },
-        "type": {
-          "extra": "Farklı model türleri, farklı kullanım senaryoları ve yeteneklere sahiptir",
-          "options": {
-            "chat": "Sohbet",
-            "embedding": "Vektörleştirme",
-            "image": "Görüntü oluşturma",
-            "realtime": "Gerçek zamanlı sohbet",
-            "stt": "Ses metne dönüştürme",
-            "text2music": "Metinden müziğe",
-            "text2video": "Metinden videoya",
-            "tts": "Ses sentezi"
-          },
-          "placeholder": "Lütfen model türünü seçin",
-          "title": "Model Türü"
-        },
-        "video": {
-          "extra": "Bu yapılandırma yalnızca uygulamadaki video tanıma yapılandırmasını etkinleştirir. Tanıma desteği tamamen modele bağlıdır, lütfen bu modelin video tanıma yeteneğini kendiniz test edin.",
-          "title": "Video Tanımayı Destekler"
-        },
-        "vision": {
-          "extra": "Bu yapılandırma yalnızca uygulamadaki resim yükleme yapılandırmasını açacaktır, tanıma desteği tamamen modele bağlıdır, lütfen bu modelin görsel tanıma yeteneğini test edin.",
-          "title": "Görsel Tanımayı Destekle"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/Resim",
-        "inputCharts": "${{amount}}/M Karakter",
-        "inputMinutes": "${{amount}}/Dakika",
-        "inputTokens": "Girdi ${{amount}}/M",
-        "outputTokens": "Çıktı ${{amount}}/M"
-      },
-      "releasedAt": "Yayınlanma tarihi: {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "Model Ekle",
-      "disabled": "Devre dışı",
-      "disabledActions": {
-        "showMore": "Hepsini Göster",
-        "sort": "Sıralama Yöntemi",
-        "sortAlphabetical": "Alfabetik Sırala",
-        "sortAlphabeticalDesc": "Alfabetik Ters Sırala",
-        "sortDefault": "Varsayılan Sıralama",
-        "sortReleasedAt": "En Eski Yayın Tarihine Göre Sırala",
-        "sortReleasedAtDesc": "En Yeni Yayın Tarihine Göre Sırala"
-      },
-      "empty": {
-        "desc": "Lütfen özel bir model oluşturun veya kullanmaya başlamadan önce bir model çekin",
-        "title": "Kullanılabilir model yok"
-      },
-      "enabled": "Etkin",
-      "enabledActions": {
-        "disableAll": "Hepsini devre dışı bırak",
-        "enableAll": "Hepsini etkinleştir",
-        "sort": "Özel model sıralaması"
-      },
-      "enabledEmpty": "Etkin model yok, lütfen aşağıdaki listeden beğendiğiniz modeli etkinleştirin~",
-      "fetcher": {
-        "clear": "Alınan modelleri temizle",
-        "fetch": "Model listesini al",
-        "fetching": "Model listesi alınıyor...",
-        "latestTime": "Son güncelleme zamanı: {{time}}",
-        "noLatestTime": "Henüz liste alınmadı"
-      },
-      "noModelsInCategory": "Bu kategoride etkinleştirilmiş model yok",
-      "resetAll": {
-        "conform": "Mevcut modelin tüm değişikliklerini sıfırlamak istediğinize emin misiniz? Sıfırladıktan sonra mevcut model listesi varsayılan duruma dönecektir.",
-        "success": "Sıfırlama başarılı",
-        "title": "Tüm değişiklikleri sıfırla"
-      },
-      "search": "Model ara...",
-      "searchResult": "{{count}} model bulundu",
-      "title": "Model Listesi",
-      "total": "Toplam {{count}} adet model mevcut"
-    },
-    "searchNotFound": "Arama sonuçları bulunamadı",
-    "tabs": {
-      "all": "Tümü",
-      "chat": "Sohbet",
-      "embedding": "Vektörleştirme",
-      "image": "Resim",
-      "stt": "ASR",
-      "tts": "TTS"
-    }
-  },
-  "sortModal": {
-    "success": "Sıralama güncellemesi başarılı",
-    "title": "Özel Sıralama",
-    "update": "Güncelle"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "Bu AI hizmet sağlayıcısını silmek üzeresiniz, silindikten sonra geri alınamaz, silmek istediğinize emin misiniz?",
-    "deleteSuccess": "Silme işlemi başarılı",
-    "tooltip": "Hizmet sağlayıcının temel yapılandırmasını güncelle",
-    "updateSuccess": "Güncelleme başarılı"
-  },
-  "updateCustomAiProvider": {
-    "title": "Özel AI Sağlayıcı Yapılandırmasını Güncelle"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "Vertex AI Anahtarlarınızı buraya girin",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "Vertex AI Anahtarları"
-    },
-    "region": {
-      "desc": "Vertex AI hizmeti için bir bölge seçin. Gemini 2.5 gibi bazı modeller yalnızca belirli bölgelerde (örneğin global) kullanılabilir",
-      "placeholder": "Bölge seçin",
-      "title": "Vertex AI Bölgesi"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI Sıfır Bir"
-  },
-  "zhipu": {
-    "title": "Zeka Haritası"
-  }
+  "azure.azureApiVersion.desc": "Azure API sürümü, YYYY-AA-GG formatını takip eder, [en son sürümü](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions) kontrol edin",
+  "azure.azureApiVersion.fetch": "Listeyi Getir",
+  "azure.azureApiVersion.title": "Azure API Sürümü",
+  "azure.empty": "İlk modeli eklemek için lütfen bir model kimliği girin",
+  "azure.endpoint.desc": "Azure portalından kaynakları kontrol ederken, bu değeri 'Anahtarlar ve Uç Noktalar' bölümünde bulabilirsiniz",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "Azure API Adresi",
+  "azure.modelListPlaceholder": "Dağıttığınız OpenAI modelini seçin veya ekleyin",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "Azure portalından kaynakları kontrol ederken, bu değeri 'Anahtarlar ve Uç Noktalar' bölümünde bulabilirsiniz. KEY1 veya KEY2 kullanabilirsiniz",
+  "azure.token.placeholder": "Azure API Anahtarı",
+  "azure.token.title": "API Anahtarı",
+  "azureai.azureApiVersion.desc": "Azure için API sürümü, YYYY-AA-GG formatını takip eder. [en son sürüme](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions) bakın",
+  "azureai.azureApiVersion.fetch": "Listeyi Getir",
+  "azureai.azureApiVersion.title": "Azure API Sürümü",
+  "azureai.endpoint.desc": "Azure AI proje genel bakışından Azure AI model çıkarım uç noktasını bulun",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "Azure AI Uç Noktası",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "Azure AI proje genel bakışından API anahtarını bulun",
+  "azureai.token.placeholder": "Azure Anahtarı",
+  "azureai.token.title": "Anahtar",
+  "bedrock.accessKeyId.desc": "AWS Erişim Anahtarı Kimliğini girin",
+  "bedrock.accessKeyId.placeholder": "AWS Erişim Anahtarı Kimliği",
+  "bedrock.accessKeyId.title": "AWS Erişim Anahtarı Kimliği",
+  "bedrock.checker.desc": "AccessKeyId / SecretAccessKey doğru girilmiş mi test edin",
+  "bedrock.region.desc": "AWS Bölgesini girin",
+  "bedrock.region.placeholder": "AWS Bölgesi",
+  "bedrock.region.title": "AWS Bölgesi",
+  "bedrock.secretAccessKey.desc": "AWS Gizli Erişim Anahtarını girin",
+  "bedrock.secretAccessKey.placeholder": "AWS Gizli Erişim Anahtarı",
+  "bedrock.secretAccessKey.title": "AWS Gizli Erişim Anahtarı",
+  "bedrock.sessionToken.desc": "AWS SSO/STS kullanıyorsanız, lütfen AWS Oturum Belgenizi girin",
+  "bedrock.sessionToken.placeholder": "AWS Oturum Belgesi",
+  "bedrock.sessionToken.title": "AWS Oturum Belgesi (isteğe bağlı)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "Özel Hizmet Bölgesi",
+  "bedrock.unlock.customSessionToken": "Özel Oturum Belgesi",
+  "bedrock.unlock.description": "Oturumu başlatmak için AWS AccessKeyId / SecretAccessKey bilgilerinizi girin. Uygulama kimlik doğrulama yapılandırmanızı saklamaz",
+  "bedrock.unlock.imageGenerationDescription": "Görüntü üretimini başlatmak için AWS AccessKeyId / SecretAccessKey bilgilerinizi girin. Uygulama kimlik bilgilerinizi saklamaz.",
+  "bedrock.unlock.title": "Özel Bedrock Kimlik Doğrulama Bilgilerini Kullan",
+  "cloudflare.apiKey.desc": "Lütfen Cloudflare API Anahtarını girin",
+  "cloudflare.apiKey.placeholder": "Cloudflare API Anahtarı",
+  "cloudflare.apiKey.title": "Cloudflare API Anahtarı",
+  "cloudflare.baseURLOrAccountID.desc": "Cloudflare hesap kimliğinizi veya özel API adresinizi girin",
+  "cloudflare.baseURLOrAccountID.placeholder": "Cloudflare Hesap Kimliği / özel API URL'si",
+  "cloudflare.baseURLOrAccountID.title": "Cloudflare Hesap Kimliği / API Adresi",
+  "comfyui.apiKey.desc": "Bearer Token kimlik doğrulaması için API anahtarı",
+  "comfyui.apiKey.placeholder": "API anahtarını girin",
+  "comfyui.apiKey.required": "Lütfen API anahtarını girin",
+  "comfyui.apiKey.title": "API Anahtarı",
+  "comfyui.authType.desc": "ComfyUI sunucusuna bağlanmak için kimlik doğrulama yöntemini seçin",
+  "comfyui.authType.options.basic": "Temel Kimlik Doğrulama",
+  "comfyui.authType.options.bearer": "Bearer Token",
+  "comfyui.authType.options.custom": "Özel Kimlik Doğrulama",
+  "comfyui.authType.options.none": "Kimlik Doğrulama Yok",
+  "comfyui.authType.placeholder": "Lütfen bir kimlik doğrulama türü seçin",
+  "comfyui.authType.title": "Kimlik Doğrulama Türü",
+  "comfyui.baseURL.desc": "ComfyUI sunucusuna erişim adresi, örn. http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "Lütfen ComfyUI hizmet URL'sini girin",
+  "comfyui.baseURL.title": "ComfyUI Hizmet URL'si",
+  "comfyui.checker.desc": "Bağlantının doğru yapılandırılıp yapılandırılmadığını test edin",
+  "comfyui.checker.title": "Bağlantı Kontrolü",
+  "comfyui.customHeaders.addButton": "Başlık Ekle",
+  "comfyui.customHeaders.deleteTooltip": "Bu başlığı sil",
+  "comfyui.customHeaders.desc": "Özel kimlik doğrulama için gerekli istek başlıkları, anahtar-değer çiftleri olarak biçimlendirilmiştir",
+  "comfyui.customHeaders.duplicateKeyError": "Başlık adları yinelenemez",
+  "comfyui.customHeaders.keyPlaceholder": "Anahtar",
+  "comfyui.customHeaders.required": "Lütfen özel istek başlıklarını girin",
+  "comfyui.customHeaders.title": "Özel Başlıklar",
+  "comfyui.customHeaders.valuePlaceholder": "Değer",
+  "comfyui.password.desc": "Temel kimlik doğrulama için parola",
+  "comfyui.password.placeholder": "Parolayı girin",
+  "comfyui.password.required": "Lütfen parolayı girin",
+  "comfyui.password.title": "Parola",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "Temel kimlik doğrulama için kullanıcı adı",
+  "comfyui.username.placeholder": "Kullanıcı adını girin",
+  "comfyui.username.required": "Lütfen kullanıcı adını girin",
+  "comfyui.username.title": "Kullanıcı Adı",
+  "createNewAiProvider.apiKey.placeholder": "Lütfen API Anahtarınızı girin",
+  "createNewAiProvider.apiKey.title": "API Anahtarı",
+  "createNewAiProvider.basicTitle": "Temel Bilgiler",
+  "createNewAiProvider.configTitle": "Yapılandırma Bilgileri",
+  "createNewAiProvider.confirm": "Oluştur",
+  "createNewAiProvider.createSuccess": "Başarıyla oluşturuldu",
+  "createNewAiProvider.description.placeholder": "Sağlayıcı açıklaması (isteğe bağlı)",
+  "createNewAiProvider.description.title": "Sağlayıcı Açıklaması",
+  "createNewAiProvider.id.desc": "Hizmet sağlayıcısı için benzersiz tanımlayıcı, oluşturulduktan sonra değiştirilemez",
+  "createNewAiProvider.id.format": "Sadece rakamlar, küçük harfler, tire (-) ve alt çizgi (_) içerebilir",
+  "createNewAiProvider.id.placeholder": "Tümü küçük harf önerilir, örn. openai, oluşturulduktan sonra değiştirilemez",
+  "createNewAiProvider.id.required": "Lütfen sağlayıcı kimliğini girin",
+  "createNewAiProvider.id.title": "Sağlayıcı Kimliği",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "Lütfen geçerli bir sağlayıcı logosu yükleyin",
+  "createNewAiProvider.logo.title": "Sağlayıcı Logosu",
+  "createNewAiProvider.name.placeholder": "Lütfen sağlayıcının görünen adını girin",
+  "createNewAiProvider.name.required": "Lütfen sağlayıcı adını girin",
+  "createNewAiProvider.name.title": "Sağlayıcı Adı",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "Lütfen proxy adresini girin",
+  "createNewAiProvider.proxyUrl.title": "Proxy URL'si",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "Lütfen SDK türünü seçin",
+  "createNewAiProvider.sdkType.title": "İstek Formatı",
+  "createNewAiProvider.title": "Özel AI Sağlayıcısı Oluştur",
+  "github.personalAccessToken.desc": "GitHub Kişisel Erişim Jetonunuzu (PAT) girin. Bir tane oluşturmak için [buraya](https://github.com/settings/tokens) tıklayın.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "GitHub PAT",
+  "huggingface.accessToken.desc": "HuggingFace Jetonunuzu girin, bir tane oluşturmak için [buraya](https://huggingface.co/settings/tokens) tıklayın",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "HuggingFace Jetonu",
+  "list.title.custom": "Özel sağlayıcı etkin değil",
+  "list.title.disabled": "Devre Dışı",
+  "list.title.enabled": "Etkin",
+  "menu.addCustomProvider": "Özel Sağlayıcı Ekle",
+  "menu.all": "Tümü",
+  "menu.list.custom": "Özel etkin değil",
+  "menu.list.disabled": "Devre Dışı",
+  "menu.list.disabledActions.sort": "Sırala",
+  "menu.list.disabledActions.sortAlphabetical": "Alfabetik Sırala",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "Ters Alfabetik Sırala",
+  "menu.list.disabledActions.sortDefault": "Varsayılan Sıralama",
+  "menu.list.enabled": "Etkin",
+  "menu.notFound": "Arama sonucu bulunamadı",
+  "menu.searchProviders": "Sağlayıcıları Ara...",
+  "menu.sort": "Özel Sıralama",
+  "newapi.apiKey.desc": "New API platformu tarafından sağlanan API anahtarı",
+  "newapi.apiKey.placeholder": "New API API Anahtarı",
+  "newapi.apiKey.required": "API anahtarı gereklidir",
+  "newapi.apiKey.title": "API Anahtarı",
+  "newapi.apiUrl.desc": "New API hizmeti için API uç noktası, genellikle /v1 içerir",
+  "newapi.apiUrl.title": "API URL'si",
+  "newapi.enabled.title": "New API'yi Etkinleştir",
+  "newapi.models.batchSelect": "Toplu model seçimi ({{count}} öğe)",
+  "newapi.models.fetch": "Model listesini getir",
+  "newapi.models.selected": "Seçilen modeller",
+  "newapi.models.title": "Mevcut Modeller",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "Proxy adresinin doğru girilip girilmediğini test edin",
+  "ollama.checker.title": "Bağlantı Kontrolü",
+  "ollama.customModelName.desc": "Özel modeller ekleyin, birden fazla modeli virgülle ayırın",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "Özel model adı",
+  "ollama.download.desc": "Ollama modeli indiriyor. Lütfen bu sayfayı kapatmamaya çalışın. İndirme kesilirse kaldığı yerden devam edecektir.",
+  "ollama.download.failed": "Model indirilemedi. Lütfen ağ bağlantınızı veya Ollama ayarlarınızı kontrol edip tekrar deneyin.",
+  "ollama.download.remainingTime": "Kalan Süre",
+  "ollama.download.speed": "Hız",
+  "ollama.download.title": "{{model}} modeli indiriliyor",
+  "ollama.endpoint.desc": "http(s):// içermelidir; yerel olarak belirtilmemişse boş bırakılabilir.",
+  "ollama.endpoint.title": "Arayüz proxy adresi",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "İndirmeyi İptal Et",
+  "ollama.unlock.confirm": "İndir",
+  "ollama.unlock.description": "Oturuma devam etmek için Ollama model etiketinizi girin",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "İndirme başlatılıyor...",
+  "ollama.unlock.title": "Belirtilen Ollama modelini indir",
+  "providerModels.batchSelect.selected": "{{count}} model seçildi",
+  "providerModels.batchSelect.title": "Toplu Seçim",
+  "providerModels.config.aesGcm": "Anahtarınız ve proxy URL'niz <1>AES-GCM</1> şifreleme algoritması ile şifrelenecektir",
+  "providerModels.config.apiKey.desc": "Lütfen {{name}} API Anahtarınızı girin",
+  "providerModels.config.apiKey.descWithUrl": "Lütfen {{name}} API Anahtarınızı girin. <3>Buraya tıklayarak edinebilirsiniz</3>",
+  "providerModels.config.apiKey.placeholder": "{{name}} API Anahtarı",
+  "providerModels.config.apiKey.title": "API Anahtarı",
+  "providerModels.config.baseURL.desc": "http(s):// içermelidir",
+  "providerModels.config.baseURL.invalid": "Lütfen geçerli bir URL girin",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "API Proxy URL'si",
+  "providerModels.config.checker.button": "Kontrol Et",
+  "providerModels.config.checker.desc": "API Anahtarı ve proxy URL'sinin doğru girilip girilmediğini test edin",
+  "providerModels.config.checker.pass": "Kontrol başarılı",
+  "providerModels.config.checker.title": "Bağlantı Kontrolü",
+  "providerModels.config.fetchOnClient.desc": "İstemci istek modu, oturum isteklerini doğrudan tarayıcıdan başlatır, bu da yanıt hızını artırabilir",
+  "providerModels.config.fetchOnClient.title": "İstemci İstek Modunu Kullan",
+  "providerModels.config.helpDoc": "Yapılandırma Kılavuzu",
+  "providerModels.config.responsesApi.desc": "OpenAI'nin yeni nesil istek formatı kullanılarak zincirleme düşünme gibi gelişmiş özellikler etkinleştirilir (yalnızca OpenAI modelleri destekler)",
+  "providerModels.config.responsesApi.title": "Yanıtlar API Spesifikasyonunu Kullan",
+  "providerModels.config.waitingForMore": "Daha fazla model şu anda <1>entegrasyon için planlanıyor</1>, bizi takipte kalın",
+  "providerModels.createNew.title": "Özel Yapay Zeka Modeli Oluştur",
+  "providerModels.item.config": "Modeli Yapılandır",
+  "providerModels.item.customModelCards.addNew": "{{id}} modelini oluştur ve ekle",
+  "providerModels.item.customModelCards.confirmDelete": "Bu özel modeli silmek üzeresiniz. Silindikten sonra geri alınamaz. Lütfen dikkatli olun.",
+  "providerModels.item.delete.confirm": "{{displayName}} modelini silmek istediğinizden emin misiniz?",
+  "providerModels.item.delete.success": "Silme işlemi başarılı",
+  "providerModels.item.delete.title": "Modeli Sil",
+  "providerModels.item.modelConfig.azureDeployName.extra": "Azure OpenAI'de gerçek isteklerde kullanılan alan",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "Azure'daki model dağıtım adını girin",
+  "providerModels.item.modelConfig.azureDeployName.title": "Model Dağıtım Adı",
+  "providerModels.item.modelConfig.deployName.extra": "Bu alan, istek gönderilirken model kimliği olarak kullanılacaktır",
+  "providerModels.item.modelConfig.deployName.placeholder": "Modelin gerçek dağıtım adını veya kimliğini girin",
+  "providerModels.item.modelConfig.deployName.title": "Model Dağıtım Adı",
+  "providerModels.item.modelConfig.displayName.placeholder": "Modelin görünen adını girin, örn. ChatGPT, GPT-4 vb.",
+  "providerModels.item.modelConfig.displayName.title": "Model Görünen Adı",
+  "providerModels.item.modelConfig.files.extra": "Mevcut dosya yükleme uygulaması geçici bir çözümdür, yalnızca kişisel denemeler için uygundur. Gelecekteki sürümlerde tam dosya yükleme desteği gelecektir.",
+  "providerModels.item.modelConfig.files.title": "Dosya Yükleme Desteği",
+  "providerModels.item.modelConfig.functionCall.extra": "Bu yapılandırma yalnızca modelin araç kullanma yeteneğini etkinleştirir. Ancak modelin araçları gerçekten kullanıp kullanamayacağı tamamen modele bağlıdır; lütfen kendiniz test edin.",
+  "providerModels.item.modelConfig.functionCall.title": "Araç Kullanım Desteği",
+  "providerModels.item.modelConfig.id.extra": "Oluşturulduktan sonra değiştirilemez ve AI çağrılarında model kimliği olarak kullanılır",
+  "providerModels.item.modelConfig.id.placeholder": "Model kimliğini girin, örn. gpt-4o veya claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "Model Kimliği",
+  "providerModels.item.modelConfig.imageOutput.extra": "Bu ayar yalnızca modelin görsel üretim yeteneğini etkinleştirir. Gerçek performans tamamen modele bağlıdır. Lütfen modelin görsel üretim desteğini test edin.",
+  "providerModels.item.modelConfig.imageOutput.title": "Görsel Üretim Desteği",
+  "providerModels.item.modelConfig.modalTitle": "Özel Model Yapılandırması",
+  "providerModels.item.modelConfig.reasoning.extra": "Bu yapılandırma modelin derin düşünme yeteneklerini etkinleştirir. Gerçek etkiler tamamen modele bağlıdır. Lütfen bu modelin kullanılabilir derin düşünme yeteneklerine sahip olup olmadığını test edin.",
+  "providerModels.item.modelConfig.reasoning.title": "Derin Düşünme Desteği",
+  "providerModels.item.modelConfig.search.extra": "Bu ayar modelin dahili web arama yeteneğini etkinleştirir. Dahili arama motorunun desteklenip desteklenmediği modele bağlıdır. Lütfen bu özelliğin kullanılabilirliğini test edin.",
+  "providerModels.item.modelConfig.search.title": "Web Arama Desteği",
+  "providerModels.item.modelConfig.tokens.extra": "Modelin desteklediği maksimum token sayısını ayarlayın",
+  "providerModels.item.modelConfig.tokens.title": "Maksimum Bağlam Penceresi",
+  "providerModels.item.modelConfig.tokens.unlimited": "Sınırsız",
+  "providerModels.item.modelConfig.type.extra": "Farklı model türlerinin farklı kullanım alanları ve yetenekleri vardır",
+  "providerModels.item.modelConfig.type.options.chat": "Sohbet",
+  "providerModels.item.modelConfig.type.options.embedding": "Gömme",
+  "providerModels.item.modelConfig.type.options.image": "Görsel Üretimi",
+  "providerModels.item.modelConfig.type.options.realtime": "Gerçek Zamanlı Sohbet",
+  "providerModels.item.modelConfig.type.options.stt": "Konuşmadan Metne",
+  "providerModels.item.modelConfig.type.options.text2music": "Metinden Müziğe",
+  "providerModels.item.modelConfig.type.options.text2video": "Metinden Videoya",
+  "providerModels.item.modelConfig.type.options.tts": "Metinden Sese",
+  "providerModels.item.modelConfig.type.placeholder": "Lütfen bir model türü seçin",
+  "providerModels.item.modelConfig.type.title": "Model Türü",
+  "providerModels.item.modelConfig.video.extra": "Bu ayar uygulama içinde video tanıma yapılandırmasını etkinleştirir. Video tanıma desteği tamamen modele bağlıdır. Lütfen bu özelliğin kullanılabilirliğini test edin.",
+  "providerModels.item.modelConfig.video.title": "Video Tanıma Desteği",
+  "providerModels.item.modelConfig.vision.extra": "Bu yapılandırma yalnızca uygulama içinde görsel yükleme yeteneğini etkinleştirir. Tanıma desteği tamamen modele bağlıdır. Lütfen modelin görsel tanıma yeteneklerini test edin.",
+  "providerModels.item.modelConfig.vision.title": "Görsel Tanıma Desteği",
+  "providerModels.item.pricing.image": "${{amount}}/Görsel",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/M Karakter",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/Dakika",
+  "providerModels.item.pricing.inputTokens": "Girdi ${{amount}}/M",
+  "providerModels.item.pricing.outputTokens": "Çıktı ${{amount}}/M",
+  "providerModels.item.releasedAt": "{{releasedAt}} tarihinde yayınlandı",
+  "providerModels.list.addNew": "Model Ekle",
+  "providerModels.list.disabled": "Devre Dışı",
+  "providerModels.list.disabledActions.showMore": "Tümünü Göster",
+  "providerModels.list.disabledActions.sort": "Sırala",
+  "providerModels.list.disabledActions.sortAlphabetical": "Alfabetik Sırala",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "Ters Alfabetik Sırala",
+  "providerModels.list.disabledActions.sortDefault": "Varsayılan Sıralama",
+  "providerModels.list.disabledActions.sortReleasedAt": "En Erken Yayın Tarihine Göre Sırala",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "En Son Yayın Tarihine Göre Sırala",
+  "providerModels.list.empty.desc": "Başlamak için özel bir model oluşturun veya bir model çekin.",
+  "providerModels.list.empty.title": "Kullanılabilir model yok",
+  "providerModels.list.enabled": "Etkin",
+  "providerModels.list.enabledActions.disableAll": "Tümünü Devre Dışı Bırak",
+  "providerModels.list.enabledActions.enableAll": "Tümünü Etkinleştir",
+  "providerModels.list.enabledActions.sort": "Özel Model Sıralaması",
+  "providerModels.list.enabledEmpty": "Etkin model bulunamadı. Lütfen aşağıdaki listeden tercih ettiğiniz modelleri etkinleştirin~",
+  "providerModels.list.fetcher.clear": "Getirilen modelleri temizle",
+  "providerModels.list.fetcher.fetch": "Modelleri getir",
+  "providerModels.list.fetcher.fetching": "Model listesi getiriliyor...",
+  "providerModels.list.fetcher.latestTime": "Son güncelleme: {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "Model listesi henüz getirilmedi",
+  "providerModels.list.noModelsInCategory": "Bu kategoride etkin model yok",
+  "providerModels.list.resetAll.conform": "Tüm değişiklikleri sıfırlamak istediğinizden emin misiniz? Sıfırlama sonrası model listesi varsayılan duruma dönecektir.",
+  "providerModels.list.resetAll.success": "Sıfırlama başarılı",
+  "providerModels.list.resetAll.title": "Tüm Değişiklikleri Sıfırla",
+  "providerModels.list.search": "Modelleri Ara...",
+  "providerModels.list.searchResult": "{{count}} model bulundu",
+  "providerModels.list.title": "Model Listesi",
+  "providerModels.list.total": "{{count}} model mevcut",
+  "providerModels.searchNotFound": "Arama sonucu bulunamadı",
+  "providerModels.tabs.all": "Tümü",
+  "providerModels.tabs.chat": "Sohbet",
+  "providerModels.tabs.embedding": "Gömme",
+  "providerModels.tabs.image": "Görsel",
+  "providerModels.tabs.stt": "ASR",
+  "providerModels.tabs.tts": "TTS",
+  "sortModal.success": "Sıralama güncellemesi başarılı",
+  "sortModal.title": "Özel Sıralama",
+  "sortModal.update": "Güncelle",
+  "updateAiProvider.confirmDelete": "Bu yapay zeka sağlayıcısını silmek üzeresiniz. Silindikten sonra geri alınamaz. Silmek istediğinizden emin misiniz?",
+  "updateAiProvider.deleteSuccess": "Silme işlemi başarılı",
+  "updateAiProvider.tooltip": "Sağlayıcı temel yapılandırmasını güncelle",
+  "updateAiProvider.updateSuccess": "Güncelleme başarılı",
+  "updateCustomAiProvider.title": "Özel Yapay Zeka Sağlayıcı Yapılandırmasını Güncelle",
+  "vertexai.apiKey.desc": "Vertex AI Anahtarlarınızı girin",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "Vertex AI Anahtarları",
+  "vertexai.region.desc": "Vertex AI hizmeti için bölge seçin. Gemini 2.5 gibi bazı modeller yalnızca belirli bölgelerde (örneğin global) mevcuttur",
+  "vertexai.region.placeholder": "Bölge seçin",
+  "vertexai.region.title": "Vertex AI Bölgesi",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

@@ -1,31 +1,39 @@
-import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { LucideIcon } from 'lucide-react';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, useThemeMode , responsive } from 'antd-style';
+import { type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
-import { Center, Flexbox } from 'react-layout-kit';
 
-const useStyles = createStyles(({ css, token, isDarkMode, responsive }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   desc: css`
     width: 280px;
     margin-block-end: 0;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    ${responsive.mobile} {
-      line-height: ${token.lineHeight};
+    ${responsive.sm} {
+      line-height: ${cssVar.lineHeight};
     }
   `,
-  icon: css`
-    color: ${isDarkMode ? token.blue : token.geekblue};
-  `,
-  iconCtn: css`
+  iconCtnDark: css`
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    background: ${isDarkMode ? token.blue1 : token.geekblue1};
+    background: ${cssVar.blue1};
+  `,
+  iconCtnLight: css`
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: ${cssVar.geekblue1};
+  `,
+  iconDark: css`
+    color: ${cssVar.blue};
+  `,
+  iconLight: css`
+    color: ${cssVar.geekblue};
   `,
   title: css`
     margin-block-end: 0;
-    font-size: ${token.fontSizeLG}px;
+    font-size: ${cssVar.fontSizeLG};
     font-weight: bold;
   `,
 }));
@@ -40,15 +48,19 @@ interface FeatureListProps {
 }
 
 const FeatureList = memo<FeatureListProps>(({ data }) => {
-  const { styles } = useStyles();
+  const { isDarkMode } = useThemeMode();
 
   return (
     <Flexbox gap={32}>
       {data.map((item) => {
         return (
           <Flexbox align={'flex-start'} gap={24} horizontal key={item.title}>
-            <Center className={styles.iconCtn}>
-              <Icon className={styles.icon} icon={item.avatar} size={36} />
+            <Center className={isDarkMode ? styles.iconCtnDark : styles.iconCtnLight}>
+              <Icon
+                className={isDarkMode ? styles.iconDark : styles.iconLight}
+                icon={item.avatar}
+                size={36}
+              />
             </Center>
             <Flexbox gap={8}>
               <p className={styles.title}>{item.title}</p>

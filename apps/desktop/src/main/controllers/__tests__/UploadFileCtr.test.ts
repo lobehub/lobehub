@@ -1,8 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import { IpcHandler } from '@/utils/ipc/base';
 
 import UploadFileCtr from '../UploadFileCtr';
+
+const { ipcHandlers, ipcMainHandleMock } = vi.hoisted(() => {
+  const handlers = new Map<string, (event: any, ...args: any[]) => any>();
+  const handle = vi.fn((channel: string, handler: any) => {
+    handlers.set(channel, handler);
+  });
+  return { ipcHandlers: handlers, ipcMainHandleMock: handle };
+});
+
+const invokeIpc = async <T = any>(channel: string, payload?: any): Promise<T> => {
+  const handler = ipcHandlers.get(channel);
+  if (!handler) throw new Error(`IPC handler for ${channel} not found`);
+
+  const fakeEvent = { sender: { id: 'test' } as any };
+  if (payload === undefined) return handler(fakeEvent);
+  return handler(fakeEvent, payload);
+};
+
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+}));
 
 // Mock FileService module to prevent electron dependency issues
 vi.mock('@/services/fileSrv', () => ({
@@ -12,9 +36,6 @@ vi.mock('@/services/fileSrv', () => ({
 // Mock FileService instance methods
 const mockFileService = {
   uploadFile: vi.fn(),
-  getFilePath: vi.fn(),
-  getFileHTTPURL: vi.fn(),
-  deleteFiles: vi.fn(),
 };
 
 const mockApp = {
@@ -26,6 +47,9 @@ describe('UploadFileCtr', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    ipcHandlers.clear();
+    ipcMainHandleMock.mockClear();
+    (IpcHandler.getInstance() as any).registeredChannels?.clear();
     controller = new UploadFileCtr(mockApp);
   });
 
@@ -41,7 +65,7 @@ describe('UploadFileCtr', () => {
       const expectedResult = { id: 'file-id-123', url: '/files/file-id-123' };
       mockFileService.uploadFile.mockResolvedValue(expectedResult);
 
-      const result = await controller.uploadFile(params);
+      const result = await invokeIpc('upload.uploadFile', params);
 
       expect(result).toEqual(expectedResult);
       expect(mockFileService.uploadFile).toHaveBeenCalledWith(params);
@@ -58,110 +82,7 @@ describe('UploadFileCtr', () => {
       const error = new Error('Upload failed');
       mockFileService.uploadFile.mockRejectedValue(error);
 
-      await expect(controller.uploadFile(params)).rejects.toThrow('Upload failed');
-    });
-  });
-
-  describe('getFileUrlById', () => {
-    it('should get file path by id successfully', async () => {
-      const fileId = 'file-id-123';
-      const expectedPath = '/files/abc123.txt';
-      mockFileService.getFilePath.mockResolvedValue(expectedPath);
-
-      const result = await controller.getFileUrlById(fileId);
-
-      expect(result).toBe(expectedPath);
-      expect(mockFileService.getFilePath).toHaveBeenCalledWith(fileId);
-    });
-
-    it('should handle get file path error', async () => {
-      const fileId = 'non-existent-id';
-      const error = new Error('File not found');
-      mockFileService.getFilePath.mockRejectedValue(error);
-
-      await expect(controller.getFileUrlById(fileId)).rejects.toThrow('File not found');
-    });
-  });
-
-  describe('getFileHTTPURL', () => {
-    it('should get file HTTP URL successfully', async () => {
-      const filePath = '/files/abc123.txt';
-      const expectedUrl = 'http://localhost:3000/files/abc123.txt';
-      mockFileService.getFileHTTPURL.mockResolvedValue(expectedUrl);
-
-      const result = await controller.getFileHTTPURL(filePath);
-
-      expect(result).toBe(expectedUrl);
-      expect(mockFileService.getFileHTTPURL).toHaveBeenCalledWith(filePath);
-    });
-
-    it('should handle get HTTP URL error', async () => {
-      const filePath = '/files/abc123.txt';
-      const error = new Error('Failed to generate URL');
-      mockFileService.getFileHTTPURL.mockRejectedValue(error);
-
-      await expect(controller.getFileHTTPURL(filePath)).rejects.toThrow('Failed to generate URL');
-    });
-  });
-
-  describe('deleteFiles', () => {
-    it('should delete files successfully', async () => {
-      const paths = ['/files/file1.txt', '/files/file2.txt'];
-      mockFileService.deleteFiles.mockResolvedValue(undefined);
-
-      await controller.deleteFiles(paths);
-
-      expect(mockFileService.deleteFiles).toHaveBeenCalledWith(paths);
-    });
-
-    it('should handle delete files error', async () => {
-      const paths = ['/files/file1.txt'];
-      const error = new Error('Delete failed');
-      mockFileService.deleteFiles.mockRejectedValue(error);
-
-      await expect(controller.deleteFiles(paths)).rejects.toThrow('Delete failed');
-    });
-
-    it('should handle empty paths array', async () => {
-      const paths: string[] = [];
-      mockFileService.deleteFiles.mockResolvedValue(undefined);
-
-      await controller.deleteFiles(paths);
-
-      expect(mockFileService.deleteFiles).toHaveBeenCalledWith([]);
-    });
-  });
-
-  describe('createFile', () => {
-    it('should create file successfully', async () => {
-      const params = {
-        hash: 'xyz789',
-        path: '/test/newfile.txt',
-        content: 'bmV3IGZpbGUgY29udGVudA==',
-        filename: 'newfile.txt',
-        type: 'text/plain',
-      };
-      const expectedResult = { id: 'new-file-id', url: '/files/new-file-id' };
-      mockFileService.uploadFile.mockResolvedValue(expectedResult);
-
-      const result = await controller.createFile(params);
-
-      expect(result).toEqual(expectedResult);
-      expect(mockFileService.uploadFile).toHaveBeenCalledWith(params);
-    });
-
-    it('should handle create file error', async () => {
-      const params = {
-        hash: 'xyz789',
-        path: '/test/newfile.txt',
-        content: 'bmV3IGZpbGUgY29udGVudA==',
-        filename: 'newfile.txt',
-        type: 'text/plain',
-      };
-      const error = new Error('Create failed');
-      mockFileService.uploadFile.mockRejectedValue(error);
-
-      await expect(controller.createFile(params)).rejects.toThrow('Create failed');
+      await expect(invokeIpc('upload.uploadFile', params)).rejects.toThrow('Upload failed');
     });
   });
 });

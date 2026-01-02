@@ -6,7 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
-import { HotkeyGroupEnum, HotkeyGroupId } from '@/types/hotkey';
+import { HotkeyGroupEnum, type HotkeyGroupId } from '@/types/hotkey';
 
 import HotkeyContent from './HotkeyContent';
 

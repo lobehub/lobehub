@@ -1,5 +1,5 @@
 import type { ChatModelCard } from '@lobechat/types';
-import uniqueId from 'lodash-es/uniqueId';
+import { uniqueId } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
 import {

@@ -1,11 +1,12 @@
 // @vitest-environment node
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { AsyncTaskStatus, AsyncTaskType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { asyncTasks, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
-import { ASYNC_TASK_TIMEOUT, AsyncTaskModel } from '../asyncTask';
+import { AsyncTaskModel } from '../asyncTask';
 import { getTestDB } from './_util';
 
 const serverDB: LobeChatDatabase = await getTestDB();

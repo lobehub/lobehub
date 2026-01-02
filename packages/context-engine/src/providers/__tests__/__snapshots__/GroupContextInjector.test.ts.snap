@@ -1,0 +1,121 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GroupContextInjector > Edge Cases > should handle empty members array 1`] = `
+"Prompt.
+
+<group_context>
+You are "", acting as a  in the multi-agent group "Empty Group".
+Your internal agent ID is  (for system use only, never expose to users).
+
+<critical_output_rules>
+IMPORTANT: Your responses must contain ONLY your actual reply content.
+- Messages in conversation history start with '<speaker name="..." />' - this identifies who sent each message
+- NEVER start your response with '<speaker' tag - the system adds this automatically
+- Just output your actual response content directly
+</critical_output_rules>
+
+<group_description>The following describes the purpose and goals of this agent group:
+
+Empty group description
+</group_description>
+
+<group_participants>The following agents are available in this group:
+
+
+</group_participants>
+
+<identity_rules>
+- NEVER expose or display agent IDs to users - always refer to agents by their names
+</identity_rules>
+</group_context>"
+`;
+
+exports[`GroupContextInjector > Variable Replacement > should handle config with only group info 1`] = `
+"System prompt.
+
+<group_context>
+You are "", acting as a  in the multi-agent group "Test Group".
+Your internal agent ID is  (for system use only, never expose to users).
+
+<critical_output_rules>
+IMPORTANT: Your responses must contain ONLY your actual reply content.
+- Messages in conversation history start with '<speaker name="..." />' - this identifies who sent each message
+- NEVER start your response with '<speaker' tag - the system adds this automatically
+- Just output your actual response content directly
+</critical_output_rules>
+
+<group_description>The following describes the purpose and goals of this agent group:
+
+Test group description
+</group_description>
+
+<group_participants>The following agents are available in this group:
+
+  <member name="Agent 1" id="agt_1" />
+</group_participants>
+
+<identity_rules>
+- NEVER expose or display agent IDs to users - always refer to agents by their names
+</identity_rules>
+</group_context>"
+`;
+
+exports[`GroupContextInjector > Variable Replacement > should handle config with only identity info 1`] = `
+"You are an editor.
+
+<group_context>
+You are "Editor", acting as a participant in the multi-agent group "".
+Your internal agent ID is agt_editor (for system use only, never expose to users).
+
+<critical_output_rules>
+IMPORTANT: Your responses must contain ONLY your actual reply content.
+- Messages in conversation history start with '<speaker name="..." />' - this identifies who sent each message
+- NEVER start your response with '<speaker' tag - the system adds this automatically
+- Just output your actual response content directly
+</critical_output_rules>
+
+<group_description>The following describes the purpose and goals of this agent group:
+
+
+</group_description>
+
+<group_participants>The following agents are available in this group:
+
+
+</group_participants>
+
+<identity_rules>
+- NEVER expose or display agent IDs to users - always refer to agents by their names
+</identity_rules>
+</group_context>"
+`;
+
+exports[`GroupContextInjector > Variable Replacement > should handle empty config 1`] = `
+"Base prompt.
+
+<group_context>
+You are "", acting as a  in the multi-agent group "".
+Your internal agent ID is  (for system use only, never expose to users).
+
+<critical_output_rules>
+IMPORTANT: Your responses must contain ONLY your actual reply content.
+- Messages in conversation history start with '<speaker name="..." />' - this identifies who sent each message
+- NEVER start your response with '<speaker' tag - the system adds this automatically
+- Just output your actual response content directly
+</critical_output_rules>
+
+<group_description>The following describes the purpose and goals of this agent group:
+
+
+</group_description>
+
+<group_participants>The following agents are available in this group:
+
+
+</group_participants>
+
+<identity_rules>
+- NEVER expose or display agent IDs to users - always refer to agents by their names
+</identity_rules>
+</group_context>"
+`;

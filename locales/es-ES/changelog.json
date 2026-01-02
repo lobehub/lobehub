@@ -1,16 +1,12 @@
 {
-  "actions": {
-    "followOnX": "Síguenos en X",
-    "subscribeToUpdates": "Suscríbete a las actualizaciones",
-    "versions": "Detalles de la versión"
-  },
-  "addedWhileAway": "Hemos traído nuevas características mientras estabas ausente.",
+  "actions.followOnX": "Síguenos en X",
+  "actions.subscribeToUpdates": "Suscríbete para recibir actualizaciones",
+  "actions.versions": "Detalles de la versión",
+  "addedWhileAway": "Hemos incorporado nuevas funciones mientras estabas fuera.",
   "allChangelog": "Ver todos los registros de cambios",
-  "description": "Sigue las nuevas funciones y mejoras de {{appName}}",
-  "pagination": {
-    "next": "Siguiente página",
-    "older": "Ver cambios anteriores"
-  },
+  "description": "Mantente al día con las nuevas funciones y mejoras de {{appName}}",
+  "pagination.next": "Página siguiente",
+  "pagination.older": "Ver cambios anteriores",
   "readDetails": "Leer detalles",
   "title": "Registro de cambios",
   "versionDetails": "Detalles de la versión",

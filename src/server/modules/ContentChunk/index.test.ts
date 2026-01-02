@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { NewChunkItem, NewUnstructuredChunkItem } from '@/database/schemas';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { ChunkingLoader } from '@/libs/langchain';
-import { ChunkingStrategy, Unstructured } from '@/libs/unstructured';
 
 import { ContentChunk } from './index';
 
 // Mock the dependencies
-vi.mock('@/libs/unstructured');
 vi.mock('@/libs/langchain');
 vi.mock('@/envs/knowledge', () => ({
   knowledgeEnv: {
@@ -20,17 +17,10 @@ vi.mock('@/envs/knowledge', () => ({
 
 describe('ContentChunk', () => {
   let contentChunk: ContentChunk;
-  let mockUnstructuredPartition: ReturnType<typeof vi.fn>;
   let mockLangChainPartition: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Setup Unstructured mock
-    mockUnstructuredPartition = vi.fn();
-    (Unstructured as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      partition: mockUnstructuredPartition,
-    }));
 
     // Setup LangChain mock
     mockLangChainPartition = vi.fn();
@@ -42,8 +32,7 @@ describe('ContentChunk', () => {
   });
 
   describe('constructor', () => {
-    it('should initialize with Unstructured and LangChain clients', () => {
-      expect(Unstructured).toHaveBeenCalledTimes(1);
+    it('should initialize with LangChain client', () => {
       expect(ChunkingLoader).toHaveBeenCalledTimes(1);
     });
   });
@@ -255,35 +244,6 @@ describe('ContentChunk', () => {
         text: 'Content with no metadata',
         type: 'LangChainElement',
       });
-    });
-  });
-
-  describe('canUseUnstructured', () => {
-    it('should return true when API key and server URL are configured', () => {
-      const result = contentChunk['canUseUnstructured']();
-      expect(result).toBe(true);
-    });
-
-    it('should return false when API key is missing', () => {
-      const originalKey = knowledgeEnv.UNSTRUCTURED_API_KEY;
-      vi.mocked(knowledgeEnv).UNSTRUCTURED_API_KEY = '';
-
-      const result = contentChunk['canUseUnstructured']();
-      expect(result).toBe(false);
-
-      // Restore
-      vi.mocked(knowledgeEnv).UNSTRUCTURED_API_KEY = originalKey;
-    });
-
-    it('should return false when server URL is missing', () => {
-      const originalUrl = knowledgeEnv.UNSTRUCTURED_SERVER_URL;
-      vi.mocked(knowledgeEnv).UNSTRUCTURED_SERVER_URL = '';
-
-      const result = contentChunk['canUseUnstructured']();
-      expect(result).toBe(false);
-
-      // Restore
-      vi.mocked(knowledgeEnv).UNSTRUCTURED_SERVER_URL = originalUrl;
     });
   });
 

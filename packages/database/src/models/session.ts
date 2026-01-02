@@ -269,7 +269,7 @@ export class SessionModel {
         params,
         systemRole,
         provider,
-        plugins = [],
+        plugins,
         openingMessage,
         openingQuestions = [],
         // TTS config
@@ -280,6 +280,8 @@ export class SessionModel {
         examples, // maps to fewShots
         identifier, // maps to marketIdentifier
         marketIdentifier,
+        // Editor data
+        editorData,
       } = config as any;
       if (type === 'group') {
         const result = await trx
@@ -306,6 +308,7 @@ export class SessionModel {
           chatConfig: chatConfig || {},
           createdAt: new Date(),
           description,
+          editorData: editorData || null,
           fewShots: examples || null, // Map examples to fewShots field
           id: idGenerator('agents'),
           marketIdentifier: identifier || marketIdentifier,
@@ -635,6 +638,7 @@ export class SessionModel {
         avatar: agent?.avatar ?? avatar ?? undefined,
         backgroundColor: agent?.backgroundColor ?? backgroundColor ?? undefined,
         description: agent?.description ?? description ?? undefined,
+
         marketIdentifier: agent?.marketIdentifier ?? undefined,
         tags: agent?.tags ?? undefined,
         title: agent?.title ?? title ?? undefined,

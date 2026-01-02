@@ -1,22 +1,29 @@
-import { Icon, Tag, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cx, useThemeMode } from 'antd-style';
 import { BoltIcon, RotateCwIcon } from 'lucide-react';
-import { darken, lighten } from 'polished';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
-import { AsyncTaskStatus, FileParsingTask } from '@/types/asyncTask';
+import { AsyncTaskStatus, type FileParsingTask } from '@/types/asyncTask';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
-  errorReason: css`
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  errorReasonDark: css`
     padding: 4px;
     border-radius: 4px;
 
     font-family: monospace;
     font-size: 12px;
 
-    background: ${isDarkMode ? darken(0.1, token.colorText) : lighten(0.1, token.colorText)};
+    background: color-mix(in srgb, ${cssVar.colorText} 90%, black);
+  `,
+  errorReasonLight: css`
+    padding: 4px;
+    border-radius: 4px;
+
+    font-family: monospace;
+    font-size: 12px;
+
+    background: color-mix(in srgb, ${cssVar.colorText} 90%, white);
   `,
 }));
 
@@ -29,7 +36,7 @@ interface EmbeddingStatusProps extends FileParsingTask {
 const EmbeddingStatus = memo<EmbeddingStatusProps>(
   ({ chunkCount, embeddingStatus, embeddingError, onClick, onErrorClick, className }) => {
     const { t } = useTranslation(['components', 'common']);
-    const { styles, cx } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     switch (embeddingStatus) {
       case AsyncTaskStatus.Processing: {
@@ -42,11 +49,11 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
               title={t('FileParsingStatus.chunks.embeddingStatus.processing')}
             >
               <Tag
-                bordered={false}
                 className={cx('chunk-tag', className)}
                 color={'processing'}
                 icon={<Icon icon={BoltIcon} spin />}
                 style={{ cursor: 'pointer' }}
+                variant={'filled'}
               >
                 {chunkCount}
               </Tag>
@@ -65,7 +72,9 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
               <Flexbox gap={4}>
                 {t('FileParsingStatus.chunks.embeddingStatus.errorResult')}
                 {embeddingError && (
-                  <Flexbox className={styles.errorReason}>
+                  <Flexbox
+                    className={isDarkMode ? styles.errorReasonDark : styles.errorReasonLight}
+                  >
                     [{embeddingError.name}]:{' '}
                     {embeddingError.body && typeof embeddingError.body !== 'string'
                       ? embeddingError.body.detail
@@ -75,7 +84,7 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
               </Flexbox>
             }
           >
-            <Tag bordered={false} className={className} color={'error'}>
+            <Tag className={className} color={'error'} variant={'filled'}>
               {t('FileParsingStatus.chunks.embeddingStatus.error')}{' '}
               <Icon
                 icon={RotateCwIcon}
@@ -98,7 +107,6 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
               title={t('FileParsingStatus.chunks.embeddingStatus.success')}
             >
               <Tag
-                bordered={false}
                 className={cx('chunk-tag', className)}
                 color={'purple'}
                 icon={<Icon icon={BoltIcon} />}
@@ -106,6 +114,7 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
                   onClick?.(AsyncTaskStatus.Success);
                 }}
                 style={{ cursor: 'pointer' }}
+                variant={'filled'}
               >
                 {chunkCount}
               </Tag>

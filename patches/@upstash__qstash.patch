@@ -1,0 +1,25 @@
+diff --git a/chunk-RQPZUJXG.mjs b/chunk-RQPZUJXG.mjs
+index d1a9b4a460efc59304ec30e6bc63a127f1aac6d6..6653a61b539aaf91253300436a8072c6c5f666ee 100644
+--- a/chunk-RQPZUJXG.mjs
++++ b/chunk-RQPZUJXG.mjs
+@@ -326,6 +326,20 @@ var HttpClient = class {
+     }
+     if (response.status < 200 || response.status >= 300) {
+       const body = await response.text();
++      // Debug aid: log non-2xx responses to trace publish failures (e.g., 400) with context
++      try {
++        console.error(
++          "[upstash-qstash] request failed",
++          JSON.stringify({
++            status: response.status,
++            url: response.url,
++            headers: Object.fromEntries(response.headers.entries()),
++            body
++          })
++        );
++      } catch {
++        // ignore logging failures to preserve original throw path
++      }
+       throw new QstashError(
+         body.length > 0 ? body : `Error: status=${response.status}`,
+         response.status

@@ -1,12 +1,11 @@
-import { Avatar, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Avatar, Center, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo } from 'react';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { useMentionStore } from '@/store/mention';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     position: relative;
 
@@ -14,10 +13,10 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 64px;
     border-radius: 8px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
     :hover {
-      background: ${token.colorBgElevated};
+      background: ${cssVar.colorBgElevated};
     }
   `,
   removeButton: css`
@@ -36,14 +35,14 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 20px;
     border-radius: 5px;
 
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
     box-shadow:
-      0 0 0 0.5px ${token.colorFillSecondary} inset,
-      ${token.boxShadowTertiary};
+      0 0 0 0.5px ${cssVar.colorFillSecondary} inset,
+      ${cssVar.boxShadowTertiary};
 
     :hover {
-      color: ${token.colorError};
-      background: ${token.colorErrorBg};
+      color: ${cssVar.colorError};
+      background: ${cssVar.colorErrorBg};
     }
   `,
 }));
@@ -53,7 +52,6 @@ interface MentionedUserItemProps {
 }
 
 const MentionedUserItem = memo<MentionedUserItemProps>(({ agent }) => {
-  const { styles } = useStyles();
   const removeMentionedUser = useMentionStore((s) => s.removeMentionedUser);
 
   const handleRemove = () => {
@@ -63,7 +61,12 @@ const MentionedUserItem = memo<MentionedUserItemProps>(({ agent }) => {
   return (
     <Flexbox align={'center'} className={styles.container} horizontal>
       <Center flex={1} height={64} padding={4} style={{ maxWidth: 64 }}>
-        <Avatar avatar={agent.avatar} background={agent.backgroundColor} shape="circle" size={48} />
+        <Avatar
+          avatar={agent.avatar}
+          background={agent.backgroundColor}
+          shape={'square'}
+          size={48}
+        />
       </Center>
       <Flexbox flex={1} gap={4} style={{ paddingBottom: 4, paddingInline: 4 }}>
         <Text ellipsis={{ tooltip: true }} style={{ fontSize: 12, maxWidth: 100 }}>

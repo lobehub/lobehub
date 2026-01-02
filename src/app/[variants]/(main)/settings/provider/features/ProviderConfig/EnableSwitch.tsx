@@ -1,11 +1,11 @@
-import { Skeleton } from 'antd';
-import { createStyles } from 'antd-style';
-import { FC } from 'react';
+import { Skeleton } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { type FC } from 'react';
 
 import InstantSwitch from '@/components/InstantSwitch';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   switchLoading: css`
     width: 44px !important;
     min-width: 44px !important;
@@ -20,8 +20,6 @@ interface SwitchProps {
 }
 
 const Switch = ({ id, Component }: SwitchProps) => {
-  const { styles } = useStyles();
-
   const [toggleProviderEnabled, enabled, isLoading] = useAiInfraStore((s) => [
     s.toggleProviderEnabled,
     aiProviderSelectors.isProviderEnabled(id)(s),

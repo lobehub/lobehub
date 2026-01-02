@@ -1,33 +1,37 @@
 'use client';
 
-import { Avatar, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Skeleton, Switch } from 'antd';
-import { createStyles } from 'antd-style';
+import { Avatar, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { Switch } from 'antd';
+import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import { Bot, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { LobeAgentSession } from '@/types/session';
+import { type LobeAgentSession } from '@/types/session';
 
-const useStyles = createStyles(({ css, token, isDarkMode }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     position: relative;
 
     overflow: hidden;
 
     height: 100%;
-    border: 1px solid ${isDarkMode ? token.colorBorder : token.colorBorderSecondary};
     border-radius: 12px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
-    transition: border-color 0.2s ${token.motionEaseInOut};
+    transition: border-color 0.2s ${cssVar.motionEaseInOut};
 
     &:hover {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
+  `,
+  containerDark: css`
+    border: 1px solid ${cssVar.colorBorder};
+  `,
+  containerLight: css`
+    border: 1px solid ${cssVar.colorBorderSecondary};
   `,
   desc: css`
     overflow: hidden;
@@ -36,7 +40,7 @@ const useStyles = createStyles(({ css, token, isDarkMode }) => ({
     margin-block-end: 0 !important;
 
     line-height: 1.5;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   title: css`
     line-height: 1.3;
@@ -55,11 +59,18 @@ interface AgentCardProps {
 const AgentCard = memo<AgentCardProps>(
   ({ agent, inGroup, isHost, loading, onAction, operationLoading }) => {
     const { t } = useTranslation('setting');
-    const { cx, styles } = useStyles();
+    const { isDarkMode } = useThemeMode();
 
     if (loading) {
       return (
-        <Flexbox className={cx(styles.container)} gap={24} padding={16}>
+        <Flexbox
+          className={cx(
+            styles.container,
+            isDarkMode ? styles.containerDark : styles.containerLight,
+          )}
+          gap={24}
+          padding={16}
+        >
           <Skeleton active />
         </Flexbox>
       );
@@ -78,7 +89,10 @@ const AgentCard = memo<AgentCardProps>(
     };
 
     return (
-      <Flexbox className={cx(styles.container)} gap={24}>
+      <Flexbox
+        className={cx(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)}
+        gap={24}
+      >
         <Flexbox gap={12} padding={16} width={'100%'}>
           <Flexbox gap={12} width={'100%'}>
             <Flexbox align={'center'} horizontal justify={'space-between'}>
@@ -86,7 +100,7 @@ const AgentCard = memo<AgentCardProps>(
                 <Avatar
                   avatar={avatar}
                   background={avatarBackground}
-                  shape="circle"
+                  shape={'square'}
                   size={24}
                   style={{ flexShrink: 0 }}
                 />

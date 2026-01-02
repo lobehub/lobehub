@@ -1,181 +1,134 @@
 {
   "addFolder": "Crea cartella",
-  "addKnowledge": "Aggiungi conoscenza",
-  "addPage": "Crea documento",
-  "desc": "Gestisci le tue conoscenze su lavoro, studio e vita.",
-  "detail": {
-    "basic": {
-      "createdAt": "Data di creazione",
-      "filename": "Nome del file",
-      "size": "Dimensione del file",
-      "title": "Informazioni di base",
-      "type": "Formato",
-      "updatedAt": "Data di aggiornamento"
-    },
-    "data": {
-      "chunkCount": "Numero di blocchi",
-      "embedding": {
-        "default": "Non ancora vettorizzato",
-        "error": "Errore",
-        "pending": "In attesa di avvio",
-        "processing": "In elaborazione",
-        "success": "Completato"
-      },
-      "embeddingStatus": "Vettorizzazione"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "Aggiungi icona",
-    "autoSaveMessage": "Il documento viene salvato automaticamente, non è necessario salvarlo manualmente",
-    "chooseIcon": "Scegli icona",
-    "deleteConfirm": {
-      "content": "Stai per eliminare questo documento. Una volta eliminato, non potrà essere recuperato. Procedi con cautela.",
-      "title": "Elimina documento"
-    },
-    "deleteError": "Eliminazione del documento non riuscita",
-    "deleteSuccess": "Documento eliminato con successo",
-    "editedAt": "Ultima modifica il {{time}}",
-    "editedBy": "Ultima modifica di {{name}}",
-    "editorPlaceholder": "Inserisci il contenuto del documento, premi / per aprire il menu dei comandi",
-    "empty": {
-      "createNewDocument": "Crea un nuovo documento",
-      "title": "Seleziona un documento per iniziare",
-      "uploadMarkdown": "Carica un file Markdown"
-    },
-    "linkCopied": "Link copiato",
-    "menu": {
-      "copyLink": "Copia link",
-      "exportDocument": "Esporta documento",
-      "importDocument": "Importa documento",
-      "pin": "Fissa documento"
-    },
-    "saving": "Salvataggio in corso...",
-    "titlePlaceholder": "Senza titolo",
-    "wordCount": "{{wordCount}} parole"
-  },
-  "documentList": {
-    "copyContent": "Copia tutto il contenuto",
-    "duplicate": "Crea una copia",
-    "empty": "Nessun documento disponibile, clicca sul pulsante in alto per creare il tuo primo documento",
-    "noResults": "Nessun documento corrispondente trovato",
-    "pageCount": "Totale {{count}} documenti",
-    "selectNote": "Seleziona un documento per iniziare a modificare",
-    "untitled": "Senza titolo"
-  },
-  "empty": "Nessun file/cartella caricato",
-  "header": {
-    "actions": {
-      "newFolder": "Nuova cartella",
-      "newPage": "Nuovo documento",
-      "uploadFile": "Carica file",
-      "uploadFolder": "Carica cartella"
-    },
-    "newNoteDialog": {
-      "cancel": "Annulla",
-      "editTitle": "Modifica documento",
-      "emptyContent": "Il contenuto del documento non può essere vuoto",
-      "loadError": "Caricamento del documento non riuscito, riprova",
-      "loading": "Caricamento in corso...",
-      "save": "Salva",
-      "saveError": "Salvataggio del documento non riuscito, riprova",
-      "saveSuccess": "Documento salvato con successo",
-      "title": "Nuovo documento",
-      "updateSuccess": "Documento aggiornato con successo"
-    },
-    "newPageButton": "Nuovo Documento",
-    "uploadButton": "Carica"
-  },
-  "home": {
-    "getStarted": "Inizia subito",
-    "greeting": "Inizia",
-    "quickActions": "Azioni rapide",
-    "recentFiles": "File recenti",
-    "recentPages": "Documenti recenti",
-    "subtitle": "Benvenuto nel tuo archivio di conoscenza, inizia a gestire i tuoi documenti da qui",
-    "uploadEntries": {
-      "files": {
-        "title": "Carica file"
-      },
-      "folder": {
-        "title": "Carica cartella"
-      },
-      "knowledgeBase": {
-        "title": "Crea nuova base di conoscenza"
-      },
-      "newPage": {
-        "title": "Nuovo Documento"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "Stai per eliminare questa knowledge base. I file al suo interno non verranno eliminati, ma spostati in 'Tutti i file'. Una volta eliminata, la knowledge base non potrà essere recuperata, procedi con cautela.",
-      "empty": "Clicca <1>+</1> per iniziare a creare una knowledge base"
-    },
-    "new": "Nuova knowledge base",
-    "title": "Knowledge Base"
-  },
-  "menu": {
-    "allFiles": "Tutti i file",
-    "allPages": "Tutti i documenti"
-  },
-  "networkError": "Impossibile ottenere la knowledge base, controlla la connessione di rete e riprova",
-  "notSupportGuide": {
-    "desc": "L'istanza attuale è in modalità database client e non supporta la gestione dei file. Passa a <1>modalità di distribuzione del database server</1>, oppure utilizza direttamente <3>LobeChat Cloud</3>",
-    "features": {
-      "allKind": {
-        "desc": "Supporta i formati di file più comuni, inclusi Word, PPT, Excel, PDF, TXT e altri formati di documenti, così come file di codice comuni come JS e Python",
-        "title": "Analisi di vari tipi di file"
-      },
-      "embeddings": {
-        "desc": "Utilizza modelli vettoriali ad alte prestazioni per vettorizzare i blocchi di testo, consentendo la ricerca semantica del contenuto dei file",
-        "title": "Semantizzazione vettoriale"
-      },
-      "repos": {
-        "desc": "Supporta la creazione di knowledge base e consente di aggiungere diversi tipi di file, costruendo la tua conoscenza di settore",
-        "title": "Knowledge Base"
-      }
-    },
-    "title": "La modalità di distribuzione attuale non supporta la gestione dei file"
-  },
-  "preview": {
-    "downloadFile": "Scarica file",
-    "unsupportedFileAndContact": "Questo formato di file non è attualmente supportato per la visualizzazione online. Se hai bisogno di una visualizzazione, ti preghiamo di <1>contattarci</1>."
-  },
+  "addLibrary": "Aggiungi",
+  "addPage": "Crea pagina",
+  "detail.basic.createdAt": "Data di creazione",
+  "detail.basic.filename": "Nome file",
+  "detail.basic.size": "Dimensione file",
+  "detail.basic.title": "Informazioni di base",
+  "detail.basic.type": "Formato",
+  "detail.basic.updatedAt": "Data di aggiornamento",
+  "detail.data.chunkCount": "Frammenti",
+  "detail.data.embedding.default": "Non incorporato",
+  "detail.data.embedding.error": "Fallito",
+  "detail.data.embedding.pending": "In attesa di avvio",
+  "detail.data.embedding.processing": "In corso",
+  "detail.data.embedding.success": "Completato",
+  "detail.data.embeddingStatus": "incorporamento",
+  "empty": "Nessun file o cartella è stato ancora caricato.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} file filtrati (su un totale di {{total}})",
+  "header.actions.connect": "Connetti...",
+  "header.actions.gitignore.apply": "Applica regole",
+  "header.actions.gitignore.cancel": "Ignora regole",
+  "header.actions.gitignore.content": "File .gitignore rilevato ({{count}} file in totale). Vuoi applicare le regole di esclusione?",
+  "header.actions.gitignore.filtered": "{{ignored}} file filtrati (su {{total}} file totali)",
+  "header.actions.gitignore.title": "Rilevato .gitignore",
+  "header.actions.newFolder": "Nuova cartella",
+  "header.actions.newPage": "Nuova pagina",
+  "header.actions.notion.error": "Importazione dei file Notion non riuscita",
+  "header.actions.notion.foundFiles": "trovati {{count}} file",
+  "header.actions.notion.importing": "Importazione contenuti Notion in corso...",
+  "header.actions.notion.noMarkdownFiles": "Nessun file markdown trovato nell'archivio ZIP",
+  "header.actions.notion.partial": "Importati con successo {{success}} file, {{failed}} non riusciti",
+  "header.actions.notion.success": "Importati con successo {{count}} file",
+  "header.actions.notionGuide.cancel": "Non ora",
+  "header.actions.notionGuide.desc": "Per prima cosa, esporta i tuoi contenuti da Notion come file Markdown (ZIP). Poi clicca su Continua per selezionare il file ZIP e importare tutte le pagine.",
+  "header.actions.notionGuide.ok": "Seleziona ZIP di Notion",
+  "header.actions.notionGuide.title": "Importa da Notion",
+  "header.actions.uploadFile": "Carica file",
+  "header.actions.uploadFolder": "Carica cartella",
+  "header.newPageButton": "Nuova pagina",
+  "header.uploadButton": "Carica",
+  "home.getStarted": "Inizia",
+  "home.greeting": "Inizia",
+  "home.quickActions": "Azioni rapide",
+  "home.recentFiles": "File recenti",
+  "home.recentPages": "Pagine recenti",
+  "home.uploadEntries.files.title": "Carica file",
+  "home.uploadEntries.folder.title": "Carica cartella",
+  "home.uploadEntries.library.title": "Crea nuova libreria",
+  "home.uploadEntries.newPage.title": "Nuova pagina",
+  "library.list.confirmRemoveLibrary": "Stai per eliminare questa libreria. I file al suo interno non verranno eliminati ma spostati in Tutti i file. Questa azione è irreversibile, procedi con cautela.",
+  "library.list.empty": "Clicca <1>+</1> per creare una nuova libreria",
+  "library.new": "Nuova libreria",
+  "library.title": "Libreria",
+  "loadMore": "Carica altri",
+  "menu.allFiles": "Tutti i file",
+  "menu.allPages": "Tutte le pagine",
+  "networkError": "Impossibile recuperare le librerie. Controlla la connessione di rete e riprova.",
+  "notSupportGuide.desc": "La modalità di distribuzione attuale non supporta la gestione dei file. Passa alla <1>modalità server con database</1> o utilizza <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "Supporta i principali tipi di file, inclusi i formati di pagina comuni come Word, PPT, Excel, PDF, TXT, e file di codice popolari come JS e Python.",
+  "notSupportGuide.features.allKind.title": "Supporto per più tipi di file",
+  "notSupportGuide.features.embeddings.desc": "Utilizza modelli vettoriali ad alte prestazioni per vettorializzare i frammenti di testo, abilitando la ricerca semantica nei contenuti dei file.",
+  "notSupportGuide.features.embeddings.title": "Semantica vettoriale",
+  "notSupportGuide.features.libraries.desc": "Crea librerie e aggiungi file per costruire la tua libreria personale.",
+  "notSupportGuide.features.libraries.title": "Libreria",
+  "notSupportGuide.title": "La modalità di distribuzione attuale non supporta la gestione dei file",
+  "pageEditor.addIcon": "Aggiungi icona",
+  "pageEditor.autoSaveMessage": "La tua pagina viene salvata automaticamente. Non è necessario salvare manualmente.",
+  "pageEditor.chooseIcon": "Scegli icona",
+  "pageEditor.deleteConfirm.content": "Questa pagina verrà eliminata e non potrà essere recuperata. Procedi con cautela.",
+  "pageEditor.deleteConfirm.title": "Elimina pagina",
+  "pageEditor.deleteError": "Eliminazione della pagina non riuscita",
+  "pageEditor.deleteSuccess": "Pagina eliminata con successo",
+  "pageEditor.duplicateError": "Duplicazione della pagina non riuscita",
+  "pageEditor.duplicateSuccess": "Pagina duplicata con successo",
+  "pageEditor.editedAt": "Ultima modifica il {{time}}",
+  "pageEditor.editedBy": "Ultima modifica di {{name}}",
+  "pageEditor.editorPlaceholder": "Inizia a scrivere la tua pagina. Premi / per aprire il menu comandi",
+  "pageEditor.empty.createNewDocument": "Crea nuova pagina",
+  "pageEditor.empty.importNotion": "Importa da Notion",
+  "pageEditor.empty.title": "Seleziona una pagina per iniziare",
+  "pageEditor.empty.uploadFiles": "Carica file",
+  "pageEditor.exportError": "Esportazione della pagina non riuscita",
+  "pageEditor.exportSuccess": "Pagina esportata con successo",
+  "pageEditor.linkCopied": "Link copiato",
+  "pageEditor.menu.copyLink": "Copia link",
+  "pageEditor.menu.export": "Esporta",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "Esporta pagina",
+  "pageEditor.menu.importDocument": "Importa pagina",
+  "pageEditor.menu.pin": "Fissa pagina",
+  "pageEditor.saving": "Salvataggio in corso...",
+  "pageEditor.titlePlaceholder": "Senza titolo",
+  "pageEditor.wordCount": "{{wordCount}} parole",
+  "pageList.copyContent": "Copia testo completo",
+  "pageList.duplicate": "Duplica",
+  "pageList.empty": "Nessuna pagina ancora. Clicca sul pulsante sopra per crearne una.",
+  "pageList.filter.all": "Tutte",
+  "pageList.filter.onlyInPages": "Solo nelle pagine",
+  "pageList.noResults": "Nessuna pagina corrispondente trovata",
+  "pageList.pageCount": "Totale {{count}} pagine",
+  "pageList.pageSizeItem": "{{count}} elementi",
+  "pageList.title": "Pagine",
+  "pageList.untitled": "Senza titolo",
+  "portal.openInPageEditor": "Modifica nella pagina",
+  "preview.downloadFile": "Scarica file",
+  "preview.unsupportedFileAndContact": "Questo formato di file non è attualmente supportato per l'anteprima online. Se desideri richiedere il supporto, <1>contattaci</1>.",
   "searchFilePlaceholder": "Cerca file",
-  "searchPagePlaceholder": "Cerca documenti",
-  "tab": {
-    "all": "Tutti",
-    "audios": "Audio",
-    "documents": "Documenti",
-    "home": "Home",
-    "images": "Immagini",
-    "moreTypes": "Altri tipi",
-    "pages": "Documenti",
-    "videos": "Video",
-    "websites": "Siti web"
-  },
-  "title": "Archivio di Conoscenza",
+  "searchPagePlaceholder": "Cerca pagine",
+  "tab.all": "Tutti",
+  "tab.audios": "Audio",
+  "tab.documents": "Documenti",
+  "tab.home": "Home",
+  "tab.images": "Immagini",
+  "tab.moreTypes": "Altri tipi",
+  "tab.pages": "Pagine",
+  "tab.videos": "Video",
+  "tab.websites": "Siti web",
+  "title": "Risorse",
   "toggleLeftPanel": "Mostra/Nascondi pannello sinistro",
-  "uploadDock": {
-    "body": {
-      "collapse": "Riduci",
-      "item": {
-        "done": "Caricato",
-        "error": "Caricamento fallito, riprova",
-        "pending": "Pronto per il caricamento...",
-        "processing": "Elaborazione del file...",
-        "restTime": "Tempo rimanente {{time}}"
-      }
-    },
-    "fileQueueInfo": "Caricamento in corso dei primi {{count}} file, i restanti {{remaining}} file saranno messi in coda",
-    "totalCount": "Totale {{count}} elementi",
-    "uploadStatus": {
-      "error": "Errore di caricamento",
-      "pending": "In attesa di caricamento",
-      "processing": "Caricamento in corso",
-      "success": "Caricamento completato",
-      "uploading": "Caricamento in corso"
-    }
-  }
+  "uploadDock.body.collapse": "Comprimi",
+  "uploadDock.body.item.done": "Caricato",
+  "uploadDock.body.item.error": "Caricamento fallito, riprova",
+  "uploadDock.body.item.pending": "Preparazione al caricamento...",
+  "uploadDock.body.item.processing": "Elaborazione file...",
+  "uploadDock.body.item.restTime": "Tempo rimanente {{time}}",
+  "uploadDock.fileQueueInfo": "Caricamento dei primi {{count}} file, {{remaining}} in coda",
+  "uploadDock.totalCount": "Totale {{count}} elementi",
+  "uploadDock.uploadStatus.error": "Errore di caricamento",
+  "uploadDock.uploadStatus.pending": "In attesa di caricamento",
+  "uploadDock.uploadStatus.processing": "Caricamento in corso",
+  "uploadDock.uploadStatus.success": "Caricamento completato",
+  "uploadDock.uploadStatus.uploading": "Caricamento in corso"
 }

@@ -1,7 +1,8 @@
 export default {
-  actions: {
-    confirmRemoveThread: '即将删除该子话题，删除后将不可恢复，请谨慎操作。',
-  },
-  newPortalThread: { includeContext: '包含话题上下文', title: '开启新的子话题' },
-  notSupportMultiModals: '子话题暂不支持文件/图片上传，如有需求，欢迎留言：<1>💬 讨论区</1>',
+  'actions.confirmRemoveThread':
+    'You are about to delete this subtopic. Once deleted, it cannot be recovered. Please proceed with caution.',
+  'newPortalThread.includeContext': 'Include topic context',
+  'newPortalThread.title': 'Start a new subtopic',
+  'notSupportMultiModals':
+    'Subtopics do not currently support file/image uploads. If you have any requests, feel free to leave a message: <1>💬 Discussion Area</1>',
 };

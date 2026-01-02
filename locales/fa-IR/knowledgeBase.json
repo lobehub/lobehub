@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "فایل با موفقیت اضافه شد، <1>همین حالا مشاهده کنید</1>",
-    "confirm": "اضافه کردن",
-    "id": {
-      "placeholder": "لطفاً پایگاه دانش مورد نظر را انتخاب کنید",
-      "required": "لطفاً پایگاه دانش را انتخاب کنید",
-      "title": "پایگاه دانش هدف"
-    },
-    "title": "اضافه کردن به پایگاه دانش",
-    "totalFiles": "{{count}} فایل انتخاب شده است"
-  },
-  "createNew": {
-    "confirm": "ایجاد جدید",
-    "description": {
-      "placeholder": "توضیحات دانش‌نامه (اختیاری)"
-    },
-    "formTitle": "اطلاعات پایه",
-    "name": {
-      "placeholder": "نام دانش‌نامه",
-      "required": "لطفاً نام دانش‌نامه را وارد کنید"
-    },
-    "title": "ایجاد دانش‌نامه جدید"
-  },
-  "tab": {
-    "evals": "ارزیابی‌ها",
-    "files": "اسناد",
-    "settings": "تنظیمات",
-    "testing": "آزمون فراخوانی"
-  },
-  "title": "دانش‌نامه"
+  "addToKnowledgeBase.addSuccess": "فایل با موفقیت اضافه شد، <1>اکنون مشاهده کنید</1>",
+  "addToKnowledgeBase.confirm": "افزودن",
+  "addToKnowledgeBase.error": "افزودن فایل به کتابخانه با شکست مواجه شد",
+  "addToKnowledgeBase.id.placeholder": "لطفاً یک کتابخانه برای افزودن انتخاب کنید",
+  "addToKnowledgeBase.id.required": "لطفاً یک کتابخانه انتخاب کنید",
+  "addToKnowledgeBase.id.title": "کتابخانه مقصد",
+  "addToKnowledgeBase.title": "افزودن به کتابخانه",
+  "addToKnowledgeBase.totalFiles": "{{count}} فایل انتخاب شده",
+  "createNew.confirm": "ایجاد جدید",
+  "createNew.description.placeholder": "توضیحات کتابخانه (اختیاری)",
+  "createNew.formTitle": "اطلاعات پایه",
+  "createNew.name.placeholder": "نام کتابخانه",
+  "createNew.name.required": "لطفاً نام کتابخانه را وارد کنید",
+  "createNew.title": "ایجاد کتابخانه جدید",
+  "tab.evals": "ارزیابی‌ها",
+  "tab.files": "فایل‌ها",
+  "tab.settings": "تنظیمات",
+  "tab.testing": "آزمون یادآوری",
+  "title": "کتابخانه"
 }

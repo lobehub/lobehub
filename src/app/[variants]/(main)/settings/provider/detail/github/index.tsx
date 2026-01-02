@@ -1,28 +1,28 @@
 'use client';
 
 import { Markdown } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
+import { GithubProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
 import { FormPassword } from '@/components/FormInput';
 import { SkeletonInput } from '@/components/Skeleton';
-import { GithubProviderCard } from '@/config/modelProviders';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { GlobalLLMProviderKey } from '@/types/user/settings';
+import { type GlobalLLMProviderKey } from '@/types/user/settings';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey } from '../../const';
-import { ProviderItem } from '../../type';
+import { type ProviderItem } from '../../type';
 import ProviderDetail from '../default';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     p {
-      color: ${token.colorTextDescription} !important;
+      color: ${cssVar.colorTextDescription} !important;
     }
   `,
   tip: css`
     font-size: 12px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
 }));
 
@@ -31,7 +31,6 @@ const providerKey: GlobalLLMProviderKey = 'github';
 // Same as OpenAIProvider, but replace API Key with Github Personal Access Token
 const useProviderCard = (): ProviderItem => {
   const { t } = useTranslation('modelProvider');
-  const { styles } = useStyles();
   const isLoading = useAiInfraStore(aiProviderSelectors.isAiProviderConfigLoading(providerKey));
 
   return {

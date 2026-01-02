@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "清空本地資料",
-      "downloadBackup": "下載資料備份",
-      "reUpgrade": "重新升級",
-      "start": "開始使用",
-      "upgrade": "一鍵升級"
-    },
-    "clear": {
-      "confirm": "即將清空本地資料（全域設定不受影響），請確認你已經下載了資料備份。"
-    },
-    "description": "在新版本中，{{appName}} 的資料儲存有了巨大的飛躍。因此我們要對舊版資料進行升級，進而為你帶來更好的使用體驗。",
-    "features": {
-      "capability": {
-        "desc": "基於 IndexedDB 技術，足以裝下你一生的會話消息",
-        "title": "大容量"
-      },
-      "performance": {
-        "desc": "百萬條消息自動索引，檢索查詢毫秒級響應",
-        "title": "高性能"
-      },
-      "use": {
-        "desc": "支持標題、描述、標籤、消息內容乃至翻譯文本檢索，日常搜索效率大大提升",
-        "title": "更易用"
-      }
-    },
-    "title": "{{appName}} 資料進化",
-    "upgrade": {
-      "error": {
-        "subTitle": "非常抱歉，資料庫升級過程發生異常。請嘗試以下方案：A. 清空本地資料後，重新匯入備份資料； B. 點擊 「重新升級」按鈕。<br><br> 如仍然出錯，請 <1>提交問題</1> ，我們將會第一時間幫你排查",
-        "title": "資料庫升級失敗"
-      },
-      "success": {
-        "subTitle": "{{appName}} 的資料庫已經升級到最新版本，立即開始體驗吧",
-        "title": "資料庫升級成功"
-      }
-    },
-    "upgradeTip": "升級大致需要 10~20 秒，升級過程中請不要關閉 {{appName}}"
-  },
-  "migrateError": {
-    "missVersion": "導入數據缺少版本號，請檢查文件後重試",
-    "noMigration": "沒有找到當前版本對應的遷移方案，請檢查版本號後重試。如仍有問題請提交問題反饋"
-  }
+  "dbV1.action.clearDB": "清空本地資料",
+  "dbV1.action.downloadBackup": "下載資料備份",
+  "dbV1.action.reUpgrade": "重新升級",
+  "dbV1.action.start": "開始使用",
+  "dbV1.action.upgrade": "一鍵升級",
+  "dbV1.clear.confirm": "即將清空本地資料（全域設定不受影響），請確認你已經下載了資料備份。",
+  "dbV1.description": "在新版本中，{{appName}} 的資料儲存有了巨大的飛躍。因此我們要對舊版資料進行升級，進而為你帶來更好的使用體驗。",
+  "dbV1.features.capability.desc": "基於 IndexedDB 技術，足以裝下你一生的會話消息",
+  "dbV1.features.capability.title": "大容量",
+  "dbV1.features.performance.desc": "百萬條消息自動索引，檢索查詢毫秒級響應",
+  "dbV1.features.performance.title": "高性能",
+  "dbV1.features.use.desc": "支持標題、描述、標籤、消息內容乃至翻譯文本檢索，日常搜索效率大大提升",
+  "dbV1.features.use.title": "更易用",
+  "dbV1.title": "{{appName}} 資料進化",
+  "dbV1.upgrade.error.subTitle": "非常抱歉，資料庫升級過程發生異常。請嘗試以下方案：A. 清空本地資料後，重新匯入備份資料； B. 點擊 「重新升級」按鈕。<br><br> 如仍然出錯，請 <1>提交問題</1> ，我們將會第一時間幫你排查",
+  "dbV1.upgrade.error.title": "資料庫升級失敗",
+  "dbV1.upgrade.success.subTitle": "{{appName}} 的資料庫已經升級到最新版本，立即開始體驗吧",
+  "dbV1.upgrade.success.title": "資料庫升級成功",
+  "dbV1.upgradeTip": "升級大致需要 10~20 秒，升級過程中請不要關閉 {{appName}}",
+  "migrateError.missVersion": "導入數據缺少版本號，請檢查文件後重試",
+  "migrateError.noMigration": "沒有找到當前版本對應的遷移方案，請檢查版本號後重試。如仍有問題請提交問題反饋"
 }

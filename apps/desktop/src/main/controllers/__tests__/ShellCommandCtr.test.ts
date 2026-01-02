@@ -4,6 +4,16 @@ import type { App } from '@/core/App';
 
 import ShellCommandCtr from '../ShellCommandCtr';
 
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+}));
+
 // Mock logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({

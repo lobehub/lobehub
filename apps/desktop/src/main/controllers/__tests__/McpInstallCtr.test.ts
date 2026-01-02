@@ -84,7 +84,7 @@ describe('McpInstallController', () => {
 
       expect(result).toBe(true);
       expect(mockBrowserManager.broadcastToWindow).toHaveBeenCalledWith(
-        'chat',
+        'app',
         'mcpInstallRequest',
         {
           marketId: 'lobehub',
@@ -143,7 +143,7 @@ describe('McpInstallController', () => {
 
       expect(result).toBe(true);
       expect(mockBrowserManager.broadcastToWindow).toHaveBeenCalledWith(
-        'chat',
+        'app',
         'mcpInstallRequest',
         {
           marketId: 'third-party',
@@ -162,7 +162,7 @@ describe('McpInstallController', () => {
 
       expect(result).toBe(true);
       expect(mockBrowserManager.broadcastToWindow).toHaveBeenCalledWith(
-        'chat',
+        'app',
         'mcpInstallRequest',
         {
           marketId: 'third-party',
@@ -235,7 +235,7 @@ describe('McpInstallController', () => {
 
       expect(result).toBe(true);
       expect(mockBrowserManager.broadcastToWindow).toHaveBeenCalledWith(
-        'chat',
+        'app',
         'mcpInstallRequest',
         expect.objectContaining({
           schema: schemaWithOptionalFields,

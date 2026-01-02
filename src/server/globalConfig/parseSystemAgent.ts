@@ -1,5 +1,5 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
-import { UserSystemAgentConfig } from '@/types/user/settings';
+import { type UserSystemAgentConfig } from '@/types/user/settings';
 
 const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
 

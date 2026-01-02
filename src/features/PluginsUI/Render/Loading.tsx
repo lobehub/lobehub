@@ -1,10 +1,22 @@
-import { createStyles } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, keyframes } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
-const useStyles = createStyles(
-  ({ css, token }) => css`
+const animloader = keyframes`
+  0% {
+    inset-inline-start: 0;
+    transform: translateX(-100%);
+  }
+
+  100% {
+    inset-inline-start: 100%;
+    transform: translateX(0%);
+  }
+`;
+
+const styles = createStaticStyles(
+  ({ css, cssVar }) => css`
     position: relative;
 
     overflow: hidden;
@@ -12,7 +24,7 @@ const useStyles = createStyles(
 
     width: 300px;
     height: 12px;
-    border: 1px solid ${token.colorBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: 10px;
 
     &::after {
@@ -26,27 +38,14 @@ const useStyles = createStyles(
       width: 40%;
       height: 100%;
 
-      background: ${token.colorPrimary};
+      background: ${cssVar.colorPrimary};
 
-      animation: animloader 2s linear infinite;
-    }
-
-    @keyframes animloader {
-      0% {
-        inset-inline-start: 0;
-        transform: translateX(-100%);
-      }
-
-      100% {
-        inset-inline-start: 100%;
-        transform: translateX(0%);
-      }
+      animation: ${animloader} 2s linear infinite;
     }
   `,
 );
 const Loading = memo(() => {
   const { t } = useTranslation('plugin');
-  const { styles } = useStyles();
 
   return (
     <Flexbox align={'center'} gap={8} padding={16}>

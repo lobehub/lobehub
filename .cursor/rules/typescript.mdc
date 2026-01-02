@@ -16,10 +16,6 @@ alwaysApply: false
 - prefer `@ts-expect-error` over `@ts-ignore` over `as any`
 - Avoid meaningless null/undefined parameters; design strict function contracts.
 
-## Imports and Modules
-
-- When importing a directory module, prefer the explicit index path like `@/db/index` instead of `@/db`.
-
 ## Asynchronous Patterns and Concurrency
 
 - Prefer `async`/`await` over callbacks or chained `.then` promises.

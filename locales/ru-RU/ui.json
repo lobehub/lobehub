@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Аватар",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Перегрузка",
+    "tokenTag.remained": "Осталось",
+    "tokenTag.used": "Использовано"
+  },
+  "common": {
+    "common.cancel": "Отмена",
+    "common.confirm": "Подтвердить",
+    "common.delete": "Удалить",
+    "common.edit": "Редактировать"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Добавить свойства",
+    "editableMessage.delete": "Удалить",
+    "editableMessage.input": "Ввод",
+    "editableMessage.inputPlaceholder": "Пожалуйста, введите пример входных данных",
+    "editableMessage.output": "Вывод",
+    "editableMessage.outputPlaceholder": "Пожалуйста, введите пример выходных данных",
+    "editableMessage.system": "Система"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Удалить",
+    "emojiPicker.draggerDesc": "Кликните или перетащите изображение в эту область для загрузки",
+    "emojiPicker.emoji": "Эмодзи",
+    "emojiPicker.fileTypeError": "Можно загружать только файлы изображений!",
+    "emojiPicker.upload": "Загрузить",
+    "emojiPicker.uploadBtn": "Обрезать и загрузить"
+  },
+  "form": {
+    "form.reset": "Сбросить",
+    "form.submit": "Отправить",
+    "form.unsavedChanges": "Несохранённые изменения",
+    "form.unsavedWarning": "У вас есть несохранённые изменения. Вы уверены, что хотите уйти?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Эта горячая клавиша конфликтует с уже существующей.",
+    "hotkey.invalidCombination": "Горячая клавиша должна включать модификатор (Ctrl, Alt, Shift) и только одну обычную клавишу.",
+    "hotkey.placeholder": "Нажмите клавиши для записи горячей клавиши",
+    "hotkey.reset": "Сбросить по умолчанию"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Отмена",
+    "messageModal.confirm": "Подтвердить",
+    "messageModal.edit": "Редактировать"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Свернуть боковую панель",
+    "sideNav.demoActiveLabel": "Активно",
+    "sideNav.demoFeatureAutoCollapseDesc": "Перетащите ниже порога для умного сворачивания",
+    "sideNav.demoFeatureAutoCollapseTitle": "Автосворачивание",
+    "sideNav.demoFeaturePerformanceDesc": "Без анимации для лучшей производительности",
+    "sideNav.demoFeaturePerformanceTitle": "Производительность",
+    "sideNav.demoFeatureResizeDesc": "Перетащите для изменения ширины панели",
+    "sideNav.demoFeatureResizeTitle": "Гибкое изменение размера",
+    "sideNav.demoFeatureSmartHandleDesc": "Наведите курсор, чтобы показать кнопку переключения",
+    "sideNav.demoFeatureSmartHandleTitle": "Умная ручка",
+    "sideNav.demoFeaturesTitle": "Функции",
+    "sideNav.demoHint": "Попробуйте перетащить край панели и использовать кнопку переключения ->",
+    "sideNav.demoSubtitle": "Боковая панель в стиле рабочего пространства с возможностью изменения размера",
+    "sideNav.demoTitle": "Демонстрация DraggableSideNav",
+    "sideNav.expand": "Развернуть боковую панель"
+  }
+}

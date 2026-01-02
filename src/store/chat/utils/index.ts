@@ -1,9 +1,10 @@
+import i18n from 'i18next';
 import { produce } from 'immer';
 
 export const preventLeavingFn = (e: BeforeUnloadEvent) => {
   // set returnValue to trigger alert modal
   // Note: No matter what value is set, the browser will display the standard text
-  e.returnValue = '你有正在生成中的请求，确定要离开吗？';
+  e.returnValue = i18n.t('beforeUnload.confirmLeave', { ns: 'chat' });
 };
 
 export const toggleBooleanList = (ids: string[], id: string, loading: boolean) => {

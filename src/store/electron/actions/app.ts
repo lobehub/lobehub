@@ -1,6 +1,6 @@
-import { ElectronAppState } from '@lobechat/electron-client-ipc';
-import { SWRResponse } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import { type ElectronAppState } from '@lobechat/electron-client-ipc';
+import { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 // Import for type usage

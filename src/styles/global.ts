@@ -1,4 +1,5 @@
-import { Theme, css } from 'antd-style';
+import { CLASSNAMES } from '@lobehub/ui';
+import { type Theme, css } from 'antd-style';
 
 // fix ios input keyboard
 // overflow: hidden;
@@ -50,5 +51,14 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     ::-webkit-scrollbar-track {
       background-color: transparent;
     }
+  }
+
+  button {
+    -webkit-app-region: no-drag;
+  }
+
+  .${CLASSNAMES.ContextTrigger}[data-popup-open],
+    .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open] {
+    background: ${token.colorFillTertiary};
   }
 `;

@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "Autorizza",
-      "deny": "Rifiuta"
-    },
-    "description": "L'applicazione {{clientName}} richiede l'autorizzazione per il tuo account",
-    "error": {
-      "sessionInvalid": {
-        "message": "La sessione di autorizzazione è scaduta o non valida, per favore riavvia il processo di autorizzazione.",
-        "title": "Sessione di autorizzazione non valida"
-      },
-      "title": "Si è verificato un errore",
-      "unsupportedInteraction": {
-        "message": "Tipo di interazione non supportato: {promptName}",
-        "title": "Tipo di interazione non supportato"
-      }
-    },
-    "permissionsTitle": "Richiesta delle seguenti autorizzazioni:",
-    "redirectUri": "Verrai reindirizzato a dopo un'autorizzazione riuscita",
-    "redirecting": "Autorizzazione completata, reindirizzamento in corso...",
-    "scope": {
-      "email": "Accesso al tuo indirizzo email",
-      "offline_access": "Consenti all'accesso del client ai tuoi dati",
-      "openid": "Autenticati con il tuo account LobeChat",
-      "profile": "Accesso alle tue informazioni di base (nome, foto profilo, ecc.)",
-      "sync-read": "Leggi i tuoi dati sincronizzati",
-      "sync-write": "Scrivi e aggiorna i tuoi dati sincronizzati"
-    },
-    "title": "Autorizzazione per {{clientName}}"
-  },
-  "error": {
-    "backToHome": "Torna alla pagina principale",
-    "desc": "Autorizzazione OAuth fallita, motivo dell'errore: {{reason}}",
-    "reason": {
-      "internal_error": "Errore del server",
-      "invalid_request": "Parametri della richiesta non validi"
-    },
-    "title": "Autorizzazione fallita"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "L'applicazione sta elaborando l'autorizzazione, verrà reindirizzato alla prossima pagina...",
-      "success": "È stato tentato di aprire l'app desktop. Se l'app non si apre automaticamente, si prega di passare manualmente. Può chiudere questa finestra del browser in seguito."
-    },
-    "title": {
-      "processing": "Elaborazione dell'autorizzazione...",
-      "success": "Autorizzazione completata"
-    }
-  },
-  "login": {
-    "button": "Conferma accesso",
-    "description": "L'app {{clientName}} richiede di utilizzare il tuo account per accedere",
-    "title": "Accedi a {{clientName}}",
-    "userWelcome": "Bentornato, "
-  },
-  "success": {
-    "subTitle": "Hai autorizzato con successo l'app ad accedere al tuo account, puoi chiudere questa pagina.",
-    "title": "Autorizzazione riuscita"
-  }
+  "consent.buttons.accept": "Autorizza",
+  "consent.buttons.deny": "Nega",
+  "consent.description": "L'applicazione {{clientName}} sta richiedendo l'autorizzazione per accedere al tuo account",
+  "consent.error.sessionInvalid.message": "La sessione di autorizzazione è scaduta o non è valida. Riavvia il processo di autorizzazione.",
+  "consent.error.sessionInvalid.title": "Sessione di autorizzazione non valida",
+  "consent.error.title": "Si è verificato un errore",
+  "consent.error.unknown.message": "Si è verificato un errore sconosciuto durante il caricamento dei dettagli di autorizzazione.",
+  "consent.error.unsupportedInteraction.message": "Tipo di interazione non supportato: {{promptName}}",
+  "consent.error.unsupportedInteraction.title": "Tipo di interazione non supportato",
+  "consent.permissionsTitle": "Richiesta delle seguenti autorizzazioni:",
+  "consent.redirectUri": "Verrai reindirizzato dopo l'autorizzazione avvenuta con successo",
+  "consent.redirecting": "Autorizzazione completata, reindirizzamento in corso...",
+  "consent.scope.email": "Accedi al tuo indirizzo email",
+  "consent.scope.offline_access": "Consenti al client di accedere ai tuoi dati",
+  "consent.scope.openid": "Autenticati con il tuo account LobeHub",
+  "consent.scope.profile": "Accedi alle informazioni di base del tuo profilo (nome, avatar, ecc.)",
+  "consent.scope.sync-read": "Leggi i tuoi dati sincronizzati",
+  "consent.scope.sync-write": "Scrivi e aggiorna i tuoi dati sincronizzati",
+  "consent.title": "Autorizza {{clientName}}",
+  "error.backToHome": "Torna alla Home",
+  "error.desc": "Autorizzazione OAuth non riuscita, motivo: {{reason}}",
+  "error.reason.internal_error": "Errore interno del server",
+  "error.reason.invalid_request": "Parametri della richiesta non validi",
+  "error.title": "Autorizzazione non riuscita",
+  "handoff.desc.processing": "L'applicazione sta elaborando l'autorizzazione e presto verrai reindirizzato alla pagina successiva...",
+  "handoff.desc.success": "È stato tentato di aprire l'applicazione desktop. Se non si apre automaticamente, passaci manualmente. Puoi chiudere questa finestra del browser in seguito.",
+  "handoff.title.processing": "Autorizzazione in corso...",
+  "handoff.title.success": "Autorizzazione completata",
+  "login.button": "Conferma accesso",
+  "login.description": "L'applicazione {{clientName}} richiede di utilizzare il tuo account per accedere",
+  "login.title": "Accedi a {{clientName}}",
+  "login.userWelcome": "Bentornato, ",
+  "success.subTitle": "Hai autorizzato con successo l'applicazione ad accedere al tuo account. Ora puoi chiudere questa pagina.",
+  "success.title": "Autorizzazione completata con successo"
 }

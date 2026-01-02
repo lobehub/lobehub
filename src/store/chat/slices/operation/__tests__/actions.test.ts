@@ -23,7 +23,7 @@ describe('Operation Actions', () => {
       act(() => {
         const res = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1', topicId: 'topic1', messageId: 'msg1' },
+          context: { agentId: 'session1', topicId: 'topic1', messageId: 'msg1' },
           label: 'Generating...',
         });
         operationId = res.operationId;
@@ -35,7 +35,7 @@ describe('Operation Actions', () => {
       expect(operation).toBeDefined();
       expect(operation.type).toBe('execAgentRuntime');
       expect(operation.status).toBe('running');
-      expect(operation.context.sessionId).toBe('session1');
+      expect(operation.context.agentId).toBe('session1');
       expect(operation.context.topicId).toBe('topic1');
       expect(operation.context.messageId).toBe('msg1');
       expect(operation.label).toBe('Generating...');
@@ -52,7 +52,7 @@ describe('Operation Actions', () => {
         // Create parent operation
         const parent = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1' },
+          context: { agentId: 'session1', topicId: 'topic1' },
         });
         parentOpId = parent.operationId;
 
@@ -67,7 +67,7 @@ describe('Operation Actions', () => {
 
       const childOp = result.current.operations[childOpId!];
 
-      expect(childOp.context.sessionId).toBe('session1'); // Inherited
+      expect(childOp.context.agentId).toBe('session1'); // Inherited
       expect(childOp.context.topicId).toBe('topic1'); // Inherited
       expect(childOp.context.messageId).toBe('msg1'); // Overridden
       expect(childOp.parentOperationId).toBe(parentOpId!);
@@ -83,7 +83,7 @@ describe('Operation Actions', () => {
         // Create parent operation with full context
         const parent = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId: 'session1', topicId: 'topic1', messageId: 'msg1' },
+          context: { agentId: 'session1', topicId: 'topic1', messageId: 'msg1' },
         });
         parentOpId = parent.operationId;
 
@@ -98,7 +98,7 @@ describe('Operation Actions', () => {
       const childOp = result.current.operations[childOpId!];
 
       // Should fully inherit parent's context
-      expect(childOp.context.sessionId).toBe('session1');
+      expect(childOp.context.agentId).toBe('session1');
       expect(childOp.context.topicId).toBe('topic1');
       expect(childOp.context.messageId).toBe('msg1');
       expect(childOp.parentOperationId).toBe(parentOpId!);
@@ -112,7 +112,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1', topicId: 'topic1', messageId: 'msg1' },
+          context: { agentId: 'session1', topicId: 'topic1', messageId: 'msg1' },
         }).operationId;
       });
 
@@ -123,7 +123,7 @@ describe('Operation Actions', () => {
       expect(result.current.operationsByMessage.msg1).toContain(operationId!);
 
       // Check context index
-      const contextKey = 'session1_topic1';
+      const contextKey = 'main_session1_topic1';
       expect(result.current.operationsByContext[contextKey]).toContain(operationId!);
     });
   });
@@ -137,7 +137,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
       });
 
@@ -166,7 +166,7 @@ describe('Operation Actions', () => {
       act(() => {
         const res = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         });
         operationId = res.operationId;
         abortController = res.abortController;
@@ -193,7 +193,7 @@ describe('Operation Actions', () => {
       act(() => {
         parentOpId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         child1OpId = result.current.startOperation({
@@ -226,7 +226,7 @@ describe('Operation Actions', () => {
       act(() => {
         parentOpId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         completedChildOpId = result.current.startOperation({
@@ -269,7 +269,7 @@ describe('Operation Actions', () => {
       act(() => {
         parentOpId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         completedChildOpId = result.current.startOperation({
@@ -303,7 +303,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
       });
 
@@ -339,7 +339,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
       });
 
@@ -373,17 +373,17 @@ describe('Operation Actions', () => {
       act(() => {
         op1 = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         op2 = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         op3 = result.current.startOperation({
           type: 'reasoning',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
       });
 
@@ -410,17 +410,17 @@ describe('Operation Actions', () => {
         // Create and complete operations at different times
         op1 = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         op2 = result.current.startOperation({
           type: 'reasoning',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         op3 = result.current.startOperation({
           type: 'toolCalling',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         // Complete op1 and op2, leave op3 running
@@ -464,7 +464,7 @@ describe('Operation Actions', () => {
         // Create and complete an operation
         completedOp = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.completeOperation(completedOp!);
@@ -485,7 +485,7 @@ describe('Operation Actions', () => {
       act(() => {
         result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         });
       });
 
@@ -503,13 +503,13 @@ describe('Operation Actions', () => {
         // Create parent operation
         parentOp = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         // Create and complete an old operation
         oldCompletedOp = result.current.startOperation({
           type: 'reasoning',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.completeOperation(oldCompletedOp!);
@@ -545,12 +545,12 @@ describe('Operation Actions', () => {
       act(() => {
         cancelledOp = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         failedOp = result.current.startOperation({
           type: 'reasoning',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.cancelOperation(cancelledOp!, 'User cancelled');
@@ -593,7 +593,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.associateMessageWithOperation('msg1', operationId!);
@@ -612,12 +612,12 @@ describe('Operation Actions', () => {
       act(() => {
         op1 = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         op2 = result.current.startOperation({
           type: 'regenerate',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         // Associate same message with multiple operations
@@ -639,7 +639,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         // Associate same operation twice
@@ -663,12 +663,12 @@ describe('Operation Actions', () => {
       act(() => {
         op1 = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         op2 = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
       });
 
@@ -711,7 +711,7 @@ describe('Operation Actions', () => {
       act(() => {
         const res = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         });
         operationId = res.operationId;
         abortController = res.abortController;
@@ -739,7 +739,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
       });
 
@@ -765,7 +765,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.onOperationCancel(operationId!, handler);
@@ -799,7 +799,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'createAssistantMessage',
-          context: { sessionId: 'session1', messageId: 'msg1' },
+          context: { agentId: 'session1', messageId: 'msg1' },
           metadata: { tempMessageId: 'temp-123' },
         }).operationId;
 
@@ -842,7 +842,7 @@ describe('Operation Actions', () => {
         act(() => {
           opId = result.current.startOperation({
             type,
-            context: { sessionId: 'session1' },
+            context: { agentId: 'session1' },
           }).operationId;
 
           result.current.onOperationCancel(opId!, handler);
@@ -876,7 +876,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'createToolMessage',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.onOperationCancel(operationId!, asyncHandler);
@@ -906,7 +906,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'executeToolCall',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.onOperationCancel(operationId!, errorHandler);
@@ -930,7 +930,7 @@ describe('Operation Actions', () => {
       act(() => {
         operationId = result.current.startOperation({
           type: 'callLLM',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         result.current.onOperationCancel(operationId!, handler);
@@ -955,6 +955,101 @@ describe('Operation Actions', () => {
     });
   });
 
+  describe('internal_getConversationContext', () => {
+    it('should return context from operationId when provided', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'sendMessage',
+          context: { agentId: 'session1', topicId: 'topic1', threadId: 'thread1' },
+        }).operationId;
+      });
+
+      const context = result.current.internal_getConversationContext({ operationId: operationId! });
+
+      expect(context.agentId).toBe('session1');
+      expect(context.topicId).toBe('topic1');
+      expect(context.threadId).toBe('thread1');
+    });
+
+    it('should return groupId from operation context when provided', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'sendMessage',
+          context: {
+            agentId: 'agent1',
+            groupId: 'group1',
+            topicId: 'topic1',
+          },
+        }).operationId;
+      });
+
+      const context = result.current.internal_getConversationContext({ operationId: operationId! });
+
+      expect(context.agentId).toBe('agent1');
+      expect(context.groupId).toBe('group1');
+      expect(context.topicId).toBe('topic1');
+    });
+
+    it('should preserve scope and isNew from operation context', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'sendMessage',
+          context: {
+            agentId: 'agent1',
+            topicId: 'topic1',
+            scope: 'group',
+            isNew: true,
+          },
+        }).operationId;
+      });
+
+      const context = result.current.internal_getConversationContext({ operationId: operationId! });
+
+      expect(context.scope).toBe('group');
+      expect(context.isNew).toBe(true);
+    });
+
+    it('should fallback to global state when no operationId provided', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'global-agent',
+          activeTopicId: 'global-topic',
+          activeThreadId: 'global-thread',
+          activeGroupId: 'global-group',
+        });
+      });
+
+      const context = result.current.internal_getConversationContext({});
+
+      expect(context.agentId).toBe('global-agent');
+      expect(context.topicId).toBe('global-topic');
+      expect(context.threadId).toBe('global-thread');
+      expect(context.groupId).toBe('global-group');
+    });
+
+    it('should throw error when operationId is invalid', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      expect(() => {
+        result.current.internal_getConversationContext({ operationId: 'invalid-op-id' });
+      }).toThrow('Operation not found');
+    });
+  });
+
   describe('cancelOperation with child operations and handlers', () => {
     it('should call handlers for both parent and child operations', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -967,7 +1062,7 @@ describe('Operation Actions', () => {
       act(() => {
         parentOpId = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         childOpId = result.current.startOperation({
@@ -1012,7 +1107,7 @@ describe('Operation Actions', () => {
       act(() => {
         level1 = result.current.startOperation({
           type: 'execAgentRuntime',
-          context: { sessionId: 'session1' },
+          context: { agentId: 'session1' },
         }).operationId;
 
         level2 = result.current.startOperation({
@@ -1044,6 +1139,152 @@ describe('Operation Actions', () => {
       expect(result.current.operations[level1!].status).toBe('cancelled');
       expect(result.current.operations[level2!].status).toBe('cancelled');
       expect(result.current.operations[level3!].status).toBe('cancelled');
+    });
+  });
+
+  describe('registerAfterCompletionCallback', () => {
+    it('should register a callback to operation metadata', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+      const callback = vi.fn();
+
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1' },
+        });
+        operationId = res.operationId;
+      });
+
+      act(() => {
+        result.current.registerAfterCompletionCallback(operationId!, callback);
+      });
+
+      const operation = result.current.operations[operationId!];
+
+      expect(operation.metadata.runtimeHooks).toBeDefined();
+      expect(operation.metadata.runtimeHooks?.afterCompletionCallbacks).toHaveLength(1);
+      expect(operation.metadata.runtimeHooks?.afterCompletionCallbacks?.[0]).toBe(callback);
+    });
+
+    it('should allow registering multiple callbacks', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+      const callback1 = vi.fn();
+      const callback2 = vi.fn();
+      const callback3 = vi.fn();
+
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1' },
+        });
+        operationId = res.operationId;
+      });
+
+      act(() => {
+        result.current.registerAfterCompletionCallback(operationId!, callback1);
+        result.current.registerAfterCompletionCallback(operationId!, callback2);
+        result.current.registerAfterCompletionCallback(operationId!, callback3);
+      });
+
+      const operation = result.current.operations[operationId!];
+
+      expect(operation.metadata.runtimeHooks?.afterCompletionCallbacks).toHaveLength(3);
+      expect(operation.metadata.runtimeHooks?.afterCompletionCallbacks?.[0]).toBe(callback1);
+      expect(operation.metadata.runtimeHooks?.afterCompletionCallbacks?.[1]).toBe(callback2);
+      expect(operation.metadata.runtimeHooks?.afterCompletionCallbacks?.[2]).toBe(callback3);
+    });
+
+    it('should not fail when operation does not exist', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const callback = vi.fn();
+
+      // Should not throw
+      act(() => {
+        result.current.registerAfterCompletionCallback('non-existent-id', callback);
+      });
+
+      // Operation should not be created
+      expect(result.current.operations['non-existent-id']).toBeUndefined();
+    });
+
+    it('should preserve existing runtimeHooks when adding callbacks', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+      const callback1 = vi.fn();
+      const callback2 = vi.fn();
+
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1' },
+        });
+        operationId = res.operationId;
+      });
+
+      // Register first callback
+      act(() => {
+        result.current.registerAfterCompletionCallback(operationId!, callback1);
+      });
+
+      // Verify first callback is registered
+      expect(
+        result.current.operations[operationId!].metadata.runtimeHooks?.afterCompletionCallbacks,
+      ).toHaveLength(1);
+
+      // Register second callback
+      act(() => {
+        result.current.registerAfterCompletionCallback(operationId!, callback2);
+      });
+
+      // Both callbacks should be present
+      const callbacks =
+        result.current.operations[operationId!].metadata.runtimeHooks?.afterCompletionCallbacks;
+      expect(callbacks).toHaveLength(2);
+      expect(callbacks?.[0]).toBe(callback1);
+      expect(callbacks?.[1]).toBe(callback2);
+    });
+
+    it('should work with child operations registering to parent', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let parentOpId: string;
+      let childOpId: string;
+      const callback = vi.fn();
+
+      act(() => {
+        // Create parent operation (execAgentRuntime)
+        const parent = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1' },
+        });
+        parentOpId = parent.operationId;
+
+        // Create child operation (toolCalling)
+        const child = result.current.startOperation({
+          type: 'toolCalling',
+          parentOperationId: parentOpId,
+        });
+        childOpId = child.operationId;
+      });
+
+      // Register callback to parent operation (simulating what speak/broadcast/delegate do)
+      act(() => {
+        result.current.registerAfterCompletionCallback(parentOpId!, callback);
+      });
+
+      // Callback should be on parent, not child
+      expect(
+        result.current.operations[parentOpId!].metadata.runtimeHooks?.afterCompletionCallbacks,
+      ).toHaveLength(1);
+      expect(
+        result.current.operations[childOpId!].metadata.runtimeHooks?.afterCompletionCallbacks,
+      ).toBeUndefined();
     });
   });
 });

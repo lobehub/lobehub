@@ -1,9 +1,9 @@
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
-import { useChatGroupStore } from '@/store/chatGroup';
 
-export const useEnable = () => useChatGroupStore((s) => !!s.activeThreadAgentId);
+export const useEnable = () => useAgentGroupStore((s) => !!s.activeThreadAgentId);
 
 export const onClose = () => {
-  useChatGroupStore.setState({ activeThreadAgentId: '' });
+  useAgentGroupStore.setState({ activeThreadAgentId: '' });
   useChatStore.getState().togglePortal(false);
 };

@@ -1,12 +1,13 @@
 import { ShortcutUpdateResult } from '@/core/ui/ShortcutManager';
 
-import { ControllerModule, ipcClientEvent } from '.';
+import { ControllerModule, IpcMethod } from '.';
 
 export default class ShortcutController extends ControllerModule {
+  static override readonly groupName = 'shortcut';
   /**
    * Get all shortcut configurations
    */
-  @ipcClientEvent('getShortcutsConfig')
+  @IpcMethod()
   getShortcutsConfig() {
     return this.app.shortcutManager.getShortcutsConfig();
   }
@@ -14,7 +15,7 @@ export default class ShortcutController extends ControllerModule {
   /**
    * Update a single shortcut configuration
    */
-  @ipcClientEvent('updateShortcutConfig')
+  @IpcMethod()
   updateShortcutConfig({
     id,
     accelerator,

@@ -1,5 +1,5 @@
-import { ChatErrorType, ErrorType } from '@lobechat/types';
-import OpenAI from 'openai';
+import { ChatErrorType, type ErrorType } from '@lobechat/types';
+import type OpenAI from 'openai';
 
 import { getOpenAIAuthFromRequest } from '@/const/fetch';
 import { createErrorResponse } from '@/utils/errorResponse';

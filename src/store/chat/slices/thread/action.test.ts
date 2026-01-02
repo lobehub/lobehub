@@ -1,16 +1,23 @@
-import { UIChatMessage } from '@lobechat/types';
+import type { UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { mutate } from 'swr';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { THREAD_DRAFT_ID } from '@/const/message';
+import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { threadService } from '@/services/thread';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useSessionStore } from '@/store/session';
 import { ThreadItem, ThreadStatus, ThreadType } from '@/types/topic';
 
 import { useChatStore } from '../../store';
+
+// Mock @/libs/swr mutate
+vi.mock('@/libs/swr', async () => {
+  const actual = await vi.importActual('@/libs/swr');
+  return {
+    ...actual,
+    mutate: vi.fn(),
+  };
+});
 
 vi.mock('zustand/traditional');
 
@@ -80,7 +87,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useChatStore.setState(
     {
-      activeId: 'test-session-id',
+      activeAgentId: 'test-session-id',
       activeTopicId: 'test-topic-id',
       isCreatingThread: false,
       isCreatingThreadMessage: false,
@@ -213,7 +220,7 @@ describe('thread action', () => {
           message: {
             content: 'test message',
             role: 'user',
-            sessionId: 'test-session-id',
+            agentId: 'test-session-id',
           },
           sourceMessageId: 'source-msg-id',
           topicId: 'test-topic-id',
@@ -225,7 +232,7 @@ describe('thread action', () => {
         message: {
           content: 'test message',
           role: 'user',
-          sessionId: 'test-session-id',
+          agentId: 'test-session-id',
         },
         sourceMessageId: 'source-msg-id',
         topicId: 'test-topic-id',
@@ -245,7 +252,7 @@ describe('thread action', () => {
 
       await act(async () => {
         await result.current.createThread({
-          message: { content: 'test', role: 'user', sessionId: 'test-session-id' },
+          message: { content: 'test', role: 'user', agentId: 'test-session-id' },
           sourceMessageId: 'source-msg-id',
           topicId: 'test-topic-id',
           type: ThreadType.Continuation,
@@ -433,7 +440,7 @@ describe('thread action', () => {
           id: 'msg-1',
           meta: {},
           role: 'user',
-          sessionId: 'test-session-id',
+          agentId: 'test-session-id',
           updatedAt: Date.now(),
         },
       ];
@@ -559,374 +566,7 @@ describe('thread action', () => {
     });
   });
 
-  describe('sendThreadMessage', () => {
-    describe('validation', () => {
-      it('should not send when activeId is undefined', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        act(() => {
-          useChatStore.setState({ activeId: undefined });
-        });
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'test' });
-        });
-
-        expect(useChatStore.getState().isCreatingThreadMessage).toBeFalsy();
-      });
-
-      it('should not send when activeTopicId is undefined', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        act(() => {
-          useChatStore.setState({ activeTopicId: undefined });
-        });
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'test' });
-        });
-
-        expect(useChatStore.getState().isCreatingThreadMessage).toBeFalsy();
-      });
-
-      it('should not send when message is empty', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: '' });
-        });
-
-        expect(useChatStore.getState().isCreatingThreadMessage).toBeFalsy();
-      });
-    });
-
-    describe('new thread creation flow', () => {
-      it('should create new thread and send first message', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        act(() => {
-          useChatStore.setState({
-            newThreadMode: ThreadType.Continuation,
-            portalThreadId: undefined,
-            threadStartMessageId: 'source-msg-id',
-          });
-        });
-
-        const createThreadSpy = vi
-          .spyOn(result.current, 'createThread')
-          .mockResolvedValue({ messageId: 'new-msg-id', threadId: 'new-thread-id' });
-
-        const refreshThreadsSpy = vi.spyOn(result.current, 'refreshThreads').mockResolvedValue();
-        const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages').mockResolvedValue();
-        const openThreadSpy = vi.spyOn(result.current, 'openThreadInPortal');
-        const coreProcessSpy = vi
-          .spyOn(result.current, 'internal_execAgentRuntime')
-          .mockResolvedValue();
-        vi.spyOn(result.current, 'optimisticCreateTmpMessage');
-        vi.spyOn(result.current, 'internal_toggleMessageLoading');
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'test message' });
-        });
-
-        expect(createThreadSpy).toHaveBeenCalledWith({
-          message: expect.objectContaining({
-            content: 'test message',
-            role: 'user',
-            sessionId: 'test-session-id',
-            threadId: undefined,
-            topicId: 'test-topic-id',
-          }),
-          sourceMessageId: 'source-msg-id',
-          topicId: 'test-topic-id',
-          type: ThreadType.Continuation,
-        });
-
-        expect(refreshThreadsSpy).toHaveBeenCalled();
-        expect(refreshMessagesSpy).toHaveBeenCalled();
-        expect(openThreadSpy).toHaveBeenCalledWith('new-thread-id', 'source-msg-id');
-        expect(coreProcessSpy).toHaveBeenCalled();
-      });
-
-      it('should use temp message with THREAD_DRAFT_ID for optimistic update', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        act(() => {
-          useChatStore.setState({
-            portalThreadId: undefined,
-            threadStartMessageId: 'source-msg-id',
-          });
-        });
-
-        const createTmpSpy = vi
-          .spyOn(result.current, 'optimisticCreateTmpMessage')
-          .mockReturnValue('temp-msg-id');
-
-        vi.spyOn(result.current, 'createThread').mockResolvedValue({
-          messageId: 'new-msg-id',
-          threadId: 'new-thread-id',
-        });
-        vi.spyOn(result.current, 'refreshThreads').mockResolvedValue();
-        vi.spyOn(result.current, 'refreshMessages').mockResolvedValue();
-        vi.spyOn(result.current, 'openThreadInPortal');
-        vi.spyOn(result.current, 'internal_execAgentRuntime').mockResolvedValue();
-        vi.spyOn(result.current, 'internal_toggleMessageLoading');
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'test message' });
-        });
-
-        expect(createTmpSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            threadId: THREAD_DRAFT_ID,
-          }),
-        );
-      });
-
-      it('should auto-summarize thread title after first message', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        const mockThread: ThreadItem = {
-          createdAt: new Date(),
-          id: 'new-thread-id',
-          lastActiveAt: new Date(),
-          sourceMessageId: 'msg-1',
-          status: ThreadStatus.Active,
-          title: 'test message',
-          topicId: 'test-topic-id',
-          type: ThreadType.Continuation,
-          updatedAt: new Date(),
-          userId: 'user-1',
-        };
-
-        act(() => {
-          useChatStore.setState({
-            messagesMap: {
-              [messageMapKey('test-session-id', 'test-topic-id')]: [
-                {
-                  content: 'test',
-                  createdAt: Date.now(),
-                  id: 'msg-1',
-                  meta: {},
-                  role: 'user',
-                  sessionId: 'test-session-id',
-                  updatedAt: Date.now(),
-                },
-              ],
-            },
-            portalThreadId: undefined,
-            threadStartMessageId: 'source-msg-id',
-          });
-        });
-
-        vi.spyOn(result.current, 'createThread').mockResolvedValue({
-          messageId: 'new-msg-id',
-          threadId: 'new-thread-id',
-        });
-
-        vi.spyOn(result.current, 'refreshThreads').mockImplementation(async () => {
-          act(() => {
-            useChatStore.setState({
-              portalThreadId: 'new-thread-id',
-              threadMaps: { 'test-topic-id': [mockThread] },
-            });
-          });
-        });
-        vi.spyOn(result.current, 'refreshMessages').mockResolvedValue();
-        vi.spyOn(result.current, 'openThreadInPortal').mockImplementation((threadId) => {
-          act(() => {
-            useChatStore.setState({ portalThreadId: threadId });
-          });
-        });
-        vi.spyOn(result.current, 'internal_execAgentRuntime').mockResolvedValue();
-        vi.spyOn(result.current, 'optimisticCreateTmpMessage').mockReturnValue('temp-msg-id');
-        vi.spyOn(result.current, 'internal_toggleMessageLoading');
-
-        const summaryTitleSpy = vi.spyOn(result.current, 'summaryThreadTitle').mockResolvedValue();
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'test message' });
-        });
-
-        expect(summaryTitleSpy).toHaveBeenCalledWith('new-thread-id', expect.any(Array));
-      });
-    });
-
-    describe('existing thread flow', () => {
-      it('should append message to existing thread', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        act(() => {
-          useChatStore.setState({
-            portalThreadId: 'existing-thread-id',
-          });
-        });
-
-        const createMessageSpy = vi
-          .spyOn(result.current, 'optimisticCreateMessage')
-          .mockResolvedValue({ id: 'new-msg-id', messages: [] });
-        const coreProcessSpy = vi
-          .spyOn(result.current, 'internal_execAgentRuntime')
-          .mockResolvedValue();
-        vi.spyOn(result.current, 'optimisticCreateTmpMessage').mockReturnValue('temp-msg-id');
-        vi.spyOn(result.current, 'internal_toggleMessageLoading');
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'follow-up message' });
-        });
-
-        expect(createMessageSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            content: 'follow-up message',
-            role: 'user',
-            threadId: 'existing-thread-id',
-          }),
-          { tempMessageId: 'temp-msg-id' },
-        );
-
-        expect(coreProcessSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            messages: expect.any(Array),
-            parentMessageId: 'new-msg-id',
-            parentMessageType: 'user',
-            inPortalThread: true,
-            threadId: 'existing-thread-id',
-          }),
-        );
-      });
-
-      it('should not auto-summarize title for existing threads', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        act(() => {
-          useChatStore.setState({
-            portalThreadId: 'existing-thread-id',
-          });
-        });
-
-        vi.spyOn(result.current, 'optimisticCreateMessage').mockResolvedValue({
-          id: 'new-msg-id',
-          messages: [],
-        });
-        vi.spyOn(result.current, 'internal_execAgentRuntime').mockResolvedValue();
-        vi.spyOn(result.current, 'optimisticCreateTmpMessage').mockReturnValue('temp-msg-id');
-        vi.spyOn(result.current, 'internal_toggleMessageLoading');
-
-        const summaryTitleSpy = vi.spyOn(result.current, 'summaryThreadTitle').mockResolvedValue();
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'follow-up message' });
-        });
-
-        expect(summaryTitleSpy).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('message processing', () => {
-      it('should trigger session update', async () => {
-        const { result } = renderHook(() => useChatStore());
-        const triggerUpdateMock = vi.fn();
-
-        (useSessionStore.getState as Mock).mockReturnValue({
-          triggerSessionUpdate: triggerUpdateMock,
-        });
-
-        act(() => {
-          useChatStore.setState({
-            portalThreadId: 'existing-thread-id',
-          });
-        });
-
-        vi.spyOn(result.current, 'optimisticCreateMessage').mockResolvedValue({
-          id: 'new-msg-id',
-          messages: [],
-        });
-        vi.spyOn(result.current, 'internal_execAgentRuntime').mockResolvedValue();
-        vi.spyOn(result.current, 'optimisticCreateTmpMessage').mockReturnValue('temp-msg-id');
-        vi.spyOn(result.current, 'internal_toggleMessageLoading');
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'test' });
-        });
-
-        expect(triggerUpdateMock).toHaveBeenCalledWith('test-session-id');
-      });
-
-      it('should pass RAG query if RAG is enabled', async () => {
-        const { result } = renderHook(() => useChatStore());
-
-        act(() => {
-          useChatStore.setState({
-            portalThreadId: 'existing-thread-id',
-          });
-        });
-
-        vi.spyOn(result.current, 'internal_shouldUseRAG').mockReturnValue(true);
-        vi.spyOn(result.current, 'optimisticCreateMessage').mockResolvedValue({
-          id: 'new-msg-id',
-          messages: [],
-        });
-        vi.spyOn(result.current, 'optimisticCreateTmpMessage').mockReturnValue('temp-msg-id');
-        vi.spyOn(result.current, 'internal_toggleMessageLoading');
-
-        const coreProcessSpy = vi
-          .spyOn(result.current, 'internal_execAgentRuntime')
-          .mockResolvedValue();
-
-        await act(async () => {
-          await result.current.sendThreadMessage({ message: 'test with rag' });
-        });
-
-        expect(coreProcessSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            messages: expect.any(Array),
-            parentMessageId: 'new-msg-id',
-            parentMessageType: 'user',
-            inPortalThread: true,
-            threadId: 'existing-thread-id',
-          }),
-        );
-      });
-    });
-  });
-
-  describe('resendThreadMessage', () => {
-    it('should resend message in thread context', async () => {
-      const { result } = renderHook(() => useChatStore());
-
-      act(() => {
-        useChatStore.setState({
-          portalThreadId: 'thread-id',
-        });
-      });
-
-      const resendSpy = vi
-        .spyOn(result.current, 'regenerateUserMessage')
-        .mockResolvedValue(undefined);
-
-      await act(async () => {
-        await result.current.resendThreadMessage('message-id');
-      });
-
-      expect(resendSpy).toHaveBeenCalledWith('message-id', {});
-    });
-  });
-
-  describe('delAndResendThreadMessage', () => {
-    it('should delete and resend message', async () => {
-      const { result } = renderHook(() => useChatStore());
-
-      const resendSpy = vi.spyOn(result.current, 'resendThreadMessage').mockResolvedValue();
-      const deleteSpy = vi.spyOn(result.current, 'deleteMessage').mockResolvedValue();
-
-      await act(async () => {
-        await result.current.delAndResendThreadMessage('message-id');
-      });
-
-      expect(resendSpy).toHaveBeenCalledWith('message-id');
-      expect(deleteSpy).toHaveBeenCalledWith('message-id');
-    });
-  });
+  // Note: resendThreadMessage and delAndResendThreadMessage have been moved to ConversationStore
 
   describe('internal_updateThreadTitleInSummary', () => {
     it('should dispatch thread update', () => {

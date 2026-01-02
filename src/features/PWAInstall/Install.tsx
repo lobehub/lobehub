@@ -1,10 +1,10 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import dynamic from 'next/dynamic';
 import { memo, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { BRANDING_NAME } from '@/const/branding';
 import { PWA_INSTALL_ID } from '@/const/layoutTokens';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useGlobalStore } from '@/store/global';

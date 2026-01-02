@@ -1,12 +1,11 @@
-import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       width: fit-content;
@@ -14,11 +13,11 @@ const useStyles = createStyles(({ css, token }) => {
       padding-inline: 8px;
       border-radius: 6px;
 
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
 
       &:hover {
-        color: ${token.colorTextSecondary};
-        background: ${token.colorFillTertiary};
+        color: ${cssVar.colorTextSecondary};
+        background: ${cssVar.colorFillTertiary};
       }
     `,
   };
@@ -30,7 +29,6 @@ interface GoBackProps {
 
 const GoBack = memo<GoBackProps>(({ href }) => {
   const { t } = useTranslation('components');
-  const { styles } = useStyles();
 
   return (
     <Link href={href}>

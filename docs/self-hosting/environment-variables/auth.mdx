@@ -55,6 +55,14 @@ LobeChat provides a complete authentication service capability when deployed. Th
 - Default: `-`
 - Example: `google,github,microsoft,cognito`
 
+#### `JWKS_KEY`
+
+- Type: Required
+- Description: Generic JWKS (JSON Web Key Set) key for signing and verifying JWTs. Used for internal service authentication and other cryptographic operations. Must be a JWKS JSON string containing an RS256 RSA key pair. Falls back to `OIDC_JWKS_KEY` if not set (for backward compatibility).
+- Default: `-`
+
+<OIDCJWKs />
+
 ### Email Service (SMTP)
 
 These settings are required for email verification and password reset features.

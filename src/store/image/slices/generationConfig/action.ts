@@ -1,12 +1,12 @@
 import {
-  AIImageModelCard,
-  ModelParamsSchema,
-  RuntimeImageGenParams,
-  RuntimeImageGenParamsKeys,
-  RuntimeImageGenParamsValue,
+  type AIImageModelCard,
+  type ModelParamsSchema,
+  type RuntimeImageGenParams,
+  type RuntimeImageGenParamsKeys,
+  type RuntimeImageGenParamsValue,
   extractDefaultValues,
 } from 'model-bank';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';

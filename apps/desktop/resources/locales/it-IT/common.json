@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Aggiungi",
-    "back": "Indietro",
-    "cancel": "Annulla",
-    "close": "Chiudi",
-    "confirm": "Conferma",
-    "delete": "Elimina",
-    "edit": "Modifica",
-    "more": "Di più",
-    "next": "Avanti",
-    "ok": "OK",
-    "previous": "Indietro",
-    "refresh": "Aggiorna",
-    "remove": "Rimuovi",
-    "retry": "Riprova",
-    "save": "Salva",
-    "search": "Cerca",
-    "submit": "Invia"
-  },
-  "app": {
-    "description": "La tua piattaforma di collaborazione con assistente AI",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Errore",
-    "info": "Informazioni",
-    "loading": "Caricamento in corso",
-    "success": "Successo",
-    "warning": "Avviso"
-  }
+  "actions.add": "Aggiungi",
+  "actions.back": "Indietro",
+  "actions.cancel": "Annulla",
+  "actions.close": "Chiudi",
+  "actions.confirm": "Conferma",
+  "actions.delete": "Elimina",
+  "actions.edit": "Modifica",
+  "actions.more": "Di più",
+  "actions.next": "Avanti",
+  "actions.ok": "OK",
+  "actions.previous": "Indietro",
+  "actions.refresh": "Aggiorna",
+  "actions.remove": "Rimuovi",
+  "actions.retry": "Riprova",
+  "actions.save": "Salva",
+  "actions.search": "Cerca",
+  "actions.submit": "Invia",
+  "app.description": "La tua piattaforma di collaborazione con assistente AI",
+  "app.name": "LobeHub",
+  "status.error": "Errore",
+  "status.info": "Informazioni",
+  "status.loading": "Caricamento in corso",
+  "status.success": "Successo",
+  "status.warning": "Avviso"
 }

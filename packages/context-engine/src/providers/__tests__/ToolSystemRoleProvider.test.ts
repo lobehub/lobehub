@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { LobeToolManifest } from '../../engine/tools/types';
 import type { PipelineContext } from '../../types';
 import { ToolSystemRoleProvider } from '../ToolSystemRole';
 
@@ -10,18 +11,23 @@ const createContext = (messages: any[]): PipelineContext => ({
   isAborted: false,
 });
 
-describe('ToolSystemRoleProvider', () => {
-  const mockToolSystemRole = 'You have access to the following tools:\n- calculator\n- weather';
+const createMockManifests = (identifiers: string[]): LobeToolManifest[] =>
+  identifiers.map((id) => ({
+    identifier: id,
+    api: [{ name: 'action', description: `${id} action`, parameters: {} }],
+    meta: { title: id },
+    type: 'default' as const,
+  }));
 
-  it('should inject tool system role when tools are available and FC is supported', async () => {
-    const mockGetToolSystemRoles = (tools: any[]) => mockToolSystemRole;
-    const mockIsCanUseFC = (model: string, provider: string) => true;
+describe('ToolSystemRoleProvider', () => {
+  it('should inject tool system role when manifests are provided and FC is supported', async () => {
+    const mockIsCanUseFC = () => true;
+    const manifests = createMockManifests(['calculator', 'weather']);
 
     const provider = new ToolSystemRoleProvider({
-      tools: ['calculator', 'weather'],
+      manifests,
       model: 'gpt-4',
       provider: 'openai',
-      getToolSystemRoles: mockGetToolSystemRoles,
       isCanUseFC: mockIsCanUseFC,
     });
 
@@ -33,26 +39,23 @@ describe('ToolSystemRoleProvider', () => {
     // Should have system message with tool system role
     const systemMessage = result.messages.find((msg) => msg.role === 'system');
     expect(systemMessage).toBeDefined();
-    expect(systemMessage!.content).toBe(mockToolSystemRole);
+    expect(systemMessage!.content).toContain('calculator');
+    expect(systemMessage!.content).toContain('weather');
 
     // Should update metadata
-    expect(result.metadata.toolSystemRole).toEqual({
-      injected: true,
-      toolsCount: 2,
-      supportsFunctionCall: true,
-      contentLength: mockToolSystemRole.length,
-    });
+    expect(result.metadata.toolSystemRole).toBeDefined();
+    expect(result.metadata.toolSystemRole.injected).toBe(true);
+    expect(result.metadata.toolSystemRole.supportsFunctionCall).toBe(true);
   });
 
   it('should merge tool system role with existing system message', async () => {
-    const mockGetToolSystemRoles = (tools: any[]) => mockToolSystemRole;
-    const mockIsCanUseFC = (model: string, provider: string) => true;
+    const mockIsCanUseFC = () => true;
+    const manifests = createMockManifests(['calculator']);
 
     const provider = new ToolSystemRoleProvider({
-      tools: ['calculator'],
+      manifests,
       model: 'gpt-4',
       provider: 'openai',
-      getToolSystemRoles: mockGetToolSystemRoles,
       isCanUseFC: mockIsCanUseFC,
     });
 
@@ -66,18 +69,17 @@ describe('ToolSystemRoleProvider', () => {
     const result = await provider.process(ctx);
 
     const systemMessage = result.messages.find((msg) => msg.role === 'system');
-    expect(systemMessage!.content).toBe(`${existingSystemContent}\n\n${mockToolSystemRole}`);
+    expect(systemMessage!.content).toContain(existingSystemContent);
+    expect(systemMessage!.content).toContain('calculator');
   });
 
-  it('should skip injection when no tools are available', async () => {
-    const mockGetToolSystemRoles = (tools: any[]) => mockToolSystemRole;
-    const mockIsCanUseFC = (model: string, provider: string) => true;
+  it('should skip injection when no manifests are provided', async () => {
+    const mockIsCanUseFC = () => true;
 
     const provider = new ToolSystemRoleProvider({
-      tools: [],
+      manifests: [],
       model: 'gpt-4',
       provider: 'openai',
-      getToolSystemRoles: mockGetToolSystemRoles,
       isCanUseFC: mockIsCanUseFC,
     });
 
@@ -95,14 +97,13 @@ describe('ToolSystemRoleProvider', () => {
   });
 
   it('should skip injection when function calling is not supported', async () => {
-    const mockGetToolSystemRoles = (tools: any[]) => mockToolSystemRole;
-    const mockIsCanUseFC = (model: string, provider: string) => false;
+    const mockIsCanUseFC = () => false;
+    const manifests = createMockManifests(['calculator']);
 
     const provider = new ToolSystemRoleProvider({
-      tools: ['calculator'],
+      manifests,
       model: 'gpt-3.5-turbo',
       provider: 'openai',
-      getToolSystemRoles: mockGetToolSystemRoles,
       isCanUseFC: mockIsCanUseFC,
     });
 
@@ -116,15 +117,89 @@ describe('ToolSystemRoleProvider', () => {
     expect(systemMessage).toBeUndefined();
   });
 
-  it('should skip injection when getToolSystemRoles returns undefined', async () => {
-    const mockGetToolSystemRoles = (tools: any[]) => undefined;
-    const mockIsCanUseFC = (model: string, provider: string) => true;
+  it('should inject manifest systemRole into the prompt', async () => {
+    const mockIsCanUseFC = () => true;
+
+    // Manifest with custom systemRole
+    const manifests: LobeToolManifest[] = [
+      {
+        identifier: 'gtd-tool',
+        api: [{ name: 'createTask', description: 'Create a task', parameters: {} }],
+        meta: { title: 'GTD Tool' },
+        type: 'builtin',
+        systemRole: 'You are a GTD expert. Always help users organize tasks effectively.',
+      },
+    ];
 
     const provider = new ToolSystemRoleProvider({
-      tools: ['calculator'],
+      manifests,
       model: 'gpt-4',
       provider: 'openai',
-      getToolSystemRoles: mockGetToolSystemRoles,
+      isCanUseFC: mockIsCanUseFC,
+    });
+
+    const messages = [{ id: 'u1', role: 'user', content: 'Create a task' }];
+
+    const ctx = createContext(messages);
+    const result = await provider.process(ctx);
+
+    const systemMessage = result.messages.find((msg) => msg.role === 'system');
+    expect(systemMessage).toBeDefined();
+    // Should contain the manifest's systemRole content
+    expect(systemMessage!.content).toContain('GTD expert');
+    expect(systemMessage!.content).toContain('organize tasks effectively');
+  });
+
+  it('should inject systemRole even when manifest has no apis', async () => {
+    const mockIsCanUseFC = () => true;
+
+    // Manifest with systemRole but no APIs
+    const manifests: LobeToolManifest[] = [
+      {
+        identifier: 'knowledge-tool',
+        api: [],
+        meta: { title: 'Knowledge Tool' },
+        type: 'builtin',
+        systemRole: 'You have access to a knowledge base. Use it wisely.',
+      },
+    ];
+
+    const provider = new ToolSystemRoleProvider({
+      manifests,
+      model: 'gpt-4',
+      provider: 'openai',
+      isCanUseFC: mockIsCanUseFC,
+    });
+
+    const messages = [{ id: 'u1', role: 'user', content: 'Search knowledge' }];
+
+    const ctx = createContext(messages);
+    const result = await provider.process(ctx);
+
+    const systemMessage = result.messages.find((msg) => msg.role === 'system');
+    expect(systemMessage).toBeDefined();
+    // Should contain the systemRole even without APIs
+    expect(systemMessage!.content).toContain('knowledge base');
+    expect(systemMessage!.content).toContain('Use it wisely');
+  });
+
+  it('should skip injection when manifests have no systemRole and no apis', async () => {
+    const mockIsCanUseFC = () => true;
+
+    // Empty manifests (no APIs)
+    const manifests: LobeToolManifest[] = [
+      {
+        identifier: 'empty-tool',
+        api: [],
+        meta: { title: 'Empty Tool' },
+        type: 'default',
+      },
+    ];
+
+    const provider = new ToolSystemRoleProvider({
+      manifests,
+      model: 'gpt-4',
+      provider: 'openai',
       isCanUseFC: mockIsCanUseFC,
     });
 
@@ -133,7 +208,7 @@ describe('ToolSystemRoleProvider', () => {
     const ctx = createContext(messages);
     const result = await provider.process(ctx);
 
-    // Should not have system message
+    // Should not have system message (empty tools produce no prompt)
     const systemMessage = result.messages.find((msg) => msg.role === 'system');
     expect(systemMessage).toBeUndefined();
   });

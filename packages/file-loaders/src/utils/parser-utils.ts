@@ -1,6 +1,5 @@
 import { DOMParser } from '@xmldom/xmldom';
 import concat from 'concat-stream';
-import { Buffer } from 'node:buffer';
 import yauzl from 'yauzl';
 
 // Define basic error messages

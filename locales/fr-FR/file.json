@@ -1,181 +1,134 @@
 {
   "addFolder": "Créer un dossier",
-  "addKnowledge": "Ajouter des connaissances",
-  "addPage": "Créer un document",
-  "desc": "Gérez vos connaissances liées au travail, aux études et à la vie quotidienne.",
-  "detail": {
-    "basic": {
-      "createdAt": "Date de création",
-      "filename": "Nom du fichier",
-      "size": "Taille du fichier",
-      "title": "Informations de base",
-      "type": "Format",
-      "updatedAt": "Date de mise à jour"
-    },
-    "data": {
-      "chunkCount": "Nombre de segments",
-      "embedding": {
-        "default": "Non vectorisé",
-        "error": "Échec",
-        "pending": "En attente de démarrage",
-        "processing": "En cours",
-        "success": "Terminé"
-      },
-      "embeddingStatus": "Vectorisation"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "Ajouter une icône",
-    "autoSaveMessage": "Le document est enregistré automatiquement, aucune action manuelle requise",
-    "chooseIcon": "Choisir une icône",
-    "deleteConfirm": {
-      "content": "Ce document va être supprimé. Cette action est irréversible, veuillez procéder avec prudence.",
-      "title": "Supprimer le document"
-    },
-    "deleteError": "Échec de la suppression du document",
-    "deleteSuccess": "Document supprimé avec succès",
-    "editedAt": "Dernière modification le {{time}}",
-    "editedBy": "Dernière modification par {{name}}",
-    "editorPlaceholder": "Saisissez le contenu du document, appuyez sur / pour ouvrir le menu de commandes",
-    "empty": {
-      "createNewDocument": "Créer un nouveau document",
-      "title": "Sélectionnez un document pour commencer",
-      "uploadMarkdown": "Téléverser un fichier Markdown"
-    },
-    "linkCopied": "Lien copié",
-    "menu": {
-      "copyLink": "Copier le lien",
-      "exportDocument": "Exporter le document",
-      "importDocument": "Importer un document",
-      "pin": "Épingler le document"
-    },
-    "saving": "Enregistrement en cours...",
-    "titlePlaceholder": "Sans titre",
-    "wordCount": "{{wordCount}} mots"
-  },
-  "documentList": {
-    "copyContent": "Copier tout le contenu",
-    "duplicate": "Créer une copie",
-    "empty": "Aucun document pour le moment, cliquez sur le bouton ci-dessus pour créer votre premier document",
-    "noResults": "Aucun document correspondant trouvé",
-    "pageCount": "{{count}} documents au total",
-    "selectNote": "Sélectionnez un document pour commencer l’édition",
-    "untitled": "Sans titre"
-  },
-  "empty": "Aucun fichier/dossier téléchargé pour le moment",
-  "header": {
-    "actions": {
-      "newFolder": "Nouveau dossier",
-      "newPage": "Nouveau document",
-      "uploadFile": "Télécharger un fichier",
-      "uploadFolder": "Télécharger un dossier"
-    },
-    "newNoteDialog": {
-      "cancel": "Annuler",
-      "editTitle": "Modifier le document",
-      "emptyContent": "Le contenu du document ne peut pas être vide",
-      "loadError": "Échec du chargement du document, veuillez réessayer",
-      "loading": "Chargement...",
-      "save": "Enregistrer",
-      "saveError": "Échec de l’enregistrement du document, veuillez réessayer",
-      "saveSuccess": "Document enregistré avec succès",
-      "title": "Nouveau document",
-      "updateSuccess": "Document mis à jour avec succès"
-    },
-    "newPageButton": "Nouveau document",
-    "uploadButton": "Télécharger"
-  },
-  "home": {
-    "getStarted": "Commencer",
-    "greeting": "Commencer",
-    "quickActions": "Actions rapides",
-    "recentFiles": "Fichiers récents",
-    "recentPages": "Pages récentes",
-    "subtitle": "Bienvenue dans votre base de connaissances, commencez ici à gérer vos documents",
-    "uploadEntries": {
-      "files": {
-        "title": "Téléverser des fichiers"
-      },
-      "folder": {
-        "title": "Téléverser un dossier"
-      },
-      "knowledgeBase": {
-        "title": "Créer une base de connaissances"
-      },
-      "newPage": {
-        "title": "Nouveau document"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "Vous allez supprimer cette base de connaissances. Les fichiers ne seront pas supprimés, mais déplacés dans tous les fichiers. La suppression de la base de connaissances est irréversible, veuillez agir avec prudence.",
-      "empty": "Cliquez sur <1>+</1> pour commencer à créer une base de connaissances"
-    },
-    "new": "Nouvelle base de connaissances",
-    "title": "Base de connaissances"
-  },
-  "menu": {
-    "allFiles": "Tous les fichiers",
-    "allPages": "Tous les documents"
-  },
-  "networkError": "Échec de l'accès à la base de connaissances, veuillez vérifier votre connexion réseau et réessayer",
-  "notSupportGuide": {
-    "desc": "L'instance déployée actuellement est en mode base de données client, la fonction de gestion des fichiers n'est pas disponible. Veuillez passer en <1>mode de déploiement de base de données serveur</1>, ou utilisez directement <3>LobeChat Cloud</3>",
-    "features": {
-      "allKind": {
-        "desc": "Prend en charge les types de fichiers courants, y compris Word, PPT, Excel, PDF, TXT et d'autres formats de documents courants, ainsi que des fichiers de code populaires comme JS et Python",
-        "title": "Analyse de divers types de fichiers"
-      },
-      "embeddings": {
-        "desc": "Utilise des modèles vectoriels haute performance pour vectoriser les segments de texte, permettant une recherche sémantique du contenu des fichiers",
-        "title": "Sémantisation vectorielle"
-      },
-      "repos": {
-        "desc": "Prend en charge la création de bases de connaissances et permet d'ajouter différents types de fichiers, construisant ainsi votre propre savoir-faire",
-        "title": "Base de connaissances"
-      }
-    },
-    "title": "Le mode de déploiement actuel ne prend pas en charge la gestion des fichiers"
-  },
-  "preview": {
-    "downloadFile": "Télécharger le fichier",
-    "unsupportedFileAndContact": "Ce format de fichier n'est pas encore pris en charge pour l'aperçu en ligne. Si vous souhaitez un aperçu, n'hésitez pas à <1>nous contacter</1>."
-  },
-  "searchFilePlaceholder": "Rechercher un fichier",
-  "searchPagePlaceholder": "Rechercher un document",
-  "tab": {
-    "all": "Tout",
-    "audios": "Audio",
-    "documents": "Documents",
-    "home": "Accueil",
-    "images": "Images",
-    "moreTypes": "Plus de types",
-    "pages": "Documents",
-    "videos": "Vidéos",
-    "websites": "Sites web"
-  },
-  "title": "Base de connaissances",
-  "toggleLeftPanel": "Afficher/Masquer le panneau de gauche",
-  "uploadDock": {
-    "body": {
-      "collapse": "Réduire",
-      "item": {
-        "done": "Téléchargé",
-        "error": "Échec du téléchargement, veuillez réessayer",
-        "pending": "Préparation au téléchargement...",
-        "processing": "Traitement du fichier...",
-        "restTime": "Temps restant {{time}}"
-      }
-    },
-    "fileQueueInfo": "Téléversement des {{count}} premiers fichiers en cours, les {{remaining}} fichiers restants seront mis en file d’attente",
-    "totalCount": "Total {{count}} éléments",
-    "uploadStatus": {
-      "error": "Erreur de téléchargement",
-      "pending": "En attente de téléchargement",
-      "processing": "Téléchargement en cours",
-      "success": "Téléchargement terminé",
-      "uploading": "Téléchargement en cours"
-    }
-  }
+  "addLibrary": "Ajouter",
+  "addPage": "Créer une page",
+  "detail.basic.createdAt": "Date de création",
+  "detail.basic.filename": "Nom du fichier",
+  "detail.basic.size": "Taille du fichier",
+  "detail.basic.title": "Informations de base",
+  "detail.basic.type": "Format",
+  "detail.basic.updatedAt": "Date de mise à jour",
+  "detail.data.chunkCount": "Segments",
+  "detail.data.embedding.default": "Non vectorisé",
+  "detail.data.embedding.error": "Échec",
+  "detail.data.embedding.pending": "En attente de démarrage",
+  "detail.data.embedding.processing": "En cours",
+  "detail.data.embedding.success": "Terminé",
+  "detail.data.embeddingStatus": "vectorisation",
+  "empty": "Aucun fichier ou dossier n’a encore été importé.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} fichiers filtrés (sur {{total}} au total)",
+  "header.actions.connect": "Se connecter...",
+  "header.actions.gitignore.apply": "Appliquer les règles",
+  "header.actions.gitignore.cancel": "Ignorer les règles",
+  "header.actions.gitignore.content": "Fichier .gitignore détecté ({{count}} fichiers au total). Souhaitez-vous appliquer les règles d’exclusion ?",
+  "header.actions.gitignore.filtered": "{{ignored}} fichiers filtrés ({{total}} fichiers au total)",
+  "header.actions.gitignore.title": ".gitignore détecté",
+  "header.actions.newFolder": "Nouveau dossier",
+  "header.actions.newPage": "Nouvelle page",
+  "header.actions.notion.error": "Échec de l’importation des fichiers Notion",
+  "header.actions.notion.foundFiles": "{{count}} fichiers trouvés",
+  "header.actions.notion.importing": "Importation du contenu Notion...",
+  "header.actions.notion.noMarkdownFiles": "Aucun fichier Markdown trouvé dans l’archive ZIP",
+  "header.actions.notion.partial": "{{success}} fichiers importés avec succès, {{failed}} échecs",
+  "header.actions.notion.success": "{{count}} fichiers importés avec succès",
+  "header.actions.notionGuide.cancel": "Plus tard",
+  "header.actions.notionGuide.desc": "Commencez par exporter votre contenu depuis Notion au format Markdown (ZIP). Cliquez ensuite sur Continuer pour sélectionner le fichier ZIP et importer toutes les pages.",
+  "header.actions.notionGuide.ok": "Sélectionner le ZIP Notion",
+  "header.actions.notionGuide.title": "Importer depuis Notion",
+  "header.actions.uploadFile": "Importer un fichier",
+  "header.actions.uploadFolder": "Importer un dossier",
+  "header.newPageButton": "Nouvelle page",
+  "header.uploadButton": "Importer",
+  "home.getStarted": "Commencer",
+  "home.greeting": "Commencer",
+  "home.quickActions": "Actions rapides",
+  "home.recentFiles": "Fichiers récents",
+  "home.recentPages": "Pages récentes",
+  "home.uploadEntries.files.title": "Importer des fichiers",
+  "home.uploadEntries.folder.title": "Importer un dossier",
+  "home.uploadEntries.library.title": "Créer une nouvelle bibliothèque",
+  "home.uploadEntries.newPage.title": "Nouvelle page",
+  "library.list.confirmRemoveLibrary": "Vous êtes sur le point de supprimer cette bibliothèque. Les fichiers qu’elle contient ne seront pas supprimés mais déplacés vers Tous les fichiers. Cette action est irréversible, veuillez procéder avec prudence.",
+  "library.list.empty": "Cliquez sur <1>+</1> pour créer une nouvelle bibliothèque",
+  "library.new": "Nouvelle bibliothèque",
+  "library.title": "Bibliothèque",
+  "loadMore": "Charger plus",
+  "menu.allFiles": "Tous les fichiers",
+  "menu.allPages": "Toutes les pages",
+  "networkError": "Échec de la récupération des bibliothèques. Veuillez vérifier votre connexion réseau et réessayer.",
+  "notSupportGuide.desc": "Le mode de déploiement actuel ne prend pas en charge la gestion des fichiers. Passez en <1>mode de déploiement avec base de données serveur</1>, ou utilisez <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "Prend en charge les types de fichiers courants, y compris les formats de page comme Word, PPT, Excel, PDF, TXT, ainsi que les fichiers de code populaires comme JS et Python.",
+  "notSupportGuide.features.allKind.title": "Prise en charge de plusieurs types de fichiers",
+  "notSupportGuide.features.embeddings.desc": "Utilise des modèles vectoriels haute performance pour vectoriser les segments de texte, permettant une recherche sémantique du contenu.",
+  "notSupportGuide.features.embeddings.title": "Sémantique vectorielle",
+  "notSupportGuide.features.libraries.desc": "Créez des bibliothèques et ajoutez-y des fichiers pour constituer votre propre collection.",
+  "notSupportGuide.features.libraries.title": "Bibliothèque",
+  "notSupportGuide.title": "Le mode de déploiement actuel ne prend pas en charge la gestion des fichiers",
+  "pageEditor.addIcon": "Ajouter une icône",
+  "pageEditor.autoSaveMessage": "Votre page est enregistrée automatiquement. Aucun enregistrement manuel nécessaire.",
+  "pageEditor.chooseIcon": "Choisir une icône",
+  "pageEditor.deleteConfirm.content": "Cette page sera supprimée de façon définitive. Veuillez confirmer.",
+  "pageEditor.deleteConfirm.title": "Supprimer la page",
+  "pageEditor.deleteError": "Échec de la suppression de la page",
+  "pageEditor.deleteSuccess": "Page supprimée avec succès",
+  "pageEditor.duplicateError": "Échec de la duplication de la page",
+  "pageEditor.duplicateSuccess": "Page dupliquée avec succès",
+  "pageEditor.editedAt": "Dernière modification le {{time}}",
+  "pageEditor.editedBy": "Dernière modification par {{name}}",
+  "pageEditor.editorPlaceholder": "Commencez à écrire votre page. Appuyez sur / pour ouvrir le menu de commandes",
+  "pageEditor.empty.createNewDocument": "Créer une nouvelle page",
+  "pageEditor.empty.importNotion": "Importer depuis Notion",
+  "pageEditor.empty.title": "Sélectionnez une page pour commencer",
+  "pageEditor.empty.uploadFiles": "Importer des fichiers",
+  "pageEditor.exportError": "Échec de l’exportation de la page",
+  "pageEditor.exportSuccess": "Page exportée avec succès",
+  "pageEditor.linkCopied": "Lien copié",
+  "pageEditor.menu.copyLink": "Copier le lien",
+  "pageEditor.menu.export": "Exporter",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "Exporter la page",
+  "pageEditor.menu.importDocument": "Importer une page",
+  "pageEditor.menu.pin": "Épingler la page",
+  "pageEditor.saving": "Enregistrement...",
+  "pageEditor.titlePlaceholder": "Sans titre",
+  "pageEditor.wordCount": "{{wordCount}} mots",
+  "pageList.copyContent": "Copier le texte complet",
+  "pageList.duplicate": "Dupliquer",
+  "pageList.empty": "Aucune page pour le moment. Cliquez sur le bouton ci-dessus pour en créer une.",
+  "pageList.filter.all": "Toutes",
+  "pageList.filter.onlyInPages": "Uniquement dans les pages",
+  "pageList.noResults": "Aucune page correspondante trouvée",
+  "pageList.pageCount": "{{count}} pages au total",
+  "pageList.pageSizeItem": "{{count}} éléments",
+  "pageList.title": "Pages",
+  "pageList.untitled": "Sans titre",
+  "portal.openInPageEditor": "Modifier dans la page",
+  "preview.downloadFile": "Télécharger le fichier",
+  "preview.unsupportedFileAndContact": "Ce format de fichier n’est pas encore pris en charge pour l’aperçu en ligne. Si vous souhaitez en faire la demande, n’hésitez pas à <1>nous contacter</1>.",
+  "searchFilePlaceholder": "Rechercher des fichiers",
+  "searchPagePlaceholder": "Rechercher des pages",
+  "tab.all": "Tous",
+  "tab.audios": "Audios",
+  "tab.documents": "Documents",
+  "tab.home": "Accueil",
+  "tab.images": "Images",
+  "tab.moreTypes": "Autres types",
+  "tab.pages": "Pages",
+  "tab.videos": "Vidéos",
+  "tab.websites": "Sites web",
+  "title": "Ressources",
+  "toggleLeftPanel": "Afficher/Masquer le panneau gauche",
+  "uploadDock.body.collapse": "Réduire",
+  "uploadDock.body.item.done": "Importé",
+  "uploadDock.body.item.error": "Échec de l’importation, veuillez réessayer",
+  "uploadDock.body.item.pending": "Préparation à l’importation...",
+  "uploadDock.body.item.processing": "Traitement du fichier...",
+  "uploadDock.body.item.restTime": "Temps restant : {{time}}",
+  "uploadDock.fileQueueInfo": "Importation des {{count}} premiers fichiers, {{remaining}} en attente",
+  "uploadDock.totalCount": "Total : {{count}} éléments",
+  "uploadDock.uploadStatus.error": "Erreur d’importation",
+  "uploadDock.uploadStatus.pending": "En attente d’importation",
+  "uploadDock.uploadStatus.processing": "Importation en cours",
+  "uploadDock.uploadStatus.success": "Importation terminée",
+  "uploadDock.uploadStatus.uploading": "Importation en cours"
 }

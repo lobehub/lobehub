@@ -2,10 +2,11 @@ import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import {
-  NewGeneration,
-  NewGenerationBatch,
+  type NewGeneration,
+  type NewGenerationBatch,
   asyncTasks,
   generationBatches,
   generations,
@@ -133,6 +134,20 @@ export const imageRouter = router({
     // 防御性检测：确保没有完整URL进入数据库
     validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
 
+    const chargeResult = await chargeBeforeGenerate({
+      clientIp: ctx.clientIp,
+      configForDatabase,
+      generationParams: params,
+      generationTopicId,
+      imageNum,
+      model,
+      provider,
+      userId,
+    });
+    if (chargeResult) {
+      return chargeResult;
+    }
+
     // 步骤 1: 在事务中原子性地创建所有数据库记录
     const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(async (tx) => {
       log('Starting database transaction for image generation');
@@ -208,8 +223,8 @@ export const imageRouter = router({
 
     log('Database transaction completed successfully. Starting async task triggers directly.');
 
-    // 步骤 2: 直接执行所有生图任务（去掉 after 包装）
-    log('Starting async image generation tasks directly');
+    // Step 2: Trigger background image generation tasks using after() API
+    log('Starting async image generation tasks with after()');
 
     try {
       log('Creating unified async caller for userId: %s', userId);
@@ -228,18 +243,20 @@ export const imageRouter = router({
       log('Unified async caller created successfully for userId: %s', ctx.userId);
       log('Processing %d async image generation tasks', generationsWithTasks.length);
 
-      // 启动所有图像生成任务（不等待完成，真正的后台任务）
+      // Fire-and-forget: trigger async tasks without awaiting
+      // These calls go to the async router which handles them independently
+      // Do NOT use after() here as it would keep the lambda alive unnecessarily
       generationsWithTasks.forEach(({ generation, asyncTaskId }) => {
         log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
-        // 不使用 await，让任务在后台异步执行
-        // 这里不应该 await 也不应该 .then.catch，让 runtime 早点释放计算资源
         asyncCaller.image.createImage({
+          generationBatchId: createdBatch.id,
           generationId: generation.id,
+          generationTopicId,
           model,
           params,
           provider,
-          taskId: asyncTaskId, // 使用原始参数
+          taskId: asyncTaskId,
         });
       });
 

@@ -1,37 +1,45 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { AgentRuntime, type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import {
+  AgentRuntime,
+  type AgentRuntimeContext,
+  type AgentState,
+  GeneralChatAgent,
+  computeStepContext,
+} from '@lobechat/agent-runtime';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { isDesktop } from '@lobechat/const';
 import {
-  ChatImageItem,
-  ChatToolPayload,
-  MessageContentPart,
-  MessageToolCall,
-  ModelUsage,
+  type ChatToolPayload,
+  type ConversationContext,
+  type MessageMapScope,
+  type MessageToolCall,
+  type ModelUsage,
+  type RuntimeInitialContext,
+  type RuntimeStepContext,
   TraceNameMap,
-  UIChatMessage,
+  type UIChatMessage,
 } from '@lobechat/types';
-import { serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 import { t } from 'i18next';
-import { throttle } from 'lodash-es';
-import pMap from 'p-map';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
+import { resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
-import { getAgentStoreState } from '@/store/agent/store';
-import { GeneralChatAgent } from '@/store/chat/agents/GeneralChatAgent';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { getFileStoreState } from '@/store/file/store';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
 import { topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
+import { selectTodosFromMessages } from '../../message/selectors/dbMessage';
+import { StreamingHandler } from './StreamingHandler';
+import type { StreamChunk } from './types/streaming';
 
 const log = debug('lobe-store:streaming-executor');
 
@@ -46,16 +54,22 @@ export interface StreamingExecutorAction {
     messages: UIChatMessage[];
     parentMessageId: string;
     /**
-     * Explicit sessionId for this execution (avoids using global activeId)
+     * Explicit agentId for this execution (avoids using global activeAgentId)
      */
-    sessionId?: string;
+    agentId?: string;
     /**
      * Explicit topicId for this execution (avoids using global activeTopicId)
      */
     topicId?: string | null;
     threadId?: string;
+    operationId?: string;
     initialState?: AgentState;
     initialContext?: AgentRuntimeContext;
+    /**
+     * Sub Agent ID for group orchestration scenarios
+     * Used to get Agent config (model, provider, plugins) instead of agentId
+     */
+    subAgentId?: string;
   }) => {
     state: AgentState;
     context: AgentRuntimeContext;
@@ -71,6 +85,10 @@ export interface StreamingExecutorAction {
     operationId?: string;
     agentConfig?: any;
     traceId?: string;
+    /** Initial context for page editor (captured at operation start) */
+    initialContext?: RuntimeInitialContext;
+    /** Step context for page editor (updated each step) */
+    stepContext?: RuntimeStepContext;
   }) => Promise<{
     isFunctionCall: boolean;
     tools?: ChatToolPayload[];
@@ -85,38 +103,33 @@ export interface StreamingExecutorAction {
    * including preprocessing and postprocessing steps
    */
   internal_execAgentRuntime: (params: {
-    messages: UIChatMessage[];
-    parentMessageId: string;
-    parentMessageType: 'user' | 'assistant' | 'tool';
     /**
-     * Explicit sessionId for this execution (avoids using global activeId)
+     * Full conversation context (required)
+     * Contains agentId, topicId, threadId, groupId, scope, etc.
      */
-    sessionId?: string;
-    /**
-     * Explicit topicId for this execution (avoids using global activeTopicId)
-     */
-    topicId?: string | null;
-    /**
-     * Operation ID for this execution (automatically created if not provided)
-     */
-    operationId?: string;
-    /**
-     * Parent operation ID (creates a child operation if provided)
-     */
-    parentOperationId?: string;
-    inSearchWorkflow?: boolean;
-    threadId?: string;
-    inPortalThread?: boolean;
-    skipCreateFirstMessage?: boolean;
-    traceId?: string;
-    /**
-     * Initial agent state (for resuming execution from a specific point)
-     */
-    initialState?: AgentState;
+    context: ConversationContext;
     /**
      * Initial agent runtime context (for resuming execution from a specific phase)
      */
     initialContext?: AgentRuntimeContext;
+    /**
+     * Initial agent state (for resuming execution from a specific point)
+     */
+    initialState?: AgentState;
+    inPortalThread?: boolean;
+    inSearchWorkflow?: boolean;
+    messages: UIChatMessage[];
+    /**
+     * Operation ID for this execution (automatically created if not provided)
+     */
+    operationId?: string;
+    parentMessageId: string;
+    parentMessageType: 'user' | 'assistant' | 'tool';
+    /**
+     * Parent operation ID (creates a child operation if provided)
+     */
+    parentOperationId?: string;
+    skipCreateFirstMessage?: boolean;
   }) => Promise<void>;
 }
 
@@ -129,19 +142,36 @@ export const streamingExecutor: StateCreator<
   internal_createAgentState: ({
     messages,
     parentMessageId,
-    sessionId: paramSessionId,
+    agentId: paramAgentId,
     topicId: paramTopicId,
     threadId,
     initialState,
     initialContext,
+    operationId,
+    subAgentId: paramSubAgentId,
   }) => {
-    // Use provided sessionId/topicId or fallback to global state
-    const { activeId, activeTopicId } = get();
-    const sessionId = paramSessionId ?? activeId;
+    // Use provided agentId/topicId or fallback to global state
+    const { activeAgentId, activeTopicId } = get();
+    const agentId = paramAgentId ?? activeAgentId;
     const topicId = paramTopicId !== undefined ? paramTopicId : activeTopicId;
 
-    const agentStoreState = getAgentStoreState();
-    const agentConfigData = agentSelectors.currentAgentConfig(agentStoreState);
+    // For group orchestration scenarios:
+    // - subAgentId is used for agent config retrieval (model, provider, plugins)
+    // - agentId is used for session ID (message storage location)
+    const effectiveAgentId = paramSubAgentId || agentId;
+
+    // Get scope from operation context if available
+    const operation = operationId ? get().operations[operationId] : undefined;
+    const scope = operation?.context.scope;
+
+    console.log('[internal_createAgentState] Operation scope:', { operationId, scope });
+
+    // Resolve agent config with builtin agent runtime config merged
+    // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
+    const { agentConfig: agentConfigData, plugins: pluginIds } = resolveAgentConfig({
+      agentId: effectiveAgentId || '',
+      scope, // Pass scope from operation context
+    });
 
     // Get tools manifest map
     const toolsEngine = createAgentToolsEngine({
@@ -151,7 +181,7 @@ export const streamingExecutor: StateCreator<
     const { enabledToolIds } = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      toolIds: agentConfigData.plugins,
+      toolIds: pluginIds,
     });
     const toolManifestMap = Object.fromEntries(
       toolsEngine.getEnabledPluginManifests(enabledToolIds).entries(),
@@ -168,17 +198,47 @@ export const streamingExecutor: StateCreator<
     const state =
       initialState ||
       AgentRuntime.createInitialState({
-        sessionId,
+        operationId: operationId ?? agentId,
         messages,
         maxSteps: 400,
         metadata: {
-          sessionId,
+          sessionId: agentId,
           topicId,
           threadId,
         },
         toolManifestMap,
         userInterventionConfig,
       });
+
+    // Build initialContext for page editor if lobe-page-agent is enabled
+    let runtimeInitialContext: RuntimeInitialContext | undefined;
+
+    if (enabledToolIds.includes(PageAgentIdentifier)) {
+      try {
+        // Get page content context from page agent runtime
+        const pageContentContext = pageAgentRuntime.getPageContentContext('both');
+
+        runtimeInitialContext = {
+          pageEditor: {
+            markdown: pageContentContext.markdown || '',
+            xml: pageContentContext.xml || '',
+            metadata: {
+              title: pageContentContext.metadata.title,
+              charCount: pageContentContext.metadata.charCount,
+              lineCount: pageContentContext.metadata.lineCount,
+            },
+          },
+        };
+        log(
+          '[internal_createAgentState] Page Agent detected, injected initialContext.pageEditor with title: %s',
+          pageContentContext.metadata.title,
+        );
+      } catch (error) {
+        // Page agent runtime may not be initialized (e.g., editor not set)
+        // This is expected in some scenarios, so we just log and continue
+        log('[internal_createAgentState] Failed to get page content context: %o', error);
+      }
+    }
 
     // Create initial context or use provided context
     const context: AgentRuntimeContext = initialContext || {
@@ -189,11 +249,13 @@ export const streamingExecutor: StateCreator<
         parentMessageId,
       },
       session: {
-        sessionId,
+        sessionId: agentId,
         messageCount: messages.length,
         status: state.status,
         stepCount: 0,
       },
+      // Inject initialContext if available
+      initialContext: runtimeInitialContext,
     };
 
     return { state, context };
@@ -207,6 +269,8 @@ export const streamingExecutor: StateCreator<
     operationId,
     agentConfig,
     traceId: traceIdParam,
+    initialContext,
+    stepContext,
   }) => {
     const {
       optimisticUpdateMessageContent,
@@ -214,9 +278,13 @@ export const streamingExecutor: StateCreator<
       internal_toggleToolCallingStreaming,
     } = get();
 
-    // Get sessionId, topicId, and abortController from operation
-    let sessionId: string;
+    // Get agentId, topicId, groupId and abortController from operation
+    let agentId: string;
+    let subAgentId: string | undefined;
     let topicId: string | null | undefined;
+    let threadId: string | undefined;
+    let groupId: string | undefined;
+    let scope: MessageMapScope | undefined;
     let traceId: string | undefined = traceIdParam;
     let abortController: AbortController;
 
@@ -226,14 +294,20 @@ export const streamingExecutor: StateCreator<
         log('[internal_fetchAIChatMessage] ERROR: Operation not found: %s', operationId);
         throw new Error(`Operation not found: ${operationId}`);
       }
-      sessionId = operation.context.sessionId!;
+      agentId = operation.context.agentId!;
+      subAgentId = operation.context.subAgentId;
       topicId = operation.context.topicId;
+      threadId = operation.context.threadId ?? undefined;
+      groupId = operation.context.groupId;
+      scope = operation.context.scope;
       abortController = operation.abortController; // 👈 Use operation's abortController
       log(
-        '[internal_fetchAIChatMessage] get context from operation %s: sessionId=%s, topicId=%s, aborted=%s',
+        '[internal_fetchAIChatMessage] get context from operation %s: agentId=%s, subAgentId=%s, topicId=%s, groupId=%s, aborted=%s',
         operationId,
-        sessionId,
+        agentId,
+        subAgentId,
         topicId,
+        groupId,
         abortController.signal.aborted,
       );
       // Get traceId from operation metadata if not explicitly provided
@@ -242,68 +316,116 @@ export const streamingExecutor: StateCreator<
       }
     } else {
       // Fallback to global state (for legacy code paths without operation)
-      sessionId = get().activeId;
+      agentId = get().activeAgentId;
       topicId = get().activeTopicId;
+      groupId = get().activeGroupId;
       abortController = new AbortController();
       log(
-        '[internal_fetchAIChatMessage] use global context: sessionId=%s, topicId=%s',
-        sessionId,
+        '[internal_fetchAIChatMessage] use global context: agentId=%s, topicId=%s, groupId=%s',
+        agentId,
         topicId,
+        groupId,
       );
     }
 
-    // Get agent config from params or use current
-    const finalAgentConfig = agentConfig || agentSelectors.currentAgentConfig(getAgentStoreState());
-    const chatConfig = agentChatConfigSelectors.currentChatConfig(getAgentStoreState());
+    // Create base context for child operations and message queries
+    const fetchContext = { agentId, topicId, threadId, groupId, scope };
 
-    // ================================== //
-    //   messages uniformly preprocess    //
-    // ================================== //
-    // 4. handle max_tokens
-    finalAgentConfig.params.max_tokens = chatConfig.enableMaxTokens
-      ? finalAgentConfig.params.max_tokens
-      : undefined;
+    // For group orchestration scenarios:
+    // - subAgentId is used for agent config retrieval (model, provider, plugins)
+    // - agentId is used for session ID (message storage location)
+    const effectiveAgentId = subAgentId || agentId;
 
-    // 5. handle reasoning_effort
-    finalAgentConfig.params.reasoning_effort = chatConfig.enableReasoningEffort
-      ? finalAgentConfig.params.reasoning_effort
-      : undefined;
+    // Resolve agent config with params adjusted based on chatConfig
+    // If agentConfig is passed in, use it directly (it's already resolved)
+    // Otherwise, resolve from mecha layer which handles:
+    // - Builtin agent runtime config merging
+    // - max_tokens/reasoning_effort based on chatConfig settings
+    const resolved = resolveAgentConfig({
+      agentId: effectiveAgentId,
+      scope, // scope is already available from line 329
+    });
+    const finalAgentConfig = agentConfig || resolved.agentConfig;
+    const chatConfig = resolved.chatConfig;
 
-    let isFunctionCall = false;
-    let tools: ChatToolPayload[] | undefined;
-    let tool_calls: MessageToolCall[] | undefined;
-    let finalUsage;
-    let msgTraceId: string | undefined;
-    let output = '';
+    let finalUsage: ModelUsage | undefined;
+    let finalToolCalls: MessageToolCall[] | undefined;
 
-    let thinkingContent = '';
-    let thinkingStartAt: number;
-    let thinkingDuration: number | undefined;
-    let reasoningOperationId: string | undefined;
-    let finishType: string | undefined;
-    // to upload image
-    const uploadTasks: Map<string, Promise<{ id?: string; url?: string }>> = new Map();
-
-    // Multimodal content parts
-    let contentParts: MessageContentPart[] = [];
-    let reasoningParts: MessageContentPart[] = [];
-    const contentImageUploads: Map<number, Promise<string>> = new Map();
-    const reasoningImageUploads: Map<number, Promise<string>> = new Map();
-
-    // Throttle tool_calls updates to prevent excessive re-renders (max once per 300ms)
-    const throttledUpdateToolCalls = throttle(
-      (toolCalls: MessageToolCall[]) => {
-        internal_dispatchMessage(
-          {
-            id: messageId,
-            type: 'updateMessage',
-            value: { tools: get().internal_transformToolCalls(toolCalls) },
-          },
-          { operationId },
-        );
+    // Create streaming handler with callbacks
+    const handler = new StreamingHandler(
+      { messageId, operationId, agentId, groupId, topicId },
+      {
+        onContentUpdate: (content, reasoning) => {
+          internal_dispatchMessage(
+            {
+              id: messageId,
+              type: 'updateMessage',
+              value: { content, reasoning },
+            },
+            { operationId },
+          );
+        },
+        onReasoningUpdate: (reasoning) => {
+          internal_dispatchMessage(
+            {
+              id: messageId,
+              type: 'updateMessage',
+              value: { reasoning },
+            },
+            { operationId },
+          );
+        },
+        onToolCallsUpdate: (tools) => {
+          internal_dispatchMessage(
+            {
+              id: messageId,
+              type: 'updateMessage',
+              value: { tools },
+            },
+            { operationId },
+          );
+        },
+        onGroundingUpdate: (grounding) => {
+          internal_dispatchMessage(
+            {
+              id: messageId,
+              type: 'updateMessage',
+              value: { search: grounding },
+            },
+            { operationId },
+          );
+        },
+        onImagesUpdate: (images) => {
+          internal_dispatchMessage(
+            {
+              id: messageId,
+              type: 'updateMessage',
+              value: { imageList: images },
+            },
+            { operationId },
+          );
+        },
+        onReasoningStart: () => {
+          const { operationId: reasoningOpId } = get().startOperation({
+            type: 'reasoning',
+            context: { ...fetchContext, messageId },
+            parentOperationId: operationId,
+          });
+          get().associateMessageWithOperation(messageId, reasoningOpId);
+          return reasoningOpId;
+        },
+        onReasoningComplete: (opId) => get().completeOperation(opId),
+        uploadBase64Image: (data) =>
+          getFileStoreState()
+            .uploadBase64FileWithProgress(data)
+            .then((file) => ({
+              id: file?.id,
+              url: file?.url,
+              alt: file?.filename || file?.id,
+            })),
+        transformToolCalls: get().internal_transformToolCalls,
+        toggleToolCallingStreaming: internal_toggleToolCallingStreaming,
       },
-      300,
-      { leading: true, trailing: true },
     );
 
     const historySummary = chatConfig.enableCompressHistory
@@ -312,16 +434,25 @@ export const streamingExecutor: StateCreator<
     await chatService.createAssistantMessageStream({
       abortController,
       params: {
+        // Use effectiveAgentId for agent config resolution (system role, tools, etc.)
+        // In group orchestration: subAgentId for the actual speaking agent
+        // In normal chat: agentId for the main agent
+        agentId: effectiveAgentId || undefined,
+        groupId,
         messages,
         model,
         provider,
+        scope, // Pass scope to chat service for page-agent injection
+        topicId, // Pass topicId for GTD context injection
         ...finalAgentConfig.params,
         plugins: finalAgentConfig.plugins,
       },
       historySummary: historySummary?.content,
+      // Pass page editor context from agent runtime
+      initialContext,
+      stepContext,
       trace: {
         traceId,
-        sessionId,
         topicId: topicId ?? undefined,
         traceName: TraceNameMap.Conversation,
       },
@@ -340,484 +471,95 @@ export const streamingExecutor: StateCreator<
       ) => {
         // if there is traceId, update it
         if (traceId) {
-          msgTraceId = traceId;
           messageService.updateMessage(
             messageId,
             { traceId, observationId: observationId ?? undefined },
-            { sessionId, topicId },
+            { agentId, groupId, topicId },
           );
         }
 
-        // 等待所有图片上传完成
-        let finalImages: ChatImageItem[] = [];
-
-        if (uploadTasks.size > 0) {
-          try {
-            // 等待所有上传任务完成
-            const uploadResults = await pMap(Array.from(uploadTasks.values()), (task) => task, {
-              concurrency: 5,
-            });
-
-            // 使用上传后的 S3 URL 替换原始图像数据
-            finalImages = uploadResults.filter((i) => !!i.url) as ChatImageItem[];
-          } catch (error) {
-            console.error('Error waiting for image uploads:', error);
-          }
-        }
-
-        // Wait for all multimodal image uploads to complete
-        // Note: Arrays are already updated in-place when uploads complete
-        // Use Promise.allSettled to continue even if some uploads fail
-        await Promise.allSettled([
-          ...Array.from(contentImageUploads.values()),
-          ...Array.from(reasoningImageUploads.values()),
-        ]);
-
-        let parsedToolCalls = toolCalls;
-        if (parsedToolCalls && parsedToolCalls.length > 0) {
-          // Flush any pending throttled updates before finalizing
-          throttledUpdateToolCalls.flush();
-          internal_toggleToolCallingStreaming(messageId, undefined);
-
-          tool_calls = toolCalls;
-
-          parsedToolCalls = parsedToolCalls.map((item) => ({
-            ...item,
-            function: {
-              ...item.function,
-              arguments: !!item.function.arguments ? item.function.arguments : '{}',
-            },
-          }));
-
-          tools = get().internal_transformToolCalls(parsedToolCalls);
-
-          isFunctionCall = true;
-        }
-
-        finalUsage = usage;
-        finishType = type;
-
-        log(
-          '[internal_fetchAIChatMessage] onFinish: messageId=%s, finishType=%s, operationId=%s',
-          messageId,
+        // Handle finish using StreamingHandler
+        const result = await handler.handleFinish({
+          traceId,
+          observationId,
+          toolCalls,
+          reasoning,
+          grounding,
+          usage,
+          speed,
           type,
-          operationId,
-        );
+        });
 
-        // Check if there are any image parts
-        const hasContentImages = contentParts.some((part) => part.type === 'image');
-        const hasReasoningImages = reasoningParts.some((part) => part.type === 'image');
-
-        // Determine final content
-        // If has images, serialize contentParts; otherwise use accumulated output text
-        const finalContent = hasContentImages ? serializePartsForStorage(contentParts) : output;
-
-        const finalDuration =
-          thinkingDuration && !isNaN(thinkingDuration) ? thinkingDuration : undefined;
-
-        // Determine final reasoning content
-        // Priority: reasoningParts (multimodal) > thinkingContent (from reasoning_part text) > reasoning (from old reasoning event)
-        let finalReasoning: any = undefined;
-        if (hasReasoningImages) {
-          // Has images, use multimodal format
-          finalReasoning = {
-            content: serializePartsForStorage(reasoningParts),
-            duration: finalDuration,
-            isMultimodal: true,
-          };
-        } else if (thinkingContent) {
-          // Has text from reasoning_part but no images
-          finalReasoning = {
-            content: thinkingContent,
-            duration: finalDuration,
-          };
-        } else if (reasoning?.content) {
-          // Fallback to old reasoning event content
-          finalReasoning = {
-            ...reasoning,
-            duration: finalDuration,
-          };
-        }
+        // Store for return value
+        finalUsage = result.usage;
+        finalToolCalls = result.toolCalls;
 
         // update the content after fetch result
         await optimisticUpdateMessageContent(
           messageId,
-          finalContent,
+          result.content,
           {
-            tools,
-            reasoning: finalReasoning,
-            search: !!grounding?.citations ? grounding : undefined,
-            imageList: finalImages.length > 0 ? finalImages : undefined,
+            tools: result.tools,
+            reasoning: result.metadata.reasoning,
+            search: result.metadata.search,
+            imageList: result.metadata.imageList,
             metadata: {
-              ...usage,
-              ...speed,
-              performance: speed,
-              usage,
-              finishType: type,
-              ...(hasContentImages && { isMultimodal: true }),
+              ...result.metadata.usage,
+              ...result.metadata.performance,
+              performance: result.metadata.performance,
+              usage: result.metadata.usage,
+              finishType: result.metadata.finishType,
+              ...(result.metadata.isMultimodal && { isMultimodal: true }),
             },
           },
           { operationId },
         );
       },
       onMessageHandle: async (chunk) => {
-        switch (chunk.type) {
-          case 'grounding': {
-            // if there is no citations, then stop
-            if (
-              !chunk.grounding ||
-              !chunk.grounding.citations ||
-              chunk.grounding.citations.length <= 0
-            )
-              return;
-
-            internal_dispatchMessage(
-              {
-                id: messageId,
-                type: 'updateMessage',
-                value: {
-                  search: {
-                    citations: chunk.grounding.citations,
-                    searchQueries: chunk.grounding.searchQueries,
-                  },
-                },
-              },
-              { operationId },
-            );
-            break;
-          }
-
-          case 'base64_image': {
-            internal_dispatchMessage(
-              {
-                id: messageId,
-                type: 'updateMessage',
-                value: {
-                  imageList: chunk.images.map((i) => ({ id: i.id, url: i.data, alt: i.id })),
-                },
-              },
-              { operationId },
-            );
-            const image = chunk.image;
-
-            const task = getFileStoreState()
-              .uploadBase64FileWithProgress(image.data)
-              .then((value) => ({
-                id: value?.id,
-                url: value?.url,
-                alt: value?.filename || value?.id,
-              }));
-
-            uploadTasks.set(image.id, task);
-
-            break;
-          }
-
-          case 'text': {
-            output += chunk.text;
-
-            // if there is no duration, it means the end of reasoning
-            if (!thinkingDuration) {
-              thinkingDuration = Date.now() - thinkingStartAt;
-
-              // Complete reasoning operation if it exists
-              if (reasoningOperationId) {
-                get().completeOperation(reasoningOperationId);
-                reasoningOperationId = undefined;
-              }
-            }
-
-            log(
-              '[text stream] messageId=%s, output length=%d, operationId=%s',
-              messageId,
-              output.length,
-              operationId,
-            );
-
-            internal_dispatchMessage(
-              {
-                id: messageId,
-                type: 'updateMessage',
-                value: {
-                  content: output,
-                  reasoning: !!thinkingContent
-                    ? { content: thinkingContent, duration: thinkingDuration }
-                    : undefined,
-                },
-              },
-              { operationId },
-            );
-            break;
-          }
-
-          case 'reasoning': {
-            // if there is no thinkingStartAt, it means the start of reasoning
-            if (!thinkingStartAt) {
-              thinkingStartAt = Date.now();
-
-              // Create reasoning operation
-              const { operationId: reasoningOpId } = get().startOperation({
-                type: 'reasoning',
-                context: { sessionId, topicId, messageId },
-                parentOperationId: operationId,
-              });
-              reasoningOperationId = reasoningOpId;
-
-              // Associate message with reasoning operation
-              get().associateMessageWithOperation(messageId, reasoningOperationId);
-            }
-
-            thinkingContent += chunk.text;
-
-            internal_dispatchMessage(
-              {
-                id: messageId,
-                type: 'updateMessage',
-                value: { reasoning: { content: thinkingContent } },
-              },
-              { operationId },
-            );
-            break;
-          }
-
-          case 'reasoning_part': {
-            // Start reasoning if not started
-            if (!thinkingStartAt) {
-              thinkingStartAt = Date.now();
-
-              const { operationId: reasoningOpId } = get().startOperation({
-                type: 'reasoning',
-                context: { sessionId, topicId, messageId },
-                parentOperationId: operationId,
-              });
-              reasoningOperationId = reasoningOpId;
-              get().associateMessageWithOperation(messageId, reasoningOperationId);
-            }
-
-            const { partType, content: partContent, mimeType } = chunk;
-
-            if (partType === 'text') {
-              const lastPart = reasoningParts.at(-1);
-
-              // If last part is also text, merge chunks together
-              if (lastPart?.type === 'text') {
-                reasoningParts = [
-                  ...reasoningParts.slice(0, -1),
-                  { type: 'text', text: lastPart.text + partContent },
-                ];
-              } else {
-                // Create new text part (first chunk, may contain thoughtSignature)
-                reasoningParts = [...reasoningParts, { type: 'text', text: partContent }];
-              }
-              thinkingContent += partContent;
-            } else if (partType === 'image') {
-              // Image part - create new array to avoid mutation
-              const tempImage = `data:${mimeType};base64,${partContent}`;
-              const partIndex = reasoningParts.length;
-              const newPart: MessageContentPart = { type: 'image', image: tempImage };
-              reasoningParts = [...reasoningParts, newPart];
-
-              // Start upload task and update array when done
-              const uploadTask = getFileStoreState()
-                .uploadBase64FileWithProgress(tempImage)
-                .then((file) => {
-                  const url = file?.url || tempImage;
-                  // Replace the part at index by creating a new array
-                  const updatedParts = [...reasoningParts];
-                  updatedParts[partIndex] = { type: 'image', image: url };
-                  reasoningParts = updatedParts;
-                  return url;
-                })
-                .catch((error) => {
-                  console.error('[reasoning_part] Image upload failed:', error);
-                  return tempImage;
-                });
-
-              reasoningImageUploads.set(partIndex, uploadTask);
-            }
-
-            // Real-time update with display format
-            // Check if there are any image parts to determine if it's multimodal
-            const hasReasoningImages = reasoningParts.some((part) => part.type === 'image');
-
-            internal_dispatchMessage(
-              {
-                id: messageId,
-                type: 'updateMessage',
-                value: {
-                  reasoning: hasReasoningImages
-                    ? { tempDisplayContent: reasoningParts, isMultimodal: true }
-                    : { content: thinkingContent },
-                },
-              },
-              { operationId },
-            );
-            break;
-          }
-
-          case 'content_part': {
-            const { partType, content: partContent, mimeType } = chunk;
-
-            // End reasoning when content starts
-            if (!thinkingDuration && reasoningOperationId) {
-              thinkingDuration = Date.now() - thinkingStartAt;
-              get().completeOperation(reasoningOperationId);
-              reasoningOperationId = undefined;
-            }
-
-            if (partType === 'text') {
-              const lastPart = contentParts.at(-1);
-
-              // If last part is also text, merge chunks together
-              if (lastPart?.type === 'text') {
-                contentParts = [
-                  ...contentParts.slice(0, -1),
-                  { type: 'text', text: lastPart.text + partContent },
-                ];
-              } else {
-                // Create new text part (first chunk, may contain thoughtSignature)
-                contentParts = [...contentParts, { type: 'text', text: partContent }];
-              }
-              output += partContent;
-            } else if (partType === 'image') {
-              // Image part - create new array to avoid mutation
-              const tempImage = `data:${mimeType};base64,${partContent}`;
-              const partIndex = contentParts.length;
-              const newPart: MessageContentPart = {
-                type: 'image',
-                image: tempImage,
-              };
-              contentParts = [...contentParts, newPart];
-
-              // Start upload task and update array when done
-              const uploadTask = getFileStoreState()
-                .uploadBase64FileWithProgress(tempImage)
-                .then((file) => {
-                  const url = file?.url || tempImage;
-                  // Replace the part at index by creating a new array
-                  const updatedParts = [...contentParts];
-                  updatedParts[partIndex] = {
-                    type: 'image',
-                    image: url,
-                  };
-                  contentParts = updatedParts;
-                  return url;
-                })
-                .catch((error) => {
-                  console.error('[content_part] Image upload failed:', error);
-                  return tempImage;
-                });
-
-              contentImageUploads.set(partIndex, uploadTask);
-            }
-
-            // Real-time update with display format
-            // Check if there are any image parts to determine if it's multimodal
-            const hasContentImages = contentParts.some((part) => part.type === 'image');
-
-            const hasReasoningImages = reasoningParts.some((part) => part.type === 'image');
-
-            internal_dispatchMessage(
-              {
-                id: messageId,
-                type: 'updateMessage',
-                value: {
-                  content: output,
-                  reasoning: hasReasoningImages
-                    ? {
-                        tempDisplayContent: reasoningParts,
-                        isMultimodal: true,
-                        duration: thinkingDuration,
-                      }
-                    : !!thinkingContent
-                      ? { content: thinkingContent, duration: thinkingDuration }
-                      : undefined,
-                  ...(hasContentImages && {
-                    metadata: {
-                      isMultimodal: true,
-                      tempDisplayContent: serializePartsForStorage(contentParts),
-                    },
-                  }),
-                },
-              },
-              { operationId },
-            );
-            break;
-          }
-
-          // is this message is just a tool call
-          case 'tool_calls': {
-            internal_toggleToolCallingStreaming(messageId, chunk.isAnimationActives);
-            throttledUpdateToolCalls(chunk.tool_calls);
-            isFunctionCall = true;
-
-            // Complete reasoning operation if it exists
-            if (!thinkingDuration && reasoningOperationId) {
-              thinkingDuration = Date.now() - thinkingStartAt;
-              get().completeOperation(reasoningOperationId);
-              reasoningOperationId = undefined;
-            }
-            break;
-          }
-
-          case 'stop': {
-            // Complete reasoning operation when receiving stop signal
-            if (!thinkingDuration && reasoningOperationId) {
-              thinkingDuration = Date.now() - thinkingStartAt;
-              get().completeOperation(reasoningOperationId);
-              reasoningOperationId = undefined;
-            }
-            break;
-          }
-        }
+        // Delegate chunk handling to StreamingHandler
+        handler.handleChunk(chunk as StreamChunk);
       },
     });
 
     log(
       '[internal_fetchAIChatMessage] completed: messageId=%s, finishType=%s, isFunctionCall=%s, operationId=%s',
       messageId,
-      finishType,
-      isFunctionCall,
+      handler.getFinishType(),
+      handler.getIsFunctionCall(),
       operationId,
     );
 
     return {
-      isFunctionCall,
-      traceId: msgTraceId,
-      content: output,
-      tools,
+      isFunctionCall: handler.getIsFunctionCall(),
+      traceId: handler.getTraceId(),
+      content: handler.getOutput(),
+      tools: handler.getTools(),
       usage: finalUsage,
-      tool_calls,
-      finishType,
+      tool_calls: finalToolCalls,
+      finishType: handler.getFinishType(),
     };
   },
 
   internal_execAgentRuntime: async (params) => {
-    const {
-      messages: originalMessages,
-      parentMessageId,
-      parentMessageType,
-      sessionId: paramSessionId,
-      topicId: paramTopicId,
-    } = params;
+    const { messages: originalMessages, parentMessageId, parentMessageType, context } = params;
 
-    // Use provided sessionId/topicId or fallback to global state
-    const { activeId, activeTopicId } = get();
-    const sessionId = paramSessionId ?? activeId;
-    const topicId = paramTopicId !== undefined ? paramTopicId : activeTopicId;
-    const messageKey = messageMapKey(sessionId, topicId);
+    // Extract values from context
+    const { agentId, topicId, threadId, subAgentId, groupId } = context;
+
+    // For group orchestration scenarios:
+    // - subAgentId is used for agent config retrieval (model, provider, plugins)
+    // - agentId is used for message storage location (via messageMapKey)
+    const effectiveAgentId = subAgentId || agentId;
+
+    // Generate message key from context
+    const messageKey = messageMapKey(context);
 
     // Create or use provided operation
     let operationId = params.operationId;
     if (!operationId) {
       const { operationId: newOperationId } = get().startOperation({
         type: 'execAgentRuntime',
-        context: {
-          sessionId,
-          topicId,
-          messageId: parentMessageId,
-          threadId: params.threadId,
-        },
+        context: { ...context, messageId: parentMessageId },
         parentOperationId: params.parentOperationId, // Pass parent operation ID
         label: 'AI Generation',
         metadata: {
@@ -833,9 +575,11 @@ export const streamingExecutor: StateCreator<
     }
 
     log(
-      '[internal_execAgentRuntime] start, operationId: %s, sessionId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d',
+      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d',
       operationId,
-      sessionId,
+      agentId,
+      subAgentId,
+      effectiveAgentId,
       topicId,
       messageKey,
       parentMessageId,
@@ -846,11 +590,16 @@ export const streamingExecutor: StateCreator<
     // Create a new array to avoid modifying the original messages
     let messages = [...originalMessages];
 
-    const agentStoreState = getAgentStoreState();
-    const agentConfigData = agentSelectors.currentAgentConfig(agentStoreState);
-    const { chatConfig } = agentConfigData;
+    // Use effectiveAgentId to get agent config (subAgentId in group orchestration, agentId otherwise)
+    // resolveAgentConfig handles:
+    // - Builtin agent runtime config merging
+    // - max_tokens/reasoning_effort based on chatConfig settings
+    const { agentConfig: agentConfigData, chatConfig } = resolveAgentConfig({
+      agentId: effectiveAgentId || '',
+      scope: context.scope, // Pass scope from context parameter (available at line 883)
+    });
 
-    // Use current agent config
+    // Use agent config from agentId
     const model = agentConfigData.model;
     const provider = agentConfigData.provider;
 
@@ -871,7 +620,7 @@ export const streamingExecutor: StateCreator<
 
     const agent = new GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
-      sessionId: `${messageKey}/${params.parentMessageId}`,
+      operationId: `${messageKey}/${params.parentMessageId}`,
       modelRuntimeConfig: {
         model,
         provider: provider!,
@@ -902,11 +651,13 @@ export const streamingExecutor: StateCreator<
       get().internal_createAgentState({
         messages,
         parentMessageId: params.parentMessageId,
-        sessionId,
+        agentId,
         topicId,
-        threadId: params.threadId,
+        threadId: threadId ?? undefined,
         initialState: params.initialState,
         initialContext: params.initialContext,
+        operationId,
+        subAgentId, // Pass subAgentId for agent config retrieval
       });
 
     let state = initialAgentState;
@@ -937,11 +688,36 @@ export const streamingExecutor: StateCreator<
       }
 
       stepCount++;
+
+      // Compute step context from current db messages before each step
+      // Use dbMessagesMap which contains persisted state (including pluginState.todos)
+      const currentDBMessages = get().dbMessagesMap[messageKey] || [];
+      // Use selectTodosFromMessages selector (shared with UI display)
+      const todos = selectTodosFromMessages(currentDBMessages);
+      const stepContext = computeStepContext({ todos });
+
+      // If page agent is enabled, get the latest XML for stepPageEditor
+      if (nextContext.initialContext?.pageEditor) {
+        try {
+          const pageContentContext = pageAgentRuntime.getPageContentContext('xml');
+          stepContext.stepPageEditor = {
+            xml: pageContentContext.xml || '',
+          };
+        } catch (error) {
+          // Page agent runtime may not be available, ignore errors
+          log('[internal_execAgentRuntime] Failed to get page XML for step: %o', error);
+        }
+      }
+
+      // Inject stepContext into the runtime context for this step
+      nextContext = { ...nextContext, stepContext };
+
       log(
-        '[internal_execAgentRuntime][step-%d]: phase=%s, status=%s',
+        '[internal_execAgentRuntime][step-%d]: phase=%s, status=%s, stepContext=%O',
         stepCount,
         nextContext.phase,
         state.status,
+        stepContext,
       );
 
       const result = await runtime.step(state, nextContext);
@@ -968,12 +744,13 @@ export const streamingExecutor: StateCreator<
             const assistantMessage = currentMessages.findLast((m) => m.role === 'assistant');
             if (assistantMessage) {
               await messageService.updateMessageError(assistantMessage.id, event.error, {
-                sessionId,
+                agentId,
+                groupId,
                 topicId,
               });
             }
             const finalMessages = get().messagesMap[messageKey] || [];
-            get().replaceMessages(finalMessages, { sessionId, topicId });
+            get().replaceMessages(finalMessages, { context });
             break;
           }
         }
@@ -1009,7 +786,9 @@ export const streamingExecutor: StateCreator<
         break;
       }
 
-      nextContext = result.nextContext;
+      // Preserve initialContext when updating nextContext
+      // initialContext is set once at the start and should persist through all steps
+      nextContext = { ...result.nextContext, initialContext: nextContext.initialContext };
     }
 
     log(
@@ -1018,16 +797,50 @@ export const streamingExecutor: StateCreator<
       stepCount,
     );
 
-    // Complete operation
-    if (state.status === 'done') {
-      get().completeOperation(operationId);
-      log('[internal_execAgentRuntime] Operation completed successfully');
-    } else if (state.status === 'error') {
-      get().failOperation(operationId, {
-        type: 'runtime_error',
-        message: 'Agent runtime execution failed',
-      });
-      log('[internal_execAgentRuntime] Operation failed');
+    // Execute afterCompletion hooks before completing operation
+    // These are registered by tools (e.g., speak/broadcast/delegate) that need to
+    // trigger actions after the AgentRuntime finishes
+    const operation = get().operations[operationId];
+    const afterCompletionCallbacks = operation?.metadata?.runtimeHooks?.afterCompletionCallbacks;
+    if (afterCompletionCallbacks && afterCompletionCallbacks.length > 0) {
+      log(
+        '[internal_execAgentRuntime] Executing %d afterCompletion callbacks',
+        afterCompletionCallbacks.length,
+      );
+
+      for (const callback of afterCompletionCallbacks) {
+        try {
+          await callback();
+        } catch (error) {
+          console.error('[internal_execAgentRuntime] afterCompletion callback error:', error);
+        }
+      }
+
+      log('[internal_execAgentRuntime] afterCompletion callbacks executed');
+    }
+
+    // Complete operation based on final state
+    switch (state.status) {
+      case 'done': {
+        get().completeOperation(operationId);
+        log('[internal_execAgentRuntime] Operation completed successfully');
+        break;
+      }
+      case 'error': {
+        get().failOperation(operationId, {
+          type: 'runtime_error',
+          message: 'Agent runtime execution failed',
+        });
+        log('[internal_execAgentRuntime] Operation failed');
+        break;
+      }
+      case 'waiting_for_human': {
+        // When waiting for human intervention, complete the current operation
+        // A new operation will be created when user approves/rejects
+        get().completeOperation(operationId);
+        log('[internal_execAgentRuntime] Operation paused for human intervention');
+        break;
+      }
     }
 
     log('[internal_execAgentRuntime] completed');
@@ -1035,7 +848,6 @@ export const streamingExecutor: StateCreator<
     // Desktop notification (if not in tools calling mode)
     if (isDesktop) {
       try {
-        const messageKey = `${activeId}_${activeTopicId ?? null}`;
         const finalMessages = get().messagesMap[messageKey] || [];
         const lastAssistant = finalMessages.findLast((m) => m.role === 'assistant');
 
@@ -1055,10 +867,10 @@ export const streamingExecutor: StateCreator<
     }
 
     // Summary history if context messages is larger than historyCount
-    const historyCount = agentChatConfigSelectors.historyCount(agentStoreState);
+    const historyCount = chatConfig.historyCount ?? 0;
 
     if (
-      agentChatConfigSelectors.enableHistoryCount(agentStoreState) &&
+      chatConfig.enableHistoryCount &&
       chatConfig.enableCompressHistory &&
       messages.length > historyCount
     ) {

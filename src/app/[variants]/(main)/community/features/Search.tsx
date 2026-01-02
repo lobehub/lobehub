@@ -1,0 +1,64 @@
+'use client';
+
+import { SearchBar, type SearchBarProps } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
+
+import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';
+import { useQuery } from '@/app/[variants]/(main)/hooks/useQuery';
+import { withSuspense } from '@/components/withSuspense';
+import { useQueryRoute } from '@/hooks/useQueryRoute';
+
+const prefixCls = 'ant';
+
+export const styles = createStaticStyles(({ css, cssVar }) => ({
+  active: css`
+    box-shadow: ${cssVar.boxShadow};
+  `,
+  bar: css`
+    .${prefixCls}-input-group-wrapper {
+      padding: 0;
+    }
+  `,
+}));
+
+interface StoreSearchBarProps extends SearchBarProps {
+  mobile?: boolean;
+}
+
+const Search = memo<StoreSearchBarProps>(() => {
+  const { t } = useTranslation('discover');
+  const pathname = usePathname();
+  const { q } = useQuery() as { q?: string };
+  const router = useQueryRoute();
+  const [word, setWord] = useState<string>(q || '');
+  const activeTab = pathname.split('/')[2] || 'assistant';
+  const handleSearch = (value: string) => {
+    router.push(urlJoin('/community', activeTab), {
+      query: value ? { q: value } : {},
+      replace: true,
+    });
+  };
+
+  return (
+    <SearchBar
+      data-testid="search-bar"
+      defaultValue={q}
+      onInputChange={(v) => {
+        setWord(v);
+        if (!v) handleSearch('');
+      }}
+      onSearch={handleSearch}
+      placeholder={t('search.placeholder')}
+      style={{
+        width: '100%',
+      }}
+      value={word}
+      variant={'borderless'}
+    />
+  );
+});
+
+export default withSuspense(Search);

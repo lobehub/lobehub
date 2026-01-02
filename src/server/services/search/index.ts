@@ -1,10 +1,10 @@
-import { SearchParams, SearchQuery } from '@lobechat/types';
-import { CrawlImplType, Crawler } from '@lobechat/web-crawler';
+import { type SearchParams, type SearchQuery } from '@lobechat/types';
+import { type CrawlImplType } from '@lobechat/web-crawler';
 import pMap from 'p-map';
 
 import { toolsEnv } from '@/envs/tools';
 
-import { SearchImplType, SearchServiceImpl, createSearchServiceImpl } from './impls';
+import { type SearchImplType, type SearchServiceImpl, createSearchServiceImpl } from './impls';
 
 const parseImplEnv = (envString: string = '') => {
   // Handle full-width commas and extra whitespace
@@ -30,6 +30,7 @@ export class SearchService {
   }
 
   async crawlPages(input: { impls?: CrawlImplType[]; urls: string[] }) {
+    const { Crawler } = await import('@lobechat/web-crawler');
     const crawler = new Crawler({ impls: this.crawlerImpls });
 
     const results = await pMap(

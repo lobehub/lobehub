@@ -1,4 +1,10 @@
-import { ElectronAppState, dispatch } from '@lobechat/electron-client-ipc';
+import type {
+  ElectronAppState,
+  WindowResizableParams,
+  WindowSizeParams,
+} from '@lobechat/electron-client-ipc';
+
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /**
  * Service class for interacting with Electron's system-level information and actions.
@@ -11,23 +17,35 @@ class ElectronSystemService {
    */
   async getAppState(): Promise<ElectronAppState> {
     // Calls the underlying IPC function to get data from the main process
-    return dispatch('getDesktopAppState');
+    return ensureElectronIpc().system.getAppState();
   }
 
   async closeWindow(): Promise<void> {
-    return dispatch('closeWindow');
+    return ensureElectronIpc().windows.closeWindow();
   }
 
   async maximizeWindow(): Promise<void> {
-    return dispatch('maximizeWindow');
+    return ensureElectronIpc().windows.maximizeWindow();
   }
 
   async minimizeWindow(): Promise<void> {
-    return dispatch('minimizeWindow');
+    return ensureElectronIpc().windows.minimizeWindow();
+  }
+
+  async setWindowResizable(params: WindowResizableParams): Promise<void> {
+    return ensureElectronIpc().windows.setWindowResizable(params);
+  }
+
+  async setWindowSize(params: WindowSizeParams): Promise<void> {
+    return ensureElectronIpc().windows.setWindowSize(params);
+  }
+
+  async openExternalLink(url: string): Promise<void> {
+    return ensureElectronIpc().system.openExternalLink(url);
   }
 
   showContextMenu = async (type: string, data?: any) => {
-    return dispatch('showContextMenu', { data, type });
+    return ensureElectronIpc().menu.showContextMenu({ data, type });
   };
 }
 

@@ -1,4 +1,4 @@
-import { OpenAITTSPayload } from '@lobehub/tts';
+import { type OpenAITTSPayload } from '@lobehub/tts';
 import { createOpenaiAudioSpeech } from '@lobehub/tts/server';
 
 import { createBizOpenAI } from '@/app/(backend)/_deprecated/createBizOpenAI';

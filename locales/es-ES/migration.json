@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Limpiar datos locales",
-      "downloadBackup": "Descargar copia de seguridad",
-      "reUpgrade": "Volver a actualizar",
-      "start": "Comenzar",
-      "upgrade": "Actualizar"
-    },
-    "clear": {
-      "confirm": "Estás a punto de borrar los datos locales (la configuración global no se verá afectada). Por favor, asegúrate de haber descargado una copia de seguridad de los datos."
-    },
-    "description": "En la nueva versión, el almacenamiento de datos de {{appName}} ha dado un gran salto. Por lo tanto, vamos a actualizar los datos de la versión anterior para ofrecerte una mejor experiencia de uso.",
-    "features": {
-      "capability": {
-        "desc": "Basado en la tecnología IndexedDB, suficiente para almacenar todos los mensajes de tu vida.",
-        "title": "Gran capacidad"
-      },
-      "performance": {
-        "desc": "Indexación automática de millones de mensajes, con respuestas de búsqueda en milisegundos.",
-        "title": "Alto rendimiento"
-      },
-      "use": {
-        "desc": "Soporta la búsqueda de títulos, descripciones, etiquetas, contenido de mensajes e incluso textos traducidos, mejorando significativamente la eficiencia de búsqueda diaria.",
-        "title": "Más fácil de usar"
-      }
-    },
-    "title": "Evolución de datos de {{appName}}",
-    "upgrade": {
-      "error": {
-        "subTitle": "Lo sentimos, ha ocurrido un error durante el proceso de actualización de la base de datos. Por favor, intenta las siguientes soluciones: A. Borra los datos locales y vuelve a importar los datos de respaldo; B. Haz clic en el botón 'Reactualizar'.<br><br> Si el problema persiste, por favor <1>informa del problema</1>, y te ayudaremos a resolverlo lo antes posible.",
-        "title": "Error en la actualización de la base de datos"
-      },
-      "success": {
-        "subTitle": "La base de datos de {{appName}} se ha actualizado a la última versión, ¡comienza a disfrutarla ahora!",
-        "title": "Actualización de la base de datos exitosa"
-      }
-    },
-    "upgradeTip": "La actualización tomará aproximadamente de 10 a 20 segundos, por favor no cierres {{appName}} durante el proceso."
-  },
-  "migrateError": {
-    "missVersion": "La importación de datos no incluye el número de versión. Por favor, verifica el archivo e inténtalo de nuevo",
-    "noMigration": "No se encontró un plan de migración correspondiente a la versión actual. Por favor, verifica el número de versión e inténtalo de nuevo. Si el problema persiste, por favor envía un informe de problema"
-  }
+  "dbV1.action.clearDB": "Borrar datos locales",
+  "dbV1.action.downloadBackup": "Descargar copia de seguridad",
+  "dbV1.action.reUpgrade": "Reintentar actualización",
+  "dbV1.action.start": "Comenzar",
+  "dbV1.action.upgrade": "Actualizar",
+  "dbV1.clear.confirm": "Estás a punto de borrar los datos locales (la configuración global no se verá afectada). Por favor, asegúrate de haber descargado una copia de seguridad de los datos.",
+  "dbV1.description": "En la nueva versión, el almacenamiento de datos de {{appName}} ha experimentado avances significativos. Por ello, necesitamos actualizar los datos antiguos para ofrecerte una mejor experiencia de usuario.",
+  "dbV1.features.capability.desc": "Basado en la tecnología IndexedDB, capaz de almacenar mensajes de chat de toda una vida.",
+  "dbV1.features.capability.title": "Gran capacidad",
+  "dbV1.features.performance.desc": "Indexa automáticamente millones de mensajes, con consultas que responden en milisegundos.",
+  "dbV1.features.performance.title": "Alto rendimiento",
+  "dbV1.features.use.desc": "Permite buscar por título, descripción, etiquetas, contenido de mensajes e incluso texto traducido, mejorando enormemente la eficiencia de búsqueda diaria.",
+  "dbV1.features.use.title": "Más fácil de usar",
+  "dbV1.title": "Evolución de datos de {{appName}}",
+  "dbV1.upgrade.error.subTitle": "Lo sentimos, se produjo un error durante el proceso de actualización de la base de datos. Por favor, prueba las siguientes soluciones: A. Borra los datos locales y vuelve a importar la copia de seguridad; B. Haz clic en el botón 'Reintentar actualización'.<br><br> Si el problema persiste, por favor <1>envía un informe de problema</1> y te ayudaremos lo antes posible.",
+  "dbV1.upgrade.error.title": "Error en la actualización de la base de datos",
+  "dbV1.upgrade.success.subTitle": "La base de datos se ha actualizado a la versión más reciente. Ya puedes continuar.",
+  "dbV1.upgrade.success.title": "Actualización de base de datos exitosa",
+  "dbV1.upgradeTip": "La actualización tomará aproximadamente entre 10 y 20 segundos. Por favor, no cierres {{appName}} durante el proceso.",
+  "migrateError.missVersion": "Los datos importados no tienen un número de versión. Por favor, revisa el archivo e inténtalo de nuevo.",
+  "migrateError.noMigration": "No se encontró una solución de migración para la versión actual. Por favor, verifica el número de versión e inténtalo nuevamente. Si el problema persiste, envía una solicitud de retroalimentación."
 }

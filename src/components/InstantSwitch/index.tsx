@@ -1,4 +1,4 @@
-import { Switch, SwitchProps } from 'antd';
+import { Switch, type SwitchProps } from 'antd';
 import { memo, useState } from 'react';
 
 interface InstantSwitchProps {

@@ -1,30 +1,25 @@
 {
-  "Artifacts": "مصنوعات",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "بخش",
-      "file": "فایل"
-    }
-  },
-  "Plugins": "افزونه‌ها",
-  "artifacts": {
-    "display": {
-      "code": "کد",
-      "preview": "پیش‌نمایش"
-    },
-    "svg": {
-      "copyAsImage": "کپی به عنوان تصویر",
-      "copyFail": "کپی ناموفق بود، دلیل خطا: {{error}}",
-      "copySuccess": "تصویر با موفقیت کپی شد",
-      "download": {
-        "png": "دانلود به صورت PNG",
-        "svg": "دانلود به صورت SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "لیست Artifacts در حال حاضر خالی است، لطفاً پس از استفاده از افزونه‌ها در جلسه، دوباره بررسی کنید.",
-  "emptyKnowledgeList": "فهرست دانش فعلی خالی است",
+  "Artifacts": "آرتیفکت‌ها",
+  "FilePreview.tabs.chunk": "بخش",
+  "FilePreview.tabs.file": "فایل",
+  "Plugins": "مهارت‌ها",
+  "artifacts.display.code": "کد",
+  "artifacts.display.preview": "پیش‌نمایش",
+  "artifacts.svg.copyAsImage": "کپی به‌صورت تصویر",
+  "artifacts.svg.copyFail": "کپی ناموفق بود: {{error}}. دوباره تلاش کنید.",
+  "artifacts.svg.copySuccess": "تصویر با موفقیت کپی شد",
+  "artifacts.svg.download.png": "دانلود به‌صورت PNG",
+  "artifacts.svg.download.svg": "دانلود به‌صورت SVG",
+  "document.todos.allCompleted": "همه وظایف انجام شده‌اند",
+  "document.todos.title": "وظایف",
+  "emptyArtifactList": "هنوز آرتیفکتی وجود ندارد. در گفتگو از مهارت‌ها استفاده کنید و سپس به اینجا بازگردید.",
+  "emptyKnowledgeList": "این فهرست خالی است.",
   "files": "فایل‌ها",
   "messageDetail": "جزئیات پیام",
-  "title": "فضای کاری"
+  "notebook.confirmDelete": "آیا این صفحه حذف شود؟",
+  "notebook.delete": "حذف",
+  "notebook.empty": "هنوز صفحه‌ای وجود ندارد. صفحاتی که به این موضوع مرتبط هستند، در اینجا نمایش داده می‌شوند.",
+  "notebook.title": "دفترچه",
+  "openInPageEditor": "ویرایش در صفحه",
+  "title": "محیط کاری"
 }

@@ -1,27 +1,26 @@
 'use client';
 
-import { Icon, Tabs, TabsProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Flexbox, Icon, Tabs, type TabsProps } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, HammerIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { PluginNavKey } from '@/types/discover';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     link: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
 
       &:hover {
-        color: ${token.colorInfo};
+        color: ${cssVar.colorInfo};
       }
     `,
     nav: css`
-      border-block-end: 1px solid ${token.colorBorder};
+      border-block-end: 1px solid ${cssVar.colorBorder};
     `,
   };
 });
@@ -34,7 +33,6 @@ interface NavProps {
 
 const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = PluginNavKey.Tools }) => {
   const { t } = useTranslation('discover');
-  const { styles } = useStyles();
   const [identifier] = useToolStore((s) => [s.activePluginIdentifier]);
   const plugin = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
 

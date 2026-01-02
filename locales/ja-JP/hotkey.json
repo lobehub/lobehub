@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "現在の入力内容をユーザーメッセージとして追加しますが、生成はトリガーしません",
-    "title": "ユーザーメッセージを追加"
-  },
-  "clearCurrentMessages": {
-    "desc": "現在のセッションのメッセージとアップロードされたファイルをクリアする",
-    "title": "セッションメッセージをクリア"
-  },
-  "commandPalette": {
-    "desc": "グローバルコマンドパレットを開いて機能に素早くアクセス",
-    "title": "コマンドパレット"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "最後のメッセージを削除して再生成する",
-    "title": "削除して再生成"
-  },
-  "deleteLastMessage": {
-    "desc": "最後のメッセージを削除する",
-    "title": "最後のメッセージを削除"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "アプリ設定ページを開く",
-      "title": "アプリ設定"
-    },
-    "showApp": {
-      "desc": "グローバルショートカットでメインウィンドウを表示または非表示にする",
-      "title": "メインウィンドウの表示/非表示"
-    }
-  },
-  "editMessage": {
-    "desc": "Altキーを押しながらメッセージをダブルクリックして編集モードに入ります",
-    "title": "メッセージを編集"
-  },
-  "navigateToChat": {
-    "desc": "チャットタブに切り替えて気軽に会話を始める",
-    "title": "デフォルトの会話に切り替え"
-  },
-  "openChatSettings": {
-    "desc": "現在の会話の設定を表示および変更する",
-    "title": "チャット設定を開く"
-  },
-  "openHotkeyHelper": {
-    "desc": "すべてのショートカットキーの使用説明を表示する",
-    "title": "ショートカットヘルプを開く"
-  },
-  "regenerateMessage": {
-    "desc": "最後のメッセージを再生成します",
-    "title": "メッセージを再生成"
-  },
-  "saveTopic": {
-    "desc": "現在のトピックを保存し、新しいトピックを開きます",
-    "title": "新しいトピックを開始"
-  },
-  "search": {
-    "desc": "現在のページの主要な検索ボックスを呼び出す",
-    "title": "検索"
-  },
-  "showApp": {
-    "desc": "アプリのメインウィンドウを迅速に表示",
-    "title": "メインウィンドウを表示"
-  },
-  "switchAgent": {
-    "desc": "Ctrlキーを押しながら数字0〜9を押してサイドバーに固定されたアシスタントを切り替えます",
-    "title": "アシスタントを素早く切り替え"
-  },
-  "toggleLeftPanel": {
-    "desc": "左側のアシスタントパネルを表示または非表示にする",
-    "title": "アシスタントパネルを表示/非表示"
-  },
-  "toggleRightPanel": {
-    "desc": "右側のトピックパネルを表示または非表示にする",
-    "title": "トピックパネルを表示/非表示"
-  },
-  "toggleZenMode": {
-    "desc": "集中モードでは、現在の会話のみを表示し、他のUIを隠す",
-    "title": "集中モードを切り替え"
-  }
+  "addUserMessage.desc": "現在の入力内容をユーザーメッセージとして追加しますが、生成はトリガーしません",
+  "addUserMessage.title": "ユーザーメッセージを追加",
+  "clearCurrentMessages.desc": "現在のセッションのメッセージとアップロードされたファイルをクリアする",
+  "clearCurrentMessages.title": "セッションメッセージをクリア",
+  "commandPalette.desc": "グローバルコマンドパレットを開いて機能に素早くアクセス",
+  "commandPalette.title": "コマンドパレット",
+  "deleteAndRegenerateMessage.desc": "最後のメッセージを削除して再生成する",
+  "deleteAndRegenerateMessage.title": "削除して再生成",
+  "deleteLastMessage.desc": "最後のメッセージを削除する",
+  "deleteLastMessage.title": "最後のメッセージを削除",
+  "desktop.openSettings.desc": "アプリ設定ページを開く",
+  "desktop.openSettings.title": "アプリ設定",
+  "desktop.showApp.desc": "グローバルショートカットでメインウィンドウを表示または非表示にする",
+  "desktop.showApp.title": "メインウィンドウの表示/非表示",
+  "editMessage.desc": "Altキーを押しながらメッセージをダブルクリックして編集モードに入ります",
+  "editMessage.title": "メッセージを編集",
+  "navigateToChat.desc": "チャットタブに切り替えてLobe AIに入る",
+  "navigateToChat.title": "デフォルトの会話に切り替え",
+  "openChatSettings.desc": "現在の会話の設定を表示および変更する",
+  "openChatSettings.title": "チャット設定を開く",
+  "openHotkeyHelper.desc": "すべてのショートカットキーの使用説明を表示する",
+  "openHotkeyHelper.title": "ショートカットヘルプを開く",
+  "regenerateMessage.desc": "最後のメッセージを再生成します",
+  "regenerateMessage.title": "メッセージを再生成",
+  "saveDocument.desc": "現在のドキュメントのすべての変更を即座に保存します",
+  "saveDocument.title": "ドキュメントを保存",
+  "saveTopic.desc": "現在のトピックを保存し、新しいトピックを開きます",
+  "saveTopic.title": "新しいトピックを開始",
+  "search.desc": "現在のページの主要な検索ボックスを呼び出す",
+  "search.title": "検索",
+  "showApp.desc": "アプリのメインウィンドウを迅速に表示",
+  "showApp.title": "メインウィンドウを表示",
+  "switchAgent.desc": "Ctrlキーを押しながら数字0〜9を押してサイドバーに固定されたアシスタントを切り替えます",
+  "switchAgent.title": "アシスタントを素早く切り替え",
+  "toggleLeftPanel.desc": "左側パネルの表示・非表示を切り替えます",
+  "toggleLeftPanel.title": "左側パネルの表示/非表示",
+  "toggleRightPanel.desc": "右側パネルの表示・非表示を切り替えます",
+  "toggleRightPanel.title": "右側パネルの表示/非表示",
+  "toggleZenMode.desc": "集中モードでは、現在の会話のみを表示し、他のUIを隠す",
+  "toggleZenMode.title": "集中モードを切り替え"
 }

@@ -1,18 +1,16 @@
-import { KLAVIS_SERVER_TYPES, KlavisServerType } from '@lobechat/const';
-import { Avatar, Icon, ItemType } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import { Avatar, Flexbox, Icon, Image, type ItemType } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, Store, ToyBrick } from 'lucide-react';
-import Image from 'next/image';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -21,6 +19,7 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import KlavisServerItem from './KlavisServerItem';
 import ToolItem from './ToolItem';
 
@@ -30,16 +29,12 @@ import ToolItem from './ToolItem';
  * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  const theme = useTheme();
-
   if (typeof icon === 'string') {
-    return (
-      <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} unoptimized width={18} />
-    );
+    return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
   }
 
   // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={theme.colorText} icon={icon} size={18} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
 });
 
 KlavisIcon.displayName = 'KlavisIcon';
@@ -52,19 +47,20 @@ export const useControls = ({
   setUpdating: (updating: boolean) => void;
 }) => {
   const { t } = useTranslation('setting');
+  const agentId = useAgentId();
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const [checked, togglePlugin] = useAgentStore((s) => [
-    agentSelectors.currentAgentPlugins(s),
+    agentByIdSelectors.getAgentPluginsById(agentId)(s),
     s.togglePlugin,
   ]);
   const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
   const enablePluginCount = useAgentStore(
     (s) =>
-      agentSelectors
-        .currentAgentPlugins(s)
+      agentByIdSelectors
+        .getAgentPluginsById(agentId)(s)
         .filter((i) => !builtinList.some((b) => b.identifier === i)).length,
   );
-  const plugins = useAgentStore((s) => agentSelectors.currentAgentPlugins(s));
+  const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   // Klavis 相关状态
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
@@ -127,7 +123,9 @@ export const useControls = ({
     () => [
       // 原有的 builtin 工具
       ...filteredBuiltinList.map((item) => ({
-        icon: <Avatar avatar={item.meta.avatar} size={20} style={{ flex: 'none' }} />,
+        icon: (
+          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+        ),
         key: item.identifier,
         label: (
           <ToolItem
@@ -212,7 +210,9 @@ export const useControls = ({
     const enabledBuiltinItems = filteredBuiltinList
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
-        icon: <Avatar avatar={item.meta.avatar} size={20} style={{ flex: 'none' }} />,
+        icon: (
+          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+        ),
         key: item.identifier,
         label: (
           <ToolItem

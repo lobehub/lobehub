@@ -1,84 +1,86 @@
-import { ColorSwatches, ColorSwatchesProps, primaryColors } from '@lobehub/ui';
-import { memo } from 'react';
+import { ColorSwatches, type ColorSwatchesProps, primaryColors } from '@lobehub/ui';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_BACKGROUND_COLOR } from '@/const/meta';
 
-interface BackgroundSwatchesProps
-  extends Pick<ColorSwatchesProps, 'defaultValue' | 'value' | 'onChange'> {
+interface BackgroundSwatchesProps extends Omit<ColorSwatchesProps, 'colors'> {
   onValuesChange?: ColorSwatchesProps['onChange'];
 }
 
 const BackgroundSwatches = memo<BackgroundSwatchesProps>(
-  ({ defaultValue = DEFAULT_BACKGROUND_COLOR, value, onChange, onValuesChange }) => {
+  ({ defaultValue = DEFAULT_BACKGROUND_COLOR, value, onChange, onValuesChange, ...rest }) => {
     const { t } = useTranslation('color');
+
+    const colors = useMemo(
+      () => [
+        {
+          color: 'rgba(0, 0, 0, 0)',
+          title: t('default'),
+        },
+        {
+          color: primaryColors.red,
+          title: t('red'),
+        },
+        {
+          color: primaryColors.orange,
+          title: t('orange'),
+        },
+        {
+          color: primaryColors.gold,
+          title: t('gold'),
+        },
+        {
+          color: primaryColors.yellow,
+          title: t('yellow'),
+        },
+        {
+          color: primaryColors.lime,
+          title: t('lime'),
+        },
+        {
+          color: primaryColors.green,
+          title: t('green'),
+        },
+        {
+          color: primaryColors.cyan,
+          title: t('cyan'),
+        },
+        {
+          color: primaryColors.blue,
+          title: t('blue'),
+        },
+        {
+          color: primaryColors.geekblue,
+          title: t('geekblue'),
+        },
+        {
+          color: primaryColors.purple,
+          title: t('purple'),
+        },
+        {
+          color: primaryColors.magenta,
+          title: t('magenta'),
+        },
+        {
+          color: primaryColors.volcano,
+          title: t('volcano'),
+        },
+      ],
+      [t],
+    );
+
     return (
       <ColorSwatches
-        colors={[
-          {
-            color: 'rgba(0, 0, 0, 0)',
-            title: t('default'),
-          },
-          {
-            color: primaryColors.red,
-            title: t('red'),
-          },
-          {
-            color: primaryColors.orange,
-            title: t('orange'),
-          },
-          {
-            color: primaryColors.gold,
-            title: t('gold'),
-          },
-          {
-            color: primaryColors.yellow,
-            title: t('yellow'),
-          },
-          {
-            color: primaryColors.lime,
-            title: t('lime'),
-          },
-          {
-            color: primaryColors.green,
-            title: t('green'),
-          },
-          {
-            color: primaryColors.cyan,
-            title: t('cyan'),
-          },
-          {
-            color: primaryColors.blue,
-            title: t('blue'),
-          },
-          {
-            color: primaryColors.geekblue,
-            title: t('geekblue'),
-          },
-          {
-            color: primaryColors.purple,
-            title: t('purple'),
-          },
-          {
-            color: primaryColors.magenta,
-            title: t('magenta'),
-          },
-          {
-            color: primaryColors.volcano,
-            title: t('volcano'),
-          },
-        ]}
+        colors={colors}
         defaultValue={defaultValue}
         enableColorPicker
         onChange={(v) => {
           onChange?.(v);
           onValuesChange?.(v);
         }}
-        texts={{
-          custom: t('custom'),
-          presets: t('presets'),
-        }}
         value={value}
+        {...rest}
       />
     );
   },

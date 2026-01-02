@@ -1,6 +1,6 @@
 import { fal } from '@fal-ai/client';
 import debug from 'debug';
-import { pick } from 'lodash-es';
+import { pick } from 'es-toolkit/compat';
 import { RuntimeImageGenParamsValue } from 'model-bank';
 import { ClientOptions } from 'openai';
 

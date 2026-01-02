@@ -1,7 +1,6 @@
-import { DraggablePanel } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { DraggablePanel, Flexbox } from '@lobehub/ui';
+import { cssVar, useTheme } from 'antd-style';
 import { Suspense, memo, useRef } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import Detail from './Detail';
 import DetailLoading from './Detail/Loading';
@@ -9,14 +8,14 @@ import List from './List';
 
 export const PluginList = memo(() => {
   const ref = useRef<HTMLDivElement>(null);
-  const theme = useTheme();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
 
   return (
     <Flexbox
       height={'75vh'}
       horizontal
       style={{
-        borderTop: `1px solid ${theme.colorBorderSecondary}`,
+        borderTop: `1px solid ${cssVar.colorBorderSecondary}`,
         overflow: 'hidden',
         position: 'relative',
       }}

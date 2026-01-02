@@ -2,17 +2,16 @@
 import { TraceEventType } from '@lobechat/types';
 import { copyToClipboard } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
-import { ChatStore } from '@/store/chat/store';
-import { useSessionStore } from '@/store/session';
-import { sessionSelectors } from '@/store/session/selectors';
+import { type ChatStore } from '@/store/chat/store';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { dbMessageSelectors, displayMessageSelectors } from '../../../selectors';
 import { toggleBooleanList } from '../../../utils';
+import { type OptimisticUpdateContext } from './optimisticUpdate';
 
 const n = setNamespace('m');
 
@@ -30,8 +29,18 @@ export interface MessagePublicApiAction {
    * clear message on the active session
    */
   clearMessage: () => Promise<void>;
-  deleteMessage: (id: string) => Promise<void>;
-  deleteAssistantMessage: (id: string) => Promise<void>;
+  /**
+   * Delete a message by id
+   * @param id - message id
+   * @param context - Optional context for optimistic update (required for Group mode)
+   */
+  deleteMessage: (id: string, context?: OptimisticUpdateContext) => Promise<void>;
+  /**
+   * Delete an assistant message and its associated tool messages
+   * @param id - message id
+   * @param context - Optional context for optimistic update (required for Group mode)
+   */
+  deleteAssistantMessage: (id: string, context?: OptimisticUpdateContext) => Promise<void>;
   deleteDBMessage: (id: string) => Promise<void>;
   deleteToolMessage: (id: string) => Promise<void>;
   clearAllMessages: () => Promise<void>;
@@ -41,16 +50,40 @@ export interface MessagePublicApiAction {
    * Update message input box content
    */
   updateMessageInput: (message: string) => void;
-  modifyMessageContent: (id: string, content: string) => Promise<void>;
+  /**
+   * Modify message content
+   * @param id - message id
+   * @param content - new content
+   * @param context - Optional context for optimistic update (required for Group mode)
+   */
+  modifyMessageContent: (
+    id: string,
+    content: string,
+    context?: OptimisticUpdateContext,
+  ) => Promise<void>;
   toggleMessageEditing: (id: string, editing: boolean) => void;
   /**
    * Toggle message collapsed state
+   * @param id - message id
+   * @param collapsed - collapsed state, if not provided, toggle current state
+   * @param context - Optional context for optimistic update (required for Group mode)
    */
-  toggleMessageCollapsed: (id: string, collapsed?: boolean) => Promise<void>;
+  toggleMessageCollapsed: (
+    id: string,
+    collapsed?: boolean,
+    context?: OptimisticUpdateContext,
+  ) => Promise<void>;
   /**
    * Toggle tool inspect expanded state
+   * @param id - message id
+   * @param expanded - expanded state, if not provided, toggle current state
+   * @param context - Optional context for optimistic update (required for Group mode)
    */
-  toggleInspectExpanded: (id: string, expanded?: boolean) => Promise<void>;
+  toggleInspectExpanded: (
+    id: string,
+    expanded?: boolean,
+    context?: OptimisticUpdateContext,
+  ) => Promise<void>;
 
   // ===== Others ===== //
   copyMessage: (id: string, content: string) => Promise<void>;
@@ -63,18 +96,26 @@ export const messagePublicApi: StateCreator<
   MessagePublicApiAction
 > = (set, get) => ({
   addAIMessage: async () => {
-    const { optimisticCreateMessage, updateMessageInput, activeTopicId, activeId, inputMessage } =
-      get();
-    if (!activeId) return;
+    const {
+      optimisticCreateMessage,
+      updateMessageInput,
+      activeTopicId,
+      activeAgentId,
+      activeThreadId,
+      activeGroupId,
+      inputMessage,
+    } = get();
+    if (!activeAgentId) return;
 
     const parentId = displayMessageSelectors.lastDisplayMessageId(get());
 
     const result = await optimisticCreateMessage({
       content: inputMessage,
       role: 'assistant',
-      sessionId: activeId,
-      // if there is activeTopicId，then add topicId to message
+      agentId: activeAgentId,
       topicId: activeTopicId,
+      threadId: activeThreadId,
+      groupId: activeGroupId,
       parentId,
     });
 
@@ -84,9 +125,15 @@ export const messagePublicApi: StateCreator<
   },
 
   addUserMessage: async ({ message, fileList }) => {
-    const { optimisticCreateMessage, updateMessageInput, activeTopicId, activeId, activeThreadId } =
-      get();
-    if (!activeId) return;
+    const {
+      optimisticCreateMessage,
+      updateMessageInput,
+      activeTopicId,
+      activeAgentId,
+      activeThreadId,
+      activeGroupId,
+    } = get();
+    if (!activeAgentId) return;
 
     const parentId = displayMessageSelectors.lastDisplayMessageId(get());
 
@@ -94,10 +141,10 @@ export const messagePublicApi: StateCreator<
       content: message,
       files: fileList,
       role: 'user',
-      sessionId: activeId,
-      // if there is activeTopicId，then add topicId to message
+      agentId: activeAgentId,
       topicId: activeTopicId,
       threadId: activeThreadId,
+      groupId: activeGroupId,
       parentId,
     });
 
@@ -106,7 +153,7 @@ export const messagePublicApi: StateCreator<
     }
   },
 
-  deleteAssistantMessage: async (id) => {
+  deleteAssistantMessage: async (id, context) => {
     const message = dbMessageSelectors.getDbMessageById(id)(get());
     if (!message) return;
 
@@ -121,9 +168,9 @@ export const messagePublicApi: StateCreator<
       ids = ids.concat(toolMessageIds);
     }
 
-    await get().optimisticDeleteMessages(ids);
+    await get().optimisticDeleteMessages(ids, context);
   },
-  deleteMessage: async (id) => {
+  deleteMessage: async (id, context) => {
     const message = displayMessageSelectors.getDisplayMessageById(id)(get());
     if (!message) return;
 
@@ -143,7 +190,7 @@ export const messagePublicApi: StateCreator<
       ids = ids.concat(toolResultIds);
     }
 
-    await get().optimisticDeleteMessages(ids);
+    await get().optimisticDeleteMessages(ids, context);
   },
 
   deleteDBMessage: async (id) => {
@@ -153,13 +200,12 @@ export const messagePublicApi: StateCreator<
     let ids = [message.id];
 
     get().internal_dispatchMessage({ type: 'deleteMessages', ids });
-    const result = await messageService.removeMessages(ids, {
-      sessionId: get().activeId,
-      topicId: get().activeTopicId,
-    });
+    const ctx = get().internal_getConversationContext();
+    // CRUD operations pass agentId - backend handles sessionId mapping (LOBE-1086)
+    const result = await messageService.removeMessages(ids, ctx);
 
     if (result?.success && result.messages) {
-      get().replaceMessages(result.messages);
+      get().replaceMessages(result.messages, { context: ctx });
     }
   },
 
@@ -189,21 +235,13 @@ export const messagePublicApi: StateCreator<
   },
 
   clearMessage: async () => {
-    const { activeId, activeTopicId, refreshTopic, switchTopic, activeSessionType } = get();
-
-    // Check if this is a group session - use activeSessionType if available, otherwise check session store
-    let isGroupSession = activeSessionType === 'group';
-    if (activeSessionType === undefined) {
-      // Fallback: check session store directly
-      const sessionStore = useSessionStore.getState();
-      isGroupSession = sessionSelectors.isCurrentSessionGroupSession(sessionStore);
-    }
+    const { activeId, activeTopicId, activeGroupId, refreshTopic, switchTopic } = get();
 
     // For group sessions, we need to clear group messages using groupId
     // For regular sessions, we clear session messages using sessionId
-    if (isGroupSession) {
-      // For group chat, activeId is the groupId
-      await messageService.removeMessagesByGroup(activeId, activeTopicId);
+    if (activeGroupId) {
+      // For group chat, activeGroupId is the groupId
+      await messageService.removeMessagesByGroup(activeGroupId, activeTopicId);
     } else {
       // For regular session, activeId is the sessionId
       await messageService.removeMessagesByAssistant(activeId, activeTopicId);
@@ -247,7 +285,7 @@ export const messagePublicApi: StateCreator<
     set({ inputMessage: message }, false, n('updateMessageInput', message));
   },
 
-  modifyMessageContent: async (id, content) => {
+  modifyMessageContent: async (id, content, context) => {
     // tracing the diff of update
     // due to message content will change, so we need send trace before update,or will get wrong data
     get().internal_traceMessage(id, {
@@ -255,10 +293,10 @@ export const messagePublicApi: StateCreator<
       nextContent: content,
     });
 
-    await get().optimisticUpdateMessageContent(id, content);
+    await get().optimisticUpdateMessageContent(id, content, undefined, context);
   },
 
-  toggleMessageCollapsed: async (id, collapsed) => {
+  toggleMessageCollapsed: async (id, collapsed, context) => {
     const message = displayMessageSelectors.getDisplayMessageById(id)(get());
     if (!message) return;
 
@@ -266,12 +304,10 @@ export const messagePublicApi: StateCreator<
     const nextCollapsed = collapsed ?? !message.metadata?.collapsed;
 
     // 直接调用现有的 optimisticUpdateMessageMetadata
-    await get().optimisticUpdateMessageMetadata(id, {
-      collapsed: nextCollapsed,
-    });
+    await get().optimisticUpdateMessageMetadata(id, { collapsed: nextCollapsed }, context);
   },
 
-  toggleInspectExpanded: async (id, expanded) => {
+  toggleInspectExpanded: async (id, expanded, context) => {
     const message = dbMessageSelectors.getDbMessageById(id)(get());
     if (!message) return;
 
@@ -279,6 +315,6 @@ export const messagePublicApi: StateCreator<
     const nextExpanded = expanded ?? !message.metadata?.inspectExpanded;
 
     // 直接调用现有的 optimisticUpdateMessageMetadata
-    await get().optimisticUpdateMessageMetadata(id, { inspectExpanded: nextExpanded });
+    await get().optimisticUpdateMessageMetadata(id, { inspectExpanded: nextExpanded }, context);
   },
 });

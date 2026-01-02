@@ -7,7 +7,7 @@ const groqChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Compound 是一个复合 AI 系统，由 GroqCloud 中已经支持的多个开放可用的模型提供支持，可以智能地、有选择地使用工具来回答用户查询。',
+      'Compound is a composite AI system powered by multiple publicly available models supported on GroqCloud, intelligently and selectively using tools to answer user queries.',
     displayName: 'Compound',
     enabled: true,
     id: 'groq/compound',
@@ -17,7 +17,7 @@ const groqChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Compound-mini 是一个复合 AI 系统，由 GroqCloud 中已经支持的公开可用模型提供支持，可以智能地、有选择地使用工具来回答用户查询。',
+      'Compound-mini is a composite AI system powered by publicly available models supported on GroqCloud, intelligently and selectively using tools to answer user queries.',
     displayName: 'Compound Mini',
     id: 'groq/compound-mini',
     maxOutput: 8192,
@@ -30,7 +30,7 @@ const groqChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'OpenAI GPT-OSS 120B 是一款拥有 1200 亿参数的顶尖语言模型，内置浏览器搜索和代码执行功能，并具备推理能力。',
+      'OpenAI GPT-OSS 120B is a top-tier language model with 120B parameters, featuring built-in browser search and code execution, plus reasoning capabilities.',
     displayName: 'GPT OSS 120B',
     id: 'openai/gpt-oss-120b',
     maxOutput: 65_536,
@@ -50,7 +50,7 @@ const groqChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'OpenAI GPT-OSS 20B 是一款拥有 200 亿参数的顶尖语言模型，内置浏览器搜索和代码执行功能，并具备推理能力。',
+      'OpenAI GPT-OSS 20B is a top-tier language model with 20B parameters, featuring built-in browser search and code execution, plus reasoning capabilities.',
     displayName: 'GPT OSS 20B',
     id: 'openai/gpt-oss-20b',
     maxOutput: 65_536,
@@ -69,7 +69,7 @@ const groqChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'kimi-k2-0905-preview 模型上下文长度为 256k，具备更强的 Agentic Coding 能力、更突出的前端代码的美观度和实用性、以及更好的上下文理解能力。',
+      'The kimi-k2-0905-preview model supports a 256k context window, with stronger agentic coding, more polished and practical frontend code, and better context understanding.',
     displayName: 'Kimi K2 0905',
     enabled: true,
     id: 'moonshotai/kimi-k2-instruct-0905',
@@ -136,7 +136,7 @@ const groqChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1 8B 是一款高效能模型，提供了快速的文本生成能力，非常适合需要大规模效率和成本效益的应用场景。',
+      'Llama 3.1 8B is a high-efficiency model with fast text generation, ideal for large-scale, cost-efficient use cases.',
     displayName: 'Llama 3.1 8B Instant',
     id: 'llama-3.1-8b-instant',
     maxOutput: 131_072,
@@ -154,7 +154,7 @@ const groqChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Meta Llama 3.3 多语言大语言模型 ( LLM ) 是 70B（文本输入/文本输出）中的预训练和指令调整生成模型。 Llama 3.3 指令调整的纯文本模型针对多语言对话用例进行了优化，并且在常见行业基准上优于许多可用的开源和封闭式聊天模型。',
+      'Meta Llama 3.3 is a multilingual LLM with 70B parameters (text in/text out), offering pre-trained and instruction-tuned variants. The instruction-tuned text-only model is optimized for multilingual dialogue use cases and outperforms many available open and closed chat models on common industry benchmarks.',
     displayName: 'Llama 3.3 70B Versatile',
     id: 'llama-3.3-70b-versatile',
     maxOutput: 32_768,

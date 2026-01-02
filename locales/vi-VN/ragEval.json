@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Tạo mới",
-    "description": {
-      "placeholder": "Mô tả bộ dữ liệu (tùy chọn)"
-    },
-    "name": {
-      "placeholder": "Tên bộ dữ liệu",
-      "required": "Vui lòng điền tên bộ dữ liệu"
-    },
-    "title": "Thêm bộ dữ liệu"
-  },
-  "dataset": {
-    "addNewButton": "Tạo bộ dữ liệu",
-    "emptyGuide": "Hiện tại không có bộ dữ liệu nào, vui lòng tạo một bộ dữ liệu.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Nhập dữ liệu"
-        },
-        "columns": {
-          "actions": "Hành động",
-          "ideal": {
-            "title": "Câu trả lời mong đợi"
-          },
-          "question": {
-            "title": "Câu hỏi"
-          },
-          "referenceFiles": {
-            "title": "Tài liệu tham khảo"
-          }
-        },
-        "notSelected": "Vui lòng chọn bộ dữ liệu ở bên trái",
-        "title": "Chi tiết bộ dữ liệu"
-      },
-      "title": "Bộ dữ liệu"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Tạo mới",
-      "datasetId": {
-        "placeholder": "Vui lòng chọn bộ dữ liệu đánh giá của bạn",
-        "required": "Vui lòng chọn bộ dữ liệu đánh giá"
-      },
-      "description": {
-        "placeholder": "Mô tả nhiệm vụ đánh giá (tùy chọn)"
-      },
-      "name": {
-        "placeholder": "Tên nhiệm vụ đánh giá",
-        "required": "Vui lòng điền tên nhiệm vụ đánh giá"
-      },
-      "title": "Thêm nhiệm vụ đánh giá"
-    },
-    "addNewButton": "Tạo đánh giá",
-    "emptyGuide": "Hiện tại không có nhiệm vụ đánh giá nào, hãy bắt đầu tạo đánh giá.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Kiểm tra trạng thái",
-          "confirmDelete": "Có chắc chắn muốn xóa nhiệm vụ đánh giá này không?",
-          "confirmRun": "Có chắc chắn muốn bắt đầu chạy không? Sau khi bắt đầu, nhiệm vụ đánh giá sẽ được thực hiện bất đồng bộ ở phía sau, đóng trang không ảnh hưởng đến việc thực hiện nhiệm vụ bất đồng bộ.",
-          "downloadRecords": "Tải xuống đánh giá",
-          "retry": "Thử lại",
-          "run": "Chạy",
-          "title": "Hành động"
-        },
-        "datasetId": {
-          "title": "Bộ dữ liệu"
-        },
-        "name": {
-          "title": "Tên nhiệm vụ đánh giá"
-        },
-        "records": {
-          "title": "Số lượng bản ghi đánh giá"
-        },
-        "referenceFiles": {
-          "title": "Tài liệu tham khảo"
-        },
-        "status": {
-          "error": "Có lỗi trong quá trình thực hiện",
-          "pending": "Chờ chạy",
-          "processing": "Đang chạy",
-          "success": "Thực hiện thành công",
-          "title": "Trạng thái"
-        }
-      },
-      "title": "Danh sách nhiệm vụ đánh giá"
-    }
-  }
+  "addDataset.confirm": "Tạo",
+  "addDataset.description.placeholder": "Mô tả tập dữ liệu (không bắt buộc)",
+  "addDataset.name.placeholder": "Tên tập dữ liệu",
+  "addDataset.name.required": "Vui lòng nhập tên tập dữ liệu",
+  "addDataset.title": "Thêm Tập Dữ Liệu",
+  "dataset.addNewButton": "Tạo Tập Dữ Liệu",
+  "dataset.emptyGuide": "Hiện chưa có tập dữ liệu nào. Vui lòng tạo một tập dữ liệu.",
+  "dataset.list.table.actions.importData": "Nhập Dữ Liệu",
+  "dataset.list.table.columns.actions": "Hành động",
+  "dataset.list.table.columns.ideal.title": "Câu Trả Lời Mong Đợi",
+  "dataset.list.table.columns.question.title": "Câu Hỏi",
+  "dataset.list.table.columns.referenceFiles.title": "Tệp Tham Chiếu",
+  "dataset.list.table.notSelected": "Vui lòng chọn một tập dữ liệu ở bên trái",
+  "dataset.list.table.title": "Chi Tiết Tập Dữ Liệu",
+  "dataset.list.title": "Tập Dữ Liệu",
+  "evaluation.addEvaluation.confirm": "Tạo",
+  "evaluation.addEvaluation.datasetId.placeholder": "Vui lòng chọn tập dữ liệu đánh giá",
+  "evaluation.addEvaluation.datasetId.required": "Vui lòng chọn một tập dữ liệu đánh giá",
+  "evaluation.addEvaluation.description.placeholder": "Mô tả nhiệm vụ đánh giá (không bắt buộc)",
+  "evaluation.addEvaluation.name.placeholder": "Tên nhiệm vụ đánh giá",
+  "evaluation.addEvaluation.name.required": "Vui lòng nhập tên nhiệm vụ đánh giá",
+  "evaluation.addEvaluation.title": "Thêm Nhiệm Vụ Đánh Giá",
+  "evaluation.addNewButton": "Tạo Đánh Giá",
+  "evaluation.emptyGuide": "Hiện chưa có nhiệm vụ đánh giá nào. Hãy bắt đầu tạo một nhiệm vụ đánh giá.",
+  "evaluation.table.columns.actions.checkStatus": "Kiểm Tra Trạng Thái",
+  "evaluation.table.columns.actions.confirmDelete": "Bạn có chắc chắn muốn xóa nhiệm vụ đánh giá này không?",
+  "evaluation.table.columns.actions.confirmRun": "Bạn có chắc chắn muốn bắt đầu chạy? Nhiệm vụ đánh giá sẽ được thực thi không đồng bộ trong nền, việc đóng trang sẽ không ảnh hưởng đến quá trình thực thi.",
+  "evaluation.table.columns.actions.downloadRecords": "Tải Xuống Đánh Giá",
+  "evaluation.table.columns.actions.retry": "Thử Lại",
+  "evaluation.table.columns.actions.run": "Chạy",
+  "evaluation.table.columns.actions.title": "Hành động",
+  "evaluation.table.columns.datasetId.title": "Tập Dữ Liệu",
+  "evaluation.table.columns.name.title": "Tên Nhiệm Vụ Đánh Giá",
+  "evaluation.table.columns.records.title": "Số Bản Ghi Đánh Giá",
+  "evaluation.table.columns.referenceFiles.title": "Tệp Tham Chiếu",
+  "evaluation.table.columns.status.error": "Lỗi Thực Thi",
+  "evaluation.table.columns.status.pending": "Đang Chờ",
+  "evaluation.table.columns.status.processing": "Đang Xử Lý",
+  "evaluation.table.columns.status.success": "Thực Thi Thành Công",
+  "evaluation.table.columns.status.title": "Trạng Thái",
+  "evaluation.table.title": "Danh Sách Nhiệm Vụ Đánh Giá"
 }

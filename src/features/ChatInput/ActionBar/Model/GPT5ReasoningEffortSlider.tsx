@@ -1,15 +1,17 @@
+import { Flexbox } from '@lobehub/ui';
 import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+
+import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
 const GPT5ReasoningEffortSlider = memo(() => {
-  const [config, updateAgentChatConfig] = useAgentStore((s) => [
-    agentChatConfigSelectors.currentChatConfig(s),
-    s.updateAgentChatConfig,
-  ]);
+  const agentId = useAgentId();
+  const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
   const gpt5ReasoningEffort = config.gpt5ReasoningEffort || 'medium'; // Default to 'medium' if not set
 

@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "تأكيد",
-    "detail": "تطبيق دردشة يعتمد على نموذج لغة كبير",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "حول"
-  },
-  "confirm": {
-    "cancel": "إلغاء",
-    "no": "لا",
-    "title": "تأكيد",
-    "yes": "نعم"
-  },
-  "error": {
-    "button": "تأكيد",
-    "detail": "حدث خطأ أثناء العملية، يرجى المحاولة لاحقًا",
-    "message": "حدث خطأ",
-    "title": "خطأ"
-  },
-  "update": {
-    "downloadAndInstall": "تنزيل وتثبيت",
-    "downloadComplete": "اكتمل التنزيل",
-    "downloadCompleteMessage": "تم تنزيل حزمة التحديث، هل ترغب في التثبيت الآن؟",
-    "installLater": "تثبيت لاحقًا",
-    "installNow": "تثبيت الآن",
-    "later": "تذكير لاحقًا",
-    "newVersion": "تم اكتشاف إصدار جديد",
-    "newVersionAvailable": "تم اكتشاف إصدار جديد: {{version}}",
-    "skipThisVersion": "تخطي هذا الإصدار"
-  }
+  "about.button": "تأكيد",
+  "about.detail": "تطبيق دردشة يعتمد على نموذج لغة كبير",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "حول",
+  "confirm.cancel": "إلغاء",
+  "confirm.no": "لا",
+  "confirm.title": "تأكيد",
+  "confirm.yes": "نعم",
+  "error.button": "تأكيد",
+  "error.detail": "حدث خطأ أثناء العملية، يرجى المحاولة لاحقًا",
+  "error.message": "حدث خطأ",
+  "error.title": "خطأ",
+  "update.downloadAndInstall": "تنزيل وتثبيت",
+  "update.downloadComplete": "اكتمل التنزيل",
+  "update.downloadCompleteMessage": "تم تنزيل حزمة التحديث، هل ترغب في التثبيت الآن؟",
+  "update.installLater": "تثبيت لاحقًا",
+  "update.installNow": "تثبيت الآن",
+  "update.later": "تذكير لاحقًا",
+  "update.newVersion": "تم اكتشاف إصدار جديد",
+  "update.newVersionAvailable": "تم اكتشاف إصدار جديد: {{version}}",
+  "update.skipThisVersion": "تخطي هذا الإصدار"
 }

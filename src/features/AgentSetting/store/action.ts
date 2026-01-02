@@ -1,29 +1,29 @@
-import { MessageTextChunk } from '@lobechat/fetch-sse';
+import { type MessageTextChunk } from '@lobechat/fetch-sse';
 import {
   chainPickEmoji,
   chainSummaryAgentName,
   chainSummaryDescription,
   chainSummaryTags,
 } from '@lobechat/prompts';
-import { TraceNameMap, TracePayload, TraceTopicType } from '@lobechat/types';
+import { TraceNameMap, type TracePayload, TraceTopicType } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import type { PartialDeep } from 'type-fest';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { chatService } from '@/services/chat';
 import { globalHelpers } from '@/store/global/helpers';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/slices/settings/selectors';
-import { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
-import { MetaData } from '@/types/meta';
-import { SystemAgentItem } from '@/types/user/settings';
+import { type LobeAgentChatConfig, type LobeAgentConfig } from '@/types/agent';
+import { type MetaData } from '@/types/meta';
+import { type SystemAgentItem } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { LoadingState } from '../store/initialState';
-import { State, initialState } from './initialState';
-import { ConfigDispatch, configReducer } from './reducers/config';
-import { MetaDataDispatch, metaDataReducer } from './reducers/meta';
+import { type LoadingState, type SaveStatus } from '../store/initialState';
+import { type State, initialState } from './initialState';
+import { type ConfigDispatch, configReducer } from './reducers/config';
+import { type MetaDataDispatch, metaDataReducer } from './reducers/meta';
 
 export interface PublicAction {
   /**
@@ -74,6 +74,11 @@ export interface Action extends PublicAction {
    * @param value - 加载状态的值
    */
   updateLoadingState: (key: keyof LoadingState, value: boolean) => void;
+  /**
+   * 更新保存状态
+   * @param status - 保存状态
+   */
+  updateSaveStatus: (status: SaveStatus) => void;
 }
 
 export type Store = Action & State;
@@ -243,14 +248,40 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
 
     set({ config: nextConfig }, false, payload);
 
-    await get().onConfigChange?.(nextConfig);
+    if (get().onConfigChange) {
+      get().updateSaveStatus('saving');
+      try {
+        await get().onConfigChange?.(nextConfig);
+        get().updateSaveStatus('saved');
+      } catch (error: any) {
+        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+          get().updateSaveStatus('idle');
+        } else {
+          console.error('[AgentSettings] Failed to save config:', error);
+          get().updateSaveStatus('idle');
+        }
+      }
+    }
   },
   dispatchMeta: async (payload) => {
     const nextValue = metaDataReducer(get().meta, payload);
 
     set({ meta: nextValue }, false, payload);
 
-    await get().onMetaChange?.(nextValue);
+    if (get().onMetaChange) {
+      get().updateSaveStatus('saving');
+      try {
+        await get().onMetaChange?.(nextValue);
+        get().updateSaveStatus('saved');
+      } catch (error: any) {
+        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+          get().updateSaveStatus('idle');
+        } else {
+          console.error('[AgentSettings] Failed to save meta:', error);
+          get().updateSaveStatus('idle');
+        }
+      }
+    }
   },
   getCurrentTracePayload: (data) => ({
     sessionId: get().id,
@@ -337,6 +368,17 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
       { loadingState: { ...get().loadingState, [key]: value } },
       false,
       t('updateLoadingState', { key, value }),
+    );
+  },
+
+  updateSaveStatus: (status) => {
+    set(
+      {
+        lastUpdatedTime: status === 'saved' ? new Date() : get().lastUpdatedTime,
+        saveStatus: status,
+      },
+      false,
+      t('updateSaveStatus', { status }),
     );
   },
 });

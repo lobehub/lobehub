@@ -9,7 +9,8 @@ const moonshotChatModels: AIChatModelCard[] = [
       structuredOutput: true,
     },
     contextWindowTokens: 262_144,
-    description: 'K2 长思考模型，支持 256k 上下文，支持多步工具调用与思考，擅长解决更复杂的问题。',
+    description:
+      'K2 long-thinking model with 256k context, supporting multi-step tool use and reasoning for complex problems.',
     displayName: 'Kimi K2 Thinking',
     enabled: true,
     id: 'kimi-k2-thinking',
@@ -33,7 +34,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'K2 长思考模型的高速版本，支持 256k 上下文，擅长深度推理，输出速度提升至每秒 60-100 tokens 。',
+      'High-speed K2 long-thinking variant with 256k context, strong deep reasoning, and 60–100 tokens/sec output.',
     displayName: 'Kimi K2 Thinking Turbo',
     id: 'kimi-k2-thinking-turbo',
     maxOutput: 65_536,
@@ -55,7 +56,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'kimi-k2-0905-preview 模型上下文长度为 256k，具备更强的 Agentic Coding 能力、更突出的前端代码的美观度和实用性、以及更好的上下文理解能力。',
+      'kimi-k2-0905-preview offers a 256k context window, stronger agentic coding, better front-end code quality, and improved context understanding.',
     displayName: 'Kimi K2 0905',
     enabled: true,
     id: 'kimi-k2-0905-preview',
@@ -76,7 +77,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'kimi-k2 是一款具备超强代码和 Agent 能力的 MoE 架构基础模型，总参数 1T，激活参数 32B。在通用知识推理、编程、数学、Agent 等主要类别的基准性能测试中，K2 模型的性能超过其他主流开源模型。',
+      'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
     displayName: 'Kimi K2 0711',
     id: 'kimi-k2-0711-preview',
     pricing: {
@@ -96,7 +97,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'kimi-k2 是一款具备超强代码和 Agent 能力的 MoE 架构基础模型，总参数 1T，激活参数 32B。在通用知识推理、编程、数学、Agent 等主要类别的基准性能测试中，K2 模型的性能超过其他主流开源模型。',
+      'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
     displayName: 'Kimi K2 0905 Turbo',
     id: 'kimi-k2-turbo-preview',
     pricing: {
@@ -117,7 +118,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Kimi 智能助手产品使用最新的 Kimi 大模型，可能包含尚未稳定的特性。支持图片理解，同时会自动根据请求的上下文长度选择 8k/32k/128k 模型作为计费模型',
+      'Kimi Latest uses the newest Kimi model and may include experimental features. It supports image understanding and automatically selects 8k/32k/128k billing models based on context length.',
     displayName: 'Kimi Latest',
     enabled: true,
     id: 'kimi-latest',
@@ -137,7 +138,7 @@ const moonshotChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Moonshot V1 Auto 可以根据当前上下文占用的 Tokens 数量来选择合适的模型',
+    description: 'Moonshot V1 Auto selects the appropriate model based on current context token usage.',
     displayName: 'Moonshot V1 Auto',
     id: 'moonshot-v1-auto',
     pricing: {
@@ -155,7 +156,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'Moonshot V1 8K 专为生成短文本任务设计，具有高效的处理性能，能够处理8,192个tokens，非常适合简短对话、速记和快速内容生成。',
+      'Moonshot V1 8K is optimized for short text generation with efficient performance, handling 8,192 tokens for short chats, notes, and quick content.',
     displayName: 'Moonshot V1 8K',
     id: 'moonshot-v1-8k',
     pricing: {
@@ -173,7 +174,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Moonshot V1 32K 提供中等长度的上下文处理能力，能够处理32,768个tokens，特别适合生成各种长文档和复杂对话，应用于内容创作、报告生成和对话系统等领域。',
+      'Moonshot V1 32K supports 32,768 tokens for medium-length context, ideal for long documents and complex dialogues in content creation, reports, and chat systems.',
     displayName: 'Moonshot V1 32K',
     id: 'moonshot-v1-32k',
     pricing: {
@@ -191,7 +192,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Moonshot V1 128K 是一款拥有超长上下文处理能力的模型，适用于生成超长文本，满足复杂的生成任务需求，能够处理多达128,000个tokens的内容，非常适合科研、学术和大型文档生成等应用场景。',
+      'Moonshot V1 128K provides ultra-long context for very long text generation, handling up to 128,000 tokens for research, academic, and large-document scenarios.',
     displayName: 'Moonshot V1 128K',
     id: 'moonshot-v1-128k',
     pricing: {
@@ -210,7 +211,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'Kimi 视觉模型（包括 moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview 等）能够理解图片内容，包括图片文字、图片颜色和物体形状等内容。',
+      'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
     displayName: 'Moonshot V1 8K Vision Preview',
     id: 'moonshot-v1-8k-vision-preview',
     pricing: {
@@ -230,7 +231,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Kimi 视觉模型（包括 moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview 等）能够理解图片内容，包括图片文字、图片颜色和物体形状等内容。',
+      'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
     displayName: 'Moonshot V1 32K Vision Preview',
     id: 'moonshot-v1-32k-vision-preview',
     pricing: {
@@ -250,7 +251,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Kimi 视觉模型（包括 moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview 等）能够理解图片内容，包括图片文字、图片颜色和物体形状等内容。',
+      'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
     displayName: 'Moonshot V1 128K Vision Preview',
     id: 'moonshot-v1-128k-vision-preview',
     pricing: {

@@ -1,12 +1,11 @@
-import { Collapse, Markdown } from '@lobehub/ui';
+import { Collapse, Flexbox, Markdown } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
-import MarkdownRender from '../../../app/[variants]/(main)/discover/(detail)/features/MakedownRender';
-import McpList from '../../../app/[variants]/(main)/discover/(list)/mcp/features/List';
-import Title from '../../../app/[variants]/(main)/discover/features/Title';
+import MarkdownRender from '../../../app/[variants]/(main)/community/(detail)/features/MakedownRender';
+import McpList from '../../../app/[variants]/(main)/community/(list)/mcp/features/List';
+import Title from '../../../app/[variants]/(main)/community/features/Title';
 import { useDetailContext } from '../DetailProvider';
 import TagList from './TagList';
 
@@ -20,7 +19,7 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
     <Flexbox gap={48}>
       <Collapse
         defaultActiveKey={['summary']}
-        expandIconPosition={'end'}
+        expandIconPlacement={'end'}
         items={[
           {
             children: !!summary ? <Markdown>{summary}</Markdown> : summary,
@@ -42,7 +41,7 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
               query: {
                 category,
               },
-              url: '/discover/mcp',
+              url: '/community/mcp',
             })}
           >
             {t('mcp.details.related.listTitle')}

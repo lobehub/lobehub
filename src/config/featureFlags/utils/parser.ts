@@ -1,4 +1,4 @@
-import { FeatureFlagsSchema, IFeatureFlags } from '../schema';
+import { FeatureFlagsSchema, type IFeatureFlags } from '../schema';
 
 /**
  * 解析环境变量中的特性标志字符串。

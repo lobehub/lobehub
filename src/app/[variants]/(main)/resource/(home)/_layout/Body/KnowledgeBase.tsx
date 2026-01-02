@@ -1,0 +1,50 @@
+import { AccordionItem, ActionIcon, Text } from '@lobehub/ui';
+import { PlusIcon } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { useCreateNewModal } from '@/features/LibraryModal';
+
+import LibraryList from './LibraryList';
+
+const Collection = memo<{ itemKey: string }>(({ itemKey }) => {
+  const { t } = useTranslation('file');
+  const navigate = useNavigate();
+
+  const { open } = useCreateNewModal();
+
+  const handleCreate = () => {
+    open({
+      onSuccess: (id) => {
+        navigate(`/resource/library/${id}`);
+      },
+    });
+  };
+
+  return (
+    <AccordionItem
+      action={
+        <ActionIcon
+          icon={PlusIcon}
+          onClick={handleCreate}
+          size={'small'}
+          style={{ flex: 'none' }}
+          title={t('library.new')}
+        />
+      }
+      itemKey={itemKey}
+      paddingBlock={4}
+      paddingInline={'8px 4px'}
+      title={
+        <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+          {t('library.title')}
+        </Text>
+      }
+    >
+      <LibraryList />
+    </AccordionItem>
+  );
+});
+
+export default Collection;

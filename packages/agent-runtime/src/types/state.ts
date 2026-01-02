@@ -8,7 +8,7 @@ import type { Cost, CostLimit, Usage } from './usage';
  * This is the "passport" that can be persisted and transferred.
  */
 export interface AgentState {
-  sessionId: string;
+  operationId: string;
   // --- State Machine ---
   status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
 
@@ -17,6 +17,15 @@ export interface AgentState {
   tools?: any[];
   systemRole?: string;
   toolManifestMap: Record<string, any>;
+
+  /**
+   * Model runtime configuration
+   * Used as fallback when call_llm instruction doesn't specify model/provider
+   */
+  modelRuntimeConfig?: {
+    model: string;
+    provider: string;
+  };
 
   /**
    * User's global intervention configuration

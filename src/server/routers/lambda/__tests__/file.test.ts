@@ -66,6 +66,12 @@ vi.mock('@/config/db', () => ({
   },
 }));
 
+vi.mock('@/envs/app', () => ({
+  appEnv: {
+    APP_URL: 'https://lobehub.com',
+  },
+}));
+
 const mockAsyncTaskFindByIds = vi.fn();
 const mockAsyncTaskFindById = vi.fn();
 const mockAsyncTaskDelete = vi.fn();
@@ -87,15 +93,23 @@ vi.mock('@/database/models/chunk', () => ({
   })),
 }));
 
+const mockFileModelCheckHash = vi.fn();
+const mockFileModelCreate = vi.fn();
+const mockFileModelDelete = vi.fn();
+const mockFileModelDeleteMany = vi.fn();
+const mockFileModelFindById = vi.fn();
+const mockFileModelQuery = vi.fn();
+const mockFileModelClear = vi.fn();
+
 vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn(() => ({
-    checkHash: vi.fn(),
-    create: vi.fn(),
-    delete: vi.fn(),
-    deleteMany: vi.fn(),
-    findById: vi.fn(),
-    query: vi.fn(),
-    clear: vi.fn(),
+    checkHash: mockFileModelCheckHash,
+    create: mockFileModelCreate,
+    delete: mockFileModelDelete,
+    deleteMany: mockFileModelDeleteMany,
+    findById: mockFileModelFindById,
+    query: mockFileModelQuery,
+    clear: mockFileModelClear,
   })),
 }));
 
@@ -171,6 +185,25 @@ describe('fileRouter', () => {
         }),
       ).rejects.toThrow();
     });
+
+    it('should return proxy URL format ${APP_URL}/f/:id', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      const result = await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+        metadata: {},
+      });
+
+      expect(result).toEqual({
+        id: 'new-file-id',
+        url: 'https://lobehub.com/f/new-file-id',
+      });
+    });
   });
 
   describe('findById', () => {
@@ -179,21 +212,55 @@ describe('fileRouter', () => {
 
       await expect(caller.findById({ id: 'invalid-id' })).rejects.toThrow(TRPCError);
     });
+
+    it('should return proxy URL format ${APP_URL}/f/:id', async () => {
+      mockFileModelFindById.mockResolvedValue(mockFile);
+
+      const result = await caller.findById({ id: 'test-id' });
+
+      expect(result.url).toBe('https://lobehub.com/f/test-id');
+    });
   });
 
   describe('getFileItemById', () => {
     it('should throw error when file not found', async () => {
-      ctx.fileModel.findById.mockResolvedValue(null);
+      mockFileModelFindById.mockResolvedValue(null);
 
       await expect(caller.getFileItemById({ id: 'invalid-id' })).rejects.toThrow(TRPCError);
+    });
+
+    it('should return proxy URL format ${APP_URL}/f/:id', async () => {
+      mockFileModelFindById.mockResolvedValue(mockFile);
+
+      const result = await caller.getFileItemById({ id: 'test-id' });
+
+      expect(result?.url).toBe('https://lobehub.com/f/test-id');
     });
   });
 
   describe('getFiles', () => {
     it('should handle fileModel.query returning undefined', async () => {
-      ctx.fileModel.query.mockResolvedValue(undefined);
+      mockFileModelQuery.mockResolvedValue(undefined);
 
       await expect(caller.getFiles({})).rejects.toThrow();
+    });
+
+    it('should return proxy URL format ${APP_URL}/f/:id for each file', async () => {
+      const files = [
+        { ...mockFile, id: 'file-1' },
+        { ...mockFile, id: 'file-2' },
+      ];
+      mockFileModelQuery.mockResolvedValue(files);
+      mockChunkCountByFileIds.mockResolvedValue([
+        { id: 'file-1', count: 5 },
+        { id: 'file-2', count: 3 },
+      ]);
+
+      const result = await caller.getFiles({});
+
+      expect(result).toHaveLength(2);
+      expect(result[0].url).toBe('https://lobehub.com/f/file-1');
+      expect(result[1].url).toBe('https://lobehub.com/f/file-2');
     });
   });
 
@@ -224,17 +291,18 @@ describe('fileRouter', () => {
 
       const result = await caller.getKnowledgeItems({});
 
-      expect(result).toHaveLength(2);
-      expect(result[0]).toMatchObject({
+      expect(result.items).toHaveLength(2);
+      expect(result.hasMore).toBe(false);
+      expect(result.items[0]).toMatchObject({
         chunkCount: 10,
         chunkingStatus: AsyncTaskStatus.Success,
         embeddingStatus: AsyncTaskStatus.Success,
         finishEmbedding: true,
         id: 'file-1',
         sourceType: 'file',
-        url: 'https://example.com/test-url',
+        url: 'https://lobehub.com/f/file-1',
       });
-      expect(result[1]).toMatchObject({
+      expect(result.items[1]).toMatchObject({
         chunkCount: null,
         chunkingError: null,
         chunkingStatus: null,

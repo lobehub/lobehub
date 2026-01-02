@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "收起",
-      "on": "展开"
-    },
-    "typobar": {
-      "off": "隐藏格式工具栏",
-      "on": "显示格式工具栏"
-    }
-  },
+  "actions.expand.off": "收起",
+  "actions.expand.on": "展开",
+  "actions.typobar.off": "隐藏格式工具栏",
+  "actions.typobar.on": "显示格式工具栏",
+  "autoSave.latest": "已加载最新版本",
+  "autoSave.saved": "已保存",
+  "autoSave.saving": "自动保存中…",
   "cancel": "取消",
+  "codemirror.copyFailed": "复制失败",
+  "codemirror.copySuccess": "代码已复制到剪贴板",
+  "codemirror.selectLanguage": "选择语言",
+  "codemirror.selectTheme": "选择主题",
+  "codemirror.showLineNumbers": "显示行号",
+  "codemirror.tabSize": "制表符大小",
+  "codemirror.theme": "主题",
+  "codemirror.useTabs": "使用制表符",
   "confirm": "确认",
-  "file": {
-    "error": "错误：{{message}}",
-    "uploading": "正在上传文件..."
-  },
-  "image": {
-    "broken": "图片损坏"
-  },
-  "link": {
-    "edit": "编辑链接",
-    "open": "打开链接",
-    "placeholder": "输入链接 URL",
-    "unlink": "取消链接"
-  },
-  "math": {
-    "placeholder": "请输入 TeX 公式"
-  },
-  "slash": {
-    "h1": "一级标题",
-    "h2": "二级标题",
-    "h3": "三级标题",
-    "hr": "分割线",
-    "table": "表格",
-    "tex": "TeX 公式"
-  },
-  "table": {
-    "delete": "删除表格",
-    "deleteColumn": "删除列",
-    "deleteRow": "删除行",
-    "insertColumnLeft": "在左侧插入 {{count}} 列",
-    "insertColumnRight": "在右侧插入 {{count}} 列",
-    "insertRowAbove": "在上方插入 {{count}} 行",
-    "insertRowBelow": "在下方插入 {{count}} 行"
-  },
-  "typobar": {
-    "blockquote": "引用",
-    "bold": "加粗",
-    "bulletList": "无序列表",
-    "code": "行内代码",
-    "codeblock": "代码块",
-    "italic": "斜体",
-    "link": "链接",
-    "numberList": "有序列表",
-    "strikethrough": "删除线",
-    "table": "table",
-    "taskList": "任务列表",
-    "tex": "TeX 公式",
-    "underline": "下划线"
-  }
+  "file.error": "错误：{{message}}",
+  "file.uploading": "正在上传文件…",
+  "image.broken": "图片损坏",
+  "link.edit": "编辑链接",
+  "link.editLinkTitle": "链接",
+  "link.editTextTitle": "标题",
+  "link.open": "打开链接",
+  "link.placeholder": "输入链接 URL",
+  "link.unlink": "取消链接",
+  "markdown.cancel": "取消",
+  "markdown.confirm": "转换",
+  "markdown.parseMessage": "将内容转换为 Markdown 格式，会覆盖当前内容且不可撤销。确认继续吗？（5 秒后自动关闭）",
+  "markdown.parseTitle": "格式化 Markdown",
+  "math.placeholder": "请输入 TeX 公式",
+  "modifier.accept": "保留",
+  "modifier.acceptAll": "全部保留",
+  "modifier.reject": "撤销",
+  "modifier.rejectAll": "全部撤销",
+  "slash.h1": "一级标题",
+  "slash.h2": "二级标题",
+  "slash.h3": "三级标题",
+  "slash.hr": "分割线",
+  "slash.table": "表格",
+  "slash.tex": "TeX 公式",
+  "table.delete": "删除表格",
+  "table.deleteColumn": "删除列",
+  "table.deleteRow": "删除行",
+  "table.insertColumnLeft": "在左侧插入 {{count}} 列",
+  "table.insertColumnRight": "在右侧插入 {{count}} 列",
+  "table.insertRowAbove": "在上方插入 {{count}} 行",
+  "table.insertRowBelow": "在下方插入 {{count}} 行",
+  "typobar.blockquote": "引用",
+  "typobar.bold": "加粗",
+  "typobar.bulletList": "无序列表",
+  "typobar.code": "行内代码",
+  "typobar.codeblock": "代码块",
+  "typobar.image": "图片",
+  "typobar.italic": "斜体",
+  "typobar.link": "链接",
+  "typobar.numberList": "有序列表",
+  "typobar.redo": "重做",
+  "typobar.strikethrough": "删除线",
+  "typobar.table": "表格",
+  "typobar.taskList": "任务列表",
+  "typobar.tex": "TeX 公式",
+  "typobar.underline": "下划线",
+  "typobar.undo": "撤销"
 }

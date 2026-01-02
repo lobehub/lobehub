@@ -1,8 +1,7 @@
-import { InputNumber } from '@lobehub/ui';
+import { Flexbox, InputNumber } from '@lobehub/ui';
 import { Slider } from 'antd';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import useMergeState from 'use-merge-value';
 
 import { useIsMobile } from '@/hooks/useIsMobile';

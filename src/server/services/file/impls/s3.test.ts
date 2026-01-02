@@ -18,7 +18,7 @@ vi.mock('@/envs/file', () => ({
 
 // 模拟 S3 类
 vi.mock('@/server/modules/S3', () => ({
-  S3: vi.fn().mockImplementation(() => ({
+  FileS3: vi.fn().mockImplementation(() => ({
     createPreSignedUrlForPreview: vi
       .fn()
       .mockResolvedValue('https://presigned.example.com/test.jpg'),

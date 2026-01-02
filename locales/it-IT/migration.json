@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Pulisci dati locali",
-      "downloadBackup": "Scarica backup dati",
-      "reUpgrade": "Riaggiorna",
-      "start": "Inizia",
-      "upgrade": "Aggiornamento"
-    },
-    "clear": {
-      "confirm": "Stai per cancellare i dati locali (le impostazioni globali non saranno influenzate), assicurati di aver scaricato il backup dei dati."
-    },
-    "description": "Nella nuova versione, il sistema di archiviazione dati di {{appName}} ha fatto un enorme balzo in avanti. Pertanto, dobbiamo aggiornare i dati della versione precedente per offrirti un'esperienza d'uso migliore.",
-    "features": {
-      "capability": {
-        "desc": "Basato sulla tecnologia IndexedDB, sufficiente per contenere tutti i messaggi delle tue conversazioni per tutta la vita",
-        "title": "Ampia capacità"
-      },
-      "performance": {
-        "desc": "Indicizzazione automatica di milioni di messaggi, con risposte alle query in millisecondi",
-        "title": "Alta performance"
-      },
-      "use": {
-        "desc": "Supporta la ricerca di titoli, descrizioni, etichette, contenuti dei messaggi e persino testi tradotti, migliorando notevolmente l'efficienza della ricerca quotidiana",
-        "title": "Più facile da usare"
-      }
-    },
-    "title": "Evoluzione dei dati di {{appName}}",
-    "upgrade": {
-      "error": {
-        "subTitle": "Ci scusiamo, si è verificato un errore durante il processo di aggiornamento del database. Ti preghiamo di provare le seguenti soluzioni: A. Cancella i dati locali e importa nuovamente i dati di backup; B. Clicca sul pulsante 'Riprova aggiornamento'.<br><br> Se l'errore persiste, ti preghiamo di <1>inviare un problema</1>, ci attiveremo immediatamente per aiutarti.",
-        "title": "Aggiornamento del database fallito"
-      },
-      "success": {
-        "subTitle": "Il database di {{appName}} è stato aggiornato all'ultima versione, inizia subito a utilizzarlo!",
-        "title": "Aggiornamento del database riuscito"
-      }
-    },
-    "upgradeTip": "L'aggiornamento richiede circa 10-20 secondi, durante il processo di aggiornamento non chiudere {{appName}}."
-  },
-  "migrateError": {
-    "missVersion": "I dati importati non contengono il numero di versione, controlla il file e riprova",
-    "noMigration": "Non è stata trovata alcuna soluzione di migrazione corrispondente alla versione attuale, controlla il numero di versione e riprova. Se il problema persiste, invia un feedback"
-  }
+  "dbV1.action.clearDB": "Cancella dati locali",
+  "dbV1.action.downloadBackup": "Scarica backup dei dati",
+  "dbV1.action.reUpgrade": "Ripeti aggiornamento",
+  "dbV1.action.start": "Inizia",
+  "dbV1.action.upgrade": "Aggiorna",
+  "dbV1.clear.confirm": "Stai per cancellare i dati locali (le impostazioni globali non saranno influenzate). Assicurati di aver scaricato un backup dei dati.",
+  "dbV1.description": "Nella nuova versione, l'archiviazione dei dati di {{appName}} ha compiuto notevoli progressi. Pertanto, è necessario aggiornare i vecchi dati per offrirti un'esperienza utente migliore.",
+  "dbV1.features.capability.desc": "Basato sulla tecnologia IndexedDB, è in grado di archiviare una quantità di messaggi sufficiente per tutta la vita.",
+  "dbV1.features.capability.title": "Grande Capacità",
+  "dbV1.features.performance.desc": "Indicizza automaticamente milioni di messaggi, con ricerche che rispondono in millisecondi.",
+  "dbV1.features.performance.title": "Prestazioni Elevate",
+  "dbV1.features.use.desc": "Supporta la ricerca per titolo, descrizione, tag, contenuto dei messaggi e persino testo tradotto, migliorando notevolmente l'efficienza delle ricerche quotidiane.",
+  "dbV1.features.use.title": "Più Intuitivo",
+  "dbV1.title": "Evoluzione dei Dati di {{appName}}",
+  "dbV1.upgrade.error.subTitle": "Ci scusiamo, si è verificato un errore durante l'aggiornamento del database. Prova le seguenti soluzioni: A. Cancella i dati locali e reimporta il backup; B. Clicca sul pulsante 'Riprova aggiornamento'.<br><br> Se il problema persiste, <1>invia una segnalazione</1> e ti assisteremo il prima possibile.",
+  "dbV1.upgrade.error.title": "Aggiornamento del Database Fallito",
+  "dbV1.upgrade.success.subTitle": "Il database è stato aggiornato all'ultima versione. Puoi continuare.",
+  "dbV1.upgrade.success.title": "Aggiornamento del Database Riuscito",
+  "dbV1.upgradeTip": "L'aggiornamento richiederà circa 10-20 secondi. Non chiudere {{appName}} durante il processo.",
+  "migrateError.missVersion": "I dati importati non contengono un numero di versione. Controlla il file e riprova.",
+  "migrateError.noMigration": "Nessuna soluzione di migrazione trovata per la versione corrente. Controlla il numero di versione e riprova. Se il problema persiste, invia una richiesta di assistenza."
 }

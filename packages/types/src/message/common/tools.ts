@@ -1,4 +1,4 @@
-import { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
+import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 

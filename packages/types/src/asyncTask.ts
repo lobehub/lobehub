@@ -13,6 +13,19 @@ export enum AsyncTaskStatus {
 
 export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
+
+  /* ↓ cloud slot | free plan limit error type ↓ */
+  /**
+   * Free plan users are not allowed to use this feature
+   */
+  FreePlanLimit = 'FreePlanLimit',
+  /**
+   * Subscription plan limit reached (paid users run out of credits)
+   */
+  SubscriptionPlanLimit = 'SubscriptionPlanLimit',
+  /* ↑ cloud slot ↑ */
+
+  // eslint-disable-next-line typescript-sort-keys/string-enum
   InvalidProviderAPIKey = 'InvalidProviderAPIKey',
   /**
    * Model not found on server

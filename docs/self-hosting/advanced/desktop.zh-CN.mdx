@@ -42,11 +42,13 @@ LobeChat 桌面端可以与您自托管的 LobeChat 实例连接，以便您可�
 
 #### OIDC 环境变量配置
 
-您需要在自托管实例中添加以下`ENABLE_OIDC` 和 `OIDC_JWKS_KEY` 这两个环境变量，你可以点击下方按钮一键生成：
+您需要在自托管实例中添加以下`ENABLE_OIDC` 和 `JWKS_KEY` 这两个环境变量，你可以点击下方按钮一键生成：
 
 <OIDCJWKs />
 
 将生成的 JWK 密钥添加到您的环境变量中。
+
+<Callout>如果您之前已配置 `OIDC_JWKS_KEY`，无需修改。系统会自动回退使用 `OIDC_JWKS_KEY`（向后兼容）。</Callout>
 
 如果您使用一键部署方式（如 Vercel、Railway 等平台）部署 LobeChat，您需要：
 
@@ -69,8 +71,8 @@ LobeChat 桌面端可以与您自托管的 LobeChat 实例连接，以便您可�
 
 **解决方案：**
 
-- 确认您已经正确设置了 `ENABLE_OIDC=1` 和 `OIDC_JWKS_KEY` 环境变量
-- 确保 `OIDC_JWKS_KEY` 是有效的 JSON 格式，没有额外的单引号
+- 确认您已经正确设置了 `ENABLE_OIDC=1` 和 `JWKS_KEY` 环境变量
+- 确保 `JWKS_KEY` 是有效的 JSON 格式，没有额外的单引号
 - 检查您的服务端日志，查看具体错误信息
 
 如果您使用 Nginx 作为反向代理，可能是请求头太大导致的问题。可以尝试在 Nginx 配置中添加以下设置：

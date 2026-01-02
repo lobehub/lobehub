@@ -5,16 +5,17 @@ import type {
   EnabledProvider,
   ProviderConfig,
 } from '@lobechat/types';
-import { isEmpty } from 'lodash-es';
+import { isEmpty } from 'es-toolkit/compat';
 import {
   AIChatModelCard,
   AiModelSourceEnum,
   AiProviderModelListItem,
   EnabledAiModel,
 } from 'model-bank';
+import * as modelBank from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import pMap from 'p-map';
 
-import { DEFAULT_MODEL_PROVIDER_LIST } from '@/config/modelProviders';
 import { merge, mergeArrayById } from '@/utils/merge';
 
 import { AiModelModel } from '../../models/aiModel';
@@ -279,7 +280,14 @@ export class AiInfraRepos {
     };
   };
 
-  getAiProviderModelList = async (providerId: string) => {
+  getAiProviderModelList = async (
+    providerId: string,
+    options?: {
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+  ) => {
     const aiModels = await this.aiModelModel.getModelListByProviderId(providerId);
 
     const defaultModels: AiProviderModelListItem[] =
@@ -287,11 +295,26 @@ export class AiInfraRepos {
     // Not modifying search settings here doesn't affect usage, but done for data consistency on get
     const mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
 
-    return mergedModel.map((m) => injectSearchSettings(providerId, m));
+    let list = mergedModel.map((m) =>
+      injectSearchSettings(providerId, m),
+    ) as AiProviderModelListItem[];
+
+    if (typeof options?.enabled === 'boolean') {
+      list = list.filter((m) => m.enabled === options.enabled);
+    }
+
+    if (typeof options?.offset === 'number' || typeof options?.limit === 'number') {
+      const offset = Math.max(0, options?.offset ?? 0);
+      const limit = options?.limit;
+      if (typeof limit === 'number') return list.slice(offset, offset + Math.max(0, limit));
+      return list.slice(offset);
+    }
+
+    return list;
   };
 
   /**
-   * use in the `/settings?active=provider&provider=[id]` page
+   * use in the `/settings/provider/[id]` page
    */
   getAiProviderDetail = async (id: string, decryptor?: DecryptUserKeyVaults) => {
     const config = await this.aiProviderModel.getAiProviderById(id, decryptor);
@@ -306,11 +329,9 @@ export class AiInfraRepos {
     providerId: string,
   ): Promise<AiProviderModelListItem[] | undefined> => {
     try {
-      const modules = await import('model-bank');
-
       // TODO: when model-bank is a separate module, we will try import from model-bank/[prividerId] again
       // @ts-expect-error providerId is string
-      const providerModels = modules[providerId];
+      const providerModels = modelBank[providerId];
 
       // use the serverModelLists as the defined server model list
       // fallback to empty array for custom provider

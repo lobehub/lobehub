@@ -1,8 +1,9 @@
 ---
-description: 
+description:
 globs: src/database/schemas/*
 alwaysApply: false
 ---
+
 # Drizzle ORM Schema Style Guide for lobe-chat
 
 This document outlines the conventions and best practices for defining PostgreSQL Drizzle ORM schemas within the lobe-chat project.
@@ -16,7 +17,8 @@ This document outlines the conventions and best practices for defining PostgreSQ
 
 ## Helper Functions
 
-Commonly used column definitions, especially for timestamps, are centralized in [src/database/schemas/_helpers.ts](mdc:src/database/schemas/_helpers.ts):
+Commonly used column definitions, especially for timestamps, are centralized in [src/database/schemas/\_helpers.ts](mdc:src/database/schemas/_helpers.ts):
+
 - `timestamptz(name: string)`: Creates a timestamp column with timezone
 - `createdAt()`, `updatedAt()`, `accessedAt()`: Helper functions for standard timestamp columns
 - `timestamps`: An object `{ createdAt, updatedAt, accessedAt }` for easy inclusion in table definitions
@@ -29,6 +31,7 @@ Commonly used column definitions, especially for timestamps, are centralized in 
 ## Column Definitions
 
 ### Primary Keys (PKs)
+
 - Typically `text('id')` (or `varchar('id')` for some OIDC tables)
 - Often use `.$defaultFn(() => idGenerator('table_name'))` for automatic ID generation with meaningful prefixes
 - **ID Prefix Purpose**: Makes it easy for users and developers to distinguish different entity types at a glance
@@ -36,24 +39,29 @@ Commonly used column definitions, especially for timestamps, are centralized in 
 - Composite PKs are defined using `primaryKey({ columns: [t.colA, t.colB] })`
 
 ### Foreign Keys (FKs)
+
 - Defined using `.references(() => otherTable.id, { onDelete: 'cascade' | 'set null' | 'no action' })`
 - FK columns are usually named `related_table_singular_name_id` (e.g., `user_id` references `users.id`)
 - Most tables include a `user_id` column referencing `users.id` with `onDelete: 'cascade'`
 
 ### Timestamps
-- Consistently use the `...timestamps` spread from [_helpers.ts](mdc:src/database/schemas/_helpers.ts) for `created_at`, `updated_at`, and `accessed_at` columns
+
+- Consistently use the `...timestamps` spread from [\_helpers.ts](mdc:src/database/schemas/_helpers.ts) for `created_at`, `updated_at`, and `accessed_at` columns
 
 ### Default Values
+
 - `.$defaultFn(() => expression)` for dynamic defaults (e.g., `idGenerator()`, `randomSlug()`)
 - `.default(staticValue)` for static defaults (e.g., `boolean('enabled').default(true)`)
 
 ### Indexes
+
 - Defined in the table's second argument: `pgTable('name', {...columns}, (t) => ({ indexName: indexType().on(...) }))`
 - Use `uniqueIndex()` for unique constraints and `index()` for non-unique indexes
 - Naming pattern: `table_name_column(s)_idx` or `table_name_column(s)_unique`
 - Many tables feature a `clientId: text('client_id')` column, often part of a composite unique index with `user_id`
 
 ### Data Types
+
 - Common types: `text`, `varchar`, `jsonb`, `boolean`, `integer`, `uuid`, `pgTable`
 - For `jsonb` fields, specify the TypeScript type using `.$type<MyType>()` for better type safety
 
@@ -97,9 +105,7 @@ export const agents = pgTable(
     ...timestamps,
   },
   // return array instead of object, the object style is deprecated
-  (t) => [
-    uniqueIndex('client_id_user_id_unique').on(t.clientId, t.userId),
-  ],
+  (t) => [uniqueIndex('client_id_user_id_unique').on(t.clientId, t.userId)],
 );
 
 export const insertAgentSchema = createInsertSchema(agents);
@@ -110,6 +116,7 @@ export type AgentItem = typeof agents.$inferSelect;
 ## Common Patterns
 
 ### 1. userId + clientId Pattern (Legacy)
+
 Some existing tables include both fields for different purposes:
 
 ```typescript
@@ -129,6 +136,7 @@ clientIdUnique: uniqueIndex('agents_client_id_user_id_unique').on(t.clientId, t.
 - **Note**: This pattern is being phased out for new features to simplify the schema
 
 ### 2. Junction Tables (Many-to-Many Relationships)
+
 Use composite primary keys for relationship tables:
 
 ```typescript
@@ -136,21 +144,26 @@ Use composite primary keys for relationship tables:
 export const agentsKnowledgeBases = pgTable(
   'agents_knowledge_bases',
   {
-    agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }).notNull(),
-    knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, { onDelete: 'cascade' }).notNull(),
-    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    agentId: text('agent_id')
+      .references(() => agents.id, { onDelete: 'cascade' })
+      .notNull(),
+    knowledgeBaseId: text('knowledge_base_id')
+      .references(() => knowledgeBases.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
     enabled: boolean('enabled').default(true),
     ...timestamps,
   },
-  (t) => [
-    primaryKey({ columns: [t.agentId, t.knowledgeBaseId] }),
-  ],
+  (t) => [primaryKey({ columns: [t.agentId, t.knowledgeBaseId] })],
 );
 ```
 
 **Pattern**: `{entity1}Id` + `{entity2}Id` as composite PK, plus `userId` for ownership
 
 ### 3. OIDC Tables Special Patterns
+
 OIDC tables use `varchar` IDs instead of `text` with custom generators:
 
 ```typescript
@@ -166,6 +179,7 @@ export const oidcAuthorizationCodes = pgTable('oidc_authorization_codes', {
 **Reason**: OIDC standards expect specific ID formats and lengths
 
 ### 4. File Processing with Async Tasks
+
 File-related tables reference async task IDs for background processing:
 
 ```typescript
@@ -173,17 +187,21 @@ File-related tables reference async task IDs for background processing:
 export const files = pgTable('files', {
   // ... other fields
   chunkTaskId: uuid('chunk_task_id').references(() => asyncTasks.id, { onDelete: 'set null' }),
-  embeddingTaskId: uuid('embedding_task_id').references(() => asyncTasks.id, { onDelete: 'set null' }),
+  embeddingTaskId: uuid('embedding_task_id').references(() => asyncTasks.id, {
+    onDelete: 'set null',
+  }),
   // ...
 });
 ```
 
-**Purpose**: 
+**Purpose**:
+
 - Track file chunking progress (breaking files into smaller pieces)
 - Track embedding generation progress (converting text to vectors)
 - Allow querying task status and handling failures
 
 ### 5. Slug Pattern (Legacy)
+
 Some entities include auto-generated slugs - this is legacy code:
 
 ```typescript
@@ -195,8 +213,6 @@ slug: varchar('slug', { length: 100 })
 slugUserIdUnique: uniqueIndex('slug_user_id_unique').on(t.slug, t.userId),
 ```
 
-**Current usage**: Only used to identify default agents/sessions (legacy pattern)
-**Future refactor**: Will likely be replaced with `isDefault: boolean()` field
-**Note**: Avoid using slugs for new features - prefer explicit boolean flags for status tracking
+**Current usage**: Only used to identify default agents/sessions (legacy pattern) **Future refactor**: Will likely be replaced with `isDefault: boolean()` field **Note**: Avoid using slugs for new features - prefer explicit boolean flags for status tracking
 
 By following these guidelines, maintain consistency, type safety, and maintainability across database schema definitions.

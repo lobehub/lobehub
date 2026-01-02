@@ -108,6 +108,7 @@ export class GenerationModel {
       const newFile = await this.fileModel.create(
         {
           ...file,
+          parentId: file.parentId ?? undefined,
           source: FileSource.ImageGeneration,
         },
         true,

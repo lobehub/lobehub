@@ -1,4 +1,4 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { z } from 'zod';
 
 import { PluginModel } from '@/database/models/plugin';
@@ -58,7 +58,7 @@ export const klavisRouter = router({
         identifier,
         meta: {
           avatar: '🔌',
-          description: `Klavis MCP Server: ${serverName}`,
+          description: `LobeHub Mcp Server: ${serverName}`,
           title: serverName,
         },
         type: 'default',
@@ -213,7 +213,7 @@ export const klavisRouter = router({
         identifier,
         meta: existingPlugin?.manifest?.meta || {
           avatar: '🔌',
-          description: `Klavis MCP Server: ${serverName}`,
+          description: `LobeHub Mcp Server: ${serverName}`,
           title: serverName,
         },
         type: 'default',

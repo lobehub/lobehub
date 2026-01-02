@@ -31,7 +31,7 @@
  * Before: chatSelectors.getMessageById(id)(state)  // For display
  * After:  displayMessageSelectors.getDisplayMessageById(id)(state)
  */
-import { ChatFileItem } from '@lobechat/types';
+import { type ChatFileItem } from '@lobechat/types';
 
 import type { ChatStoreState } from '../../../initialState';
 import { dbMessageSelectors } from './dbMessage';
@@ -78,8 +78,6 @@ export const chatSelectors = {
 
   getMessageById: displayMessageSelectors.getDisplayMessageById,
 
-  getSupervisorTodos: displayMessageSelectors.getSupervisorTodos,
-
   getThreadMessageIDs: displayMessageSelectors.getThreadMessageIDs,
 
   getThreadMessages: displayMessageSelectors.getThreadMessages,
@@ -89,8 +87,6 @@ export const chatSelectors = {
   inboxActiveTopicMessages: displayMessageSelectors.inboxActiveTopicDisplayMessages,
 
   isCurrentChatLoaded: displayMessageSelectors.isCurrentDisplayChatLoaded,
-
-  isSupervisorLoading: displayMessageSelectors.isSupervisorLoading,
 
   latestMessage: dbMessageSelectors.latestDbMessage,
 

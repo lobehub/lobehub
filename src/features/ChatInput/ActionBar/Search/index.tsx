@@ -1,34 +1,35 @@
 import { GlobeOffIcon } from '@lobehub/ui/icons';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentEnableSearch } from '@/hooks/useAgentEnableSearch';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { agentChatConfigSelectors } from '@/store/agent/slices/chat';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 
+import { useAgentEnableSearch } from '../../hooks/useAgentEnableSearch';
+import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import Action from '../components/Action';
 import Controls from './Controls';
 
 const Search = memo(() => {
   const { t } = useTranslation('chat');
-  const [isLoading, mode, updateAgentChatConfig] = useAgentStore((s) => [
-    agentSelectors.isAgentConfigLoading(s),
-    agentChatConfigSelectors.agentSearchMode(s),
-    s.updateAgentChatConfig,
+  const agentId = useAgentId();
+  const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const [isLoading, mode] = useAgentStore((s) => [
+    agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
+    chatConfigByIdSelectors.getSearchModeById(agentId)(s),
   ]);
   const isAgentEnableSearch = useAgentEnableSearch();
-  const theme = useTheme();
   const isMobile = useIsMobile();
 
   if (isLoading) return <Action disabled icon={GlobeOffIcon} />;
 
   return (
     <Action
-      color={isAgentEnableSearch ? theme.colorInfo : undefined}
+      color={isAgentEnableSearch ? cssVar.colorInfo : undefined}
       icon={isAgentEnableSearch ? Globe : GlobeOffIcon}
       onClick={
         isMobile
@@ -46,7 +47,7 @@ const Search = memo(() => {
         minWidth: 320,
         placement: 'topLeft',
         styles: {
-          body: {
+          container: {
             padding: 4,
           },
         },

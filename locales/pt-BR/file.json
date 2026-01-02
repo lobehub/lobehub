@@ -1,181 +1,134 @@
 {
-  "addFolder": "Criar pasta",
-  "addKnowledge": "Adicionar conhecimento",
-  "addPage": "Criar documento",
-  "desc": "Gerencie seus conhecimentos de trabalho, estudo e vida.",
-  "detail": {
-    "basic": {
-      "createdAt": "Data de criação",
-      "filename": "Nome do arquivo",
-      "size": "Tamanho do arquivo",
-      "title": "Informações básicas",
-      "type": "Formato",
-      "updatedAt": "Data de atualização"
-    },
-    "data": {
-      "chunkCount": "Número de partes",
-      "embedding": {
-        "default": "Ainda não vetorizado",
-        "error": "Falha",
-        "pending": "Aguardando início",
-        "processing": "Processando",
-        "success": "Concluído"
-      },
-      "embeddingStatus": "Vetorização"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "Adicionar ícone",
-    "autoSaveMessage": "O documento é salvo automaticamente, não é necessário salvar manualmente",
-    "chooseIcon": "Escolher ícone",
-    "deleteConfirm": {
-      "content": "Este documento será excluído permanentemente e não poderá ser recuperado. Por favor, tenha cuidado.",
-      "title": "Excluir documento"
-    },
-    "deleteError": "Falha ao excluir o documento",
-    "deleteSuccess": "Documento excluído com sucesso",
-    "editedAt": "Última edição em {{time}}",
-    "editedBy": "Última edição por {{name}}",
-    "editorPlaceholder": "Digite o conteúdo do documento, pressione / para abrir o menu de comandos",
-    "empty": {
-      "createNewDocument": "Criar novo documento",
-      "title": "Selecione um documento para começar",
-      "uploadMarkdown": "Carregar arquivo Markdown"
-    },
-    "linkCopied": "Link copiado",
-    "menu": {
-      "copyLink": "Copiar link",
-      "exportDocument": "Exportar documento",
-      "importDocument": "Importar documento",
-      "pin": "Fixar documento"
-    },
-    "saving": "Salvando...",
-    "titlePlaceholder": "Sem título",
-    "wordCount": "{{wordCount}} palavras"
-  },
-  "documentList": {
-    "copyContent": "Copiar conteúdo completo",
-    "duplicate": "Criar uma cópia",
-    "empty": "Nenhum documento ainda. Clique no botão acima para criar seu primeiro.",
-    "noResults": "Nenhum documento correspondente encontrado",
-    "pageCount": "Total de {{count}} documentos",
-    "selectNote": "Selecione um documento para começar a editar",
-    "untitled": "Sem título"
-  },
-  "empty": "Nenhum arquivo/pasta enviado até o momento",
-  "header": {
-    "actions": {
-      "newFolder": "Nova pasta",
-      "newPage": "Novo documento",
-      "uploadFile": "Enviar arquivo",
-      "uploadFolder": "Enviar pasta"
-    },
-    "newNoteDialog": {
-      "cancel": "Cancelar",
-      "editTitle": "Editar documento",
-      "emptyContent": "O conteúdo do documento não pode estar vazio",
-      "loadError": "Falha ao carregar o documento, tente novamente",
-      "loading": "Carregando...",
-      "save": "Salvar",
-      "saveError": "Falha ao salvar o documento, tente novamente",
-      "saveSuccess": "Documento salvo com sucesso",
-      "title": "Novo documento",
-      "updateSuccess": "Documento atualizado com sucesso"
-    },
-    "newPageButton": "Novo Documento",
-    "uploadButton": "Enviar"
-  },
-  "home": {
-    "getStarted": "Começar",
-    "greeting": "Início",
-    "quickActions": "Ações Rápidas",
-    "recentFiles": "Arquivos Recentes",
-    "recentPages": "Documentos Recentes",
-    "subtitle": "Bem-vindo ao seu repositório de conhecimento. Comece a gerenciar seus documentos aqui",
-    "uploadEntries": {
-      "files": {
-        "title": "Enviar Arquivos"
-      },
-      "folder": {
-        "title": "Enviar Pasta"
-      },
-      "knowledgeBase": {
-        "title": "Nova Base de Conhecimento"
-      },
-      "newPage": {
-        "title": "Novo Documento"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "Você está prestes a excluir este repositório de conhecimento. Os arquivos não serão excluídos, mas serão movidos para 'Todos os arquivos'. Após a exclusão, o repositório não poderá ser recuperado, por favor, proceda com cautela.",
-      "empty": "Clique em <1>+</1> para começar a criar um repositório de conhecimento"
-    },
-    "new": "Novo repositório de conhecimento",
-    "title": "Repositório de conhecimento"
-  },
-  "menu": {
-    "allFiles": "Todos os arquivos",
-    "allPages": "Todos os Documentos"
-  },
-  "networkError": "Falha ao acessar a base de conhecimento, por favor verifique a conexão de rede e tente novamente",
-  "notSupportGuide": {
-    "desc": "A instância atual está no modo de banco de dados cliente e não pode usar a funcionalidade de gerenciamento de arquivos. Por favor, mude para <1>modo de banco de dados servidor</1>, ou use diretamente <3>LobeChat Cloud</3>",
-    "features": {
-      "allKind": {
-        "desc": "Suporta os principais tipos de arquivos, incluindo formatos comuns como Word, PPT, Excel, PDF, TXT, além de arquivos de código como JS, Python",
-        "title": "Análise de vários tipos de arquivos"
-      },
-      "embeddings": {
-        "desc": "Utiliza modelos vetoriais de alto desempenho para vetorização de partes de texto, permitindo a busca semântica do conteúdo dos arquivos",
-        "title": "Semantização vetorial"
-      },
-      "repos": {
-        "desc": "Permite a criação de repositórios de conhecimento e a adição de diferentes tipos de arquivos, construindo seu próprio conhecimento de domínio",
-        "title": "Repositório de conhecimento"
-      }
-    },
-    "title": "O modo de implantação atual não suporta gerenciamento de arquivos"
-  },
-  "preview": {
-    "downloadFile": "Baixar arquivo",
-    "unsupportedFileAndContact": "Este formato de arquivo não é suportado para visualização online. Se você tiver interesse em visualizar, sinta-se à vontade para <1>nos enviar um feedback</1>."
-  },
-  "searchFilePlaceholder": "Pesquisar arquivo",
-  "searchPagePlaceholder": "Buscar documentos",
-  "tab": {
-    "all": "Todos",
-    "audios": "Áudios",
-    "documents": "Documentos",
-    "home": "Início",
-    "images": "Imagens",
-    "moreTypes": "Mais Tipos",
-    "pages": "Documentos",
-    "videos": "Vídeos",
-    "websites": "Sites"
-  },
-  "title": "Base de Conhecimento",
-  "toggleLeftPanel": "Mostrar/Ocultar painel esquerdo",
-  "uploadDock": {
-    "body": {
-      "collapse": "Recolher",
-      "item": {
-        "done": "Enviado",
-        "error": "Falha no envio, por favor, tente novamente",
-        "pending": "Preparando para enviar...",
-        "processing": "Processando arquivo...",
-        "restTime": "Restante {{time}}"
-      }
-    },
-    "fileQueueInfo": "Enviando os primeiros {{count}} arquivos, os {{remaining}} restantes estão na fila para upload",
-    "totalCount": "Total de {{count}} itens",
-    "uploadStatus": {
-      "error": "Erro no envio",
-      "pending": "Aguardando envio",
-      "processing": "Enviando",
-      "success": "Envio concluído",
-      "uploading": "Enviando"
-    }
-  }
+  "addFolder": "Criar Pasta",
+  "addLibrary": "Adicionar",
+  "addPage": "Criar Página",
+  "detail.basic.createdAt": "Data de Criação",
+  "detail.basic.filename": "Nome do Arquivo",
+  "detail.basic.size": "Tamanho do Arquivo",
+  "detail.basic.title": "Informações Básicas",
+  "detail.basic.type": "Formato",
+  "detail.basic.updatedAt": "Data de Atualização",
+  "detail.data.chunkCount": "Fragmentos",
+  "detail.data.embedding.default": "Sem vetorização",
+  "detail.data.embedding.error": "Falha",
+  "detail.data.embedding.pending": "Aguardando início",
+  "detail.data.embedding.processing": "Processando",
+  "detail.data.embedding.success": "Concluído",
+  "detail.data.embeddingStatus": "vetorização",
+  "empty": "Nenhum arquivo ou pasta foi enviado ainda.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} arquivos filtrados (de {{total}} no total)",
+  "header.actions.connect": "Conectar...",
+  "header.actions.gitignore.apply": "Aplicar Regras",
+  "header.actions.gitignore.cancel": "Ignorar Regras",
+  "header.actions.gitignore.content": "Arquivo .gitignore detectado ({{count}} arquivos no total). Deseja aplicar as regras de exclusão?",
+  "header.actions.gitignore.filtered": "{{ignored}} arquivos filtrados ({{total}} arquivos no total)",
+  "header.actions.gitignore.title": ".gitignore Detectado",
+  "header.actions.newFolder": "Nova Pasta",
+  "header.actions.newPage": "Nova Página",
+  "header.actions.notion.error": "Falha ao importar arquivos do Notion",
+  "header.actions.notion.foundFiles": "{{count}} arquivos encontrados",
+  "header.actions.notion.importing": "Importando conteúdo do Notion...",
+  "header.actions.notion.noMarkdownFiles": "Nenhum arquivo Markdown encontrado no arquivo ZIP",
+  "header.actions.notion.partial": "{{success}} arquivos importados com sucesso, {{failed}} falharam",
+  "header.actions.notion.success": "{{count}} arquivos importados com sucesso",
+  "header.actions.notionGuide.cancel": "Agora não",
+  "header.actions.notionGuide.desc": "Primeiro, exporte seu conteúdo do Notion como um arquivo Markdown (ZIP). Em seguida, clique em Continuar para selecionar o arquivo ZIP e importar todas as páginas.",
+  "header.actions.notionGuide.ok": "Selecionar ZIP do Notion",
+  "header.actions.notionGuide.title": "Importar do Notion",
+  "header.actions.uploadFile": "Enviar Arquivo",
+  "header.actions.uploadFolder": "Enviar Pasta",
+  "header.newPageButton": "Nova Página",
+  "header.uploadButton": "Enviar",
+  "home.getStarted": "Começar",
+  "home.greeting": "Começar",
+  "home.quickActions": "Ações Rápidas",
+  "home.recentFiles": "Arquivos Recentes",
+  "home.recentPages": "Páginas Recentes",
+  "home.uploadEntries.files.title": "Enviar Arquivos",
+  "home.uploadEntries.folder.title": "Enviar Pasta",
+  "home.uploadEntries.library.title": "Criar Nova Biblioteca",
+  "home.uploadEntries.newPage.title": "Nova Página",
+  "library.list.confirmRemoveLibrary": "Você está prestes a excluir esta biblioteca. Os arquivos dentro dela não serão excluídos, mas movidos para Todos os Arquivos. Esta ação não pode ser desfeita, portanto, prossiga com cautela.",
+  "library.list.empty": "Clique em <1>+</1> para criar uma nova biblioteca",
+  "library.new": "Nova Biblioteca",
+  "library.title": "Biblioteca",
+  "loadMore": "Carregar Mais",
+  "menu.allFiles": "Todos os Arquivos",
+  "menu.allPages": "Todas as Páginas",
+  "networkError": "Falha ao recuperar bibliotecas. Verifique sua conexão de rede e tente novamente.",
+  "notSupportGuide.desc": "O modo de implantação atual não suporta gerenciamento de arquivos. Mude para o <1>modo de banco de dados no servidor</1> ou use o <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "Suporta os principais tipos de arquivos, incluindo formatos comuns de páginas como Word, PPT, Excel, PDF, TXT, além de arquivos de código populares como JS e Python.",
+  "notSupportGuide.features.allKind.title": "Suporte a Múltiplos Tipos de Arquivo",
+  "notSupportGuide.features.embeddings.desc": "Utiliza modelos vetoriais de alto desempenho para vetorizar trechos de texto, permitindo busca semântica no conteúdo dos arquivos.",
+  "notSupportGuide.features.embeddings.title": "Semântica Vetorial",
+  "notSupportGuide.features.libraries.desc": "Crie Bibliotecas e adicione arquivos para montar sua própria Biblioteca.",
+  "notSupportGuide.features.libraries.title": "Biblioteca",
+  "notSupportGuide.title": "O modo de implantação atual não suporta gerenciamento de arquivos",
+  "pageEditor.addIcon": "Adicionar Ícone",
+  "pageEditor.autoSaveMessage": "Sua página é salva automaticamente. Não é necessário salvar manualmente.",
+  "pageEditor.chooseIcon": "Escolher Ícone",
+  "pageEditor.deleteConfirm.content": "Esta página será excluída e não poderá ser recuperada. Prossiga com cautela.",
+  "pageEditor.deleteConfirm.title": "Excluir Página",
+  "pageEditor.deleteError": "Falha ao excluir a página",
+  "pageEditor.deleteSuccess": "Página excluída com sucesso",
+  "pageEditor.duplicateError": "Falha ao duplicar a página",
+  "pageEditor.duplicateSuccess": "Página duplicada com sucesso",
+  "pageEditor.editedAt": "Última edição em {{time}}",
+  "pageEditor.editedBy": "Última edição por {{name}}",
+  "pageEditor.editorPlaceholder": "Comece a escrever sua página. Pressione / para abrir o menu de comandos",
+  "pageEditor.empty.createNewDocument": "Criar Nova Página",
+  "pageEditor.empty.importNotion": "Importar do Notion",
+  "pageEditor.empty.title": "Selecione uma página para começar",
+  "pageEditor.empty.uploadFiles": "Enviar Arquivos",
+  "pageEditor.exportError": "Falha ao exportar a página",
+  "pageEditor.exportSuccess": "Página exportada com sucesso",
+  "pageEditor.linkCopied": "Link copiado",
+  "pageEditor.menu.copyLink": "Copiar Link",
+  "pageEditor.menu.export": "Exportar",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "Exportar Página",
+  "pageEditor.menu.importDocument": "Importar Página",
+  "pageEditor.menu.pin": "Fixar Página",
+  "pageEditor.saving": "Salvando...",
+  "pageEditor.titlePlaceholder": "Sem título",
+  "pageEditor.wordCount": "{{wordCount}} palavras",
+  "pageList.copyContent": "Copiar Texto Completo",
+  "pageList.duplicate": "Duplicar",
+  "pageList.empty": "Nenhuma página ainda. Clique no botão acima para criar a primeira.",
+  "pageList.filter.all": "Todas",
+  "pageList.filter.onlyInPages": "Apenas em Páginas",
+  "pageList.noResults": "Nenhuma página correspondente encontrada",
+  "pageList.pageCount": "{{count}} páginas no total",
+  "pageList.pageSizeItem": "{{count}} itens",
+  "pageList.title": "Páginas",
+  "pageList.untitled": "Sem título",
+  "portal.openInPageEditor": "Editar na Página",
+  "preview.downloadFile": "Baixar Arquivo",
+  "preview.unsupportedFileAndContact": "Este formato de arquivo não é suportado para visualização online no momento. Se desejar solicitar suporte, <1>entre em contato conosco</1>.",
+  "searchFilePlaceholder": "Buscar Arquivos",
+  "searchPagePlaceholder": "Buscar Páginas",
+  "tab.all": "Todos",
+  "tab.audios": "Áudios",
+  "tab.documents": "Documentos",
+  "tab.home": "Início",
+  "tab.images": "Imagens",
+  "tab.moreTypes": "Mais Tipos",
+  "tab.pages": "Páginas",
+  "tab.videos": "Vídeos",
+  "tab.websites": "Sites",
+  "title": "Recursos",
+  "toggleLeftPanel": "Mostrar/Ocultar Painel Esquerdo",
+  "uploadDock.body.collapse": "Recolher",
+  "uploadDock.body.item.done": "Enviado",
+  "uploadDock.body.item.error": "Falha no envio, tente novamente",
+  "uploadDock.body.item.pending": "Preparando para envio...",
+  "uploadDock.body.item.processing": "Processando arquivo...",
+  "uploadDock.body.item.restTime": "Restam {{time}}",
+  "uploadDock.fileQueueInfo": "Enviando os primeiros {{count}} arquivos, {{remaining}} restantes na fila",
+  "uploadDock.totalCount": "Total de {{count}} itens",
+  "uploadDock.uploadStatus.error": "Erro no envio",
+  "uploadDock.uploadStatus.pending": "Aguardando envio",
+  "uploadDock.uploadStatus.processing": "Enviando",
+  "uploadDock.uploadStatus.success": "Envio concluído",
+  "uploadDock.uploadStatus.uploading": "Enviando"
 }

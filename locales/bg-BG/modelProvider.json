@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "Версия на Azure API, в формат YYYY-MM-DD, вижте [най-новата версия](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Извличане на списък",
-      "title": "Версия на Azure API"
-    },
-    "empty": "Моля, въведете идентификатор на модела, за да добавите първия модел",
-    "endpoint": {
-      "desc": "Тази стойност може да бъде намерена в раздела „Ключове и крайни точки“ при проверка на ресурсите от портала на Azure",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "Адрес на Azure API"
-    },
-    "modelListPlaceholder": "Изберете или добавете моделите на OpenAI, които сте разгърнали",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Тази стойност може да бъде намерена в раздела „Ключове и крайни точки“ при проверка на ресурсите от портала на Azure. Можете да използвате KEY1 или KEY2",
-      "placeholder": "Azure API Key",
-      "title": "API ключ"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "Версия на API на Azure, следваща формата YYYY-MM-DD, вижте [най-новата версия](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Вземи списък",
-      "title": "Версия на API на Azure"
-    },
-    "endpoint": {
-      "desc": "Намерете крайна точка за инференция на моделите на Azure AI в прегледа на проекта на Azure AI",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "Крайна точка на Azure AI"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Намерете API ключа в прегледа на проекта на Azure AI",
-      "placeholder": "Ключ на Azure",
-      "title": "Ключ"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "Въведете AWS Access Key Id",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key Id"
-    },
-    "checker": {
-      "desc": "Тестване дали AccessKeyId / SecretAccessKey са попълнени правилно"
-    },
-    "region": {
-      "desc": "Въведете AWS Region",
-      "placeholder": "AWS Region",
-      "title": "AWS Region"
-    },
-    "secretAccessKey": {
-      "desc": "Въведете AWS Secret Access Key",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "Ако използвате AWS SSO/STS, моля, въведете вашия AWS Session Token",
-      "placeholder": "AWS Session Token",
-      "title": "AWS Session Token (по избор)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "Персонализиран регион за услуги",
-      "customSessionToken": "Персонализиран токен за сесия",
-      "description": "Въведете вашия AWS AccessKeyId / SecretAccessKey, за да започнете сесия. Приложението няма да запази вашата удостоверителна конфигурация",
-      "imageGenerationDescription": "Въведете вашия AWS AccessKeyId / SecretAccessKey, за да започнете генерирането. Приложението няма да записва вашите данни за удостоверяване",
-      "title": "Използване на персонализирана информация за удостоверяване на Bedrock"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "Моля, въведете Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "Въведете ID на Cloudflare или личен API адрес",
-      "placeholder": "ID на Cloudflare / личен API адрес",
-      "title": "ID на Cloudflare / API адрес"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "API ключ, необходим за удостоверяване с Bearer Token",
-      "placeholder": "Моля, въведете API ключ",
-      "required": "Моля, въведете API ключ",
-      "title": "API ключ"
-    },
-    "authType": {
-      "desc": "Изберете метод за удостоверяване със сървъра ComfyUI",
-      "options": {
-        "basic": "Потребителско име/Парола",
-        "bearer": "Bearer (API ключ)",
-        "custom": "Потребителски HTTP хедъри",
-        "none": "Без удостоверяване"
-      },
-      "placeholder": "Моля, изберете тип удостоверяване",
-      "title": "Тип удостоверяване"
-    },
-    "baseURL": {
-      "desc": "Уеб адрес за достъп до ComfyUI",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "Моля, въведете адреса на услугата ComfyUI",
-      "title": "Адрес на услугата ComfyUI"
-    },
-    "checker": {
-      "desc": "Проверете дали връзката е конфигурирана правилно",
-      "title": "Проверка на свързаността"
-    },
-    "customHeaders": {
-      "addButton": "Добавяне на хедър",
-      "deleteTooltip": "Изтриване на този хедър",
-      "desc": "HTTP хедъри, необходими за потребителски метод на удостоверяване, във формат ключ-стойност",
-      "duplicateKeyError": "Ключовете на хедърите не трябва да се повтарят",
-      "keyPlaceholder": "Ключ",
-      "required": "Моля, въведете потребителски HTTP хедър",
-      "title": "Потребителски HTTP хедъри",
-      "valuePlaceholder": "Стойност"
-    },
-    "password": {
-      "desc": "Парола, необходима за базово удостоверяване",
-      "placeholder": "Моля, въведете парола",
-      "required": "Моля, въведете парола",
-      "title": "Парола"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "Потребителско име, необходимо за базово удостоверяване",
-      "placeholder": "Моля, въведете потребителско име",
-      "required": "Моля, въведете потребителско име",
-      "title": "Потребителско име"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "Моля, въведете вашия API ключ",
-      "title": "API ключ"
-    },
-    "basicTitle": "Основна информация",
-    "configTitle": "Конфигурационна информация",
-    "confirm": "Създаване",
-    "createSuccess": "Създаването е успешно",
-    "description": {
-      "placeholder": "Описание на доставчика (по избор)",
-      "title": "Описание на доставчика"
-    },
-    "id": {
-      "desc": "Уникален идентификатор за доставчика на услуги, който не може да бъде променян след създаването му",
-      "format": "Може да съдържа само цифри, малки букви, тирета (-) и долни черти (_) ",
-      "placeholder": "Препоръчително изцяло с малки букви, например openai, след създаването не може да се промени",
-      "required": "Моля, въведете ID на доставчика",
-      "title": "ID на доставчика"
-    },
-    "logo": {
-      "required": "Моля, качете правилното лого на доставчика",
-      "title": "Лого на доставчика"
-    },
-    "name": {
-      "placeholder": "Моля, въведете показваното име на доставчика",
-      "required": "Моля, въведете името на доставчика",
-      "title": "Име на доставчика"
-    },
-    "proxyUrl": {
-      "required": "Моля, въведете адреса на проксито",
-      "title": "Адрес на прокси"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "Моля, изберете тип SDK",
-      "title": "Формат на запитването"
-    },
-    "title": "Създаване на персонализиран AI доставчик"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "Въведете вашия GitHub PAT, кликнете [тук](https://github.com/settings/tokens), за да създадете",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "Въведете вашия HuggingFace токен, кликнете [тук](https://huggingface.co/settings/tokens), за да създадете",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "HuggingFace токен"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "Персонализираният доставчик на услуги не е активиран",
-      "disabled": "Неактивен доставчик",
-      "enabled": "Активен доставчик"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "Добавяне на персонализиран доставчик",
-    "all": "Всички",
-    "list": {
-      "custom": "Персонализираният не е активиран",
-      "disabled": "Неактивиран",
-      "disabledActions": {
-        "sort": "Сортиране",
-        "sortAlphabetical": "Сортиране по азбучен ред",
-        "sortAlphabeticalDesc": "Сортиране по обратен азбучен ред",
-        "sortDefault": "Сортиране по подразбиране"
-      },
-      "enabled": "Активиран"
-    },
-    "notFound": "Не са намерени резултати от търсенето",
-    "searchProviders": "Търсене на доставчици...",
-    "sort": "Персонализирано сортиране"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "API ключът, предоставен от платформата New API",
-      "placeholder": "API ключ на New API",
-      "required": "API ключът е задължителен",
-      "title": "API ключ"
-    },
-    "apiUrl": {
-      "desc": "API адресът на услугата New API, обикновено трябва да включва /v1",
-      "title": "API адрес"
-    },
-    "enabled": {
-      "title": "Активиране на New API"
-    },
-    "models": {
-      "batchSelect": "Избор на множество модели ({{count}} броя)",
-      "fetch": "Вземане на списък с модели",
-      "selected": "Избрани модели",
-      "title": "Налични модели"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "Тестване дали адресът на прокси е попълнен правилно",
-      "title": "Проверка на свързаност"
-    },
-    "customModelName": {
-      "desc": "Добавяне на персонализирани модели, използвайте запетая (,) за разделяне на множество модели",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "Имена на персонализирани модели"
-    },
-    "download": {
-      "desc": "Ollama изтегля този модел, моля, не затваряйте тази страница. При повторно изтегляне ще продължи от мястото, на което е прекъснато",
-      "failed": "Изтеглянето на модела не успя, моля проверете мрежата или настройките на Ollama и опитайте отново",
-      "remainingTime": "Оставащо време",
-      "speed": "Скорост на изтегляне",
-      "title": "Изтегляне на модел {{model}} "
-    },
-    "endpoint": {
-      "desc": "Трябва да съдържа http(s)://, местният адрес може да остане празен, ако не е зададен допълнително",
-      "title": "Адрес на прокси интерфейс"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "Отмяна на изтеглянето",
-      "confirm": "Изтегляне",
-      "description": "Въведете етикета на вашия Ollama модел, за да продължите сесията",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "Започва изтеглянето...",
-      "title": "Изтегляне на зададения Ollama модел"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "Избрани {{count}} модела",
-      "title": "Множествен избор"
-    },
-    "config": {
-      "aesGcm": "Вашият ключ и адреса на прокси ще бъдат криптирани с <1>AES-GCM</1> алгоритъм",
-      "apiKey": {
-        "desc": "Моля, въведете вашия {{name}} API ключ",
-        "descWithUrl": "Моля, въведете вашия {{name}} API ключ, <3>кликнете тук, за да го получите</3>",
-        "placeholder": "{{name}} API ключ",
-        "title": "API ключ"
-      },
-      "baseURL": {
-        "desc": "Трябва да съдържа http(s)://",
-        "invalid": "Моля, въведете валиден URL",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "API адрес на прокси"
-      },
-      "checker": {
-        "button": "Проверка",
-        "desc": "Тест на API ключа и адреса на прокси за правилно попълване",
-        "pass": "Проверката е успешна",
-        "title": "Проверка на свързаност"
-      },
-      "fetchOnClient": {
-        "desc": "Режимът на клиентски запитвания ще инициира сесийни запитвания директно от браузъра, което може да ускори времето за отговор",
-        "title": "Използване на клиентски режим на запитвания"
-      },
-      "helpDoc": "Ръководство за конфигуриране",
-      "responsesApi": {
-        "desc": "Използва новия формат за заявки на OpenAI, отключвайки разширени функции като вериги на мисълта (поддържа се само от моделите на OpenAI)",
-        "title": "Използване на Responses API стандарта"
-      },
-      "waitingForMore": "Още модели са в <1>планиране</1>, моля, очаквайте"
-    },
-    "createNew": {
-      "title": "Създаване на персонализиран AI модел"
-    },
-    "item": {
-      "config": "Конфигуриране на модела",
-      "customModelCards": {
-        "addNew": "Създаване и добавяне на модел {{id}}",
-        "confirmDelete": "Ще изтриете този персонализиран модел, след изтриването няма да може да бъде възстановен, моля, действайте внимателно."
-      },
-      "delete": {
-        "confirm": "Потвърдете ли, че искате да изтриете модела {{displayName}}?",
-        "success": "Изтриването е успешно",
-        "title": "Изтриване на модел"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Полето, което действително се изисква в Azure OpenAI",
-          "placeholder": "Моля, въведете името на модела за разполагане в Azure",
-          "title": "Име на разполагане на модела"
-        },
-        "deployName": {
-          "extra": "Това поле ще бъде използвано като ID на модела при изпращане на заявката",
-          "placeholder": "Моля, въведете действителното име или ID на разположението на модела",
-          "title": "Име на разположение на модела"
-        },
-        "displayName": {
-          "placeholder": "Моля, въведете показваното име на модела, например ChatGPT, GPT-4 и др.",
-          "title": "Показвано име на модела"
-        },
-        "files": {
-          "extra": "Текущата функция за качване на файлове е само един хак, само за опити. Пълната функционалност за качване на файлове ще бъде реализирана по-късно.",
-          "title": "Поддръжка на качване на файлове"
-        },
-        "functionCall": {
-          "extra": "Тази конфигурация ще активира само способността на модела да използва инструменти, което позволява добавянето на плъгини от клас инструменти. Но дали наистина ще се поддържа използването на инструменти зависи изцяло от самия модел, моля, тествайте неговата наличност",
-          "title": "Поддръжка на използването на инструменти"
-        },
-        "id": {
-          "extra": "След създаването не може да бъде променян, ще се използва като идентификатор на модела при извикване на AI",
-          "placeholder": "Моля, въведете идентификатор на модела, например gpt-4o или claude-3.5-sonnet",
-          "title": "ID на модела"
-        },
-        "imageOutput": {
-          "extra": "Тази конфигурация ще активира само способността на модела да генерира изображения. Конкретният резултат зависи изцяло от самия модел. Моля, тествайте сами дали моделът има способност за генериране на изображения.",
-          "title": "Поддържа генериране на изображения"
-        },
-        "modalTitle": "Конфигурация на персонализиран модел",
-        "reasoning": {
-          "extra": "Тази конфигурация ще активира само способността на модела за дълбоко мислене, конкретният ефект зависи изцяло от самия модел, моля, тествайте сами дали моделът притежава налична способност за дълбоко мислене",
-          "title": "Поддръжка на дълбоко мислене"
-        },
-        "search": {
-          "extra": "Тази конфигурация ще активира само възможността за онлайн търсене чрез вградения търсач на модела. Дали се поддържа вграден търсач зависи от самия модел. Моля, тествайте сами дали тази функция е налична.",
-          "title": "Поддържа онлайн търсене"
-        },
-        "tokens": {
-          "extra": "Настройте максималния брой токени, поддържани от модела",
-          "title": "Максимален контекстуален прозорец",
-          "unlimited": "Без ограничения"
-        },
-        "type": {
-          "extra": "Различните типове модели имат различни сценарии на използване и възможности",
-          "options": {
-            "chat": "Чат",
-            "embedding": "Векторизация",
-            "image": "Генериране на изображения",
-            "realtime": "Реално време чат",
-            "stt": "Гласов текст",
-            "text2music": "Текст към музика",
-            "text2video": "Текст към видео",
-            "tts": "Гласово синтезиране"
-          },
-          "placeholder": "Моля, изберете тип модел",
-          "title": "Тип модел"
-        },
-        "video": {
-          "extra": "Тази конфигурация ще активира само настройките за разпознаване на видео в приложението. Дали се поддържа разпознаване зависи изцяло от самия модел. Моля, тествайте сами дали моделът поддържа разпознаване на видео.",
-          "title": "Поддържа разпознаване на видео"
-        },
-        "vision": {
-          "extra": "Тази конфигурация ще активира само конфигурацията за качване на изображения в приложението, дали поддържа разпознаване зависи изцяло от самия модел, моля, тествайте наличността на визуалната разпознаваемост на този модел.",
-          "title": "Поддръжка на визуално разпознаване"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/изображение",
-        "inputCharts": "${{amount}}/M символи",
-        "inputMinutes": "${{amount}}/минути",
-        "inputTokens": "Входящи ${{amount}}/М",
-        "outputTokens": "Изходящи ${{amount}}/М"
-      },
-      "releasedAt": "Пуснато на {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "Добавяне на модел",
-      "disabled": "Неактивен",
-      "disabledActions": {
-        "showMore": "Покажи всичко",
-        "sort": "Сортиране",
-        "sortAlphabetical": "Сортиране по азбучен ред",
-        "sortAlphabeticalDesc": "Сортиране по обратен азбучен ред",
-        "sortDefault": "Сортиране по подразбиране",
-        "sortReleasedAt": "Сортиране по най-ранна дата на публикуване",
-        "sortReleasedAtDesc": "Сортиране по най-нова дата на публикуване"
-      },
-      "empty": {
-        "desc": "Моля, създайте персонализиран модел или изтеглете модел, за да започнете да го използвате",
-        "title": "Няма налични модели"
-      },
-      "enabled": "Активен",
-      "enabledActions": {
-        "disableAll": "Деактивирай всичко",
-        "enableAll": "Активирай всичко",
-        "sort": "Персонализиране на подредбата на моделите"
-      },
-      "enabledEmpty": "Няма активни модели, моля активирайте желаните модели от списъка по-долу~",
-      "fetcher": {
-        "clear": "Изчисти получените модели",
-        "fetch": "Получаване на списък с модели",
-        "fetching": "Получаване на списък с модели...",
-        "latestTime": "Последно обновление: {{time}}",
-        "noLatestTime": "Все още не е получен списък"
-      },
-      "noModelsInCategory": "В тази категория няма активирани модели",
-      "resetAll": {
-        "conform": "Потвърдете ли, че искате да нулирате всички промени в текущия модел? След нулирането списъкът с текущи модели ще се върне в първоначалното си състояние",
-        "success": "Успешно нулирано",
-        "title": "Нулиране на всички промени"
-      },
-      "search": "Търсене на модели...",
-      "searchResult": "Намерени са {{count}} модела",
-      "title": "Списък с модели",
-      "total": "Общо {{count}} налични модела"
-    },
-    "searchNotFound": "Не са намерени резултати от търсенето",
-    "tabs": {
-      "all": "Всички",
-      "chat": "Чат",
-      "embedding": "Векторизация",
-      "image": "Изображение",
-      "stt": "ASR",
-      "tts": "TTS"
-    }
-  },
-  "sortModal": {
-    "success": "Сортирането е успешно обновено",
-    "title": "Персонализирано сортиране",
-    "update": "Актуализиране"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "Ще изтриете този AI доставчик, след изтриването няма да може да бъде възстановен, потвърдете ли, че искате да изтриете?",
-    "deleteSuccess": "Изтриването е успешно",
-    "tooltip": "Актуализиране на основната конфигурация на доставчика",
-    "updateSuccess": "Актуализацията е успешна"
-  },
-  "updateCustomAiProvider": {
-    "title": "Актуализиране на конфигурацията на доставчика на персонализирани AI услуги"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "Въведете вашите ключове за Vertex AI",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "Ключове за Vertex AI"
-    },
-    "region": {
-      "desc": "Изберете регион за услугата Vertex AI. Някои модели, като Gemini 2.5, са налични само в определени региони (например global)",
-      "placeholder": "Изберете регион",
-      "title": "Регион на Vertex AI"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI Зероуан Всичко"
-  },
-  "zhipu": {
-    "title": "Интелигентен албум"
-  }
+  "azure.azureApiVersion.desc": "Версия на Azure API, следвайте формата ГГГГ-ММ-ДД, проверете [последната версия](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "Изтегли списък",
+  "azure.azureApiVersion.title": "Версия на Azure API",
+  "azure.empty": "Моля, въведете ID на модел, за да добавите първия модел",
+  "azure.endpoint.desc": "Когато проверявате ресурсите в Azure портала, можете да намерите тази стойност в секцията 'Ключове и крайни точки'",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "Адрес на Azure API",
+  "azure.modelListPlaceholder": "Изберете или добавете OpenAI модел, който сте внедрили",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "Когато проверявате ресурсите в Azure портала, можете да намерите тази стойност в секцията 'Ключове и крайни точки'. Можете да използвате KEY1 или KEY2",
+  "azure.token.placeholder": "Ключ за Azure API",
+  "azure.token.title": "API ключ",
+  "azureai.azureApiVersion.desc": "Версия на API за Azure, следва формата ГГГГ-ММ-ДД. Вижте [последната версия](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "Изтегли списък",
+  "azureai.azureApiVersion.title": "Версия на Azure API",
+  "azureai.endpoint.desc": "Намерете крайния адрес за инференция на модела от прегледа на проекта в Azure AI",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "Краен адрес на Azure AI",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "Намерете API ключа от прегледа на проекта в Azure AI",
+  "azureai.token.placeholder": "Ключ за Azure",
+  "azureai.token.title": "Ключ",
+  "bedrock.accessKeyId.desc": "Въведете AWS Access Key Id",
+  "bedrock.accessKeyId.placeholder": "AWS Access Key Id",
+  "bedrock.accessKeyId.title": "AWS Access Key Id",
+  "bedrock.checker.desc": "Проверете дали AccessKeyId / SecretAccessKey са въведени правилно",
+  "bedrock.region.desc": "Въведете AWS регион",
+  "bedrock.region.placeholder": "AWS регион",
+  "bedrock.region.title": "AWS регион",
+  "bedrock.secretAccessKey.desc": "Въведете AWS Secret Access Key",
+  "bedrock.secretAccessKey.placeholder": "AWS Secret Access Key",
+  "bedrock.secretAccessKey.title": "AWS Secret Access Key",
+  "bedrock.sessionToken.desc": "Ако използвате AWS SSO/STS, моля въведете вашия AWS Session Token",
+  "bedrock.sessionToken.placeholder": "AWS Session Token",
+  "bedrock.sessionToken.title": "AWS Session Token (по избор)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "Потребителски регион на услугата",
+  "bedrock.unlock.customSessionToken": "Потребителски Session Token",
+  "bedrock.unlock.description": "Въведете вашите AWS AccessKeyId / SecretAccessKey, за да започнете сесията. Приложението няма да съхранява вашата конфигурация за удостоверяване",
+  "bedrock.unlock.imageGenerationDescription": "Въведете вашите AWS AccessKeyId / SecretAccessKey, за да започнете генерирането. Приложението няма да съхранява вашите удостоверителни данни.",
+  "bedrock.unlock.title": "Използвайте потребителска Bedrock информация за удостоверяване",
+  "cloudflare.apiKey.desc": "Моля, въведете Cloudflare API ключ",
+  "cloudflare.apiKey.placeholder": "Cloudflare API ключ",
+  "cloudflare.apiKey.title": "Cloudflare API ключ",
+  "cloudflare.baseURLOrAccountID.desc": "Въведете вашия Cloudflare Account ID или персонализиран API адрес",
+  "cloudflare.baseURLOrAccountID.placeholder": "Cloudflare Account ID / персонализиран API URL",
+  "cloudflare.baseURLOrAccountID.title": "Cloudflare Account ID / API адрес",
+  "comfyui.apiKey.desc": "API ключ за удостоверяване с Bearer Token",
+  "comfyui.apiKey.placeholder": "Въведете API ключ",
+  "comfyui.apiKey.required": "Моля, въведете API ключ",
+  "comfyui.apiKey.title": "API ключ",
+  "comfyui.authType.desc": "Изберете метод за удостоверяване за връзка със сървъра ComfyUI",
+  "comfyui.authType.options.basic": "Основно удостоверяване",
+  "comfyui.authType.options.bearer": "Bearer Token",
+  "comfyui.authType.options.custom": "Потребителско удостоверяване",
+  "comfyui.authType.options.none": "Без удостоверяване",
+  "comfyui.authType.placeholder": "Моля, изберете тип удостоверяване",
+  "comfyui.authType.title": "Тип удостоверяване",
+  "comfyui.baseURL.desc": "Адрес за достъп до сървъра ComfyUI, напр. http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "Моля, въведете URL на услугата ComfyUI",
+  "comfyui.baseURL.title": "URL на услугата ComfyUI",
+  "comfyui.checker.desc": "Проверете дали връзката е конфигурирана правилно",
+  "comfyui.checker.title": "Проверка на свързаността",
+  "comfyui.customHeaders.addButton": "Добави хедър",
+  "comfyui.customHeaders.deleteTooltip": "Изтрий този хедър",
+  "comfyui.customHeaders.desc": "Хедъри на заявката, необходими за потребителско удостоверяване, във формат ключ-стойност",
+  "comfyui.customHeaders.duplicateKeyError": "Имената на хедърите не могат да се повтарят",
+  "comfyui.customHeaders.keyPlaceholder": "Ключ",
+  "comfyui.customHeaders.required": "Моля, въведете потребителски хедъри на заявката",
+  "comfyui.customHeaders.title": "Потребителски хедъри",
+  "comfyui.customHeaders.valuePlaceholder": "Стойност",
+  "comfyui.password.desc": "Парола за основно удостоверяване",
+  "comfyui.password.placeholder": "Въведете парола",
+  "comfyui.password.required": "Моля, въведете парола",
+  "comfyui.password.title": "Парола",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "Потребителско име за основно удостоверяване",
+  "comfyui.username.placeholder": "Въведете потребителско име",
+  "comfyui.username.required": "Моля, въведете потребителско име",
+  "comfyui.username.title": "Потребителско име",
+  "createNewAiProvider.apiKey.placeholder": "Моля, въведете вашия API ключ",
+  "createNewAiProvider.apiKey.title": "API ключ",
+  "createNewAiProvider.basicTitle": "Основна информация",
+  "createNewAiProvider.configTitle": "Конфигурационна информация",
+  "createNewAiProvider.confirm": "Създай",
+  "createNewAiProvider.createSuccess": "Успешно създаване",
+  "createNewAiProvider.description.placeholder": "Описание на доставчика (по избор)",
+  "createNewAiProvider.description.title": "Описание на доставчика",
+  "createNewAiProvider.id.desc": "Уникален идентификатор за доставчика на услуги, който не може да бъде променян след създаване",
+  "createNewAiProvider.id.format": "Може да съдържа само цифри, малки букви, тирета (-) и долни черти (_)",
+  "createNewAiProvider.id.placeholder": "Препоръчително е да е с малки букви, напр. openai, не може да се променя след създаване",
+  "createNewAiProvider.id.required": "Моля, въведете ID на доставчика",
+  "createNewAiProvider.id.title": "ID на доставчика",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "Моля, качете валидно лого на доставчика",
+  "createNewAiProvider.logo.title": "Лого на доставчика",
+  "createNewAiProvider.name.placeholder": "Моля, въведете показваното име на доставчика",
+  "createNewAiProvider.name.required": "Моля, въведете име на доставчика",
+  "createNewAiProvider.name.title": "Име на доставчика",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "Моля, въведете прокси адрес",
+  "createNewAiProvider.proxyUrl.title": "Прокси URL",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "Моля, изберете тип SDK",
+  "createNewAiProvider.sdkType.title": "Формат на заявката",
+  "createNewAiProvider.title": "Създай потребителски AI доставчик",
+  "github.personalAccessToken.desc": "Въведете вашия GitHub PAT. Натиснете [тук](https://github.com/settings/tokens), за да създадете такъв.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "GitHub PAT",
+  "huggingface.accessToken.desc": "Въведете вашия HuggingFace Token, натиснете [тук](https://huggingface.co/settings/tokens), за да създадете такъв",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "HuggingFace Token",
+  "list.title.custom": "Персонализиран доставчик не е активиран",
+  "list.title.disabled": "Деактивиран",
+  "list.title.enabled": "Активиран",
+  "menu.addCustomProvider": "Добави персонализиран доставчик",
+  "menu.all": "Всички",
+  "menu.list.custom": "Персонализиран не е активиран",
+  "menu.list.disabled": "Деактивиран",
+  "menu.list.disabledActions.sort": "Сортирай по",
+  "menu.list.disabledActions.sortAlphabetical": "Сортирай по азбучен ред",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "Сортирай по обратен азбучен ред",
+  "menu.list.disabledActions.sortDefault": "По подразбиране",
+  "menu.list.enabled": "Активиран",
+  "menu.notFound": "Няма намерени резултати от търсенето",
+  "menu.searchProviders": "Търсене на доставчици...",
+  "menu.sort": "Персонализирано сортиране",
+  "newapi.apiKey.desc": "API ключ, предоставен от платформата New API",
+  "newapi.apiKey.placeholder": "API ключ за New API",
+  "newapi.apiKey.required": "API ключът е задължителен",
+  "newapi.apiKey.title": "API ключ",
+  "newapi.apiUrl.desc": "API адрес за услугата New API, обикновено включва /v1",
+  "newapi.apiUrl.title": "API URL адрес",
+  "newapi.enabled.title": "Активирай New API",
+  "newapi.models.batchSelect": "Избери модели накуп ({{count}} елемента)",
+  "newapi.models.fetch": "Изтегли списък с модели",
+  "newapi.models.selected": "Избрани модели",
+  "newapi.models.title": "Налични модели",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "Провери дали адресът на проксито е попълнен правилно",
+  "ollama.checker.title": "Проверка на свързаност",
+  "ollama.customModelName.desc": "Добави персонализирани модели, разделени със запетаи",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "Име на персонализиран модел",
+  "ollama.download.desc": "Ollama изтегля модела. Моля, не затваряйте страницата. Ако изтеглянето бъде прекъснато, ще се възобнови от мястото, където е спряло.",
+  "ollama.download.failed": "Неуспешно изтегляне на модела. Моля, проверете мрежата или настройките на Ollama и опитайте отново.",
+  "ollama.download.remainingTime": "Оставащо време",
+  "ollama.download.speed": "Скорост",
+  "ollama.download.title": "Изтегляне на модел {{model}}",
+  "ollama.endpoint.desc": "Трябва да включва http(s)://; може да се остави празно, ако не е зададено локално.",
+  "ollama.endpoint.title": "Адрес на интерфейсното прокси",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "Отказ на изтегляне",
+  "ollama.unlock.confirm": "Изтегли",
+  "ollama.unlock.description": "Въведете етикета на модела Ollama, за да продължите сесията",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "Стартиране на изтегляне...",
+  "ollama.unlock.title": "Изтегли избрания модел на Ollama",
+  "providerModels.batchSelect.selected": "Избрани {{count}} модела",
+  "providerModels.batchSelect.title": "Масов избор",
+  "providerModels.config.aesGcm": "Вашият ключ и прокси URL ще бъдат криптирани с <1>AES-GCM</1> алгоритъм",
+  "providerModels.config.apiKey.desc": "Моля, въведете вашия {{name}} API ключ",
+  "providerModels.config.apiKey.descWithUrl": "Моля, въведете вашия {{name}} API ключ. <3>Кликнете тук, за да го получите</3>",
+  "providerModels.config.apiKey.placeholder": "{{name}} API ключ",
+  "providerModels.config.apiKey.title": "API ключ",
+  "providerModels.config.baseURL.desc": "Трябва да включва http(s)://",
+  "providerModels.config.baseURL.invalid": "Моля, въведете валиден URL адрес",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "API прокси URL",
+  "providerModels.config.checker.button": "Провери",
+  "providerModels.config.checker.desc": "Провери дали API ключът и прокси URL са попълнени правилно",
+  "providerModels.config.checker.pass": "Проверката е успешна",
+  "providerModels.config.checker.title": "Проверка на свързаност",
+  "providerModels.config.fetchOnClient.desc": "Режимът на клиентска заявка ще стартира сесии директно от браузъра, което може да подобри скоростта на отговор",
+  "providerModels.config.fetchOnClient.title": "Използвай клиентски режим на заявка",
+  "providerModels.config.helpDoc": "Ръководство за конфигурация",
+  "providerModels.config.responsesApi.desc": "Използва новия формат на заявки на OpenAI за отключване на разширени функции като верига на мисълта (поддържа се само от OpenAI модели)",
+  "providerModels.config.responsesApi.title": "Използвай Responses API спецификация",
+  "providerModels.config.waitingForMore": "В момента се <1>планира интеграция</1> на още модели, следете за новини",
+  "providerModels.createNew.title": "Създай персонализиран AI модел",
+  "providerModels.item.config": "Конфигурирай модел",
+  "providerModels.item.customModelCards.addNew": "Създай и добави модел {{id}}",
+  "providerModels.item.customModelCards.confirmDelete": "Ще изтриете този персонализиран модел. След изтриване не може да бъде възстановен. Продължете с внимание.",
+  "providerModels.item.delete.confirm": "Сигурни ли сте, че искате да изтриете модела {{displayName}}?",
+  "providerModels.item.delete.success": "Успешно изтриване",
+  "providerModels.item.delete.title": "Изтрий модел",
+  "providerModels.item.modelConfig.azureDeployName.extra": "Поле, използвано за реални заявки в Azure OpenAI",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "Въведете името на разгръщане на модела в Azure",
+  "providerModels.item.modelConfig.azureDeployName.title": "Име на разгръщане на модела",
+  "providerModels.item.modelConfig.deployName.extra": "Това поле ще се използва като ID на модела при изпращане на заявки",
+  "providerModels.item.modelConfig.deployName.placeholder": "Въведете реалното име или ID на разгръщане на модела",
+  "providerModels.item.modelConfig.deployName.title": "Име на разгръщане на модела",
+  "providerModels.item.modelConfig.displayName.placeholder": "Въведете показваното име на модела, напр. ChatGPT, GPT-4 и др.",
+  "providerModels.item.modelConfig.displayName.title": "Показвано име на модела",
+  "providerModels.item.modelConfig.files.extra": "Текущата реализация на качване на файлове е временна и е предназначена само за експерименти. Очаквайте пълна поддръжка в бъдеще.",
+  "providerModels.item.modelConfig.files.title": "Поддръжка на качване на файлове",
+  "providerModels.item.modelConfig.functionCall.extra": "Тази настройка активира възможността на модела да използва инструменти. Дали ще ги използва ефективно зависи от самия модел. Моля, тествайте.",
+  "providerModels.item.modelConfig.functionCall.title": "Поддръжка на използване на инструменти",
+  "providerModels.item.modelConfig.id.extra": "Не може да се променя след създаване и ще се използва като ID на модела при извикване",
+  "providerModels.item.modelConfig.id.placeholder": "Въведете ID на модела, напр. gpt-4o или claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "ID на модела",
+  "providerModels.item.modelConfig.imageOutput.extra": "Тази настройка активира само възможността за генериране на изображения. Реалната поддръжка зависи от модела. Моля, тествайте.",
+  "providerModels.item.modelConfig.imageOutput.title": "Поддържа генериране на изображения",
+  "providerModels.item.modelConfig.modalTitle": "Конфигурация на персонализиран модел",
+  "providerModels.item.modelConfig.reasoning.extra": "Тази настройка активира дълбоко мислене. Ефективността зависи от модела. Моля, тествайте.",
+  "providerModels.item.modelConfig.reasoning.title": "Поддръжка на дълбоко мислене",
+  "providerModels.item.modelConfig.search.extra": "Активира вградена уеб търсачка. Поддръжката зависи от модела. Моля, тествайте.",
+  "providerModels.item.modelConfig.search.title": "Поддържа уеб търсене",
+  "providerModels.item.modelConfig.tokens.extra": "Задай максималния брой токени, поддържани от модела",
+  "providerModels.item.modelConfig.tokens.title": "Максимален контекстов прозорец",
+  "providerModels.item.modelConfig.tokens.unlimited": "Неограничен",
+  "providerModels.item.modelConfig.type.extra": "Различните типове модели имат различни приложения и възможности",
+  "providerModels.item.modelConfig.type.options.chat": "Чат",
+  "providerModels.item.modelConfig.type.options.embedding": "Вграждане",
+  "providerModels.item.modelConfig.type.options.image": "Генериране на изображения",
+  "providerModels.item.modelConfig.type.options.realtime": "Чат в реално време",
+  "providerModels.item.modelConfig.type.options.stt": "Реч към текст",
+  "providerModels.item.modelConfig.type.options.text2music": "Текст към музика",
+  "providerModels.item.modelConfig.type.options.text2video": "Текст към видео",
+  "providerModels.item.modelConfig.type.options.tts": "Текст към реч",
+  "providerModels.item.modelConfig.type.placeholder": "Изберете тип модел",
+  "providerModels.item.modelConfig.type.title": "Тип модел",
+  "providerModels.item.modelConfig.video.extra": "Активира конфигурация за разпознаване на видео. Поддръжката зависи от модела. Моля, тествайте.",
+  "providerModels.item.modelConfig.video.title": "Поддържа разпознаване на видео",
+  "providerModels.item.modelConfig.vision.extra": "Активира възможност за качване на изображения. Поддръжката зависи от модела. Моля, тествайте.",
+  "providerModels.item.modelConfig.vision.title": "Поддръжка на визуално разпознаване",
+  "providerModels.item.pricing.image": "${{amount}}/Изображение",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/М символа",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/Минута",
+  "providerModels.item.pricing.inputTokens": "Вход ${{amount}}/М",
+  "providerModels.item.pricing.outputTokens": "Изход ${{amount}}/М",
+  "providerModels.item.releasedAt": "Пуснат на {{releasedAt}}",
+  "providerModels.list.addNew": "Добави модел",
+  "providerModels.list.disabled": "Деактивиран",
+  "providerModels.list.disabledActions.showMore": "Покажи всички",
+  "providerModels.list.disabledActions.sort": "Сортирай по",
+  "providerModels.list.disabledActions.sortAlphabetical": "Сортирай по азбучен ред",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "Сортирай по обратен азбучен ред",
+  "providerModels.list.disabledActions.sortDefault": "По подразбиране",
+  "providerModels.list.disabledActions.sortReleasedAt": "Сортирай по най-ранна дата",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "Сортирай по най-нова дата",
+  "providerModels.list.empty.desc": "Моля, създайте персонализиран модел или изтеглете модел, за да започнете.",
+  "providerModels.list.empty.title": "Няма налични модели",
+  "providerModels.list.enabled": "Активиран",
+  "providerModels.list.enabledActions.disableAll": "Деактивирай всички",
+  "providerModels.list.enabledActions.enableAll": "Активирай всички",
+  "providerModels.list.enabledActions.sort": "Сортиране на персонализирани модели",
+  "providerModels.list.enabledEmpty": "Няма активирани модели. Моля, активирайте предпочитаните модели от списъка по-долу~",
+  "providerModels.list.fetcher.clear": "Изчисти изтеглените модели",
+  "providerModels.list.fetcher.fetch": "Изтегли модели",
+  "providerModels.list.fetcher.fetching": "Изтегляне на списък с модели...",
+  "providerModels.list.fetcher.latestTime": "Последна актуализация: {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "Списъкът с модели все още не е изтеглен",
+  "providerModels.list.noModelsInCategory": "Няма активирани модели в тази категория",
+  "providerModels.list.resetAll.conform": "Сигурни ли сте, че искате да нулирате всички промени по текущия модел? След нулиране списъкът ще се върне към първоначалното си състояние.",
+  "providerModels.list.resetAll.success": "Успешно нулиране",
+  "providerModels.list.resetAll.title": "Нулирай всички промени",
+  "providerModels.list.search": "Търсене на модели...",
+  "providerModels.list.searchResult": "Намерени {{count}} модела",
+  "providerModels.list.title": "Списък с модели",
+  "providerModels.list.total": "Налични {{count}} модела",
+  "providerModels.searchNotFound": "Няма намерени резултати от търсенето",
+  "providerModels.tabs.all": "Всички",
+  "providerModels.tabs.chat": "Чат",
+  "providerModels.tabs.embedding": "Вграждане",
+  "providerModels.tabs.image": "Изображение",
+  "providerModels.tabs.stt": "ASR",
+  "providerModels.tabs.tts": "TTS",
+  "sortModal.success": "Сортирането е успешно обновено",
+  "sortModal.title": "Персонализиран ред",
+  "sortModal.update": "Обнови",
+  "updateAiProvider.confirmDelete": "Ще изтриете този AI доставчик. След изтриване не може да бъде възстановен. Сигурни ли сте?",
+  "updateAiProvider.deleteSuccess": "Успешно изтриване",
+  "updateAiProvider.tooltip": "Обнови основната конфигурация на доставчика",
+  "updateAiProvider.updateSuccess": "Успешно обновяване",
+  "updateCustomAiProvider.title": "Обнови конфигурацията на персонализиран AI доставчик",
+  "vertexai.apiKey.desc": "Въведете вашите ключове за Vertex AI",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "Ключове за Vertex AI",
+  "vertexai.region.desc": "Изберете регион за услугата Vertex AI. Някои модели като Gemini 2.5 са налични само в определени региони (напр. global)",
+  "vertexai.region.placeholder": "Изберете регион",
+  "vertexai.region.title": "Регион на Vertex AI",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

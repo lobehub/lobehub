@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "折りたたむ",
-      "on": "展開する"
-    },
-    "typobar": {
-      "off": "書式ツールバーを非表示",
-      "on": "書式ツールバーを表示"
-    }
-  },
+  "actions.expand.off": "折りたたむ",
+  "actions.expand.on": "展開する",
+  "actions.typobar.off": "書式ツールバーを非表示",
+  "actions.typobar.on": "書式ツールバーを表示",
+  "autoSave.latest": "最新バージョンを読み込みました",
+  "autoSave.saved": "保存済み",
+  "autoSave.saving": "自動保存中...",
   "cancel": "キャンセル",
+  "codemirror.copyFailed": "コピーに失敗しました",
+  "codemirror.copySuccess": "コードがクリップボードにコピーされました",
+  "codemirror.selectLanguage": "言語を選択",
+  "codemirror.selectTheme": "テーマを選択",
+  "codemirror.showLineNumbers": "行番号を表示",
+  "codemirror.tabSize": "タブサイズ",
+  "codemirror.theme": "テーマ",
+  "codemirror.useTabs": "タブを使用",
   "confirm": "確認",
-  "file": {
-    "error": "エラー：{{message}}",
-    "uploading": "ファイルをアップロードしています..."
-  },
-  "image": {
-    "broken": "画像が破損しています"
-  },
-  "link": {
-    "edit": "リンクを編集",
-    "open": "リンクを開く",
-    "placeholder": "リンクの URL を入力",
-    "unlink": "リンクを解除"
-  },
-  "math": {
-    "placeholder": "TeX 公式を入力してください"
-  },
-  "slash": {
-    "h1": "見出し1",
-    "h2": "見出し2",
-    "h3": "見出し3",
-    "hr": "区切り線",
-    "table": "表",
-    "tex": "TeX 数式"
-  },
-  "table": {
-    "delete": "表を削除",
-    "deleteColumn": "列を削除",
-    "deleteRow": "行を削除",
-    "insertColumnLeft": "左側に {{count}} 列を挿入",
-    "insertColumnRight": "右側に {{count}} 列を挿入",
-    "insertRowAbove": "上に {{count}} 行を挿入",
-    "insertRowBelow": "下に {{count}} 行を挿入"
-  },
-  "typobar": {
-    "blockquote": "引用",
-    "bold": "太字",
-    "bulletList": "番号なしリスト",
-    "code": "インラインコード",
-    "codeblock": "コードブロック",
-    "italic": "斜体",
-    "link": "リンク",
-    "numberList": "番号付きリスト",
-    "strikethrough": "取り消し線",
-    "table": "表",
-    "taskList": "タスクリスト",
-    "tex": "TeX 公式",
-    "underline": "下線"
-  }
+  "file.error": "エラー：{{message}}",
+  "file.uploading": "ファイルをアップロードしています...",
+  "image.broken": "画像が破損しています",
+  "link.edit": "リンクを編集",
+  "link.editLinkTitle": "リンク",
+  "link.editTextTitle": "タイトル",
+  "link.open": "リンクを開く",
+  "link.placeholder": "リンクの URL を入力",
+  "link.unlink": "リンクを解除",
+  "markdown.cancel": "キャンセル",
+  "markdown.confirm": "変換",
+  "markdown.parseMessage": "Markdown形式に変換すると、現在の内容は上書きされます。よろしいですか？（5秒後に自動的に閉じます）",
+  "markdown.parseTitle": "Markdownのフォーマット",
+  "math.placeholder": "TeX 公式を入力してください",
+  "modifier.accept": "保持",
+  "modifier.acceptAll": "すべて承諾する",
+  "modifier.reject": "取り消し",
+  "modifier.rejectAll": "すべてを取り消す",
+  "slash.h1": "見出し1",
+  "slash.h2": "見出し2",
+  "slash.h3": "見出し3",
+  "slash.hr": "区切り線",
+  "slash.table": "表",
+  "slash.tex": "TeX 数式",
+  "table.delete": "表を削除",
+  "table.deleteColumn": "列を削除",
+  "table.deleteRow": "行を削除",
+  "table.insertColumnLeft": "左側に {{count}} 列を挿入",
+  "table.insertColumnRight": "右側に {{count}} 列を挿入",
+  "table.insertRowAbove": "上に {{count}} 行を挿入",
+  "table.insertRowBelow": "下に {{count}} 行を挿入",
+  "typobar.blockquote": "引用",
+  "typobar.bold": "太字",
+  "typobar.bulletList": "番号なしリスト",
+  "typobar.code": "インラインコード",
+  "typobar.codeblock": "コードブロック",
+  "typobar.image": "画像",
+  "typobar.italic": "斜体",
+  "typobar.link": "リンク",
+  "typobar.numberList": "番号付きリスト",
+  "typobar.redo": "やり直し",
+  "typobar.strikethrough": "取り消し線",
+  "typobar.table": "表",
+  "typobar.taskList": "タスクリスト",
+  "typobar.tex": "TeX 公式",
+  "typobar.underline": "下線",
+  "typobar.undo": "元に戻す"
 }

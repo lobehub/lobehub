@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Ảnh đại diện",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Quá tải",
+    "tokenTag.remained": "Còn lại",
+    "tokenTag.used": "Đã sử dụng"
+  },
+  "common": {
+    "common.cancel": "Hủy",
+    "common.confirm": "Xác nhận",
+    "common.delete": "Xóa",
+    "common.edit": "Chỉnh sửa"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Thêm thuộc tính",
+    "editableMessage.delete": "Xóa",
+    "editableMessage.input": "Đầu vào",
+    "editableMessage.inputPlaceholder": "Vui lòng nhập nội dung mẫu đầu vào",
+    "editableMessage.output": "Đầu ra",
+    "editableMessage.outputPlaceholder": "Vui lòng nhập nội dung mẫu đầu ra",
+    "editableMessage.system": "Hệ thống"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Xóa",
+    "emojiPicker.draggerDesc": "Nhấp hoặc kéo hình ảnh vào khu vực này để tải lên",
+    "emojiPicker.emoji": "Biểu tượng cảm xúc",
+    "emojiPicker.fileTypeError": "Bạn chỉ có thể tải lên các tệp hình ảnh!",
+    "emojiPicker.upload": "Tải lên",
+    "emojiPicker.uploadBtn": "Cắt và tải lên"
+  },
+  "form": {
+    "form.reset": "Đặt lại",
+    "form.submit": "Gửi",
+    "form.unsavedChanges": "Thay đổi chưa được lưu",
+    "form.unsavedWarning": "Bạn có thay đổi chưa được lưu. Bạn có chắc chắn muốn rời đi không?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Phím tắt này bị trùng với một phím tắt khác.",
+    "hotkey.invalidCombination": "Phím tắt phải bao gồm một phím điều khiển (Ctrl, Alt, Shift) và chỉ một phím thường.",
+    "hotkey.placeholder": "Nhấn phím để ghi lại phím tắt",
+    "hotkey.reset": "Khôi phục mặc định"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Hủy",
+    "messageModal.confirm": "Xác nhận",
+    "messageModal.edit": "Chỉnh sửa"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Thu gọn thanh bên",
+    "sideNav.demoActiveLabel": "Đang hoạt động",
+    "sideNav.demoFeatureAutoCollapseDesc": "Kéo dưới ngưỡng để tự động thu gọn",
+    "sideNav.demoFeatureAutoCollapseTitle": "Tự động thu gọn",
+    "sideNav.demoFeaturePerformanceDesc": "Không có hiệu ứng động để tăng hiệu suất",
+    "sideNav.demoFeaturePerformanceTitle": "Hiệu suất",
+    "sideNav.demoFeatureResizeDesc": "Kéo để điều chỉnh độ rộng bảng",
+    "sideNav.demoFeatureResizeTitle": "Thay đổi kích thước linh hoạt",
+    "sideNav.demoFeatureSmartHandleDesc": "Di chuột để hiển thị nút chuyển đổi",
+    "sideNav.demoFeatureSmartHandleTitle": "Tay cầm thông minh",
+    "sideNav.demoFeaturesTitle": "Tính năng",
+    "sideNav.demoHint": "Thử kéo cạnh bảng và sử dụng nút chuyển đổi ->",
+    "sideNav.demoSubtitle": "Bảng bên kiểu không gian làm việc với khả năng thay đổi kích thước bằng cách kéo",
+    "sideNav.demoTitle": "Bản demo DraggableSideNav",
+    "sideNav.expand": "Mở rộng thanh bên"
+  }
+}

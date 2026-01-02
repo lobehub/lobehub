@@ -1,4 +1,4 @@
-import { ColorSwatches, NeutralColors, findCustomThemeName, neutralColors } from '@lobehub/ui';
+import { ColorSwatches, type NeutralColors, findCustomThemeName, neutralColors } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

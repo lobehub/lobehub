@@ -22,7 +22,12 @@ export interface FileListItem {
    */
   metadata?: Record<string, any> | null;
   name: string;
+  /**
+   * Parent folder ID (for folder hierarchy)
+   */
+  parentId?: string | null;
   size: number;
+  slug?: string | null;
   sourceType: string;
   updatedAt: Date;
   url: string;
@@ -36,6 +41,9 @@ export enum SortType {
 export const QueryFileListSchema = z.object({
   category: z.string().optional(),
   knowledgeBaseId: z.string().optional(),
+  limit: z.number().int().positive().default(50),
+  offset: z.number().int().min(0).default(0),
+  parentId: z.string().nullable().optional(),
   q: z.string().nullable().optional(),
   showFilesInKnowledgeBase: z.boolean().default(false),
   sortType: z.enum(['desc', 'asc']).optional(),
@@ -47,8 +55,17 @@ export type QueryFileListSchemaType = z.infer<typeof QueryFileListSchema>;
 export interface QueryFileListParams {
   category?: string;
   knowledgeBaseId?: string;
+  limit?: number;
+  offset?: number;
+  parentId?: string | null;
   q?: string | null;
   showFilesInKnowledgeBase?: boolean;
   sortType?: string;
   sorter?: string;
+}
+
+export interface PaginatedFileList {
+  hasMore: boolean;
+  items: FileListItem[];
+  total?: number;
 }

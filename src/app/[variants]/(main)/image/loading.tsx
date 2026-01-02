@@ -1,3 +1,3 @@
 import Loading from '@/components/Loading/BrandTextLoading';
 
-export default () => <Loading />;
+export default () => <Loading debugId="Image Page" />;

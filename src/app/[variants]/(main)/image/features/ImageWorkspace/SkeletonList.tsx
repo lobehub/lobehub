@@ -1,15 +1,13 @@
 'use client';
 
-import { Block, Grid } from '@lobehub/ui';
-import { Skeleton } from 'antd';
+import { Block, Center, Flexbox, Grid, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import PromptInput from '@/app/[variants]/(main)/image/features/PromptInput';
 
 const SkeletonList = memo(() => {
   return (
-    <>
+    <Flexbox style={{ minHeight: 'calc(100vh - 44px)' }}>
       <Block variant={'borderless'}>
         <Flexbox gap={12}>
           {/* Prompt text skeleton */}
@@ -41,7 +39,7 @@ const SkeletonList = memo(() => {
       >
         <PromptInput disableAnimation={true} showTitle={false} />
       </Center>
-    </>
+    </Flexbox>
   );
 });
 

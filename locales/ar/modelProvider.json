@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "نسخة API الخاصة بـ Azure، والتي تتبع تنسيق YYYY-MM-DD، راجع [الإصدارات الأحدث](https://learn.microsoft.com/zh-en/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "جلب القائمة",
-      "title": "Azure API Version"
-    },
-    "empty": "الرجاء إدخال معرف النموذج لإضافة أول نموذج",
-    "endpoint": {
-      "desc": "يمكن العثور على هذه القيمة في قسم 'المفاتيح والنقاط النهائية' عند فحص الموارد في بوابة Azure",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "عنوان Azure API"
-    },
-    "modelListPlaceholder": "يرجى تحديد أو إضافة نموذج OpenAI الذي قمت بنشره",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "يمكن العثور على هذه القيمة في قسم 'المفاتيح والنقاط النهائية' عند فحص الموارد في بوابة Azure. يمكن استخدام KEY1 أو KEY2",
-      "placeholder": "Azure API Key",
-      "title": "مفتاح API"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "إصدار واجهة برمجة التطبيقات Azure، يتبع تنسيق YYYY-MM-DD، راجع [الإصدار الأحدث](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "الحصول على القائمة",
-      "title": "إصدار واجهة برمجة التطبيقات Azure"
-    },
-    "endpoint": {
-      "desc": "ابحث عن نقطة نهاية استدلال نموذج Azure AI من نظرة عامة على مشروع Azure AI",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "نقطة نهاية Azure AI"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "ابحث عن مفتاح واجهة برمجة التطبيقات من نظرة عامة على مشروع Azure AI",
-      "placeholder": "مفتاح Azure",
-      "title": "المفتاح"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "أدخل AWS Access Key Id",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key Id"
-    },
-    "checker": {
-      "desc": "اختبر ما إذا كان AccessKeyId / SecretAccessKey مدخلاً بشكل صحيح"
-    },
-    "region": {
-      "desc": "أدخل AWS Region",
-      "placeholder": "AWS Region",
-      "title": "AWS Region"
-    },
-    "secretAccessKey": {
-      "desc": "أدخل AWS Secret Access Key",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "إذا كنت تستخدم AWS SSO/STS، يرجى إدخال رمز جلسة AWS الخاص بك",
-      "placeholder": "رمز جلسة AWS",
-      "title": "رمز جلسة AWS (اختياري)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "منطقة خدمة مخصصة",
-      "customSessionToken": "رمز الجلسة المخصص",
-      "description": "أدخل معرف الوصول / مفتاح الوصول السري الخاص بك في AWS لبدء الجلسة. لن يتم تسجيل تكوين المصادقة الخاص بك من قبل التطبيق",
-      "imageGenerationDescription": "أدخل AWS AccessKeyId / SecretAccessKey الخاص بك للبدء في التوليد. التطبيق لن يقوم بتسجيل إعدادات المصادقة الخاصة بك",
-      "title": "استخدام معلومات المصادقة الخاصة بـ Bedrock المخصصة"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "يرجى ملء Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "أدخل رقم حساب Cloudflare أو عنوان URL API المخصص",
-      "placeholder": "رقم حساب Cloudflare / عنوان URL API المخصص",
-      "title": "رقم حساب Cloudflare / عنوان URL API"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "مفتاح API المطلوب لمصادقة Bearer Token",
-      "placeholder": "يرجى إدخال مفتاح API",
-      "required": "يرجى إدخال مفتاح API",
-      "title": "مفتاح API"
-    },
-    "authType": {
-      "desc": "اختر طريقة المصادقة مع خادم ComfyUI",
-      "options": {
-        "basic": "اسم المستخدم/كلمة المرور",
-        "bearer": "Bearer (مفتاح API)",
-        "custom": "رؤوس مخصصة",
-        "none": "لا حاجة للمصادقة"
-      },
-      "placeholder": "يرجى اختيار نوع المصادقة",
-      "title": "نوع المصادقة"
-    },
-    "baseURL": {
-      "desc": "عنوان الوصول إلى واجهة ComfyUI على الويب",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "يرجى إدخال عنوان خدمة ComfyUI",
-      "title": "عنوان خدمة ComfyUI"
-    },
-    "checker": {
-      "desc": "اختبار ما إذا كان الاتصال مهيأ بشكل صحيح",
-      "title": "فحص الاتصال"
-    },
-    "customHeaders": {
-      "addButton": "إضافة رأس طلب",
-      "deleteTooltip": "حذف رأس الطلب هذا",
-      "desc": "رؤوس الطلب المطلوبة لطريقة المصادقة المخصصة، بتنسيق زوج مفتاح-قيمة",
-      "duplicateKeyError": "لا يمكن تكرار أسماء رؤوس الطلب",
-      "keyPlaceholder": "اسم المفتاح",
-      "required": "يرجى إدخال رؤوس الطلب المخصصة",
-      "title": "رؤوس الطلب المخصصة",
-      "valuePlaceholder": "القيمة"
-    },
-    "password": {
-      "desc": "كلمة المرور المطلوبة للمصادقة الأساسية",
-      "placeholder": "يرجى إدخال كلمة المرور",
-      "required": "يرجى إدخال كلمة المرور",
-      "title": "كلمة المرور"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "اسم المستخدم المطلوب للمصادقة الأساسية",
-      "placeholder": "يرجى إدخال اسم المستخدم",
-      "required": "يرجى إدخال اسم المستخدم",
-      "title": "اسم المستخدم"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "يرجى إدخال مفتاح API الخاص بك",
-      "title": "مفتاح API"
-    },
-    "basicTitle": "المعلومات الأساسية",
-    "configTitle": "معلومات التكوين",
-    "confirm": "إنشاء جديد",
-    "createSuccess": "تم الإنشاء بنجاح",
-    "description": {
-      "placeholder": "نبذة عن مزود الخدمة (اختياري)",
-      "title": "نبذة عن مزود الخدمة"
-    },
-    "id": {
-      "desc": "معرف فريد لمزود الخدمة، لا يمكن تعديله بعد الإنشاء",
-      "format": "يمكن أن يحتوي فقط على أرقام، أحرف صغيرة، شرطات (-) وشرطات سفلية (_) ",
-      "placeholder": "يفضل أن يكون بالكامل بحروف صغيرة، مثل openai، لن يمكن تعديله بعد الإنشاء",
-      "required": "يرجى إدخال معرف المزود",
-      "title": "معرف المزود"
-    },
-    "logo": {
-      "required": "يرجى تحميل شعار المزود بشكل صحيح",
-      "title": "شعار المزود"
-    },
-    "name": {
-      "placeholder": "يرجى إدخال اسم العرض لمزود الخدمة",
-      "required": "يرجى إدخال اسم المزود",
-      "title": "اسم المزود"
-    },
-    "proxyUrl": {
-      "required": "يرجى إدخال عنوان الوكيل",
-      "title": "عنوان الوكيل"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "يرجى اختيار نوع SDK",
-      "title": "تنسيق الطلب"
-    },
-    "title": "إنشاء مزود AI مخصص"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "أدخل رمز الوصول الشخصي الخاص بك على Github، انقر [هنا](https://github.com/settings/tokens) لإنشاء واحد",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "أدخل رمز HuggingFace الخاص بك، انقر [هنا](https://huggingface.co/settings/tokens) لإنشاء واحد",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "رمز HuggingFace"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "لم يتم تفعيل مزود الخدمة المخصص",
-      "disabled": "مزود الخدمة غير مفعل",
-      "enabled": "مزود الخدمة مفعل"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "إضافة مزود خدمة مخصص",
-    "all": "الكل",
-    "list": {
-      "custom": "المزود المخصص غير مفعل",
-      "disabled": "غير مفعل",
-      "disabledActions": {
-        "sort": "طريقة الترتيب",
-        "sortAlphabetical": "ترتيب أبجديًا",
-        "sortAlphabeticalDesc": "ترتيب أبجدي عكسي",
-        "sortDefault": "الترتيب الافتراضي"
-      },
-      "enabled": "مفعل"
-    },
-    "notFound": "لم يتم العثور على نتائج البحث",
-    "searchProviders": "البحث عن مزودين...",
-    "sort": "ترتيب مخصص"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "مفتاح API المقدم من منصة New API",
-      "placeholder": "مفتاح API الخاص بـ New API",
-      "required": "مفتاح API مطلوب",
-      "title": "مفتاح API"
-    },
-    "apiUrl": {
-      "desc": "عنوان API لخدمة New API، غالبًا ما يحتاج إلى /v1",
-      "title": "عنوان API"
-    },
-    "enabled": {
-      "title": "تمكين New API"
-    },
-    "models": {
-      "batchSelect": "تحديد نماذج متعددة ({{count}})",
-      "fetch": "جلب قائمة النماذج",
-      "selected": "النماذج المختارة",
-      "title": "النماذج المتاحة"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "اختبر ما إذا تم إدخال عنوان الوكيل بشكل صحيح",
-      "title": "فحص الاتصال"
-    },
-    "customModelName": {
-      "desc": "أضف نماذج مخصصة، استخدم الفاصلة (،) لفصل عدة نماذج",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "أسماء النماذج المخصصة"
-    },
-    "download": {
-      "desc": "أولاما يقوم بتنزيل هذا النموذج، يرجى عدم إغلاق هذه الصفحة إذا أمكن. سيتم استئناف التنزيل من النقطة التي تم قطعها عند إعادة التحميل",
-      "failed": "فشل تحميل النموذج، يرجى التحقق من الشبكة أو إعدادات Ollama ثم إعادة المحاولة",
-      "remainingTime": "الوقت المتبقي",
-      "speed": "سرعة التنزيل",
-      "title": "جارٍ تنزيل النموذج {{model}} "
-    },
-    "endpoint": {
-      "desc": "يجب أن تحتوي على http(s)://، يمكن تركها فارغة إذا لم يتم تحديدها محليًا",
-      "title": "عنوان وكيل الواجهة"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "Cancel Download",
-      "confirm": "Download",
-      "description": "Enter your Ollama model tag to continue the session",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "Starting download...",
-      "title": "Download specified Ollama model"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "تم اختيار {{count}} نموذج",
-      "title": "تحديد متعدد"
-    },
-    "config": {
-      "aesGcm": "سيتم استخدام خوارزمية التشفير <1>AES-GCM</1> لتشفير مفتاحك وعنوان الوكيل وما إلى ذلك",
-      "apiKey": {
-        "desc": "يرجى إدخال مفتاح API الخاص بك {{name}}",
-        "descWithUrl": "يرجى إدخال مفتاح API الخاص بـ {{name}}، <3>انقر هنا للحصول عليه</3>",
-        "placeholder": "{{name}} مفتاح API",
-        "title": "مفتاح API"
-      },
-      "baseURL": {
-        "desc": "يجب أن يحتوي على http(s)://",
-        "invalid": "يرجى إدخال عنوان URL صالح",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "عنوان وكيل API"
-      },
-      "checker": {
-        "button": "تحقق",
-        "desc": "اختبار ما إذا كان مفتاح API وعنوان الوكيل قد تم إدخالهما بشكل صحيح",
-        "pass": "تم التحقق بنجاح",
-        "title": "اختبار الاتصال"
-      },
-      "fetchOnClient": {
-        "desc": "سيتم بدء طلب الجلسة مباشرة من المتصفح، مما قد يحسن سرعة الاستجابة",
-        "title": "استخدام وضع الطلب من العميل"
-      },
-      "helpDoc": "دليل التكوين",
-      "responsesApi": {
-        "desc": "يعتمد تنسيق طلب الجيل الجديد من OpenAI، لتمكين ميزات متقدمة مثل سلسلة التفكير (مدعومة فقط من نماذج OpenAI)",
-        "title": "استخدام معيار Responses API"
-      },
-      "waitingForMore": "المزيد من النماذج قيد <1>التخطيط للإدماج</1>، يرجى الانتظار"
-    },
-    "createNew": {
-      "title": "إنشاء نموذج AI مخصص"
-    },
-    "item": {
-      "config": "تكوين النموذج",
-      "customModelCards": {
-        "addNew": "إنشاء وإضافة نموذج {{id}}",
-        "confirmDelete": "سيتم حذف هذا النموذج المخصص، ولن يمكن استعادته بعد الحذف، يرجى توخي الحذر."
-      },
-      "delete": {
-        "confirm": "هل تؤكد حذف النموذج {{displayName}}؟",
-        "success": "تم الحذف بنجاح",
-        "title": "حذف النموذج"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "الحقل المطلوب في Azure OpenAI",
-          "placeholder": "يرجى إدخال اسم نشر النموذج في Azure",
-          "title": "اسم نشر النموذج"
-        },
-        "deployName": {
-          "extra": "سيتم استخدام هذا الحقل كمعرف نموذج عند إرسال الطلب",
-          "placeholder": "يرجى إدخال اسم أو معرف النشر الفعلي للنموذج",
-          "title": "اسم نشر النموذج"
-        },
-        "displayName": {
-          "placeholder": "يرجى إدخال اسم العرض للنموذج، مثل ChatGPT، GPT-4، إلخ",
-          "title": "اسم عرض النموذج"
-        },
-        "files": {
-          "extra": "تنفيذ تحميل الملفات الحالي هو مجرد حل Hack، يقتصر على التجربة الذاتية. يرجى الانتظار حتى يتم تنفيذ القدرة الكاملة لتحميل الملفات لاحقًا",
-          "title": "دعم تحميل الملفات"
-        },
-        "functionCall": {
-          "extra": "هذا الإعداد سيفتح فقط قدرة النموذج على استخدام الأدوات، مما يسمح بإضافة مكونات إضافية من نوع الأدوات للنموذج. لكن ما إذا كان يمكن استخدام الأدوات فعليًا يعتمد تمامًا على النموذج نفسه، يرجى اختبار مدى قابليته للاستخدام",
-          "title": "دعم استخدام الأدوات"
-        },
-        "id": {
-          "extra": "لا يمكن تعديله بعد الإنشاء، سيتم استخدامه كمعرف نموذج عند استدعاء الذكاء الاصطناعي",
-          "placeholder": "يرجى إدخال معرف النموذج، مثل gpt-4o أو claude-3.5-sonnet",
-          "title": "معرف النموذج"
-        },
-        "imageOutput": {
-          "extra": "سيؤدي هذا الإعداد فقط إلى تفعيل قدرة النموذج على توليد الصور، وتعتمد النتيجة بالكامل على قدرات النموذج نفسه. يُرجى اختبار ما إذا كان النموذج يدعم توليد الصور بشكل فعّال.",
-          "title": "يدعم توليد الصور"
-        },
-        "modalTitle": "تكوين النموذج المخصص",
-        "reasoning": {
-          "extra": "هذا الإعداد سيفتح فقط قدرة النموذج على التفكير العميق، التأثير الفعلي يعتمد بالكامل على النموذج نفسه، يرجى اختبار ما إذا كان هذا النموذج يمتلك القدرة على التفكير العميق القابل للاستخدام",
-          "title": "يدعم التفكير العميق"
-        },
-        "search": {
-          "extra": "سيؤدي هذا الإعداد فقط إلى تفعيل قدرة محرك البحث المدمج في النموذج على الاتصال بالإنترنت. تعتمد إمكانية استخدام محرك البحث المدمج على قدرات النموذج نفسه. يُرجى اختبار ما إذا كان محرك البحث المدمج في النموذج يعمل بشكل فعّال.",
-          "title": "يدعم البحث عبر الإنترنت"
-        },
-        "tokens": {
-          "extra": "تعيين الحد الأقصى لعدد الرموز المدعومة من قبل النموذج",
-          "title": "أقصى نافذة سياق",
-          "unlimited": "غير محدود"
-        },
-        "type": {
-          "extra": "أنواع النماذج المختلفة تمتلك سيناريوهات استخدام وقدرات مميزة",
-          "options": {
-            "chat": "محادثة",
-            "embedding": "تضمين",
-            "image": "توليد الصور",
-            "realtime": "محادثة فورية",
-            "stt": "تحويل الصوت إلى نص",
-            "text2music": "تحويل النص إلى موسيقى",
-            "text2video": "تحويل النص إلى فيديو",
-            "tts": "تحويل النص إلى كلام"
-          },
-          "placeholder": "يرجى اختيار نوع النموذج",
-          "title": "نوع النموذج"
-        },
-        "video": {
-          "extra": "سيؤدي هذا الإعداد فقط إلى تفعيل إعدادات التعرف على الفيديو داخل التطبيق. وتعتمد إمكانية التعرف على الفيديو بالكامل على قدرات النموذج نفسه. يُرجى اختبار ما إذا كان النموذج يدعم التعرف على الفيديو بشكل فعّال.",
-          "title": "يدعم التعرف على الفيديو"
-        },
-        "vision": {
-          "extra": "سيؤدي هذا التكوين إلى فتح إعدادات تحميل الصور في التطبيق، ما إذا كان يدعم التعرف يعتمد بالكامل على النموذج نفسه، يرجى اختبار قابلية استخدام التعرف البصري لهذا النموذج بنفسك",
-          "title": "دعم التعرف البصري"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/صورة",
-        "inputCharts": "${{amount}}/M حرف",
-        "inputMinutes": "${{amount}}/دقيقة",
-        "inputTokens": "إدخال ${{amount}}/م",
-        "outputTokens": "إخراج ${{amount}}/م"
-      },
-      "releasedAt": "صدر في {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "إضافة نموذج",
-      "disabled": "غير مفعل",
-      "disabledActions": {
-        "showMore": "عرض الكل",
-        "sort": "طريقة الترتيب",
-        "sortAlphabetical": "ترتيب أبجديًا",
-        "sortAlphabeticalDesc": "ترتيب أبجدي عكسي",
-        "sortDefault": "الترتيب الافتراضي",
-        "sortReleasedAt": "ترتيب حسب أقدم تاريخ إصدار",
-        "sortReleasedAtDesc": "ترتيب حسب أحدث تاريخ إصدار"
-      },
-      "empty": {
-        "desc": "يرجى إنشاء نموذج مخصص أو سحب نموذج للبدء في الاستخدام",
-        "title": "لا توجد نماذج متاحة"
-      },
-      "enabled": "مفعل",
-      "enabledActions": {
-        "disableAll": "تعطيل الكل",
-        "enableAll": "تفعيل الكل",
-        "sort": "ترتيب النموذج حسب التخصيص"
-      },
-      "enabledEmpty": "لا توجد نماذج مفعلة، يرجى تفعيل النماذج المفضلة لديك من القائمة أدناه~",
-      "fetcher": {
-        "clear": "مسح النماذج المستخرجة",
-        "fetch": "الحصول على قائمة النماذج",
-        "fetching": "جارٍ الحصول على قائمة النماذج...",
-        "latestTime": "آخر تحديث: {{time}}",
-        "noLatestTime": "لم يتم الحصول على القائمة بعد"
-      },
-      "noModelsInCategory": "لا توجد نماذج مفعلة في هذا التصنيف",
-      "resetAll": {
-        "conform": "هل أنت متأكد من إعادة تعيين جميع التعديلات على النموذج الحالي؟ بعد إعادة التعيين، ستعود قائمة النماذج الحالية إلى الحالة الافتراضية",
-        "success": "تمت إعادة التعيين بنجاح",
-        "title": "إعادة تعيين جميع التعديلات"
-      },
-      "search": "ابحث عن نموذج...",
-      "searchResult": "تم العثور على {{count}} نموذج",
-      "title": "قائمة النماذج",
-      "total": "إجمالي {{count}} نموذج متاح"
-    },
-    "searchNotFound": "لم يتم العثور على نتائج البحث",
-    "tabs": {
-      "all": "الكل",
-      "chat": "الدردشة",
-      "embedding": "التضمين",
-      "image": "صورة",
-      "stt": "تحويل الكلام إلى نص",
-      "tts": "تحويل النص إلى كلام"
-    }
-  },
-  "sortModal": {
-    "success": "تم تحديث الترتيب بنجاح",
-    "title": "ترتيب مخصص",
-    "update": "تحديث"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "سيتم حذف مزود AI هذا، ولن يمكن استعادته بعد الحذف، هل تؤكد الحذف؟",
-    "deleteSuccess": "تم الحذف بنجاح",
-    "tooltip": "تحديث التكوين الأساسي للمزود",
-    "updateSuccess": "تم التحديث بنجاح"
-  },
-  "updateCustomAiProvider": {
-    "title": "تحديث إعدادات مزود الذكاء الاصطناعي المخصص"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "أدخل مفاتيح Vertex AI الخاصة بك",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "مفاتيح Vertex AI"
-    },
-    "region": {
-      "desc": "اختر منطقة خدمة Vertex AI. بعض النماذج مثل Gemini 2.5 متاحة فقط في مناطق محددة (مثل global)",
-      "placeholder": "اختر المنطقة",
-      "title": "منطقة Vertex AI"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI الأشياء الصغرى"
-  },
-  "zhipu": {
-    "title": "Zhipu"
-  }
+  "azure.azureApiVersion.desc": "إصدار واجهة برمجة التطبيقات لـ Azure، اتبع التنسيق YYYY-MM-DD، تحقق من [أحدث إصدار](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "جلب القائمة",
+  "azure.azureApiVersion.title": "إصدار Azure API",
+  "azure.empty": "يرجى إدخال معرف النموذج لإضافة النموذج الأول",
+  "azure.endpoint.desc": "عند التحقق من الموارد من بوابة Azure، يمكنك العثور على هذه القيمة في قسم 'المفاتيح ونقاط النهاية'",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "عنوان Azure API",
+  "azure.modelListPlaceholder": "اختر أو أضف نموذج OpenAI الذي قمت بنشره",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "عند التحقق من الموارد من بوابة Azure، يمكنك العثور على هذه القيمة في قسم 'المفاتيح ونقاط النهاية'. يمكنك استخدام KEY1 أو KEY2",
+  "azure.token.placeholder": "مفتاح Azure API",
+  "azure.token.title": "مفتاح API",
+  "azureai.azureApiVersion.desc": "إصدار واجهة برمجة التطبيقات لـ Azure، باتباع تنسيق YYYY-MM-DD. راجع [أحدث إصدار](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "جلب القائمة",
+  "azureai.azureApiVersion.title": "إصدار Azure API",
+  "azureai.endpoint.desc": "اعثر على نقطة نهاية استدلال نموذج Azure AI من نظرة عامة على مشروع Azure AI",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "نقطة نهاية Azure AI",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "اعثر على مفتاح API من نظرة عامة على مشروع Azure AI",
+  "azureai.token.placeholder": "مفتاح Azure",
+  "azureai.token.title": "المفتاح",
+  "bedrock.accessKeyId.desc": "أدخل معرف مفتاح الوصول لـ AWS",
+  "bedrock.accessKeyId.placeholder": "معرف مفتاح الوصول لـ AWS",
+  "bedrock.accessKeyId.title": "معرف مفتاح الوصول لـ AWS",
+  "bedrock.checker.desc": "اختبر ما إذا تم إدخال AccessKeyId / SecretAccessKey بشكل صحيح",
+  "bedrock.region.desc": "أدخل منطقة AWS",
+  "bedrock.region.placeholder": "منطقة AWS",
+  "bedrock.region.title": "منطقة AWS",
+  "bedrock.secretAccessKey.desc": "أدخل مفتاح الوصول السري لـ AWS",
+  "bedrock.secretAccessKey.placeholder": "مفتاح الوصول السري لـ AWS",
+  "bedrock.secretAccessKey.title": "مفتاح الوصول السري لـ AWS",
+  "bedrock.sessionToken.desc": "إذا كنت تستخدم AWS SSO/STS، يرجى إدخال رمز جلسة AWS",
+  "bedrock.sessionToken.placeholder": "رمز جلسة AWS",
+  "bedrock.sessionToken.title": "رمز جلسة AWS (اختياري)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "منطقة خدمة مخصصة",
+  "bedrock.unlock.customSessionToken": "رمز جلسة مخصص",
+  "bedrock.unlock.description": "أدخل AccessKeyId / SecretAccessKey الخاص بك لبدء الجلسة. لن يقوم التطبيق بتخزين إعدادات المصادقة الخاصة بك",
+  "bedrock.unlock.imageGenerationDescription": "أدخل AccessKeyId / SecretAccessKey الخاص بك لبدء التوليد. لن يقوم التطبيق بتخزين بيانات اعتماد المصادقة الخاصة بك.",
+  "bedrock.unlock.title": "استخدام معلومات مصادقة Bedrock مخصصة",
+  "cloudflare.apiKey.desc": "يرجى إدخال مفتاح Cloudflare API",
+  "cloudflare.apiKey.placeholder": "مفتاح Cloudflare API",
+  "cloudflare.apiKey.title": "مفتاح Cloudflare API",
+  "cloudflare.baseURLOrAccountID.desc": "أدخل معرف حساب Cloudflare أو عنوان API مخصص",
+  "cloudflare.baseURLOrAccountID.placeholder": "معرف حساب Cloudflare / عنوان API مخصص",
+  "cloudflare.baseURLOrAccountID.title": "معرف حساب Cloudflare / عنوان API",
+  "comfyui.apiKey.desc": "مفتاح API لمصادقة Bearer Token",
+  "comfyui.apiKey.placeholder": "أدخل مفتاح API",
+  "comfyui.apiKey.required": "يرجى إدخال مفتاح API",
+  "comfyui.apiKey.title": "مفتاح API",
+  "comfyui.authType.desc": "اختر طريقة المصادقة للاتصال بخادم ComfyUI",
+  "comfyui.authType.options.basic": "مصادقة أساسية",
+  "comfyui.authType.options.bearer": "رمز Bearer",
+  "comfyui.authType.options.custom": "مصادقة مخصصة",
+  "comfyui.authType.options.none": "بدون مصادقة",
+  "comfyui.authType.placeholder": "يرجى اختيار نوع المصادقة",
+  "comfyui.authType.title": "نوع المصادقة",
+  "comfyui.baseURL.desc": "عنوان الوصول إلى خادم ComfyUI، مثل http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "يرجى إدخال عنوان خدمة ComfyUI",
+  "comfyui.baseURL.title": "عنوان خدمة ComfyUI",
+  "comfyui.checker.desc": "اختبر ما إذا تم تكوين الاتصال بشكل صحيح",
+  "comfyui.checker.title": "فحص الاتصال",
+  "comfyui.customHeaders.addButton": "إضافة ترويسة",
+  "comfyui.customHeaders.deleteTooltip": "حذف هذه الترويسة",
+  "comfyui.customHeaders.desc": "ترويسات الطلب المطلوبة للمصادقة المخصصة، بتنسيق أزواج مفتاح-قيمة",
+  "comfyui.customHeaders.duplicateKeyError": "لا يمكن تكرار أسماء الترويسات",
+  "comfyui.customHeaders.keyPlaceholder": "المفتاح",
+  "comfyui.customHeaders.required": "يرجى إدخال ترويسات الطلب المخصصة",
+  "comfyui.customHeaders.title": "ترويسات مخصصة",
+  "comfyui.customHeaders.valuePlaceholder": "القيمة",
+  "comfyui.password.desc": "كلمة المرور للمصادقة الأساسية",
+  "comfyui.password.placeholder": "أدخل كلمة المرور",
+  "comfyui.password.required": "يرجى إدخال كلمة المرور",
+  "comfyui.password.title": "كلمة المرور",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "اسم المستخدم للمصادقة الأساسية",
+  "comfyui.username.placeholder": "أدخل اسم المستخدم",
+  "comfyui.username.required": "يرجى إدخال اسم المستخدم",
+  "comfyui.username.title": "اسم المستخدم",
+  "createNewAiProvider.apiKey.placeholder": "يرجى إدخال مفتاح API الخاص بك",
+  "createNewAiProvider.apiKey.title": "مفتاح API",
+  "createNewAiProvider.basicTitle": "معلومات أساسية",
+  "createNewAiProvider.configTitle": "معلومات التكوين",
+  "createNewAiProvider.confirm": "إنشاء",
+  "createNewAiProvider.createSuccess": "تم الإنشاء بنجاح",
+  "createNewAiProvider.description.placeholder": "وصف المزود (اختياري)",
+  "createNewAiProvider.description.title": "وصف المزود",
+  "createNewAiProvider.id.desc": "معرف فريد لمزود الخدمة، لا يمكن تعديله بعد الإنشاء",
+  "createNewAiProvider.id.format": "يمكن أن يحتوي فقط على أرقام، حروف صغيرة، شرطات (-)، وشرطات سفلية (_)",
+  "createNewAiProvider.id.placeholder": "يفضل أن يكون بحروف صغيرة، مثل openai، لا يمكن تعديله بعد الإنشاء",
+  "createNewAiProvider.id.required": "يرجى إدخال معرف المزود",
+  "createNewAiProvider.id.title": "معرف المزود",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "يرجى تحميل شعار مزود صالح",
+  "createNewAiProvider.logo.title": "شعار المزود",
+  "createNewAiProvider.name.placeholder": "يرجى إدخال اسم العرض للمزود",
+  "createNewAiProvider.name.required": "يرجى إدخال اسم المزود",
+  "createNewAiProvider.name.title": "اسم المزود",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "يرجى إدخال عنوان الوكيل",
+  "createNewAiProvider.proxyUrl.title": "عنوان الوكيل",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "يرجى اختيار نوع SDK",
+  "createNewAiProvider.sdkType.title": "تنسيق الطلب",
+  "createNewAiProvider.title": "إنشاء مزود ذكاء اصطناعي مخصص",
+  "github.personalAccessToken.desc": "أدخل رمز الوصول الشخصي (PAT) الخاص بك على GitHub. انقر [هنا](https://github.com/settings/tokens) لإنشاء واحد.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "رمز GitHub PAT",
+  "huggingface.accessToken.desc": "أدخل رمز HuggingFace الخاص بك، انقر [هنا](https://huggingface.co/settings/tokens) لإنشاء واحد",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "رمز HuggingFace",
+  "list.title.custom": "المزود المخصص غير مفعل",
+  "list.title.disabled": "معطل",
+  "list.title.enabled": "مفعل",
+  "menu.addCustomProvider": "إضافة مزود مخصص",
+  "menu.all": "الكل",
+  "menu.list.custom": "المخصص غير مفعل",
+  "menu.list.disabled": "معطل",
+  "menu.list.disabledActions.sort": "ترتيب حسب",
+  "menu.list.disabledActions.sortAlphabetical": "ترتيب أبجدي",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "ترتيب أبجدي عكسي",
+  "menu.list.disabledActions.sortDefault": "الترتيب الافتراضي",
+  "menu.list.enabled": "مفعل",
+  "menu.notFound": "لم يتم العثور على نتائج",
+  "menu.searchProviders": "البحث عن مزودين...",
+  "menu.sort": "ترتيب مخصص",
+  "newapi.apiKey.desc": "مفتاح API مقدم من منصة New API",
+  "newapi.apiKey.placeholder": "مفتاح New API",
+  "newapi.apiKey.required": "مفتاح API مطلوب",
+  "newapi.apiKey.title": "مفتاح API",
+  "newapi.apiUrl.desc": "نقطة النهاية لخدمة New API، عادةً ما تتضمن /v1",
+  "newapi.apiUrl.title": "رابط API",
+  "newapi.enabled.title": "تفعيل New API",
+  "newapi.models.batchSelect": "تحديد النماذج دفعة واحدة ({{count}} عنصر)",
+  "newapi.models.fetch": "جلب قائمة النماذج",
+  "newapi.models.selected": "النماذج المحددة",
+  "newapi.models.title": "النماذج المتاحة",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "اختبر ما إذا كان عنوان البروكسي مملوءًا بشكل صحيح",
+  "ollama.checker.title": "فحص الاتصال",
+  "ollama.customModelName.desc": "أضف نماذج مخصصة، افصل بين النماذج بفواصل",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "اسم النموذج المخصص",
+  "ollama.download.desc": "يقوم Ollama بتنزيل النموذج. يُفضل عدم إغلاق هذه الصفحة. سيستأنف التنزيل من حيث توقف إذا تم قطعه.",
+  "ollama.download.failed": "فشل تنزيل النموذج. يرجى التحقق من الشبكة أو إعدادات Ollama والمحاولة مرة أخرى.",
+  "ollama.download.remainingTime": "الوقت المتبقي",
+  "ollama.download.speed": "السرعة",
+  "ollama.download.title": "جارٍ تنزيل النموذج {{model}}",
+  "ollama.endpoint.desc": "يجب أن يتضمن http(s)://؛ يمكن تركه فارغًا إذا لم يتم تحديده محليًا.",
+  "ollama.endpoint.title": "عنوان بروكسي الواجهة",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "إلغاء التنزيل",
+  "ollama.unlock.confirm": "تنزيل",
+  "ollama.unlock.description": "أدخل وسم نموذج Ollama الخاص بك لمتابعة الجلسة",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "بدء التنزيل...",
+  "ollama.unlock.title": "تنزيل نموذج Ollama المحدد",
+  "providerModels.batchSelect.selected": "{{count}} نموذج محدد",
+  "providerModels.batchSelect.title": "تحديد جماعي",
+  "providerModels.config.aesGcm": "سيتم تشفير مفتاحك وعنوان البروكسي باستخدام خوارزمية التشفير <1>AES-GCM</1>",
+  "providerModels.config.apiKey.desc": "يرجى إدخال مفتاح API الخاص بـ {{name}}",
+  "providerModels.config.apiKey.descWithUrl": "يرجى إدخال مفتاح API الخاص بـ {{name}}. <3>انقر هنا للحصول عليه</3>",
+  "providerModels.config.apiKey.placeholder": "مفتاح API لـ {{name}}",
+  "providerModels.config.apiKey.title": "مفتاح API",
+  "providerModels.config.baseURL.desc": "يجب أن يتضمن http(s)://",
+  "providerModels.config.baseURL.invalid": "يرجى إدخال عنوان URL صالح",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "رابط بروكسي API",
+  "providerModels.config.checker.button": "تحقق",
+  "providerModels.config.checker.desc": "اختبر ما إذا تم ملء مفتاح API ورابط البروكسي بشكل صحيح",
+  "providerModels.config.checker.pass": "تم التحقق بنجاح",
+  "providerModels.config.checker.title": "فحص الاتصال",
+  "providerModels.config.fetchOnClient.desc": "وضع طلب العميل سيبدأ الطلبات مباشرة من المتصفح، مما قد يحسن سرعة الاستجابة",
+  "providerModels.config.fetchOnClient.title": "استخدام وضع طلب العميل",
+  "providerModels.config.helpDoc": "دليل الإعداد",
+  "providerModels.config.responsesApi.desc": "يستخدم تنسيق الطلب الجديد من OpenAI لتمكين ميزات متقدمة مثل سلسلة التفكير (مدعومة فقط من نماذج OpenAI)",
+  "providerModels.config.responsesApi.title": "استخدام مواصفات Responses API",
+  "providerModels.config.waitingForMore": "يتم حاليًا <1>التخطيط لإضافة المزيد من النماذج</1>، يرجى المتابعة للبقاء على اطلاع",
+  "providerModels.createNew.title": "إنشاء نموذج ذكاء اصطناعي مخصص",
+  "providerModels.item.config": "إعداد النموذج",
+  "providerModels.item.customModelCards.addNew": "إنشاء وإضافة نموذج {{id}}",
+  "providerModels.item.customModelCards.confirmDelete": "أنت على وشك حذف هذا النموذج المخصص. لا يمكن استعادته بعد الحذف. يرجى المتابعة بحذر.",
+  "providerModels.item.delete.confirm": "هل أنت متأكد أنك تريد حذف النموذج {{displayName}}؟",
+  "providerModels.item.delete.success": "تم الحذف بنجاح",
+  "providerModels.item.delete.title": "حذف النموذج",
+  "providerModels.item.modelConfig.azureDeployName.extra": "حقل يُستخدم للطلبات الفعلية في Azure OpenAI",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "يرجى إدخال اسم نشر النموذج في Azure",
+  "providerModels.item.modelConfig.azureDeployName.title": "اسم نشر النموذج",
+  "providerModels.item.modelConfig.deployName.extra": "سيُستخدم هذا الحقل كمعرف النموذج عند إرسال الطلبات",
+  "providerModels.item.modelConfig.deployName.placeholder": "يرجى إدخال اسم أو معرف النشر الفعلي للنموذج",
+  "providerModels.item.modelConfig.deployName.title": "اسم نشر النموذج",
+  "providerModels.item.modelConfig.displayName.placeholder": "يرجى إدخال اسم العرض للنموذج، مثل ChatGPT، GPT-4، إلخ.",
+  "providerModels.item.modelConfig.displayName.title": "اسم عرض النموذج",
+  "providerModels.item.modelConfig.files.extra": "تنفيذ رفع الملفات الحالي هو حل مؤقت، مخصص للتجربة الذاتية فقط. يرجى الانتظار حتى تتوفر إمكانيات رفع الملفات الكاملة في المستقبل.",
+  "providerModels.item.modelConfig.files.title": "دعم رفع الملفات",
+  "providerModels.item.modelConfig.functionCall.extra": "سيمكن هذا الإعداد النموذج من استخدام الأدوات، ولكن قدرة النموذج الفعلية على استخدامها تعتمد عليه بالكامل؛ يرجى الاختبار بنفسك.",
+  "providerModels.item.modelConfig.functionCall.title": "دعم استخدام الأدوات",
+  "providerModels.item.modelConfig.id.extra": "لا يمكن تعديله بعد الإنشاء وسيُستخدم كمعرف النموذج عند استدعاء الذكاء الاصطناعي",
+  "providerModels.item.modelConfig.id.placeholder": "يرجى إدخال معرف النموذج، مثل gpt-4o أو claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "معرف النموذج",
+  "providerModels.item.modelConfig.imageOutput.extra": "يُمكّن هذا الإعداد قدرة النموذج على توليد الصور فقط. الأداء الفعلي يعتمد على النموذج نفسه. يرجى اختباره.",
+  "providerModels.item.modelConfig.imageOutput.title": "يدعم توليد الصور",
+  "providerModels.item.modelConfig.modalTitle": "إعداد النموذج المخصص",
+  "providerModels.item.modelConfig.reasoning.extra": "سيمكن هذا الإعداد قدرات التفكير العميق للنموذج. التأثير الفعلي يعتمد على النموذج. يرجى اختباره.",
+  "providerModels.item.modelConfig.reasoning.title": "دعم التفكير العميق",
+  "providerModels.item.modelConfig.search.extra": "يُمكّن هذا الإعداد قدرة البحث عبر الإنترنت المدمجة في النموذج. يعتمد الدعم على النموذج نفسه. يرجى اختباره.",
+  "providerModels.item.modelConfig.search.title": "يدعم البحث عبر الإنترنت",
+  "providerModels.item.modelConfig.tokens.extra": "تحديد الحد الأقصى لعدد الرموز التي يدعمها النموذج",
+  "providerModels.item.modelConfig.tokens.title": "أقصى نافذة سياق",
+  "providerModels.item.modelConfig.tokens.unlimited": "غير محدود",
+  "providerModels.item.modelConfig.type.extra": "أنواع النماذج المختلفة لها استخدامات وقدرات مختلفة",
+  "providerModels.item.modelConfig.type.options.chat": "دردشة",
+  "providerModels.item.modelConfig.type.options.embedding": "تضمين",
+  "providerModels.item.modelConfig.type.options.image": "توليد الصور",
+  "providerModels.item.modelConfig.type.options.realtime": "دردشة فورية",
+  "providerModels.item.modelConfig.type.options.stt": "تحويل الكلام إلى نص",
+  "providerModels.item.modelConfig.type.options.text2music": "نص إلى موسيقى",
+  "providerModels.item.modelConfig.type.options.text2video": "نص إلى فيديو",
+  "providerModels.item.modelConfig.type.options.tts": "تحويل النص إلى كلام",
+  "providerModels.item.modelConfig.type.placeholder": "يرجى اختيار نوع النموذج",
+  "providerModels.item.modelConfig.type.title": "نوع النموذج",
+  "providerModels.item.modelConfig.video.extra": "يُمكّن هذا الإعداد تكوين التعرف على الفيديو داخل التطبيق. يعتمد الدعم على النموذج نفسه. يرجى اختباره.",
+  "providerModels.item.modelConfig.video.title": "يدعم التعرف على الفيديو",
+  "providerModels.item.modelConfig.vision.extra": "يُمكّن هذا الإعداد فقط من رفع الصور داخل التطبيق. يعتمد دعم التعرف على الصور على النموذج نفسه. يرجى اختباره.",
+  "providerModels.item.modelConfig.vision.title": "دعم الرؤية",
+  "providerModels.item.pricing.image": "${{amount}}/صورة",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/مليون حرف",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/دقيقة",
+  "providerModels.item.pricing.inputTokens": "المدخلات ${{amount}}/مليون",
+  "providerModels.item.pricing.outputTokens": "المخرجات ${{amount}}/مليون",
+  "providerModels.item.releasedAt": "تم الإصدار في {{releasedAt}}",
+  "providerModels.list.addNew": "إضافة نموذج",
+  "providerModels.list.disabled": "معطل",
+  "providerModels.list.disabledActions.showMore": "عرض الكل",
+  "providerModels.list.disabledActions.sort": "ترتيب حسب",
+  "providerModels.list.disabledActions.sortAlphabetical": "ترتيب أبجدي",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "ترتيب أبجدي عكسي",
+  "providerModels.list.disabledActions.sortDefault": "الترتيب الافتراضي",
+  "providerModels.list.disabledActions.sortReleasedAt": "ترتيب حسب أقدم تاريخ إصدار",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "ترتيب حسب أحدث تاريخ إصدار",
+  "providerModels.list.empty.desc": "يرجى إنشاء نموذج مخصص أو سحب نموذج للبدء.",
+  "providerModels.list.empty.title": "لا توجد نماذج متاحة",
+  "providerModels.list.enabled": "مفعل",
+  "providerModels.list.enabledActions.disableAll": "تعطيل الكل",
+  "providerModels.list.enabledActions.enableAll": "تفعيل الكل",
+  "providerModels.list.enabledActions.sort": "ترتيب النماذج المخصصة",
+  "providerModels.list.enabledEmpty": "لا توجد نماذج مفعلة. يرجى تفعيل النماذج المفضلة من القائمة أدناه~",
+  "providerModels.list.fetcher.clear": "مسح النماذج المسحوبة",
+  "providerModels.list.fetcher.fetch": "جلب النماذج",
+  "providerModels.list.fetcher.fetching": "جارٍ جلب قائمة النماذج...",
+  "providerModels.list.fetcher.latestTime": "آخر تحديث: {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "لم يتم جلب قائمة النماذج بعد",
+  "providerModels.list.noModelsInCategory": "لا توجد نماذج مفعلة في هذه الفئة",
+  "providerModels.list.resetAll.conform": "هل أنت متأكد أنك تريد إعادة تعيين جميع التعديلات على النموذج الحالي؟ بعد إعادة التعيين، ستعود قائمة النماذج إلى حالتها الافتراضية.",
+  "providerModels.list.resetAll.success": "تمت إعادة التعيين بنجاح",
+  "providerModels.list.resetAll.title": "إعادة تعيين جميع التعديلات",
+  "providerModels.list.search": "البحث عن نماذج...",
+  "providerModels.list.searchResult": "تم العثور على {{count}} نموذج",
+  "providerModels.list.title": "قائمة النماذج",
+  "providerModels.list.total": "{{count}} نموذج متاح",
+  "providerModels.searchNotFound": "لم يتم العثور على نتائج",
+  "providerModels.tabs.all": "الكل",
+  "providerModels.tabs.chat": "دردشة",
+  "providerModels.tabs.embedding": "تضمين",
+  "providerModels.tabs.image": "صورة",
+  "providerModels.tabs.stt": "تحويل الكلام إلى نص",
+  "providerModels.tabs.tts": "تحويل النص إلى كلام",
+  "sortModal.success": "تم تحديث الترتيب بنجاح",
+  "sortModal.title": "ترتيب مخصص",
+  "sortModal.update": "تحديث",
+  "updateAiProvider.confirmDelete": "أنت على وشك حذف مزود الذكاء الاصطناعي هذا. لا يمكن استعادته بعد الحذف. هل أنت متأكد من الحذف؟",
+  "updateAiProvider.deleteSuccess": "تم الحذف بنجاح",
+  "updateAiProvider.tooltip": "تحديث إعدادات المزود الأساسية",
+  "updateAiProvider.updateSuccess": "تم التحديث بنجاح",
+  "updateCustomAiProvider.title": "تحديث إعدادات مزود الذكاء الاصطناعي المخصص",
+  "vertexai.apiKey.desc": "أدخل مفاتيح Vertex AI الخاصة بك",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "مفاتيح Vertex AI",
+  "vertexai.region.desc": "اختر المنطقة لخدمة Vertex AI. بعض النماذج مثل Gemini 2.5 متاحة فقط في مناطق محددة (مثل global)",
+  "vertexai.region.placeholder": "اختر المنطقة",
+  "vertexai.region.title": "منطقة Vertex AI",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

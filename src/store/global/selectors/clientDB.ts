@@ -1,4 +1,4 @@
-import { GlobalState } from '@/store/global/initialState';
+import { type GlobalState } from '@/store/global/initialState';
 
 const initClientDBMigrationSqls = (s: GlobalState) => {
   return s.initClientDBMigrations?.sqls || [];

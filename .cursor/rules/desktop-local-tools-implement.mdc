@@ -51,15 +51,15 @@ alwaysApply: false
         *   导入在步骤 2 中定义的 IPC 参数类型。
         *   添加一个新的 `async` 方法，方法名通常与 Action 名称对应 (例如: `renameLocalFile`)。
         *   方法接收 `params` (符合 IPC 参数类型)。
-        *   使用从 `@lobechat/electron-client-ipc` 导入的 `dispatch` (或 `invoke`) 函数，调用与 Manifest 中 `name` 字段匹配的 IPC 事件名称，并将 `params` 传递过去。
+        *   通过 `ensureElectronIpc()` 获取 IPC 代理 (`const ipc = ensureElectronIpc();`)，调用与 Manifest 中 `name` 字段匹配的链式方法，并将 `params` 传递过去。
         *   定义方法的返回类型，通常是 `Promise<{ success: boolean; error?: string }>`，与后端 Controller 返回的结构一致。
 
 5.  **实现后端逻辑 (Controller / IPC Handler):**
     *   **文件:** `apps/desktop/src/main/controllers/[ToolName]Ctr.ts` (例如: `apps/desktop/src/main/controllers/LocalFileCtr.ts`)
     *   **操作:**
-        *   导入 Node.js 相关模块 (`fs`, `path` 等) 和 IPC 相关依赖 (`ipcClientEvent`, 参数类型等)。
+        *   导入 Node.js 相关模块 (`fs`, `path` 等) 和 IPC 相关依赖 (`ControllerModule`, `IpcMethod`/`IpcServerMethod`、参数类型等)。
         *   添加一个新的 `async` 方法，方法名通常以 `handle` 开头 (例如: `handleRenameFile`)。
-        *   使用 `@ipcClientEvent('yourApiName')` 装饰器将此方法注册为对应 IPC 事件的处理器，确保 `'yourApiName'` 与 Manifest 中的 `name` 和 Service 层调用的事件名称一致。
+        *   使用 `@IpcMethod()` 或 `@IpcServerMethod()` 装饰器将此方法注册为对应 IPC 事件的处理器，确保方法名与 Manifest 中的 `name` 以及 Service 层的链式调用一致。
         *   方法的参数应解构自 Service 层传递过来的对象，类型与步骤 2 中定义的 IPC 参数类型匹配。
         *   实现核心业务逻辑：
             *   进行必要的输入验证。

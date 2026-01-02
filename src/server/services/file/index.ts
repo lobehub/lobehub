@@ -1,14 +1,15 @@
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { sha256 } from 'js-sha256';
 
 import { serverDBEnv } from '@/config/db';
 import { FileModel } from '@/database/models/file';
-import { FileItem } from '@/database/schemas';
+import { type FileItem } from '@/database/schemas';
+import { appEnv } from '@/envs/app';
 import { TempFileManager } from '@/server/utils/tempFileManager';
 
-import { FileServiceImpl, createFileServiceModule } from './impls';
+import { type FileServiceImpl, createFileServiceModule } from './impls';
 
 /**
  * File service class
@@ -128,10 +129,10 @@ export class FileService {
       !isExist, // insertToGlobalFiles
     );
 
-    // Return unified proxy URL: /f/:id
+    // Return unified proxy URL: ${APP_URL}/f/:id
     return {
       fileId: id,
-      url: `/f/${id}`,
+      url: `${appEnv.APP_URL}/f/${id}`,
     };
   }
 

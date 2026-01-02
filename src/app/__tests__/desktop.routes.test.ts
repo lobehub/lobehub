@@ -5,14 +5,21 @@ import { describe, expect, it } from 'vitest';
 describe('Desktop Routes', () => {
   const appRootDir = resolve(__dirname, '..');
 
-  const desktopRoutes = [
-    '(backend)/trpc/desktop/[trpc]/route.ts',
-    'desktop/devtools/page.tsx',
-    'desktop/layout.tsx',
+  /**
+   * Desktop-specific "routes" used by the desktop app are implemented via:
+   * - backend desktop OIDC callback route
+   * - desktop router configs/components under `[variants]/router`
+   *
+   * This test is intentionally a "smoke check" to prevent accidental deletion.
+   */
+  const desktopRelatedEntries = [
+    '(backend)/oidc/callback/desktop/route.ts',
+    '[variants]/router/DesktopClientRouter.tsx',
+    '[variants]/router/desktopRouter.config.tsx',
   ];
 
-  it.each(desktopRoutes)('should have file: %s', (route) => {
-    const filePath = resolve(appRootDir, route);
+  it.each(desktopRelatedEntries)('should have file: %s', (entry) => {
+    const filePath = resolve(appRootDir, entry);
     expect(fs.existsSync(filePath)).toBe(true);
   });
 });

@@ -1,0 +1,136 @@
+[
+  {
+    "id": "msg-user-1",
+    "role": "user",
+    "content": "Help me create two tasks to research the weather in Hangzhou and Beijing tomorrow.",
+    "parentId": null,
+    "createdAt": 1735526559382,
+    "updatedAt": 1735526559382,
+    "meta": {}
+  },
+  {
+    "id": "msg-assistant-1",
+    "role": "assistant",
+    "content": "I'll help you create two async tasks to research the weather in Hangzhou and Beijing.",
+    "parentId": "msg-user-1",
+    "createdAt": 1735526560163,
+    "updatedAt": 1735526585550,
+    "meta": {},
+    "model": "deepseek-chat",
+    "provider": "deepseek",
+    "tools": [
+      {
+        "id": "call_exec_tasks_1",
+        "type": "builtin",
+        "apiName": "execTasks",
+        "arguments": "{\"tasks\": [{\"description\": \"Research Hangzhou weather\", \"instruction\": \"Search for Hangzhou weather tomorrow.\"}, {\"description\": \"Research Beijing weather\", \"instruction\": \"Search for Beijing weather tomorrow.\"}]}",
+        "identifier": "lobe-gtd"
+      }
+    ],
+    "metadata": {
+      "tps": 29.33,
+      "cost": 0.000441,
+      "ttft": 1490,
+      "latency": 13425,
+      "duration": 11935,
+      "totalTokens": 10143,
+      "totalInputTokens": 9793,
+      "totalOutputTokens": 350
+    }
+  },
+  {
+    "id": "msg-tool-1",
+    "role": "tool",
+    "content": "Triggered 2 async tasks for execution:\n1. Research Hangzhou weather\n2. Research Beijing weather",
+    "parentId": "msg-assistant-1",
+    "tool_call_id": "call_exec_tasks_1",
+    "createdAt": 1735526588116,
+    "updatedAt": 1735526591337,
+    "meta": {},
+    "plugin": {
+      "apiName": "execTasks",
+      "arguments": "{\"tasks\": [{\"description\": \"Research Hangzhou weather\", \"instruction\": \"Search for Hangzhou weather tomorrow.\"}, {\"description\": \"Research Beijing weather\", \"instruction\": \"Search for Beijing weather tomorrow.\"}]}",
+      "identifier": "lobe-gtd",
+      "type": "builtin"
+    },
+    "pluginState": {
+      "type": "execTasks",
+      "tasks": [
+        {
+          "description": "Research Hangzhou weather",
+          "instruction": "Search for Hangzhou weather tomorrow."
+        },
+        {
+          "description": "Research Beijing weather",
+          "instruction": "Search for Beijing weather tomorrow."
+        }
+      ],
+      "parentMessageId": "msg-tool-1"
+    }
+  },
+  {
+    "id": "msg-task-hangzhou",
+    "role": "task",
+    "content": "## Hangzhou Weather Report\n\nBased on the China Meteorological Administration data:\n\n- **Temperature**: 4-9°C\n- **Condition**: Cloudy during day, light rain at night\n- **Wind**: Northeast, light breeze\n- **Humidity**: 62.3%-93.6%",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526594643,
+    "updatedAt": 1735526756262,
+    "meta": {},
+    "metadata": {
+      "instruction": "Search for Hangzhou weather tomorrow."
+    },
+    "taskDetail": {
+      "duration": 152955,
+      "status": "completed",
+      "threadId": "thd_hangzhou_weather",
+      "title": "Research Hangzhou weather",
+      "totalCost": 0.019886,
+      "totalMessages": 22,
+      "totalTokens": 143825,
+      "totalToolCalls": 0
+    }
+  },
+  {
+    "id": "msg-task-beijing",
+    "role": "task",
+    "content": "## Beijing Weather Report\n\nBased on the China Weather Network data:\n\n- **Temperature**: -9°C to 0°C\n- **Condition**: Sunny and cold\n- **Wind**: North, <3 level\n- **AQI**: 57 (Good)",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526595647,
+    "updatedAt": 1735526792430,
+    "meta": {},
+    "metadata": {
+      "instruction": "Search for Beijing weather tomorrow."
+    },
+    "taskDetail": {
+      "duration": 186928,
+      "status": "completed",
+      "threadId": "thd_beijing_weather",
+      "title": "Research Beijing weather",
+      "totalCost": 0.022058,
+      "totalMessages": 28,
+      "totalTokens": 178678,
+      "totalToolCalls": 0
+    }
+  },
+  {
+    "id": "msg-assistant-summary",
+    "role": "assistant",
+    "content": "I've created two async tasks to research the weather. Both tasks are completed:\n\n## Hangzhou: 4-9°C, cloudy with light rain at night\n## Beijing: -9°C to 0°C, sunny and cold",
+    "parentId": "msg-tool-1",
+    "createdAt": 1735526795651,
+    "updatedAt": 1735526813171,
+    "meta": {},
+    "model": "deepseek-chat",
+    "provider": "deepseek",
+    "metadata": {
+      "tps": 28.27,
+      "cost": 0.001078,
+      "ttft": 1994,
+      "latency": 10129,
+      "duration": 8135,
+      "totalTokens": 12530,
+      "totalInputTokens": 12300,
+      "totalOutputTokens": 230
+    }
+  }
+]

@@ -1,5 +1,5 @@
 import { Button, Modal } from '@lobehub/ui';
-import { FormInstance } from 'antd';
+import { type FormInstance } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +60,7 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ id, open, setOpen }) => 
       onCancel={closeModal}
       open={open}
       styles={{
-        content: {
+        body: {
           display: 'flex',
           flexDirection: 'column',
           maxHeight: 'calc(100vh - 150px)',

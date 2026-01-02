@@ -1,6 +1,6 @@
+import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
@@ -46,7 +46,7 @@ const TitleBar = memo(() => {
         </Flexbox>
         {showWinControl && (
           <>
-            <Divider type={'vertical'} />
+            <Divider orientation={'vertical'} />
             <WinControl />
           </>
         )}

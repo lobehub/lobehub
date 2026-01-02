@@ -1,7 +1,7 @@
 import { resolveAcceptLanguage } from 'resolve-accept-language';
 
 import { DEFAULT_LANG } from '@/const/locale';
-import { Locales, locales, normalizeLocale } from '@/locales/resources';
+import { type Locales, locales, normalizeLocale } from '@/locales/resources';
 
 import { RouteVariants } from './server/routeVariants';
 

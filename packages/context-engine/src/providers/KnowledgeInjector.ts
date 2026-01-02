@@ -2,7 +2,7 @@ import { promptAgentKnowledge } from '@lobechat/prompts';
 import type { FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:KnowledgeInjector');
@@ -17,8 +17,9 @@ export interface KnowledgeInjectorConfig {
 /**
  * Knowledge Injector
  * Responsible for injecting agent's knowledge (files and knowledge bases) into context
+ * before the first user message
  */
-export class KnowledgeInjector extends BaseProvider {
+export class KnowledgeInjector extends BaseFirstUserContentProvider {
   readonly name = 'KnowledgeInjector';
 
   constructor(
@@ -28,51 +29,39 @@ export class KnowledgeInjector extends BaseProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected buildContent(_context: PipelineContext): string | null {
     const fileContents = this.config.fileContents || [];
     const knowledgeBases = this.config.knowledgeBases || [];
 
     // Generate unified knowledge prompt
     const formattedContent = promptAgentKnowledge({ fileContents, knowledgeBases });
 
-    // Skip injection if no knowledge at all
     if (!formattedContent) {
       log('No knowledge to inject');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
-
-    // Find the first user message index
-    const firstUserIndex = clonedContext.messages.findIndex((msg) => msg.role === 'user');
-
-    if (firstUserIndex === -1) {
-      log('No user messages found, skipping injection');
-      return this.markAsExecuted(clonedContext);
-    }
-
-    // Insert a new user message with knowledge before the first user message
-    // Mark it as application-level system injection
-    const knowledgeMessage = {
-      content: formattedContent,
-      createdAt: Date.now(),
-      id: `knowledge-${Date.now()}`,
-      meta: { injectType: 'knowledge', systemInjection: true },
-      role: 'user' as const,
-      updatedAt: Date.now(),
-    };
-
-    clonedContext.messages.splice(firstUserIndex, 0, knowledgeMessage);
-
-    // Update metadata
-    clonedContext.metadata.knowledgeInjected = true;
-    clonedContext.metadata.filesCount = fileContents.length;
-    clonedContext.metadata.knowledgeBasesCount = knowledgeBases.length;
 
     log(
-      `Agent knowledge injected as new user message: ${fileContents.length} file(s), ${knowledgeBases.length} knowledge base(s)`,
+      `Knowledge prepared: ${fileContents.length} file(s), ${knowledgeBases.length} knowledge base(s)`,
     );
 
-    return this.markAsExecuted(clonedContext);
+    return formattedContent;
+  }
+
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    const result = await super.doProcess(context);
+
+    // Update metadata
+    const fileContents = this.config.fileContents || [];
+    const knowledgeBases = this.config.knowledgeBases || [];
+
+    if (fileContents.length > 0 || knowledgeBases.length > 0) {
+      result.metadata.knowledgeInjected = true;
+      result.metadata.filesCount = fileContents.length;
+      result.metadata.knowledgeBasesCount = knowledgeBases.length;
+    }
+
+    return result;
   }
 }

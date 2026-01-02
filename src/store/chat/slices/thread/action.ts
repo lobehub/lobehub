@@ -1,31 +1,26 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { LOADING_FLAT, THREAD_DRAFT_ID } from '@lobechat/const';
+import { LOADING_FLAT } from '@lobechat/const';
 import { chainSummaryTitle } from '@lobechat/prompts';
-import {
-  CreateMessageParams,
-  SendThreadMessageParams,
-  ThreadItem,
-  ThreadType,
-  UIChatMessage,
-} from '@lobechat/types';
+import { type CreateMessageParams, type IThreadType, type ThreadItem, type UIChatMessage } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import type { SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { threadService } from '@/services/thread';
 import { threadSelectors } from '@/store/chat/selectors';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { globalHelpers } from '@/store/global/helpers';
-import { useSessionStore } from '@/store/session';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { ThreadDispatch, threadReducer } from './reducer';
+import { displayMessageSelectors } from '../message/selectors';
+import { type ThreadDispatch, threadReducer } from './reducer';
+import { genParentMessages } from './selectors';
 
 const n = setNamespace('thd');
 const SWR_USE_FETCH_THREADS = 'SWR_USE_FETCH_THREADS';
@@ -34,17 +29,11 @@ export interface ChatThreadAction {
   // update
   updateThreadInputMessage: (message: string) => void;
   refreshThreads: () => Promise<void>;
-  /**
-   * Sends a new thread message to the AI chat system
-   */
-  sendThreadMessage: (params: SendThreadMessageParams) => Promise<void>;
-  resendThreadMessage: (messageId: string) => Promise<void>;
-  delAndResendThreadMessage: (messageId: string) => Promise<void>;
   createThread: (params: {
     message: CreateMessageParams;
     sourceMessageId: string;
     topicId: string;
-    type: ThreadType;
+    type: IThreadType;
   }) => Promise<{ threadId: string; messageId: string }>;
   openThreadCreator: (messageId: string) => void;
   openThreadInPortal: (threadId: string, sourceMessageId?: string | null) => void;
@@ -74,6 +63,26 @@ export const chatThreadMessage: StateCreator<
   },
 
   openThreadCreator: (messageId) => {
+    const { activeAgentId, activeTopicId, newThreadMode, replaceMessages } = get();
+
+    // Get parent messages up to and including the source message
+    const displayMessages = displayMessageSelectors.activeDisplayMessages(get());
+    // Filter out messages that have threadId (they belong to other threads)
+    const mainMessages = displayMessages.filter((m) => !m.threadId);
+    const parentMessages = genParentMessages(mainMessages, messageId, newThreadMode);
+
+    // Initialize messages in thread scope for optimistic update
+    // This ensures the UI can display messages immediately
+    if (parentMessages.length > 0) {
+      const context = {
+        agentId: activeAgentId,
+        isNew: true,
+        scope: 'thread' as const,
+        topicId: activeTopicId,
+      };
+      replaceMessages(parentMessages, { action: 'initThreadMessages', context });
+    }
+
     set(
       { threadStartMessageId: messageId, portalThreadId: undefined, startToForkThread: true },
       false,
@@ -98,115 +107,6 @@ export const chatThreadMessage: StateCreator<
     );
     get().togglePortal(false);
   },
-  sendThreadMessage: async ({ message }) => {
-    const {
-      internal_execAgentRuntime,
-      activeTopicId,
-      activeId,
-      threadStartMessageId,
-      newThreadMode,
-      portalThreadId,
-    } = get();
-    if (!activeId || !activeTopicId) return;
-
-    // if message is empty or no files, then stop
-    if (!message) return;
-
-    set({ isCreatingThreadMessage: true }, false, n('creatingThreadMessage/start'));
-
-    const newMessage: CreateMessageParams = {
-      content: message,
-      // if message has attached with files, then add files to message and the agent
-      // files: fileIdList,
-      role: 'user',
-      sessionId: activeId,
-      // if there is activeTopicId，then add topicId to message
-      topicId: activeTopicId,
-      threadId: portalThreadId,
-    };
-
-    let parentMessageId: string | undefined = undefined;
-    let tempMessageId: string | undefined = undefined;
-
-    // if there is no portalThreadId, then create a thread and then append message
-    if (!portalThreadId) {
-      if (!threadStartMessageId) return;
-      // we need to create a temp message for optimistic update
-      tempMessageId = get().optimisticCreateTmpMessage({
-        ...newMessage,
-        threadId: THREAD_DRAFT_ID,
-      });
-      get().internal_toggleMessageLoading(true, tempMessageId);
-
-      const { threadId, messageId } = await get().createThread({
-        message: newMessage,
-        sourceMessageId: threadStartMessageId,
-        topicId: activeTopicId,
-        type: newThreadMode,
-      });
-
-      parentMessageId = messageId;
-
-      // mark the portal in thread mode
-      await get().refreshThreads();
-      await get().refreshMessages();
-
-      get().openThreadInPortal(threadId, threadStartMessageId);
-    } else {
-      // if there is a thread, just append message
-      // we need to create a temp message for optimistic update
-      tempMessageId = get().optimisticCreateTmpMessage(newMessage);
-      get().internal_toggleMessageLoading(true, tempMessageId);
-
-      const result = await get().optimisticCreateMessage(newMessage, { tempMessageId });
-      if (!result) return;
-      parentMessageId = result.id;
-    }
-
-    get().internal_toggleMessageLoading(false, tempMessageId);
-
-    if (!parentMessageId) return;
-    //  update assistant update to make it rerank
-    useSessionStore.getState().triggerSessionUpdate(get().activeId);
-
-    // Get the current messages to generate AI response
-    const messages = threadSelectors.portalAIChats(get());
-
-    await internal_execAgentRuntime({
-      messages,
-      parentMessageId,
-      parentMessageType: 'user',
-      sessionId: get().activeId,
-      topicId: get().activeTopicId,
-      threadId: get().portalThreadId,
-      inPortalThread: true,
-    });
-
-    set({ isCreatingThreadMessage: false }, false, n('creatingThreadMessage/stop'));
-
-    // 说明是在新建 thread，需要自动总结标题
-    if (!portalThreadId) {
-      const portalThread = threadSelectors.currentPortalThread(get());
-
-      if (!portalThread) return;
-
-      const chats = threadSelectors.portalAIChats(get());
-      await get().summaryThreadTitle(portalThread.id, chats);
-    }
-  },
-  resendThreadMessage: async (messageId) => {
-    // const chats = threadSelectors.portalAIChats(get());
-
-    await get().regenerateUserMessage(messageId, {
-      // messages: chats,
-      // threadId: get().portalThreadId,
-      // inPortalThread: true,
-    });
-  },
-  delAndResendThreadMessage: async (id) => {
-    get().resendThreadMessage(id);
-    get().deleteMessage(id);
-  },
   createThread: async ({ message, sourceMessageId, topicId, type }) => {
     set({ isCreatingThread: true }, false, n('creatingThread/start'));
 
@@ -229,8 +129,8 @@ export const chatThreadMessage: StateCreator<
         onSuccess: (threads) => {
           const nextMap = { ...get().threadMaps, [topicId!]: threads };
 
-          // no need to update map if the topics have been init and the map is the same
-          if (get().topicsInit && isEqual(nextMap, get().topicMaps)) return;
+          // no need to update map if the threads have been init and the map is the same
+          if (get().threadsInit && isEqual(nextMap, get().threadMaps)) return;
 
           set(
             { threadMaps: nextMap, threadsInit: true },

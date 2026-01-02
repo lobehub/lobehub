@@ -1,8 +1,7 @@
 'use client';
 
+import { OllamaProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
-
-import { OllamaProviderCard } from '@/config/modelProviders';
 
 import ProviderDetail from '../default';
 import CheckError from './CheckError';

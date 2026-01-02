@@ -1,0 +1,355 @@
+{
+  "json_schema": {
+    "type": "object",
+    "properties": {
+      "add": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "details": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Optional detailed information"
+            },
+            "memoryCategory": {
+              "type": "string",
+              "description": "Memory category"
+            },
+            "memoryLayer": {
+              "type": "string",
+              "const": "identity",
+              "description": "Memory layer"
+            },
+            "memoryType": {
+              "type": "string",
+              "enum": [
+                "activity",
+                "context",
+                "event",
+                "fact",
+                "location",
+                "other",
+                "people",
+                "preference",
+                "technology",
+                "topic"
+              ],
+              "description": "Memory type"
+            },
+            "summary": {
+              "type": "string",
+              "description": "Concise overview of this specific memory"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Model generated tags that summarize the identity facets"
+            },
+            "title": {
+              "type": "string",
+              "description": "Brief descriptive title"
+            },
+            "withIdentity": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "episodicDate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "extractedLabels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "relationship": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "father",
+                    "mother",
+                    "son",
+                    "daughter",
+                    "brother",
+                    "sister",
+                    "sibling",
+                    "husband",
+                    "wife",
+                    "spouse",
+                    "partner",
+                    "couple",
+                    "friend",
+                    "colleague",
+                    "coworker",
+                    "classmate",
+                    "mentor",
+                    "mentee",
+                    "manager",
+                    "teammate",
+                    "grandfather",
+                    "grandmother",
+                    "grandson",
+                    "granddaughter",
+                    "uncle",
+                    "aunt",
+                    "nephew",
+                    "niece",
+                    "other"
+                  ]
+                },
+                "role": {
+                  "type": "string"
+                },
+                "scoreConfidence": {
+                  "type": "number"
+                },
+                "sourceEvidence": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "professional",
+                    "personal",
+                    "demographic"
+                  ]
+                }
+              },
+              "required": [
+                "description",
+                "episodicDate",
+                "extractedLabels",
+                "relationship",
+                "role",
+                "scoreConfidence",
+                "sourceEvidence",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "details",
+            "memoryCategory",
+            "memoryLayer",
+            "memoryType",
+            "summary",
+            "tags",
+            "title",
+            "withIdentity"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "remove": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "update": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "mergeStrategy": {
+              "type": "string",
+              "enum": [
+                "merge",
+                "replace"
+              ]
+            },
+            "set": {
+              "type": "object",
+              "properties": {
+                "details": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional detailed information, use null for omitting the field"
+                },
+                "memoryCategory": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Memory category, use null for omitting the field"
+                },
+                "memoryType": {
+                  "type": "string",
+                  "enum": [
+                    "activity",
+                    "context",
+                    "event",
+                    "fact",
+                    "location",
+                    "other",
+                    "people",
+                    "preference",
+                    "technology",
+                    "topic"
+                  ],
+                  "description": "Memory type, use null for omitting the field"
+                },
+                "summary": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Concise overview of this specific memory, use null for omitting the field"
+                },
+                "tags": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Model generated tags that summarize the identity facets, use null for omitting the field"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Brief descriptive title, use null for omitting the field"
+                },
+                "withIdentity": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "episodicDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "extractedLabels": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "relationship": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Possible values: self | father | mother | son | daughter | brother | sister | sibling | husband | wife | spouse | partner | couple | friend | colleague | coworker | classmate | mentor | mentee | manager | teammate | grandfather | grandmother | grandson | granddaughter | uncle | aunt | nephew | niece | other"
+                    },
+                    "role": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "scoreConfidence": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "sourceEvidence": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Possible values: professional | personal | demographic"
+                    }
+                  },
+                  "required": [
+                    "description",
+                    "episodicDate",
+                    "extractedLabels",
+                    "relationship",
+                    "role",
+                    "scoreConfidence",
+                    "sourceEvidence",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "details",
+                "memoryCategory",
+                "memoryType",
+                "summary",
+                "tags",
+                "title",
+                "withIdentity"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "mergeStrategy",
+            "set"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "add",
+      "remove",
+      "update"
+    ],
+    "additionalProperties": false
+  },
+  "type": "json_schema"
+}

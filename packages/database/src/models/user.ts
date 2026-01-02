@@ -7,7 +7,7 @@ import {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, inArray, or } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -33,6 +33,17 @@ export class UserNotFoundError extends TRPCError {
     super({ code: 'UNAUTHORIZED', message: 'user not found' });
   }
 }
+
+export interface ListUsersForMemoryExtractorCursor {
+  createdAt: Date;
+  id: string;
+}
+
+export type ListUsersForMemoryExtractorOptions = {
+  cursor?: ListUsersForMemoryExtractorCursor;
+  limit?: number;
+  whitelist?: string[];
+};
 
 export class UserModel {
   private userId: string;
@@ -70,8 +81,10 @@ export class UserModel {
         email: users.email,
         firstName: users.firstName,
         fullName: users.fullName,
+        interests: users.interests,
         isOnboarded: users.isOnboarded,
         lastName: users.lastName,
+        onboarding: users.onboarding,
         preference: users.preference,
         settingsDefaultAgent: userSettings.defaultAgent,
 
@@ -81,6 +94,7 @@ export class UserModel {
         settingsKeyVaults: userSettings.keyVaults,
         settingsLanguageModel: userSettings.languageModel,
         settingsMarket: userSettings.market,
+        settingsMemory: userSettings.memory,
         settingsSystemAgent: userSettings.systemAgent,
         settingsTTS: userSettings.tts,
         settingsTool: userSettings.tool,
@@ -114,6 +128,7 @@ export class UserModel {
       keyVaults: decryptKeyVaults,
       languageModel: state.settingsLanguageModel || {},
       market: state.settingsMarket || undefined,
+      memory: state.settingsMemory || {},
       systemAgent: state.settingsSystemAgent || {},
       tool: state.settingsTool || {},
       tts: state.settingsTTS || {},
@@ -124,8 +139,10 @@ export class UserModel {
       email: state.email || undefined,
       firstName: state.firstName || undefined,
       fullName: state.fullName || undefined,
+      interests: state.interests || undefined,
       isOnboarded: state.isOnboarded,
       lastName: state.lastName || undefined,
+      onboarding: state.onboarding || undefined,
       preference: state.preference as UserPreference,
       settings,
       userId: this.userId,
@@ -146,6 +163,16 @@ export class UserModel {
 
   getUserSettings = async () => {
     return this.db.query.userSettings.findFirst({ where: eq(userSettings.id, this.userId) });
+  };
+
+  getUserSettingsDefaultAgentConfig = async () => {
+    const result = await this.db
+      .select({ defaultAgent: userSettings.defaultAgent })
+      .from(userSettings)
+      .where(eq(userSettings.id, this.userId))
+      .limit(1);
+
+    return result[0]?.defaultAgent;
   };
 
   updateUser = async (value: Partial<UserItem>) => {
@@ -277,5 +304,31 @@ export class UserModel {
 
     // Decrypt keyVaults
     return await decryptor(state.settingsKeyVaults, id);
+  };
+
+  static listUsersForMemoryExtractor = (
+    db: LobeChatDatabase,
+    options: ListUsersForMemoryExtractorOptions = {},
+  ) => {
+    const cursorCondition = options.cursor
+      ? or(
+          gt(users.createdAt, options.cursor.createdAt),
+          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
+        )
+      : undefined;
+
+    const whitelistCondition =
+      options.whitelist && options.whitelist.length > 0
+        ? inArray(users.id, options.whitelist)
+        : undefined;
+
+    const where = and(cursorCondition, whitelistCondition);
+
+    return db.query.users.findMany({
+      columns: { createdAt: true, id: true },
+      limit: options.limit,
+      orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
+      where,
+    });
   };
 }
