@@ -6,11 +6,6 @@ on:
     types: [completed]
     branches: [next]
   workflow_dispatch:
-    inputs:
-      extra_build_args:
-        description: 'Extra Docker build-args'
-        required: false
-        default: ''
 
 # 确保同一时间只运行一个相同的 workflow,取消正在进行的旧的运行
 concurrency:
@@ -25,8 +20,8 @@ permissions:
 env:
   REGISTRY_IMAGE: pigeonszz/lobe-chat-database
   DOCKER_REGISTRY: docker.io
-  # 默认值，会被 repo 变量或 workflow_dispatch 覆盖
-  EXTRA_BUILD_ARG_DEFAULT: ""
+  # 额外的构建参数，可以在 workflow_dispatch 或仓库设置中覆盖
+  EXTRA_BUILD_ARG: ""
 
 jobs:
   build:
@@ -35,8 +30,6 @@ jobs:
     if: |
       (github.event_name == 'workflow_dispatch') ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-    env:
-      FINAL_EXTRA_BUILD_ARG: ${{ github.event.inputs.extra_build_args || vars.EXTRA_BUILD_ARG || env.EXTRA_BUILD_ARG_DEFAULT }}
     strategy:
       matrix:
         include:
@@ -50,7 +43,7 @@ jobs:
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-          echo "Using extra build args: $FINAL_EXTRA_BUILD_ARG"
+          echo "Extra build args: ${{ env.EXTRA_BUILD_ARG }}"
 
       - name: Checkout next branch
         uses: actions/checkout@v5
@@ -96,7 +89,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             SHA=${{ github.sha }}
-            ${{ env.FINAL_EXTRA_BUILD_ARG }}
+            ${{ env.EXTRA_BUILD_ARG }}
           outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
