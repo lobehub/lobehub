@@ -43,13 +43,15 @@ export class KnowledgeBaseModel {
   };
 
   removeFilesFromKnowledgeBase = async (knowledgeBaseId: string, ids: string[]) => {
-    return this.db.delete(knowledgeBaseFiles).where(
-      and(
-        eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
-        inArray(knowledgeBaseFiles.fileId, ids),
-        // eq(knowledgeBaseFiles.userId, this.userId),
-      ),
-    );
+    return this.db
+      .delete(knowledgeBaseFiles)
+      .where(
+        and(
+          eq(knowledgeBaseFiles.userId, this.userId),
+          eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
+          inArray(knowledgeBaseFiles.fileId, ids),
+        ),
+      );
   };
   // query
   query = async () => {
