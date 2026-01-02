@@ -108,10 +108,13 @@ const searchUserMemories = async (
   ctx: MemorySearchContext,
   input: z.infer<typeof searchMemorySchema>,
 ): Promise<SearchMemoryResult> => {
-  const agentRuntime = await initModelRuntimeWithUserPayload(ModelProvider.OpenAI, ctx.jwtPayload);
-
-  const { model: embeddingModel } =
+  const { model: embeddingModel, provider: embeddingProviderRaw } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+
+  // Normalize and strongly type the provider so misconfigurations are caught at compile time
+  const embeddingProvider = (embeddingProviderRaw ?? ModelProvider.OpenAI) as ModelProvider;
+
+  const agentRuntime = await initModelRuntimeWithUserPayload(embeddingProvider, ctx.jwtPayload);
 
   const queryEmbeddings = await agentRuntime.embeddings({
     dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
@@ -134,12 +137,13 @@ const searchUserMemories = async (
 };
 
 const getEmbeddingRuntime = async (jwtPayload: ClientSecretPayload) => {
-  const agentRuntime = await initModelRuntimeWithUserPayload(
-    ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : ModelProvider.OpenAI,
-    jwtPayload,
-  );
-  const { model: embeddingModel } =
+  const { model: embeddingModel, provider: embeddingProviderRaw } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+
+  // Normalize and strongly type the provider so misconfigurations are caught at compile time
+  const embeddingProvider = (embeddingProviderRaw ?? ModelProvider.OpenAI) as ModelProvider;
+
+  const agentRuntime = await initModelRuntimeWithUserPayload(embeddingProvider, jwtPayload);
 
   return { agentRuntime, embeddingModel };
 };
