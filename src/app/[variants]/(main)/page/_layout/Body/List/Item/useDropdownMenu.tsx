@@ -1,7 +1,7 @@
 import { Icon, type MenuProps } from '@lobehub/ui';
 import { App } from 'antd';
 import { Copy, CopyPlus, Pencil, Trash2 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
@@ -16,7 +16,7 @@ export const useDropdownMenu = ({
   documentContent,
   pageId,
   toggleEditing,
-}: ActionProps): MenuProps['items'] => {
+}: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'file']);
   const { message, modal } = App.useApp();
   const removeDocument = useFileStore((s) => s.removeDocument);
@@ -59,7 +59,7 @@ export const useDropdownMenu = ({
     }
   };
 
-  return useMemo(
+  return useCallback(
     () =>
       [
         {

@@ -1,6 +1,27 @@
 [
   {
     "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.190"
+  },
+  {
+    "children": {
+      "improvements": ["Migrate to new DropdownMenuV2 and showContextMenu API."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.189"
+  },
+  {
+    "children": {
+      "improvements": ["Improve tools UI and fix Google schema compatibility."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.188"
+  },
+  {
+    "children": {
       "improvements": ["Add Gemini 3 Flash & Doubao Seed 1.8 models."]
     },
     "date": "2026-01-01",

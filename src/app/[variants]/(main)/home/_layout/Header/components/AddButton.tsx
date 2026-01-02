@@ -1,6 +1,5 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { CreateBotIcon } from '@lobehub/ui/icons';
-import { Dropdown } from 'antd';
 import { cssVar } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import React, { memo, useCallback, useMemo } from 'react';
@@ -45,7 +44,7 @@ const AddButton = memo(() => {
         size={DESKTOP_HEADER_ICON_SIZE}
         title={tChat('newAgent')}
       />
-      <Dropdown menu={{ items: dropdownItems || [] }}>
+      <DropdownMenu items={dropdownItems}>
         <ActionIcon
           color={cssVar.colorTextQuaternary}
           icon={ChevronDownIcon}
@@ -54,7 +53,7 @@ const AddButton = memo(() => {
             width: 16,
           }}
         />
-      </Dropdown>
+      </DropdownMenu>
     </Flexbox>
   );
 });

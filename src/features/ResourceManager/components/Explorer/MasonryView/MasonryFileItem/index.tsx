@@ -1,4 +1,4 @@
-import { Checkbox } from '@lobehub/ui';
+import { Checkbox, showContextMenu } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -13,6 +13,7 @@ import { documentService } from '@/services/document';
 import { type FileListItem } from '@/types/files';
 
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
+import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
 import MarkdownFileItem from './MarkdownFileItem';
@@ -346,6 +347,15 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       }
     }, [isMarkdown, isPage, url, isInView, markdownContent, id]);
 
+    const { menuItems } = useFileItemDropdown({
+      fileType,
+      filename: name,
+      id,
+      knowledgeBaseId,
+      sourceType,
+      url,
+    });
+
     return (
       <div
         className={cx(
@@ -357,6 +367,10 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         data-drop-target-id={id}
         data-is-folder={isFolder}
         draggable={!!knowledgeBaseId}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          showContextMenu(menuItems());
+        }}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -379,13 +393,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <DropdownMenu
-            fileType={fileType}
-            filename={name}
-            id={id}
-            knowledgeBaseId={knowledgeBaseId}
-            url={url}
-          />
+          <DropdownMenu items={menuItems} />
         </div>
 
         <div

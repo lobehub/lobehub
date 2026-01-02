@@ -29,7 +29,6 @@
   "internlm.description": "An open-source organization focused on large-model research and tooling, providing an efficient, easy-to-use platform that makes cutting-edge models and algorithms accessible.",
   "jina.description": "Founded in 2020, Jina AI is a leading search AI company. Its search stack includes vector models, rerankers, and small language models to build reliable, high-quality generative and multimodal search apps.",
   "lmstudio.description": "LM Studio is a desktop app for developing and experimenting with LLMs on your computer.",
-  "lobehub.description": "LobeHub Cloud uses official APIs to access AI models and measures usage with Credits tied to model tokens.",
   "minimax.description": "Founded in 2021, MiniMax builds general-purpose AI with multimodal foundation models, including trillion-parameter MoE text models, speech models, and vision models, along with apps like Hailuo AI.",
   "mistral.description": "Mistral offers advanced general, specialized, and research models for complex reasoning, multilingual tasks, and code generation, with function-calling for custom integrations.",
   "modelscope.description": "ModelScope is Alibaba Cloud’s model-as-a-service platform, offering a wide range of AI models and inference services.",

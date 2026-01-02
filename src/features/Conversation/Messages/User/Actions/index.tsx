@@ -135,7 +135,7 @@ export const UserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data 
     [allActions],
   );
 
-  return <ActionIconGroup items={items} menu={{ items: menu }} onActionClick={handleAction} />;
+  return <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />;
 });
 
 UserActionsBar.displayName = 'UserActionsBar';

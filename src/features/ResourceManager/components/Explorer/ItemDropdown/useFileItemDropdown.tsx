@@ -10,7 +10,7 @@ import {
   PencilIcon,
   Trash,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RepoIcon from '@/components/LibIcon';
@@ -33,11 +33,10 @@ interface UseFileItemDropdownParams {
 }
 
 interface UseFileItemDropdownReturn {
-  menuItems: ItemType[];
+  menuItems: () => ItemType[];
 }
 
 export const useFileItemDropdown = ({
-  enabled = true,
   id,
   knowledgeBaseId,
   url,
@@ -65,10 +64,7 @@ export const useFileItemDropdown = ({
   const isFolder = fileType === 'custom/folder';
   const isPage = sourceType === 'document' || fileType === 'custom/document';
 
-  const menuItems = useMemo(() => {
-    // Skip building menu items when dropdown is not open (performance optimization)
-    if (!enabled) return [];
-
+  const menuItems = useCallback(() => {
     // Filter out current knowledge base and create submenu items
     const availableKnowledgeBases = (knowledgeBases || []).filter(
       (kb) => kb.id !== knowledgeBaseId,
@@ -264,7 +260,7 @@ export const useFileItemDropdown = ({
         },
       ] as ItemType[]
     ).filter(Boolean);
-  }, [enabled, inKnowledgeBase, isFolder, knowledgeBases, knowledgeBaseId, id]);
+  }, [inKnowledgeBase, isFolder, knowledgeBases, knowledgeBaseId, id]);
 
   return { menuItems };
 };

@@ -1,6 +1,16 @@
 'use client';
 
-import { Block, type BlockProps, Center, Flexbox, Icon, type IconProps, Text } from '@lobehub/ui';
+import {
+  Block,
+  type BlockProps,
+  Center,
+  ContextMenuTrigger,
+  Flexbox,
+  type GenericItemType,
+  Icon,
+  type IconProps,
+  Text,
+} from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
@@ -18,6 +28,11 @@ const styles = createStaticStyles(({ css }) => ({
       margin-inline-end: 2px;
       opacity: 0;
       transition: opacity 0.2s ${cssVar.motionEaseOut};
+
+      &:has([data-popup-open]) {
+        width: unset;
+        opacity: 1;
+      }
     }
 
     &:hover {
@@ -32,6 +47,7 @@ const styles = createStaticStyles(({ css }) => ({
 export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
   actions?: ReactNode;
   active?: boolean;
+  contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
   disabled?: boolean;
   extra?: ReactNode;
   icon?: IconProps['icon'];
@@ -40,13 +56,25 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
 }
 
 const NavItem = memo<NavItemProps>(
-  ({ className, actions, active, icon, title, onClick, disabled, loading, extra, ...rest }) => {
+  ({
+    className,
+    actions,
+    contextMenuItems,
+    active,
+    icon,
+    title,
+    onClick,
+    disabled,
+    loading,
+    extra,
+    ...rest
+  }) => {
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
     const textColor = active ? cssVar.colorText : cssVar.colorTextSecondary;
     const variant = active ? 'filled' : 'borderless';
     const iconComponent = loading ? Loader2Icon : icon;
 
-    return (
+    const Content = (
       <Block
         align={'center'}
         className={cx(styles.container, className)}
@@ -102,6 +130,8 @@ const NavItem = memo<NavItemProps>(
         </Flexbox>
       </Block>
     );
+    if (!contextMenuItems) return Content;
+    return <ContextMenuTrigger items={contextMenuItems}>{Content}</ContextMenuTrigger>;
   },
 );
 

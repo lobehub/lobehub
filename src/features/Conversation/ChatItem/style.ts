@@ -22,6 +22,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
         display: flex;
       }
 
+      &:has([data-popup-open]) {
+        div[role='menubar'] {
+          pointer-events: unset;
+          opacity: 1;
+        }
+      }
+
       &:hover {
         time,
         div[role='menubar'] {

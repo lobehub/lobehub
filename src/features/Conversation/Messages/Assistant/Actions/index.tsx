@@ -1,10 +1,16 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { ActionIconGroup } from '@lobehub/ui';
+import { ActionIconGroup, createRawModal } from '@lobehub/ui';
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
-import ShareMessageModal from '../../../components/ShareMessageModal';
-import { messageStateSelectors, useConversationStore } from '../../../store';
+import ShareMessageModal, { type ShareModalProps } from '../../../components/ShareMessageModal';
+import {
+  Provider,
+  createStore,
+  messageStateSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../../../store';
 import type {
   MessageActionItem,
   MessageActionItemOrDivider,
@@ -57,7 +63,30 @@ interface AssistantActionsBarProps {
 export const AssistantActionsBar = memo<AssistantActionsBarProps>(
   ({ actionsConfig, id, data, index }) => {
     const { error, tools } = data;
-    const [showShareModal, setShareModal] = useState(false);
+    const store = useConversationStoreApi();
+
+    const handleOpenShareModal = useCallback(() => {
+      createRawModal(
+        (props: ShareModalProps) => (
+          <Provider
+            createStore={() => {
+              const state = store.getState();
+              return createStore({
+                context: state.context,
+                hooks: state.hooks,
+                skipFetch: state.skipFetch,
+              });
+            }}
+          >
+            <ShareMessageModal {...props} />
+          </Provider>
+        ),
+        {
+          message: data,
+        },
+        { onCloseKey: 'onCancel', openKey: 'open' },
+      );
+    }, [data, store]);
 
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
 
@@ -65,7 +94,7 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
       data,
       id,
       index,
-      onOpenShareModal: () => setShareModal(true),
+      onOpenShareModal: handleOpenShareModal,
     });
 
     const hasTools = !!tools;
@@ -174,17 +203,9 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
       [allActions],
     );
 
-    const shareOnCancel = useCallback(() => {
-      setShareModal(false);
-    }, []);
     if (error) return <ErrorActionsBar actions={defaultActions} onActionClick={handleAction} />;
 
-    return (
-      <>
-        <ActionIconGroup items={items} menu={{ items: menu }} onActionClick={handleAction} />
-        <ShareMessageModal message={data} onCancel={shareOnCancel} open={showShareModal} />
-      </>
-    );
+    return <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />;
   },
 );
 

@@ -1,4 +1,4 @@
-import { Button, Center, Checkbox, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Center, Checkbox, ContextMenuTrigger, Flexbox, Icon } from '@lobehub/ui';
 import { App, Input } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
@@ -23,6 +23,7 @@ import { formatSize } from '@/utils/format';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
+import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import ChunksBadge from './ChunkTag';
 
 dayjs.extend(relativeTime);
@@ -37,10 +38,6 @@ const styles = createStaticStyles(({ css }) => {
 
       &:hover {
         background: ${cssVar.colorFillTertiary};
-
-        .file-list-item-hover {
-          opacity: 1;
-        }
       }
     `,
 
@@ -58,12 +55,14 @@ const styles = createStaticStyles(({ css }) => {
       opacity: 0.5;
     `,
 
-    hover: cx(
-      'file-list-item-hover',
-      css`
-        opacity: 0;
-      `,
-    ),
+    hover: css`
+      opacity: 0;
+
+      &[data-popup-open],
+      .file-list-item-group:hover & {
+        opacity: 1;
+      }
+    `,
     item: css`
       padding-block: 0;
       padding-inline: 0 24px;
@@ -324,169 +323,172 @@ const FileListItem = memo<FileListItemProps>(
       }
     }, [pendingRenameItemId, id, isFolder, resourceManagerState]);
 
+    const { menuItems } = useFileItemDropdown({
+      fileType,
+      filename: name,
+      id,
+      knowledgeBaseId: resourceManagerState.libraryId,
+      onRenameStart: isFolder ? handleRenameStart : undefined,
+      sourceType,
+      url,
+    });
+
     return (
-      <Flexbox
-        align={'center'}
-        className={cx(
-          styles.container,
-          selected && styles.selected,
-          isDragging && styles.dragging,
-          isOver && styles.dragOver,
-        )}
-        data-drop-target-id={id}
-        data-is-folder={String(isFolder)}
-        draggable={!!resourceManagerState.libraryId}
-        height={48}
-        horizontal
-        onDragEnd={handleDragEnd}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDragStart={handleDragStart}
-        onDrop={handleDrop}
-        paddingInline={8}
-        style={{
-          borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-        }}
-      >
+      <ContextMenuTrigger items={menuItems}>
         <Flexbox
           align={'center'}
-          className={styles.item}
-          distribution={'space-between'}
-          flex={1}
+          className={cx(
+            styles.container,
+            'file-list-item-group',
+            selected && styles.selected,
+            isDragging && styles.dragging,
+            isOver && styles.dragOver,
+          )}
+          data-drop-target-id={id}
+          data-is-folder={String(isFolder)}
+          draggable={!!resourceManagerState.libraryId}
+          height={48}
           horizontal
-          onClick={handleItemClick}
+          onDragEnd={handleDragEnd}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDragStart={handleDragStart}
+          onDrop={handleDrop}
+          paddingInline={8}
+          style={{
+            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+          }}
         >
-          <Flexbox align={'center'} className={styles.nameContainer} horizontal>
-            <Center
-              height={48}
-              onClick={(e) => {
-                e.stopPropagation();
-
-                onSelectedChange(id, !selected, e.shiftKey, index);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              style={{ paddingInline: 4 }}
-            >
-              <Checkbox checked={selected} />
-            </Center>
-            <Flexbox
-              align={'center'}
-              justify={'center'}
-              style={{ fontSize: 24, marginInline: 8, width: 24 }}
-            >
-              {isFolder ? (
-                <Icon icon={FolderIcon} size={24} />
-              ) : isPage ? (
-                emoji ? (
-                  <span style={{ fontSize: 24 }}>{emoji}</span>
-                ) : (
-                  <Center height={24} width={24}>
-                    <Icon icon={FileText} size={24} />
-                  </Center>
-                )
-              ) : (
-                <FileIcon fileName={name} fileType={fileType} size={24} />
-              )}
-            </Flexbox>
-            {isRenaming && isFolder ? (
-              <Input
-                onBlur={handleRenameConfirm}
-                onChange={(e) => setRenamingValue(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleRenameConfirm();
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    handleRenameCancel();
-                  }
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                ref={inputRef}
-                size="small"
-                style={{ flex: 1, maxWidth: 400 }}
-                value={renamingValue}
-              />
-            ) : (
-              <span className={styles.name}>{name || t('file:pageList.untitled')}</span>
-            )}
-          </Flexbox>
           <Flexbox
             align={'center'}
-            gap={8}
+            className={styles.item}
+            distribution={'space-between'}
+            flex={1}
             horizontal
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleItemClick}
           >
-            {!isFolder &&
-              (fileStoreState.isCreatingFileParseTask ||
-              isNull(chunkingStatus) ||
-              !chunkingStatus ? (
-                <div
-                  className={fileStoreState.isCreatingFileParseTask ? undefined : styles.hover}
-                  title={t(
-                    isSupportedForChunking
-                      ? 'FileManager.actions.chunkingTooltip'
-                      : 'FileManager.actions.chunkingUnsupported',
-                  )}
-                >
-                  <Button
-                    disabled={!isSupportedForChunking}
-                    icon={FileBoxIcon}
-                    loading={fileStoreState.isCreatingFileParseTask}
-                    onClick={() => {
-                      fileStoreState.parseFiles([id]);
-                    }}
-                    size={'small'}
-                    type={'text'}
-                  >
-                    {t(
-                      fileStoreState.isCreatingFileParseTask
-                        ? 'FileManager.actions.createChunkingTask'
-                        : 'FileManager.actions.chunking',
-                    )}
-                  </Button>
-                </div>
+            <Flexbox align={'center'} className={styles.nameContainer} horizontal>
+              <Center
+                height={48}
+                onClick={(e) => {
+                  e.stopPropagation();
+
+                  onSelectedChange(id, !selected, e.shiftKey, index);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{ paddingInline: 4 }}
+              >
+                <Checkbox checked={selected} />
+              </Center>
+              <Flexbox
+                align={'center'}
+                justify={'center'}
+                style={{ fontSize: 24, marginInline: 8, width: 24 }}
+              >
+                {isFolder ? (
+                  <Icon icon={FolderIcon} size={24} />
+                ) : isPage ? (
+                  emoji ? (
+                    <span style={{ fontSize: 24 }}>{emoji}</span>
+                  ) : (
+                    <Center height={24} width={24}>
+                      <Icon icon={FileText} size={24} />
+                    </Center>
+                  )
+                ) : (
+                  <FileIcon fileName={name} fileType={fileType} size={24} />
+                )}
+              </Flexbox>
+              {isRenaming && isFolder ? (
+                <Input
+                  onBlur={handleRenameConfirm}
+                  onChange={(e) => setRenamingValue(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleRenameConfirm();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      handleRenameCancel();
+                    }
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  ref={inputRef}
+                  size="small"
+                  style={{ flex: 1, maxWidth: 400 }}
+                  value={renamingValue}
+                />
               ) : (
-                <div style={{ cursor: 'default' }}>
-                  <ChunksBadge
-                    chunkCount={chunkCount}
-                    chunkingError={chunkingError}
-                    chunkingStatus={chunkingStatus}
-                    embeddingError={embeddingError}
-                    embeddingStatus={embeddingStatus}
-                    finishEmbedding={finishEmbedding}
-                    id={id}
-                  />
-                </div>
-              ))}
-            <div className={styles.hover}>
-              <DropdownMenu
-                fileType={fileType}
-                filename={name}
-                id={id}
-                knowledgeBaseId={resourceManagerState.libraryId}
-                onRenameStart={isFolder ? handleRenameStart : undefined}
-                sourceType={sourceType}
-                url={url}
-              />
-            </div>
+                <span className={styles.name}>{name || t('file:pageList.untitled')}</span>
+              )}
+            </Flexbox>
+            <Flexbox
+              align={'center'}
+              gap={8}
+              horizontal
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {!isFolder &&
+                (fileStoreState.isCreatingFileParseTask ||
+                isNull(chunkingStatus) ||
+                !chunkingStatus ? (
+                  <div
+                    className={fileStoreState.isCreatingFileParseTask ? undefined : styles.hover}
+                    title={t(
+                      isSupportedForChunking
+                        ? 'FileManager.actions.chunkingTooltip'
+                        : 'FileManager.actions.chunkingUnsupported',
+                    )}
+                  >
+                    <Button
+                      disabled={!isSupportedForChunking}
+                      icon={FileBoxIcon}
+                      loading={fileStoreState.isCreatingFileParseTask}
+                      onClick={() => {
+                        fileStoreState.parseFiles([id]);
+                      }}
+                      size={'small'}
+                      type={'text'}
+                    >
+                      {t(
+                        fileStoreState.isCreatingFileParseTask
+                          ? 'FileManager.actions.createChunkingTask'
+                          : 'FileManager.actions.chunking',
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <div style={{ cursor: 'default' }}>
+                    <ChunksBadge
+                      chunkCount={chunkCount}
+                      chunkingError={chunkingError}
+                      chunkingStatus={chunkingStatus}
+                      embeddingError={embeddingError}
+                      embeddingStatus={embeddingStatus}
+                      finishEmbedding={finishEmbedding}
+                      id={id}
+                    />
+                  </div>
+                ))}
+              <DropdownMenu className={styles.hover} items={menuItems} />
+            </Flexbox>
           </Flexbox>
+          {!isDragging && (
+            <>
+              <Flexbox className={styles.item} width={FILE_DATE_WIDTH}>
+                {displayTime}
+              </Flexbox>
+              <Flexbox className={styles.item} width={FILE_SIZE_WIDTH}>
+                {isFolder || isPage ? '-' : formatSize(size)}
+              </Flexbox>
+            </>
+          )}
         </Flexbox>
-        {!isDragging && (
-          <>
-            <Flexbox className={styles.item} width={FILE_DATE_WIDTH}>
-              {displayTime}
-            </Flexbox>
-            <Flexbox className={styles.item} width={FILE_SIZE_WIDTH}>
-              {isFolder || isPage ? '-' : formatSize(size)}
-            </Flexbox>
-          </>
-        )}
-      </Flexbox>
+      </ContextMenuTrigger>
     );
   },
 );

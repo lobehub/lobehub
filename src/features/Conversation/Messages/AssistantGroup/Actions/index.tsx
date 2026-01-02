@@ -1,10 +1,16 @@
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
-import { ActionIconGroup } from '@lobehub/ui';
+import { ActionIconGroup, createRawModal } from '@lobehub/ui';
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
-import ShareMessageModal from '../../../components/ShareMessageModal';
-import { messageStateSelectors, useConversationStore } from '../../../store';
+import ShareMessageModal, { type ShareModalProps } from '../../../components/ShareMessageModal';
+import {
+  Provider,
+  createStore,
+  messageStateSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../../../store';
 import type {
   MessageActionItem,
   MessageActionItemOrDivider,
@@ -59,7 +65,29 @@ interface GroupActionsProps {
  */
 const WithContentId = memo<GroupActionsProps>(({ actionsConfig, id, data, contentBlock }) => {
   const { tools } = data;
-  const [showShareModal, setShareModal] = useState(false);
+  const store = useConversationStoreApi();
+  const handleOpenShareModal = useCallback(() => {
+    createRawModal(
+      (props: ShareModalProps) => (
+        <Provider
+          createStore={() => {
+            const state = store.getState();
+            return createStore({
+              context: state.context,
+              hooks: state.hooks,
+              skipFetch: state.skipFetch,
+            });
+          }}
+        >
+          <ShareMessageModal {...props} />
+        </Provider>
+      ),
+      {
+        message: data,
+      },
+      { onCloseKey: 'onCancel', openKey: 'open' },
+    );
+  }, [data, store]);
 
   const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
 
@@ -67,7 +95,7 @@ const WithContentId = memo<GroupActionsProps>(({ actionsConfig, id, data, conten
     contentBlock,
     data,
     id,
-    onOpenShareModal: () => setShareModal(true),
+    onOpenShareModal: handleOpenShareModal,
   });
 
   const hasTools = !!tools;
@@ -130,16 +158,7 @@ const WithContentId = memo<GroupActionsProps>(({ actionsConfig, id, data, conten
     [allActions],
   );
 
-  return (
-    <>
-      <ActionIconGroup items={items} menu={{ items: menu }} onActionClick={handleAction} />
-      <ShareMessageModal
-        message={data}
-        onCancel={() => setShareModal(false)}
-        open={showShareModal}
-      />
-    </>
-  );
+  return <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />;
 });
 
 WithContentId.displayName = 'GroupActionsWithContentId';

@@ -15,9 +15,7 @@ export const ErrorActionsBar = memo<ErrorActionsBarProps>(({ actions, onActionCl
   return (
     <ActionIconGroup
       items={[regenerate, del]}
-      menu={{
-        items: [edit, copy, divider, del],
-      }}
+      menu={[edit, copy, divider, del]}
       onActionClick={onActionClick}
     />
   );

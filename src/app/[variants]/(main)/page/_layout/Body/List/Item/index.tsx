@@ -1,5 +1,4 @@
-import { Avatar, type MenuProps } from '@lobehub/ui';
-import { Dropdown } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
 import { FileTextIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +55,7 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
     return FileTextIcon;
   }, [emoji]);
 
-  const dropdownMenu: MenuProps['items'] = useDropdownMenu({
+  const dropdownMenu = useDropdownMenu({
     documentContent: document?.content || undefined,
     pageId,
     toggleEditing,
@@ -64,23 +63,17 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
 
   return (
     <>
-      <Dropdown
-        menu={{
-          items: dropdownMenu,
-        }}
-        trigger={['contextMenu']}
-      >
-        <NavItem
-          actions={<Actions dropdownMenu={dropdownMenu} />}
-          active={active}
-          className={className}
-          disabled={editing}
-          icon={icon}
-          key={pageId}
-          onClick={handleClick}
-          title={title}
-        />
-      </Dropdown>
+      <NavItem
+        actions={<Actions dropdownMenu={dropdownMenu} />}
+        active={active}
+        className={className}
+        contextMenuItems={dropdownMenu}
+        disabled={editing}
+        icon={icon}
+        key={pageId}
+        onClick={handleClick}
+        title={title}
+      />
       <Editing
         currentEmoji={emoji}
         documentId={pageId}

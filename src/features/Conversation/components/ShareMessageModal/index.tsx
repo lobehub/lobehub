@@ -15,7 +15,7 @@ enum Tab {
   Text = 'text',
 }
 
-interface ShareModalProps {
+export interface ShareModalProps {
   message: UIChatMessage;
   onCancel: () => void;
   open: boolean;

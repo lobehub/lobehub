@@ -231,14 +231,14 @@ export const presetResponses = {
   codeHelp: 'I can help you with coding! Please share the code you would like me to review.',
   error: 'I apologize, but I encountered an error processing your request.',
   greeting: 'Hello! I am Lobe AI, your AI assistant. How can I help you today?',
-  
+
   // Long response for stop generation test
-longArticle:
+  longArticle:
     '这是一篇很长的文章。第一段：人工智能是计算机科学的一个分支，它企图了解智能的实质，并生产出一种新的能以人类智能相似的方式做出反应的智能机器。第二段：人工智能研究的主要目标包括推理、知识、规划、学习、自然语言处理、感知和移动与操控物体的能力。第三段：目前，人工智能已经在许多领域取得了重大突破，包括图像识别、语音识别、自然语言处理等。',
-  
-// Multi-turn conversation responses
-nameIntro: '好的，我记住了，你的名字是小明。很高兴认识你，小明！有什么我可以帮助你的吗？',
-  
+
+  // Multi-turn conversation responses
+  nameIntro: '好的，我记住了，你的名字是小明。很高兴认识你，小明！有什么我可以帮助你的吗？',
+
   nameRecall: '你刚才说你的名字是小明。',
   // Regenerate response
   regenerated: '这是重新生成的回复内容。我是 Lobe AI，很高兴为你服务！',

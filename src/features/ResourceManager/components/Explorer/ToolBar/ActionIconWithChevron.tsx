@@ -10,14 +10,15 @@ interface ActionIconWithChevronProps extends ComponentProps<typeof Button> {
 }
 
 const ActionIconWithChevron = memo<ActionIconWithChevronProps>(
-  ({ icon, title, style, disabled, type = 'text', ...rest }) => {
+  ({ icon, title, style, disabled, className, ...rest }) => {
     return (
       <Button
+        {...rest}
+        className={className}
         disabled={disabled}
         style={{ paddingInline: 4, ...style }}
         title={title}
-        type={type}
-        {...rest}
+        type={'text'}
       >
         <Flexbox align={'center'} gap={4} horizontal>
           <Icon color={cssVar.colorIcon} icon={icon} size={18} />

@@ -1,7 +1,7 @@
 'use client';
 
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
-import { ActionIcon, Block, Dropdown, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, showContextMenu } from '@lobehub/ui';
 import { App, Input } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
@@ -328,100 +328,97 @@ const FileTreeRow = memo<{
 
       return (
         <Flexbox gap={2}>
-          <Dropdown menu={{ items: menuItems }} trigger={['contextMenu']}>
-            <Block
-              align={'center'}
-              className={cx(
-                styles.treeItem,
-                isOver && styles.fileItemDragOver,
-                isDragging && styles.dragging,
-              )}
-              clickable
-              data-drop-target-id={item.id}
-              data-is-folder={String(item.isFolder)}
-              draggable
-              gap={8}
-              height={36}
-              horizontal
-              onClick={() => handleFolderClick(item.id, item.slug)}
-              onDragEnd={handleDragEnd}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDragStart={handleDragStart}
-              onDrop={handleDrop}
-              paddingInline={4}
-              style={{
-                paddingInlineStart: level * 12 + 4,
-              }}
-              variant={isActive ? 'filled' : 'borderless'}
-            >
-              {isLoading ? (
+          <Block
+            align={'center'}
+            className={cx(
+              styles.treeItem,
+              isOver && styles.fileItemDragOver,
+              isDragging && styles.dragging,
+            )}
+            clickable
+            data-drop-target-id={item.id}
+            data-is-folder={String(item.isFolder)}
+            draggable
+            gap={8}
+            height={36}
+            horizontal
+            onClick={() => handleFolderClick(item.id, item.slug)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              showContextMenu(menuItems());
+            }}
+            onDragEnd={handleDragEnd}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDragStart={handleDragStart}
+            onDrop={handleDrop}
+            paddingInline={4}
+            style={{
+              paddingInlineStart: level * 12 + 4,
+            }}
+            variant={isActive ? 'filled' : 'borderless'}
+          >
+            {isLoading ? (
+              <ActionIcon icon={LoadingOutlined as any} size={'small'} spin style={{ width: 20 }} />
+            ) : (
+              <motion.div
+                animate={{ rotate: isExpanded ? 0 : -90 }}
+                initial={false}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+              >
                 <ActionIcon
-                  icon={LoadingOutlined as any}
+                  icon={CaretDownFilled as any}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggle();
+                  }}
                   size={'small'}
-                  spin
                   style={{ width: 20 }}
                 />
+              </motion.div>
+            )}
+            <Flexbox
+              align={'center'}
+              flex={1}
+              gap={8}
+              horizontal
+              style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
+            >
+              <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={18} />
+              {isRenaming ? (
+                <Input
+                  onBlur={handleRenameConfirm}
+                  onChange={(e) => setRenamingValue(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleRenameConfirm();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      handleRenameCancel();
+                    }
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  ref={inputRef}
+                  size="small"
+                  style={{ flex: 1 }}
+                  value={renamingValue}
+                />
               ) : (
-                <motion.div
-                  animate={{ rotate: isExpanded ? 0 : -90 }}
-                  initial={false}
-                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                <span
+                  style={{
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
                 >
-                  <ActionIcon
-                    icon={CaretDownFilled as any}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggle();
-                    }}
-                    size={'small'}
-                    style={{ width: 20 }}
-                  />
-                </motion.div>
+                  {item.name}
+                </span>
               )}
-              <Flexbox
-                align={'center'}
-                flex={1}
-                gap={8}
-                horizontal
-                style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
-              >
-                <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={18} />
-                {isRenaming ? (
-                  <Input
-                    onBlur={handleRenameConfirm}
-                    onChange={(e) => setRenamingValue(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleRenameConfirm();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        handleRenameCancel();
-                      }
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    ref={inputRef}
-                    size="small"
-                    style={{ flex: 1 }}
-                    value={renamingValue}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {item.name}
-                  </span>
-                )}
-              </Flexbox>
-            </Block>
-          </Dropdown>
+            </Flexbox>
+          </Block>
         </Flexbox>
       );
     }
@@ -430,52 +427,54 @@ const FileTreeRow = memo<{
     const isActive = selectedKey === itemKey;
     return (
       <Flexbox gap={2}>
-        <Dropdown menu={{ items: menuItems }} trigger={['contextMenu']}>
-          <Block
+        <Block
+          align={'center'}
+          className={cx(styles.treeItem, isDragging && styles.dragging)}
+          clickable
+          data-drop-target-id={item.id}
+          data-is-folder={false}
+          draggable
+          gap={8}
+          height={36}
+          horizontal
+          onClick={handleItemClick}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            showContextMenu(menuItems());
+          }}
+          onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
+          paddingInline={4}
+          style={{
+            paddingInlineStart: level * 12 + 4,
+          }}
+          variant={isActive ? 'filled' : 'borderless'}
+        >
+          <div style={{ width: 20 }} />
+          <Flexbox
             align={'center'}
-            className={cx(styles.treeItem, isDragging && styles.dragging)}
-            clickable
-            data-drop-target-id={item.id}
-            data-is-folder={false}
-            draggable
+            flex={1}
             gap={8}
-            height={36}
             horizontal
-            onClick={handleItemClick}
-            onDragEnd={handleDragEnd}
-            onDragStart={handleDragStart}
-            paddingInline={4}
-            style={{
-              paddingInlineStart: level * 12 + 4,
-            }}
-            variant={isActive ? 'filled' : 'borderless'}
+            style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
           >
-            <div style={{ width: 20 }} />
-            <Flexbox
-              align={'center'}
-              flex={1}
-              gap={8}
-              horizontal
-              style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
+            {item.sourceType === 'document' ? (
+              <Icon icon={FileText} size={18} />
+            ) : (
+              <FileIcon fileName={item.name} fileType={item.fileType} size={18} />
+            )}
+            <span
+              style={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
             >
-              {item.sourceType === 'document' ? (
-                <Icon icon={FileText} size={18} />
-              ) : (
-                <FileIcon fileName={item.name} fileType={item.fileType} size={18} />
-              )}
-              <span
-                style={{
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {item.name}
-              </span>
-            </Flexbox>
-          </Block>
-        </Dropdown>
+              {item.name}
+            </span>
+          </Flexbox>
+        </Block>
       </Flexbox>
     );
   },

@@ -1,6 +1,6 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
+import { ActionIcon, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
@@ -96,7 +96,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     return <Avatar avatar={typeof avatar === 'string' ? avatar : undefined} />;
   }, [isUpdating, avatar]);
 
-  const dropdownMenu: MenuProps['items'] = useDropdownMenu({
+  const dropdownMenu = useDropdownMenu({
     group: undefined, // TODO: pass group from parent if needed
     id,
     openCreateGroupModal: handleOpenCreateGroupModal,
@@ -108,30 +108,25 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
 
   return (
     <>
-      <Dropdown
-        menu={{
-          items: dropdownMenu,
-        }}
-        trigger={['contextMenu']}
-      >
-        <Link aria-label={id} to={agentUrl}>
-          <NavItem
-            actions={<Actions dropdownMenu={dropdownMenu} />}
-            className={className}
-            disabled={editing || isUpdating}
-            draggable={!editing && !isUpdating}
-            extra={pinIcon}
-            icon={avatarIcon}
-            key={id}
-            loading={isLoading}
-            onDoubleClick={handleDoubleClick}
-            onDragEnd={handleDragEnd}
-            onDragStart={handleDragStart}
-            style={style}
-            title={displayTitle}
-          />
-        </Link>
-      </Dropdown>
+      <Link aria-label={id} to={agentUrl}>
+        <NavItem
+          actions={<Actions dropdownMenu={dropdownMenu} />}
+          className={className}
+          contextMenuItems={dropdownMenu}
+          disabled={editing || isUpdating}
+          draggable={!editing && !isUpdating}
+          extra={pinIcon}
+          icon={avatarIcon}
+          key={id}
+          loading={isLoading}
+          onDoubleClick={handleDoubleClick}
+          onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
+          style={style}
+          title={displayTitle}
+        />
+      </Link>
+
       <Editing
         avatar={typeof avatar === 'string' ? avatar : undefined}
         id={id}

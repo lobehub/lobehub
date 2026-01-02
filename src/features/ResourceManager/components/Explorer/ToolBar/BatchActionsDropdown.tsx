@@ -1,6 +1,5 @@
-import { Icon } from '@lobehub/ui';
-import { App, Dropdown } from 'antd';
-import type { MenuProps } from 'antd';
+import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { App } from 'antd';
 import {
   BookMinusIcon,
   BookPlusIcon,
@@ -36,8 +35,8 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
 
     const libraryId = useResourceManagerStore((s) => s.libraryId);
 
-    const menuItems = useMemo<MenuProps['items']>(() => {
-      const items: MenuProps['items'] = [];
+    const menuItems = useMemo<DropdownItem[]>(() => {
+      const items: DropdownItem[] = [];
 
       // Show delete library option only when in a knowledge base and no files selected
       if (libraryId && selectCount === 0) {
@@ -138,18 +137,13 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
     }, [libraryId, selectCount, onActionClick, t, modal, message]);
 
     return (
-      <Dropdown
-        disabled={disabled}
-        menu={{ items: menuItems }}
-        placement="bottomLeft"
-        trigger={['click']}
-      >
+      <DropdownMenu items={menuItems} placement="bottomLeft" triggerProps={{ disabled }}>
         <ActionIconWithChevron
           disabled={disabled}
           icon={CircleEllipsisIcon}
           title={t('FileManager.actions.batchActions', 'Batch actions')}
         />
-      </Dropdown>
+      </DropdownMenu>
     );
   },
 );

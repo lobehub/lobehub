@@ -29,7 +29,6 @@
   "internlm.description": "Een open-source organisatie gericht op grootschalig modelonderzoek en tooling, met een efficiënt en gebruiksvriendelijk platform dat geavanceerde modellen en algoritmen toegankelijk maakt.",
   "jina.description": "Opgericht in 2020, is Jina AI een toonaangevend zoek-AI-bedrijf. De zoekstack omvat vectormodellen, herordenaars en kleine taalmodellen om betrouwbare, hoogwaardige generatieve en multimodale zoekapps te bouwen.",
   "lmstudio.description": "LM Studio is een desktopapplicatie voor het ontwikkelen en experimenteren met LLM’s op je eigen computer.",
-  "lobehub.description": "LobeHub Cloud gebruikt officiële API's om toegang te krijgen tot AI-modellen en meet het gebruik met Credits die gekoppeld zijn aan modeltokens.",
   "minimax.description": "Opgericht in 2021, bouwt MiniMax algemene AI met multimodale fundamentele modellen, waaronder tekstmodellen met biljoenen parameters, spraakmodellen en visiemodellen, evenals apps zoals Hailuo AI.",
   "mistral.description": "Mistral biedt geavanceerde algemene, gespecialiseerde en onderzoeksmodellen voor complexe redenering, meertalige taken en codegeneratie, met functie-aanroepen voor aangepaste integraties.",
   "modelscope.description": "ModelScope is het model-as-a-service platform van Alibaba Cloud, met een breed scala aan AI-modellen en inferentiediensten.",

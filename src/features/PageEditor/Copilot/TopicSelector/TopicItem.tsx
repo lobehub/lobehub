@@ -28,6 +28,7 @@ const TopicItem = memo<TopicItemProps>(
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
         active={active}
+        contextMenuItems={dropdownMenu}
         onClick={() => {
           onTopicChange(topicId);
           onClose();

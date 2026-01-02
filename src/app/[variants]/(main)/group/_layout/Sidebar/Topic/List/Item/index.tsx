@@ -1,4 +1,4 @@
-import { ActionIcon, Dropdown, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MessageSquareDashed, Star } from 'lucide-react';
 import { Suspense, memo, useCallback } from 'react';
@@ -92,34 +92,28 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
 
   return (
     <Flexbox style={{ position: 'relative' }}>
-      <Dropdown
-        menu={{
-          items: dropdownMenu,
-        }}
-        trigger={['contextMenu']}
-      >
-        <NavItem
-          actions={<Actions dropdownMenu={dropdownMenu} />}
-          active={active && !threadId && !isInAgentSubRoute}
-          disabled={editing}
-          icon={
-            <ActionIcon
-              color={fav ? cssVar.colorWarning : undefined}
-              fill={fav ? cssVar.colorWarning : 'transparent'}
-              icon={Star}
-              onClick={(e) => {
-                e.stopPropagation();
-                favoriteTopic(id, !fav);
-              }}
-              size={'small'}
-            />
-          }
-          loading={isLoading}
-          onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
-          title={title}
-        />
-      </Dropdown>
+      <NavItem
+        actions={<Actions dropdownMenu={dropdownMenu} />}
+        active={active && !threadId && !isInAgentSubRoute}
+        contextMenuItems={dropdownMenu}
+        disabled={editing}
+        icon={
+          <ActionIcon
+            color={fav ? cssVar.colorWarning : undefined}
+            fill={fav ? cssVar.colorWarning : 'transparent'}
+            icon={Star}
+            onClick={(e) => {
+              e.stopPropagation();
+              favoriteTopic(id, !fav);
+            }}
+            size={'small'}
+          />
+        }
+        loading={isLoading}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        title={title}
+      />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
       {active && (
         <Suspense
