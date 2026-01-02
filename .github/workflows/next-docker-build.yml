@@ -26,7 +26,7 @@ env:
   REGISTRY_IMAGE: pigeonszz/lobe-chat-database
   DOCKER_REGISTRY: docker.io
   # 默认值，会被 repo 变量或 workflow_dispatch 覆盖
-  EXTRA_BUILD_ARG: ""
+  EXTRA_BUILD_ARG_DEFAULT: ""
 
 jobs:
   build:
@@ -36,7 +36,7 @@ jobs:
       (github.event_name == 'workflow_dispatch') ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     env:
-      FINAL_EXTRA_BUILD_ARG: ${{ github.event.inputs.extra_build_args || vars.EXTRA_BUILD_ARG || env.EXTRA_BUILD_ARG }}
+      FINAL_EXTRA_BUILD_ARG: ${{ github.event.inputs.extra_build_args || vars.EXTRA_BUILD_ARG || env.EXTRA_BUILD_ARG_DEFAULT }}
     strategy:
       matrix:
         include:
@@ -50,7 +50,7 @@ jobs:
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-          echo "Using extra build args: ${{ env.FINAL_EXTRA_BUILD_ARG }}"
+          echo "Using extra build args: $FINAL_EXTRA_BUILD_ARG"
 
       - name: Checkout next branch
         uses: actions/checkout@v5
