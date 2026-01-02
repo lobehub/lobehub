@@ -5,8 +5,7 @@
     "content": "What's the difference between map and forEach in JavaScript?",
     "parentId": null,
     "createdAt": 1704067200000,
-    "updatedAt": 1704067200000,
-    "meta": {}
+    "updatedAt": 1704067200000
   },
   {
     "id": "msg-502",
@@ -15,7 +14,6 @@
     "parentId": "msg-501",
     "createdAt": 1704067202000,
     "updatedAt": 1704067202000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 18,
       "totalOutputTokens": 42,
@@ -30,8 +28,7 @@
     "content": "Can you show me a practical example?",
     "parentId": "msg-502",
     "createdAt": 1704067210000,
-    "updatedAt": 1704067210000,
-    "meta": {}
+    "updatedAt": 1704067210000
   },
   {
     "id": "msg-504",
@@ -40,7 +37,6 @@
     "parentId": "msg-503",
     "createdAt": 1704067212000,
     "updatedAt": 1704067212000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 68,
       "totalOutputTokens": 95,
@@ -54,8 +50,7 @@
     "content": "Thanks! What about performance differences?",
     "parentId": "msg-504",
     "createdAt": 1704067220000,
-    "updatedAt": 1704067220000,
-    "meta": {}
+    "updatedAt": 1704067220000
   },
   {
     "id": "msg-506",
@@ -64,7 +59,6 @@
     "parentId": "msg-505",
     "createdAt": 1704067222000,
     "updatedAt": 1704067222000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 175,
       "totalOutputTokens": 58,
@@ -78,8 +72,7 @@
     "content": "Can you explain the technical implementation details?",
     "parentId": "msg-502",
     "createdAt": 1704067210100,
-    "updatedAt": 1704067210100,
-    "meta": {}
+    "updatedAt": 1704067210100
   },
   {
     "id": "msg-508",
@@ -88,7 +81,6 @@
     "parentId": "msg-507",
     "createdAt": 1704067212100,
     "updatedAt": 1704067212100,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 68,
       "totalOutputTokens": 82,
@@ -102,8 +94,7 @@
     "content": "What about memory usage?",
     "parentId": "msg-508",
     "createdAt": 1704067220100,
-    "updatedAt": 1704067220100,
-    "meta": {}
+    "updatedAt": 1704067220100
   },
   {
     "id": "msg-510",
@@ -112,7 +103,6 @@
     "parentId": "msg-509",
     "createdAt": 1704067222100,
     "updatedAt": 1704067222100,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 160,
       "totalOutputTokens": 68,

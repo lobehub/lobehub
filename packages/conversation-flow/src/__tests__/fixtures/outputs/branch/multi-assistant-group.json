@@ -74,7 +74,6 @@
       "content": "杭州和北京天气如何",
       "createdAt": 1704067200000,
       "id": "msg-user-1",
-      "meta": {},
       "metadata": {
         "activeBranchIndex": 2
       },
@@ -89,7 +88,6 @@
       "parentId": "msg-user-1",
       "createdAt": 1704067240000,
       "updatedAt": 1704067240000,
-      "meta": {},
       "branch": {
         "activeBranchIndex": 2,
         "count": 3
@@ -149,7 +147,6 @@
       "content": "",
       "createdAt": 1704067202000,
       "id": "msg-assistant-1",
-      "meta": {},
       "metadata": {
         "totalInputTokens": 3441,
         "totalOutputTokens": 310,
@@ -172,7 +169,6 @@
       "content": "",
       "createdAt": 1704067208000,
       "id": "msg-assistant-2",
-      "meta": {},
       "metadata": {
         "totalInputTokens": 4128,
         "totalOutputTokens": 183,
@@ -195,7 +191,6 @@
       "content": "你是想看现在的实时天气，还是未来几天的天气预报？",
       "createdAt": 1704067214000,
       "id": "msg-assistant-3",
-      "meta": {},
       "metadata": {
         "totalInputTokens": 6135,
         "totalOutputTokens": 508,
@@ -212,7 +207,6 @@
       "content": "",
       "createdAt": 1704067220000,
       "id": "msg-assistant-4",
-      "meta": {},
       "metadata": {
         "totalInputTokens": 3440,
         "totalOutputTokens": 369,
@@ -242,7 +236,6 @@
       "content": "我可以帮你查天气 —— 想确认一下你的偏好再去查实时数据。",
       "createdAt": 1704067229000,
       "id": "msg-assistant-5",
-      "meta": {},
       "metadata": {
         "totalInputTokens": 6425,
         "totalOutputTokens": 675,
@@ -256,7 +249,6 @@
       "content": "",
       "createdAt": 1704067240000,
       "id": "msg-assistant-6",
-      "meta": {},
       "metadata": {
         "totalInputTokens": 3441,
         "totalOutputTokens": 186,
@@ -279,7 +271,6 @@
       "content": "好的——我可以立刻去查并把结果发给你。",
       "createdAt": 1704067246000,
       "id": "msg-assistant-7",
-      "meta": {},
       "metadata": {
         "totalInputTokens": 7604,
         "totalOutputTokens": 584,
@@ -293,7 +284,6 @@
       "content": "<searchResults>\n  <item title=\"Weather Site\" url=\"https://weather.example.com/\">Weather information...</item>\n</searchResults>",
       "createdAt": 1704067205000,
       "id": "msg-tool-1",
-      "meta": {},
       "parentId": "msg-assistant-1",
       "plugin": {
         "apiName": "search",
@@ -318,7 +308,6 @@
       "content": "<searchResults>\n  <item title=\"Weather Info\" url=\"https://weather2.example.com/\">More weather...</item>\n</searchResults>",
       "createdAt": 1704067211000,
       "id": "msg-tool-2",
-      "meta": {},
       "parentId": "msg-assistant-2",
       "plugin": {
         "apiName": "search",
@@ -333,7 +322,6 @@
       "content": "<searchResults />",
       "createdAt": 1704067223000,
       "id": "msg-tool-3",
-      "meta": {},
       "parentId": "msg-assistant-4",
       "plugin": {
         "apiName": "search",
@@ -352,7 +340,6 @@
       "content": "<searchResults />",
       "createdAt": 1704067226000,
       "id": "msg-tool-4",
-      "meta": {},
       "parentId": "msg-assistant-4",
       "plugin": {
         "apiName": "search",
@@ -371,7 +358,6 @@
       "content": "<searchResults>\n  <item title=\"Weather Portal\" url=\"https://weather3.example.com/\">Weather data...</item>\n</searchResults>",
       "createdAt": 1704067243000,
       "id": "msg-tool-5",
-      "meta": {},
       "parentId": "msg-assistant-6",
       "plugin": {
         "apiName": "search",
@@ -395,7 +381,6 @@
       "content": "杭州和北京天气如何",
       "createdAt": 1704067200000,
       "id": "msg-user-1",
-      "meta": {},
       "metadata": {
         "activeBranchIndex": 2
       },

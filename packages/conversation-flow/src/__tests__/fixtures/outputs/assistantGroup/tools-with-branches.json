@@ -47,8 +47,7 @@
       "content": "Help me debug this Python code that's throwing an error",
       "parentId": null,
       "createdAt": 1704067200000,
-      "updatedAt": 1704067200000,
-      "meta": {}
+      "updatedAt": 1704067200000
     },
     {
       "id": "msg-502",
@@ -57,7 +56,6 @@
       "parentId": "msg-501",
       "createdAt": 1704067202000,
       "updatedAt": 1704067202000,
-      "meta": {},
       "children": [
         {
           "content": "I'll help you debug the code. Let me first check the syntax and run some analysis.",
@@ -121,8 +119,7 @@
       "content": "Here's the code:\n```python\ndef calculate():\n    x = 5\n    y = 10\n    print(result)\n```",
       "parentId": "msg-504",
       "createdAt": 1704067210000,
-      "updatedAt": 1704067210000,
-      "meta": {}
+      "updatedAt": 1704067210000
     },
     {
       "id": "msg-506",
@@ -131,7 +128,6 @@
       "parentId": "msg-505",
       "createdAt": 1704067213000,
       "updatedAt": 1704067213000,
-      "meta": {},
       "usage": {
         "totalInputTokens": 156,
         "totalOutputTokens": 89,
@@ -151,8 +147,7 @@
       "content": "Help me debug this Python code that's throwing an error",
       "parentId": null,
       "createdAt": 1704067200000,
-      "updatedAt": 1704067200000,
-      "meta": {}
+      "updatedAt": 1704067200000
     },
     "msg-502": {
       "id": "msg-502",
@@ -177,7 +172,6 @@
       ],
       "createdAt": 1704067202000,
       "updatedAt": 1704067202000,
-      "meta": {},
       "usage": {
         "totalInputTokens": 32,
         "totalOutputTokens": 48,
@@ -198,8 +192,7 @@
       },
       "parentId": "msg-502",
       "createdAt": 1704067203000,
-      "updatedAt": 1704067203000,
-      "meta": {}
+      "updatedAt": 1704067203000
     },
     "msg-504": {
       "id": "msg-504",
@@ -215,8 +208,7 @@
       },
       "parentId": "msg-502",
       "createdAt": 1704067203100,
-      "updatedAt": 1704067203100,
-      "meta": {}
+      "updatedAt": 1704067203100
     },
     "msg-505": {
       "id": "msg-505",
@@ -224,8 +216,7 @@
       "content": "Here's the code:\n```python\ndef calculate():\n    x = 5\n    y = 10\n    print(result)\n```",
       "parentId": "msg-504",
       "createdAt": 1704067210000,
-      "updatedAt": 1704067210000,
-      "meta": {}
+      "updatedAt": 1704067210000
     },
     "msg-506": {
       "id": "msg-506",
@@ -234,7 +225,6 @@
       "parentId": "msg-505",
       "createdAt": 1704067213000,
       "updatedAt": 1704067213000,
-      "meta": {},
       "usage": {
         "totalInputTokens": 156,
         "totalOutputTokens": 89,
@@ -249,7 +239,6 @@
       "parentId": "msg-505",
       "createdAt": 1704067213100,
       "updatedAt": 1704067213100,
-      "meta": {},
       "usage": {
         "totalInputTokens": 156,
         "totalOutputTokens": 72,

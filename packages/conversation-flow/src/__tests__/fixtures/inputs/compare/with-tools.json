@@ -6,7 +6,6 @@
     "parentId": null,
     "createdAt": 1704067200000,
     "updatedAt": 1704067200000,
-    "meta": {},
     "metadata": {
       "compare": true
     }
@@ -20,13 +19,12 @@
     "provider": "openai",
     "createdAt": 1704067205000,
     "updatedAt": 1704067205000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 24,
       "totalOutputTokens": 198,
       "totalTokens": 222,
       "cost": 0.00666,
-      "tps": 45.0,
+      "tps": 45,
       "ttft": 456,
       "duration": 4400,
       "latency": 4856
@@ -41,13 +39,12 @@
     "provider": "anthropic",
     "createdAt": 1704067205100,
     "updatedAt": 1704067205100,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 24,
       "totalOutputTokens": 215,
       "totalTokens": 239,
       "cost": 0.001195,
-      "tps": 58.0,
+      "tps": 58,
       "ttft": 312,
       "duration": 3707,
       "latency": 4019,
@@ -79,13 +76,12 @@
     ],
     "createdAt": 1704067205200,
     "updatedAt": 1704067205200,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 24,
       "totalOutputTokens": 38,
       "totalTokens": 62,
       "cost": 0.000186,
-      "tps": 52.0,
+      "tps": 52,
       "ttft": 198,
       "duration": 730,
       "latency": 928
@@ -102,8 +98,7 @@
     },
     "parentId": "msg-304",
     "createdAt": 1704067207540,
-    "updatedAt": 1704067207540,
-    "meta": {}
+    "updatedAt": 1704067207540
   },
   {
     "id": "msg-306",
@@ -116,8 +111,7 @@
     },
     "parentId": "msg-304",
     "createdAt": 1704067207552,
-    "updatedAt": 1704067207552,
-    "meta": {}
+    "updatedAt": 1704067207552
   },
   {
     "id": "msg-307",
@@ -126,13 +120,12 @@
     "parentId": "msg-306",
     "createdAt": 1704067208000,
     "updatedAt": 1704067208000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 156,
       "totalOutputTokens": 134,
       "totalTokens": 290,
       "cost": 0.00087,
-      "tps": 48.0,
+      "tps": 48,
       "ttft": 234,
       "duration": 2791,
       "latency": 3025
@@ -144,8 +137,7 @@
     "content": "Great analysis! Can you explain why QuickSort has better cache locality?",
     "parentId": "msg-303",
     "createdAt": 1704067220000,
-    "updatedAt": 1704067220000,
-    "meta": {}
+    "updatedAt": 1704067220000
   },
   {
     "id": "msg-309",
@@ -154,13 +146,12 @@
     "parentId": "msg-308",
     "createdAt": 1704067222000,
     "updatedAt": 1704067222000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 268,
       "totalOutputTokens": 176,
       "totalTokens": 444,
       "cost": 0.00222,
-      "tps": 52.0,
+      "tps": 52,
       "ttft": 312,
       "duration": 3384,
       "latency": 3696
