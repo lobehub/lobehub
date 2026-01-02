@@ -1,28 +1,28 @@
 import {
-  EditLocalFileParams,
-  EditLocalFileResult,
-  GetCommandOutputParams,
-  GetCommandOutputResult,
-  GlobFilesParams,
-  GlobFilesResult,
-  GrepContentParams,
-  GrepContentResult,
-  KillCommandParams,
-  KillCommandResult,
-  ListLocalFileParams,
-  LocalFileItem,
-  LocalMoveFilesResultItem,
-  LocalReadFileParams,
-  LocalReadFileResult,
-  LocalReadFilesParams,
-  LocalSearchFilesParams,
-  MoveLocalFilesParams,
-  OpenLocalFileParams,
-  OpenLocalFolderParams,
-  RenameLocalFileParams,
-  RunCommandParams,
-  RunCommandResult,
-  WriteLocalFileParams,
+  type EditLocalFileParams,
+  type EditLocalFileResult,
+  type GetCommandOutputParams,
+  type GetCommandOutputResult,
+  type GlobFilesParams,
+  type GlobFilesResult,
+  type GrepContentParams,
+  type GrepContentResult,
+  type KillCommandParams,
+  type KillCommandResult,
+  type ListLocalFileParams,
+  type LocalFileItem,
+  type LocalMoveFilesResultItem,
+  type LocalReadFileParams,
+  type LocalReadFileResult,
+  type LocalReadFilesParams,
+  type LocalSearchFilesParams,
+  type MoveLocalFilesParams,
+  type OpenLocalFileParams,
+  type OpenLocalFolderParams,
+  type RenameLocalFileParams,
+  type RunCommandParams,
+  type RunCommandResult,
+  type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -50,7 +50,7 @@ class LocalFileService {
   }
 
   async openLocalFolder(params: OpenLocalFolderParams) {
-    return ensureElectronIpc().localSystem.handleOpenLocalFile(params);
+    return ensureElectronIpc().localSystem.handleOpenLocalFolder(params);
   }
 
   async moveLocalFiles(params: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {

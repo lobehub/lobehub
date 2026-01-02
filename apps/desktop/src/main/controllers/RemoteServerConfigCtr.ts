@@ -46,6 +46,24 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   private readonly encryptedTokensKey = 'encryptedTokens';
 
   /**
+   * Normalize legacy config that used local storageMode.
+   * Local mode has been removed; fall back to cloud.
+   */
+  private normalizeConfig = (config: DataSyncConfig): DataSyncConfig => {
+    if (config.storageMode !== 'local') return config;
+
+    const nextConfig: DataSyncConfig = {
+      ...config,
+      remoteServerUrl: config.remoteServerUrl || OFFICIAL_CLOUD_SERVER,
+      storageMode: 'cloud',
+    };
+
+    this.app.storeManager.set('dataSyncConfig', nextConfig);
+
+    return nextConfig;
+  };
+
+  /**
    * Get remote server configuration
    */
   @IpcMethod()
@@ -54,12 +72,13 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     const { storeManager } = this.app;
 
     const config: DataSyncConfig = storeManager.get('dataSyncConfig');
+    const normalized = this.normalizeConfig(config);
 
     logger.debug(
-      `Remote server config: active=${config.active}, storageMode=${config.storageMode}, url=${config.remoteServerUrl}`,
+      `Remote server config: active=${normalized.active}, storageMode=${normalized.storageMode}, url=${normalized.remoteServerUrl}`,
     );
 
-    return config;
+    return normalized;
   }
 
   /**
@@ -73,8 +92,11 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     const { storeManager } = this.app;
     const prev: DataSyncConfig = storeManager.get('dataSyncConfig');
 
-    // Save configuration
-    storeManager.set('dataSyncConfig', { ...prev, ...config });
+    // Save configuration with legacy local storage fallback
+    const merged = this.normalizeConfig({ ...prev, ...config });
+    storeManager.set('dataSyncConfig', merged);
+
+    this.broadcastRemoteServerConfigUpdated();
 
     return true;
   }
@@ -88,12 +110,19 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     const { storeManager } = this.app;
 
     // Clear instance configuration
-    storeManager.set('dataSyncConfig', { storageMode: 'local' });
+    storeManager.set('dataSyncConfig', { active: false, storageMode: 'cloud' });
 
     // Clear tokens (if any)
     await this.clearTokens();
 
+    this.broadcastRemoteServerConfigUpdated();
+
     return true;
+  }
+
+  private broadcastRemoteServerConfigUpdated() {
+    logger.debug('Broadcasting remoteServerConfigUpdated event to all windows');
+    this.app.browserManager.broadcastToAllWindows('remoteServerConfigUpdated', undefined);
   }
 
   /**
@@ -468,7 +497,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   }
 
   async getRemoteServerUrl(config?: DataSyncConfig) {
-    const dataConfig = config ? config : await this.getRemoteServerConfig();
+    const dataConfig = this.normalizeConfig(config ? config : await this.getRemoteServerConfig());
 
     return dataConfig.storageMode === 'cloud' ? OFFICIAL_CLOUD_SERVER : dataConfig.remoteServerUrl;
   }

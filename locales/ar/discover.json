@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "إضافة مساعد",
-    "addAgentAndConverse": "إضافة مساعد والدردشة",
-    "addAgentSuccess": "تمت الإضافة بنجاح",
-    "conversation": {
-      "l1": "مرحبًا، أنا **{{name}}**، يمكنك أن تسألني أي سؤال وسأبذل قصارى جهدي للإجابة ~",
-      "l2": "إليك مقدمة عن قدراتي: ",
-      "l3": "لنبدأ المحادثة!"
-    },
-    "description": "مقدمة المساعد",
-    "detail": "تفاصيل",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "المساعد مزود بقواعد المعرفة التالية لمساعدتك في الإجابة على المزيد من الأسئلة.",
-          "title": "قاعدة المعرفة"
-        },
-        "plugin": {
-          "desc": "المساعد مزود بالإضافة التالية لمساعدتك في إتمام المزيد من المهام.",
-          "title": "الإضافات المدمجة"
-        },
-        "title": "قدرات المساعد"
-      },
-      "overview": {
-        "example": "عرض المساعد",
-        "title": "نظرة عامة"
-      },
-      "related": {
-        "listTitle": "المساعدون المرتبطون",
-        "more": "عرض المزيد",
-        "title": "اقتراحات ذات صلة"
-      },
-      "sidebar": {
-        "toc": "المحتوى"
-      },
-      "summary": {
-        "title": "ما الذي يمكنك فعله باستخدام هذا المساعد؟"
-      },
-      "systemRole": {
-        "openingMessage": "رسالة الافتتاح",
-        "openingQuestions": "أسئلة الافتتاح",
-        "title": "إعدادات المساعد"
-      },
-      "version": {
-        "empty": "لا توجد إصدارات سابقة",
-        "status": {
-          "archived": "مؤرشف",
-          "deprecated": "مرفوض",
-          "unpublished": "قيد المراجعة"
-        },
-        "table": {
-          "isLatest": "أحدث إصدار",
-          "isValidated": "تم التحقق منه",
-          "publishAt": "تاريخ النشر",
-          "version": "رقم الإصدار"
-        },
-        "title": "سجل الإصدارات"
-      }
-    },
-    "list": "قائمة المساعدين",
-    "marketSource": {
-      "label": "تبديل مصدر السوق",
-      "legacy": "السوق القديم",
-      "new": "السوق الجديد"
-    },
-    "more": "المزيد",
-    "plugins": "دمج الإضافات",
-    "recentSubmits": "آخر التحديثات",
-    "sorts": {
-      "createdAt": "تم النشر مؤخراً",
-      "identifier": "معرف المساعد",
-      "knowledgeCount": "عدد قواعد المعرفة",
-      "myown": "عرض مساعدي",
-      "pluginCount": "عدد الإضافات",
-      "title": "اسم المساعد",
-      "tokenUsage": "استهلاك التوكن"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "تمت إزالة المساعد من قبل الإدارة لأسباب أمنية أو سياسية",
-          "owner": "قام مالك المساعد بإزالته أو أرشفته طوعًا"
-        },
-        "subtitle": "المساعد الذي تحاول الوصول إليه تم أرشفته للأسباب التالية المحتملة:",
-        "title": "تم أرشفة المساعد"
-      },
-      "backToMarket": "العودة إلى سوق المساعدين",
-      "deprecated": {
-        "reasons": {
-          "official": "تمت إزالة المساعد من قبل الإدارة لأسباب أمنية أو سياسية",
-          "owner": "قام مالك المساعد بإزالته أو رفضه طوعًا"
-        },
-        "subtitle": "المساعد الذي تحاول الوصول إليه تم رفضه للأسباب التالية المحتملة:",
-        "title": "تم رفض المساعد"
-      },
-      "support": "إذا واجهت أي مشاكل، يرجى نسخ الرابط وإرساله إلى <1>support@lobehub.com</1> للاستفسار.",
-      "unpublished": {
-        "subtitle": "المساعد الذي تحاول الوصول إليه قيد المراجعة حاليًا. إذا كان لديك أي استفسار، يرجى نسخ الرابط وإرساله إلى <1>support@lobehub.com</1>.",
-        "title": "المساعد قيد المراجعة"
-      }
-    },
-    "suggestions": "اقتراحات ذات صلة",
-    "systemRole": "إعدادات المساعد",
-    "tokenUsage": "استهلاك توكنات تعليمات المساعد",
-    "try": "جرب",
-    "withKnowledge": "هذا المساعد مزود بقاعدة معرفة",
-    "withPlugin": "هذا المساعد مزود بالإضافة"
-  },
-  "back": "عودة إلى الاكتشاف",
-  "category": {
-    "assistant": {
-      "academic": "أكاديمي",
-      "all": "الكل",
-      "career": "مهنة",
-      "copywriting": "كتابة نصوص",
-      "design": "تصميم",
-      "education": "تعليم",
-      "emotions": "عواطف",
-      "entertainment": "ترفيه",
-      "games": "ألعاب",
-      "general": "عام",
-      "life": "حياة",
-      "marketing": "تسويق",
-      "office": "مكتب",
-      "programming": "برمجة",
-      "translation": "ترجمة"
-    },
-    "plugin": {
-      "all": "الكل",
-      "gaming-entertainment": "ألعاب وترفيه",
-      "life-style": "أسلوب حياة",
-      "lifestyle": "نمط الحياة",
-      "media-generate": "توليد الوسائط",
-      "science-education": "علوم وتعليم",
-      "social": "وسائل التواصل الاجتماعي",
-      "stocks-finance": "أسواق مالية",
-      "tools": "أدوات عملية",
-      "web-search": "بحث على الويب"
-    }
-  },
-  "cleanFilter": "مسح الفلتر",
+  "assistant.favorite": "حفظ",
+  "assistant.favoriteFailed": "فشل في الحفظ",
+  "assistant.favoriteSuccess": "تم الحفظ",
+  "assistant.like": "إعجاب",
+  "assistant.likeFailed": "فشل في الإعجاب",
+  "assistant.likeSuccess": "تم الإعجاب",
+  "assistant.unfavorite": "إلغاء الحفظ",
+  "assistant.unfavoriteFailed": "فشل في إلغاء الحفظ",
+  "assistant.unfavoriteSuccess": "تم إلغاء الحفظ",
+  "assistant.unlike": "إلغاء الإعجاب",
+  "assistant.unlikeSuccess": "تم إلغاء الإعجاب",
+  "assistants.addAgent": "إضافة وكيل",
+  "assistants.addAgentAndConverse": "إضافة وكيل والدردشة",
+  "assistants.addAgentSuccess": "تمت الإضافة",
+  "assistants.conversation.l1": "مرحبًا، أنا **{{name}}**. شاركني هدفك أو السياق وسنتعاون من هنا.",
+  "assistants.conversation.l2": "إليك ما يمكنني فعله:",
+  "assistants.conversation.l3": "ابدأ المحادثة",
+  "assistants.description": "حول هذا الوكيل",
+  "assistants.detail": "تفاصيل",
+  "assistants.details.capabilities.knowledge.desc": "يتضمن هذا الوكيل المكتبات التالية للمساعدة في الإجابة على المزيد من الأسئلة.",
+  "assistants.details.capabilities.knowledge.title": "المكتبة",
+  "assistants.details.capabilities.plugin.desc": "يتضمن هذا الوكيل المهارات التالية لمساعدتك في إنجاز المزيد من المهام.",
+  "assistants.details.capabilities.plugin.title": "المهارات المدمجة",
+  "assistants.details.capabilities.title": "قدرات الوكيل",
+  "assistants.details.overview.example": "عرض توضيحي للوكيل",
+  "assistants.details.overview.title": "نظرة عامة",
+  "assistants.details.related.listTitle": "وكلاء ذوو صلة",
+  "assistants.details.related.more": "عرض المزيد",
+  "assistants.details.related.title": "وكلاء مشابهون",
+  "assistants.details.sidebar.toc": "جدول المحتويات",
+  "assistants.details.summary.title": "ما الذي يمكنك فعله باستخدام هذا الوكيل؟",
+  "assistants.details.systemRole.openingMessage": "رسالة الترحيب",
+  "assistants.details.systemRole.openingQuestions": "أسئلة البداية",
+  "assistants.details.systemRole.title": "ملف تعريف الوكيل",
+  "assistants.details.version.empty": "لا توجد إصدارات سابقة بعد",
+  "assistants.details.version.status.archived": "مؤرشف",
+  "assistants.details.version.status.deprecated": "مرفوض",
+  "assistants.details.version.status.unpublished": "قيد المراجعة",
+  "assistants.details.version.table.isLatest": "أحدث إصدار",
+  "assistants.details.version.table.isValidated": "تم التحقق منه",
+  "assistants.details.version.table.publishAt": "تاريخ النشر",
+  "assistants.details.version.table.version": "الإصدار",
+  "assistants.details.version.title": "سجل الإصدارات",
+  "assistants.downloads": "التنزيلات",
+  "assistants.duplicateAdd.content": "“{{title}}” موجود بالفعل في وكلائك. هل ترغب في إضافة نسخة أخرى؟",
+  "assistants.duplicateAdd.ok": "إضافة نسخة",
+  "assistants.duplicateAdd.title": "إضافة نسخة مكررة؟",
+  "assistants.empty.description": "حاول تعديل الفلاتر، أو استكشف المزيد من الوكلاء في المجتمع.",
+  "assistants.empty.search": "لم يتم العثور على وكلاء مطابقين",
+  "assistants.empty.title": "لم يتم العثور على وكلاء",
+  "assistants.list": "قائمة الوكلاء",
+  "assistants.marketSource.label": "تبديل مصدر المجتمع",
+  "assistants.marketSource.legacy": "المجتمع القديم",
+  "assistants.marketSource.new": "المجتمع الجديد",
+  "assistants.more": "المزيد",
+  "assistants.plugins": "المهارات المدمجة",
+  "assistants.recentSubmits": "التحديثات الأخيرة",
+  "assistants.sorts.createdAt": "تم النشر مؤخرًا",
+  "assistants.sorts.identifier": "معرّف الوكيل",
+  "assistants.sorts.knowledgeCount": "عدد المكتبات",
+  "assistants.sorts.myown": "عرض وكلائي",
+  "assistants.sorts.pluginCount": "عدد المهارات",
+  "assistants.sorts.title": "اسم الوكيل",
+  "assistants.sorts.tokenUsage": "استخدام الرموز",
+  "assistants.status.archived.reasons.official": "قامت المنصة بإزالة هذا الوكيل لأسباب تتعلق بالأمان أو السياسات أو غيرها.",
+  "assistants.status.archived.reasons.owner": "قام المنشئ بأرشفة أو إزالة هذا الوكيل.",
+  "assistants.status.archived.subtitle": "تمت أرشفة هذا الوكيل. الأسباب المحتملة:",
+  "assistants.status.archived.title": "تمت أرشفة الوكيل",
+  "assistants.status.backToMarket": "العودة إلى مجتمع الوكلاء",
+  "assistants.status.deprecated.reasons.official": "قامت المنصة بإزالة هذا الوكيل لأسباب تتعلق بالأمان أو السياسات أو غيرها.",
+  "assistants.status.deprecated.reasons.owner": "قام المنشئ برفض أو إزالة هذا الوكيل.",
+  "assistants.status.deprecated.subtitle": "هذا الوكيل غير متاح حاليًا. الأسباب المحتملة:",
+  "assistants.status.deprecated.title": "الوكيل غير متاح",
+  "assistants.status.support": "لأي استفسارات، يرجى نسخ الرابط وإرساله إلى <email>support@lobehub.com</email> للحصول على المساعدة.",
+  "assistants.status.unpublished.subtitle": "هذا الوكيل قيد المراجعة. لتأكيد حالته، انسخ الرابط وأرسله إلى <email>support@lobehub.com</email>.",
+  "assistants.status.unpublished.title": "الوكيل قيد المراجعة",
+  "assistants.suggestions": "وكلاء مشابهون",
+  "assistants.systemRole": "ملف تعريف الوكيل",
+  "assistants.tokenUsage": "استخدام رموز الوكيل",
+  "assistants.try": "جرّب",
+  "assistants.withKnowledge": "يتضمن هذا الوكيل مكتبات",
+  "assistants.withPlugin": "يتضمن هذا الوكيل مهارات",
+  "back": "العودة إلى الاكتشاف",
+  "category.assistant.academic": "أكاديمي",
+  "category.assistant.all": "الكل",
+  "category.assistant.career": "المسار المهني",
+  "category.assistant.copywriting": "كتابة المحتوى",
+  "category.assistant.design": "تصميم",
+  "category.assistant.education": "تعليم",
+  "category.assistant.emotions": "العواطف",
+  "category.assistant.entertainment": "ترفيه",
+  "category.assistant.games": "ألعاب",
+  "category.assistant.general": "عام",
+  "category.assistant.life": "الحياة",
+  "category.assistant.marketing": "تسويق",
+  "category.assistant.office": "مكتب",
+  "category.assistant.programming": "برمجة",
+  "category.assistant.translation": "ترجمة",
+  "category.plugin.all": "الكل",
+  "category.plugin.gaming-entertainment": "الألعاب والترفيه",
+  "category.plugin.life-style": "نمط الحياة",
+  "category.plugin.lifestyle": "نمط الحياة",
+  "category.plugin.media-generate": "إنشاء الوسائط",
+  "category.plugin.science-education": "العلم والتعليم",
+  "category.plugin.social": "وسائل التواصل الاجتماعي",
+  "category.plugin.stocks-finance": "الأسهم والتمويل",
+  "category.plugin.tools": "أدوات مساعدة",
+  "category.plugin.web-search": "البحث على الويب",
+  "cleanFilter": "مسح الفلاتر",
   "create": "إنشاء",
-  "createGuide": {
-    "func1": {
-      "desc1": "ادخل إلى صفحة إعداد المساعد الذي ترغب في تقديمه من خلال الإعدادات في الزاوية العليا اليمنى من نافذة المحادثة;",
-      "desc2": "انقر على زر التقديم إلى سوق المساعدين في الزاوية العليا اليمنى.",
-      "tag": "الطريقة الأولى",
-      "title": "تقديم عبر LobeChat"
-    },
-    "func2": {
-      "button": "اذهب إلى مستودع مساعدي Github",
-      "desc": "إذا كنت ترغب في إضافة مساعد إلى الفهرس، يرجى استخدام agent-template.json أو agent-template-full.json لإنشاء إدخال في دليل الإضافات، كتابة وصف قصير ووضع علامات مناسبة، ثم إنشاء طلب سحب.",
-      "tag": "الطريقة الثانية",
-      "title": "تقديم عبر Github"
-    }
-  },
-  "dislike": "لا يعجبني",
+  "createGuide.func1.desc1": "في المحادثة، افتح إعدادات الوكيل من القائمة في الزاوية العلوية اليمنى.",
+  "createGuide.func1.desc2": "ثم انقر على إرسال إلى مجتمع الوكلاء في الزاوية العلوية اليمنى.",
+  "createGuide.func1.tag": "الخيار 1",
+  "createGuide.func1.title": "الإرسال في LobeHub",
+  "createGuide.func2.button": "افتح مستودع وكيل GitHub",
+  "createGuide.func2.desc": "لإضافة وكيل إلى الفهرس، أنشئ إدخالًا في `plugins/` باستخدام `agent-template.json` أو `agent-template-full.json`، أضف وصفًا قصيرًا وعلامات، ثم افتح طلب سحب.",
+  "createGuide.func2.tag": "الخيار 2",
+  "createGuide.func2.title": "الإرسال على GitHub",
+  "dislike": "عدم الإعجاب",
   "filter": "تصفية",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "جميع المؤلفين",
-      "followed": "المؤلفون المتابعون",
-      "title": "نطاق المؤلفين"
-    },
-    "contentLength": "أقل طول للسياق",
-    "maxToken": {
-      "title": "تعيين الحد الأقصى للطول (Token)",
-      "unlimited": "غير محدود"
-    },
-    "other": {
-      "functionCall": "دعم استدعاء الوظائف",
-      "title": "أخرى",
-      "vision": "دعم التعرف البصري",
-      "withKnowledge": "مع قاعدة المعرفة",
-      "withTool": "مع الإضافات"
-    },
-    "pricing": "أسعار النموذج",
-    "timePeriod": {
-      "all": "كل الوقت",
-      "day": "آخر 24 ساعة",
-      "month": "آخر 30 يومًا",
-      "title": "نطاق الوقت",
-      "week": "آخر 7 أيام",
-      "year": "آخر سنة"
-    }
-  },
-  "home": {
-    "featuredAssistants": "مساعدون مميزون",
-    "featuredModels": "نماذج مميزة",
-    "featuredProviders": "مزودو نماذج مميزون",
-    "featuredTools": "إضافات مميزة",
-    "more": "اكتشف المزيد"
-  },
-  "isClaimed": "تم المطالبة",
+  "filterBy.authorRange.everyone": "جميع المؤلفين",
+  "filterBy.authorRange.followed": "المؤلفون المتابعون",
+  "filterBy.authorRange.title": "نطاق المؤلف",
+  "filterBy.contentLength": "الحد الأدنى لطول السياق",
+  "filterBy.maxToken.title": "تحديد الحد الأقصى للطول (رموز)",
+  "filterBy.maxToken.unlimited": "غير محدود",
+  "filterBy.other.functionCall": "يدعم استدعاء الوظائف",
+  "filterBy.other.title": "أخرى",
+  "filterBy.other.vision": "يدعم التعرف البصري",
+  "filterBy.other.withKnowledge": "يتضمن مكتبات",
+  "filterBy.other.withTool": "يتضمن مهارات",
+  "filterBy.pricing": "تسعير النموذج",
+  "filterBy.timePeriod.all": "كل الوقت",
+  "filterBy.timePeriod.day": "آخر 24 ساعة",
+  "filterBy.timePeriod.month": "آخر 30 يومًا",
+  "filterBy.timePeriod.title": "النطاق الزمني",
+  "filterBy.timePeriod.week": "آخر 7 أيام",
+  "filterBy.timePeriod.year": "العام الماضي",
+  "footer.desc": "تطوّر مع مستخدمي الذكاء الاصطناعي حول العالم. كن منشئًا وشارك وكلاءك ومهاراتك في مجتمع LobeHub.",
+  "footer.title": "شارك إبداعاتك في مجتمع LobeHub اليوم",
+  "home.communityAgents": "وكلاء المجتمع",
+  "home.featuredAssistants": "وكلاء مميزون",
+  "home.featuredModels": "نماذج مميزة",
+  "home.featuredPlugins": "مهارات مميزة",
+  "home.featuredProviders": "مزودون مميزون",
+  "home.featuredTools": "مهارات مميزة",
+  "home.more": "اكتشف المزيد",
+  "isClaimed": "تم المطالبة به",
   "isFeatured": "مميز",
-  "isOfficial": "معتمد رسميًا",
-  "like": "أحب",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "جميع خوادم MCP",
-        "name": "الكل"
-      },
-      "business": {
-        "description": "الخدمات التجارية والمؤسساتية",
-        "name": "الخدمات التجارية"
-      },
-      "developer": {
-        "description": "أدوات وخدمات متعلقة بالتطوير",
-        "name": "أدوات التطوير"
-      },
-      "gaming-entertainment": {
-        "description": "الألعاب، الترفيه والأنشطة الترفيهية",
-        "name": "الألعاب والترفيه"
-      },
-      "health-wellness": {
-        "description": "الصحة، اللياقة والعناية بالجسم والعقل",
-        "name": "الصحة والعافية"
-      },
-      "lifestyle": {
-        "description": "أسلوب الحياة الشخصية، العادات والأنشطة اليومية",
-        "name": "نمط الحياة"
-      },
-      "media-generate": {
-        "description": "إنشاء، تحرير ومعالجة الوسائط",
-        "name": "إنشاء الوسائط"
-      },
-      "news": {
-        "description": "تجميع الأخبار، التقارير وخدمات المعلومات",
-        "name": "الأخبار والمعلومات"
-      },
-      "productivity": {
-        "description": "إدارة المهام، الملاحظات وأدوات الكفاءة",
-        "name": "أدوات الإنتاجية"
-      },
-      "science-education": {
-        "description": "البحث العلمي، التعلم وأدوات التعليم",
-        "name": "العلوم والتعليم"
-      },
-      "social": {
-        "description": "الشبكات الاجتماعية والتواصل",
-        "name": "وسائل التواصل الاجتماعي"
-      },
-      "stocks-finance": {
-        "description": "أسواق المال، التداول والاستثمار",
-        "name": "الأسهم والمالية"
-      },
-      "tools": {
-        "description": "أدوات وخدمات عامة وعملية",
-        "name": "أدوات عملية"
-      },
-      "travel-transport": {
-        "description": "تخطيط السفر والتنقل",
-        "name": "السفر والنقل"
-      },
-      "weather": {
-        "description": "توقعات الطقس وخدمات الأرصاد الجوية",
-        "name": "الطقس والأرصاد"
-      },
-      "web-search": {
-        "description": "البحث على الويب واسترجاع المعلومات",
-        "name": "استرجاع المعلومات"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "هذه الخدمة يمكن تشغيلها محلياً أو على السحابة حسب الإعداد أو سيناريو الاستخدام، وتتمتع بقدرة تشغيل مزدوجة.",
-          "title": "خدمة هجينة"
-        },
-        "local": {
-          "desc": "هذا الخادم يعمل فقط على جهاز العميل المحلي، ويتطلب التثبيت والاعتماد على الموارد المحلية.",
-          "title": "خدمة محلية"
-        },
-        "remote": {
-          "desc": "هذا الخادم مستضاف ويعمل عن بُعد، لأنه يعتمد بشكل رئيسي على خدمات بعيدة ولا يعتمد على البيئة المحلية.",
-          "title": "خدمة سحابية"
-        }
-      },
-      "deployment": {
-        "args": "المعطيات",
-        "checkCommand": "أمر التحقق",
-        "command": "الأمر",
-        "commandLine": "اعتمادات النظام",
-        "connection": "طريقة الاتصال",
-        "connectionType": "نوع الاتصال",
-        "description": "طريقة تثبيت ونشر الإضافة",
-        "descriptionPlaceholder": "وصف اختياري",
-        "empty": "لا توجد خيارات نشر حالياً",
-        "env": "متغيرات البيئة",
-        "guide": "تعليمات التثبيت",
-        "installation": "التثبيت عبر {{method}}",
-        "installationMethod": "طريقة التثبيت",
-        "other": "إعدادات أخرى",
-        "packageName": "اسم الحزمة",
-        "platform": {
-          "steps": {
-            "claude": "- افتح تطبيق **Claude Desktop**\n- اذهب إلى **الإعدادات** ثم اختر **المطور**\n- اضغط على **تحرير الإعدادات**\n- افتح ملف **claude_desktop_config.json**\n- انسخ والصق إعدادات الخادم في الملف الحالي ثم احفظ",
-            "cline": "- افتح VS Code مع إضافة Cline المثبتة\n- اضغط على أيقونة Cline في الشريط الجانبي\n- اختر **MCP Servers** من القائمة المنسدلة\n- في تبويب **الخوادم البعيدة**، أدخل اسم الخادم ورابط MCP الخاص بك\n- اضغط **Add Server** للاتصال",
-            "cursor": "- انتقل إلى **الإعدادات** ثم إعدادات Cursor\n- اختر **MCP** من الجانب الأيسر\n- اضغط على **إضافة خادم MCP عالمي جديد** في الأعلى يمين\n- انسخ والصق إعدادات الخادم في الملف الحالي ثم احفظ",
-            "lobeChat": "- افتح تطبيق **LobeChat لسطح المكتب**\n- اذهب إلى **الإعدادات** - **المساعد الافتراضي**\n- اختر **إعدادات الإضافة** - **إضافة مخصصة**\n- اضغط على **استيراد سريع لإعدادات JSON**\n- انسخ والصق إعدادات الخادم في مربع النص ثم ثبت",
-            "openai": "- افتح تطبيق **OpenAI** أو بيئة التطوير الخاصة بك\n- قم بإعداد أدوات MCP في **Responses API**\n- أضف كتلة MCP إلى مصفوفة **tools** في طلب API\n- عيّن **server_url** إلى نقطة نهاية خادم MCP الخاص بك\n- أدرج رؤوس المصادقة المطلوبة (مفتاح API، رموز، إلخ)\n- استخدم معلمة `allowed_tools` لتقييد الأدوات المكشوفة\n- عيّن `require_approval` للتحكم في موافقة تنفيذ الأدوات",
-            "vscode": "- افتح VS Code\n- افتح لوحة الأوامر (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- اكتب **MCP: Add Server** واختره\n- اختر الإضافة إلى مساحة العمل أو إعدادات المستخدم\n- انسخ والصق إعدادات الخادم"
-          },
-          "title": "التثبيت على {{platform}}"
-        },
-        "recommended": "موصى به",
-        "systemDependencies": "اعتمادات النظام",
-        "table": {
-          "description": "الوصف",
-          "name": "الاسم",
-          "required": "مطلوب",
-          "type": "النوع"
-        },
-        "title": "طريقة التثبيت"
-      },
-      "githubBadge": {
-        "desc": "يقوم LobeHub بمسح مستودعات الأكواد والوثائق بانتظام من أجل:\n\n- التأكد من أن خوادم MCP تعمل بشكل صحيح.\n- استخراج ميزات الخادم مثل الأدوات، الموارد، التعليمات والمعطيات المطلوبة.\n- تساعد شارة التقييم المستخدمين على تقييم أمان الخادم، ميزاته ودليل التثبيت بسرعة.\n\nيرجى نسخ الكود التالي إلى ملف `README.md` الخاص بك:"
-      },
-      "nav": {
-        "needHelp": "هل تحتاج مساعدة؟",
-        "reportIssue": "الإبلاغ عن مشكلة",
-        "viewSourceCode": "عرض الشيفرة المصدرية"
-      },
-      "overview": {
-        "title": "نظرة عامة"
-      },
-      "related": {
-        "listTitle": "خوادم MCP ذات الصلة",
-        "more": "عرض المزيد",
-        "title": "اقتراحات ذات صلة"
-      },
-      "schema": {
-        "mode": {
-          "docs": "الوثائق"
-        },
-        "prompts": {
-          "arguments": "إعدادات المعطيات",
-          "desc": "قوالب تفاعلية يتم تفعيلها باختيار المستخدم",
-          "empty": "لا توجد تعليمات حالياً",
-          "instructions": "تعليمات",
-          "table": {
-            "description": "الوصف",
-            "name": "الاسم",
-            "required": "مطلوب"
-          },
-          "title": "قائمة التعليمات"
-        },
-        "resources": {
-          "desc": "بيانات سياقية مرفقة ومدارة من قبل العميل",
-          "empty": "لا توجد موارد",
-          "table": {
-            "description": "الوصف",
-            "mineType": "نوع MIME",
-            "name": "الاسم",
-            "uri": "رابط URI"
-          },
-          "title": "قائمة الموارد"
-        },
-        "title": "وظائف الإضافة",
-        "tools": {
-          "desc": "واجهات وظائف مكشوفة لنموذج اللغة الكبير (LLM) لتنفيذ العمليات",
-          "empty": "لا توجد أدوات",
-          "inputSchema": "وصف الإدخال",
-          "instructions": "تعليمات",
-          "table": {
-            "description": "الوصف",
-            "name": "الاسم",
-            "required": "مطلوب",
-            "type": "النوع"
-          },
-          "title": "قائمة الأدوات"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "تمت المطالبة بهذا الخادم من قبل المالك، مما يضمن ملكيته وإدارته.",
-          "title": "مطالب به من قبل المالك"
-        },
-        "deployMoreThanManual": {
-          "desc": "يوفر هذا الخادم طرق تثبيت أكثر سهولة من الطريقة اليدوية، مما يسمح للمستخدمين بالنشر والاستخدام بسهولة.",
-          "title": "يوفر طرق تثبيت سهلة"
-        },
-        "deployment": {
-          "desc": "يوفر هذا الخادم على الأقل طريقة تثبيت واحدة تسمح للمستخدمين بالنشر والاستخدام.",
-          "descWithCount": "يوفر هذا الخادم {{number}} طريقة تثبيت تسمح للمستخدمين بالنشر والاستخدام.",
-          "title": "يوفر طريقة تثبيت واحدة على الأقل"
-        },
-        "license": {
-          "desc": "يحتوي هذا المستودع على ملف LICENSE.",
-          "descWithlicense": "رخصة هذا المستودع هي {{license}}.",
-          "title": "يحتوي على رخصة"
-        },
-        "listTitle": "تفاصيل التقييم",
-        "notClaimed": {
-          "desc": "إذا كنت مالك هذا الخادم، يمكنك المطالبة به بالطرق التالية.",
-          "title": "غير مطالب به من قبل المالك"
-        },
-        "prompts": {
-          "desc": "يوفر هذا الخادم تعليمات تسمح للمستخدمين بالتفاعل مع الخدمة.",
-          "descWithCount": "يوفر هذا الخادم {{number}} تعليمات تسمح للمستخدمين بالتفاعل مع الخدمة.",
-          "title": "يحتوي على تعليمات"
-        },
-        "readme": {
-          "desc": "يحتوي هذا المستودع على ملف README.md.",
-          "title": "يحتوي على README"
-        },
-        "resources": {
-          "desc": "يوفر هذا الخادم موارد تسمح للمستخدمين بإرفاق وإدارة بيانات السياق.",
-          "descWithCount": "يوفر هذا الخادم {{number}} موارد تسمح للمستخدمين بإرفاق وإدارة بيانات السياق.",
-          "title": "يحتوي على موارد"
-        },
-        "title": "التقييم",
-        "tools": {
-          "desc": "يجب أن يوفر الخادم أداة واحدة على الأقل تسمح للمستخدمين بتنفيذ عمليات محددة.",
-          "descWithCount": "يوفر هذا الخادم {{number}} أداة تسمح للمستخدمين بتنفيذ عمليات محددة.",
-          "title": "يحتوي على أداة واحدة على الأقل"
-        },
-        "validated": {
-          "desc": "تم التحقق من هذا الخادم لضمان جودته وموثوقيته.",
-          "title": "تم التحقق منه"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "تم التحقق من هذا الخادم بدقة، ويوفر وظائف شاملة وتجربة مستخدم عالية الجودة.",
-          "fullTitle": "إضافة ممتازة",
-          "title": "ممتاز"
-        },
-        "b": {
-          "desc": "يوفر هذا الخادم وظائف وتجربة مستخدم جيدة، لكنه قد يحتاج إلى تحسين في بعض الجوانب.",
-          "fullTitle": "وظائف جيدة",
-          "title": "جيد"
-        },
-        "f": {
-          "desc": "وظائف هذا الخادم غير مكتملة أو جودته منخفضة، ينصح المستخدمون بالحذر عند الاستخدام.",
-          "fullTitle": "جودة ضعيفة",
-          "title": "ضعيف"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "التلميحات",
-          "resources": "الموارد",
-          "title": "قدرات الإضافة",
-          "tools": "الأدوات"
-        },
-        "configuration": {
-          "title": "تكوين الإضافة"
-        },
-        "connection": {
-          "args": "معاملات التشغيل",
-          "command": "أمر التشغيل",
-          "title": "معلومات الاتصال",
-          "type": "نوع الاتصال",
-          "url": "عنوان الخدمة"
-        },
-        "saveSettings": "حفظ الإعدادات",
-        "title": "إعدادات الإضافة"
-      },
-      "sidebar": {
-        "install": "تثبيت خادم MCP",
-        "meta": {
-          "homepage": "الصفحة الرئيسية",
-          "installCount": "عدد التثبيتات",
-          "language": "لغة المصدر",
-          "license": "الرخصة",
-          "published": "تاريخ النشر",
-          "repo": "مستودع الشيفرة",
-          "stars": "عدد النجوم",
-          "title": "معلومات مفصلة",
-          "updated": "آخر تحديث"
-        },
-        "moreServerConfig": "عرض التفاصيل",
-        "recommendServers": "خوادم MCP ذات صلة",
-        "serverConfig": "إعدادات التثبيت",
-        "toc": "المحتوى"
-      },
-      "summary": {
-        "title": "ما الذي يمكنك فعله باستخدام خادم MCP هذا؟"
-      },
-      "totalScore": {
-        "description": "الدرجة الإجمالية المحسوبة بناءً على مؤشرات متعددة",
-        "legend": {
-          "aGrade": "الدرجة أ ({{minPercent}}-100%)",
-          "bGrade": "الدرجة ب ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "الدرجة ف (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} نقاط",
-        "popover": {
-          "completedOptional": "✅ تم إكمال الخيارات الاختيارية ({{count}} عناصر)",
-          "completedRequired": "✅ تم إكمال العناصر المطلوبة ({{count}} عناصر)",
-          "incompleteOptional": "⏸️ لم تكتمل الخيارات الاختيارية ({{count}} عناصر)",
-          "incompleteRequired": "❌ لم تكتمل العناصر المطلوبة ({{count}} عناصر)",
-          "title": "تفاصيل التقييم"
-        },
-        "ratingFormat": "التقييم: {{level}}",
-        "scoreInfo": {
-          "items": "عناصر",
-          "points": "نقاط",
-          "requiredItems": "عناصر مطلوبة"
-        },
-        "title": "الدرجة الإجمالية"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "أحدث إصدار",
-          "isValidated": "تم التحقق",
-          "publishAt": "تاريخ النشر",
-          "version": "الإصدار"
-        },
-        "title": "سجل الإصدارات"
-      }
-    },
-    "hero": {
-      "desc": "منصة MCP Servers مفتوحة المصدر وقابلة للنشر، تساعد أنظمة الذكاء الاصطناعي على الوصول بسهولة إلى أنظمة الملفات، قواعد البيانات، واجهات برمجة التطبيقات وغيرها من الموارد الحيوية، لتوسيع قدرات الذكاء الاصطناعي الخاصة بك بشكل شامل.",
-      "subTitle": "مفتوح المصدر وجاهز للاستخدام",
-      "title": "سوق MCP مفتوح المصدر للذكاء الاصطناعي"
-    },
-    "sorts": {
-      "createdAt": "أضيف مؤخراً",
-      "installCount": "عدد التثبيتات",
-      "isFeatured": "الإضافات المميزة",
-      "isValidated": "الإضافات التي تم التحقق منها",
-      "promptsCount": "عدد التعليمات",
-      "ratingCount": "عدد التقييمات",
-      "resourcesCount": "عدد الموارد",
-      "toolsCount": "عدد الأدوات",
-      "updatedAt": "تم التحديث مؤخراً"
-    },
-    "title": "سوق MCP",
-    "unvalidated": {
-      "desc": "هذا الخادم MCP لم يتم التحقق منه بعد",
-      "title": "غير مُحقق"
-    },
-    "validated": {
-      "desc": "تم التحقق من هذا الخادم MCP لضمان جودته وموثوقيته.",
-      "descWithDate": "تم التحقق من هذا الخادم MCP بتاريخ {{date}} لضمان جودته وموثوقيته.",
-      "title": "تم التحقق"
-    }
-  },
-  "models": {
-    "abilities": "قدرات النموذج",
-    "chat": "بدء المحادثة",
-    "contentLength": "أقصى طول للسياق",
-    "details": {
-      "overview": {
-        "title": "نظرة عامة"
-      },
-      "related": {
-        "listTitle": "النماذج ذات الصلة",
-        "more": "عرض المزيد",
-        "title": "اقتراحات ذات صلة"
-      }
-    },
-    "free": "مجاني",
-    "guide": "دليل الإعداد",
-    "list": "قائمة النماذج",
-    "more": "المزيد",
-    "parameterList": {
-      "defaultValue": "القيمة الافتراضية",
-      "docs": "عرض الوثائق",
-      "frequency_penalty": {
-        "desc": "تقوم هذه الإعدادات بتعديل تكرار استخدام النموذج لكلمات معينة ظهرت بالفعل في المدخلات. القيم الأعلى تقلل من احتمال تكرار هذه الكلمات، بينما القيم السلبية تعزز استخدامها. عقوبة الكلمات لا تزداد مع زيادة عدد مرات الظهور. القيم السلبية ستشجع على تكرار الكلمات.",
-        "title": "عقوبة التكرار"
-      },
-      "max_tokens": {
-        "desc": "تحدد هذه الإعدادات الحد الأقصى لطول النص الذي يمكن أن ينتجه النموذج في رد واحد. يسمح تعيين قيمة أعلى للنموذج بإنتاج ردود أطول، بينما تحدد القيمة المنخفضة طول الردود، مما يجعلها أكثر اختصارًا. يمكن أن يساعد ضبط هذه القيمة بشكل معقول وفقًا لمختلف سيناريوهات الاستخدام في تحقيق الطول والتفاصيل المتوقعة للرد.",
-        "title": "حد الرد الواحد"
-      },
-      "presence_penalty": {
-        "desc": "تهدف هذه الإعدادات إلى التحكم في تكرار استخدام الكلمات بناءً على تكرار ظهورها في المدخلات. تحاول تقليل استخدام الكلمات التي ظهرت كثيرًا في المدخلات، حيث يتناسب تكرار استخدامها مع تكرار ظهورها. عقوبة الكلمات تزداد مع عدد مرات الظهور. القيم السلبية ستشجع على تكرار الكلمات.",
-        "title": "جدة الموضوع"
-      },
-      "range": "نطاق",
-      "reasoning_effort": {
-        "desc": "تُستخدم هذه الإعدادات للتحكم في شدة التفكير التي يقوم بها النموذج قبل توليد الإجابات. الشدة المنخفضة تعطي الأولوية لسرعة الاستجابة وتوفر الرموز، بينما الشدة العالية توفر تفكيرًا أكثر اكتمالًا ولكنها تستهلك المزيد من الرموز وتقلل من سرعة الاستجابة. القيمة الافتراضية هي متوسطة، مما يوازن بين دقة التفكير وسرعة الاستجابة.",
-        "title": "شدة التفكير"
-      },
-      "temperature": {
-        "desc": "تؤثر هذه الإعدادات على تنوع استجابة النموذج. القيم المنخفضة تؤدي إلى استجابات أكثر توقعًا ونمطية، بينما القيم الأعلى تشجع على استجابات أكثر تنوعًا وغير شائعة. عندما تكون القيمة 0، يعطي النموذج نفس الاستجابة دائمًا لنفس المدخل.",
-        "title": "عشوائية"
-      },
-      "title": "معلمات النموذج",
-      "top_p": {
-        "desc": "تحدد هذه الإعدادات اختيار النموذج للكلمات ذات الاحتمالية الأعلى فقط: اختيار الكلمات التي تصل احتمالاتها التراكمية إلى P. القيم المنخفضة تجعل استجابات النموذج أكثر توقعًا، بينما الإعداد الافتراضي يسمح للنموذج بالاختيار من جميع نطاق الكلمات.",
-        "title": "عينات النواة"
-      },
-      "type": "نوع"
-    },
-    "providerInfo": {
-      "apiTooltip": "يدعم LobeChat استخدام مفتاح API مخصص لهذا المزود.",
-      "input": "سعر الإدخال",
-      "inputTooltip": "تكلفة لكل مليون Token",
-      "latency": "زمن الاستجابة",
-      "latencyTooltip": "متوسط زمن استجابة المزود لإرسال أول Token",
-      "maxOutput": "أقصى طول للإخراج",
-      "maxOutputTooltip": "عدد Tokens الأقصى الذي يمكن أن ينتجه هذا النقطة",
-      "officialTooltip": "خدمة رسمية من LobeHub",
-      "output": "سعر الإخراج",
-      "outputTooltip": "تكلفة لكل مليون Token",
-      "streamCancellationTooltip": "يدعم هذا المزود ميزة إلغاء التدفق.",
-      "throughput": "معدل النقل",
-      "throughputTooltip": "متوسط عدد Tokens المنقولة في الطلبات المتدفقة في الثانية"
-    },
-    "sorts": {
-      "contextWindowTokens": "طول السياق",
-      "identifier": "معرف النموذج",
-      "inputPrice": "سعر الإدخال",
-      "outputPrice": "سعر الإخراج",
-      "providerCount": "عدد المزودين",
-      "releasedAt": "تم النشر مؤخراً"
-    },
-    "suggestions": "نماذج ذات صلة",
-    "supportedProviders": "مزودو الخدمة المدعومون لهذا النموذج"
-  },
-  "plugins": {
-    "builtinTag": "الملحقات المدمجة",
-    "community": "إضافات المجتمع",
-    "details": {
-      "settings": {
-        "title": "إعدادات الإضافة"
-      },
-      "summary": {
-        "title": "ما الذي يمكنك فعله باستخدام هذه الإضافة؟"
-      },
-      "tools": {
-        "title": "أدوات الإضافة"
-      }
-    },
-    "install": "تثبيت الإضافة",
-    "installed": "تم التثبيت",
-    "legacyTag": "الملحقات القديمة",
-    "list": "قائمة الإضافات",
-    "meta": {
-      "description": "وصف",
-      "parameter": "معامل",
-      "title": "معامل الأداة",
-      "type": "نوع"
-    },
-    "more": "المزيد",
-    "official": "إضافات رسمية",
-    "recentSubmits": "آخر التحديثات",
-    "sorts": {
-      "createdAt": "تم النشر مؤخراً",
-      "identifier": "معرف الإضافة",
-      "title": "اسم الإضافة"
-    },
-    "suggestions": "اقتراحات ذات صلة"
-  },
-  "providers": {
-    "config": "تكوين مزود الخدمة",
-    "details": {
-      "guide": {
-        "title": "دليل الاندماج"
-      },
-      "overview": {
-        "title": "نظرة عامة"
-      },
-      "related": {
-        "listTitle": "مزودو الخدمة ذات الصلة",
-        "more": "عرض المزيد",
-        "title": "اقتراحات ذات صلة"
-      }
-    },
-    "list": "قائمة مزودي النماذج",
-    "modelCount": "{{count}} نموذج",
-    "modelName": "اسم النموذج",
-    "modelSite": "وثائق النموذج",
-    "more": "المزيد",
-    "officialSite": "الموقع الرسمي",
-    "showAllModels": "عرض جميع النماذج",
-    "sorts": {
-      "default": "الترتيب الافتراضي",
-      "identifier": "معرف المزود",
-      "modelCount": "عدد النماذج"
-    },
-    "suggestions": "مزودو الخدمة ذوو الصلة",
-    "supportedModels": "النماذج المدعومة"
-  },
-  "publishedTime": "نشر في",
-  "search": {
-    "placeholder": "ابحث عن اسم أو كلمة مفتاحية...",
-    "result": "{{count}} نتيجة بحث حول <highlight>{{keyword}}</highlight>",
-    "searching": "جارٍ البحث..."
-  },
-  "tab": {
-    "assistant": "المساعد",
-    "home": "الصفحة الرئيسية",
-    "model": "النموذج",
-    "plugin": "الإضافة",
-    "provider": "مزود النموذج"
-  }
+  "isOfficial": "تم التحقق منه رسميًا",
+  "like": "إعجاب",
+  "mcp.categories.all.description": "جميع خوادم MCP",
+  "mcp.categories.all.name": "الكل",
+  "mcp.categories.business.description": "خدمات الأعمال والمؤسسات",
+  "mcp.categories.business.name": "خدمات الأعمال",
+  "mcp.categories.developer.description": "أدوات وخدمات للمطورين",
+  "mcp.categories.developer.name": "أدوات المطورين",
+  "mcp.categories.gaming-entertainment.description": "الألعاب، الترفيه، والأنشطة الترفيهية",
+  "mcp.categories.gaming-entertainment.name": "الألعاب والترفيه",
+  "mcp.categories.health-wellness.description": "الصحة، اللياقة، والعافية",
+  "mcp.categories.health-wellness.name": "الصحة والعافية",
+  "mcp.categories.lifestyle.description": "نمط الحياة الشخصية، العادات، والأنشطة اليومية",
+  "mcp.categories.lifestyle.name": "نمط الحياة",
+  "mcp.categories.media-generate.description": "إنشاء الوسائط، تحريرها، ومعالجتها",
+  "mcp.categories.media-generate.name": "إنشاء الوسائط",
+  "mcp.categories.news.description": "تجميع الأخبار، التقارير، وخدمات المعلومات",
+  "mcp.categories.news.name": "الأخبار والمعلومات",
+  "mcp.categories.productivity.description": "إدارة المهام، الملاحظات، وأدوات الإنتاجية",
+  "mcp.categories.productivity.name": "أدوات الإنتاجية",
+  "mcp.categories.science-education.description": "البحث العلمي، التعلم، وأدوات التعليم",
+  "mcp.categories.science-education.name": "العلم والتعليم",
+  "mcp.categories.social.description": "الشبكات الاجتماعية والتواصل",
+  "mcp.categories.social.name": "وسائل التواصل الاجتماعي",
+  "mcp.categories.stocks-finance.description": "الأسواق المالية، التداول، والاستثمار",
+  "mcp.categories.stocks-finance.name": "الأسهم والتمويل",
+  "mcp.categories.tools.description": "أدوات وخدمات عملية متعددة الأغراض",
+  "mcp.categories.tools.name": "أدوات مساعدة",
+  "mcp.categories.travel-transport.description": "تخطيط السفر والمواصلات",
+  "mcp.categories.travel-transport.name": "السفر والمواصلات",
+  "mcp.categories.weather.description": "توقعات الطقس وخدمات الأرصاد الجوية",
+  "mcp.categories.weather.name": "الطقس",
+  "mcp.categories.web-search.description": "البحث على الويب واسترجاع المعلومات",
+  "mcp.categories.web-search.name": "استرجاع المعلومات",
+  "mcp.details.connectionType.hybrid.desc": "يمكن تشغيل هذه الخدمة محليًا أو عبر السحابة حسب الإعداد أو سيناريو الاستخدام، مما يوفر إمكانية التشغيل المزدوج.",
+  "mcp.details.connectionType.hybrid.title": "خدمة هجينة",
+  "mcp.details.connectionType.local.desc": "يمكن تشغيل هذا الخادم فقط على جهاز المستخدم المحلي، ويتطلب التثبيت ويعتمد على الموارد المحلية.",
+  "mcp.details.connectionType.local.title": "خدمة محلية",
+  "mcp.details.connectionType.remote.desc": "يتم استضافة هذا الخادم عن بُعد لأنه يعتمد بشكل أساسي على خدمات خارجية ولا يعتمد على البيئة المحلية.",
+  "mcp.details.connectionType.remote.title": "خدمة سحابية",
+  "mcp.details.deployment.args": "المعلمات",
+  "mcp.details.deployment.checkCommand": "أمر التحقق",
+  "mcp.details.deployment.command": "الأمر",
+  "mcp.details.deployment.commandLine": "اعتمادات النظام",
+  "mcp.details.deployment.connection": "طريقة الاتصال",
+  "mcp.details.deployment.connectionType": "نوع الاتصال",
+  "mcp.details.deployment.description": "طريقة تثبيت ونشر المهارة",
+  "mcp.details.deployment.descriptionPlaceholder": "وصف اختياري",
+  "mcp.details.deployment.empty": "لا توجد خيارات نشر متاحة",
+  "mcp.details.deployment.env": "متغيرات البيئة",
+  "mcp.details.deployment.guide": "دليل التثبيت",
+  "mcp.details.deployment.installation": "التثبيت عبر {{method}}",
+  "mcp.details.deployment.installationMethod": "طريقة التثبيت",
+  "mcp.details.deployment.other": "إعدادات أخرى",
+  "mcp.details.deployment.packageName": "اسم الحزمة",
+  "mcp.details.deployment.platform.steps.claude": "- افتح تطبيق **Claude Desktop**\n- انتقل إلى **الإعدادات** ثم اختر **المطور**\n- انقر على **تحرير الإعدادات**\n- افتح ملف **claude_desktop_config.json**\n- انسخ والصق إعدادات الخادم في الملف الحالي ثم احفظ",
+  "mcp.details.deployment.platform.steps.cline": "- افتح VS Code مع تثبيت إضافة Cline\n- انقر على أيقونة Cline في الشريط الجانبي\n- اختر **MCP Servers** من القائمة المنسدلة\n- في تبويب **الخوادم البعيدة**، أدخل اسم الخادم ورابط MCP الخاص بك\n- انقر على **إضافة خادم** للاتصال",
+  "mcp.details.deployment.platform.steps.cursor": "- انتقل إلى **الإعدادات** ثم اختر إعدادات Cursor\n- اختر **MCP** من القائمة الجانبية\n- انقر على **إضافة خادم MCP عالمي جديد** في الأعلى\n- انسخ والصق إعدادات الخادم في الملف الحالي ثم احفظ",
+  "mcp.details.deployment.platform.steps.lobeChat": "- افتح تطبيق **LobeHub Desktop**\n- انتقل إلى **الإعدادات** - **الوكيل الافتراضي**\n- ثم اختر **إعدادات المهارة** - **مهارات مخصصة**\n- انقر على **استيراد سريع لإعدادات JSON**\n- انسخ والصق إعدادات الخادم في مربع النص ثم قم بالتثبيت",
+  "mcp.details.deployment.platform.steps.openai": "- افتح تطبيق **OpenAI** أو بيئة التطوير الخاصة بك\n- قم بإعداد أدوات MCP في **Responses API**\n- أضف كتل MCP إلى مصفوفة **tools** في طلبات API\n- عيّن **server_url** إلى نقطة نهاية خادم MCP الخاص بك\n- أدرج رؤوس المصادقة المطلوبة (مفتاح API، رمز، إلخ)\n- استخدم المعامل `allowed_tools` لتقييد الأدوات المتاحة\n- عيّن `require_approval` للتحكم في الموافقة على تنفيذ الأدوات",
+  "mcp.details.deployment.platform.steps.vscode": "- افتح VS Code\n- افتح لوحة الأوامر (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- اكتب **MCP: Add Server** واختره\n- اختر الإضافة إلى إعدادات مساحة العمل أو المستخدم\n- انسخ والصق إعدادات الخادم",
+  "mcp.details.deployment.platform.title": "التثبيت على {{platform}}",
+  "mcp.details.deployment.recommended": "موصى به",
+  "mcp.details.deployment.systemDependencies": "اعتمادات النظام",
+  "mcp.details.deployment.table.description": "الوصف",
+  "mcp.details.deployment.table.name": "الاسم",
+  "mcp.details.deployment.table.required": "مطلوب",
+  "mcp.details.deployment.table.type": "النوع",
+  "mcp.details.deployment.title": "طريقة التثبيت",
+  "mcp.details.githubBadge.desc": "يقوم LobeHub بمسح مستودعات الشيفرة والمستندات بانتظام من أجل:\n- التحقق من حالة تشغيل خادم MCP.\n- استخراج ميزات الخادم مثل الأدوات، الموارد، التعليمات، والمعلمات المطلوبة.\n- تساعد شارة MCP المستخدمين على تقييم أمان الخادم وميزاته وتعليمات التثبيت بسرعة. يرجى نسخ الكود التالي إلى ملف `README.md` الخاص بك:",
+  "mcp.details.nav.needHelp": "هل تحتاج إلى مساعدة؟",
+  "mcp.details.nav.reportIssue": "الإبلاغ عن مشكلة",
+  "mcp.details.nav.viewSourceCode": "عرض الشيفرة المصدرية",
+  "mcp.details.overview.title": "نظرة عامة",
+  "mcp.details.related.listTitle": "خوادم MCP ذات صلة",
+  "mcp.details.related.more": "عرض المزيد",
+  "mcp.details.related.title": "توصيات ذات صلة",
+  "mcp.details.schema.mode.docs": "الوثائق",
+  "mcp.details.schema.prompts.arguments": "إعداد المعلمات",
+  "mcp.details.schema.prompts.desc": "قوالب تفاعلية يتم تفعيلها عند اختيار المستخدم",
+  "mcp.details.schema.prompts.empty": "لا توجد تعليمات متاحة",
+  "mcp.details.schema.prompts.instructions": "وصف التعليمات",
+  "mcp.details.schema.prompts.table.description": "الوصف",
+  "mcp.details.schema.prompts.table.name": "الاسم",
+  "mcp.details.schema.prompts.table.required": "مطلوب",
+  "mcp.details.schema.prompts.title": "قائمة التعليمات",
+  "mcp.details.schema.resources.desc": "بيانات السياق المرفقة والمدارة من قبل العميل",
+  "mcp.details.schema.resources.empty": "لا توجد موارد متاحة",
+  "mcp.details.schema.resources.table.description": "الوصف",
+  "mcp.details.schema.resources.table.mineType": "نوع MIME",
+  "mcp.details.schema.resources.table.name": "الاسم",
+  "mcp.details.schema.resources.table.uri": "الرابط URI",
+  "mcp.details.schema.resources.title": "قائمة الموارد",
+  "mcp.details.schema.title": "ميزات المهارة",
+  "mcp.details.schema.tools.desc": "واجهات وظيفية مكشوفة لنماذج اللغة الكبيرة (LLM) لتنفيذ العمليات",
+  "mcp.details.schema.tools.empty": "لا توجد أدوات متاحة",
+  "mcp.details.schema.tools.inputSchema": "وصف الإدخال",
+  "mcp.details.schema.tools.instructions": "وصف التعليمات",
+  "mcp.details.schema.tools.table.description": "الوصف",
+  "mcp.details.schema.tools.table.name": "الاسم",
+  "mcp.details.schema.tools.table.required": "مطلوب",
+  "mcp.details.schema.tools.table.type": "النوع",
+  "mcp.details.schema.tools.title": "قائمة الأدوات",
+  "mcp.details.score.claimed.desc": "تم تأكيد ملكية هذا الخادم MCP من قبل مالكه، مما يضمن إدارته.",
+  "mcp.details.score.claimed.title": "تمت المطالبة به من قبل المالك",
+  "mcp.details.score.deployMoreThanManual.desc": "يوفر هذا الخادم MCP طرق تثبيت أسهل من التثبيت اليدوي، مما يسهل على المستخدمين نشره واستخدامه.",
+  "mcp.details.score.deployMoreThanManual.title": "يوفر طرق تثبيت سهلة",
+  "mcp.details.score.deployment.desc": "يوفر هذا الخادم MCP طريقة تثبيت واحدة على الأقل، مما يتيح للمستخدمين نشره واستخدامه.",
+  "mcp.details.score.deployment.descWithCount": "يوفر هذا الخادم MCP {{number}} طريقة تثبيت، مما يتيح للمستخدمين نشره واستخدامه.",
+  "mcp.details.score.deployment.title": "يوفر طريقة تثبيت واحدة على الأقل",
+  "mcp.details.score.license.desc": "يحتوي هذا المستودع على ملف ترخيص LICENSE.",
+  "mcp.details.score.license.descWithlicense": "تم ترخيص هذا المستودع بموجب {{license}}.",
+  "mcp.details.score.license.title": "يحتوي على ترخيص",
+  "mcp.details.score.listTitle": "تفاصيل التقييم",
+  "mcp.details.score.notClaimed.desc": "إذا كنت مالك هذا الخادم MCP، يمكنك المطالبة به عبر الطرق التالية.",
+  "mcp.details.score.notClaimed.title": "لم تتم المطالبة به من قبل المالك",
+  "mcp.details.score.prompts.desc": "يوفر هذا الخادم MCP تعليمات تتيح للمستخدمين التفاعل مع الخدمة.",
+  "mcp.details.score.prompts.descWithCount": "يوفر هذا الخادم MCP {{number}} تعليمات تتيح للمستخدمين التفاعل مع الخدمة.",
+  "mcp.details.score.prompts.title": "يتضمن تعليمات",
+  "mcp.details.score.readme.desc": "يحتوي هذا المستودع على ملف README.md.",
+  "mcp.details.score.readme.title": "يحتوي على README",
+  "mcp.details.score.resources.desc": "يوفر هذا الخادم MCP موارد تتيح للمستخدمين إرفاق بيانات السياق وإدارتها.",
+  "mcp.details.score.resources.descWithCount": "يوفر هذا الخادم MCP {{number}} من الموارد تتيح للمستخدمين إرفاق بيانات السياق وإدارتها.",
+  "mcp.details.score.resources.title": "يتضمن موارد",
+  "mcp.details.score.title": "التقييم",
+  "mcp.details.score.tools.desc": "يجب أن يوفر هذا الخادم أداة واحدة على الأقل تتيح للمستخدمين تنفيذ عمليات محددة.",
+  "mcp.details.score.tools.descWithCount": "يوفر هذا الخادم MCP {{number}} من الأدوات التي تتيح للمستخدمين تنفيذ عمليات محددة.",
+  "mcp.details.score.tools.title": "يتضمن أداة واحدة على الأقل",
+  "mcp.details.score.validated.desc": "تم التحقق من هذا الخادم MCP لضمان جودته وموثوقيته.",
+  "mcp.details.score.validated.title": "تم التحقق منه",
+  "mcp.details.scoreLevel.a.desc": "تم التحقق من هذا الخادم MCP بدقة، ويقدم ميزات شاملة وتجربة مستخدم عالية الجودة.",
+  "mcp.details.scoreLevel.a.fullTitle": "مهارة ممتازة",
+  "mcp.details.scoreLevel.a.title": "مميز",
+  "mcp.details.scoreLevel.b.desc": "يقدم هذا الخادم MCP ميزات جيدة وتجربة مستخدم مقبولة، لكنه قد يحتاج إلى تحسينات في بعض الجوانب.",
+  "mcp.details.scoreLevel.b.fullTitle": "وظائف جيدة",
+  "mcp.details.scoreLevel.b.title": "جيد",
+  "mcp.details.scoreLevel.f.desc": "هذا الخادم MCP غير مكتمل أو منخفض الجودة؛ يُنصح المستخدمون باستخدامه بحذر.",
+  "mcp.details.scoreLevel.f.fullTitle": "جودة ضعيفة",
+  "mcp.details.scoreLevel.f.title": "ضعيف",
+  "mcp.details.settings.capabilities.prompts": "المحفزات",
+  "mcp.details.settings.capabilities.resources": "الموارد",
+  "mcp.details.settings.capabilities.title": "قدرات المهارة",
+  "mcp.details.settings.capabilities.tools": "الأدوات",
+  "mcp.details.settings.configuration.title": "إعدادات المهارة",
+  "mcp.details.settings.connection.args": "وسائط التشغيل",
+  "mcp.details.settings.connection.command": "أمر التشغيل",
+  "mcp.details.settings.connection.title": "معلومات الاتصال",
+  "mcp.details.settings.connection.type": "نوع الاتصال",
+  "mcp.details.settings.connection.url": "رابط الخدمة",
+  "mcp.details.settings.saveSettings": "حفظ الإعدادات",
+  "mcp.details.settings.title": "إعدادات المهارة",
+  "mcp.details.sidebar.install": "تثبيت خادم MCP",
+  "mcp.details.sidebar.meta.homepage": "الصفحة الرسمية",
+  "mcp.details.sidebar.meta.installCount": "عدد التثبيتات",
+  "mcp.details.sidebar.meta.language": "لغة المصدر",
+  "mcp.details.sidebar.meta.license": "الرخصة",
+  "mcp.details.sidebar.meta.published": "تاريخ النشر",
+  "mcp.details.sidebar.meta.repo": "مستودع المصدر",
+  "mcp.details.sidebar.meta.stars": "التقييمات",
+  "mcp.details.sidebar.meta.title": "التفاصيل",
+  "mcp.details.sidebar.meta.updated": "آخر تحديث",
+  "mcp.details.sidebar.moreServerConfig": "عرض التفاصيل",
+  "mcp.details.sidebar.recommendServers": "خوادم MCP ذات صلة",
+  "mcp.details.sidebar.serverConfig": "إعدادات التثبيت",
+  "mcp.details.sidebar.toc": "جدول المحتويات",
+  "mcp.details.summary.title": "ماذا يمكنك أن تفعل بهذا الخادم MCP؟",
+  "mcp.details.totalScore.description": "تم حساب الدرجة الإجمالية بناءً على مؤشرات متعددة",
+  "mcp.details.totalScore.legend.aGrade": "الدرجة A ({{minPercent}}-100%)",
+  "mcp.details.totalScore.legend.bGrade": "الدرجة B ({{minPercent}}-{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "الدرجة F (0-{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} نقطة",
+  "mcp.details.totalScore.popover.completedOptional": "✅ العناصر الاختيارية المكتملة ({{count}})",
+  "mcp.details.totalScore.popover.completedRequired": "✅ العناصر المطلوبة المكتملة ({{count}})",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ العناصر الاختيارية غير المكتملة ({{count}})",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ العناصر المطلوبة غير المكتملة ({{count}})",
+  "mcp.details.totalScore.popover.title": "تفاصيل التقييم",
+  "mcp.details.totalScore.ratingFormat": "التقييم: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "العناصر",
+  "mcp.details.totalScore.scoreInfo.points": "النقاط",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "العناصر المطلوبة",
+  "mcp.details.totalScore.title": "الدرجة الإجمالية",
+  "mcp.details.versions.table.isLatest": "أحدث إصدار",
+  "mcp.details.versions.table.isValidated": "تم التحقق منه",
+  "mcp.details.versions.table.publishAt": "تاريخ النشر",
+  "mcp.details.versions.table.version": "الإصدار",
+  "mcp.details.versions.title": "سجل الإصدارات",
+  "mcp.hero.desc": "مجتمع خوادم MCP مفتوح المصدر وقابل للنشر—يساعد أنظمة الذكاء الاصطناعي على الوصول إلى أنظمة الملفات وقواعد البيانات وواجهات البرمجة وغيرها من الموارد الأساسية.",
+  "mcp.hero.subTitle": "مفتوح المصدر وجاهز للتشغيل",
+  "mcp.hero.title": "مجتمع MCP مفتوح المصدر للذكاء الاصطناعي",
+  "mcp.sorts.createdAt": "أُضيف حديثًا",
+  "mcp.sorts.installCount": "عدد التثبيتات",
+  "mcp.sorts.isFeatured": "المهارات المميزة",
+  "mcp.sorts.isValidated": "المهارات المُتحقق منها",
+  "mcp.sorts.promptsCount": "عدد المحفزات",
+  "mcp.sorts.ratingCount": "عدد التقييمات",
+  "mcp.sorts.resourcesCount": "عدد الموارد",
+  "mcp.sorts.toolsCount": "عدد الأدوات",
+  "mcp.sorts.updatedAt": "تم التحديث مؤخرًا",
+  "mcp.title": "مجتمع MCP",
+  "mcp.unvalidated.desc": "لم يتم التحقق من هذا الخادم MCP بعد",
+  "mcp.unvalidated.title": "غير مُتحقق",
+  "mcp.validated.desc": "تم التحقق من هذا الخادم MCP لضمان جودته وموثوقيته.",
+  "mcp.validated.descWithDate": "تم التحقق من هذا الخادم MCP في {{date}} لضمان جودته وموثوقيته.",
+  "mcp.validated.title": "تم التحقق منه",
+  "mcpEmpty.description": "حاول تعديل الفلاتر أو البحث بكلمات مفتاحية مختلفة.",
+  "mcpEmpty.search": "لم يتم العثور على خوادم MCP مطابقة",
+  "mcpEmpty.title": "لا توجد خوادم MCP",
+  "models.abilities": "قدرات النموذج",
+  "models.chat": "بدء محادثة",
+  "models.contentLength": "الحد الأقصى لطول السياق",
+  "models.details.overview.title": "نظرة عامة",
+  "models.details.related.listTitle": "نماذج ذات صلة",
+  "models.details.related.more": "عرض المزيد",
+  "models.details.related.title": "توصيات ذات صلة",
+  "models.empty.description": "حاول تعديل الفلاتر لرؤية المزيد من النماذج",
+  "models.empty.search": "لم يتم العثور على نماذج مطابقة",
+  "models.empty.title": "لا توجد نماذج متاحة",
+  "models.free": "مجاني",
+  "models.guide": "دليل الإعداد",
+  "models.list": "قائمة النماذج",
+  "models.more": "المزيد",
+  "models.parameterList.defaultValue": "القيمة الافتراضية",
+  "models.parameterList.docs": "عرض التوثيق",
+  "models.parameterList.frequency_penalty.desc": "تتحكم هذه الإعدادات في تكرار استخدام المفردات التي ظهرت مسبقًا في الإدخال. القيم الأعلى تقلل من التكرار، بينما القيم السالبة تشجع على إعادة الاستخدام.",
+  "models.parameterList.frequency_penalty.title": "عقوبة التكرار",
+  "models.parameterList.max_tokens.desc": "يحدد هذا الإعداد الحد الأقصى لطول الرد الذي يمكن أن يولده النموذج. القيم الأعلى تسمح بردود أطول، بينما القيم الأقل تجعل الردود أكثر إيجازًا.",
+  "models.parameterList.max_tokens.title": "حد الرد الواحد",
+  "models.parameterList.presence_penalty.desc": "يتحكم هذا الإعداد في استخدام المفردات بناءً على تكرارها في الإدخال. القيم الأعلى تقلل من استخدام الكلمات المتكررة، بينما القيم السالبة تشجع على إعادة استخدامها.",
+  "models.parameterList.presence_penalty.title": "تجديد الموضوع",
+  "models.parameterList.range": "النطاق",
+  "models.parameterList.reasoning_effort.desc": "يتحكم هذا الإعداد في مستوى التفكير الذي يستخدمه النموذج قبل توليد الرد. القيم الأعلى توفر استدلالًا أعمق ولكنها أبطأ، بينما القيم الأقل أسرع ولكنها أقل دقة.",
+  "models.parameterList.reasoning_effort.title": "شدة الاستدلال",
+  "models.parameterList.temperature.desc": "يؤثر هذا الإعداد على تنوع الردود. القيم المنخفضة تؤدي إلى ردود أكثر توقعًا، بينما القيم الأعلى تنتج ردودًا أكثر تنوعًا.",
+  "models.parameterList.temperature.title": "العشوائية",
+  "models.parameterList.title": "معلمات النموذج",
+  "models.parameterList.top_p.desc": "يحدد هذا الإعداد نسبة الكلمات الأكثر احتمالًا التي يمكن للنموذج اختيارها. القيم المنخفضة تجعل الردود أكثر قابلية للتنبؤ.",
+  "models.parameterList.top_p.title": "اختيار النواة",
+  "models.parameterList.type": "النوع",
+  "models.providerInfo.apiTooltip": "يدعم LobeHub استخدام مفتاح API مخصص لهذا المزود.",
+  "models.providerInfo.input": "سعر الإدخال",
+  "models.providerInfo.inputTooltip": "التكلفة لكل مليون رمز",
+  "models.providerInfo.latency": "الكمون",
+  "models.providerInfo.latencyTooltip": "متوسط وقت الاستجابة لإرسال أول رمز",
+  "models.providerInfo.maxOutput": "الحد الأقصى لطول الإخراج",
+  "models.providerInfo.maxOutputTooltip": "أقصى عدد من الرموز يمكن أن يولدها هذا الطرف",
+  "models.providerInfo.officialTooltip": "خدمة LobeHub الرسمية",
+  "models.providerInfo.output": "سعر الإخراج",
+  "models.providerInfo.outputTooltip": "التكلفة لكل مليون رمز",
+  "models.providerInfo.streamCancellationTooltip": "يدعم هذا المزود إلغاء البث.",
+  "models.providerInfo.throughput": "معدل النقل",
+  "models.providerInfo.throughputTooltip": "متوسط عدد الرموز المنقولة في الثانية لطلبات البث",
+  "models.sorts.contextWindowTokens": "طول السياق",
+  "models.sorts.identifier": "معرف النموذج",
+  "models.sorts.inputPrice": "سعر الإدخال",
+  "models.sorts.outputPrice": "سعر الإخراج",
+  "models.sorts.providerCount": "عدد المزودين",
+  "models.sorts.releasedAt": "تم الإصدار مؤخرًا",
+  "models.suggestions": "نماذج ذات صلة",
+  "models.supportedProviders": "المزودون الداعمون لهذا النموذج",
+  "plugins.builtinTag": "مضمن",
+  "plugins.community": "مهارات المجتمع",
+  "plugins.details.settings.title": "إعدادات المهارة",
+  "plugins.details.summary.title": "ماذا يمكنك أن تفعل بهذه المهارة؟",
+  "plugins.details.tools.title": "أدوات المهارة",
+  "plugins.install": "تثبيت المهارة",
+  "plugins.installed": "مثبت",
+  "plugins.legacyTag": "قديم",
+  "plugins.list": "قائمة المهارات",
+  "plugins.meta.description": "الوصف",
+  "plugins.meta.parameter": "المعلمة",
+  "plugins.meta.title": "معلمات الأداة",
+  "plugins.meta.type": "النوع",
+  "plugins.more": "المزيد",
+  "plugins.official": "مهارات رسمية",
+  "plugins.recentSubmits": "تم التحديث مؤخرًا",
+  "plugins.sorts.createdAt": "تم النشر مؤخرًا",
+  "plugins.sorts.identifier": "معرف المهارة",
+  "plugins.sorts.title": "اسم المهارة",
+  "plugins.suggestions": "توصيات ذات صلة",
+  "providers.config": "إعداد المزود",
+  "providers.details.guide.title": "دليل التكامل",
+  "providers.details.overview.title": "نظرة عامة",
+  "providers.details.related.listTitle": "مزودون ذوو صلة",
+  "providers.details.related.more": "عرض المزيد",
+  "providers.details.related.title": "توصيات ذات صلة",
+  "providers.empty.description": "حاول تعديل الفلاتر لرؤية المزيد من المزودين.",
+  "providers.empty.search": "لم يتم العثور على مزودين مطابقين",
+  "providers.empty.title": "لا يوجد مزودون",
+  "providers.list": "قائمة المزودين",
+  "providers.modelCount": "{{count}} نموذج",
+  "providers.modelName": "اسم النموذج",
+  "providers.modelSite": "توثيق النموذج",
+  "providers.more": "المزيد",
+  "providers.officialSite": "الموقع الرسمي",
+  "providers.showAllModels": "عرض جميع النماذج",
+  "providers.sorts.default": "الافتراضي",
+  "providers.sorts.identifier": "معرف المزود",
+  "providers.sorts.modelCount": "عدد النماذج",
+  "providers.suggestions": "مزودون ذوو صلة",
+  "providers.supportedModels": "النماذج المدعومة",
+  "publishedTime": "تاريخ النشر",
+  "search.placeholder": "ابحث بالاسم أو الوصف أو الكلمات المفتاحية...",
+  "search.result": "{{count}} نتيجة حول <highlight>{{keyword}}</highlight>",
+  "search.searching": "جارٍ البحث...",
+  "tab.assistant": "الوكيل",
+  "tab.home": "الرئيسية",
+  "tab.model": "النموذج",
+  "tab.plugin": "المهارة",
+  "tab.provider": "المزود",
+  "tab.user": "المستخدم",
+  "user.agents": "الوكلاء",
+  "user.downloads": "التنزيلات",
+  "user.editProfile": "تعديل الملف الشخصي",
+  "user.favoriteAgents": "الوكلاء المحفوظون",
+  "user.favoritePlugins": "المهارات المحفوظة",
+  "user.follow": "متابعة",
+  "user.followers": "المتابعون",
+  "user.following": "يتابع",
+  "user.login": "كن منشئًا",
+  "user.logout": "تسجيل الخروج",
+  "user.myProfile": "ملفي الشخصي",
+  "user.noAgents": "لم ينشر هذا المستخدم أي وكلاء بعد",
+  "user.noFavoriteAgents": "لا يوجد وكلاء محفوظون بعد",
+  "user.noFavoritePlugins": "لا توجد مهارات محفوظة بعد",
+  "user.publishedAgents": "الوكلاء المنشؤون",
+  "user.tabs.favorites": "المفضلة",
+  "user.tabs.publishedAgents": "تم الإنشاء",
+  "user.unfavorite": "إلغاء الحفظ",
+  "user.unfavoriteFailed": "فشل في إلغاء الحفظ",
+  "user.unfavoriteSuccess": "تم إلغاء الحفظ",
+  "user.unfollow": "إلغاء المتابعة",
+  "user.website": "الموقع الإلكتروني"
 }

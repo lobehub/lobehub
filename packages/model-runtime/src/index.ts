@@ -36,6 +36,7 @@ export { LobeXiaomiMiMoAI } from './providers/xiaomimimo';
 export { LobeZenMuxAI } from './providers/zenmux';
 export { LobeZeroOneAI } from './providers/zeroone';
 export { LobeZhipuAI } from './providers/zhipu';
+export { LobeHubAI } from './providers/lobehub';
 export * from './types';
 export * from './types/error';
 export { consumeStreamUntilDone } from './utils/consumeStream';

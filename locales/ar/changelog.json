@@ -1,18 +1,14 @@
 {
-  "actions": {
-    "followOnX": "تابعنا على X",
-    "subscribeToUpdates": "اشترك في التحديثات",
-    "versions": "تفاصيل الإصدار"
-  },
-  "addedWhileAway": "لقد أضفنا ميزات جديدة أثناء غيابك.",
-  "allChangelog": "عرض جميع سجلات التحديثات",
-  "description": "تابع الميزات الجديدة والتحسينات في {{appName}}",
-  "pagination": {
-    "next": "الصفحة التالية",
-    "older": "عرض التغييرات السابقة"
-  },
+  "actions.followOnX": "تابعنا على X",
+  "actions.subscribeToUpdates": "اشترك للحصول على التحديثات",
+  "actions.versions": "تفاصيل الإصدار",
+  "addedWhileAway": "قمنا بإضافة ميزات جديدة أثناء غيابك.",
+  "allChangelog": "عرض جميع سجلات التغييرات",
+  "description": "ابقَ على اطلاع بآخر الميزات والتحسينات في {{appName}}",
+  "pagination.next": "الصفحة التالية",
+  "pagination.older": "عرض التغييرات السابقة",
   "readDetails": "اقرأ التفاصيل",
-  "title": "سجل التحديثات",
+  "title": "سجل التغييرات",
   "versionDetails": "تفاصيل الإصدار",
   "welcomeBack": "مرحبًا بعودتك!"
 }

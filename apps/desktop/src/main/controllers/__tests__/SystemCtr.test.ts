@@ -44,6 +44,22 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(() => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    return {
+      on: vi.fn((event: string, cb: (...args: any[]) => void) => {
+        handlers.set(event, cb);
+        return undefined;
+      }),
+    } as any;
+  }),
+}));
+
+vi.mock('node:child_process', () => ({
+  spawn: (...args: any[]) => spawnMock.call(null, ...args),
+}));
+
 // Mock electron
 vi.mock('electron', () => ({
   app: {
@@ -61,6 +77,8 @@ vi.mock('electron', () => ({
     openExternal: vi.fn().mockResolvedValue(undefined),
   },
   systemPreferences: {
+    askForMediaAccess: vi.fn(async () => true),
+    getMediaAccessStatus: vi.fn(() => 'not-determined'),
     isTrustedAccessibilityClient: vi.fn(() => true),
   },
 }));
@@ -73,6 +91,14 @@ vi.mock('electron-is', () => ({
 // Mock browserManager
 const mockBrowserManager = {
   broadcastToAllWindows: vi.fn(),
+  getMainWindow: vi.fn(() => ({
+    browserWindow: {
+      isDestroyed: vi.fn(() => false),
+      webContents: {
+        executeJavaScript: vi.fn(async () => true),
+      },
+    },
+  })),
   handleAppThemeChange: vi.fn(),
 };
 
@@ -139,25 +165,89 @@ describe('SystemController', () => {
     });
   });
 
-  describe('checkAccessibilityForMacOS', () => {
-    it('should check accessibility on macOS', async () => {
+  describe('accessibility', () => {
+    it('should request accessibility access on macOS', async () => {
       const { systemPreferences } = await import('electron');
 
-      await invokeIpc('system.checkAccessibilityForMacOS');
+      await invokeIpc('system.requestAccessibilityAccess');
 
       expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(true);
     });
 
-    it('should return undefined on non-macOS', async () => {
+    it('should return true on non-macOS when requesting accessibility access', async () => {
       const { macOS } = await import('electron-is');
+      const { systemPreferences } = await import('electron');
       vi.mocked(macOS).mockReturnValue(false);
 
-      const result = await invokeIpc('system.checkAccessibilityForMacOS');
+      const result = await invokeIpc('system.requestAccessibilityAccess');
 
-      expect(result).toBeUndefined();
+      expect(result).toBe(true);
+      expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
 
       // Reset
       vi.mocked(macOS).mockReturnValue(true);
+    });
+  });
+
+  describe('screen recording', () => {
+    it('should request screen recording access and open System Settings on macOS', async () => {
+      const { shell, systemPreferences } = await import('electron');
+
+      const result = await invokeIpc('system.requestScreenAccess');
+
+      expect(systemPreferences.getMediaAccessStatus).toHaveBeenCalledWith('screen');
+      expect(systemPreferences.askForMediaAccess).toHaveBeenCalledWith('screen');
+      expect(mockBrowserManager.getMainWindow).toHaveBeenCalled();
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+      );
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('should return true on non-macOS and not open settings', async () => {
+      const { macOS } = await import('electron-is');
+      const { shell, systemPreferences } = await import('electron');
+      vi.mocked(macOS).mockReturnValue(false);
+
+      const result = await invokeIpc('system.requestScreenAccess');
+
+      expect(result).toBe(true);
+      expect(systemPreferences.askForMediaAccess).not.toHaveBeenCalled();
+      expect(shell.openExternal).not.toHaveBeenCalled();
+
+      // Reset
+      vi.mocked(macOS).mockReturnValue(true);
+    });
+  });
+
+  describe('full disk access', () => {
+    it('should try to open Full Disk Access settings with fallbacks', async () => {
+      const { shell } = await import('electron');
+      vi.mocked(shell.openExternal)
+        .mockRejectedValueOnce(new Error('fail first'))
+        .mockResolvedValueOnce(undefined);
+
+      await invokeIpc('system.openFullDiskAccessSettings');
+
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'com.apple.settings:Privacy&path=FullDiskAccess',
+      );
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+      );
+    });
+
+    it('should spawn osascript when autoAdd is enabled', async () => {
+      const { shell } = await import('electron');
+      vi.mocked(shell.openExternal).mockResolvedValueOnce(undefined);
+
+      await invokeIpc('system.openFullDiskAccessSettings', { autoAdd: true });
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'osascript',
+        expect.arrayContaining(['-e', expect.any(String), expect.any(String)]),
+        expect.objectContaining({ env: expect.any(Object) }),
+      );
     });
   });
 

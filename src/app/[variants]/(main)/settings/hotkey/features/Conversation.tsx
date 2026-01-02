@@ -1,7 +1,7 @@
 'use client';
 
 import { Form, type FormGroupItemType, HotkeyInput, Icon } from '@lobehub/ui';
-import { Skeleton } from 'antd';
+import { Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,7 +12,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { HotkeyGroupEnum, HotkeyItem } from '@/types/hotkey';
+import { HotkeyGroupEnum, type HotkeyItem } from '@/types/hotkey';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
@@ -39,14 +39,9 @@ const HotkeySetting = memo(() => {
           hotkeyConflicts={hotkeyConflicts}
           placeholder={t('hotkey.record')}
           resetValue={item.keys}
-          texts={{
-            conflicts: t('hotkey.conflicts'),
-            invalidCombination: t('hotkey.invalidCombination'),
-            reset: t('hotkey.reset'),
-          }}
         />
       ),
-      desc: hotkeyMeta[item.id].desc ? t(`${item.id}.desc`, { ns: 'hotkey' }) : undefined,
+      desc: hotkeyMeta[`${item.id}.desc`] ? t(`${item.id}.desc`, { ns: 'hotkey' }) : undefined,
       label: t(`${item.id}.title`, { ns: 'hotkey' }),
       name: item.id,
     };
@@ -62,6 +57,7 @@ const HotkeySetting = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={hotkey}
       items={[conversation]}
@@ -71,7 +67,7 @@ const HotkeySetting = memo(() => {
         await setSettings({ hotkey: values });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

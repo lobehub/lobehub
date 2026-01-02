@@ -3,14 +3,14 @@ import { Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiProviderSelectors } from '@/store/aiInfra';
 
 import { createHeaderWithAuth } from '../_auth';
-import { initializeWithClientStore } from '../chat/clientModelRuntime';
 import { resolveRuntimeProvider } from '../chat/helper';
+import { initializeWithClientStore } from '../chat/mecha';
 import { ModelsService } from '../models';
 
 vi.stubGlobal('fetch', vi.fn());
 
 vi.mock('@/const/version', () => ({
-  isDeprecatedEdition: false,
+  isDesktop: false,
 }));
 
 vi.mock('../_auth', () => ({
@@ -21,7 +21,7 @@ vi.mock('../chat/helper', () => ({
   resolveRuntimeProvider: vi.fn((provider: string) => provider),
 }));
 
-vi.mock('../chat/clientModelRuntime', () => ({
+vi.mock('../chat/mecha', () => ({
   initializeWithClientStore: vi.fn(),
 }));
 

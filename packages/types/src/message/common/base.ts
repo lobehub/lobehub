@@ -1,11 +1,11 @@
-import type { ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import { z } from 'zod';
 
+import type { ILobeAgentRuntimeErrorType } from '../../agentRuntime';
 import { ErrorType } from '../../fetch';
 
 /**
- * 聊天消息错误对象
+ * Chat message error object
  */
 export interface ChatMessageError {
   body?: any;

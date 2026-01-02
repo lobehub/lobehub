@@ -1,32 +1,31 @@
-import { Button, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Button, Center, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { BrainIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 
 import CreateNewModelModal from './CreateNewModelModal';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   circle: css`
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   container: css`
     width: 100%;
-    border: 1px dashed ${token.colorBorder};
+    border: 1px dashed ${cssVar.colorBorder};
     border-radius: 12px;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   description: css`
     max-width: 280px;
 
-    font-size: ${token.fontSize}px;
-    color: ${token.colorTextDescription};
+    font-size: ${cssVar.fontSize};
+    color: ${cssVar.colorTextDescription};
     text-align: center;
     text-wrap: balance;
   `,
@@ -37,17 +36,16 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   sparklesIcon: css`
     font-size: 40px;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   title: css`
-    font-size: ${token.fontSizeLG}px;
+    font-size: ${cssVar.fontSizeLG};
     font-weight: 500;
   `,
 }));
 
 const EmptyState = memo<{ provider: string }>(({ provider }) => {
   const { t } = useTranslation('modelProvider');
-  const { styles } = useStyles();
 
   const [fetchRemoteModelList] = useAiInfraStore((s) => [s.fetchRemoteModelList]);
 

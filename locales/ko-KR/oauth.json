@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "허용",
-      "deny": "거부"
-    },
-    "description": "{{clientName}} 애플리케이션이 귀하의 계정 권한을 요청하고 있습니다",
-    "error": {
-      "sessionInvalid": {
-        "message": "인증 세션이 만료되었거나 유효하지 않습니다. 다시 인증 절차를 시작해 주세요.",
-        "title": "유효하지 않은 인증 세션"
-      },
-      "title": "오류 발생",
-      "unsupportedInteraction": {
-        "message": "지원되지 않는 상호작용 유형: {promptName}",
-        "title": "지원되지 않는 상호작용 유형"
-      }
-    },
-    "permissionsTitle": "다음 권한을 요청합니다:",
-    "redirectUri": "인증이 완료되면 다음으로 리디렉션됩니다:",
-    "redirecting": "인증이 완료되었습니다. 이동 중...",
-    "scope": {
-      "email": "귀하의 이메일 주소에 접근",
-      "offline_access": "클라이언트가 귀하의 데이터에 접근할 수 있도록 허용",
-      "openid": "귀하의 LobeChat 계정으로 인증",
-      "profile": "기본 프로필 정보(이름, 아바타 등)에 접근",
-      "sync-read": "동기화된 데이터를 읽기",
-      "sync-write": "동기화된 데이터를 쓰고 업데이트"
-    },
-    "title": "{{clientName}} 권한 요청"
-  },
-  "error": {
-    "backToHome": "홈으로 돌아가기",
-    "desc": "OAuth 인증에 실패했습니다. 실패 사유: {{reason}}",
-    "reason": {
-      "internal_error": "서버 오류",
-      "invalid_request": "잘못된 요청 매개변수"
-    },
-    "title": "인증 실패"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "애플리케이션이 인증을 처리 중입니다. 곧 다음 페이지로 이동합니다...",
-      "success": "데스크톱 애플리케이션을 열려고 시도했습니다. 자동으로 열리지 않는 경우 수동으로 전환해 주세요. 이 브라우저 창은 나중에 닫으셔도 됩니다."
-    },
-    "title": {
-      "processing": "인증 처리 중...",
-      "success": "인증 완료"
-    }
-  },
-  "login": {
-    "button": "로그인 확인",
-    "description": "{{clientName}} 애플리케이션이 귀하의 계정으로 로그인하려고 합니다",
-    "title": "{{clientName}} 로그인",
-    "userWelcome": "다시 오신 것을 환영합니다,"
-  },
-  "success": {
-    "subTitle": "애플리케이션이 귀하의 계정에 성공적으로 접근할 수 있도록 권한이 부여되었습니다. 이 페이지를 닫으셔도 됩니다.",
-    "title": "인증 성공"
-  }
+  "consent.buttons.accept": "허용",
+  "consent.buttons.deny": "거부",
+  "consent.description": "{{clientName}} 애플리케이션이 귀하의 계정 권한을 요청하고 있습니다",
+  "consent.error.sessionInvalid.message": "인증 세션이 만료되었거나 유효하지 않습니다. 다시 인증 절차를 시작해 주세요.",
+  "consent.error.sessionInvalid.title": "유효하지 않은 인증 세션",
+  "consent.error.title": "오류 발생",
+  "consent.error.unknown.message": "권한 세부 정보를 가져오는 중 알 수 없는 오류가 발생했습니다",
+  "consent.error.unsupportedInteraction.message": "지원되지 않는 상호작용 유형: {promptName}",
+  "consent.error.unsupportedInteraction.title": "지원되지 않는 상호작용 유형",
+  "consent.permissionsTitle": "다음 권한을 요청합니다:",
+  "consent.redirectUri": "인증이 완료되면 다음으로 리디렉션됩니다:",
+  "consent.redirecting": "인증이 완료되었습니다. 이동 중...",
+  "consent.scope.email": "귀하의 이메일 주소에 접근",
+  "consent.scope.offline_access": "클라이언트가 귀하의 데이터에 접근할 수 있도록 허용",
+  "consent.scope.openid": "귀하의 LobeChat 계정으로 인증",
+  "consent.scope.profile": "기본 프로필 정보(이름, 아바타 등)에 접근",
+  "consent.scope.sync-read": "동기화된 데이터를 읽기",
+  "consent.scope.sync-write": "동기화된 데이터를 쓰고 업데이트",
+  "consent.title": "{{clientName}} 권한 요청",
+  "error.backToHome": "홈으로 돌아가기",
+  "error.desc": "OAuth 인증에 실패했습니다. 실패 사유: {{reason}}",
+  "error.reason.internal_error": "서버 오류",
+  "error.reason.invalid_request": "잘못된 요청 매개변수",
+  "error.title": "인증 실패",
+  "handoff.desc.processing": "애플리케이션이 인증을 처리 중입니다. 곧 다음 페이지로 이동합니다...",
+  "handoff.desc.success": "데스크톱 애플리케이션을 열려고 시도했습니다. 자동으로 열리지 않는 경우 수동으로 전환해 주세요. 이 브라우저 창은 나중에 닫으셔도 됩니다.",
+  "handoff.title.processing": "인증 처리 중...",
+  "handoff.title.success": "인증 완료",
+  "login.button": "로그인 확인",
+  "login.description": "{{clientName}} 애플리케이션이 귀하의 계정으로 로그인하려고 합니다",
+  "login.title": "{{clientName}} 로그인",
+  "login.userWelcome": "다시 오신 것을 환영합니다,",
+  "success.subTitle": "애플리케이션이 귀하의 계정에 성공적으로 접근할 수 있도록 권한이 부여되었습니다. 이 페이지를 닫으셔도 됩니다.",
+  "success.title": "인증 성공"
 }

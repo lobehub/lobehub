@@ -1,12 +1,13 @@
 import {
-  ChatMessageExtra,
-  ChatPluginPayload,
-  ChatToolPayload,
-  CreateMessageParams,
-  MessagePluginItem,
-  UIChatMessage,
+  type ChatMessageExtra,
+  type ChatPluginPayload,
+  type ChatToolPayload,
+  type CreateMessageParams,
+  type MessagePluginItem,
+  type UIChatMessage,
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
+import i18n from 'i18next';
 import { produce } from 'immer';
 
 import { merge } from '@/utils/merge';
@@ -248,7 +249,7 @@ export const messagesReducer = (
     }
 
     default: {
-      throw new Error('暂未实现的 type，请检查 reducer');
+      throw new Error(i18n.t('errors.unimplementedType', { ns: 'common' }));
     }
   }
 };

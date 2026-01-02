@@ -1,5 +1,5 @@
 import { lambdaClient } from '@/libs/trpc/client';
-import { CreateKnowledgeBaseParams } from '@/types/knowledgeBase';
+import { type CreateKnowledgeBaseParams } from '@/types/knowledgeBase';
 
 class KnowledgeBaseService {
   createKnowledgeBase = async (params: CreateKnowledgeBaseParams) => {

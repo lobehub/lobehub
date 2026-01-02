@@ -1,10 +1,17 @@
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { importJWK, jwtVerify } from 'jose';
 
-import { oidcEnv } from '@/envs/oidc';
+import { authEnv } from '@/envs/auth';
 
 const log = debug('oidc-jwt');
+
+/**
+ * Get JWKS key string from environment
+ * Uses JWKS_KEY which already has fallback to OIDC_JWKS_KEY in authEnv
+ */
+const getJwksKeyString = () => {
+  return authEnv.JWKS_KEY;
+};
 
 /**
  * 从环境变量中获取 JWKS
@@ -12,11 +19,11 @@ const log = debug('oidc-jwt');
  */
 export const getJWKS = (): object => {
   try {
-    const jwksString = oidcEnv.OIDC_JWKS_KEY;
+    const jwksString = getJwksKeyString();
 
     if (!jwksString) {
       throw new Error(
-        'OIDC_JWKS_KEY 环境变量是必需的。请使用 scripts/generate-oidc-jwk.mjs 生成 JWKS。',
+        'JWKS_KEY 环境变量是必需的。请使用 scripts/generate-oidc-jwk.mjs 生成 JWKS。',
       );
     }
 
@@ -37,16 +44,16 @@ export const getJWKS = (): object => {
     return jwks;
   } catch (error) {
     console.error('解析 JWKS 失败:', error);
-    throw new Error(`OIDC_JWKS_KEY 解析错误: ${(error as Error).message}`);
+    throw new Error(`JWKS_KEY 解析错误: ${(error as Error).message}`);
   }
 };
 
 const getVerificationKey = async () => {
   try {
-    const jwksString = oidcEnv.OIDC_JWKS_KEY;
+    const jwksString = getJwksKeyString();
 
     if (!jwksString) {
-      throw new Error('OIDC_JWKS_KEY 环境变量未设置');
+      throw new Error('JWKS_KEY 环境变量未设置');
     }
 
     const jwks = JSON.parse(jwksString);
@@ -76,11 +83,13 @@ const getVerificationKey = async () => {
       (key) => (publicKeyJwk as any)[key] === undefined && delete (publicKeyJwk as any)[key],
     );
 
+    const { importJWK } = await import('jose');
+
     // 现在，无论在哪个环境下，`importJWK` 都会将这个对象正确地识别为一个公钥。
     return await importJWK(publicKeyJwk, 'RS256');
   } catch (error) {
     log('获取 JWKS 公钥失败: %O', error);
-    throw new Error(`JWKS 公key获取失败: ${(error as Error).message}`);
+    throw new Error(`JWKS_KEY 公钥获取失败: ${(error as Error).message}`);
   }
 };
 
@@ -97,6 +106,7 @@ export const validateOIDCJWT = async (token: string) => {
     const publicKey = await getVerificationKey();
 
     // 验证 JWT
+    const { jwtVerify } = await import('jose');
     const { payload } = await jwtVerify(token, publicKey, {
       algorithms: ['RS256'],
       // 可以添加其他验证选项，如 issuer、audience 等

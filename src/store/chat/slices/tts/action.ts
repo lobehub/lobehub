@@ -1,8 +1,8 @@
-import { ChatTTS } from '@lobechat/types';
-import { StateCreator } from 'zustand/vanilla';
+import { type ChatTTS } from '@lobechat/types';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { messageService } from '@/services/message';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
 /**
  * enhance chat action like translate,tts

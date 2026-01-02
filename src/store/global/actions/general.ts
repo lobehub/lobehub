@@ -1,7 +1,7 @@
-import { ThemeMode } from 'antd-style';
+import { type ThemeMode } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
-import { SWRResponse } from 'swr';
+import { type SWRResponse } from 'swr';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { LOBE_THEME_APPEARANCE } from '@/const/theme';
@@ -9,7 +9,7 @@ import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalService } from '@/services/global';
 import type { SystemStatus } from '@/store/global/initialState';
-import { LocaleMode } from '@/types/locale';
+import { type LocaleMode } from '@/types/locale';
 import { setCookie } from '@/utils/client/cookie';
 import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
@@ -20,8 +20,8 @@ import type { GlobalStore } from '../store';
 const n = setNamespace('g');
 
 export interface GlobalGeneralAction {
-  openSessionInNewWindow: (sessionId: string) => Promise<void>;
-  openTopicInNewWindow: (sessionId: string, topicId: string) => Promise<void>;
+  openAgentInNewWindow: (agentId: string) => Promise<void>;
+  openTopicInNewWindow: (agentId: string, topicId: string) => Promise<void>;
   switchLocale: (locale: LocaleMode, params?: { skipBroadcast?: boolean }) => void;
   switchThemeMode: (themeMode: ThemeMode, params?: { skipBroadcast?: boolean }) => void;
   updateSystemStatus: (status: Partial<SystemStatus>, action?: any) => void;
@@ -35,45 +35,65 @@ export const generalActionSlice: StateCreator<
   [],
   GlobalGeneralAction
 > = (set, get) => ({
-  openSessionInNewWindow: async (sessionId: string) => {
-    if (!isDesktop) return;
+  openAgentInNewWindow: async (agentId: string) => {
+    const url = `/agent/${agentId}${isDesktop ? '?mode=single' : ''}`;
 
-    try {
-      const { ensureElectronIpc } = await import('@/utils/electron/ipc');
-      const url = `/chat?session=${sessionId}&mode=single`;
+    if (isDesktop) {
+      try {
+        const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+        const path = `/agent/${agentId}?mode=single`;
 
-      const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
-        path: url,
-        templateId: 'chatSingle',
-        uniqueId: `chat_${sessionId}`,
-      });
+        const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
+          path,
+          templateId: 'chatSingle',
+          uniqueId: `chat_${agentId}`,
+        });
 
-      if (!result.success) {
-        console.error('Failed to open session in new window:', result.error);
+        if (!result.success) {
+          console.error('Failed to open agent in new window:', result.error);
+        }
+      } catch (error) {
+        console.error('Error opening agent in new window:', error);
       }
-    } catch (error) {
-      console.error('Error opening session in new window:', error);
+    } else {
+      // Open in popup window for browser
+      const width = 1200;
+      const height = 800;
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+      const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+      window.open(url, `agent_${agentId}`, features);
     }
   },
 
-  openTopicInNewWindow: async (sessionId: string, topicId: string) => {
-    if (!isDesktop) return;
+  openTopicInNewWindow: async (agentId: string, topicId: string) => {
+    const url = `/agent/${agentId}?topic=${topicId}${isDesktop ? '&mode=single' : ''}`;
 
-    try {
-      const { ensureElectronIpc } = await import('@/utils/electron/ipc');
-      const url = `/chat?session=${sessionId}&topic=${topicId}&mode=single`;
+    if (isDesktop) {
+      try {
+        const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+        const path = `/agent/${agentId}?topic=${topicId}&mode=single`;
 
-      const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
-        path: url,
-        templateId: 'chatSingle',
-        uniqueId: `chat_${sessionId}_${topicId}`,
-      });
+        const result = await ensureElectronIpc().windows.createMultiInstanceWindow({
+          path,
+          templateId: 'chatSingle',
+          uniqueId: `chat_${agentId}_${topicId}`,
+        });
 
-      if (!result.success) {
-        console.error('Failed to open topic in new window:', result.error);
+        if (!result.success) {
+          console.error('Failed to open topic in new window:', result.error);
+        }
+      } catch (error) {
+        console.error('Error opening topic in new window:', error);
       }
-    } catch (error) {
-      console.error('Error opening topic in new window:', error);
+    } else {
+      // Open in popup window for browser
+      const width = 1200;
+      const height = 800;
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+      const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+      window.open(url, `agent_${agentId}_topic_${topicId}`, features);
     }
   },
 
@@ -103,6 +123,7 @@ export const generalActionSlice: StateCreator<
       (async () => {
         try {
           const { ensureElectronIpc } = await import('@/utils/electron/ipc');
+
           await ensureElectronIpc().system.updateThemeModeHandler(themeMode);
         } catch (error) {
           console.error('Failed to update theme in main process:', error);
@@ -153,7 +174,14 @@ export const generalActionSlice: StateCreator<
         onSuccess: (status) => {
           set({ isStatusInit: true }, false, 'setStatusInit');
 
-          get().updateSystemStatus(status, 'initSystemStatus');
+          // Reset transient UI states that should not persist across page reloads
+          const statusWithResetTransientStates = {
+            ...status,
+            showCommandMenu: false,
+            showHotkeyHelper: false,
+          };
+
+          get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus');
         },
       },
     ),

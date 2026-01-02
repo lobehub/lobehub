@@ -1,8 +1,8 @@
 import { Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { PropsWithChildren, memo } from 'react';
+import { createStaticStyles, cx } from 'antd-style';
+import { type PropsWithChildren, memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     desc: css`
       overflow: hidden;
@@ -15,13 +15,13 @@ const useStyles = createStyles(({ css, token }) => {
 
       font-size: 14px;
       line-height: 28px;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
       text-overflow: ellipsis;
 
       transition:
-        margin-block-start 0.3s ${token.motionEaseInOut},
-        height 0.3s ${token.motionEaseInOut},
-        opacity 0.2s ${token.motionEaseInOut};
+        margin-block-start 0.3s ${cssVar.motionEaseInOut},
+        height 0.3s ${cssVar.motionEaseInOut},
+        opacity 0.2s ${cssVar.motionEaseInOut};
     `,
     hideDesc: css`
       height: 0;
@@ -32,8 +32,6 @@ const useStyles = createStyles(({ css, token }) => {
 });
 
 const CollapseDesc = memo<PropsWithChildren<{ hide?: boolean }>>(({ children, hide }) => {
-  const { cx, styles } = useStyles();
-
   return (
     <Text as={'p'} className={cx(styles.desc, hide && styles.hideDesc)}>
       {children}

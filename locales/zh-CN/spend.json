@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS（每秒令牌数）：每秒生成的令牌数量",
+  "duration.TTFT": "TTFT（首令牌时间）：生成首个令牌的延迟",
+  "duration.completion": "输出完成时间",
+  "duration.latency": "耗时",
+  "duration.stage.end": "结束",
+  "duration.stage.firstToken": "首个令牌",
+  "duration.stage.start": "开始",
+  "table.columns.TTFT.tooltip": "首令牌时间，单位：秒",
+  "table.columns.duration": "耗时",
+  "table.columns.model": "模型",
+  "table.columns.spend": "消耗积分",
+  "table.columns.startTime": "创建时间",
+  "table.columns.totalTokens": "令牌使用量",
+  "table.columns.type.enums.chat": "文本生成",
+  "table.columns.type.enums.imageGeneration": "图像生成",
+  "table.columns.type.title": "类型",
+  "table.desc": "展示文本生成、嵌入、图像生成等功能的计算积分使用详情。",
+  "table.more": "查看详情",
+  "table.title": "计算积分使用详情",
+  "table.totalToken.input": "输入",
+  "table.totalToken.output": "输出"
+}

@@ -5,8 +5,8 @@ import type { Transporter } from 'nodemailer';
 
 import { emailEnv } from '@/envs/email';
 
-import { EmailPayload, EmailResponse, EmailServiceImpl } from '../type';
-import { NodemailerConfig } from './type';
+import { type EmailPayload, type EmailResponse, type EmailServiceImpl } from '../type';
+import { type NodemailerConfig } from './type';
 
 const log = debug('lobe-email:Nodemailer');
 

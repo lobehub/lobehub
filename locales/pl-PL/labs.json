@@ -1,18 +1,10 @@
 {
-  "desc": "Tutaj będziemy okresowo aktualizować nowe funkcje, które obecnie testujemy — zapraszamy do wypróbowania!",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "Grupowanie wiadomości asystenta i wyników wywołań narzędzi w jednym widoku",
-      "title": "Grupowanie wiadomości asystenta"
-    },
-    "groupChat": {
-      "desc": "Włącz możliwość organizowania czatów grupowych z wieloma agentami.",
-      "title": "Czat grupowy (wielu agentów)"
-    },
-    "inputMarkdown": {
-      "desc": "Renderowanie Markdown (pogrubienie, bloki kodu, tabele itp.) w czasie rzeczywistym w polu wprowadzania.",
-      "title": "Renderowanie Markdown w polu tekstowym"
-    }
-  },
+  "desc": "Tutaj znajdziesz okazjonalne aktualizacje dotyczące nowych funkcji, które testujemy — śmiało wypróbuj je samodzielnie!",
+  "features.assistantMessageGroup.desc": "Grupuj wiadomości agenta i wyniki wywołań narzędzi razem do wyświetlenia",
+  "features.assistantMessageGroup.title": "Grupowanie Wiadomości Agenta",
+  "features.groupChat.desc": "Włącz koordynację czatu grupowego z wieloma agentami.",
+  "features.groupChat.title": "Czat Grupowy (Wielu Agentów)",
+  "features.inputMarkdown.desc": "Renderuj Markdown w polu wprowadzania w czasie rzeczywistym (pogrubiony tekst, bloki kodu, tabele itp.).",
+  "features.inputMarkdown.title": "Renderowanie Markdown w Polu Wprowadzania",
   "title": "Laboratorium"
 }

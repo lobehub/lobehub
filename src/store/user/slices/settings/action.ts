@@ -6,13 +6,13 @@ import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { shareService } from '@/services/share';
 import { userService } from '@/services/user';
 import type { UserStore } from '@/store/user';
-import { LobeAgentSettings } from '@/types/session';
+import { type LobeAgentSettings } from '@/types/session';
 import {
-  SystemAgentItem,
-  UserGeneralConfig,
-  UserKeyVaults,
-  UserSettings,
-  UserSystemAgentConfigKey,
+  type SystemAgentItem,
+  type UserGeneralConfig,
+  type UserKeyVaults,
+  type UserSettings,
+  type UserSystemAgentConfigKey,
 } from '@/types/user/settings';
 import { difference } from '@/utils/difference';
 import { merge } from '@/utils/merge';

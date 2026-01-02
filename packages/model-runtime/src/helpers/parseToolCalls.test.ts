@@ -92,6 +92,77 @@ describe('parseToolCalls', () => {
     ]);
   });
 
+  it('should handle parallel tool calls with same index but different ids (Gemini behavior)', () => {
+    // This tests the scenario where Gemini sends multiple tool calls in separate chunks
+    // with the same index: 0 but different ids
+    const origin = [
+      {
+        id: 'get_temperature_0_abc123',
+        type: 'function',
+        function: { name: 'get_temperature', arguments: '{"location":"Paris"}' },
+      },
+    ];
+
+    // Second tool call comes with same index: 0 but different id
+    const chunk = [
+      {
+        index: 0,
+        id: 'get_temperature_0_def456',
+        type: 'function',
+        function: { name: 'get_temperature', arguments: '{"location":"London"}' },
+      },
+    ];
+
+    const result = parseToolCalls(origin, chunk);
+
+    // Should create a new tool call instead of concatenating arguments
+    expect(result).toEqual([
+      {
+        id: 'get_temperature_0_abc123',
+        type: 'function',
+        function: { name: 'get_temperature', arguments: '{"location":"Paris"}' },
+      },
+      {
+        id: 'get_temperature_0_def456',
+        type: 'function',
+        function: { name: 'get_temperature', arguments: '{"location":"London"}' },
+      },
+    ]);
+
+    // Verify arguments are NOT concatenated (the bug we're fixing)
+    expect(result[0].function.arguments).not.toContain('London');
+    expect(result[1].function.arguments).not.toContain('Paris');
+  });
+
+  it('should merge arguments when same id appears in subsequent chunks', () => {
+    const origin = [
+      {
+        id: 'tool_1',
+        type: 'function',
+        function: { name: 'func', arguments: '{"ke' },
+      },
+    ];
+
+    // Same id in subsequent chunk - should merge arguments
+    const chunk = [
+      {
+        index: 0,
+        id: 'tool_1',
+        function: { arguments: 'y":"value"}' },
+      },
+    ];
+
+    const result = parseToolCalls(origin, chunk);
+
+    expect(result).toEqual([
+      {
+        id: 'tool_1',
+        type: 'function',
+        function: { name: 'func', arguments: '{"key":"value"}' },
+      },
+    ]);
+  });
+
   it('should throw error if incomplete tool calls data', () => {
     const origin = [
       {

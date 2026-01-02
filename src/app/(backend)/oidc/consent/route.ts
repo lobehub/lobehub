@@ -1,6 +1,6 @@
 import { correctOIDCUrl, getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { OIDCService } from '@/server/services/oidc';
 

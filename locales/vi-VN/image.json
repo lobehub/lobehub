@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Tỷ lệ",
-      "lock": "Khóa tỷ lệ khung hình",
-      "unlock": "Mở khóa tỷ lệ khung hình"
-    },
-    "cfg": {
-      "label": "Cường độ hướng dẫn"
-    },
-    "header": {
-      "desc": "Mô tả ngắn gọn, sáng tạo ngay lập tức",
-      "title": "Vẽ tranh"
-    },
-    "height": {
-      "label": "Chiều cao"
-    },
-    "imageNum": {
-      "label": "Số lượng ảnh"
-    },
-    "imageUrl": {
-      "label": "Hình tham khảo"
-    },
-    "imageUrls": {
-      "label": "Ảnh tham khảo"
-    },
-    "model": {
-      "label": "Mô hình"
-    },
-    "prompt": {
-      "placeholder": "Mô tả nội dung bạn muốn tạo"
-    },
-    "quality": {
-      "label": "Chất lượng hình ảnh",
-      "options": {
-        "hd": "Độ nét cao",
-        "standard": "Tiêu chuẩn"
-      }
-    },
-    "resolution": {
-      "label": "Độ phân giải",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Hạt giống",
-      "random": "Hạt giống ngẫu nhiên"
-    },
-    "size": {
-      "label": "Kích thước"
-    },
-    "steps": {
-      "label": "Số bước"
-    },
-    "title": "Vẽ AI",
-    "width": {
-      "label": "Chiều rộng"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Áp dụng hạt giống",
-      "copyError": "Sao chép lỗi",
-      "copyPrompt": "Sao chép lời nhắc",
-      "copySeed": "Sao chép hạt giống",
-      "delete": "Xóa",
-      "deleteBatch": "Xóa lô",
-      "download": "Tải xuống",
-      "downloadFailed": "Tải ảnh thất bại",
-      "errorCopied": "Thông tin lỗi đã được sao chép vào bộ nhớ tạm",
-      "errorCopyFailed": "Sao chép thông tin lỗi thất bại",
-      "generate": "Tạo",
-      "promptCopied": "Từ khóa đã được sao chép vào bộ nhớ tạm",
-      "promptCopyFailed": "Sao chép từ khóa thất bại",
-      "reuseSettings": "Tái sử dụng cài đặt",
-      "seedApplied": "Hạt giống đã được áp dụng vào cấu hình",
-      "seedApplyFailed": "Áp dụng hạt giống thất bại",
-      "seedCopied": "Hạt giống đã được sao chép vào bộ nhớ tạm",
-      "seedCopyFailed": "Sao chép hạt giống thất bại"
-    },
-    "metadata": {
-      "count": "{{count}} ảnh"
-    },
-    "status": {
-      "failed": "Tạo thất bại",
-      "generating": "Đang tạo..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "Phiên bản triển khai hiện tại là chế độ cơ sở dữ liệu phía khách, không hỗ trợ chức năng tạo hình ảnh AI. Vui lòng chuyển sang <1>chế độ triển khai cơ sở dữ liệu phía máy chủ</1> hoặc sử dụng trực tiếp <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "Tích hợp sâu với hệ thống quản lý tệp, ảnh tạo ra tự động lưu vào hệ thống tệp, hỗ trợ quản lý và tổ chức thống nhất",
-        "title": "Tương tác hệ thống tệp"
-      },
-      "llmAssisted": {
-        "desc": "Kết hợp khả năng mô hình ngôn ngữ lớn, tối ưu và mở rộng từ khóa thông minh, nâng cao chất lượng tạo ảnh (Sắp ra mắt)",
-        "title": "Hỗ trợ tạo ảnh bởi LLM"
-      },
-      "multiProviders": {
-        "desc": "Hỗ trợ nhiều nhà cung cấp dịch vụ vẽ AI, bao gồm OpenAI gpt-image-1, Google Imagen, FAL.ai, v.v., cung cấp đa dạng lựa chọn mô hình",
-        "title": "Hỗ trợ nhiều nhà cung cấp"
-      }
-    },
-    "title": "Chế độ triển khai hiện tại không hỗ trợ vẽ AI"
-  },
-  "topic": {
-    "createNew": "Tạo chủ đề mới",
-    "deleteConfirm": "Xác nhận xóa chủ đề tạo",
-    "deleteConfirmDesc": "Bạn sắp xóa chủ đề tạo này, hành động này không thể hoàn tác, vui lòng cân nhắc kỹ.",
-    "empty": "Chưa có chủ đề tạo",
-    "title": "Chủ đề vẽ tranh",
-    "untitled": "Chủ đề mặc định"
-  }
+  "config.aspectRatio.label": "Tỷ lệ khung hình",
+  "config.aspectRatio.lock": "Khóa tỷ lệ khung hình",
+  "config.aspectRatio.unlock": "Mở khóa tỷ lệ khung hình",
+  "config.cfg.label": "Cường độ hướng dẫn",
+  "config.header.desc": "Mô tả ngắn gọn, tạo ngay lập tức",
+  "config.header.title": "Tranh vẽ",
+  "config.height.label": "Chiều cao",
+  "config.imageNum.label": "Số lượng ảnh",
+  "config.imageUrl.label": "Ảnh tham khảo",
+  "config.imageUrls.label": "Các ảnh tham khảo",
+  "config.model.label": "Mô hình",
+  "config.prompt.placeholder": "Mô tả những gì bạn muốn tạo",
+  "config.quality.label": "Chất lượng ảnh",
+  "config.quality.options.hd": "Độ nét cao",
+  "config.quality.options.standard": "Tiêu chuẩn",
+  "config.resolution.label": "Độ phân giải",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Hạt giống",
+  "config.seed.random": "Hạt giống ngẫu nhiên",
+  "config.size.label": "Kích thước",
+  "config.steps.label": "Số bước",
+  "config.title": "Ảnh AI",
+  "config.width.label": "Chiều rộng",
+  "generation.actions.applySeed": "Áp dụng hạt giống",
+  "generation.actions.copyError": "Sao chép thông báo lỗi",
+  "generation.actions.copyPrompt": "Sao chép lời nhắc",
+  "generation.actions.copySeed": "Sao chép hạt giống",
+  "generation.actions.delete": "Xóa",
+  "generation.actions.deleteBatch": "Xóa hàng loạt",
+  "generation.actions.download": "Tải xuống",
+  "generation.actions.downloadFailed": "Tải ảnh xuống thất bại. Vui lòng kiểm tra kết nối mạng hoặc cấu hình CORS của bộ lưu trữ S3.",
+  "generation.actions.errorCopied": "Đã sao chép thông báo lỗi vào bộ nhớ tạm",
+  "generation.actions.errorCopyFailed": "Sao chép thông báo lỗi thất bại",
+  "generation.actions.generate": "Tạo ảnh",
+  "generation.actions.promptCopied": "Đã sao chép lời nhắc vào bộ nhớ tạm",
+  "generation.actions.promptCopyFailed": "Sao chép lời nhắc thất bại",
+  "generation.actions.reuseSettings": "Tái sử dụng cài đặt",
+  "generation.actions.seedApplied": "Đã áp dụng hạt giống vào cấu hình",
+  "generation.actions.seedApplyFailed": "Áp dụng hạt giống thất bại",
+  "generation.actions.seedCopied": "Đã sao chép hạt giống vào bộ nhớ tạm",
+  "generation.actions.seedCopyFailed": "Sao chép hạt giống thất bại",
+  "generation.metadata.count": "{{count}} ảnh",
+  "generation.status.failed": "Tạo ảnh thất bại",
+  "generation.status.generating": "Đang tạo...",
+  "notSupportGuide.desc": "Chế độ triển khai hiện tại không hỗ trợ tạo ảnh AI. Hãy chuyển sang <1>chế độ triển khai cơ sở dữ liệu máy chủ</1>, hoặc sử dụng <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Tích hợp sâu với hệ thống quản lý tệp; ảnh được tạo sẽ tự động lưu vào hệ thống tệp để quản lý và tổ chức thống nhất.",
+  "notSupportGuide.features.fileIntegration.title": "Tích hợp hệ thống tệp",
+  "notSupportGuide.features.llmAssisted.desc": "Kết hợp khả năng của mô hình ngôn ngữ lớn để tối ưu hóa và mở rộng lời nhắc một cách thông minh, nâng cao chất lượng tạo ảnh (Sắp ra mắt).",
+  "notSupportGuide.features.llmAssisted.title": "Tạo ảnh hỗ trợ bởi LLM",
+  "notSupportGuide.features.multiProviders.desc": "Hỗ trợ nhiều nhà cung cấp tạo ảnh AI, bao gồm OpenAI gpt-image-1, Google Imagen, FAL.ai và nhiều hơn nữa, mang đến lựa chọn mô hình đa dạng.",
+  "notSupportGuide.features.multiProviders.title": "Hỗ trợ nhiều nhà cung cấp",
+  "notSupportGuide.title": "Chế độ triển khai hiện tại không hỗ trợ tạo ảnh AI",
+  "topic.createNew": "Chủ đề mới",
+  "topic.deleteConfirm": "Xóa chủ đề tạo ảnh",
+  "topic.deleteConfirmDesc": "Bạn sắp xóa chủ đề tạo ảnh này. Hành động này không thể hoàn tác, vui lòng cẩn trọng.",
+  "topic.empty": "Chưa có chủ đề tạo ảnh",
+  "topic.title": "Chủ đề tranh vẽ",
+  "topic.untitled": "Chủ đề mặc định"
 }

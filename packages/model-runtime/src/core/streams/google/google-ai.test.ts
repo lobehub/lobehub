@@ -1083,6 +1083,177 @@ describe('GoogleGenerativeAIStream', () => {
       );
     });
 
+    it('should handle sequential tool calls with thinking in separate chunks', async () => {
+      // This test simulates a real-world scenario where Gemini returns:
+      // 1. Multiple thinking chunks (thought: true)
+      // 2. First tool call in one chunk
+      // 3. Second tool call in another chunk
+      // 4. Final empty text with finishReason
+      // Each tool call should be treated as a separate call, not concatenated
+      vi.spyOn(uuidModule, 'nanoid')
+        .mockReturnValueOnce('test')
+        .mockReturnValueOnce('tool_id_1')
+        .mockReturnValueOnce('tool_id_2');
+
+      const data = [
+        // Chunk 0-3: Thinking chunks (omitted for brevity, just showing final chunks)
+        {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: '**Planning the Solution**\n\nI\'m solidifying my plan...',
+                    thought: true,
+                  },
+                ],
+                role: 'model',
+              },
+              index: 0,
+            },
+          ],
+          modelVersion: 'gemini-3-pro-preview',
+          responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
+          usageMetadata: {
+            promptTokenCount: 10250,
+            totalTokenCount: 10250,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
+          },
+        },
+        // Chunk 4: First tool call (createPlan)
+        {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    functionCall: {
+                      name: 'lobe-gtd____createPlan____builtin',
+                      args: {
+                        goal: 'Fix Linear API Argument Validation Error',
+                        description: 'Investigate the Linear API error.',
+                        context: 'The user is encountering a validation error.',
+                      },
+                    },
+                    thoughtSignature: 'EoIYCv8XAXLI2nx+C18votz5l0A...',
+                  },
+                ],
+                role: 'model',
+              },
+              index: 0,
+            },
+          ],
+          modelVersion: 'gemini-3-pro-preview',
+          responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
+          usageMetadata: {
+            promptTokenCount: 10250,
+            candidatesTokenCount: 131,
+            totalTokenCount: 11111,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
+            thoughtsTokenCount: 730,
+          },
+        },
+        // Chunk 5: Second tool call (createTodos) - different function, same streaming response
+        {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    functionCall: {
+                      name: 'lobe-gtd____createTodos____builtin',
+                      args: {
+                        adds: [
+                          'Verify Linear GraphQL API requirements',
+                          'Determine if code needs to look up Team UUID',
+                          'Provide corrected code',
+                        ],
+                      },
+                    },
+                  },
+                ],
+                role: 'model',
+              },
+              index: 0,
+            },
+          ],
+          modelVersion: 'gemini-3-pro-preview',
+          responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
+          usageMetadata: {
+            promptTokenCount: 10250,
+            candidatesTokenCount: 213,
+            totalTokenCount: 11193,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
+            thoughtsTokenCount: 730,
+          },
+        },
+        // Chunk 6: Empty text with finishReason
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: '' }],
+                role: 'model',
+              },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          modelVersion: 'gemini-3-pro-preview',
+          responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
+          usageMetadata: {
+            promptTokenCount: 10250,
+            candidatesTokenCount: 213,
+            totalTokenCount: 11193,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
+            thoughtsTokenCount: 730,
+          },
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => {
+            controller.enqueue(item);
+          });
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      // Verify the output contains two separate tool_calls events
+      expect(chunks).toEqual(
+        [
+          // Thinking chunk
+          'id: chat_test',
+          'event: reasoning_part',
+          'data: {"content":"**Planning the Solution**\\n\\nI\'m solidifying my plan...","inReasoning":true,"partType":"text"}\n',
+
+          // First tool call (createPlan)
+          'id: chat_test',
+          'event: tool_calls',
+          'data: [{"function":{"arguments":"{\\"goal\\":\\"Fix Linear API Argument Validation Error\\",\\"description\\":\\"Investigate the Linear API error.\\",\\"context\\":\\"The user is encountering a validation error.\\"}","name":"lobe-gtd____createPlan____builtin"},"id":"lobe-gtd____createPlan____builtin_0_tool_id_1","index":0,"thoughtSignature":"EoIYCv8XAXLI2nx+C18votz5l0A...","type":"function"}]\n',
+
+          // Second tool call (createTodos) - should be a SEPARATE event with index:0
+          'id: chat_test',
+          'event: tool_calls',
+          'data: [{"function":{"arguments":"{\\"adds\\":[\\"Verify Linear GraphQL API requirements\\",\\"Determine if code needs to look up Team UUID\\",\\"Provide corrected code\\"]}","name":"lobe-gtd____createTodos____builtin"},"id":"lobe-gtd____createTodos____builtin_0_tool_id_2","index":0,"type":"function"}]\n',
+
+          // Stop and usage
+          'id: chat_test',
+          'event: stop',
+          'data: "STOP"\n',
+
+          'id: chat_test',
+          'event: usage',
+          'data: {"inputTextTokens":10250,"outputImageTokens":0,"outputReasoningTokens":730,"outputTextTokens":213,"totalInputTokens":10250,"totalOutputTokens":943,"totalTokens":11193}\n',
+        ].map((i) => i + '\n'),
+      );
+    });
+
     it('should handle thoughtSignature with empty text', async () => {
       vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 

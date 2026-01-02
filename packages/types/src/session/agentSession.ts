@@ -1,5 +1,5 @@
 import { AgentItem, LobeAgentConfig } from '../agent';
-import { NewChatGroupAgent } from '../chatGroup';
+import { NewChatGroupAgent } from '../agentGroup';
 import { MetaData } from '../meta';
 
 export enum LobeSessionType {
@@ -47,7 +47,7 @@ export interface LobeGroupSession {
 
 export interface LobeAgentSettings {
   /**
-   * 语言模型角色设定
+   * Language model agent configuration
    */
   config: LobeAgentConfig;
   meta: MetaData;

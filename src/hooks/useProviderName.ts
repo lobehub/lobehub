@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_PROVIDER_LIST } from '@/config/modelProviders';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 export const useProviderName = (provider: string) => {
   // const { t } = useTranslation('modelProvider');

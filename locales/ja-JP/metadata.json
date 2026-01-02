@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "{{appName}} の新機能と改善を継続的に追跡する",
-    "title": "更新履歴"
-  },
-  "chat": {
-    "description": "{{appName}}が提供する最高のChatGPT、Claude、Gemini、OLLaMA WebUIの体験",
-    "title": "{{appName}}：個人AI効率ツール、より賢い脳を手に入れよう"
-  },
-  "discover": {
-    "assistants": {
-      "description": "コンテンツ作成、コピーライティング、Q&A、画像生成、動画生成、音声生成、インテリジェントエージェント、自動化ワークフロー、あなた専用のAI / GPTs / OLLaMAインテリジェントアシスタントをカスタマイズ",
-      "title": "AIアシスタント"
-    },
-    "description": "コンテンツ作成、コピーライティング、Q&A、画像生成、動画生成、音声生成、インテリジェントエージェント、自動化ワークフロー、カスタムAIアプリケーション、あなた専用のAIアプリケーションワークスペースをカスタマイズ",
-    "mcp": {
-      "description": "数千のMCPサーバーを検索、比較、接続し、AIシステムがファイルシステム、データベース、APIなどの重要なリソースに簡単にアクセスできるよう支援し、あなたのAI能力を全面的に拡張します。",
-      "title": "MCPサーバーマーケット"
-    },
-    "models": {
-      "description": "主流のAIモデルを探索 OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
-      "title": "AIモデル"
-    },
-    "plugins": {
-      "description": "グラフ生成、学術、画像生成、動画生成、音声生成、自動化ワークフローの検索を行い、あなたのアシスタントに豊富なプラグイン機能を統合します。",
-      "title": "AIプラグイン"
-    },
-    "providers": {
-      "description": "主流のモデルプロバイダーを探索 OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
-      "title": "AIモデルサービスプロバイダー"
-    },
-    "search": "検索",
-    "title": "発見"
-  },
-  "image": {
-    "description": "{{appName}} が最高の GPT 画像、Flux、Midjourney、Stable Diffusion の使用体験をお届けします",
-    "title": "AI 絵画"
-  },
-  "plugins": {
-    "description": "検索、グラフ生成、学術、画像生成、動画生成、音声生成、自動化ワークフロー、ChatGPT / Claude専用のToolCallプラグイン機能をカスタマイズ",
-    "title": "プラグインマーケット"
-  },
-  "welcome": {
-    "description": "{{appName}}が提供する最高のChatGPT、Claude、Gemini、OLLaMA WebUIの体験",
-    "title": "ようこそ{{appName}}へ：個人AI効率ツール、より賢い脳を手に入れよう"
-  }
+  "changelog.description": "{{appName}} の新機能と改善を継続的に追跡する",
+  "changelog.title": "更新履歴",
+  "chat.description": "{{appName}}が提供する最高のChatGPT、Claude、Gemini、OLLaMA WebUIの体験",
+  "chat.title": "{{appName}} · 協働エージェントのために",
+  "discover.assistants.description": "コンテンツ作成、コピーライティング、Q&A、画像生成、動画生成、音声生成、インテリジェントアシスタント、自動化ワークフロー、あなた専用のAI / GPTs / OLLaMAインテリジェントアシスタントをカスタマイズ",
+  "discover.assistants.title": "インテリジェントアシスタントコミュニティ",
+  "discover.description": "コンテンツ作成、コピーライティング、Q&A、画像生成、動画生成、音声生成、インテリジェントアシスタント、自動化ワークフロー、カスタムAIアプリケーション、あなた専用のAIアプリケーションワークスペースをカスタマイズ",
+  "discover.mcp.description": "数千のMCPサーバーを検索、比較、接続し、AIシステムがファイルシステム、データベース、APIなどの重要なリソースに簡単にアクセスできるよう支援し、あなたのAI能力を全面的に拡張します。",
+  "discover.mcp.title": "MCPサーバーコミュニティ",
+  "discover.models.description": "主流のAIモデルを探索 OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "モデルコミュニティ",
+  "discover.plugins.description": "グラフ生成、学術、画像生成、動画生成、音声生成、自動化ワークフローの検索を行い、あなたのアシスタントに豊富なプラグイン機能を統合します。",
+  "discover.plugins.title": "プラグインコミュニティ",
+  "discover.providers.description": "主流のモデルプロバイダーを探索 OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "モデルサービスコミュニティ",
+  "discover.search": "検索",
+  "discover.title": "発見",
+  "image.description": "{{appName}} が最高の GPT 画像、Flux、Midjourney、Stable Diffusion の使用体験をお届けします",
+  "image.title": "AI 絵画",
+  "plugins.description": "検索、グラフ生成、学術、画像生成、動画生成、音声生成、自動化ワークフロー、ChatGPT / Claude専用のToolCallプラグイン機能をカスタマイズ",
+  "plugins.title": "プラグインコミュニティ",
+  "welcome.description": "{{appName}}が提供する最高のChatGPT、Claude、Gemini、OLLaMA WebUIの体験",
+  "welcome.title": "ようこそ、{{appName}} · 協働エージェントのために"
 }

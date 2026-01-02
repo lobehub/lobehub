@@ -58,6 +58,11 @@ export const messageGroups = pgTable(
     title: varchar255('title'),
     description: text('description'),
 
+    // Compression fields
+    type: text('type', { enum: ['parallel', 'compression'] }),
+    content: text('content'), // compression summary (plain text)
+    editorData: jsonb('editor_data'), // rich text editor data (future extension)
+
     clientId: varchar255('client_id'),
 
     ...timestamps,
@@ -65,6 +70,7 @@ export const messageGroups = pgTable(
   (t) => [
     uniqueIndex('message_groups_client_id_user_id_unique').on(t.clientId, t.userId),
     index('message_groups_topic_id_idx').on(t.topicId),
+    index('message_groups_type_idx').on(t.type),
   ],
 );
 
@@ -84,6 +90,7 @@ export const messages = pgTable(
     role: varchar255('role').notNull(),
     content: text('content'),
     editorData: jsonb('editor_data'),
+    summary: text('summary'),
     reasoning: jsonb('reasoning').$type<ModelReasoning>(),
     search: jsonb('search').$type<GroundingSearch>(),
     metadata: jsonb('metadata'),
@@ -164,12 +171,10 @@ export const messagePlugins = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
   },
-  (t) => ({
-    clientIdUnique: uniqueIndex('message_plugins_client_id_user_id_unique').on(
-      t.clientId,
-      t.userId,
-    ),
-  }),
+  (t) => [
+    uniqueIndex('message_plugins_client_id_user_id_unique').on(t.clientId, t.userId),
+    index('message_plugins_tool_call_id_idx').on(t.toolCallId),
+  ],
 );
 
 export const messageTTS = pgTable(

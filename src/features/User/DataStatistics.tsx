@@ -1,13 +1,12 @@
 'use client';
 
-import { Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, type FlexboxProps, Icon, Tooltip } from '@lobehub/ui';
 import { Badge } from 'antd';
-import { createStyles } from 'antd-style';
-import { isUndefined } from 'lodash-es';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { isUndefined } from 'es-toolkit/compat';
 import { LoaderCircle } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox, FlexboxProps } from 'react-layout-kit';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { messageService } from '@/services/message';
@@ -17,15 +16,15 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { formatShortenNumber } from '@/utils/format';
 import { today } from '@/utils/time';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 6px;
     padding-inline: 8px;
-    border-radius: ${token.borderRadius}px;
-    background: ${token.colorFillTertiary};
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorFillTertiary};
 
     &:hover {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   count: css`
@@ -36,7 +35,7 @@ const useStyles = createStyles(({ css, token }) => ({
   title: css`
     font-size: 12px;
     line-height: 1.2;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
   today: css`
     font-size: 12px;
@@ -64,7 +63,6 @@ const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
     }),
   );
 
-  const { styles, theme } = useStyles();
   const { t } = useTranslation('common');
 
   const loading = useMemo(() => <Icon icon={LoaderCircle} spin />, []);
@@ -120,8 +118,8 @@ const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
                   <Badge
                     count={`+${item.countToady}`}
                     style={{
-                      background: theme.colorSuccess,
-                      color: theme.colorSuccessBg,
+                      background: cssVar.colorSuccess,
+                      color: cssVar.colorSuccessBg,
                       cursor: 'pointer',
                     }}
                   />

@@ -40,7 +40,11 @@ export class FileModel {
   }
 
   create = async (
-    params: Omit<NewFile, 'id' | 'userId'> & { id?: string; knowledgeBaseId?: string },
+    params: Omit<NewFile, 'id' | 'userId'> & {
+      id?: string;
+      knowledgeBaseId?: string;
+      parentId?: string;
+    },
     insertToGlobalFiles?: boolean,
     trx?: Transaction,
   ): Promise<{ id: string }> => {

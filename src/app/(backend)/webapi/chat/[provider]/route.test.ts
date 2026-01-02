@@ -22,8 +22,8 @@ vi.mock('@lobechat/utils/server', () => ({
   getXorPayload: vi.fn(),
 }));
 
-// 定义一个变量来存储 enableAuth 的值
-let enableClerk = false;
+// Use vi.hoisted to ensure mockState is initialized before mocks are set up
+const mockState = vi.hoisted(() => ({ enableClerk: false }));
 
 // 模拟 @/const/auth 模块
 vi.mock('@/const/auth', async (importOriginal) => {
@@ -31,7 +31,7 @@ vi.mock('@/const/auth', async (importOriginal) => {
   return {
     ...(modules as any),
     get enableClerk() {
-      return enableClerk;
+      return mockState.enableClerk;
     },
   };
 });
@@ -52,7 +52,7 @@ beforeEach(() => {
 afterEach(() => {
   // 清除模拟调用历史
   vi.clearAllMocks();
-  enableClerk = false;
+  mockState.enableClerk = false;
 });
 
 describe('POST handler', () => {
@@ -102,7 +102,7 @@ describe('POST handler', () => {
     });
 
     it('should have pass clerk Auth when enable clerk', async () => {
-      enableClerk = true;
+      mockState.enableClerk = true;
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
         accessCode: 'test-access-code',

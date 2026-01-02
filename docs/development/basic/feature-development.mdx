@@ -239,7 +239,7 @@ We're adding a new category of settings this time. In `src/features/AgentSetting
 
 - [ant-design](https://ant.design/) and [lobe-ui](https://github.com/lobehub/lobe-ui): component libraries
 - [antd-style](https://ant-design.github.io/antd-style): css-in-js solution
-- [react-layout-kit](https://github.com/arvinxx/react-layout-kit): responsive layout components
+- [@lobehub/ui](https://ui.lobehub.com/): UI component library (includes Flexbox and Center for responsive layouts)
 - [@ant-design/icons](https://ant.design/components/icon-cn) and [lucide](https://lucide.dev/icons/): icon libraries
 - [react-i18next](https://github.com/i18next/react-i18next) and [lobe-i18n](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n): i18n framework and multi-language automatic translation tool
 
@@ -252,12 +252,11 @@ Let's take the subcomponent `OpeningQuestion.tsx` as an example. Component imple
 'use client';
 
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { SortableList } from '@lobehub/ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
 import { Button, Empty, Input } from 'antd';
 import { createStyles } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';

@@ -1,30 +1,25 @@
 {
   "Artifacts": "Артефакты",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Часть",
-      "file": "Файл"
-    }
-  },
-  "Plugins": "Плагины",
-  "artifacts": {
-    "display": {
-      "code": "Код",
-      "preview": "Предварительный просмотр"
-    },
-    "svg": {
-      "copyAsImage": "Скопировать как изображение",
-      "copyFail": "Не удалось скопировать, причина ошибки: {{error}}",
-      "copySuccess": "Изображение успешно скопировано",
-      "download": {
-        "png": "Скачать как PNG",
-        "svg": "Скачать как SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "Список текущих артефактов пуст. Пожалуйста, используйте плагины во время сеанса и затем просмотрите.",
-  "emptyKnowledgeList": "Текущий список знаний пуст. Пожалуйста, откройте базу знаний по мере необходимости в разговоре, прежде чем просматривать.",
-  "files": "файлы",
+  "FilePreview.tabs.chunk": "Фрагмент",
+  "FilePreview.tabs.file": "Файл",
+  "Plugins": "Навыки",
+  "artifacts.display.code": "Код",
+  "artifacts.display.preview": "Предпросмотр",
+  "artifacts.svg.copyAsImage": "Копировать как изображение",
+  "artifacts.svg.copyFail": "Не удалось скопировать: {{error}}. Попробуйте снова.",
+  "artifacts.svg.copySuccess": "Изображение успешно скопировано",
+  "artifacts.svg.download.png": "Скачать как PNG",
+  "artifacts.svg.download.svg": "Скачать как SVG",
+  "document.todos.allCompleted": "Все задачи выполнены",
+  "document.todos.title": "Задачи",
+  "emptyArtifactList": "Артефактов пока нет. Используйте навыки в беседе, затем вернитесь сюда.",
+  "emptyKnowledgeList": "Этот список пуст.",
+  "files": "Файлы",
   "messageDetail": "Детали сообщения",
-  "title": "Расширенное окно"
+  "notebook.confirmDelete": "Удалить эту страницу?",
+  "notebook.delete": "Удалить",
+  "notebook.empty": "Пока нет страниц. Страницы, связанные с этой темой, появятся здесь.",
+  "notebook.title": "Блокнот",
+  "openInPageEditor": "Редактировать на странице",
+  "title": "Рабочее пространство"
 }

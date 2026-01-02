@@ -1,197 +1,137 @@
 {
-  "ArgsInput": {
-    "addArgument": "新增參數",
-    "argumentPlaceholder": "參數 {{index}}",
-    "enterFirstArgument": "輸入第一個參數..."
-  },
-  "DragUpload": {
-    "dragDesc": "拖曳檔案到這裡，支援上傳多個圖片。",
-    "dragFileDesc": "拖曳圖片和檔案到這裡，支援上傳多個圖片和檔案。",
-    "dragFileTitle": "上傳檔案",
-    "dragTitle": "上傳圖片"
-  },
-  "FileManager": {
-    "actions": {
-      "addToKnowledgeBase": "添加到知識庫",
-      "addToOtherKnowledgeBase": "添加到其他知識庫",
-      "batchChunking": "批量分塊",
-      "chunking": "分塊",
-      "chunkingTooltip": "將文件拆分為多個文本塊並向量化後，可用於語義檢索和文件對話",
-      "chunkingUnsupported": "該檔案不支援分塊",
-      "confirmDelete": "即將刪除該文件，刪除後將無法找回，請確認你的操作",
-      "confirmDeleteMultiFiles": "即將刪除選中的 {{count}} 個文件，刪除後將無法找回，請確認你的操作",
-      "confirmRemoveFromKnowledgeBase": "即將從知識庫中移除選中的 {{count}} 個文件，移除後文件仍然可以在全部文件中查看，請確認你的操作",
-      "copyUrl": "複製鏈接",
-      "copyUrlSuccess": "文件地址複製成功",
-      "createChunkingTask": "準備中...",
-      "deleteSuccess": "文件刪除成功",
-      "downloading": "文件下載中...",
-      "removeFromKnowledgeBase": "從知識庫中移除",
-      "removeFromKnowledgeBaseSuccess": "文件移除成功"
-    },
-    "bottom": "已經到底啦",
-    "config": {
-      "showFilesInKnowledgeBase": "顯示知識庫中內容"
-    },
-    "emptyStatus": {
-      "actions": {
-        "file": "上傳文件",
-        "folder": "上傳文件夾",
-        "knowledgeBase": "新建知識庫"
-      },
-      "or": "或者",
-      "title": "將文件或文件夾拖到這裡"
-    },
-    "title": {
-      "createdAt": "創建時間",
-      "size": "大小",
-      "title": "文件"
-    },
-    "total": {
-      "fileCount": "共 {{count}} 項",
-      "selectedCount": "已選 {{count}} 項"
-    },
-    "view": {
-      "list": "清單檢視",
-      "masonry": "網格檢視"
-    }
-  },
-  "FileParsingStatus": {
-    "chunks": {
-      "embeddingStatus": {
-        "empty": "文本塊尚未完全向量化，將導致語義檢索功能不可用，為提升檢索質量，請對文本塊向量化",
-        "error": "向量化失敗",
-        "errorResult": "向量化失敗，請檢查後重試。失敗原因：",
-        "processing": "文本塊正在向量化，請耐心等待",
-        "success": "當前文本塊均已向量化"
-      },
-      "embeddings": "向量化",
-      "status": {
-        "error": "分塊失敗",
-        "errorResult": "分塊失敗，請檢查後重試。失敗原因：",
-        "processing": "分塊中",
-        "processingTip": "服務端正在拆分文本塊，關閉頁面不影響分塊進度"
-      }
-    }
-  },
-  "GoBack": {
-    "back": "返回"
-  },
-  "HtmlPreview": {
-    "actions": {
-      "download": "下載",
-      "preview": "預覽"
-    },
-    "iframeTitle": "HTML 預覽",
-    "mode": {
-      "code": "程式碼",
-      "preview": "預覽"
-    },
-    "title": "HTML 預覽"
-  },
-  "ImageUpload": {
-    "actions": {
-      "changeImage": "點擊更換圖片",
-      "dropMultipleFiles": "不支援多重上傳多個檔案，僅會使用第一個檔案"
-    },
-    "placeholder": {
-      "primary": "新增圖片",
-      "secondary": "點擊或拖曳上傳"
-    }
-  },
-  "KeyValueEditor": {
-    "addButton": "新增一行",
-    "deleteTooltip": "刪除",
-    "duplicateKeyError": "鍵名必須唯一",
-    "keyPlaceholder": "鍵",
-    "valuePlaceholder": "值"
-  },
-  "LocalFile": {
-    "action": {
-      "open": "開啟",
-      "showInFolder": "在資料夾中顯示"
-    }
-  },
-  "MaxTokenSlider": {
-    "unlimited": "無限制"
-  },
-  "ModelSelect": {
-    "featureTag": {
-      "custom": "自訂模型，預設支援函式呼叫與視覺辨識，請根據實際情況驗證上述能力的可用性",
-      "file": "該模型支援上傳檔案讀取與辨識",
-      "functionCall": "該模型支援函式呼叫（Function Call）",
-      "imageOutput": "該模型支援生成圖片",
-      "reasoning": "該模型支持深度思考",
-      "search": "該模型支援聯網搜尋",
-      "tokens": "該模型單一會話最多支援 {{tokens}} Tokens",
-      "video": "該模型支援影片識別",
-      "vision": "該模型支援視覺辨識"
-    },
-    "removed": "該模型不在清單中，若取消選取將會自動移除"
-  },
-  "ModelSwitchPanel": {
-    "emptyModel": "沒有啟用的模型，請前往設定開啟",
-    "emptyProvider": "沒有啟用的服務商，請前往設定開啟",
-    "goToSettings": "前往設定",
-    "provider": "提供商",
-    "title": "模型"
-  },
-  "MultiImagesUpload": {
-    "actions": {
-      "uploadMore": "點擊或拖曳上傳更多"
-    },
-    "modal": {
-      "complete": "完成",
-      "newFileIndicator": "新增",
-      "selectImageToPreview": "請選擇要預覽的圖片",
-      "title": "管理圖片 ({{count}})",
-      "upload": "上傳圖片"
-    },
-    "placeholder": {
-      "primary": "點擊或拖曳上傳圖片",
-      "secondary": "支援多張圖片選擇"
-    },
-    "progress": {
-      "uploadingWithCount": "{{completed}}/{{total}} 已上傳"
-    },
-    "validation": {
-      "fileSizeExceeded": "檔案大小已超過限制",
-      "fileSizeExceededDetail": "{{fileName}}（{{actualSize}}）超過最大檔案大小限制 {{maxSize}}",
-      "fileSizeExceededMultiple": "{{count}} 個檔案超過最大檔案大小限制 {{maxSize}}：{{fileList}}",
-      "imageCountExceeded": "圖片數量已超出限制"
-    }
-  },
-  "OllamaSetupGuide": {
-    "action": {
-      "close": "關閉提示",
-      "start": "已安裝並運行，開始對話"
-    },
-    "cors": {
-      "description": "因瀏覽器安全限制，你需要為 Ollama 進行跨域配置後方可正常使用。",
-      "linux": {
-        "env": "在 [Service] 部分下添加 `Environment`，添加 OLLAMA_ORIGINS 環境變數：",
-        "reboot": "重載 systemd 並重啟 Ollama",
-        "systemd": "調用 systemd 編輯 ollama 服務："
-      },
-      "macos": "請打開「終端」應用程式，並粘貼以下指令，然後按回車執行",
-      "reboot": "請在執行完成後重啟 Ollama 服務",
-      "title": "配置 Ollama 允許跨域訪問",
-      "windows": "在 Windows 上，點擊「控制面板」，進入編輯系統環境變數。為您的用戶帳戶新建名為「OLLAMA_ORIGINS」的環境變數，值為 *，點擊「確定/應用」保存"
-    },
-    "install": {
-      "description": "請確認你已經啟動 Ollama，如果沒有下載 Ollama，請前往官網<1>下載</1>",
-      "docker": "如果你更傾向於使用 Docker，Ollama 也提供了官方 Docker 映像，你可以通過以下命令拉取：",
-      "linux": {
-        "command": "通過以下命令安裝：",
-        "manual": "或者，你也可以參考 <1>Linux 手動安裝指南</1> 自行安裝"
-      },
-      "title": "在本地安裝並啟動 Ollama 應用",
-      "windowsTab": "Windows (預覽版)"
-    }
-  },
-  "Thinking": {
-    "thinking": "深度思考中...",
-    "thought": "已深度思考（用時 {{duration}} 秒）",
-    "thoughtWithDuration": "已深度思考"
-  }
+  "ArgsInput.addArgument": "新增參數",
+  "ArgsInput.argumentPlaceholder": "參數 {{index}}",
+  "ArgsInput.enterFirstArgument": "輸入第一個參數...",
+  "DragUpload.dragDesc": "拖曳檔案到這裡，支援上傳多個圖片。",
+  "DragUpload.dragFileDesc": "拖曳圖片和檔案到這裡，支援上傳多個圖片和檔案。",
+  "DragUpload.dragFileTitle": "上傳檔案",
+  "DragUpload.dragTitle": "上傳圖片",
+  "FileManager.actions.addToKnowledgeBase": "新增至資源庫",
+  "FileManager.actions.addToOtherKnowledgeBase": "新增至其他資源庫",
+  "FileManager.actions.batchChunking": "批量分塊",
+  "FileManager.actions.chunking": "分塊",
+  "FileManager.actions.chunkingTooltip": "將文件拆分為多個文本塊並向量化後，可用於語義檢索和文件對話",
+  "FileManager.actions.chunkingUnsupported": "該檔案不支援分塊",
+  "FileManager.actions.confirmDelete": "即將刪除該文件，刪除後將無法找回，請確認你的操作",
+  "FileManager.actions.confirmDeleteFolder": "即將刪除該資料夾及其所有內容，刪除後將無法恢復，請確認你的操作",
+  "FileManager.actions.confirmDeleteMultiFiles": "即將刪除選中的 {{count}} 個文件，刪除後將無法找回，請確認你的操作",
+  "FileManager.actions.confirmRemoveFromKnowledgeBase": "即將從資源庫中移除選取的 {{count}} 個檔案，移除後仍可在全部檔案中查看，請確認你的操作",
+  "FileManager.actions.copyUrl": "複製鏈接",
+  "FileManager.actions.copyUrlSuccess": "文件地址複製成功",
+  "FileManager.actions.createChunkingTask": "準備中...",
+  "FileManager.actions.deleteSuccess": "文件刪除成功",
+  "FileManager.actions.downloading": "文件下載中...",
+  "FileManager.actions.goBack": "返回上一頁",
+  "FileManager.actions.goForward": "前進到下一頁",
+  "FileManager.actions.goToParent": "進入父層資料夾",
+  "FileManager.actions.moveError": "移動檔案失敗",
+  "FileManager.actions.moveHere": "移動到此處",
+  "FileManager.actions.moveSuccess": "檔案移動成功",
+  "FileManager.actions.moveToFolder": "移動到...",
+  "FileManager.actions.moveToRoot": "移動到根目錄",
+  "FileManager.actions.moving": "正在移動...",
+  "FileManager.actions.removeFromKnowledgeBase": "從資源庫中移除",
+  "FileManager.actions.removeFromKnowledgeBaseSuccess": "文件移除成功",
+  "FileManager.actions.rename": "重新命名",
+  "FileManager.actions.renameError": "重新命名失敗",
+  "FileManager.actions.renameSuccess": "重新命名成功",
+  "FileManager.bottom": "已經到底啦",
+  "FileManager.config.showFilesInKnowledgeBase": "顯示資源庫內容",
+  "FileManager.emptyStatus.actions.file": "上傳文件",
+  "FileManager.emptyStatus.actions.folder": "上傳文件夾",
+  "FileManager.emptyStatus.actions.knowledgeBase": "建立資源庫",
+  "FileManager.emptyStatus.or": "或者",
+  "FileManager.emptyStatus.title": "將文件或文件夾拖到這裡",
+  "FileManager.noFolders": "暫無資料夾",
+  "FileManager.sort.dateAdded": "新增日期",
+  "FileManager.sort.name": "名稱",
+  "FileManager.sort.size": "大小",
+  "FileManager.title.createdAt": "創建時間",
+  "FileManager.title.size": "大小",
+  "FileManager.title.title": "文件",
+  "FileManager.total.fileCount": "共 {{count}} 項",
+  "FileManager.total.selectedCount": "已選 {{count}} 項",
+  "FileManager.view.list": "清單檢視",
+  "FileManager.view.masonry": "網格檢視",
+  "FileParsingStatus.chunks.embeddingStatus.empty": "文本塊尚未完全向量化，將導致語義檢索功能不可用，為提升檢索質量，請對文本塊向量化",
+  "FileParsingStatus.chunks.embeddingStatus.error": "向量化失敗",
+  "FileParsingStatus.chunks.embeddingStatus.errorResult": "向量化失敗，請檢查後重試。失敗原因：",
+  "FileParsingStatus.chunks.embeddingStatus.processing": "文本塊正在向量化，請耐心等待",
+  "FileParsingStatus.chunks.embeddingStatus.success": "當前文本塊均已向量化",
+  "FileParsingStatus.chunks.embeddings": "向量化",
+  "FileParsingStatus.chunks.status.error": "分塊失敗",
+  "FileParsingStatus.chunks.status.errorResult": "分塊失敗，請檢查後重試。失敗原因：",
+  "FileParsingStatus.chunks.status.processing": "分塊中",
+  "FileParsingStatus.chunks.status.processingTip": "服務端正在拆分文本塊，關閉頁面不影響分塊進度",
+  "GoBack.back": "返回",
+  "HtmlPreview.actions.download": "下載",
+  "HtmlPreview.actions.preview": "預覽",
+  "HtmlPreview.iframeTitle": "HTML 預覽",
+  "HtmlPreview.mode.code": "程式碼",
+  "HtmlPreview.mode.preview": "預覽",
+  "HtmlPreview.title": "HTML 預覽",
+  "ImageUpload.actions.changeImage": "點擊更換圖片",
+  "ImageUpload.actions.dropMultipleFiles": "不支援多重上傳多個檔案，僅會使用第一個檔案",
+  "ImageUpload.placeholder.primary": "新增圖片",
+  "ImageUpload.placeholder.secondary": "點擊或拖曳上傳",
+  "KeyValueEditor.addButton": "新增一行",
+  "KeyValueEditor.deleteTooltip": "刪除",
+  "KeyValueEditor.duplicateKeyError": "鍵名必須唯一",
+  "KeyValueEditor.keyPlaceholder": "鍵",
+  "KeyValueEditor.valuePlaceholder": "值",
+  "LocalFile.action.open": "開啟",
+  "LocalFile.action.showInFolder": "在資料夾中顯示",
+  "MaxTokenSlider.unlimited": "無限制",
+  "ModelSelect.featureTag.custom": "自訂模型，預設支援函式呼叫與視覺辨識，請根據實際情況驗證上述能力的可用性",
+  "ModelSelect.featureTag.file": "該模型支援上傳檔案讀取與辨識",
+  "ModelSelect.featureTag.functionCall": "該模型支援函式呼叫（Function Call）",
+  "ModelSelect.featureTag.imageOutput": "該模型支援生成圖片",
+  "ModelSelect.featureTag.reasoning": "該模型支持深度思考",
+  "ModelSelect.featureTag.search": "該模型支援聯網搜尋",
+  "ModelSelect.featureTag.tokens": "該模型單一會話最多支援 {{tokens}} Tokens",
+  "ModelSelect.featureTag.video": "該模型支援影片識別",
+  "ModelSelect.featureTag.vision": "該模型支援視覺辨識",
+  "ModelSelect.removed": "該模型不在清單中，若取消選取將會自動移除",
+  "ModelSwitchPanel.emptyModel": "沒有啟用的模型，請前往設定開啟",
+  "ModelSwitchPanel.emptyProvider": "沒有啟用的服務商，請前往設定開啟",
+  "ModelSwitchPanel.goToSettings": "前往設定",
+  "ModelSwitchPanel.provider": "提供商",
+  "ModelSwitchPanel.title": "模型",
+  "MultiImagesUpload.actions.uploadMore": "點擊或拖曳上傳更多",
+  "MultiImagesUpload.modal.complete": "完成",
+  "MultiImagesUpload.modal.newFileIndicator": "新增",
+  "MultiImagesUpload.modal.selectImageToPreview": "請選擇要預覽的圖片",
+  "MultiImagesUpload.modal.title": "管理圖片 ({{count}})",
+  "MultiImagesUpload.modal.upload": "上傳圖片",
+  "MultiImagesUpload.placeholder.primary": "點擊或拖曳上傳圖片",
+  "MultiImagesUpload.placeholder.secondary": "支援多張圖片選擇",
+  "MultiImagesUpload.progress.uploadingWithCount": "{{completed}}/{{total}} 已上傳",
+  "MultiImagesUpload.validation.fileSizeExceeded": "檔案大小已超過限制",
+  "MultiImagesUpload.validation.fileSizeExceededDetail": "{{fileName}}（{{actualSize}}）超過最大檔案大小限制 {{maxSize}}",
+  "MultiImagesUpload.validation.fileSizeExceededMultiple": "{{count}} 個檔案超過最大檔案大小限制 {{maxSize}}：{{fileList}}",
+  "MultiImagesUpload.validation.imageCountExceeded": "圖片數量已超出限制",
+  "OllamaSetupGuide.action.close": "關閉提示",
+  "OllamaSetupGuide.action.start": "已安裝",
+  "OllamaSetupGuide.cors.description": "因瀏覽器安全限制，你需要為 Ollama 進行跨域配置後方可正常使用。",
+  "OllamaSetupGuide.cors.linux.env": "在 [Service] 部分下添加 `Environment`，添加 OLLAMA_ORIGINS 環境變數：",
+  "OllamaSetupGuide.cors.linux.reboot": "重載 systemd 並重啟 Ollama",
+  "OllamaSetupGuide.cors.linux.systemd": "調用 systemd 編輯 ollama 服務：",
+  "OllamaSetupGuide.cors.macos": "請打開「終端」應用程式，並粘貼以下指令，然後按回車執行",
+  "OllamaSetupGuide.cors.reboot": "請在執行完成後重啟 Ollama 服務",
+  "OllamaSetupGuide.cors.title": "配置 Ollama 允許跨域訪問",
+  "OllamaSetupGuide.cors.windows": "在 Windows 上，點擊「控制面板」，進入編輯系統環境變數。為您的用戶帳戶新建名為「OLLAMA_ORIGINS」的環境變數，值為 *，點擊「確定/應用」保存",
+  "OllamaSetupGuide.install.description": "請確認你已經啟動 Ollama，如果沒有下載 Ollama，請前往官網<1>下載</1>",
+  "OllamaSetupGuide.install.docker": "如果你更傾向於使用 Docker，Ollama 也提供了官方 Docker 映像，你可以通過以下命令拉取：",
+  "OllamaSetupGuide.install.linux.command": "通過以下命令安裝：",
+  "OllamaSetupGuide.install.linux.manual": "或者，你也可以參考 <1>Linux 手動安裝指南</1> 自行安裝",
+  "OllamaSetupGuide.install.title": "在本地安裝並啟動 Ollama 應用",
+  "OllamaSetupGuide.install.windowsTab": "Windows (預覽版)",
+  "Thinking.thinking": "深度思考中...",
+  "Thinking.thought": "已深度思考（用時 {{duration}} 秒）",
+  "Thinking.thoughtWithDuration": "已深度思考",
+  "devTools.cache.empty": "快取為空",
+  "devTools.metadata.empty": "暫無中繼資料",
+  "knowledgeBase.empty.description": "建立資源庫以組織與管理你的資源",
+  "knowledgeBase.empty.search": "未找到符合的資源庫",
+  "knowledgeBase.empty.title": "尚無資源庫"
 }

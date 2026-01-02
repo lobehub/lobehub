@@ -1,9 +1,19 @@
-'use client';
+import { useTranslation } from 'react-i18next';
 
-import Advanced from './Advanced';
+import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 
-const StorageEstimate = () => {
-  return <Advanced />;
+import Advanced from './features/Advanced';
+
+const Page = () => {
+  const { t } = useTranslation('setting');
+  return (
+    <>
+      <SettingHeader title={t('tab.storage')} />
+      <Advanced />
+    </>
+  );
 };
 
-export default StorageEstimate;
+Page.displayName = 'StorageSetting';
+
+export default Page;

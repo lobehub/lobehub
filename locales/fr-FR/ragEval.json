@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Créer",
-    "description": {
-      "placeholder": "Description du jeu de données (optionnel)"
-    },
-    "name": {
-      "placeholder": "Nom du jeu de données",
-      "required": "Veuillez remplir le nom du jeu de données"
-    },
-    "title": "Ajouter un jeu de données"
-  },
-  "dataset": {
-    "addNewButton": "Créer un jeu de données",
-    "emptyGuide": "Le jeu de données actuel est vide, veuillez en créer un.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Importer des données"
-        },
-        "columns": {
-          "actions": "Actions",
-          "ideal": {
-            "title": "Réponse idéale"
-          },
-          "question": {
-            "title": "Question"
-          },
-          "referenceFiles": {
-            "title": "Fichiers de référence"
-          }
-        },
-        "notSelected": "Veuillez sélectionner un jeu de données à gauche",
-        "title": "Détails du jeu de données"
-      },
-      "title": "Jeu de données"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Créer",
-      "datasetId": {
-        "placeholder": "Veuillez sélectionner votre jeu de données d'évaluation",
-        "required": "Veuillez sélectionner un jeu de données d'évaluation"
-      },
-      "description": {
-        "placeholder": "Description de la tâche d'évaluation (optionnel)"
-      },
-      "name": {
-        "placeholder": "Nom de la tâche d'évaluation",
-        "required": "Veuillez remplir le nom de la tâche d'évaluation"
-      },
-      "title": "Ajouter une tâche d'évaluation"
-    },
-    "addNewButton": "Créer une évaluation",
-    "emptyGuide": "La tâche d'évaluation actuelle est vide, commencez à créer une évaluation.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Vérifier l'état",
-          "confirmDelete": "Voulez-vous supprimer cette évaluation ?",
-          "confirmRun": "Voulez-vous commencer l'exécution ? L'exécution sera effectuée en arrière-plan de manière asynchrone, fermer la page n'affectera pas l'exécution de la tâche asynchrone.",
-          "downloadRecords": "Télécharger l'évaluation",
-          "retry": "Réessayer",
-          "run": "Exécuter",
-          "title": "Actions"
-        },
-        "datasetId": {
-          "title": "Jeu de données"
-        },
-        "name": {
-          "title": "Nom de la tâche d'évaluation"
-        },
-        "records": {
-          "title": "Nombre d'enregistrements d'évaluation"
-        },
-        "referenceFiles": {
-          "title": "Fichiers de référence"
-        },
-        "status": {
-          "error": "Erreur d'exécution",
-          "pending": "En attente d'exécution",
-          "processing": "En cours d'exécution",
-          "success": "Exécution réussie",
-          "title": "État"
-        }
-      },
-      "title": "Liste des tâches d'évaluation"
-    }
-  }
+  "addDataset.confirm": "Créer",
+  "addDataset.description.placeholder": "Description du jeu de données (optionnel)",
+  "addDataset.name.placeholder": "Nom du jeu de données",
+  "addDataset.name.required": "Veuillez saisir le nom du jeu de données",
+  "addDataset.title": "Ajouter un jeu de données",
+  "dataset.addNewButton": "Créer un jeu de données",
+  "dataset.emptyGuide": "Il n'y a actuellement aucun jeu de données. Veuillez en créer un.",
+  "dataset.list.table.actions.importData": "Importer des données",
+  "dataset.list.table.columns.actions": "Actions",
+  "dataset.list.table.columns.ideal.title": "Réponse attendue",
+  "dataset.list.table.columns.question.title": "Question",
+  "dataset.list.table.columns.referenceFiles.title": "Fichiers de référence",
+  "dataset.list.table.notSelected": "Veuillez sélectionner un jeu de données à gauche",
+  "dataset.list.table.title": "Détails du jeu de données",
+  "dataset.list.title": "Jeu de données",
+  "evaluation.addEvaluation.confirm": "Créer",
+  "evaluation.addEvaluation.datasetId.placeholder": "Veuillez sélectionner votre jeu de données d’évaluation",
+  "evaluation.addEvaluation.datasetId.required": "Veuillez sélectionner un jeu de données d’évaluation",
+  "evaluation.addEvaluation.description.placeholder": "Description de la tâche d’évaluation (optionnel)",
+  "evaluation.addEvaluation.name.placeholder": "Nom de la tâche d’évaluation",
+  "evaluation.addEvaluation.name.required": "Veuillez saisir le nom de la tâche d’évaluation",
+  "evaluation.addEvaluation.title": "Ajouter une tâche d’évaluation",
+  "evaluation.addNewButton": "Créer une évaluation",
+  "evaluation.emptyGuide": "Il n'y a actuellement aucune tâche d’évaluation. Commencez par en créer une.",
+  "evaluation.table.columns.actions.checkStatus": "Vérifier le statut",
+  "evaluation.table.columns.actions.confirmDelete": "Êtes-vous sûr de vouloir supprimer cette évaluation ?",
+  "evaluation.table.columns.actions.confirmRun": "Êtes-vous sûr de vouloir lancer l’exécution ? La tâche d’évaluation sera exécutée de manière asynchrone en arrière-plan, et la fermeture de la page n’affectera pas son exécution.",
+  "evaluation.table.columns.actions.downloadRecords": "Télécharger l’évaluation",
+  "evaluation.table.columns.actions.retry": "Réessayer",
+  "evaluation.table.columns.actions.run": "Exécuter",
+  "evaluation.table.columns.actions.title": "Actions",
+  "evaluation.table.columns.datasetId.title": "Jeu de données",
+  "evaluation.table.columns.name.title": "Nom de la tâche d’évaluation",
+  "evaluation.table.columns.records.title": "Nombre d’enregistrements d’évaluation",
+  "evaluation.table.columns.referenceFiles.title": "Fichiers de référence",
+  "evaluation.table.columns.status.error": "Erreur d’exécution",
+  "evaluation.table.columns.status.pending": "En attente",
+  "evaluation.table.columns.status.processing": "En cours",
+  "evaluation.table.columns.status.success": "Exécution réussie",
+  "evaluation.table.columns.status.title": "Statut",
+  "evaluation.table.title": "Liste des tâches d’évaluation"
 }

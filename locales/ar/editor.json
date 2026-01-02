@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "طي",
-      "on": "توسيع"
-    },
-    "typobar": {
-      "off": "إخفاء شريط أدوات التنسيق",
-      "on": "إظهار شريط أدوات التنسيق"
-    }
-  },
+  "actions.expand.off": "طي",
+  "actions.expand.on": "توسيع",
+  "actions.typobar.off": "إخفاء شريط تنسيق النص",
+  "actions.typobar.on": "إظهار شريط تنسيق النص",
+  "autoSave.latest": "تم تحميل أحدث نسخة",
+  "autoSave.saved": "تم الحفظ",
+  "autoSave.saving": "يتم الحفظ تلقائيًا...",
   "cancel": "إلغاء",
+  "codemirror.copyFailed": "فشل النسخ",
+  "codemirror.copySuccess": "تم نسخ الكود إلى الحافظة",
+  "codemirror.selectLanguage": "اختر اللغة",
+  "codemirror.selectTheme": "اختر السمة",
+  "codemirror.showLineNumbers": "إظهار أرقام الأسطر",
+  "codemirror.tabSize": "حجم التبويب",
+  "codemirror.theme": "السمة",
+  "codemirror.useTabs": "استخدام التبويبات",
   "confirm": "تأكيد",
-  "file": {
-    "error": "خطأ: {{message}}",
-    "uploading": "جاري رفع الملف..."
-  },
-  "image": {
-    "broken": "الصورة تالفة"
-  },
-  "link": {
-    "edit": "تعديل الرابط",
-    "open": "فتح الرابط",
-    "placeholder": "أدخل عنوان URL للرابط",
-    "unlink": "إزالة الرابط"
-  },
-  "math": {
-    "placeholder": "يرجى إدخال معادلة TeX"
-  },
-  "slash": {
-    "h1": "عنوان رئيسي من المستوى الأول",
-    "h2": "عنوان فرعي من المستوى الثاني",
-    "h3": "عنوان فرعي من المستوى الثالث",
-    "hr": "خط فاصل",
-    "table": "جدول",
-    "tex": "معادلة TeX"
-  },
-  "table": {
-    "delete": "حذف الجدول",
-    "deleteColumn": "حذف العمود",
-    "deleteRow": "حذف الصف",
-    "insertColumnLeft": "إدراج {{count}} عمودًا إلى اليسار",
-    "insertColumnRight": "إدراج {{count}} عمودًا إلى اليمين",
-    "insertRowAbove": "إدراج {{count}} صفًا في الأعلى",
-    "insertRowBelow": "إدراج {{count}} صفًا في الأسفل"
-  },
-  "typobar": {
-    "blockquote": "اقتباس",
-    "bold": "غامق",
-    "bulletList": "قائمة نقطية",
-    "code": "كود مضمن",
-    "codeblock": "كتلة كود",
-    "italic": "مائل",
-    "link": "رابط",
-    "numberList": "قائمة مرقمة",
-    "strikethrough": "شطب",
-    "table": "جدول",
-    "taskList": "قائمة المهام",
-    "tex": "معادلة TeX",
-    "underline": "تسطير"
-  }
+  "file.error": "خطأ: {{message}}",
+  "file.uploading": "جاري رفع الملف...",
+  "image.broken": "الصورة تالفة",
+  "link.edit": "تعديل الرابط",
+  "link.editLinkTitle": "الرابط",
+  "link.editTextTitle": "العنوان",
+  "link.open": "فتح الرابط",
+  "link.placeholder": "أدخل عنوان الرابط",
+  "link.unlink": "إزالة الرابط",
+  "markdown.cancel": "إلغاء",
+  "markdown.confirm": "تحويل",
+  "markdown.parseMessage": "سيتم التحويل إلى تنسيق Markdown. سيتم استبدال المحتوى الحالي. هل أنت متأكد؟ (سيُغلق تلقائيًا خلال 5 ثوانٍ)",
+  "markdown.parseTitle": "تنسيق كـ Markdown",
+  "math.placeholder": "يرجى إدخال صيغة TeX",
+  "modifier.accept": "الاحتفاظ",
+  "modifier.acceptAll": "الاحتفاظ بالجميع",
+  "modifier.reject": "تراجع",
+  "modifier.rejectAll": "تراجع عن الكل",
+  "slash.h1": "عنوان 1",
+  "slash.h2": "عنوان 2",
+  "slash.h3": "عنوان 3",
+  "slash.hr": "فاصل",
+  "slash.table": "جدول",
+  "slash.tex": "صيغة TeX",
+  "table.delete": "حذف الجدول",
+  "table.deleteColumn": "حذف العمود",
+  "table.deleteRow": "حذف الصف",
+  "table.insertColumnLeft": "إدراج {{count}} عمود إلى اليسار",
+  "table.insertColumnRight": "إدراج {{count}} عمود إلى اليمين",
+  "table.insertRowAbove": "إدراج {{count}} صف أعلى",
+  "table.insertRowBelow": "إدراج {{count}} صف أسفل",
+  "typobar.blockquote": "اقتباس",
+  "typobar.bold": "عريض",
+  "typobar.bulletList": "قائمة نقطية",
+  "typobar.code": "كود مضمّن",
+  "typobar.codeblock": "كتلة كود",
+  "typobar.image": "صورة",
+  "typobar.italic": "مائل",
+  "typobar.link": "رابط",
+  "typobar.numberList": "قائمة مرقمة",
+  "typobar.redo": "إعادة",
+  "typobar.strikethrough": "يتوسطه خط",
+  "typobar.table": "جدول",
+  "typobar.taskList": "قائمة مهام",
+  "typobar.tex": "صيغة TeX",
+  "typobar.underline": "تحته خط",
+  "typobar.undo": "تراجع"
 }

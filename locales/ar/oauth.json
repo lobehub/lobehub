@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "موافقة",
-      "deny": "رفض"
-    },
-    "description": "تطبيق {{clientName}} يطلب إذن حسابك",
-    "error": {
-      "sessionInvalid": {
-        "message": "جلسة التفويض منتهية أو غير صالحة، يرجى إعادة بدء عملية التفويض.",
-        "title": "جلسة التفويض غير صالحة"
-      },
-      "title": "حدث خطأ",
-      "unsupportedInteraction": {
-        "message": "نوع التفاعل غير مدعوم: {promptName}",
-        "title": "نوع التفاعل غير مدعوم"
-      }
-    },
-    "permissionsTitle": "طلب الأذونات التالية:",
-    "redirectUri": "سيتم إعادة التوجيه إلى بعد نجاح التفويض",
-    "redirecting": "تم التفويض بنجاح، جارٍ إعادة التوجيه...",
-    "scope": {
-      "email": "الوصول إلى عنوان بريدك الإلكتروني",
-      "offline_access": "السماح للتطبيق بالوصول إلى بياناتك",
-      "openid": "استخدام حسابك في LobeChat للتحقق من الهوية",
-      "profile": "الوصول إلى معلومات ملفك الشخصي الأساسية (الاسم، الصورة، إلخ)",
-      "sync-read": "قراءة بيانات المزامنة الخاصة بك",
-      "sync-write": "كتابة وتحديث بيانات المزامنة الخاصة بك"
-    },
-    "title": "تفويض {{clientName}}"
-  },
-  "error": {
-    "backToHome": "العودة إلى الصفحة الرئيسية",
-    "desc": "فشل تفويض OAuth، سبب الفشل: {{reason}}",
-    "reason": {
-      "internal_error": "خطأ في الخادم",
-      "invalid_request": "معلمات طلب غير صالحة"
-    },
-    "title": "فشل التفويض"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "التطبيق يقوم بمعالجة التفويض، سيتم الانتقال إلى الصفحة التالية قريبًا...",
-      "success": "تمت محاولة فتح التطبيق على سطح المكتب. إذا لم يفتح التطبيق تلقائيًا، يرجى التبديل يدويًا. يمكنك إغلاق نافذة المتصفح هذه لاحقًا."
-    },
-    "title": {
-      "processing": "جارٍ معالجة التفويض...",
-      "success": "تم الانتهاء من التفويض"
-    }
-  },
-  "login": {
-    "button": "تأكيد تسجيل الدخول",
-    "description": "التطبيق {{clientName}} يطلب استخدام حسابك لتسجيل الدخول",
-    "title": "تسجيل الدخول إلى {{clientName}}",
-    "userWelcome": "مرحبًا بعودتك،"
-  },
-  "success": {
-    "subTitle": "لقد قمت بتفويض التطبيق للوصول إلى حسابك بنجاح، يمكنك الآن إغلاق هذه الصفحة",
-    "title": "تم التفويض بنجاح"
-  }
+  "consent.buttons.accept": "السماح",
+  "consent.buttons.deny": "رفض",
+  "consent.description": "يطلب التطبيق {{clientName}} إذن الوصول إلى حسابك",
+  "consent.error.sessionInvalid.message": "انتهت صلاحية جلسة التفويض أو أنها غير صالحة. يرجى إعادة بدء عملية التفويض.",
+  "consent.error.sessionInvalid.title": "جلسة تفويض غير صالحة",
+  "consent.error.title": "حدث خطأ",
+  "consent.error.unknown.message": "حدث خطأ غير معروف أثناء تحميل تفاصيل التفويض.",
+  "consent.error.unsupportedInteraction.message": "نوع التفاعل غير مدعوم: {{promptName}}",
+  "consent.error.unsupportedInteraction.title": "نوع التفاعل غير مدعوم",
+  "consent.permissionsTitle": "يطلب الأذونات التالية:",
+  "consent.redirectUri": "سيتم إعادة التوجيه بعد إتمام التفويض بنجاح",
+  "consent.redirecting": "تم التفويض بنجاح، جارٍ إعادة التوجيه...",
+  "consent.scope.email": "الوصول إلى عنوان بريدك الإلكتروني",
+  "consent.scope.offline_access": "السماح للتطبيق بالوصول إلى بياناتك",
+  "consent.scope.openid": "تسجيل الدخول باستخدام حساب LobeHub الخاص بك",
+  "consent.scope.profile": "الوصول إلى معلومات ملفك الشخصي الأساسية (الاسم، الصورة الرمزية، إلخ)",
+  "consent.scope.sync-read": "قراءة بياناتك المتزامنة",
+  "consent.scope.sync-write": "كتابة وتحديث بياناتك المتزامنة",
+  "consent.title": "تفويض {{clientName}}",
+  "error.backToHome": "العودة إلى الصفحة الرئيسية",
+  "error.desc": "فشل تفويض OAuth، السبب: {{reason}}",
+  "error.reason.internal_error": "خطأ داخلي في الخادم",
+  "error.reason.invalid_request": "معلمات الطلب غير صالحة",
+  "error.title": "فشل التفويض",
+  "handoff.desc.processing": "يقوم التطبيق بمعالجة التفويض وسيتم إعادة التوجيه إلى الصفحة التالية قريبًا...",
+  "handoff.desc.success": "تمت محاولة فتح التطبيق على سطح المكتب. إذا لم يتم فتحه تلقائيًا، يرجى التبديل يدويًا. يمكنك إغلاق نافذة المتصفح لاحقًا.",
+  "handoff.title.processing": "جارٍ تنفيذ التفويض...",
+  "handoff.title.success": "تم التفويض بنجاح",
+  "login.button": "تأكيد تسجيل الدخول",
+  "login.description": "يطلب التطبيق {{clientName}} استخدام حسابك لتسجيل الدخول",
+  "login.title": "تسجيل الدخول إلى {{clientName}}",
+  "login.userWelcome": "مرحبًا بعودتك، ",
+  "success.subTitle": "لقد قمت بتفويض التطبيق للوصول إلى حسابك بنجاح. يمكنك الآن إغلاق هذه الصفحة.",
+  "success.title": "تم التفويض بنجاح"
 }

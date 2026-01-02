@@ -1,25 +1,24 @@
-import { ActionIcon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { ActionIcon, Center, Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { createStaticStyles , responsive } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { ReactNode, memo } from 'react';
-import { Center, Flexbox, FlexboxProps } from 'react-layout-kit';
+import { type ReactNode, memo } from 'react';
 
-const useStyles = createStyles(({ css, token, responsive }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     position: relative;
 
     overflow: hidden;
 
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   desc: css`
     font-size: 14px;
     line-height: 1.4;
-    color: ${token.colorTextDescription};
-    ${responsive.mobile} {
+    color: ${cssVar.colorTextDescription};
+    ${responsive.sm} {
       font-size: 12px;
     }
   `,
@@ -29,23 +28,23 @@ const useStyles = createStyles(({ css, token, responsive }) => ({
     inset-inline-start: 50%;
     transform: translateX(-50%);
 
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 50%;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   header: css`
-    border-block-end: 1px solid ${token.colorBorderSecondary};
-    background: ${token.colorFillQuaternary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   more: css`
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
   `,
   title: css`
     font-size: 16px;
     font-weight: bold;
     line-height: 1.4;
-    ${responsive.mobile} {
+    ${responsive.sm} {
       font-size: 14px;
     }
   `,
@@ -76,7 +75,6 @@ const IndexCard = memo<IndexCardProps>(
     children,
     ...rest
   }) => {
-    const { styles } = useStyles();
     return (
       <Flexbox
         style={{

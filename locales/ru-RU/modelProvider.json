@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "Версия API Azure, следующая формату ГГГГ-ММ-ДД, см. [последнюю версию](https://learn.microsoft.com/ru-ru/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Получить список",
-      "title": "Версия Azure API"
-    },
-    "empty": "Введите идентификатор модели, чтобы добавить первую модель",
-    "endpoint": {
-      "desc": "Можно найти в разделе «Ключи и конечные точки» при проверке ресурса в портале Azure",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "Адрес Azure API"
-    },
-    "modelListPlaceholder": "Выберите или добавьте модель OpenAI, которую вы развернули",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Можно найти в разделе «Ключи и конечные точки» при проверке ресурса в портале Azure. Можно использовать KEY1 или KEY2",
-      "placeholder": "Azure API Key",
-      "title": "API Key"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "Версия API Azure, формат YYYY-MM-DD, смотрите [последнюю версию](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Получить список",
-      "title": "Версия API Azure"
-    },
-    "endpoint": {
-      "desc": "Найдите конечную точку вывода модели Azure AI в обзоре проекта Azure AI",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "Конечная точка Azure AI"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Найдите API-ключ в обзоре проекта Azure AI",
-      "placeholder": "Ключ Azure",
-      "title": "Ключ"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "Введите ваш AWS Access Key ID",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key ID"
-    },
-    "checker": {
-      "desc": "Проверить правильность заполнения AccessKeyId/SecretAccessKey"
-    },
-    "region": {
-      "desc": "Введите ваш AWS Region",
-      "placeholder": "AWS Region",
-      "title": "AWS Region"
-    },
-    "secretAccessKey": {
-      "desc": "Введите ваш AWS Secret Access Key",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "Если вы используете AWS SSO/STS, введите ваш AWS Session Token",
-      "placeholder": "AWS Session Token",
-      "title": "AWS Session Token (необязательно)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "Пользовательский регион обслуживания",
-      "customSessionToken": "Пользовательский токен сессии",
-      "description": "Введите свой ключ доступа AWS AccessKeyId / SecretAccessKey, чтобы начать сеанс. Приложение не будет сохранять вашу конфигурацию аутентификации",
-      "imageGenerationDescription": "Введите ваш AWS AccessKeyId / SecretAccessKey, чтобы начать генерацию. Приложение не будет сохранять ваши данные аутентификации",
-      "title": "Использовать пользовательскую информацию аутентификации Bedrock"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "Пожалуйста, заполните Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "Введите ID аккаунта Cloudflare или адрес API по умолчанию",
-      "placeholder": "ID аккаунта Cloudflare / адрес API по умолчанию",
-      "title": "ID аккаунта Cloudflare / адрес API"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "API-ключ, необходимый для аутентификации с использованием Bearer Token",
-      "placeholder": "Пожалуйста, введите API-ключ",
-      "required": "Пожалуйста, введите API-ключ",
-      "title": "API-ключ"
-    },
-    "authType": {
-      "desc": "Выберите способ аутентификации с сервером ComfyUI",
-      "options": {
-        "basic": "Логин/Пароль",
-        "bearer": "Bearer (API-ключ)",
-        "custom": "Пользовательские заголовки",
-        "none": "Без аутентификации"
-      },
-      "placeholder": "Пожалуйста, выберите тип аутентификации",
-      "title": "Тип аутентификации"
-    },
-    "baseURL": {
-      "desc": "Веб-адрес для доступа к ComfyUI",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "Пожалуйста, введите адрес сервиса ComfyUI",
-      "title": "Адрес сервиса ComfyUI"
-    },
-    "checker": {
-      "desc": "Проверка правильности настройки соединения",
-      "title": "Проверка подключения"
-    },
-    "customHeaders": {
-      "addButton": "Добавить заголовок",
-      "deleteTooltip": "Удалить этот заголовок",
-      "desc": "Заголовки, необходимые для пользовательской аутентификации, в формате ключ-значение",
-      "duplicateKeyError": "Имена ключей заголовков не должны повторяться",
-      "keyPlaceholder": "Ключ",
-      "required": "Пожалуйста, введите пользовательские заголовки",
-      "title": "Пользовательские заголовки",
-      "valuePlaceholder": "Значение"
-    },
-    "password": {
-      "desc": "Пароль, необходимый для базовой аутентификации",
-      "placeholder": "Пожалуйста, введите пароль",
-      "required": "Пожалуйста, введите пароль",
-      "title": "Пароль"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "Имя пользователя, необходимое для базовой аутентификации",
-      "placeholder": "Пожалуйста, введите имя пользователя",
-      "required": "Пожалуйста, введите имя пользователя",
-      "title": "Имя пользователя"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "Пожалуйста, введите ваш API Key",
-      "title": "API Key"
-    },
-    "basicTitle": "Основная информация",
-    "configTitle": "Конфигурационная информация",
-    "confirm": "Создать",
-    "createSuccess": "Создание успешно",
-    "description": {
-      "placeholder": "Описание провайдера (необязательно)",
-      "title": "Описание провайдера"
-    },
-    "id": {
-      "desc": "Уникальный идентификатор для поставщика услуг, который нельзя изменить после создания",
-      "format": "Может содержать только цифры, строчные буквы, дефисы (-) и подчеркивания (_) ",
-      "placeholder": "Рекомендуется использовать строчные буквы, например, openai, после создания изменить нельзя",
-      "required": "Пожалуйста, введите ID провайдера",
-      "title": "ID провайдера"
-    },
-    "logo": {
-      "required": "Пожалуйста, загрузите правильный логотип провайдера",
-      "title": "Логотип провайдера"
-    },
-    "name": {
-      "placeholder": "Пожалуйста, введите отображаемое имя провайдера",
-      "required": "Пожалуйста, введите имя провайдера",
-      "title": "Имя провайдера"
-    },
-    "proxyUrl": {
-      "required": "Пожалуйста, введите адрес прокси",
-      "title": "Адрес прокси"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "Пожалуйста, выберите тип SDK",
-      "title": "Формат запроса"
-    },
-    "title": "Создание пользовательского AI провайдера"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "Введите ваш персональный токен доступа GitHub (PAT), нажмите [здесь](https://github.com/settings/tokens), чтобы создать его",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "Введите ваш токен HuggingFace, нажмите [здесь](https://huggingface.co/settings/tokens) для создания",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "Токен HuggingFace"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "Пользовательский поставщик не активирован",
-      "disabled": "Поставщик не активирован",
-      "enabled": "Поставщик активирован"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "Добавить пользовательского провайдера",
-    "all": "Все",
-    "list": {
-      "custom": "Пользовательский не активирован",
-      "disabled": "Не активирован",
-      "disabledActions": {
-        "sort": "Сортировка",
-        "sortAlphabetical": "Сортировать по алфавиту",
-        "sortAlphabeticalDesc": "Сортировать в обратном алфавитном порядке",
-        "sortDefault": "Сортировка по умолчанию"
-      },
-      "enabled": "Активирован"
-    },
-    "notFound": "Результаты поиска не найдены",
-    "searchProviders": "Поиск провайдеров...",
-    "sort": "Пользовательская сортировка"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "API-ключ, предоставляемый платформой New API",
-      "placeholder": "API-ключ New API",
-      "required": "API-ключ обязателен",
-      "title": "API-ключ"
-    },
-    "apiUrl": {
-      "desc": "API-адрес сервиса New API, чаще всего требуется с /v1",
-      "title": "API-адрес"
-    },
-    "enabled": {
-      "title": "Включить New API"
-    },
-    "models": {
-      "batchSelect": "Выбрать модели пакетно ({{count}} шт.)",
-      "fetch": "Получить список моделей",
-      "selected": "Выбранные модели",
-      "title": "Доступные модели"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "Проверить правильность адреса прокси",
-      "title": "Проверка связности"
-    },
-    "customModelName": {
-      "desc": "Добавить кастомные модели, разделяя их через запятую (,)",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "Название кастомных моделей"
-    },
-    "download": {
-      "desc": "Ollama загружает эту модель, пожалуйста, старайтесь не закрывать эту страницу. При повторной загрузке процесс будет продолжен с места остановки",
-      "failed": "Не удалось загрузить модель, пожалуйста, проверьте сеть или настройки Ollama и попробуйте снова",
-      "remainingTime": "Оставшееся время",
-      "speed": "Скорость загрузки",
-      "title": "Загрузка модели {{model}} "
-    },
-    "endpoint": {
-      "desc": "Должен содержать http(s)://, если локально не указано иное, можно оставить пустым",
-      "title": "Адрес прокси-интерфейса"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "Cancel Download",
-      "confirm": "Download",
-      "description": "Enter your Ollama model tag to continue the session",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "Starting download...",
-      "title": "Download specified Ollama model"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "Выбрано {{count}} моделей",
-      "title": "Пакетный выбор"
-    },
-    "config": {
-      "aesGcm": "Ваши ключи и адрес прокси будут зашифрованы с использованием <1>AES-GCM</1>",
-      "apiKey": {
-        "desc": "Пожалуйста, введите ваш {{name}} API Key",
-        "descWithUrl": "Пожалуйста, введите ваш {{name}} API ключ, <3>получить здесь</3>",
-        "placeholder": "{{name}} API Key",
-        "title": "API Key"
-      },
-      "baseURL": {
-        "desc": "Должен содержать http(s)://",
-        "invalid": "Пожалуйста, введите действительный URL",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "API адрес прокси"
-      },
-      "checker": {
-        "button": "Проверить",
-        "desc": "Проверьте, правильно ли заполнены API Key и адрес прокси",
-        "pass": "Проверка пройдена",
-        "title": "Проверка соединения"
-      },
-      "fetchOnClient": {
-        "desc": "Клиентский режим запросов будет инициировать сессии напрямую из браузера, что может ускорить время отклика",
-        "title": "Использовать клиентский режим запросов"
-      },
-      "helpDoc": "Документация по настройке",
-      "responsesApi": {
-        "desc": "Использует новый формат запроса OpenAI, открывая доступ к продвинутым функциям, таким как цепочки рассуждений (поддерживается только моделями OpenAI)",
-        "title": "Использование спецификации Responses API"
-      },
-      "waitingForMore": "Больше моделей находится в <1>планировании подключения</1>, ожидайте с нетерпением"
-    },
-    "createNew": {
-      "title": "Создание пользовательской AI модели"
-    },
-    "item": {
-      "config": "Настроить модель",
-      "customModelCards": {
-        "addNew": "Создать и добавить модель {{id}}",
-        "confirmDelete": "Вы собираетесь удалить эту пользовательскую модель, после удаления восстановить ее будет невозможно, будьте осторожны."
-      },
-      "delete": {
-        "confirm": "Подтвердите удаление модели {{displayName}}?",
-        "success": "Удаление успешно",
-        "title": "Удалить модель"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Поле, запрашиваемое в Azure OpenAI",
-          "placeholder": "Пожалуйста, введите имя развертывания модели в Azure",
-          "title": "Имя развертывания модели"
-        },
-        "deployName": {
-          "extra": "Это поле будет использоваться как идентификатор модели при отправке запроса",
-          "placeholder": "Введите фактическое имя или id развертывания модели",
-          "title": "Имя развертывания модели"
-        },
-        "displayName": {
-          "placeholder": "Пожалуйста, введите отображаемое имя модели, например, ChatGPT, GPT-4 и т.д.",
-          "title": "Отображаемое имя модели"
-        },
-        "files": {
-          "extra": "Текущая реализация загрузки файлов является лишь хакерским решением, предназначенным только для самостоятельного тестирования. Полные возможности загрузки файлов ожидайте в будущем.",
-          "title": "Поддержка загрузки файлов"
-        },
-        "functionCall": {
-          "extra": "Эта настройка позволит модели использовать инструменты, что даст возможность добавлять плагины инструментов. Однако возможность фактического использования инструментов полностью зависит от самой модели, пожалуйста, протестируйте их работоспособность самостоятельно",
-          "title": "Поддержка использования инструментов"
-        },
-        "id": {
-          "extra": "После создания изменить нельзя, будет использоваться как идентификатор модели при вызове AI",
-          "placeholder": "Введите идентификатор модели, например, gpt-4o или claude-3.5-sonnet",
-          "title": "ID модели"
-        },
-        "imageOutput": {
-          "extra": "Эта настройка включает только возможность генерации изображений моделью. Конечный результат полностью зависит от самой модели. Пожалуйста, самостоятельно проверьте, способна ли модель генерировать изображения.",
-          "title": "Поддержка генерации изображений"
-        },
-        "modalTitle": "Настройка пользовательской модели",
-        "reasoning": {
-          "extra": "Эта настройка активирует возможность глубокого мышления модели, конкретный эффект полностью зависит от самой модели, пожалуйста, протестируйте, обладает ли модель доступной способностью к глубокому мышлению",
-          "title": "Поддержка глубокого мышления"
-        },
-        "search": {
-          "extra": "Эта настройка включает только возможность подключения к интернету для встроенного поискового движка модели. Поддержка встроенного поиска зависит от самой модели. Пожалуйста, самостоятельно проверьте, доступна ли эта функция у модели.",
-          "title": "Поддержка интернет-поиска"
-        },
-        "tokens": {
-          "extra": "Установите максимальное количество токенов, поддерживаемое моделью",
-          "title": "Максимальное окно контекста",
-          "unlimited": "Без ограничений"
-        },
-        "type": {
-          "extra": "Различные типы моделей имеют разные сценарии использования и возможности",
-          "options": {
-            "chat": "Диалог",
-            "embedding": "Векторизация",
-            "image": "Генерация изображений",
-            "realtime": "Реальное время",
-            "stt": "Распознавание речи",
-            "text2music": "Текст в музыку",
-            "text2video": "Текст в видео",
-            "tts": "Синтез речи"
-          },
-          "placeholder": "Пожалуйста, выберите тип модели",
-          "title": "Тип модели"
-        },
-        "video": {
-          "extra": "Эта настройка включает только конфигурацию распознавания видео в приложении. Возможность распознавания полностью зависит от самой модели. Пожалуйста, самостоятельно проверьте, поддерживает ли модель распознавание видео.",
-          "title": "Поддержка распознавания видео"
-        },
-        "vision": {
-          "extra": "Эта настройка только активирует возможность загрузки изображений в приложении, поддержка распознавания полностью зависит от самой модели, пожалуйста, протестируйте доступность визуального распознавания этой модели.",
-          "title": "Поддержка визуального распознавания"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/изображение",
-        "inputCharts": "${{amount}}/M символов",
-        "inputMinutes": "${{amount}}/минуты",
-        "inputTokens": "Ввод ${{amount}}/М",
-        "outputTokens": "Вывод ${{amount}}/М"
-      },
-      "releasedAt": "Выпущено {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "Добавить модель",
-      "disabled": "Не активирован",
-      "disabledActions": {
-        "showMore": "Показать все",
-        "sort": "Сортировка",
-        "sortAlphabetical": "Сортировать по алфавиту",
-        "sortAlphabeticalDesc": "Сортировать в обратном алфавитном порядке",
-        "sortDefault": "Сортировка по умолчанию",
-        "sortReleasedAt": "Сортировать по дате первого выпуска",
-        "sortReleasedAtDesc": "Сортировать по дате последнего выпуска"
-      },
-      "empty": {
-        "desc": "Пожалуйста, создайте пользовательскую модель или загрузите модель, чтобы начать использовать.",
-        "title": "Нет доступных моделей"
-      },
-      "enabled": "Активирован",
-      "enabledActions": {
-        "disableAll": "Отключить все",
-        "enableAll": "Включить все",
-        "sort": "Сортировка моделей по индивидуальному порядку"
-      },
-      "enabledEmpty": "Нет активированных моделей, пожалуйста, активируйте понравившиеся модели из списка ниже~",
-      "fetcher": {
-        "clear": "Очистить полученные модели",
-        "fetch": "Получить список моделей",
-        "fetching": "Получение списка моделей...",
-        "latestTime": "Последнее обновление: {{time}}",
-        "noLatestTime": "Список еще не получен"
-      },
-      "noModelsInCategory": "В этой категории нет активных моделей",
-      "resetAll": {
-        "conform": "Вы уверены, что хотите сбросить все изменения текущей модели? После сброса список текущих моделей вернется к состоянию по умолчанию",
-        "success": "Сброс выполнен успешно",
-        "title": "Сбросить все изменения"
-      },
-      "search": "Поиск моделей...",
-      "searchResult": "Найдено {{count}} моделей",
-      "title": "Список моделей",
-      "total": "Всего доступно {{count}} моделей"
-    },
-    "searchNotFound": "Результаты поиска не найдены",
-    "tabs": {
-      "all": "Все",
-      "chat": "Чат",
-      "embedding": "Векторизация",
-      "image": "Изображение",
-      "stt": "ASR",
-      "tts": "TTS"
-    }
-  },
-  "sortModal": {
-    "success": "Сортировка обновлена успешно",
-    "title": "Пользовательская сортировка",
-    "update": "Обновить"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "Вы собираетесь удалить этого AI провайдера, после удаления его будет невозможно восстановить, подтвердите, хотите ли вы удалить?",
-    "deleteSuccess": "Удаление успешно",
-    "tooltip": "Обновить базовую конфигурацию провайдера",
-    "updateSuccess": "Обновление успешно"
-  },
-  "updateCustomAiProvider": {
-    "title": "Обновить настройки поставщика пользовательского ИИ"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "Введите ваши ключи Vertex AI",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "Ключи Vertex AI"
-    },
-    "region": {
-      "desc": "Выберите регион для службы Vertex AI. Некоторые модели, такие как Gemini 2.5, доступны только в определённых регионах (например, global)",
-      "placeholder": "Выберите регион",
-      "title": "Регион Vertex AI"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI Цифровая Вселенная"
-  },
-  "zhipu": {
-    "title": "Zhipu"
-  }
+  "azure.azureApiVersion.desc": "Версия Azure API в формате ГГГГ-ММ-ДД. Ознакомьтесь с [последней версией](https://learn.microsoft.com/ru-ru/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "Получить список",
+  "azure.azureApiVersion.title": "Версия Azure API",
+  "azure.empty": "Пожалуйста, введите ID модели, чтобы добавить первую модель",
+  "azure.endpoint.desc": "При просмотре ресурсов в портале Azure это значение можно найти в разделе «Ключи и конечные точки»",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "Адрес Azure API",
+  "azure.modelListPlaceholder": "Выберите или добавьте развернутую модель OpenAI",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "При просмотре ресурсов в портале Azure это значение можно найти в разделе «Ключи и конечные точки». Можно использовать KEY1 или KEY2",
+  "azure.token.placeholder": "Ключ Azure API",
+  "azure.token.title": "API-ключ",
+  "azureai.azureApiVersion.desc": "Версия API для Azure в формате ГГГГ-ММ-ДД. См. [последнюю версию](https://learn.microsoft.com/ru-ru/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "Получить список",
+  "azureai.azureApiVersion.title": "Версия Azure API",
+  "azureai.endpoint.desc": "Найдите конечную точку вывода модели Azure AI в обзоре проекта Azure AI",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "Конечная точка Azure AI",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "Найдите API-ключ в обзоре проекта Azure AI",
+  "azureai.token.placeholder": "Ключ Azure",
+  "azureai.token.title": "Ключ",
+  "bedrock.accessKeyId.desc": "Введите идентификатор ключа доступа AWS",
+  "bedrock.accessKeyId.placeholder": "Идентификатор ключа доступа AWS",
+  "bedrock.accessKeyId.title": "Идентификатор ключа доступа AWS",
+  "bedrock.checker.desc": "Проверьте, правильно ли введены AccessKeyId / SecretAccessKey",
+  "bedrock.region.desc": "Введите регион AWS",
+  "bedrock.region.placeholder": "Регион AWS",
+  "bedrock.region.title": "Регион AWS",
+  "bedrock.secretAccessKey.desc": "Введите секретный ключ доступа AWS",
+  "bedrock.secretAccessKey.placeholder": "Секретный ключ доступа AWS",
+  "bedrock.secretAccessKey.title": "Секретный ключ доступа AWS",
+  "bedrock.sessionToken.desc": "Если вы используете AWS SSO/STS, введите токен сеанса AWS",
+  "bedrock.sessionToken.placeholder": "Токен сеанса AWS",
+  "bedrock.sessionToken.title": "Токен сеанса AWS (необязательно)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "Пользовательский регион сервиса",
+  "bedrock.unlock.customSessionToken": "Пользовательский токен сеанса",
+  "bedrock.unlock.description": "Введите AccessKeyId / SecretAccessKey AWS, чтобы начать сеанс. Приложение не сохраняет ваши данные аутентификации",
+  "bedrock.unlock.imageGenerationDescription": "Введите AccessKeyId / SecretAccessKey AWS, чтобы начать генерацию. Приложение не сохраняет ваши учетные данные.",
+  "bedrock.unlock.title": "Использовать пользовательскую аутентификацию Bedrock",
+  "cloudflare.apiKey.desc": "Пожалуйста, введите API-ключ Cloudflare",
+  "cloudflare.apiKey.placeholder": "API-ключ Cloudflare",
+  "cloudflare.apiKey.title": "API-ключ Cloudflare",
+  "cloudflare.baseURLOrAccountID.desc": "Введите идентификатор учетной записи Cloudflare или пользовательский адрес API",
+  "cloudflare.baseURLOrAccountID.placeholder": "ID учетной записи Cloudflare / пользовательский URL API",
+  "cloudflare.baseURLOrAccountID.title": "ID учетной записи Cloudflare / адрес API",
+  "comfyui.apiKey.desc": "API-ключ для аутентификации с использованием Bearer Token",
+  "comfyui.apiKey.placeholder": "Введите API-ключ",
+  "comfyui.apiKey.required": "Пожалуйста, введите API-ключ",
+  "comfyui.apiKey.title": "API-ключ",
+  "comfyui.authType.desc": "Выберите метод аутентификации для подключения к серверу ComfyUI",
+  "comfyui.authType.options.basic": "Базовая аутентификация",
+  "comfyui.authType.options.bearer": "Bearer Token",
+  "comfyui.authType.options.custom": "Пользовательская аутентификация",
+  "comfyui.authType.options.none": "Без аутентификации",
+  "comfyui.authType.placeholder": "Пожалуйста, выберите тип аутентификации",
+  "comfyui.authType.title": "Тип аутентификации",
+  "comfyui.baseURL.desc": "Адрес доступа к серверу ComfyUI, например http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "Пожалуйста, введите URL сервиса ComfyUI",
+  "comfyui.baseURL.title": "URL сервиса ComfyUI",
+  "comfyui.checker.desc": "Проверьте, правильно ли настроено подключение",
+  "comfyui.checker.title": "Проверка подключения",
+  "comfyui.customHeaders.addButton": "Добавить заголовок",
+  "comfyui.customHeaders.deleteTooltip": "Удалить этот заголовок",
+  "comfyui.customHeaders.desc": "Заголовки запроса, необходимые для пользовательской аутентификации, в формате ключ-значение",
+  "comfyui.customHeaders.duplicateKeyError": "Имена заголовков не должны повторяться",
+  "comfyui.customHeaders.keyPlaceholder": "Ключ",
+  "comfyui.customHeaders.required": "Пожалуйста, введите пользовательские заголовки запроса",
+  "comfyui.customHeaders.title": "Пользовательские заголовки",
+  "comfyui.customHeaders.valuePlaceholder": "Значение",
+  "comfyui.password.desc": "Пароль для базовой аутентификации",
+  "comfyui.password.placeholder": "Введите пароль",
+  "comfyui.password.required": "Пожалуйста, введите пароль",
+  "comfyui.password.title": "Пароль",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "Имя пользователя для базовой аутентификации",
+  "comfyui.username.placeholder": "Введите имя пользователя",
+  "comfyui.username.required": "Пожалуйста, введите имя пользователя",
+  "comfyui.username.title": "Имя пользователя",
+  "createNewAiProvider.apiKey.placeholder": "Пожалуйста, введите ваш API-ключ",
+  "createNewAiProvider.apiKey.title": "API-ключ",
+  "createNewAiProvider.basicTitle": "Основная информация",
+  "createNewAiProvider.configTitle": "Информация о конфигурации",
+  "createNewAiProvider.confirm": "Создать",
+  "createNewAiProvider.createSuccess": "Успешно создано",
+  "createNewAiProvider.description.placeholder": "Описание провайдера (необязательно)",
+  "createNewAiProvider.description.title": "Описание провайдера",
+  "createNewAiProvider.id.desc": "Уникальный идентификатор провайдера, не может быть изменен после создания",
+  "createNewAiProvider.id.format": "Может содержать только цифры, строчные буквы, дефисы (-) и подчеркивания (_)",
+  "createNewAiProvider.id.placeholder": "Рекомендуется использовать строчные буквы, например openai. Не может быть изменен после создания",
+  "createNewAiProvider.id.required": "Пожалуйста, введите ID провайдера",
+  "createNewAiProvider.id.title": "ID провайдера",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "Пожалуйста, загрузите действительный логотип провайдера",
+  "createNewAiProvider.logo.title": "Логотип провайдера",
+  "createNewAiProvider.name.placeholder": "Пожалуйста, введите отображаемое имя провайдера",
+  "createNewAiProvider.name.required": "Пожалуйста, введите имя провайдера",
+  "createNewAiProvider.name.title": "Имя провайдера",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "Пожалуйста, введите адрес прокси",
+  "createNewAiProvider.proxyUrl.title": "URL прокси",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "Пожалуйста, выберите тип SDK",
+  "createNewAiProvider.sdkType.title": "Формат запроса",
+  "createNewAiProvider.title": "Создать пользовательского AI-провайдера",
+  "github.personalAccessToken.desc": "Введите ваш персональный токен GitHub. Нажмите [здесь](https://github.com/settings/tokens), чтобы создать его.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "Персональный токен GitHub",
+  "huggingface.accessToken.desc": "Введите ваш токен HuggingFace. Нажмите [здесь](https://huggingface.co/settings/tokens), чтобы создать его",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "Токен HuggingFace",
+  "list.title.custom": "Пользовательский провайдер не включен",
+  "list.title.disabled": "Отключено",
+  "list.title.enabled": "Включено",
+  "menu.addCustomProvider": "Добавить пользовательского провайдера",
+  "menu.all": "Все",
+  "menu.list.custom": "Пользовательские не включены",
+  "menu.list.disabled": "Отключено",
+  "menu.list.disabledActions.sort": "Сортировать по",
+  "menu.list.disabledActions.sortAlphabetical": "Сортировать по алфавиту",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "Сортировать в обратном алфавитном порядке",
+  "menu.list.disabledActions.sortDefault": "Сортировка по умолчанию",
+  "menu.list.enabled": "Включено",
+  "menu.notFound": "Результаты не найдены",
+  "menu.searchProviders": "Поиск провайдеров...",
+  "menu.sort": "Пользовательская сортировка",
+  "newapi.apiKey.desc": "Ключ API, предоставленный платформой New API",
+  "newapi.apiKey.placeholder": "Ключ API New API",
+  "newapi.apiKey.required": "Требуется ключ API",
+  "newapi.apiKey.title": "Ключ API",
+  "newapi.apiUrl.desc": "Конечная точка API для сервиса New API, обычно включает /v1",
+  "newapi.apiUrl.title": "URL API",
+  "newapi.enabled.title": "Включить New API",
+  "newapi.models.batchSelect": "Выбрать модели оптом ({{count}} элементов)",
+  "newapi.models.fetch": "Получить список моделей",
+  "newapi.models.selected": "Выбранные модели",
+  "newapi.models.title": "Доступные модели",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "Проверьте, правильно ли указан адрес прокси",
+  "ollama.checker.title": "Проверка подключения",
+  "ollama.customModelName.desc": "Добавьте пользовательские модели, разделяя их запятыми",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "Имя пользовательской модели",
+  "ollama.download.desc": "Ollama загружает модель. Пожалуйста, не закрывайте эту страницу. Загрузка продолжится с места остановки в случае прерывания.",
+  "ollama.download.failed": "Не удалось загрузить модель. Проверьте подключение к сети или настройки Ollama и попробуйте снова.",
+  "ollama.download.remainingTime": "Оставшееся время",
+  "ollama.download.speed": "Скорость",
+  "ollama.download.title": "Загрузка модели {{model}}",
+  "ollama.endpoint.desc": "Должен включать http(s)://; можно оставить пустым, если не указано локально.",
+  "ollama.endpoint.title": "Адрес прокси-интерфейса",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "Отменить загрузку",
+  "ollama.unlock.confirm": "Загрузить",
+  "ollama.unlock.description": "Введите тег модели Ollama для продолжения сессии",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "Начало загрузки...",
+  "ollama.unlock.title": "Загрузить указанную модель Ollama",
+  "providerModels.batchSelect.selected": "Выбрано моделей: {{count}}",
+  "providerModels.batchSelect.title": "Множественный выбор",
+  "providerModels.config.aesGcm": "Ваш ключ и URL прокси будут зашифрованы с использованием алгоритма <1>AES-GCM</1>",
+  "providerModels.config.apiKey.desc": "Пожалуйста, введите ваш ключ API {{name}}",
+  "providerModels.config.apiKey.descWithUrl": "Пожалуйста, введите ваш ключ API {{name}}. <3>Нажмите здесь, чтобы получить его</3>",
+  "providerModels.config.apiKey.placeholder": "Ключ API {{name}}",
+  "providerModels.config.apiKey.title": "Ключ API",
+  "providerModels.config.baseURL.desc": "Должен включать http(s)://",
+  "providerModels.config.baseURL.invalid": "Пожалуйста, введите корректный URL",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "URL прокси API",
+  "providerModels.config.checker.button": "Проверить",
+  "providerModels.config.checker.desc": "Проверьте, правильно ли указаны ключ API и URL прокси",
+  "providerModels.config.checker.pass": "Проверка пройдена",
+  "providerModels.config.checker.title": "Проверка подключения",
+  "providerModels.config.fetchOnClient.desc": "Режим клиентского запроса инициирует сессии напрямую из браузера, что может повысить скорость отклика",
+  "providerModels.config.fetchOnClient.title": "Использовать режим клиентского запроса",
+  "providerModels.config.helpDoc": "Руководство по настройке",
+  "providerModels.config.responsesApi.desc": "Использует формат запроса следующего поколения от OpenAI для активации расширенных функций, таких как цепочка рассуждений (поддерживается только моделями OpenAI)",
+  "providerModels.config.responsesApi.title": "Использовать спецификацию Responses API",
+  "providerModels.config.waitingForMore": "В настоящее время <1>планируется интеграция</1> дополнительных моделей, следите за обновлениями",
+  "providerModels.createNew.title": "Создать пользовательскую AI-модель",
+  "providerModels.item.config": "Настроить модель",
+  "providerModels.item.customModelCards.addNew": "Создать и добавить модель {{id}}",
+  "providerModels.item.customModelCards.confirmDelete": "Вы собираетесь удалить эту пользовательскую модель. После удаления восстановление будет невозможно. Пожалуйста, действуйте осторожно.",
+  "providerModels.item.delete.confirm": "Вы уверены, что хотите удалить модель {{displayName}}?",
+  "providerModels.item.delete.success": "Удаление прошло успешно",
+  "providerModels.item.delete.title": "Удалить модель",
+  "providerModels.item.modelConfig.azureDeployName.extra": "Поле, используемое для реальных запросов в Azure OpenAI",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "Введите имя развертывания модели в Azure",
+  "providerModels.item.modelConfig.azureDeployName.title": "Имя развертывания модели",
+  "providerModels.item.modelConfig.deployName.extra": "Это поле будет использоваться как ID модели при отправке запросов",
+  "providerModels.item.modelConfig.deployName.placeholder": "Введите фактическое имя или ID развертывания модели",
+  "providerModels.item.modelConfig.deployName.title": "Имя развертывания модели",
+  "providerModels.item.modelConfig.displayName.placeholder": "Введите отображаемое имя модели, например, ChatGPT, GPT-4 и т.д.",
+  "providerModels.item.modelConfig.displayName.title": "Отображаемое имя модели",
+  "providerModels.item.modelConfig.files.extra": "Текущая реализация загрузки файлов является временным решением, предназначенным только для экспериментов. Полноценная поддержка загрузки будет добавлена позже.",
+  "providerModels.item.modelConfig.files.title": "Поддержка загрузки файлов",
+  "providerModels.item.modelConfig.functionCall.extra": "Эта настройка активирует возможность модели использовать инструменты. Однако фактическая поддержка зависит от самой модели. Пожалуйста, протестируйте самостоятельно.",
+  "providerModels.item.modelConfig.functionCall.title": "Поддержка использования инструментов",
+  "providerModels.item.modelConfig.id.extra": "Не может быть изменено после создания и будет использоваться как ID модели при вызове AI",
+  "providerModels.item.modelConfig.id.placeholder": "Введите ID модели, например, gpt-4o или claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "ID модели",
+  "providerModels.item.modelConfig.imageOutput.extra": "Эта настройка активирует только возможность генерации изображений. Фактическая поддержка зависит от модели. Пожалуйста, протестируйте.",
+  "providerModels.item.modelConfig.imageOutput.title": "Поддержка генерации изображений",
+  "providerModels.item.modelConfig.modalTitle": "Настройка пользовательской модели",
+  "providerModels.item.modelConfig.reasoning.extra": "Эта настройка активирует способность модели к глубокому мышлению. Эффективность зависит от самой модели. Пожалуйста, протестируйте.",
+  "providerModels.item.modelConfig.reasoning.title": "Поддержка глубокого мышления",
+  "providerModels.item.modelConfig.search.extra": "Эта настройка активирует встроенный веб-поиск. Поддержка зависит от модели. Пожалуйста, протестируйте.",
+  "providerModels.item.modelConfig.search.title": "Поддержка веб-поиска",
+  "providerModels.item.modelConfig.tokens.extra": "Установите максимальное количество токенов, поддерживаемое моделью",
+  "providerModels.item.modelConfig.tokens.title": "Максимальное окно контекста",
+  "providerModels.item.modelConfig.tokens.unlimited": "Без ограничений",
+  "providerModels.item.modelConfig.type.extra": "Разные типы моделей имеют различные возможности и сценарии использования",
+  "providerModels.item.modelConfig.type.options.chat": "Чат",
+  "providerModels.item.modelConfig.type.options.embedding": "Встраивание",
+  "providerModels.item.modelConfig.type.options.image": "Генерация изображений",
+  "providerModels.item.modelConfig.type.options.realtime": "Чат в реальном времени",
+  "providerModels.item.modelConfig.type.options.stt": "Речь в текст",
+  "providerModels.item.modelConfig.type.options.text2music": "Текст в музыку",
+  "providerModels.item.modelConfig.type.options.text2video": "Текст в видео",
+  "providerModels.item.modelConfig.type.options.tts": "Текст в речь",
+  "providerModels.item.modelConfig.type.placeholder": "Выберите тип модели",
+  "providerModels.item.modelConfig.type.title": "Тип модели",
+  "providerModels.item.modelConfig.video.extra": "Эта настройка активирует распознавание видео. Поддержка зависит от модели. Пожалуйста, протестируйте.",
+  "providerModels.item.modelConfig.video.title": "Поддержка распознавания видео",
+  "providerModels.item.modelConfig.vision.extra": "Эта настройка активирует возможность загрузки изображений. Поддержка распознавания зависит от модели. Пожалуйста, протестируйте.",
+  "providerModels.item.modelConfig.vision.title": "Поддержка визуального распознавания",
+  "providerModels.item.pricing.image": "${{amount}}/изображение",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/М символов",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/минута",
+  "providerModels.item.pricing.inputTokens": "Вход ${{amount}}/М",
+  "providerModels.item.pricing.outputTokens": "Выход ${{amount}}/М",
+  "providerModels.item.releasedAt": "Дата выпуска: {{releasedAt}}",
+  "providerModels.list.addNew": "Добавить модель",
+  "providerModels.list.disabled": "Отключено",
+  "providerModels.list.disabledActions.showMore": "Показать все",
+  "providerModels.list.disabledActions.sort": "Сортировать по",
+  "providerModels.list.disabledActions.sortAlphabetical": "Сортировать по алфавиту",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "Сортировать в обратном алфавитном порядке",
+  "providerModels.list.disabledActions.sortDefault": "Сортировка по умолчанию",
+  "providerModels.list.disabledActions.sortReleasedAt": "Сортировать по дате выпуска (сначала старые)",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "Сортировать по дате выпуска (сначала новые)",
+  "providerModels.list.empty.desc": "Создайте пользовательскую модель или загрузите модель для начала работы.",
+  "providerModels.list.empty.title": "Нет доступных моделей",
+  "providerModels.list.enabled": "Включено",
+  "providerModels.list.enabledActions.disableAll": "Отключить все",
+  "providerModels.list.enabledActions.enableAll": "Включить все",
+  "providerModels.list.enabledActions.sort": "Пользовательская сортировка моделей",
+  "providerModels.list.enabledEmpty": "Нет включенных моделей. Пожалуйста, включите нужные модели из списка ниже~",
+  "providerModels.list.fetcher.clear": "Очистить загруженные модели",
+  "providerModels.list.fetcher.fetch": "Загрузить модели",
+  "providerModels.list.fetcher.fetching": "Загрузка списка моделей...",
+  "providerModels.list.fetcher.latestTime": "Последнее обновление: {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "Список моделей еще не загружен",
+  "providerModels.list.noModelsInCategory": "Нет включенных моделей в этой категории",
+  "providerModels.list.resetAll.conform": "Вы уверены, что хотите сбросить все изменения текущей модели? После сброса список моделей вернется к состоянию по умолчанию.",
+  "providerModels.list.resetAll.success": "Сброс выполнен успешно",
+  "providerModels.list.resetAll.title": "Сбросить все изменения",
+  "providerModels.list.search": "Поиск моделей...",
+  "providerModels.list.searchResult": "Найдено моделей: {{count}}",
+  "providerModels.list.title": "Список моделей",
+  "providerModels.list.total": "Доступно моделей: {{count}}",
+  "providerModels.searchNotFound": "Результаты поиска не найдены",
+  "providerModels.tabs.all": "Все",
+  "providerModels.tabs.chat": "Чат",
+  "providerModels.tabs.embedding": "Встраивание",
+  "providerModels.tabs.image": "Изображения",
+  "providerModels.tabs.stt": "ASR",
+  "providerModels.tabs.tts": "TTS",
+  "sortModal.success": "Сортировка успешно обновлена",
+  "sortModal.title": "Пользовательский порядок",
+  "sortModal.update": "Обновить",
+  "updateAiProvider.confirmDelete": "Вы собираетесь удалить этого AI-провайдера. После удаления восстановление будет невозможно. Вы уверены?",
+  "updateAiProvider.deleteSuccess": "Удаление прошло успешно",
+  "updateAiProvider.tooltip": "Обновить базовую конфигурацию провайдера",
+  "updateAiProvider.updateSuccess": "Обновление прошло успешно",
+  "updateCustomAiProvider.title": "Обновить конфигурацию пользовательского AI-провайдера",
+  "vertexai.apiKey.desc": "Введите ключи Vertex AI",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "Ключи Vertex AI",
+  "vertexai.region.desc": "Выберите регион для сервиса Vertex AI. Некоторые модели, такие как Gemini 2.5, доступны только в определенных регионах (например, global)",
+  "vertexai.region.placeholder": "Выберите регион",
+  "vertexai.region.title": "Регион Vertex AI",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

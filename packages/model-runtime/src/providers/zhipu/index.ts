@@ -61,7 +61,7 @@ export const params = {
         ...resolvedParams,
         model,
         stream: true,
-        thinking: model.includes('-4.5') ? { type: thinking?.type } : undefined,
+        thinking: thinking ? { type: thinking.type } : undefined,
         tools: zhipuTools,
       } as any;
     },

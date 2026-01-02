@@ -5,35 +5,6 @@ import { imagenGenParameters, nanoBananaParameters } from './google';
 const vertexaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
-      imageOutput: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072 + 32_768,
-    description:
-      'Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。',
-    displayName: 'Nano Banana Pro',
-    enabled: true,
-    id: 'gemini-3-pro-image-preview',
-    maxOutput: 32_768,
-    pricing: {
-      approximatePricePerImage: 0.134,
-      units: [
-        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-11-20',
-    settings: {
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       functionCall: true,
       reasoning: true,
       search: true,
@@ -42,7 +13,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      'Gemini 3 Pro 是 全球最佳的多模态理解模型，也是 Google 迄今为止最强大的智能体和氛围编程模型，提供更丰富的视觉效果和更深层次的交互性，所有这些都建立在最先进的推理能力基础之上。',
+      'Gemini 3 Pro is Google’s most powerful agent and vibe-coding model, delivering richer visuals and deeper interaction on top of state-of-the-art reasoning.',
     displayName: 'Gemini 3 Pro Preview',
     enabled: true,
     id: 'gemini-3-pro-preview',
@@ -86,7 +57,71 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-18',
     settings: {
+      extendParams: ['thinkingLevel2', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description: 'Gemini 3 Flash 是为速度而打造的最智能的模型，将前沿智能与卓越的搜索接地相结合。',
+    displayName: 'Gemini 3 Flash Preview',
+    enabled: true,
+    id: 'gemini-3-flash-preview',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2025-12-17',
+    settings: {
       extendParams: ['thinkingLevel', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      'Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。',
+    displayName: 'Nano Banana Pro',
+    enabled: true,
+    id: 'gemini-3-pro-image-preview',
+    maxOutput: 32_768,
+    pricing: {
+      approximatePricePerImage: 0.134,
+      units: [
+        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-20',
+    settings: {
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -101,9 +136,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      'Gemini 2.5 Pro 是 Google 最先进的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      'Gemini 2.5 Pro is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro',
-    enabled: true,
     id: 'gemini-2.5-pro',
     maxOutput: 65_536,
     pricing: {
@@ -129,7 +163,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      'Gemini 2.5 Pro Preview 是 Google 最先进的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      'Gemini 2.5 Pro Preview is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro Preview 05-06',
     id: 'gemini-2.5-pro-preview-05-06',
     maxOutput: 65_536,
@@ -150,7 +184,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
-      'Gemini 2.5 Pro Preview 是 Google 最先进的思维模型，能够对代码、数学和STEM领域的复杂问题进行推理，以及使用长上下文分析大型数据集、代码库和文档。',
+      'Gemini 2.5 Pro Preview is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro Preview 03-25',
     id: 'gemini-2.5-pro-preview-03-25',
     maxOutput: 65_536,
@@ -171,9 +205,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Gemini 2.5 Flash 是 Google 性价比最高的模型，提供全面的功能。',
+    description: 'Gemini 2.5 Flash is Google’s best-value model with full capabilities.',
     displayName: 'Gemini 2.5 Flash',
-    enabled: true,
     id: 'gemini-2.5-flash',
     maxOutput: 65_536,
     pricing: {
@@ -198,7 +231,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Gemini 2.5 Flash Preview 是 Google 性价比最高的模型，提供全面的功能。',
+    description: 'Gemini 2.5 Flash Preview is Google’s best-value model with full capabilities.',
     displayName: 'Gemini 2.5 Flash Preview 04-17',
     id: 'gemini-2.5-flash-preview-04-17',
     maxOutput: 65_536,
@@ -218,7 +251,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768 + 8192,
     description:
-      'Nano Banana 是 Google 最新、最快、最高效的原生多模态模型，它允许您通过对话生成和编辑图像。',
+      'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     displayName: 'Nano Banana',
     enabled: true,
     id: 'gemini-2.5-flash-image',
@@ -242,7 +275,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_000_000 + 64_000,
-    description: 'Gemini 2.5 Flash-Lite 是 Google 最小、性价比最高的模型，专为大规模使用而设计。',
+    description:
+      'Gemini 2.5 Flash-Lite is Google’s smallest, best-value model, designed for large-scale use.',
     displayName: 'Gemini 2.5 Flash-Lite',
     id: 'gemini-2.5-flash-lite',
     maxOutput: 64_000,
@@ -269,7 +303,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000 + 64_000,
     description:
-      'Gemini 2.5 Flash-Lite Preview 是 Google 最小、性价比最高的模型，专为大规模使用而设计。',
+      'Gemini 2.5 Flash-Lite Preview is Google’s smallest, best-value model, designed for large-scale use.',
     displayName: 'Gemini 2.5 Flash-Lite Preview 06-17',
     id: 'gemini-2.5-flash-lite-preview-06-17',
     maxOutput: 64_000,
@@ -294,7 +328,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 8192,
     description:
-      'Gemini 2.0 Flash 提供下一代功能和改进，包括卓越的速度、原生工具使用、多模态生成和1M令牌上下文窗口。',
+      'Gemini 2.0 Flash delivers next-gen features including exceptional speed, native tool use, multimodal generation, and a 1M-token context window.',
     displayName: 'Gemini 2.0 Flash',
     id: 'gemini-2.0-flash',
     maxOutput: 8192,
@@ -314,7 +348,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 8192,
-    description: 'Gemini 2.0 Flash 模型变体，针对成本效益和低延迟等目标进行了优化。',
+    description: 'A Gemini 2.0 Flash variant optimized for cost efficiency and low latency.',
     displayName: 'Gemini 2.0 Flash-Lite',
     id: 'gemini-2.0-flash-lite',
     maxOutput: 8192,
@@ -334,7 +368,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_000_000 + 8192,
-    description: 'Gemini 1.5 Flash 002 是一款高效的多模态模型，支持广泛应用的扩展。',
+    description:
+      'Gemini 1.5 Flash 002 is an efficient multimodal model built for broad deployment.',
     displayName: 'Gemini 1.5 Flash 002',
     id: 'gemini-1.5-flash-002',
     maxOutput: 8192,
@@ -354,7 +389,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_000_000 + 8192,
     description:
-      'Gemini 1.5 Pro 002 是最新的生产就绪模型，提供更高质量的输出，特别在数学、长上下文和视觉任务方面有显著提升。',
+      'Gemini 1.5 Pro 002 is the latest production-ready model with higher-quality output, especially for math, long context, and vision tasks.',
     displayName: 'Gemini 1.5 Pro 002',
     id: 'gemini-1.5-pro-002',
     maxOutput: 8192,
@@ -377,7 +412,7 @@ const vertexaiImageModels: AIImageModelCard[] = [
     enabled: true,
     type: 'image',
     description:
-      'Nano Banana 是 Google 最新、最快、最高效的原生多模态模型，它允许您通过对话生成和编辑图像。',
+      'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     releasedAt: '2025-08-26',
     parameters: nanoBananaParameters,
     pricing: {

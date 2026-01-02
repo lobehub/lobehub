@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 
-import { UserStore } from '../../../store';
+import { type UserStore } from '../../../store';
 import { currentSettings } from './settings';
 
 const generalConfig = (s: UserStore) => currentSettings(s).general || {};
@@ -17,6 +17,7 @@ const contextMenuMode = (s: UserStore) => {
   if (config !== undefined) return config;
   return isDesktop ? 'default' : 'disabled';
 };
+const telemetry = (s: UserStore) => generalConfig(s).telemetry;
 
 export const userGeneralSettingsSelectors = {
   animationMode,
@@ -27,5 +28,6 @@ export const userGeneralSettingsSelectors = {
   mermaidTheme,
   neutralColor,
   primaryColor,
+  telemetry,
   transitionMode,
 };

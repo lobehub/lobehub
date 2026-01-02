@@ -2,6 +2,7 @@ import { Menu, app, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import menuTranslations from '@/locales/default/menu';
 
 import { MacOSMenu } from './macOS';
 
@@ -34,53 +35,16 @@ vi.mock('@/const/env', () => ({
 // Mock App instance
 const createMockApp = () => {
   const mockT = vi.fn((key: string, params?: any) => {
-    const translations: Record<string, string> = {
-      'macOS.about': `About ${params?.appName || 'App'}`,
-      'common.checkUpdates': 'Check for Updates',
-      'macOS.preferences': 'Preferences',
-      'macOS.services': 'Services',
-      'macOS.hide': `Hide ${params?.appName || 'App'}`,
-      'macOS.hideOthers': 'Hide Others',
-      'macOS.unhide': 'Show All',
-      'file.quit': 'Quit',
-      'file.title': 'File',
-      'file.preferences': 'Preferences',
-      'window.close': 'Close Window',
-      'window.title': 'Window',
-      'window.minimize': 'Minimize',
-      'edit.title': 'Edit',
-      'edit.undo': 'Undo',
-      'edit.redo': 'Redo',
-      'edit.cut': 'Cut',
-      'edit.copy': 'Copy',
-      'edit.paste': 'Paste',
-      'edit.selectAll': 'Select All',
-      'edit.speech': 'Speech',
-      'edit.startSpeaking': 'Start Speaking',
-      'edit.stopSpeaking': 'Stop Speaking',
-      'edit.delete': 'Delete',
-      'view.title': 'View',
-      'view.reload': 'Reload',
-      'view.forceReload': 'Force Reload',
-      'view.resetZoom': 'Actual Size',
-      'view.zoomIn': 'Zoom In',
-      'view.zoomOut': 'Zoom Out',
-      'view.toggleFullscreen': 'Toggle Full Screen',
-      'help.title': 'Help',
-      'help.visitWebsite': 'Visit Website',
-      'help.githubRepo': 'GitHub Repository',
-      'help.reportIssue': 'Report Issue',
-      'help.about': 'About',
-      'dev.title': 'Developer',
-      'dev.devPanel': 'Dev Panel',
-      'dev.refreshMenu': 'Refresh Menu',
-      'dev.devTools': 'Developer Tools',
-      'dev.reload': 'Reload',
-      'dev.forceReload': 'Force Reload',
-      'tray.show': `Show ${params?.appName || 'App'}`,
-      'tray.quit': 'Quit',
-    };
-    return translations[key] || key;
+    let translation = menuTranslations[key as keyof typeof menuTranslations] || key;
+    if (params && typeof translation === 'string') {
+      Object.keys(params).forEach((paramKey) => {
+        translation = translation.replace(
+          new RegExp(`{{${paramKey}}}`, 'g'),
+          params[paramKey] as string,
+        );
+      });
+    }
+    return translation;
   });
 
   return {
@@ -89,6 +53,7 @@ const createMockApp = () => {
     },
     browserManager: {
       getMainWindow: vi.fn(() => ({
+        broadcast: vi.fn(),
         loadUrl: vi.fn(),
         show: vi.fn(),
       })),
@@ -132,20 +97,20 @@ describe('MacOSMenu', () => {
     });
 
     it('should include developer menu when showDevItems is true', () => {
-      const menu = macOSMenu.buildAndSetAppMenu({ showDevItems: true });
+      macOSMenu.buildAndSetAppMenu({ showDevItems: true });
 
       expect(Menu.buildFromTemplate).toHaveBeenCalled();
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
-      const devMenu = template.find((item: any) => item.label === 'Developer');
+      const devMenu = template.find((item: any) => item.label === 'Development');
       expect(devMenu).toBeDefined();
     });
 
     it('should not include developer menu when showDevItems is false', () => {
-      const menu = macOSMenu.buildAndSetAppMenu({ showDevItems: false });
+      macOSMenu.buildAndSetAppMenu({ showDevItems: false });
 
       expect(Menu.buildFromTemplate).toHaveBeenCalled();
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
-      const devMenu = template.find((item: any) => item.label === 'Developer');
+      const devMenu = template.find((item: any) => item.label === 'Development');
       expect(devMenu).toBeUndefined();
     });
 
@@ -228,7 +193,7 @@ describe('MacOSMenu', () => {
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const appMenu = template[0];
       const checkUpdatesItem = appMenu.submenu.find(
-        (item: any) => item.label === 'Check for Updates',
+        (item: any) => item.label === 'Check for updates...',
       );
 
       expect(checkUpdatesItem).toBeDefined();
@@ -241,7 +206,7 @@ describe('MacOSMenu', () => {
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const appMenu = template[0];
-      const preferencesItem = appMenu.submenu.find((item: any) => item.label === 'Preferences');
+      const preferencesItem = appMenu.submenu.find((item: any) => item.label === 'Preferences...');
 
       expect(preferencesItem).toBeDefined();
       await preferencesItem.click();
@@ -253,7 +218,7 @@ describe('MacOSMenu', () => {
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const helpMenu = template.find((item: any) => item.label === 'Help');
-      const visitWebsiteItem = helpMenu.submenu.find((item: any) => item.label === 'Visit Website');
+      const visitWebsiteItem = helpMenu.submenu.find((item: any) => item.label === 'Open Website');
 
       expect(visitWebsiteItem).toBeDefined();
       await visitWebsiteItem.click();
@@ -277,7 +242,7 @@ describe('MacOSMenu', () => {
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const helpMenu = template.find((item: any) => item.label === 'Help');
-      const logsItem = helpMenu.submenu.find((item: any) => item.label === '打开日志目录');
+      const logsItem = helpMenu.submenu.find((item: any) => item.label === 'Open Logs Directory');
 
       expect(logsItem).toBeDefined();
       logsItem.click();
@@ -303,7 +268,7 @@ describe('MacOSMenu', () => {
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const appMenu = template[0];
-      const preferencesItem = appMenu.submenu.find((item: any) => item.label === 'Preferences');
+      const preferencesItem = appMenu.submenu.find((item: any) => item.label === 'Preferences...');
 
       expect(preferencesItem.accelerator).toBe('Command+,');
     });
@@ -334,8 +299,8 @@ describe('MacOSMenu', () => {
       macOSMenu.buildAndSetAppMenu({ showDevItems: true });
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
-      const devMenu = template.find((item: any) => item.label === 'Developer');
-      const devPanelItem = devMenu.submenu.find((item: any) => item.label === 'Dev Panel');
+      const devMenu = template.find((item: any) => item.label === 'Development');
+      const devPanelItem = devMenu.submenu.find((item: any) => item.label === 'Developer Panel');
 
       expect(devPanelItem).toBeDefined();
     });
@@ -344,8 +309,8 @@ describe('MacOSMenu', () => {
       macOSMenu.buildAndSetAppMenu({ showDevItems: true });
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
-      const devMenu = template.find((item: any) => item.label === 'Developer');
-      const devPanelItem = devMenu.submenu.find((item: any) => item.label === 'Dev Panel');
+      const devMenu = template.find((item: any) => item.label === 'Development');
+      const devPanelItem = devMenu.submenu.find((item: any) => item.label === 'Developer Panel');
 
       devPanelItem.click();
       expect(mockApp.browserManager.retrieveByIdentifier).toHaveBeenCalledWith('devtools');
@@ -355,7 +320,7 @@ describe('MacOSMenu', () => {
       macOSMenu.buildAndSetAppMenu({ showDevItems: true });
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
-      const devMenu = template.find((item: any) => item.label === 'Developer');
+      const devMenu = template.find((item: any) => item.label === 'Development');
       const refreshMenuItem = devMenu.submenu.find((item: any) => item.label === 'Refresh Menu');
 
       refreshMenuItem.click();
@@ -366,8 +331,8 @@ describe('MacOSMenu', () => {
       macOSMenu.buildAndSetAppMenu({ showDevItems: true });
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
-      const devMenu = template.find((item: any) => item.label === 'Developer');
-      const updaterMenu = devMenu.submenu.find((item: any) => item.label === '自动更新测试模拟');
+      const devMenu = template.find((item: any) => item.label === 'Development');
+      const updaterMenu = devMenu.submenu.find((item: any) => item.label === 'Updater Simulation');
 
       expect(updaterMenu).toBeDefined();
       expect(updaterMenu.submenu).toBeInstanceOf(Array);

@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Jetons par seconde) : Production de jetons par seconde",
+  "duration.TTFT": "TTFT (Temps jusqu’au premier jeton) : Latence du premier jeton",
+  "duration.completion": "Temps de génération de la sortie",
+  "duration.latency": "Durée",
+  "duration.stage.end": "Fin",
+  "duration.stage.firstToken": "Premier jeton",
+  "duration.stage.start": "Début",
+  "table.columns.TTFT.tooltip": "Temps jusqu’au premier jeton, unité : secondes",
+  "table.columns.duration": "Durée",
+  "table.columns.model": "Modèle",
+  "table.columns.spend": "Crédits",
+  "table.columns.startTime": "Créé le",
+  "table.columns.totalTokens": "Utilisation des jetons",
+  "table.columns.type.enums.chat": "Génération de texte",
+  "table.columns.type.enums.imageGeneration": "Génération d’images",
+  "table.columns.type.title": "Type",
+  "table.desc": "Détails de l’utilisation des crédits de calcul pour la génération de texte, l’intégration, la génération d’images, etc.",
+  "table.more": "Voir les détails",
+  "table.title": "Détails de l’utilisation des crédits de calcul",
+  "table.totalToken.input": "Entrée",
+  "table.totalToken.output": "Sortie"
+}

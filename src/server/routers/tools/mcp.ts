@@ -6,7 +6,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { ToolCallContent } from '@/libs/mcp';
+import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';

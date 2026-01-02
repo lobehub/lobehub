@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PlaceholderVariablesProcessor,
+  formatPlaceholderValues,
   parsePlaceholderVariables,
   parsePlaceholderVariablesMessages,
+  renderPlaceholderTemplate,
 } from '../PlaceholderVariables';
 
 describe('PlaceholderVariablesProcessor', () => {
@@ -329,6 +331,32 @@ describe('PlaceholderVariablesProcessor', () => {
       const result = await processor.process(context);
 
       expect(result.metadata.placeholderVariablesProcessed).toBe(0);
+    });
+  });
+
+  describe('formatPlaceholderValues & renderPlaceholderTemplate', () => {
+    it('formats nested structures into strings', () => {
+      const formatted = formatPlaceholderValues({
+        empty: undefined,
+        list: ['work', 'personal'],
+        nested: ['alpha', ['beta']],
+        number: 42,
+      });
+
+      expect(formatted.empty).toBe('');
+      expect(formatted.list).toBe('work, personal');
+      expect(formatted.nested).toBe('alpha, beta');
+      expect(formatted.number).toBe('42');
+    });
+
+    it('renders template strings using provided values', () => {
+      const template = 'Hello {{ name }}! Categories: {{ categories }}';
+      const result = renderPlaceholderTemplate(template, {
+        categories: ['work', 'personal'],
+        name: 'World',
+      });
+
+      expect(result).toBe('Hello World! Categories: work, personal');
     });
   });
 });

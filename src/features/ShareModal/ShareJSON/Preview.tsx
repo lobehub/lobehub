@@ -1,14 +1,23 @@
 import { Highlighter } from '@lobehub/ui';
+import { cx } from 'antd-style';
 import { memo } from 'react';
 
-import { useContainerStyles } from '../style';
+import { containerStyles } from '../style';
 
 const Preview = memo<{ content: string }>(({ content }) => {
-  const { styles } = useContainerStyles();
-
   return (
-    <div className={styles.preview} style={{ padding: 16 }}>
-      <Highlighter language={'json'} variant={'borderless'} wrap>
+    <div
+      className={cx(containerStyles.preview, containerStyles.previewWide)}
+      style={{ padding: 16 }}
+    >
+      <Highlighter
+        language={'json'}
+        style={{
+          fontSize: 12,
+        }}
+        variant={'borderless'}
+        wrap
+      >
         {content}
       </Highlighter>
     </div>

@@ -17,6 +17,7 @@ export interface KnowledgeItem {
   metadata?: Record<string, any> | null;
   name: string;
   size: number;
+  slug?: string | null;
   /**
    * Source type to distinguish between files and documents
    * - 'file': from files table
@@ -53,11 +54,26 @@ export class KnowledgeRepo {
     sorter,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
+    parentId,
+    limit = 50,
+    offset = 0,
   }: QueryFileListParams = {}): Promise<KnowledgeItem[]> {
+    // If parentId is provided, check if it's a slug and resolve it to an ID
+    let resolvedParentId = parentId;
+    if (parentId) {
+      // Try to find a document with this slug
+      const docBySlug = await this.documentModel.findBySlug(parentId);
+      if (docBySlug) {
+        resolvedParentId = docBySlug.id;
+      }
+      // Otherwise assume it's already an ID
+    }
+
     // Build file query
     const fileQuery = this.buildFileQuery({
       category,
       knowledgeBaseId,
+      parentId: resolvedParentId,
       q,
       showFilesInKnowledgeBase,
       sortType,
@@ -68,6 +84,7 @@ export class KnowledgeRepo {
     const documentQuery = this.buildDocumentQuery({
       category,
       knowledgeBaseId,
+      parentId: resolvedParentId,
       q,
       sortType,
       sorter,
@@ -80,11 +97,13 @@ export class KnowledgeRepo {
       (${documentQuery})
     `;
 
-    // Add final ordering
+    // Add final ordering and pagination
     const orderClause = this.buildOrderClause(sortType, sorter);
     const finalQuery = sql`
       SELECT * FROM (${combinedQuery}) as combined
       ORDER BY ${orderClause}
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
 
     const result = await this.db.execute(finalQuery);
@@ -123,6 +142,114 @@ export class KnowledgeRepo {
         metadata,
         name: row.name,
         size: Number(row.size),
+        slug: row.slug,
+        sourceType: row.source_type,
+        updatedAt: new Date(row.updated_at),
+        url: row.url,
+      };
+    });
+
+    return mappedResults;
+  }
+
+  /**
+   * Query recent items (files and documents)
+   * Returns the most recently updated items
+   */
+  async queryRecent(limit: number = 12): Promise<KnowledgeItem[]> {
+    const fileQuery = sql`
+      SELECT
+        COALESCE(d.id, f.id) as id,
+        f.name,
+        f.file_type,
+        f.size,
+        f.url,
+        f.created_at,
+        f.updated_at,
+        f.chunk_task_id,
+        f.embedding_task_id,
+        d.editor_data,
+        d.content,
+        d.slug,
+        COALESCE(d.metadata, f.metadata) as metadata,
+        'file' as source_type
+      FROM ${files} f
+      LEFT JOIN ${documents} d
+        ON f.id = d.file_id
+      WHERE f.user_id = ${this.userId}
+        AND NOT EXISTS (
+          SELECT 1 FROM ${knowledgeBaseFiles}
+          WHERE ${knowledgeBaseFiles.fileId} = f.id
+        )
+    `;
+
+    const documentQuery = sql`
+      SELECT
+        id,
+        COALESCE(title, filename, 'Untitled') as name,
+        file_type,
+        total_char_count as size,
+        source as url,
+        created_at,
+        updated_at,
+        NULL as chunk_task_id,
+        NULL as embedding_task_id,
+        editor_data,
+        content,
+        slug,
+        metadata,
+        'document' as source_type
+      FROM ${documents}
+      WHERE user_id = ${this.userId}
+        AND source_type != ${'file'}
+        AND (metadata->>'knowledgeBaseId') IS NULL
+    `;
+
+    const combinedQuery = sql`
+      SELECT * FROM (
+        (${fileQuery})
+        UNION ALL
+        (${documentQuery})
+      ) as combined
+      ORDER BY updated_at DESC
+      LIMIT ${limit}
+    `;
+
+    const result = await this.db.execute(combinedQuery);
+
+    const mappedResults = result.rows.map((row: any) => {
+      // Parse editor_data if it's a string
+      let editorData = row.editor_data;
+      if (typeof editorData === 'string') {
+        try {
+          editorData = JSON.parse(editorData);
+        } catch {
+          editorData = null;
+        }
+      }
+
+      // Parse metadata if it's a string
+      let metadata = row.metadata;
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata);
+        } catch {
+          metadata = null;
+        }
+      }
+
+      return {
+        chunkTaskId: row.chunk_task_id,
+        content: row.content,
+        createdAt: new Date(row.created_at),
+        editorData,
+        embeddingTaskId: row.embedding_task_id,
+        fileType: row.file_type,
+        id: row.id,
+        metadata,
+        name: row.name,
+        size: Number(row.size),
+        slug: row.slug,
         sourceType: row.source_type,
         updatedAt: new Date(row.updated_at),
         url: row.url,
@@ -176,25 +303,33 @@ export class KnowledgeRepo {
     q,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
+    parentId,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
-    let whereConditions: any[] = [sql`${files.userId} = ${this.userId}`];
+    let whereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+
+    // Parent ID filter
+    if (parentId !== undefined) {
+      if (parentId === null) {
+        whereConditions.push(sql`f.parent_id IS NULL`);
+      } else {
+        whereConditions.push(sql`f.parent_id = ${parentId}`);
+      }
+    }
 
     // Search filter
     if (q) {
-      whereConditions.push(sql`${files.name} ILIKE ${`%${q}%`}`);
+      whereConditions.push(sql`f.name ILIKE ${`%${q}%`}`);
     }
 
     // Category filter
-    if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
+    if (category && category !== FilesTabs.All) {
       const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
       if (Array.isArray(fileTypePrefix)) {
         // For multiple file types (e.g., Documents includes 'application' and 'custom')
-        const orConditions = fileTypePrefix.map(
-          (prefix) => sql`${files.fileType} ILIKE ${`${prefix}%`}`,
-        );
+        const orConditions = fileTypePrefix.map((prefix) => sql`f.file_type ILIKE ${`${prefix}%`}`);
         whereConditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
       } else {
-        whereConditions.push(sql`${files.fileType} ILIKE ${`${fileTypePrefix}%`}`);
+        whereConditions.push(sql`f.file_type ILIKE ${`${fileTypePrefix}%`}`);
       }
     }
 
@@ -202,6 +337,15 @@ export class KnowledgeRepo {
     if (knowledgeBaseId) {
       // Build where conditions using proper table references (f.column instead of files.column)
       const kbWhereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+
+      // Parent ID filter
+      if (parentId !== undefined) {
+        if (parentId === null) {
+          kbWhereConditions.push(sql`f.parent_id IS NULL`);
+        } else {
+          kbWhereConditions.push(sql`f.parent_id = ${parentId}`);
+        }
+      }
 
       // Search filter
       if (q) {
@@ -223,7 +367,7 @@ export class KnowledgeRepo {
 
       return sql`
         SELECT
-          f.id,
+          COALESCE(d.id, f.id) as id,
           f.name,
           f.file_type,
           f.size,
@@ -232,14 +376,17 @@ export class KnowledgeRepo {
           f.updated_at,
           f.chunk_task_id,
           f.embedding_task_id,
-          NULL as editor_data,
-          NULL as content,
-          NULL as metadata,
+          d.editor_data,
+          d.content,
+          d.slug,
+          COALESCE(d.metadata, f.metadata) as metadata,
           'file' as source_type
         FROM ${files} f
         INNER JOIN ${knowledgeBaseFiles} kbf
           ON f.id = kbf.file_id
           AND kbf.knowledge_base_id = ${knowledgeBaseId}
+        LEFT JOIN ${documents} d
+          ON f.id = d.file_id
         WHERE ${sql.join(kbWhereConditions, sql` AND `)}
       `;
     }
@@ -250,7 +397,7 @@ export class KnowledgeRepo {
         sql`
           NOT EXISTS (
                     SELECT 1 FROM ${knowledgeBaseFiles}
-                    WHERE ${knowledgeBaseFiles.fileId} = ${files.id}
+                    WHERE ${knowledgeBaseFiles.fileId} = f.id
                   )
         `,
       );
@@ -258,20 +405,23 @@ export class KnowledgeRepo {
 
     return sql`
       SELECT
-        id,
-        name,
-        file_type,
-        size,
-        url,
-        created_at,
-        updated_at,
-        chunk_task_id,
-        embedding_task_id,
-        NULL as editor_data,
-        NULL as content,
-        NULL as metadata,
+        COALESCE(d.id, f.id) as id,
+        f.name,
+        f.file_type,
+        f.size,
+        f.url,
+        f.created_at,
+        f.updated_at,
+        f.chunk_task_id,
+        f.embedding_task_id,
+        d.editor_data,
+        d.content,
+        d.slug,
+        COALESCE(d.metadata, f.metadata) as metadata,
         'file' as source_type
-      FROM ${files}
+      FROM ${files} f
+      LEFT JOIN ${documents} d
+        ON f.id = d.file_id
       WHERE ${sql.join(whereConditions, sql` AND `)}
     `;
   }
@@ -280,11 +430,21 @@ export class KnowledgeRepo {
     category,
     q,
     knowledgeBaseId,
+    parentId,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
     let whereConditions: any[] = [
       sql`${documents.userId} = ${this.userId}`,
       sql`${documents.sourceType} != ${'file'}`,
     ];
+
+    // Parent ID filter
+    if (parentId !== undefined) {
+      if (parentId === null) {
+        whereConditions.push(sql`${documents.parentId} IS NULL`);
+      } else {
+        whereConditions.push(sql`${documents.parentId} = ${parentId}`);
+      }
+    }
 
     // Search filter
     if (q) {
@@ -294,7 +454,7 @@ export class KnowledgeRepo {
     }
 
     // Category filter - match documents by fileType prefix
-    if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
+    if (category && category !== FilesTabs.All) {
       const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
       if (Array.isArray(fileTypePrefix)) {
         // For multiple file types (e.g., Documents includes 'application' and 'custom')
@@ -324,6 +484,7 @@ export class KnowledgeRepo {
             NULL::uuid as embedding_task_id,
             NULL::jsonb as editor_data,
             NULL::text as content,
+            NULL::varchar(255) as slug,
             NULL::jsonb as metadata,
             NULL::text as source_type
           WHERE false
@@ -332,24 +493,92 @@ export class KnowledgeRepo {
     }
 
     // Knowledge base filter for documents
-    // Documents don't have knowledge base association currently, so skip if knowledgeBaseId is set
+    // Documents are linked to knowledge bases through files table via fileId
     if (knowledgeBaseId) {
+      // Build where conditions using proper table references (d.column instead of documents.column)
+      const kbWhereConditions: any[] = [sql`d.user_id = ${this.userId}`];
+
+      // Parent ID filter
+      if (parentId !== undefined) {
+        if (parentId === null) {
+          kbWhereConditions.push(sql`d.parent_id IS NULL`);
+        } else {
+          kbWhereConditions.push(sql`d.parent_id = ${parentId}`);
+        }
+      }
+
+      // Search filter
+      if (q) {
+        kbWhereConditions.push(sql`(d.title ILIKE ${`%${q}%`} OR d.filename ILIKE ${`%${q}%`})`);
+      }
+
+      // Category filter
+      if (category && category !== FilesTabs.All) {
+        const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
+        if (Array.isArray(fileTypePrefix)) {
+          const orConditions = fileTypePrefix.map(
+            (prefix) => sql`d.file_type ILIKE ${`${prefix}%`}`,
+          );
+          kbWhereConditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
+
+          // Exclude custom/document and source_type='file' from Documents category
+          if (category === FilesTabs.Documents) {
+            kbWhereConditions.push(
+              sql`d.file_type != ${'custom/document'}`,
+              sql`d.source_type != ${'file'}`,
+            );
+          }
+        } else if (fileTypePrefix) {
+          kbWhereConditions.push(sql`d.file_type ILIKE ${`${fileTypePrefix}%`}`);
+        } else {
+          // Exclude documents from other categories (Images, Videos, Audios, Websites)
+          return sql`
+            SELECT
+              NULL::varchar(30) as id,
+              NULL::text as name,
+              NULL::varchar(255) as file_type,
+              NULL::integer as size,
+              NULL::text as url,
+              NULL::timestamp with time zone as created_at,
+              NULL::timestamp with time zone as updated_at,
+              NULL::uuid as chunk_task_id,
+              NULL::uuid as embedding_task_id,
+              NULL::jsonb as editor_data,
+              NULL::text as content,
+              NULL::varchar(255) as slug,
+              NULL::jsonb as metadata,
+              NULL::text as source_type
+            WHERE false
+          `;
+        }
+      }
+
+      // When in a knowledge base, return standalone documents (folders and notes without fileId)
+      // that have the knowledgeBaseId set in their metadata. Documents with fileId are already
+      // returned by the file query via their linked file records.
+      kbWhereConditions.push(
+        sql`d.file_id IS NULL`,
+        sql`d.metadata->>'knowledgeBaseId' = ${knowledgeBaseId}`,
+      );
+
       return sql`
         SELECT
-          NULL::varchar(30) as id,
-          NULL::text as name,
-          NULL::varchar(255) as file_type,
-          NULL::integer as size,
-          NULL::text as url,
-          NULL::timestamp with time zone as created_at,
-          NULL::timestamp with time zone as updated_at,
-          NULL::uuid as chunk_task_id,
-          NULL::uuid as embedding_task_id,
-          NULL::jsonb as editor_data,
-          NULL::text as content,
-          NULL::jsonb as metadata,
-          NULL::text as source_type
-        WHERE false
+          d.id,
+          COALESCE(d.title, d.filename, 'Untitled') as name,
+          d.file_type,
+          d.total_char_count as size,
+          d.source as url,
+          d.created_at,
+          d.updated_at,
+          NULL as chunk_task_id,
+          NULL as embedding_task_id,
+          d.editor_data,
+          d.content,
+          d.slug,
+          d.metadata,
+          'document' as source_type
+        FROM ${documents} d
+        WHERE ${sql.join(kbWhereConditions, sql` AND `)}
       `;
     }
 
@@ -366,6 +595,7 @@ export class KnowledgeRepo {
         NULL as embedding_task_id,
         editor_data,
         content,
+        slug,
         metadata,
         'document' as source_type
       FROM ${documents}

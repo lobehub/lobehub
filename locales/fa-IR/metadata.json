@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "پیگیری مداوم ویژگی‌ها و بهبودهای جدید {{appName}}",
-    "title": "گزارش تغییرات"
-  },
-  "chat": {
-    "description": "{{appName}} بهترین تجربه استفاده از ChatGPT، Claude، Gemini، OLLaMA WebUI را برای شما به ارمغان می‌آورد",
-    "title": "{{appName}}: ابزار بهره‌وری شخصی AI، به خودتان یک مغز هوشمندتر بدهید"
-  },
-  "discover": {
-    "assistants": {
-      "description": "تولید محتوا، نوشتن متن، پرسش و پاسخ، تولید تصویر، تولید ویدئو، تولید صدا، عامل هوشمند، جریان‌های کاری خودکار، دستیار هوشمند AI / GPTs / OLLaMA شخصی‌سازی‌شده خود را بسازید",
-      "title": "دستیارهای AI"
-    },
-    "description": "تولید محتوا، نوشتن متن، پرسش و پاسخ، تولید تصویر، تولید ویدئو، تولید صدا، عامل هوشمند، جریان‌های کاری خودکار، برنامه‌های AI سفارشی‌سازی‌شده خود را بسازید",
-    "mcp": {
-      "description": "جستجو، مقایسه و اتصال به هزاران سرور MCP، به سیستم‌های هوش مصنوعی کمک می‌کند تا به راحتی به سیستم فایل، پایگاه داده، API و منابع کلیدی دیگر دسترسی پیدا کنند و توانایی‌های هوش مصنوعی شما را به طور کامل گسترش دهند",
-      "title": "بازار سرورهای MCP"
-    },
-    "models": {
-      "description": "کاوش مدل‌های اصلی AI مانند OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
-      "title": "مدل‌های AI"
-    },
-    "plugins": {
-      "description": "جستجو، تولید نمودار، علمی، تولید تصویر، تولید ویدئو، تولید صدا، جریان‌های کاری خودکار، قابلیت‌های افزونه‌های متنوع را به دستیار خود اضافه کنید",
-      "title": "افزونه‌های AI"
-    },
-    "providers": {
-      "description": "کاوش ارائه‌دهندگان اصلی مدل‌ها مانند OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
-      "title": "ارائه‌دهندگان مدل‌های AI"
-    },
-    "search": "جستجو",
-    "title": "کشف"
-  },
-  "image": {
-    "description": "{{appName}} بهترین تجربه استفاده از GPT Image، Flux، Midjourney و Stable Diffusion را برای شما به ارمغان می‌آورد",
-    "title": "نقاشی هوش مصنوعی"
-  },
-  "plugins": {
-    "description": "جستجو، تولید نمودار، علمی، تولید تصویر، تولید ویدئو، تولید صدا، جریان کاری خودکار، سفارشی‌سازی قابلیت‌های ToolCall اختصاصی ChatGPT / Claude",
-    "title": "بازار افزونه‌ها"
-  },
-  "welcome": {
-    "description": "{{appName}} بهترین تجربه استفاده از ChatGPT، Claude، Gemini و OLLaMA WebUI را برای شما به ارمغان می‌آورد",
-    "title": "به {{appName}} خوش آمدید: ابزار بهره‌وری شخصی AI، به خودتان یک مغز هوشمندتر هدیه دهید"
-  }
+  "changelog.description": "با ویژگی‌ها و بهبودهای جدید {{appName}} به‌روز بمانید",
+  "changelog.title": "تغییرات نسخه",
+  "chat.description": "{{appName}} بهترین تجربه کاربری را برای ChatGPT، Claude، Gemini و OLLaMA به شما ارائه می‌دهد.",
+  "chat.title": "{{appName}} · برای عامل‌های همکار",
+  "discover.assistants.description": "محتوا، پرسش و پاسخ، تصاویر، ویدیو، صدا، جریان‌های کاری—عامل‌ها را از جامعه انتخاب و اضافه کنید.",
+  "discover.assistants.title": "جامعه عامل‌ها",
+  "discover.description": "عامل‌ها، مهارت‌ها، ارائه‌دهندگان، مدل‌ها و سرورهای MCP را کاوش کنید.",
+  "discover.mcp.description": "هزاران سرور MCP را جستجو، مقایسه و متصل کنید تا سیستم‌های هوش مصنوعی به‌راحتی به فایل‌ها، پایگاه‌های داده، APIها و منابع ضروری دیگر دسترسی داشته باشند و توانمندی‌های شما را به‌طور چشمگیری گسترش دهند.",
+  "discover.mcp.title": "جامعه سرورهای MCP",
+  "discover.models.description": "مدل‌های اصلی هوش مصنوعی را کاوش کنید: OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "جامعه مدل‌ها",
+  "discover.plugins.description": "نمودارها، ابزارهای علمی، تولید تصویر/ویدیو/صدا و جریان‌های کاری—مهارت‌ها را به عامل‌های خود اضافه کنید.",
+  "discover.plugins.title": "جامعه مهارت‌ها",
+  "discover.providers.description": "ارائه‌دهندگان برتر مدل‌ها را کاوش کنید: OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "جامعه ارائه‌دهندگان",
+  "discover.search": "جستجو",
+  "discover.title": "کاوش",
+  "image.description": "{{appName}} بهترین تجربه را با GPT Image، Flux، Midjourney و Stable Diffusion برای شما فراهم می‌کند.",
+  "image.title": "هنر هوش مصنوعی",
+  "plugins.description": "جستجو، نمودارها، ابزارهای علمی، تولید تصویر/ویدیو/صدا، جریان‌های کاری—مهارت‌ها را به عامل‌های خود اضافه کنید.",
+  "plugins.title": "جامعه مهارت‌ها",
+  "welcome.description": "{{appName}} بهترین تجربه کاربری را برای ChatGPT، Claude، Gemini و OLLaMA به شما ارائه می‌دهد.",
+  "welcome.title": "به {{appName}} خوش آمدید · برای عامل‌های همکار"
 }

@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Аватар",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Претоварване",
+    "tokenTag.remained": "Останали",
+    "tokenTag.used": "Използвани"
+  },
+  "common": {
+    "common.cancel": "Отказ",
+    "common.confirm": "Потвърди",
+    "common.delete": "Изтрий",
+    "common.edit": "Редактирай"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Добави свойства",
+    "editableMessage.delete": "Изтрий",
+    "editableMessage.input": "Вход",
+    "editableMessage.inputPlaceholder": "Моля, въведете примерен вход",
+    "editableMessage.output": "Изход",
+    "editableMessage.outputPlaceholder": "Моля, въведете примерен изход",
+    "editableMessage.system": "Система"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Изтрий",
+    "emojiPicker.draggerDesc": "Кликнете или плъзнете изображение тук, за да го качите",
+    "emojiPicker.emoji": "Емотикони",
+    "emojiPicker.fileTypeError": "Можете да качвате само файлове с изображения!",
+    "emojiPicker.upload": "Качване",
+    "emojiPicker.uploadBtn": "Изрежи и качи"
+  },
+  "form": {
+    "form.reset": "Нулирай",
+    "form.submit": "Изпрати",
+    "form.unsavedChanges": "Незаписани промени",
+    "form.unsavedWarning": "Имате незаписани промени. Сигурни ли сте, че искате да напуснете?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Този клавишен шорткът е в конфликт със съществуващ.",
+    "hotkey.invalidCombination": "Шорткътът трябва да включва модифициращ клавиш (Ctrl, Alt, Shift) и само един обикновен клавиш.",
+    "hotkey.placeholder": "Натиснете клавиши за запис на шорткът",
+    "hotkey.reset": "Възстанови по подразбиране"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Отказ",
+    "messageModal.confirm": "Потвърди",
+    "messageModal.edit": "Редактирай"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Свий страничната лента",
+    "sideNav.demoActiveLabel": "Активен",
+    "sideNav.demoFeatureAutoCollapseDesc": "Плъзнете под прага за интелигентно свиване",
+    "sideNav.demoFeatureAutoCollapseTitle": "Автоматично свиване",
+    "sideNav.demoFeaturePerformanceDesc": "Без анимации за по-добра производителност",
+    "sideNav.demoFeaturePerformanceTitle": "Производителност",
+    "sideNav.demoFeatureResizeDesc": "Плъзнете за промяна на ширината на панела",
+    "sideNav.demoFeatureResizeTitle": "Гъвкаво преоразмеряване",
+    "sideNav.demoFeatureSmartHandleDesc": "Задръжте курсора за показване на бутона за превключване",
+    "sideNav.demoFeatureSmartHandleTitle": "Интелигентна дръжка",
+    "sideNav.demoFeaturesTitle": "Функции",
+    "sideNav.demoHint": "Опитайте да плъзнете ръба на панела и използвайте бутона за превключване ->",
+    "sideNav.demoSubtitle": "Страничен панел в стил работно пространство с възможност за преоразмеряване чрез плъзгане",
+    "sideNav.demoTitle": "Демо на DraggableSideNav",
+    "sideNav.expand": "Разгъни страничната лента"
+  }
+}

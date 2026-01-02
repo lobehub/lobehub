@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "OK",
-    "detail": "Aplikacja czatu oparta na dużym modelu językowym",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "O aplikacji"
-  },
-  "confirm": {
-    "cancel": "Anuluj",
-    "no": "Nie",
-    "title": "Potwierdzenie",
-    "yes": "Tak"
-  },
-  "error": {
-    "button": "OK",
-    "detail": "Wystąpił błąd podczas operacji, spróbuj ponownie później",
-    "message": "Wystąpił błąd",
-    "title": "Błąd"
-  },
-  "update": {
-    "downloadAndInstall": "Pobierz i zainstaluj",
-    "downloadComplete": "Pobieranie zakończone",
-    "downloadCompleteMessage": "Pakiet aktualizacji został pobrany, czy chcesz go teraz zainstalować?",
-    "installLater": "Zainstaluj później",
-    "installNow": "Zainstaluj teraz",
-    "later": "Przypomnij później",
-    "newVersion": "Nowa wersja dostępna",
-    "newVersionAvailable": "Znaleziono nową wersję: {{version}}",
-    "skipThisVersion": "Pomiń tę wersję"
-  }
+  "about.button": "OK",
+  "about.detail": "Aplikacja czatu oparta na dużym modelu językowym",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "O aplikacji",
+  "confirm.cancel": "Anuluj",
+  "confirm.no": "Nie",
+  "confirm.title": "Potwierdzenie",
+  "confirm.yes": "Tak",
+  "error.button": "OK",
+  "error.detail": "Wystąpił błąd podczas operacji, spróbuj ponownie później",
+  "error.message": "Wystąpił błąd",
+  "error.title": "Błąd",
+  "update.downloadAndInstall": "Pobierz i zainstaluj",
+  "update.downloadComplete": "Pobieranie zakończone",
+  "update.downloadCompleteMessage": "Pakiet aktualizacji został pobrany, czy chcesz go teraz zainstalować?",
+  "update.installLater": "Zainstaluj później",
+  "update.installNow": "Zainstaluj teraz",
+  "update.later": "Przypomnij później",
+  "update.newVersion": "Nowa wersja dostępna",
+  "update.newVersionAvailable": "Znaleziono nową wersję: {{version}}",
+  "update.skipThisVersion": "Pomiń tę wersję"
 }

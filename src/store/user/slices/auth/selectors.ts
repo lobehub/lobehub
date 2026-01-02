@@ -1,5 +1,6 @@
-import { BRANDING_NAME, isDesktop } from '@lobechat/const';
-import { LobeUser, SSOProvider } from '@lobechat/types';
+import { BRANDING_NAME } from '@lobechat/business-const';
+import { isDesktop } from '@lobechat/const';
+import { type LobeUser, type SSOProvider } from '@lobechat/types';
 import { t } from 'i18next';
 
 import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
@@ -26,6 +27,7 @@ const username = (s: UserStore) => {
     if (isDesktop) {
       return s.user?.username;
     }
+
     return DEFAULT_USERNAME;
   }
 
@@ -35,9 +37,10 @@ const username = (s: UserStore) => {
 };
 
 export const userProfileSelectors = {
-  displayUserName: (s: UserStore): string => username(s) || s.user?.email || '',
+  displayUserName: (s: UserStore): string => s.user?.fullName || username(s) || s.user?.email || '',
   email: (s: UserStore): string => s.user?.email || '',
   fullName: (s: UserStore): string => s.user?.fullName || '',
+  interests: (s: UserStore): string[] => s.user?.interests || [],
   nickName,
   userAvatar: (s: UserStore): string => s.user?.avatar || '',
   userId: (s: UserStore) => s.user?.id,
@@ -45,22 +48,13 @@ export const userProfileSelectors = {
   username,
 };
 
-/**
- * 使用此方法可以兼容不需要登录鉴权的情况
- */
-const isLogin = (s: UserStore) => {
-  // 如果没有开启鉴权，说明不需要登录，默认是登录态
-  if (!enableAuth) return true;
-
-  return s.isSignedIn;
-};
-
 export const authSelectors = {
   authProviders: (s: UserStore): SSOProvider[] => s.authProviders || [],
   hasPasswordAccount: (s: UserStore) => s.hasPasswordAccount ?? false,
+  isFreePlan: (s: UserStore) => s.isFreePlan,
   isLoaded: (s: UserStore) => s.isLoaded,
   isLoadedAuthProviders: (s: UserStore) => s.isLoadedAuthProviders ?? false,
-  isLogin,
+  isLogin: (s: UserStore) => s.isSignedIn,
   isLoginWithAuth: (s: UserStore) => s.isSignedIn,
   isLoginWithBetterAuth: (s: UserStore): boolean => (s.isSignedIn && enableBetterAuth) || false,
   isLoginWithClerk: (s: UserStore): boolean => (s.isSignedIn && enableClerk) || false,

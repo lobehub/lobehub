@@ -1,811 +1,539 @@
 {
-  "about": {
-    "title": "について"
-  },
-  "agentInfoDescription": {
-    "basic": {
-      "avatar": "アバター",
-      "description": "説明",
-      "name": "名前",
-      "tags": "タグ",
-      "title": "アシスタント情報"
-    },
-    "chat": {
-      "displayMode": "表示モード",
-      "enableHistoryCount": "履歴メッセージ数を有効にする",
-      "historyCount": "履歴メッセージ数",
-      "no": "いいえ",
-      "searchMode": "検索モード",
-      "title": "チャット設定",
-      "yes": "はい"
-    },
-    "model": {
-      "maxTokens": "最大トークン数",
-      "model": "モデル",
-      "provider": "プロバイダー",
-      "temperature": "温度",
-      "title": "モデル設定",
-      "topP": "Top P 値"
-    },
-    "plugins": {
-      "count": "プラグイン設定（{{count}}）",
-      "empty": "プラグインがまだインストールされていません",
-      "title": "インストール済みプラグイン"
-    },
-    "role": {
-      "systemRole": "システムプロンプト",
-      "title": "ロール設定"
-    },
-    "value": {
-      "unset": "未設定",
-      "untitled": "無題のアシスタント"
-    }
-  },
-  "agentTab": {
-    "chat": "チャット設定",
-    "meta": "メタ情報",
-    "modal": "モーダル設定",
-    "opening": "オープニング設定",
-    "plugin": "プラグイン設定",
-    "prompt": "プロンプト設定",
-    "tts": "音声サービス"
-  },
-  "analytics": {
-    "telemetry": {
-      "desc": "{{appName}} の全体的なユーザー体験を改善するために、テレメトリーデータの送信を選択することで、あなたは私たちを助けることができます。",
-      "title": "匿名使用データの送信"
-    },
-    "title": "データ分析"
-  },
+  "_cloud.officialProvider": "{{name}} 公式モデルサービス",
+  "about.title": "について",
+  "advancedSettings": "詳細設定",
+  "agentInfoDescription.basic.avatar": "アバター",
+  "agentInfoDescription.basic.description": "説明",
+  "agentInfoDescription.basic.name": "名前",
+  "agentInfoDescription.basic.tags": "タグ",
+  "agentInfoDescription.basic.title": "アシスタント情報",
+  "agentInfoDescription.chat.enableHistoryCount": "履歴メッセージ数を有効にする",
+  "agentInfoDescription.chat.historyCount": "履歴メッセージ数",
+  "agentInfoDescription.chat.no": "いいえ",
+  "agentInfoDescription.chat.searchMode": "検索モード",
+  "agentInfoDescription.chat.title": "チャット設定",
+  "agentInfoDescription.chat.yes": "はい",
+  "agentInfoDescription.model.maxTokens": "最大トークン数",
+  "agentInfoDescription.model.model": "モデル",
+  "agentInfoDescription.model.provider": "プロバイダー",
+  "agentInfoDescription.model.temperature": "温度",
+  "agentInfoDescription.model.title": "モデル設定",
+  "agentInfoDescription.model.topP": "Top P 値",
+  "agentInfoDescription.plugins.count": "スキル設定（{{count}}）",
+  "agentInfoDescription.plugins.empty": "スキルがまだインストールされていません",
+  "agentInfoDescription.plugins.title": "インストール済みスキル",
+  "agentInfoDescription.role.systemRole": "システムプロンプト",
+  "agentInfoDescription.role.title": "ロール設定",
+  "agentInfoDescription.value.unset": "未設定",
+  "agentInfoDescription.value.untitled": "無題のアシスタント",
+  "agentTab.chat": "チャット設定",
+  "agentTab.meta": "メタ情報",
+  "agentTab.modal": "モーダル設定",
+  "agentTab.opening": "オープニング設定",
+  "agentTab.plugin": "スキル設定",
+  "agentTab.prompt": "プロンプト設定",
+  "agentTab.tts": "音声サービス",
+  "analytics.telemetry.desc": "{{appName}} の改善のために匿名の使用データの提供にご協力ください",
+  "analytics.telemetry.title": "匿名使用データの送信",
+  "analytics.title": "データ分析",
   "checking": "確認中...",
   "checkingPermissions": "権限を確認中...",
-  "danger": {
-    "clear": {
-      "action": "すぐにクリア",
-      "confirm": "すべてのチャットデータを削除しますか？",
-      "desc": "アシスタント、ファイル、メッセージ、プラグインなど、すべてのセッションデータが削除されます",
-      "success": "すべてのセッションメッセージが削除されました",
-      "title": "すべてのセッションメッセージをクリア"
-    },
-    "reset": {
-      "action": "すぐにリセット",
-      "confirm": "すべての設定をリセットしますか？",
-      "currentVersion": "現在のバージョン",
-      "desc": "すべての設定をデフォルト値にリセットします",
-      "success": "すべての設定がリセットされました",
-      "title": "すべての設定をリセット"
-    }
-  },
-  "groupTab": {
-    "chat": "チャット",
-    "members": "メンバー",
-    "meta": "基本情報"
-  },
-  "header": {
-    "desc": "設定優先順位和模型設置。",
-    "global": "グローバル設定",
-    "group": "チーム設定",
-    "groupDesc": "エージェントチームとチャットの設定を管理",
-    "session": "セッション設定",
-    "sessionDesc": "キャラクター設定とセッションの好み。",
-    "sessionWithName": "セッション設定 · {{name}}",
-    "title": "設定"
-  },
-  "hotkey": {
-    "conflicts": "既存のショートカットキーと衝突しています",
-    "errors": {
-      "CONFLICT": "ホットキーの競合：このホットキーは他の機能で既に使用されています",
-      "INVALID_FORMAT": "ホットキーの形式が無効です：正しい形式を使用してください（例：CommandOrControl+E）",
-      "INVALID_ID": "無効なホットキーIDです",
-      "NO_MODIFIER": "ホットキーには修飾キー（Ctrl、Alt、Shiftなど）が含まれている必要があります",
-      "SYSTEM_OCCUPIED": "ホットキーはシステムまたは他のアプリケーションで使用されています",
-      "UNKNOWN": "更新に失敗しました：不明なエラー"
-    },
-    "group": {
-      "conversation": "会話",
-      "desktop": "デスクトップ",
-      "essential": "基本"
-    },
-    "invalidCombination": "ショートカットキーには少なくとも1つの修飾キー（Ctrl、Alt、Shift）と1つの通常のキーが必要です",
-    "record": "ショートカットキーを録音するにはキーを押してください",
-    "reset": "デフォルトのショートカットキーにリセット",
-    "title": "ショートカットキー",
-    "updateError": "ホットキーの更新に失敗しました：ネットワークまたはシステムエラー",
-    "updateSuccess": "ホットキーが正常に更新されました"
-  },
-  "llm": {
-    "aesGcm": "キーとプロキシアドレスなどは <1>AES-GCM</1> 暗号化アルゴリズムを使用して暗号化されます",
-    "apiKey": {
-      "desc": "あなたの {{name}} API キーを入力してください",
-      "placeholder": "{{name}} API キー",
-      "title": "API キー"
-    },
-    "checker": {
-      "button": "チェック",
-      "desc": "APIキーとプロキシアドレスが正しく記入されているかをテスト",
-      "pass": "チェック合格",
-      "title": "接続性チェック"
-    },
-    "customModelCards": {
-      "addNew": "{{id}} モデルを作成して追加する",
-      "config": "モデルの設定",
-      "confirmDelete": "このカスタムモデルを削除しようとしています。削除した後は元に戻すことはできませんので、慎重に操作してください。",
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Azure OpenAI で実際にリクエストされるフィールド",
-          "placeholder": "Azure でのモデル展開名を入力してください",
-          "title": "モデル展開名"
-        },
-        "displayName": {
-          "placeholder": "ChatGPT、GPT-4 などのモデルの表示名を入力してください",
-          "title": "モデル表示名"
-        },
-        "files": {
-          "extra": "現在のファイルアップロード機能は一時的なハック手法であり、自己責任での試行に限られています。完全なファイルアップロード機能は今後の実装をお待ちください。",
-          "title": "ファイルアップロードのサポート"
-        },
-        "functionCall": {
-          "extra": "この設定はアプリ内の関数呼び出し機能のみを有効にします。関数呼び出しのサポートはモデル自体に依存するため、モデルの関数呼び出し機能の有効性を自分でテストしてください。",
-          "title": "関数呼び出しのサポート"
-        },
-        "id": {
-          "extra": "モデルのラベルとして表示されます",
-          "placeholder": "gpt-4-turbo-preview または claude-2.1 などのモデルIDを入力してください",
-          "title": "モデルID"
-        },
-        "modalTitle": "カスタムモデルの設定",
-        "tokens": {
-          "title": "最大トークン数"
-        },
-        "vision": {
-          "extra": "この設定はアプリ内の画像アップロード機能のみを有効にします。認識のサポートはモデル自体に依存するため、モデルの視覚認識機能の有効性を自分でテストしてください。",
-          "title": "視覚認識のサポート"
-        }
-      }
-    },
-    "fetchOnClient": {
-      "desc": "ブラウザから直接セッションリクエストを開始するクライアントサイドリクエストモードは、応答速度を向上させることができます。",
-      "title": "クライアントサイドリクエストモードの使用"
-    },
-    "fetcher": {
-      "clear": "取得したモデルをクリア",
-      "fetch": "モデルリストを取得する",
-      "fetching": "モデルリストを取得中...",
-      "latestTime": "最終更新時間：{{time}}",
-      "noLatestTime": "リストを取得していません"
-    },
-    "helpDoc": "設定ガイド",
-    "modelList": {
-      "desc": "セッションで表示するモデルを選択します。選択したモデルはモデルリストに表示されます",
-      "placeholder": "モデルをリストから選択してください",
-      "title": "モデルリスト",
-      "total": "合計 {{count}} 個のモデルが利用可能です"
-    },
-    "proxyUrl": {
-      "desc": "デフォルトのアドレスに加えて、http(s)://を含める必要があります",
-      "title": "APIプロキシアドレス"
-    },
-    "waitingForMore": "さらに多くのモデルが <1>計画されています</1>。お楽しみに"
-  },
-  "marketPublish": {
-    "modal": {
-      "changelog": {
-        "extra": "このバージョンの主な変更点と改善点を記述してください",
-        "label": "変更ログ",
-        "maxLengthError": "変更ログは500文字以内で入力してください",
-        "placeholder": "変更ログを入力してください",
-        "required": "変更ログを入力してください"
-      },
-      "comparison": {
-        "local": "ローカルの現在のバージョン",
-        "remote": "公開中のバージョン"
-      },
-      "identifier": {
-        "extra": "識別子はアシスタントの一意なIDとして使用されます。小文字、数字、ハイフンの使用を推奨します",
-        "label": "アシスタント識別子",
-        "lengthError": "識別子の長さは3〜50文字である必要があります",
-        "patternError": "識別子には小文字、数字、ハイフンのみ使用できます",
-        "placeholder": "例: web-development のように一意な識別子を入力してください",
-        "required": "アシスタント識別子を入力してください"
-      },
-      "loading": {
-        "fetchingRemote": "リモートデータを読み込み中...",
-        "submit": "アシスタントを公開中...",
-        "upload": "新しいバージョンを公開中..."
-      },
-      "messages": {
-        "createVersionFailed": "バージョンの作成に失敗しました: {{message}}",
-        "fetchRemoteFailed": "リモートアシスタントデータの取得に失敗しました",
-        "missingIdentifier": "現在のアシスタントにはマーケット識別子がありません",
-        "notAuthenticated": "まずマーケットアカウントにログインしてください",
-        "publishFailed": "公開に失敗しました: {{message}}"
-      },
-      "submitButton": "公開",
-      "title": {
-        "submit": "アシスタントマーケットに共有",
-        "upload": "新しいバージョンを公開"
-      }
-    },
-    "resultModal": {
-      "message": "アシスタントは審査に提出されました。審査に通過すると自動的に公開されます。「マーケットで確認」をクリックして公開済みのアシスタントを確認できます。",
-      "view": "マーケットで確認"
-    },
-    "submit": {
-      "button": "マーケットに共有",
-      "tooltip": "アシスタントをマーケットに共有する"
-    },
-    "upload": {
-      "button": "新しいバージョンを公開",
-      "tooltip": "アシスタントマーケットに新しいバージョンを公開する"
-    }
-  },
-  "message": {
-    "success": "更新に成功しました"
-  },
-  "plugin": {
-    "addMCPPlugin": "MCPプラグインを追加",
-    "addTooltip": "カスタムプラグイン",
-    "clearDeprecated": "無効なプラグインをクリア",
-    "empty": "インストールされたプラグインはありません。 <1>プラグインストア</1> で探索してください",
-    "installStatus": {
-      "deprecated": "アンインストール済み"
-    },
-    "settings": {
-      "hint": "説明に従って以下の設定を入力してください",
-      "title": "{{id}} プラグイン設定",
-      "tooltip": "プラグイン設定"
-    },
-    "store": "プラグインストア"
-  },
-  "settingAgent": {
-    "avatar": {
-      "title": "アバター"
-    },
-    "backgroundColor": {
-      "title": "背景色"
-    },
-    "description": {
-      "desc": "あなたのアシスタントを簡単に紹介します。キャラクター設定ではありません",
-      "placeholder": "アシスタントの説明を入力してください",
-      "title": "説明"
-    },
-    "name": {
-      "placeholder": "アシスタントの名前を入力してください",
-      "title": "名前"
-    },
-    "prompt": {
-      "placeholder": "役割のプロンプトワードを入力してください",
-      "title": "役割の設定"
-    },
-    "submit": "アシスタント情報を更新",
-    "tag": {
-      "desc": "アシスタントのタグはアシスタントマーケットに表示されます",
-      "placeholder": "タグを入力してください",
-      "title": "タグ"
-    },
-    "title": "アシスタント情報"
-  },
-  "settingAppearance": {
-    "animationMode": {
-      "agile": "敏捷",
-      "desc": "アプリケーションの操作応答のアニメーション速度を選択します",
-      "disabled": "オフ",
-      "elegant": "エレガント",
-      "title": "応答アニメーション"
-    },
-    "contextMenuMode": {
-      "default": "デフォルト",
-      "desc": "チャットメッセージの右クリックメニューの表示方法を選択してください",
-      "disabled": "使用しない",
-      "title": "右クリックメニューの設定"
-    },
-    "neutralColor": {
-      "desc": "異なる色彩傾向のグレースケールカスタマイズ",
-      "title": "ニュートラルカラー"
-    },
-    "noAnimation": {
-      "desc": "アプリ内のすべてのアニメーション効果を無効にします",
-      "title": "アニメーションなしモード"
-    },
-    "preview": {
-      "title": "カラーパレット"
-    },
-    "primaryColor": {
-      "desc": "テーマカラーのカスタマイズ",
-      "title": "テーマカラー"
-    },
-    "title": "アプリの外観"
-  },
-  "settingChat": {
-    "autoCreateTopicThreshold": {
-      "desc": "現在のメッセージ数がこの値を超えると、トピックが自動的に作成されます",
-      "title": "メッセージ閾値"
-    },
-    "chatStyleType": {
-      "title": "チャットウィンドウのスタイル",
-      "type": {
-        "chat": "チャットモード",
-        "docs": "ドキュメントモード"
-      }
-    },
-    "compressThreshold": {
-      "desc": "圧縮されていない過去のメッセージがこの値を超えると、圧縮されます",
-      "title": "過去メッセージの長さの圧縮閾値"
-    },
-    "enableAutoCreateTopic": {
-      "desc": "会話中に自動的にトピックを作成するかどうか。一時的なトピックのみ有効です",
-      "title": "自動的にトピックを作成する"
-    },
-    "enableCompressHistory": {
-      "title": "履歴メッセージの自動要約を有効にする"
-    },
-    "enableHistoryCount": {
-      "alias": "制限なし",
-      "limited": "{{number}}件の会話メッセージのみ含む",
-      "setlimited": "使用履歴メッセージ数",
-      "title": "過去メッセージ数を制限する",
-      "unlimited": "過去メッセージ数を制限しない"
-    },
-    "enableStreaming": {
-      "desc": "リアルタイムで応答を表示するためにストリーミング出力を有効にします。無効にすると、完全な応答のみが表示されます。",
-      "title": "ストリーミング出力を有効にする"
-    },
-    "historyCount": {
-      "desc": "リクエストごとに含まれる過去メッセージの数",
-      "title": "過去メッセージ数"
-    },
-    "inputTemplate": {
-      "desc": "ユーザーの最新メッセージがこのテンプレートに埋め込まれます",
-      "placeholder": "入力テンプレート {{text}} はリアルタイムの入力情報に置き換えられます",
-      "title": "ユーザー入力のプリプロセス"
-    },
-    "submit": "チャットの好みを更新",
-    "title": "チャット設定"
-  },
-  "settingChatAppearance": {
-    "fontSize": {
-      "desc": "チャット内容のフォントサイズ",
-      "marks": {
-        "normal": "標準"
-      },
-      "title": "フォントサイズ"
-    },
-    "highlighterTheme": {
-      "title": "コードハイライトテーマ"
-    },
-    "mermaidTheme": {
-      "title": "マーメイドテーマ"
-    },
-    "title": "チャットの外観",
-    "transitionMode": {
-      "desc": "チャットメッセージの遷移アニメーション",
-      "options": {
-        "fadeIn": "フェードイン",
-        "none": {
-          "desc": "これはモデルの応答出力方法によりますので、ご自身でテストしてください。",
-          "value": "なし"
-        },
-        "smooth": "スムーズ"
-      },
-      "title": "遷移アニメーション"
-    }
-  },
-  "settingCommon": {
-    "lang": {
-      "autoMode": "システムに従う",
-      "title": "言語"
-    },
-    "themeMode": {
-      "auto": "自動",
-      "dark": "ダーク",
-      "light": "ライト",
-      "title": "テーマ"
-    },
-    "title": "一般設定"
-  },
-  "settingGroup": {
-    "description": {
-      "placeholder": "チームの説明を入力してください",
-      "title": "チームの説明"
-    },
-    "name": {
-      "placeholder": "チーム名を入力してください",
-      "title": "チーム名"
-    },
-    "scene": {
-      "desc": "チームのシナリオを選択",
-      "options": {
-        "casual": "カジュアル",
-        "productive": "生産性"
-      },
-      "title": "チームシナリオ"
-    },
-    "submit": "チームを更新",
-    "systemPrompt": {
-      "placeholder": "ホストのシステムプロンプトを入力してください",
-      "title": "ホストのシステムプロンプト"
-    },
-    "title": "エージェントチーム情報"
-  },
-  "settingGroupChat": {
-    "allowDM": {
-      "desc": "オフにしても、あなたからアシスタントへのダイレクトメッセージは可能です",
-      "title": "アシスタントからのダイレクトメッセージを許可"
-    },
-    "enableSupervisor": {
-      "desc": "エージェントチームのモデレーター機能を有効にします。モデレーターはチームの会話の流れを管理します",
-      "title": "司会者を有効にする"
-    },
-    "maxResponseInRow": {
-      "desc": "メンバーが連続して返信できるメッセージ数を選択します。0に設定すると制限が無効になります。",
-      "title": "連続返信メッセージ数"
-    },
-    "model": {
-      "desc": "グループメンバーの発言には影響しません。一部のモデルは司会者として使用できません。",
-      "title": "ホストモデル"
-    },
-    "orchestratorTitle": "ホスト設定",
-    "responseOrder": {
-      "desc": "チャット内で設定された順番に従ってエージェントが応答します",
-      "options": {
-        "natural": "自然",
-        "sequential": "順序通り"
-      },
-      "placeholder": "返信順序を選択してください",
-      "title": "返信順序"
-    },
-    "responseSpeed": {
-      "desc": "チャット全体の進行速度を調整します",
-      "options": {
-        "fast": "速い",
-        "medium": "中程度",
-        "slow": "遅い"
-      },
-      "placeholder": "返信速度を選択してください",
-      "title": "返信速度"
-    },
-    "revealDM": {
-      "desc": "他のメンバーに送信されたプライベートメッセージの内容をあなたに表示します。",
-      "title": "プライベートメッセージを表示"
-    },
-    "submit": "設定を更新",
-    "systemPrompt": {
-      "desc": "グループチャットホストのカスタムシステムプロンプト。デフォルトのホスト動作に影響を与える可能性があります。",
-      "placeholder": "カスタムホストシステムプロンプトを入力してください...",
-      "title": "ホストのシステムプロンプト"
-    },
-    "title": "チャット設定"
-  },
-  "settingGroupMembers": {
-    "addToGroup": "グループに参加",
-    "availableAgents": "利用可能なアシスタント",
-    "createMember": "メンバーを作成",
-    "defaultAgent": "カスタムアシスタント",
-    "disableHost": "ホストアシスタントを無効にする",
-    "edit": "メンバーを編集",
-    "empty": "このチームにはまだメンバーがいません。「＋」ボタンをクリックしてメンバーを追加してください。",
-    "enableHost": "ホストアシスタントを有効にする",
-    "groupHost": "グループホスト",
-    "groupMembers": "グループメンバー",
-    "host": {
-      "description": "ホストがグループにいるとき、グループチャットは自動化され、発散的なタスクに適しています。",
-      "title": "ホスト"
-    },
-    "noAvailableAgents": "利用可能なアシスタントがいません",
-    "noDescription": "説明なし",
-    "noMembersInGroup": "グループにメンバーがいません",
-    "owner": "あなた（所有者）",
-    "remove": "メンバーを削除",
-    "removeFromGroup": "グループから削除",
-    "you": "あなた"
-  },
-  "settingImage": {
-    "defaultCount": {
-      "desc": "新しいタスクを作成する際に、画像生成パネルでのデフォルト画像数を設定します。",
-      "label": "デフォルト画像数",
-      "title": "AI画像設定"
-    }
-  },
-  "settingModel": {
-    "enableMaxTokens": {
-      "title": "単一応答制限を有効にする"
-    },
-    "enableReasoningEffort": {
-      "title": "推論強度の調整を有効にする"
-    },
-    "frequencyPenalty": {
-      "desc": "値が大きいほど、言葉がより豊かで多様になります。値が小さいほど、言葉はより素朴でシンプルになります。",
-      "title": "語彙の豊かさ"
-    },
-    "maxTokens": {
-      "desc": "1 回の対話で使用される最大トークン数",
-      "title": "単一応答制限"
-    },
-    "model": {
-      "desc": "{{provider}}モデル",
-      "title": "モデル"
-    },
-    "params": {
-      "title": "高度なパラメータ"
-    },
-    "presencePenalty": {
-      "desc": "値が大きいほど、異なる表現方法を好み、概念の繰り返しを避けます。値が小さいほど、繰り返しの概念や表現を使用する傾向が強く、一貫性のある表現になります。",
-      "title": "表現の多様性"
-    },
-    "reasoningEffort": {
-      "desc": "値が大きいほど推論能力が高くなりますが、応答時間とトークン消費が増加する可能性があります",
-      "options": {
-        "high": "高い",
-        "low": "低い",
-        "medium": "中程度"
-      },
-      "title": "推論強度"
-    },
-    "submit": "モデル設定を更新",
-    "temperature": {
-      "desc": "数値が大きいほど、回答はより創造的で想像力に富む；数値が小さいほど、回答はより厳密になる",
-      "title": "創造性の活性度",
-      "warning": "創造性の活性度が高すぎると、出力に乱れが生じる可能性があります"
-    },
-    "title": "モデル設定",
-    "topP": {
-      "desc": "どれだけの可能性を考慮するか。値が大きいほど、より多くの可能な回答を受け入れる；値が小さいほど、最も可能性の高い回答を選ぶ傾向がある。創造性の活性度と一緒に変更することは推奨しません",
-      "title": "思考の開放度"
-    }
-  },
-  "settingOpening": {
-    "openingMessage": {
-      "desc": "会話を開始する際のオープニングメッセージで、アシスタントの機能を紹介します",
-      "placeholder": "こんにちは、私はカスタムアシスタントです。すぐに私と会話を始めることも、アシスタント設定に進んで私の情報を充実させることもできます。",
-      "title": "オープニングメッセージ"
-    },
-    "openingQuestions": {
-      "desc": "会話開始時に表示されるガイド質問",
-      "empty": "質問はありません",
-      "placeholder": "質問を入力してください",
-      "repeat": "質問は既に存在します",
-      "title": "オープニング質問"
-    },
-    "title": "オープニング設定"
-  },
-  "settingPlugin": {
-    "title": "プラグインリスト"
-  },
-  "settingSystem": {
-    "accessCode": {
-      "desc": "管理者が暗号化アクセスを有効にしています",
-      "placeholder": "アクセスコードを入力してください",
-      "title": "アクセスコード"
-    },
-    "oauth": {
-      "info": {
-        "desc": "ログイン済み",
-        "title": "アカウント情報"
-      },
-      "signin": {
-        "action": "ログイン",
-        "desc": "SSO ログインを使用してアプリをロック解除",
-        "title": "アカウントにログイン"
-      },
-      "signout": {
-        "action": "ログアウト",
-        "confirm": "ログアウトしますか？",
-        "success": "ログアウトに成功しました"
-      }
-    },
-    "title": "システム設定"
-  },
-  "settingTTS": {
-    "openai": {
-      "sttModel": "OpenAI 音声認識モデル",
-      "title": "OpenAI",
-      "ttsModel": "OpenAI 音声合成モデル"
-    },
-    "showAllLocaleVoice": {
-      "desc": "無効にすると、現在の言語の音声のみが表示されます",
-      "title": "すべての言語の音声を表示"
-    },
-    "stt": "音声認識設定",
-    "sttAutoStop": {
-      "desc": "無効にすると、音声認識は自動的に停止せず、手動で停止する必要があります",
-      "title": "音声認識の自動停止"
-    },
-    "sttLocale": {
-      "desc": "音声入力の言語、このオプションを選択すると音声認識の精度が向上します",
-      "title": "音声認識言語"
-    },
-    "sttService": {
-      "desc": "ブラウザはネイティブの音声認識サービスです",
-      "title": "音声認識サービス"
-    },
-    "submit": "音声サービスを更新",
-    "title": "音声サービス",
-    "tts": "音声合成設定",
-    "ttsService": {
-      "desc": "OpenAI 音声合成サービスを使用する場合、OpenAI モデルサービスが有効になっている必要があります",
-      "title": "音声合成サービス"
-    },
-    "voice": {
-      "desc": "現在のアシスタントに適した音声を選択します。異なる TTS サービスは異なる音声をサポートしています",
-      "preview": "音声を試聴",
-      "title": "音声合成音声"
-    }
-  },
-  "storage": {
-    "actions": {
-      "export": {
-        "button": "エクスポート",
-        "exportType": {
-          "agent": "エージェント設定をエクスポート",
-          "agentWithMessage": "エージェントとメッセージをエクスポート",
-          "all": "全体設定とすべてのエージェントデータをエクスポート",
-          "allAgent": "すべてのエージェント設定をエクスポート",
-          "allAgentWithMessage": "すべてのエージェントとメッセージをエクスポート",
-          "globalSetting": "全体設定をエクスポート"
-        },
-        "title": "データをエクスポート"
-      },
-      "import": {
-        "button": "インポート",
-        "title": "データをインポート"
-      },
-      "title": "高度な操作"
-    },
-    "desc": "現在のブラウザのストレージ使用量",
-    "embeddings": {
-      "used": "ベクトルストレージ"
-    },
-    "title": "データストレージ",
-    "used": "ストレージ使用量"
-  },
-  "submitAgentModal": {
-    "button": "エージェントを提出",
-    "identifier": "アシスタント識別子（identifier）",
-    "metaMiss": "エージェント情報を入力してから提出してください。名前、説明、タグが必要です。",
-    "placeholder": "エージェントの識別子を入力してください。一意である必要があります。例：web-development",
-    "tooltips": "エージェントマーケットに共有"
-  },
-  "submitFooter": {
-    "reset": "リセット",
-    "submit": "保存",
-    "unSaved": "未保存の変更",
-    "unSavedWarning": "現在、未保存の変更があります"
-  },
-  "sync": {
-    "device": {
-      "deviceName": {
-        "hint": "識別のために名前を追加",
-        "placeholder": "デバイス名を入力",
-        "title": "デバイス名"
-      },
-      "title": "デバイス情報",
-      "unknownBrowser": "不明なブラウザ",
-      "unknownOS": "不明なOS"
-    },
-    "warning": {
-      "tip": "コミュニティの長期にわたる公開テストの結果、WebRTC 同期は一般的なデータ同期要求を安定して満たすことができない可能性があります。 <1>シグナリングサーバーをデプロイ</1> してからご使用ください。"
-    },
-    "webrtc": {
-      "channelName": {
-        "desc": "WebRTC はこの名前で同期チャネルを作成し、チャネル名が一意であることを確認します",
-        "placeholder": "同期チャネル名を入力してください",
-        "shuffle": "ランダム生成",
-        "title": "同期チャネル名"
-      },
-      "channelPassword": {
-        "desc": "パスワードを追加してチャネルをプライベートに保ち、パスワードが正しい場合のみデバイスがチャネルに参加できます",
-        "placeholder": "同期チャネルのパスワードを入力してください",
-        "title": "同期チャネルのパスワード"
-      },
-      "desc": "リアルタイムでピアツーピアのデータ通信を行い、デバイスが同時にオンラインである必要があります",
-      "enabled": {
-        "invalid": "シグナリングサーバーと同期チャネル名を入力してから有効にしてください",
-        "title": "同期を有効にする"
-      },
-      "signaling": {
-        "desc": "WebRTC はこのアドレスを使用して同期します",
-        "placeholder": "シグナリングサーバーのアドレスを入力してください",
-        "title": "シグナリングサーバー"
-      },
-      "title": "WebRTC 同期"
-    }
-  },
-  "systemAgent": {
-    "agentMeta": {
-      "label": "アシスタントメタデータ生成モデル",
-      "modelDesc": "アシスタントの名前、説明、アバター、ラベルを生成するために指定されたモデル",
-      "title": "アシスタント情報の自動生成"
-    },
-    "customPrompt": {
-      "addPrompt": "カスタムプロンプトを追加",
-      "desc": "入力後、システムアシスタントは生成するコンテンツにカスタムプロンプトを使用します",
-      "placeholder": "カスタムプロンプトを入力してください",
-      "title": "カスタムプロンプト"
-    },
-    "generationTopic": {
-      "label": "AI絵画トピック命名モデル",
-      "modelDesc": "AI絵画の自動トピック命名に使用されるモデルを指定します",
-      "title": "AI絵画自動トピック命名"
-    },
-    "helpInfo": "新しいアシスタントを作成するとき、デフォルトのアシスタント設定がプリセット値として使用されます。",
-    "historyCompress": {
-      "label": "会話履歴モデル",
-      "modelDesc": "会話履歴を圧縮するために指定されたモデル",
-      "title": "会話履歴の自動要約"
-    },
-    "queryRewrite": {
-      "label": "質問リライトモデル",
-      "modelDesc": "ユーザーの質問を最適化するために指定されたモデル",
-      "title": "知識ベースの質問の書き換え"
-    },
-    "thread": {
-      "label": "サブトピック命名モデル",
-      "modelDesc": "サブトピックの自動命名に使用されるモデルを指定します",
-      "title": "サブトピックの自動命名"
-    },
-    "title": "システムアシスタント",
-    "topic": {
-      "label": "トピックネーミングモデル",
-      "modelDesc": "トピックの自動リネームに使用されるモデルを指定します",
-      "title": "トピックの自動リネーム"
-    },
-    "translation": {
-      "label": "翻訳モデル",
-      "modelDesc": "翻訳に使用するモデルを指定します",
-      "title": "翻訳アシスタントの設定"
-    }
-  },
-  "tab": {
-    "about": "について",
-    "agent": "デフォルトエージェント",
-    "common": "一般設定",
-    "experiment": "実験",
-    "hotkey": "ショートカットキー",
-    "image": "AI画像生成",
-    "llm": "言語モデル",
-    "provider": "AIサービスプロバイダー",
-    "proxy": "ネットワークプロキシ",
-    "storage": "データストレージ",
-    "sync": "クラウド同期",
-    "system-agent": "システムアシスタント",
-    "tts": "音声サービス"
-  },
-  "tools": {
-    "builtins": {
-      "groupName": "組み込み"
-    },
-    "disabled": "現在のモデルは関数呼び出しをサポートしていません。プラグインを使用できません",
-    "klavis": {
-      "addServer": "サーバーを追加",
-      "authCompleted": "認証完了",
-      "authFailed": "認証に失敗しました",
-      "authRequired": "認証が必要です",
-      "connected": "接続済み",
-      "error": "エラー",
-      "groupName": "Klavis ツール",
-      "manage": "Klavis を管理",
-      "manageTitle": "Klavis 統合を管理",
-      "noServers": "接続されているサーバーはありません",
-      "notEnabled": "Klavis サービスは有効化されていません",
-      "oauthRequired": "新しいウィンドウで OAuth 認証を完了してください",
-      "pendingAuth": "認証待ち",
-      "serverCreated": "サーバーが正常に作成されました",
-      "serverCreatedFailed": "サーバーの作成に失敗しました",
-      "serverRemoved": "サーバーが削除されました",
-      "servers": "台のサーバー",
-      "tools": "個のツール",
-      "verifyAuth": "認証を完了しました"
-    },
-    "plugins": {
-      "enabled": "{{num}} が有効",
-      "groupName": "プラグイン",
-      "noEnabled": "有効なプラグインはありません",
-      "store": "プラグインストア"
-    },
-    "tabs": {
-      "all": "すべて",
-      "installed": "有効化済み"
-    },
-    "title": "拡張ツール"
-  }
+  "danger.clear.action": "すぐにクリア",
+  "danger.clear.confirm": "すべてのチャットデータを削除しますか？",
+  "danger.clear.desc": "エージェント、ファイル、メッセージ、スキルを含むすべてのデータを削除します。アカウントは削除されません。",
+  "danger.clear.success": "すべてのセッションメッセージが削除されました",
+  "danger.clear.title": "データを消去",
+  "danger.reset.action": "すぐにリセット",
+  "danger.reset.confirm": "すべての設定をリセットしますか？",
+  "danger.reset.currentVersion": "現在のバージョン",
+  "danger.reset.desc": "すべての設定を初期状態に戻します。データは削除されません。",
+  "danger.reset.success": "すべての設定がリセットされました",
+  "danger.reset.title": "すべての設定をリセット",
+  "defaultAgent.model.desc": "新しいアシスタントを作成する際に使用されるデフォルトモデル",
+  "defaultAgent.model.title": "モデル",
+  "defaultAgent.title": "デフォルトアシスタント設定",
+  "group.aiConfig": "AI 設定",
+  "group.common": "共通",
+  "group.profile": "アカウント",
+  "group.subscription": "サブスクリプション",
+  "group.system": "システム",
+  "groupTab.chat": "チャット",
+  "groupTab.members": "メンバー",
+  "groupTab.meta": "基本情報",
+  "header.desc": "設定優先順位和模型設置。",
+  "header.global": "グローバル設定",
+  "header.group": "チーム設定",
+  "header.groupDesc": "グループとチャットの設定を管理",
+  "header.session": "セッション設定",
+  "header.sessionDesc": "キャラクター設定とセッションの好み。",
+  "header.sessionWithName": "セッション設定 · {{name}}",
+  "header.title": "設定",
+  "hotkey.conflicts": "既存のショートカットキーと衝突しています",
+  "hotkey.errors.CONFLICT": "ホットキーの競合：このホットキーは他の機能で既に使用されています",
+  "hotkey.errors.INVALID_FORMAT": "ホットキーの形式が無効です：正しい形式を使用してください（例：CommandOrControl+E）",
+  "hotkey.errors.INVALID_ID": "無効なホットキーIDです",
+  "hotkey.errors.NO_MODIFIER": "ホットキーには修飾キー（Ctrl、Alt、Shiftなど）が含まれている必要があります",
+  "hotkey.errors.SYSTEM_OCCUPIED": "ホットキーはシステムまたは他のアプリケーションで使用されています",
+  "hotkey.errors.UNKNOWN": "更新に失敗しました：不明なエラー",
+  "hotkey.group.conversation": "会話",
+  "hotkey.group.desktop": "デスクトップ",
+  "hotkey.group.essential": "基本",
+  "hotkey.invalidCombination": "ショートカットキーには少なくとも1つの修飾キー（Ctrl、Alt、Shift）と1つの通常のキーが必要です",
+  "hotkey.record": "ショートカットキーを録音するにはキーを押してください",
+  "hotkey.reset": "デフォルトのショートカットキーにリセット",
+  "hotkey.title": "ショートカットキー",
+  "hotkey.updateError": "ホットキーの更新に失敗しました：ネットワークまたはシステムエラー",
+  "hotkey.updateSuccess": "ホットキーが正常に更新されました",
+  "llm.aesGcm": "キーとプロキシアドレスなどは <1>AES-GCM</1> 暗号化アルゴリズムを使用して暗号化されます",
+  "llm.apiKey.desc": "あなたの {{name}} API キーを入力してください",
+  "llm.apiKey.placeholder": "{{name}} API キー",
+  "llm.apiKey.title": "API キー",
+  "llm.checker.button": "チェック",
+  "llm.checker.desc": "APIキーとプロキシアドレスが正しく記入されているかをテスト",
+  "llm.checker.pass": "チェック合格",
+  "llm.checker.title": "接続性チェック",
+  "llm.customModelCards.addNew": "{{id}} モデルを作成して追加する",
+  "llm.customModelCards.config": "モデルの設定",
+  "llm.customModelCards.confirmDelete": "このカスタムモデルを削除しようとしています。削除した後は元に戻すことはできませんので、慎重に操作してください。",
+  "llm.customModelCards.modelConfig.azureDeployName.extra": "Azure OpenAI で実際にリクエストされるフィールド",
+  "llm.customModelCards.modelConfig.azureDeployName.placeholder": "Azure でのモデル展開名を入力してください",
+  "llm.customModelCards.modelConfig.azureDeployName.title": "モデル展開名",
+  "llm.customModelCards.modelConfig.displayName.placeholder": "ChatGPT、GPT-4 などのモデルの表示名を入力してください",
+  "llm.customModelCards.modelConfig.displayName.title": "モデル表示名",
+  "llm.customModelCards.modelConfig.files.extra": "現在のファイルアップロード機能は一時的なハック手法であり、自己責任での試行に限られています。完全なファイルアップロード機能は今後の実装をお待ちください。",
+  "llm.customModelCards.modelConfig.files.title": "ファイルアップロードのサポート",
+  "llm.customModelCards.modelConfig.functionCall.extra": "この設定はアプリ内の関数呼び出し機能のみを有効にします。関数呼び出しのサポートはモデル自体に依存するため、モデルの関数呼び出し機能の有効性を自分でテストしてください。",
+  "llm.customModelCards.modelConfig.functionCall.title": "関数呼び出しのサポート",
+  "llm.customModelCards.modelConfig.id.extra": "モデルのラベルとして表示されます",
+  "llm.customModelCards.modelConfig.id.placeholder": "gpt-4-turbo-preview または claude-2.1 などのモデルIDを入力してください",
+  "llm.customModelCards.modelConfig.id.title": "モデルID",
+  "llm.customModelCards.modelConfig.modalTitle": "カスタムモデルの設定",
+  "llm.customModelCards.modelConfig.tokens.title": "最大トークン数",
+  "llm.customModelCards.modelConfig.vision.extra": "この設定はアプリ内の画像アップロード機能のみを有効にします。認識のサポートはモデル自体に依存するため、モデルの視覚認識機能の有効性を自分でテストしてください。",
+  "llm.customModelCards.modelConfig.vision.title": "視覚認識のサポート",
+  "llm.fetchOnClient.desc": "ブラウザから直接セッションリクエストを開始するクライアントサイドリクエストモードは、応答速度を向上させることができます。",
+  "llm.fetchOnClient.title": "クライアントサイドリクエストモードの使用",
+  "llm.fetcher.clear": "取得したモデルをクリア",
+  "llm.fetcher.fetch": "モデルリストを取得する",
+  "llm.fetcher.fetching": "モデルリストを取得中...",
+  "llm.fetcher.latestTime": "最終更新時間：{{time}}",
+  "llm.fetcher.noLatestTime": "リストを取得していません",
+  "llm.helpDoc": "設定ガイド",
+  "llm.modelList.desc": "セッションで表示するモデルを選択します。選択したモデルはモデルリストに表示されます",
+  "llm.modelList.placeholder": "モデルをリストから選択してください",
+  "llm.modelList.title": "モデルリスト",
+  "llm.modelList.total": "合計 {{count}} 個のモデルが利用可能です",
+  "llm.proxyUrl.desc": "デフォルトのアドレスに加えて、http(s)://を含める必要があります",
+  "llm.proxyUrl.title": "APIプロキシアドレス",
+  "llm.waitingForMore": "さらに多くのモデルが <1>計画されています</1>。お楽しみに",
+  "llm.waitingForMoreLinkAriaLabel": "モデルプロバイダー接続リクエストフォームを開く",
+  "marketPublish.modal.changelog.extra": "このバージョンの主な変更点と改善点を記述してください",
+  "marketPublish.modal.changelog.label": "変更ログ",
+  "marketPublish.modal.changelog.maxLengthError": "変更ログは500文字以内で入力してください",
+  "marketPublish.modal.changelog.placeholder": "変更ログを入力してください",
+  "marketPublish.modal.changelog.required": "変更ログを入力してください",
+  "marketPublish.modal.comparison.local": "ローカルの現在のバージョン",
+  "marketPublish.modal.comparison.remote": "公開中のバージョン",
+  "marketPublish.modal.identifier.extra": "識別子はアシスタントの一意なIDとして使用されます。小文字、数字、ハイフンの使用を推奨します",
+  "marketPublish.modal.identifier.label": "アシスタント識別子",
+  "marketPublish.modal.identifier.lengthError": "識別子の長さは3〜50文字である必要があります",
+  "marketPublish.modal.identifier.patternError": "識別子には小文字、数字、ハイフンのみ使用できます",
+  "marketPublish.modal.identifier.placeholder": "例: web-development のように一意な識別子を入力してください",
+  "marketPublish.modal.identifier.required": "アシスタント識別子を入力してください",
+  "marketPublish.modal.loading.fetchingRemote": "リモートデータを読み込み中...",
+  "marketPublish.modal.loading.submit": "アシスタントを公開中...",
+  "marketPublish.modal.loading.upload": "新しいバージョンを公開中...",
+  "marketPublish.modal.messages.createVersionFailed": "バージョンの作成に失敗しました: {{message}}",
+  "marketPublish.modal.messages.fetchRemoteFailed": "リモートアシスタントデータの取得に失敗しました",
+  "marketPublish.modal.messages.missingIdentifier": "このアシスタントにはまだコミュニティ識別子がありません",
+  "marketPublish.modal.messages.notAuthenticated": "まずはコミュニティアカウントにログインしてください",
+  "marketPublish.modal.messages.publishFailed": "公開に失敗しました: {{message}}",
+  "marketPublish.modal.submitButton": "公開",
+  "marketPublish.modal.title.submit": "アシスタントコミュニティに共有",
+  "marketPublish.modal.title.upload": "新しいバージョンを公開",
+  "marketPublish.resultModal.message": "作成したアシスタントは審査に提出されました。審査に通過すると自動的に公開されます。",
+  "marketPublish.resultModal.title": "送信成功",
+  "marketPublish.resultModal.view": "コミュニティで確認",
+  "marketPublish.submit.button": "コミュニティに共有",
+  "marketPublish.submit.tooltip": "アシスタントをコミュニティに共有する",
+  "marketPublish.upload.button": "新しいバージョンを公開",
+  "marketPublish.upload.tooltip": "新しいバージョンをアシスタントコミュニティに公開",
+  "memory.enabled.desc": "LobeHub が会話から好みや情報を抽出し、後で使用できるようにします。メモリはいつでも表示、編集、または消去できます。",
+  "memory.enabled.title": "記憶機能を有効にする",
+  "memory.title": "記憶設定",
+  "message.success": "更新に成功しました",
+  "myAgents.actions.cancel": "キャンセル",
+  "myAgents.actions.confirmDeprecate": "廃止を確認",
+  "myAgents.actions.deprecate": "永久に廃止",
+  "myAgents.actions.deprecateConfirmContent": "廃止後、このアシスタントはマーケットから永久に削除され、再掲載はできません。この操作は元に戻せませんので、慎重に行ってください。",
+  "myAgents.actions.deprecateConfirmTitle": "アシスタントを廃止しますか？",
+  "myAgents.actions.deprecateError": "アシスタントの廃止に失敗しました",
+  "myAgents.actions.deprecateLoading": "アシスタントを廃止中...",
+  "myAgents.actions.deprecateSuccess": "アシスタントが廃止されました",
+  "myAgents.actions.edit": "アシスタントを編集",
+  "myAgents.actions.publish": "アシスタントを公開",
+  "myAgents.actions.publishError": "アシスタントの公開に失敗しました",
+  "myAgents.actions.publishLoading": "アシスタントを公開中...",
+  "myAgents.actions.publishSuccess": "アシスタントが公開されました",
+  "myAgents.actions.unpublish": "アシスタントを非公開",
+  "myAgents.actions.unpublishError": "アシスタントの非公開に失敗しました",
+  "myAgents.actions.unpublishLoading": "アシスタントを非公開にしています...",
+  "myAgents.actions.unpublishSuccess": "アシスタントが非公開になりました",
+  "myAgents.actions.viewDetail": "詳細を見る",
+  "myAgents.detail.category": "カテゴリ",
+  "myAgents.detail.description": "説明",
+  "myAgents.detail.identifier": "識別子",
+  "myAgents.detail.title": "アシスタントの詳細",
+  "myAgents.empty.description": "まだマーケットにアシスタントを公開していません",
+  "myAgents.empty.title": "公開中のアシスタントはありません",
+  "myAgents.errors.editFailed": "アシスタントの編集に失敗しました。しばらくしてから再試行してください。",
+  "myAgents.errors.fetchFailed": "アシスタントの詳細取得に失敗しました",
+  "myAgents.errors.notAuthenticated": "まずマーケットアカウントにログインしてください",
+  "myAgents.loginRequired.button": "マーケットアカウントにログイン",
+  "myAgents.loginRequired.description": "公開したアシスタントを見るには、まずマーケットアカウントにログインしてください",
+  "myAgents.loginRequired.title": "ログインが必要です",
+  "myAgents.status.archived": "アーカイブ済み",
+  "myAgents.status.deprecated": "廃止済み",
+  "myAgents.status.published": "公開中",
+  "myAgents.status.unpublished": "非公開",
+  "myAgents.title": "自分の公開アシスタント",
+  "plugin.addMCPPlugin": "MCPスキルを追加",
+  "plugin.addTooltip": "カスタムスキル",
+  "plugin.clearDeprecated": "無効なスキルをクリア",
+  "plugin.empty": "インストールされたスキルはありません。 <1>スキルストア</1> で探索してください",
+  "plugin.installStatus.deprecated": "アンインストール済み",
+  "plugin.settings.hint": "説明に従って以下の設定を入力してください",
+  "plugin.settings.title": "{{id}} スキル設定",
+  "plugin.settings.tooltip": "スキル設定",
+  "plugin.store": "スキルストア",
+  "settingAgent.avatar.sizeExceeded": "画像のサイズが1MBの制限を超えています。より小さい画像を選択してください。",
+  "settingAgent.avatar.title": "アバター",
+  "settingAgent.backgroundColor.title": "背景色",
+  "settingAgent.description.desc": "あなたのアシスタントを簡単に紹介します。キャラクター設定ではありません",
+  "settingAgent.description.placeholder": "アシスタントの説明を入力してください",
+  "settingAgent.description.title": "説明",
+  "settingAgent.name.placeholder": "アシスタントの名前を入力してください",
+  "settingAgent.name.title": "名前",
+  "settingAgent.prompt.placeholder": "アシスタントの設定を入力し、「/」でコマンドメニューを開く",
+  "settingAgent.prompt.templatePlaceholder": "#### 目的\nこのエージェントの主な目的と目標を記述してください。\n\n#### スキル\n- 主要な能力を列挙\n- 専門的な知識分野も含めてください\n\n#### ワークフロー\n1. ステップごとのプロセス\n2. タスクへの取り組み方\n3. ユーザーとの想定されるやり取り\n\n#### 制約\n- 守るべき重要な制限事項\n- 行動に関するガイドライン",
+  "settingAgent.prompt.title": "アシスタント設定",
+  "settingAgent.submit": "アシスタント情報を更新",
+  "settingAgent.tag.desc": "アシスタントのタグはコミュニティ内で表示されます",
+  "settingAgent.tag.placeholder": "タグを入力してください",
+  "settingAgent.tag.title": "タグ",
+  "settingAgent.title": "アシスタント情報",
+  "settingAppearance.animationMode.agile": "敏捷",
+  "settingAppearance.animationMode.desc": "アプリケーションの操作応答のアニメーション速度を選択します",
+  "settingAppearance.animationMode.disabled": "オフ",
+  "settingAppearance.animationMode.elegant": "エレガント",
+  "settingAppearance.animationMode.title": "応答アニメーション",
+  "settingAppearance.contextMenuMode.default": "デフォルト",
+  "settingAppearance.contextMenuMode.desc": "一部のリスト項目に右クリックメニューを有効にします。",
+  "settingAppearance.contextMenuMode.disabled": "使用しない",
+  "settingAppearance.contextMenuMode.title": "右クリックメニューの設定",
+  "settingAppearance.neutralColor.desc": "異なる色彩傾向のグレースケールカスタマイズ",
+  "settingAppearance.neutralColor.title": "ニュートラルカラー",
+  "settingAppearance.noAnimation.desc": "アプリ内のすべてのアニメーション効果を無効にします",
+  "settingAppearance.noAnimation.title": "アニメーションなしモード",
+  "settingAppearance.preview.title": "カラーパレット",
+  "settingAppearance.primaryColor.desc": "テーマカラーのカスタマイズ",
+  "settingAppearance.primaryColor.title": "テーマカラー",
+  "settingAppearance.title": "アプリの外観",
+  "settingChat.autoCreateTopicThreshold.desc": "現在のメッセージ数がこの値を超えると、トピックが自動的に作成されます",
+  "settingChat.autoCreateTopicThreshold.title": "メッセージ閾値",
+  "settingChat.chatStyleType.title": "チャットウィンドウのスタイル",
+  "settingChat.chatStyleType.type.chat": "チャットモード",
+  "settingChat.chatStyleType.type.docs": "ドキュメントモード",
+  "settingChat.compressThreshold.desc": "圧縮されていない過去のメッセージがこの値を超えると、圧縮されます",
+  "settingChat.compressThreshold.title": "過去メッセージの長さの圧縮閾値",
+  "settingChat.enableAutoCreateTopic.desc": "会話中に自動的にトピックを作成するかどうか。一時的なトピックのみ有効です",
+  "settingChat.enableAutoCreateTopic.title": "自動的にトピックを作成する",
+  "settingChat.enableCompressHistory.title": "履歴メッセージの自動要約を有効にする",
+  "settingChat.enableHistoryCount.alias": "制限なし",
+  "settingChat.enableHistoryCount.limited": "{{number}}件の会話メッセージのみ含む",
+  "settingChat.enableHistoryCount.setlimited": "使用履歴メッセージ数",
+  "settingChat.enableHistoryCount.title": "過去メッセージ数を制限する",
+  "settingChat.enableHistoryCount.unlimited": "過去メッセージ数を制限しない",
+  "settingChat.enableStreaming.desc": "リアルタイムで応答を表示するためにストリーミング出力を有効にします。無効にすると、完全な応答のみが表示されます。",
+  "settingChat.enableStreaming.title": "ストリーミング出力を有効にする",
+  "settingChat.historyCount.desc": "リクエストごとに含まれる過去メッセージの数",
+  "settingChat.historyCount.title": "過去メッセージ数",
+  "settingChat.inputTemplate.desc": "ユーザーの最新メッセージがこのテンプレートに埋め込まれます",
+  "settingChat.inputTemplate.placeholder": "入力テンプレート {{text}} はリアルタイムの入力情報に置き換えられます",
+  "settingChat.inputTemplate.title": "ユーザー入力のプリプロセス",
+  "settingChat.submit": "チャットの好みを更新",
+  "settingChat.title": "チャット設定",
+  "settingChatAppearance.fontSize.desc": "メッセージのフォントサイズ",
+  "settingChatAppearance.fontSize.marks.normal": "標準",
+  "settingChatAppearance.fontSize.title": "フォントサイズ",
+  "settingChatAppearance.highlighterTheme.title": "コードハイライトテーマ",
+  "settingChatAppearance.mermaidTheme.title": "マーメイドテーマ",
+  "settingChatAppearance.title": "チャットの外観",
+  "settingChatAppearance.transitionMode.desc": "チャットメッセージの表示方法を選択",
+  "settingChatAppearance.transitionMode.options.fadeIn": "フェードイン",
+  "settingChatAppearance.transitionMode.options.none.desc": "これはモデルの応答出力方法によりますので、ご自身でテストしてください。",
+  "settingChatAppearance.transitionMode.options.none.value": "なし",
+  "settingChatAppearance.transitionMode.options.smooth": "スムーズ",
+  "settingChatAppearance.transitionMode.title": "遷移アニメーション",
+  "settingCommon.devMode.desc": "有効にすると、開発者向けの機能とオプションが表示されます",
+  "settingCommon.devMode.title": "開発者モード",
+  "settingCommon.lang.autoMode": "システムに従う",
+  "settingCommon.lang.title": "言語",
+  "settingCommon.liteMode.desc": "インターフェースを簡素化し、高度な機能を非表示にします",
+  "settingCommon.liteMode.title": "簡易モード",
+  "settingCommon.responseLanguage.auto": "システムに従う",
+  "settingCommon.responseLanguage.desc": "AIの返信に使用する言語を設定します",
+  "settingCommon.responseLanguage.placeholder": "返信言語を選択",
+  "settingCommon.responseLanguage.title": "返信言語",
+  "settingCommon.themeMode.auto": "自動",
+  "settingCommon.themeMode.dark": "ダーク",
+  "settingCommon.themeMode.light": "ライト",
+  "settingCommon.themeMode.title": "テーマ",
+  "settingCommon.title": "一般設定",
+  "settingGroup.description.placeholder": "チームの説明を入力してください",
+  "settingGroup.description.title": "チームの説明",
+  "settingGroup.name.placeholder": "チーム名を入力してください",
+  "settingGroup.name.title": "チーム名",
+  "settingGroup.scene.desc": "チームのシナリオを選択",
+  "settingGroup.scene.options.casual": "カジュアル",
+  "settingGroup.scene.options.productive": "生産性",
+  "settingGroup.scene.title": "チームシナリオ",
+  "settingGroup.submit": "チームを更新",
+  "settingGroup.systemPrompt.placeholder": "ホストのシステムプロンプトを入力してください",
+  "settingGroup.systemPrompt.title": "ホストのシステムプロンプト",
+  "settingGroup.title": "グループ情報",
+  "settingGroupChat.allowDM.desc": "オフにしても、あなたからアシスタントへのダイレクトメッセージは可能です",
+  "settingGroupChat.allowDM.title": "アシスタントからのダイレクトメッセージを許可",
+  "settingGroupChat.enableSupervisor.desc": "グループモデレーター機能を有効にすると、モデレーターがチームの会話の進行を管理します",
+  "settingGroupChat.enableSupervisor.title": "司会者を有効にする",
+  "settingGroupChat.maxResponseInRow.desc": "メンバーが連続して返信できるメッセージ数を選択します。0に設定すると制限が無効になります。",
+  "settingGroupChat.maxResponseInRow.title": "連続返信メッセージ数",
+  "settingGroupChat.model.desc": "グループメンバーの発言には影響しません。一部のモデルは司会者として使用できません。",
+  "settingGroupChat.model.title": "ホストモデル",
+  "settingGroupChat.orchestratorTitle": "ホスト設定",
+  "settingGroupChat.responseOrder.desc": "チャット内で設定された順番に従ってアシスタントが応答します",
+  "settingGroupChat.responseOrder.options.natural": "自然",
+  "settingGroupChat.responseOrder.options.sequential": "順序通り",
+  "settingGroupChat.responseOrder.placeholder": "返信順序を選択してください",
+  "settingGroupChat.responseOrder.title": "返信順序",
+  "settingGroupChat.responseSpeed.desc": "チャット全体の進行速度を調整します",
+  "settingGroupChat.responseSpeed.options.fast": "速い",
+  "settingGroupChat.responseSpeed.options.medium": "中程度",
+  "settingGroupChat.responseSpeed.options.slow": "遅い",
+  "settingGroupChat.responseSpeed.placeholder": "返信速度を選択してください",
+  "settingGroupChat.responseSpeed.title": "返信速度",
+  "settingGroupChat.revealDM.desc": "他のメンバーに送信されたプライベートメッセージの内容をあなたに表示します。",
+  "settingGroupChat.revealDM.title": "プライベートメッセージを表示",
+  "settingGroupChat.submit": "設定を更新",
+  "settingGroupChat.systemPrompt.desc": "グループチャットホストのカスタムシステムプロンプト。デフォルトのホスト動作に影響を与える可能性があります。",
+  "settingGroupChat.systemPrompt.placeholder": "カスタムホストシステムプロンプトを入力してください...",
+  "settingGroupChat.systemPrompt.title": "ホストのシステムプロンプト",
+  "settingGroupChat.title": "チャット設定",
+  "settingGroupMembers.addToGroup": "グループに参加",
+  "settingGroupMembers.availableAgents": "利用可能なアシスタント",
+  "settingGroupMembers.createMember": "メンバーを作成",
+  "settingGroupMembers.defaultAgent": "カスタムアシスタント",
+  "settingGroupMembers.disableHost": "ホストアシスタントを無効にする",
+  "settingGroupMembers.edit": "メンバーを編集",
+  "settingGroupMembers.empty": "このチームにはまだメンバーがいません。「＋」ボタンをクリックしてメンバーを追加してください。",
+  "settingGroupMembers.enableHost": "ホストアシスタントを有効にする",
+  "settingGroupMembers.groupHost": "グループホスト",
+  "settingGroupMembers.groupMembers": "グループメンバー",
+  "settingGroupMembers.host.description": "ホストがグループにいるとき、グループチャットは自動化され、発散的なタスクに適しています。",
+  "settingGroupMembers.host.title": "ホスト",
+  "settingGroupMembers.noAvailableAgents": "利用可能なアシスタントがいません",
+  "settingGroupMembers.noDescription": "説明なし",
+  "settingGroupMembers.noMembersInGroup": "グループにメンバーがいません",
+  "settingGroupMembers.owner": "あなた（所有者）",
+  "settingGroupMembers.remove": "メンバーを削除",
+  "settingGroupMembers.removeFromGroup": "グループから削除",
+  "settingGroupMembers.you": "あなた",
+  "settingImage.defaultCount.desc": "新しいタスクを作成する際に、画像生成パネルでのデフォルト画像数を設定します。",
+  "settingImage.defaultCount.label": "デフォルト画像数",
+  "settingImage.defaultCount.title": "AI画像設定",
+  "settingModel.enableMaxTokens.title": "単一応答制限を有効にする",
+  "settingModel.enableReasoningEffort.title": "推論強度の調整を有効にする",
+  "settingModel.frequencyPenalty.desc": "値が大きいほど、言葉がより豊かで多様になります。値が小さいほど、言葉はより素朴でシンプルになります。",
+  "settingModel.frequencyPenalty.title": "語彙の豊かさ",
+  "settingModel.maxTokens.desc": "1 回の対話で使用される最大トークン数",
+  "settingModel.maxTokens.title": "単一応答制限",
+  "settingModel.model.desc": "{{provider}}モデル",
+  "settingModel.model.title": "モデル",
+  "settingModel.params.title": "高度なパラメータ",
+  "settingModel.presencePenalty.desc": "値が大きいほど、異なる表現方法を好み、概念の繰り返しを避けます。値が小さいほど、繰り返しの概念や表現を使用する傾向が強く、一貫性のある表現になります。",
+  "settingModel.presencePenalty.title": "表現の多様性",
+  "settingModel.reasoningEffort.desc": "値が大きいほど推論能力が高くなりますが、応答時間とトークン消費が増加する可能性があります",
+  "settingModel.reasoningEffort.options.high": "高い",
+  "settingModel.reasoningEffort.options.low": "低い",
+  "settingModel.reasoningEffort.options.medium": "中程度",
+  "settingModel.reasoningEffort.title": "推論強度",
+  "settingModel.submit": "モデル設定を更新",
+  "settingModel.temperature.desc": "数値が大きいほど、回答はより創造的で想像力に富む；数値が小さいほど、回答はより厳密になる",
+  "settingModel.temperature.title": "創造性の活性度",
+  "settingModel.temperature.warning": "創造性の活性度が高すぎると、出力に乱れが生じる可能性があります",
+  "settingModel.title": "モデル設定",
+  "settingModel.topP.desc": "どれだけの可能性を考慮するか。値が大きいほど、より多くの可能な回答を受け入れる；値が小さいほど、最も可能性の高い回答を選ぶ傾向がある。創造性の活性度と一緒に変更することは推奨しません",
+  "settingModel.topP.title": "思考の開放度",
+  "settingOpening.openingMessage.desc": "会話を開始する際のオープニングメッセージで、アシスタントの機能を紹介します",
+  "settingOpening.openingMessage.placeholder": "こんにちは、私はカスタムアシスタントです。すぐに私と会話を始めることも、アシスタント設定に進んで私の情報を充実させることもできます。",
+  "settingOpening.openingMessage.title": "オープニングメッセージ",
+  "settingOpening.openingQuestions.desc": "会話開始時に表示されるガイド質問",
+  "settingOpening.openingQuestions.empty": "開始用の質問を追加して、ユーザーがスムーズに会話を始められるようにしましょう",
+  "settingOpening.openingQuestions.placeholder": "質問を入力してください",
+  "settingOpening.openingQuestions.repeat": "質問は既に存在します",
+  "settingOpening.openingQuestions.title": "オープニング質問",
+  "settingOpening.title": "オープニング設定",
+  "settingPlugin.title": "スキルリスト",
+  "settingSystem.accessCode.desc": "管理者が暗号化アクセスを有効にしています",
+  "settingSystem.accessCode.placeholder": "アクセスコードを入力してください",
+  "settingSystem.accessCode.title": "アクセスコード",
+  "settingSystem.oauth.info.desc": "ログイン済み",
+  "settingSystem.oauth.info.title": "アカウント情報",
+  "settingSystem.oauth.signin.action": "ログイン",
+  "settingSystem.oauth.signin.desc": "SSO ログインを使用してアプリをロック解除",
+  "settingSystem.oauth.signin.title": "アカウントにログイン",
+  "settingSystem.oauth.signout.action": "ログアウト",
+  "settingSystem.oauth.signout.confirm": "ログアウトしますか？",
+  "settingSystem.oauth.signout.success": "ログアウトに成功しました",
+  "settingSystem.title": "システム設定",
+  "settingTTS.openai.sttModel": "OpenAI 音声認識モデル",
+  "settingTTS.openai.title": "OpenAI",
+  "settingTTS.openai.ttsModel": "OpenAI 音声合成モデル",
+  "settingTTS.showAllLocaleVoice.desc": "無効にすると、現在の言語の音声のみが表示されます",
+  "settingTTS.showAllLocaleVoice.title": "すべての言語の音声を表示",
+  "settingTTS.stt": "音声認識設定",
+  "settingTTS.sttAutoStop.desc": "無効にすると、音声認識は自動的に停止せず、手動で停止する必要があります",
+  "settingTTS.sttAutoStop.title": "音声認識の自動停止",
+  "settingTTS.sttLocale.desc": "音声入力の言語、このオプションを選択すると音声認識の精度が向上します",
+  "settingTTS.sttLocale.title": "音声認識言語",
+  "settingTTS.sttService.desc": "ブラウザはネイティブの音声認識サービスです",
+  "settingTTS.sttService.title": "音声認識サービス",
+  "settingTTS.submit": "音声サービスを更新",
+  "settingTTS.title": "音声サービス",
+  "settingTTS.tts": "音声合成設定",
+  "settingTTS.ttsService.desc": "OpenAI 音声合成サービスを使用する場合、OpenAI モデルサービスが有効になっている必要があります",
+  "settingTTS.ttsService.title": "音声合成サービス",
+  "settingTTS.voice.desc": "現在のアシスタントに適した音声を選択します。異なる TTS サービスは異なる音声をサポートしています",
+  "settingTTS.voice.preview": "音声を試聴",
+  "settingTTS.voice.title": "音声合成音声",
+  "startConversation": "会話を開始する",
+  "storage.actions.export.button": "エクスポート",
+  "storage.actions.export.exportType.agent": "アシスタント設定をエクスポート",
+  "storage.actions.export.exportType.agentWithMessage": "アシスタントとメッセージをエクスポート",
+  "storage.actions.export.exportType.all": "全体設定とすべてのアシスタントデータをエクスポート",
+  "storage.actions.export.exportType.allAgent": "すべてのアシスタント設定をエクスポート",
+  "storage.actions.export.exportType.allAgentWithMessage": "すべてのアシスタントとメッセージをエクスポート",
+  "storage.actions.export.exportType.globalSetting": "全体設定をエクスポート",
+  "storage.actions.export.title": "データをエクスポート",
+  "storage.actions.import.button": "インポート",
+  "storage.actions.import.title": "データをインポート",
+  "storage.actions.title": "高度な操作",
+  "storage.desc": "現在のブラウザのストレージ使用量",
+  "storage.embeddings.used": "ベクトルストレージ",
+  "storage.title": "データストレージ",
+  "storage.used": "ストレージ使用量",
+  "submitAgentModal.button": "アシスタントを提出",
+  "submitAgentModal.identifier": "アシスタント識別子（identifier）",
+  "submitAgentModal.metaMiss": "アシスタント情報を入力してから提出してください。名前、説明、タグが必要です。",
+  "submitAgentModal.placeholder": "アシスタントの識別子を入力してください。一意である必要があります。例：web-development",
+  "submitAgentModal.success": "アシスタントの送信が成功しました",
+  "submitAgentModal.tooltips": "アシスタントコミュニティに共有",
+  "sync.device.deviceName.hint": "識別のために名前を追加",
+  "sync.device.deviceName.placeholder": "デバイス名を入力",
+  "sync.device.deviceName.title": "デバイス名",
+  "sync.device.title": "デバイス情報",
+  "sync.device.unknownBrowser": "不明なブラウザ",
+  "sync.device.unknownOS": "不明なOS",
+  "sync.warning.tip": "コミュニティの長期にわたる公開テストの結果、WebRTC 同期は一般的なデータ同期要求を安定して満たすことができない可能性があります。 <1>シグナリングサーバーをデプロイ</1> してからご使用ください。",
+  "sync.webrtc.channelName.desc": "WebRTC はこの名前で同期チャネルを作成し、チャネル名が一意であることを確認します",
+  "sync.webrtc.channelName.placeholder": "同期チャネル名を入力してください",
+  "sync.webrtc.channelName.shuffle": "ランダム生成",
+  "sync.webrtc.channelName.title": "同期チャネル名",
+  "sync.webrtc.channelPassword.desc": "パスワードを追加してチャネルをプライベートに保ち、パスワードが正しい場合のみデバイスがチャネルに参加できます",
+  "sync.webrtc.channelPassword.placeholder": "同期チャネルのパスワードを入力してください",
+  "sync.webrtc.channelPassword.title": "同期チャネルのパスワード",
+  "sync.webrtc.desc": "リアルタイムでピアツーピアのデータ通信を行い、デバイスが同時にオンラインである必要があります",
+  "sync.webrtc.enabled.invalid": "シグナリングサーバーと同期チャネル名を入力してから有効にしてください",
+  "sync.webrtc.enabled.title": "同期を有効にする",
+  "sync.webrtc.signaling.desc": "WebRTC はこのアドレスを使用して同期します",
+  "sync.webrtc.signaling.placeholder": "シグナリングサーバーのアドレスを入力してください",
+  "sync.webrtc.signaling.title": "シグナリングサーバー",
+  "sync.webrtc.title": "WebRTC 同期",
+  "systemAgent.agentMeta.label": "モデル",
+  "systemAgent.agentMeta.modelDesc": "アシスタントの名前、説明、アバター、ラベルを生成するために指定されたモデル",
+  "systemAgent.agentMeta.title": "アシスタント情報生成アシスタント",
+  "systemAgent.customPrompt.addPrompt": "カスタムプロンプトを追加",
+  "systemAgent.customPrompt.desc": "入力後、システムアシスタントは生成するコンテンツにカスタムプロンプトを使用します",
+  "systemAgent.customPrompt.placeholder": "カスタムプロンプトを入力してください",
+  "systemAgent.customPrompt.title": "カスタムプロンプト",
+  "systemAgent.generationTopic.label": "モデル",
+  "systemAgent.generationTopic.modelDesc": "AI絵画の自動トピック命名に使用されるモデルを指定します",
+  "systemAgent.generationTopic.title": "AIイラスト用トピック命名アシスタント",
+  "systemAgent.helpInfo": "新しいアシスタントを作成するとき、デフォルトのアシスタント設定がプリセット値として使用されます。",
+  "systemAgent.historyCompress.label": "モデル",
+  "systemAgent.historyCompress.modelDesc": "会話履歴を圧縮するために指定されたモデル",
+  "systemAgent.historyCompress.title": "会話履歴圧縮アシスタント",
+  "systemAgent.queryRewrite.label": "モデル",
+  "systemAgent.queryRewrite.modelDesc": "ユーザーの質問を最適化するために指定されたモデル",
+  "systemAgent.queryRewrite.title": "リソースライブラリ質問リライトアシスタント",
+  "systemAgent.thread.label": "モデル",
+  "systemAgent.thread.modelDesc": "サブトピックの自動命名に使用されるモデルを指定します",
+  "systemAgent.thread.title": "サブトピック自動命名アシスタント",
+  "systemAgent.title": "システムアシスタント",
+  "systemAgent.topic.label": "モデル",
+  "systemAgent.topic.modelDesc": "トピックの自動リネームに使用されるモデルを指定します",
+  "systemAgent.topic.title": "トピック自動命名アシスタント",
+  "systemAgent.translation.label": "モデル",
+  "systemAgent.translation.modelDesc": "翻訳に使用するモデルを指定します",
+  "systemAgent.translation.title": "メッセージ内容翻訳アシスタント",
+  "tab.about": "について",
+  "tab.agent": "デフォルトアシスタント",
+  "tab.apikey": "APIキー管理",
+  "tab.chatAppearance": "チャットの外観",
+  "tab.common": "外観",
+  "tab.experiment": "実験",
+  "tab.hotkey": "ショートカットキー",
+  "tab.image": "画像生成サービス",
+  "tab.llm": "言語モデル",
+  "tab.memory": "記憶設定",
+  "tab.profile": "マイアカウント",
+  "tab.provider": "AIサービスプロバイダー",
+  "tab.proxy": "ネットワークプロキシ",
+  "tab.security": "セキュリティ",
+  "tab.stats": "データ統計",
+  "tab.storage": "データストレージ",
+  "tab.sync": "クラウド同期",
+  "tab.tts": "音声サービス",
+  "tab.usage": "使用状況",
+  "tools.add": "スキルを統合",
+  "tools.builtins.groupName": "組み込み",
+  "tools.disabled": "現在のモデルは関数呼び出しをサポートしていません。スキルを使用できません",
+  "tools.klavis.addServer": "サーバーを追加",
+  "tools.klavis.authCompleted": "認証完了",
+  "tools.klavis.authFailed": "認証に失敗しました",
+  "tools.klavis.authRequired": "認証が必要です",
+  "tools.klavis.connected": "接続済み",
+  "tools.klavis.error": "エラー",
+  "tools.klavis.groupName": "Klavis ツール",
+  "tools.klavis.manage": "Klavis を管理",
+  "tools.klavis.manageTitle": "Klavis 統合を管理",
+  "tools.klavis.noServers": "接続されているサーバーはありません",
+  "tools.klavis.notEnabled": "Klavis サービスは有効化されていません",
+  "tools.klavis.oauthRequired": "新しいウィンドウで OAuth 認証を完了してください",
+  "tools.klavis.pendingAuth": "認証待ち",
+  "tools.klavis.serverCreated": "サーバーが正常に作成されました",
+  "tools.klavis.serverCreatedFailed": "サーバーの作成に失敗しました",
+  "tools.klavis.serverRemoved": "サーバーが削除されました",
+  "tools.klavis.servers": "台のサーバー",
+  "tools.klavis.tools": "個のツール",
+  "tools.klavis.verifyAuth": "認証を完了しました",
+  "tools.notInstalled": "未インストール",
+  "tools.notInstalledWarning": "このスキルはまだインストールされておらず、アシスタントの使用に影響する可能性があります",
+  "tools.plugins.enabled": "{{num}} が有効",
+  "tools.plugins.groupName": "スキル",
+  "tools.plugins.noEnabled": "有効なスキルはありません",
+  "tools.plugins.store": "スキルストア",
+  "tools.tabs.all": "すべて",
+  "tools.tabs.installed": "有効化済み",
+  "tools.title": "拡張ツール"
 }

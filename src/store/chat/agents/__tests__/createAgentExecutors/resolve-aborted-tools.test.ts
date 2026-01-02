@@ -19,7 +19,7 @@ describe('resolve_aborted_tools executor', () => {
     it('should create tool messages with aborted status', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'test-session', topicId: 'test-topic' });
+      const context = createTestContext({ agentId: 'test-session', topicId: 'test-topic' });
 
       const toolCalls: ChatToolPayload[] = [
         {
@@ -33,7 +33,7 @@ describe('resolve_aborted_tools executor', () => {
 
       const parentMessage = createAssistantMessage();
       const instruction = createResolveAbortedToolsInstruction(toolCalls, parentMessage.id);
-      const state = createInitialState({ sessionId: 'test-session' });
+      const state = createInitialState({ operationId: 'test-session' });
 
       // When
       const result = await executeWithMockContext({
@@ -53,7 +53,7 @@ describe('resolve_aborted_tools executor', () => {
           plugin: toolCalls[0],
           pluginIntervention: { status: 'aborted' },
           tool_call_id: 'tool_1',
-          sessionId: 'test-session',
+          agentId: 'test-session',
           topicId: 'test-topic',
           parentId: parentMessage.id,
         }),
@@ -66,7 +66,7 @@ describe('resolve_aborted_tools executor', () => {
     it('should handle multiple aborted tools', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'test-session' });
+      const context = createTestContext({ agentId: 'test-session' });
 
       const toolCalls: ChatToolPayload[] = [
         {
@@ -176,7 +176,7 @@ describe('resolve_aborted_tools executor', () => {
     it('should create tool messages with correct structure', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'sess_123', topicId: 'topic_456' });
+      const context = createTestContext({ agentId: 'sess_123', topicId: 'topic_456' });
 
       const toolCall: ChatToolPayload = {
         id: 'tool_abc',
@@ -195,7 +195,7 @@ describe('resolve_aborted_tools executor', () => {
         instruction,
         state,
         mockStore,
-        context: { ...context, sessionId: 'sess_123', topicId: 'topic_456' },
+        context: { ...context, agentId: 'sess_123', topicId: 'topic_456' },
       });
 
       // Then
@@ -207,7 +207,7 @@ describe('resolve_aborted_tools executor', () => {
           pluginIntervention: { status: 'aborted' },
           tool_call_id: 'tool_abc',
           parentId: 'msg_parent',
-          sessionId: 'sess_123',
+          agentId: 'sess_123',
           topicId: 'topic_456',
           threadId: undefined,
         }),
@@ -260,7 +260,7 @@ describe('resolve_aborted_tools executor', () => {
     it('should handle tool without topicId', async () => {
       // Given
       const mockStore = createMockStore();
-      const context = createTestContext({ sessionId: 'test-session', topicId: null });
+      const context = createTestContext({ agentId: 'test-session', topicId: null });
       const instruction = createResolveAbortedToolsInstruction();
       const state = createInitialState();
 
@@ -270,7 +270,7 @@ describe('resolve_aborted_tools executor', () => {
         instruction,
         state,
         mockStore,
-        context: { ...context, sessionId: 'test-session', topicId: null },
+        context: { ...context, agentId: 'test-session', topicId: null },
       });
 
       // Then
@@ -316,7 +316,7 @@ describe('resolve_aborted_tools executor', () => {
       const context = createTestContext();
       const instruction = createResolveAbortedToolsInstruction();
       const state = createInitialState({
-        sessionId: 'test-session',
+        operationId: 'test-session',
         stepCount: 10,
         messages: [{ role: 'user', content: 'test' } as any],
         cost: {
@@ -360,7 +360,7 @@ describe('resolve_aborted_tools executor', () => {
       });
 
       // Then
-      expect(result.newState.sessionId).toBe(state.sessionId);
+      expect(result.newState.operationId).toBe(state.operationId);
       expect(result.newState.stepCount).toBe(state.stepCount);
       expect(result.newState.messages).toEqual(state.messages);
       expect(result.newState.usage).toEqual(state.usage);

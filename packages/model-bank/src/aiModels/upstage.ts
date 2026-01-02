@@ -6,7 +6,7 @@ const upstageChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Solar Pro 是 Upstage 推出的一款高智能LLM，专注于单GPU的指令跟随能力，IFEval得分80以上。目前支持英语，正式版本计划于2024年11月推出，将扩展语言支持和上下文长度。',
+      'Solar Pro is a high-intelligence LLM from Upstage, focused on instruction following on a single GPU, with IFEval scores above 80. It currently supports English; the full release was planned for November 2024 with expanded language support and longer context.',
     displayName: 'Solar Pro',
     enabled: true,
     id: 'solar-pro',
@@ -25,7 +25,7 @@ const upstageChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Solar Mini 是一种紧凑型 LLM，性能优于 GPT-3.5，具备强大的多语言能力，支持英语和韩语，提供高效小巧的解决方案。',
+      'Solar Mini is a compact LLM that outperforms GPT-3.5, with strong multilingual capability supporting English and Korean, offering an efficient small-footprint solution.',
     displayName: 'Solar Mini',
     enabled: true,
     id: 'solar-mini',
@@ -41,7 +41,7 @@ const upstageChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Solar Mini (Ja) 扩展了 Solar Mini 的能力，专注于日语，同时在英语和韩语的使用中保持高效和卓越性能。',
+      'Solar Mini (Ja) extends Solar Mini with a focus on Japanese while maintaining efficient, strong performance in English and Korean.',
     displayName: 'Solar Mini (Ja)',
     id: 'solar-mini-ja', // deprecated on 2025-04-10
     releasedAt: '2025-01-23',

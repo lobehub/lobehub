@@ -1,13 +1,13 @@
 'use client';
 
+import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import ModelList from '../../features/ModelList';
-import ProviderConfig, { ProviderConfigProps } from '../../features/ProviderConfig';
+import ProviderConfig, { type ProviderConfigProps } from '../../features/ProviderConfig';
 
 interface ProviderDetailProps extends ProviderConfigProps {
   showConfig?: boolean;

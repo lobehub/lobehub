@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "Datei erfolgreich hinzugefügt, <1>jetzt ansehen</1>",
-    "confirm": "Hinzufügen",
-    "id": {
-      "placeholder": "Bitte wählen Sie die zu hinzuzufügende Wissensdatenbank",
-      "required": "Bitte wählen Sie eine Wissensdatenbank",
-      "title": "Ziel-Wissensdatenbank"
-    },
-    "title": "Zur Wissensdatenbank hinzufügen",
-    "totalFiles": "{{count}} Datei(en) ausgewählt"
-  },
-  "createNew": {
-    "confirm": "Neu erstellen",
-    "description": {
-      "placeholder": "Beschreibung der Wissensdatenbank (optional)"
-    },
-    "formTitle": "Grundinformationen",
-    "name": {
-      "placeholder": "Name der Wissensdatenbank",
-      "required": "Bitte geben Sie den Namen der Wissensdatenbank ein"
-    },
-    "title": "Wissensdatenbank neu erstellen"
-  },
-  "tab": {
-    "evals": "Bewertungen",
-    "files": "Dokumente",
-    "settings": "Einstellungen",
-    "testing": "Rückruf-Test"
-  },
-  "title": "Wissensdatenbank"
+  "addToKnowledgeBase.addSuccess": "Datei erfolgreich hinzugefügt, <1>jetzt ansehen</1>",
+  "addToKnowledgeBase.confirm": "Hinzufügen",
+  "addToKnowledgeBase.error": "Datei konnte nicht zur Bibliothek hinzugefügt werden",
+  "addToKnowledgeBase.id.placeholder": "Bitte wählen Sie eine Bibliothek zum Hinzufügen aus",
+  "addToKnowledgeBase.id.required": "Bitte wählen Sie eine Bibliothek aus",
+  "addToKnowledgeBase.id.title": "Zielbibliothek",
+  "addToKnowledgeBase.title": "Zur Bibliothek hinzufügen",
+  "addToKnowledgeBase.totalFiles": "{{count}} Dateien ausgewählt",
+  "createNew.confirm": "Neu erstellen",
+  "createNew.description.placeholder": "Bibliotheksbeschreibung (optional)",
+  "createNew.formTitle": "Grundinformationen",
+  "createNew.name.placeholder": "Name der Bibliothek",
+  "createNew.name.required": "Bitte geben Sie einen Namen für die Bibliothek ein",
+  "createNew.title": "Neue Bibliothek erstellen",
+  "tab.evals": "Auswertungen",
+  "tab.files": "Dateien",
+  "tab.settings": "Einstellungen",
+  "tab.testing": "Abrufprüfung",
+  "title": "Bibliothek"
 }

@@ -1,24 +1,23 @@
-import { Button, Modal, SortableList } from '@lobehub/ui';
+import { Button, Flexbox, Modal, SortableList } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useAiInfraStore } from '@/store/aiInfra';
-import { AiProviderListItem } from '@/types/aiProvider';
+import { type AiProviderListItem } from '@/types/aiProvider';
 
 import GroupItem from './GroupItem';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     height: 36px;
     padding-inline: 8px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
     transition: background 0.2s ease-in-out;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
@@ -30,7 +29,6 @@ interface ConfigGroupModalProps {
 }
 const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultItems }) => {
   const { t } = useTranslation('modelProvider');
-  const { styles } = useStyles();
   const updateAiProviderSort = useAiInfraStore((s) => s.updateAiProviderSort);
   const [loading, setLoading] = useState(false);
   const { message } = App.useApp();

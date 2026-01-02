@@ -66,10 +66,6 @@
       "meta": {},
       "metadata": {
         "activeBranchIndex": 1
-      },
-      "branch": {
-        "activeBranchIndex": 1,
-        "count": 3
       }
     },
     {
@@ -85,6 +81,10 @@
         "totalOutputTokens": 24,
         "totalTokens": 36,
         "cost": 0.000108
+      },
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 3
       }
     },
     {

@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Effacer la base de données locale",
-      "downloadBackup": "Télécharger la sauvegarde des données",
-      "reUpgrade": "Refaire la mise à niveau",
-      "start": "Commencer",
-      "upgrade": "Mise à niveau"
-    },
-    "clear": {
-      "confirm": "Vous êtes sur le point de vider les données locales (les paramètres globaux ne seront pas affectés). Veuillez confirmer que vous avez sauvegardé les données."
-    },
-    "description": "Dans cette nouvelle version, le stockage des données de {{appName}} a fait un bond en avant considérable. Nous devons donc mettre à niveau les données de l'ancienne version pour vous offrir une meilleure expérience d'utilisation.",
-    "features": {
-      "capability": {
-        "desc": "Basé sur la technologie IndexedDB, capable de stocker toutes vos conversations de toute une vie.",
-        "title": "Grande capacité"
-      },
-      "performance": {
-        "desc": "Indexation automatique de millions de messages, avec des réponses aux requêtes en millisecondes.",
-        "title": "Haute performance"
-      },
-      "use": {
-        "desc": "Prise en charge de la recherche par titre, description, étiquettes, contenu des messages et même texte traduit, rendant la recherche quotidienne beaucoup plus efficace.",
-        "title": "Plus facile à utiliser"
-      }
-    },
-    "title": "Évolution des données de {{appName}}",
-    "upgrade": {
-      "error": {
-        "subTitle": "Nous sommes désolés, une erreur s'est produite lors du processus de mise à niveau de la base de données. Veuillez essayer les solutions suivantes : A. Vider les données locales, puis réimporter les données de sauvegarde ; B. Cliquez sur le bouton « Réessayer la mise à niveau ». <br><br> Si l'erreur persiste, veuillez <1>soumettre un problème</1>, nous vous aiderons à le résoudre dans les plus brefs délais.",
-        "title": "Échec de la mise à niveau de la base de données"
-      },
-      "success": {
-        "subTitle": "La base de données de {{appName}} a été mise à niveau vers la dernière version, commencez à en profiter dès maintenant.",
-        "title": "Mise à niveau de la base de données réussie"
-      }
-    },
-    "upgradeTip": "La mise à niveau prend environ 10 à 20 secondes, veuillez ne pas fermer {{appName}} pendant le processus."
-  },
-  "migrateError": {
-    "missVersion": "Les données importées ne comportent pas de numéro de version. Veuillez vérifier le fichier et réessayer.",
-    "noMigration": "Aucune solution de migration correspondant à la version actuelle n'a été trouvée. Veuillez vérifier le numéro de version et réessayer. Si le problème persiste, veuillez soumettre un rapport de problème."
-  }
+  "dbV1.action.clearDB": "Effacer les données locales",
+  "dbV1.action.downloadBackup": "Télécharger la sauvegarde des données",
+  "dbV1.action.reUpgrade": "Relancer la mise à niveau",
+  "dbV1.action.start": "Commencer",
+  "dbV1.action.upgrade": "Mettre à niveau",
+  "dbV1.clear.confirm": "Vous êtes sur le point d'effacer les données locales (les paramètres globaux ne seront pas affectés). Veuillez confirmer que vous avez bien téléchargé une sauvegarde des données.",
+  "dbV1.description": "Dans cette nouvelle version, le stockage des données de {{appName}} a connu des avancées significatives. Nous devons donc mettre à niveau les anciennes données afin de vous offrir une meilleure expérience utilisateur.",
+  "dbV1.features.capability.desc": "Basé sur la technologie IndexedDB, capable de stocker une vie entière de messages de discussion.",
+  "dbV1.features.capability.title": "Grande capacité",
+  "dbV1.features.performance.desc": "Indexe automatiquement des millions de messages, avec des requêtes de recherche répondant en quelques millisecondes.",
+  "dbV1.features.performance.title": "Haute performance",
+  "dbV1.features.use.desc": "Permet la recherche par titre, description, étiquettes, contenu des messages, et même texte traduit, améliorant considérablement l'efficacité des recherches quotidiennes.",
+  "dbV1.features.use.title": "Plus convivial",
+  "dbV1.title": "Évolution des données de {{appName}}",
+  "dbV1.upgrade.error.subTitle": "Nous sommes désolés, une erreur est survenue lors de la mise à niveau de la base de données. Veuillez essayer les solutions suivantes : A. Effacez les données locales et réimportez la sauvegarde ; B. Cliquez sur le bouton « Relancer la mise à niveau ».<br><br> Si le problème persiste, veuillez <1>soumettre un rapport de problème</1>, et nous vous aiderons dans les plus brefs délais.",
+  "dbV1.upgrade.error.title": "Échec de la mise à niveau de la base de données",
+  "dbV1.upgrade.success.subTitle": "La base de données a été mise à niveau vers la dernière version. Vous pouvez continuer.",
+  "dbV1.upgrade.success.title": "Mise à niveau réussie de la base de données",
+  "dbV1.upgradeTip": "La mise à niveau prendra environ 10 à 20 secondes. Veuillez ne pas fermer {{appName}} pendant le processus.",
+  "migrateError.missVersion": "La version est manquante dans les données importées. Veuillez vérifier le fichier et réessayer.",
+  "migrateError.noMigration": "Aucune solution de migration trouvée pour la version actuelle. Veuillez vérifier le numéro de version et réessayer. Si le problème persiste, veuillez soumettre une demande de retour."
 }

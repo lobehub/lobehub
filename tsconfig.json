@@ -2,7 +2,12 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ESNext",
-    "lib": ["dom", "dom.iterable", "esnext", "webworker"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext",
+      "webworker"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -15,14 +20,33 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "types": ["vitest/globals", "@serwist/next/typings"],
+    "types": [
+      "vitest/globals",
+      "@serwist/next/typings"
+    ],
     "paths": {
-      "@/database/*": ["./packages/database/src/*", "./src/database/*"],
-      "@/const/*": ["./packages/const/src/*", "./src/const/*"],
-      "@/utils/*": ["./packages/utils/src/*", "./src/utils/*"],
-      "@/types/*": ["./packages/types/src/*", "./src/types/*"],
-      "@/*": ["./src/*"],
-      "~test-utils": ["./tests/utils.tsx"]
+      "@/database/*": [
+        "./packages/database/src/*",
+        "./src/database/*"
+      ],
+      "@/const/*": [
+        "./packages/const/src/*",
+        "./src/const/*"
+      ],
+      "@/utils/*": [
+        "./packages/utils/src/*",
+        "./src/utils/*"
+      ],
+      "@/types/*": [
+        "./packages/types/src/*",
+        "./src/types/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ],
+      "~test-utils": [
+        "./tests/utils.tsx"
+      ]
     },
     "plugins": [
       {
@@ -33,17 +57,30 @@
   "exclude": [
     "node_modules",
     "public/sw.js",
-    "apps/desktop",
-    "apps/mobile",
+    "apps/desktop/**",
+    "apps/mobile/**",
     "tmp",
     "temp",
     ".temp",
-    "e2e"
+    "e2e/**",
+    "knip.ts"
   ],
   "include": [
-    "**/*.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.d.ts",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "tests/**/*.d.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "scripts/**/*.ts",
+    "scripts/**/*.mts",
+    "scripts/**/*.cts",
+    "*.ts",
+    "*.mts",
+    "*.cts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     ".next/dev/types/**/*.ts"

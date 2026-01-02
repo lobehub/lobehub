@@ -1,8 +1,8 @@
 'use client';
 
-import { Loader } from 'next/dist/shared/lib/dynamic';
+import { type Loader } from 'next/dist/shared/lib/dynamic';
 import dynamic from 'next/dynamic';
-import { FC, memo } from 'react';
+import { type FC, memo } from 'react';
 
 import MobileSwitchLoading from '@/features/MobileSwitchLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';

@@ -33,10 +33,6 @@ const isMessageInChatReasoning = (id: string) => (s: ChatStoreState) =>
 const isMessageCreating = (id: string) => (s: ChatStoreState) =>
   operationSelectors.isMessageCreating(id)(s); // Only check sendMessage operations
 
-// RAG flow still uses dedicated state
-const isMessageInRAGFlow = (id: string) => (s: ChatStoreState) =>
-  s.messageRAGLoadingIds.includes(id);
-
 const isMessageCollapsed = (id: string) => (s: ChatStoreState) => {
   const message = getDisplayMessageById(id)(s);
   return message?.metadata?.collapsed ?? false;
@@ -72,9 +68,6 @@ const isToolApiNameShining =
     return isStreaming || isPluginInvoking;
   };
 
-const isInRAGFlow = (s: ChatStoreState) =>
-  s.messageRAGLoadingIds.some((id) => mainDisplayChatIDs(s).includes(id));
-
 const isCreatingMessage = (s: ChatStoreState) => s.isCreatingMessage;
 
 const isHasMessageLoading = (s: ChatStoreState) =>
@@ -89,14 +82,11 @@ const isSendButtonDisabledByMessage = (s: ChatStoreState) =>
   // 2. when is creating the topic
   s.creatingTopic ||
   // 3. when is creating the message
-  isCreatingMessage(s) ||
-  // 4. when the message is in RAG flow
-  isInRAGFlow(s);
+  isCreatingMessage(s);
 
 export const messageStateSelectors = {
   isCreatingMessage,
   isHasMessageLoading,
-  isInRAGFlow,
   isInToolsCalling,
   isMessageCollapsed,
   isMessageContinuing,
@@ -104,7 +94,6 @@ export const messageStateSelectors = {
   isMessageEditing,
   isMessageGenerating,
   isMessageInChatReasoning,
-  isMessageInRAGFlow,
   isMessageLoading,
   isMessageRegenerating,
   isPluginApiInvoking,

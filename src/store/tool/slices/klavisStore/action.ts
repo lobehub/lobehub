@@ -1,19 +1,19 @@
 import { enableMapSet, produce } from 'immer';
-import useSWR, { SWRResponse } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import useSWR, { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { ToolStore } from '../../store';
-import { KlavisStoreState } from './initialState';
+import { type ToolStore } from '../../store';
+import { type KlavisStoreState } from './initialState';
 import {
-  CallKlavisToolParams,
-  CallKlavisToolResult,
-  CreateKlavisServerParams,
-  KlavisServer,
+  type CallKlavisToolParams,
+  type CallKlavisToolResult,
+  type CreateKlavisServerParams,
+  type KlavisServer,
   KlavisServerStatus,
-  KlavisTool,
+  type KlavisTool,
 } from './types';
 
 enableMapSet();

@@ -1,181 +1,134 @@
 {
   "addFolder": "Create Folder",
-  "addKnowledge": "Add Knowledge",
-  "addPage": "Create Document",
-  "desc": "Manage your knowledge for work, study, and life.",
-  "detail": {
-    "basic": {
-      "createdAt": "Creation Time",
-      "filename": "File Name",
-      "size": "File Size",
-      "title": "Basic Information",
-      "type": "Format",
-      "updatedAt": "Update Time"
-    },
-    "data": {
-      "chunkCount": "Chunks",
-      "embedding": {
-        "default": "Not embedding",
-        "error": "Failed",
-        "pending": "Pending start",
-        "processing": "In progress",
-        "success": "Completed"
-      },
-      "embeddingStatus": "embedding"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "Add Icon",
-    "autoSaveMessage": "Document auto-saves, no manual save needed",
-    "chooseIcon": "Choose Icon",
-    "deleteConfirm": {
-      "content": "This document will be deleted permanently and cannot be recovered. Please proceed with caution.",
-      "title": "Delete Document"
-    },
-    "deleteError": "Failed to delete document",
-    "deleteSuccess": "Document deleted successfully",
-    "editedAt": "Edited {{time}}",
-    "editedBy": "Edited by {{name}}",
-    "editorPlaceholder": "Type document content, press / to open command menu",
-    "empty": {
-      "createNewDocument": "Create New Page",
-      "title": "Select a page to start",
-      "uploadMarkdown": "Upload Markdown File"
-    },
-    "linkCopied": "Link copied",
-    "menu": {
-      "copyLink": "Copy Link",
-      "exportDocument": "Export Document",
-      "importDocument": "Import Document",
-      "pin": "Pin Document"
-    },
-    "saving": "Saving...",
-    "titlePlaceholder": "Untitled",
-    "wordCount": "{{wordCount}} words"
-  },
-  "documentList": {
-    "copyContent": "Copy All",
-    "duplicate": "Duplicate",
-    "empty": "No documents yet. Click the button above to create your first one.",
-    "noResults": "No matching documents found.",
-    "pageCount": "{{count}} pages in total",
-    "selectNote": "Select a document to start editing",
-    "untitled": "Untitled"
-  },
+  "addLibrary": "Add",
+  "addPage": "Create Page",
+  "detail.basic.createdAt": "Creation Time",
+  "detail.basic.filename": "File Name",
+  "detail.basic.size": "File Size",
+  "detail.basic.title": "Basic Information",
+  "detail.basic.type": "Format",
+  "detail.basic.updatedAt": "Update Time",
+  "detail.data.chunkCount": "Chunks",
+  "detail.data.embedding.default": "Not embedding",
+  "detail.data.embedding.error": "Failed",
+  "detail.data.embedding.pending": "Pending start",
+  "detail.data.embedding.processing": "In progress",
+  "detail.data.embedding.success": "Completed",
+  "detail.data.embeddingStatus": "embedding",
   "empty": "No files or folders have been uploaded yet.",
-  "header": {
-    "actions": {
-      "newFolder": "New Folder",
-      "newPage": "New Page",
-      "uploadFile": "Upload File",
-      "uploadFolder": "Upload Folder"
-    },
-    "newNoteDialog": {
-      "cancel": "Cancel",
-      "editTitle": "Edit Document",
-      "emptyContent": "Document content cannot be empty.",
-      "loadError": "Failed to load the document. Please try again.",
-      "loading": "Loading...",
-      "save": "Save",
-      "saveError": "Failed to save the document. Please try again.",
-      "saveSuccess": "Document saved successfully.",
-      "title": "New Page",
-      "updateSuccess": "Document updated successfully."
-    },
-    "newPageButton": "New Page",
-    "uploadButton": "Upload"
-  },
-  "home": {
-    "getStarted": "Get Started",
-    "greeting": "Get Started",
-    "quickActions": "Quick Actions",
-    "recentFiles": "Recent Files",
-    "recentPages": "Recent Documents",
-    "subtitle": "Welcome to your knowledge base. Start managing your documents here.",
-    "uploadEntries": {
-      "files": {
-        "title": "Upload Files"
-      },
-      "folder": {
-        "title": "Upload Folder"
-      },
-      "knowledgeBase": {
-        "title": "Create Knowledge Base"
-      },
-      "newPage": {
-        "title": "New Page"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "You are about to delete this knowledge base. The files within will not be deleted and will be moved to All Files. Once deleted, the knowledge base cannot be recovered. Please proceed with caution.",
-      "empty": "Click <1>+</1> to add a knowledge base"
-    },
-    "new": "New Knowledge Base",
-    "title": "Knowledge Base"
-  },
-  "menu": {
-    "allFiles": "All Files",
-    "allPages": "All Documents"
-  },
-  "networkError": "Failed to retrieve the knowledge base. Please check your network connection and try again.",
-  "notSupportGuide": {
-    "desc": "The current deployment instance is in client database mode, and file management features are not available. Please switch to <1>server database deployment mode</1>, or use <3>LobeChat Cloud</3> directly.",
-    "features": {
-      "allKind": {
-        "desc": "Supports mainstream file types, including common document formats like Word, PPT, Excel, PDF, TXT, as well as popular code files like JS and Python.",
-        "title": "Multiple File Type Parsing"
-      },
-      "embeddings": {
-        "desc": "Utilizes high-performance vector models to vectorize text chunks, enabling semantic search of file content.",
-        "title": "Vector Semantics"
-      },
-      "repos": {
-        "desc": "Supports the creation of knowledge bases and allows the addition of different types of files, building your domain knowledge.",
-        "title": "Knowledge Base"
-      }
-    },
-    "title": "The current deployment mode does not support file management"
-  },
-  "preview": {
-    "downloadFile": "Download File",
-    "unsupportedFileAndContact": "This file format is not currently supported for online preview. If you have a request for previewing, feel free to <1>contact us</1>."
-  },
+  "header.actions.builtInBlockList.filtered": "{{ignored}} files filtered (out of {{total}} total)",
+  "header.actions.connect": "Connect...",
+  "header.actions.gitignore.apply": "Apply Rules",
+  "header.actions.gitignore.cancel": "Ignore Rules",
+  "header.actions.gitignore.content": ".gitignore file detected ({{count}} files in total). Would you like to apply the ignore rules?",
+  "header.actions.gitignore.filtered": "{{ignored}} files filtered out ({{total}} files in total)",
+  "header.actions.gitignore.title": ".gitignore Detected",
+  "header.actions.newFolder": "New Folder",
+  "header.actions.newPage": "New Page",
+  "header.actions.notion.error": "Failed to import Notion files",
+  "header.actions.notion.foundFiles": "found {{count}} files",
+  "header.actions.notion.importing": "Importing Notion Content...",
+  "header.actions.notion.noMarkdownFiles": "No markdown files found in the ZIP archive",
+  "header.actions.notion.partial": "Successfully imported {{success}} files, {{failed}} failed",
+  "header.actions.notion.success": "Successfully imported {{count}} files",
+  "header.actions.notionGuide.cancel": "Not Now",
+  "header.actions.notionGuide.desc": "First, export your content from Notion as a Markdown (ZIP) file. Then click Continue to select the ZIP file and import all pages.",
+  "header.actions.notionGuide.ok": "Select Notion ZIP",
+  "header.actions.notionGuide.title": "Import from Notion",
+  "header.actions.uploadFile": "Upload File",
+  "header.actions.uploadFolder": "Upload Folder",
+  "header.newPageButton": "New Page",
+  "header.uploadButton": "Upload",
+  "home.getStarted": "Get Started",
+  "home.greeting": "Get Started",
+  "home.quickActions": "Quick Actions",
+  "home.recentFiles": "Recent Files",
+  "home.recentPages": "Recent Pages",
+  "home.uploadEntries.files.title": "Upload Files",
+  "home.uploadEntries.folder.title": "Upload Folder",
+  "home.uploadEntries.library.title": "Create New Library",
+  "home.uploadEntries.newPage.title": "New Page",
+  "library.list.confirmRemoveLibrary": "You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.",
+  "library.list.empty": "Click <1>+</1> to create a new library",
+  "library.new": "New Library",
+  "library.title": "Library",
+  "loadMore": "Load More",
+  "menu.allFiles": "All Files",
+  "menu.allPages": "All Pages",
+  "networkError": "Failed to retrieve libraries. Please check your network connection and try again.",
+  "notSupportGuide.desc": "The current deployment mode does not support file management. Switch to <1>server database deployment mode</1>, or use <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "Supports mainstream file types, including common page formats like Word, PPT, Excel, PDF, TXT, as well as popular code files like JS and Python.",
+  "notSupportGuide.features.allKind.title": "Multiple File Type Parsing",
+  "notSupportGuide.features.embeddings.desc": "Utilizes high-performance vector models to vectorize text chunks, enabling semantic search of file content.",
+  "notSupportGuide.features.embeddings.title": "Vector Semantics",
+  "notSupportGuide.features.libraries.desc": "Create Libraries and add files to build your own Library.",
+  "notSupportGuide.features.libraries.title": "Library",
+  "notSupportGuide.title": "The current deployment mode does not support file management",
+  "pageEditor.addIcon": "Add Icon",
+  "pageEditor.autoSaveMessage": "Your page is saved automatically. No need to save manually.",
+  "pageEditor.chooseIcon": "Choose Icon",
+  "pageEditor.deleteConfirm.content": "This page will be deleted and cannot be recovered. Please proceed with caution.",
+  "pageEditor.deleteConfirm.title": "Delete Page",
+  "pageEditor.deleteError": "Failed to delete the page",
+  "pageEditor.deleteSuccess": "Page deleted successfully",
+  "pageEditor.duplicateError": "Failed to duplicate the page",
+  "pageEditor.duplicateSuccess": "Page duplicated successfully",
+  "pageEditor.editedAt": "Last edited on {{time}}",
+  "pageEditor.editedBy": "Last edited by {{name}}",
+  "pageEditor.editorPlaceholder": "Start writing your page. Press / to open the command menu",
+  "pageEditor.empty.createNewDocument": "Create New Page",
+  "pageEditor.empty.importNotion": "Import from Notion",
+  "pageEditor.empty.title": "Select a page to get started",
+  "pageEditor.empty.uploadFiles": "Upload Files",
+  "pageEditor.exportError": "Failed to export the page",
+  "pageEditor.exportSuccess": "Page exported successfully",
+  "pageEditor.linkCopied": "Link copied",
+  "pageEditor.menu.copyLink": "Copy Link",
+  "pageEditor.menu.export": "Export",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "Export Page",
+  "pageEditor.menu.importDocument": "Import Page",
+  "pageEditor.menu.pin": "Pin Page",
+  "pageEditor.saving": "Saving...",
+  "pageEditor.titlePlaceholder": "Untitled",
+  "pageEditor.wordCount": "{{wordCount}} words",
+  "pageList.copyContent": "Copy Full Text",
+  "pageList.duplicate": "Duplicate",
+  "pageList.empty": "No pages yet. Click the button above to create your first one.",
+  "pageList.filter.all": "All",
+  "pageList.filter.onlyInPages": "In Pages Only",
+  "pageList.noResults": "No matching pages found",
+  "pageList.pageCount": "{{count}} pages in total",
+  "pageList.pageSizeItem": "{{count}} items",
+  "pageList.title": "Pages",
+  "pageList.untitled": "Untitled",
+  "portal.openInPageEditor": "Edit in Page",
+  "preview.downloadFile": "Download File",
+  "preview.unsupportedFileAndContact": "This file format is not currently supported for online preview. If you have a request for previewing, feel free to <1>contact us</1>.",
   "searchFilePlaceholder": "Search Files",
   "searchPagePlaceholder": "Search Pages",
-  "tab": {
-    "all": "All",
-    "audios": "Audio",
-    "documents": "Documents",
-    "home": "Home",
-    "images": "Images",
-    "moreTypes": "More Types",
-    "pages": "Pages",
-    "videos": "Videos",
-    "websites": "Websites"
-  },
-  "title": "Knowledge Base",
+  "tab.all": "All",
+  "tab.audios": "Audio",
+  "tab.documents": "Documents",
+  "tab.home": "Home",
+  "tab.images": "Images",
+  "tab.moreTypes": "More Types",
+  "tab.pages": "Pages",
+  "tab.videos": "Videos",
+  "tab.websites": "Websites",
+  "title": "Resources",
   "toggleLeftPanel": "Show/Hide Left Panel",
-  "uploadDock": {
-    "body": {
-      "collapse": "Collapse",
-      "item": {
-        "done": "Uploaded",
-        "error": "Upload failed, please try again",
-        "pending": "Preparing to upload...",
-        "processing": "Processing file...",
-        "restTime": "Remaining {{time}}"
-      }
-    },
-    "fileQueueInfo": "Uploading the first {{count}} files, {{remaining}} remaining in queue",
-    "totalCount": "Total {{count}} items",
-    "uploadStatus": {
-      "error": "Upload error",
-      "pending": "Waiting to upload",
-      "processing": "Uploading",
-      "success": "Upload completed",
-      "uploading": "Uploading"
-    }
-  }
+  "uploadDock.body.collapse": "Collapse",
+  "uploadDock.body.item.done": "Uploaded",
+  "uploadDock.body.item.error": "Upload failed, please try again",
+  "uploadDock.body.item.pending": "Preparing to upload...",
+  "uploadDock.body.item.processing": "Processing file...",
+  "uploadDock.body.item.restTime": "Remaining {{time}}",
+  "uploadDock.fileQueueInfo": "Uploading the first {{count}} files, {{remaining}} remaining in queue",
+  "uploadDock.totalCount": "Total {{count}} items",
+  "uploadDock.uploadStatus.error": "Upload error",
+  "uploadDock.uploadStatus.pending": "Waiting to upload",
+  "uploadDock.uploadStatus.processing": "Uploading",
+  "uploadDock.uploadStatus.success": "Upload completed",
+  "uploadDock.uploadStatus.uploading": "Uploading"
 }

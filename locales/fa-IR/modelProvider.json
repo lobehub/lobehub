@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "نسخه API Azure، با فرمت YYYY-MM-DD، برای مشاهده [آخرین نسخه](https://learn.microsoft.com/fa-ir/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "دریافت لیست",
-      "title": "نسخه API Azure"
-    },
-    "empty": "لطفاً شناسه مدل را وارد کنید تا اولین مدل را اضافه کنید",
-    "endpoint": {
-      "desc": "هنگام بررسی منابع از پورتال Azure، این مقدار را می‌توانید در بخش «کلیدها و نقاط پایانی» پیدا کنید",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "آدرس API Azure"
-    },
-    "modelListPlaceholder": "لطفاً مدل OpenAI مستقر شده خود را انتخاب یا اضافه کنید",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "هنگام بررسی منابع از پورتال Azure، این مقدار را می‌توانید در بخش «کلیدها و نقاط پایانی» پیدا کنید. می‌توانید از KEY1 یا KEY2 استفاده کنید",
-      "placeholder": "کلید API Azure",
-      "title": "کلید API"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "نسخه API آژور، با فرمت YYYY-MM-DD، برای مشاهده [آخرین نسخه](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "دریافت لیست",
-      "title": "نسخه API آژور"
-    },
-    "endpoint": {
-      "desc": "نقطه پایانی استنتاج مدل آژور AI را از نمای کلی پروژه آژور AI پیدا کنید",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "نقطه پایانی آژور AI"
-    },
-    "title": "آژور OpenAI",
-    "token": {
-      "desc": "کلید API را از نمای کلی پروژه آژور AI پیدا کنید",
-      "placeholder": "کلید آژور",
-      "title": "کلید"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "AWS Access Key Id را وارد کنید",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key Id"
-    },
-    "checker": {
-      "desc": "بررسی کنید که آیا AccessKeyId / SecretAccessKey به درستی وارد شده است"
-    },
-    "region": {
-      "desc": "AWS Region را وارد کنید",
-      "placeholder": "AWS Region",
-      "title": "AWS Region"
-    },
-    "secretAccessKey": {
-      "desc": "AWS Secret Access Key را وارد کنید",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "اگر از AWS SSO/STS استفاده می‌کنید، لطفاً AWS Session Token خود را وارد کنید",
-      "placeholder": "AWS Session Token",
-      "title": "AWS Session Token (اختیاری)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "منطقه خدمات سفارشی",
-      "customSessionToken": "توکن نشست سفارشی",
-      "description": "برای شروع جلسه، AWS AccessKeyId / SecretAccessKey خود را وارد کنید. برنامه تنظیمات احراز هویت شما را ذخیره نخواهد کرد",
-      "imageGenerationDescription": "برای شروع تولید، AWS AccessKeyId / SecretAccessKey خود را وارد کنید. برنامه پیکربندی احراز هویت شما را ذخیره نمی‌کند.",
-      "title": "استفاده از اطلاعات احراز هویت سفارشی Bedrock"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "لطفاً کلید API Cloudflare را وارد کنید",
-      "placeholder": "کلید API Cloudflare",
-      "title": "کلید API Cloudflare"
-    },
-    "baseURLOrAccountID": {
-      "desc": "شناسه حساب Cloudflare یا آدرس API سفارشی را وارد کنید",
-      "placeholder": "شناسه حساب Cloudflare / آدرس API سفارشی",
-      "title": "شناسه حساب Cloudflare / آدرس API"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "کلید API مورد نیاز برای احراز هویت Bearer Token",
-      "placeholder": "لطفاً کلید API را وارد کنید",
-      "required": "لطفاً کلید API را وارد کنید",
-      "title": "کلید API"
-    },
-    "authType": {
-      "desc": "نوع احراز هویت با سرور ComfyUI را انتخاب کنید",
-      "options": {
-        "basic": "نام کاربری/رمز عبور",
-        "bearer": "Bearer (کلید API)",
-        "custom": "هدر سفارشی",
-        "none": "بدون احراز هویت"
-      },
-      "placeholder": "لطفاً نوع احراز هویت را انتخاب کنید",
-      "title": "نوع احراز هویت"
-    },
-    "baseURL": {
-      "desc": "آدرس وب برای دسترسی به ComfyUI",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "لطفاً آدرس سرویس ComfyUI را وارد کنید",
-      "title": "آدرس سرویس ComfyUI"
-    },
-    "checker": {
-      "desc": "بررسی کنید که اتصال به درستی پیکربندی شده باشد",
-      "title": "بررسی اتصال"
-    },
-    "customHeaders": {
-      "addButton": "افزودن هدر",
-      "deleteTooltip": "حذف این هدر",
-      "desc": "هدرهای مورد نیاز برای احراز هویت سفارشی، به صورت جفت کلید-مقدار",
-      "duplicateKeyError": "نام کلید هدر نباید تکراری باشد",
-      "keyPlaceholder": "نام کلید",
-      "required": "لطفاً هدر سفارشی را وارد کنید",
-      "title": "هدرهای سفارشی",
-      "valuePlaceholder": "مقدار"
-    },
-    "password": {
-      "desc": "رمز عبور مورد نیاز برای احراز هویت پایه",
-      "placeholder": "لطفاً رمز عبور را وارد کنید",
-      "required": "لطفاً رمز عبور را وارد کنید",
-      "title": "رمز عبور"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "نام کاربری مورد نیاز برای احراز هویت پایه",
-      "placeholder": "لطفاً نام کاربری را وارد کنید",
-      "required": "لطفاً نام کاربری را وارد کنید",
-      "title": "نام کاربری"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "لطفاً کلید API خود را وارد کنید",
-      "title": "کلید API"
-    },
-    "basicTitle": "اطلاعات پایه",
-    "configTitle": "اطلاعات پیکربندی",
-    "confirm": "ایجاد جدید",
-    "createSuccess": "ایجاد با موفقیت انجام شد",
-    "description": {
-      "placeholder": "توضیحات ارائه‌دهنده (اختیاری)",
-      "title": "توضیحات ارائه‌دهنده"
-    },
-    "id": {
-      "desc": "به عنوان شناسه منحصر به فرد ارائه‌دهنده خدمات، پس از ایجاد قابل ویرایش نخواهد بود",
-      "format": "فقط می‌تواند شامل اعداد، حروف کوچک، خط تیره (-) و زیرخط (_) باشد",
-      "placeholder": "توصیه می‌شود تماماً با حروف کوچک باشد، مانند openai، پس از ایجاد قابل ویرایش نخواهد بود",
-      "required": "لطفاً شناسه ارائه‌دهنده را وارد کنید",
-      "title": "شناسه ارائه‌دهنده"
-    },
-    "logo": {
-      "required": "لطفاً لوگوی صحیح ارائه‌دهنده را بارگذاری کنید",
-      "title": "لوگوی ارائه‌دهنده"
-    },
-    "name": {
-      "placeholder": "لطفاً نام نمایشی ارائه‌دهنده را وارد کنید",
-      "required": "لطفاً نام ارائه‌دهنده را وارد کنید",
-      "title": "نام ارائه‌دهنده"
-    },
-    "proxyUrl": {
-      "required": "لطفاً آدرس پروکسی را وارد کنید",
-      "title": "آدرس پروکسی"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "لطفاً نوع SDK را انتخاب کنید",
-      "title": "فرمت درخواست"
-    },
-    "title": "ایجاد ارائه‌دهنده AI سفارشی"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "توکن دسترسی شخصی Github خود را وارد کنید، برای ایجاد [اینجا](https://github.com/settings/tokens) کلیک کنید",
-      "placeholder": "ghp_xxxxxx",
-      "title": "توکن دسترسی شخصی Github"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "توکن HuggingFace خود را وارد کنید، برای ایجاد [اینجا](https://huggingface.co/settings/tokens) کلیک کنید",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "توکن HuggingFace"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "ارائه‌دهنده سفارشی فعال نشده است",
-      "disabled": "سرویس‌دهنده غیرفعال",
-      "enabled": "سرویس‌دهنده فعال"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "اضافه کردن ارائه‌دهنده سفارشی",
-    "all": "همه",
-    "list": {
-      "custom": "سفارشی‌سازی فعال نشده است",
-      "disabled": "غیرفعال",
-      "disabledActions": {
-        "sort": "نحوه مرتب‌سازی",
-        "sortAlphabetical": "مرتب‌سازی الفبایی",
-        "sortAlphabeticalDesc": "مرتب‌سازی الفبایی معکوس",
-        "sortDefault": "مرتب‌سازی پیش‌فرض"
-      },
-      "enabled": "فعال"
-    },
-    "notFound": "نتیجه‌ای برای جستجو پیدا نشد",
-    "searchProviders": "جستجوی ارائه‌دهندگان...",
-    "sort": "مرتب‌سازی سفارشی"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "کلید API ارائه شده توسط پلتفرم New API",
-      "placeholder": "کلید API New API",
-      "required": "کلید API الزامی است",
-      "title": "کلید API"
-    },
-    "apiUrl": {
-      "desc": "آدرس API سرویس New API، اغلب نیاز به /v1 دارد",
-      "title": "آدرس API"
-    },
-    "enabled": {
-      "title": "فعال‌سازی New API"
-    },
-    "models": {
-      "batchSelect": "انتخاب دسته‌ای مدل‌ها ({{count}} عدد)",
-      "fetch": "دریافت فهرست مدل‌ها",
-      "selected": "مدل‌های انتخاب شده",
-      "title": "مدل‌های قابل استفاده"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "آزمایش کنید که آیا آدرس پروکسی به درستی وارد شده است",
-      "title": "بررسی اتصال"
-    },
-    "customModelName": {
-      "desc": "مدل‌های سفارشی را اضافه کنید، چندین مدل را با کاما (,) جدا کنید",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "نام مدل سفارشی"
-    },
-    "download": {
-      "desc": "Ollama در حال دانلود این مدل است، لطفاً تا حد امکان این صفحه را نبندید. در صورت دانلود مجدد، از نقطه قطع شده ادامه خواهد یافت",
-      "failed": "دانلود مدل ناموفق بود، لطفاً شبکه یا تنظیمات Ollama را بررسی کرده و دوباره تلاش کنید",
-      "remainingTime": "زمان باقی‌مانده",
-      "speed": "سرعت دانلود",
-      "title": "در حال دانلود مدل {{model}} "
-    },
-    "endpoint": {
-      "desc": "باید شامل http(s):// باشد، اگر محلی به طور اضافی مشخص نشده باشد می‌توان خالی گذاشت",
-      "title": "آدرس سرویس Ollama"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "لغو دانلود",
-      "confirm": "دانلود",
-      "description": "برچسب مدل Ollama خود را وارد کنید تا بتوانید به مکالمه ادامه دهید",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "شروع دانلود...",
-      "title": "دانلود مدل مشخص شده Ollama"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "{{count}} مدل انتخاب شده",
-      "title": "انتخاب دسته‌ای"
-    },
-    "config": {
-      "aesGcm": "کلید شما و آدرس پروکسی و غیره با استفاده از <1>AES-GCM</1> رمزگذاری خواهد شد",
-      "apiKey": {
-        "desc": "لطفاً کلید API {{name}} خود را وارد کنید",
-        "descWithUrl": "لطفاً کلید API {{name}} خود را وارد کنید، <3>برای دریافت اینجا کلیک کنید</3>",
-        "placeholder": "{{name}} کلید API",
-        "title": "کلید API"
-      },
-      "baseURL": {
-        "desc": "باید شامل http(s):// باشد",
-        "invalid": "لطفاً یک URL معتبر وارد کنید",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "آدرس پروکسی API"
-      },
-      "checker": {
-        "button": "بررسی",
-        "desc": "آزمون کلید API و آدرس پروکسی برای صحت",
-        "pass": "بررسی موفقیت‌آمیز",
-        "title": "بررسی اتصال"
-      },
-      "fetchOnClient": {
-        "desc": "مدل درخواست کلاینت به طور مستقیم از مرورگر درخواست جلسه را آغاز می‌کند و می‌تواند سرعت پاسخ را افزایش دهد",
-        "title": "استفاده از مدل درخواست کلاینت"
-      },
-      "helpDoc": "راهنمای پیکربندی",
-      "responsesApi": {
-        "desc": "با استفاده از قالب جدید درخواست OpenAI، ویژگی‌های پیشرفته‌ای مانند زنجیره تفکر فعال می‌شود (فقط برای مدل‌های OpenAI پشتیبانی می‌شود)",
-        "title": "استفاده از استاندارد Responses API"
-      },
-      "waitingForMore": "مدل‌های بیشتری در حال <1>برنامه‌ریزی برای اتصال</1> هستند، لطفاً منتظر بمانید"
-    },
-    "createNew": {
-      "title": "ایجاد مدل AI سفارشی"
-    },
-    "item": {
-      "config": "پیکربندی مدل",
-      "customModelCards": {
-        "addNew": "ایجاد و افزودن مدل {{id}}",
-        "confirmDelete": "در حال حذف این مدل سفارشی هستید، پس از حذف قابل بازیابی نخواهد بود، لطفاً با احتیاط عمل کنید."
-      },
-      "delete": {
-        "confirm": "آیا مطمئن هستید که می‌خواهید مدل {{displayName}} را حذف کنید؟",
-        "success": "حذف با موفقیت انجام شد",
-        "title": "حذف مدل"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "فیلدی که در Azure OpenAI درخواست واقعی می‌شود",
-          "placeholder": "لطفاً نام استقرار مدل در Azure را وارد کنید",
-          "title": "نام استقرار مدل"
-        },
-        "deployName": {
-          "extra": "این فیلد به عنوان شناسه مدل هنگام ارسال درخواست استفاده می‌شود",
-          "placeholder": "لطفاً نام یا شناسه واقعی مدل را وارد کنید",
-          "title": "نام مدل برای استقرار"
-        },
-        "displayName": {
-          "placeholder": "لطفاً نام نمایشی مدل را وارد کنید، مانند ChatGPT، GPT-4 و غیره",
-          "title": "نام نمایشی مدل"
-        },
-        "files": {
-          "extra": "پیاده‌سازی بارگذاری فایل فعلی تنها یک راه‌حل Hack است و فقط برای آزمایش شخصی محدود است. لطفاً منتظر پیاده‌سازی کامل قابلیت بارگذاری فایل باشید",
-          "title": "پشتیبانی از بارگذاری فایل"
-        },
-        "functionCall": {
-          "extra": "این پیکربندی تنها قابلیت استفاده از ابزارها را برای مدل فعال می‌کند و به این ترتیب می‌توان افزونه‌های نوع ابزار را به مدل اضافه کرد. اما اینکه آیا واقعاً از ابزارها استفاده می‌شود به خود مدل بستگی دارد، لطفاً قابلیت استفاده را خودتان آزمایش کنید",
-          "title": "پشتیبانی از استفاده از ابزار"
-        },
-        "id": {
-          "extra": "پس از ایجاد قابل ویرایش نیست و در هنگام فراخوانی AI به عنوان شناسه مدل استفاده خواهد شد",
-          "placeholder": "لطفاً شناسه مدل را وارد کنید، مانند gpt-4o یا claude-3.5-sonnet",
-          "title": "شناسه مدل"
-        },
-        "imageOutput": {
-          "extra": "این پیکربندی تنها قابلیت تولید تصویر توسط مدل را فعال می‌کند. نتیجه نهایی کاملاً به توانایی‌های خود مدل بستگی دارد. لطفاً خودتان بررسی کنید که آیا این مدل توانایی تولید تصویر را دارد یا خیر.",
-          "title": "پشتیبانی از تولید تصویر"
-        },
-        "modalTitle": "پیکربندی مدل سفارشی",
-        "reasoning": {
-          "extra": "این تنظیم فقط قابلیت تفکر عمیق مدل را فعال می‌کند و تأثیر دقیق آن کاملاً به خود مدل بستگی دارد، لطفاً خودتان آزمایش کنید که آیا این مدل قابلیت تفکر عمیق قابل استفاده را دارد یا خیر",
-          "title": "پشتیبانی از تفکر عمیق"
-        },
-        "search": {
-          "extra": "این پیکربندی تنها قابلیت جستجوی آنلاین از طریق موتور جستجوی داخلی مدل را فعال می‌کند. پشتیبانی از موتور جستجوی داخلی به توانایی‌های خود مدل بستگی دارد. لطفاً خودتان بررسی کنید که آیا این مدل از موتور جستجوی داخلی پشتیبانی می‌کند یا خیر.",
-          "title": "پشتیبانی از جستجوی آنلاین"
-        },
-        "tokens": {
-          "extra": "حداکثر تعداد توکن‌های پشتیبانی شده توسط مدل را تنظیم کنید",
-          "title": "حداکثر پنجره زمینه",
-          "unlimited": "بدون محدودیت"
-        },
-        "type": {
-          "extra": "انواع مختلف مدل‌ها دارای سناریوها و قابلیت‌های متفاوتی هستند",
-          "options": {
-            "chat": "گفتگو",
-            "embedding": "بردار‌سازی",
-            "image": "تولید تصویر",
-            "realtime": "گفتگوی زنده",
-            "stt": "تبدیل گفتار به متن",
-            "text2music": "تبدیل متن به موسیقی",
-            "text2video": "تبدیل متن به ویدئو",
-            "tts": "تبدیل متن به گفتار"
-          },
-          "placeholder": "لطفاً نوع مدل را انتخاب کنید",
-          "title": "نوع مدل"
-        },
-        "video": {
-          "extra": "این پیکربندی تنها قابلیت شناسایی ویدیو در برنامه را فعال می‌کند. پشتیبانی از شناسایی ویدیو کاملاً به توانایی‌های خود مدل بستگی دارد. لطفاً خودتان بررسی کنید که آیا این مدل توانایی شناسایی ویدیو را دارد یا خیر.",
-          "title": "پشتیبانی از شناسایی ویدیو"
-        },
-        "vision": {
-          "extra": "این پیکربندی تنها قابلیت بارگذاری تصویر در برنامه را فعال می‌کند، اینکه آیا شناسایی پشتیبانی می‌شود به خود مدل بستگی دارد، لطفاً قابلیت استفاده از شناسایی بصری این مدل را آزمایش کنید",
-          "title": "پشتیبانی از شناسایی بصری"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/تصویر",
-        "inputCharts": "${{amount}}/M کاراکتر",
-        "inputMinutes": "${{amount}}/دقیقه",
-        "inputTokens": "ورودی ${{amount}}/M",
-        "outputTokens": "خروجی ${{amount}}/M"
-      },
-      "releasedAt": "منتشر شده در {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "مدل جدید اضافه کنید",
-      "disabled": "غیرفعال",
-      "disabledActions": {
-        "showMore": "نمایش همه",
-        "sort": "نحوه مرتب‌سازی",
-        "sortAlphabetical": "مرتب‌سازی الفبایی",
-        "sortAlphabeticalDesc": "مرتب‌سازی الفبایی معکوس",
-        "sortDefault": "مرتب‌سازی پیش‌فرض",
-        "sortReleasedAt": "مرتب‌سازی بر اساس تاریخ انتشار قدیمی‌تر",
-        "sortReleasedAtDesc": "مرتب‌سازی بر اساس جدیدترین تاریخ انتشار"
-      },
-      "empty": {
-        "desc": "لطفاً یک مدل سفارشی ایجاد کنید یا پس از بارگذاری مدل‌ها، شروع به استفاده کنید",
-        "title": "مدل قابل استفاده‌ای وجود ندارد"
-      },
-      "enabled": "فعال",
-      "enabledActions": {
-        "disableAll": "غیرفعال کردن همه",
-        "enableAll": "فعال کردن همه",
-        "sort": "مرتب‌سازی مدل‌های سفارشی"
-      },
-      "enabledEmpty": "مدل فعال وجود ندارد، لطفاً از لیست زیر مدل مورد نظر خود را فعال کنید~",
-      "fetcher": {
-        "clear": "پاک کردن مدل‌های دریافت شده",
-        "fetch": "دریافت لیست مدل‌ها",
-        "fetching": "در حال دریافت لیست مدل‌ها...",
-        "latestTime": "آخرین زمان به‌روزرسانی: {{time}}",
-        "noLatestTime": "لیست هنوز دریافت نشده است"
-      },
-      "noModelsInCategory": "در این دسته‌بندی مدل فعالی وجود ندارد",
-      "resetAll": {
-        "conform": "آیا مطمئن هستید که می‌خواهید تمام تغییرات مدل فعلی را بازنشانی کنید؟ پس از بازنشانی، لیست مدل‌های فعلی به حالت پیش‌فرض باز خواهد گشت",
-        "success": "بازنشانی با موفقیت انجام شد",
-        "title": "بازنشانی تمام تغییرات"
-      },
-      "search": "جستجوی مدل...",
-      "searchResult": "{{count}} مدل پیدا شد",
-      "title": "لیست مدل‌ها",
-      "total": "در مجموع {{count}} مدل در دسترس است"
-    },
-    "searchNotFound": "نتیجه‌ای برای جستجو پیدا نشد",
-    "tabs": {
-      "all": "همه",
-      "chat": "گفتگو",
-      "embedding": "بردار‌سازی",
-      "image": "تصویر",
-      "stt": "تبدیل گفتار به متن",
-      "tts": "تبدیل متن به گفتار"
-    }
-  },
-  "sortModal": {
-    "success": "به‌روزرسانی مرتب‌سازی با موفقیت انجام شد",
-    "title": "مرتب‌سازی سفارشی",
-    "update": "به‌روزرسانی"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "در حال حذف این ارائه‌دهنده AI هستید، پس از حذف قابل بازیابی نخواهد بود، آیا مطمئن هستید که می‌خواهید حذف کنید؟",
-    "deleteSuccess": "حذف با موفقیت انجام شد",
-    "tooltip": "به‌روزرسانی پیکربندی پایه ارائه‌دهنده",
-    "updateSuccess": "به‌روزرسانی با موفقیت انجام شد"
-  },
-  "updateCustomAiProvider": {
-    "title": "به‌روزرسانی تنظیمات ارائه‌دهنده AI سفارشی"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "کلیدهای Vertex AI خود را وارد کنید",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "کلیدهای Vertex AI"
-    },
-    "region": {
-      "desc": "منطقه‌ای را برای خدمات Vertex AI انتخاب کنید. برخی مدل‌ها مانند Gemini 2.5 فقط در مناطق خاصی (مانند global) در دسترس هستند.",
-      "placeholder": "انتخاب منطقه",
-      "title": "منطقه Vertex AI"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI صفر و یک همه چیز"
-  },
-  "zhipu": {
-    "title": "ژھیپو"
-  }
+  "azure.azureApiVersion.desc": "نسخه API آژور، با فرمت YYYY-MM-DD. [آخرین نسخه را بررسی کنید](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "دریافت فهرست",
+  "azure.azureApiVersion.title": "نسخه API آژور",
+  "azure.empty": "لطفاً یک شناسه مدل وارد کنید تا اولین مدل اضافه شود",
+  "azure.endpoint.desc": "در پورتال آژور، این مقدار را در بخش 'کلیدها و آدرس‌های پایانی' می‌توانید پیدا کنید",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "آدرس API آژور",
+  "azure.modelListPlaceholder": "مدل OpenAI که مستقر کرده‌اید را انتخاب یا اضافه کنید",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "در پورتال آژور، این مقدار را در بخش 'کلیدها و آدرس‌های پایانی' می‌توانید پیدا کنید. می‌توانید از KEY1 یا KEY2 استفاده کنید",
+  "azure.token.placeholder": "کلید API آژور",
+  "azure.token.title": "کلید API",
+  "azureai.azureApiVersion.desc": "نسخه API برای آژور، با فرمت YYYY-MM-DD. به [آخرین نسخه مراجعه کنید](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "دریافت فهرست",
+  "azureai.azureApiVersion.title": "نسخه API آژور",
+  "azureai.endpoint.desc": "آدرس پایانی استنتاج مدل Azure AI را از نمای کلی پروژه Azure AI پیدا کنید",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "آدرس پایانی Azure AI",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "کلید API را از نمای کلی پروژه Azure AI پیدا کنید",
+  "azureai.token.placeholder": "کلید آژور",
+  "azureai.token.title": "کلید",
+  "bedrock.accessKeyId.desc": "شناسه کلید دسترسی AWS را وارد کنید",
+  "bedrock.accessKeyId.placeholder": "شناسه کلید دسترسی AWS",
+  "bedrock.accessKeyId.title": "شناسه کلید دسترسی AWS",
+  "bedrock.checker.desc": "بررسی کنید که AccessKeyId / SecretAccessKey به درستی وارد شده‌اند",
+  "bedrock.region.desc": "منطقه AWS را وارد کنید",
+  "bedrock.region.placeholder": "منطقه AWS",
+  "bedrock.region.title": "منطقه AWS",
+  "bedrock.secretAccessKey.desc": "کلید مخفی دسترسی AWS را وارد کنید",
+  "bedrock.secretAccessKey.placeholder": "کلید مخفی دسترسی AWS",
+  "bedrock.secretAccessKey.title": "کلید مخفی دسترسی AWS",
+  "bedrock.sessionToken.desc": "اگر از AWS SSO/STS استفاده می‌کنید، لطفاً توکن نشست AWS خود را وارد کنید",
+  "bedrock.sessionToken.placeholder": "توکن نشست AWS",
+  "bedrock.sessionToken.title": "توکن نشست AWS (اختیاری)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "منطقه سرویس سفارشی",
+  "bedrock.unlock.customSessionToken": "توکن نشست سفارشی",
+  "bedrock.unlock.description": "برای شروع نشست، شناسه کلید دسترسی و کلید مخفی AWS خود را وارد کنید. برنامه اطلاعات احراز هویت شما را ذخیره نخواهد کرد",
+  "bedrock.unlock.imageGenerationDescription": "برای شروع تولید تصویر، شناسه کلید دسترسی و کلید مخفی AWS خود را وارد کنید. برنامه اطلاعات احراز هویت شما را ذخیره نخواهد کرد.",
+  "bedrock.unlock.title": "استفاده از اطلاعات احراز هویت سفارشی Bedrock",
+  "cloudflare.apiKey.desc": "لطفاً کلید API Cloudflare را وارد کنید",
+  "cloudflare.apiKey.placeholder": "کلید API Cloudflare",
+  "cloudflare.apiKey.title": "کلید API Cloudflare",
+  "cloudflare.baseURLOrAccountID.desc": "شناسه حساب Cloudflare یا آدرس API سفارشی خود را وارد کنید",
+  "cloudflare.baseURLOrAccountID.placeholder": "شناسه حساب Cloudflare / آدرس API سفارشی",
+  "cloudflare.baseURLOrAccountID.title": "شناسه حساب Cloudflare / آدرس API",
+  "comfyui.apiKey.desc": "کلید API برای احراز هویت Bearer Token",
+  "comfyui.apiKey.placeholder": "کلید API را وارد کنید",
+  "comfyui.apiKey.required": "لطفاً کلید API را وارد کنید",
+  "comfyui.apiKey.title": "کلید API",
+  "comfyui.authType.desc": "روش احراز هویت برای اتصال به سرور ComfyUI را انتخاب کنید",
+  "comfyui.authType.options.basic": "احراز هویت پایه",
+  "comfyui.authType.options.bearer": "توکن Bearer",
+  "comfyui.authType.options.custom": "احراز هویت سفارشی",
+  "comfyui.authType.options.none": "بدون احراز هویت",
+  "comfyui.authType.placeholder": "لطفاً نوع احراز هویت را انتخاب کنید",
+  "comfyui.authType.title": "نوع احراز هویت",
+  "comfyui.baseURL.desc": "آدرس دسترسی به سرور ComfyUI، مانند http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "لطفاً آدرس سرویس ComfyUI را وارد کنید",
+  "comfyui.baseURL.title": "آدرس سرویس ComfyUI",
+  "comfyui.checker.desc": "بررسی کنید که اتصال به درستی پیکربندی شده باشد",
+  "comfyui.checker.title": "بررسی اتصال",
+  "comfyui.customHeaders.addButton": "افزودن هدر",
+  "comfyui.customHeaders.deleteTooltip": "حذف این هدر",
+  "comfyui.customHeaders.desc": "هدرهای درخواست مورد نیاز برای احراز هویت سفارشی، به صورت جفت کلید-مقدار",
+  "comfyui.customHeaders.duplicateKeyError": "نام هدرها نباید تکراری باشند",
+  "comfyui.customHeaders.keyPlaceholder": "کلید",
+  "comfyui.customHeaders.required": "لطفاً هدرهای درخواست سفارشی را وارد کنید",
+  "comfyui.customHeaders.title": "هدرهای سفارشی",
+  "comfyui.customHeaders.valuePlaceholder": "مقدار",
+  "comfyui.password.desc": "رمز عبور برای احراز هویت پایه",
+  "comfyui.password.placeholder": "رمز عبور را وارد کنید",
+  "comfyui.password.required": "لطفاً رمز عبور را وارد کنید",
+  "comfyui.password.title": "رمز عبور",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "نام کاربری برای احراز هویت پایه",
+  "comfyui.username.placeholder": "نام کاربری را وارد کنید",
+  "comfyui.username.required": "لطفاً نام کاربری را وارد کنید",
+  "comfyui.username.title": "نام کاربری",
+  "createNewAiProvider.apiKey.placeholder": "لطفاً کلید API خود را وارد کنید",
+  "createNewAiProvider.apiKey.title": "کلید API",
+  "createNewAiProvider.basicTitle": "اطلاعات پایه",
+  "createNewAiProvider.configTitle": "اطلاعات پیکربندی",
+  "createNewAiProvider.confirm": "ایجاد",
+  "createNewAiProvider.createSuccess": "ایجاد با موفقیت انجام شد",
+  "createNewAiProvider.description.placeholder": "توضیحات ارائه‌دهنده (اختیاری)",
+  "createNewAiProvider.description.title": "توضیحات ارائه‌دهنده",
+  "createNewAiProvider.id.desc": "شناسه یکتا برای ارائه‌دهنده سرویس که پس از ایجاد قابل تغییر نیست",
+  "createNewAiProvider.id.format": "فقط شامل اعداد، حروف کوچک، خط تیره (-) و زیرخط (_) مجاز است",
+  "createNewAiProvider.id.placeholder": "ترجیحاً با حروف کوچک، مانند openai. پس از ایجاد قابل تغییر نیست",
+  "createNewAiProvider.id.required": "لطفاً شناسه ارائه‌دهنده را وارد کنید",
+  "createNewAiProvider.id.title": "شناسه ارائه‌دهنده",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "لطفاً یک لوگوی معتبر برای ارائه‌دهنده بارگذاری کنید",
+  "createNewAiProvider.logo.title": "لوگوی ارائه‌دهنده",
+  "createNewAiProvider.name.placeholder": "لطفاً نام نمایشی ارائه‌دهنده را وارد کنید",
+  "createNewAiProvider.name.required": "لطفاً نام ارائه‌دهنده را وارد کنید",
+  "createNewAiProvider.name.title": "نام ارائه‌دهنده",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "لطفاً آدرس پراکسی را وارد کنید",
+  "createNewAiProvider.proxyUrl.title": "آدرس پراکسی",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "لطفاً نوع SDK را انتخاب کنید",
+  "createNewAiProvider.sdkType.title": "فرمت درخواست",
+  "createNewAiProvider.title": "ایجاد ارائه‌دهنده هوش مصنوعی سفارشی",
+  "github.personalAccessToken.desc": "توکن دسترسی شخصی GitHub خود را وارد کنید. برای ایجاد یک توکن، [اینجا](https://github.com/settings/tokens) کلیک کنید.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "توکن GitHub",
+  "huggingface.accessToken.desc": "توکن HuggingFace خود را وارد کنید، برای ایجاد یک توکن [اینجا](https://huggingface.co/settings/tokens) کلیک کنید",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "توکن HuggingFace",
+  "list.title.custom": "ارائه‌دهنده سفارشی فعال نیست",
+  "list.title.disabled": "غیرفعال",
+  "list.title.enabled": "فعال",
+  "menu.addCustomProvider": "افزودن ارائه‌دهنده سفارشی",
+  "menu.all": "همه",
+  "menu.list.custom": "سفارشی فعال نیست",
+  "menu.list.disabled": "غیرفعال",
+  "menu.list.disabledActions.sort": "مرتب‌سازی بر اساس",
+  "menu.list.disabledActions.sortAlphabetical": "مرتب‌سازی الفبایی",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "مرتب‌سازی معکوس الفبایی",
+  "menu.list.disabledActions.sortDefault": "مرتب‌سازی پیش‌فرض",
+  "menu.list.enabled": "فعال",
+  "menu.notFound": "نتیجه‌ای برای جستجو یافت نشد",
+  "menu.searchProviders": "جستجوی ارائه‌دهنده‌ها...",
+  "menu.sort": "مرتب‌سازی سفارشی",
+  "newapi.apiKey.desc": "کلید API ارائه‌شده توسط پلتفرم New API",
+  "newapi.apiKey.placeholder": "کلید API New API",
+  "newapi.apiKey.required": "کلید API الزامی است",
+  "newapi.apiKey.title": "کلید API",
+  "newapi.apiUrl.desc": "آدرس پایانی API برای سرویس New API، معمولاً شامل /v1 است",
+  "newapi.apiUrl.title": "آدرس URL API",
+  "newapi.enabled.title": "فعال‌سازی New API",
+  "newapi.models.batchSelect": "انتخاب گروهی مدل‌ها ({{count}} مورد)",
+  "newapi.models.fetch": "دریافت لیست مدل‌ها",
+  "newapi.models.selected": "مدل‌های انتخاب‌شده",
+  "newapi.models.title": "مدل‌های در دسترس",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "بررسی صحت وارد کردن آدرس پراکسی",
+  "ollama.checker.title": "بررسی اتصال",
+  "ollama.customModelName.desc": "افزودن مدل‌های سفارشی، مدل‌ها را با کاما جدا کنید",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "نام مدل سفارشی",
+  "ollama.download.desc": "Ollama در حال دانلود مدل است. لطفاً این صفحه را نبندید. در صورت قطع شدن، دانلود از همان نقطه ادامه خواهد یافت.",
+  "ollama.download.failed": "دانلود مدل ناموفق بود. لطفاً اتصال شبکه یا تنظیمات Ollama را بررسی کرده و دوباره تلاش کنید.",
+  "ollama.download.remainingTime": "زمان باقی‌مانده",
+  "ollama.download.speed": "سرعت",
+  "ollama.download.title": "در حال دانلود مدل {{model}}",
+  "ollama.endpoint.desc": "باید شامل http(s):// باشد؛ در صورت استفاده محلی می‌توان خالی گذاشت.",
+  "ollama.endpoint.title": "آدرس پراکسی رابط",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "لغو دانلود",
+  "ollama.unlock.confirm": "دانلود",
+  "ollama.unlock.description": "برای ادامه جلسه، تگ مدل Ollama خود را وارد کنید",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "در حال شروع دانلود...",
+  "ollama.unlock.title": "دانلود مدل مشخص‌شده Ollama",
+  "providerModels.batchSelect.selected": "{{count}} مدل انتخاب شده",
+  "providerModels.batchSelect.title": "انتخاب گروهی",
+  "providerModels.config.aesGcm": "کلید و آدرس پراکسی شما با استفاده از الگوریتم رمزنگاری <1>AES-GCM</1> رمزگذاری خواهد شد",
+  "providerModels.config.apiKey.desc": "لطفاً کلید API {{name}} خود را وارد کنید",
+  "providerModels.config.apiKey.descWithUrl": "لطفاً کلید API {{name}} خود را وارد کنید. <3>برای دریافت آن اینجا کلیک کنید</3>",
+  "providerModels.config.apiKey.placeholder": "کلید API {{name}}",
+  "providerModels.config.apiKey.title": "کلید API",
+  "providerModels.config.baseURL.desc": "باید شامل http(s):// باشد",
+  "providerModels.config.baseURL.invalid": "لطفاً یک URL معتبر وارد کنید",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "آدرس پراکسی API",
+  "providerModels.config.checker.button": "بررسی",
+  "providerModels.config.checker.desc": "بررسی صحت وارد کردن کلید API و آدرس پراکسی",
+  "providerModels.config.checker.pass": "بررسی موفقیت‌آمیز بود",
+  "providerModels.config.checker.title": "بررسی اتصال",
+  "providerModels.config.fetchOnClient.desc": "حالت درخواست از سمت کاربر، درخواست‌ها را مستقیماً از مرورگر ارسال می‌کند که می‌تواند سرعت پاسخ را افزایش دهد",
+  "providerModels.config.fetchOnClient.title": "استفاده از حالت درخواست کاربر",
+  "providerModels.config.helpDoc": "راهنمای پیکربندی",
+  "providerModels.config.responsesApi.desc": "از فرمت درخواست نسل بعدی OpenAI برای فعال‌سازی قابلیت‌هایی مانند زنجیره تفکر استفاده می‌کند (فقط برای مدل‌های OpenAI)",
+  "providerModels.config.responsesApi.title": "استفاده از مشخصات Responses API",
+  "providerModels.config.waitingForMore": "مدل‌های بیشتری در حال <1>برنامه‌ریزی برای اضافه شدن</1> هستند، با ما همراه باشید",
+  "providerModels.createNew.title": "ایجاد مدل هوش مصنوعی سفارشی",
+  "providerModels.item.config": "پیکربندی مدل",
+  "providerModels.item.customModelCards.addNew": "ایجاد و افزودن مدل {{id}}",
+  "providerModels.item.customModelCards.confirmDelete": "در حال حذف این مدل سفارشی هستید. پس از حذف، قابل بازیابی نخواهد بود. لطفاً با احتیاط ادامه دهید.",
+  "providerModels.item.delete.confirm": "آیا از حذف مدل {{displayName}} مطمئن هستید؟",
+  "providerModels.item.delete.success": "حذف با موفقیت انجام شد",
+  "providerModels.item.delete.title": "حذف مدل",
+  "providerModels.item.modelConfig.azureDeployName.extra": "فیلدی که در درخواست‌های واقعی Azure OpenAI استفاده می‌شود",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "نام استقرار مدل در Azure را وارد کنید",
+  "providerModels.item.modelConfig.azureDeployName.title": "نام استقرار مدل",
+  "providerModels.item.modelConfig.deployName.extra": "این فیلد به عنوان شناسه مدل هنگام ارسال درخواست‌ها استفاده خواهد شد",
+  "providerModels.item.modelConfig.deployName.placeholder": "نام یا شناسه واقعی استقرار مدل را وارد کنید",
+  "providerModels.item.modelConfig.deployName.title": "نام استقرار مدل",
+  "providerModels.item.modelConfig.displayName.placeholder": "نام نمایشی مدل را وارد کنید، مانند ChatGPT، GPT-4 و غیره",
+  "providerModels.item.modelConfig.displayName.title": "نام نمایشی مدل",
+  "providerModels.item.modelConfig.files.extra": "پیاده‌سازی فعلی آپلود فایل فقط یک راه‌حل موقتی است و محدود به آزمایش شخصی می‌باشد. لطفاً منتظر قابلیت کامل آپلود فایل در نسخه‌های آینده باشید.",
+  "providerModels.item.modelConfig.files.title": "پشتیبانی از آپلود فایل",
+  "providerModels.item.modelConfig.functionCall.extra": "این پیکربندی فقط قابلیت استفاده از ابزارها را برای مدل فعال می‌کند. اما استفاده واقعی از ابزارها به خود مدل بستگی دارد؛ لطفاً قابلیت استفاده را خودتان آزمایش کنید.",
+  "providerModels.item.modelConfig.functionCall.title": "پشتیبانی از استفاده از ابزار",
+  "providerModels.item.modelConfig.id.extra": "پس از ایجاد قابل تغییر نیست و به عنوان شناسه مدل هنگام فراخوانی AI استفاده می‌شود",
+  "providerModels.item.modelConfig.id.placeholder": "شناسه مدل را وارد کنید، مانند gpt-4o یا claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "شناسه مدل",
+  "providerModels.item.modelConfig.imageOutput.extra": "این تنظیم فقط قابلیت تولید تصویر را فعال می‌کند. عملکرد واقعی به خود مدل بستگی دارد. لطفاً بررسی کنید که آیا مدل از تولید تصویر پشتیبانی می‌کند.",
+  "providerModels.item.modelConfig.imageOutput.title": "پشتیبانی از تولید تصویر",
+  "providerModels.item.modelConfig.modalTitle": "پیکربندی مدل سفارشی",
+  "providerModels.item.modelConfig.reasoning.extra": "این پیکربندی قابلیت تفکر عمیق مدل را فعال می‌کند. عملکرد واقعی به خود مدل بستگی دارد. لطفاً بررسی کنید که آیا مدل از این قابلیت پشتیبانی می‌کند.",
+  "providerModels.item.modelConfig.reasoning.title": "پشتیبانی از تفکر عمیق",
+  "providerModels.item.modelConfig.search.extra": "این تنظیم قابلیت جستجوی وب داخلی مدل را فعال می‌کند. پشتیبانی از موتور جستجوی داخلی به خود مدل بستگی دارد. لطفاً بررسی کنید که آیا این قابلیت فعال است.",
+  "providerModels.item.modelConfig.search.title": "پشتیبانی از جستجوی وب",
+  "providerModels.item.modelConfig.tokens.extra": "حداکثر تعداد توکن‌های پشتیبانی‌شده توسط مدل را تنظیم کنید",
+  "providerModels.item.modelConfig.tokens.title": "حداکثر پنجره متنی",
+  "providerModels.item.modelConfig.tokens.unlimited": "نامحدود",
+  "providerModels.item.modelConfig.type.extra": "انواع مختلف مدل‌ها کاربردها و قابلیت‌های متفاوتی دارند",
+  "providerModels.item.modelConfig.type.options.chat": "گفت‌وگو",
+  "providerModels.item.modelConfig.type.options.embedding": "بردارسازی",
+  "providerModels.item.modelConfig.type.options.image": "تولید تصویر",
+  "providerModels.item.modelConfig.type.options.realtime": "گفت‌وگوی بلادرنگ",
+  "providerModels.item.modelConfig.type.options.stt": "تبدیل گفتار به متن",
+  "providerModels.item.modelConfig.type.options.text2music": "تبدیل متن به موسیقی",
+  "providerModels.item.modelConfig.type.options.text2video": "تبدیل متن به ویدیو",
+  "providerModels.item.modelConfig.type.options.tts": "تبدیل متن به گفتار",
+  "providerModels.item.modelConfig.type.placeholder": "نوع مدل را انتخاب کنید",
+  "providerModels.item.modelConfig.type.title": "نوع مدل",
+  "providerModels.item.modelConfig.video.extra": "این تنظیم قابلیت شناسایی ویدیو را در برنامه فعال می‌کند. پشتیبانی از این قابلیت به خود مدل بستگی دارد. لطفاً بررسی کنید که آیا مدل از آن پشتیبانی می‌کند.",
+  "providerModels.item.modelConfig.video.title": "پشتیبانی از شناسایی ویدیو",
+  "providerModels.item.modelConfig.vision.extra": "این پیکربندی فقط قابلیت آپلود تصویر را در برنامه فعال می‌کند. پشتیبانی از شناسایی به خود مدل بستگی دارد. لطفاً قابلیت بینایی مدل را بررسی کنید.",
+  "providerModels.item.modelConfig.vision.title": "پشتیبانی از بینایی",
+  "providerModels.item.pricing.image": "${{amount}}/تصویر",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/میلیون نویسه",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/دقیقه",
+  "providerModels.item.pricing.inputTokens": "ورودی ${{amount}}/میلیون",
+  "providerModels.item.pricing.outputTokens": "خروجی ${{amount}}/میلیون",
+  "providerModels.item.releasedAt": "منتشر شده در {{releasedAt}}",
+  "providerModels.list.addNew": "افزودن مدل",
+  "providerModels.list.disabled": "غیرفعال",
+  "providerModels.list.disabledActions.showMore": "نمایش همه",
+  "providerModels.list.disabledActions.sort": "مرتب‌سازی بر اساس",
+  "providerModels.list.disabledActions.sortAlphabetical": "مرتب‌سازی الفبایی",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "مرتب‌سازی معکوس الفبایی",
+  "providerModels.list.disabledActions.sortDefault": "مرتب‌سازی پیش‌فرض",
+  "providerModels.list.disabledActions.sortReleasedAt": "مرتب‌سازی بر اساس تاریخ انتشار زودتر",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "مرتب‌سازی بر اساس جدیدترین تاریخ انتشار",
+  "providerModels.list.empty.desc": "لطفاً یک مدل سفارشی ایجاد کرده یا مدلی را دریافت کنید تا شروع کنید.",
+  "providerModels.list.empty.title": "مدلی در دسترس نیست",
+  "providerModels.list.enabled": "فعال",
+  "providerModels.list.enabledActions.disableAll": "غیرفعال‌سازی همه",
+  "providerModels.list.enabledActions.enableAll": "فعال‌سازی همه",
+  "providerModels.list.enabledActions.sort": "مرتب‌سازی مدل‌های سفارشی",
+  "providerModels.list.enabledEmpty": "هیچ مدل فعالی در دسترس نیست. لطفاً مدل‌های دلخواه خود را از لیست زیر فعال کنید~",
+  "providerModels.list.fetcher.clear": "پاک‌سازی مدل‌های دریافت‌شده",
+  "providerModels.list.fetcher.fetch": "دریافت مدل‌ها",
+  "providerModels.list.fetcher.fetching": "در حال دریافت لیست مدل‌ها...",
+  "providerModels.list.fetcher.latestTime": "آخرین به‌روزرسانی: {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "لیست مدل‌ها هنوز دریافت نشده است",
+  "providerModels.list.noModelsInCategory": "هیچ مدل فعالی در این دسته وجود ندارد",
+  "providerModels.list.resetAll.conform": "آیا مطمئن هستید که می‌خواهید تمام تغییرات اعمال‌شده روی مدل فعلی را بازنشانی کنید؟ پس از بازنشانی، لیست مدل‌ها به حالت پیش‌فرض بازمی‌گردد.",
+  "providerModels.list.resetAll.success": "بازنشانی با موفقیت انجام شد",
+  "providerModels.list.resetAll.title": "بازنشانی همه تغییرات",
+  "providerModels.list.search": "جستجوی مدل‌ها...",
+  "providerModels.list.searchResult": "{{count}} مدل یافت شد",
+  "providerModels.list.title": "لیست مدل‌ها",
+  "providerModels.list.total": "{{count}} مدل در دسترس",
+  "providerModels.searchNotFound": "نتیجه‌ای برای جستجو یافت نشد",
+  "providerModels.tabs.all": "همه",
+  "providerModels.tabs.chat": "گفت‌وگو",
+  "providerModels.tabs.embedding": "بردارسازی",
+  "providerModels.tabs.image": "تصویر",
+  "providerModels.tabs.stt": "تبدیل گفتار به متن",
+  "providerModels.tabs.tts": "تبدیل متن به گفتار",
+  "sortModal.success": "مرتب‌سازی با موفقیت به‌روزرسانی شد",
+  "sortModal.title": "ترتیب سفارشی",
+  "sortModal.update": "به‌روزرسانی",
+  "updateAiProvider.confirmDelete": "در حال حذف این ارائه‌دهنده هوش مصنوعی هستید. پس از حذف، قابل بازیابی نخواهد بود. آیا مطمئن هستید؟",
+  "updateAiProvider.deleteSuccess": "حذف با موفقیت انجام شد",
+  "updateAiProvider.tooltip": "به‌روزرسانی پیکربندی پایه ارائه‌دهنده",
+  "updateAiProvider.updateSuccess": "به‌روزرسانی با موفقیت انجام شد",
+  "updateCustomAiProvider.title": "به‌روزرسانی پیکربندی ارائه‌دهنده هوش مصنوعی سفارشی",
+  "vertexai.apiKey.desc": "کلیدهای Vertex AI خود را وارد کنید",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "کلیدهای Vertex AI",
+  "vertexai.region.desc": "منطقه مورد نظر برای سرویس Vertex AI را انتخاب کنید. برخی مدل‌ها مانند Gemini 2.5 فقط در مناطق خاصی (مثلاً global) در دسترس هستند",
+  "vertexai.region.placeholder": "انتخاب منطقه",
+  "vertexai.region.title": "منطقه Vertex AI",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

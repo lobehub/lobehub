@@ -1,12 +1,12 @@
 import { Form, type FormItemProps, Tag } from '@lobehub/ui';
-import { Form as AntdForm, Checkbox } from 'antd';
-import { createStyles } from 'antd-style';
+import { Checkbox, Flexbox } from '@lobehub/ui';
+import { Form as AntdForm } from 'antd';
+import { createStaticStyles } from 'antd-style';
+import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
-import { debounce } from 'lodash-es';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import {
@@ -16,8 +16,11 @@ import {
   TopP,
 } from '@/features/ModelParamsControl';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
+
+import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
 interface ControlsProps {
   setUpdating: (updating: boolean) => void;
@@ -38,14 +41,14 @@ type ParamDescKey =
   | 'settingModel.presencePenalty.desc'
   | 'settingModel.frequencyPenalty.desc';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   checkbox: css`
     .ant-checkbox-inner {
       border-radius: 4px;
     }
 
     &:hover .ant-checkbox-inner {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
   `,
   label: css`
@@ -77,10 +80,10 @@ const ParamControlWrapper = memo<ParamControlWrapperProps>(
         <Checkbox
           checked={checked}
           className={styles.checkbox}
-          onChange={(e) => {
-            e.stopPropagation();
-            onToggle(e.target.checked);
+          onChange={(v) => {
+            onToggle(v);
           }}
+          onClick={(e) => e.stopPropagation()}
         />
         <div style={{ flex: 1 }}>
           <Component disabled={disabled} onChange={onChange} value={value} />
@@ -142,10 +145,10 @@ const PARAM_CONFIG = {
 const Controls = memo<ControlsProps>(({ setUpdating }) => {
   const { t } = useTranslation('setting');
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const updateAgentConfig = useAgentStore((s) => s.updateAgentConfig);
-  const { styles } = useStyles();
+  const agentId = useAgentId();
+  const { updateAgentConfig } = useUpdateAgentConfig();
 
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+  const config = useAgentStore((s) => agentByIdSelectors.getAgentConfigById(agentId)(s), isEqual);
   const [form] = Form.useForm();
 
   const { frequency_penalty, presence_penalty, temperature, top_p } = config.params ?? {};

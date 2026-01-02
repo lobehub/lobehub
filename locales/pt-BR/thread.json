@@ -1,10 +1,6 @@
 {
-  "actions": {
-    "confirmRemoveThread": "Você está prestes a remover este subtópico. Após a exclusão, não será possível recuperá-lo. Por favor, proceda com cautela."
-  },
-  "newPortalThread": {
-    "includeContext": "Incluir contexto do tópico",
-    "title": "Iniciar um novo subtópico"
-  },
-  "notSupportMultiModals": "Subtópicos atualmente não suportam upload de arquivos/imagens. Se houver necessidade, sinta-se à vontade para deixar uma mensagem: <1>💬 Área de Discussão</1>"
+  "actions.confirmRemoveThread": "Você está prestes a excluir este subtópico. Uma vez excluído, não será possível recuperá-lo. Por favor, prossiga com cautela.",
+  "newPortalThread.includeContext": "Incluir contexto do tópico",
+  "newPortalThread.title": "Iniciar um novo subtópico",
+  "notSupportMultiModals": "Atualmente, os subtópicos não suportam o envio de arquivos/imagens. Se tiver alguma solicitação, sinta-se à vontade para deixar uma mensagem: <1>💬 Área de Discussão</1>"
 }

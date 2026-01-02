@@ -1,10 +1,11 @@
 'use client';
 
-import { BRANDING_NAME, DOCUMENTS_REFER_URL, PRIVACY_URL, TERMS_URL } from '@lobechat/const';
-import { Button, Text } from '@lobehub/ui';
+import { BRANDING_NAME } from '@lobechat/business-const';
+import { DOCUMENTS_REFER_URL, PRIVACY_URL, TERMS_URL } from '@lobechat/const';
+import { Button, Skeleton, Text } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
-import { Col, Flex, Row, Skeleton } from 'antd';
-import { createStyles } from 'antd-style';
+import { Col, Flex, Row } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { AuthError } from 'next-auth';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -15,15 +16,15 @@ import BrandWatermark from '@/components/BrandWatermark';
 import AuthIcons from '@/components/NextAuth/AuthIcons';
 import { useUserStore } from '@/store/user';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
     text-transform: capitalize;
   `,
   container: css`
     min-width: 360px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorBgContainer};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusLG}px;
+    background: ${cssVar.colorBgContainer};
   `,
   contentCard: css`
     padding-block: 2.5rem;
@@ -31,23 +32,23 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   description: css`
     margin: 0;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   footer: css`
     padding: 1rem;
-    border-block-start: 1px solid ${token.colorBorder};
+    border-block-start: 1px solid ${cssVar.colorBorder};
     border-radius: 0 0 8px 8px;
 
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
 
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
   `,
   text: css`
     text-align: center;
   `,
   title: css`
     margin: 0;
-    color: ${token.colorTextHeading};
+    color: ${cssVar.colorTextHeading};
   `,
 }));
 
@@ -67,7 +68,6 @@ const BtnListLoading = memo(() => {
  * ref: https://authjs.dev/guides/pages/signin
  */
 export default memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('clerk');
   const router = useRouter();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);

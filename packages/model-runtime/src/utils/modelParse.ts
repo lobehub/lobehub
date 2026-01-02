@@ -38,9 +38,9 @@ export const MODEL_LIST_CONFIGS = {
     excludeKeywords: ['tts'],
     functionCallKeywords: ['gemini', '!-image-'],
     imageOutputKeywords: ['-image-'],
-    reasoningKeywords: ['thinking', '-2.5-', '!-image-'],
+    reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-'],
     searchKeywords: ['-search', '!-image-'],
-    videoKeywords: ['-2.5-', '!-image-'],
+    videoKeywords: ['-2.5-', '!-image-', '-3-'],
     visionKeywords: ['gemini', 'learnlm'],
   },
   inclusionai: {
@@ -131,8 +131,8 @@ export const MODEL_LIST_CONFIGS = {
   },
   zhipu: {
     functionCallKeywords: ['glm-4', 'glm-z1'],
-    reasoningKeywords: ['glm-zero', 'glm-z1', 'glm-4.5'],
-    visionKeywords: ['glm-4v', 'glm-4.1v', 'glm-4.5v'],
+    reasoningKeywords: ['glm-zero', 'glm-z1', 'glm-4.'],
+    visionKeywords: ['re:glm-4(\\.\\d)?v'],
   },
 } as const;
 
@@ -189,36 +189,41 @@ export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as 
  * @param keywords 关键词列表，支持以下前缀：
  *   - ^ 开头：只在模型ID开头匹配
  *   - ! 开头：排除匹配，优先级最高
+ *   - re: 开头：正则表达式匹配（支持 !re: 正则排除）
  *   - 无前缀：包含匹配（默认行为）
  * @returns 是否匹配（排除逻辑优先）
  */
 const isKeywordListMatch = (modelId: string, keywords: readonly string[]): boolean => {
-  // 先检查排除规则（感叹号开头）
+  const matchKeyword = (keyword: string): boolean => {
+    const rawKeyword = keyword.startsWith('!') ? keyword.slice(1) : keyword;
+
+    if (rawKeyword.startsWith('re:')) {
+      try {
+        return new RegExp(rawKeyword.slice(3)).test(modelId);
+      } catch {
+        return false;
+      }
+    }
+
+    if (rawKeyword.startsWith('^')) {
+      return modelId.startsWith(rawKeyword.slice(1));
+    }
+
+    return modelId.includes(rawKeyword);
+  };
+
+  // 先检查排除规则（感叹号开头，包括 !re:）
   const excludeKeywords = keywords.filter((keyword) => keyword.startsWith('!'));
   const includeKeywords = keywords.filter((keyword) => !keyword.startsWith('!'));
 
-  // 如果匹配任何排除规则，直接返回 false
   for (const excludeKeyword of excludeKeywords) {
-    const keywordWithoutPrefix = excludeKeyword.slice(1);
-    const isMatch = keywordWithoutPrefix.startsWith('^')
-      ? modelId.startsWith(keywordWithoutPrefix.slice(1))
-      : modelId.includes(keywordWithoutPrefix);
-
-    if (isMatch) {
+    if (matchKeyword(excludeKeyword)) {
       return false;
     }
   }
 
   // 检查包含规则
-  return includeKeywords.some((keyword) => {
-    if (keyword.startsWith('^')) {
-      // ^ 开头则只在开头匹配
-      const keywordWithoutPrefix = keyword.slice(1);
-      return modelId.startsWith(keywordWithoutPrefix);
-    }
-    // 默认行为：包含匹配
-    return modelId.includes(keyword);
-  });
+  return includeKeywords.some((keyword) => matchKeyword(keyword));
 };
 
 /**

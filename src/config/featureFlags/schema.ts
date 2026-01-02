@@ -6,7 +6,6 @@ const FeatureFlagValue = z.union([z.boolean(), z.array(z.string())]);
 
 export const FeatureFlagsSchema = z.object({
   check_updates: FeatureFlagValue.optional(),
-  pin_list: FeatureFlagValue.optional(),
 
   // settings
   provider_settings: FeatureFlagValue.optional(),
@@ -16,12 +15,8 @@ export const FeatureFlagsSchema = z.object({
 
   // profile
   api_key_manage: FeatureFlagValue.optional(),
-
-  create_session: FeatureFlagValue.optional(),
   edit_agent: FeatureFlagValue.optional(),
 
-  plugins: FeatureFlagValue.optional(),
-  dalle: FeatureFlagValue.optional(),
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
   token_counter: FeatureFlagValue.optional(),
@@ -36,8 +31,6 @@ export const FeatureFlagsSchema = z.object({
 
   // internal flag
   cloud_promotion: FeatureFlagValue.optional(),
-
-  group_chat: FeatureFlagValue.optional(),
 
   // the flags below can only be used with commercial license
   // if you want to use it in the commercial usage
@@ -66,20 +59,14 @@ export const evaluateFeatureFlag = (
 };
 
 export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
-  pin_list: false,
-
   provider_settings: true,
 
   openai_api_key: true,
   openai_proxy_url: true,
 
   api_key_manage: false,
-
-  create_session: true,
   edit_agent: true,
 
-  plugins: true,
-  dalle: true,
   ai_image: true,
 
   check_updates: true,
@@ -95,8 +82,6 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   speech_to_text: true,
   changelog: true,
 
-  group_chat: false,
-
   // the flags below can only be used with commercial license
   // if you want to use it in the commercial usage
   // please contact us for more information: hello@lobehub.com
@@ -107,19 +92,13 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string) => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
-
-    showCreateSession: evaluateFeatureFlag(config.create_session, userId),
-    enableGroupChat: evaluateFeatureFlag(config.group_chat, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
-    showPinList: evaluateFeatureFlag(config.pin_list, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),
     showOpenAIProxyUrl: evaluateFeatureFlag(config.openai_proxy_url, userId),
 
     showApiKeyManage: evaluateFeatureFlag(config.api_key_manage, userId),
 
-    enablePlugins: evaluateFeatureFlag(config.plugins, userId),
-    showDalle: evaluateFeatureFlag(config.dalle, userId),
     showAiImage: evaluateFeatureFlag(config.ai_image, userId),
     showChangelog: evaluateFeatureFlag(config.changelog, userId),
 

@@ -1,6 +1,15 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import type { AiProviderConfig, AiProviderSettings } from '@lobechat/types';
-import { boolean, integer, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { AiModelSettings } from 'model-bank';
 
 import { timestamps } from './_helpers';
@@ -36,7 +45,10 @@ export const aiProviders = pgTable(
 
     ...timestamps,
   },
-  (table) => [primaryKey({ columns: [table.id, table.userId] })],
+  (table) => [
+    primaryKey({ columns: [table.id, table.userId] }),
+    index('ai_providers_user_id_idx').on(table.userId),
+  ],
 );
 
 export type NewAiProviderItem = Omit<typeof aiProviders.$inferInsert, 'userId'>;
@@ -68,7 +80,10 @@ export const aiModels = pgTable(
 
     ...timestamps,
   },
-  (table) => [primaryKey({ columns: [table.id, table.providerId, table.userId] })],
+  (table) => [
+    primaryKey({ columns: [table.id, table.providerId, table.userId] }),
+    index('ai_models_user_id_idx').on(table.userId),
+  ],
 );
 
 export type NewAiModelItem = Omit<typeof aiModels.$inferInsert, 'userId'>;

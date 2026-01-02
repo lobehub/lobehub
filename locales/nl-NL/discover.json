@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "Voeg assistent toe",
-    "addAgentAndConverse": "Voeg assistent toe en begin een gesprek",
-    "addAgentSuccess": "Toevoegen geslaagd",
-    "conversation": {
-      "l1": "Hallo, ik ben **{{name}}**, je kunt me alles vragen en ik zal mijn best doen om je te helpen ~",
-      "l2": "Hier zijn mijn mogelijkheden: ",
-      "l3": "Laten we het gesprek beginnen!"
-    },
-    "description": "Assistent introductie",
-    "detail": "Details",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "De assistent bevat de volgende kennisbanken om je te helpen meer vragen te beantwoorden.",
-          "title": "Kennisbank"
-        },
-        "plugin": {
-          "desc": "De assistent bevat de volgende plugins om je te helpen meer taken uit te voeren.",
-          "title": "Ingebouwde plugins"
-        },
-        "title": "Assistent mogelijkheden"
-      },
-      "overview": {
-        "example": "Assistent demonstratie",
-        "title": "Overzicht"
-      },
-      "related": {
-        "listTitle": "Gerelateerde assistenten",
-        "more": "Meer bekijken",
-        "title": "Aanbevolen"
-      },
-      "sidebar": {
-        "toc": "Inhoudsopgave"
-      },
-      "summary": {
-        "title": "Wat kun je met deze assistent doen?"
-      },
-      "systemRole": {
-        "openingMessage": "Openingsbericht",
-        "openingQuestions": "Openingsvragen",
-        "title": "Assistent instellingen"
-      },
-      "version": {
-        "empty": "Geen eerdere versies beschikbaar",
-        "status": {
-          "archived": "Gearchiveerd",
-          "deprecated": "Afgewezen",
-          "unpublished": "In beoordeling"
-        },
-        "table": {
-          "isLatest": "Laatste versie",
-          "isValidated": "Geverifieerd",
-          "publishAt": "Publicatiedatum",
-          "version": "Versienummer"
-        },
-        "title": "Versiegeschiedenis"
-      }
-    },
-    "list": "Assistentenlijst",
-    "marketSource": {
-      "label": "Wissel van marktplaats",
-      "legacy": "Oude marktplaats",
-      "new": "Nieuwe marktplaats"
-    },
-    "more": "Meer",
-    "plugins": "Geïntegreerde plugins",
-    "recentSubmits": "Recent bijgewerkt",
-    "sorts": {
-      "createdAt": "Recent gepubliceerd",
-      "identifier": "Assistent ID",
-      "knowledgeCount": "Aantal kennisbanken",
-      "myown": "Bekijk mijn assistenten",
-      "pluginCount": "Aantal plugins",
-      "title": "Assistent naam",
-      "tokenUsage": "Token gebruik"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "De assistent is verwijderd door officiële instanties vanwege veiligheids- of politieke redenen",
-          "owner": "De eigenaar van de assistent heeft deze vrijwillig verwijderd of gearchiveerd"
-        },
-        "subtitle": "De assistent die je probeert te openen is gearchiveerd om een van de volgende redenen:",
-        "title": "Assistent is gearchiveerd"
-      },
-      "backToMarket": "Terug naar de assistentenmarktplaats",
-      "deprecated": {
-        "reasons": {
-          "official": "De assistent is verwijderd door officiële instanties vanwege veiligheids- of politieke redenen",
-          "owner": "De eigenaar van de assistent heeft deze vrijwillig verwijderd of afgewezen"
-        },
-        "subtitle": "De assistent die je probeert te openen is afgewezen om een van de volgende redenen:",
-        "title": "Assistent is afgewezen"
-      },
-      "support": "Bij vragen of problemen, kopieer de link en stuur deze naar <1>support@lobehub.com</1> voor ondersteuning.",
-      "unpublished": {
-        "subtitle": "De assistent die je probeert te openen wordt momenteel beoordeeld. Bij vragen, kopieer de link en stuur deze naar <1>support@lobehub.com</1> voor ondersteuning.",
-        "title": "Assistent in beoordeling"
-      }
-    },
-    "suggestions": "Gerelateerde aanbevelingen",
-    "systemRole": "Assistent instellingen",
-    "tokenUsage": "Token gebruik van assistent prompt",
-    "try": "Probeer het",
-    "withKnowledge": "Deze assistent bevat kennisbanken",
-    "withPlugin": "Deze assistent bevat plugins"
-  },
-  "back": "Terug naar Ontdekken",
-  "category": {
-    "assistant": {
-      "academic": "Academisch",
-      "all": "Alle",
-      "career": "Carrière",
-      "copywriting": "Copywriting",
-      "design": "Ontwerp",
-      "education": "Onderwijs",
-      "emotions": "Emoties",
-      "entertainment": "Entertainment",
-      "games": "Spellen",
-      "general": "Algemeen",
-      "life": "Leven",
-      "marketing": "Marketing",
-      "office": "Kantoor",
-      "programming": "Programmeren",
-      "translation": "Vertaling"
-    },
-    "plugin": {
-      "all": "Alles",
-      "gaming-entertainment": "Gaming en Entertainment",
-      "life-style": "Levensstijl",
-      "lifestyle": "Levensstijl",
-      "media-generate": "Media Generatie",
-      "science-education": "Wetenschap en Educatie",
-      "social": "Sociale Media",
-      "stocks-finance": "Aandelen en Financiën",
-      "tools": "Hulpmiddelen",
-      "web-search": "Webzoektocht"
-    }
-  },
+  "assistant.favorite": "Opslaan",
+  "assistant.favoriteFailed": "Opslaan mislukt",
+  "assistant.favoriteSuccess": "Opgeslagen",
+  "assistant.like": "Leuk",
+  "assistant.likeFailed": "Leuk vinden mislukt",
+  "assistant.likeSuccess": "Leuk gevonden",
+  "assistant.unfavorite": "Verwijderen uit opgeslagen",
+  "assistant.unfavoriteFailed": "Verwijderen mislukt",
+  "assistant.unfavoriteSuccess": "Verwijderd",
+  "assistant.unlike": "Niet leuk",
+  "assistant.unlikeSuccess": "Niet leuk gevonden",
+  "assistants.addAgent": "Agent toevoegen",
+  "assistants.addAgentAndConverse": "Agent toevoegen & Chatten",
+  "assistants.addAgentSuccess": "Toegevoegd",
+  "assistants.conversation.l1": "Hoi, ik ben **{{name}}**. Deel je doel of context—vanaf hier werken we samen.",
+  "assistants.conversation.l2": "Dit is wat ik kan doen:",
+  "assistants.conversation.l3": "Begin het gesprek",
+  "assistants.description": "Over deze Agent",
+  "assistants.detail": "Details",
+  "assistants.details.capabilities.knowledge.desc": "Deze Agent bevat de volgende bibliotheken om meer vragen te kunnen beantwoorden.",
+  "assistants.details.capabilities.knowledge.title": "Bibliotheek",
+  "assistants.details.capabilities.plugin.desc": "Deze Agent bevat de volgende vaardigheden om je te helpen meer taken uit te voeren.",
+  "assistants.details.capabilities.plugin.title": "Ingebouwde Vaardigheden",
+  "assistants.details.capabilities.title": "Agentmogelijkheden",
+  "assistants.details.overview.example": "Agentdemo",
+  "assistants.details.overview.title": "Overzicht",
+  "assistants.details.related.listTitle": "Gerelateerde Agents",
+  "assistants.details.related.more": "Meer bekijken",
+  "assistants.details.related.title": "Vergelijkbare Agents",
+  "assistants.details.sidebar.toc": "Inhoudsopgave",
+  "assistants.details.summary.title": "Wat kun je doen met deze Agent?",
+  "assistants.details.systemRole.openingMessage": "Openingsbericht",
+  "assistants.details.systemRole.openingQuestions": "Openingsvragen",
+  "assistants.details.systemRole.title": "Agentprofiel",
+  "assistants.details.version.empty": "Nog geen eerdere versies",
+  "assistants.details.version.status.archived": "Gearchiveerd",
+  "assistants.details.version.status.deprecated": "Afgekeurd",
+  "assistants.details.version.status.unpublished": "In beoordeling",
+  "assistants.details.version.table.isLatest": "Laatste versie",
+  "assistants.details.version.table.isValidated": "Gevalideerd",
+  "assistants.details.version.table.publishAt": "Publicatiedatum",
+  "assistants.details.version.table.version": "Versie",
+  "assistants.details.version.title": "Versiegeschiedenis",
+  "assistants.downloads": "Downloads",
+  "assistants.duplicateAdd.content": "“{{title}}” staat al in je Agents. Nog een kopie toevoegen?",
+  "assistants.duplicateAdd.ok": "Kopie toevoegen",
+  "assistants.duplicateAdd.title": "Duplicaat toevoegen?",
+  "assistants.empty.description": "Probeer filters aan te passen of ontdek meer Agents in de community.",
+  "assistants.empty.search": "Geen overeenkomende Agents gevonden",
+  "assistants.empty.title": "Geen Agents gevonden",
+  "assistants.list": "Agentlijst",
+  "assistants.marketSource.label": "Wissel van communitybron",
+  "assistants.marketSource.legacy": "Oude community",
+  "assistants.marketSource.new": "Nieuwe community",
+  "assistants.more": "Meer",
+  "assistants.plugins": "Geïntegreerde Vaardigheden",
+  "assistants.recentSubmits": "Recente updates",
+  "assistants.sorts.createdAt": "Recent gepubliceerd",
+  "assistants.sorts.identifier": "Agent-ID",
+  "assistants.sorts.knowledgeCount": "Bibliotheken",
+  "assistants.sorts.myown": "Mijn Agents bekijken",
+  "assistants.sorts.pluginCount": "Vaardigheden",
+  "assistants.sorts.title": "Agentnaam",
+  "assistants.sorts.tokenUsage": "Tokengebruik",
+  "assistants.status.archived.reasons.official": "Het platform heeft deze Agent verwijderd vanwege beveiliging, beleid of andere zorgen.",
+  "assistants.status.archived.reasons.owner": "De maker heeft deze Agent gearchiveerd of verwijderd.",
+  "assistants.status.archived.subtitle": "Deze Agent is gearchiveerd. Mogelijke redenen:",
+  "assistants.status.archived.title": "Agent gearchiveerd",
+  "assistants.status.backToMarket": "Terug naar Agentcommunity",
+  "assistants.status.deprecated.reasons.official": "Het platform heeft deze Agent verwijderd vanwege beveiliging, beleid of andere zorgen.",
+  "assistants.status.deprecated.reasons.owner": "De maker heeft deze Agent afgekeurd of verwijderd.",
+  "assistants.status.deprecated.subtitle": "Deze Agent is momenteel niet beschikbaar. Mogelijke redenen:",
+  "assistants.status.deprecated.title": "Agent niet beschikbaar",
+  "assistants.status.support": "Voor vragen, kopieer de link en stuur deze naar <email>support@lobehub.com</email> voor hulp.",
+  "assistants.status.unpublished.subtitle": "Deze Agent wordt beoordeeld. Om de status te bevestigen, kopieer de link en mail naar <email>support@lobehub.com</email>.",
+  "assistants.status.unpublished.title": "Agent in beoordeling",
+  "assistants.suggestions": "Vergelijkbare Agents",
+  "assistants.systemRole": "Agentprofiel",
+  "assistants.tokenUsage": "Tokengebruik van Agentprompt",
+  "assistants.try": "Probeer",
+  "assistants.withKnowledge": "Deze Agent bevat bibliotheken",
+  "assistants.withPlugin": "Deze Agent bevat vaardigheden",
+  "back": "Terug naar Ontdekking",
+  "category.assistant.academic": "Academisch",
+  "category.assistant.all": "Alle",
+  "category.assistant.career": "Carrière",
+  "category.assistant.copywriting": "Tekstschrijven",
+  "category.assistant.design": "Design",
+  "category.assistant.education": "Onderwijs",
+  "category.assistant.emotions": "Emoties",
+  "category.assistant.entertainment": "Amusement",
+  "category.assistant.games": "Spellen",
+  "category.assistant.general": "Algemeen",
+  "category.assistant.life": "Leven",
+  "category.assistant.marketing": "Marketing",
+  "category.assistant.office": "Kantoor",
+  "category.assistant.programming": "Programmeren",
+  "category.assistant.translation": "Vertaling",
+  "category.plugin.all": "Alle",
+  "category.plugin.gaming-entertainment": "Spellen & Amusement",
+  "category.plugin.life-style": "Levensstijl",
+  "category.plugin.lifestyle": "Levensstijl",
+  "category.plugin.media-generate": "Media Generatie",
+  "category.plugin.science-education": "Wetenschap & Onderwijs",
+  "category.plugin.social": "Sociale Media",
+  "category.plugin.stocks-finance": "Aandelen & Financiën",
+  "category.plugin.tools": "Hulpmiddelen",
+  "category.plugin.web-search": "Webzoekopdracht",
   "cleanFilter": "Filter wissen",
-  "create": "Creëren",
-  "createGuide": {
-    "func1": {
-      "desc1": "Ga naar de instellingenpagina van de assistent die je wilt indienen via de instellingen in de rechterbovenhoek van het gespreksscherm;",
-      "desc2": "Klik op de knop 'Indienen naar assistentmarkt' in de rechterbovenhoek.",
-      "tag": "Methode één",
-      "title": "Indienen via LobeChat"
-    },
-    "func2": {
-      "button": "Ga naar de Github assistent repository",
-      "desc": "Als je de assistent aan de index wilt toevoegen, maak dan een item aan in de plugins map met agent-template.json of agent-template-full.json, schrijf een korte beschrijving en markeer het correct, en dien vervolgens een pull request in.",
-      "tag": "Methode twee",
-      "title": "Indienen via Github"
-    }
-  },
+  "create": "Aanmaken",
+  "createGuide.func1.desc1": "Open in een gesprek de Agentinstellingen via het menu rechtsboven.",
+  "createGuide.func1.desc2": "Klik vervolgens op 'Verstuur naar Agentcommunity' rechtsboven.",
+  "createGuide.func1.tag": "Optie 1",
+  "createGuide.func1.title": "Indienen in LobeHub",
+  "createGuide.func2.button": "Open GitHub Agent-repo",
+  "createGuide.func2.desc": "Om een Agent toe te voegen aan de index, maak een item aan in `plugins/` met `agent-template.json` of `agent-template-full.json`, voeg een korte beschrijving en tags toe, en open een pull request.",
+  "createGuide.func2.tag": "Optie 2",
+  "createGuide.func2.title": "Indienen op GitHub",
   "dislike": "Niet leuk",
   "filter": "Filter",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "Alle auteurs",
-      "followed": "Gevolgde auteurs",
-      "title": "Auteur bereik"
-    },
-    "contentLength": "Minimale contextlengte",
-    "maxToken": {
-      "title": "Stel maximale lengte in (Token)",
-      "unlimited": "Onbeperkt"
-    },
-    "other": {
-      "functionCall": "Ondersteunt functie-aanroep",
-      "title": "Overige",
-      "vision": "Ondersteunt visuele herkenning",
-      "withKnowledge": "Met kennisbank",
-      "withTool": "Met plugin"
-    },
-    "pricing": "Modelprijs",
-    "timePeriod": {
-      "all": "Alle tijd",
-      "day": "Laatste 24 uur",
-      "month": "Laatste 30 dagen",
-      "title": "Tijd bereik",
-      "week": "Laatste 7 dagen",
-      "year": "Laatste jaar"
-    }
-  },
-  "home": {
-    "featuredAssistants": "Aanbevolen assistenten",
-    "featuredModels": "Aanbevolen modellen",
-    "featuredProviders": "Aanbevolen modelproviders",
-    "featuredTools": "Aanbevolen plugins",
-    "more": "Ontdek meer"
-  },
+  "filterBy.authorRange.everyone": "Alle auteurs",
+  "filterBy.authorRange.followed": "Gevolgde auteurs",
+  "filterBy.authorRange.title": "Auteursbereik",
+  "filterBy.contentLength": "Minimale contextlengte",
+  "filterBy.maxToken.title": "Maximale lengte instellen (tokens)",
+  "filterBy.maxToken.unlimited": "Onbeperkt",
+  "filterBy.other.functionCall": "Ondersteunt functieaanroepen",
+  "filterBy.other.title": "Overig",
+  "filterBy.other.vision": "Ondersteunt visuele herkenning",
+  "filterBy.other.withKnowledge": "Bevat bibliotheken",
+  "filterBy.other.withTool": "Bevat vaardigheden",
+  "filterBy.pricing": "Modelprijs",
+  "filterBy.timePeriod.all": "Altijd",
+  "filterBy.timePeriod.day": "Laatste 24 uur",
+  "filterBy.timePeriod.month": "Laatste 30 dagen",
+  "filterBy.timePeriod.title": "Tijdsperiode",
+  "filterBy.timePeriod.week": "Laatste 7 dagen",
+  "filterBy.timePeriod.year": "Laatste jaar",
+  "footer.desc": "Ontwikkel mee met AI-gebruikers wereldwijd. Word een maker en dien je agents en vaardigheden in bij de LobeHub-community.",
+  "footer.title": "Deel vandaag nog je creatie in de LobeHub-community",
+  "home.communityAgents": "Community Agents",
+  "home.featuredAssistants": "Uitgelichte Agents",
+  "home.featuredModels": "Uitgelichte Modellen",
+  "home.featuredPlugins": "Uitgelichte Vaardigheden",
+  "home.featuredProviders": "Uitgelichte Aanbieders",
+  "home.featuredTools": "Uitgelichte Vaardigheden",
+  "home.more": "Ontdek meer",
   "isClaimed": "Geclaimd",
-  "isFeatured": "Aanbevolen",
-  "isOfficial": "Officieel gecertificeerd",
+  "isFeatured": "Uitgelicht",
+  "isOfficial": "Officieel bevestigd",
   "like": "Leuk",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "Alle MCP-servers",
-        "name": "Alles"
-      },
-      "business": {
-        "description": "Zakelijke en ondernemingsdiensten",
-        "name": "Zakelijke diensten"
-      },
-      "developer": {
-        "description": "Ontwikkelaar gerelateerde tools en diensten",
-        "name": "Ontwikkeltools"
-      },
-      "gaming-entertainment": {
-        "description": "Spelletjes, entertainment en recreatie",
-        "name": "Spel en entertainment"
-      },
-      "health-wellness": {
-        "description": "Gezondheid, fitness en welzijn",
-        "name": "Gezondheid en welzijn"
-      },
-      "lifestyle": {
-        "description": "Persoonlijke levensstijl, gewoonten en dagelijkse activiteiten",
-        "name": "Levensstijl"
-      },
-      "media-generate": {
-        "description": "Genereren, bewerken en verwerken van media",
-        "name": "Mediaproductie"
-      },
-      "news": {
-        "description": "Nieuwsaggregatie, verslaggeving en informatiediensten",
-        "name": "Nieuws en informatie"
-      },
-      "productivity": {
-        "description": "Taakbeheer, notities en efficiëntietools",
-        "name": "Efficiëntietools"
-      },
-      "science-education": {
-        "description": "Wetenschappelijk onderzoek, leren en educatieve tools",
-        "name": "Wetenschap en educatie"
-      },
-      "social": {
-        "description": "Sociale netwerken en communicatie",
-        "name": "Sociale media"
-      },
-      "stocks-finance": {
-        "description": "Financiële markten, handel en investeringen",
-        "name": "Aandelen en financiën"
-      },
-      "tools": {
-        "description": "Algemene praktische tools en diensten",
-        "name": "Handige tools"
-      },
-      "travel-transport": {
-        "description": "Reisplanning en vervoer",
-        "name": "Reizen en vervoer"
-      },
-      "weather": {
-        "description": "Weersvoorspellingen en meteorologische diensten",
-        "name": "Weer en meteorologie"
-      },
-      "web-search": {
-        "description": "Webzoekopdrachten en informatieopvraging",
-        "name": "Informatieopvraging"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "Deze service kan, afhankelijk van configuratie of gebruikssituatie, lokaal of in de cloud draaien en heeft dubbele uitvoeringsmogelijkheden.",
-          "title": "Hybride service"
-        },
-        "local": {
-          "desc": "Deze server draait alleen op het lokale apparaat van de cliënt en vereist installatie en lokale bronnen.",
-          "title": "Lokale service"
-        },
-        "remote": {
-          "desc": "Deze server wordt op afstand gehost en draait omdat het voornamelijk afhankelijk is van externe diensten en niet van de lokale omgeving.",
-          "title": "Cloudservice"
-        }
-      },
-      "deployment": {
-        "args": "Argumenten",
-        "checkCommand": "Controleer commando",
-        "command": "Commando",
-        "commandLine": "Systeemafhankelijkheden",
-        "connection": "Verbindingsmethode",
-        "connectionType": "Verbindingstype",
-        "description": "Installatie- en implementatiemethode van de plugin",
-        "descriptionPlaceholder": "Optionele beschrijving",
-        "empty": "Geen implementatieopties beschikbaar",
-        "env": "Omgevingsvariabelen",
-        "guide": "Installatiehandleiding",
-        "installation": "Installatie via {{method}}",
-        "installationMethod": "Installatiemethode",
-        "other": "Andere instellingen",
-        "packageName": "Pakketnaam",
-        "platform": {
-          "steps": {
-            "claude": "- Open de **Claude Desktop** applicatie\n- Ga naar **Instellingen** en kies **Ontwikkelaar**\n- Klik op **Configuratie bewerken**\n- Open het bestand **claude_desktop_config.json**\n- Kopieer en plak de serverconfiguratie in het bestaande bestand en sla op",
-            "cline": "- Open VS Code met de Cline-extensie geïnstalleerd\n- Klik op het Cline-icoon in de zijbalk\n- Selecteer **MCP Servers** in het dropdownmenu\n- Voer de servernaam en jouw MCP-server URL in onder het tabblad **Remote Servers**\n- Klik op **Add Server** om te verbinden",
-            "cursor": "- Navigeer naar **Instellingen** en kies Cursor-instellingen\n- Selecteer aan de linkerkant **MCP**\n- Klik rechtsboven op **Nieuwe globale MCP-server toevoegen**\n- Kopieer en plak de serverconfiguratie in het bestaande bestand en sla op",
-            "lobeChat": "- Open de **LobeChat desktop** applicatie\n- Ga naar **Instellingen** - **Standaard assistent**\n- Kies vervolgens **Plugin instellingen** - **Aangepaste plugins**\n- Klik op **Snelle import JSON-configuratie**\n- Kopieer en plak de serverconfiguratie in het tekstvak en installeer",
-            "openai": "- Open je **OpenAI-app** of ontwikkelomgeving\n- Configureer MCP-tools in de **Responses API**\n- Voeg een MCP-blok toe aan de **tools** array in de API-aanvraag\n- Stel **server_url** in op jouw MCP-server endpoint\n- Voeg de benodigde authenticatieheaders toe (API-sleutel, token, etc.)\n- Gebruik de parameter `allowed_tools` om blootgestelde tools te beperken\n- Stel `require_approval` in om goedkeuring voor tooluitvoering te regelen",
-            "vscode": "- Open VS Code\n- Open het commandopalet (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Typ **MCP: Add Server** en selecteer het\n- Kies toevoegen aan werkruimte of gebruikersinstellingen\n- Kopieer en plak de serverconfiguratie"
-          },
-          "title": "Installeren in {{platform}}"
-        },
-        "recommended": "Aanbevolen",
-        "systemDependencies": "Systeemafhankelijkheden",
-        "table": {
-          "description": "Beschrijving",
-          "name": "Naam",
-          "required": "Verplicht",
-          "type": "Type"
-        },
-        "title": "Installatiemethode"
-      },
-      "githubBadge": {
-        "desc": "LobeHub scant regelmatig de codebase en documentatie om:\n\n- Te bevestigen dat de MCP-server correct werkt.\n- Serverkenmerken te extraheren, zoals tools, bronnen, prompts en vereiste parameters.\n- Onze badge helpt gebruikers snel de veiligheid, functionaliteit en installatiehandleiding van de MCP-server te beoordelen.\n\nKopieer de volgende code naar je `README.md` bestand:"
-      },
-      "nav": {
-        "needHelp": "Hulp nodig?",
-        "reportIssue": "Probleem melden",
-        "viewSourceCode": "Bekijk broncode"
-      },
-      "overview": {
-        "title": "Overzicht"
-      },
-      "related": {
-        "listTitle": "Gerelateerde MCP-servers",
-        "more": "Meer bekijken",
-        "title": "Aanbevolen"
-      },
-      "schema": {
-        "mode": {
-          "docs": "Documentatie"
-        },
-        "prompts": {
-          "arguments": "Parameterconfiguratie",
-          "desc": "Interactieve sjablonen die door gebruikers worden gekozen om te activeren",
-          "empty": "Geen prompts beschikbaar",
-          "instructions": "Instructies",
-          "table": {
-            "description": "Beschrijving",
-            "name": "Naam",
-            "required": "Verplicht"
-          },
-          "title": "Promptlijst"
-        },
-        "resources": {
-          "desc": "Contextgegevens die door de client worden toegevoegd en beheerd",
-          "empty": "Geen bronnen beschikbaar",
-          "table": {
-            "description": "Beschrijving",
-            "mineType": "MIME-type",
-            "name": "Naam",
-            "uri": "URI"
-          },
-          "title": "Bronnenlijst"
-        },
-        "title": "Plugin functies",
-        "tools": {
-          "desc": "Functionele interfaces die aan het grote taalmodel (LLM) worden blootgesteld om acties uit te voeren",
-          "empty": "Geen tools beschikbaar",
-          "inputSchema": "Invoerbeschrijving",
-          "instructions": "Instructies",
-          "table": {
-            "description": "Beschrijving",
-            "name": "Naam",
-            "required": "Verplicht",
-            "type": "Type"
-          },
-          "title": "Toollijst"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "Deze MCP-server is opgeëist door de eigenaar, wat eigendom en beheer garandeert.",
-          "title": "Opgeëist door eigenaar"
-        },
-        "deployMoreThanManual": {
-          "desc": "Deze MCP-server biedt gebruiksvriendelijkere installatiemethoden dan alleen handmatig, waardoor gebruikers eenvoudig kunnen implementeren en gebruiken.",
-          "title": "Biedt gebruiksvriendelijke installatiemethoden"
-        },
-        "deployment": {
-          "desc": "Deze MCP-server biedt ten minste één installatiemethode waarmee gebruikers kunnen implementeren en gebruiken.",
-          "descWithCount": "Deze MCP-server biedt {{number}} installatiemethoden waarmee gebruikers kunnen implementeren en gebruiken.",
-          "title": "Biedt ten minste één installatiemethode"
-        },
-        "license": {
-          "desc": "Deze repository bevat een LICENSE-bestand.",
-          "descWithlicense": "De licentie van deze repository is {{license}}.",
-          "title": "Bevat LICENSE"
-        },
-        "listTitle": "Score details",
-        "notClaimed": {
-          "desc": "Als je de eigenaar bent van deze MCP-server, kun je deze op de volgende manier opeisen.",
-          "title": "Niet opgeëist door eigenaar"
-        },
-        "prompts": {
-          "desc": "Deze MCP-server biedt prompts waarmee gebruikers met de service kunnen interageren.",
-          "descWithCount": "Deze MCP-server biedt {{number}} prompts waarmee gebruikers met de service kunnen interageren.",
-          "title": "Bevat prompts"
-        },
-        "readme": {
-          "desc": "Deze repository bevat een README.md-bestand.",
-          "title": "Bevat README"
-        },
-        "resources": {
-          "desc": "Deze MCP-server biedt bronnen waarmee gebruikers contextgegevens kunnen toevoegen en beheren.",
-          "descWithCount": "Deze MCP-server biedt {{number}} bronnen waarmee gebruikers contextgegevens kunnen toevoegen en beheren.",
-          "title": "Bevat bronnen"
-        },
-        "title": "Score",
-        "tools": {
-          "desc": "De service moet ten minste één tool bieden waarmee gebruikers specifieke acties kunnen uitvoeren.",
-          "descWithCount": "Deze MCP-server biedt {{number}} toolfuncties waarmee gebruikers specifieke acties kunnen uitvoeren.",
-          "title": "Bevat ten minste één tool"
-        },
-        "validated": {
-          "desc": "Deze MCP-server is geïnstalleerd en gevalideerd om kwaliteit en betrouwbaarheid te garanderen.",
-          "title": "Gevalideerd"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "Deze MCP-server is streng gevalideerd en biedt uitgebreide functionaliteit en een hoogwaardige gebruikerservaring.",
-          "fullTitle": "Uitstekende plugin",
-          "title": "Uitstekend"
-        },
-        "b": {
-          "desc": "Deze MCP-server biedt goede functionaliteit en gebruikerservaring, maar kan op sommige punten verbeterd worden.",
-          "fullTitle": "Goede functionaliteit",
-          "title": "Goed"
-        },
-        "f": {
-          "desc": "Deze MCP-server is incompleet of van lage kwaliteit; gebruikers wordt aangeraden voorzichtig te zijn.",
-          "fullTitle": "Matige kwaliteit",
-          "title": "Matig"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "Promptwoorden",
-          "resources": "Middelen",
-          "title": "Plugin-mogelijkheden",
-          "tools": "Gereedschappen"
-        },
-        "configuration": {
-          "title": "Plugin-configuratie"
-        },
-        "connection": {
-          "args": "Startparameters",
-          "command": "Startcommando",
-          "title": "Verbindingsinformatie",
-          "type": "Verbindingstype",
-          "url": "Serviceadres"
-        },
-        "saveSettings": "Instellingen opslaan",
-        "title": "Plugin-instellingen"
-      },
-      "sidebar": {
-        "install": "Installeer MCP-server",
-        "meta": {
-          "homepage": "Officiële website",
-          "installCount": "Aantal installaties",
-          "language": "Broncode taal",
-          "license": "Licentie",
-          "published": "Publicatiedatum",
-          "repo": "Broncode repository",
-          "stars": "Aantal sterren",
-          "title": "Details",
-          "updated": "Laatst bijgewerkt"
-        },
-        "moreServerConfig": "Bekijk details",
-        "recommendServers": "Gerelateerde MCP's",
-        "serverConfig": "Installatieconfiguratie",
-        "toc": "Inhoudsopgave"
-      },
-      "summary": {
-        "title": "Wat kun je met deze MCP-server doen?"
-      },
-      "totalScore": {
-        "description": "Totale score berekend op basis van verschillende indicatoren",
-        "legend": {
-          "aGrade": "Cijfer A ({{minPercent}}-100%)",
-          "bGrade": "Cijfer B ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "Cijfer F (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} punten",
-        "popover": {
-          "completedOptional": "✅ Optionele items voltooid ({{count}} items)",
-          "completedRequired": "✅ Verplichte items voltooid ({{count}} items)",
-          "incompleteOptional": "⏸️ Optionele items niet voltooid ({{count}} items)",
-          "incompleteRequired": "❌ Verplichte items niet voltooid ({{count}} items)",
-          "title": "Score details"
-        },
-        "ratingFormat": "Beoordeling: {{level}}",
-        "scoreInfo": {
-          "items": "Items",
-          "points": "Punten",
-          "requiredItems": "Verplichte items"
-        },
-        "title": "Totale score"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "Laatste versie",
-          "isValidated": "Gevalideerd",
-          "publishAt": "Publicatiedatum",
-          "version": "Versie"
-        },
-        "title": "Versiegeschiedenis"
-      }
-    },
-    "hero": {
-      "desc": "Open source, implementeerbaar MCP-servers platform dat AI-systemen helpt eenvoudig toegang te krijgen tot bestandssystemen, databases, API's en andere essentiële bronnen, waarmee je AI-capaciteiten volledig worden uitgebreid.",
-      "subTitle": "Open source & direct gebruiksklaar",
-      "title": "Open source MCP-marktplaats voor AI"
-    },
-    "sorts": {
-      "createdAt": "Recent toegevoegd",
-      "installCount": "Aantal installaties",
-      "isFeatured": "Aanbevolen plugin",
-      "isValidated": "Gevalideerde plugin",
-      "promptsCount": "Aantal prompts",
-      "ratingCount": "Aantal beoordelingen",
-      "resourcesCount": "Aantal bronnen",
-      "toolsCount": "Aantal tools",
-      "updatedAt": "Laatst bijgewerkt"
-    },
-    "title": "MCP-markt",
-    "unvalidated": {
-      "desc": "Deze MCP-server is nog niet gevalideerd",
-      "title": "Niet gevalideerd"
-    },
-    "validated": {
-      "desc": "Deze MCP-server is gevalideerd om kwaliteit en betrouwbaarheid te waarborgen.",
-      "descWithDate": "Deze MCP-server is op {{date}} gevalideerd om kwaliteit en betrouwbaarheid te waarborgen.",
-      "title": "Gevalideerd"
-    }
-  },
-  "models": {
-    "abilities": "Modelmogelijkheden",
-    "chat": "Begin gesprek",
-    "contentLength": "Maximale contextlengte",
-    "details": {
-      "overview": {
-        "title": "Overzicht"
-      },
-      "related": {
-        "listTitle": "Gerelateerde modellen",
-        "more": "Meer bekijken",
-        "title": "Aanbevolen"
-      }
-    },
-    "free": "Gratis",
-    "guide": "Configuratiegids",
-    "list": "Modellenlijst",
-    "more": "Meer",
-    "parameterList": {
-      "defaultValue": "Standaardwaarde",
-      "docs": "Bekijk documentatie",
-      "frequency_penalty": {
-        "desc": "Deze instelling past de frequentie aan waarmee het model specifieke woorden die al in de invoer zijn verschenen, herhaalt. Hogere waarden verminderen de kans op herhaling, terwijl negatieve waarden het tegenovergestelde effect hebben. Woordstraffen nemen niet toe met het aantal verschijningen. Negatieve waarden moedigen herhaling aan.",
-        "title": "Frequentie straf"
-      },
-      "max_tokens": {
-        "desc": "Deze instelling definieert de maximale lengte die het model kan genereren in één enkele reactie. Een hogere waarde stelt het model in staat om langere antwoorden te genereren, terwijl een lagere waarde de lengte van de reactie beperkt, waardoor deze beknopter wordt. Het is raadzaam om deze waarde aan te passen op basis van verschillende toepassingsscenario's om de gewenste lengte en detailniveau van de reactie te bereiken.",
-        "title": "Beperking van de reactie in één keer"
-      },
-      "presence_penalty": {
-        "desc": "Deze instelling is bedoeld om de herhaling van woorden te beheersen op basis van hun frequentie in de invoer. Het probeert minder gebruik te maken van woorden die vaker in de invoer voorkomen, in verhouding tot hun gebruiksfrequentie. Woordstraffen nemen toe met het aantal verschijningen. Negatieve waarden moedigen herhaling aan.",
-        "title": "Onderwerp versheid"
-      },
-      "range": "Bereik",
-      "reasoning_effort": {
-        "desc": "Deze instelling wordt gebruikt om de redeneerkracht van het model te regelen voordat het een antwoord genereert. Lage kracht geeft prioriteit aan de responssnelheid en bespaart tokens, terwijl hoge kracht een completere redenering biedt, maar meer tokens verbruikt en de responssnelheid verlaagt. De standaardwaarde is gemiddeld, wat een balans biedt tussen redeneringsnauwkeurigheid en responssnelheid.",
-        "title": "Redeneerkracht"
-      },
-      "temperature": {
-        "desc": "Deze instelling beïnvloedt de diversiteit van de reacties van het model. Lagere waarden leiden tot meer voorspelbare en typische reacties, terwijl hogere waarden meer diverse en ongebruikelijke reacties aanmoedigen. Wanneer de waarde op 0 is ingesteld, geeft het model altijd dezelfde reactie op een gegeven invoer.",
-        "title": "Willekeurigheid"
-      },
-      "title": "Modelparameters",
-      "top_p": {
-        "desc": "Deze instelling beperkt de keuze van het model tot een bepaald percentage van de meest waarschijnlijke woorden: alleen die woorden waarvan de cumulatieve waarschijnlijkheid P bereikt. Lagere waarden maken de reacties van het model voorspelbaarder, terwijl de standaardinstelling het model toestaat om uit het volledige bereik van woorden te kiezen.",
-        "title": "Nucleus sampling"
-      },
-      "type": "Type"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChat ondersteunt het gebruik van een aangepaste API-sleutel voor deze provider.",
-      "input": "Invoerkosten",
-      "inputTooltip": "Kosten per miljoen tokens",
-      "latency": "Latentie",
-      "latencyTooltip": "Gemiddelde responstijd voor de eerste token van de provider",
-      "maxOutput": "Maximale uitvoerlengte",
-      "maxOutputTooltip": "Maximaal aantal tokens dat deze endpoint kan genereren",
-      "officialTooltip": "Officiële LobeHub service",
-      "output": "Uitvoerkosten",
-      "outputTooltip": "Kosten per miljoen tokens",
-      "streamCancellationTooltip": "Deze provider ondersteunt stream annulering.",
-      "throughput": "Doorvoer",
-      "throughputTooltip": "Gemiddeld aantal tokens dat per seconde wordt verzonden in stream aanvragen"
-    },
-    "sorts": {
-      "contextWindowTokens": "Contextlengte",
-      "identifier": "Model ID",
-      "inputPrice": "Invoerprijs",
-      "outputPrice": "Uitvoerprijs",
-      "providerCount": "Aantal aanbieders",
-      "releasedAt": "Recent uitgebracht"
-    },
-    "suggestions": "Gerelateerde modellen",
-    "supportedProviders": "Providers die dit model ondersteunen"
-  },
-  "plugins": {
-    "builtinTag": "Ingebouwde plug-in",
-    "community": "Gemeenschapsplugins",
-    "details": {
-      "settings": {
-        "title": "Plug-in instellingen"
-      },
-      "summary": {
-        "title": "Wat kun je met deze plugin doen?"
-      },
-      "tools": {
-        "title": "Plug-in hulpmiddelen"
-      }
-    },
-    "install": "Plugin installeren",
-    "installed": "Geïnstalleerd",
-    "legacyTag": "Verouderde plug-in",
-    "list": "Pluginlijst",
-    "meta": {
-      "description": "Beschrijving",
-      "parameter": "Parameter",
-      "title": "Hulpmiddelparameters",
-      "type": "Type"
-    },
-    "more": "Meer",
-    "official": "Officiële plugins",
-    "recentSubmits": "Recent ingediend",
-    "sorts": {
-      "createdAt": "Recent gepubliceerd",
-      "identifier": "Plugin ID",
-      "title": "Plugin naam"
-    },
-    "suggestions": "Gerelateerde aanbevelingen"
-  },
-  "providers": {
-    "config": "Configuratie aanbieder",
-    "details": {
-      "guide": {
-        "title": "Integratiehandleiding"
-      },
-      "overview": {
-        "title": "Overzicht"
-      },
-      "related": {
-        "listTitle": "Gerelateerde aanbieders",
-        "more": "Meer bekijken",
-        "title": "Aanbevolen"
-      }
-    },
-    "list": "Lijst van modelproviders",
-    "modelCount": "{{count}} modellen",
-    "modelName": "Modelnaam",
-    "modelSite": "Modeldocumentatie",
-    "more": "Meer",
-    "officialSite": "Officiële website",
-    "showAllModels": "Toon alle modellen",
-    "sorts": {
-      "default": "Standaard sortering",
-      "identifier": "Aanbieder ID",
-      "modelCount": "Aantal modellen"
-    },
-    "suggestions": "Gerelateerde aanbieders",
-    "supportedModels": "Ondersteunde modellen"
-  },
-  "publishedTime": "Gepubliceerd op",
-  "search": {
-    "placeholder": "Zoek naam, beschrijving of trefwoord...",
-    "result": "{{count}} resultaten over <highlight>{{keyword}}</highlight>",
-    "searching": "Zoeken..."
-  },
-  "tab": {
-    "assistant": "Assistent",
-    "home": "Startpagina",
-    "model": "Model",
-    "plugin": "Plugin",
-    "provider": "Model aanbieder"
-  }
+  "mcp.categories.all.description": "Alle MCP-servers",
+  "mcp.categories.all.name": "Alle",
+  "mcp.categories.business.description": "Zakelijke en ondernemingsdiensten",
+  "mcp.categories.business.name": "Zakelijke diensten",
+  "mcp.categories.developer.description": "Ontwikkelaarstools en -diensten",
+  "mcp.categories.developer.name": "Ontwikkelaarstools",
+  "mcp.categories.gaming-entertainment.description": "Spellen, entertainment en vrijetijdsactiviteiten",
+  "mcp.categories.gaming-entertainment.name": "Gaming & Entertainment",
+  "mcp.categories.health-wellness.description": "Gezondheid, fitness en welzijn",
+  "mcp.categories.health-wellness.name": "Gezondheid & Welzijn",
+  "mcp.categories.lifestyle.description": "Persoonlijke levensstijl, gewoonten en dagelijkse activiteiten",
+  "mcp.categories.lifestyle.name": "Levensstijl",
+  "mcp.categories.media-generate.description": "Media genereren, bewerken en verwerken",
+  "mcp.categories.media-generate.name": "Media Generatie",
+  "mcp.categories.news.description": "Nieuwsaggregatie, verslaggeving en informatiediensten",
+  "mcp.categories.news.name": "Nieuws & Informatie",
+  "mcp.categories.productivity.description": "Taakbeheer, notities en productiviteitstools",
+  "mcp.categories.productivity.name": "Productiviteitstools",
+  "mcp.categories.science-education.description": "Wetenschappelijk onderzoek, leren en educatieve hulpmiddelen",
+  "mcp.categories.science-education.name": "Wetenschap & Educatie",
+  "mcp.categories.social.description": "Sociale netwerken en communicatie",
+  "mcp.categories.social.name": "Sociale media",
+  "mcp.categories.stocks-finance.description": "Financiële markten, handel en investeringen",
+  "mcp.categories.stocks-finance.name": "Aandelen & Financiën",
+  "mcp.categories.tools.description": "Algemene praktische tools en diensten",
+  "mcp.categories.tools.name": "Hulpprogramma's",
+  "mcp.categories.travel-transport.description": "Reisplanning en vervoer",
+  "mcp.categories.travel-transport.name": "Reizen & Vervoer",
+  "mcp.categories.weather.description": "Weersvoorspellingen en meteorologische diensten",
+  "mcp.categories.weather.name": "Weer",
+  "mcp.categories.web-search.description": "Webzoekopdrachten en informatieopvraging",
+  "mcp.categories.web-search.name": "Informatieopvraging",
+  "mcp.details.connectionType.hybrid.desc": "Deze service kan lokaal of in de cloud draaien, afhankelijk van de configuratie of het gebruiksscenario, en biedt een dubbele gebruiksmogelijkheid.",
+  "mcp.details.connectionType.hybrid.title": "Hybride Service",
+  "mcp.details.connectionType.local.desc": "Deze server kan alleen draaien op het lokale apparaat van de gebruiker, vereist installatie en maakt gebruik van lokale bronnen.",
+  "mcp.details.connectionType.local.title": "Lokale Service",
+  "mcp.details.connectionType.remote.desc": "Deze server wordt op afstand gehost omdat hij voornamelijk afhankelijk is van externe diensten en niet van de lokale omgeving.",
+  "mcp.details.connectionType.remote.title": "Cloudservice",
+  "mcp.details.deployment.args": "Argumenten",
+  "mcp.details.deployment.checkCommand": "Controlecommando",
+  "mcp.details.deployment.command": "Commando",
+  "mcp.details.deployment.commandLine": "Systeemvereisten",
+  "mcp.details.deployment.connection": "Verbindingsmethode",
+  "mcp.details.deployment.connectionType": "Verbindingstype",
+  "mcp.details.deployment.description": "Installatie- en implementatiemethode van de skill",
+  "mcp.details.deployment.descriptionPlaceholder": "Optionele beschrijving",
+  "mcp.details.deployment.empty": "Geen implementatieopties beschikbaar",
+  "mcp.details.deployment.env": "Omgevingsvariabelen",
+  "mcp.details.deployment.guide": "Installatiehandleiding",
+  "mcp.details.deployment.installation": "Installeren via {{method}}",
+  "mcp.details.deployment.installationMethod": "Installatiemethode",
+  "mcp.details.deployment.other": "Overige instellingen",
+  "mcp.details.deployment.packageName": "Pakketnaam",
+  "mcp.details.deployment.platform.steps.claude": "- Open de **Claude Desktop** app\n- Ga naar **Instellingen**, selecteer vervolgens **Ontwikkelaar**\n- Klik op **Configuratie bewerken**\n- Open het bestand **claude_desktop_config.json**\n- Kopieer en plak de serverconfiguratie in het bestaande bestand en sla op",
+  "mcp.details.deployment.platform.steps.cline": "- Open VS Code met de Cline-extensie geïnstalleerd\n- Klik op het Cline-pictogram in de zijbalk\n- Selecteer **MCP Servers** in het dropdownmenu\n- Ga naar het tabblad **Remote Servers**, voer de servernaam en jouw MCP-server-URL in\n- Klik op **Server toevoegen** om verbinding te maken",
+  "mcp.details.deployment.platform.steps.cursor": "- Ga naar **Instellingen**, selecteer vervolgens Cursor-instellingen\n- Kies **MCP** aan de linkerkant\n- Klik rechtsboven op **Nieuwe globale MCP-server toevoegen**\n- Kopieer en plak de serverconfiguratie in het bestaande bestand en sla op",
+  "mcp.details.deployment.platform.steps.lobeChat": "- Open de **LobeHub Desktop** app\n- Ga naar **Instellingen** - **Standaardagent**\n- Selecteer vervolgens **Skill-instellingen** - **Aangepaste skills**\n- Klik op **Snelle JSON-configuratie importeren**\n- Kopieer en plak de serverconfiguratie in het tekstvak en installeer",
+  "mcp.details.deployment.platform.steps.openai": "- Open je **OpenAI-app** of ontwikkelomgeving\n- Configureer MCP-tools in de **Responses API**\n- Voeg MCP-blokken toe aan de **tools** array in API-verzoeken\n- Stel **server_url** in op jouw MCP-serverendpoint\n- Voeg vereiste authenticatieheaders toe (API-sleutel, token, enz.)\n- Gebruik de parameter `allowed_tools` om toegestane tools te beperken\n- Stel `require_approval` in om goedkeuring voor toolgebruik te beheren",
+  "mcp.details.deployment.platform.steps.vscode": "- Open VS Code\n- Open de commandopalet (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Typ **MCP: Server toevoegen** en selecteer het\n- Kies om toe te voegen aan werkruimte- of gebruikersinstellingen\n- Kopieer en plak de serverconfiguratie",
+  "mcp.details.deployment.platform.title": "Installeren op {{platform}}",
+  "mcp.details.deployment.recommended": "Aanbevolen",
+  "mcp.details.deployment.systemDependencies": "Systeemvereisten",
+  "mcp.details.deployment.table.description": "Beschrijving",
+  "mcp.details.deployment.table.name": "Naam",
+  "mcp.details.deployment.table.required": "Vereist",
+  "mcp.details.deployment.table.type": "Type",
+  "mcp.details.deployment.title": "Installatiemethode",
+  "mcp.details.githubBadge.desc": "LobeHub scant regelmatig codeopslagplaatsen en documentatie om:\n- De werking van MCP-servers te bevestigen.\n- Serverfuncties zoals tools, bronnen, prompts en vereiste parameters te extraheren.\n- Onze badge helpt gebruikers snel de veiligheid, functionaliteit en installatie-instructies van een MCP-server te beoordelen. Kopieer de volgende code naar je `README.md` bestand:",
+  "mcp.details.nav.needHelp": "Hulp nodig?",
+  "mcp.details.nav.reportIssue": "Probleem melden",
+  "mcp.details.nav.viewSourceCode": "Bekijk broncode",
+  "mcp.details.overview.title": "Overzicht",
+  "mcp.details.related.listTitle": "Gerelateerde MCP-servers",
+  "mcp.details.related.more": "Meer bekijken",
+  "mcp.details.related.title": "Gerelateerde aanbevelingen",
+  "mcp.details.schema.mode.docs": "Documentatie",
+  "mcp.details.schema.prompts.arguments": "Parameterconfiguratie",
+  "mcp.details.schema.prompts.desc": "Interactieve sjablonen geactiveerd door gebruikersselectie",
+  "mcp.details.schema.prompts.empty": "Geen prompts beschikbaar",
+  "mcp.details.schema.prompts.instructions": "Instructiebeschrijving",
+  "mcp.details.schema.prompts.table.description": "Beschrijving",
+  "mcp.details.schema.prompts.table.name": "Naam",
+  "mcp.details.schema.prompts.table.required": "Vereist",
+  "mcp.details.schema.prompts.title": "Promptlijst",
+  "mcp.details.schema.resources.desc": "Contextuele gegevens beheerd en gekoppeld door de client",
+  "mcp.details.schema.resources.empty": "Geen bronnen beschikbaar",
+  "mcp.details.schema.resources.table.description": "Beschrijving",
+  "mcp.details.schema.resources.table.mineType": "MIME-type",
+  "mcp.details.schema.resources.table.name": "Naam",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "Bronnenlijst",
+  "mcp.details.schema.title": "Skillfuncties",
+  "mcp.details.schema.tools.desc": "Functionele interfaces beschikbaar voor grote taalmodellen (LLM) om acties uit te voeren",
+  "mcp.details.schema.tools.empty": "Geen tools beschikbaar",
+  "mcp.details.schema.tools.inputSchema": "Invoerbeschrijving",
+  "mcp.details.schema.tools.instructions": "Instructiebeschrijving",
+  "mcp.details.schema.tools.table.description": "Beschrijving",
+  "mcp.details.schema.tools.table.name": "Naam",
+  "mcp.details.schema.tools.table.required": "Vereist",
+  "mcp.details.schema.tools.table.type": "Type",
+  "mcp.details.schema.tools.title": "Toollijst",
+  "mcp.details.score.claimed.desc": "Deze MCP-server is geclaimd door de eigenaar, wat het eigenaarschap en beheer bevestigt.",
+  "mcp.details.score.claimed.title": "Geclaimd door eigenaar",
+  "mcp.details.score.deployMoreThanManual.desc": "Deze MCP-server biedt gebruiksvriendelijkere installatiemethoden dan handmatig, waardoor gebruikers deze eenvoudig kunnen implementeren en gebruiken.",
+  "mcp.details.score.deployMoreThanManual.title": "Biedt gebruiksvriendelijke installatiemethoden",
+  "mcp.details.score.deployment.desc": "Deze MCP-server biedt ten minste één installatiemethode, zodat gebruikers deze kunnen implementeren en gebruiken.",
+  "mcp.details.score.deployment.descWithCount": "Deze MCP-server biedt {{number}} installatiemethoden, zodat gebruikers deze kunnen implementeren en gebruiken.",
+  "mcp.details.score.deployment.title": "Biedt ten minste één installatiemethode",
+  "mcp.details.score.license.desc": "Deze repository bevat een LICENSE-bestand.",
+  "mcp.details.score.license.descWithlicense": "Deze repository is gelicentieerd onder {{license}}.",
+  "mcp.details.score.license.title": "Bevat LICENSE",
+  "mcp.details.score.listTitle": "Scoregegevens",
+  "mcp.details.score.notClaimed.desc": "Als jij de eigenaar bent van deze MCP-server, kun je deze claimen via de volgende methoden.",
+  "mcp.details.score.notClaimed.title": "Niet geclaimd door eigenaar",
+  "mcp.details.score.prompts.desc": "Deze MCP-server biedt prompts waarmee gebruikers met de service kunnen communiceren.",
+  "mcp.details.score.prompts.descWithCount": "Deze MCP-server biedt {{number}} prompts waarmee gebruikers met de service kunnen communiceren.",
+  "mcp.details.score.prompts.title": "Bevat prompts",
+  "mcp.details.score.readme.desc": "Deze repository bevat een README.md-bestand.",
+  "mcp.details.score.readme.title": "Bevat README",
+  "mcp.details.score.resources.desc": "Deze MCP-server biedt bronnen waarmee gebruikers contextuele gegevens kunnen koppelen en beheren.",
+  "mcp.details.score.resources.descWithCount": "Deze MCP-server biedt {{number}} bronnen waarmee gebruikers contextuele gegevens kunnen koppelen en beheren.",
+  "mcp.details.score.resources.title": "Bevat bronnen",
+  "mcp.details.score.title": "Score",
+  "mcp.details.score.tools.desc": "De service moet ten minste één tool bieden waarmee gebruikers specifieke acties kunnen uitvoeren.",
+  "mcp.details.score.tools.descWithCount": "Deze MCP-server biedt {{number}} toolfuncties waarmee gebruikers specifieke acties kunnen uitvoeren.",
+  "mcp.details.score.tools.title": "Bevat ten minste één tool",
+  "mcp.details.score.validated.desc": "Deze MCP-server is gevalideerd, wat de kwaliteit en betrouwbaarheid garandeert.",
+  "mcp.details.score.validated.title": "Gevalideerd",
+  "mcp.details.scoreLevel.a.desc": "Deze MCP-server is grondig gevalideerd, biedt uitgebreide functies en een hoogwaardige gebruikerservaring.",
+  "mcp.details.scoreLevel.a.fullTitle": "Uitstekende Skill",
+  "mcp.details.scoreLevel.a.title": "Premium",
+  "mcp.details.scoreLevel.b.desc": "Deze MCP-server biedt goede functies en gebruikerservaring, maar kan op sommige punten verbeterd worden.",
+  "mcp.details.scoreLevel.b.fullTitle": "Goede Functionaliteit",
+  "mcp.details.scoreLevel.b.title": "Goed",
+  "mcp.details.scoreLevel.f.desc": "Deze MCP-server is onvolledig of van lage kwaliteit; gebruik wordt met voorzichtigheid aanbevolen.",
+  "mcp.details.scoreLevel.f.fullTitle": "Lage Kwaliteit",
+  "mcp.details.scoreLevel.f.title": "Slecht",
+  "mcp.details.settings.capabilities.prompts": "Prompts",
+  "mcp.details.settings.capabilities.resources": "Bronnen",
+  "mcp.details.settings.capabilities.title": "Skillmogelijkheden",
+  "mcp.details.settings.capabilities.tools": "Tools",
+  "mcp.details.settings.configuration.title": "Skillconfiguratie",
+  "mcp.details.settings.connection.args": "Opstartargumenten",
+  "mcp.details.settings.connection.command": "Opstartcommando",
+  "mcp.details.settings.connection.title": "Verbindingsinformatie",
+  "mcp.details.settings.connection.type": "Verbindingstype",
+  "mcp.details.settings.connection.url": "Service-URL",
+  "mcp.details.settings.saveSettings": "Instellingen opslaan",
+  "mcp.details.settings.title": "Skillinstellingen",
+  "mcp.details.sidebar.install": "Installeer MCP-server",
+  "mcp.details.sidebar.meta.homepage": "Officiële homepage",
+  "mcp.details.sidebar.meta.installCount": "Aantal installaties",
+  "mcp.details.sidebar.meta.language": "Broncode-taal",
+  "mcp.details.sidebar.meta.license": "Licentie",
+  "mcp.details.sidebar.meta.published": "Publicatiedatum",
+  "mcp.details.sidebar.meta.repo": "Bronrepository",
+  "mcp.details.sidebar.meta.stars": "Sterren",
+  "mcp.details.sidebar.meta.title": "Details",
+  "mcp.details.sidebar.meta.updated": "Laatst bijgewerkt",
+  "mcp.details.sidebar.moreServerConfig": "Bekijk details",
+  "mcp.details.sidebar.recommendServers": "Gerelateerde MCP",
+  "mcp.details.sidebar.serverConfig": "Installatieconfiguratie",
+  "mcp.details.sidebar.toc": "Inhoudsopgave",
+  "mcp.details.summary.title": "Wat kun je doen met deze MCP-server?",
+  "mcp.details.totalScore.description": "Totale score berekend op basis van verschillende indicatoren",
+  "mcp.details.totalScore.legend.aGrade": "Score A ({{minPercent}}-100%)",
+  "mcp.details.totalScore.legend.bGrade": "Score B ({{minPercent}}-{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "Score F (0-{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} punten",
+  "mcp.details.totalScore.popover.completedOptional": "✅ Voltooide optionele items ({{count}})",
+  "mcp.details.totalScore.popover.completedRequired": "✅ Voltooide verplichte items ({{count}})",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ Niet-voltooide optionele items ({{count}})",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ Niet-voltooide verplichte items ({{count}})",
+  "mcp.details.totalScore.popover.title": "Scoregegevens",
+  "mcp.details.totalScore.ratingFormat": "Beoordeling: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "Items",
+  "mcp.details.totalScore.scoreInfo.points": "Punten",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "Verplichte items",
+  "mcp.details.totalScore.title": "Totale score",
+  "mcp.details.versions.table.isLatest": "Laatste versie",
+  "mcp.details.versions.table.isValidated": "Gevalideerd",
+  "mcp.details.versions.table.publishAt": "Publicatiedatum",
+  "mcp.details.versions.table.version": "Versie",
+  "mcp.details.versions.title": "Versiegeschiedenis",
+  "mcp.hero.desc": "Een open-source, implementeerbare MCP-servergemeenschap—helpt AI-systemen toegang te krijgen tot bestandsystemen, databases, API's en andere belangrijke bronnen.",
+  "mcp.hero.subTitle": "Open-source, klaar voor gebruik",
+  "mcp.hero.title": "Open-source MCP-gemeenschap voor AI",
+  "mcp.sorts.createdAt": "Recent toegevoegd",
+  "mcp.sorts.installCount": "Aantal installaties",
+  "mcp.sorts.isFeatured": "Aanbevolen skills",
+  "mcp.sorts.isValidated": "Gevalideerde skills",
+  "mcp.sorts.promptsCount": "Aantal prompts",
+  "mcp.sorts.ratingCount": "Aantal beoordelingen",
+  "mcp.sorts.resourcesCount": "Aantal bronnen",
+  "mcp.sorts.toolsCount": "Aantal tools",
+  "mcp.sorts.updatedAt": "Recent bijgewerkt",
+  "mcp.title": "MCP-gemeenschap",
+  "mcp.unvalidated.desc": "Deze MCP-server is nog niet gevalideerd",
+  "mcp.unvalidated.title": "Niet gevalideerd",
+  "mcp.validated.desc": "Deze MCP-server is gevalideerd om de kwaliteit en betrouwbaarheid te waarborgen.",
+  "mcp.validated.descWithDate": "Deze MCP-server is gevalideerd op {{date}} om de kwaliteit en betrouwbaarheid te waarborgen.",
+  "mcp.validated.title": "Gevalideerd",
+  "mcpEmpty.description": "Probeer filters aan te passen of zoek met andere trefwoorden.",
+  "mcpEmpty.search": "Geen overeenkomende MCP-servers gevonden",
+  "mcpEmpty.title": "Geen MCP-servers gevonden",
+  "models.abilities": "Modelmogelijkheden",
+  "models.chat": "Gesprek starten",
+  "models.contentLength": "Maximale contextlengte",
+  "models.details.overview.title": "Overzicht",
+  "models.details.related.listTitle": "Gerelateerde modellen",
+  "models.details.related.more": "Meer bekijken",
+  "models.details.related.title": "Gerelateerde aanbevelingen",
+  "models.empty.description": "Pas de filters aan om meer modellen te bekijken",
+  "models.empty.search": "Geen overeenkomende modellen gevonden",
+  "models.empty.title": "Geen modellen beschikbaar",
+  "models.free": "Gratis",
+  "models.guide": "Configuratiehandleiding",
+  "models.list": "Modellenlijst",
+  "models.more": "Meer",
+  "models.parameterList.defaultValue": "Standaardwaarde",
+  "models.parameterList.docs": "Documentatie bekijken",
+  "models.parameterList.frequency_penalty.desc": "Deze instelling regelt hoe vaak het model specifieke woorden hergebruikt die al in de invoer zijn verschenen. Hogere waarden verminderen de kans op herhaling, terwijl negatieve waarden het tegenovergestelde effect hebben. Straf op woordgebruik neemt niet toe met frequentie. Negatieve waarden stimuleren hergebruik van vocabulaire.",
+  "models.parameterList.frequency_penalty.title": "Frequentiestraf",
+  "models.parameterList.max_tokens.desc": "Deze instelling bepaalt de maximale lengte die het model in één antwoord kan genereren. Een hogere waarde laat langere antwoorden toe, terwijl een lagere waarde het antwoord beknopter maakt. Pas deze waarde aan op basis van de toepassing om de gewenste lengte en detailniveau te bereiken.",
+  "models.parameterList.max_tokens.title": "Limiet per antwoord",
+  "models.parameterList.presence_penalty.desc": "Deze instelling probeert het hergebruik van woorden te beperken op basis van hoe vaak ze in de invoer voorkomen. Woorden die vaker voorkomen, worden minder gebruikt. Straf op woordgebruik neemt toe met frequentie. Negatieve waarden stimuleren hergebruik van vocabulaire.",
+  "models.parameterList.presence_penalty.title": "Onderwerpvernieuwing",
+  "models.parameterList.range": "Bereik",
+  "models.parameterList.reasoning_effort.desc": "Deze instelling bepaalt de intensiteit van het redeneren dat het model toepast voordat het een antwoord genereert. Lage intensiteit geeft snellere antwoorden en bespaart tokens, terwijl hoge intensiteit grondiger redeneert maar meer tokens verbruikt en trager is. De standaardwaarde is gemiddeld, wat een balans biedt tussen nauwkeurigheid en snelheid.",
+  "models.parameterList.reasoning_effort.title": "Redeneerintensiteit",
+  "models.parameterList.temperature.desc": "Deze instelling beïnvloedt de variatie in de antwoorden van het model. Lagere waarden zorgen voor voorspelbare antwoorden, terwijl hogere waarden meer diversiteit en creativiteit stimuleren. Bij waarde 0 geeft het model altijd hetzelfde antwoord op dezelfde invoer.",
+  "models.parameterList.temperature.title": "Willekeurigheid",
+  "models.parameterList.title": "Modelparameters",
+  "models.parameterList.top_p.desc": "Deze instelling beperkt de woordkeuze van het model tot een bepaald percentage van de meest waarschijnlijke woorden: alleen woorden waarvan de cumulatieve kans P bereikt, worden gekozen. Lagere waarden maken de antwoorden voorspelbaarder, terwijl de standaardinstelling meer variatie toelaat.",
+  "models.parameterList.top_p.title": "Nucleus sampling",
+  "models.parameterList.type": "Type",
+  "models.providerInfo.apiTooltip": "LobeHub ondersteunt het gebruik van een aangepaste API-sleutel voor deze provider.",
+  "models.providerInfo.input": "Invoerprijs",
+  "models.providerInfo.inputTooltip": "Kosten per miljoen tokens",
+  "models.providerInfo.latency": "Vertraging",
+  "models.providerInfo.latencyTooltip": "Gemiddelde tijd tot de provider het eerste token verzendt",
+  "models.providerInfo.maxOutput": "Maximale uitvoerlengte",
+  "models.providerInfo.maxOutputTooltip": "Maximaal aantal tokens dat dit eindpunt kan genereren",
+  "models.providerInfo.officialTooltip": "Officiële dienst van LobeHub",
+  "models.providerInfo.output": "Uitvoerprijs",
+  "models.providerInfo.outputTooltip": "Kosten per miljoen tokens",
+  "models.providerInfo.streamCancellationTooltip": "Deze provider ondersteunt het annuleren van streams.",
+  "models.providerInfo.throughput": "Doorvoersnelheid",
+  "models.providerInfo.throughputTooltip": "Gemiddeld aantal tokens per seconde bij streamverzoeken",
+  "models.sorts.contextWindowTokens": "Contextlengte",
+  "models.sorts.identifier": "Model-ID",
+  "models.sorts.inputPrice": "Invoerprijs",
+  "models.sorts.outputPrice": "Uitvoerprijs",
+  "models.sorts.providerCount": "Aantal providers",
+  "models.sorts.releasedAt": "Recent uitgebracht",
+  "models.suggestions": "Gerelateerde modellen",
+  "models.supportedProviders": "Providers die dit model ondersteunen",
+  "plugins.builtinTag": "Ingebouwd",
+  "plugins.community": "Communityvaardigheden",
+  "plugins.details.settings.title": "Vaardigheidsinstellingen",
+  "plugins.details.summary.title": "Wat kun je met deze vaardigheid doen?",
+  "plugins.details.tools.title": "Vaardigheidstools",
+  "plugins.install": "Vaardigheid installeren",
+  "plugins.installed": "Geïnstalleerd",
+  "plugins.legacyTag": "Verouderd",
+  "plugins.list": "Vaardighedenlijst",
+  "plugins.meta.description": "Beschrijving",
+  "plugins.meta.parameter": "Parameter",
+  "plugins.meta.title": "Toolparameters",
+  "plugins.meta.type": "Type",
+  "plugins.more": "Meer",
+  "plugins.official": "Officiële vaardigheden",
+  "plugins.recentSubmits": "Recent bijgewerkt",
+  "plugins.sorts.createdAt": "Recent gepubliceerd",
+  "plugins.sorts.identifier": "Vaardigheid-ID",
+  "plugins.sorts.title": "Vaardigheidsnaam",
+  "plugins.suggestions": "Gerelateerde aanbevelingen",
+  "providers.config": "Provider configureren",
+  "providers.details.guide.title": "Integratiehandleiding",
+  "providers.details.overview.title": "Overzicht",
+  "providers.details.related.listTitle": "Gerelateerde providers",
+  "providers.details.related.more": "Meer bekijken",
+  "providers.details.related.title": "Gerelateerde aanbevelingen",
+  "providers.empty.description": "Pas de filters aan om meer providers te bekijken.",
+  "providers.empty.search": "Geen overeenkomende providers gevonden",
+  "providers.empty.title": "Geen providers gevonden",
+  "providers.list": "Providerlijst",
+  "providers.modelCount": "{{count}} modellen",
+  "providers.modelName": "Modelnaam",
+  "providers.modelSite": "Modeldocumentatie",
+  "providers.more": "Meer",
+  "providers.officialSite": "Officiële website",
+  "providers.showAllModels": "Alle modellen weergeven",
+  "providers.sorts.default": "Standaard",
+  "providers.sorts.identifier": "Provider-ID",
+  "providers.sorts.modelCount": "Aantal modellen",
+  "providers.suggestions": "Gerelateerde providers",
+  "providers.supportedModels": "Ondersteunde modellen",
+  "publishedTime": "Gepubliceerd",
+  "search.placeholder": "Zoek op naam, beschrijving of trefwoorden...",
+  "search.result": "{{count}} resultaten over <highlight>{{keyword}}</highlight>",
+  "search.searching": "Zoeken...",
+  "tab.assistant": "Agent",
+  "tab.home": "Home",
+  "tab.model": "Model",
+  "tab.plugin": "Vaardigheid",
+  "tab.provider": "Aanbieder",
+  "tab.user": "Gebruiker",
+  "user.agents": "Agents",
+  "user.downloads": "Downloads",
+  "user.editProfile": "Profiel bewerken",
+  "user.favoriteAgents": "Opgeslagen Agents",
+  "user.favoritePlugins": "Opgeslagen Vaardigheden",
+  "user.follow": "Volgen",
+  "user.followers": "Volgers",
+  "user.following": "Volgend",
+  "user.login": "Word een Maker",
+  "user.logout": "Uitloggen",
+  "user.myProfile": "Mijn Profiel",
+  "user.noAgents": "Deze gebruiker heeft nog geen Agents gepubliceerd",
+  "user.noFavoriteAgents": "Nog geen opgeslagen Agents",
+  "user.noFavoritePlugins": "Nog geen opgeslagen Vaardigheden",
+  "user.publishedAgents": "Gemaakte Agents",
+  "user.tabs.favorites": "Favorieten",
+  "user.tabs.publishedAgents": "Gemaakt",
+  "user.unfavorite": "Verwijderen uit opgeslagen",
+  "user.unfavoriteFailed": "Verwijderen mislukt",
+  "user.unfavoriteSuccess": "Verwijderd",
+  "user.unfollow": "Ontvolgen",
+  "user.website": "Website"
 }

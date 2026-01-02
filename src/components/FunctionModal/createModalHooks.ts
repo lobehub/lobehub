@@ -1,8 +1,8 @@
 import { App } from 'antd';
-import { ModalFuncProps } from 'antd/es/modal/interface';
-import { MutableRefObject, ReactNode, RefObject, useRef } from 'react';
+import { type ModalFuncProps } from 'antd/es/modal/interface';
+import { type MutableRefObject, type ReactNode, type RefObject, useRef } from 'react';
 
-import { closeIcon, useStyles } from './style';
+import { closeIcon, styles } from './style';
 
 interface CreateModalProps extends ModalFuncProps {
   content: ReactNode;
@@ -19,7 +19,6 @@ type PropsFunc<T = undefined> = (
 
 const createModal = <T>(params: CreateModalProps | PropsFunc<T>) => {
   const useModal = () => {
-    const { styles } = useStyles();
     const { modal } = App.useApp();
     const instanceRef = useRef<ModalInstance>(null);
 

@@ -10,7 +10,7 @@ const xaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description: '前沿多模态模型，专门针对高性能代理工具调用进行优化。',
+    description: 'A frontier multimodal model optimized for high-performance agent tool use.',
     displayName: 'Grok 4.1 Fast (Non-Reasoning)',
     enabled: true,
     id: 'grok-4-1-fast-non-reasoning',
@@ -52,7 +52,7 @@ const xaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description: '前沿多模态模型，专门针对高性能代理工具调用进行优化。',
+    description: 'A frontier multimodal model optimized for high-performance agent tool use.',
     displayName: 'Grok 4.1 Fast',
     enabled: true,
     id: 'grok-4-1-fast-reasoning',
@@ -92,7 +92,8 @@ const xaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description: '我们很高兴发布 Grok 4 Fast，这是我们在成本效益推理模型方面的最新进展。',
+    description:
+      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
     displayName: 'Grok 4 Fast (Non-Reasoning)',
     id: 'grok-4-fast-non-reasoning',
     pricing: {
@@ -132,7 +133,8 @@ const xaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_000_000,
-    description: '我们很高兴发布 Grok 4 Fast，这是我们在成本效益推理模型方面的最新进展。',
+    description:
+      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
     displayName: 'Grok 4 Fast',
     id: 'grok-4-fast-reasoning',
     pricing: {
@@ -171,7 +173,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      '我们很高兴推出 grok-code-fast-1，这是一款快速且经济高效的推理模型，在代理编码方面表现出色。',
+      'We’re excited to launch grok-code-fast-1, a fast and cost-effective reasoning model that excels at agentic coding.',
     displayName: 'Grok Code Fast 1',
     id: 'grok-code-fast-1',
     pricing: {
@@ -197,7 +199,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      '我们最新最强大的旗舰模型，在自然语言处理、数学计算和推理方面表现卓越 —— 是一款完美的全能型选手。',
+      'Our newest and strongest flagship model, excelling in NLP, math, and reasoning—an ideal all-rounder.',
     displayName: 'Grok 4 0709',
     enabled: true,
     id: 'grok-4',
@@ -223,7 +225,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '旗舰级模型，擅长数据提取、编程和文本摘要等企业级应用，拥有金融、医疗、法律和科学等领域的深厚知识。',
+      'A flagship model that excels at enterprise use cases like data extraction, coding, and summarization, with deep domain knowledge in finance, healthcare, law, and science.',
     displayName: 'Grok 3',
     id: 'grok-3',
     pricing: {
@@ -247,7 +249,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '轻量级模型，回话前会先思考。运行快速、智能，适用于不需要深层领域知识的逻辑任务，并能获取原始的思维轨迹。',
+      'A lightweight model that thinks before responding. It’s fast and smart for logic tasks that don’t require deep domain knowledge, with access to raw reasoning traces.',
     displayName: 'Grok 3 Mini',
     id: 'grok-3-mini',
     pricing: {
@@ -271,7 +273,8 @@ const xaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: '该模型在准确性、指令遵循和多语言能力方面有所改进。',
+    description:
+      'Improved accuracy, instruction following, and multilingual capability.',
     displayName: 'Grok 2 Vision 1212',
     id: 'grok-2-vision-1212', // legacy
     pricing: {
@@ -291,7 +294,7 @@ const xaiChatModels: AIChatModelCard[] = [
 const xaiImageModels: AIImageModelCard[] = [
   {
     description:
-      '我们最新的图像生成模型可以根据文本提示生成生动逼真的图像。它在营销、社交媒体和娱乐等领域的图像生成方面表现出色。',
+      'Our latest image generation model creates vivid, realistic images from prompts and excels in marketing, social media, and entertainment use cases.',
     displayName: 'Grok 2 Image 1212',
     enabled: true,
     id: 'grok-2-image-1212',

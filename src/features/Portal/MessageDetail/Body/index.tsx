@@ -1,11 +1,10 @@
-import { Markdown } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { useEffect } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors, chatSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
 
 const md = css`
   overflow: scroll;
@@ -21,7 +20,7 @@ const MessageDetailBody = () => {
     s.togglePortal,
   ]);
 
-  const message = useChatStore(chatSelectors.getMessageById(messageDetailId || ''), isEqual);
+  const message = useChatStore(dbMessageSelectors.getDbMessageById(messageDetailId || ''), isEqual);
 
   const content = message?.content || '';
 

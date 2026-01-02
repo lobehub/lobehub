@@ -25,27 +25,36 @@ vi.mock('@/utils/env', () => ({
   isDev: false,
 }));
 
-// 模拟动态导入结果
-const mockTranslations = {
+// Mock default locale modules with flat key structure (i18n keys are flat, not nested objects)
+// Keys like 'nested.key' are direct string keys, not nested property paths
+vi.mock('@/locales/default/common', () => ({
   key1: 'Value 1',
   key2: 'Value 2 with {{param}}',
-  nested: { key: 'Nested value' },
-};
+  'nested.key': 'Nested value',
+  multiParam: 'Hello {{name}}, you have {{count}} messages',
+  simpleText: 'Just a simple text',
+  withParam: 'Text with {{param}}',
+  'very.deeply.nested.key': 'Found the nested value',
+  // Add exports for testing missing keys (will be undefined, triggering fallback)
+  nonexistent: undefined,
+  'totally.missing.key': undefined,
+}));
 
-const mockDefaultTranslations = {
-  key1: '默认值 1',
-  key2: '默认值 2 带 {{param}}',
-  nested: { key: '默认嵌套值' },
-};
+vi.mock('@/locales/default/chat', () => ({
+  welcome: 'Welcome to the chat',
+}));
 
-// 重写导入函数
-vi.mock('@/../locales/en-US/common.json', async () => {
-  return mockTranslations;
-});
+vi.mock('@/locales/default/models', () => ({
+  default: {
+    'gpt-4.description': 'GPT-4 description',
+  },
+}));
 
-vi.mock('@/locales/default/common', async () => {
-  return mockDefaultTranslations;
-});
+vi.mock('@/locales/default/providers', () => ({
+  default: {
+    'openai.description': 'OpenAI provider description',
+  },
+}));
 
 describe('getLocale', () => {
   const mockCookieStore = {
@@ -73,10 +82,6 @@ describe('getLocale', () => {
 describe('translation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // 重置 import 模拟
-    vi.doMock('@/../locales/en-US/common.json', async () => {
-      return mockTranslations;
-    });
   });
 
   it('should return correct translation object', async () => {
@@ -94,57 +99,55 @@ describe('translation', () => {
   });
 
   it('should handle multiple parameters in translation string', async () => {
-    // 模拟多参数翻译
-    vi.doMock('@/../locales/en-US/common.json', async () => ({
-      multiParam: 'Hello {{name}}, you have {{count}} messages',
-    }));
-
     const { t } = await translation('common', 'en-US');
     expect(t('multiParam', { name: 'John', count: '5' })).toBe('Hello John, you have 5 messages');
   });
 
   it('should handle different namespaces', async () => {
-    // 模拟另一个命名空间
-    vi.doMock('@/../locales/en-US/chat.json', async () => ({
-      welcome: 'Welcome to the chat',
-    }));
-
     const { t } = await translation('chat', 'en-US');
     expect(t('welcome')).toBe('Welcome to the chat');
   });
 
-  it('should handle deep nested objects in translations', async () => {
-    // 模拟深层嵌套对象
-    vi.doMock('@/../locales/en-US/common.json', async () => ({
-      very: {
-        deeply: {
-          nested: {
-            key: 'Found the nested value',
-          },
-        },
-      },
-    }));
-
+  it('should handle dotted keys (flat structure with dots in key names)', async () => {
     const { t } = await translation('common', 'en-US');
     expect(t('very.deeply.nested.key')).toBe('Found the nested value');
   });
 
   it('should handle empty parameters object', async () => {
-    vi.doMock('@/../locales/en-US/common.json', async () => ({
-      simpleText: 'Just a simple text',
-    }));
-
     const { t } = await translation('common', 'en-US');
     expect(t('simpleText', {})).toBe('Just a simple text');
   });
 
   it('should handle missing parameters in translation string', async () => {
-    vi.doMock('@/../locales/en-US/common.json', async () => ({
-      withParam: 'Text with {{param}}',
-    }));
-
     const { t } = await translation('common', 'en-US');
     // 当缺少参数时应保留占位符
     expect(t('withParam')).toBe('Text with {{param}}');
+  });
+
+  it('should return key when translation not found', async () => {
+    const { t } = await translation('common', 'en-US');
+    expect(t('nonexistent')).toBe('nonexistent');
+  });
+
+  it('should handle missing i18ns object gracefully', async () => {
+    // Test the case where i18ns might be empty due to import failure
+    const { t } = await translation('common', 'en-US');
+    // When a key doesn't exist, it should return the key itself
+    const result = t('totally.missing.key');
+    expect(result).toBe('totally.missing.key');
+  });
+
+  it('should fallback to default module when locale JSON is missing (models)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { t } = await translation('models', 'zz-ZZ');
+    expect(t('gpt-4.description')).toBe('GPT-4 description');
+  });
+
+  it('should fallback to default module when locale JSON is missing (providers)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { t } = await translation('providers', 'zz-ZZ');
+    expect(t('openai.description')).toBe('OpenAI provider description');
   });
 });

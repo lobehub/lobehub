@@ -2,7 +2,7 @@
 
 import { App } from 'antd';
 import dayjs from 'dayjs';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDownloadImage } from '@/hooks/useDownloadImage';
@@ -14,7 +14,7 @@ import { inferFileExtensionFromImageUrl } from '@/utils/url';
 import { ErrorState } from './ErrorState';
 import { LoadingState } from './LoadingState';
 import { SuccessState } from './SuccessState';
-import { GenerationItemProps } from './types';
+import { type GenerationItemProps } from './types';
 import { getAspectRatio } from './utils';
 
 const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam;
@@ -40,15 +40,15 @@ export const GenerationItem = memo<GenerationItemProps>(
     const aspectRatio = getAspectRatio(generation, generationBatch);
 
     // 事件处理函数
-    const handleDeleteGeneration = async () => {
+    const handleDeleteGeneration = useCallback(async () => {
       try {
         await deleteGeneration(generation.id);
       } catch (error) {
         console.error('Failed to delete generation:', error);
       }
-    };
+    }, [deleteGeneration, generation.id]);
 
-    const handleDownloadImage = async () => {
+    const handleDownloadImage = useCallback(async () => {
       if (!generation.asset?.url) return;
 
       // Generate filename with prompt and timestamp
@@ -61,9 +61,9 @@ export const GenerationItem = memo<GenerationItemProps>(
       const fileName = `${safePrompt}_${timestamp}.${fileExtension}`;
 
       await downloadImage(generation.asset.url, fileName);
-    };
+    }, [downloadImage, generation.asset?.url, generation.createdAt, prompt]);
 
-    const handleCopySeed = async () => {
+    const handleCopySeed = useCallback(async () => {
       if (!generation.seed) return;
 
       // If current model supports seed parameter, apply it directly to configuration
@@ -85,9 +85,9 @@ export const GenerationItem = memo<GenerationItemProps>(
           message.error(t('generation.actions.seedCopyFailed'));
         }
       }
-    };
+    }, [generation.seed, isSupportSeed, message, t, reuseSeed]);
 
-    const handleCopyError = async () => {
+    const handleCopyError = useCallback(async () => {
       if (!generation.task.error) return;
 
       const errorMessage =
@@ -102,7 +102,7 @@ export const GenerationItem = memo<GenerationItemProps>(
         console.error('Failed to copy error message:', error);
         message.error(t('generation.actions.errorCopyFailed'));
       }
-    };
+    }, [generation.task.error, message, t]);
 
     // 根据状态渲染对应组件
     if (generation.task.status === AsyncTaskStatus.Success && generation.asset?.url) {

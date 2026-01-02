@@ -61,7 +61,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
             click: () => {
               this.app.updaterManager.checkForUpdates({ manual: true });
             },
-            label: t('common.checkUpdates') || '检查更新',
+            label: t('common.checkUpdates'),
           },
           { type: 'separator' },
           {

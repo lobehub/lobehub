@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Avatar",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Sobrecarga",
+    "tokenTag.remained": "Restante",
+    "tokenTag.used": "Usado"
+  },
+  "common": {
+    "common.cancel": "Cancelar",
+    "common.confirm": "Confirmar",
+    "common.delete": "Eliminar",
+    "common.edit": "Editar"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Agregar propiedades",
+    "editableMessage.delete": "Eliminar",
+    "editableMessage.input": "Entrada",
+    "editableMessage.inputPlaceholder": "Por favor, introduce contenido de entrada de ejemplo",
+    "editableMessage.output": "Salida",
+    "editableMessage.outputPlaceholder": "Por favor, introduce contenido de salida de ejemplo",
+    "editableMessage.system": "Sistema"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Eliminar",
+    "emojiPicker.draggerDesc": "Haz clic o arrastra una imagen a esta área para subirla",
+    "emojiPicker.emoji": "Emoji",
+    "emojiPicker.fileTypeError": "¡Solo puedes subir archivos de imagen!",
+    "emojiPicker.upload": "Subir",
+    "emojiPicker.uploadBtn": "Recortar y subir"
+  },
+  "form": {
+    "form.reset": "Restablecer",
+    "form.submit": "Enviar",
+    "form.unsavedChanges": "Cambios no guardados",
+    "form.unsavedWarning": "Tienes cambios no guardados. ¿Estás seguro de que deseas salir?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Este atajo de teclado entra en conflicto con uno existente.",
+    "hotkey.invalidCombination": "El atajo debe incluir una tecla modificadora (Ctrl, Alt, Shift) y solo una tecla normal.",
+    "hotkey.placeholder": "Presiona teclas para registrar el atajo",
+    "hotkey.reset": "Restablecer a valores predeterminados"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Cancelar",
+    "messageModal.confirm": "Confirmar",
+    "messageModal.edit": "Editar"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Colapsar barra lateral",
+    "sideNav.demoActiveLabel": "Activo",
+    "sideNav.demoFeatureAutoCollapseDesc": "Arrastra por debajo del umbral para colapsar automáticamente",
+    "sideNav.demoFeatureAutoCollapseTitle": "Colapso automático",
+    "sideNav.demoFeaturePerformanceDesc": "Sin animaciones para un mejor rendimiento",
+    "sideNav.demoFeaturePerformanceTitle": "Rendimiento",
+    "sideNav.demoFeatureResizeDesc": "Arrastra para ajustar el ancho del panel",
+    "sideNav.demoFeatureResizeTitle": "Redimensionamiento flexible",
+    "sideNav.demoFeatureSmartHandleDesc": "Pasa el cursor para mostrar el botón de alternar",
+    "sideNav.demoFeatureSmartHandleTitle": "Mango inteligente",
+    "sideNav.demoFeaturesTitle": "Características",
+    "sideNav.demoHint": "Prueba arrastrar el borde del panel y usar el botón de alternar ->",
+    "sideNav.demoSubtitle": "Un panel lateral estilo espacio de trabajo con redimensionamiento arrastrable",
+    "sideNav.demoTitle": "Demostración de DraggableSideNav",
+    "sideNav.expand": "Expandir barra lateral"
+  }
+}

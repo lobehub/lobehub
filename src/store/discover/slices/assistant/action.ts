@@ -1,16 +1,16 @@
-import { CategoryItem, CategoryListQuery } from '@lobehub/market-sdk';
+import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
 import useSWR, { type SWRResponse } from 'swr';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { discoverService } from '@/services/discover';
-import { DiscoverStore } from '@/store/discover';
+import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
 import {
-  AssistantListResponse,
-  AssistantMarketSource,
-  AssistantQueryParams,
-  DiscoverAssistantDetail,
-  IdentifiersResponse,
+  type AssistantListResponse,
+  type AssistantMarketSource,
+  type AssistantQueryParams,
+  type DiscoverAssistantDetail,
+  type IdentifiersResponse,
 } from '@/types/discover';
 
 export interface AssistantAction {

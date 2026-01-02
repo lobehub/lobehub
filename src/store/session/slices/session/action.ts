@@ -1,34 +1,32 @@
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
-import useSWR, { SWRResponse, mutate } from 'swr';
+import useSWR, { type SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { message } from '@/components/AntdStaticMethods';
-import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
-import { getChatGroupStoreState } from '@/store/chatGroup';
-import { SessionStore } from '@/store/session';
+import { getChatGroupStoreState } from '@/store/agentGroup';
+import { type SessionStore } from '@/store/session';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import { settingsSelectors, userProfileSelectors } from '@/store/user/selectors';
-import { MetaData } from '@/types/meta';
 import {
-  ChatSessionList,
-  LobeAgentSession,
-  LobeSessionGroups,
+  type ChatSessionList,
+  type LobeAgentSession,
+  type LobeSessionGroups,
   LobeSessionType,
-  LobeSessions,
-  UpdateSessionParams,
+  type LobeSessions,
+  type UpdateSessionParams,
 } from '@/types/session';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { SessionDispatch, sessionsReducer } from './reducers';
+import { type SessionDispatch, sessionsReducer } from './reducers';
 import { sessionSelectors } from './selectors';
 import { sessionMetaSelectors } from './selectors/meta';
 
@@ -47,6 +45,7 @@ export interface SessionAction {
    * reset sessions to default
    */
   clearSessions: () => Promise<void>;
+  closeAllAgentsDrawer: () => void;
   /**
    * create a new session
    * @param agent
@@ -58,9 +57,9 @@ export interface SessionAction {
   ) => Promise<string>;
 
   duplicateSession: (id: string) => Promise<void>;
+  openAllAgentsDrawer: () => void;
   triggerSessionUpdate: (id: string) => Promise<void>;
   updateSessionGroupId: (sessionId: string, groupId: string) => Promise<void>;
-  updateSessionMeta: (meta: Partial<MetaData>) => void;
 
   /**
    * Pins or unpins a session.
@@ -112,6 +111,10 @@ export const createSessionSlice: StateCreator<
   clearSessions: async () => {
     await sessionService.removeAllSessions();
     await get().refreshSessions();
+  },
+
+  closeAllAgentsDrawer: () => {
+    set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
   },
 
   createSession: async (agent, isSwitchSession = true) => {
@@ -183,6 +186,10 @@ export const createSessionSlice: StateCreator<
 
     switchSession(newId);
   },
+
+  openAllAgentsDrawer: () => {
+    set({ allAgentsDrawerOpen: true }, false, n('openAllAgentsDrawer'));
+  },
   pinSession: async (id, pinned) => {
     await get().internal_updateSession(id, { pinned });
   },
@@ -207,9 +214,9 @@ export const createSessionSlice: StateCreator<
   },
 
   switchSession: (sessionId) => {
-    if (get().activeId === sessionId) return;
+    if (get().activeAgentId === sessionId) return;
 
-    set({ activeId: sessionId }, false, n(`activeSession/${sessionId}`));
+    set({ activeAgentId: sessionId }, false, n(`activeSession/${sessionId}`));
   },
 
   toggleAgentPinned: () => {
@@ -227,6 +234,7 @@ export const createSessionSlice: StateCreator<
       n('updateSearchKeywords'),
     );
   },
+
   updateSessionGroupId: async (sessionId, group) => {
     const session = sessionSelectors.getSessionById(sessionId)(get());
 
@@ -240,21 +248,6 @@ export const createSessionSlice: StateCreator<
       // For regular agent sessions, use the existing session service
       await get().internal_updateSession(sessionId, { group });
     }
-  },
-
-  updateSessionMeta: async (meta) => {
-    const session = sessionSelectors.currentSession(get());
-    if (!session) return;
-
-    const { activeId, refreshSessions } = get();
-
-    const abortController = get().signalSessionMeta as AbortController;
-    if (abortController) abortController.abort(MESSAGE_CANCEL_FLAT);
-    const controller = new AbortController();
-    set({ signalSessionMeta: controller }, false, 'updateSessionMetaSignal');
-
-    await sessionService.updateSessionMeta(activeId, meta, controller.signal);
-    await refreshSessions();
   },
 
   useFetchSessions: (enabled, isLogin) =>

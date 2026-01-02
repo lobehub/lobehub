@@ -1,25 +1,24 @@
-import { Button, Icon, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Button, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { Package } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import EditCustomPlugin from '../EditCustomPlugin';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   button: css`
-    margin-block-start: ${token.marginLG}px;
+    margin-block-start: ${cssVar.marginLG};
   `,
   container: css`
     height: 80%;
-    padding-block: ${token.paddingXL}px;
-    padding-inline: ${token.paddingLG}px;
+    padding-block: ${cssVar.paddingXL};
+    padding-inline: ${cssVar.paddingLG};
   `,
   description: css`
     max-width: 240px;
     line-height: 1.5;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
   iconWrapper: css`
@@ -29,17 +28,17 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 64px;
     height: 64px;
-    margin-block-end: ${token.marginMD}px;
+    margin-block-end: ${cssVar.marginMD};
     border-radius: 50%;
 
-    background-color: ${token.colorPrimaryBg};
+    background-color: ${cssVar.colorPrimaryBg};
   `,
   title: css`
-    margin-block-end: ${token.marginSM}px;
+    margin-block-end: ${cssVar.marginSM};
 
-    font-size: ${token.fontSizeLG}px;
+    font-size: ${cssVar.fontSizeLG};
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
     text-align: center;
   `,
 }));
@@ -49,7 +48,6 @@ interface Props {
 }
 
 const CustomPluginEmptyState = memo<Props>(({ identifier }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('plugin');
 
   const [showModal, setModal] = useState(false);

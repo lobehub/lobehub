@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { PropsWithChildren } from 'react';
+import { type PropsWithChildren } from 'react';
 
 import { enableBetterAuth } from '@/const/auth';
 

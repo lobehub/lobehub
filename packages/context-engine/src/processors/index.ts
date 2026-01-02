@@ -1,16 +1,32 @@
 // Transformer processors
+export { AgentCouncilFlattenProcessor } from './AgentCouncilFlatten';
 export { GroupMessageFlattenProcessor } from './GroupMessageFlatten';
+export { GroupMessageSenderProcessor } from './GroupMessageSender';
 export { HistoryTruncateProcessor } from './HistoryTruncate';
 export { InputTemplateProcessor } from './InputTemplate';
 export { MessageCleanupProcessor } from './MessageCleanup';
 export { MessageContentProcessor } from './MessageContent';
-export { PlaceholderVariablesProcessor } from './PlaceholderVariables';
+export {
+  buildPlaceholderGenerators,
+  formatPlaceholderValues,
+  PlaceholderVariablesProcessor,
+  renderPlaceholderTemplate,
+} from './PlaceholderVariables';
+export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
+export { TaskMessageProcessor } from './TaskMessage';
+export { TasksFlattenProcessor } from './TasksFlatten';
 export { ToolCallProcessor } from './ToolCall';
 export { ToolMessageReorder } from './ToolMessageReorder';
 
 // Re-export types
+export type { AgentInfo, GroupMessageSenderConfig } from './GroupMessageSender';
 export type { HistoryTruncateConfig } from './HistoryTruncate';
 export type { InputTemplateConfig } from './InputTemplate';
 export type { MessageContentConfig, UserMessageContentPart } from './MessageContent';
-export type { PlaceholderVariablesConfig } from './PlaceholderVariables';
+export type {
+  PlaceholderValue,
+  PlaceholderValueMap,
+  PlaceholderVariablesConfig,
+} from './PlaceholderVariables';
+export type { TaskMessageConfig } from './TaskMessage';
 export type { ToolCallConfig } from './ToolCall';

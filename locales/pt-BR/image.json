@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Proporção",
-      "lock": "Bloquear proporção",
-      "unlock": "Desbloquear proporção"
-    },
-    "cfg": {
-      "label": "Intensidade de Orientação"
-    },
-    "header": {
-      "desc": "Descrição simples, crie imediatamente",
-      "title": "Pintura"
-    },
-    "height": {
-      "label": "Altura"
-    },
-    "imageNum": {
-      "label": "Quantidade de Imagens"
-    },
-    "imageUrl": {
-      "label": "Imagem de referência"
-    },
-    "imageUrls": {
-      "label": "Imagem de Referência"
-    },
-    "model": {
-      "label": "Modelo"
-    },
-    "prompt": {
-      "placeholder": "Descreva o conteúdo que deseja gerar"
-    },
-    "quality": {
-      "label": "Qualidade da imagem",
-      "options": {
-        "hd": "Alta definição",
-        "standard": "Padrão"
-      }
-    },
-    "resolution": {
-      "label": "Resolução",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Semente",
-      "random": "Semente aleatória"
-    },
-    "size": {
-      "label": "Tamanho"
-    },
-    "steps": {
-      "label": "Passos"
-    },
-    "title": "Pintura AI",
-    "width": {
-      "label": "Largura"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Aplicar semente",
-      "copyError": "Copiar erro",
-      "copyPrompt": "Copiar prompt",
-      "copySeed": "Copiar semente",
-      "delete": "Excluir",
-      "deleteBatch": "Excluir lote",
-      "download": "Baixar",
-      "downloadFailed": "Falha ao baixar a imagem",
-      "errorCopied": "Informação de erro copiada para a área de transferência",
-      "errorCopyFailed": "Falha ao copiar a informação de erro",
-      "generate": "Gerar",
-      "promptCopied": "Prompt copiado para a área de transferência",
-      "promptCopyFailed": "Falha ao copiar o prompt",
-      "reuseSettings": "Reutilizar configurações",
-      "seedApplied": "Semente aplicada à configuração",
-      "seedApplyFailed": "Falha ao aplicar a semente",
-      "seedCopied": "Semente copiada para a área de transferência",
-      "seedCopyFailed": "Falha ao copiar a semente"
-    },
-    "metadata": {
-      "count": "{{count}} imagens"
-    },
-    "status": {
-      "failed": "Falha na geração",
-      "generating": "Gerando..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "A instância atual está no modo de banco de dados cliente e não suporta a função de geração de imagens AI. Por favor, altere para o <1>modo de implantação do banco de dados do servidor</1> ou use diretamente o <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "Integração profunda com o sistema de gerenciamento de arquivos, salvando automaticamente as imagens geradas no sistema de arquivos para gerenciamento e organização unificados",
-        "title": "Integração com sistema de arquivos"
-      },
-      "llmAssisted": {
-        "desc": "Combina capacidades de grandes modelos de linguagem para otimizar e expandir inteligentemente os prompts, melhorando a qualidade da geração de imagens (Em breve)",
-        "title": "Geração assistida por LLM"
-      },
-      "multiProviders": {
-        "desc": "Suporta múltiplos provedores de pintura AI, incluindo OpenAI gpt-image-1, Google Imagen, FAL.ai, entre outros, oferecendo uma ampla seleção de modelos",
-        "title": "Suporte a múltiplos provedores"
-      }
-    },
-    "title": "O modo de implantação atual não suporta pintura AI"
-  },
-  "topic": {
-    "createNew": "Criar novo tópico",
-    "deleteConfirm": "Excluir tópico gerado",
-    "deleteConfirmDesc": "Você está prestes a excluir este tópico gerado. Após a exclusão, não poderá ser recuperado. Por favor, proceda com cautela.",
-    "empty": "Nenhum tópico gerado",
-    "title": "Tema da pintura",
-    "untitled": "Tópico padrão"
-  }
+  "config.aspectRatio.label": "Proporção",
+  "config.aspectRatio.lock": "Bloquear Proporção",
+  "config.aspectRatio.unlock": "Desbloquear Proporção",
+  "config.cfg.label": "Intensidade da Orientação",
+  "config.header.desc": "Descrição breve, crie instantaneamente",
+  "config.header.title": "Pintura",
+  "config.height.label": "Altura",
+  "config.imageNum.label": "Número de Imagens",
+  "config.imageUrl.label": "Imagem de Referência",
+  "config.imageUrls.label": "Imagens de Referência",
+  "config.model.label": "Modelo",
+  "config.prompt.placeholder": "Descreva o que você deseja gerar",
+  "config.quality.label": "Qualidade da Imagem",
+  "config.quality.options.hd": "Alta Definição",
+  "config.quality.options.standard": "Padrão",
+  "config.resolution.label": "Resolução",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Semente",
+  "config.seed.random": "Semente Aleatória",
+  "config.size.label": "Tamanho",
+  "config.steps.label": "Etapas",
+  "config.title": "Imagem com IA",
+  "config.width.label": "Largura",
+  "generation.actions.applySeed": "Aplicar Semente",
+  "generation.actions.copyError": "Copiar Mensagem de Erro",
+  "generation.actions.copyPrompt": "Copiar Prompt",
+  "generation.actions.copySeed": "Copiar Semente",
+  "generation.actions.delete": "Excluir",
+  "generation.actions.deleteBatch": "Excluir em Lote",
+  "generation.actions.download": "Baixar",
+  "generation.actions.downloadFailed": "Falha ao baixar a imagem. Verifique sua conexão de rede ou a configuração CORS do armazenamento S3.",
+  "generation.actions.errorCopied": "Mensagem de erro copiada para a área de transferência",
+  "generation.actions.errorCopyFailed": "Falha ao copiar a mensagem de erro",
+  "generation.actions.generate": "Gerar",
+  "generation.actions.promptCopied": "Prompt copiado para a área de transferência",
+  "generation.actions.promptCopyFailed": "Falha ao copiar o prompt",
+  "generation.actions.reuseSettings": "Reutilizar Configurações",
+  "generation.actions.seedApplied": "Semente Aplicada à Configuração",
+  "generation.actions.seedApplyFailed": "Falha ao Aplicar a Semente",
+  "generation.actions.seedCopied": "Semente copiada para a área de transferência",
+  "generation.actions.seedCopyFailed": "Falha ao copiar a semente",
+  "generation.metadata.count": "{{count}} Imagens",
+  "generation.status.failed": "Falha na Geração",
+  "generation.status.generating": "Gerando...",
+  "notSupportGuide.desc": "O modo de implantação atual não suporta geração de imagens com IA. Mude para o <1>modo de implantação com banco de dados no servidor</1> ou utilize o <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Integração profunda com o sistema de gerenciamento de arquivos; imagens geradas são salvas automaticamente no sistema de arquivos para gerenciamento e organização unificados.",
+  "notSupportGuide.features.fileIntegration.title": "Integração com Sistema de Arquivos",
+  "notSupportGuide.features.llmAssisted.desc": "Combina capacidades de modelos de linguagem de grande porte para otimizar e expandir prompts de forma inteligente, melhorando a qualidade da geração de imagens (Em breve).",
+  "notSupportGuide.features.llmAssisted.title": "Geração de Imagens Assistida por LLM",
+  "notSupportGuide.features.multiProviders.desc": "Suporta múltiplos provedores de geração de imagens com IA, incluindo OpenAI gpt-image-1, Google Imagen, FAL.ai e outros, oferecendo uma ampla seleção de modelos.",
+  "notSupportGuide.features.multiProviders.title": "Suporte a Múltiplos Provedores",
+  "notSupportGuide.title": "O Modo de Implantação Atual Não Suporta Geração de Imagens com IA",
+  "topic.createNew": "Novo Tópico",
+  "topic.deleteConfirm": "Excluir Tópico de Geração",
+  "topic.deleteConfirmDesc": "Você está prestes a excluir este tópico de geração. Esta ação não pode ser desfeita, prossiga com cautela.",
+  "topic.empty": "Nenhum tópico de geração",
+  "topic.title": "Tema da Pintura",
+  "topic.untitled": "Tópico Padrão"
 }

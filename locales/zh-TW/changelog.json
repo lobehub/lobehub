@@ -1,16 +1,12 @@
 {
-  "actions": {
-    "followOnX": "在 X 上關注我們",
-    "subscribeToUpdates": "訂閱更新",
-    "versions": "版本詳情"
-  },
+  "actions.followOnX": "在 X 上關注我們",
+  "actions.subscribeToUpdates": "訂閱更新",
+  "actions.versions": "版本詳情",
   "addedWhileAway": "在您離開期間，我們帶來了新的特性。",
   "allChangelog": "查看所有更新日誌",
   "description": "持續追蹤 {{appName}} 的新功能和改進",
-  "pagination": {
-    "next": "下一頁",
-    "older": "查看歷史變更"
-  },
+  "pagination.next": "下一頁",
+  "pagination.older": "查看歷史變更",
   "readDetails": "閱讀詳情",
   "title": "更新日誌",
   "versionDetails": "版本詳情",

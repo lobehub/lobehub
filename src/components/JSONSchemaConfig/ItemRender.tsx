@@ -1,6 +1,6 @@
 import { Input, InputNumber, InputPassword, Select } from '@lobehub/ui';
 import { Slider, Switch } from 'antd';
-import { JSONSchema7Type } from 'json-schema';
+import { type JSONSchema7Type } from 'json-schema';
 import { memo } from 'react';
 
 interface JSONSchemaItemRenderProps {

@@ -9,7 +9,7 @@ const qiniuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      '推理速度大幅提升，位居开源模型之首，媲美顶尖闭源模型。采用负载均衡辅助策略和多标记预测训练，性能显著增强。',
+      'Greatly improved reasoning speed, leading open models and comparable to top closed models. Uses load-balancing strategies and multi-token prediction training for significant gains.',
     displayName: 'DeepSeek V3',
     enabled: true,
     id: 'deepseek-v3',
@@ -21,7 +21,7 @@ const qiniuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'DeepSeek R1 是 DeepSeek 团队发布的最新开源模型，具备非常强悍的推理性能，尤其在数学、编程和推理任务上达到了与 OpenAI 的 o1 模型相当的水平。',
+      "DeepSeek R1 is DeepSeek’s latest open model with very strong reasoning, matching OpenAI’s o1 on math, programming, and reasoning tasks.",
     displayName: 'DeepSeek R1',
     enabled: true,
     id: 'deepseek-r1',
@@ -34,7 +34,7 @@ const qiniuChatModels: AIChatModelCard[] = [
       search: true,
     },
     contextWindowTokens: 204_800,
-    description: '专为高效编码与 Agent 工作流而生',
+    description: 'Built for efficient coding and agent workflows.',
     displayName: 'MiniMax M2',
     enabled: true,
     id: 'minimax/minimax-m2',
@@ -58,7 +58,8 @@ const qiniuChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: '美团开源的专为对话交互和智能体任务优化的非思维型基础模型，在工具调用和复杂多轮交互场景中表现突出',
+    description:
+      'An open-source non-thinking base model from Meituan optimized for dialogue and agent tasks, strong in tool use and complex multi-turn interactions.',
     displayName: 'LongCat Flash Chat',
     enabled: true,
     id: 'meituan/longcat-flash-chat',
@@ -84,7 +85,8 @@ const qiniuChatModels: AIChatModelCard[] = [
       search: true,
     },
     contextWindowTokens: 200_000,
-    description: '智谱最新旗舰模型 GLM-4.6，在高级编码、长文本处理、推理与智能体能力上全面超越前代。',
+    description:
+      "Zhipu’s latest flagship GLM-4.6 surpasses the previous generation in advanced coding, long-text processing, reasoning, and agent capabilities.",
     displayName: 'GLM-4.6',
     enabled: true,
     id: 'z-ai/glm-4.6',
@@ -112,7 +114,7 @@ const qiniuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_000_000,
     description:
-      '我们很高兴发布 Grok 4 Fast，这是我们在成本效益推理模型方面的最新进展。',
+      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
     displayName: 'Grok 4 Fast',
     enabled: true,
     id: 'x-ai/grok-4-fast',
@@ -136,7 +138,7 @@ const qiniuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      '我们很高兴推出 grok-code-fast-1，这是一款快速且经济高效的推理模型，在代理编码方面表现出色。',
+      'We’re excited to launch grok-code-fast-1, a fast and cost-effective reasoning model that excels at agentic coding.',
     displayName: 'Grok Code Fast 1',
     id: 'x-ai/grok-code-fast-1',
     pricing: {

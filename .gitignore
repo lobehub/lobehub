@@ -24,7 +24,7 @@ Desktop.ini
 .windsurfrules
 *.code-workspace
 .vscode/sessions.json
-
+prd
 # Temporary files
 .temp/
 temp/
@@ -93,7 +93,6 @@ robots.txt
 .husky/prepare-commit-msg
 
 # Documents and media
-*.patch
 *.pdf
 
 # Cloud service keys
@@ -114,5 +113,6 @@ CLAUDE.local.md
 *.ppt*
 *.doc*
 *.xls*
-
 e2e/reports
+out
+i18n-unused-keys-report.json

@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "{{appName}}'in yeni özelliklerini ve iyileştirmelerini sürekli takip edin",
-    "title": "Güncelleme Geçmişi"
-  },
-  "chat": {
-    "description": "{{appName}} size en iyi ChatGPT, Claude, Gemini, OLLaMA WebUI deneyimini sunar",
-    "title": "{{appName}}: Kişisel AI verimlilik aracı, kendinize daha akıllı bir zihin verin"
-  },
-  "discover": {
-    "assistants": {
-      "description": "İçerik oluşturma, metin yazımı, soru-cevap, görsel oluşturma, video oluşturma, ses oluşturma, akıllı Ajan, otomatik iş akışları, size özel AI / GPTs / OLLaMA akıllı asistanınızı özelleştirin.",
-      "title": "Yapay Zeka Asistanları"
-    },
-    "description": "İçerik oluşturma, metin yazımı, soru-cevap, görsel oluşturma, video oluşturma, ses oluşturma, akıllı Ajan, otomatik iş akışları, özelleştirilmiş AI uygulamaları, size özel AI uygulama çalışma alanınızı oluşturun.",
-    "mcp": {
-      "description": "Binlerce MCP Sunucusunu arayın, karşılaştırın ve bağlanın; AI sistemlerinin dosya sistemleri, veritabanları, API'ler ve diğer önemli kaynaklara kolayca erişmesini sağlayarak AI yeteneklerinizi kapsamlı şekilde genişletin",
-      "title": "MCP Sunucuları Pazarı"
-    },
-    "models": {
-      "description": "Ana akım AI modellerini keşfedin: OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek.",
-      "title": "Yapay Zeka Modelleri"
-    },
-    "plugins": {
-      "description": "Grafik oluşturma, akademik, görüntü oluşturma, video oluşturma, ses oluşturma, otomatik iş akışları için asistanınıza zengin eklenti yetenekleri entegre edin.",
-      "title": "Yapay Zeka Eklentileri"
-    },
-    "providers": {
-      "description": "Ana akım model sağlayıcılarını keşfedin: OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter.",
-      "title": "Yapay Zeka Modeli Sağlayıcıları"
-    },
-    "search": "Ara",
-    "title": "Keşfet"
-  },
-  "image": {
-    "description": "{{appName}} size en iyi GPT Image, Flux, Midjourney, Stable Diffusion deneyimini sunar",
-    "title": "Yapay Zeka Resim"
-  },
-  "plugins": {
-    "description": "Arama, grafik oluşturma, akademik, görsel oluşturma, video oluşturma, ses oluşturma, otomatik iş akışları, ChatGPT / Claude için özel ToolCall eklenti yeteneklerini özelleştirin",
-    "title": "Eklenti Pazarı"
-  },
-  "welcome": {
-    "description": "{{appName}} size en iyi ChatGPT, Claude, Gemini, OLLaMA WebUI deneyimini sunar",
-    "title": "Hoş geldiniz {{appName}}: Kişisel AI verimlilik aracı, kendinize daha akıllı bir zihin verin"
-  }
+  "changelog.description": "{{appName}} uygulamasındaki yeni özellikler ve iyileştirmelerden haberdar olun",
+  "changelog.title": "Sürüm Notları",
+  "chat.description": "{{appName}}, ChatGPT, Claude, Gemini ve OLLaMA için en iyi kullanıcı arayüzü deneyimini sunar.",
+  "chat.title": "{{appName}} · İş Birlikçi Ajanlar İçin",
+  "discover.assistants.description": "İçerik, Soru-Cevap, görseller, video, ses, iş akışları—Topluluk'tan Ajanları keşfedin ve ekleyin.",
+  "discover.assistants.title": "Ajan Topluluğu",
+  "discover.description": "Ajanları, Yetenekleri, Sağlayıcıları, modelleri ve MCP Sunucularını keşfedin.",
+  "discover.mcp.description": "Dosya sistemlerine, veritabanlarına, API'lere ve diğer temel kaynaklara kolay erişim sağlayarak yapay zeka sistemlerinizi kapsamlı şekilde genişleten binlerce MCP Sunucusunu arayın, karşılaştırın ve bağlanın.",
+  "discover.mcp.title": "MCP Sunucuları Topluluğu",
+  "discover.models.description": "OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek gibi yaygın yapay zeka modellerini keşfedin",
+  "discover.models.title": "Model Topluluğu",
+  "discover.plugins.description": "Grafikler, akademik araçlar, görsel/video/ses üretimi ve iş akışları—Ajanlarınıza Yetenekler ekleyin.",
+  "discover.plugins.title": "Yetenek Topluluğu",
+  "discover.providers.description": "OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter gibi önde gelen model sağlayıcılarını keşfedin",
+  "discover.providers.title": "Sağlayıcı Topluluğu",
+  "discover.search": "Ara",
+  "discover.title": "Keşfet",
+  "image.description": "{{appName}}, GPT Image, Flux, Midjourney ve Stable Diffusion ile en iyi deneyimi sunar",
+  "image.title": "Yapay Zeka Sanatı",
+  "plugins.description": "Arama, grafikler, akademik araçlar, görsel/video/ses üretimi, iş akışları—Ajanlarınıza Yetenekler ekleyin.",
+  "plugins.title": "Yetenek Topluluğu",
+  "welcome.description": "{{appName}}, ChatGPT, Claude, Gemini ve OLLaMA için en iyi kullanıcı arayüzü deneyimini sunar.",
+  "welcome.title": "{{appName}}'e Hoş Geldiniz · İş Birlikçi Ajanlar İçin"
 }

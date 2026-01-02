@@ -1,0 +1,55 @@
+name: Verify Desktop Patch
+
+on:
+  push:
+    branches:
+      - main
+      - next
+      - dev
+    paths:
+      - 'scripts/electronWorkflow/**'
+      - 'src/libs/next/config/**'
+      - 'src/app/**'
+      - 'src/layout/**'
+      - 'src/components/mdx/**'
+      - 'src/features/DevPanel/**'
+      - 'src/server/translation.ts'
+  pull_request:
+    paths:
+      - 'scripts/electronWorkflow/**'
+      - 'src/libs/next/config/**'
+      - 'src/app/**'
+      - 'src/layout/**'
+      - 'src/components/mdx/**'
+      - 'src/features/DevPanel/**'
+      - 'src/server/translation.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.11.1
+  BUN_VERSION: 1.2.23
+
+jobs:
+  verify:
+    name: Desktop patch smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node & Bun
+        uses: ./.github/actions/setup-node-bun
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install deps
+        run: bun i
+
+      - name: Verify desktop patch
+        run: bun scripts/electronWorkflow/modifiers/index.mts

@@ -56,6 +56,8 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
     }),
 
     // AI chat methods
+    internal_dispatchMessage: vi.fn(),
+
     internal_fetchAIChatMessage: vi.fn().mockResolvedValue(undefined),
 
     internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({ error: null }),

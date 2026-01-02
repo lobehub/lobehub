@@ -1,7 +1,8 @@
-import { CSSProperties, ReactNode, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox } from '@lobehub/ui';
+import { cx } from 'antd-style';
+import { type CSSProperties, type ReactNode, memo, useMemo } from 'react';
 
-import { MAX_SIZE_DESKTOP, MIN_IMAGE_SIZE, useStyles } from './style';
+import { MAX_SIZE_DESKTOP, MIN_IMAGE_SIZE, styles } from './style';
 
 interface GridProps {
   children: ReactNode;
@@ -23,10 +24,26 @@ const Grid = memo<GridProps>(
     className,
     style,
   }) => {
-    const { styles, cx } = useStyles({ col, gap, max, min });
+    const cssVariables = useMemo<Record<string, string>>(
+      () => ({
+        '--galley-grid-col': `${col}`,
+        '--galley-grid-gap': `${gap}px`,
+        '--galley-grid-max': `${max}px`,
+        '--galley-grid-min': `${min}px`,
+      }),
+      [col, gap, max, min],
+    );
 
     return (
-      <Flexbox className={cx(styles.container, className)} gap={gap} horizontal style={style}>
+      <Flexbox
+        className={cx(styles.container, className)}
+        gap={gap}
+        horizontal
+        style={{
+          ...cssVariables,
+          ...style,
+        }}
+      >
         {children}
       </Flexbox>
     );

@@ -1,695 +1,483 @@
 {
-  "assistants": {
-    "addAgent": "アシスタントを追加",
-    "addAgentAndConverse": "アシスタントを追加して会話する",
-    "addAgentSuccess": "追加成功",
-    "conversation": {
-      "l1": "こんにちは、私は **{{name}}** です。何でも質問してください、できる限りお答えします ~",
-      "l2": "以下は私の能力の紹介です: ",
-      "l3": "さあ、会話を始めましょう！"
-    },
-    "description": "アシスタントの紹介",
-    "detail": "詳細",
-    "details": {
-      "capabilities": {
-        "knowledge": {
-          "desc": "アシスタントには以下のナレッジベースが組み込まれており、より多くの質問に答えるのに役立ちます。",
-          "title": "ナレッジベース"
-        },
-        "plugin": {
-          "desc": "アシスタントには以下のプラグインが組み込まれており、より多くのタスクを完了するのに役立ちます。",
-          "title": "組み込みプラグイン"
-        },
-        "title": "アシスタントの能力"
-      },
-      "overview": {
-        "example": "アシスタントのデモ",
-        "title": "概要"
-      },
-      "related": {
-        "listTitle": "関連アシスタント",
-        "more": "もっと見る",
-        "title": "関連情報"
-      },
-      "sidebar": {
-        "toc": "目次"
-      },
-      "summary": {
-        "title": "このアシスタントでできること"
-      },
-      "systemRole": {
-        "openingMessage": "開始メッセージ",
-        "openingQuestions": "開始時の質問",
-        "title": "アシスタント設定"
-      },
-      "version": {
-        "empty": "履歴バージョンはありません",
-        "status": {
-          "archived": "アーカイブ済み",
-          "deprecated": "却下されました",
-          "unpublished": "審査中"
-        },
-        "table": {
-          "isLatest": "最新バージョン",
-          "isValidated": "検証済み",
-          "publishAt": "公開日",
-          "version": "バージョン番号"
-        },
-        "title": "バージョン履歴"
-      }
-    },
-    "list": "アシスタントリスト",
-    "marketSource": {
-      "label": "マーケットソースを切り替える",
-      "legacy": "旧マーケット",
-      "new": "新マーケット"
-    },
-    "more": "もっと見る",
-    "plugins": "プラグインを統合",
-    "recentSubmits": "最近の更新",
-    "sorts": {
-      "createdAt": "最新公開",
-      "identifier": "アシスタントID",
-      "knowledgeCount": "ナレッジベース数",
-      "myown": "自分のアシスタントを見る",
-      "pluginCount": "プラグイン数",
-      "title": "アシスタント名",
-      "tokenUsage": "トークン使用量"
-    },
-    "status": {
-      "archived": {
-        "reasons": {
-          "official": "アシスタントに安全性や政治的な問題があり、公式により削除されました",
-          "owner": "アシスタントの開発者が自ら削除またはアーカイブしました"
-        },
-        "subtitle": "現在アクセスしているアシスタントは、以下の理由によりアーカイブされています：",
-        "title": "アシスタントはアーカイブされました"
-      },
-      "backToMarket": "アシスタントマーケットに戻る",
-      "deprecated": {
-        "reasons": {
-          "official": "アシスタントに安全性や政治的な問題があり、公式により削除されました",
-          "owner": "アシスタントの開発者が自ら削除または却下しました"
-        },
-        "subtitle": "現在アクセスしているアシスタントは、以下の理由により却下されています：",
-        "title": "アシスタントは却下されました"
-      },
-      "support": "ご不明な点がある場合は、リンクをコピーして <1>support@lobehub.com</1> までお問い合わせください。",
-      "unpublished": {
-        "subtitle": "現在アクセスしているアシスタントはバージョン審査中です。ご質問がある場合は、リンクをコピーして <1>support@lobehub.com</1> までお問い合わせください。",
-        "title": "アシスタントは審査中です"
-      }
-    },
-    "suggestions": "関連情報",
-    "systemRole": "アシスタント設定",
-    "tokenUsage": "アシスタントプロンプトのトークン使用量",
-    "try": "試してみる",
-    "withKnowledge": "このアシスタントにはナレッジベースが付属しています",
-    "withPlugin": "このアシスタントにはプラグインが付属しています"
-  },
+  "assistant.favorite": "お気に入りに追加",
+  "assistant.favoriteFailed": "お気に入りへの追加に失敗しました",
+  "assistant.favoriteSuccess": "お気に入りに追加しました",
+  "assistant.like": "いいね",
+  "assistant.likeFailed": "いいねに失敗しました",
+  "assistant.likeSuccess": "いいねしました",
+  "assistant.unfavorite": "お気に入りから削除",
+  "assistant.unfavoriteFailed": "お気に入りからの削除に失敗しました",
+  "assistant.unfavoriteSuccess": "お気に入りから削除しました",
+  "assistant.unlike": "いいねを取り消す",
+  "assistant.unlikeSuccess": "いいねを取り消しました",
+  "assistants.addAgent": "アシスタントを追加",
+  "assistants.addAgentAndConverse": "アシスタントを追加して会話する",
+  "assistants.addAgentSuccess": "追加成功",
+  "assistants.conversation.l1": "こんにちは、私は **{{name}}** です。何でも質問してください、できる限りお答えします ~",
+  "assistants.conversation.l2": "以下は私の能力の紹介です: ",
+  "assistants.conversation.l3": "さあ、会話を始めましょう！",
+  "assistants.description": "アシスタントの紹介",
+  "assistants.detail": "詳細",
+  "assistants.details.capabilities.knowledge.desc": "アシスタントには以下のリソースライブラリが組み込まれており、より多くの質問に答えることができます。",
+  "assistants.details.capabilities.knowledge.title": "リソースライブラリ",
+  "assistants.details.capabilities.plugin.desc": "アシスタントには以下のプラグインが組み込まれており、より多くのタスクを完了するのに役立ちます。",
+  "assistants.details.capabilities.plugin.title": "組み込みプラグイン",
+  "assistants.details.capabilities.title": "アシスタントの能力",
+  "assistants.details.overview.example": "アシスタントのデモ",
+  "assistants.details.overview.title": "概要",
+  "assistants.details.related.listTitle": "関連アシスタント",
+  "assistants.details.related.more": "もっと見る",
+  "assistants.details.related.title": "類似のエージェント",
+  "assistants.details.sidebar.toc": "目次",
+  "assistants.details.summary.title": "このアシスタントでできること",
+  "assistants.details.systemRole.openingMessage": "開始メッセージ",
+  "assistants.details.systemRole.openingQuestions": "開始時の質問",
+  "assistants.details.systemRole.title": "エージェントプロフィール",
+  "assistants.details.version.empty": "履歴バージョンはありません",
+  "assistants.details.version.status.archived": "アーカイブ済み",
+  "assistants.details.version.status.deprecated": "却下されました",
+  "assistants.details.version.status.unpublished": "審査中",
+  "assistants.details.version.table.isLatest": "最新バージョン",
+  "assistants.details.version.table.isValidated": "検証済み",
+  "assistants.details.version.table.publishAt": "公開日",
+  "assistants.details.version.table.version": "バージョン番号",
+  "assistants.details.version.title": "バージョン履歴",
+  "assistants.downloads": "ダウンロード数",
+  "assistants.duplicateAdd.content": "「{{title}}」アシスタントはすでに追加されています。再度追加しますか？",
+  "assistants.duplicateAdd.ok": "追加を確認",
+  "assistants.duplicateAdd.title": "重複追加の確認",
+  "assistants.empty.description": "フィルター条件を調整するか、コミュニティを訪れてさらに多くのアシスタントを見つけてください",
+  "assistants.empty.search": "一致するアシスタントが見つかりませんでした",
+  "assistants.empty.title": "アシスタントがありません",
+  "assistants.list": "アシスタントリスト",
+  "assistants.marketSource.label": "コミュニティソースを切り替える",
+  "assistants.marketSource.legacy": "旧コミュニティ",
+  "assistants.marketSource.new": "新コミュニティ",
+  "assistants.more": "もっと見る",
+  "assistants.plugins": "プラグインを統合",
+  "assistants.recentSubmits": "最近の更新",
+  "assistants.sorts.createdAt": "最新公開",
+  "assistants.sorts.identifier": "アシスタントID",
+  "assistants.sorts.knowledgeCount": "リソースライブラリの数",
+  "assistants.sorts.myown": "自分のアシスタントを見る",
+  "assistants.sorts.pluginCount": "プラグイン数",
+  "assistants.sorts.title": "アシスタント名",
+  "assistants.sorts.tokenUsage": "トークン使用量",
+  "assistants.status.archived.reasons.official": "アシスタントに安全性や政治的な問題があり、公式により削除されました",
+  "assistants.status.archived.reasons.owner": "アシスタントの開発者が自ら削除またはアーカイブしました",
+  "assistants.status.archived.subtitle": "現在アクセスしているアシスタントは、以下の理由によりアーカイブされています：",
+  "assistants.status.archived.title": "アシスタントはアーカイブされました",
+  "assistants.status.backToMarket": "アシスタントコミュニティに戻る",
+  "assistants.status.deprecated.reasons.official": "アシスタントに安全性や政治的な問題があり、公式により削除されました",
+  "assistants.status.deprecated.reasons.owner": "アシスタントの開発者が自ら削除または却下しました",
+  "assistants.status.deprecated.subtitle": "現在アクセスしているアシスタントは、以下の理由により却下されています：",
+  "assistants.status.deprecated.title": "アシスタントは却下されました",
+  "assistants.status.support": "ご不明な点がございましたら、リンクをコピーして <email>support@lobehub.com</email> までお問い合わせください。",
+  "assistants.status.unpublished.subtitle": "現在アクセスしているアシスタントはバージョン審査中です。ご質問がある場合は、リンクをコピーして <email>support@lobehub.com</email> までお問い合わせください。",
+  "assistants.status.unpublished.title": "アシスタントは審査中です",
+  "assistants.suggestions": "類似のエージェント",
+  "assistants.systemRole": "エージェントプロフィール",
+  "assistants.tokenUsage": "アシスタントプロンプトのトークン使用量",
+  "assistants.try": "試してみる",
+  "assistants.withKnowledge": "このアシスタントにはリソースライブラリが付属しています",
+  "assistants.withPlugin": "このアシスタントにはプラグインが付属しています",
   "back": "戻る",
-  "category": {
-    "assistant": {
-      "academic": "学術",
-      "all": "すべて",
-      "career": "キャリア",
-      "copywriting": "コピーライティング",
-      "design": "デザイン",
-      "education": "教育",
-      "emotions": "感情",
-      "entertainment": "エンターテイメント",
-      "games": "ゲーム",
-      "general": "一般",
-      "life": "生活",
-      "marketing": "マーケティング",
-      "office": "オフィス",
-      "programming": "プログラミング",
-      "translation": "翻訳"
-    },
-    "plugin": {
-      "all": "すべて",
-      "gaming-entertainment": "ゲーム・エンターテイメント",
-      "life-style": "ライフスタイル",
-      "lifestyle": "ライフスタイル",
-      "media-generate": "メディア生成",
-      "science-education": "科学・教育",
-      "social": "ソーシャルメディア",
-      "stocks-finance": "株式・金融",
-      "tools": "実用ツール",
-      "web-search": "ウェブ検索"
-    }
-  },
+  "category.assistant.academic": "学術",
+  "category.assistant.all": "すべて",
+  "category.assistant.career": "キャリア",
+  "category.assistant.copywriting": "コピーライティング",
+  "category.assistant.design": "デザイン",
+  "category.assistant.education": "教育",
+  "category.assistant.emotions": "感情",
+  "category.assistant.entertainment": "エンターテイメント",
+  "category.assistant.games": "ゲーム",
+  "category.assistant.general": "一般",
+  "category.assistant.life": "生活",
+  "category.assistant.marketing": "マーケティング",
+  "category.assistant.office": "オフィス",
+  "category.assistant.programming": "プログラミング",
+  "category.assistant.translation": "翻訳",
+  "category.plugin.all": "すべて",
+  "category.plugin.gaming-entertainment": "ゲーム・エンターテイメント",
+  "category.plugin.life-style": "ライフスタイル",
+  "category.plugin.lifestyle": "ライフスタイル",
+  "category.plugin.media-generate": "メディア生成",
+  "category.plugin.science-education": "科学・教育",
+  "category.plugin.social": "ソーシャルメディア",
+  "category.plugin.stocks-finance": "株式・金融",
+  "category.plugin.tools": "実用ツール",
+  "category.plugin.web-search": "ウェブ検索",
   "cleanFilter": "フィルターをクリア",
   "create": "作成",
-  "createGuide": {
-    "func1": {
-      "desc1": "会話ウィンドウの右上隅の設定から、アシスタントを提出したい設定ページに入ります;",
-      "desc2": "右上隅のアシスタントマーケットに提出ボタンをクリックします。",
-      "tag": "方法1",
-      "title": "LobeChatを通じて提出"
-    },
-    "func2": {
-      "button": "Githubアシスタントリポジトリに移動",
-      "desc": "アシスタントをインデックスに追加したい場合は、pluginsディレクトリにagent-template.jsonまたはagent-template-full.jsonを使用してエントリを作成し、簡単な説明を書いて適切にタグ付けし、プルリクエストを作成してください。",
-      "tag": "方法2",
-      "title": "Githubを通じて提出"
-    }
-  },
+  "createGuide.func1.desc1": "会話ウィンドウの右上隅の設定から、アシスタントを提出したい設定ページに入ります;",
+  "createGuide.func1.desc2": "右上の「アシスタントコミュニティに投稿」ボタンをクリックしてください。",
+  "createGuide.func1.tag": "方法1",
+  "createGuide.func1.title": "LobeChatを通じて提出",
+  "createGuide.func2.button": "Githubアシスタントリポジトリに移動",
+  "createGuide.func2.desc": "アシスタントをインデックスに追加したい場合は、スキルsディレクトリにagent-template.jsonまたはagent-template-full.jsonを使用してエントリを作成し、簡単な説明を書いて適切にタグ付けし、プルリクエストを作成してください。",
+  "createGuide.func2.tag": "方法2",
+  "createGuide.func2.title": "Githubを通じて提出",
   "dislike": "嫌い",
   "filter": "フィルター",
-  "filterBy": {
-    "authorRange": {
-      "everyone": "すべての著者",
-      "followed": "フォローしている著者",
-      "title": "著者範囲"
-    },
-    "contentLength": "最小コンテキスト長",
-    "maxToken": {
-      "title": "最大長さを設定 (トークン)",
-      "unlimited": "無制限"
-    },
-    "other": {
-      "functionCall": "関数呼び出しをサポート",
-      "title": "その他",
-      "vision": "視覚認識をサポート",
-      "withKnowledge": "知識ベース付き",
-      "withTool": "プラグイン付き"
-    },
-    "pricing": "モデル価格",
-    "timePeriod": {
-      "all": "すべての時間",
-      "day": "過去24時間",
-      "month": "過去30日",
-      "title": "時間範囲",
-      "week": "過去7日",
-      "year": "過去1年"
-    }
-  },
-  "home": {
-    "featuredAssistants": "おすすめアシスタント",
-    "featuredModels": "おすすめモデル",
-    "featuredProviders": "おすすめモデルサービスプロバイダー",
-    "featuredTools": "おすすめプラグイン",
-    "more": "もっと発見する"
-  },
+  "filterBy.authorRange.everyone": "すべての著者",
+  "filterBy.authorRange.followed": "フォローしている著者",
+  "filterBy.authorRange.title": "著者範囲",
+  "filterBy.contentLength": "最小コンテキスト長",
+  "filterBy.maxToken.title": "最大長さを設定 (トークン)",
+  "filterBy.maxToken.unlimited": "無制限",
+  "filterBy.other.functionCall": "関数呼び出しをサポート",
+  "filterBy.other.title": "その他",
+  "filterBy.other.vision": "視覚認識をサポート",
+  "filterBy.other.withKnowledge": "リソースライブラリ付き",
+  "filterBy.other.withTool": "プラグイン付き",
+  "filterBy.pricing": "モデル価格",
+  "filterBy.timePeriod.all": "すべての時間",
+  "filterBy.timePeriod.day": "過去24時間",
+  "filterBy.timePeriod.month": "過去30日",
+  "filterBy.timePeriod.title": "時間範囲",
+  "filterBy.timePeriod.week": "過去7日",
+  "filterBy.timePeriod.year": "過去1年",
+  "footer.desc": "世界中のAIユーザーと共に進化しましょう。クリエイターとして、あなたのエージェントやスキルをLobeHubコミュニティに投稿しましょう。",
+  "footer.title": "あなたの作品をLobeHubコミュニティで共有しよう",
+  "home.communityAgents": "コミュニティアシスタント",
+  "home.featuredAssistants": "おすすめアシスタント",
+  "home.featuredModels": "おすすめモデル",
+  "home.featuredPlugins": "おすすめプラグイン",
+  "home.featuredProviders": "おすすめモデルサービスプロバイダー",
+  "home.featuredTools": "おすすめプラグイン",
+  "home.more": "もっと発見する",
   "isClaimed": "認領済み",
   "isFeatured": "おすすめ",
   "isOfficial": "公式認証",
   "like": "好き",
-  "mcp": {
-    "categories": {
-      "all": {
-        "description": "すべてのMCPサーバー",
-        "name": "すべて"
-      },
-      "business": {
-        "description": "ビジネスおよび企業向けサービス",
-        "name": "ビジネスサービス"
-      },
-      "developer": {
-        "description": "開発関連のツールとサービス",
-        "name": "開発ツール"
-      },
-      "gaming-entertainment": {
-        "description": "ゲーム、エンターテインメント、レジャー活動",
-        "name": "ゲーム・エンタメ"
-      },
-      "health-wellness": {
-        "description": "健康、フィットネス、メンタルケア",
-        "name": "健康・ウェルネス"
-      },
-      "lifestyle": {
-        "description": "個人のライフスタイル、習慣、日常活動",
-        "name": "ライフスタイル"
-      },
-      "media-generate": {
-        "description": "メディアの生成、編集、処理",
-        "name": "メディア生成"
-      },
-      "news": {
-        "description": "ニュース集約、報道、情報サービス",
-        "name": "ニュース・情報"
-      },
-      "productivity": {
-        "description": "タスク管理、ノート、効率化ツール",
-        "name": "生産性ツール"
-      },
-      "science-education": {
-        "description": "科学研究、学習、教育ツール",
-        "name": "科学・教育"
-      },
-      "social": {
-        "description": "ソーシャルネットワークとコミュニケーション",
-        "name": "ソーシャルメディア"
-      },
-      "stocks-finance": {
-        "description": "金融市場、取引、投資",
-        "name": "株式・金融"
-      },
-      "tools": {
-        "description": "汎用実用ツールとサービス",
-        "name": "実用ツール"
-      },
-      "travel-transport": {
-        "description": "旅行計画と交通手段",
-        "name": "旅行・交通"
-      },
-      "weather": {
-        "description": "天気予報と気象サービス",
-        "name": "気象・天気"
-      },
-      "web-search": {
-        "description": "ウェブ検索と情報検索",
-        "name": "情報検索"
-      }
-    },
-    "details": {
-      "connectionType": {
-        "hybrid": {
-          "desc": "このサービスは設定や使用シーンに応じて、ローカルまたはクラウドで動作可能なハイブリッド型サービスです。",
-          "title": "ハイブリッドサービス"
-        },
-        "local": {
-          "desc": "このサーバーはクライアントのローカルデバイス上でのみ動作し、インストールとローカルリソースへの依存が必要です。",
-          "title": "ローカルサービス"
-        },
-        "remote": {
-          "desc": "このサーバーはリモートでホストされており、主にリモートサービスに依存し、ローカル環境には依存しません。",
-          "title": "クラウドサービス"
-        }
-      },
-      "deployment": {
-        "args": "引数",
-        "checkCommand": "確認コマンド",
-        "command": "コマンド",
-        "commandLine": "システム依存",
-        "connection": "接続方式",
-        "connectionType": "接続タイプ",
-        "description": "プラグインのインストールおよび展開方法",
-        "descriptionPlaceholder": "任意の説明",
-        "empty": "展開オプションなし",
-        "env": "環境変数",
-        "guide": "インストールガイド",
-        "installation": "{{method}} によるインストール",
-        "installationMethod": "インストール方法",
-        "other": "その他の設定",
-        "packageName": "パッケージ名",
-        "platform": {
-          "steps": {
-            "claude": "- **Claude Desktop** アプリを開く\n- **設定** に移動し、**開発者** を選択\n- **設定編集** をクリック\n- **claude_desktop_config.json** ファイルを開く\n- サーバー設定を既存ファイルにコピー＆ペーストし保存",
-            "cline": "- Cline拡張がインストールされたVS Codeを開く\n- サイドバーのClineアイコンをクリック\n- ドロップダウンメニューから **MCP Servers** を選択\n- **Remote Servers** タブでサーバー名とMCPサーバーURLを入力\n- **Add Server** をクリックして接続",
-            "cursor": "- **設定** に移動し、Cursor設定を選択\n- 左側で **MCP** を選択\n- 右上の **新しいグローバルMCPサーバーを追加** をクリック\n- サーバー設定を既存ファイルにコピー＆ペーストし保存",
-            "lobeChat": "- **LobeChat デスクトップ版** アプリを開く\n- **設定** - **デフォルトアシスタント** に移動\n- **プラグイン設定** - **カスタムプラグイン** を選択\n- **JSON設定のクイックインポート** をクリック\n- サーバー設定をテキストボックスにコピー＆ペーストしインストール",
-            "openai": "- **OpenAIアプリ** または開発環境を開く\n- **Responses API** にてMCPツールを設定\n- APIリクエストの **tools** 配列にMCPブロックを追加\n- **server_url** をMCPサーバーのエンドポイントに設定\n- 認証に必要なヘッダー情報（APIキー、トークン等）を含める\n- `allowed_tools` パラメータで公開ツールを制限\n- `require_approval` でツール実行の承認を制御",
-            "vscode": "- VS Codeを開く\n- コマンドパレット（`Ctrl+Shift+P` / `Cmd+Shift+P`）を開く\n- **MCP: Add Server** と入力して選択\n- ワークスペースまたはユーザー設定に追加を選択\n- サーバー設定をコピー＆ペースト"
-          },
-          "title": "{{platform}} にインストール"
-        },
-        "recommended": "おすすめ",
-        "systemDependencies": "システム依存関係",
-        "table": {
-          "description": "説明",
-          "name": "名前",
-          "required": "必須",
-          "type": "タイプ"
-        },
-        "title": "{{platform}}でのインストール"
-      },
-      "githubBadge": {
-        "desc": "LobeHub は定期的にリポジトリとドキュメントをスキャンし、以下を行います：\n\n- MCP サーバーが正常に稼働していることを確認します。\n- ツール、リソース、プロンプト情報、必要なパラメータなどのサーバー機能を抽出します。\n- バッジはユーザーが MCP サーバーの安全性、機能特性、インストールガイドを迅速に評価するのに役立ちます。\n\n以下のコードをあなたの `README.md` ファイルにコピーしてください："
-      },
-      "nav": {
-        "needHelp": "ヘルプが必要ですか？",
-        "reportIssue": "問題を報告する",
-        "viewSourceCode": "ソースコードを見る"
-      },
-      "overview": {
-        "title": "概要"
-      },
-      "related": {
-        "listTitle": "関連 MCP サーバー",
-        "more": "もっと見る",
-        "title": "関連おすすめ"
-      },
-      "schema": {
-        "mode": {
-          "docs": "ドキュメント"
-        },
-        "prompts": {
-          "arguments": "パラメータ設定",
-          "desc": "ユーザーが選択してトリガーするインタラクティブテンプレート",
-          "empty": "プロンプトなし",
-          "instructions": "指示説明",
-          "table": {
-            "description": "説明",
-            "name": "名前",
-            "required": "必須"
-          },
-          "title": "プロンプト一覧"
-        },
-        "resources": {
-          "desc": "クライアントによって追加・管理されるコンテキストデータ",
-          "empty": "リソースなし",
-          "table": {
-            "description": "説明",
-            "mineType": "MIME タイプ",
-            "name": "名前",
-            "uri": "URI"
-          },
-          "title": "リソース一覧"
-        },
-        "title": "プラグイン機能",
-        "tools": {
-          "desc": "大規模言語モデル（LLM）に公開される操作用機能インターフェース",
-          "empty": "ツールなし",
-          "inputSchema": "入力説明",
-          "instructions": "指示説明",
-          "table": {
-            "description": "説明",
-            "name": "名前",
-            "required": "必須",
-            "type": "タイプ"
-          },
-          "title": "ツール一覧"
-        }
-      },
-      "score": {
-        "claimed": {
-          "desc": "この MCP サーバーは所有者により認領されており、所有権と管理が保証されています。",
-          "title": "所有者により認領済み"
-        },
-        "deployMoreThanManual": {
-          "desc": "この MCP サーバーは Manual 以外のより使いやすいインストール方法を提供し、ユーザーが簡単に展開・利用できます。",
-          "title": "使いやすいインストール方法を提供"
-        },
-        "deployment": {
-          "desc": "この MCP サーバーは少なくとも一つのインストール方法を提供し、ユーザーが展開・利用できます。",
-          "descWithCount": "この MCP サーバーは {{number}} 種類のインストール方法を提供し、ユーザーが展開・利用できます。",
-          "title": "少なくとも一つのインストール方法を提供"
-        },
-        "license": {
-          "desc": "このリポジトリには LICENSE ファイルが含まれています。",
-          "descWithlicense": "このリポジトリのライセンスは {{license}} です。",
-          "title": "LICENSE あり"
-        },
-        "listTitle": "評価詳細",
-        "notClaimed": {
-          "desc": "もしあなたがこの MCP サーバーの所有者であれば、以下の方法で認領できます。",
-          "title": "所有者により未認領"
-        },
-        "prompts": {
-          "desc": "この MCP サーバーはプロンプトを提供し、ユーザーがサービスと対話できます。",
-          "descWithCount": "この MCP サーバーは {{number}} 個のプロンプトを提供し、ユーザーがサービスと対話できます。",
-          "title": "プロンプトを含む"
-        },
-        "readme": {
-          "desc": "このリポジトリには README.md ファイルが含まれています。",
-          "title": "README あり"
-        },
-        "resources": {
-          "desc": "この MCP サーバーはリソースを提供し、ユーザーがコンテキストデータを追加・管理できます。",
-          "descWithCount": "この MCP サーバーは {{number}} 個のリソースを提供し、ユーザーがコンテキストデータを追加・管理できます。",
-          "title": "リソースを含む"
-        },
-        "title": "評価",
-        "tools": {
-          "desc": "サービスは少なくとも一つのツールを提供し、ユーザーが特定の操作を実行できます。",
-          "descWithCount": "この MCP サーバーは {{number}} 個のツール機能を提供し、ユーザーが特定の操作を実行できます。",
-          "title": "少なくとも一つのツールを含む"
-        },
-        "validated": {
-          "desc": "この MCP サーバーはインストール検証を通過しており、その品質と信頼性が保証されています。",
-          "title": "検証済み"
-        }
-      },
-      "scoreLevel": {
-        "a": {
-          "desc": "この MCP サーバーは厳格に検証され、包括的な機能と高品質なユーザー体験を提供します。",
-          "fullTitle": "優秀なプラグイン",
-          "title": "優良"
-        },
-        "b": {
-          "desc": "この MCP サーバーは良好な機能とユーザー体験を提供しますが、一部改善の余地があります。",
-          "fullTitle": "良好な機能",
-          "title": "良好"
-        },
-        "f": {
-          "desc": "この MCP サーバーは機能が不完全か品質が低いため、利用には注意が必要です。",
-          "fullTitle": "品質不良",
-          "title": "不良"
-        }
-      },
-      "settings": {
-        "capabilities": {
-          "prompts": "プロンプト",
-          "resources": "リソース",
-          "title": "プラグイン能力",
-          "tools": "ツール"
-        },
-        "configuration": {
-          "title": "プラグイン設定"
-        },
-        "connection": {
-          "args": "起動パラメータ",
-          "command": "起動コマンド",
-          "title": "接続情報",
-          "type": "接続タイプ",
-          "url": "サービスアドレス"
-        },
-        "saveSettings": "設定を保存",
-        "title": "プラグイン設定"
-      },
-      "sidebar": {
-        "install": "MCP サーバーをインストール",
-        "meta": {
-          "homepage": "公式ホームページ",
-          "installCount": "インストール数",
-          "language": "ソースコード言語",
-          "license": "ライセンス",
-          "published": "公開日時",
-          "repo": "ソースコードリポジトリ",
-          "stars": "スター数",
-          "title": "詳細情報",
-          "updated": "最終更新"
-        },
-        "moreServerConfig": "詳細を見る",
-        "recommendServers": "関連 MCP",
-        "serverConfig": "インストール設定",
-        "toc": "目次"
-      },
-      "summary": {
-        "title": "この MCP サーバーで何ができるか？"
-      },
-      "totalScore": {
-        "description": "各指標を総合的に計算した合計スコア",
-        "legend": {
-          "aGrade": "A級 ({{minPercent}}-100%)",
-          "bGrade": "B級 ({{minPercent}}-{{maxPercent}}%)",
-          "fGrade": "F級 (0-{{maxPercent}}%)"
-        },
-        "pointsFormat": "{{score}}/{{total}} 点",
-        "popover": {
-          "completedOptional": "✅ 任意項目完了 ({{count}} 件)",
-          "completedRequired": "✅ 必須項目完了 ({{count}} 件)",
-          "incompleteOptional": "⏸️ 任意項目未完了 ({{count}} 件)",
-          "incompleteRequired": "❌ 必須項目未完了 ({{count}} 件)",
-          "title": "評価詳細"
-        },
-        "ratingFormat": "評価: {{level}}",
-        "scoreInfo": {
-          "items": "項目",
-          "points": "点数",
-          "requiredItems": "必須項目"
-        },
-        "title": "合計スコア"
-      },
-      "versions": {
-        "table": {
-          "isLatest": "最新バージョン",
-          "isValidated": "検証済み",
-          "publishAt": "公開日時",
-          "version": "バージョン"
-        },
-        "title": "バージョン履歴"
-      }
-    },
-    "hero": {
-      "desc": "オープンソースでデプロイ可能な MCP サーバープラットフォーム。AI システムがファイルシステム、データベース、API などの重要リソースに簡単にアクセスでき、AI の能力を全面的に拡張します。",
-      "subTitle": "オープンソース & すぐ使える",
-      "title": "AI 向けオープンソース MCP マーケット"
-    },
-    "sorts": {
-      "createdAt": "最近追加",
-      "installCount": "インストール数",
-      "isFeatured": "おすすめプラグイン",
-      "isValidated": "検証済みプラグイン",
-      "promptsCount": "プロンプト数",
-      "ratingCount": "評価数",
-      "resourcesCount": "リソース数",
-      "toolsCount": "ツール数",
-      "updatedAt": "最近更新"
-    },
-    "title": "MCP マーケット",
-    "unvalidated": {
-      "desc": "この MCP サーバーはまだ検証されていません",
-      "title": "未検証"
-    },
-    "validated": {
-      "desc": "この MCP サーバーは検証済みで、その品質と信頼性が保証されています。",
-      "descWithDate": "この MCP サーバーは {{date}} に検証され、その品質と信頼性が保証されています。",
-      "title": "検証済み"
-    }
-  },
-  "models": {
-    "abilities": "モデル能力",
-    "chat": "会話を始める",
-    "contentLength": "最大コンテキスト長",
-    "details": {
-      "overview": {
-        "title": "概要"
-      },
-      "related": {
-        "listTitle": "関連モデル",
-        "more": "もっと見る",
-        "title": "関連おすすめ"
-      }
-    },
-    "free": "無料",
-    "guide": "設定ガイド",
-    "list": "モデルリスト",
-    "more": "もっと見る",
-    "parameterList": {
-      "defaultValue": "デフォルト値",
-      "docs": "ドキュメントを見る",
-      "frequency_penalty": {
-        "desc": "この設定は、モデルが入力中に既に出現した特定の語彙の使用頻度を調整します。高い値はそのような繰り返しの可能性を低下させ、負の値は逆の効果を生み出します。語彙の罰則は出現回数に応じて増加しません。負の値は語彙の繰り返し使用を奨励します。",
-        "title": "頻度ペナルティ"
-      },
-      "max_tokens": {
-        "desc": "この設定は、モデルが一度の応答で生成できる最大の長さを定義します。値を高く設定すると、モデルはより長い応答を生成でき、値を低く設定すると、応答の長さが制限され、より簡潔になります。異なるアプリケーションシーンに応じて、この値を適切に調整することで、期待される応答の長さと詳細度を達成するのに役立ちます。",
-        "title": "一度の応答制限"
-      },
-      "presence_penalty": {
-        "desc": "この設定は、語彙が入力中に出現する頻度に基づいて語彙の繰り返し使用を制御することを目的としています。入力中に多く出現する語彙の使用を減らそうとし、その使用頻度は出現頻度に比例します。語彙の罰則は出現回数に応じて増加します。負の値は語彙の繰り返し使用を奨励します。",
-        "title": "トピックの新鮮さ"
-      },
-      "range": "範囲",
-      "reasoning_effort": {
-        "desc": "この設定は、モデルが回答を生成する前の推論の強度を制御するために使用されます。低強度は応答速度を優先し、トークンを節約しますが、高強度はより完全な推論を提供しますが、より多くのトークンを消費し、応答速度が低下します。デフォルト値は中で、推論の正確性と応答速度のバランスを取ります。",
-        "title": "推論強度"
-      },
-      "temperature": {
-        "desc": "この設定は、モデルの応答の多様性に影響を与えます。低い値はより予測可能で典型的な応答をもたらし、高い値はより多様で珍しい応答を奨励します。値が0に設定されると、モデルは与えられた入力に対して常に同じ応答を返します。",
-        "title": "ランダム性"
-      },
-      "title": "モデルパラメータ",
-      "top_p": {
-        "desc": "この設定は、モデルの選択を可能性の高い一定の割合の語彙に制限します：累積確率がPに達するトップ語彙のみを選択します。低い値はモデルの応答をより予測可能にし、デフォルト設定はモデルが全範囲の語彙から選択できることを許可します。",
-        "title": "核サンプリング"
-      },
-      "type": "タイプ"
-    },
-    "providerInfo": {
-      "apiTooltip": "LobeChatは、このプロバイダーに対してカスタムAPIキーを使用することをサポートしています。",
-      "input": "入力価格",
-      "inputTooltip": "百万トークンあたりのコスト",
-      "latency": "レイテンシ",
-      "latencyTooltip": "プロバイダーが最初のトークンを送信する平均応答時間",
-      "maxOutput": "最大出力長",
-      "maxOutputTooltip": "このエンドポイントが生成できる最大トークン数",
-      "officialTooltip": "LobeHub公式サービス",
-      "output": "出力価格",
-      "outputTooltip": "百万トークンあたりのコスト",
-      "streamCancellationTooltip": "このプロバイダーはストリームキャンセル機能をサポートしています。",
-      "throughput": "スループット",
-      "throughputTooltip": "ストリームリクエストが毎秒転送する平均トークン数"
-    },
-    "sorts": {
-      "contextWindowTokens": "コンテキスト長",
-      "identifier": "モデル ID",
-      "inputPrice": "入力価格",
-      "outputPrice": "出力価格",
-      "providerCount": "サービスプロバイダー数",
-      "releasedAt": "最近公開"
-    },
-    "suggestions": "関連モデル",
-    "supportedProviders": "このモデルをサポートするプロバイダー"
-  },
-  "plugins": {
-    "builtinTag": "内蔵プラグイン",
-    "community": "コミュニティプラグイン",
-    "details": {
-      "settings": {
-        "title": "プラグイン設定"
-      },
-      "summary": {
-        "title": "このプラグインで何ができるか？"
-      },
-      "tools": {
-        "title": "プラグインツール"
-      }
-    },
-    "install": "プラグインをインストール",
-    "installed": "インストール済み",
-    "legacyTag": "旧バージョンプラグイン",
-    "list": "プラグインリスト",
-    "meta": {
-      "description": "説明",
-      "parameter": "パラメータ",
-      "title": "ツールパラメータ",
-      "type": "タイプ"
-    },
-    "more": "もっと見る",
-    "official": "公式プラグイン",
-    "recentSubmits": "最近の更新",
-    "sorts": {
-      "createdAt": "最近公開",
-      "identifier": "プラグイン ID",
-      "title": "プラグイン名"
-    },
-    "suggestions": "関連する提案"
-  },
-  "providers": {
-    "config": "プロバイダーの設定",
-    "details": {
-      "guide": {
-        "title": "接続ガイド"
-      },
-      "overview": {
-        "title": "概要"
-      },
-      "related": {
-        "listTitle": "関連サービスプロバイダー",
-        "more": "もっと見る",
-        "title": "関連おすすめ"
-      }
-    },
-    "list": "モデルサービスプロバイダーリスト",
-    "modelCount": "{{count}} 個のモデル",
-    "modelName": "モデル名",
-    "modelSite": "モデルドキュメント",
-    "more": "もっと見る",
-    "officialSite": "公式サイト",
-    "showAllModels": "すべてのモデルを表示",
-    "sorts": {
-      "default": "デフォルト並び替え",
-      "identifier": "サービスプロバイダー ID",
-      "modelCount": "モデル数"
-    },
-    "suggestions": "関連プロバイダー",
-    "supportedModels": "サポートされているモデル"
-  },
+  "mcp.categories.all.description": "すべてのMCPサーバー",
+  "mcp.categories.all.name": "すべて",
+  "mcp.categories.business.description": "ビジネスおよび企業向けサービス",
+  "mcp.categories.business.name": "ビジネスサービス",
+  "mcp.categories.developer.description": "開発関連のツールとサービス",
+  "mcp.categories.developer.name": "開発ツール",
+  "mcp.categories.gaming-entertainment.description": "ゲーム、エンターテインメント、レジャー活動",
+  "mcp.categories.gaming-entertainment.name": "ゲーム・エンタメ",
+  "mcp.categories.health-wellness.description": "健康、フィットネス、メンタルケア",
+  "mcp.categories.health-wellness.name": "健康・ウェルネス",
+  "mcp.categories.lifestyle.description": "個人のライフスタイル、習慣、日常活動",
+  "mcp.categories.lifestyle.name": "ライフスタイル",
+  "mcp.categories.media-generate.description": "メディアの生成、編集、処理",
+  "mcp.categories.media-generate.name": "メディア生成",
+  "mcp.categories.news.description": "ニュース集約、報道、情報サービス",
+  "mcp.categories.news.name": "ニュース・情報",
+  "mcp.categories.productivity.description": "タスク管理、ノート、効率化ツール",
+  "mcp.categories.productivity.name": "生産性ツール",
+  "mcp.categories.science-education.description": "科学研究、学習、教育ツール",
+  "mcp.categories.science-education.name": "科学・教育",
+  "mcp.categories.social.description": "ソーシャルネットワークとコミュニケーション",
+  "mcp.categories.social.name": "ソーシャルメディア",
+  "mcp.categories.stocks-finance.description": "金融市場、取引、投資",
+  "mcp.categories.stocks-finance.name": "株式・金融",
+  "mcp.categories.tools.description": "汎用実用ツールとサービス",
+  "mcp.categories.tools.name": "実用ツール",
+  "mcp.categories.travel-transport.description": "旅行計画と交通手段",
+  "mcp.categories.travel-transport.name": "旅行・交通",
+  "mcp.categories.weather.description": "天気予報と気象サービス",
+  "mcp.categories.weather.name": "気象・天気",
+  "mcp.categories.web-search.description": "ウェブ検索と情報検索",
+  "mcp.categories.web-search.name": "情報検索",
+  "mcp.details.connectionType.hybrid.desc": "このサービスは設定や使用シーンに応じて、ローカルまたはクラウドで動作可能なハイブリッド型サービスです。",
+  "mcp.details.connectionType.hybrid.title": "ハイブリッドサービス",
+  "mcp.details.connectionType.local.desc": "このサーバーはクライアントのローカルデバイス上でのみ動作し、インストールとローカルリソースへの依存が必要です。",
+  "mcp.details.connectionType.local.title": "ローカルサービス",
+  "mcp.details.connectionType.remote.desc": "このサーバーはリモートでホストされており、主にリモートサービスに依存し、ローカル環境には依存しません。",
+  "mcp.details.connectionType.remote.title": "クラウドサービス",
+  "mcp.details.deployment.args": "引数",
+  "mcp.details.deployment.checkCommand": "確認コマンド",
+  "mcp.details.deployment.command": "コマンド",
+  "mcp.details.deployment.commandLine": "システム依存",
+  "mcp.details.deployment.connection": "接続方式",
+  "mcp.details.deployment.connectionType": "接続タイプ",
+  "mcp.details.deployment.description": "プラグインのインストールおよび展開方法",
+  "mcp.details.deployment.descriptionPlaceholder": "任意の説明",
+  "mcp.details.deployment.empty": "展開オプションなし",
+  "mcp.details.deployment.env": "環境変数",
+  "mcp.details.deployment.guide": "インストールガイド",
+  "mcp.details.deployment.installation": "{{method}} によるインストール",
+  "mcp.details.deployment.installationMethod": "インストール方法",
+  "mcp.details.deployment.other": "その他の設定",
+  "mcp.details.deployment.packageName": "パッケージ名",
+  "mcp.details.deployment.platform.steps.claude": "- **Claude Desktop** アプリを開く\n- **設定** に移動し、**開発者** を選択\n- **設定編集** をクリック\n- **claude_desktop_config.json** ファイルを開く\n- サーバー設定を既存ファイルにコピー＆ペーストし保存",
+  "mcp.details.deployment.platform.steps.cline": "- Cline拡張がインストールされたVS Codeを開く\n- サイドバーのClineアイコンをクリック\n- ドロップダウンメニューから **MCP Servers** を選択\n- **Remote Servers** タブでサーバー名とMCPサーバーURLを入力\n- **Add Server** をクリックして接続",
+  "mcp.details.deployment.platform.steps.cursor": "- **設定** に移動し、Cursor設定を選択\n- 左側で **MCP** を選択\n- 右上の **新しいグローバルMCPサーバーを追加** をクリック\n- サーバー設定を既存ファイルにコピー＆ペーストし保存",
+  "mcp.details.deployment.platform.steps.lobeChat": "- **LobeChat デスクトップ版** アプリを開く\n- **設定** - **デフォルトアシスタント** に移動\n- **プラグイン設定** - **カスタムプラグイン** を選択\n- **JSON設定のクイックインポート** をクリック\n- サーバー設定をテキストボックスにコピー＆ペーストしインストール",
+  "mcp.details.deployment.platform.steps.openai": "- **OpenAIアプリ** または開発環境を開く\n- **Responses API** にてMCPツールを設定\n- APIリクエストの **tools** 配列にMCPブロックを追加\n- **server_url** をMCPサーバーのエンドポイントに設定\n- 認証に必要なヘッダー情報（APIキー、トークン等）を含める\n- `allowed_tools` パラメータで公開ツールを制限\n- `require_approval` でツール実行の承認を制御",
+  "mcp.details.deployment.platform.steps.vscode": "- VS Codeを開く\n- コマンドパレット（`Ctrl+Shift+P` / `Cmd+Shift+P`）を開く\n- **MCP: Add Server** と入力して選択\n- ワークスペースまたはユーザー設定に追加を選択\n- サーバー設定をコピー＆ペースト",
+  "mcp.details.deployment.platform.title": "{{platform}} にインストール",
+  "mcp.details.deployment.recommended": "おすすめ",
+  "mcp.details.deployment.systemDependencies": "システム依存関係",
+  "mcp.details.deployment.table.description": "説明",
+  "mcp.details.deployment.table.name": "名前",
+  "mcp.details.deployment.table.required": "必須",
+  "mcp.details.deployment.table.type": "タイプ",
+  "mcp.details.deployment.title": "{{platform}}でのインストール",
+  "mcp.details.githubBadge.desc": "LobeHub は定期的にリポジトリとドキュメントをスキャンし、以下を行います：\n\n- MCP サーバーが正常に稼働していることを確認します。\n- ツール、リソース、プロンプト情報、必要なパラメータなどのサーバー機能を抽出します。\n- バッジはユーザーが MCP サーバーの安全性、機能特性、インストールガイドを迅速に評価するのに役立ちます。\n\n以下のコードをあなたの `README.md` ファイルにコピーしてください：",
+  "mcp.details.nav.needHelp": "ヘルプが必要ですか？",
+  "mcp.details.nav.reportIssue": "問題を報告する",
+  "mcp.details.nav.viewSourceCode": "ソースコードを見る",
+  "mcp.details.overview.title": "概要",
+  "mcp.details.related.listTitle": "関連 MCP サーバー",
+  "mcp.details.related.more": "もっと見る",
+  "mcp.details.related.title": "関連おすすめ",
+  "mcp.details.schema.mode.docs": "ドキュメント",
+  "mcp.details.schema.prompts.arguments": "パラメータ設定",
+  "mcp.details.schema.prompts.desc": "ユーザーが選択してトリガーするインタラクティブテンプレート",
+  "mcp.details.schema.prompts.empty": "プロンプトなし",
+  "mcp.details.schema.prompts.instructions": "指示説明",
+  "mcp.details.schema.prompts.table.description": "説明",
+  "mcp.details.schema.prompts.table.name": "名前",
+  "mcp.details.schema.prompts.table.required": "必須",
+  "mcp.details.schema.prompts.title": "プロンプト一覧",
+  "mcp.details.schema.resources.desc": "クライアントによって追加・管理されるコンテキストデータ",
+  "mcp.details.schema.resources.empty": "リソースなし",
+  "mcp.details.schema.resources.table.description": "説明",
+  "mcp.details.schema.resources.table.mineType": "MIME タイプ",
+  "mcp.details.schema.resources.table.name": "名前",
+  "mcp.details.schema.resources.table.uri": "URI",
+  "mcp.details.schema.resources.title": "リソース一覧",
+  "mcp.details.schema.title": "プラグイン機能",
+  "mcp.details.schema.tools.desc": "大規模言語モデル（LLM）に公開される操作用機能インターフェース",
+  "mcp.details.schema.tools.empty": "ツールなし",
+  "mcp.details.schema.tools.inputSchema": "入力説明",
+  "mcp.details.schema.tools.instructions": "指示説明",
+  "mcp.details.schema.tools.table.description": "説明",
+  "mcp.details.schema.tools.table.name": "名前",
+  "mcp.details.schema.tools.table.required": "必須",
+  "mcp.details.schema.tools.table.type": "タイプ",
+  "mcp.details.schema.tools.title": "ツール一覧",
+  "mcp.details.score.claimed.desc": "この MCP サーバーは所有者により認領されており、所有権と管理が保証されています。",
+  "mcp.details.score.claimed.title": "所有者により認領済み",
+  "mcp.details.score.deployMoreThanManual.desc": "この MCP サーバーは Manual 以外のより使いやすいインストール方法を提供し、ユーザーが簡単に展開・利用できます。",
+  "mcp.details.score.deployMoreThanManual.title": "使いやすいインストール方法を提供",
+  "mcp.details.score.deployment.desc": "この MCP サーバーは少なくとも一つのインストール方法を提供し、ユーザーが展開・利用できます。",
+  "mcp.details.score.deployment.descWithCount": "この MCP サーバーは {{number}} 種類のインストール方法を提供し、ユーザーが展開・利用できます。",
+  "mcp.details.score.deployment.title": "少なくとも一つのインストール方法を提供",
+  "mcp.details.score.license.desc": "このリポジトリには LICENSE ファイルが含まれています。",
+  "mcp.details.score.license.descWithlicense": "このリポジトリのライセンスは {{license}} です。",
+  "mcp.details.score.license.title": "LICENSE あり",
+  "mcp.details.score.listTitle": "評価詳細",
+  "mcp.details.score.notClaimed.desc": "もしあなたがこの MCP サーバーの所有者であれば、以下の方法で認領できます。",
+  "mcp.details.score.notClaimed.title": "所有者により未認領",
+  "mcp.details.score.prompts.desc": "この MCP サーバーはプロンプトを提供し、ユーザーがサービスと対話できます。",
+  "mcp.details.score.prompts.descWithCount": "この MCP サーバーは {{number}} 個のプロンプトを提供し、ユーザーがサービスと対話できます。",
+  "mcp.details.score.prompts.title": "プロンプトを含む",
+  "mcp.details.score.readme.desc": "このリポジトリには README.md ファイルが含まれています。",
+  "mcp.details.score.readme.title": "README あり",
+  "mcp.details.score.resources.desc": "この MCP サーバーはリソースを提供し、ユーザーがコンテキストデータを追加・管理できます。",
+  "mcp.details.score.resources.descWithCount": "この MCP サーバーは {{number}} 個のリソースを提供し、ユーザーがコンテキストデータを追加・管理できます。",
+  "mcp.details.score.resources.title": "リソースを含む",
+  "mcp.details.score.title": "評価",
+  "mcp.details.score.tools.desc": "サービスは少なくとも一つのツールを提供し、ユーザーが特定の操作を実行できます。",
+  "mcp.details.score.tools.descWithCount": "この MCP サーバーは {{number}} 個のツール機能を提供し、ユーザーが特定の操作を実行できます。",
+  "mcp.details.score.tools.title": "少なくとも一つのツールを含む",
+  "mcp.details.score.validated.desc": "この MCP サーバーはインストール検証を通過しており、その品質と信頼性が保証されています。",
+  "mcp.details.score.validated.title": "検証済み",
+  "mcp.details.scoreLevel.a.desc": "この MCP サーバーは厳格に検証され、包括的な機能と高品質なユーザー体験を提供します。",
+  "mcp.details.scoreLevel.a.fullTitle": "優秀なプラグイン",
+  "mcp.details.scoreLevel.a.title": "優良",
+  "mcp.details.scoreLevel.b.desc": "この MCP サーバーは良好な機能とユーザー体験を提供しますが、一部改善の余地があります。",
+  "mcp.details.scoreLevel.b.fullTitle": "良好な機能",
+  "mcp.details.scoreLevel.b.title": "良好",
+  "mcp.details.scoreLevel.f.desc": "この MCP サーバーは機能が不完全か品質が低いため、利用には注意が必要です。",
+  "mcp.details.scoreLevel.f.fullTitle": "品質不良",
+  "mcp.details.scoreLevel.f.title": "不良",
+  "mcp.details.settings.capabilities.prompts": "プロンプト",
+  "mcp.details.settings.capabilities.resources": "リソース",
+  "mcp.details.settings.capabilities.title": "プラグイン能力",
+  "mcp.details.settings.capabilities.tools": "ツール",
+  "mcp.details.settings.configuration.title": "プラグイン設定",
+  "mcp.details.settings.connection.args": "起動パラメータ",
+  "mcp.details.settings.connection.command": "起動コマンド",
+  "mcp.details.settings.connection.title": "接続情報",
+  "mcp.details.settings.connection.type": "接続タイプ",
+  "mcp.details.settings.connection.url": "サービスアドレス",
+  "mcp.details.settings.saveSettings": "設定を保存",
+  "mcp.details.settings.title": "プラグイン設定",
+  "mcp.details.sidebar.install": "MCP サーバーをインストール",
+  "mcp.details.sidebar.meta.homepage": "公式ホームページ",
+  "mcp.details.sidebar.meta.installCount": "インストール数",
+  "mcp.details.sidebar.meta.language": "ソースコード言語",
+  "mcp.details.sidebar.meta.license": "ライセンス",
+  "mcp.details.sidebar.meta.published": "公開日時",
+  "mcp.details.sidebar.meta.repo": "ソースコードリポジトリ",
+  "mcp.details.sidebar.meta.stars": "スター数",
+  "mcp.details.sidebar.meta.title": "詳細情報",
+  "mcp.details.sidebar.meta.updated": "最終更新",
+  "mcp.details.sidebar.moreServerConfig": "詳細を見る",
+  "mcp.details.sidebar.recommendServers": "関連 MCP",
+  "mcp.details.sidebar.serverConfig": "インストール設定",
+  "mcp.details.sidebar.toc": "目次",
+  "mcp.details.summary.title": "この MCP サーバーで何ができるか？",
+  "mcp.details.totalScore.description": "各指標を総合的に計算した合計スコア",
+  "mcp.details.totalScore.legend.aGrade": "A級 ({{minPercent}}-100%)",
+  "mcp.details.totalScore.legend.bGrade": "B級 ({{minPercent}}-{{maxPercent}}%)",
+  "mcp.details.totalScore.legend.fGrade": "F級 (0-{{maxPercent}}%)",
+  "mcp.details.totalScore.pointsFormat": "{{score}}/{{total}} 点",
+  "mcp.details.totalScore.popover.completedOptional": "✅ 任意項目完了 ({{count}} 件)",
+  "mcp.details.totalScore.popover.completedRequired": "✅ 必須項目完了 ({{count}} 件)",
+  "mcp.details.totalScore.popover.incompleteOptional": "⏸️ 任意項目未完了 ({{count}} 件)",
+  "mcp.details.totalScore.popover.incompleteRequired": "❌ 必須項目未完了 ({{count}} 件)",
+  "mcp.details.totalScore.popover.title": "評価詳細",
+  "mcp.details.totalScore.ratingFormat": "評価: {{level}}",
+  "mcp.details.totalScore.scoreInfo.items": "項目",
+  "mcp.details.totalScore.scoreInfo.points": "点数",
+  "mcp.details.totalScore.scoreInfo.requiredItems": "必須項目",
+  "mcp.details.totalScore.title": "合計スコア",
+  "mcp.details.versions.table.isLatest": "最新バージョン",
+  "mcp.details.versions.table.isValidated": "検証済み",
+  "mcp.details.versions.table.publishAt": "公開日時",
+  "mcp.details.versions.table.version": "バージョン",
+  "mcp.details.versions.title": "バージョン履歴",
+  "mcp.hero.desc": "オープンソースでデプロイ可能な MCP サーバープラットフォーム。AI システムがファイルシステム、データベース、API などの重要リソースに簡単にアクセスでき、AI の能力を全面的に拡張します。",
+  "mcp.hero.subTitle": "オープンソース & すぐ使える",
+  "mcp.hero.title": "AI 向けオープンソース MCP コミュニティ",
+  "mcp.sorts.createdAt": "最近追加",
+  "mcp.sorts.installCount": "インストール数",
+  "mcp.sorts.isFeatured": "おすすめプラグイン",
+  "mcp.sorts.isValidated": "検証済みプラグイン",
+  "mcp.sorts.promptsCount": "プロンプト数",
+  "mcp.sorts.ratingCount": "評価数",
+  "mcp.sorts.resourcesCount": "リソース数",
+  "mcp.sorts.toolsCount": "ツール数",
+  "mcp.sorts.updatedAt": "最近更新",
+  "mcp.title": "MCP コミュニティ",
+  "mcp.unvalidated.desc": "この MCP サーバーはまだ検証されていません",
+  "mcp.unvalidated.title": "未検証",
+  "mcp.validated.desc": "この MCP サーバーは検証済みで、その品質と信頼性が保証されています。",
+  "mcp.validated.descWithDate": "この MCP サーバーは {{date}} に検証され、その品質と信頼性が保証されています。",
+  "mcp.validated.title": "検証済み",
+  "mcpEmpty.description": "フィルター条件を調整するか、キーワードで検索してください",
+  "mcpEmpty.search": "一致する MCP サーバーが見つかりませんでした",
+  "mcpEmpty.title": "MCP サーバーがありません",
+  "models.abilities": "モデル能力",
+  "models.chat": "会話を始める",
+  "models.contentLength": "最大コンテキスト長",
+  "models.details.overview.title": "概要",
+  "models.details.related.listTitle": "関連モデル",
+  "models.details.related.more": "もっと見る",
+  "models.details.related.title": "関連おすすめ",
+  "models.empty.description": "フィルター条件を調整して、さらに多くのモデルをご覧ください",
+  "models.empty.search": "一致するモデルが見つかりませんでした",
+  "models.empty.title": "モデルがありません",
+  "models.free": "無料",
+  "models.guide": "設定ガイド",
+  "models.list": "モデルリスト",
+  "models.more": "もっと見る",
+  "models.parameterList.defaultValue": "デフォルト値",
+  "models.parameterList.docs": "ドキュメントを見る",
+  "models.parameterList.frequency_penalty.desc": "この設定は、モデルが入力中に既に出現した特定の語彙の使用頻度を調整します。高い値はそのような繰り返しの可能性を低下させ、負の値は逆の効果を生み出します。語彙の罰則は出現回数に応じて増加しません。負の値は語彙の繰り返し使用を奨励します。",
+  "models.parameterList.frequency_penalty.title": "頻度ペナルティ",
+  "models.parameterList.max_tokens.desc": "この設定は、モデルが一度の応答で生成できる最大の長さを定義します。値を高く設定すると、モデルはより長い応答を生成でき、値を低く設定すると、応答の長さが制限され、より簡潔になります。異なるアプリケーションシーンに応じて、この値を適切に調整することで、期待される応答の長さと詳細度を達成するのに役立ちます。",
+  "models.parameterList.max_tokens.title": "一度の応答制限",
+  "models.parameterList.presence_penalty.desc": "この設定は、語彙が入力中に出現する頻度に基づいて語彙の繰り返し使用を制御することを目的としています。入力中に多く出現する語彙の使用を減らそうとし、その使用頻度は出現頻度に比例します。語彙の罰則は出現回数に応じて増加します。負の値は語彙の繰り返し使用を奨励します。",
+  "models.parameterList.presence_penalty.title": "トピックの新鮮さ",
+  "models.parameterList.range": "範囲",
+  "models.parameterList.reasoning_effort.desc": "この設定は、モデルが回答を生成する前の推論の強度を制御するために使用されます。低強度は応答速度を優先し、トークンを節約しますが、高強度はより完全な推論を提供しますが、より多くのトークンを消費し、応答速度が低下します。デフォルト値は中で、推論の正確性と応答速度のバランスを取ります。",
+  "models.parameterList.reasoning_effort.title": "推論強度",
+  "models.parameterList.temperature.desc": "この設定は、モデルの応答の多様性に影響を与えます。低い値はより予測可能で典型的な応答をもたらし、高い値はより多様で珍しい応答を奨励します。値が0に設定されると、モデルは与えられた入力に対して常に同じ応答を返します。",
+  "models.parameterList.temperature.title": "ランダム性",
+  "models.parameterList.title": "モデルパラメータ",
+  "models.parameterList.top_p.desc": "この設定は、モデルの選択を可能性の高い一定の割合の語彙に制限します：累積確率がPに達するトップ語彙のみを選択します。低い値はモデルの応答をより予測可能にし、デフォルト設定はモデルが全範囲の語彙から選択できることを許可します。",
+  "models.parameterList.top_p.title": "核サンプリング",
+  "models.parameterList.type": "タイプ",
+  "models.providerInfo.apiTooltip": "LobeChatは、このプロバイダーに対してカスタムAPIキーを使用することをサポートしています。",
+  "models.providerInfo.input": "入力価格",
+  "models.providerInfo.inputTooltip": "百万トークンあたりのコスト",
+  "models.providerInfo.latency": "レイテンシ",
+  "models.providerInfo.latencyTooltip": "プロバイダーが最初のトークンを送信する平均応答時間",
+  "models.providerInfo.maxOutput": "最大出力長",
+  "models.providerInfo.maxOutputTooltip": "このエンドポイントが生成できる最大トークン数",
+  "models.providerInfo.officialTooltip": "LobeHub公式サービス",
+  "models.providerInfo.output": "出力価格",
+  "models.providerInfo.outputTooltip": "百万トークンあたりのコスト",
+  "models.providerInfo.streamCancellationTooltip": "このプロバイダーはストリームキャンセル機能をサポートしています。",
+  "models.providerInfo.throughput": "スループット",
+  "models.providerInfo.throughputTooltip": "ストリームリクエストが毎秒転送する平均トークン数",
+  "models.sorts.contextWindowTokens": "コンテキスト長",
+  "models.sorts.identifier": "モデル ID",
+  "models.sorts.inputPrice": "入力価格",
+  "models.sorts.outputPrice": "出力価格",
+  "models.sorts.providerCount": "サービスプロバイダー数",
+  "models.sorts.releasedAt": "最近公開",
+  "models.suggestions": "関連モデル",
+  "models.supportedProviders": "このモデルをサポートするプロバイダー",
+  "plugins.builtinTag": "内蔵プラグイン",
+  "plugins.community": "コミュニティプラグイン",
+  "plugins.details.settings.title": "プラグイン設定",
+  "plugins.details.summary.title": "このプラグインで何ができるか？",
+  "plugins.details.tools.title": "プラグインツール",
+  "plugins.install": "プラグインをインストール",
+  "plugins.installed": "インストール済み",
+  "plugins.legacyTag": "旧バージョンプラグイン",
+  "plugins.list": "プラグインリスト",
+  "plugins.meta.description": "説明",
+  "plugins.meta.parameter": "パラメータ",
+  "plugins.meta.title": "ツールパラメータ",
+  "plugins.meta.type": "タイプ",
+  "plugins.more": "もっと見る",
+  "plugins.official": "公式プラグイン",
+  "plugins.recentSubmits": "最近の更新",
+  "plugins.sorts.createdAt": "最近公開",
+  "plugins.sorts.identifier": "プラグイン ID",
+  "plugins.sorts.title": "プラグイン名",
+  "plugins.suggestions": "関連する提案",
+  "providers.config": "プロバイダーの設定",
+  "providers.details.guide.title": "接続ガイド",
+  "providers.details.overview.title": "概要",
+  "providers.details.related.listTitle": "関連サービスプロバイダー",
+  "providers.details.related.more": "もっと見る",
+  "providers.details.related.title": "関連おすすめ",
+  "providers.empty.description": "フィルター条件を調整して、さらに多くのプロバイダーをご覧ください",
+  "providers.empty.search": "一致するプロバイダーが見つかりませんでした",
+  "providers.empty.title": "プロバイダーがありません",
+  "providers.list": "モデルサービスプロバイダーリスト",
+  "providers.modelCount": "{{count}} 個のモデル",
+  "providers.modelName": "モデル名",
+  "providers.modelSite": "モデルドキュメント",
+  "providers.more": "もっと見る",
+  "providers.officialSite": "公式サイト",
+  "providers.showAllModels": "すべてのモデルを表示",
+  "providers.sorts.default": "デフォルト並び替え",
+  "providers.sorts.identifier": "サービスプロバイダー ID",
+  "providers.sorts.modelCount": "モデル数",
+  "providers.suggestions": "関連プロバイダー",
+  "providers.supportedModels": "サポートされているモデル",
   "publishedTime": "公開日時",
-  "search": {
-    "placeholder": "名前、紹介、またはキーワードを検索...",
-    "result": "<highlight>{{keyword}}</highlight>に関する{{count}}件の検索結果",
-    "searching": "検索中..."
-  },
-  "tab": {
-    "assistant": "アシスタント",
-    "home": "ホーム",
-    "model": "モデル",
-    "plugin": "プラグイン",
-    "provider": "モデルサービスプロバイダー"
-  }
+  "search.placeholder": "名前、紹介、またはキーワードを検索...",
+  "search.result": "<highlight>{{keyword}}</highlight>に関する{{count}}件の検索結果",
+  "search.searching": "検索中...",
+  "tab.assistant": "アシスタント",
+  "tab.home": "ホーム",
+  "tab.model": "モデル",
+  "tab.plugin": "プラグイン",
+  "tab.provider": "モデルサービスプロバイダー",
+  "tab.user": "ユーザー",
+  "user.agents": "アシスタント",
+  "user.downloads": "ダウンロード",
+  "user.editProfile": "プロフィールを編集",
+  "user.favoriteAgents": "お気に入りのアシスタント",
+  "user.favoritePlugins": "お気に入りのプラグイン",
+  "user.follow": "フォロー",
+  "user.followers": "フォロワー",
+  "user.following": "フォロー中",
+  "user.login": "クリエイターになる",
+  "user.logout": "ログアウト",
+  "user.myProfile": "マイページ",
+  "user.noAgents": "このユーザーはまだアシスタントを公開していません",
+  "user.noFavoriteAgents": "お気に入りのアシスタントはまだありません",
+  "user.noFavoritePlugins": "お気に入りのプラグインはまだありません",
+  "user.publishedAgents": "作成したアシスタント",
+  "user.tabs.favorites": "お気に入り",
+  "user.tabs.publishedAgents": "作成したアシスタント",
+  "user.unfavorite": "お気に入りから削除",
+  "user.unfavoriteFailed": "お気に入りからの削除に失敗しました",
+  "user.unfavoriteSuccess": "お気に入りから削除しました",
+  "user.unfollow": "フォローを解除",
+  "user.website": "個人ウェブサイト"
 }

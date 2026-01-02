@@ -1,4 +1,8 @@
-import { ElectronAppState } from '@lobechat/electron-client-ipc';
+import type {
+  ElectronAppState,
+  WindowResizableParams,
+  WindowSizeParams,
+} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -26,6 +30,18 @@ class ElectronSystemService {
 
   async minimizeWindow(): Promise<void> {
     return ensureElectronIpc().windows.minimizeWindow();
+  }
+
+  async setWindowResizable(params: WindowResizableParams): Promise<void> {
+    return ensureElectronIpc().windows.setWindowResizable(params);
+  }
+
+  async setWindowSize(params: WindowSizeParams): Promise<void> {
+    return ensureElectronIpc().windows.setWindowSize(params);
+  }
+
+  async openExternalLink(url: string): Promise<void> {
+    return ensureElectronIpc().system.openExternalLink(url);
   }
 
   showContextMenu = async (type: string, data?: any) => {

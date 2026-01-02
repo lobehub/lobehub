@@ -390,9 +390,9 @@ bunx vitest run --silent='passed-only' 'src/providers/{provider}/index.test.ts'
 
 ```bash
 # Check TypeScript types (from project root)
-cd ../../../ && bun run typecheck
+cd ../../../ && bun run type-check
 
-# Or run typecheck for model-runtime only
+# Or run type-check for model-runtime only
 bunx tsc --noEmit
 
 # Fix any linting issues
@@ -475,7 +475,7 @@ Based on your development summary, update the following sections:
 bunx vitest run --silent='passed-only' 'src/providers/{provider}/index.test.ts'
 
 # Verify type check still passes
-cd ../../../ && bun run typecheck
+cd ../../../ && bun run type-check
 ```
 
 #### Complete Workflow Example
@@ -486,7 +486,7 @@ cd ../../../ && bun run typecheck
 bunx vitest run --silent='passed-only' 'src/providers/example/index.test.ts'
 
 # 2. Type/Lint Phase (REQUIRED)
-cd ../../../ && bun run typecheck # Must pass!
+cd ../../../ && bun run type-check # Must pass!
 bunx eslint src/providers/example/ --fix
 
 # 3. Coverage Phase
@@ -501,7 +501,7 @@ bunx vitest run --coverage --silent='passed-only'
 
 # 6. Final Verification
 bunx vitest run --silent='passed-only' 'src/providers/example/index.test.ts'
-cd ../../../ && bun run typecheck
+cd ../../../ && bun run type-check
 
 # 7. Commit
 git add .
@@ -539,7 +539,7 @@ bunx vitest watch 'src/providers/{provider}/index.test.ts'
 
 ```bash
 # Type check entire project (from project root)
-cd ../../../ && bun run typecheck
+cd ../../../ && bun run type-check
 
 # Type check model-runtime only
 bunx tsc --noEmit

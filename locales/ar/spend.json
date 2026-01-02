@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (الرموز في الثانية): عدد الرموز المُخرجة في الثانية",
+  "duration.TTFT": "TTFT (الوقت حتى أول رمز): زمن استجابة أول رمز",
+  "duration.completion": "زمن إتمام الإخراج",
+  "duration.latency": "المدة",
+  "duration.stage.end": "النهاية",
+  "duration.stage.firstToken": "أول رمز",
+  "duration.stage.start": "البداية",
+  "table.columns.TTFT.tooltip": "الوقت حتى أول رمز، الوحدة: ثوانٍ",
+  "table.columns.duration": "المدة",
+  "table.columns.model": "النموذج",
+  "table.columns.spend": "الاعتمادات",
+  "table.columns.startTime": "تاريخ الإنشاء",
+  "table.columns.totalTokens": "استخدام الرموز",
+  "table.columns.type.enums.chat": "توليد نصوص",
+  "table.columns.type.enums.imageGeneration": "توليد صور",
+  "table.columns.type.title": "النوع",
+  "table.desc": "تفاصيل استخدام الاعتمادات الحاسوبية لتوليد النصوص، التضمين، توليد الصور، وغيرها.",
+  "table.more": "عرض التفاصيل",
+  "table.title": "تفاصيل استخدام الاعتمادات الحاسوبية",
+  "table.totalToken.input": "المدخلات",
+  "table.totalToken.output": "المخرجات"
+}

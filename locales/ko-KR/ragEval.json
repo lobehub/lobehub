@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "새로 만들기",
-    "description": {
-      "placeholder": "데이터셋 소개 (선택 사항)"
-    },
-    "name": {
-      "placeholder": "데이터셋 이름",
-      "required": "데이터셋 이름을 입력해 주세요"
-    },
-    "title": "데이터셋 추가"
-  },
-  "dataset": {
-    "addNewButton": "데이터셋 생성",
-    "emptyGuide": "현재 데이터셋이 비어 있습니다. 데이터셋을 생성해 주세요.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "데이터 가져오기"
-        },
-        "columns": {
-          "actions": "작업",
-          "ideal": {
-            "title": "예상 답변"
-          },
-          "question": {
-            "title": "질문"
-          },
-          "referenceFiles": {
-            "title": "참고 파일"
-          }
-        },
-        "notSelected": "왼쪽에서 데이터셋을 선택해 주세요",
-        "title": "데이터셋 상세"
-      },
-      "title": "데이터셋"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "새로 만들기",
-      "datasetId": {
-        "placeholder": "평가할 데이터셋을 선택해 주세요",
-        "required": "평가할 데이터셋을 선택해 주세요"
-      },
-      "description": {
-        "placeholder": "평가 작업 소개 (선택 사항)"
-      },
-      "name": {
-        "placeholder": "평가 작업 이름",
-        "required": "평가 작업 이름을 입력해 주세요"
-      },
-      "title": "평가 작업 추가"
-    },
-    "addNewButton": "평가 생성",
-    "emptyGuide": "현재 평가 작업이 없습니다. 평가를 생성해 주세요.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "상태 확인",
-          "confirmDelete": "이 평가를 삭제하시겠습니까?",
-          "confirmRun": "실행하시겠습니까? 실행 후에는 백그라운드에서 비동기적으로 평가 작업이 수행되며, 페이지를 닫아도 작업은 계속 진행됩니다.",
-          "downloadRecords": "평가 다운로드",
-          "retry": "재시도",
-          "run": "실행",
-          "title": "작업"
-        },
-        "datasetId": {
-          "title": "데이터셋"
-        },
-        "name": {
-          "title": "평가 작업 이름"
-        },
-        "records": {
-          "title": "평가 기록 수"
-        },
-        "referenceFiles": {
-          "title": "참고 파일"
-        },
-        "status": {
-          "error": "실행 오류",
-          "pending": "대기 중",
-          "processing": "실행 중",
-          "success": "실행 성공",
-          "title": "상태"
-        }
-      },
-      "title": "평가 작업 목록"
-    }
-  }
+  "addDataset.confirm": "새로 만들기",
+  "addDataset.description.placeholder": "데이터셋 소개 (선택 사항)",
+  "addDataset.name.placeholder": "데이터셋 이름",
+  "addDataset.name.required": "데이터셋 이름을 입력해 주세요",
+  "addDataset.title": "데이터셋 추가",
+  "dataset.addNewButton": "데이터셋 생성",
+  "dataset.emptyGuide": "현재 데이터셋이 비어 있습니다. 데이터셋을 생성해 주세요.",
+  "dataset.list.table.actions.importData": "데이터 가져오기",
+  "dataset.list.table.columns.actions": "작업",
+  "dataset.list.table.columns.ideal.title": "예상 답변",
+  "dataset.list.table.columns.question.title": "질문",
+  "dataset.list.table.columns.referenceFiles.title": "참고 파일",
+  "dataset.list.table.notSelected": "왼쪽에서 데이터셋을 선택해 주세요",
+  "dataset.list.table.title": "데이터셋 상세",
+  "dataset.list.title": "데이터셋",
+  "evaluation.addEvaluation.confirm": "새로 만들기",
+  "evaluation.addEvaluation.datasetId.placeholder": "평가할 데이터셋을 선택해 주세요",
+  "evaluation.addEvaluation.datasetId.required": "평가할 데이터셋을 선택해 주세요",
+  "evaluation.addEvaluation.description.placeholder": "평가 작업 소개 (선택 사항)",
+  "evaluation.addEvaluation.name.placeholder": "평가 작업 이름",
+  "evaluation.addEvaluation.name.required": "평가 작업 이름을 입력해 주세요",
+  "evaluation.addEvaluation.title": "평가 작업 추가",
+  "evaluation.addNewButton": "평가 생성",
+  "evaluation.emptyGuide": "현재 평가 작업이 없습니다. 평가를 생성해 주세요.",
+  "evaluation.table.columns.actions.checkStatus": "상태 확인",
+  "evaluation.table.columns.actions.confirmDelete": "이 평가를 삭제하시겠습니까?",
+  "evaluation.table.columns.actions.confirmRun": "실행하시겠습니까? 실행 후에는 백그라운드에서 비동기적으로 평가 작업이 수행되며, 페이지를 닫아도 작업은 계속 진행됩니다.",
+  "evaluation.table.columns.actions.downloadRecords": "평가 다운로드",
+  "evaluation.table.columns.actions.retry": "재시도",
+  "evaluation.table.columns.actions.run": "실행",
+  "evaluation.table.columns.actions.title": "작업",
+  "evaluation.table.columns.datasetId.title": "데이터셋",
+  "evaluation.table.columns.name.title": "평가 작업 이름",
+  "evaluation.table.columns.records.title": "평가 기록 수",
+  "evaluation.table.columns.referenceFiles.title": "참고 파일",
+  "evaluation.table.columns.status.error": "실행 오류",
+  "evaluation.table.columns.status.pending": "대기 중",
+  "evaluation.table.columns.status.processing": "실행 중",
+  "evaluation.table.columns.status.success": "실행 성공",
+  "evaluation.table.columns.status.title": "상태",
+  "evaluation.table.title": "평가 작업 목록"
 }

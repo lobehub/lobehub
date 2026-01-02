@@ -3,7 +3,7 @@ import { AIChatModelCard } from '../types/aiModel';
 const zerooneChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 16_384,
-    description: '最新高性能模型，保证高质量输出同时，推理速度大幅提升。',
+    description: 'A latest high-performance model with faster inference and high-quality output.',
     displayName: 'Yi Lightning',
     enabled: true,
     id: 'yi-lightning',
@@ -21,7 +21,7 @@ const zerooneChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 16_384,
-    description: '复杂视觉任务模型，提供基于多张图片的高性能理解、分析能力。',
+    description: 'A vision model for complex tasks with strong multi-image understanding and analysis.',
     displayName: 'Yi Vision V2',
     enabled: true,
     id: 'yi-vision-v2',
@@ -36,7 +36,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '小而精悍，轻量极速模型。提供强化数学运算和代码编写能力。',
+    description: 'A compact, fast model with strengthened math and coding capabilities.',
     displayName: 'Yi Spark',
     id: 'yi-spark',
     pricing: {
@@ -50,7 +50,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '中型尺寸模型升级微调，能力均衡，性价比高。深度优化指令遵循能力。',
+    description: 'A tuned mid-size model with balanced capability and value, optimized for instruction following.',
     displayName: 'Yi Medium',
     id: 'yi-medium',
     pricing: {
@@ -64,7 +64,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 200_000,
-    description: '200K 超长上下文窗口，提供长文本深度理解和生成能力。',
+    description: 'A 200K long-context model for deep long-form understanding and generation.',
     displayName: 'Yi Medium 200K',
     id: 'yi-medium-200k',
     pricing: {
@@ -78,7 +78,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '超高性价比、卓越性能。根据性能和推理速度、成本，进行平衡性高精度调优。',
+    description: 'Exceptional value and performance, tuned for a strong balance of quality, speed, and cost.',
     displayName: 'Yi Large Turbo',
     id: 'yi-large-turbo',
     pricing: {
@@ -93,7 +93,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 16_384,
     description:
-      '基于 yi-large 超强模型的高阶服务，结合检索与生成技术提供精准答案，实时全网检索信息服务。',
+      'An advanced service based on yi-large, combining retrieval and generation for precise answers with real-time web search.',
     displayName: 'Yi Large RAG',
     id: 'yi-large-rag',
     pricing: {
@@ -111,7 +111,7 @@ const zerooneChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      '在 yi-large 模型的基础上支持并强化了工具调用的能力，适用于各种需要搭建 agent 或 workflow 的业务场景。',
+      'Built on yi-large with enhanced tool-calling, suited for agent and workflow scenarios.',
     displayName: 'Yi Large FC',
     id: 'yi-large-fc',
     pricing: {
@@ -125,7 +125,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: '全新千亿参数模型，提供超强问答及文本生成能力。',
+    description: 'A new 100B-parameter model with strong Q&A and text generation.',
     displayName: 'Yi Large',
     id: 'yi-large',
     pricing: {
@@ -142,7 +142,7 @@ const zerooneChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 16_384,
-    description: '复杂视觉任务模型，提供高性能图片理解、分析能力。',
+    description: 'A vision model for complex tasks with strong image understanding and analysis.',
     displayName: 'Yi Vision',
     id: 'yi-vision',
     pricing: {
@@ -156,7 +156,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '初期版本，推荐使用 yi-large（新版本）。',
+    description: 'An early version; yi-large (newer) is recommended.',
     displayName: 'Yi Large Preview',
     id: 'yi-large-preview',
     pricing: {
@@ -170,7 +170,7 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '轻量化版本，推荐使用 yi-lightning。',
+    description: 'A lightweight version; yi-lightning is recommended.',
     displayName: 'Yi Lightning Lite',
     id: 'yi-lightning-lite',
     pricing: {

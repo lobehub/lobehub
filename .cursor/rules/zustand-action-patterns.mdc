@@ -1,137 +1,126 @@
 ---
-description: 
+description:
 globs: src/store/**
 alwaysApply: false
 ---
-# LobeChat Zustand Action 组织模式
 
-本文档详细说明了 LobeChat 项目中 Zustand Action 的组织方式、命名规范和实现模式，特别关注乐观更新与后端服务的集成。
+# LobeChat Zustand Action Patterns
 
-## Action 类型分层
+## Action Type Hierarchy
 
-LobeChat 的 Action 采用分层架构，明确区分不同职责：
+LobeChat Actions use a layered architecture with clear separation of responsibilities:
 
 ### 1. Public Actions
-对外暴露的主要接口，供 UI 组件调用：
-- 命名：动词形式（`createTopic`, `sendMessage`, `updateTopicTitle`）
-- 职责：参数验证、流程编排、调用 internal actions
-- 示例：[src/store/chat/slices/topic/action.ts](mdc:src/store/chat/slices/topic/action.ts)
+
+Main interfaces exposed for UI component consumption:
+
+- Naming: Verb form (`createTopic`, `sendMessage`, `updateTopicTitle`)
+- Responsibilities: Parameter validation, flow orchestration, calling internal actions
+- Example: [src/store/chat/slices/topic/action.ts](mdc:src/store/chat/slices/topic/action.ts)
 
 ```typescript
-// Public Action 示例
+// Public Action example
 createTopic: async () => {
-  const { activeId, internal_createTopic } = get();
-  const messages = chatSelectors.activeBaseChats(get());
-  
-  if (messages.length === 0) return;
-  
-  const topicId = await internal_createTopic({
-    sessionId: activeId,
-    title: t('defaultTitle', { ns: 'topic' }),
-    messages: messages.map((m) => m.id),
-  });
-  
+  // ...
   return topicId;
 },
 ```
 
 ### 2. Internal Actions (`internal_*`)
-内部实现细节，处理核心业务逻辑：
-- 命名：`internal_` 前缀 + 动词（`internal_createTopic`, `internal_updateMessageContent`）
-- 职责：乐观更新、服务调用、错误处理、状态同步
-- 不应该被 UI 组件直接调用
+
+Internal implementation details handling core business logic:
+
+- Naming: `internal_` prefix + verb (`internal_createTopic`, `internal_updateMessageContent`)
+- Responsibilities: Optimistic updates, service calls, error handling, state synchronization
+- Should not be called directly by UI components
 
 ```typescript
-// Internal Action 示例 - 乐观更新模式
+// Internal Action example - Optimistic update pattern
 internal_createTopic: async (params) => {
   const tmpId = Date.now().toString();
-  
-  // 1. 立即更新前端状态（乐观更新）
+
+  // 1. Immediately update frontend state (optimistic update)
   get().internal_dispatchTopic(
     { type: 'addTopic', value: { ...params, id: tmpId } },
     'internal_createTopic',
   );
   get().internal_updateTopicLoading(tmpId, true);
-  
-  // 2. 调用后端服务
+
+  // 2. Call backend service
   const topicId = await topicService.createTopic(params);
   get().internal_updateTopicLoading(tmpId, false);
-  
-  // 3. 刷新数据确保一致性
+
+  // 3. Refresh data to ensure consistency
   get().internal_updateTopicLoading(topicId, true);
   await get().refreshTopic();
   get().internal_updateTopicLoading(topicId, false);
-  
+
   return topicId;
 },
 ```
 
 ### 3. Dispatch Methods (`internal_dispatch*`)
-专门处理状态更新的方法：
-- 命名：`internal_dispatch` + 实体名（`internal_dispatchTopic`, `internal_dispatchMessage`）
-- 职责：调用 reducer、更新 Zustand store、处理状态对比
+
+Methods dedicated to handling state updates:
+
+- Naming: `internal_dispatch` + entity name (`internal_dispatchTopic`, `internal_dispatchMessage`)
+- Responsibilities: Calling reducers, updating Zustand store, handling state comparison
 
 ```typescript
-// Dispatch Method 示例
+// Dispatch Method example
 internal_dispatchTopic: (payload, action) => {
   const nextTopics = topicReducer(topicSelectors.currentTopics(get()), payload);
   const nextMap = { ...get().topicMaps, [get().activeId]: nextTopics };
 
   if (isEqual(nextMap, get().topicMaps)) return;
-  
+
   set({ topicMaps: nextMap }, false, action ?? n(`dispatchTopic/${payload.type}`));
 },
 ```
 
-## 何时使用 Reducer 模式 vs. 简单 `set`
+## When to Use Reducer Pattern vs. Simple `set`
 
-### 使用 Reducer 模式的场景
+### Use Reducer Pattern When
 
-适用于复杂的数据结构管理，特别是：
-- 管理对象列表或映射（如 `messagesMap`, `topicMaps`）
-- 需要乐观更新的场景
-- 状态转换逻辑复杂
-- 需要类型安全的 action payload
+Suitable for complex data structure management, especially:
+
+- Managing object lists or maps (e.g., `messagesMap`, `topicMaps`)
+- Scenarios requiring optimistic updates
+- Complex state transition logic
+- Type-safe action payloads needed
 
 ```typescript
-// Reducer 模式示例 - 复杂消息状态管理
+// Reducer pattern example - Complex message state management
 export const messagesReducer = (state: ChatMessage[], payload: MessageDispatch): ChatMessage[] => {
   switch (payload.type) {
     case 'updateMessage': {
       return produce(state, (draftState) => {
         const index = draftState.findIndex((i) => i.id === payload.id);
         if (index < 0) return;
-        draftState[index] = merge(draftState[index], { 
-          ...payload.value, 
-          updatedAt: Date.now() 
+        draftState[index] = merge(draftState[index], {
+          ...payload.value,
+          updatedAt: Date.now(),
         });
       });
     }
     case 'createMessage': {
-      return produce(state, (draftState) => {
-        draftState.push({ 
-          ...payload.value, 
-          id: payload.id,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          meta: {}
-        });
-      });
+      // ...
     }
-    // ...其他复杂状态转换
+    // ...other complex state transitions
   }
 };
 ```
 
-### 使用简单 `set` 的场景
+### Use Simple `set` When
 
-适用于简单状态更新：
-- 切换布尔值
-- 更新简单字符串/数字
-- 设置单一状态字段
+Suitable for simple state updates:
+
+- Toggling boolean values
+- Updating simple strings/numbers
+- Setting single state fields
 
 ```typescript
-// 简单 set 示例
+// Simple set example
 updateInputMessage: (message) => {
   if (isEqual(message, get().inputMessage)) return;
   set({ inputMessage: message }, false, n('updateInputMessage'));
@@ -142,45 +131,45 @@ togglePortal: (open?: boolean) => {
 },
 ```
 
-## 乐观更新实现模式
+## Optimistic Update Implementation Patterns
 
-乐观更新是 LobeChat 中的核心模式，用于提供流畅的用户体验：
+Optimistic updates are a core pattern in LobeChat for providing smooth user experience:
 
-### 标准乐观更新流程
+### Standard Optimistic Update Flow
 
 ```typescript
-// 完整的乐观更新示例
+// Complete optimistic update example
 internal_updateMessageContent: async (id, content, extra) => {
   const { internal_dispatchMessage, refreshMessages } = get();
 
-  // 1. 立即更新前端状态（乐观更新）
+  // 1. Immediately update frontend state (optimistic update)
   internal_dispatchMessage({
     id,
     type: 'updateMessage',
     value: { content },
   });
 
-  // 2. 调用后端服务
+  // 2. Call backend service
   await messageService.updateMessage(id, {
     content,
     tools: extra?.toolCalls ? internal_transformToolCalls(extra.toolCalls) : undefined,
-    // ...其他字段
+    // ...other fields
   });
 
-  // 3. 刷新确保数据一致性
+  // 3. Refresh to ensure data consistency
   await refreshMessages();
 },
 ```
 
-### 创建操作的乐观更新
+### Optimistic Update for Create Operations
 
 ```typescript
 internal_createMessage: async (message, context) => {
   const { internal_createTmpMessage, refreshMessages, internal_toggleMessageLoading } = get();
-  
+
   let tempId = context?.tempMessageId;
   if (!tempId) {
-    // 创建临时消息用于乐观更新
+    // Create temporary message for optimistic update
     tempId = internal_createTmpMessage(message);
     internal_toggleMessageLoading(true, tempId);
   }
@@ -194,7 +183,7 @@ internal_createMessage: async (message, context) => {
     return id;
   } catch (e) {
     internal_toggleMessageLoading(false, tempId);
-    // 错误处理：更新消息错误状态
+    // Error handling: update message error state
     internal_dispatchMessage({
       id: tempId,
       type: 'updateMessage',
@@ -204,96 +193,77 @@ internal_createMessage: async (message, context) => {
 },
 ```
 
-### 删除操作模式（不使用乐观更新）
+### Delete Operation Pattern (No Optimistic Update)
 
-删除操作通常不适合乐观更新，因为：
-- 删除是破坏性操作，错误恢复复杂
-- 用户对删除操作的即时反馈期望较低
-- 删除失败时恢复原状态会造成困惑
+Delete operations typically don't suit optimistic updates because:
+
+- Deletion is destructive; error recovery is complex
+- Users have lower expectations for immediate feedback on deletions
+- Restoring state on deletion failure causes confusion
 
 ```typescript
-// 删除操作的标准模式 - 无乐观更新
+// Standard delete operation pattern - No optimistic update
 removeGenerationTopic: async (id: string) => {
   const { internal_removeGenerationTopic } = get();
   await internal_removeGenerationTopic(id);
 },
 
 internal_removeGenerationTopic: async (id: string) => {
-  // 1. 显示加载状态
+  // 1. Show loading state
   get().internal_updateGenerationTopicLoading(id, true);
-  
+
   try {
-    // 2. 直接调用后端服务
+    // 2. Directly call backend service
     await generationTopicService.deleteTopic(id);
-    
-    // 3. 刷新数据获取最新状态
+
+    // 3. Refresh data to get latest state
     await get().refreshGenerationTopics();
   } finally {
-    // 4. 确保清除加载状态（无论成功或失败）
+    // 4. Ensure loading state is cleared (whether success or failure)
     get().internal_updateGenerationTopicLoading(id, false);
   }
 },
 ```
 
-删除操作的特点：
-- 直接调用服务，不预先更新状态
-- 依赖 loading 状态提供用户反馈
-- 操作完成后刷新整个列表确保一致性
-- 使用 `try/finally` 确保 loading 状态总是被清理
+Delete operation characteristics:
 
-## 加载状态管理模式
+- Directly call service without pre-updating state
+- Rely on loading state for user feedback
+- Refresh entire list after operation to ensure consistency
+- Use `try/finally` to ensure loading state is always cleaned up
 
-LobeChat 使用统一的加载状态管理模式：
+## Loading State Management Pattern
 
-### 数组式加载状态
+LobeChat uses a unified loading state management pattern:
+
+### Array-based Loading State
 
 ```typescript
-// 在 initialState.ts 中定义
+// Define in initialState.ts
 export interface ChatMessageState {
-  messageLoadingIds: string[];      // 消息加载状态
-  messageEditingIds: string[];      // 消息编辑状态
-  chatLoadingIds: string[];         // 对话生成状态
+  messageEditingIds: string[]; // Message editing state
 }
 
-// 在 action 中管理
-internal_toggleMessageLoading: (loading, id) => {
-  set({
-    messageLoadingIds: toggleBooleanList(get().messageLoadingIds, id, loading),
-  }, false, `internal_toggleMessageLoading/${loading ? 'start' : 'end'}`);
-},
+// Manage in action
+{
+  toggleMessageEditing: (id, editing) => {
+    set(
+      { messageEditingIds: toggleBooleanList(get().messageEditingIds, id, editing) },
+      false,
+      'toggleMessageEditing',
+    );
+  };
+}
 ```
 
-### 统一的加载状态工具
+## SWR Integration Pattern
+
+LobeChat uses SWR for data fetching and cache management:
+
+### Hook-based Data Fetching
 
 ```typescript
-// 通用的加载状态切换工具
-internal_toggleLoadingArrays: (key, loading, id, action) => {
-  const abortControllerKey = `${key}AbortController`;
-  
-  if (loading) {
-    const abortController = new AbortController();
-    set({
-      [abortControllerKey]: abortController,
-      [key]: toggleBooleanList(get()[key] as string[], id!, loading),
-    }, false, action);
-    return abortController;
-  } else {
-    set({
-      [abortControllerKey]: undefined,
-      [key]: id ? toggleBooleanList(get()[key] as string[], id, loading) : [],
-    }, false, action);
-  }
-},
-```
-
-## SWR 集成模式
-
-LobeChat 使用 SWR 进行数据获取和缓存管理：
-
-### Hook 式数据获取
-
-```typescript
-// 在 action.ts 中定义 SWR hook
+// Define SWR hook in action.ts
 useFetchMessages: (enable, sessionId, activeTopicId) =>
   useClientDataSWR<ChatMessage[]>(
     enable ? [SWR_USE_FETCH_MESSAGES, sessionId, activeTopicId] : null,
@@ -304,57 +274,55 @@ useFetchMessages: (enable, sessionId, activeTopicId) =>
           ...get().messagesMap,
           [messageMapKey(sessionId, activeTopicId)]: messages,
         };
-        
+
         if (get().messagesInit && isEqual(nextMap, get().messagesMap)) return;
-        
+
         set({ messagesInit: true, messagesMap: nextMap }, false, n('useFetchMessages'));
       },
     },
   ),
 ```
 
-### 缓存失效和刷新
+### Cache Invalidation and Refresh
 
 ```typescript
-// 刷新数据的标准模式
+// Standard data refresh pattern
 refreshMessages: async () => {
   await mutate([SWR_USE_FETCH_MESSAGES, get().activeId, get().activeTopicId]);
-},
-
-refreshTopic: async () => {
-  return mutate([SWR_USE_FETCH_TOPIC, get().activeId]);
-},
+};
 ```
 
-## 命名规范总结
+## Naming Convention Summary
 
-### Action 命名模式
-- Public Actions: 动词形式，描述用户意图
+### Action Naming Patterns
+
+- Public Actions: Verb form, describing user intent
   - `createTopic`, `sendMessage`, `regenerateMessage`
-- Internal Actions: `internal_` + 动词，描述内部操作
+- Internal Actions: `internal_` + verb, describing internal operation
   - `internal_createTopic`, `internal_updateMessageContent`
-- Dispatch Methods: `internal_dispatch` + 实体名
+- Dispatch Methods: `internal_dispatch` + entity name
   - `internal_dispatchTopic`, `internal_dispatchMessage`
-- Toggle Methods: `internal_toggle` + 状态名
+- Toggle Methods: `internal_toggle` + state name
   - `internal_toggleMessageLoading`, `internal_toggleChatLoading`
 
-### 状态命名模式
-- ID 数组: `[entity]LoadingIds`, `[entity]EditingIds`
-- 映射结构: `[entity]Maps`, `[entity]Map`
-- 当前激活: `active[Entity]Id`
-- 初始化标记: `[entity]sInit`
+### State Naming Patterns
 
-## 最佳实践
+- ID arrays: `[entity]LoadingIds`, `[entity]EditingIds`
+- Map structures: `[entity]Maps`, `[entity]Map`
+- Currently active: `active[Entity]Id`
+- Initialization flags: `[entity]sInit`
 
-1. 合理使用乐观更新：
-   - ✅ 适用：创建、更新操作（用户交互频繁）
-   - ❌ 避免：删除操作（破坏性操作，错误恢复复杂）
-2. 加载状态管理：使用统一的加载状态数组管理并发操作
-3. 类型安全：为所有 action payload 定义 TypeScript 接口
-4. SWR 集成：使用 SWR 管理数据获取和缓存失效
-5. AbortController：为长时间运行的操作提供取消能力
-6. 操作模式选择：
-   - 创建/更新：乐观更新 + 最终一致性
-   - 删除：加载状态 + 服务调用 + 数据刷新
+## Best Practices
 
-这套 Action 组织模式确保了代码的一致性、可维护性，并提供了优秀的用户体验。
+1. Use optimistic updates appropriately:
+   - ✅ Suitable: Create, update operations (frequent user interaction)
+   - ❌ Avoid: Delete operations (destructive, complex error recovery)
+2. Loading state management: Use unified loading state arrays to manage concurrent operations
+3. Type safety: Define TypeScript interfaces for all action payloads
+4. SWR integration: Use SWR to manage data fetching and cache invalidation
+5. AbortController: Provide cancellation capability for long-running operations
+6. Operation mode selection:
+   - Create/Update: Optimistic update + eventual consistency
+   - Delete: Loading state + service call + data refresh
+
+This Action organization pattern ensures code consistency, maintainability, and provides excellent user experience.

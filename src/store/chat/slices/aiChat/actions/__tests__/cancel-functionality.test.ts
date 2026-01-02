@@ -12,7 +12,7 @@ describe('Cancel send message functionality tests', () => {
       // Initial state setup
       act(() => {
         useChatStore.setState({
-          activeId: 'session-1',
+          activeAgentId: 'session-1',
           activeTopicId: 'topic-1',
           operations: {},
           operationsByContext: {},
@@ -33,12 +33,12 @@ describe('Cancel send message functionality tests', () => {
     it('should cancel running sendMessage operations', () => {
       const { result } = renderHook(() => useChatStore());
 
-      const sessionId = 'session-1';
+      const agentId = 'session-1';
       const topicId = 'topic-1';
 
       act(() => {
         useChatStore.setState({
-          activeId: sessionId,
+          activeAgentId: agentId,
           activeTopicId: topicId,
         });
       });
@@ -48,7 +48,7 @@ describe('Cancel send message functionality tests', () => {
       act(() => {
         const res = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId, topicId },
+          context: { agentId, topicId },
         });
         operationId = res.operationId;
       });
@@ -66,7 +66,7 @@ describe('Cancel send message functionality tests', () => {
     it('should restore editor state when cancelling', () => {
       const { result } = renderHook(() => useChatStore());
 
-      const sessionId = 'session-1';
+      const agentId = 'session-1';
       const topicId = 'topic-1';
       const mockEditorState = { content: 'test message' };
 
@@ -78,7 +78,7 @@ describe('Cancel send message functionality tests', () => {
 
       act(() => {
         useChatStore.setState({
-          activeId: sessionId,
+          activeAgentId: agentId,
           activeTopicId: topicId,
           mainInputEditor: mockEditor as any,
         });
@@ -89,7 +89,7 @@ describe('Cancel send message functionality tests', () => {
       act(() => {
         const res = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId, topicId },
+          context: { agentId, topicId },
         });
         operationId = res.operationId;
 
@@ -112,7 +112,7 @@ describe('Cancel send message functionality tests', () => {
 
       act(() => {
         useChatStore.setState({
-          activeId: 'session-1',
+          activeAgentId: 'session-1',
           operations: {},
           operationsByContext: {},
         });
@@ -132,7 +132,7 @@ describe('Cancel send message functionality tests', () => {
 
       act(() => {
         useChatStore.setState({
-          activeId: 'session-1',
+          activeAgentId: 'session-1',
           activeTopicId: 'topic-1',
           operations: {},
           operationsByContext: {},
@@ -151,12 +151,12 @@ describe('Cancel send message functionality tests', () => {
     it('should clear error messages from sendMessage operations', () => {
       const { result } = renderHook(() => useChatStore());
 
-      const sessionId = 'session-1';
+      const agentId = 'session-1';
       const topicId = 'topic-1';
 
       act(() => {
         useChatStore.setState({
-          activeId: sessionId,
+          activeAgentId: agentId,
           activeTopicId: topicId,
         });
       });
@@ -166,7 +166,7 @@ describe('Cancel send message functionality tests', () => {
       act(() => {
         const res = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId, topicId },
+          context: { agentId, topicId },
         });
         operationId = res.operationId;
 
@@ -205,12 +205,12 @@ describe('Cancel send message functionality tests', () => {
       act(() => {
         const res = result.current.startOperation({
           type: 'sendMessage',
-          context: { sessionId, topicId },
+          context: { agentId: sessionId, topicId },
         });
         operationId = res.operationId;
       });
 
-      const contextKey = messageMapKey(sessionId, topicId);
+      const contextKey = messageMapKey({ agentId: sessionId, topicId });
       expect(result.current.operationsByContext[contextKey]).toContain(operationId!);
     });
   });

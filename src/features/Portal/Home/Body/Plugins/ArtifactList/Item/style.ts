@@ -1,6 +1,6 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     cursor: pointer;
 
@@ -10,12 +10,12 @@ export const useStyles = createStyles(({ css, token }) => ({
     padding-inline-end: 12px;
     border-radius: 8px;
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
 
     &:hover {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   plugin: css`
@@ -36,11 +36,11 @@ export const useStyles = createStyles(({ css, token }) => ({
     border-radius: 4px;
   `,
   tagBlue: css`
-    color: ${token.geekblue};
-    background: ${token.geekblue1};
+    color: ${cssVar.geekblue};
+    background: ${cssVar.geekblue1};
   `,
   tagGreen: css`
-    color: ${token.green};
-    background: ${token.green1};
+    color: ${cssVar.green};
+    background: ${cssVar.green1};
   `,
 }));

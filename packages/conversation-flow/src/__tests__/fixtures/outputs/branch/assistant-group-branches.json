@@ -124,11 +124,7 @@
       "fileList": [],
       "imageList": [],
       "meta": {},
-      "videoList": [],
-      "branch": {
-        "activeBranchIndex": 1,
-        "count": 3
-      }
+      "videoList": []
     },
     {
       "id": "msg_eEAXz3HLKeAmEQ",
@@ -162,7 +158,11 @@
       "meta": {},
       "model": "deepseek-chat",
       "provider": "deepseek",
-      "videoList": []
+      "videoList": [],
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 3
+      }
     },
     {
       "id": "msg_nSG0QuSDSmYlXj",

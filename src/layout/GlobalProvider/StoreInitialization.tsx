@@ -1,7 +1,6 @@
 'use client';
 
-import { enableNextAuth } from '@lobechat/const';
-import { useRouter } from 'next/navigation';
+import { INBOX_SESSION_ID, enableNextAuth } from '@lobechat/const';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
@@ -14,19 +13,16 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
-import { useUrlHydrationStore } from '@/store/urlHydration';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { useUserMemoryStore } from '@/store/userMemory';
+
+import { useUserStateRedirect } from './useUserStateRedirect';
 
 const StoreInitialization = memo(() => {
   // prefetch error ns to avoid don't show error content correctly
   useTranslation('error');
 
-  // Initialize from URL (one-time)
-  const initAgentPinnedFromUrl = useUrlHydrationStore((s) => s.initAgentPinnedFromUrl);
-  initAgentPinnedFromUrl();
-
-  const router = useRouter();
   const [isLogin, isSignedIn, useInitUserState] = useUserStore((s) => [
     authSelectors.isLogin(s),
     s.isSignedIn,
@@ -37,8 +33,9 @@ const StoreInitialization = memo(() => {
 
   const useInitSystemStatus = useGlobalStore((s) => s.useInitSystemStatus);
 
-  const useInitAgentStore = useAgentStore((s) => s.useInitInboxAgentStore);
+  const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
   const useInitAiProviderKeyVaults = useAiInfraStore((s) => s.useFetchAiProviderRuntimeState);
+  const useInitIdentities = useUserMemoryStore((s) => s.useInitIdentities);
 
   // init the system preference
   useInitSystemStatus();
@@ -62,21 +59,22 @@ const StoreInitialization = memo(() => {
    */
   const isLoginOnInit = Boolean(enableNextAuth ? isSignedIn : isLogin);
 
-  // init inbox agent and default agent config
-  useInitAgentStore(isLoginOnInit, serverConfig.defaultAgent?.config);
+  // init inbox agent via builtin agent mechanism
+  useInitBuiltinAgent(INBOX_SESSION_ID, { isLogin: isLoginOnInit });
 
   const isSyncActive = useElectronStore((s) => electronSyncSelectors.isSyncActive(s));
 
   // init user provider key vaults
   useInitAiProviderKeyVaults(isLoginOnInit, isSyncActive);
 
+  // init user memory identities (for chat context injection)
+  useInitIdentities(isLoginOnInit);
+
+  const onUserStateSuccess = useUserStateRedirect();
+
   // init user state
   useInitUserState(isLoginOnInit, serverConfig, {
-    onSuccess: (state) => {
-      if (state.isOnboard === false) {
-        router.push('/onboard');
-      }
-    },
+    onSuccess: onUserStateSuccess,
   });
 
   const useStoreUpdater = createStoreUpdater(useGlobalStore);

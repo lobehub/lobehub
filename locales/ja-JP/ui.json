@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "アバター",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "超過",
+    "tokenTag.remained": "残り",
+    "tokenTag.used": "使用"
+  },
+  "common": {
+    "common.cancel": "キャンセル",
+    "common.confirm": "確認",
+    "common.delete": "削除",
+    "common.edit": "編集"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "プロパティを追加",
+    "editableMessage.delete": "削除",
+    "editableMessage.input": "入力",
+    "editableMessage.inputPlaceholder": "サンプル入力内容を入力してください",
+    "editableMessage.output": "出力",
+    "editableMessage.outputPlaceholder": "サンプル出力内容を入力してください",
+    "editableMessage.system": "システム"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "削除",
+    "emojiPicker.draggerDesc": "クリックまたは画像をこの領域にドラッグしてアップロード",
+    "emojiPicker.emoji": "絵文字",
+    "emojiPicker.fileTypeError": "画像ファイルのみアップロードできます！",
+    "emojiPicker.upload": "アップロード",
+    "emojiPicker.uploadBtn": "切り抜いてアップロード"
+  },
+  "form": {
+    "form.reset": "リセット",
+    "form.submit": "送信",
+    "form.unsavedChanges": "未保存の変更",
+    "form.unsavedWarning": "未保存の変更があります。移動してもよろしいですか？"
+  },
+  "hotkey": {
+    "hotkey.conflict": "このショートカットは既存のものと競合しています。",
+    "hotkey.invalidCombination": "ショートカットは修飾キー（Ctrl、Alt、Shift）を含み、通常キーは1つのみです。",
+    "hotkey.placeholder": "キーを押してショートカットを記録",
+    "hotkey.reset": "既定にリセット"
+  },
+  "messageModal": {
+    "messageModal.cancel": "キャンセル",
+    "messageModal.confirm": "確認",
+    "messageModal.edit": "編集"
+  },
+  "sideNav": {
+    "sideNav.collapse": "サイドバーを折りたたむ",
+    "sideNav.demoActiveLabel": "アクティブ",
+    "sideNav.demoFeatureAutoCollapseDesc": "しきい値以下にドラッグすると自動的に折りたたみ",
+    "sideNav.demoFeatureAutoCollapseTitle": "自動折りたたみ",
+    "sideNav.demoFeaturePerformanceDesc": "アニメーション負荷なしで高性能",
+    "sideNav.demoFeaturePerformanceTitle": "パフォーマンス",
+    "sideNav.demoFeatureResizeDesc": "ドラッグしてパネル幅を調整",
+    "sideNav.demoFeatureResizeTitle": "柔軟なサイズ変更",
+    "sideNav.demoFeatureSmartHandleDesc": "ホバーで切替ボタンを表示",
+    "sideNav.demoFeatureSmartHandleTitle": "スマートハンドル",
+    "sideNav.demoFeaturesTitle": "機能",
+    "sideNav.demoHint": "パネルの端をドラッグし、切替ボタンを試してください ->",
+    "sideNav.demoSubtitle": "ドラッグでサイズ変更できるワークスペース風サイドパネル",
+    "sideNav.demoTitle": "DraggableSideNav デモ",
+    "sideNav.expand": "サイドバーを展開"
+  }
+}

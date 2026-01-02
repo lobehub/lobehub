@@ -1,0 +1,66 @@
+'use client';
+
+import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
+
+import AgentItem, { type AgentItemData } from './AgentItem';
+import { useAgentSelectionStore } from './store';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  container: css`
+    overflow-y: auto;
+    flex: 1;
+    padding: ${cssVar.paddingSM}px;
+  `,
+  title: css`
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
+}));
+
+interface SelectedAgentListProps {
+  agents: AgentItemData[];
+}
+
+const SelectedAgentList = memo<SelectedAgentListProps>(({ agents }) => {
+  const { t } = useTranslation(['chat', 'common']);
+
+  const selectedAgentIds = useAgentSelectionStore((s) => s.selectedAgentIds);
+
+  const defaultTitle = useMemo(() => t('defaultSession', { ns: 'common' }), [t]);
+
+  // Get selected agents data
+  const selectedAgents = useMemo(() => {
+    return selectedAgentIds
+      .map((id) => agents.find((a) => a.id === id))
+      .filter((a): a is AgentItemData => a !== undefined);
+  }, [agents, selectedAgentIds]);
+
+  if (selectedAgents.length === 0) {
+    return (
+      <Flexbox className={styles.container} flex={1}>
+        <AgentSelectionEmpty variant="noSelected" />
+      </Flexbox>
+    );
+  }
+
+  return (
+    <Flexbox className={styles.container} gap={4}>
+      <div className={styles.title}>
+        {t('memberSelection.selectedAgents', { count: selectedAgents.length })}
+      </div>
+      <Flexbox>
+        {selectedAgents.map((agent) => (
+          <AgentItem agent={agent} defaultTitle={defaultTitle} key={agent.id} showRemove />
+        ))}
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+export default SelectedAgentList;

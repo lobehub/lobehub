@@ -1,0 +1,318 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`promptUserMemory > contexts only > should format multiple contexts 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="3">
+  <context id="ctx-1" title="Language Preference">User prefers TypeScript over JavaScript</context>
+  <context id="ctx-2" title="Current Project">User is building a SaaS product</context>
+  <context id="ctx-3" title="Location">User is based in San Francisco timezone</context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > contexts only > should format single context 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title="Professional Background">User is a software engineer working on web applications</context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > contexts only > should handle context with null/undefined values 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title=""></context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > contexts only > should handle context without id 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="" title="Some Title">Some context description</context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > edge cases > should handle multiline content 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title="Multi-line Context">Line 1: First point
+Line 2: Second point
+Line 3: Third point</context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > edge cases > should handle special characters in content 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title="Tech Stack & Tools">Uses <React/> & Vue.js frameworks with "strict" mode</context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > edge cases > should handle unicode characters 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title="语言偏好 🌍">用户偏好中文回复 🚀 with émojis and spëcial chàracters</context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > edge cases > should handle very long content 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title="Long Content Test">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</context>
+</contexts>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > experiences only > should format multiple experiences 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<experiences count="2">
+  <experience id="exp-1">
+    <situation>Debugging a memory leak in Node.js</situation>
+    <key_learning>User likes step-by-step debugging guidance</key_learning>
+  </experience>
+  <experience id="exp-2">
+    <situation>Discussing database schema design</situation>
+    <key_learning>User appreciates alternative approaches being mentioned</key_learning>
+  </experience>
+</experiences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > experiences only > should format single experience 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<experiences count="1">
+  <experience id="exp-1">
+    <situation>User asked about React hooks implementation</situation>
+    <key_learning>User prefers concise explanations with code examples</key_learning>
+  </experience>
+</experiences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > experiences only > should handle experience with null/undefined values 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<experiences count="1">
+  <experience id="exp-1">
+    <situation></situation>
+    <key_learning></key_learning>
+  </experience>
+</experiences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should format identities grouped by type 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="3">
+  <personal count="1">
+    <identity role="Father">User is a father of two children</identity>
+  </personal>
+  <professional count="1">
+    <identity role="Software Engineer">User is a senior software engineer</identity>
+  </professional>
+  <demographic count="1">
+    <identity>User is based in Shanghai</identity>
+  </demographic>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should format single type identities (demographic only) 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="2">
+  <demographic count="2">
+    <identity>User is 35 years old</identity>
+    <identity>User speaks Mandarin and English</identity>
+  </demographic>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should format single type identities (personal only) 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="2">
+  <personal count="2">
+    <identity>User is married</identity>
+    <identity>User has a pet dog</identity>
+  </personal>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should format single type identities (professional only) 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <professional count="1">
+    <identity role="CTO">User works at a tech startup</identity>
+  </professional>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should handle identity with null values 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <personal count="1">
+    <identity></identity>
+  </personal>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > identities only > should handle identity without role 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <personal count="1">
+    <identity>User enjoys hiking</identity>
+  </personal>
+</identities>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > mixed memory types > should format all memory types together 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="1">
+  <professional count="1">
+    <identity role="Tech Lead">User is a tech lead at a startup</identity>
+  </professional>
+</identities>
+<contexts count="1">
+  <context id="ctx-1" title="Experience Level">Senior developer with 10 years experience</context>
+</contexts>
+<experiences count="1">
+  <experience id="exp-1">
+    <situation>System design conversation</situation>
+    <key_learning>Prefers detailed architectural discussions</key_learning>
+  </experience>
+</experiences>
+<preferences count="1">
+  <preference id="pref-1">Use design patterns when appropriate</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > mixed memory types > should format all memory types with multiple identities 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<identities count="3">
+  <personal count="1">
+    <identity role="Father">User is a father</identity>
+  </personal>
+  <professional count="1">
+    <identity role="Senior Engineer">User is a senior engineer</identity>
+  </professional>
+  <demographic count="1">
+    <identity>User lives in Beijing</identity>
+  </demographic>
+</identities>
+<contexts count="1">
+  <context id="ctx-1" title="Current Work">Working on AI products</context>
+</contexts>
+<experiences count="1">
+  <experience id="exp-1">
+    <situation>Code review session</situation>
+    <key_learning>Likes practical examples</key_learning>
+  </experience>
+</experiences>
+<preferences count="1">
+  <preference id="pref-1">Prefer concise responses</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > mixed memory types > should format contexts and experiences without preferences 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title="Current Focus">Working on mobile app development</context>
+</contexts>
+<experiences count="1">
+  <experience id="exp-1">
+    <situation>Mobile development discussion</situation>
+    <key_learning>Likes React Native examples</key_learning>
+  </experience>
+</experiences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > mixed memory types > should format contexts and preferences without experiences 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<contexts count="1">
+  <context id="ctx-1" title="Specialization">Backend developer specializing in APIs</context>
+</contexts>
+<preferences count="1">
+  <preference id="pref-1">Always include error handling in examples</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > mixed memory types > should format experiences and preferences without contexts 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<experiences count="1">
+  <experience id="exp-1">
+    <situation>Database query optimization</situation>
+    <key_learning>Appreciates performance optimization tips</key_learning>
+  </experience>
+</experiences>
+<preferences count="1">
+  <preference id="pref-1">Mention time complexity for algorithms</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > preferences only > should filter out empty preferences and keep valid ones 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<preferences count="1">
+  <preference id="pref-2">Valid preference</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > preferences only > should format multiple preferences 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<preferences count="3">
+  <preference id="pref-1">Prefer functional programming patterns</preference>
+  <preference id="pref-2">Use ESLint with Prettier for formatting</preference>
+  <preference id="pref-3">Write unit tests for all new features</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > preferences only > should format single preference 1`] = `
+"<user_memory>
+<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
+<preferences count="1">
+  <preference id="pref-1">Always use TypeScript strict mode</preference>
+</preferences>
+</user_memory>"
+`;
+
+exports[`promptUserMemory > preferences only > should skip preference with empty conclusionDirectives 1`] = `""`;
+
+exports[`promptUserMemory > preferences only > should skip preference with null conclusionDirectives 1`] = `""`;

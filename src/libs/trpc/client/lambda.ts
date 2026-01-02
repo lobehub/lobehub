@@ -1,10 +1,11 @@
-import { TRPCLink, createTRPCClient, httpBatchLink } from '@trpc/client';
+import { type TRPCLink, createTRPCClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
 import { observable } from '@trpc/server/observable';
 import debug from 'debug';
-import { ModelProvider } from 'model-bank';
+import { type ModelProvider } from 'model-bank';
 import superjson from 'superjson';
 
+import { withElectronProtocolIfElectron } from '@/const/protocol';
 import { isDesktop } from '@/const/version';
 import type { LambdaRouter } from '@/server/routers/lambda';
 
@@ -33,15 +34,26 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
 
           // Don't show notifications for abort errors
           if (showError && !isAbortError) {
-            const { loginRequired } = await import('@/components/Error/loginRequiredNotification');
-
             switch (status) {
               case 401: {
                 // Debounce: only show login notification once every 5 seconds
                 const now = Date.now();
                 if (now - last401Time > MIN_401_INTERVAL) {
                   last401Time = now;
-                  loginRequired.redirect();
+                  // Desktop app doesn't have the web auth routes like `/signin`,
+                  // so skip the login redirect/notification there.
+                  if (!isDesktop) {
+                    const { getUserStoreState } = await import('@/store/user/store');
+                    const { isSignedIn, logout } = getUserStoreState();
+                    // If user is still marked as signed in but got 401,
+                    // session is invalid - clear client state first
+                    if (isSignedIn) {
+                      await logout();
+                    }
+                    const { loginRequired } =
+                      await import('@/components/Error/loginRequiredNotification');
+                    loginRequired.redirect();
+                  }
                 }
                 // Mark error as non-retryable to prevent SWR infinite retry loop
                 err.meta = { ...err.meta, shouldRetry: false };
@@ -61,14 +73,13 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
     );
 };
 
-// 2. httpBatchLink
-const customHttpBatchLink = httpBatchLink({
-  fetch: async (input, init) => {
+// 2. Shared link options
+const linkOptions = {
+  // eslint-disable-next-line no-undef
+  fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
     if (isDesktop) {
-      const { desktopRemoteRPCFetch } = await import('@/utils/electron/desktopRemoteRPCFetch');
-
       // eslint-disable-next-line no-undef
-      const res = await desktopRemoteRPCFetch(input as string, init as RequestInit);
+      const res = await fetch(input as string, init as RequestInit);
 
       if (res) return res;
     }
@@ -85,9 +96,8 @@ const customHttpBatchLink = httpBatchLink({
     log('Getting provider from store for image page: %s', location.pathname);
     if (location.pathname === '/image') {
       const { getImageStoreState } = await import('@/store/image');
-      const { imageGenerationConfigSelectors } = await import(
-        '@/store/image/slices/generationConfig/selectors'
-      );
+      const { imageGenerationConfigSelectors } =
+        await import('@/store/image/slices/generationConfig/selectors');
       provider = imageGenerationConfigSelectors.provider(getImageStoreState()) as ModelProvider;
       log('Getting provider from store for image page: %s', provider);
     }
@@ -98,13 +108,24 @@ const customHttpBatchLink = httpBatchLink({
     log('Headers: %O', headers);
     return headers;
   },
-  maxURLLength: 2083,
   transformer: superjson,
-  url: '/trpc/lambda',
+  url: withElectronProtocolIfElectron('/trpc/lambda'),
+};
+
+// Procedures that should skip batching for faster initial load
+const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalConfig']);
+const slowProcedures = new Set(['market.getAssistantList']);
+const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedures]);
+
+// 3. splitLink to conditionally disable batching
+const customSplitLink = splitLink({
+  condition: (op) => SKIP_BATCH_PROCEDURES.has(op.path),
+  false: httpBatchLink({ ...linkOptions, maxURLLength: 2083 }),
+  true: httpLink(linkOptions),
 });
 
-// 3. assembly links
-const links = [errorHandlingLink, customHttpBatchLink];
+// 4. assembly links
+const links = [errorHandlingLink, customSplitLink];
 
 export const lambdaClient = createTRPCClient<LambdaRouter>({
   links,

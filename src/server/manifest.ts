@@ -1,6 +1,6 @@
+import { BRANDING_LOGO_URL } from '@lobechat/business-const';
 import qs from 'query-string';
 
-import { BRANDING_LOGO_URL } from '@/const/branding';
 import { getCanonicalUrl } from '@/server/utils/url';
 
 const MAX_AGE = 31_536_000;
@@ -63,10 +63,10 @@ export class Manifest {
       screenshots: screenshots.map((item) => this._getScreenshot(item)),
       short_name: name,
       splash_pages: null,
-      start_url: '/chat',
+      start_url: '/agent',
       tab_strip: {
         new_tab_button: {
-          url: '/chat',
+          url: '/agent',
         },
       },
       theme_color: color,

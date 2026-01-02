@@ -10,12 +10,12 @@ import debug from 'debug';
 import { spawn } from 'node:child_process';
 
 import {
-  MCPClientParams,
-  MCPError,
-  McpPrompt,
-  McpResource,
-  McpTool,
-  ToolCallResult,
+  type MCPClientParams,
+  type MCPError,
+  type McpPrompt,
+  type McpResource,
+  type McpTool,
+  type ToolCallResult,
   createMCPError,
 } from './types';
 

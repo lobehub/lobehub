@@ -1,4 +1,4 @@
-import { set } from 'lodash-es';
+import { set } from 'es-toolkit/compat';
 
 /**
  * Improved parsing function that handles numbers, booleans, semicolons, and equals signs in values.

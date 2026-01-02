@@ -210,16 +210,52 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 };
 
 /**
+ * Sanitize JSON Schema for Google GenAI compatibility
+ * Google's API doesn't support certain JSON Schema keywords like 'const'
+ * This function recursively processes the schema and converts unsupported keywords
+ */
+const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, any> => {
+  if (!schema || typeof schema !== 'object') return schema;
+
+  // Handle arrays
+  if (Array.isArray(schema)) {
+    return schema.map((item) => sanitizeSchemaForGoogle(item));
+  }
+
+  const result: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(schema)) {
+    // Convert 'const' to 'enum' with single value (Google doesn't support 'const')
+    if (key === 'const') {
+      result['enum'] = [value];
+      continue;
+    }
+
+    // Recursively process nested objects
+    if (value && typeof value === 'object') {
+      result[key] = sanitizeSchemaForGoogle(value);
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result;
+};
+
+/**
  * Convert ChatCompletionTool to Google FunctionDeclaration
  */
 export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration => {
   const functionDeclaration = tool.function;
   const parameters = functionDeclaration.parameters;
   // refs: https://github.com/lobehub/lobe-chat/pull/5002
-  const properties =
+  const rawProperties =
     parameters?.properties && Object.keys(parameters.properties).length > 0
       ? parameters.properties
       : { dummy: { type: 'string' } }; // dummy property to avoid empty object
+
+  // Sanitize properties to remove unsupported JSON Schema keywords for Google
+  const properties = sanitizeSchemaForGoogle(rawProperties);
 
   return {
     description: functionDeclaration.description,

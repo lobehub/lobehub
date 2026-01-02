@@ -1,197 +1,137 @@
 {
-  "ArgsInput": {
-    "addArgument": "Dodaj parametr",
-    "argumentPlaceholder": "Parametr {{index}}",
-    "enterFirstArgument": "Wprowadź pierwszy parametr..."
-  },
-  "DragUpload": {
-    "dragDesc": "Przeciągnij pliki tutaj, aby przesłać wiele obrazów.",
-    "dragFileDesc": "Przeciągnij obrazy i pliki tutaj, aby przesłać wiele obrazów i plików.",
-    "dragFileTitle": "Prześlij plik",
-    "dragTitle": "Prześlij obraz"
-  },
-  "FileManager": {
-    "actions": {
-      "addToKnowledgeBase": "Dodaj do bazy wiedzy",
-      "addToOtherKnowledgeBase": "Dodaj do innej bazy wiedzy",
-      "batchChunking": "Partycjonowanie wsadowe",
-      "chunking": "Partycjonowanie",
-      "chunkingTooltip": "Podziel plik na wiele bloków tekstowych i wektoryzuj, aby umożliwić wyszukiwanie semantyczne i rozmowy o plikach",
-      "chunkingUnsupported": "Ten plik nie obsługuje podziału na części.",
-      "confirmDelete": "Zaraz usuniesz ten plik. Po usunięciu nie będzie można go odzyskać, proszę potwierdź swoje działanie",
-      "confirmDeleteMultiFiles": "Zaraz usuniesz wybrane {{count}} plików. Po usunięciu nie będzie można ich odzyskać, proszę potwierdź swoje działanie",
-      "confirmRemoveFromKnowledgeBase": "Zaraz usuniesz wybrane {{count}} plików z bazy wiedzy. Po usunięciu pliki będą nadal widoczne wśród wszystkich plików, proszę potwierdź swoje działanie",
-      "copyUrl": "Kopiuj link",
-      "copyUrlSuccess": "Adres pliku skopiowany pomyślnie",
-      "createChunkingTask": "Przygotowywanie...",
-      "deleteSuccess": "Plik usunięty pomyślnie",
-      "downloading": "Pobieranie pliku...",
-      "removeFromKnowledgeBase": "Usuń z bazy wiedzy",
-      "removeFromKnowledgeBaseSuccess": "Plik usunięty pomyślnie"
-    },
-    "bottom": "To już wszystko",
-    "config": {
-      "showFilesInKnowledgeBase": "Pokaż zawartość w bazie wiedzy"
-    },
-    "emptyStatus": {
-      "actions": {
-        "file": "Prześlij plik",
-        "folder": "Prześlij folder",
-        "knowledgeBase": "Utwórz nową bazę wiedzy"
-      },
-      "or": "lub",
-      "title": "Przeciągnij plik lub folder tutaj"
-    },
-    "title": {
-      "createdAt": "Data utworzenia",
-      "size": "Rozmiar",
-      "title": "Plik"
-    },
-    "total": {
-      "fileCount": "Łącznie {{count}} pozycji",
-      "selectedCount": "Wybrano {{count}} pozycji"
-    },
-    "view": {
-      "list": "Widok listy",
-      "masonry": "Widok siatki"
-    }
-  },
-  "FileParsingStatus": {
-    "chunks": {
-      "embeddingStatus": {
-        "empty": "Bloki tekstowe nie zostały w pełni wektoryzowane, co spowoduje, że funkcja wyszukiwania semantycznego będzie niedostępna. Aby poprawić jakość wyszukiwania, proszę wektoryzować bloki tekstowe",
-        "error": "Błąd wektoryzacji",
-        "errorResult": "Błąd wektoryzacji, spróbuj ponownie po sprawdzeniu. Powód błędu:",
-        "processing": "Bloki tekstowe są wektoryzowane, proszę czekać",
-        "success": "Obecne bloki tekstowe zostały w pełni wektoryzowane"
-      },
-      "embeddings": "Wektoryzacja",
-      "status": {
-        "error": "Partycjonowanie nie powiodło się",
-        "errorResult": "Partycjonowanie nie powiodło się, proszę sprawdzić i spróbować ponownie. Powód niepowodzenia:",
-        "processing": "Partycjonowanie w toku",
-        "processingTip": "Serwer jest w trakcie dzielenia bloków tekstowych, zamknięcie strony nie wpłynie na postęp partycjonowania"
-      }
-    }
-  },
-  "GoBack": {
-    "back": "Wróć"
-  },
-  "HtmlPreview": {
-    "actions": {
-      "download": "Pobierz",
-      "preview": "Podgląd"
-    },
-    "iframeTitle": "Podgląd HTML",
-    "mode": {
-      "code": "Kod",
-      "preview": "Podgląd"
-    },
-    "title": "Podgląd HTML"
-  },
-  "ImageUpload": {
-    "actions": {
-      "changeImage": "Kliknij, aby zmienić obraz",
-      "dropMultipleFiles": "Nie obsługujemy przesyłania wielu plików jednocześnie, używany będzie tylko pierwszy plik"
-    },
-    "placeholder": {
-      "primary": "Dodaj obraz",
-      "secondary": "Kliknij lub przeciągnij, aby przesłać"
-    }
-  },
-  "KeyValueEditor": {
-    "addButton": "Dodaj nowy wiersz",
-    "deleteTooltip": "Usuń",
-    "duplicateKeyError": "Nazwa klucza musi być unikalna",
-    "keyPlaceholder": "Klucz",
-    "valuePlaceholder": "Wartość"
-  },
-  "LocalFile": {
-    "action": {
-      "open": "Otwórz",
-      "showInFolder": "Pokaż w folderze"
-    }
-  },
-  "MaxTokenSlider": {
-    "unlimited": "Bez ograniczeń"
-  },
-  "ModelSelect": {
-    "featureTag": {
-      "custom": "Niestandardowy model, domyślnie obsługujący zarówno wywołania funkcji, jak i rozpoznawanie wizualne. Proszę zweryfikować możliwość użycia tych funkcji w praktyce.",
-      "file": "Ten model obsługuje wczytywanie plików i rozpoznawanie",
-      "functionCall": "Ten model obsługuje wywołania funkcji (Function Call).",
-      "imageOutput": "Ten model wspiera generowanie obrazów",
-      "reasoning": "Ten model wspiera głębokie myślenie",
-      "search": "Ten model wspiera wyszukiwanie w sieci",
-      "tokens": "Ten model obsługuje maksymalnie {{tokens}} tokenów w pojedynczej sesji.",
-      "video": "Ten model obsługuje rozpoznawanie wideo",
-      "vision": "Ten model obsługuje rozpoznawanie wizualne."
-    },
-    "removed": "Ten model nie znajduje się na liście, jeśli zostanie odznaczony, zostanie automatycznie usunięty"
-  },
-  "ModelSwitchPanel": {
-    "emptyModel": "Brak włączonych modeli, przejdź do ustawień i włącz je",
-    "emptyProvider": "Nie ma aktywnego dostawcy usług, przejdź do ustawień, aby go włączyć",
-    "goToSettings": "Przejdź do ustawień",
-    "provider": "Dostawca",
-    "title": "Model"
-  },
-  "MultiImagesUpload": {
-    "actions": {
-      "uploadMore": "Kliknij lub przeciągnij, aby przesłać więcej"
-    },
-    "modal": {
-      "complete": "Zakończ",
-      "newFileIndicator": "Nowy",
-      "selectImageToPreview": "Wybierz obraz do podglądu",
-      "title": "Zarządzaj obrazami ({{count}})",
-      "upload": "Prześlij obraz"
-    },
-    "placeholder": {
-      "primary": "Kliknij lub przeciągnij, aby przesłać obraz",
-      "secondary": "Obsługuje wybór wielu obrazów"
-    },
-    "progress": {
-      "uploadingWithCount": "{{completed}}/{{total}} przesłano"
-    },
-    "validation": {
-      "fileSizeExceeded": "Przekroczono limit rozmiaru pliku",
-      "fileSizeExceededDetail": "{{fileName}} ({{actualSize}}) przekracza maksymalny dozwolony rozmiar {{maxSize}}",
-      "fileSizeExceededMultiple": "{{count}} plików przekracza maksymalny dozwolony rozmiar {{maxSize}}: {{fileList}}",
-      "imageCountExceeded": "Przekroczono dopuszczalną liczbę obrazów"
-    }
-  },
-  "OllamaSetupGuide": {
-    "action": {
-      "close": "Zamknij powiadomienie",
-      "start": "Zainstalowano i uruchomiono, rozpocznij rozmowę"
-    },
-    "cors": {
-      "description": "Z powodu ograniczeń bezpieczeństwa przeglądarki, musisz skonfigurować CORS dla Ollama, aby móc go używać.",
-      "linux": {
-        "env": "Dodaj `Environment` w sekcji [Service], dodając zmienną środowiskową OLLAMA_ORIGINS:",
-        "reboot": "Przeładuj systemd i uruchom ponownie Ollama",
-        "systemd": "Wywołaj systemd, aby edytować usługę ollama:"
-      },
-      "macos": "Otwórz aplikację „Terminal” i wklej poniższe polecenie, a następnie naciśnij Enter, aby je uruchomić",
-      "reboot": "Po zakończeniu wykonania, uruchom ponownie usługę Ollama",
-      "title": "Skonfiguruj Ollama, aby zezwolić na dostęp międzydomenowy",
-      "windows": "Na Windowsie, kliknij „Panel sterowania”, aby edytować zmienne środowiskowe systemu. Utwórz nową zmienną środowiskową o nazwie „OLLAMA_ORIGINS” dla swojego konta użytkownika, ustawiając wartość na * i kliknij „OK/Zastosuj”, aby zapisać"
-    },
-    "install": {
-      "description": "Upewnij się, że uruchomiłeś Ollama. Jeśli nie masz Ollama, przejdź na oficjalną stronę <1>pobierz</1>",
-      "docker": "Jeśli wolisz używać Dockera, Ollama również oferuje oficjalny obraz Dockera, który możesz pobrać za pomocą poniższego polecenia:",
-      "linux": {
-        "command": "Zainstaluj za pomocą poniższego polecenia:",
-        "manual": "Alternatywnie, możesz również zapoznać się z <1>podręcznikiem instalacji ręcznej dla Linuxa</1>, aby zainstalować samodzielnie"
-      },
-      "title": "Zainstaluj i uruchom aplikację Ollama lokalnie",
-      "windowsTab": "Windows (wersja podglądowa)"
-    }
-  },
-  "Thinking": {
-    "thinking": "Głęboko myślę...",
-    "thought": "Głęboko przemyślane (czas: {{duration}} sekund)",
-    "thoughtWithDuration": "Głęboko przemyślane"
-  }
+  "ArgsInput.addArgument": "Dodaj argument",
+  "ArgsInput.argumentPlaceholder": "Argument {{index}}",
+  "ArgsInput.enterFirstArgument": "Wprowadź pierwszy argument...",
+  "DragUpload.dragDesc": "Przeciągnij i upuść pliki tutaj, aby przesłać wiele obrazów.",
+  "DragUpload.dragFileDesc": "Przeciągnij i upuść obrazy i pliki tutaj, aby przesłać wiele obrazów i plików.",
+  "DragUpload.dragFileTitle": "Prześlij pliki",
+  "DragUpload.dragTitle": "Prześlij obrazy",
+  "FileManager.actions.addToKnowledgeBase": "Dodaj do biblioteki",
+  "FileManager.actions.addToOtherKnowledgeBase": "Dodaj do innej biblioteki",
+  "FileManager.actions.batchChunking": "Przetwarzanie wsadowe",
+  "FileManager.actions.chunking": "Dzielenie na fragmenty",
+  "FileManager.actions.chunkingTooltip": "Podziel plik na wiele fragmentów tekstu i osadź je do wyszukiwania semantycznego i dialogu z plikiem.",
+  "FileManager.actions.chunkingUnsupported": "Ten plik nie obsługuje dzielenia na fragmenty.",
+  "FileManager.actions.confirmDelete": "Zamierzasz usunąć ten plik. Po usunięciu nie będzie można go odzyskać. Potwierdź swoją decyzję.",
+  "FileManager.actions.confirmDeleteFolder": "Zamierzasz usunąć ten folder wraz z całą jego zawartością. Tej operacji nie można cofnąć. Potwierdź swoją decyzję.",
+  "FileManager.actions.confirmDeleteMultiFiles": "Zamierzasz usunąć wybrane {{count}} pliki. Po usunięciu nie będzie można ich odzyskać. Potwierdź swoją decyzję.",
+  "FileManager.actions.confirmRemoveFromKnowledgeBase": "Zamierzasz usunąć {{count}} wybranych plików z biblioteki. Nadal będą dostępne w zakładce Wszystkie pliki. Potwierdź, aby kontynuować.",
+  "FileManager.actions.copyUrl": "Kopiuj link",
+  "FileManager.actions.copyUrlSuccess": "Link do pliku został skopiowany pomyślnie.",
+  "FileManager.actions.createChunkingTask": "Przygotowywanie...",
+  "FileManager.actions.deleteSuccess": "Plik został pomyślnie usunięty.",
+  "FileManager.actions.downloading": "Pobieranie pliku...",
+  "FileManager.actions.goBack": "Przejdź do poprzedniej strony",
+  "FileManager.actions.goForward": "Przejdź do następnej strony",
+  "FileManager.actions.goToParent": "Przejdź do folderu nadrzędnego",
+  "FileManager.actions.moveError": "Nie udało się przenieść pliku",
+  "FileManager.actions.moveHere": "Przenieś tutaj",
+  "FileManager.actions.moveSuccess": "Plik został pomyślnie przeniesiony",
+  "FileManager.actions.moveToFolder": "Przenieś do...",
+  "FileManager.actions.moveToRoot": "Przenieś do katalogu głównego",
+  "FileManager.actions.moving": "Przenoszenie...",
+  "FileManager.actions.removeFromKnowledgeBase": "Usuń z biblioteki",
+  "FileManager.actions.removeFromKnowledgeBaseSuccess": "Plik został pomyślnie usunięty.",
+  "FileManager.actions.rename": "Zmień nazwę",
+  "FileManager.actions.renameError": "Zmiana nazwy nie powiodła się",
+  "FileManager.actions.renameSuccess": "Nazwa została pomyślnie zmieniona",
+  "FileManager.bottom": "To już koniec.",
+  "FileManager.config.showFilesInKnowledgeBase": "Pokaż zawartość w bibliotece",
+  "FileManager.emptyStatus.actions.file": "Prześlij plik",
+  "FileManager.emptyStatus.actions.folder": "Prześlij folder",
+  "FileManager.emptyStatus.actions.knowledgeBase": "Utwórz bibliotekę",
+  "FileManager.emptyStatus.or": "lub",
+  "FileManager.emptyStatus.title": "Przeciągnij pliki lub foldery tutaj",
+  "FileManager.noFolders": "Brak dostępnych folderów",
+  "FileManager.sort.dateAdded": "Data dodania",
+  "FileManager.sort.name": "Nazwa",
+  "FileManager.sort.size": "Rozmiar",
+  "FileManager.title.createdAt": "Utworzono",
+  "FileManager.title.size": "Rozmiar",
+  "FileManager.title.title": "Plik",
+  "FileManager.total.fileCount": "Łącznie {{count}} elementów",
+  "FileManager.total.selectedCount": "Wybrano {{count}} elementów",
+  "FileManager.view.list": "Widok listy",
+  "FileManager.view.masonry": "Widok siatki",
+  "FileParsingStatus.chunks.embeddingStatus.empty": "Fragmenty tekstu nie zostały w pełni osadzone, co uniemożliwia korzystanie z wyszukiwania semantycznego. Aby poprawić jakość wyszukiwania, osadź fragmenty tekstu.",
+  "FileParsingStatus.chunks.embeddingStatus.error": "Osadzanie nie powiodło się",
+  "FileParsingStatus.chunks.embeddingStatus.errorResult": "Wektoryzacja nie powiodła się, sprawdź i spróbuj ponownie. Szczegóły błędu:",
+  "FileParsingStatus.chunks.embeddingStatus.processing": "Trwa osadzanie fragmentów tekstu, proszę czekać.",
+  "FileParsingStatus.chunks.embeddingStatus.success": "Wszystkie aktualne fragmenty tekstu zostały osadzone",
+  "FileParsingStatus.chunks.embeddings": "Osadzanie",
+  "FileParsingStatus.chunks.status.error": "Dzielenie na fragmenty nie powiodło się",
+  "FileParsingStatus.chunks.status.errorResult": "Dzielenie na fragmenty nie powiodło się, sprawdź i spróbuj ponownie. Szczegóły błędu:",
+  "FileParsingStatus.chunks.status.processing": "Dzielenie na fragmenty",
+  "FileParsingStatus.chunks.status.processingTip": "Serwer dzieli tekst na fragmenty; zamknięcie strony nie wpłynie na postęp procesu.",
+  "GoBack.back": "Wstecz",
+  "HtmlPreview.actions.download": "Pobierz",
+  "HtmlPreview.actions.preview": "Podgląd",
+  "HtmlPreview.iframeTitle": "Podgląd HTML",
+  "HtmlPreview.mode.code": "Kod",
+  "HtmlPreview.mode.preview": "Podgląd",
+  "HtmlPreview.title": "Podgląd HTML",
+  "ImageUpload.actions.changeImage": "Kliknij, aby zmienić obraz",
+  "ImageUpload.actions.dropMultipleFiles": "Przesyłanie wielu plików jednocześnie nie jest obsługiwane; zostanie użyty tylko pierwszy plik",
+  "ImageUpload.placeholder.primary": "Dodaj obraz",
+  "ImageUpload.placeholder.secondary": "Kliknij lub przeciągnij, aby przesłać",
+  "KeyValueEditor.addButton": "Dodaj wiersz",
+  "KeyValueEditor.deleteTooltip": "Usuń",
+  "KeyValueEditor.duplicateKeyError": "Klucz musi być unikalny",
+  "KeyValueEditor.keyPlaceholder": "Klucz",
+  "KeyValueEditor.valuePlaceholder": "Wartość",
+  "LocalFile.action.open": "Otwórz",
+  "LocalFile.action.showInFolder": "Pokaż w folderze",
+  "MaxTokenSlider.unlimited": "Bez limitu",
+  "ModelSelect.featureTag.custom": "Model niestandardowy, domyślnie obsługuje wywołania funkcji i rozpoznawanie wizualne. Sprawdź dostępność tych funkcji w zależności od sytuacji.",
+  "ModelSelect.featureTag.file": "Ten model obsługuje przesyłanie plików do odczytu i rozpoznawania.",
+  "ModelSelect.featureTag.functionCall": "Ten model obsługuje wywołania funkcji.",
+  "ModelSelect.featureTag.imageOutput": "Ten model obsługuje generowanie obrazów.",
+  "ModelSelect.featureTag.reasoning": "Ten model obsługuje głębokie rozumowanie.",
+  "ModelSelect.featureTag.search": "Ten model obsługuje wyszukiwanie online.",
+  "ModelSelect.featureTag.tokens": "Ten model obsługuje do {{tokens}} tokenów w jednej sesji.",
+  "ModelSelect.featureTag.video": "Ten model obsługuje rozpoznawanie wideo",
+  "ModelSelect.featureTag.vision": "Ten model obsługuje rozpoznawanie wizualne.",
+  "ModelSelect.removed": "Model nie znajduje się na liście. Zostanie automatycznie usunięty po odznaczeniu.",
+  "ModelSwitchPanel.emptyModel": "Brak włączonych modeli. Przejdź do ustawień, aby je włączyć.",
+  "ModelSwitchPanel.emptyProvider": "Brak włączonych dostawców. Przejdź do ustawień, aby włączyć jednego.",
+  "ModelSwitchPanel.goToSettings": "Przejdź do ustawień",
+  "ModelSwitchPanel.provider": "Dostawca",
+  "ModelSwitchPanel.title": "Model",
+  "MultiImagesUpload.actions.uploadMore": "Kliknij lub przeciągnij, aby przesłać więcej",
+  "MultiImagesUpload.modal.complete": "Gotowe",
+  "MultiImagesUpload.modal.newFileIndicator": "Nowy",
+  "MultiImagesUpload.modal.selectImageToPreview": "Wybierz obraz do podglądu",
+  "MultiImagesUpload.modal.title": "Zarządzaj obrazami ({{count}})",
+  "MultiImagesUpload.modal.upload": "Prześlij obrazy",
+  "MultiImagesUpload.placeholder.primary": "Kliknij lub przeciągnij, aby przesłać obrazy",
+  "MultiImagesUpload.placeholder.secondary": "Obsługuje wybór wielu obrazów",
+  "MultiImagesUpload.progress.uploadingWithCount": "Przesłano {{completed}}/{{total}}",
+  "MultiImagesUpload.validation.fileSizeExceeded": "Rozmiar pliku przekracza dozwolony limit",
+  "MultiImagesUpload.validation.fileSizeExceededDetail": "{{fileName}} ({{actualSize}}) przekracza maksymalny dozwolony rozmiar {{maxSize}}",
+  "MultiImagesUpload.validation.fileSizeExceededMultiple": "{{count}} plików przekracza maksymalny dozwolony rozmiar {{maxSize}}: {{fileList}}",
+  "MultiImagesUpload.validation.imageCountExceeded": "Przekroczono maksymalną liczbę obrazów",
+  "OllamaSetupGuide.action.close": "Zamknij komunikat",
+  "OllamaSetupGuide.action.start": "Zainstalowano",
+  "OllamaSetupGuide.cors.description": "Ze względu na ograniczenia bezpieczeństwa przeglądarki musisz skonfigurować ustawienia CORS, aby Ollama działała poprawnie.",
+  "OllamaSetupGuide.cors.linux.env": "Dodaj `Environment` w sekcji [Service] i ustaw zmienną środowiskową OLLAMA_ORIGINS:",
+  "OllamaSetupGuide.cors.linux.reboot": "Przeładuj systemd i uruchom ponownie Ollama",
+  "OllamaSetupGuide.cors.linux.systemd": "Edytuj usługę ollama za pomocą systemd:",
+  "OllamaSetupGuide.cors.macos": "Otwórz aplikację 'Terminal', wklej poniższe polecenie i naciśnij Enter, aby je uruchomić.",
+  "OllamaSetupGuide.cors.reboot": "Uruchom ponownie usługę Ollama po zakończeniu wykonania.",
+  "OllamaSetupGuide.cors.title": "Skonfiguruj Ollama do dostępu między domenami (CORS)",
+  "OllamaSetupGuide.cors.windows": "W systemie Windows otwórz 'Panel sterowania' i przejdź do edycji zmiennych środowiskowych systemu. Utwórz nową zmienną środowiskową o nazwie 'OLLAMA_ORIGINS' dla swojego konta użytkownika, ustaw wartość na *, a następnie kliknij 'OK/Zastosuj', aby zapisać.",
+  "OllamaSetupGuide.install.description": "Upewnij się, że uruchomiłeś aplikację Ollama. Jeśli nie została pobrana, odwiedź oficjalną stronę, aby ją <1>pobrać</1>.",
+  "OllamaSetupGuide.install.docker": "Jeśli wolisz używać Dockera, Ollama udostępnia oficjalny obraz Dockera, który możesz pobrać za pomocą następującego polecenia:",
+  "OllamaSetupGuide.install.linux.command": "Zainstaluj za pomocą następującego polecenia:",
+  "OllamaSetupGuide.install.linux.manual": "Alternatywnie możesz skorzystać z <1>Podręcznika instalacji dla systemu Linux</1>.",
+  "OllamaSetupGuide.install.title": "Zainstaluj i uruchom aplikację Ollama lokalnie",
+  "OllamaSetupGuide.install.windowsTab": "Windows (wersja testowa)",
+  "Thinking.thinking": "Głębokie myślenie...",
+  "Thinking.thought": "Przemyślane (w {{duration}} sekund)",
+  "Thinking.thoughtWithDuration": "Przemyślane",
+  "devTools.cache.empty": "Pamięć podręczna jest pusta",
+  "devTools.metadata.empty": "Brak dostępnych metadanych",
+  "knowledgeBase.empty.description": "Utwórz bibliotekę, aby organizować i zarządzać swoimi zasobami",
+  "knowledgeBase.empty.search": "Nie znaleziono pasującej biblioteki",
+  "knowledgeBase.empty.title": "Brak dostępnych bibliotek"
 }

@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "Bestand succesvol toegevoegd, <1>direct bekijken</1>",
-    "confirm": "Toevoegen",
-    "id": {
-      "placeholder": "Selecteer de kennisbank die u wilt toevoegen",
-      "required": "Selecteer een kennisbank",
-      "title": "Doelkennisbank"
-    },
-    "title": "Toevoegen aan kennisbank",
-    "totalFiles": "{{count}} bestanden geselecteerd"
-  },
-  "createNew": {
-    "confirm": "Nieuw aanmaken",
-    "description": {
-      "placeholder": "Kennisbank beschrijving (optioneel)"
-    },
-    "formTitle": "Basisinformatie",
-    "name": {
-      "placeholder": "Kennisbank naam",
-      "required": "Vul de naam van de kennisbank in"
-    },
-    "title": "Nieuwe kennisbank aanmaken"
-  },
-  "tab": {
-    "evals": "Beoordelingen",
-    "files": "Documenten",
-    "settings": "Instellingen",
-    "testing": "Herinneringstest"
-  },
-  "title": "Kennisbank"
+  "addToKnowledgeBase.addSuccess": "Bestand succesvol toegevoegd, <1>nu bekijken</1>",
+  "addToKnowledgeBase.confirm": "Toevoegen",
+  "addToKnowledgeBase.error": "Toevoegen van bestand aan bibliotheek mislukt",
+  "addToKnowledgeBase.id.placeholder": "Selecteer een bibliotheek om toe te voegen",
+  "addToKnowledgeBase.id.required": "Selecteer een bibliotheek",
+  "addToKnowledgeBase.id.title": "Doelbibliotheek",
+  "addToKnowledgeBase.title": "Toevoegen aan bibliotheek",
+  "addToKnowledgeBase.totalFiles": "{{count}} bestanden geselecteerd",
+  "createNew.confirm": "Nieuw aanmaken",
+  "createNew.description.placeholder": "Beschrijving van de bibliotheek (optioneel)",
+  "createNew.formTitle": "Basisinformatie",
+  "createNew.name.placeholder": "Naam van de bibliotheek",
+  "createNew.name.required": "Voer een naam voor de bibliotheek in",
+  "createNew.title": "Nieuwe bibliotheek aanmaken",
+  "tab.evals": "Evaluaties",
+  "tab.files": "Bestanden",
+  "tab.settings": "Instellingen",
+  "tab.testing": "Herinneringstest",
+  "title": "Bibliotheek"
 }

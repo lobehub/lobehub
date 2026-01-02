@@ -32,7 +32,7 @@ pnpm install-isolated
 pnpm electron:dev
 
 # Type checking
-pnpm typecheck
+pnpm type-check
 
 # Run tests
 pnpm test
@@ -66,9 +66,9 @@ cp .env.desktop .env
 pnpm electron:dev # Start with hot reload
 
 # 2. Code Quality
-pnpm lint      # ESLint checking
-pnpm format    # Prettier formatting
-pnpm typecheck # TypeScript validation
+pnpm lint       # ESLint checking
+pnpm format     # Prettier formatting
+pnpm type-check # TypeScript validation
 
 # 3. Testing
 pnpm test # Run Vitest tests
@@ -313,7 +313,7 @@ tests/                                       # Integration tests
 ```bash
 pnpm test       # Run all tests
 pnpm test:watch # Watch mode
-pnpm typecheck  # Type validation
+pnpm type-check # Type validation
 ```
 
 ### Test Coverage

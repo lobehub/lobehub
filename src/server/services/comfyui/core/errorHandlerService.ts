@@ -7,7 +7,7 @@
 import {
   AgentRuntimeError,
   AgentRuntimeErrorType,
-  ILobeAgentRuntimeErrorType,
+  type ILobeAgentRuntimeErrorType,
 } from '@lobechat/model-runtime';
 import { TRPCError } from '@trpc/server';
 

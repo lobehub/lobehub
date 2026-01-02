@@ -82,6 +82,10 @@
         "totalOutputTokens": 52,
         "totalTokens": 82,
         "cost": 0.00025
+      },
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 3
       }
     },
     {

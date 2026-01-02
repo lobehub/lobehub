@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "Renombrar automáticamente",
-    "confirmRemoveAll": "Se eliminarán todos los temas. Una vez eliminados, no se podrán recuperar. Por favor, actúe con precaución.",
-    "confirmRemoveTopic": "Se eliminará este tema. Una vez eliminado, no se podrá recuperar. Por favor, actúe con precaución.",
-    "confirmRemoveUnstarred": "Se eliminarán los temas no favoritos. Una vez eliminados, no se podrán recuperar. Por favor, actúe con precaución.",
-    "duplicate": "Crear copia",
-    "export": "Exportar tema",
-    "openInNewWindow": "Abrir en una nueva ventana",
-    "removeAll": "Eliminar todos los temas",
-    "removeUnstarred": "Eliminar temas no favoritos"
-  },
-  "defaultTitle": "Tema por defecto",
+  "actions.addNewTopic": "Iniciar nuevo tema",
+  "actions.autoRename": "Renombrado inteligente",
+  "actions.confirmRemoveAll": "Estás a punto de eliminar todos los temas. Esta acción no se puede deshacer.",
+  "actions.confirmRemoveTopic": "Estás a punto de eliminar este tema. Esta acción no se puede deshacer.",
+  "actions.confirmRemoveUnstarred": "Estás a punto de eliminar los temas no marcados como favoritos. Esta acción no se puede deshacer.",
+  "actions.duplicate": "Duplicar",
+  "actions.export": "Exportar temas",
+  "actions.import": "Importar conversación",
+  "actions.openInNewWindow": "Abrir en una nueva ventana",
+  "actions.removeAll": "Eliminar todos los temas",
+  "actions.removeUnstarred": "Eliminar temas no favoritos",
+  "defaultTitle": "Tema predeterminado",
+  "displayItems": "Mostrar elementos",
   "duplicateLoading": "Copiando tema...",
   "duplicateSuccess": "Tema copiado con éxito",
   "favorite": "Favorito",
-  "groupMode": {
-    "ascMessages": "Ordenar por número total de mensajes ascendente",
-    "byTime": "Agrupar por tiempo",
-    "descMessages": "Ordenar por número total de mensajes descendente",
-    "flat": "Sin agrupar"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "Este mes",
-      "today": "Hoy",
-      "week": "Esta semana",
-      "yesterday": "Ayer"
-    }
-  },
-  "guide": {
-    "desc": "Haga clic en el botón a la izquierda para guardar la conversación actual como un tema histórico y comenzar una nueva conversación.",
-    "title": "Lista de temas"
-  },
+  "groupMode.ascMessages": "Ordenar por mensajes totales ascendente",
+  "groupMode.byTime": "Agrupar por tiempo",
+  "groupMode.descMessages": "Ordenar por mensajes totales descendente",
+  "groupMode.flat": "Sin agrupación",
+  "groupTitle.byTime.month": "Este mes",
+  "groupTitle.byTime.today": "Hoy",
+  "groupTitle.byTime.week": "Esta semana",
+  "groupTitle.byTime.yesterday": "Ayer",
+  "guide.desc": "Haz clic en el botón de la izquierda para guardar la conversación actual como un tema histórico y comenzar una nueva conversación.",
+  "guide.title": "Lista de temas",
+  "importError": "Error al importar",
+  "importInvalidFormat": "Formato de archivo no válido. Asegúrate de que sea un archivo JSON válido.",
+  "importLoading": "Importando conversación...",
+  "importSuccess": "Se importaron correctamente {{count}} mensajes",
+  "loadMore": "Cargar más",
   "searchPlaceholder": "Buscar temas...",
-  "searchResultEmpty": "No hay resultados de búsqueda disponibles",
+  "searchResultEmpty": "No se encontraron resultados de búsqueda.",
   "temp": "Temporal",
   "title": "Tema"
 }

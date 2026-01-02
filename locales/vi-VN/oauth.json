@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "Cho phép",
-      "deny": "Từ chối"
-    },
-    "description": "Ứng dụng {{clientName}} yêu cầu quyền truy cập vào tài khoản của bạn",
-    "error": {
-      "sessionInvalid": {
-        "message": "Phiên ủy quyền đã hết hạn hoặc không hợp lệ, vui lòng khởi động lại quy trình ủy quyền.",
-        "title": "Phiên ủy quyền không hợp lệ"
-      },
-      "title": "Đã xảy ra lỗi",
-      "unsupportedInteraction": {
-        "message": "Loại tương tác không được hỗ trợ: {promptName}",
-        "title": "Loại tương tác không được hỗ trợ"
-      }
-    },
-    "permissionsTitle": "Yêu cầu các quyền sau:",
-    "redirectUri": "Sẽ được chuyển hướng đến sau khi ủy quyền thành công",
-    "redirecting": "Ủy quyền thành công, đang chuyển hướng...",
-    "scope": {
-      "email": "Truy cập địa chỉ email của bạn",
-      "offline_access": "Cho phép ứng dụng truy cập dữ liệu của bạn",
-      "openid": "Xác thực bằng tài khoản LobeChat của bạn",
-      "profile": "Truy cập thông tin hồ sơ cơ bản của bạn (tên, ảnh đại diện, v.v.)",
-      "sync-read": "Đọc dữ liệu đồng bộ của bạn",
-      "sync-write": "Ghi và cập nhật dữ liệu đồng bộ của bạn"
-    },
-    "title": "Ủy quyền cho {{clientName}}"
-  },
-  "error": {
-    "backToHome": "Quay lại trang chủ",
-    "desc": "Ủy quyền OAuth thất bại, lý do thất bại: {{reason}}",
-    "reason": {
-      "internal_error": "Lỗi máy chủ",
-      "invalid_request": "Tham số yêu cầu không hợp lệ"
-    },
-    "title": "Ủy quyền thất bại"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "Ứng dụng đang xử lý quyền truy cập, sắp chuyển sang trang tiếp theo...",
-      "success": "Đã cố gắng mở ứng dụng trên máy tính. Nếu ứng dụng không tự động mở, vui lòng chuyển đổi thủ công. Bạn có thể đóng cửa sổ trình duyệt này sau."
-    },
-    "title": {
-      "processing": "Đang xử lý quyền truy cập...",
-      "success": "Quyền truy cập đã hoàn tất"
-    }
-  },
-  "login": {
-    "button": "Xác nhận đăng nhập",
-    "description": "Ứng dụng {{clientName}} yêu cầu sử dụng tài khoản của bạn để đăng nhập",
-    "title": "Đăng nhập vào {{clientName}}",
-    "userWelcome": "Chào mừng bạn trở lại, "
-  },
-  "success": {
-    "subTitle": "Bạn đã cấp quyền thành công cho ứng dụng truy cập tài khoản của mình, có thể đóng trang này.",
-    "title": "Ủy quyền thành công"
-  }
+  "consent.buttons.accept": "Cho phép",
+  "consent.buttons.deny": "Từ chối",
+  "consent.description": "Ứng dụng {{clientName}} đang yêu cầu quyền truy cập vào tài khoản của bạn",
+  "consent.error.sessionInvalid.message": "Phiên ủy quyền đã hết hạn hoặc không hợp lệ. Vui lòng khởi động lại quá trình ủy quyền.",
+  "consent.error.sessionInvalid.title": "Phiên ủy quyền không hợp lệ",
+  "consent.error.title": "Đã xảy ra lỗi",
+  "consent.error.unknown.message": "Đã xảy ra lỗi không xác định khi tải thông tin ủy quyền.",
+  "consent.error.unsupportedInteraction.message": "Loại tương tác không được hỗ trợ: {{promptName}}",
+  "consent.error.unsupportedInteraction.title": "Loại tương tác không được hỗ trợ",
+  "consent.permissionsTitle": "Yêu cầu các quyền sau:",
+  "consent.redirectUri": "Bạn sẽ được chuyển hướng sau khi ủy quyền thành công",
+  "consent.redirecting": "Ủy quyền thành công, đang chuyển hướng...",
+  "consent.scope.email": "Truy cập địa chỉ email của bạn",
+  "consent.scope.offline_access": "Cho phép ứng dụng truy cập dữ liệu của bạn",
+  "consent.scope.openid": "Xác thực bằng tài khoản LobeHub của bạn",
+  "consent.scope.profile": "Truy cập thông tin hồ sơ cơ bản của bạn (tên, ảnh đại diện, v.v.)",
+  "consent.scope.sync-read": "Đọc dữ liệu đã đồng bộ của bạn",
+  "consent.scope.sync-write": "Ghi và cập nhật dữ liệu đã đồng bộ của bạn",
+  "consent.title": "Ủy quyền cho {{clientName}}",
+  "error.backToHome": "Quay về trang chủ",
+  "error.desc": "Ủy quyền OAuth thất bại, lý do: {{reason}}",
+  "error.reason.internal_error": "Lỗi máy chủ nội bộ",
+  "error.reason.invalid_request": "Tham số yêu cầu không hợp lệ",
+  "error.title": "Ủy quyền thất bại",
+  "handoff.desc.processing": "Ứng dụng đang xử lý ủy quyền và sẽ sớm chuyển sang trang tiếp theo...",
+  "handoff.desc.success": "Đã cố gắng mở ứng dụng trên máy tính. Nếu không tự động mở, vui lòng chuyển đổi thủ công. Bạn có thể đóng cửa sổ trình duyệt này sau.",
+  "handoff.title.processing": "Đang tiến hành ủy quyền...",
+  "handoff.title.success": "Đã hoàn tất ủy quyền",
+  "login.button": "Xác nhận đăng nhập",
+  "login.description": "Ứng dụng {{clientName}} đang yêu cầu sử dụng tài khoản của bạn để đăng nhập",
+  "login.title": "Đăng nhập vào {{clientName}}",
+  "login.userWelcome": "Chào mừng trở lại, ",
+  "success.subTitle": "Bạn đã ủy quyền thành công cho ứng dụng truy cập tài khoản của mình. Bây giờ bạn có thể đóng trang này.",
+  "success.title": "Ủy quyền thành công"
 }

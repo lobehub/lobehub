@@ -1,367 +1,312 @@
 {
-  "guide": {
-    "agents": {
-      "replaceBtn": "换一批",
-      "title": "新增助手推荐："
+  "guide.agents.replaceBtn": "换一批",
+  "guide.agents.title": "新增助理推荐：",
+  "guide.defaultMessage": "我是你的智能助理 {{appName}}。从任何想法开始都可以。<br />如需更专业的助理，可以点击 <plus /> 创建",
+  "guide.defaultMessageWithoutCreate": "这里是 {{appName}}。从一句话开始，把目标说清楚就行",
+  "guide.groupActivities.analysis.codeReview.description": "对代码变更和实现进行技术讨论和同行评审",
+  "guide.groupActivities.analysis.codeReview.emoji": "💻",
+  "guide.groupActivities.analysis.codeReview.prompt": "让我们一起审查一些代码。你能帮助我们分析这些代码并识别改进的地方吗？",
+  "guide.groupActivities.analysis.codeReview.title": "代码评审",
+  "guide.groupActivities.analysis.investment.description": "分析市场、讨论投资策略并分享财经洞察",
+  "guide.groupActivities.analysis.investment.emoji": "📈",
+  "guide.groupActivities.analysis.investment.prompt": "让我们一起分析市场。你能帮助我们讨论投资策略并分享财经洞察吗？",
+  "guide.groupActivities.analysis.investment.title": "投资俱乐部",
+  "guide.groupActivities.analysis.research.description": "探索科学概念、进行实验并分享发现",
+  "guide.groupActivities.analysis.research.emoji": "🔬",
+  "guide.groupActivities.analysis.research.prompt": "让我们一起探索科学吧！你能帮助我们进行实验并分享我们的发现吗？",
+  "guide.groupActivities.analysis.research.title": "科学展览",
+  "guide.groupActivities.analysis.study.description": "协作学习会议，讨论概念并共同解决问题",
+  "guide.groupActivities.analysis.study.emoji": "📚",
+  "guide.groupActivities.analysis.study.prompt": "让我们组成一个学习小组。你能帮助我们理解这些概念并一起解决问题吗？",
+  "guide.groupActivities.analysis.study.title": "学习小组",
+  "guide.groupActivities.brainstorm.artWorkshop.description": "创作、评论和欣赏各种形式的视觉和数字艺术",
+  "guide.groupActivities.brainstorm.artWorkshop.emoji": "🖼️",
+  "guide.groupActivities.brainstorm.artWorkshop.prompt": "让我们举办艺术工作坊吧！你能帮助我们创作、评论和欣赏各种形式的艺术吗？",
+  "guide.groupActivities.brainstorm.artWorkshop.title": "艺术工作坊",
+  "guide.groupActivities.brainstorm.debate.description": "关于各种话题和时事的结构化讨论和论辩",
+  "guide.groupActivities.brainstorm.debate.emoji": "⚖️",
+  "guide.groupActivities.brainstorm.debate.prompt": "让我们进行一场结构化辩论。你能帮助我们就这个话题组织一场有理有据的讨论吗？",
+  "guide.groupActivities.brainstorm.debate.title": "辩论俱乐部",
+  "guide.groupActivities.brainstorm.designReview.description": "针对设计概念、原型或创意作品的协作反馈会议",
+  "guide.groupActivities.brainstorm.designReview.emoji": "🎨",
+  "guide.groupActivities.brainstorm.designReview.prompt": "我们需要审查一些设计作品。你能帮助我们对设计概念和原型提供建设性反馈吗？",
+  "guide.groupActivities.brainstorm.designReview.title": "设计评审",
+  "guide.groupActivities.brainstorm.ideation.description": "多视角协作式创意产生和创造性问题解决",
+  "guide.groupActivities.brainstorm.ideation.emoji": "🧠",
+  "guide.groupActivities.brainstorm.ideation.prompt": "让我们开始为项目进行头脑风暴吧。你能帮助我们产生创意想法和解决方案吗？",
+  "guide.groupActivities.brainstorm.ideation.title": "头脑风暴",
+  "guide.groupActivities.game.debateClub.description": "关于各种话题和时事的结构化讨论和论辩",
+  "guide.groupActivities.game.debateClub.emoji": "⚖️",
+  "guide.groupActivities.game.debateClub.prompt": "让我们进行一场结构化辩论。你能帮助我们就这个话题组织一场有理有据的讨论吗？",
+  "guide.groupActivities.game.debateClub.title": "辩论俱乐部",
+  "guide.groupActivities.game.gameNight.description": "有趣的互动游戏和活动，建立团队纽带并享受乐趣",
+  "guide.groupActivities.game.gameNight.emoji": "🎲",
+  "guide.groupActivities.game.gameNight.prompt": "游戏之夜开始啦！你能帮助我们组织一些有趣的互动游戏来建立团队纽带吗？",
+  "guide.groupActivities.game.gameNight.title": "游戏之夜",
+  "guide.groupActivities.game.modelUN.description": "模拟联合国辩论和全球议题的外交谈判",
+  "guide.groupActivities.game.modelUN.emoji": "🌍",
+  "guide.groupActivities.game.modelUN.prompt": "让我们模拟一场联合国辩论。你能帮助我们设置一个关于全球议题的外交谈判吗？",
+  "guide.groupActivities.game.modelUN.title": "模拟联合国",
+  "guide.groupActivities.game.werewolf.description": "玩家通过策略和讨论找出狼人的社交推理游戏",
+  "guide.groupActivities.game.werewolf.emoji": "🐺",
+  "guide.groupActivities.game.werewolf.prompt": "让我们玩狼人游戏吧！你能帮助我们设置规则并主持这个社交推理游戏吗？",
+  "guide.groupActivities.game.werewolf.title": "狼人游戏",
+  "guide.groupActivities.general.brainstorm.description": "多视角协作式创意产生和创造性问题解决",
+  "guide.groupActivities.general.brainstorm.emoji": "🧠",
+  "guide.groupActivities.general.brainstorm.prompt": "让我们开始为项目进行头脑风暴吧。你能帮助我们产生创意想法和解决方案吗？",
+  "guide.groupActivities.general.brainstorm.title": "头脑风暴",
+  "guide.groupActivities.general.debate.description": "关于各种话题和时事的结构化讨论和论辩",
+  "guide.groupActivities.general.debate.emoji": "⚖️",
+  "guide.groupActivities.general.debate.prompt": "让我们进行一场结构化辩论。你能帮助我们就这个话题组织一场有理有据的讨论吗？",
+  "guide.groupActivities.general.debate.title": "辩论俱乐部",
+  "guide.groupActivities.general.languagePractice.description": "与母语者一起练习口语和学习新语言",
+  "guide.groupActivities.general.languagePractice.emoji": "🗣️",
+  "guide.groupActivities.general.languagePractice.prompt": "让我们一起练习新语言吧。你能帮助我们学习和练习说这门语言吗？",
+  "guide.groupActivities.general.languagePractice.title": "语言练习",
+  "guide.groupActivities.general.studyGroup.description": "协作学习会议，讨论概念并共同解决问题",
+  "guide.groupActivities.general.studyGroup.emoji": "📚",
+  "guide.groupActivities.general.studyGroup.prompt": "让我们组成一个学习小组。你能帮助我们理解这些概念并一起解决问题吗？",
+  "guide.groupActivities.general.studyGroup.title": "学习小组",
+  "guide.groupActivities.planning.cookingClass.description": "学习和分享烹饪技巧、食谱和烹饪传统",
+  "guide.groupActivities.planning.cookingClass.emoji": "👨‍🍳",
+  "guide.groupActivities.planning.cookingClass.prompt": "让我们上烹饪课吧！你能帮助我们一起学习新食谱和烹饪技巧吗？",
+  "guide.groupActivities.planning.cookingClass.title": "烹饪课堂",
+  "guide.groupActivities.planning.fitnessChallenge.description": "设定团体健身目标、分享锻炼方法并相互激励",
+  "guide.groupActivities.planning.fitnessChallenge.emoji": "💪",
+  "guide.groupActivities.planning.fitnessChallenge.prompt": "让我们开始健身挑战吧！你能帮助我们设定目标并相互激励保持健康吗？",
+  "guide.groupActivities.planning.fitnessChallenge.title": "健身挑战",
+  "guide.groupActivities.planning.planningPoker.description": "使用卡片估算项目任务和工作量的敏捷估算技术",
+  "guide.groupActivities.planning.planningPoker.emoji": "🃏",
+  "guide.groupActivities.planning.planningPoker.prompt": "我们正在为项目进行规划扑克。你能帮助我们使用敏捷技术估算这些任务的工作量吗？",
+  "guide.groupActivities.planning.planningPoker.title": "规划扑克",
+  "guide.groupActivities.planning.travelPlanning.description": "规划旅行、分享旅行经历并发现新目的地",
+  "guide.groupActivities.planning.travelPlanning.emoji": "✈️",
+  "guide.groupActivities.planning.travelPlanning.prompt": "让我们一起规划旅行吧！你能帮助我们研究目的地并规划旅行行程吗？",
+  "guide.groupActivities.planning.travelPlanning.title": "旅行规划",
+  "guide.groupActivities.product.codeReview.description": "对代码变更和实现进行技术讨论和同行评审",
+  "guide.groupActivities.product.codeReview.emoji": "💻",
+  "guide.groupActivities.product.codeReview.prompt": "让我们一起审查一些代码。你能帮助我们分析这些代码并识别改进的地方吗？",
+  "guide.groupActivities.product.codeReview.title": "代码评审",
+  "guide.groupActivities.product.designReview.description": "针对设计概念、原型或创意作品的协作反馈会议",
+  "guide.groupActivities.product.designReview.emoji": "🎨",
+  "guide.groupActivities.product.designReview.prompt": "我们需要审查一些设计作品。你能帮助我们对设计概念和原型提供建设性反馈吗？",
+  "guide.groupActivities.product.designReview.title": "设计评审",
+  "guide.groupActivities.product.sprintPlanning.description": "使用卡片估算项目任务和工作量的敏捷估算技术",
+  "guide.groupActivities.product.sprintPlanning.emoji": "🃏",
+  "guide.groupActivities.product.sprintPlanning.prompt": "我们正在为项目进行规划扑克。你能帮助我们使用敏捷技术估算这些任务的工作量吗？",
+  "guide.groupActivities.product.sprintPlanning.title": "规划扑克",
+  "guide.groupActivities.product.techExchange.description": "讨论新兴技术、创新和行业趋势",
+  "guide.groupActivities.product.techExchange.emoji": "🚀",
+  "guide.groupActivities.product.techExchange.prompt": "让我们进行技术交流吧！你能帮助我们讨论新兴技术和行业趋势吗？",
+  "guide.groupActivities.product.techExchange.title": "技术交流",
+  "guide.groupActivities.title": "群组聊天用法推荐",
+  "guide.groupActivities.writing.bookClub.description": "对书籍、故事和文学作品进行文学讨论和分析",
+  "guide.groupActivities.writing.bookClub.emoji": "📖",
+  "guide.groupActivities.writing.bookClub.prompt": "让我们开始读书俱乐部讨论。你能帮助我们分析这本书并一起探讨其主题吗？",
+  "guide.groupActivities.writing.bookClub.title": "读书俱乐部",
+  "guide.groupActivities.writing.movieClub.description": "一起观看和讨论电影、纪录片和视觉媒体",
+  "guide.groupActivities.writing.movieClub.emoji": "🎬",
+  "guide.groupActivities.writing.movieClub.prompt": "让我们开始电影俱乐部讨论。你能帮助我们分析这部电影并一起探讨其主题吗？",
+  "guide.groupActivities.writing.movieClub.title": "电影俱乐部",
+  "guide.groupActivities.writing.musicSession.description": "协作音乐创作、分享和欣赏会议",
+  "guide.groupActivities.writing.musicSession.emoji": "🎵",
+  "guide.groupActivities.writing.musicSession.prompt": "让我们进行音乐即兴演奏吧！你能帮助我们一起创作和欣赏音乐吗？",
+  "guide.groupActivities.writing.musicSession.title": "音乐即兴",
+  "guide.groupActivities.writing.studyGroup.description": "协作学习会议，讨论概念并共同解决问题",
+  "guide.groupActivities.writing.studyGroup.emoji": "📚",
+  "guide.groupActivities.writing.studyGroup.prompt": "让我们组成一个学习小组。你能帮助我们理解这些概念并一起解决问题吗？",
+  "guide.groupActivities.writing.studyGroup.title": "学习小组",
+  "guide.groupMessage": "欢迎使用群组。在同一对话空间里，让助理们一起推进任务",
+  "guide.groupTemplates.analysis.description": "数据驱动洞察，深度研究分析",
+  "guide.groupTemplates.analysis.members": [
+    {
+      "avatar": "📊",
+      "backgroundColor": "#E8F8F5",
+      "plugins": ["steam"],
+      "systemRole": "你擅长处理和解释数据，通过图表和统计分析揭示数据背后的规律和趋势。",
+      "title": "数据分析师"
     },
-    "defaultMessage": "我是您的私人智能助理 {{appName}} ，请问现在能帮您做什么？<br />如果需要获得更加专业或定制的助手，可以点击 <plus /> 创建自定义助手",
-    "defaultMessageWithoutCreate": "我是您的私人智能助理 {{appName}} ，请问现在能帮您做什么？",
-    "groupActivities": {
-      "analysis": {
-        "codeReview": {
-          "description": "对代码变更和实现进行技术讨论和同行评审",
-          "emoji": "💻",
-          "prompt": "让我们一起审查一些代码。你能帮助我们分析这些代码并识别改进的地方吗？",
-          "title": "代码评审"
-        },
-        "investment": {
-          "description": "分析市场、讨论投资策略并分享财经洞察",
-          "emoji": "📈",
-          "prompt": "让我们一起分析市场。你能帮助我们讨论投资策略并分享财经洞察吗？",
-          "title": "投资俱乐部"
-        },
-        "research": {
-          "description": "探索科学概念、进行实验并分享发现",
-          "emoji": "🔬",
-          "prompt": "让我们一起探索科学吧！你能帮助我们进行实验并分享我们的发现吗？",
-          "title": "科学展览"
-        },
-        "study": {
-          "description": "协作学习会议，讨论概念并共同解决问题",
-          "emoji": "📚",
-          "prompt": "让我们组成一个学习小组。你能帮助我们理解这些概念并一起解决问题吗？",
-          "title": "学习小组"
-        }
-      },
-      "brainstorm": {
-        "artWorkshop": {
-          "description": "创作、评论和欣赏各种形式的视觉和数字艺术",
-          "emoji": "🖼️",
-          "prompt": "让我们举办艺术工作坊吧！你能帮助我们创作、评论和欣赏各种形式的艺术吗？",
-          "title": "艺术工作坊"
-        },
-        "debate": {
-          "description": "关于各种话题和时事的结构化讨论和论辩",
-          "emoji": "⚖️",
-          "prompt": "让我们进行一场结构化辩论。你能帮助我们就这个话题组织一场有理有据的讨论吗？",
-          "title": "辩论俱乐部"
-        },
-        "designReview": {
-          "description": "针对设计概念、原型或创意作品的协作反馈会议",
-          "emoji": "🎨",
-          "prompt": "我们需要审查一些设计作品。你能帮助我们对设计概念和原型提供建设性反馈吗？",
-          "title": "设计评审"
-        },
-        "ideation": {
-          "description": "多视角协作式创意产生和创造性问题解决",
-          "emoji": "🧠",
-          "prompt": "让我们开始为项目进行头脑风暴吧。你能帮助我们产生创意想法和解决方案吗？",
-          "title": "头脑风暴"
-        }
-      },
-      "game": {
-        "debateClub": {
-          "description": "关于各种话题和时事的结构化讨论和论辩",
-          "emoji": "⚖️",
-          "prompt": "让我们进行一场结构化辩论。你能帮助我们就这个话题组织一场有理有据的讨论吗？",
-          "title": "辩论俱乐部"
-        },
-        "gameNight": {
-          "description": "有趣的互动游戏和活动，建立团队纽带并享受乐趣",
-          "emoji": "🎲",
-          "prompt": "游戏之夜开始啦！你能帮助我们组织一些有趣的互动游戏来建立团队纽带吗？",
-          "title": "游戏之夜"
-        },
-        "modelUN": {
-          "description": "模拟联合国辩论和全球议题的外交谈判",
-          "emoji": "🌍",
-          "prompt": "让我们模拟一场联合国辩论。你能帮助我们设置一个关于全球议题的外交谈判吗？",
-          "title": "模拟联合国"
-        },
-        "werewolf": {
-          "description": "玩家通过策略和讨论找出狼人的社交推理游戏",
-          "emoji": "🐺",
-          "prompt": "让我们玩狼人游戏吧！你能帮助我们设置规则并主持这个社交推理游戏吗？",
-          "title": "狼人游戏"
-        }
-      },
-      "general": {
-        "brainstorm": {
-          "description": "多视角协作式创意产生和创造性问题解决",
-          "emoji": "🧠",
-          "prompt": "让我们开始为项目进行头脑风暴吧。你能帮助我们产生创意想法和解决方案吗？",
-          "title": "头脑风暴"
-        },
-        "debate": {
-          "description": "关于各种话题和时事的结构化讨论和论辩",
-          "emoji": "⚖️",
-          "prompt": "让我们进行一场结构化辩论。你能帮助我们就这个话题组织一场有理有据的讨论吗？",
-          "title": "辩论俱乐部"
-        },
-        "languagePractice": {
-          "description": "与母语者一起练习口语和学习新语言",
-          "emoji": "🗣️",
-          "prompt": "让我们一起练习新语言吧。你能帮助我们学习和练习说这门语言吗？",
-          "title": "语言练习"
-        },
-        "studyGroup": {
-          "description": "协作学习会议，讨论概念并共同解决问题",
-          "emoji": "📚",
-          "prompt": "让我们组成一个学习小组。你能帮助我们理解这些概念并一起解决问题吗？",
-          "title": "学习小组"
-        }
-      },
-      "planning": {
-        "cookingClass": {
-          "description": "学习和分享烹饪技巧、食谱和烹饪传统",
-          "emoji": "👨‍🍳",
-          "prompt": "让我们上烹饪课吧！你能帮助我们一起学习新食谱和烹饪技巧吗？",
-          "title": "烹饪课堂"
-        },
-        "fitnessChallenge": {
-          "description": "设定团体健身目标、分享锻炼方法并相互激励",
-          "emoji": "💪",
-          "prompt": "让我们开始健身挑战吧！你能帮助我们设定目标并相互激励保持健康吗？",
-          "title": "健身挑战"
-        },
-        "planningPoker": {
-          "description": "使用卡片估算项目任务和工作量的敏捷估算技术",
-          "emoji": "🃏",
-          "prompt": "我们正在为项目进行规划扑克。你能帮助我们使用敏捷技术估算这些任务的工作量吗？",
-          "title": "规划扑克"
-        },
-        "travelPlanning": {
-          "description": "规划旅行、分享旅行经历并发现新目的地",
-          "emoji": "✈️",
-          "prompt": "让我们一起规划旅行吧！你能帮助我们研究目的地并规划旅行行程吗？",
-          "title": "旅行规划"
-        }
-      },
-      "product": {
-        "codeReview": {
-          "description": "对代码变更和实现进行技术讨论和同行评审",
-          "emoji": "💻",
-          "prompt": "让我们一起审查一些代码。你能帮助我们分析这些代码并识别改进的地方吗？",
-          "title": "代码评审"
-        },
-        "designReview": {
-          "description": "针对设计概念、原型或创意作品的协作反馈会议",
-          "emoji": "🎨",
-          "prompt": "我们需要审查一些设计作品。你能帮助我们对设计概念和原型提供建设性反馈吗？",
-          "title": "设计评审"
-        },
-        "sprintPlanning": {
-          "description": "使用卡片估算项目任务和工作量的敏捷估算技术",
-          "emoji": "🃏",
-          "prompt": "我们正在为项目进行规划扑克。你能帮助我们使用敏捷技术估算这些任务的工作量吗？",
-          "title": "规划扑克"
-        },
-        "techExchange": {
-          "description": "讨论新兴技术、创新和行业趋势",
-          "emoji": "🚀",
-          "prompt": "让我们进行技术交流吧！你能帮助我们讨论新兴技术和行业趋势吗？",
-          "title": "技术交流"
-        }
-      },
-      "title": "团队聊天用法推荐",
-      "writing": {
-        "bookClub": {
-          "description": "对书籍、故事和文学作品进行文学讨论和分析",
-          "emoji": "📖",
-          "prompt": "让我们开始读书俱乐部讨论。你能帮助我们分析这本书并一起探讨其主题吗？",
-          "title": "读书俱乐部"
-        },
-        "movieClub": {
-          "description": "一起观看和讨论电影、纪录片和视觉媒体",
-          "emoji": "🎬",
-          "prompt": "让我们开始电影俱乐部讨论。你能帮助我们分析这部电影并一起探讨其主题吗？",
-          "title": "电影俱乐部"
-        },
-        "musicSession": {
-          "description": "协作音乐创作、分享和欣赏会议",
-          "emoji": "🎵",
-          "prompt": "让我们进行音乐即兴演奏吧！你能帮助我们一起创作和欣赏音乐吗？",
-          "title": "音乐即兴"
-        },
-        "studyGroup": {
-          "description": "协作学习会议，讨论概念并共同解决问题",
-          "emoji": "📚",
-          "prompt": "让我们组成一个学习小组。你能帮助我们理解这些概念并一起解决问题吗？",
-          "title": "学习小组"
-        }
-      }
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "你是研究专家，专门负责信息收集和深度调研，能够从多个维度全面分析问题。",
+      "title": "研究专家"
     },
-    "groupMessage": "欢迎使用群聊！与多个 AI 助手在共享的对话空间中协作。",
-    "groupTemplates": {
-      "analysis": {
-        "description": "数据驱动洞察，深度研究分析",
-        "members": [
-          {
-            "avatar": "📊",
-            "backgroundColor": "#E8F8F5",
-            "plugins": ["steam"],
-            "systemRole": "你擅长处理和解释数据，通过图表和统计分析揭示数据背后的规律和趋势。",
-            "title": "数据分析师"
-          },
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "你是研究专家，专门负责信息收集和深度调研，能够从多个维度全面分析问题。",
-            "title": "研究专家"
-          },
-          {
-            "avatar": "📈",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "你是统计专家，精通各种统计方法和模型，能够从数据中提取有价值的商业洞察。",
-            "title": "统计专家"
-          },
-          {
-            "avatar": "🧮",
-            "backgroundColor": "#F0F8FF",
-            "systemRole": "你是量化分析师，专门进行量化建模和风险评估，用数学方法解决复杂问题。",
-            "title": "量化分析师"
-          }
-        ],
-        "title": "分析小队"
-      },
-      "brainstorm": {
-        "description": "多视角创意思维，激发无限可能",
-        "members": [
-          {
-            "avatar": "🧠",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "你是一位创意总监，擅长从宏观角度把控创意方向，能够将抽象概念转化为具体可执行的创意方案。",
-            "title": "创意总监"
-          },
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "你是创新专家，专门负责发现新颖的解决方案和突破性思维，善于跳出固有框架思考问题。",
-            "title": "创新专家"
-          },
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "你是设计思维专家，从用户体验和视觉呈现角度思考问题，注重创意的可视化表达。",
-            "title": "设计思维师"
-          }
-        ],
-        "title": "头脑风暴小组"
-      },
-      "game": {
-        "description": "畅玩各种多人文字游戏，例如狼人杀和谁是卧底",
-        "members": [
-          {
-            "avatar": "🧠",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "你是一位主持人，擅长组织各种多人文字游戏，能够引导玩家进行游戏。",
-            "title": "游戏主持人"
-          },
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "你擅长参与各种多人文字游戏，能够根据游戏规则进行游戏。",
-            "title": "游戏玩家"
-          },
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "你擅长参与各种多人文字游戏，能够根据游戏规则进行游戏。",
-            "title": "游戏玩家"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "你擅长参与各种多人文字游戏，能够根据游戏规则进行游戏。",
-            "title": "游戏玩家"
-          }
-        ],
-        "title": "游戏厅"
-      },
-      "planning": {
-        "description": "策略规划与项目管理，统筹全局",
-        "members": [
-          {
-            "avatar": "📋",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "你负责项目的整体规划、进度管控和资源协调，确保项目按时高质量完成。",
-            "title": "厨师"
-          },
-          {
-            "avatar": "🎯",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "你负责制定长期战略规划，分析市场机会，制定目标和实现路径。",
-            "title": "原料采购专家"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#F0F8FF",
-            "systemRole": "你负责制定详细的执行计划，协调各部门资源，确保计划的可执行性。",
-            "title": "美食研发专家"
-          }
-        ],
-        "title": "美食研发团队"
-      },
-      "product": {
-        "description": "产品设计与开发，打造优质产品",
-        "members": [
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "你是设计师，擅长设计各种类型的产品，能够根据产品需求进行设计。",
-            "title": "设计师"
-          },
-          {
-            "avatar": "🧑",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "你是产品经理，负责产品的规划、设计、开发和维护，确保产品的质量和用户体验。",
-            "title": "产品经理"
-          },
-          {
-            "avatar": "🧑‍💻",
-            "backgroundColor": "#E8F8F5",
-            "systemRole": "你是经验丰富的全栈工程师，擅长开发各种类型的产品，能够根据产品需求进行开发。",
-            "title": "全栈工程师"
-          }
-        ],
-        "title": "产品研发团队"
-      },
-      "writing": {
-        "description": "内容创作与编辑，打造优质文案",
-        "members": [
-          {
-            "avatar": "✍️",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "你擅长创作各类文体的内容，能够根据不同场景和受众调整写作风格。",
-            "title": "内容写手"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#E8F8F5",
-            "systemRole": "你是编辑，负责文本的校对、润色和优化，确保内容的准确性、流畅性和专业性。",
-            "title": "编辑"
-          }
-        ],
-        "title": "写作圈"
-      }
+    {
+      "avatar": "📈",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "你是统计专家，精通各种统计方法和模型，能够从数据中提取有价值的商业洞察。",
+      "title": "统计专家"
     },
-    "questions": {
-      "moreBtn": "了解更多",
-      "title": "试着问问："
-    },
-    "welcome": {
-      "afternoon": "下午好",
-      "morning": "早上好",
-      "night": "晚上好",
-      "noon": "中午好"
+    {
+      "avatar": "🧮",
+      "backgroundColor": "#F0F8FF",
+      "systemRole": "你是量化分析师，专门进行量化建模和风险评估，用数学方法解决复杂问题。",
+      "title": "量化分析师"
     }
-  },
+  ],
+  "guide.groupTemplates.analysis.title": "分析小队",
+  "guide.groupTemplates.brainstorm.description": "多视角创意思维，激发无限可能",
+  "guide.groupTemplates.brainstorm.members": [
+    {
+      "avatar": "🧠",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "你是一位创意总监，擅长从宏观角度把控创意方向，能够将抽象概念转化为具体可执行的创意方案。",
+      "title": "创意总监"
+    },
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "你是创新专家，专门负责发现新颖的解决方案和突破性思维，善于跳出固有框架思考问题。",
+      "title": "创新专家"
+    },
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "你是设计思维专家，从用户体验和视觉呈现角度思考问题，注重创意的可视化表达。",
+      "title": "设计思维师"
+    }
+  ],
+  "guide.groupTemplates.brainstorm.title": "头脑风暴小组",
+  "guide.groupTemplates.game.description": "畅玩各种多人文字游戏，例如狼人杀和谁是卧底",
+  "guide.groupTemplates.game.members": [
+    {
+      "avatar": "🧠",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "你是一位主持人，擅长组织各种多人文字游戏，能够引导玩家进行游戏。",
+      "title": "游戏主持人"
+    },
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "你擅长参与各种多人文字游戏，能够根据游戏规则进行游戏。",
+      "title": "游戏玩家"
+    },
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "你擅长参与各种多人文字游戏，能够根据游戏规则进行游戏。",
+      "title": "游戏玩家"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "你擅长参与各种多人文字游戏，能够根据游戏规则进行游戏。",
+      "title": "游戏玩家"
+    }
+  ],
+  "guide.groupTemplates.game.title": "游戏厅",
+  "guide.groupTemplates.planning.description": "策略规划与项目管理，统筹全局",
+  "guide.groupTemplates.planning.members": [
+    {
+      "avatar": "📋",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "你负责项目的整体规划、进度管控和资源协调，确保项目按时高质量完成。",
+      "title": "厨师"
+    },
+    {
+      "avatar": "🎯",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "你负责制定长期战略规划，分析市场机会，制定目标和实现路径。",
+      "title": "原料采购专家"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#F0F8FF",
+      "systemRole": "你负责制定详细的执行计划，协调各部门资源，确保计划的可执行性。",
+      "title": "美食研发专家"
+    }
+  ],
+  "guide.groupTemplates.planning.title": "美食研发群组",
+  "guide.groupTemplates.product.description": "产品设计与开发，打造优质产品",
+  "guide.groupTemplates.product.members": [
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "你是设计师，擅长设计各种类型的产品，能够根据产品需求进行设计。",
+      "title": "设计师"
+    },
+    {
+      "avatar": "🧑",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "你是产品经理，负责产品的规划、设计、开发和维护，确保产品的质量和用户体验。",
+      "title": "产品经理"
+    },
+    {
+      "avatar": "🧑‍💻",
+      "backgroundColor": "#E8F8F5",
+      "systemRole": "你是经验丰富的全栈工程师，擅长开发各种类型的产品，能够根据产品需求进行开发。",
+      "title": "全栈工程师"
+    }
+  ],
+  "guide.groupTemplates.product.title": "产品研发群组",
+  "guide.groupTemplates.writing.description": "内容创作与编辑，打造优质文案",
+  "guide.groupTemplates.writing.members": [
+    {
+      "avatar": "✍️",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "你擅长创作各类文体的内容，能够根据不同场景和受众调整写作风格。",
+      "title": "内容写手"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#E8F8F5",
+      "systemRole": "你是编辑，负责文本的校对、润色和优化，确保内容的准确性、流畅性和专业性。",
+      "title": "编辑"
+    }
+  ],
+  "guide.groupTemplates.writing.title": "写作圈",
+  "guide.questions.moreBtn": "了解更多",
+  "guide.questions.title": "试着问问：",
+  "guide.welcome.afternoon": "下午好",
+  "guide.welcome.morning": "早上好",
+  "guide.welcome.night": "晚上好",
+  "guide.welcome.noon": "中午好",
   "header": "欢迎使用",
-  "pickAgent": "或从下列助手模板选择",
+  "pickAgent": "或从下列助理模板选择",
   "skip": "跳过创建",
-  "slogan": {
-    "desc1": "开启大脑集群，激发思维火花。你的智能助理，一直都在。",
-    "desc2": "创建你的第一个助手，让我们开始吧~",
-    "title": "给自己一个更聪明的大脑"
+  "slogan.desc1": "在这里，助理随叫随到。想法可以协作、沉淀、演进",
+  "slogan.desc2": "创建你的第一个助理，从这里开始",
+  "slogan.title": "把时间用在重要的事上",
+  "welcomeMessages": {
+    "1": "欢迎回来",
+    "2": "嗨，我在呢",
+    "3": "我已就绪",
+    "4": "很高兴见到你",
+    "5": "准备开始了吗",
+    "6": "今日事，我来帮",
+    "7": "继续前行吧",
+    "8": "一起推进吧",
+    "9": "开工咯",
+    "10": "状态就绪",
+    "11": "听候差遣",
+    "12": "久等了",
+    "13": "开始行动吧",
+    "14": "带着新问题来了吧",
+    "15": "今天也辛苦啦",
+    "16": "灵感加载中",
+    "17": "已就绪",
+    "18": "开始吧",
+    "19": "我的思绪已跟上节奏",
+    "20": "灵感即将出现",
+    "21": "只等你的召唤",
+    "22": "再启动高效模式",
+    "23": "已进入待命状态",
+    "24": "准备迎接挑战",
+    "25": "新思路正在生成中",
+    "26": "前路清晰，启程",
+    "27": "系统在线，随时帮你",
+    "28": "努力加载好心情",
+    "29": "掌控节奏，从现在开始",
+    "30": "效率提升中",
+    "31": "今日目标，稳步达成",
+    "32": "让灵感多一点闪光",
+    "33": "任务更新完成",
+    "34": "一切准备就绪",
+    "35": "加速度模式启动",
+    "36": "嗯！我们开始吧",
+    "37": "我在这儿。需要时随时叫我",
+    "38": "继续保持好状态",
+    "39": "记得休息一下"
   }
 }

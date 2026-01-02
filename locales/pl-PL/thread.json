@@ -1,10 +1,6 @@
 {
-  "actions": {
-    "confirmRemoveThread": "Zaraz usuniesz ten wątek, po usunięciu nie będzie można go przywrócić, proszę postępować ostrożnie."
-  },
-  "newPortalThread": {
-    "includeContext": "Zawiera kontekst tematu",
-    "title": "Rozpocznij nowy podtemat"
-  },
-  "notSupportMultiModals": "Podtematy obecnie nie obsługują przesyłania plików/zdjęć. W przypadku potrzeby, zapraszamy do pozostawienia wiadomości: <1>💬 Dyskusja</1>"
+  "actions.confirmRemoveThread": "Zamierzasz usunąć ten wątek podrzędny. Po usunięciu nie będzie można go odzyskać. Proszę postępuj ostrożnie.",
+  "newPortalThread.includeContext": "Dołącz kontekst tematu",
+  "newPortalThread.title": "Rozpocznij nowy wątek podrzędny",
+  "notSupportMultiModals": "Wątki podrzędne nie obsługują obecnie przesyłania plików/obrazów. Jeśli masz jakieś prośby, zostaw wiadomość: <1>💬 Strefa dyskusji</1>"
 }

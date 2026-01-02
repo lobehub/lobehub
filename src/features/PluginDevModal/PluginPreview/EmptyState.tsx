@@ -1,11 +1,11 @@
 import { Icon, Text } from '@lobehub/ui';
 import { Space } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Puzzle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 // Create styles using antd-style
-const useStyles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex-direction: column;
@@ -15,10 +15,10 @@ const useStyles = createStyles(({ token, css }) => ({
 
     width: 100%;
     height: 100%;
-    padding: ${token.paddingLG}px;
+    padding: ${cssVar.paddingLG};
   `,
   description: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
   iconWrapper: css`
@@ -30,30 +30,29 @@ const useStyles = createStyles(({ token, css }) => ({
     height: 64px;
     border-radius: 50%;
 
-    background-color: ${token.colorPrimaryBg};
+    background-color: ${cssVar.colorPrimaryBg};
   `,
   line: css`
     height: 6px;
     border-radius: 3px;
-    background: ${token.colorBorderSecondary};
+    background: ${cssVar.colorBorderSecondary};
   `,
   placeholderLine: css`
     height: 6px;
-    margin-block: ${token.marginXS}px;
+    margin-block: ${cssVar.marginXS};
     margin-inline: 0;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background-color: ${token.colorBorderSecondary};
+    background-color: ${cssVar.colorBorderSecondary};
   `,
   title: css`
-    margin-block-end: ${token.marginXS}px;
-    font-size: ${token.fontSizeLG}px;
+    margin-block-end: ${cssVar.marginXS};
+    font-size: ${cssVar.fontSizeLG};
     font-weight: 500;
   `,
 }));
 
 export default function PluginEmptyState() {
-  const { styles } = useStyles();
   const { t } = useTranslation('plugin');
 
   return (

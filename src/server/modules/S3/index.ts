@@ -31,21 +31,32 @@ export class S3 {
 
   private readonly setAcl: boolean;
 
-  constructor() {
-    if (!fileEnv.S3_ACCESS_KEY_ID || !fileEnv.S3_SECRET_ACCESS_KEY || !fileEnv.S3_BUCKET)
+  constructor(
+    accessKeyId: string | undefined,
+    secretAccessKey: string | undefined,
+    endpoint: string | undefined,
+    options?: {
+      bucket?: string;
+      forcePathStyle?: boolean;
+      region?: string;
+      setAcl?: boolean;
+    },
+  ) {
+    if (!accessKeyId || !secretAccessKey || !endpoint)
       throw new Error('S3 environment variables are not set completely, please check your env');
+    if (!options?.bucket) throw new Error('S3 bucket is not set, please check your env');
 
-    this.bucket = fileEnv.S3_BUCKET;
-    this.setAcl = fileEnv.S3_SET_ACL;
+    this.bucket = options?.bucket;
+    this.setAcl = options?.setAcl || false;
 
     this.client = new S3Client({
       credentials: {
-        accessKeyId: fileEnv.S3_ACCESS_KEY_ID,
-        secretAccessKey: fileEnv.S3_SECRET_ACCESS_KEY,
+        accessKeyId: accessKeyId,
+        secretAccessKey: secretAccessKey,
       },
-      endpoint: fileEnv.S3_ENDPOINT,
-      forcePathStyle: fileEnv.S3_ENABLE_PATH_STYLE,
-      region: fileEnv.S3_REGION || DEFAULT_S3_REGION,
+      endpoint: endpoint,
+      forcePathStyle: options?.forcePathStyle,
+      region: options?.region || DEFAULT_S3_REGION,
       // refs: https://github.com/lobehub/lobe-chat/pull/5479
       requestChecksumCalculation: 'WHEN_REQUIRED',
       responseChecksumValidation: 'WHEN_REQUIRED',
@@ -156,5 +167,16 @@ export class S3 {
     });
 
     await this.client.send(command);
+  }
+}
+
+export class FileS3 extends S3 {
+  constructor() {
+    super(fileEnv.S3_ACCESS_KEY_ID, fileEnv.S3_SECRET_ACCESS_KEY, fileEnv.S3_ENDPOINT, {
+      bucket: fileEnv.S3_BUCKET,
+      forcePathStyle: fileEnv.S3_ENABLE_PATH_STYLE,
+      region: fileEnv.S3_REGION,
+      setAcl: fileEnv.S3_SET_ACL,
+    });
   }
 }

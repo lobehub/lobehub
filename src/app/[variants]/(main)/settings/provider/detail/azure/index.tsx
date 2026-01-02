@@ -1,28 +1,28 @@
 'use client';
 
 import { AutoComplete, Markdown } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ModelProvider } from 'model-bank';
+import { AzureProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput } from '@/components/Skeleton';
-import { AzureProviderCard } from '@/config/modelProviders';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
-import { ProviderItem } from '../../type';
+import { type ProviderItem } from '../../type';
 import ProviderDetail from '../default';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     p {
-      color: ${token.colorTextDescription} !important;
+      color: ${cssVar.colorTextDescription} !important;
     }
   `,
   tip: css`
     font-size: 12px;
-    color: ${token.colorTextDescription};
+    color: ${cssVar.colorTextDescription};
   `,
 }));
 
@@ -30,7 +30,6 @@ const providerKey = ModelProvider.Azure;
 
 const useProviderCard = (): ProviderItem => {
   const { t } = useTranslation('modelProvider');
-  const { styles } = useStyles();
 
   // Get the first model card's deployment name as the check model
   const checkModel = useAiInfraStore((s) => {

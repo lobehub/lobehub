@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "إعادة تسمية ذكية",
-    "confirmRemoveAll": "سيتم حذف جميع المواضيع، ولن يمكن استعادتها بعد الحذف، يرجى توخي الحذر.",
-    "confirmRemoveTopic": "سيتم حذف هذا الموضوع، ولن يمكن استعادته بعد الحذف، يرجى توخي الحذر.",
-    "confirmRemoveUnstarred": "سيتم حذف المواضيع غير المفضلة، ولن يمكن استعادتها بعد الحذف، يرجى توخي الحذر.",
-    "duplicate": "إنشاء نسخة",
-    "export": "تصدير الموضوع",
-    "openInNewWindow": "افتح الصفحة في نافذة جديدة",
-    "removeAll": "حذف جميع المواضيع",
-    "removeUnstarred": "حذف المواضيع غير المفضلة"
-  },
+  "actions.addNewTopic": "ابدأ موضوعًا جديدًا",
+  "actions.autoRename": "إعادة تسمية ذكية",
+  "actions.confirmRemoveAll": "أنت على وشك حذف جميع المواضيع. لا يمكن التراجع عن هذا الإجراء.",
+  "actions.confirmRemoveTopic": "أنت على وشك حذف هذا الموضوع. لا يمكن التراجع عن هذا الإجراء.",
+  "actions.confirmRemoveUnstarred": "أنت على وشك حذف المواضيع غير المميزة. لا يمكن التراجع عن هذا الإجراء.",
+  "actions.duplicate": "نسخ",
+  "actions.export": "تصدير المواضيع",
+  "actions.import": "استيراد المحادثة",
+  "actions.openInNewWindow": "فتح في نافذة جديدة",
+  "actions.removeAll": "حذف جميع المواضيع",
+  "actions.removeUnstarred": "حذف المواضيع غير المميزة",
   "defaultTitle": "موضوع افتراضي",
-  "duplicateLoading": "يتم نسخ الموضوع...",
+  "displayItems": "عرض العناصر",
+  "duplicateLoading": "جارٍ نسخ الموضوع...",
   "duplicateSuccess": "تم نسخ الموضوع بنجاح",
   "favorite": "مفضل",
-  "groupMode": {
-    "ascMessages": "ترتيب حسب إجمالي عدد الرسائل",
-    "byTime": "تجميع حسب الوقت",
-    "descMessages": "ترتيب عكسي حسب إجمالي عدد الرسائل",
-    "flat": "بدون تجميع"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "هذا الشهر",
-      "today": "اليوم",
-      "week": "هذا الأسبوع",
-      "yesterday": "أمس"
-    }
-  },
-  "guide": {
-    "desc": "انقر على زر الإرسال على اليسار لحفظ المحادثة الحالية كموضوع تاريخي وبدء جولة جديدة من المحادثة",
-    "title": "قائمة المواضيع"
-  },
-  "searchPlaceholder": "ابحث عن موضوع...",
-  "searchResultEmpty": "لا توجد نتائج للبحث",
+  "groupMode.ascMessages": "ترتيب حسب عدد الرسائل تصاعديًا",
+  "groupMode.byTime": "تجميع حسب الوقت",
+  "groupMode.descMessages": "ترتيب حسب عدد الرسائل تنازليًا",
+  "groupMode.flat": "بدون تجميع",
+  "groupTitle.byTime.month": "هذا الشهر",
+  "groupTitle.byTime.today": "اليوم",
+  "groupTitle.byTime.week": "هذا الأسبوع",
+  "groupTitle.byTime.yesterday": "أمس",
+  "guide.desc": "انقر على الزر في اليسار لحفظ المحادثة الحالية كموضوع محفوظ وبدء محادثة جديدة.",
+  "guide.title": "قائمة المواضيع",
+  "importError": "فشل في الاستيراد",
+  "importInvalidFormat": "تنسيق الملف غير صالح. يرجى التأكد من أنه ملف JSON صالح.",
+  "importLoading": "جارٍ استيراد المحادثة...",
+  "importSuccess": "تم استيراد {{count}} رسالة بنجاح",
+  "loadMore": "تحميل المزيد",
+  "searchPlaceholder": "ابحث في المواضيع...",
+  "searchResultEmpty": "لم يتم العثور على نتائج.",
   "temp": "مؤقت",
-  "title": "موضوع"
+  "title": "الموضوع"
 }

@@ -1,206 +1,70 @@
 {
-  "ai21": {
-    "description": "AI21 Labs, işletmeler için temel modeller ve yapay zeka sistemleri geliştirerek, üretimde jeneratif yapay zekanın uygulanmasını hızlandırır."
-  },
-  "ai302": {
-    "description": "302.AI, talep üzerine ödeme yapılan bir yapay zeka uygulama platformudur ve piyasadaki en kapsamlı yapay zeka API'leri ile çevrimiçi yapay zeka uygulamalarını sunar"
-  },
-  "ai360": {
-    "description": "360 AI, 360 şirketi tarafından sunulan yapay zeka modeli ve hizmet platformudur. 360GPT2 Pro, 360GPT Pro, 360GPT Turbo ve 360GPT Turbo Responsibility 8K gibi çeşitli gelişmiş doğal dil işleme modelleri sunmaktadır. Bu modeller, büyük ölçekli parametreler ve çok modlu yetenekleri birleştirerek metin üretimi, anlamsal anlama, diyalog sistemleri ve kod üretimi gibi alanlarda geniş bir uygulama yelpazesine sahiptir. Esnek fiyatlandırma stratejileri ile 360 AI, çeşitli kullanıcı ihtiyaçlarını karşılamakta ve geliştiricilerin entegrasyonunu destekleyerek akıllı uygulamaların yenilik ve gelişimini teşvik etmektedir."
-  },
-  "aihubmix": {
-    "description": "AiHubMix, çeşitli yapay zeka modellerine tek bir API arayüzü üzerinden erişim sağlar."
-  },
-  "akashchat": {
-    "description": "Akash, geleneksel bulut sağlayıcılarına kıyasla rekabetçi fiyatlandırmaya sahip, izin gerektirmeyen bir bulut kaynakları pazar yeridir."
-  },
-  "anthropic": {
-    "description": "Anthropic, yapay zeka araştırma ve geliştirmeye odaklanan bir şirkettir. Claude 3.5 Sonnet, Claude 3 Sonnet, Claude 3 Opus ve Claude 3 Haiku gibi bir dizi gelişmiş dil modeli sunmaktadır. Bu modeller, zeka, hız ve maliyet arasında ideal bir denge sağlamaktadır ve kurumsal düzeydeki iş yüklerinden hızlı yanıt gerektiren çeşitli uygulama senaryolarına kadar geniş bir yelpazede kullanılmaktadır. Claude 3.5 Sonnet, en son modeli olarak, birçok değerlendirmede mükemmel performans sergilemekte ve yüksek maliyet etkinliğini korumaktadır."
-  },
-  "azure": {
-    "description": "Azure, GPT-3.5 ve en son GPT-4 serisi gibi çeşitli gelişmiş yapay zeka modelleri sunar. Farklı veri türlerini ve karmaşık görevleri destekleyerek güvenli, güvenilir ve sürdürülebilir yapay zeka çözümleri sağlamaya odaklanmaktadır."
-  },
-  "azureai": {
-    "description": "Azure, GPT-3.5 ve en son GPT-4 serisi dahil olmak üzere çeşitli gelişmiş AI modelleri sunar, çeşitli veri türlerini ve karmaşık görevleri destekler, güvenli, güvenilir ve sürdürülebilir AI çözümlerine odaklanır."
-  },
-  "baichuan": {
-    "description": "Baichuan Intelligent, yapay zeka büyük modellerinin geliştirilmesine odaklanan bir şirkettir. Modelleri, yerel bilgi ansiklopedisi, uzun metin işleme ve üretim gibi Çince görevlerde mükemmel performans sergilemekte ve uluslararası ana akım modelleri aşmaktadır. Baichuan Intelligent ayrıca sektördeki lider çok modlu yeteneklere sahiptir ve birçok otoriter değerlendirmede mükemmel sonuçlar elde etmiştir. Modelleri, Baichuan 4, Baichuan 3 Turbo ve Baichuan 3 Turbo 128k gibi farklı uygulama senaryolarına yönelik optimize edilmiş yüksek maliyet etkinliği çözümleri sunmaktadır."
-  },
-  "bedrock": {
-    "description": "Bedrock, Amazon AWS tarafından sunulan bir hizmettir ve işletmelere gelişmiş yapay zeka dil modelleri ve görsel modeller sağlamaya odaklanmaktadır. Model ailesi, Anthropic'in Claude serisi, Meta'nın Llama 3.1 serisi gibi seçenekleri içermekte olup, metin üretimi, diyalog, görüntü işleme gibi çeşitli görevleri desteklemektedir. Farklı ölçek ve ihtiyaçlara uygun kurumsal uygulamalar için geniş bir yelpaze sunmaktadır."
-  },
-  "bfl": {
-    "description": "Öncü bir ileri düzey yapay zeka araştırma laboratuvarı, yarının görsel altyapısını inşa ediyor."
-  },
-  "cerebras": {
-    "description": "Cerebras, özel CS-3 sistemi üzerine kurulu bir yapay zeka çıkarım platformudur. Gerçek zamanlı yanıtlar ve yüksek veri işleme kapasitesiyle dünyanın en hızlı LLM hizmetini sunmayı hedefler. Gecikmeleri ortadan kaldırmak ve gerçek zamanlı kod üretimi ile aracı görevler gibi karmaşık yapay zeka iş akışlarını hızlandırmak için tasarlanmıştır."
-  },
-  "cloudflare": {
-    "description": "Cloudflare'ın küresel ağı üzerinde sunucusuz GPU destekli makine öğrenimi modelleri çalıştırın."
-  },
-  "cohere": {
-    "description": "Cohere, en son çok dilli modelleri, gelişmiş arama işlevselliğini ve modern işletmeler için özel olarak tasarlanmış AI çalışma alanını sunar - hepsi güvenli bir platformda entegre edilmiştir."
-  },
-  "cometapi": {
-    "description": "CometAPI, OpenAI, Anthropic, Google ve daha fazlasını destekleyen çeşitli ileri düzey büyük model arayüzleri sunan bir hizmet platformudur. Çeşitli geliştirme ve uygulama ihtiyaçlarına uygundur. Kullanıcılar, kendi ihtiyaçlarına göre en uygun modeli ve fiyatı esnek bir şekilde seçebilir, böylece yapay zeka deneyimini geliştirebilirler."
-  },
-  "comfyui": {
-    "description": "Güçlü bir açık kaynaklı görüntü, video ve ses üretim iş akışı motoru; SD, FLUX, Qwen, Hunyuan, WAN gibi ileri düzey modelleri destekler, düğüm tabanlı iş akışı düzenleme ve özelleştirilmiş dağıtım yetenekleri sunar."
-  },
-  "deepseek": {
-    "description": "DeepSeek, yapay zeka teknolojisi araştırma ve uygulamalarına odaklanan bir şirkettir. En son modeli DeepSeek-V2.5, genel diyalog ve kod işleme yeteneklerini birleştirerek, insan tercihleriyle uyum, yazma görevleri ve talimat takibi gibi alanlarda önemli iyileştirmeler sağlamaktadır."
-  },
-  "fal": {
-    "description": "Geliştiricilere yönelik üretken medya platformu"
-  },
-  "fireworksai": {
-    "description": "Fireworks AI, işlev çağrısı ve çok modlu işleme üzerine odaklanan önde gelen bir gelişmiş dil modeli hizmet sağlayıcısıdır. En son modeli Firefunction V2, Llama-3 tabanlıdır ve işlev çağrısı, diyalog ve talimat takibi için optimize edilmiştir. Görsel dil modeli FireLLaVA-13B, görüntü ve metin karışık girişi desteklemektedir. Diğer dikkat çekici modeller arasında Llama serisi ve Mixtral serisi bulunmaktadır ve etkili çok dilli talimat takibi ve üretim desteği sunmaktadır."
-  },
-  "giteeai": {
-    "description": "Gitee AI'nin Sunucusuz API, AI geliştiricileri kutusun dışında büyük modeller infeksiyon API hizmetini sağlar."
-  },
-  "github": {
-    "description": "GitHub Modelleri ile geliştiriciler, AI mühendisleri olabilir ve sektörün önde gelen AI modelleri ile inşa edebilirler."
-  },
-  "google": {
-    "description": "Google'ın Gemini serisi, Google DeepMind tarafından geliştirilen en gelişmiş ve genel yapay zeka modelleridir. Çok modlu tasarımı sayesinde metin, kod, görüntü, ses ve video gibi çeşitli veri türlerini sorunsuz bir şekilde anlama ve işleme yeteneğine sahiptir. Veri merkezlerinden mobil cihazlara kadar çeşitli ortamlarda kullanılabilir, yapay zeka modellerinin verimliliğini ve uygulama kapsamını büyük ölçüde artırmaktadır."
-  },
-  "groq": {
-    "description": "Groq'un LPU çıkarım motoru, en son bağımsız büyük dil modeli (LLM) benchmark testlerinde mükemmel performans sergilemekte ve olağanüstü hız ve verimliliği ile yapay zeka çözümlerinin standartlarını yeniden tanımlamaktadır. Groq, bulut tabanlı dağıtımlarda iyi bir performans sergileyen anlık çıkarım hızının temsilcisidir."
-  },
-  "higress": {
-    "description": "Higress, uzun süreli bağlantı işlerine zarar veren Tengine yeniden yükleme sorununu ve gRPC/Dubbo yük dengeleme yeteneklerinin yetersizliğini çözmek için Alibaba içinde geliştirilmiş bir bulut yerel API geçididir."
-  },
-  "huggingface": {
-    "description": "HuggingFace Inference API, binlerce modeli keşfetmenin hızlı ve ücretsiz bir yolunu sunar, çeşitli görevler için uygundur. Yeni uygulamalar için prototip oluşturuyor ya da makine öğreniminin yeteneklerini deniyorsanız, bu API size birçok alanda yüksek performanslı modellere anında erişim sağlar."
-  },
-  "hunyuan": {
-    "description": "Tencent tarafından geliştirilen büyük bir dil modeli, güçlü Çince yaratım yeteneklerine, karmaşık bağlamlarda mantıksal akıl yürütme yeteneğine ve güvenilir görev yerine getirme yeteneğine sahiptir."
-  },
-  "infiniai": {
-    "description": "Uygulama geliştiricilere yüksek performanslı, kullanımı kolay ve güvenilir büyük model hizmetleri sunar. Büyük model geliştirme den hizmetleştirmeye kadar tüm süreçleri kapsar."
-  },
-  "internlm": {
-    "description": "Büyük model araştırma ve geliştirme araç zincirine adanmış bir açık kaynak organizasyonu. Tüm AI geliştiricilerine verimli ve kullanımı kolay bir açık kaynak platformu sunarak en son büyük model ve algoritma teknolojilerine erişimi kolaylaştırır."
-  },
-  "jina": {
-    "description": "Jina AI, 2020 yılında kurulmuş, önde gelen bir arama AI şirketidir. Arama tabanlı platformumuz, işletmelerin güvenilir ve yüksek kaliteli üretken AI ve çok modlu arama uygulamaları geliştirmelerine yardımcı olan vektör modelleri, yeniden sıralayıcılar ve küçük dil modelleri içerir."
-  },
-  "lmstudio": {
-    "description": "LM Studio, bilgisayarınızda LLM'ler geliştirmek ve denemeler yapmak için bir masaüstü uygulamasıdır."
-  },
-  "minimax": {
-    "description": "MiniMax, 2021 yılında kurulan genel yapay zeka teknolojisi şirketidir ve kullanıcılarla birlikte akıllı çözümler yaratmayı hedeflemektedir. MiniMax, farklı modlarda genel büyük modeller geliştirmiştir. Bunlar arasında trilyon parametreli MoE metin büyük modeli, ses büyük modeli ve görüntü büyük modeli bulunmaktadır. Ayrıca, Conch AI gibi uygulamalar da sunmaktadır."
-  },
-  "mistral": {
-    "description": "Mistral, karmaşık akıl yürütme, çok dilli görevler, kod üretimi gibi alanlarda geniş bir uygulama yelpazesine sahip gelişmiş genel, profesyonel ve araştırma modelleri sunmaktadır. Fonksiyon çağrısı arayüzü aracılığıyla kullanıcılar, özel işlevleri entegre ederek belirli uygulamalar gerçekleştirebilirler."
-  },
-  "modelscope": {
-    "description": "ModelScope, Alibaba Cloud tarafından sunulan bir model hizmet platformudur ve zengin AI modelleri ile çıkarım hizmetleri sağlar."
-  },
-  "moonshot": {
-    "description": "Moonshot, Beijing Yuezhi Anmian Technology Co., Ltd. tarafından sunulan açık kaynaklı bir platformdur. İçerik oluşturma, akademik araştırma, akıllı öneri, tıbbi teşhis gibi geniş bir uygulama alanına sahip çeşitli doğal dil işleme modelleri sunmaktadır. Uzun metin işleme ve karmaşık üretim görevlerini desteklemektedir."
-  },
-  "nebius": {
-    "description": "Nebius, büyük ölçekli GPU kümeleri ve dikey entegre bulut platformları oluşturarak, dünya çapındaki yapay zeka yenilikçilerine yüksek performanslı altyapı sağlar."
-  },
-  "newapi": {
-    "description": "Açık kaynaklı çoklu AI hizmetlerini birleştiren ve yönlendiren platform"
-  },
-  "novita": {
-    "description": "Novita AI, çeşitli büyük dil modelleri ve yapay zeka görüntü üretimi API hizmetleri sunan bir platformdur. Esnek, güvenilir ve maliyet etkin bir yapıya sahiptir. Llama3, Mistral gibi en son açık kaynak modelleri desteklemekte ve üretken yapay zeka uygulama geliştirme için kapsamlı, kullanıcı dostu ve otomatik ölçeklenebilir API çözümleri sunmaktadır. Bu, yapay zeka girişimlerinin hızlı gelişimi için uygundur."
-  },
-  "nvidia": {
-    "description": "NVIDIA NIM™, bulut, veri merkezi, RTX™ AI kişisel bilgisayarlar ve iş istasyonlarında önceden eğitilmiş ve özelleştirilmiş AI modellerinin dağıtımını destekleyen, kendi kendine barındırılan GPU hızlandırmalı çıkarım mikro hizmetleri için konteynerler sunar."
-  },
-  "ollama": {
-    "description": "Ollama'nın sunduğu modeller, kod üretimi, matematiksel işlemler, çok dilli işleme ve diyalog etkileşimi gibi alanları kapsamaktadır. Kurumsal düzeyde ve yerelleştirilmiş dağıtım için çeşitli ihtiyaçları desteklemektedir."
-  },
-  "ollamacloud": {
-    "description": "Ollama Cloud, resmi olarak barındırılan çıkarım hizmetleri sunar, kutudan çıkar çıkmaz Ollama model kütüphanesine erişim sağlar ve OpenAI uyumlu arayüzleri destekler."
-  },
-  "openai": {
-    "description": "OpenAI, dünya çapında lider bir yapay zeka araştırma kuruluşudur. Geliştirdiği modeller, GPT serisi gibi, doğal dil işleme alanında öncü adımlar atmaktadır. OpenAI, yenilikçi ve etkili yapay zeka çözümleri ile birçok sektörü dönüştürmeyi hedeflemektedir. Ürünleri, belirgin performans ve maliyet etkinliği ile araştırma, ticaret ve yenilikçi uygulamalarda yaygın olarak kullanılmaktadır."
-  },
-  "openrouter": {
-    "description": "OpenRouter, OpenAI, Anthropic, LLaMA ve daha fazlasını destekleyen çeşitli öncü büyük model arayüzleri sunan bir hizmet platformudur. Kullanıcılar, ihtiyaçlarına göre en uygun modeli ve fiyatı esnek bir şekilde seçerek yapay zeka deneyimlerini geliştirebilirler."
-  },
-  "perplexity": {
-    "description": "Perplexity, çeşitli gelişmiş Llama 3.1 modelleri sunan önde gelen bir diyalog üretim modeli sağlayıcısıdır. Hem çevrimiçi hem de çevrimdışı uygulamaları desteklemekte olup, özellikle karmaşık doğal dil işleme görevleri için uygundur."
-  },
-  "ppio": {
-    "description": "PPIO Paiou Cloud, istikrarlı ve yüksek maliyet etkinliğe sahip açık kaynak model API hizmeti sunar, DeepSeek'in tüm serisi, Llama, Qwen gibi sektörün önde gelen büyük modellerini destekler."
-  },
-  "qiniu": {
-    "description": "Qiniu, esnek seçeneklerle büyük model API hizmetleri sunan lider bulut hizmeti sağlayıcısıdır, DeepSeek, Llama ve Qwen gibi sektörün önde gelen büyük modellerini destekler."
-  },
-  "qwen": {
-    "description": "Tongyi Qianwen, Alibaba Cloud tarafından geliştirilen büyük ölçekli bir dil modelidir ve güçlü doğal dil anlama ve üretme yeteneklerine sahiptir. Çeşitli soruları yanıtlayabilir, metin içeriği oluşturabilir, görüşlerini ifade edebilir ve kod yazabilir. Birçok alanda etkili bir şekilde kullanılmaktadır."
-  },
-  "replicate": {
-    "description": "Replicate, FLUX ve Stable Diffusion gibi açık kaynaklı görsel modelleri basit bir bulut API'si aracılığıyla çalıştırır."
-  },
-  "sambanova": {
-    "description": "SambaNova Cloud, geliştiricilerin en iyi açık kaynak modellerini kolayca kullanmalarını ve en hızlı çıkarım hızından yararlanmalarını sağlar."
-  },
-  "search1api": {
-    "description": "Search1API, ihtiyaç duyduğunuzda çevrimiçi olabilen DeepSeek serisi modellere erişim sağlar; standart ve hızlı sürümler dahil olmak üzere çeşitli parametre ölçeklerinde model seçimini destekler."
-  },
-  "sensenova": {
-    "description": "SenseTime, güçlü altyapısına dayanarak, verimli ve kullanımı kolay tam yığın büyük model hizmetleri sunar."
-  },
-  "siliconcloud": {
-    "description": "SiliconFlow, insanlığa fayda sağlamak amacıyla AGI'yi hızlandırmaya odaklanmakta ve kullanıcı dostu ve maliyet etkin GenAI yığınları ile büyük ölçekli yapay zeka verimliliğini artırmayı hedeflemektedir."
-  },
-  "spark": {
-    "description": "iFlytek'in Xinghuo büyük modeli, çok alanlı ve çok dilli güçlü yapay zeka yetenekleri sunmaktadır. Gelişmiş doğal dil işleme teknolojisini kullanarak, akıllı donanım, akıllı sağlık, akıllı finans gibi çeşitli dikey senaryolar için yenilikçi uygulamalar geliştirmektedir."
-  },
-  "stepfun": {
-    "description": "StepFun büyük modeli, sektördeki lider çok modlu ve karmaşık akıl yürütme yeteneklerine sahiptir. Uzun metin anlama ve güçlü kendi kendine yönlendirme arama motoru işlevlerini desteklemektedir."
-  },
-  "taichu": {
-    "description": "Çin Bilimler Akademisi Otomasyon Araştırma Enstitüsü ve Wuhan Yapay Zeka Araştırma Enstitüsü, çok modlu büyük modelin yeni neslini sunmaktadır. Çoklu soru-cevap, metin oluşturma, görüntü üretimi, 3D anlama, sinyal analizi gibi kapsamlı soru-cevap görevlerini desteklemekte ve daha güçlü bilişsel, anlama ve yaratma yetenekleri sunarak yeni bir etkileşim deneyimi sağlamaktadır."
-  },
-  "tencentcloud": {
-    "description": "Bilgi motoru atomik yetenekleri (LLM Knowledge Engine Atomic Power), bilgi motoru üzerine geliştirilmiş bilgi sorgulama tam zincir yetenekleri sunar. Bu yetenekler, işletmeler ve geliştiriciler için esnek model uygulamaları oluşturma ve geliştirme imkanı sağlar. Birden fazla atomik yeteneği kullanarak özel model hizmetlerinizi oluşturabilir, belge analizi, parçalama, embedding, çoklu yeniden yazım gibi hizmetleri bir araya getirerek işletmenize özel AI çözümleri tasarlayabilirsiniz."
-  },
-  "togetherai": {
-    "description": "Together AI, yenilikçi yapay zeka modelleri aracılığıyla lider performans elde etmeye odaklanmaktadır. Hızlı ölçeklenme desteği ve sezgisel dağıtım süreçleri dahil olmak üzere geniş özelleştirme yetenekleri sunarak işletmelerin çeşitli ihtiyaçlarını karşılamaktadır."
-  },
-  "upstage": {
-    "description": "Upstage, çeşitli ticari ihtiyaçlar için yapay zeka modelleri geliştirmeye odaklanmaktadır. Solar LLM ve belge AI gibi modeller, insan yapımı genel zeka (AGI) hedeflemektedir. Chat API aracılığıyla basit diyalog ajanları oluşturmakta ve işlev çağrısı, çeviri, gömme ve belirli alan uygulamalarını desteklemektedir."
-  },
-  "v0": {
-    "description": "v0, eşli programlama asistanıdır; sadece doğal dilde fikirlerinizi tanımlamanız yeterlidir, o da projeniz için kod ve kullanıcı arayüzü (UI) oluşturur"
-  },
-  "vercelaigateway": {
-    "description": "Vercel AI Gateway, 100'den fazla modele erişim sağlamak için birleşik bir API sunar; tek bir uç nokta üzerinden OpenAI, Anthropic, Google ve diğer sağlayıcıların modellerini kullanmanıza olanak tanır. Bütçe ayarları, kullanım izleme, istek yük dengeleme ve hata toleransı desteklenmektedir."
-  },
-  "vertexai": {
-    "description": "Google'un Gemini serisi, Google DeepMind tarafından geliştirilen en gelişmiş ve genel amaçlı AI modelleridir. Çok modlu tasarım için özel olarak oluşturulmuş olup, metin, kod, görüntü, ses ve video gibi içeriklerin kesintisiz anlaşılması ve işlenmesini destekler. Veri merkezlerinden mobil cihazlara kadar çeşitli ortamlarda kullanılabilir, AI modellerinin verimliliğini ve uygulama kapsamını büyük ölçüde artırır."
-  },
-  "vllm": {
-    "description": "vLLM, LLM çıkarımı ve hizmetleri için hızlı ve kullanımı kolay bir kütüphanedir."
-  },
-  "volcengine": {
-    "description": "ByteDance tarafından sunulan büyük model hizmetleri geliştirme platformu, zengin özellikler, güvenlik ve rekabetçi fiyatlarla model çağırma hizmetleri sunar. Ayrıca model verileri, ince ayar, çıkarım, değerlendirme gibi uçtan uca işlevler sağlar ve AI uygulama geliştirme sürecinizi her yönüyle güvence altına alır."
-  },
-  "wenxin": {
-    "description": "Kurumsal düzeyde tek duraklı büyük model ve AI yerel uygulama geliştirme ve hizmet platformu, en kapsamlı ve kullanımı kolay üretken yapay zeka modeli geliştirme, uygulama geliştirme için tam süreç araç zinciri sunar."
-  },
-  "xai": {
-    "description": "xAI, insan bilimsel keşiflerini hızlandırmak için yapay zeka geliştirmeye adanmış bir şirkettir. Misyonumuz, evrene dair ortak anlayışımızı ilerletmektir."
-  },
-  "xinference": {
-    "description": "Xorbits Inference (Xinference), çeşitli yapay zeka modellerinin çalıştırılmasını ve entegrasyonunu kolaylaştıran açık kaynaklı bir platformdur. Xinference ile bulutta veya yerel ortamda herhangi bir açık kaynaklı LLM, gömme modeli ve çoklu modal modeli kullanarak çıkarım yapabilir ve güçlü yapay zeka uygulamaları oluşturabilirsiniz."
-  },
-  "zenmux": {
-    "description": "ZenMux, OpenAI, Anthropic, Google VertexAI gibi birçok popüler yapay zeka hizmeti arayüzünü destekleyen birleşik bir yapay zeka hizmetleri toplama platformudur. Esnek yönlendirme yetenekleri sayesinde farklı yapay zeka modelleri arasında kolayca geçiş yapabilir ve yönetebilirsiniz."
-  },
-  "zeroone": {
-    "description": "01.AI, yapay zeka 2.0 çağının yapay zeka teknolojisine odaklanmakta ve 'insan + yapay zeka' yenilik ve uygulamalarını teşvik etmektedir. Son derece güçlü modeller ve gelişmiş yapay zeka teknolojileri kullanarak insan üretkenliğini artırmayı ve teknolojik güçlendirmeyi hedeflemektedir."
-  },
-  "zhipu": {
-    "description": "Zhipu AI, çok modlu ve dil modellerinin açık platformunu sunmakta, metin işleme, görüntü anlama ve programlama yardımı gibi geniş bir yapay zeka uygulama senaryosunu desteklemektedir."
-  }
+  "ai21.description": "AI21 Labs, üretim ortamlarında üretken yapay zekayı hızlandırarak işletmeler için temel modeller ve yapay zeka sistemleri geliştirir.",
+  "ai302.description": "302.AI, geniş bir yapay zeka API ve çevrimiçi yapay zeka uygulamaları kataloğu sunan, kullandıkça öde modeliyle çalışan bir yapay zeka platformudur.",
+  "ai360.description": "360 AI, 360 tarafından sunulan bir model ve hizmet platformudur. 360GPT2 Pro, 360GPT Pro ve 360GPT Turbo gibi NLP modelleri sunar. Bu modeller, metin üretimi, anlamsal anlama, sohbet ve kodlama gibi görevler için büyük ölçekli parametreler ve çok modlu yetenekleri birleştirir. Esnek fiyatlandırma seçenekleriyle çeşitli ihtiyaçlara hitap eder.",
+  "aihubmix.description": "AiHubMix, birleşik bir API aracılığıyla birden fazla yapay zeka modeline erişim sağlar.",
+  "akashchat.description": "Akash, geleneksel bulut sağlayıcılarına kıyasla rekabetçi fiyatlarla izin gerektirmeyen bir bulut kaynak pazarıdır.",
+  "anthropic.description": "Anthropic, Claude 3.5 Sonnet, Claude 3 Sonnet, Claude 3 Opus ve Claude 3 Haiku gibi gelişmiş dil modelleri geliştirir. Bu modeller, kurumsal iş yüklerinden hızlı yanıt gerektiren senaryolara kadar zeka, hız ve maliyet dengesini sağlar.",
+  "azure.description": "Azure, GPT-3.5 ve GPT-4 serisi dahil olmak üzere gelişmiş yapay zeka modelleri sunar. Farklı veri türleri ve karmaşık görevler için güvenli, güvenilir ve sürdürülebilir yapay zeka çözümlerine odaklanır.",
+  "azureai.description": "Azure, GPT-3.5 ve GPT-4 serisi dahil olmak üzere gelişmiş yapay zeka modelleri sunar. Farklı veri türleri ve karmaşık görevler için güvenli, güvenilir ve sürdürülebilir yapay zeka çözümlerine odaklanır.",
+  "baichuan.description": "Baichuan AI, Çin bilgisi, uzun bağlam işleme ve yaratıcı üretim konularında güçlü performans sergileyen temel modellere odaklanır. Modelleri (Baichuan 4, Baichuan 3 Turbo, Baichuan 3 Turbo 128k) farklı senaryolar için optimize edilmiştir ve yüksek değer sunar.",
+  "bedrock.description": "Amazon Bedrock, işletmelere Anthropic Claude ve Meta Llama 3.1 gibi gelişmiş dil ve görsel modeller sunar. Metin, sohbet ve görsel görevler için hafiften yüksek performansa kadar çeşitli seçenekler içerir.",
+  "bfl.description": "Geleceğin görsel altyapısını inşa eden öncü bir yapay zeka araştırma laboratuvarı.",
+  "cerebras.description": "Cerebras, CS-3 sistemi üzerine inşa edilmiş bir çıkarım platformudur. Kod üretimi ve ajan görevleri gibi gerçek zamanlı iş yükleri için ultra düşük gecikme ve yüksek verimlilik sağlar.",
+  "cloudflare.description": "Cloudflare’ın küresel ağı üzerinde sunucusuz, GPU destekli makine öğrenimi modelleri çalıştırın.",
+  "cohere.description": "Cohere, çok dilli modeller, gelişmiş bilgi alma ve modern işletmeler için güvenli bir platformda yapay zeka çalışma alanları sunar.",
+  "cometapi.description": "CometAPI, OpenAI, Anthropic, Google ve diğerlerinden öncü modellere erişim sağlar. Kullanıcıların farklı kullanım senaryoları için en uygun modeli ve fiyatı seçmesine olanak tanır.",
+  "comfyui.description": "SD, FLUX, Qwen, Hunyuan ve WAN gibi modelleri destekleyen, görsel, video ve ses üretimi için güçlü, açık kaynaklı bir iş akışı motorudur. Düğüm tabanlı düzenleme ve özel kurulum imkanı sunar.",
+  "deepseek.description": "DeepSeek, yapay zeka araştırmaları ve uygulamalarına odaklanır. En son modeli DeepSeek-V3, Qwen2.5-72B ve Llama-3.1-405B gibi açık modelleri geride bırakır ve GPT-4o ile Claude-3.5-Sonnet gibi kapalı modellere yaklaşır.",
+  "fal.description": "Geliştiriciler için oluşturulmuş üretken medya platformu.",
+  "fireworksai.description": "Fireworks AI, işlev çağrısı ve çok modlu işleme özelliklerine sahip gelişmiş dil modeli hizmetleri sunar. Llama-3 tabanlı Firefunction V2, işlev çağrısı, sohbet ve talimat takibi için optimize edilmiştir. FireLLaVA-13B ise karışık görsel-metin girişlerini destekler. Llama ve Mixtral aileleri de öne çıkan modeller arasındadır.",
+  "giteeai.description": "Gitee AI Serverless API’leri, geliştiriciler için tak-çalıştır LLM çıkarım hizmetleri sunar.",
+  "github.description": "GitHub Modelleri ile geliştiriciler, sektör lideri modelleri kullanarak yapay zeka mühendisi gibi projeler geliştirebilir.",
+  "google.description": "Google’ın Gemini ailesi, metin, kod, görsel, ses ve video gibi çok modlu kullanım için Google DeepMind tarafından geliştirilen en gelişmiş genel amaçlı yapay zekadır. Veri merkezlerinden mobil cihazlara kadar ölçeklenebilir ve yüksek verimlilik sağlar.",
+  "groq.description": "Groq’un LPU çıkarım motoru, olağanüstü hız ve verimlilikle öne çıkan kıyaslama performansı sunar. Düşük gecikmeli, bulut tabanlı LLM çıkarımı için yüksek standart belirler.",
+  "higress.description": "Higress, Alibaba içinde geliştirilen bulut yerel bir API geçididir. Tengine yeniden yükleme etkisini ve gRPC/Dubbo yük dengelemedeki boşlukları gidermek için tasarlanmıştır.",
+  "huggingface.description": "Hugging Face Inference API, binlerce modeli hızlıca keşfetmenin kolay bir yolunu sunar. Prototipleme ve makine öğrenimi denemeleri için yüksek performanslı modellere anında erişim sağlar.",
+  "hunyuan.description": "Tencent tarafından geliştirilen bu büyük dil modeli, güçlü Çince yazım yetenekleri, karmaşık bağlamlarda sağlam akıl yürütme ve güvenilir görev yürütme sunar.",
+  "infiniai.description": "Uygulama geliştiricilerine, model geliştirmeden üretim dağıtımına kadar tüm iş akışında yüksek performanslı, kullanımı kolay ve güvenli LLM hizmetleri sunar.",
+  "internlm.description": "Büyük model araştırmaları ve araçları üzerine odaklanan açık kaynaklı bir organizasyon. En son modelleri ve algoritmaları erişilebilir kılan verimli ve kullanıcı dostu bir platform sağlar.",
+  "jina.description": "2020 yılında kurulan Jina AI, önde gelen bir arama yapay zekası şirketidir. Vektör modelleri, yeniden sıralayıcılar ve küçük dil modelleri içeren arama yığını ile güvenilir ve yüksek kaliteli üretken ve çok modlu arama uygulamaları geliştirir.",
+  "lmstudio.description": "LM Studio, bilgisayarınızda büyük dil modelleriyle geliştirme ve denemeler yapmanızı sağlayan bir masaüstü uygulamasıdır.",
+  "minimax.description": "2021 yılında kurulan MiniMax, çok modlu temel modellerle genel amaçlı yapay zeka geliştirir. Trilyon parametreli MoE metin modelleri, ses ve görsel modellerin yanı sıra Hailuo AI gibi uygulamalar sunar.",
+  "mistral.description": "Mistral, karmaşık akıl yürütme, çok dilli görevler ve kod üretimi için gelişmiş genel, özel ve araştırma modelleri sunar. Özelleştirilmiş entegrasyonlar için işlev çağrısını destekler.",
+  "modelscope.description": "ModelScope, Alibaba Cloud’un model-hizmet olarak sunduğu platformudur. Geniş bir yapay zeka modeli ve çıkarım hizmeti yelpazesi sunar.",
+  "moonshot.description": "Moonshot AI (Beijing Moonshot Technology) tarafından geliştirilen Moonshot, içerik üretimi, araştırma, öneri sistemleri ve tıbbi analiz gibi kullanım alanları için güçlü uzun bağlam ve karmaşık üretim desteği sunan çok sayıda NLP modeli sunar.",
+  "nebius.description": "Nebius, büyük ölçekli GPU kümeleri ve dikey entegre bulut platformu ile küresel yapay zeka yenilikçilerine yüksek performanslı altyapı sağlar.",
+  "newapi.description": "Birden fazla yapay zeka hizmetini birleştiren ve yönlendiren açık kaynaklı bir platform.",
+  "novita.description": "Novita AI, LLM’ler ve görsel üretim için esnek, güvenilir ve uygun maliyetli API’ler sunar. Llama 3 ve Mistral gibi modelleri destekler ve üretken yapay zeka girişimleri için ölçeklenebilir, geliştirici dostu API’ler sağlar.",
+  "nvidia.description": "NVIDIA NIM, önceden eğitilmiş ve özel modeller için bulut, veri merkezleri, RTX AI bilgisayarlar ve iş istasyonlarında kendi kendine barındırılan, GPU hızlandırmalı çıkarım mikro hizmetleri sunan konteynerler sağlar.",
+  "ollama.description": "Ollama, kod üretimi, matematik, çok dilli işleme ve sohbet gibi alanlarda modeller sunar. Hem kurumsal hem de yerel dağıtımları destekler.",
+  "ollamacloud.description": "Ollama Cloud, Ollama model kitaplığına ve OpenAI uyumlu API’lere kutudan çıkar çıkmaz erişim sağlayan yönetilen çıkarım hizmeti sunar.",
+  "openai.description": "OpenAI, GPT modelleriyle doğal dil işleme alanında yüksek performans ve güçlü değer sunan, öncü bir yapay zeka araştırma laboratuvarıdır.",
+  "openrouter.description": "OpenRouter, OpenAI, Anthropic, LLaMA ve daha fazlasından öncü modellere erişim sağlar. Kullanıcıların kullanım senaryolarına en uygun modeli ve fiyatı seçmesine olanak tanır.",
+  "perplexity.description": "Perplexity, çevrimiçi ve çevrimdışı kullanım ile karmaşık NLP iş yükleri için Llama 3.1 varyantları dahil olmak üzere gelişmiş sohbet modelleri sunar.",
+  "ppio.description": "PPIO, DeepSeek, Llama, Qwen ve diğer önde gelen modelleri içeren güvenilir ve uygun maliyetli açık model API’leri sunar.",
+  "qiniu.description": "Qiniu, kullanımı kolay, güvenilir ve uygun maliyetli gerçek zamanlı ve toplu yapay zeka çıkarım hizmetleri sunar.",
+  "qwen.description": "Qwen, Alibaba Cloud’un güçlü anlama ve üretim yeteneklerine sahip büyük ölçekli dil modelidir. Soru-cevap, yazım, görüş bildirme ve kodlama gibi birçok alanda çalışır.",
+  "replicate.description": "Replicate, FLUX ve Stable Diffusion gibi açık kaynaklı görsel modelleri basit bir bulut API’si aracılığıyla çalıştırır.",
+  "sambanova.description": "SambaNova Cloud, geliştiricilerin en iyi açık kaynaklı modelleri son derece hızlı çıkarım ile kullanmasına olanak tanır.",
+  "search1api.description": "Search1API, web bağlantısı seçeneğiyle birlikte DeepSeek modellerine erişim sağlar. Farklı parametre boyutlarında standart ve hızlı varyantlar sunar.",
+  "sensenova.description": "SenseNova, SenseTime altyapısıyla desteklenen verimli ve kullanımı kolay tam yığın LLM hizmetleri sunar.",
+  "siliconcloud.description": "SiliconCloud, güçlü açık kaynaklı temel modeller üzerine inşa edilmiş uygun maliyetli bir üretken yapay zeka bulut hizmetidir.",
+  "spark.description": "iFLYTEK Spark, çok dilli güçlü yapay zeka yetenekleriyle akıllı donanım, sağlık, finans ve diğer dikey alanlarda yenilikler sağlar.",
+  "stepfun.description": "Stepfun modelleri, uzun bağlam anlama ve güçlü otonom arama düzenleme özellikleriyle öne çıkan çok modlu ve karmaşık akıl yürütme yetenekleri sunar.",
+  "taichu.description": "CASIA ve Wuhan Yapay Zeka Enstitüsü tarafından geliştirilen yeni nesil çok modlu modeldir. Çok turlu soru-cevap, yazım, görsel üretim, 3D anlama ve sinyal analizi gibi görevlerde güçlü bilişsel ve yaratıcı yetenekler sunar.",
+  "tencentcloud.description": "LLM Bilgi Motoru Atom Gücü, belgeleri ayrıştırma, parçalara ayırma, gömme ve çok turlu yeniden yazma gibi modüler hizmetlerle kurumsal ve geliştiricilere özel yapay zeka çözümleri oluşturma imkanı sunar.",
+  "togetherai.description": "Together AI, yenilikçi modeller, geniş özelleştirme seçenekleri, hızlı ölçeklenebilirlik ve kolay dağıtım ile kurumsal ihtiyaçlara yönelik üstün performans sunar.",
+  "upstage.description": "Upstage, Solar LLM ve Belge AI gibi iş odaklı yapay zeka modelleri geliştirir. Sohbet API’leri işlev çağrısı, çeviri, gömme ve alanlara özel kullanım senaryolarını destekler.",
+  "v0.description": "v0, doğal dildeki fikirleri projeniz için koda ve kullanıcı arayüzüne dönüştüren bir eş programlama asistanıdır.",
+  "vercelaigateway.description": "Vercel AI Gateway, OpenAI, Anthropic, Google ve daha fazlasından 100’den fazla modele birleşik bir API sunar. Bütçeleme, kullanım izleme, yük dengeleme ve hata toleransı özellikleri içerir.",
+  "vertexai.description": "Google’ın Gemini ailesi, metin, kod, görsel, ses ve video gibi çok modlu kullanım için Google DeepMind tarafından geliştirilen en gelişmiş genel amaçlı yapay zekadır. Veri merkezlerinden mobil cihazlara kadar ölçeklenebilir, verimliliği ve dağıtım esnekliğini artırır.",
+  "vllm.description": "vLLM, LLM çıkarımı ve sunumu için hızlı ve kullanımı kolay bir kütüphanedir.",
+  "volcengine.description": "ByteDance’in model hizmet platformu, güvenli, özellik açısından zengin ve uygun maliyetli model erişimi ile veri, ince ayar, çıkarım ve değerlendirme için uçtan uca araçlar sunar.",
+  "wenxin.description": "Kurumsal düzeyde temel modeller ve yapay zeka tabanlı uygulama geliştirme için uçtan uca araçlar sunan hepsi bir arada bir platformdur.",
+  "xai.description": "xAI, bilimsel keşifleri hızlandırmak ve insanlığın evreni anlama düzeyini derinleştirmek amacıyla yapay zeka geliştirir.",
+  "xinference.description": "Xorbits Inference (Xinference), yapay zeka modellerini çalıştırmayı ve entegre etmeyi kolaylaştıran açık kaynaklı bir platformdur. Açık kaynaklı LLM’leri, gömme modellerini ve çok modlu modelleri yerel veya bulutta çalıştırarak güçlü yapay zeka uygulamaları geliştirmenizi sağlar.",
+  "zenmux.description": "ZenMux, OpenAI, Anthropic, Google VertexAI ve daha fazlasını destekleyen birleşik bir yapay zeka toplama platformudur. Modelleri kolayca yönlendirme ve yönetme imkanı sunar.",
+  "zeroone.description": "01.AI, insan merkezli bir Yapay Zeka 2.0 devrimini yönlendirir. LLM’leri kullanarak ekonomik ve sosyal değer yaratır, yeni yapay zeka ekosistemleri ve iş modelleri inşa eder.",
+  "zhipu.description": "ZhiPu AI, metin işleme, görsel anlama ve kodlama desteği gibi alanlarda çok modlu ve dil modelleri sunan açık bir platform sağlar."
 }
