@@ -38,10 +38,15 @@ export const checkTelemetryEnabled = async (ctx: TelemetryContext): Promise<Tele
     const userModel = new UserModel(ctx.serverDB, ctx.userId);
 
     // Priority 2: Check user settings (new location: settings.general.telemetry)
+    // Only return false if explicitly set to false, otherwise continue checking
     const settings = await userModel.getUserSettings();
     const generalConfig = settings?.general as UserGeneralConfig | null | undefined;
 
-    return { telemetryEnabled: generalConfig?.telemetry || false };
+    if (generalConfig?.telemetry === false) {
+      return { telemetryEnabled: false };
+    }
+
+    return { telemetryEnabled: true };
   } catch {
     // If fetching user settings fails, default to disabled
     return { telemetryEnabled: false };

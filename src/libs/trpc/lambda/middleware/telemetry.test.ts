@@ -5,7 +5,13 @@ import { appEnv } from '@/envs/app';
 
 import { TelemetryContext, checkTelemetryEnabled } from './telemetry';
 
-const mockGetUserSettings = vi.fn();
+const { mockGetUserSettings, MockUserModel } = vi.hoisted(() => {
+  const mockGetUserSettings = vi.fn();
+  const MockUserModel = vi.fn().mockImplementation(() => ({
+    getUserSettings: mockGetUserSettings,
+  })) as any;
+  return { MockUserModel, mockGetUserSettings };
+});
 
 vi.mock('@/envs/app', () => ({
   appEnv: {
@@ -14,9 +20,7 @@ vi.mock('@/envs/app', () => ({
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn().mockImplementation(() => ({
-    getUserSettings: mockGetUserSettings,
-  })),
+  UserModel: MockUserModel,
 }));
 
 describe('checkTelemetryEnabled', () => {
@@ -90,7 +94,7 @@ describe('checkTelemetryEnabled', () => {
       expect(result).toEqual({ telemetryEnabled: false });
     });
 
-    it('should return false when settings.general.telemetry is not set', async () => {
+    it('should return true (default) when settings.general.telemetry is not set', async () => {
       mockGetUserSettings.mockResolvedValue({
         general: { fontSize: 14 }, // no telemetry field
       });
@@ -100,12 +104,13 @@ describe('checkTelemetryEnabled', () => {
         userId: 'test-user',
       });
 
-      expect(result).toEqual({ telemetryEnabled: false });
+      // Default to true when not explicitly disabled
+      expect(result).toEqual({ telemetryEnabled: true });
     });
   });
 
   describe('default value', () => {
-    it('should default to false when settings is null', async () => {
+    it('should default to true when settings is null', async () => {
       mockGetUserSettings.mockResolvedValue(null);
 
       const result = await checkTelemetryEnabled({
@@ -113,10 +118,11 @@ describe('checkTelemetryEnabled', () => {
         userId: 'test-user',
       });
 
-      expect(result).toEqual({ telemetryEnabled: false });
+      // Default to true (enabled) unless explicitly disabled
+      expect(result).toEqual({ telemetryEnabled: true });
     });
 
-    it('should default to false when general is null', async () => {
+    it('should default to true when general is null', async () => {
       mockGetUserSettings.mockResolvedValue({
         general: null,
       });
@@ -126,28 +132,29 @@ describe('checkTelemetryEnabled', () => {
         userId: 'test-user',
       });
 
-      expect(result).toEqual({ telemetryEnabled: false });
+      // Default to true (enabled) unless explicitly disabled
+      expect(result).toEqual({ telemetryEnabled: true });
     });
   });
 
   describe('missing context', () => {
-    it('should return telemetryEnabled: true when userId is missing', async () => {
+    it('should return telemetryEnabled: false when userId is missing', async () => {
       const result = await checkTelemetryEnabled({
         serverDB: {} as TelemetryContext['serverDB'],
         userId: null,
       });
 
-      expect(result).toEqual({ telemetryEnabled: true });
+      expect(result).toEqual({ telemetryEnabled: false });
       expect(mockGetUserSettings).not.toHaveBeenCalled();
     });
 
-    it('should return telemetryEnabled: true when serverDB is missing', async () => {
+    it('should return telemetryEnabled: false when serverDB is missing', async () => {
       const result = await checkTelemetryEnabled({
         serverDB: undefined,
         userId: 'test-user',
       });
 
-      expect(result).toEqual({ telemetryEnabled: true });
+      expect(result).toEqual({ telemetryEnabled: false });
       expect(mockGetUserSettings).not.toHaveBeenCalled();
     });
   });

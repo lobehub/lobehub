@@ -35,6 +35,13 @@ vi.mock('@lobechat/utils', () => ({
 }));
 
 vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: {
+    market: {
+      callCloudMcpEndpoint: {
+        mutate: vi.fn(),
+      },
+    },
+  },
   toolsClient: {
     mcp: {
       callTool: {
@@ -129,22 +136,20 @@ describe('MCPService', () => {
             name: 'test-plugin',
             env: { API_KEY: 'test-key' },
           },
+          reportMeta: {
+            customPluginInfo: undefined,
+            isCustomPlugin: false,
+            sessionId: 'topic-1',
+            version: '1.0.0',
+          },
           toolName: 'testMethod',
         },
         { signal: undefined },
       );
 
-      // Wait for async reporting to complete
+      // For SSE type, reporting is handled by server-side, frontend should NOT call reportPluginCall
       await new Promise((resolve) => setTimeout(resolve, 10));
-
-      expect(discoverService.reportPluginCall).toHaveBeenCalled();
-      const reportCall = vi.mocked(discoverService.reportPluginCall).mock.calls[0][0];
-      expect(reportCall).toMatchObject({
-        identifier: 'test-plugin',
-        methodName: 'testMethod',
-        success: true,
-        isCustomPlugin: false,
-      });
+      expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
     });
 
     it('should invoke tool call with custom plugin', async () => {
@@ -274,28 +279,21 @@ describe('MCPService', () => {
 
       await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow('Tool call failed');
 
-      // Wait for async reporting to complete
+      // For SSE type, reporting is handled by server-side, frontend should NOT call reportPluginCall
       await new Promise((resolve) => setTimeout(resolve, 10));
-
-      expect(discoverService.reportPluginCall).toHaveBeenCalled();
-      const reportCall = vi.mocked(discoverService.reportPluginCall).mock.calls[0][0];
-      expect(reportCall).toMatchObject({
-        success: false,
-        errorCode: 'CALL_FAILED',
-        errorMessage: 'Tool call failed',
-      });
+      expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
     });
 
-    it('should calculate request and response sizes correctly', async () => {
-      const { toolsClient } = await import('@/libs/trpc/client');
+    it('should report from frontend for cloud type with correct sizes', async () => {
       const { discoverService } = await import('./discover');
 
+      // Use cloud type which still reports from frontend
       const mockPlugin = {
         customParams: {
-          mcp: { type: 'sse' },
+          mcp: { type: 'cloud' },
         },
         manifest: {
-          meta: { title: 'Size Test Plugin' },
+          meta: { title: 'Cloud Plugin' },
           version: '1.0.0',
         },
       };
@@ -303,19 +301,21 @@ describe('MCPService', () => {
       mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => mockPlugin);
       mockPluginSelectors.getCustomPluginById.mockReturnValue(() => null);
 
+      // Mock the lambdaClient for cloud type
+      const { lambdaClient } = await import('@/libs/trpc/client');
       const mockResult = {
         content: 'response data',
         state: {
-          content: [{ text: 'response data', type: 'text' }],
+          content: [{ text: 'response data', type: 'text' as const }],
         },
         success: true,
       };
-      vi.mocked(toolsClient.mcp.callTool.mutate).mockResolvedValue(mockResult);
+      vi.mocked(lambdaClient.market.callCloudMcpEndpoint.mutate).mockResolvedValue(mockResult);
 
       const payload: ChatToolPayload = {
         id: 'tool-call-6',
-        identifier: 'size-plugin',
-        apiName: 'sizeMethod',
+        identifier: 'cloud-plugin',
+        apiName: 'cloudMethod',
         arguments: '{"key": "value"}',
         type: 'standalone',
       };
@@ -325,6 +325,7 @@ describe('MCPService', () => {
       // Wait for async reporting
       await new Promise((resolve) => setTimeout(resolve, 10));
 
+      // Cloud type should report from frontend
       expect(discoverService.reportPluginCall).toHaveBeenCalled();
       const reportCall = vi.mocked(discoverService.reportPluginCall).mock.calls[0][0];
       expect(reportCall.requestSizeBytes).toBeGreaterThan(0);
@@ -372,9 +373,8 @@ describe('MCPService', () => {
       expect(result).toEqual(mockResult);
     });
 
-    it('should report custom plugin info correctly', async () => {
+    it('should pass reportMeta to server for custom plugin', async () => {
       const { toolsClient } = await import('@/libs/trpc/client');
-      const { discoverService } = await import('./discover');
 
       const mockCustomPlugin = {
         customParams: {
@@ -406,19 +406,24 @@ describe('MCPService', () => {
         type: 'standalone',
       };
 
-      await mcpService.invokeMcpToolCall(payload, {});
+      await mcpService.invokeMcpToolCall(payload, { topicId: 'topic-123' });
 
-      // Wait for async reporting
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      expect(discoverService.reportPluginCall).toHaveBeenCalled();
-      const reportCall = vi.mocked(discoverService.reportPluginCall).mock.calls[0][0];
-      expect(reportCall.isCustomPlugin).toBe(true);
-      expect(reportCall.customPluginInfo).toEqual({
-        avatar: '🔧',
-        description: 'Custom tool description',
-        name: 'Custom Tool',
-      });
+      // Verify reportMeta is passed to server
+      expect(toolsClient.mcp.callTool.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reportMeta: {
+            customPluginInfo: {
+              avatar: '🔧',
+              description: 'Custom tool description',
+              name: 'Custom Tool',
+            },
+            isCustomPlugin: true,
+            sessionId: 'topic-123',
+            version: '3.0.0',
+          },
+        }),
+        expect.anything(),
+      );
     });
   });
 

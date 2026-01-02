@@ -1,5 +1,9 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
-import { type ChatToolPayload, type CheckMcpInstallResult, type CustomPluginMetadata } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type CheckMcpInstallResult,
+  type CustomPluginMetadata,
+} from '@lobechat/types';
 import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
 import { type PluginManifest } from '@lobehub/market-sdk';
 import { type CallReportRequest } from '@lobehub/market-types';
@@ -80,6 +84,21 @@ class MCPService {
 
     const isStdio = plugin?.customParams?.mcp?.type === 'stdio';
     const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
+    const isCustomPlugin = !!customPlugin;
+
+    // Build reportMeta for server-side reporting
+    const reportMeta = {
+      customPluginInfo: isCustomPlugin
+        ? {
+            avatar: plugin.manifest?.meta.avatar,
+            description: plugin.manifest?.meta.description,
+            name: plugin.manifest?.meta.title,
+          }
+        : undefined,
+      isCustomPlugin,
+      sessionId: topicId,
+      version: plugin.manifest?.version || 'unknown',
+    };
 
     const data = {
       // For desktop IPC, always pass a record/object for tool "arguments"
@@ -87,6 +106,7 @@ class MCPService {
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
       env: connection?.type === 'stdio' ? params.env : (pluginSettings ?? connection?.env),
       params,
+      reportMeta,
       toolName: apiName,
     };
 
@@ -134,50 +154,45 @@ class MCPService {
       // Rethrow error, maintain original error handling logic
       throw error;
     } finally {
-      // Asynchronously report call result without affecting main flow
-      const callEndTime = Date.now();
-      const callDurationMs = callEndTime - callStartTime;
+      // HTTP/SSE/streamable types: reporting is handled by server-side via mcp.callTool
+      // Only report from frontend for cloud and stdio types
+      if (isCloud || isStdio) {
+        const callEndTime = Date.now();
+        const callDurationMs = callEndTime - callStartTime;
 
-      // Calculate request size
-      const inputParams = safeParseJSON(args) || args;
+        // Calculate request size
+        const inputParams = safeParseJSON(args) || args;
+        const requestSizeBytes = calculateObjectSizeBytes(inputParams);
+        // Calculate response size
+        const responseSizeBytes = success && result ? calculateObjectSizeBytes(result.state) : 0;
 
-      const requestSizeBytes = calculateObjectSizeBytes(inputParams);
-      // Calculate response size
-      const responseSizeBytes = success && result ? calculateObjectSizeBytes(result.state) : 0;
+        // Construct report data
+        const reportData: CallReportRequest = {
+          callDurationMs,
+          customPluginInfo: reportMeta.customPluginInfo,
+          errorCode,
+          errorMessage,
+          identifier,
+          isCustomPlugin,
+          metadata: {
+            appVersion: CURRENT_VERSION,
+            command: plugin.customParams?.mcp?.command,
+            mcpType: plugin.customParams?.mcp?.type,
+          },
+          methodName: apiName,
+          methodType: 'tool' as const,
+          requestSizeBytes,
+          responseSizeBytes,
+          sessionId: topicId,
+          success,
+          version: reportMeta.version,
+        };
 
-      const isCustomPlugin = !!customPlugin;
-      // Construct report data
-      const reportData: CallReportRequest = {
-        callDurationMs,
-        customPluginInfo: isCustomPlugin
-          ? {
-              avatar: plugin.manifest?.meta.avatar,
-              description: plugin.manifest?.meta.description,
-              name: plugin.manifest?.meta.title,
-            }
-          : undefined,
-        errorCode,
-        errorMessage,
-        identifier,
-        isCustomPlugin,
-        metadata: {
-          appVersion: CURRENT_VERSION,
-          command: plugin.customParams?.mcp?.command,
-          mcpType: plugin.customParams?.mcp?.type,
-        },
-        methodName: apiName,
-        methodType: 'tool' as const,
-        requestSizeBytes,
-        responseSizeBytes,
-        sessionId: topicId,
-        success,
-        version: plugin.manifest!.version || 'unknown',
-      };
-
-      // Asynchronously report without affecting main flow
-      discoverService.reportPluginCall(reportData).catch((reportError) => {
-        console.warn('Failed to report MCP tool call:', reportError);
-      });
+        // Asynchronously report without affecting main flow
+        discoverService.reportPluginCall(reportData).catch((reportError) => {
+          console.warn('Failed to report MCP tool call:', reportError);
+        });
+      }
     }
   }
 
