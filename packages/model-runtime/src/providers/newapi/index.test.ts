@@ -1340,6 +1340,71 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('model-a');
     });
+
+    it('should verify that additionalModels get processed with displayName and type through processMultiProviderModelList', async () => {
+      const mockClient = {
+        apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [],
+          }),
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          data: [
+            {
+              enable_groups: ['default'],
+              model_name: 'new-model-from-pricing',
+              model_price: 15,
+              quota_type: 0,
+            },
+          ],
+          success: true,
+        }),
+        ok: true,
+      });
+
+      // Mock processMultiProviderModelList to simulate the real behavior of adding displayName and type
+      mockProcessMultiProviderModelList.mockImplementation((models) =>
+        models.map((m: any) => ({
+          ...m,
+          displayName: m.displayName || m.id, // processModelCard adds displayName
+          enabled: m.enabled || false,
+          type: m.type || 'chat', // processModelCard adds type
+        })),
+      );
+
+      const result = await params.models({ client: mockClient as any });
+
+      // Verify the model was added from pricing
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('new-model-from-pricing');
+
+      // Verify that processMultiProviderModelList was called with the additionalModels
+      expect(mockProcessMultiProviderModelList).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'new-model-from-pricing',
+            pricing: expect.objectContaining({
+              units: expect.arrayContaining([
+                expect.objectContaining({ name: 'textInput' }),
+                expect.objectContaining({ name: 'textOutput' }),
+              ]),
+            }),
+          }),
+        ]),
+        'newapi',
+      );
+
+      // Verify that after processing, the model has the required fields
+      expect(result[0]).toHaveProperty('displayName');
+      expect(result[0]).toHaveProperty('type');
+      expect(result[0].displayName).toBe('new-model-from-pricing'); // Falls back to id
+      expect(result[0].type).toBe('chat'); // Default type
+    });
   });
 
   describe('Runtime Instance Creation', () => {

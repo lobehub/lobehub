@@ -27,22 +27,10 @@ const modelscopeChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek V3.2 Exp uses a hybrid reasoning architecture and supports both thinking and non-thinking modes.',
-    displayName: 'DeepSeek V3.2 Exp',
+      'DeepSeek V3.2 uses a hybrid reasoning architecture and supports both thinking and non-thinking modes.',
+    displayName: 'DeepSeek V3.2',
     enabled: true,
-    id: 'deepseek-ai/DeepSeek-V3.2-Exp',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.1 uses a hybrid reasoning architecture and supports both thinking and non-thinking modes.',
-    displayName: 'DeepSeek V3.1',
-    id: 'deepseek-ai/DeepSeek-V3.1',
+    id: 'deepseek-ai/DeepSeek-V3.2',
     type: 'chat',
   },
   {
@@ -62,7 +50,8 @@ const modelscopeChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen3 235B A22B is the Qwen3 ultra-scale model delivering top-tier AI capability.',
+    description:
+      'Qwen3 235B A22B is the Qwen3 ultra-scale model delivering top-tier AI capability.',
     displayName: 'Qwen3 235B A22B',
     id: 'Qwen/Qwen3-235B-A22B',
     type: 'chat',
