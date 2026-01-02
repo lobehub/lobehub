@@ -1,52 +1,23 @@
-import {
-  type ClientDBLoadingProgress,
-  DatabaseLoadingState,
-  type MigrationSQL,
-  type MigrationTableItem,
-} from '@lobechat/types';
+import { PGlite } from '@electric-sql/pglite';
+import { vector } from '@electric-sql/pglite/vector';
 import { sql } from 'drizzle-orm';
 import { PgliteDatabase, drizzle } from 'drizzle-orm/pglite';
 import { Md5 } from 'ts-md5';
-
-import { sleep } from '@/utils/sleep';
 
 import migrations from '../core/migrations.json';
 import { DrizzleMigrationModel } from '../models/drizzleMigration';
 import * as schema from '../schemas';
 
 const pgliteSchemaHashCache = 'LOBE_CHAT_PGLITE_SCHEMA_HASH';
-
 const DB_NAME = 'lobechat';
+
 type DrizzleInstance = PgliteDatabase<typeof schema>;
 
-interface onErrorState {
-  error: Error;
-  migrationTableItems: MigrationTableItem[];
-  migrationsSQL: MigrationSQL[];
-}
-
-export interface DatabaseLoadingCallbacks {
-  onError?: (error: onErrorState) => void;
-  onProgress?: (progress: ClientDBLoadingProgress) => void;
-  onStateChange?: (state: DatabaseLoadingState) => void;
-}
-
-export class DatabaseManager {
+class DatabaseManager {
   private static instance: DatabaseManager;
   private dbInstance: DrizzleInstance | null = null;
   private initPromise: Promise<DrizzleInstance> | null = null;
-  private callbacks?: DatabaseLoadingCallbacks;
   private isLocalDBSchemaSynced = false;
-
-  // CDN configuration
-  private static WASM_CDN_URL =
-    'https://registry.npmmirror.com/@electric-sql/pglite/0.2.17/files/dist/postgres.wasm';
-
-  private static FSBUNDLER_CDN_URL =
-    'https://registry.npmmirror.com/@electric-sql/pglite/0.2.17/files/dist/postgres.data';
-
-  private static VECTOR_CDN_URL =
-    'https://registry.npmmirror.com/@electric-sql/pglite/0.2.17/files/dist/vector.tar.gz';
 
   private constructor() {}
 
@@ -57,108 +28,8 @@ export class DatabaseManager {
     return DatabaseManager.instance;
   }
 
-  // Load and compile WASM module
-  private async loadWasmModule(): Promise<WebAssembly.Module> {
-    const start = Date.now();
-    this.callbacks?.onStateChange?.(DatabaseLoadingState.LoadingWasm);
-
-    const response = await fetch(DatabaseManager.WASM_CDN_URL);
-
-    const contentLength = Number(response.headers.get('Content-Length')) || 0;
-    const reader = response.body?.getReader();
-
-    if (!reader) throw new Error('Failed to start WASM download');
-
-    let receivedLength = 0;
-    const chunks: Uint8Array[] = [];
-
-    // Read data stream
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) break;
-
-      chunks.push(value);
-      receivedLength += value.length;
-
-      // Calculate and report progress
-      const progress = Math.min(Math.round((receivedLength / contentLength) * 100), 100);
-      this.callbacks?.onProgress?.({
-        phase: 'wasm',
-        progress,
-      });
-    }
-
-    // Merge data chunks
-    const wasmBytes = new Uint8Array(receivedLength);
-    let position = 0;
-    for (const chunk of chunks) {
-      wasmBytes.set(chunk, position);
-      position += chunk.length;
-    }
-
-    this.callbacks?.onProgress?.({
-      costTime: Date.now() - start,
-      phase: 'wasm',
-      progress: 100,
-    });
-
-    // Compile WASM module
-    return WebAssembly.compile(wasmBytes);
-  }
-
-  private fetchFsBundle = async () => {
-    const res = await fetch(DatabaseManager.FSBUNDLER_CDN_URL);
-
-    return await res.blob();
-  };
-
-  // Asynchronously load PGlite related dependencies
-  private async loadDependencies() {
-    const start = Date.now();
-    this.callbacks?.onStateChange?.(DatabaseLoadingState.LoadingDependencies);
-
-    const imports = [
-      import('@electric-sql/pglite').then((m) => ({
-        IdbFs: m.IdbFs,
-        MemoryFS: m.MemoryFS,
-        PGlite: m.PGlite,
-      })),
-      import('@electric-sql/pglite/vector'),
-      this.fetchFsBundle(),
-    ];
-
-    let loaded = 0;
-    const results = await Promise.all(
-      imports.map(async (importPromise) => {
-        const result = await importPromise;
-        loaded += 1;
-
-        // Calculate loading progress
-        this.callbacks?.onProgress?.({
-          phase: 'dependencies',
-          progress: Math.min(Math.round((loaded / imports.length) * 100), 100),
-        });
-        return result;
-      }),
-    );
-
-    this.callbacks?.onProgress?.({
-      costTime: Date.now() - start,
-      phase: 'dependencies',
-      progress: 100,
-    });
-
-    // @ts-ignore
-    const [{ PGlite, IdbFs, MemoryFS }, { vector }, fsBundle] = results;
-
-    return { IdbFs, MemoryFS, PGlite, fsBundle, vector };
-  }
-
-  // Database migration method
-  private async migrate(skipMultiRun = false): Promise<DrizzleInstance> {
-    if (this.isLocalDBSchemaSynced && skipMultiRun) return this.db;
+  private async migrate(): Promise<DrizzleInstance> {
+    if (this.isLocalDBSchemaSynced) return this.db;
 
     let hash: string | undefined;
     if (typeof localStorage !== 'undefined') {
@@ -179,17 +50,13 @@ export class DatabaseManager {
           }
         } catch (error) {
           console.warn('Error checking table existence, proceeding with migration', error);
-          // If query fails, continue migration to ensure safety
         }
       }
     }
 
     const start = Date.now();
     try {
-      this.callbacks?.onStateChange?.(DatabaseLoadingState.Migrating);
-
-      // refs: https://github.com/drizzle-team/drizzle-orm/discussions/2532
-      // @ts-expect-error
+      // @ts-expect-error - migrate internal API
       await this.db.dialect.migrate(migrations, this.db.session, {});
 
       if (typeof localStorage !== 'undefined' && hash) {
@@ -197,7 +64,6 @@ export class DatabaseManager {
       }
 
       this.isLocalDBSchemaSynced = true;
-
       console.info(`🗂 Migration success, take ${Date.now() - start}ms`);
     } catch (cause) {
       console.error('❌ Local database schema migration failed', cause);
@@ -207,95 +73,32 @@ export class DatabaseManager {
     return this.db;
   }
 
-  // Initialize database
-  async initialize(callbacks?: DatabaseLoadingCallbacks): Promise<DrizzleInstance> {
+  async initialize(): Promise<DrizzleInstance> {
     if (this.initPromise) return this.initPromise;
 
-    this.callbacks = callbacks;
-
     this.initPromise = (async () => {
-      try {
-        if (this.dbInstance) return this.dbInstance;
+      if (this.dbInstance) return this.dbInstance;
 
-        const time = Date.now();
-        // Initialize database
-        this.callbacks?.onStateChange?.(DatabaseLoadingState.Initializing);
+      const time = Date.now();
 
-        // Load dependencies
-        const { fsBundle, PGlite, MemoryFS, IdbFs, vector } = await this.loadDependencies();
+      // 直接使用 pglite，自动处理 wasm 加载
+      const pglite = new PGlite(`idb://${DB_NAME}`, {
+        extensions: { vector },
+        relaxedDurability: true,
+      });
 
-        // Load and compile WASM module
-        const wasmModule = await this.loadWasmModule();
+      this.dbInstance = drizzle({ client: pglite, schema });
 
-        const { initPgliteWorker } = await import('./pglite');
+      await this.migrate();
 
-        let db: typeof PGlite;
+      console.log(`✅ Database initialized in ${Date.now() - time}ms`);
 
-        // make db as web worker if worker is available
-        // https://github.com/lobehub/lobe-chat/issues/5785
-        if (typeof Worker !== 'undefined' && typeof navigator.locks !== 'undefined') {
-          db = await initPgliteWorker({
-            dbName: DB_NAME,
-            fsBundle: fsBundle as Blob,
-            vectorBundlePath: DatabaseManager.VECTOR_CDN_URL,
-            wasmModule,
-          });
-        } else {
-          // in edge runtime or test runtime, we don't have worker
-          db = new PGlite({
-            extensions: { vector },
-            fs: typeof window === 'undefined' ? new MemoryFS(DB_NAME) : new IdbFs(DB_NAME),
-            relaxedDurability: true,
-            wasmModule,
-          });
-        }
-
-        this.dbInstance = drizzle({ client: db, schema });
-
-        await this.migrate(true);
-
-        this.callbacks?.onStateChange?.(DatabaseLoadingState.Finished);
-        console.log(`✅ Database initialized in ${Date.now() - time}ms`);
-
-        await sleep(50);
-
-        this.callbacks?.onStateChange?.(DatabaseLoadingState.Ready);
-
-        return this.dbInstance as DrizzleInstance;
-      } catch (e) {
-        this.initPromise = null;
-        this.callbacks?.onStateChange?.(DatabaseLoadingState.Error);
-        const error = e as Error;
-
-        // Query migration table data
-        let migrationsTableData: MigrationTableItem[] = [];
-        try {
-          // Attempt to query migration table
-          const drizzleMigration = new DrizzleMigrationModel(this.db as any);
-          migrationsTableData = await drizzleMigration.getMigrationList();
-        } catch (queryError) {
-          console.error('Failed to query migrations table:', queryError);
-        }
-
-        this.callbacks?.onError?.({
-          error: {
-            message: error.message,
-            name: error.name,
-            stack: error.stack,
-          },
-          migrationTableItems: migrationsTableData,
-          migrationsSQL: migrations,
-        });
-
-        console.error(error);
-        throw error;
-      }
+      return this.dbInstance;
     })();
 
     return this.initPromise;
   }
 
-  // Get database instance
   get db(): DrizzleInstance {
     if (!this.dbInstance) {
       throw new Error('Database not initialized. Please call initialize() first.');
@@ -303,7 +106,6 @@ export class DatabaseManager {
     return this.dbInstance;
   }
 
-  // Create proxy object
   createProxy(): DrizzleInstance {
     return new Proxy({} as DrizzleInstance, {
       get: (target, prop) => {
@@ -313,7 +115,7 @@ export class DatabaseManager {
   }
 
   async resetDatabase(): Promise<void> {
-    // 1. Close existing PGlite connection (if exists)
+    // 1. Close existing PGlite connection
     if (this.dbInstance) {
       try {
         // @ts-ignore
@@ -321,31 +123,28 @@ export class DatabaseManager {
         console.log('PGlite instance closed successfully.');
       } catch (e) {
         console.error('Error closing PGlite instance:', e);
-        // Even if closing fails, continue with deletion attempt; IndexedDB onblocked or onerror will handle subsequent issues
       }
     }
 
     // 2. Reset database instance and initialization state
     this.dbInstance = null;
     this.initPromise = null;
-    this.isLocalDBSchemaSynced = false; // Reset sync state
+    this.isLocalDBSchemaSynced = false;
 
     // 3. Delete IndexedDB database
     return new Promise<void>((resolve, reject) => {
-      // Check if IndexedDB is available
       if (typeof indexedDB === 'undefined') {
         console.warn('IndexedDB is not available, cannot delete database');
-        resolve(); // Cannot delete in this environment, resolve directly
+        resolve();
         return;
       }
 
-      const dbName = `/pglite/${DB_NAME}`; // Path used by PGlite IdbFs
+      const dbName = `/pglite/${DB_NAME}`;
       const request = indexedDB.deleteDatabase(dbName);
 
       request.onsuccess = () => {
         console.log(`✅ Database '${dbName}' reset successfully`);
 
-        // Clear locally stored schema hash
         if (typeof localStorage !== 'undefined') {
           localStorage.removeItem(pgliteSchemaHashCache);
         }
@@ -365,14 +164,10 @@ export class DatabaseManager {
       };
 
       request.onblocked = (event) => {
-        // This event is triggered when other open connections block database deletion
-        console.warn(
-          `Deletion of database '${dbName}' is blocked. This usually means other connections (e.g., in other tabs) are still open. Event:`,
-          event,
-        );
+        console.warn(`Deletion of database '${dbName}' is blocked.`, event);
         reject(
           new Error(
-            `Failed to reset database '${dbName}' because it is blocked by other open connections. Please close other tabs or applications using this database and try again.`,
+            `Failed to reset database '${dbName}' because it is blocked by other open connections.`,
           ),
         );
       };
@@ -383,12 +178,9 @@ export class DatabaseManager {
 // Export singleton
 const dbManager = DatabaseManager.getInstance();
 
-// Keep original clientDB export unchanged
 export const clientDB = dbManager.createProxy();
 
-// Export initialization method for application startup
-export const initializeDB = (callbacks?: DatabaseLoadingCallbacks) =>
-  dbManager.initialize(callbacks);
+export const initializeDB = () => dbManager.initialize();
 
 export const resetClientDatabase = async () => {
   await dbManager.resetDatabase();
