@@ -62,6 +62,16 @@ export class FileService {
   }
 
   /**
+   * Get file metadata from storage
+   * Used to verify actual file size instead of trusting client-provided values
+   */
+  public async getFileMetadata(
+    key: string,
+  ): Promise<{ contentLength: number; contentType?: string }> {
+    return this.impl.getFileMetadata(key);
+  }
+
+  /**
    * Create pre-signed preview URL
    */
   public async createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {

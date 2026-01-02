@@ -19,6 +19,7 @@ function createCallerWithCtx(partialCtx: any = {}) {
 
   const fileService = {
     getFullFileUrl: vi.fn().mockResolvedValue('full-url'),
+    getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 2048, contentType: 'text/plain' }),
     deleteFile: vi.fn().mockResolvedValue(undefined),
     deleteFiles: vi.fn().mockResolvedValue(undefined),
   };
@@ -114,12 +115,14 @@ vi.mock('@/database/models/file', () => ({
 }));
 
 const mockFileServiceGetFullFileUrl = vi.fn();
+const mockFileServiceGetFileMetadata = vi.fn();
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(() => ({
     deleteFile: vi.fn(),
     deleteFiles: vi.fn(),
     getFullFileUrl: mockFileServiceGetFullFileUrl,
+    getFileMetadata: mockFileServiceGetFileMetadata,
   })),
 }));
 
@@ -159,6 +162,12 @@ describe('fileRouter', () => {
       chunkTaskId: null,
       embeddingTaskId: null,
     };
+
+    // Set default mock for getFileMetadata (security fix for GHSA-wrrr-8jcv-wjf5)
+    mockFileServiceGetFileMetadata.mockResolvedValue({
+      contentLength: 100,
+      contentType: 'text/plain',
+    });
 
     // Use actual context with default mocks
     ({ ctx, caller } = createCallerWithCtx());
@@ -203,6 +212,53 @@ describe('fileRouter', () => {
         id: 'new-file-id',
         url: 'https://lobehub.com/f/new-file-id',
       });
+    });
+
+    it('should use actual file size from S3 instead of client-provided size (security fix)', async () => {
+      // Setup: S3 returns actual size of 5000 bytes
+      mockFileServiceGetFileMetadata.mockResolvedValue({
+        contentLength: 5000,
+        contentType: 'text/plain',
+      });
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+
+      // Client claims file is only 100 bytes (attempting quota bypass)
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        name: 'test.txt',
+        size: 100, // Client-provided fake size
+        url: 'files/test.txt',
+        metadata: {},
+      });
+
+      // Verify getFileMetadata was called to get actual size
+      expect(mockFileServiceGetFileMetadata).toHaveBeenCalledWith('files/test.txt');
+
+      // Verify create was called with actual size from S3, not client-provided size
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size: 5000, // Actual size from S3, not 100
+        }),
+        true,
+      );
+    });
+
+    it('should handle getFileMetadata errors', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileServiceGetFileMetadata.mockRejectedValue(new Error('File not found in S3'));
+
+      await expect(
+        caller.createFile({
+          hash: 'test-hash',
+          fileType: 'text',
+          name: 'test.txt',
+          size: 100,
+          url: 'files/non-existent.txt',
+          metadata: {},
+        }),
+      ).rejects.toThrow('File not found in S3');
     });
   });
 

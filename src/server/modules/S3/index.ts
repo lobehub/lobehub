@@ -2,6 +2,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -109,6 +110,26 @@ export class S3 {
     }
 
     return response.Body.transformToByteArray();
+  }
+
+  /**
+   * Get file metadata from S3 using HeadObject
+   * This is used to verify actual file size from S3 instead of trusting client-provided values
+   */
+  public async getFileMetadata(
+    key: string,
+  ): Promise<{ contentLength: number; contentType?: string }> {
+    const command = new HeadObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+
+    const response = await this.client.send(command);
+
+    return {
+      contentLength: response.ContentLength ?? 0,
+      contentType: response.ContentType,
+    };
   }
 
   public async createPreSignedUrl(key: string): Promise<string> {

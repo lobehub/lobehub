@@ -16,8 +16,6 @@ import { LobeChatDatabase } from '../../type';
 import { KnowledgeBaseModel } from '../knowledgeBase';
 import { getTestDB } from './_util';
 
-import { sleep } from '@/utils/sleep';
-
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'session-group-model-test-user-id';
