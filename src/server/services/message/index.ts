@@ -52,7 +52,7 @@ export class MessageService {
 
   /**
    * Query messages and return response with success status (used after mutations)
-   * 优先使用 agentId，如果没有则使用 sessionId（向后兼容）
+   * Prioritize agentId, fallback to sessionId if not provided (for backwards compatibility)
    */
   private async queryWithSuccess(
     options?: QueryOptions,
@@ -84,11 +84,11 @@ export class MessageService {
    * reducing the need for separate refresh calls and improving performance.
    */
   async createMessage(params: CreateMessageParams): Promise<CreateMessageResult> {
-    // 1. Create the message (使用 agentId)
+    // 1. Create the message (using agentId)
     const item = await this.messageModel.create(params);
 
     // 2. Query all messages for this agent/topic
-    // 使用 agentId 字段查询
+    // Use agentId field for query
     const messages = await this.messageModel.query(
       {
         agentId: params.agentId,

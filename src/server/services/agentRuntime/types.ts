@@ -4,12 +4,12 @@ import { type LobeToolManifest } from '@lobechat/context-engine';
 // ==================== Step Lifecycle Callbacks ====================
 
 /**
- * Step 执行生命周期回调
- * 用于在 step 执行的不同阶段注入自定义逻辑
+ * Step execution lifecycle callbacks
+ * Used to inject custom logic at different stages of step execution
  */
 export interface StepLifecycleCallbacks {
   /**
-   * 在 step 执行后调用
+   * Called after step execution
    */
   onAfterStep?: (params: {
     operationId: string;
@@ -20,7 +20,7 @@ export interface StepLifecycleCallbacks {
   }) => Promise<void>;
 
   /**
-   * 在 step 执行前调用
+   * Called before step execution
    */
   onBeforeStep?: (params: {
     context?: AgentRuntimeContext;
@@ -30,7 +30,7 @@ export interface StepLifecycleCallbacks {
   }) => Promise<void>;
 
   /**
-   * 在操作完成时调用（status 变为 done/error/interrupted）
+   * Called when operation completes (status changes to done/error/interrupted)
    */
   onComplete?: (params: {
     finalState: AgentState;
@@ -40,7 +40,7 @@ export interface StepLifecycleCallbacks {
 }
 
 /**
- * Step 完成原因
+ * Step completion reason
  */
 export type StepCompletionReason =
   | 'done'
@@ -82,8 +82,8 @@ export interface OperationCreationParams {
   modelRuntimeConfig?: any;
   operationId: string;
   /**
-   * Step 生命周期回调
-   * 用于在 step 执行的不同阶段注入自定义逻辑
+   * Step lifecycle callbacks
+   * Used to inject custom logic at different stages of step execution
    */
   stepCallbacks?: StepLifecycleCallbacks;
   toolManifestMap: Record<string, LobeToolManifest>;
