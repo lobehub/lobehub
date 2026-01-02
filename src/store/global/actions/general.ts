@@ -1,16 +1,13 @@
-import { type ThemeMode } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
 import { type SWRResponse } from 'swr';
 import type { StateCreator } from 'zustand/vanilla';
 
-import { LOBE_THEME_APPEARANCE } from '@/const/theme';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalService } from '@/services/global';
 import type { SystemStatus } from '@/store/global/initialState';
 import { type LocaleMode } from '@/types/locale';
-import { setCookie } from '@/utils/client/cookie';
 import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
@@ -23,7 +20,6 @@ export interface GlobalGeneralAction {
   openAgentInNewWindow: (agentId: string) => Promise<void>;
   openTopicInNewWindow: (agentId: string, topicId: string) => Promise<void>;
   switchLocale: (locale: LocaleMode, params?: { skipBroadcast?: boolean }) => void;
-  switchThemeMode: (themeMode: ThemeMode, params?: { skipBroadcast?: boolean }) => void;
   updateSystemStatus: (status: Partial<SystemStatus>, action?: any) => void;
   useCheckLatestVersion: (enabledCheck?: boolean) => SWRResponse<string>;
   useInitSystemStatus: () => SWRResponse;
@@ -110,23 +106,6 @@ export const generalActionSlice: StateCreator<
           await ensureElectronIpc().system.updateLocale(locale);
         } catch (error) {
           console.error('Failed to update locale in main process:', error);
-        }
-      })();
-    }
-  },
-  switchThemeMode: (themeMode, { skipBroadcast } = {}) => {
-    get().updateSystemStatus({ themeMode });
-
-    setCookie(LOBE_THEME_APPEARANCE, themeMode === 'auto' ? undefined : themeMode);
-
-    if (isDesktop && !skipBroadcast) {
-      (async () => {
-        try {
-          const { ensureElectronIpc } = await import('@/utils/electron/ipc');
-
-          await ensureElectronIpc().system.updateThemeModeHandler(themeMode);
-        } catch (error) {
-          console.error('Failed to update theme in main process:', error);
         }
       })();
     }

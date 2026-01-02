@@ -1,6 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SpeedInsights } from '@vercel/speed-insights/next';
-import { type ThemeAppearance } from 'antd-style';
 import { type ResolvingViewport } from 'next';
 import Script from 'next/script';
 import { type ReactNode, Suspense } from 'react';
@@ -26,7 +25,7 @@ export interface RootLayoutProps extends DynamicLayoutProps {
 const RootLayout = async ({ children, params }: RootLayoutProps) => {
   const { variants } = await params;
 
-  const { locale, isMobile, theme, primaryColor, neutralColor } =
+  const { locale, isMobile, primaryColor, neutralColor } =
     RouteVariants.deserializeVariants(variants);
 
   const direction = isRtlLang(locale) ? 'rtl' : 'ltr';
@@ -34,7 +33,6 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
   const renderContent = () => {
     return (
       <GlobalProvider
-        appearance={theme}
         isMobile={isMobile}
         locale={locale}
         neutralColor={neutralColor}
@@ -99,7 +97,6 @@ export const generateViewport = async (props: DynamicLayoutProps): ResolvingView
 };
 
 export const generateStaticParams = () => {
-  const themes: ThemeAppearance[] = ['dark', 'light'];
   const mobileOptions = isDesktop ? [false] : [true, false];
   // only static for serveral page, other go to dynamtic
   const staticLocales: Locales[] = [DEFAULT_LANG, 'zh-CN'];
@@ -107,16 +104,13 @@ export const generateStaticParams = () => {
   const variants: { variants: string }[] = [];
 
   for (const locale of staticLocales) {
-    for (const theme of themes) {
-      for (const isMobile of mobileOptions) {
-        variants.push({
-          variants: RouteVariants.serializeVariants({
-            isMobile,
-            locale,
-            theme: theme as 'dark' | 'light',
-          }),
-        });
-      }
+    for (const isMobile of mobileOptions) {
+      variants.push({
+        variants: RouteVariants.serializeVariants({
+          isMobile,
+          locale,
+        }),
+      });
     }
   }
 

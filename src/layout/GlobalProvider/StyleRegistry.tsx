@@ -13,9 +13,27 @@ const StyleRegistry = ({ children }: PropsWithChildren) => {
     if (isInsert.current) return;
 
     isInsert.current = true;
+    const dark = extractStaticStyle(undefined, {
+      injectTokenStyle: {
+        appearance: 'dark',
+        filter: 'color',
+        selector: '[data-theme="dark"]',
+      },
+    });
 
-    // @ts-ignore
-    return extractStaticStyle().map((item) => item.style);
+    const darkCSS = dark.find((i) => i.key === 'ant-token-dark')!.style;
+
+    return (
+      <>
+        {extractStaticStyle().map((item) => item.style)}
+        {darkCSS}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `html[data-theme="dark"], [data-theme="dark"] body { background-color: #000; }`,
+          }}
+        />
+      </>
+    );
   });
 
   return <StyleProvider cache={extractStaticStyle.cache}>{children}</StyleProvider>;

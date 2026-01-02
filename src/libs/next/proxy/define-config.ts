@@ -1,5 +1,4 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { parseDefaultThemeFromCountry } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 import { UAParser } from 'ua-parser-js';
@@ -39,10 +38,6 @@ export function defineConfig() {
       return NextResponse.next();
     }
 
-    // 1. Read user preferences from cookies
-    const theme = (request.cookies.get(LOBE_THEME_APPEARANCE)?.value ||
-      parseDefaultThemeFromCountry(request)) as 'dark' | 'light';
-
     // locale has three levels
     // 1. search params
     // 2. cookie
@@ -70,14 +65,12 @@ export function defineConfig() {
         theme: !!request.cookies.get(LOBE_THEME_APPEARANCE)?.value,
       },
       locale,
-      theme,
     });
 
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
       isMobile: device.type === 'mobile',
       locale,
-      theme,
     });
 
     logDefault('Serialized route variant: %s', route);
@@ -99,8 +92,8 @@ export function defineConfig() {
 
     // refs: https://github.com/lobehub/lobe-chat/pull/5866
     // new handle segment rewrite: /${route}${originalPathname}
-    // / -> /zh-CN__0__dark
-    // /discover -> /zh-CN__0__dark/discover
+    // / -> /zh-CN__0
+    // /discover -> /zh-CN__0/discover
     // All SPA routes that use react-router-dom should be rewritten to just /${route}
     const spaRoutes = [
       '/chat',

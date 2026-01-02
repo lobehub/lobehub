@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import { ThemeMode } from 'antd-style';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withSWR } from '~test-utils';
 
@@ -114,42 +113,6 @@ describe('generalActionSlice', () => {
       });
 
       expect(result.current.status.language).toBeUndefined();
-    });
-  });
-
-  describe('switchThemeMode', () => {
-    it('should update theme mode in system status', () => {
-      const { result } = renderHook(() => useGlobalStore());
-      const themeMode: ThemeMode = 'dark';
-
-      act(() => {
-        useGlobalStore.setState({ isStatusInit: true });
-        result.current.switchThemeMode(themeMode);
-      });
-
-      expect(result.current.status.themeMode).toBe(themeMode);
-    });
-
-    it('should not update theme mode if status is not initialized', () => {
-      const { result } = renderHook(() => useGlobalStore());
-      const themeMode: ThemeMode = 'dark';
-
-      act(() => {
-        result.current.switchThemeMode(themeMode);
-      });
-
-      expect(result.current.status.themeMode).toBe(initialState.status.themeMode);
-    });
-
-    it('should handle light theme mode', () => {
-      const { result } = renderHook(() => useGlobalStore());
-
-      act(() => {
-        useGlobalStore.setState({ isStatusInit: true });
-        result.current.switchThemeMode('light');
-      });
-
-      expect(result.current.status.themeMode).toBe('light');
     });
   });
 
