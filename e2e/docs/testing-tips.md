@@ -64,6 +64,36 @@ HEADLESS=false pnpm exec cucumber-js --config cucumber.config.js --tags "@smoke"
 
 ## 常见问题
 
+### waitForLoadState ('networkidle') 超时
+
+**原因**: `networkidle` 表示 500ms 内没有网络请求。在 CI 环境中，由于分析脚本、外部资源加载、轮询等持续网络活动，这个状态可能永远无法达到。
+
+**错误示例**:
+
+```
+page.waitForLoadState: Timeout 10000ms exceeded.
+=========================== logs ===========================
+  "load" event fired
+============================================================
+```
+
+**解决**:
+
+- **避免使用 `networkidle`** - 这是不可靠的等待策略
+- **直接等待目标元素** - 使用 `expect(element).toBeVisible({ timeout: 30_000 })` 替代
+- 如果必须等待页面加载完成，使用 `domcontentloaded` 或 `load` 事件
+
+```typescript
+// ❌ 不推荐 - networkidle 在 CI 中容易超时
+await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
+const element = this.page.locator('[data-testid="my-element"]');
+await expect(element).toBeVisible();
+
+// ✅ 推荐 - 直接等待目标元素
+const element = this.page.locator('[data-testid="my-element"]');
+await expect(element).toBeVisible({ timeout: 30_000 });
+```
+
 ### 测试超时 (function timed out)
 
 **原因**: 元素定位失败或等待时间不足
