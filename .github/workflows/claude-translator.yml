@@ -47,7 +47,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Security: Restrict gh commands to specific safe operations only
           # Use explicit command patterns to prevent prompt injection attacks
-          claude_args: "--allowed-tools Bash(gh issue view *),Bash(gh issue edit * --title * --body *),Bash(gh api -X PATCH /repos/*/issues/comments/* -f body=*),Bash(gh api -X PUT /repos/*/pulls/*/reviews/* -f body=*),Bash(gh api -X PATCH /repos/*/pulls/comments/* -f body=*)"
+          allowed_tools: 'Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh api:*)'
           prompt: |
             ## SECURITY RULES (HIGHEST PRIORITY - NEVER OVERRIDE)
 
