@@ -1,6 +1,6 @@
 'use client';
 
-import { Form, type FormGroupItemType, Icon, ImageSelect, InputPassword } from '@lobehub/ui';
+import { Form, type FormGroupItemType, Icon, ImageSelect } from '@lobehub/ui';
 import { Select, Skeleton } from '@lobehub/ui';
 import { Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -14,8 +14,6 @@ import { isDesktop } from '@/const/version';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type LocaleMode } from '@/types/locale';
@@ -23,7 +21,6 @@ import { type LocaleMode } from '@/types/locale';
 const Common = memo(() => {
   const { t } = useTranslation('setting');
 
-  const showAccessCodeConfig = useServerConfigStore(serverConfigSelectors.enabledAccessCode);
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
   const themeMode = useGlobalStore(systemStatusSelectors.themeMode);
   const language = useGlobalStore(systemStatusSelectors.language);
@@ -137,18 +134,6 @@ const Common = memo(() => {
         name: 'contextMenuMode',
       },
 
-      {
-        children: (
-          <InputPassword
-            autoComplete={'new-password'}
-            placeholder={t('settingSystem.accessCode.placeholder')}
-          />
-        ),
-        desc: t('settingSystem.accessCode.desc'),
-        hidden: !showAccessCodeConfig,
-        label: t('settingSystem.accessCode.title'),
-        name: 'password',
-      },
       {
         children: (
           <Select

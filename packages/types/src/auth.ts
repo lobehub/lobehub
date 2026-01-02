@@ -1,10 +1,6 @@
 /* eslint-disable typescript-sort-keys/interface */
 export interface ClientSecretPayload {
   /**
-   * password
-   */
-  accessCode?: string;
-  /**
    * Represents the user's API key
    *
    * If provider need multi keys like bedrock,

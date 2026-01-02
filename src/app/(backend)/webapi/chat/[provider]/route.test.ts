@@ -62,7 +62,6 @@ describe('POST handler', () => {
 
       // 设置 getJWTPayload 和 initModelRuntimeWithUserPayload 的模拟返回值
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
       });
@@ -105,7 +104,6 @@ describe('POST handler', () => {
       mockState.enableClerk = true;
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
       });
@@ -133,7 +131,6 @@ describe('POST handler', () => {
       await POST(request, { params: mockParams });
 
       expect(checkAuthMethod).toBeCalledWith({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         betterAuthAuthorized: false,
         clerkAuth: {},
@@ -163,7 +160,6 @@ describe('POST handler', () => {
   describe('chat', () => {
     it('should correctly handle chat completion with valid payload', async () => {
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
         userId: 'abc',
@@ -193,7 +189,6 @@ describe('POST handler', () => {
     it('should return an error response when chat completion fails', async () => {
       // 设置 getJWTPayload 和 initAgentRuntimeWithUserPayload 的模拟返回值
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
       });
