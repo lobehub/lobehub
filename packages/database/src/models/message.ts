@@ -485,7 +485,6 @@ export class MessageModel {
             .filter((relation) => relation.messageId === item.id)
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             .map<ChatImageItem>(({ id, url, name }) => ({ alt: name!, id, url })),
-          meta: {},
 
           model,
 

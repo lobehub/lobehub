@@ -152,7 +152,6 @@ describe('messageRouter', () => {
     const mockQueryAll = vi.fn().mockResolvedValue([
       {
         id: 'msg1',
-        meta: {},
       } as UIChatMessage,
     ]);
     vi.mocked(MessageModel).mockImplementation(
@@ -169,7 +168,7 @@ describe('messageRouter', () => {
     const result = await ctx.messageModel.queryAll();
 
     expect(mockQueryAll).toHaveBeenCalled();
-    expect(result).toEqual([{ id: 'msg1', meta: {} }]);
+    expect(result).toEqual([{ id: 'msg1' }]);
   });
 
   it('should handle removeMessage', async () => {

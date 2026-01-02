@@ -438,7 +438,6 @@ describe('thread action', () => {
           content: 'Hello',
           createdAt: Date.now(),
           id: 'msg-1',
-          meta: {},
           role: 'user',
           agentId: 'test-session-id',
           updatedAt: Date.now(),

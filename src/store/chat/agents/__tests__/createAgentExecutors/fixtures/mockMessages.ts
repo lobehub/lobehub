@@ -9,7 +9,6 @@ export const createAssistantMessage = (overrides: Partial<UIChatMessage> = {}): 
     content: 'I am an AI assistant.',
     createdAt: Date.now(),
     id: `msg_${nanoid()}`,
-    meta: {},
     model: 'gpt-4',
     provider: 'openai',
     role: 'assistant',
@@ -26,7 +25,6 @@ export const createUserMessage = (overrides: Partial<UIChatMessage> = {}): UICha
     content: 'Hello, AI!',
     createdAt: Date.now(),
     id: `msg_${nanoid()}`,
-    meta: {},
     role: 'user',
     updatedAt: Date.now(),
     ...overrides,
@@ -41,7 +39,6 @@ export const createToolMessage = (overrides: Partial<UIChatMessage> = {}): UICha
     content: '',
     createdAt: Date.now(),
     id: `msg_${nanoid()}`,
-    meta: {},
     plugin: {
       apiName: 'search',
       arguments: JSON.stringify({ query: 'test' }),

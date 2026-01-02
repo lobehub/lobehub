@@ -53,7 +53,6 @@ describe('Message CRUD Actions', () => {
               role: 'user',
               createdAt: Date.now(),
               updatedAt: Date.now(),
-              meta: {},
             },
           ],
         });
@@ -138,7 +137,6 @@ describe('Message CRUD Actions', () => {
         role: 'user' as const,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
       };
 
       act(() => {
@@ -173,7 +171,6 @@ describe('Message CRUD Actions', () => {
         role: 'assistantGroup',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
         children: [
           {
             id: 'child-1',
@@ -223,7 +220,6 @@ describe('Message CRUD Actions', () => {
         role: 'user' as const,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
       };
 
       act(() => {
@@ -246,7 +242,6 @@ describe('Message CRUD Actions', () => {
         role: 'assistantGroup',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
         children: [{ id: 'child-1', content: 'Response' }],
       };
 
@@ -290,7 +285,6 @@ describe('Message CRUD Actions', () => {
         role: 'user' as const,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
       };
 
       act(() => {
@@ -340,7 +334,6 @@ describe('Message CRUD Actions', () => {
           role: 'assistant' as const,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
         {
           id: 'assistant-2',
@@ -348,7 +341,6 @@ describe('Message CRUD Actions', () => {
           role: 'assistant' as const,
           createdAt: Date.now() + 1,
           updatedAt: Date.now() + 1,
-          meta: {},
         },
       ];
 
@@ -492,7 +484,6 @@ describe('Message CRUD Actions', () => {
               role: 'user',
               createdAt: Date.now(),
               updatedAt: Date.now(),
-              meta: {},
             },
           ],
         });
@@ -638,7 +629,6 @@ describe('Message CRUD Actions', () => {
             role: 'user',
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            meta: {},
           },
         ]);
       });

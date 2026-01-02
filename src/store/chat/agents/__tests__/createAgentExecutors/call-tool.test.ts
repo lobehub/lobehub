@@ -294,7 +294,6 @@ describe('call_tool executor', () => {
         content: '',
         pluginIntervention: { status: 'pending' },
         createdAt: Date.now(),
-        meta: {},
         updatedAt: Date.now(),
       };
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage, existingToolMessage as any];
@@ -342,7 +341,6 @@ describe('call_tool executor', () => {
         role: 'tool',
         content: '',
         createdAt: Date.now(),
-        meta: {},
         updatedAt: Date.now(),
       };
       mockStore.dbMessagesMap[context.messageKey] = [assistantMessage, existingToolMessage as any];
@@ -1297,7 +1295,6 @@ describe('call_tool executor', () => {
           role: 'tool',
           content: '',
           createdAt: Date.now(),
-          meta: {},
           updatedAt: Date.now(),
         } as any,
       ];
@@ -1757,7 +1754,6 @@ describe('call_tool executor', () => {
           role: 'user',
           content: 'Hello',
           createdAt: Date.now(),
-          meta: {},
           updatedAt: Date.now(),
         } as any,
         {
@@ -1766,7 +1762,6 @@ describe('call_tool executor', () => {
           content: 'Hi',
           groupId: 'group_old',
           createdAt: Date.now(),
-          meta: {},
           updatedAt: Date.now(),
         } as any,
         {
@@ -1774,7 +1769,6 @@ describe('call_tool executor', () => {
           role: 'user',
           content: 'Question',
           createdAt: Date.now(),
-          meta: {},
           updatedAt: Date.now(),
         } as any,
         createAssistantMessage({ groupId: 'group_latest' }),
