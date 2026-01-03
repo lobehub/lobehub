@@ -17,6 +17,8 @@ import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
+import { buildCallbackUrl, getCallbackUrlOrigin } from './callback-url';
+
 // Create debug logger instances
 const logDefault = debug('middleware:default');
 const logNextAuth = debug('middleware:next-auth');
@@ -244,17 +246,8 @@ export function defineConfig() {
       // ref: https://authjs.dev/getting-started/session-management/protecting
       if (isProtected) {
         logNextAuth('Request a protected route, redirecting to sign-in page');
-        // Get the real origin from request headers, not from req.nextUrl.origin
-        // This handles reverse proxy scenarios where req.nextUrl.origin may be incorrect
-        const protocol = req.headers.get('x-forwarded-proto') || req.nextUrl.protocol.slice(0, -1);
-        const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.host;
-        const origin = `${protocol}://${host}`;
-
-        const nextLoginUrl = new URL('/next-auth/signin', origin);
-        // Build callbackUrl with correct origin
-        const callbackUrl = `${origin}${req.nextUrl.pathname}${req.nextUrl.search}`;
-        nextLoginUrl.searchParams.set('callbackUrl', callbackUrl);
-
+        const nextLoginUrl = new URL('/next-auth/signin', getCallbackUrlOrigin(req));
+        nextLoginUrl.searchParams.set('callbackUrl', buildCallbackUrl(req));
         const hl = req.nextUrl.searchParams.get('hl');
         if (hl) {
           nextLoginUrl.searchParams.set('hl', hl);
@@ -339,17 +332,8 @@ export function defineConfig() {
       // If request a protected route, redirect to sign-in page
       if (isProtected) {
         logBetterAuth('Request a protected route, redirecting to sign-in page');
-        // Get the real origin from request headers, not from req.nextUrl.origin
-        // This handles reverse proxy scenarios where req.nextUrl.origin may be incorrect
-        const protocol = req.headers.get('x-forwarded-proto') || req.nextUrl.protocol.slice(0, -1);
-        const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.host;
-        const origin = `${protocol}://${host}`;
-
-        const signInUrl = new URL('/signin', origin);
-        // Build callbackUrl with correct origin
-        const callbackUrl = `${origin}${req.nextUrl.pathname}${req.nextUrl.search}`;
-        signInUrl.searchParams.set('callbackUrl', callbackUrl);
-
+        const signInUrl = new URL('/signin', getCallbackUrlOrigin(req));
+        signInUrl.searchParams.set('callbackUrl', buildCallbackUrl(req));
         const hl = req.nextUrl.searchParams.get('hl');
         if (hl) {
           signInUrl.searchParams.set('hl', hl);
