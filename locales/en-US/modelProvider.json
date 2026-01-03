@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "Azure API version, follow the format YYYY-MM-DD, check the [latest version](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Fetch List",
-      "title": "Azure API Version"
-    },
-    "empty": "Please enter a model ID to add the first model",
-    "endpoint": {
-      "desc": "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "Azure API Address"
-    },
-    "modelListPlaceholder": "Select or add the OpenAI model you deployed",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section. You can use KEY1 or KEY2",
-      "placeholder": "Azure API Key",
-      "title": "API Key"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "The API version for Azure, following the YYYY-MM-DD format. Refer to the [latest version](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Fetch List",
-      "title": "Azure API Version"
-    },
-    "endpoint": {
-      "desc": "Find the Azure AI model inference endpoint from the Azure AI project overview",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "Azure AI Endpoint"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Find the API key from the Azure AI project overview",
-      "placeholder": "Azure Key",
-      "title": "Key"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "Enter AWS Access Key Id",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key Id"
-    },
-    "checker": {
-      "desc": "Test if AccessKeyId / SecretAccessKey are filled in correctly"
-    },
-    "region": {
-      "desc": "Enter AWS Region",
-      "placeholder": "AWS Region",
-      "title": "AWS Region"
-    },
-    "secretAccessKey": {
-      "desc": "Enter AWS Secret Access Key",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "If you are using AWS SSO/STS, please enter your AWS Session Token",
-      "placeholder": "AWS Session Token",
-      "title": "AWS Session Token (optional)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "Custom Service Region",
-      "customSessionToken": "Custom Session Token",
-      "description": "Enter your AWS AccessKeyId / SecretAccessKey to start the session. The app will not store your authentication configuration",
-      "imageGenerationDescription": "Enter your AWS AccessKeyId / SecretAccessKey to start generating. The application will not store your authentication credentials.",
-      "title": "Use Custom Bedrock Authentication Information"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "Please enter Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "Enter your Cloudflare account ID or custom API address",
-      "placeholder": "Cloudflare Account ID / custom API URL",
-      "title": "Cloudflare Account ID / API Address"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "API key for Bearer Token authentication",
-      "placeholder": "Enter API key",
-      "required": "Please enter the API key",
-      "title": "API Key"
-    },
-    "authType": {
-      "desc": "Select the authentication method for connecting to the ComfyUI server",
-      "options": {
-        "basic": "Basic Authentication",
-        "bearer": "Bearer Token",
-        "custom": "Custom Authentication",
-        "none": "No Authentication"
-      },
-      "placeholder": "Please select an authentication type",
-      "title": "Authentication Type"
-    },
-    "baseURL": {
-      "desc": "ComfyUI server access address, e.g., http://localhost:8000",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "Please enter the ComfyUI service URL",
-      "title": "ComfyUI Service URL"
-    },
-    "checker": {
-      "desc": "Test if the connection is properly configured",
-      "title": "Connectivity Check"
-    },
-    "customHeaders": {
-      "addButton": "Add Header",
-      "deleteTooltip": "Delete this header",
-      "desc": "Request headers required for custom authentication, formatted as key-value pairs",
-      "duplicateKeyError": "Header names cannot be duplicated",
-      "keyPlaceholder": "Key",
-      "required": "Please enter custom request headers",
-      "title": "Custom Headers",
-      "valuePlaceholder": "Value"
-    },
-    "password": {
-      "desc": "Password for basic authentication",
-      "placeholder": "Enter password",
-      "required": "Please enter the password",
-      "title": "Password"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "Username for basic authentication",
-      "placeholder": "Enter username",
-      "required": "Please enter the username",
-      "title": "Username"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "Please enter your API Key",
-      "title": "API Key"
-    },
-    "basicTitle": "Basic Information",
-    "configTitle": "Configuration Information",
-    "confirm": "Create",
-    "createSuccess": "Creation successful",
-    "description": {
-      "placeholder": "Provider description (optional)",
-      "title": "Provider Description"
-    },
-    "id": {
-      "desc": "Unique identifier for the service provider, which cannot be modified after creation",
-      "format": "Can only contain numbers, lowercase letters, hyphens (-), and underscores (_) ",
-      "placeholder": "Suggested all lowercase, e.g., openai, cannot be modified after creation",
-      "required": "Please enter the provider ID",
-      "title": "Provider ID"
-    },
-    "logo": {
-      "required": "Please upload a valid provider logo",
-      "title": "Provider Logo"
-    },
-    "name": {
-      "placeholder": "Please enter the display name of the provider",
-      "required": "Please enter the provider name",
-      "title": "Provider Name"
-    },
-    "proxyUrl": {
-      "required": "Please enter the proxy address",
-      "title": "Proxy URL"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "Please select SDK type",
-      "title": "Request Format"
-    },
-    "title": "Create Custom AI Provider"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "Enter your GitHub PAT. Click [here](https://github.com/settings/tokens) to create one.",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "Enter your HuggingFace Token, click [here](https://huggingface.co/settings/tokens) to create one",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "HuggingFace Token"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "Custom provider not enabled",
-      "disabled": "Disabled",
-      "enabled": "Enabled"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "Add Custom Provider",
-    "all": "All",
-    "list": {
-      "custom": "Custom not enabled",
-      "disabled": "Disabled",
-      "disabledActions": {
-        "sort": "Sort By",
-        "sortAlphabetical": "Sort Alphabetically",
-        "sortAlphabeticalDesc": "Sort by Reverse Alphabetical Order",
-        "sortDefault": "Default Sort"
-      },
-      "enabled": "Enabled"
-    },
-    "notFound": "No search results found",
-    "searchProviders": "Search Providers...",
-    "sort": "Custom Sort"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "API key provided by the New API platform",
-      "placeholder": "New API API Key",
-      "required": "API key is required",
-      "title": "API Key"
-    },
-    "apiUrl": {
-      "desc": "API endpoint for the New API service, usually includes /v1",
-      "title": "API URL"
-    },
-    "enabled": {
-      "title": "Enable New API"
-    },
-    "models": {
-      "batchSelect": "Select models in bulk ({{count}} items)",
-      "fetch": "Fetch model list",
-      "selected": "Selected models",
-      "title": "Available Models"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "Test if the proxy address is correctly filled in",
-      "title": "Connectivity Check"
-    },
-    "customModelName": {
-      "desc": "Add custom models, separate multiple models with commas",
-      "placeholder": "vicuna, llava, codellama, llama2:13b-text",
-      "title": "Custom model name"
-    },
-    "download": {
-      "desc": "Ollama is downloading the model. Please try not to close this page. The download will resume from where it left off if interrupted.",
-      "failed": "Model download failed. Please check your network or Ollama settings and try again.",
-      "remainingTime": "Remaining Time",
-      "speed": "Speed",
-      "title": "Downloading model {{model}}"
-    },
-    "endpoint": {
-      "desc": "Must include http(s)://; can be left blank if not specified locally.",
-      "title": "Interface proxy address"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "Cancel Download",
-      "confirm": "Download",
-      "description": "Enter your Ollama model tag to continue the session",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "Starting download...",
-      "title": "Download specified Ollama model"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "{{count}} models selected",
-      "title": "Bulk Selection"
-    },
-    "config": {
-      "aesGcm": "Your key and proxy URL will be encrypted using <1>AES-GCM</1> encryption algorithm",
-      "apiKey": {
-        "desc": "Please enter your {{name}} API Key",
-        "descWithUrl": "Please enter your {{name}} API Key. <3>Click here to get it</3>",
-        "placeholder": "{{name}} API Key",
-        "title": "API Key"
-      },
-      "baseURL": {
-        "desc": "Must include http(s)://",
-        "invalid": "Please enter a valid URL",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "API Proxy URL"
-      },
-      "checker": {
-        "button": "Check",
-        "desc": "Test if the API Key and proxy URL are correctly filled",
-        "pass": "Check passed",
-        "title": "Connectivity Check"
-      },
-      "fetchOnClient": {
-        "desc": "Client request mode will initiate session requests directly from the browser, which can improve response speed",
-        "title": "Use Client Request Mode"
-      },
-      "helpDoc": "Configuration Guide",
-      "responsesApi": {
-        "desc": "Uses OpenAI's next-generation request format specification to unlock advanced features like chain-of-thought (supported by OpenAI models only)",
-        "title": "Use Responses API Specification"
-      },
-      "waitingForMore": "More models are currently <1>planned for integration</1>, please stay tuned"
-    },
-    "createNew": {
-      "title": "Create Custom AI Model"
-    },
-    "item": {
-      "config": "Configure Model",
-      "customModelCards": {
-        "addNew": "Create and add {{id}} model",
-        "confirmDelete": "You are about to delete this custom model. Once deleted, it cannot be recovered. Please proceed with caution."
-      },
-      "delete": {
-        "confirm": "Are you sure you want to delete model {{displayName}}?",
-        "success": "Deletion successful",
-        "title": "Delete Model"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Field used for actual requests in Azure OpenAI",
-          "placeholder": "Please enter the model deployment name in Azure",
-          "title": "Model Deployment Name"
-        },
-        "deployName": {
-          "extra": "This field will be used as the model ID when sending requests",
-          "placeholder": "Please enter the actual deployment name or ID of the model",
-          "title": "Model Deployment Name"
-        },
-        "displayName": {
-          "placeholder": "Please enter the display name of the model, e.g., ChatGPT, GPT-4, etc.",
-          "title": "Model Display Name"
-        },
-        "files": {
-          "extra": "The current file upload implementation is just a hack solution, limited to self-experimentation. Please wait for complete file upload capabilities in future implementations.",
-          "title": "File Upload Support"
-        },
-        "functionCall": {
-          "extra": "This configuration will only enable the model's ability to use tools, allowing for the addition of tool-type plugins. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
-          "title": "Support for Tool Usage"
-        },
-        "id": {
-          "extra": "This cannot be modified after creation and will be used as the model ID when calling AI",
-          "placeholder": "Please enter the model ID, e.g., gpt-4o or claude-3.5-sonnet",
-          "title": "Model ID"
-        },
-        "imageOutput": {
-          "extra": "This setting enables the model's image generation capability only. The actual performance depends entirely on the model itself. Please test the model to determine if it supports image generation.",
-          "title": "Supports Image Generation"
-        },
-        "modalTitle": "Custom Model Configuration",
-        "reasoning": {
-          "extra": "This configuration will enable the model's deep thinking capabilities, and the specific effects depend entirely on the model itself. Please test whether this model has usable deep thinking abilities.",
-          "title": "Support Deep Thinking"
-        },
-        "search": {
-          "extra": "This setting enables the model's built-in web search capability. Whether the built-in search engine is supported depends on the model itself. Please test the model to verify the availability of this feature.",
-          "title": "Supports Web Search"
-        },
-        "tokens": {
-          "extra": "Set the maximum number of tokens supported by the model",
-          "title": "Maximum Context Window",
-          "unlimited": "Unlimited"
-        },
-        "type": {
-          "extra": "Different model types have distinct use cases and capabilities",
-          "options": {
-            "chat": "Chat",
-            "embedding": "Embedding",
-            "image": "Image Generation",
-            "realtime": "Real-time Chat",
-            "stt": "Speech-to-Text",
-            "text2music": "Text-to-Music",
-            "text2video": "Text-to-Video",
-            "tts": "Text-to-Speech"
-          },
-          "placeholder": "Please select a model type",
-          "title": "Model Type"
-        },
-        "video": {
-          "extra": "This setting enables video recognition configuration within the application. Whether video recognition is supported depends entirely on the model itself. Please test the model to verify the availability of this feature.",
-          "title": "Supports Video Recognition"
-        },
-        "vision": {
-          "extra": "This configuration will only enable image upload capabilities in the application. Whether recognition is supported depends entirely on the model itself. Please test the visual recognition capabilities of the model yourself.",
-          "title": "Support Vision"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/Image",
-        "inputCharts": "${{amount}}/M Characters",
-        "inputMinutes": "${{amount}}/Minutes",
-        "inputTokens": "Input ${{amount}}/M",
-        "outputTokens": "Output ${{amount}}/M"
-      },
-      "releasedAt": "Released at {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "Add Model",
-      "disabled": "Disabled",
-      "disabledActions": {
-        "showMore": "Show All",
-        "sort": "Sort By",
-        "sortAlphabetical": "Sort Alphabetically",
-        "sortAlphabeticalDesc": "Sort by Reverse Alphabetical Order",
-        "sortDefault": "Default Sort",
-        "sortReleasedAt": "Sort by Earliest Release Date",
-        "sortReleasedAtDesc": "Sort by Latest Release Date"
-      },
-      "empty": {
-        "desc": "Please create a custom model or pull a model to get started.",
-        "title": "No available models"
-      },
-      "enabled": "Enabled",
-      "enabledActions": {
-        "disableAll": "Disable All",
-        "enableAll": "Enable All",
-        "sort": "Custom Model Sorting"
-      },
-      "enabledEmpty": "No enabled models available. Please enable your preferred models from the list below~",
-      "fetcher": {
-        "clear": "Clear fetched models",
-        "fetch": "Fetch models",
-        "fetching": "Fetching model list...",
-        "latestTime": "Last updated: {{time}}",
-        "noLatestTime": "Model list not yet fetched"
-      },
-      "noModelsInCategory": "No enabled models in this category",
-      "resetAll": {
-        "conform": "Are you sure you want to reset all modifications to the current model? After resetting, the current model list will return to its default state.",
-        "success": "Reset successful",
-        "title": "Reset All Modifications"
-      },
-      "search": "Search Models...",
-      "searchResult": "{{count}} models found",
-      "title": "Model List",
-      "total": "{{count}} models available"
-    },
-    "searchNotFound": "No search results found",
-    "tabs": {
-      "all": "All",
-      "chat": "Chat",
-      "embedding": "Embedding",
-      "image": "Image",
-      "stt": "ASR",
-      "tts": "TTS"
-    }
-  },
-  "sortModal": {
-    "success": "Sort update successful",
-    "title": "Custom Order",
-    "update": "Update"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "You are about to delete this AI provider. Once deleted, it cannot be retrieved. Are you sure you want to delete?",
-    "deleteSuccess": "Deletion successful",
-    "tooltip": "Update provider basic configuration",
-    "updateSuccess": "Update successful"
-  },
-  "updateCustomAiProvider": {
-    "title": "Update Custom AI Provider Configuration"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "Enter your Vertex AI Keys",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "Vertex AI Keys"
-    },
-    "region": {
-      "desc": "Select the region for Vertex AI service. Some models like Gemini 2.5 are only available in specific regions (e.g., global)",
-      "placeholder": "Select region",
-      "title": "Vertex AI Region"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI Zero One Everything"
-  },
-  "zhipu": {
-    "title": "Zhipu"
-  }
+  "azure.azureApiVersion.desc": "Azure API version, follow the format YYYY-MM-DD, check the [latest version](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "Fetch List",
+  "azure.azureApiVersion.title": "Azure API Version",
+  "azure.empty": "Please enter a model ID to add the first model",
+  "azure.endpoint.desc": "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "Azure API Address",
+  "azure.modelListPlaceholder": "Select or add the OpenAI model you deployed",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section. You can use KEY1 or KEY2",
+  "azure.token.placeholder": "Azure API Key",
+  "azure.token.title": "API Key",
+  "azureai.azureApiVersion.desc": "The API version for Azure, following the YYYY-MM-DD format. Refer to the [latest version](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "Fetch List",
+  "azureai.azureApiVersion.title": "Azure API Version",
+  "azureai.endpoint.desc": "Find the Azure AI model inference endpoint from the Azure AI project overview",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "Azure AI Endpoint",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "Find the API key from the Azure AI project overview",
+  "azureai.token.placeholder": "Azure Key",
+  "azureai.token.title": "Key",
+  "bedrock.accessKeyId.desc": "Enter AWS Access Key Id",
+  "bedrock.accessKeyId.placeholder": "AWS Access Key Id",
+  "bedrock.accessKeyId.title": "AWS Access Key Id",
+  "bedrock.checker.desc": "Test if AccessKeyId / SecretAccessKey are filled in correctly",
+  "bedrock.region.desc": "Enter AWS Region",
+  "bedrock.region.placeholder": "AWS Region",
+  "bedrock.region.title": "AWS Region",
+  "bedrock.secretAccessKey.desc": "Enter AWS Secret Access Key",
+  "bedrock.secretAccessKey.placeholder": "AWS Secret Access Key",
+  "bedrock.secretAccessKey.title": "AWS Secret Access Key",
+  "bedrock.sessionToken.desc": "If you are using AWS SSO/STS, please enter your AWS Session Token",
+  "bedrock.sessionToken.placeholder": "AWS Session Token",
+  "bedrock.sessionToken.title": "AWS Session Token (optional)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "Custom Service Region",
+  "bedrock.unlock.customSessionToken": "Custom Session Token",
+  "bedrock.unlock.description": "Enter your AWS AccessKeyId / SecretAccessKey to start the session. The app will not store your authentication configuration",
+  "bedrock.unlock.imageGenerationDescription": "Enter your AWS AccessKeyId / SecretAccessKey to start generating. The application will not store your authentication credentials.",
+  "bedrock.unlock.title": "Use Custom Bedrock Authentication Information",
+  "cloudflare.apiKey.desc": "Please enter Cloudflare API Key",
+  "cloudflare.apiKey.placeholder": "Cloudflare API Key",
+  "cloudflare.apiKey.title": "Cloudflare API Key",
+  "cloudflare.baseURLOrAccountID.desc": "Enter your Cloudflare account ID or custom API address",
+  "cloudflare.baseURLOrAccountID.placeholder": "Cloudflare Account ID / custom API URL",
+  "cloudflare.baseURLOrAccountID.title": "Cloudflare Account ID / API Address",
+  "comfyui.apiKey.desc": "API key for Bearer Token authentication",
+  "comfyui.apiKey.placeholder": "Enter API key",
+  "comfyui.apiKey.required": "Please enter the API key",
+  "comfyui.apiKey.title": "API Key",
+  "comfyui.authType.desc": "Select the authentication method for connecting to the ComfyUI server",
+  "comfyui.authType.options.basic": "Basic Authentication",
+  "comfyui.authType.options.bearer": "Bearer Token",
+  "comfyui.authType.options.custom": "Custom Authentication",
+  "comfyui.authType.options.none": "No Authentication",
+  "comfyui.authType.placeholder": "Please select an authentication type",
+  "comfyui.authType.title": "Authentication Type",
+  "comfyui.baseURL.desc": "ComfyUI server access address, e.g., http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "Please enter the ComfyUI service URL",
+  "comfyui.baseURL.title": "ComfyUI Service URL",
+  "comfyui.checker.desc": "Test if the connection is properly configured",
+  "comfyui.checker.title": "Connectivity Check",
+  "comfyui.customHeaders.addButton": "Add Header",
+  "comfyui.customHeaders.deleteTooltip": "Delete this header",
+  "comfyui.customHeaders.desc": "Request headers required for custom authentication, formatted as key-value pairs",
+  "comfyui.customHeaders.duplicateKeyError": "Header names cannot be duplicated",
+  "comfyui.customHeaders.keyPlaceholder": "Key",
+  "comfyui.customHeaders.required": "Please enter custom request headers",
+  "comfyui.customHeaders.title": "Custom Headers",
+  "comfyui.customHeaders.valuePlaceholder": "Value",
+  "comfyui.password.desc": "Password for basic authentication",
+  "comfyui.password.placeholder": "Enter password",
+  "comfyui.password.required": "Please enter the password",
+  "comfyui.password.title": "Password",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "Username for basic authentication",
+  "comfyui.username.placeholder": "Enter username",
+  "comfyui.username.required": "Please enter the username",
+  "comfyui.username.title": "Username",
+  "createNewAiProvider.apiKey.placeholder": "Please enter your API Key",
+  "createNewAiProvider.apiKey.title": "API Key",
+  "createNewAiProvider.basicTitle": "Basic Information",
+  "createNewAiProvider.configTitle": "Configuration Information",
+  "createNewAiProvider.confirm": "Create",
+  "createNewAiProvider.createSuccess": "Creation successful",
+  "createNewAiProvider.description.placeholder": "Provider description (optional)",
+  "createNewAiProvider.description.title": "Provider Description",
+  "createNewAiProvider.id.desc": "Unique identifier for the service provider, which cannot be modified after creation",
+  "createNewAiProvider.id.format": "Can only contain numbers, lowercase letters, hyphens (-), and underscores (_) ",
+  "createNewAiProvider.id.placeholder": "Suggested all lowercase, e.g., openai, cannot be modified after creation",
+  "createNewAiProvider.id.required": "Please enter the provider ID",
+  "createNewAiProvider.id.title": "Provider ID",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "Please upload a valid provider logo",
+  "createNewAiProvider.logo.title": "Provider Logo",
+  "createNewAiProvider.name.placeholder": "Please enter the display name of the provider",
+  "createNewAiProvider.name.required": "Please enter the provider name",
+  "createNewAiProvider.name.title": "Provider Name",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "Please enter the proxy address",
+  "createNewAiProvider.proxyUrl.title": "Proxy URL",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "Please select SDK type",
+  "createNewAiProvider.sdkType.title": "Request Format",
+  "createNewAiProvider.title": "Create Custom AI Provider",
+  "github.personalAccessToken.desc": "Enter your GitHub PAT. Click [here](https://github.com/settings/tokens) to create one.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "GitHub PAT",
+  "huggingface.accessToken.desc": "Enter your HuggingFace Token, click [here](https://huggingface.co/settings/tokens) to create one",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "HuggingFace Token",
+  "list.title.custom": "Custom provider not enabled",
+  "list.title.disabled": "Disabled",
+  "list.title.enabled": "Enabled",
+  "menu.addCustomProvider": "Add Custom Provider",
+  "menu.all": "All",
+  "menu.list.custom": "Custom not enabled",
+  "menu.list.disabled": "Disabled",
+  "menu.list.disabledActions.sort": "Sort By",
+  "menu.list.disabledActions.sortAlphabetical": "Sort Alphabetically",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "Sort by Reverse Alphabetical Order",
+  "menu.list.disabledActions.sortDefault": "Default Sort",
+  "menu.list.enabled": "Enabled",
+  "menu.notFound": "No search results found",
+  "menu.searchProviders": "Search Providers...",
+  "menu.sort": "Custom Sort",
+  "newapi.apiKey.desc": "API key provided by the New API platform",
+  "newapi.apiKey.placeholder": "New API API Key",
+  "newapi.apiKey.required": "API key is required",
+  "newapi.apiKey.title": "API Key",
+  "newapi.apiUrl.desc": "API endpoint for the New API service, usually includes /v1",
+  "newapi.apiUrl.title": "API URL",
+  "newapi.enabled.title": "Enable New API",
+  "newapi.models.batchSelect": "Select models in bulk ({{count}} items)",
+  "newapi.models.fetch": "Fetch model list",
+  "newapi.models.selected": "Selected models",
+  "newapi.models.title": "Available Models",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "Test if the proxy address is correctly filled in",
+  "ollama.checker.title": "Connectivity Check",
+  "ollama.customModelName.desc": "Add custom models, separate multiple models with commas",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "Custom model name",
+  "ollama.download.desc": "Ollama is downloading the model. Please try not to close this page. The download will resume from where it left off if interrupted.",
+  "ollama.download.failed": "Model download failed. Please check your network or Ollama settings and try again.",
+  "ollama.download.remainingTime": "Remaining Time",
+  "ollama.download.speed": "Speed",
+  "ollama.download.title": "Downloading model {{model}}",
+  "ollama.endpoint.desc": "Must include http(s)://; can be left blank if not specified locally.",
+  "ollama.endpoint.title": "Interface proxy address",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "Cancel Download",
+  "ollama.unlock.confirm": "Download",
+  "ollama.unlock.description": "Enter your Ollama model tag to continue the session",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "Starting download...",
+  "ollama.unlock.title": "Download specified Ollama model",
+  "providerModels.batchSelect.selected": "{{count}} models selected",
+  "providerModels.batchSelect.title": "Bulk Selection",
+  "providerModels.config.aesGcm": "Your key and proxy URL will be encrypted using <1>AES-GCM</1> encryption algorithm",
+  "providerModels.config.apiKey.desc": "Please enter your {{name}} API Key",
+  "providerModels.config.apiKey.descWithUrl": "Please enter your {{name}} API Key. <3>Click here to get it</3>",
+  "providerModels.config.apiKey.placeholder": "{{name}} API Key",
+  "providerModels.config.apiKey.title": "API Key",
+  "providerModels.config.baseURL.desc": "Must include http(s)://",
+  "providerModels.config.baseURL.invalid": "Please enter a valid URL",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "API Proxy URL",
+  "providerModels.config.checker.button": "Check",
+  "providerModels.config.checker.desc": "Test if the API Key and proxy URL are correctly filled",
+  "providerModels.config.checker.pass": "Check passed",
+  "providerModels.config.checker.title": "Connectivity Check",
+  "providerModels.config.fetchOnClient.desc": "Client request mode will initiate session requests directly from the browser, which can improve response speed",
+  "providerModels.config.fetchOnClient.title": "Use Client Request Mode",
+  "providerModels.config.helpDoc": "Configuration Guide",
+  "providerModels.config.responsesApi.desc": "Uses OpenAI's next-generation request format specification to unlock advanced features like chain-of-thought (supported by OpenAI models only)",
+  "providerModels.config.responsesApi.title": "Use Responses API Specification",
+  "providerModels.config.waitingForMore": "More models are currently <1>planned for integration</1>, please stay tuned",
+  "providerModels.createNew.title": "Create Custom AI Model",
+  "providerModels.item.config": "Configure Model",
+  "providerModels.item.customModelCards.addNew": "Create and add {{id}} model",
+  "providerModels.item.customModelCards.confirmDelete": "You are about to delete this custom model. Once deleted, it cannot be recovered. Please proceed with caution.",
+  "providerModels.item.delete.confirm": "Are you sure you want to delete model {{displayName}}?",
+  "providerModels.item.delete.success": "Deletion successful",
+  "providerModels.item.delete.title": "Delete Model",
+  "providerModels.item.modelConfig.azureDeployName.extra": "Field used for actual requests in Azure OpenAI",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "Please enter the model deployment name in Azure",
+  "providerModels.item.modelConfig.azureDeployName.title": "Model Deployment Name",
+  "providerModels.item.modelConfig.deployName.extra": "This field will be used as the model ID when sending requests",
+  "providerModels.item.modelConfig.deployName.placeholder": "Please enter the actual deployment name or ID of the model",
+  "providerModels.item.modelConfig.deployName.title": "Model Deployment Name",
+  "providerModels.item.modelConfig.displayName.placeholder": "Please enter the display name of the model, e.g., ChatGPT, GPT-4, etc.",
+  "providerModels.item.modelConfig.displayName.title": "Model Display Name",
+  "providerModels.item.modelConfig.files.extra": "The current file upload implementation is just a hack solution, limited to self-experimentation. Please wait for complete file upload capabilities in future implementations.",
+  "providerModels.item.modelConfig.files.title": "File Upload Support",
+  "providerModels.item.modelConfig.functionCall.extra": "This configuration will only enable the model's ability to use tools, allowing for the addition of tool-type skills. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
+  "providerModels.item.modelConfig.functionCall.title": "Support for Tool Usage",
+  "providerModels.item.modelConfig.id.extra": "This cannot be modified after creation and will be used as the model ID when calling AI",
+  "providerModels.item.modelConfig.id.placeholder": "Please enter the model ID, e.g., gpt-4o or claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "Model ID",
+  "providerModels.item.modelConfig.imageOutput.extra": "This setting enables the model's image generation capability only. The actual performance depends entirely on the model itself. Please test the model to determine if it supports image generation.",
+  "providerModels.item.modelConfig.imageOutput.title": "Supports Image Generation",
+  "providerModels.item.modelConfig.modalTitle": "Custom Model Configuration",
+  "providerModels.item.modelConfig.reasoning.extra": "This configuration will enable the model's deep thinking capabilities, and the specific effects depend entirely on the model itself. Please test whether this model has usable deep thinking abilities.",
+  "providerModels.item.modelConfig.reasoning.title": "Support Deep Thinking",
+  "providerModels.item.modelConfig.search.extra": "This setting enables the model's built-in web search capability. Whether the built-in search engine is supported depends on the model itself. Please test the model to verify the availability of this feature.",
+  "providerModels.item.modelConfig.search.title": "Supports Web Search",
+  "providerModels.item.modelConfig.tokens.extra": "Set the maximum number of tokens supported by the model",
+  "providerModels.item.modelConfig.tokens.title": "Maximum Context Window",
+  "providerModels.item.modelConfig.tokens.unlimited": "Unlimited",
+  "providerModels.item.modelConfig.type.extra": "Different model types have distinct use cases and capabilities",
+  "providerModels.item.modelConfig.type.options.chat": "Chat",
+  "providerModels.item.modelConfig.type.options.embedding": "Embedding",
+  "providerModels.item.modelConfig.type.options.image": "Image Generation",
+  "providerModels.item.modelConfig.type.options.realtime": "Real-time Chat",
+  "providerModels.item.modelConfig.type.options.stt": "Speech-to-Text",
+  "providerModels.item.modelConfig.type.options.text2music": "Text-to-Music",
+  "providerModels.item.modelConfig.type.options.text2video": "Text-to-Video",
+  "providerModels.item.modelConfig.type.options.tts": "Text-to-Speech",
+  "providerModels.item.modelConfig.type.placeholder": "Please select a model type",
+  "providerModels.item.modelConfig.type.title": "Model Type",
+  "providerModels.item.modelConfig.video.extra": "This setting enables video recognition configuration within the application. Whether video recognition is supported depends entirely on the model itself. Please test the model to verify the availability of this feature.",
+  "providerModels.item.modelConfig.video.title": "Supports Video Recognition",
+  "providerModels.item.modelConfig.vision.extra": "This configuration will only enable image upload capabilities in the application. Whether recognition is supported depends entirely on the model itself. Please test the visual recognition capabilities of the model yourself.",
+  "providerModels.item.modelConfig.vision.title": "Support Vision",
+  "providerModels.item.pricing.image": "${{amount}}/Image",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/M Characters",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/Minutes",
+  "providerModels.item.pricing.inputTokens": "Input ${{amount}}/M",
+  "providerModels.item.pricing.outputTokens": "Output ${{amount}}/M",
+  "providerModels.item.releasedAt": "Released at {{releasedAt}}",
+  "providerModels.list.addNew": "Add Model",
+  "providerModels.list.disabled": "Disabled",
+  "providerModels.list.disabledActions.showMore": "Show All",
+  "providerModels.list.disabledActions.sort": "Sort By",
+  "providerModels.list.disabledActions.sortAlphabetical": "Sort Alphabetically",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "Sort by Reverse Alphabetical Order",
+  "providerModels.list.disabledActions.sortDefault": "Default Sort",
+  "providerModels.list.disabledActions.sortReleasedAt": "Sort by Earliest Release Date",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "Sort by Latest Release Date",
+  "providerModels.list.empty.desc": "Please create a custom model or pull a model to get started.",
+  "providerModels.list.empty.title": "No available models",
+  "providerModels.list.enabled": "Enabled",
+  "providerModels.list.enabledActions.disableAll": "Disable All",
+  "providerModels.list.enabledActions.enableAll": "Enable All",
+  "providerModels.list.enabledActions.sort": "Custom Model Sorting",
+  "providerModels.list.enabledEmpty": "No enabled models available. Please enable your preferred models from the list below~",
+  "providerModels.list.fetcher.clear": "Clear fetched models",
+  "providerModels.list.fetcher.fetch": "Fetch models",
+  "providerModels.list.fetcher.fetching": "Fetching model list...",
+  "providerModels.list.fetcher.latestTime": "Last updated: {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "Model list not yet fetched",
+  "providerModels.list.noModelsInCategory": "No enabled models in this category",
+  "providerModels.list.resetAll.conform": "Are you sure you want to reset all modifications to the current model? After resetting, the current model list will return to its default state.",
+  "providerModels.list.resetAll.success": "Reset successful",
+  "providerModels.list.resetAll.title": "Reset All Modifications",
+  "providerModels.list.search": "Search Models...",
+  "providerModels.list.searchResult": "{{count}} models found",
+  "providerModels.list.title": "Model List",
+  "providerModels.list.total": "{{count}} models available",
+  "providerModels.searchNotFound": "No search results found",
+  "providerModels.tabs.all": "All",
+  "providerModels.tabs.chat": "Chat",
+  "providerModels.tabs.embedding": "Embedding",
+  "providerModels.tabs.image": "Image",
+  "providerModels.tabs.stt": "ASR",
+  "providerModels.tabs.tts": "TTS",
+  "sortModal.success": "Sort update successful",
+  "sortModal.title": "Custom Order",
+  "sortModal.update": "Update",
+  "updateAiProvider.confirmDelete": "You are about to delete this AI provider. Once deleted, it cannot be retrieved. Are you sure you want to delete?",
+  "updateAiProvider.deleteSuccess": "Deletion successful",
+  "updateAiProvider.tooltip": "Update provider basic configuration",
+  "updateAiProvider.updateSuccess": "Update successful",
+  "updateCustomAiProvider.title": "Update Custom AI Provider Configuration",
+  "vertexai.apiKey.desc": "Enter your Vertex AI Keys",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "Vertex AI Keys",
+  "vertexai.region.desc": "Select the region for Vertex AI service. Some models like Gemini 2.5 are only available in specific regions (e.g., global)",
+  "vertexai.region.placeholder": "Select region",
+  "vertexai.region.title": "Vertex AI Region",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

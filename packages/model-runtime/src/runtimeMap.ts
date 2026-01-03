@@ -28,6 +28,7 @@ import { LobeInfiniAI } from './providers/infiniai';
 import { LobeInternLMAI } from './providers/internlm';
 import { LobeJinaAI } from './providers/jina';
 import { LobeLMStudioAI } from './providers/lmstudio';
+import { LobeHubAI } from './providers/lobehub';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMistralAI } from './providers/mistral';
 import { LobeModelScopeAI } from './providers/modelscope';
@@ -44,6 +45,7 @@ import { LobePerplexityAI } from './providers/perplexity';
 import { LobePPIOAI } from './providers/ppio';
 import { LobeQiniuAI } from './providers/qiniu';
 import { LobeQwenAI } from './providers/qwen';
+import { LobeReplicateAI } from './providers/replicate';
 import { LobeSambaNovaAI } from './providers/sambanova';
 import { LobeSearch1API } from './providers/search1api';
 import { LobeSenseNovaAI } from './providers/sensenova';
@@ -85,6 +87,7 @@ export const providerRuntimeMap = {
   deepseek: LobeDeepSeekAI,
   fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
+  lobehub: LobeHubAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
   google: LobeGoogleAI,
@@ -112,6 +115,7 @@ export const providerRuntimeMap = {
   ppio: LobePPIOAI,
   qiniu: LobeQiniuAI,
   qwen: LobeQwenAI,
+  replicate: LobeReplicateAI,
   router: LobeNewAPIAI,
   sambanova: LobeSambaNovaAI,
   search1api: LobeSearch1API,

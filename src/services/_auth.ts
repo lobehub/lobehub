@@ -1,12 +1,12 @@
 import { LOBE_CHAT_AUTH_HEADER } from '@lobechat/const';
 import {
-  AWSBedrockKeyVault,
-  AzureOpenAIKeyVault,
-  ClientSecretPayload,
-  CloudflareKeyVault,
-  ComfyUIKeyVault,
-  OpenAICompatibleKeyVault,
-  VertexAIKeyVault,
+  type AWSBedrockKeyVault,
+  type AzureOpenAIKeyVault,
+  type ClientSecretPayload,
+  type CloudflareKeyVault,
+  type ComfyUIKeyVault,
+  type OpenAICompatibleKeyVault,
+  type VertexAIKeyVault,
 } from '@lobechat/types';
 import { clientApiKeyManager } from '@lobechat/utils/client';
 import { ModelProvider } from 'model-bank';

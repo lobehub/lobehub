@@ -1,0 +1,14 @@
+{
+  "name": "@lobechat/builtin-tool-group-management",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executor": "./src/executor.ts"
+  },
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

@@ -1,12 +1,14 @@
-import { Select, type SelectProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
-import { EnabledProviderWithModels } from '@/types/aiProvider';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   popup: css`
     &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
       padding-inline-start: 12px;
@@ -27,7 +29,7 @@ interface ModelOption {
   value: string;
 }
 
-interface ModelSelectProps {
+interface ModelSelectProps extends Pick<SelectProps, 'loading' | 'size' | 'style' | 'variant'> {
   defaultValue?: { model: string; provider?: string };
   onChange?: (props: { model: string; provider: string }) => void;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
@@ -36,10 +38,8 @@ interface ModelSelectProps {
 }
 
 const ModelSelect = memo<ModelSelectProps>(
-  ({ value, onChange, showAbility = true, requiredAbilities }) => {
+  ({ value, onChange, showAbility = true, requiredAbilities, loading, size, style, variant }) => {
     const enabledList = useEnabledChatModels();
-
-    const { styles } = useStyles();
 
     const options = useMemo<SelectProps['options']>(() => {
       const getChatModels = (provider: EnabledProviderWithModels) => {
@@ -51,7 +51,8 @@ const ModelSelect = memo<ModelSelectProps>(
             : provider.children;
 
         return models.map((model) => ({
-          label: <ModelItemRender {...model} {...model.abilities} showInfoTag={showAbility} />,
+          ...model,
+          label: <ModelItemRender {...model} {...model.abilities} showInfoTag={false} />,
           provider: provider.id,
           value: `${provider.id}/${model.id}`,
         }));
@@ -83,24 +84,33 @@ const ModelSelect = memo<ModelSelectProps>(
         .filter(Boolean) as SelectProps['options'];
     }, [enabledList, requiredAbilities, showAbility]);
 
-    console.log('options', options);
-    console.log('enabledList', enabledList);
-
     return (
-      <Select
-        className={styles.select}
-        classNames={{
-          popup: { root: styles.popup },
-        }}
-        defaultValue={`${value?.provider}/${value?.model}`}
-        onChange={(value, option) => {
-          const model = value.split('/').slice(1).join('/');
-          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
-        }}
-        options={options}
-        popupMatchSelectWidth={false}
-        value={`${value?.provider}/${value?.model}`}
-      />
+      <TooltipGroup>
+        <Select
+          className={styles.select}
+          classNames={{
+            popup: { root: styles.popup },
+          }}
+          defaultValue={`${value?.provider}/${value?.model}`}
+          loading={loading}
+          onChange={(value, option) => {
+            const model = value.split('/').slice(1).join('/');
+            onChange?.({ model, provider: (option as unknown as ModelOption).provider });
+          }}
+          optionRender={(option) => (
+            <ModelItemRender {...option.data} {...option.data.abilities} showInfoTag />
+          )}
+          options={options}
+          popupMatchSelectWidth={false}
+          size={size}
+          style={{
+            minWidth: 200,
+            ...style,
+          }}
+          value={`${value?.provider}/${value?.model}`}
+          variant={variant}
+        />
+      </TooltipGroup>
     );
   },
 );

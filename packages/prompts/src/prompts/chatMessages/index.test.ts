@@ -15,7 +15,6 @@ const createMessage = (
   id: overrides.id ?? `msg-${++messageCounter}`,
   createdAt: overrides.createdAt ?? 0,
   updatedAt: overrides.updatedAt ?? 0,
-  meta: overrides.meta ?? {},
   ...overrides,
 });
 

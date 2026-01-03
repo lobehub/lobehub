@@ -1,4 +1,4 @@
-import { ProxyTRPCRequestParams } from './types';
+import type { ProxyTRPCStreamRequestParams } from './types';
 import { headersToRecord } from './utils/headers';
 import { getRequestBody } from './utils/request';
 
@@ -11,10 +11,15 @@ export const streamInvoke = async (input: RequestInfo | URL, init?: RequestInit)
   const headers = headersToRecord(init?.headers);
   const body = await getRequestBody(init?.body);
 
-  const params: ProxyTRPCRequestParams = {
+  const requestId =
+    globalThis.crypto?.randomUUID?.() ??
+    `stream_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  const params: ProxyTRPCStreamRequestParams = {
     body,
     headers,
     method,
+    requestId,
     urlPath,
   };
 
@@ -34,7 +39,13 @@ export const streamInvoke = async (input: RequestInfo | URL, init?: RequestInit)
       },
     });
 
-    const cleanup = window.electronAPI.onStreamInvoke(params, {
+    const electronAPI = window.electronAPI;
+    if (!electronAPI || !electronAPI.onStreamInvoke) {
+      reject(new Error('[streamInvoke] window.electronAPI.onStreamInvoke is not available'));
+      return;
+    }
+
+    const cleanup = electronAPI.onStreamInvoke(params, {
       onData: (chunk) => {
         if (streamController) streamController.enqueue(chunk);
       },

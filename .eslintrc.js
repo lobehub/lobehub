@@ -1,6 +1,7 @@
 const config = require('@lobehub/lint').eslint;
 
-config.extends.push('plugin:@next/next/recommended');
+config.root = true;
+config.extends.push('plugin:@next/next/recommended-legacy');
 
 config.rules['unicorn/no-negated-condition'] = 0;
 config.rules['unicorn/prefer-type-error'] = 0;

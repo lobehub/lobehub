@@ -11,7 +11,7 @@ const interceptRoute = async (
 
   // Use electron-client-ipc's dispatch method
   try {
-    await invoke('interceptRoute', { path, source, url });
+    await invoke('windows.interceptRoute', { path, source, url });
   } catch (e) {
     console.error(`[preload] Route interception (${source}) call failed`, e);
   }
@@ -37,14 +37,14 @@ export const setupRouteInterceptors = function () {
         if (urlObj.origin !== window.location.origin) {
           console.log(`[preload] Intercepted window.open for external URL:`, urlString);
           // Call main process to handle external link
-          invoke('openExternalLink', urlString);
+          invoke('system.openExternalLink', urlString);
           return null; // Return null to indicate no window was opened
         }
       } catch (error) {
         // Handle invalid URL or special protocol
         console.error(`[preload] Intercepted window.open for special protocol:`, url);
         console.error(error);
-        invoke('openExternalLink', typeof url === 'string' ? url : url.toString());
+        invoke('system.openExternalLink', typeof url === 'string' ? url : url.toString());
         return null;
       }
     }
@@ -69,7 +69,7 @@ export const setupRouteInterceptors = function () {
             e.preventDefault();
             e.stopPropagation();
             // Call main process to handle external link
-            await invoke('openExternalLink', url.href);
+            await invoke('system.openExternalLink', url.href);
             return false; // Explicitly prevent subsequent processing
           }
 

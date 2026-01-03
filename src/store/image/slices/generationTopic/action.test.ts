@@ -1,14 +1,23 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
-import { mutate } from 'swr';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
+import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
 import { useImageStore } from '@/store/image';
 import { useUserStore } from '@/store/user';
 import { ImageGenerationTopic } from '@/types/generation';
+
+// Mock @/libs/swr mutate
+vi.mock('@/libs/swr', async () => {
+  const actual = await vi.importActual('@/libs/swr');
+  return {
+    ...actual,
+    mutate: vi.fn(),
+  };
+});
 
 // Mock services and dependencies
 vi.mock('@/services/generationTopic', () => ({
@@ -245,9 +254,9 @@ describe('GenerationTopicAction', () => {
       });
 
       expect(chatService.fetchPresetTaskResult).toHaveBeenCalled();
-      // Should call with fallback title (first 3 words, max 10 chars)
+      // Should call with fallback title (first 3 words, max 20 chars)
       expect(generationTopicService.updateTopic).toHaveBeenCalledWith(topicId, {
-        title: 'A beautifu',
+        title: 'A beautiful sunset',
       });
     });
 

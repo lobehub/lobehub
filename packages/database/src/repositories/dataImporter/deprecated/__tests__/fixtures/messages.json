@@ -483,7 +483,6 @@
           "provider": "anthropic",
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -521,7 +520,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -559,7 +557,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -608,7 +605,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -646,7 +642,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -684,7 +679,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -722,7 +716,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -766,7 +759,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -814,7 +806,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -852,7 +843,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -890,7 +880,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -930,7 +919,6 @@
           "openingQuestions": ["Question 1", "Question 2"],
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -968,7 +956,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -1006,7 +993,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }
@@ -1044,7 +1030,6 @@
           },
           "chatConfig": {
             "autoCreateTopicThreshold": 2,
-            "displayMode": "chat",
             "enableAutoCreateTopic": true,
             "historyCount": 1
           }

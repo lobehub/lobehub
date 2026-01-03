@@ -8,7 +8,7 @@ This TypeScript code snippet defines an object named `pluginSelectors`, which co
 
 Here are some key points to note:
 
-- `enabledSchema`: A function that returns an array of `ChatCompletionFunctions` filtered based on the enabled plugin list `enabledPlugins`. It appends the plugin identifier as a prefix to the API names to ensure uniqueness and uses the `uniqBy` function from the Lodash library to remove duplicates.
+- `enabledSchema`: A function that returns an array of `ChatCompletionFunctions` filtered based on the enabled plugin list `enabledPlugins`. It appends the plugin identifier as a prefix to the API names to ensure uniqueness and uses the `uniqBy` function from the es-toolkit library to remove duplicates.
 - `onlinePluginStore`: Returns the current online plugin list.
 - `pluginList`: Returns the list of plugins, including custom plugins and standard plugins.
 - `getPluginMetaById`: Returns the plugin metadata based on the plugin ID.

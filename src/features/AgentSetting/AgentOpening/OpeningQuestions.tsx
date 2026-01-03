@@ -1,18 +1,17 @@
 'use client';
 
-import { ActionIcon, Button, Input, SortableList } from '@lobehub/ui';
-import { Empty, Space } from 'antd';
-import { createStyles } from 'antd-style';
-import { PlusIcon, Trash } from 'lucide-react';
+import { ActionIcon, Button, Empty, Flexbox, Input, SortableList } from '@lobehub/ui';
+import { Space } from 'antd';
+import { createStaticStyles } from 'antd-style';
+import { MessageCircle, PlusIcon, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import useMergeState from 'use-merge-value';
 
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   empty: css`
     margin-block: 24px;
     margin-inline: 0;
@@ -30,7 +29,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   repeatError: css`
     margin: 0;
-    color: ${token.colorErrorText};
+    color: ${cssVar.colorErrorText};
   `,
 }));
 
@@ -41,7 +40,6 @@ interface QuestionItem {
 
 const OpeningQuestions = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [questionInput, setQuestionInput] = useState('');
 
   const openingQuestions = useStore(selectors.openingQuestions);
@@ -135,7 +133,9 @@ const OpeningQuestions = memo(() => {
           <Empty
             className={styles.empty}
             description={t('settingOpening.openingQuestions.empty')}
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            descriptionProps={{ fontSize: 14 }}
+            icon={MessageCircle}
+            style={{ maxWidth: 400 }}
           />
         )}
       </div>

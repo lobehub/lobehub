@@ -1,15 +1,16 @@
 import { act, renderHook } from '@testing-library/react';
-import { mutate } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { mutate } from '@/libs/swr';
 import { useUserStore } from '@/store/user';
 
 vi.mock('zustand/traditional');
 
-vi.mock('swr', async (importOriginal) => {
-  const modules = await importOriginal();
+// Mock @/libs/swr mutate
+vi.mock('@/libs/swr', async () => {
+  const actual = await vi.importActual('@/libs/swr');
   return {
-    ...(modules as any),
+    ...actual,
     mutate: vi.fn(),
   };
 });
@@ -66,7 +67,7 @@ afterEach(() => {
   useUserStore.setState({
     isLoadedAuthProviders: false,
     authProviders: [],
-    isEmailPasswordAuth: false,
+    hasPasswordAccount: false,
   });
 });
 
@@ -209,7 +210,12 @@ describe('createAuthSlice', () => {
       const originalLocation = window.location;
       Object.defineProperty(window, 'location', {
         configurable: true,
-        value: { ...originalLocation, href: '', toString: () => 'http://localhost/chat' },
+        value: {
+          ...originalLocation,
+          href: '',
+          pathname: '/chat',
+          toString: () => 'http://localhost/chat',
+        },
         writable: true,
       });
 
@@ -233,6 +239,18 @@ describe('createAuthSlice', () => {
       enableNextAuth.value = true;
       useUserStore.setState({ oAuthSSOProviders: ['github'] });
 
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: {
+          ...originalLocation,
+          href: '',
+          pathname: '/chat',
+          toString: () => 'http://localhost/chat',
+        },
+        writable: true,
+      });
+
       const { result } = renderHook(() => useUserStore());
 
       await act(async () => {
@@ -242,6 +260,12 @@ describe('createAuthSlice', () => {
       const { signIn } = await import('next-auth/react');
 
       expect(signIn).toHaveBeenCalledWith('github');
+
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+        writable: true,
+      });
     });
   });
 
@@ -312,7 +336,7 @@ describe('createAuthSlice', () => {
 
       expect(mockBetterAuthClient.listAccounts).toHaveBeenCalled();
       expect(result.current.isLoadedAuthProviders).toBe(true);
-      expect(result.current.isEmailPasswordAuth).toBe(true);
+      expect(result.current.hasPasswordAccount).toBe(true);
     });
 
     it('should handle fetch error gracefully', async () => {

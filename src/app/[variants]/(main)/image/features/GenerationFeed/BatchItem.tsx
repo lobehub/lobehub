@@ -2,40 +2,40 @@
 
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { ModelTag } from '@lobehub/icons';
-import { ActionIconGroup, Block, Grid, Markdown, Tag, Text } from '@lobehub/ui';
+import { ActionIconGroup, Block, Flexbox, Grid, Markdown, Tag, Text } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { omit } from 'lodash-es';
+import { omit } from 'es-toolkit/compat';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
-import { RuntimeImageGenParams } from 'model-bank';
+import { type RuntimeImageGenParams } from 'model-bank';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
-import InvalidAPIKey from '@/components/InvalidAPIKey';
+import useRenderBusinessBatchItem from '@/business/client/hooks/useRenderBusinessBatchItem';
+import APIKeyForm from '@/components/InvalidAPIKey';
 import { useImageStore } from '@/store/image';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
-import { GenerationBatch } from '@/types/generation';
+import { type GenerationBatch } from '@/types/generation';
 
 import { GenerationItem } from './GenerationItem';
 import { DEFAULT_MAX_ITEM_WIDTH } from './GenerationItem/utils';
 import { ReferenceImages } from './ReferenceImages';
 
-const useStyles = createStyles(({ cx, css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar, cx }) => ({
   batchActions: cx(
     'batch-actions',
     css`
       opacity: 0;
-      transition: opacity 0.1s ${token.motionEaseInOut};
+      transition: opacity 0.1s ${cssVar.motionEaseInOut};
     `,
   ),
   batchDeleteButton: css`
     &:hover {
-      border-color: ${token.colorError} !important;
-      color: ${token.colorError} !important;
-      background: ${token.colorErrorBg} !important;
+      border-color: ${cssVar.colorError} !important;
+      color: ${cssVar.colorError} !important;
+      background: ${cssVar.colorErrorBg} !important;
     }
   `,
   container: css`
@@ -63,7 +63,6 @@ interface GenerationBatchItemProps {
 }
 
 export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation(['image', 'modelProvider', 'error']);
   const { message } = App.useApp();
 
@@ -73,6 +72,7 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   const removeGenerationBatch = useImageStore((s) => s.removeGenerationBatch);
   const recreateImage = useImageStore((s) => s.recreateImage);
   const reuseSettings = useImageStore((s) => s.reuseSettings);
+  const { shouldRenderBusinessBatchItem, businessBatchItem } = useRenderBusinessBatchItem(batch);
 
   const time = useMemo(() => {
     return dayjs(batch.createdAt).format('YYYY-MM-DD HH:mm:ss');
@@ -117,7 +117,7 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   if (isInvalidApiKey) {
     // Use unified InvalidAPIKey component for all providers (including ComfyUI)
     return (
-      <InvalidAPIKey
+      <APIKeyForm
         bedrockDescription={t('bedrock.unlock.imageGenerationDescription', { ns: 'modelProvider' })}
         description={t('unlock.apiKey.imageGenerationDescription', {
           name: batch.provider,
@@ -133,6 +133,10 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
         provider={batch.provider}
       />
     );
+  }
+
+  if (shouldRenderBusinessBatchItem) {
+    return businessBatchItem;
   }
 
   // Calculate total number of reference images

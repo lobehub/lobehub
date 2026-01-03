@@ -2,4 +2,5 @@ packages:
   - '../../packages/electron-server-ipc'
   - '../../packages/electron-client-ipc'
   - '../../packages/file-loaders'
+  - '../../packages/desktop-bridge'
   - '.'

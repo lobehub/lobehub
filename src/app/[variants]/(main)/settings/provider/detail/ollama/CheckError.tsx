@@ -1,7 +1,7 @@
-import { ChatMessageError } from '@lobechat/types';
-import { Skeleton } from 'antd';
+import { type ChatMessageError } from '@lobechat/types';
+import { Skeleton } from '@lobehub/ui';
 import dynamic from 'next/dynamic';
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 import Container from './Container';
 

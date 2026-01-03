@@ -1,11 +1,12 @@
 ---
-description: react flex layout package `react-layout-kit` usage
-globs: 
+description: flex layout components from `@lobehub/ui` usage
+globs:
 alwaysApply: false
 ---
-# React Layout Kit 使用指南
 
-react-layout-kit 是一个功能丰富的 React flex 布局组件库，在 lobe-chat 项目中被广泛使用。以下是重点组件的使用方法：
+# Flexbox 布局组件使用指南
+
+`@lobehub/ui` 提供了 `Flexbox` 和 `Center` 组件用于创建弹性布局。以下是重点组件的使用方法：
 
 ## Flexbox 组件
 
@@ -14,7 +15,7 @@ Flexbox 是最常用的布局组件，用于创建弹性布局，类似于 CSS �
 ### 基本用法
 
 ```jsx
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox } from '@lobehub/ui';
 
 // 默认垂直布局
 <Flexbox>
@@ -58,14 +59,14 @@ import { Flexbox } from 'react-layout-kit';
   >
     <SidebarContent />
   </Flexbox>
-  
+
   {/* 中间内容区 */}
   <Flexbox flex={1} style={{ height: '100%' }}>
     {/* 主要内容 */}
     <Flexbox flex={1} padding={24} style={{ overflowY: 'auto' }}>
       <MainContent />
     </Flexbox>
-    
+
     {/* 底部区域 */}
     <Flexbox
       style={{
@@ -86,9 +87,11 @@ Center 是对 Flexbox 的封装，使子元素水平和垂直居中。
 ### 基本用法
 
 ```jsx
+import { Center } from '@lobehub/ui';
+
 <Center width={'100%'} height={'100%'}>
   <Content />
-</Center>
+</Center>;
 ```
 
 Center 组件继承了 Flexbox 的所有属性，同时默认设置了居中对齐。主要用于快速创建居中布局。

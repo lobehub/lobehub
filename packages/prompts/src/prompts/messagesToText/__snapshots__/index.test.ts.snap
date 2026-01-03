@@ -1,0 +1,40 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`conversationToText > should format a single message correctly 1`] = `
+"<conversation>
+<user>Hello, how are you?</user>
+</conversation>"
+`;
+
+exports[`conversationToText > should format multiple messages correctly 1`] = `
+"<conversation>
+<user>Hello, how are you?</user>
+<assistant>I am doing well, thank you!</assistant>
+<user>What is the weather like?</user>
+</conversation>"
+`;
+
+exports[`conversationToText > should handle empty messages array 1`] = `"<conversation/>"`;
+
+exports[`conversationToText > should handle messages with different roles 1`] = `
+"<conversation>
+<system>You are a helpful assistant.</system>
+<user>Tell me a joke.</user>
+<assistant>Why did the chicken cross the road?</assistant>
+</conversation>"
+`;
+
+exports[`conversationToText > should handle messages with special characters 1`] = `
+"<conversation>
+<user>What is 2 + 2?</user>
+<assistant>The answer is 4.</assistant>
+</conversation>"
+`;
+
+exports[`conversationToText > should handle multiline content 1`] = `
+"<conversation>
+<user>This is a multiline message.
+It has multiple lines.
+Line 3 here.</user>
+</conversation>"
+`;

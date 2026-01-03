@@ -29,26 +29,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node & Bun
+        uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
           bun-version: 1.2.23
+          package-manager-cache: 'false'
 
       - name: Install deps
         run: bun i
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Lint
         run: bun run lint
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
   version:
     name: Determine version
@@ -84,7 +80,7 @@ jobs:
           echo "📦 Release Version: ${version} (based on base version ${base_version})"
 
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
       # 输出版本信息总结，方便在 GitHub Actions 界面查看
       - name: Version Summary
@@ -103,16 +99,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
           node-version: 24.11.1
-          package-manager-cache: false
+          package-manager-cache: 'false'
 
       # node-linker=hoisted 模式将可以确保 asar 压缩可用
       - name: Install dependencies
@@ -132,11 +123,11 @@ jobs:
         run: npm run desktop:build
         env:
           # 设置更新通道，PR构建为nightly，否则为stable
-          UPDATE_CHANNEL: "nightly"
+          UPDATE_CHANNEL: 'nightly'
           APP_URL: http://localhost:3015
-          DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           # 默认添加一个加密 SECRET
-          KEY_VAULTS_SECRET: "oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE="
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
           # macOS 签名和公证配置（fork 的 PR 访问不到 secrets，会跳过签名）
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -156,10 +147,10 @@ jobs:
         run: npm run desktop:build
         env:
           # 设置更新通道，PR构建为nightly，否则为stable
-          UPDATE_CHANNEL: "nightly"
+          UPDATE_CHANNEL: 'nightly'
           APP_URL: http://localhost:3015
-          DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
-          KEY_VAULTS_SECRET: "oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE="
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
           NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
           # 将 TEMP 和 TMP 目录设置到 C 盘
@@ -172,10 +163,10 @@ jobs:
         run: npm run desktop:build
         env:
           # 设置更新通道，PR构建为nightly，否则为stable
-          UPDATE_CHANNEL: "nightly"
+          UPDATE_CHANNEL: 'nightly'
           APP_URL: http://localhost:3015
-          DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
-          KEY_VAULTS_SECRET: "oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE="
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
           NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
 
@@ -229,16 +220,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node & Bun
+        uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
           bun-version: 1.2.23
+          package-manager-cache: 'false'
 
       # 下载所有平台的构建产物
       - name: Download artifacts

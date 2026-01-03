@@ -1,7 +1,7 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { t } from 'i18next';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { BRANDING_NAME } from '@/const/branding';
 import { UserStore } from '@/store/user';
 
 import { authSelectors, userProfileSelectors } from './selectors';
@@ -243,7 +243,7 @@ describe('userProfileSelectors', () => {
 
 describe('authSelectors', () => {
   describe('isLogin', () => {
-    it('should return true when auth is disabled', () => {
+    it('should return false when not signed in (regardless of auth enabled state)', () => {
       enableAuth = false;
 
       const store: UserStore = {
@@ -251,7 +251,8 @@ describe('authSelectors', () => {
         enableAuth: () => false,
       } as UserStore;
 
-      expect(authSelectors.isLogin(store)).toBe(true);
+      // isLogin now only checks isSignedIn, not enableAuth
+      expect(authSelectors.isLogin(store)).toBe(false);
     });
 
     it('should return true when signed in', () => {

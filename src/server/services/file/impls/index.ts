@@ -1,19 +1,11 @@
-import { isDesktop } from '@/const/version';
-
-import { DesktopLocalFileImpl } from './local';
 import { S3StaticFileImpl } from './s3';
-import { FileServiceImpl } from './type';
+import { type FileServiceImpl } from './type';
 
 /**
  * Create file service module
- * Automatically selects between S3 or desktop local file implementation based on environment
+ * Returns S3 file implementation for cloud storage
  */
 export const createFileServiceModule = (): FileServiceImpl => {
-  // If in desktop application environment, use local file implementation
-  if (isDesktop) {
-    return new DesktopLocalFileImpl();
-  }
-
   return new S3StaticFileImpl();
 };
 

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOBE_ERROR_KEY } from '../../core/streams';
 import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
-import { LobeGoogleAI, resolveModelThinkingBudget } from './index';
+import { LobeGoogleAI } from './index';
 
 const provider = 'google';
 const bizErrorType = 'ProviderBizError';
@@ -581,44 +581,6 @@ describe('LobeGoogleAI', () => {
         ]);
       });
     });
-  });
-});
-
-describe('resolveModelThinkingBudget', () => {
-  it('returns dynamic defaults for 2.5 pro models', () => {
-    expect(resolveModelThinkingBudget('gemini-2.5-pro')).toBe(-1);
-  });
-
-  it('clamps manual budgets for 2.5 pro models', () => {
-    expect(resolveModelThinkingBudget('gemini-2.5-pro', 0)).toBe(128);
-    expect(resolveModelThinkingBudget('gemini-2.5-pro', 40_000)).toBe(32_768);
-  });
-
-  it('supports disabling and dynamic thinking for flash models', () => {
-    expect(resolveModelThinkingBudget('gemini-2.5-flash')).toBe(-1);
-    expect(resolveModelThinkingBudget('gemini-2.5-flash', 0)).toBe(0);
-    expect(resolveModelThinkingBudget('gemini-2.5-flash', -1)).toBe(-1);
-    expect(resolveModelThinkingBudget('gemini-2.5-flash', -5)).toBe(0);
-    expect(resolveModelThinkingBudget('gemini-2.5-flash-preview', 30_000)).toBe(24_576);
-  });
-
-  it('enforces flash lite family defaults and ranges', () => {
-    expect(resolveModelThinkingBudget('gemini-2.5-flash-lite')).toBe(0);
-    expect(resolveModelThinkingBudget('gemini-2.5-flash-lite', 400)).toBe(512);
-    expect(resolveModelThinkingBudget('gemini-2.5-flash-lite', 600)).toBe(600);
-    expect(resolveModelThinkingBudget('gemini-2.5-flash-lite-preview', 25_000)).toBe(24_576);
-  });
-
-  it('applies robotics preview defaults and overrides', () => {
-    expect(resolveModelThinkingBudget('robotics-er-1.5-preview')).toBe(0);
-    expect(resolveModelThinkingBudget('robotics-er-1.5-preview', -1)).toBe(-1);
-    expect(resolveModelThinkingBudget('robotics-er-1.5-preview', 256)).toBe(512);
-  });
-
-  it('falls back to generic behaviour for other models', () => {
-    expect(resolveModelThinkingBudget('unknown-model')).toBeUndefined();
-    expect(resolveModelThinkingBudget('unknown-model', 999)).toBe(999);
-    expect(resolveModelThinkingBudget('unknown-model', 99_999)).toBe(24_576);
   });
 });
 

@@ -1,4 +1,4 @@
-import { Generation, GenerationBatch } from '@/types/generation';
+import { type Generation, type GenerationBatch } from '@/types/generation';
 
 export interface GenerationItemProps {
   generation: Generation;

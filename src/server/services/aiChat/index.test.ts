@@ -26,13 +26,18 @@ describe('AiChatService', () => {
 
     const service = new AiChatService(serverDB, 'u1');
 
-    const res = await service.getMessagesAndTopics({ includeTopic: true, sessionId: 's1' });
+    const res = await service.getMessagesAndTopics({
+      agentId: 'agent-1',
+      groupId: 'group-1',
+      includeTopic: true,
+      sessionId: 's1',
+    });
 
     expect(mockQueryMessages).toHaveBeenCalledWith(
-      { includeTopic: true, sessionId: 's1' },
+      { agentId: 'agent-1', groupId: 'group-1', includeTopic: true, sessionId: 's1' },
       expect.objectContaining({ postProcessUrl: expect.any(Function) }),
     );
-    expect(mockQueryTopics).toHaveBeenCalledWith({ containerId: 's1' });
+    expect(mockQueryTopics).toHaveBeenCalledWith({ agentId: 'agent-1', groupId: 'group-1' });
     expect(res.messages).toEqual([{ id: 'm1' }]);
     expect(res.topics).toEqual([{ id: 't1' }]);
   });

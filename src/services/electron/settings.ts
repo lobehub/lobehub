@@ -1,50 +1,48 @@
-import {
-  NetworkProxySettings,
-  ShortcutUpdateResult,
-  dispatch,
-} from '@lobechat/electron-client-ipc';
+import { type NetworkProxySettings, type ShortcutUpdateResult } from '@lobechat/electron-client-ipc';
+
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class DesktopSettingsService {
   /**
    * Get proxy settings
    */
   getProxySettings = async () => {
-    return dispatch('getProxySettings');
+    return ensureElectronIpc().networkProxy.getDesktopSettings();
   };
 
   /**
    * Set proxy settings
    */
   setSettings = async (data: Partial<NetworkProxySettings>) => {
-    return dispatch('setProxySettings', data);
+    return ensureElectronIpc().networkProxy.setProxySettings(data);
   };
 
   /**
    * Get desktop hotkey configuration
    */
   getDesktopHotkeys = async () => {
-    return dispatch('getShortcutsConfig');
+    return ensureElectronIpc().shortcut.getShortcutsConfig();
   };
 
   /**
    * Update desktop hotkey configuration
    */
   updateDesktopHotkey = async (id: string, accelerator: string): Promise<ShortcutUpdateResult> => {
-    return dispatch('updateShortcutConfig', { accelerator, id });
+    return ensureElectronIpc().shortcut.updateShortcutConfig({ accelerator, id });
   };
 
   /**
    * Test proxy connection
    */
   testProxyConnection = async (url: string) => {
-    return dispatch('testProxyConnection', url);
+    return ensureElectronIpc().networkProxy.testProxyConnection(url);
   };
 
   /**
    * Test specified proxy configuration
    */
   testProxyConfig = async (config: NetworkProxySettings, testUrl?: string) => {
-    return dispatch('testProxyConfig', { config, testUrl });
+    return ensureElectronIpc().networkProxy.testProxyConfig({ config, testUrl });
   };
 }
 

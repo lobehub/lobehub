@@ -1,10 +1,10 @@
-import { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 
 import { LOADING_FLAT } from '@/const/message';
 
-import { FieldType } from './type';
+import { type BaseExportOptions } from './type';
 
-interface JSONParams extends FieldType {
+interface JSONParams extends BaseExportOptions {
   messages: UIChatMessage[];
   systemRole: string;
 }

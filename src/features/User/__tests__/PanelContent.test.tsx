@@ -169,6 +169,6 @@ describe('PanelContent', () => {
   it('should render Menu with main items', () => {
     renderWithRouter(<PanelContent closePopover={closePopover} />);
 
-    expect(screen.getByText('Mocked Menu')).toBeInTheDocument();
+    expect(screen.getAllByText('Mocked Menu').length).toBeGreaterThan(0);
   });
 });

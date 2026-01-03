@@ -1,0 +1,88 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildGroupMembersXml > should build XML for group supervisor agents 1`] = `
+"  <member name="创意总监" id="agt_xxx" />
+  <member name="设计师" id="agt_yyy" />"
+`;
+
+exports[`buildGroupMembersXml > should handle empty agents array 1`] = `""`;
+
+exports[`buildGroupMembersXml > should use agent id as fallback when title is missing 1`] = `
+"  <member name="agt_xxx" id="agt_xxx" />
+  <member name="agt_yyy" id="agt_yyy" />"
+`;
+
+exports[`formatAgentProfile > should format agent with all fields 1`] = `
+"# Agent: Backend Developer
+
+- **ID**: agent-backend
+- **Description**: Expert in backend development
+- **Model**: gpt-4
+
+## System Role
+
+You are a backend developer expert."
+`;
+
+exports[`formatAgentProfile > should show N/A for missing optional fields 1`] = `
+"# Agent: Untitled Agent
+
+- **ID**: agent-123
+- **Description**: N/A
+- **Model**: Unknown Model
+
+## System Role
+
+N/A"
+`;
+
+exports[`formatAgentProfile > should use default title when title is missing 1`] = `
+"# Agent: Untitled Agent
+
+- **ID**: agent-123
+- **Description**: N/A
+- **Model**: Unknown Model
+
+## System Role
+
+N/A"
+`;
+
+exports[`formatGroupMembers > should format members list in XML format 1`] = `
+"  <member name="Supervisor" id="agt_supervisor" />
+  <member name="Writer" id="agt_writer" />
+  <member name="Editor" id="agt_editor" />"
+`;
+
+exports[`formatGroupMembers > should handle empty members array 1`] = `""`;
+
+exports[`formatGroupMembers > should mark current agent with you attribute 1`] = `
+"  <member name="Supervisor" id="agt_supervisor" />
+  <member name="Editor" id="agt_editor" you="true" />"
+`;
+
+exports[`groupContextTemplate > should match snapshot 1`] = `
+"You are "{{AGENT_NAME}}", acting as a {{AGENT_ROLE}} in the multi-agent group "{{GROUP_TITLE}}".
+Your internal agent ID is {{AGENT_ID}} (for system use only, never expose to users).
+
+<critical_output_rules>
+IMPORTANT: Your responses must contain ONLY your actual reply content.
+- Messages in conversation history start with '<speaker name="..." />' - this identifies who sent each message
+- NEVER start your response with '<speaker' tag - the system adds this automatically
+- Just output your actual response content directly
+</critical_output_rules>
+
+<group_description>The following describes the purpose and goals of this agent group:
+
+{{SYSTEM_PROMPT}}
+</group_description>
+
+<group_participants>The following agents are available in this group:
+
+{{GROUP_MEMBERS}}
+</group_participants>
+
+<identity_rules>
+- NEVER expose or display agent IDs to users - always refer to agents by their names
+</identity_rules>"
+`;

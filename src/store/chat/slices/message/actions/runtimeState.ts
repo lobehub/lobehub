@@ -1,12 +1,10 @@
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { ChatStore } from '@/store/chat/store';
-import { Action, setNamespace } from '@/utils/storeDebug';
+import { type ChatStore } from '@/store/chat/store';
+import { type Action } from '@/utils/storeDebug';
 
 import type { ChatStoreState } from '../../../initialState';
 import { preventLeavingFn, toggleBooleanList } from '../../../utils';
-
-const n = setNamespace('m');
 
 /**
  * Runtime state management for message-related states
@@ -29,16 +27,6 @@ export interface MessageRuntimeStateAction {
    * other message role like user and tool , only this method need to be called
    */
   internal_toggleMessageLoading: (loading: boolean, id: string) => void;
-
-  /**
-   * Update active session ID with cleanup of pending operations
-   */
-  internal_updateActiveId: (activeId: string) => void;
-
-  /**
-   * Update active session type
-   */
-  internal_updateActiveSessionType: (sessionType?: 'agent' | 'group') => void;
 }
 
 export const messageRuntimeState: StateCreator<
@@ -88,21 +76,5 @@ export const messageRuntimeState: StateCreator<
       false,
       `internal_toggleMessageLoading/${loading ? 'start' : 'end'}`,
     );
-  },
-
-  internal_updateActiveId: (activeId: string) => {
-    const currentActiveId = get().activeId;
-    if (currentActiveId === activeId) return;
-
-    // Before switching sessions, cancel all pending supervisor decisions
-    get().internal_cancelAllSupervisorDecisions();
-
-    set({ activeId }, false, n(`updateActiveId/${activeId}`));
-  },
-
-  internal_updateActiveSessionType: (sessionType?: 'agent' | 'group') => {
-    if (get().activeSessionType === sessionType) return;
-
-    set({ activeSessionType: sessionType }, false, n('updateActiveSessionType'));
   },
 });

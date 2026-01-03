@@ -16,7 +16,7 @@ export class PluginModel {
   create = async (
     params: Pick<
       NewInstalledPlugin,
-      'type' | 'identifier' | 'manifest' | 'customParams' | 'settings'
+      'type' | 'identifier' | 'manifest' | 'customParams' | 'settings' | 'source'
     >,
   ) => {
     const [result] = await this.db

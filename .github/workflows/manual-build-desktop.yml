@@ -1,0 +1,337 @@
+name: Desktop Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release channel for desktop build (affects version suffix and workflow:set-desktop-version)'
+        required: true
+        default: nightly
+        type: choice
+        options:
+          - nightly
+          - beta
+          - stable
+      build_macos:
+        description: 'Build macOS artifacts'
+        required: true
+        default: true
+        type: boolean
+      build_windows:
+        description: 'Build Windows artifacts'
+        required: true
+        default: true
+        type: boolean
+      build_linux:
+        description: 'Build Linux artifacts'
+        required: true
+        default: true
+        type: boolean
+      version:
+        description: 'Override desktop version (e.g. 1.2.3). Leave empty to auto-generate.'
+        required: false
+        default: ''
+
+concurrency:
+  group: manual-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.11.1
+  BUN_VERSION: 1.2.23
+
+jobs:
+  test:
+    name: Code quality check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node & Bun
+        uses: ./.github/actions/setup-node-bun
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
+          package-manager-cache: 'false'
+
+      - name: Install deps
+        run: bun i
+
+      - name: Lint
+        run: bun run lint
+
+  version:
+    name: Determine version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Set version
+        id: set_version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          base_version=$(node -p "require('./apps/desktop/package.json').version")
+
+          if [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+            echo "📦 Using provided version: ${version} (base: ${base_version})"
+          else
+            ci_build_number="${{ github.run_number }}"
+            version="0.0.0-${CHANNEL}.manual.${ci_build_number}"
+            echo "📦 Generated version: ${version} (base: ${base_version})"
+          fi
+
+          echo "version=${version}" >> $GITHUB_OUTPUT
+
+      - name: Version Summary
+        run: |
+          echo "🚦 Release Version: ${{ steps.set_version.outputs.version }}"
+
+  build-macos:
+    needs: [version, test]
+    name: Build Desktop App (macOS)
+    if: inputs.build_macos
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: 'false'
+
+      # node-linker=hoisted 模式将可以确保 asar 压缩可用
+      - name: Install dependencies
+        run: pnpm install --node-linker=hoisted
+
+      - name: Install deps on Desktop
+        run: npm run install-isolated --prefix=./apps/desktop
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
+
+      - name: Build artifact on macOS
+        run: npm run desktop:build
+        env:
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_PROJECT_ID || secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+          CSC_FOR_PULL_REQUEST: true
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Rename macOS latest-mac.yml for multi-architecture support
+        if: runner.os == 'macOS'
+        run: |
+          cd apps/desktop/release
+          if [ -f "latest-mac.yml" ]; then
+            SYSTEM_ARCH=$(uname -m)
+            if [[ "$SYSTEM_ARCH" == "arm64" ]]; then
+              ARCH_SUFFIX="arm64"
+            else
+              ARCH_SUFFIX="x64"
+            fi
+
+            mv latest-mac.yml "latest-mac-${ARCH_SUFFIX}.yml"
+            echo "✅ Renamed latest-mac.yml to latest-mac-${ARCH_SUFFIX}.yml (detected: $SYSTEM_ARCH)"
+            ls -la latest-mac-*.yml
+          else
+            echo "⚠️ latest-mac.yml not found, skipping rename"
+            ls -la latest*.yml || echo "No latest*.yml files found"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-${{ matrix.os }}
+          path: |
+            apps/desktop/release/latest*
+            apps/desktop/release/*.dmg*
+            apps/desktop/release/*.zip*
+            apps/desktop/release/*.exe*
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb*
+            apps/desktop/release/*.snap*
+            apps/desktop/release/*.rpm*
+            apps/desktop/release/*.tar.gz*
+          retention-days: 5
+
+  build-windows:
+    needs: [version, test]
+    name: Build Desktop App (Windows)
+    if: inputs.build_windows
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: 'false'
+
+      - name: Install dependencies
+        run: pnpm install --node-linker=hoisted
+
+      - name: Install deps on Desktop
+        run: npm run install-isolated --prefix=./apps/desktop
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
+
+      - name: Build artifact on Windows
+        run: npm run desktop:build
+        env:
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_PROJECT_ID || secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+          TEMP: C:\temp
+          TMP: C:\temp
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-windows-2025
+          path: |
+            apps/desktop/release/latest*
+            apps/desktop/release/*.dmg*
+            apps/desktop/release/*.zip*
+            apps/desktop/release/*.exe*
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb*
+            apps/desktop/release/*.snap*
+            apps/desktop/release/*.rpm*
+            apps/desktop/release/*.tar.gz*
+          retention-days: 5
+
+  build-linux:
+    needs: [version, test]
+    name: Build Desktop App (Linux)
+    if: inputs.build_linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: 'false'
+
+      - name: Install dependencies
+        run: pnpm install --node-linker=hoisted
+
+      - name: Install deps on Desktop
+        run: npm run install-isolated --prefix=./apps/desktop
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
+
+      - name: Build artifact on Linux
+        run: npm run desktop:build
+        env:
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_PROJECT_ID || secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-ubuntu-latest
+          path: |
+            apps/desktop/release/latest*
+            apps/desktop/release/*.dmg*
+            apps/desktop/release/*.zip*
+            apps/desktop/release/*.exe*
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb*
+            apps/desktop/release/*.snap*
+            apps/desktop/release/*.rpm*
+            apps/desktop/release/*.tar.gz*
+          retention-days: 5
+
+  merge-mac-files:
+    needs: [build-macos, version]
+    name: Merge macOS Release Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    if: inputs.build_macos
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node & Bun
+        uses: ./.github/actions/setup-node-bun
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          bun-version: ${{ env.BUN_VERSION }}
+          package-manager-cache: 'false'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release
+          pattern: release-*
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -R release
+
+      - name: Install yaml only for merge step
+        run: |
+          cd scripts/electronWorkflow
+          if [ ! -f package.json ]; then
+            echo '{"name":"merge-mac-release","private":true}' > package.json
+          fi
+          bun add --no-save yaml@2.8.1
+
+      - name: Merge latest-mac.yml files
+        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+
+      - name: Upload artifacts with merged macOS files
+        uses: actions/upload-artifact@v5
+        with:
+          name: merged-release-manual
+          path: release/
+          retention-days: 1

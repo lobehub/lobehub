@@ -105,11 +105,11 @@ export class DataExporterRepos {
     try {
       const conditions = [];
 
-      // 处理每个关联条件
+      // Process each relation condition
       for (const relation of config.relations) {
         const sourceData = existingData[relation.sourceTable] || [];
 
-        // 如果源数据为空，这个表可能无法查询到任何数据
+        // If source data is empty, this table may not be able to query any data
         if (sourceData.length === 0) {
           console.log(
             `Source table ${relation.sourceTable} has no data, skipping query for ${table}`,
@@ -121,18 +121,18 @@ export class DataExporterRepos {
         conditions.push(inArray(tableObj[relation.field], sourceIds));
       }
 
-      // 如果表有userId字段并且不是users表，添加用户过滤
+      // If table has userId field and is not the users table, add user filter
       if ('userId' in tableObj && table !== 'users' && !config.relations) {
         conditions.push(eq(tableObj.userId, this.userId));
       }
 
-      // 组合所有条件
+      // Combine all conditions
       const where = conditions.length === 1 ? conditions[0] : and(...conditions);
 
       // @ts-expect-error query
       const result = await this.db.query[table].findMany({ where });
 
-      // 只对使用 userId 查询的表移除 userId 字段
+      // Only remove userId field for tables queried with userId
       console.log(`Successfully exported table: ${table}, count: ${result.length}`);
       return config.relations ? result : this.removeUserId(result);
     } catch (error) {
@@ -147,16 +147,16 @@ export class DataExporterRepos {
     if (!tableObj) throw new Error(`Table ${table} not found`);
 
     try {
-      // 如果有关联配置，使用关联查询
+      // If there's relation config, use relation query
 
-      // 默认使用 userId 查询，特殊情况使用 userField
+      // Default to querying with userId, use userField for special cases
       const userField = config.userField || 'userId';
       const where = eq(tableObj[userField], this.userId);
 
       // @ts-expect-error query
       const result = await this.db.query[table].findMany({ where });
 
-      // 只对使用 userId 查询的表移除 userId 字段
+      // Only remove userId field for tables queried with userId
       console.log(`Successfully exported table: ${table}, count: ${result.length}`);
       return this.removeUserId(result);
     } catch (error) {
@@ -168,7 +168,7 @@ export class DataExporterRepos {
   async export(concurrency = 10) {
     const result: Record<string, any[]> = {};
 
-    // 1. 首先并发查询所有基础表
+    // 1. First query all base tables concurrently
     console.log('Querying base tables...');
     const baseResults = await pMap(
       DATA_EXPORT_CONFIG.baseTables,
@@ -176,17 +176,17 @@ export class DataExporterRepos {
       { concurrency },
     );
 
-    // 更新结果集
+    // Update result set
     baseResults.forEach(({ table, data }) => {
       result[table] = data;
     });
 
-    // 2. 然后并发查询所有关联表
+    // 2. Then query all relation tables concurrently
 
     const relationResults = await pMap(
       DATA_EXPORT_CONFIG.relationTables,
       async (config) => {
-        // 检查所有依赖的源表是否有数据
+        // Check if all dependent source tables have data
         const allSourcesHaveData = config.relations.every(
           (relation) => (result[relation.sourceTable] || []).length > 0,
         );
@@ -204,7 +204,7 @@ export class DataExporterRepos {
       { concurrency },
     );
 
-    // 更新结果集
+    // Update result set
     relationResults.forEach(({ table, data }) => {
       result[table] = data;
     });

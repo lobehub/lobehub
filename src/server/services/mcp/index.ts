@@ -1,7 +1,7 @@
-import { CheckMcpInstallResult, CustomPluginMetadata } from '@lobechat/types';
+import { type CheckMcpInstallResult, type CustomPluginMetadata } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import { LobeChatPluginApi, LobeChatPluginManifest, PluginSchema } from '@lobehub/chat-plugin-sdk';
-import { DeploymentOption } from '@lobehub/market-sdk';
+import type { LobeChatPluginApi, LobeChatPluginManifest, PluginSchema } from '@lobehub/chat-plugin-sdk';
+import { type DeploymentOption } from '@lobehub/market-sdk';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
 import retry from 'async-retry';
@@ -9,23 +9,71 @@ import debug from 'debug';
 
 import {
   MCPClient,
-  MCPClientParams,
-  McpPrompt,
-  McpResource,
-  McpTool,
-  StdioMCPParams,
+  type MCPClientParams,
+  type McpPrompt,
+  type McpResource,
+  type McpTool,
+  type StdioMCPParams,
 } from '@/libs/mcp';
 
-import { ProcessContentBlocksFn, contentBlocksToString } from './contentProcessor';
+import { type ProcessContentBlocksFn, contentBlocksToString } from './contentProcessor';
 import { mcpSystemDepsCheckService } from './deps';
 
 const log = debug('lobe-mcp:service');
+
+/**
+ * MCP Tool call raw result type
+ */
+export interface MCPToolCallRawResult {
+  content: any[];
+  isError?: boolean;
+}
+
+/**
+ * MCP Tool call processed result type
+ */
+export interface MCPToolCallProcessedResult {
+  content: string;
+  error?: Error;
+  state: {
+    content: any[];
+    isError?: boolean;
+  };
+  success: boolean;
+}
 
 // Removed MCPConnection interface as it's no longer needed
 
 export class MCPService {
   // Store instances of the custom MCPClient, keyed by serialized MCPClientParams
   private clients: Map<string, MCPClient> = new Map();
+
+  /**
+   * Process MCP tool call result with content blocks processing
+   * This is a common utility method that can be used by both internal MCP calls and external services (e.g., Klavis)
+   */
+  static async processToolCallResult(
+    result: MCPToolCallRawResult,
+    processContentBlocksFn?: ProcessContentBlocksFn,
+  ): Promise<MCPToolCallProcessedResult> {
+    // Process content blocks (upload images, etc.)
+
+    const newContent =
+      result.isError || !processContentBlocksFn
+        ? result.content
+        : await processContentBlocksFn(result.content);
+
+    // Convert content blocks to string
+    const content = contentBlocksToString(newContent);
+
+    const state = { ...result, content: newContent };
+
+    if (result.isError) {
+      return { content, state, success: true };
+    }
+
+    return { content, state, success: true };
+  }
 
   private sanitizeForLogging = <T extends Record<string, any>>(obj: T): Omit<T, 'env'> => {
     if (!obj) return obj;
@@ -162,7 +210,12 @@ export class MCPService {
     processContentBlocks?: ProcessContentBlocksFn;
     toolName: string;
   }): Promise<any> {
-    const { clientParams, toolName, argsStr, processContentBlocks } = options;
+    const {
+      clientParams,
+      toolName,
+      argsStr,
+      processContentBlocks: processContentBlocksFn,
+    } = options;
 
     const client = await this.getClient(clientParams); // Get client using params
 
@@ -179,26 +232,19 @@ export class MCPService {
       // Delegate the call to the MCPClient instance
       const result = await client.callTool(toolName, args); // Pass args directly
 
-      // Process content blocks (upload images, etc.)
-      const newContent =
-        result.isError || !processContentBlocks
-          ? result.content
-          : await processContentBlocks(result.content);
-
-      // Convert content blocks to string
-      const content = contentBlocksToString(newContent);
-
-      const state = { ...result, content: newContent };
+      // Use the common processing method
+      const processedResult = await MCPService.processToolCallResult(
+        result,
+        processContentBlocksFn,
+      );
 
       log(
         `Tool "${toolName}" called successfully for params: %O, result: %O`,
         loggableParams,
-        state,
+        processedResult.state,
       );
 
-      if (result.isError) return { content, state, success: true };
-
-      return { content, state, success: true };
+      return processedResult;
     } catch (error) {
       if (error instanceof McpError) {
         const mcpError = error as McpError;
@@ -322,6 +368,8 @@ export class MCPService {
     return {
       api: tools,
       identifier,
+      // @ts-ignore
+      mcpParams,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
         description:
@@ -338,13 +386,15 @@ export class MCPService {
     params: Omit<StdioMCPParams, 'type'>,
     metadata?: CustomPluginMetadata,
   ): Promise<LobeChatPluginManifest> {
-    const client = await this.getClient({
+    const mcpParams = {
       args: params.args,
       command: params.command,
       env: params.env,
       name: params.name,
-      type: 'stdio',
-    }); // Get client using params
+      type: 'stdio' as const,
+    };
+
+    const client = await this.getClient(mcpParams); // Get client using params
 
     const manifest = await client.listManifests();
 
@@ -365,6 +415,8 @@ export class MCPService {
         title: metadata?.name || identifier,
       },
       ...manifest,
+      // @ts-ignore
+      mcpParams,
       // TODO: temporary
       type: 'mcp' as any,
     } as LobeChatPluginManifest;

@@ -1,786 +1,536 @@
 {
-  "about": {
-    "title": "Về chúng tôi"
-  },
-  "agentInfoDescription": {
-    "basic": {
-      "avatar": "Ảnh đại diện",
-      "description": "Mô tả",
-      "name": "Tên",
-      "tags": "Thẻ",
-      "title": "Thông tin trợ lý"
-    },
-    "chat": {
-      "displayMode": "Chế độ hiển thị",
-      "enableHistoryCount": "Bật đếm tin nhắn lịch sử",
-      "historyCount": "Số lượng tin nhắn lịch sử",
-      "no": "Không",
-      "searchMode": "Chế độ tìm kiếm",
-      "title": "Tùy chọn trò chuyện",
-      "yes": "Có"
-    },
-    "model": {
-      "maxTokens": "Số lượng Token tối đa",
-      "model": "Mô hình",
-      "provider": "Nhà cung cấp",
-      "temperature": "Nhiệt độ",
-      "title": "Cài đặt mô hình",
-      "topP": "Giá trị Top P"
-    },
-    "plugins": {
-      "count": "Cài đặt plugin ({{count}})",
-      "empty": "Chưa cài đặt plugin nào",
-      "title": "Plugin đã cài đặt"
-    },
-    "role": {
-      "systemRole": "Lời nhắc hệ thống",
-      "title": "Cài đặt vai trò"
-    },
-    "value": {
-      "unset": "Chưa thiết lập",
-      "untitled": "Trợ lý chưa có tên"
-    }
-  },
-  "agentTab": {
-    "chat": "Tùy chọn Trò chuyện",
-    "meta": "Thông tin Trợ lý",
-    "modal": "Cài đặt Mô hình",
-    "opening": "Cài đặt mở đầu",
-    "plugin": "Cài đặt Plugin",
-    "prompt": "Thiết lập Nhân vật",
-    "tts": "Dịch vụ Giọng nói"
-  },
-  "analytics": {
-    "telemetry": {
-      "desc": "Bằng cách chọn gửi dữ liệu telemetry, bạn có thể giúp chúng tôi cải thiện trải nghiệm người dùng tổng thể của {{appName}}",
-      "title": "Gửi dữ liệu sử dụng ẩn danh"
-    },
-    "title": "Thống kê dữ liệu"
-  },
+  "_cloud.officialProvider": "Dịch vụ Mô hình Chính thức của {{name}}",
+  "about.title": "Giới thiệu",
+  "advancedSettings": "Cài đặt nâng cao",
+  "agentInfoDescription.basic.avatar": "Ảnh đại diện",
+  "agentInfoDescription.basic.description": "Mô tả",
+  "agentInfoDescription.basic.name": "Tên",
+  "agentInfoDescription.basic.tags": "Thẻ",
+  "agentInfoDescription.basic.title": "Thông tin Agent",
+  "agentInfoDescription.chat.enableHistoryCount": "Bật đếm lịch sử tin nhắn",
+  "agentInfoDescription.chat.historyCount": "Số lượng tin nhắn lịch sử",
+  "agentInfoDescription.chat.no": "Không",
+  "agentInfoDescription.chat.searchMode": "Chế độ tìm kiếm",
+  "agentInfoDescription.chat.title": "Tùy chọn trò chuyện",
+  "agentInfoDescription.chat.yes": "Có",
+  "agentInfoDescription.model.maxTokens": "Số lượng Token tối đa",
+  "agentInfoDescription.model.model": "Mô hình",
+  "agentInfoDescription.model.provider": "Nhà cung cấp",
+  "agentInfoDescription.model.temperature": "Mức độ sáng tạo",
+  "agentInfoDescription.model.title": "Cài đặt Mô hình",
+  "agentInfoDescription.model.topP": "Giá trị Top P",
+  "agentInfoDescription.plugins.count": "Cài đặt Kỹ năng ({{count}})",
+  "agentInfoDescription.plugins.empty": "Chưa cài đặt kỹ năng nào",
+  "agentInfoDescription.plugins.title": "Kỹ năng đã cài đặt",
+  "agentInfoDescription.role.systemRole": "Hồ sơ Agent",
+  "agentInfoDescription.role.title": "Hồ sơ Agent",
+  "agentInfoDescription.value.unset": "Chưa thiết lập",
+  "agentInfoDescription.value.untitled": "Agent chưa đặt tên",
+  "agentTab.chat": "Tùy chọn trò chuyện",
+  "agentTab.meta": "Thông tin Agent",
+  "agentTab.modal": "Cài đặt Mô hình",
+  "agentTab.opening": "Cài đặt Mở đầu",
+  "agentTab.plugin": "Cài đặt Kỹ năng",
+  "agentTab.prompt": "Hồ sơ Agent",
+  "agentTab.tts": "Dịch vụ Giọng nói",
+  "analytics.telemetry.desc": "Giúp chúng tôi cải thiện {{appName}} bằng dữ liệu sử dụng ẩn danh",
+  "analytics.telemetry.title": "Gửi dữ liệu sử dụng ẩn danh",
+  "analytics.title": "Phân tích",
   "checking": "Đang kiểm tra...",
   "checkingPermissions": "Đang kiểm tra quyền...",
-  "danger": {
-    "clear": {
-      "action": "Xóa ngay",
-      "confirm": "Xác nhận xóa tất cả dữ liệu trò chuyện?",
-      "desc": "Dữ liệu cuộc trò chuyện, bao gồm trợ lý, tệp tin, tin nhắn, plugin, sẽ bị xóa",
-      "success": "Đã xóa tất cả tin nhắn cuộc trò chuyện",
-      "title": "Xóa tất cả tin nhắn cuộc trò chuyện"
-    },
-    "reset": {
-      "action": "Đặt lại ngay",
-      "confirm": "Xác nhận đặt lại tất cả cài đặt?",
-      "currentVersion": "Phiên bản hiện tại",
-      "desc": "Đặt lại tất cả cài đặt về giá trị mặc định",
-      "success": "Đã đặt lại tất cả cài đặt",
-      "title": "Đặt lại tất cả cài đặt"
-    }
-  },
-  "groupTab": {
-    "chat": "Trò chuyện",
-    "members": "Thành viên",
-    "meta": "Thông tin cơ bản"
-  },
-  "header": {
-    "desc": "Thiết lập Ưu tiên và Mô hình.",
-    "global": "Cài đặt toàn cầu",
-    "group": "Cài đặt nhóm",
-    "groupDesc": "Quản lý nhóm Agent và tùy chọn trò chuyện",
-    "session": "Cài đặt cuộc trò chuyện",
-    "sessionDesc": "Thiết lập nhân vật và ưu tiên phiên hội thoại.",
-    "sessionWithName": "Cài đặt cuộc trò chuyện · {{name}}",
-    "title": "Cài đặt"
-  },
-  "hotkey": {
-    "conflicts": "Xung đột với phím tắt hiện có",
-    "errors": {
-      "CONFLICT": "Phím tắt bị trùng: Phím tắt này đã được chức năng khác sử dụng",
-      "INVALID_FORMAT": "Định dạng phím tắt không hợp lệ: Vui lòng sử dụng định dạng đúng (ví dụ CommandOrControl+E)",
-      "INVALID_ID": "ID phím tắt không hợp lệ",
-      "NO_MODIFIER": "Phím tắt phải bao gồm phím điều khiển (Ctrl, Alt, Shift, v.v.)",
-      "SYSTEM_OCCUPIED": "Phím tắt đã bị hệ thống hoặc ứng dụng khác chiếm dụng",
-      "UNKNOWN": "Cập nhật thất bại: Lỗi không xác định"
-    },
-    "group": {
-      "conversation": "Cuộc trò chuyện",
-      "desktop": "Phiên bản máy tính để bàn",
-      "essential": "Cơ bản"
-    },
-    "invalidCombination": "Phím tắt cần ít nhất một phím sửa đổi (Ctrl, Alt, Shift) và một phím thông thường",
-    "record": "Nhấn phím để ghi lại phím tắt",
-    "reset": "Đặt lại thành phím tắt mặc định",
-    "title": "Phím tắt",
-    "updateError": "Cập nhật phím tắt thất bại: Lỗi mạng hoặc hệ thống",
-    "updateSuccess": "Cập nhật phím tắt thành công"
-  },
-  "llm": {
-    "aesGcm": "Khóa và địa chỉ proxy của bạn sẽ được mã hóa bằng thuật toán mã hóa <1>AES-GCM</1>",
-    "apiKey": {
-      "desc": "Vui lòng nhập {{name}} API Key của bạn",
-      "placeholder": "{{name}} API Key",
-      "title": "API Key"
-    },
-    "checker": {
-      "button": "Kiểm tra",
-      "desc": "Kiểm tra xem API Key và địa chỉ proxy đã được điền đúng chưa",
-      "pass": "Kiểm tra thành công",
-      "title": "Kiểm tra kết nối"
-    },
-    "customModelCards": {
-      "addNew": "Tạo và thêm mô hình {{id}}",
-      "config": "Cấu hình mô hình",
-      "confirmDelete": "Bạn sắp xóa mô hình tùy chỉnh này, sau khi xóa sẽ không thể khôi phục, hãy thận trọng.",
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Trường thực tế được yêu cầu trong Azure OpenAI",
-          "placeholder": "Nhập tên triển khai mô hình trong Azure",
-          "title": "Tên triển khai mô hình"
-        },
-        "displayName": {
-          "placeholder": "Nhập tên hiển thị của mô hình, ví dụ ChatGPT, GPT-4, v.v.",
-          "title": "Tên hiển thị mô hình"
-        },
-        "files": {
-          "extra": "Hiện tại, việc tải lên tệp chỉ là một giải pháp Hack, chỉ dành cho việc thử nghiệm cá nhân. Vui lòng chờ đợi khả năng tải lên tệp đầy đủ trong các phiên bản sau.",
-          "title": "Hỗ trợ tải lên tệp"
-        },
-        "functionCall": {
-          "extra": "Cấu hình này chỉ mở khả năng gọi hàm trong ứng dụng, việc hỗ trợ gọi hàm hoàn toàn phụ thuộc vào chính mô hình, vui lòng tự kiểm tra khả năng gọi hàm của mô hình đó.",
-          "title": "Hỗ trợ gọi hàm"
-        },
-        "id": {
-          "extra": "Sẽ được hiển thị như một nhãn mô hình",
-          "placeholder": "Nhập ID mô hình, ví dụ gpt-4-turbo-preview hoặc claude-2.1",
-          "title": "ID mô hình"
-        },
-        "modalTitle": "Cấu hình mô hình tùy chỉnh",
-        "tokens": {
-          "title": "Số lượng token tối đa"
-        },
-        "vision": {
-          "extra": "Cấu hình này chỉ mở khả năng tải lên hình ảnh trong ứng dụng, việc hỗ trợ nhận diện hoàn toàn phụ thuộc vào chính mô hình, vui lòng tự kiểm tra khả năng nhận diện hình ảnh của mô hình đó.",
-          "title": "Hỗ trợ nhận diện hình ảnh"
-        }
-      }
-    },
-    "fetchOnClient": {
-      "desc": "Chế độ yêu cầu từ khách hàng sẽ khởi động yêu cầu phiên trực tiếp từ trình duyệt, có thể cải thiện tốc độ phản hồi",
-      "title": "Sử dụng chế độ yêu cầu từ khách hàng"
-    },
-    "fetcher": {
-      "clear": "Xóa mô hình đã lấy",
-      "fetch": "Lấy danh sách mô hình",
-      "fetching": "Đang lấy danh sách mô hình...",
-      "latestTime": "Thời gian cập nhật lần cuối: {{time}}",
-      "noLatestTime": "Chưa có danh sách nào được lấy"
-    },
-    "helpDoc": "Hướng dẫn cấu hình",
-    "modelList": {
-      "desc": "Chọn mô hình hiển thị trong cuộc trò chuyện, mô hình đã chọn sẽ được hiển thị trong danh sách mô hình",
-      "placeholder": "Vui lòng chọn mô hình từ danh sách",
-      "title": "Danh sách mô hình",
-      "total": "Tổng cộng có {{count}} mô hình có sẵn"
-    },
-    "proxyUrl": {
-      "desc": "Ngoài địa chỉ mặc định, phải bao gồm http(s)://",
-      "title": "Địa chỉ Proxy API"
-    },
-    "waitingForMore": "Có thêm mô hình đang <1>được lên kế hoạch tích hợp</1>, hãy chờ đợi"
-  },
-  "marketPublish": {
-    "modal": {
-      "changelog": {
-        "extra": "Mô tả những thay đổi và cải tiến chính trong phiên bản này",
-        "label": "Nhật ký thay đổi",
-        "maxLengthError": "Nhật ký thay đổi không được vượt quá 500 ký tự",
-        "placeholder": "Vui lòng nhập nhật ký thay đổi",
-        "required": "Vui lòng nhập nhật ký thay đổi"
-      },
-      "comparison": {
-        "local": "Phiên bản hiện tại trên máy",
-        "remote": "Phiên bản đã phát hành"
-      },
-      "identifier": {
-        "extra": "Định danh sẽ là mã định danh duy nhất của trợ lý, nên sử dụng chữ thường, số và dấu gạch ngang",
-        "label": "Định danh trợ lý",
-        "lengthError": "Độ dài định danh phải từ 3 đến 50 ký tự",
-        "patternError": "Định danh chỉ được chứa chữ thường, số và dấu gạch ngang",
-        "placeholder": "Vui lòng nhập định danh duy nhất cho trợ lý, ví dụ: web-development",
-        "required": "Vui lòng nhập định danh trợ lý"
-      },
-      "loading": {
-        "fetchingRemote": "Đang tải dữ liệu từ xa...",
-        "submit": "Đang phát hành trợ lý...",
-        "upload": "Đang phát hành phiên bản mới..."
-      },
-      "messages": {
-        "createVersionFailed": "Tạo phiên bản thất bại: {{message}}",
-        "fetchRemoteFailed": "Không thể lấy dữ liệu trợ lý từ xa",
-        "missingIdentifier": "Trợ lý hiện tại chưa có định danh thị trường",
-        "notAuthenticated": "Vui lòng đăng nhập tài khoản thị trường trước",
-        "publishFailed": "Phát hành thất bại: {{message}}"
-      },
-      "submitButton": "Phát hành",
-      "title": {
-        "submit": "Chia sẻ lên thị trường trợ lý",
-        "upload": "Phát hành phiên bản mới"
-      }
-    },
-    "resultModal": {
-      "message": "Trợ lý đã được gửi để kiểm duyệt, sẽ tự động hiển thị sau khi được phê duyệt. Nhấn “Xem trên thị trường” để xem trợ lý đã phát hành.",
-      "view": "Xem trên thị trường"
-    },
-    "submit": {
-      "button": "Chia sẻ lên thị trường",
-      "tooltip": "Chia sẻ trợ lý lên thị trường"
-    },
-    "upload": {
-      "button": "Phát hành phiên bản mới",
-      "tooltip": "Phát hành phiên bản mới lên thị trường trợ lý"
-    }
-  },
-  "message": {
-    "success": "Cập nhật thành công"
-  },
-  "plugin": {
-    "addMCPPlugin": "Thêm plugin MCP",
-    "addTooltip": "Thêm tiện ích",
-    "clearDeprecated": "Xóa tiện ích không còn hỗ trợ",
-    "empty": "Hiện chưa có tiện ích nào được cài đặt, hãy truy cập <1>cửa hàng tiện ích</1> để khám phá",
-    "installStatus": {
-      "deprecated": "Đã gỡ bỏ"
-    },
-    "settings": {
-      "hint": "Vui lòng điền cấu hình dựa trên mô tả",
-      "title": "Cấu hình tiện ích {{id}}",
-      "tooltip": "Cấu hình tiện ích"
-    },
-    "store": "Cửa hàng tiện ích"
-  },
-  "settingAgent": {
-    "avatar": {
-      "title": "Hình đại diện"
-    },
-    "backgroundColor": {
-      "title": "Màu nền"
-    },
-    "description": {
-      "desc": "Giới thiệu ngắn gọn về trợ lý của bạn, không dùng để thiết lập nhân vật",
-      "placeholder": "Vui lòng nhập mô tả trợ lý",
-      "title": "Mô tả trợ lý"
-    },
-    "name": {
-      "placeholder": "Vui lòng nhập tên trợ lý",
-      "title": "Tên"
-    },
-    "prompt": {
-      "placeholder": "Vui lòng nhập từ khóa Prompt cho vai diễn",
-      "title": "Thiết lập vai diễn"
-    },
-    "submit": "Cập nhật thông tin trợ lý",
-    "tag": {
-      "desc": "Thẻ trợ lý sẽ được hiển thị trong thị trường trợ lý",
-      "placeholder": "Vui lòng nhập nhãn",
-      "title": "Nhãn"
-    },
-    "title": "Thông tin trợ lý"
-  },
-  "settingAppearance": {
-    "animationMode": {
-      "agile": "Nhanh nhẹn",
-      "desc": "Chọn tốc độ hoạt ảnh phản hồi của ứng dụng",
-      "disabled": "Tắt",
-      "elegant": "Thanh lịch",
-      "title": "Hoạt ảnh phản hồi"
-    },
-    "contextMenuMode": {
-      "default": "Mặc định",
-      "desc": "Chọn phương án hiển thị menu chuột phải cho tin nhắn trò chuyện",
-      "disabled": "Không sử dụng",
-      "title": "Phương án menu chuột phải"
-    },
-    "neutralColor": {
-      "desc": "Tùy chỉnh thang độ xám với các xu hướng màu sắc khác nhau",
-      "title": "Màu trung tính"
-    },
-    "noAnimation": {
-      "desc": "Vô hiệu hóa tất cả hiệu ứng hoạt ảnh trong ứng dụng",
-      "title": "Chế độ không hoạt ảnh"
-    },
-    "preview": {
-      "title": "Bảng màu"
-    },
-    "primaryColor": {
-      "desc": "Tùy chỉnh màu chủ đề",
-      "title": "Màu chủ đề"
-    },
-    "title": "Giao diện ứng dụng"
-  },
-  "settingChat": {
-    "autoCreateTopicThreshold": {
-      "desc": "Khi số tin nhắn hiện tại vượt quá giá trị này, chủ đề sẽ tự động được tạo",
-      "title": "Ngưỡng tự động tạo chủ đề"
-    },
-    "chatStyleType": {
-      "title": "Kiểu cửa sổ trò chuyện",
-      "type": {
-        "chat": "Chế độ trò chuyện",
-        "docs": "Chế độ tài liệu"
-      }
-    },
-    "compressThreshold": {
-      "desc": "Khi số tin nhắn lịch sử chưa được nén vượt quá giá trị này, sẽ thực hiện nén",
-      "title": "Ngưỡng nén độ dài lịch sử"
-    },
-    "enableAutoCreateTopic": {
-      "desc": "Có tự động tạo chủ đề trong quá trình trò chuyện hay không, chỉ áp dụng trong chủ đề tạm thời",
-      "title": "Tự động tạo chủ đề"
-    },
-    "enableCompressHistory": {
-      "title": "Bật tóm tắt tự động lịch sử tin nhắn"
-    },
-    "enableHistoryCount": {
-      "alias": "Không giới hạn",
-      "limited": "Chỉ chứa {{number}} tin nhắn trò chuyện",
-      "setlimited": "Thiết lập số lượng tin nhắn lịch sử",
-      "title": "Giới hạn số lượng tin nhắn lịch sử",
-      "unlimited": "Không giới hạn số lượng tin nhắn lịch sử"
-    },
-    "enableStreaming": {
-      "desc": "Bật phát trực tiếp để hiển thị phản hồi theo thời gian thực. Tắt sẽ chỉ hiển thị phản hồi đầy đủ.",
-      "title": "Bật phát trực tiếp"
-    },
-    "historyCount": {
-      "desc": "Số lượng tin nhắn được gửi mỗi lần yêu cầu (bao gồm cả câu hỏi mới nhất. Mỗi câu hỏi và câu trả lời đều tính là 1)",
-      "title": "Số lượng tin nhắn đi kèm"
-    },
-    "inputTemplate": {
-      "desc": "Tin nhắn mới nhất của người dùng sẽ được điền vào mẫu này",
-      "placeholder": "Mẫu xử lý trước {{text}} sẽ được thay thế bằng thông tin nhập thời gian thực",
-      "title": "Mẫu xử lý đầu vào của người dùng"
-    },
-    "submit": "Cập nhật sở thích trò chuyện",
-    "title": "Cài đặt trò chuyện"
-  },
-  "settingChatAppearance": {
-    "fontSize": {
-      "desc": "Kích thước phông chữ của nội dung trò chuyện",
-      "marks": {
-        "normal": "Chuẩn"
-      },
-      "title": "Kích thước phông chữ"
-    },
-    "highlighterTheme": {
-      "title": "Chủ đề làm nổi bật mã"
-    },
-    "mermaidTheme": {
-      "title": "Chủ đề Nàng Tiên Cá"
-    },
-    "title": "Giao diện trò chuyện",
-    "transitionMode": {
-      "desc": "Hiệu ứng chuyển tiếp của tin nhắn trò chuyện",
-      "options": {
-        "fadeIn": "Mờ dần",
-        "none": {
-          "desc": "Điều này phụ thuộc vào cách mô hình phản hồi, vui lòng tự kiểm tra.",
-          "value": "Không"
-        },
-        "smooth": "Mượt mà"
-      },
-      "title": "Hiệu ứng chuyển tiếp"
-    }
-  },
-  "settingCommon": {
-    "lang": {
-      "autoMode": "Theo hệ thống",
-      "title": "Ngôn ngữ"
-    },
-    "themeMode": {
-      "auto": "Tự động",
-      "dark": "Tối",
-      "light": "Sáng",
-      "title": "Chủ đề"
-    },
-    "title": "Cài đặt chung"
-  },
-  "settingGroup": {
-    "description": {
-      "placeholder": "Vui lòng nhập mô tả nhóm",
-      "title": "Mô tả nhóm"
-    },
-    "name": {
-      "placeholder": "Vui lòng nhập tên nhóm",
-      "title": "Tên nhóm"
-    },
-    "scene": {
-      "desc": "Chọn ngữ cảnh nhóm",
-      "options": {
-        "casual": "Thư giãn",
-        "productive": "Năng suất"
-      },
-      "title": "Ngữ cảnh nhóm"
-    },
-    "submit": "Cập nhật nhóm",
-    "systemPrompt": {
-      "placeholder": "Vui lòng nhập từ khóa hệ thống cho người dẫn chương trình",
-      "title": "Từ khóa hệ thống người dẫn chương trình"
-    },
-    "title": "Thông tin nhóm Agent"
-  },
-  "settingGroupChat": {
-    "allowDM": {
-      "desc": "Sau khi tắt, bạn vẫn có thể chủ động gửi tin nhắn riêng cho trợ lý",
-      "title": "Cho phép trợ lý gửi tin nhắn riêng"
-    },
-    "enableSupervisor": {
-      "desc": "Bật chức năng người điều phối nhóm Agent, người điều phối sẽ quản lý luồng hội thoại của nhóm",
-      "title": "Bật người điều phối"
-    },
-    "maxResponseInRow": {
-      "desc": "Chọn số lượng tin nhắn thành viên có thể trả lời liên tiếp. Đặt là 0 để vô hiệu hóa giới hạn này.",
-      "title": "Số tin nhắn trả lời liên tiếp"
-    },
-    "model": {
-      "desc": "Phát ngôn của thành viên nhóm sẽ không bị ảnh hưởng. Một số mô hình không thể được sử dụng làm mô hình điều phối.",
-      "title": "Mô hình người dẫn chương trình"
-    },
-    "orchestratorTitle": "Cài đặt người dẫn chương trình",
-    "responseOrder": {
-      "desc": "Các Agent sẽ phản hồi theo thứ tự đã thiết lập trong cuộc trò chuyện",
-      "options": {
-        "natural": "Tự nhiên",
-        "sequential": "Tuần tự"
-      },
-      "placeholder": "Chọn thứ tự trả lời",
-      "title": "Thứ tự trả lời"
-    },
-    "responseSpeed": {
-      "desc": "Kiểm soát tốc độ tiến hành tổng thể của cuộc trò chuyện",
-      "options": {
-        "fast": "Nhanh",
-        "medium": "Trung bình",
-        "slow": "Chậm"
-      },
-      "placeholder": "Chọn tốc độ trả lời",
-      "title": "Tốc độ trả lời"
-    },
-    "revealDM": {
-      "desc": "Hiển thị nội dung tin nhắn riêng gửi cho các thành viên khác cho bạn xem.",
-      "title": "Hiển thị nội dung tin nhắn riêng"
-    },
-    "submit": "Cập nhật cài đặt",
-    "systemPrompt": {
-      "desc": "Từ khóa hệ thống tùy chỉnh cho người dẫn chương trình trong cuộc trò chuyện nhóm. Điều này có thể ảnh hưởng đến hành vi mặc định của người dẫn.",
-      "placeholder": "Vui lòng nhập từ khóa hệ thống người dẫn chương trình tùy chỉnh...",
-      "title": "Từ khóa hệ thống người dẫn chương trình"
-    },
-    "title": "Cài đặt trò chuyện"
-  },
-  "settingGroupMembers": {
-    "addToGroup": "Thêm vào nhóm",
-    "availableAgents": "Trợ lý có sẵn",
-    "createMember": "Tạo thành viên",
-    "defaultAgent": "Trợ lý tùy chỉnh",
-    "disableHost": "Tắt trợ lý chủ trì",
-    "edit": "Chỉnh sửa thành viên",
-    "empty": "Hiện chưa có thành viên nào trong nhóm. Nhấn nút + để thêm thành viên.",
-    "enableHost": "Bật trợ lý chủ trì",
-    "groupHost": "Chủ trì nhóm",
-    "groupMembers": "Thành viên nhóm",
-    "host": {
-      "description": "Khi chủ trì có mặt trong nhóm, trò chuyện nhóm sẽ được tự động hóa, phù hợp với các nhiệm vụ sáng tạo.",
-      "title": "Chủ trì"
-    },
-    "noAvailableAgents": "Không có trợ lý khả dụng",
-    "noDescription": "Chưa có mô tả",
-    "noMembersInGroup": "Nhóm chưa có thành viên",
-    "owner": "Bạn (chủ sở hữu)",
-    "remove": "Xóa thành viên",
-    "removeFromGroup": "Loại khỏi nhóm",
-    "you": "Bạn"
-  },
-  "settingImage": {
-    "defaultCount": {
-      "desc": "Thiết lập số lượng hình ảnh mặc định được tạo khi bắt đầu một tác vụ mới trong bảng tạo hình ảnh.",
-      "label": "Số lượng hình ảnh mặc định",
-      "title": "Cài đặt Vẽ AI"
-    }
-  },
-  "settingModel": {
-    "enableMaxTokens": {
-      "title": "Bật giới hạn phản hồi một lần"
-    },
-    "enableReasoningEffort": {
-      "title": "Bật điều chỉnh cường độ suy luận"
-    },
-    "frequencyPenalty": {
-      "desc": "Giá trị càng lớn, từ ngữ càng phong phú đa dạng; giá trị càng thấp, từ ngữ càng đơn giản mộc mạc",
-      "title": "Độ phong phú từ vựng"
-    },
-    "maxTokens": {
-      "desc": "Số lượng Token tối đa được sử dụng trong mỗi tương tác",
-      "title": "Giới hạn phản hồi một lần"
-    },
-    "model": {
-      "desc": "Mô hình {{provider}}",
-      "title": "Mô hình"
-    },
-    "params": {
-      "title": "Tham số nâng cao"
-    },
-    "presencePenalty": {
-      "desc": "Giá trị càng lớn, càng có xu hướng sử dụng các cách diễn đạt khác nhau, tránh lặp lại khái niệm; giá trị càng nhỏ, càng có xu hướng sử dụng các khái niệm hoặc mô tả lặp lại, thể hiện tính nhất quán cao hơn",
-      "title": "Độ phân tán trong diễn đạt"
-    },
-    "reasoningEffort": {
-      "desc": "Giá trị càng cao, khả năng suy luận càng mạnh, nhưng có thể làm tăng thời gian phản hồi và tiêu thụ Token",
-      "options": {
-        "high": "Cao",
-        "low": "Thấp",
-        "medium": "Trung bình"
-      },
-      "title": "Cường độ suy luận"
-    },
-    "submit": "Cập nhật cài đặt mô hình",
-    "temperature": {
-      "desc": "Giá trị càng lớn, câu trả lời càng sáng tạo và giàu trí tưởng tượng; giá trị càng nhỏ, câu trả lời càng nghiêm ngặt",
-      "title": "Mức độ sáng tạo",
-      "warning": "Giá trị mức độ sáng tạo quá lớn có thể dẫn đến đầu ra bị lỗi"
-    },
-    "title": "Cài đặt mô hình",
-    "topP": {
-      "desc": "Xem xét bao nhiêu khả năng, giá trị càng lớn, chấp nhận nhiều câu trả lời khả thi hơn; giá trị càng nhỏ, có xu hướng chọn câu trả lời khả thi nhất. Không khuyến nghị thay đổi cùng với mức độ sáng tạo",
-      "title": "Mức độ mở trong tư duy"
-    }
-  },
-  "settingOpening": {
-    "openingMessage": {
-      "desc": "Tin nhắn mở đầu khi bắt đầu cuộc trò chuyện, dùng để giới thiệu chức năng của trợ lý",
-      "placeholder": "Xin chào, tôi là Trợ lý tùy chỉnh, bạn có thể bắt đầu trò chuyện với tôi ngay lập tức, hoặc đến Cài đặt trợ lý để hoàn thiện thông tin của tôi.",
-      "title": "Tin nhắn mở đầu"
-    },
-    "openingQuestions": {
-      "desc": "Câu hỏi hướng dẫn hiển thị khi bắt đầu cuộc trò chuyện",
-      "empty": "Chưa có câu hỏi nào",
-      "placeholder": "Nhập câu hỏi",
-      "repeat": "Câu hỏi đã tồn tại",
-      "title": "Câu hỏi mở đầu"
-    },
-    "title": "Cài đặt mở đầu"
-  },
-  "settingPlugin": {
-    "title": "Danh sách plugin"
-  },
-  "settingSystem": {
-    "accessCode": {
-      "desc": "Quản trị viên đã bật mã hóa truy cập",
-      "placeholder": "Nhập mật khẩu truy cập",
-      "title": "Mật khẩu truy cập"
-    },
-    "oauth": {
-      "info": {
-        "desc": "Đã đăng nhập",
-        "title": "Thông tin tài khoản"
-      },
-      "signin": {
-        "action": "Đăng nhập",
-        "desc": "Đăng nhập bằng SSO để mở khóa ứng dụng",
-        "title": "Đăng nhập tài khoản"
-      },
-      "signout": {
-        "action": "Đăng xuất",
-        "confirm": "Xác nhận đăng xuất?",
-        "success": "Đăng xuất thành công"
-      }
-    },
-    "title": "Cài đặt hệ thống"
-  },
-  "settingTTS": {
-    "openai": {
-      "sttModel": "Mô hình nhận dạng giọng nói OpenAI",
-      "title": "OpenAI",
-      "ttsModel": "Mô hình tổng hợp giọng nói OpenAI"
-    },
-    "showAllLocaleVoice": {
-      "desc": "Tắt sẽ chỉ hiển thị nguồn âm thanh của ngôn ngữ hiện tại",
-      "title": "Hiển thị tất cả nguồn âm thanh ngôn ngữ"
-    },
-    "stt": "Cài đặt nhận dạng giọng nói",
-    "sttAutoStop": {
-      "desc": "Tắt sẽ không tự động dừng nhận dạng giọng nói, cần phải bấm nút dừng thủ công",
-      "title": "Tự động dừng nhận dạng giọng nói"
-    },
-    "sttLocale": {
-      "desc": "Ngôn ngữ đầu vào cho giọng nói, tùy chọn này có thể cải thiện độ chính xác của nhận dạng giọng nói",
-      "title": "Ngôn ngữ nhận dạng giọng nói"
-    },
-    "sttService": {
-      "desc": "Trong đó, trình duyệt là dịch vụ nhận dạng giọng nói nguyên bản của trình duyệt",
-      "title": "Dịch vụ nhận dạng giọng nói"
-    },
-    "submit": "Cập nhật dịch vụ giọng nói",
-    "title": "Dịch vụ giọng nói",
-    "tts": "Cài đặt tổng hợp giọng nói",
-    "ttsService": {
-      "desc": "Nếu sử dụng dịch vụ tổng hợp giọng nói OpenAI, cần đảm bảo dịch vụ mô hình OpenAI đã được bật",
-      "title": "Dịch vụ tổng hợp giọng nói"
-    },
-    "voice": {
-      "desc": "Chọn một giọng nói cho trợ lý hiện tại, các dịch vụ TTS khác nhau hỗ trợ các nguồn âm thanh khác nhau",
-      "preview": "Xem trước âm thanh",
-      "title": "Nguồn âm thanh tổng hợp giọng nói"
-    }
-  },
-  "storage": {
-    "actions": {
-      "export": {
-        "button": "Xuất",
-        "exportType": {
-          "agent": "Xuất cài đặt trợ lý",
-          "agentWithMessage": "Xuất trợ lý và tin nhắn",
-          "all": "Xuất cài đặt toàn cầu và tất cả dữ liệu trợ lý",
-          "allAgent": "Xuất tất cả cài đặt trợ lý",
-          "allAgentWithMessage": "Xuất tất cả trợ lý và tin nhắn",
-          "globalSetting": "Xuất cài đặt toàn cầu"
-        },
-        "title": "Xuất dữ liệu"
-      },
-      "import": {
-        "button": "Nhập",
-        "title": "Nhập dữ liệu"
-      },
-      "title": "Thao tác nâng cao"
-    },
-    "desc": "Dung lượng lưu trữ trong trình duyệt hiện tại",
-    "embeddings": {
-      "used": "Lưu trữ vector"
-    },
-    "title": "Lưu trữ dữ liệu",
-    "used": "Dung lượng lưu trữ"
-  },
-  "submitAgentModal": {
-    "button": "Gửi trợ lý",
-    "identifier": "Định danh trợ lý (identifier)",
-    "metaMiss": "Vui lòng điền đầy đủ thông tin trợ lý trước khi gửi, cần bao gồm tên, mô tả và nhãn",
-    "placeholder": "Vui lòng nhập nhận dạng trợ lý, cần phải duy nhất, ví dụ như phát triển web",
-    "tooltips": "Chia sẻ lên thị trường trợ lý"
-  },
-  "submitFooter": {
-    "reset": "Đặt lại",
-    "submit": "Lưu",
-    "unSaved": "Thay đổi chưa được lưu",
-    "unSavedWarning": "Hiện tại có thay đổi chưa được lưu"
-  },
-  "sync": {
-    "device": {
-      "deviceName": {
-        "hint": "Thêm tên để dễ nhận biết",
-        "placeholder": "Nhập tên thiết bị",
-        "title": "Tên thiết bị"
-      },
-      "title": "Thông tin thiết bị",
-      "unknownBrowser": "Trình duyệt không xác định",
-      "unknownOS": "Hệ điều hành không xác định"
-    },
-    "warning": {
-      "tip": "经过较长一段时间社区公测，WebRTC 同步可能无法稳定满足通用的数据同步诉求。请自行 <1>部署信令服务器</1> 后使用。"
-    },
-    "webrtc": {
-      "channelName": {
-        "desc": "WebRTC sẽ sử dụng tên này để tạo kênh đồng bộ, đảm bảo tên kênh là duy nhất",
-        "placeholder": "Nhập tên kênh đồng bộ",
-        "shuffle": "Tạo ngẫu nhiên",
-        "title": "Tên kênh đồng bộ"
-      },
-      "channelPassword": {
-        "desc": "Thêm mật khẩu để đảm bảo tính riêng tư của kênh, chỉ khi mật khẩu đúng, thiết bị mới có thể tham gia kênh",
-        "placeholder": "Nhập mật khẩu kênh đồng bộ",
-        "title": "Mật khẩu kênh đồng bộ"
-      },
-      "desc": "Truyền thông dữ liệu thời gian thực, điểm-điểm, cần thiết bị cùng online mới có thể đồng bộ",
-      "enabled": {
-        "invalid": "Vui lòng nhập địa chỉ máy chủ tín hiệu và tên kênh đồng bộ trước khi bật",
-        "title": "Bật đồng bộ"
-      },
-      "signaling": {
-        "desc": "WebRTC sẽ sử dụng địa chỉ này để đồng bộ",
-        "placeholder": "Vui lòng nhập địa chỉ máy chủ tín hiệu",
-        "title": "Máy chủ tín hiệu"
-      },
-      "title": "WebRTC Đồng bộ"
-    }
-  },
-  "systemAgent": {
-    "agentMeta": {
-      "label": "Mô hình tạo siêu dữ liệu trợ lý",
-      "modelDesc": "Xác định mô hình được sử dụng để tạo tên, mô tả, hình đại diện, nhãn cho trợ lý",
-      "title": "Tự động tạo thông tin trợ lý"
-    },
-    "customPrompt": {
-      "addPrompt": "Thêm gợi ý tùy chỉnh",
-      "desc": "Sau khi điền, trợ lý hệ thống sẽ sử dụng gợi ý tùy chỉnh khi tạo nội dung",
-      "placeholder": "Nhập từ gợi ý tùy chỉnh",
-      "title": "Từ gợi ý tùy chỉnh"
-    },
-    "generationTopic": {
-      "label": "Mô hình đặt tên chủ đề vẽ AI",
-      "modelDesc": "Mô hình được chỉ định để tự động đặt tên chủ đề cho vẽ AI",
-      "title": "Tự động đặt tên chủ đề vẽ AI"
-    },
-    "helpInfo": "Khi tạo trợ lý mới, sẽ sử dụng cài đặt trợ lý mặc định làm giá trị mặc định.",
-    "historyCompress": {
-      "label": "Mô hình lịch sử cuộc trò chuyện",
-      "modelDesc": "Chỉ định mô hình được sử dụng để nén lịch sử cuộc trò chuyện",
-      "title": "Tóm tắt tự động lịch sử cuộc trò chuyện"
-    },
-    "queryRewrite": {
-      "label": "Mô hình viết lại câu hỏi",
-      "modelDesc": "Mô hình được chỉ định để tối ưu hóa câu hỏi của người dùng",
-      "title": "Viết lại câu hỏi trong kho kiến thức"
-    },
-    "thread": {
-      "label": "Mô hình đặt tên chủ đề phụ",
-      "modelDesc": "Mô hình được chỉ định để tự động đổi tên chủ đề phụ",
-      "title": "Tự động đặt tên chủ đề phụ"
-    },
-    "title": "Trợ lý hệ thống",
-    "topic": {
-      "label": "Mô hình đặt tên chủ đề",
-      "modelDesc": "Mô hình được chỉ định để tự động đặt tên chủ đề",
-      "title": "Tự động đặt tên chủ đề"
-    },
-    "translation": {
-      "label": "Mô hình dịch",
-      "modelDesc": "Chọn mô hình để dịch",
-      "title": "Cài đặt trợ lý dịch"
-    }
-  },
-  "tab": {
-    "about": "Về chúng tôi",
-    "agent": "Trợ lý mặc định",
-    "common": "Cài đặt chung",
-    "experiment": "Thử nghiệm",
-    "hotkey": "Phím tắt",
-    "image": "Vẽ AI",
-    "llm": "Mô hình ngôn ngữ",
-    "provider": "Nhà cung cấp AI",
-    "proxy": "Mạng proxy",
-    "storage": "Lưu trữ dữ liệu",
-    "sync": "Đồng bộ trên đám mây",
-    "system-agent": "Trợ lý hệ thống",
-    "tts": "Dịch vụ giọng nói"
-  },
-  "tools": {
-    "builtins": {
-      "groupName": "Mở rộng tích hợp sẵn"
-    },
-    "disabled": "Mô hình hiện tại không hỗ trợ gọi hàm, không thể sử dụng plugin",
-    "plugins": {
-      "enabled": "Đã kích hoạt {{num}}",
-      "groupName": "Tiện ích",
-      "noEnabled": "Chưa có tiện ích nào được kích hoạt",
-      "store": "Cửa hàng tiện ích"
-    },
-    "title": "Công cụ mở rộng"
-  }
+  "danger.clear.action": "Xóa ngay",
+  "danger.clear.confirm": "Xóa toàn bộ dữ liệu trò chuyện? Hành động này không thể hoàn tác.",
+  "danger.clear.desc": "Xóa toàn bộ dữ liệu bao gồm agent, tệp, tin nhắn và kỹ năng. Tài khoản của bạn sẽ KHÔNG bị xóa.",
+  "danger.clear.success": "Tất cả tin nhắn phiên đã được xóa",
+  "danger.clear.title": "Xóa Dữ liệu",
+  "danger.reset.action": "Đặt lại ngay",
+  "danger.reset.confirm": "Đặt lại tất cả cài đặt?",
+  "danger.reset.currentVersion": "Phiên bản hiện tại",
+  "danger.reset.desc": "Khôi phục tất cả cài đặt về mặc định. Dữ liệu của bạn sẽ không bị xóa.",
+  "danger.reset.success": "Tất cả cài đặt đã được đặt lại",
+  "danger.reset.title": "Đặt lại Tất cả Cài đặt",
+  "defaultAgent.model.desc": "Mô hình mặc định được sử dụng khi tạo Agent mới",
+  "defaultAgent.model.title": "Mô hình",
+  "defaultAgent.title": "Cài đặt Agent Mặc định",
+  "group.aiConfig": "Mô hình",
+  "group.common": "Chung",
+  "group.profile": "Tài khoản",
+  "group.subscription": "Gói đăng ký",
+  "group.system": "Hệ thống",
+  "groupTab.chat": "Trò chuyện",
+  "groupTab.members": "Thành viên",
+  "groupTab.meta": "Thông tin cơ bản",
+  "header.desc": "Tùy chọn và cài đặt mô hình",
+  "header.global": "Cài đặt Toàn cục",
+  "header.group": "Cài đặt Nhóm",
+  "header.groupDesc": "Quản lý nhóm và tùy chọn trò chuyện",
+  "header.session": "Cài đặt Phiên",
+  "header.sessionDesc": "Hồ sơ Agent và tùy chọn phiên",
+  "header.sessionWithName": "Cài đặt Phiên · {{name}}",
+  "header.title": "Cài đặt",
+  "hotkey.conflicts": "Xung đột với phím tắt hiện có",
+  "hotkey.errors.CONFLICT": "Xung đột phím tắt: Phím này đã được gán cho chức năng khác",
+  "hotkey.errors.INVALID_FORMAT": "Định dạng phím tắt không hợp lệ: Vui lòng sử dụng định dạng đúng (ví dụ: CommandOrControl+E)",
+  "hotkey.errors.INVALID_ID": "ID phím tắt không hợp lệ",
+  "hotkey.errors.NO_MODIFIER": "Phím tắt phải bao gồm một phím bổ trợ (Ctrl, Alt, Shift, v.v.)",
+  "hotkey.errors.SYSTEM_OCCUPIED": "Phím tắt đã được hệ thống hoặc ứng dụng khác sử dụng",
+  "hotkey.errors.UNKNOWN": "Cập nhật thất bại: Lỗi không xác định",
+  "hotkey.group.conversation": "Trò chuyện",
+  "hotkey.group.desktop": "Màn hình",
+  "hotkey.group.essential": "Cơ bản",
+  "hotkey.invalidCombination": "Phím tắt phải bao gồm ít nhất một phím bổ trợ (Ctrl, Alt, Shift) và một phím thường",
+  "hotkey.record": "Nhấn phím để ghi lại phím tắt",
+  "hotkey.reset": "Đặt lại phím tắt mặc định",
+  "hotkey.title": "Phím tắt",
+  "hotkey.updateError": "Cập nhật phím tắt thất bại: Lỗi mạng hoặc hệ thống",
+  "hotkey.updateSuccess": "Cập nhật phím tắt thành công",
+  "llm.aesGcm": "Khóa và địa chỉ proxy của bạn sẽ được mã hóa bằng thuật toán <1>AES-GCM</1>",
+  "llm.apiKey.desc": "Vui lòng nhập API Key của {{name}}",
+  "llm.apiKey.placeholder": "API Key của {{name}}",
+  "llm.apiKey.title": "API Key",
+  "llm.checker.button": "Kiểm tra",
+  "llm.checker.desc": "Kiểm tra xem API Key và địa chỉ proxy đã được điền đúng chưa",
+  "llm.checker.pass": "Kiểm tra thành công",
+  "llm.checker.title": "Kiểm tra Kết nối",
+  "llm.customModelCards.addNew": "Tạo và thêm mô hình {{id}}",
+  "llm.customModelCards.config": "Cấu hình Mô hình",
+  "llm.customModelCards.confirmDelete": "Bạn sắp xóa mô hình tùy chỉnh này. Sau khi xóa sẽ không thể khôi phục. Vui lòng cẩn trọng.",
+  "llm.customModelCards.modelConfig.azureDeployName.extra": "Trường được yêu cầu thực tế trong Azure OpenAI",
+  "llm.customModelCards.modelConfig.azureDeployName.placeholder": "Nhập tên triển khai mô hình trong Azure",
+  "llm.customModelCards.modelConfig.azureDeployName.title": "Tên Triển khai Mô hình",
+  "llm.customModelCards.modelConfig.displayName.placeholder": "Nhập tên hiển thị của mô hình, ví dụ: ChatGPT, GPT-4, v.v.",
+  "llm.customModelCards.modelConfig.displayName.title": "Tên Hiển thị Mô hình",
+  "llm.customModelCards.modelConfig.files.extra": "Tính năng tải tệp hiện tại chỉ là giải pháp tạm thời và chỉ dành cho thử nghiệm cá nhân. Vui lòng chờ cập nhật chính thức trong tương lai.",
+  "llm.customModelCards.modelConfig.files.title": "Hỗ trợ Tải tệp",
+  "llm.customModelCards.modelConfig.functionCall.extra": "Chỉ bật gọi Kỹ năng trong ứng dụng. Việc mô hình có hỗ trợ hay không phụ thuộc vào chính mô hình đó—vui lòng kiểm tra.",
+  "llm.customModelCards.modelConfig.functionCall.title": "Hỗ trợ gọi Kỹ năng",
+  "llm.customModelCards.modelConfig.id.extra": "Sẽ được hiển thị dưới dạng nhãn mô hình",
+  "llm.customModelCards.modelConfig.id.placeholder": "Nhập ID mô hình, ví dụ: gpt-4-turbo-preview hoặc claude-2.1",
+  "llm.customModelCards.modelConfig.id.title": "ID Mô hình",
+  "llm.customModelCards.modelConfig.modalTitle": "Cấu hình Mô hình Tùy chỉnh",
+  "llm.customModelCards.modelConfig.tokens.title": "Số lượng Token tối đa",
+  "llm.customModelCards.modelConfig.vision.extra": "Chỉ bật tải ảnh trong ứng dụng. Việc mô hình có hỗ trợ hay không phụ thuộc vào chính mô hình đó—vui lòng kiểm tra.",
+  "llm.customModelCards.modelConfig.vision.title": "Hỗ trợ thị giác",
+  "llm.fetchOnClient.desc": "Gửi yêu cầu trực tiếp từ trình duyệt để cải thiện độ trễ.",
+  "llm.fetchOnClient.title": "Sử dụng chế độ yêu cầu từ phía máy khách",
+  "llm.fetcher.clear": "Xóa mô hình đã lấy",
+  "llm.fetcher.fetch": "Lấy danh sách mô hình",
+  "llm.fetcher.fetching": "Đang lấy danh sách mô hình...",
+  "llm.fetcher.latestTime": "Cập nhật lần cuối: {{time}}",
+  "llm.fetcher.noLatestTime": "Chưa có danh sách nào",
+  "llm.helpDoc": "Hướng dẫn cấu hình",
+  "llm.modelList.desc": "Chọn các mô hình để hiển thị trong phiên. Các mô hình được chọn sẽ hiển thị trong danh sách mô hình.",
+  "llm.modelList.placeholder": "Vui lòng chọn mô hình từ danh sách",
+  "llm.modelList.title": "Danh sách Mô hình",
+  "llm.modelList.total": "Tổng cộng có {{count}} mô hình",
+  "llm.proxyUrl.desc": "Phải bao gồm http(s):// ngoài địa chỉ mặc định",
+  "llm.proxyUrl.title": "URL proxy API",
+  "llm.waitingForMore": "Sẽ có thêm <1>mô hình được bổ sung</1>, hãy đón chờ",
+  "llm.waitingForMoreLinkAriaLabel": "Mở biểu mẫu yêu cầu Nhà cung cấp",
+  "marketPublish.modal.changelog.extra": "Mô tả những thay đổi và cải tiến chính trong phiên bản này",
+  "marketPublish.modal.changelog.label": "Nhật ký thay đổi",
+  "marketPublish.modal.changelog.maxLengthError": "Nhật ký thay đổi không được vượt quá 500 ký tự",
+  "marketPublish.modal.changelog.placeholder": "Nhập nhật ký thay đổi",
+  "marketPublish.modal.changelog.required": "Vui lòng nhập nhật ký thay đổi",
+  "marketPublish.modal.comparison.local": "Phiên bản cục bộ hiện tại",
+  "marketPublish.modal.comparison.remote": "Phiên bản đã xuất bản hiện tại",
+  "marketPublish.modal.identifier.extra": "Đây là định danh duy nhất của Agent. Sử dụng chữ thường, số và dấu gạch ngang.",
+  "marketPublish.modal.identifier.label": "Định danh Agent",
+  "marketPublish.modal.identifier.lengthError": "Định danh phải có từ 3 đến 50 ký tự",
+  "marketPublish.modal.identifier.patternError": "Định danh chỉ được chứa chữ thường, số và dấu gạch ngang",
+  "marketPublish.modal.identifier.placeholder": "Nhập định danh duy nhất cho agent, ví dụ: web-development",
+  "marketPublish.modal.identifier.required": "Vui lòng nhập định danh agent",
+  "marketPublish.modal.loading.fetchingRemote": "Đang tải dữ liệu từ xa...",
+  "marketPublish.modal.loading.submit": "Đang gửi Agent...",
+  "marketPublish.modal.loading.upload": "Đang xuất bản phiên bản mới...",
+  "marketPublish.modal.messages.createVersionFailed": "Tạo phiên bản thất bại: {{message}}",
+  "marketPublish.modal.messages.fetchRemoteFailed": "Không thể lấy dữ liệu agent từ xa",
+  "marketPublish.modal.messages.missingIdentifier": "Agent này chưa có định danh Cộng đồng.",
+  "marketPublish.modal.messages.notAuthenticated": "Vui lòng đăng nhập vào tài khoản Cộng đồng của bạn trước.",
+  "marketPublish.modal.messages.publishFailed": "Xuất bản thất bại: {{message}}",
+  "marketPublish.modal.submitButton": "Xuất bản",
+  "marketPublish.modal.title.submit": "Chia sẻ lên Cộng đồng Agent",
+  "marketPublish.modal.title.upload": "Xuất bản Phiên bản Mới",
+  "marketPublish.resultModal.message": "Agent của bạn đã được gửi để xét duyệt. Sau khi được phê duyệt, nó sẽ tự động được hiển thị công khai.",
+  "marketPublish.resultModal.title": "Gửi thành công",
+  "marketPublish.resultModal.view": "Xem trên Cộng đồng",
+  "marketPublish.submit.button": "Chia sẻ lên Cộng đồng",
+  "marketPublish.submit.tooltip": "Chia sẻ Agent này lên Cộng đồng",
+  "marketPublish.upload.button": "Xuất bản Phiên bản Mới",
+  "marketPublish.upload.tooltip": "Xuất bản phiên bản mới lên Cộng đồng Agent",
+  "memory.enabled.desc": "Cho phép LobeHub ghi nhớ sở thích và thông tin từ các cuộc trò chuyện để sử dụng sau này. Bạn có thể xem, chỉnh sửa hoặc xóa bộ nhớ bất kỳ lúc nào.",
+  "memory.enabled.title": "Bật Bộ nhớ",
+  "memory.title": "Cài đặt Bộ nhớ",
+  "message.success": "Cập nhật thành công",
+  "myAgents.actions.cancel": "Hủy",
+  "myAgents.actions.confirmDeprecate": "Xác nhận Ngừng sử dụng",
+  "myAgents.actions.deprecate": "Ngừng sử dụng vĩnh viễn",
+  "myAgents.actions.deprecateConfirmContent": "Sau khi ngừng sử dụng, agent này sẽ bị xóa vĩnh viễn khỏi thị trường và không thể xuất bản lại. Hành động này không thể hoàn tác, vui lòng cẩn trọng.",
+  "myAgents.actions.deprecateConfirmTitle": "Xác nhận ngừng sử dụng Agent?",
+  "myAgents.actions.deprecateError": "Ngừng sử dụng agent thất bại",
+  "myAgents.actions.deprecateLoading": "Đang ngừng sử dụng agent...",
+  "myAgents.actions.deprecateSuccess": "Đã ngừng sử dụng agent",
+  "myAgents.actions.edit": "Chỉnh sửa Agent",
+  "myAgents.actions.publish": "Xuất bản Agent",
+  "myAgents.actions.publishError": "Xuất bản agent thất bại",
+  "myAgents.actions.publishLoading": "Đang xuất bản agent...",
+  "myAgents.actions.publishSuccess": "Đã xuất bản agent",
+  "myAgents.actions.unpublish": "Gỡ Agent khỏi thị trường",
+  "myAgents.actions.unpublishError": "Gỡ agent thất bại",
+  "myAgents.actions.unpublishLoading": "Đang gỡ agent...",
+  "myAgents.actions.unpublishSuccess": "Đã gỡ agent",
+  "myAgents.actions.viewDetail": "Xem chi tiết",
+  "myAgents.detail.category": "Danh mục",
+  "myAgents.detail.description": "Mô tả",
+  "myAgents.detail.identifier": "Định danh",
+  "myAgents.detail.title": "Chi tiết Agent",
+  "myAgents.empty.description": "Bạn chưa xuất bản agent nào lên thị trường",
+  "myAgents.empty.title": "Chưa có Agent được xuất bản",
+  "myAgents.errors.editFailed": "Chỉnh sửa agent thất bại, vui lòng thử lại sau",
+  "myAgents.errors.fetchFailed": "Không thể lấy chi tiết agent",
+  "myAgents.errors.notAuthenticated": "Vui lòng đăng nhập vào tài khoản thị trường của bạn trước",
+  "myAgents.loginRequired.button": "Đăng nhập vào Thị trường",
+  "myAgents.loginRequired.description": "Vui lòng đăng nhập vào tài khoản thị trường để xem các agent bạn đã xuất bản",
+  "myAgents.loginRequired.title": "Yêu cầu Đăng nhập",
+  "myAgents.status.archived": "Đã lưu trữ",
+  "myAgents.status.deprecated": "Đã ngừng sử dụng",
+  "myAgents.status.published": "Đã xuất bản",
+  "myAgents.status.unpublished": "Chưa xuất bản",
+  "myAgents.title": "Agent đã xuất bản của tôi",
+  "plugin.addMCPPlugin": "Thêm MCP",
+  "plugin.addTooltip": "Kỹ năng tùy chỉnh",
+  "plugin.clearDeprecated": "Xóa kỹ năng đã lỗi thời",
+  "plugin.empty": "Chưa có kỹ năng nào được cài đặt. Khám phá <1>Cửa hàng Kỹ năng</1> để bắt đầu.",
+  "plugin.installStatus.deprecated": "Đã gỡ cài đặt",
+  "plugin.settings.hint": "Vui lòng điền các cấu hình sau dựa trên mô tả",
+  "plugin.settings.title": "Cấu hình kỹ năng {{id}}",
+  "plugin.settings.tooltip": "Cấu hình kỹ năng",
+  "plugin.store": "Cửa hàng Kỹ năng",
+  "settingAgent.avatar.sizeExceeded": "Kích thước ảnh vượt quá giới hạn 1MB, vui lòng chọn ảnh nhỏ hơn",
+  "settingAgent.avatar.title": "Ảnh đại diện",
+  "settingAgent.backgroundColor.title": "Màu nền",
+  "settingAgent.description.desc": "Giới thiệu ngắn gọn về tác nhân của bạn, không dùng để thiết lập tính cách",
+  "settingAgent.description.placeholder": "Nhập mô tả tác nhân",
+  "settingAgent.description.title": "Mô tả tác nhân",
+  "settingAgent.name.placeholder": "Nhập tên tác nhân",
+  "settingAgent.name.title": "Tên",
+  "settingAgent.prompt.placeholder": "Nhập thiết lập tác nhân, nhấn / để mở menu lệnh",
+  "settingAgent.prompt.templatePlaceholder": "#### Mục tiêu\nMô tả mục đích chính và mục tiêu của tác nhân này.\n\n#### Kỹ năng\n- Liệt kê các năng lực chính\n- Và các lĩnh vực kiến thức chuyên môn\n\n#### Quy trình làm việc\n1. Quy trình từng bước\n2. Cách tác nhân nên tiếp cận các nhiệm vụ\n3. Tương tác mong đợi với người dùng\n\n#### Hạn chế\n- Những giới hạn quan trọng cần tuân thủ\n- Nguyên tắc hành vi",
+  "settingAgent.prompt.title": "Hồ sơ tác nhân",
+  "settingAgent.submit": "Cập nhật tác nhân",
+  "settingAgent.tag.desc": "Thẻ tác nhân sẽ hiển thị trong Cộng đồng Tác nhân",
+  "settingAgent.tag.placeholder": "Nhập thẻ",
+  "settingAgent.tag.title": "Thẻ",
+  "settingAgent.title": "Thông tin tác nhân",
+  "settingAppearance.animationMode.agile": "Nhanh nhẹn",
+  "settingAppearance.animationMode.desc": "Chọn tốc độ hoạt ảnh cho các hành động phản hồi của ứng dụng",
+  "settingAppearance.animationMode.disabled": "Tắt",
+  "settingAppearance.animationMode.elegant": "Thanh lịch",
+  "settingAppearance.animationMode.title": "Hoạt ảnh phản hồi",
+  "settingAppearance.contextMenuMode.default": "Mặc định",
+  "settingAppearance.contextMenuMode.desc": "Bật menu chuột phải cho một số mục trong danh sách.",
+  "settingAppearance.contextMenuMode.disabled": "Tắt",
+  "settingAppearance.contextMenuMode.title": "Chế độ menu chuột phải",
+  "settingAppearance.neutralColor.desc": "Tùy chỉnh thang màu xám với xu hướng màu khác nhau",
+  "settingAppearance.neutralColor.title": "Màu trung tính",
+  "settingAppearance.noAnimation.desc": "Tắt tất cả hiệu ứng hoạt ảnh trong ứng dụng",
+  "settingAppearance.noAnimation.title": "Chế độ không hoạt ảnh",
+  "settingAppearance.preview.title": "Bảng màu",
+  "settingAppearance.primaryColor.desc": "Tùy chỉnh màu chủ đề",
+  "settingAppearance.primaryColor.title": "Màu chủ đề",
+  "settingAppearance.title": "Giao diện ứng dụng",
+  "settingChat.autoCreateTopicThreshold.desc": "Tự động tạo chủ đề khi số lượng tin nhắn hiện tại vượt quá giá trị này",
+  "settingChat.autoCreateTopicThreshold.title": "Ngưỡng tin nhắn",
+  "settingChat.chatStyleType.title": "Kiểu cửa sổ trò chuyện",
+  "settingChat.chatStyleType.type.chat": "Chế độ hội thoại",
+  "settingChat.chatStyleType.type.docs": "Chế độ trang",
+  "settingChat.compressThreshold.desc": "Khi số lượng tin nhắn chưa nén vượt quá giá trị này, sẽ tiến hành nén",
+  "settingChat.compressThreshold.title": "Ngưỡng độ dài tin nhắn lịch sử để nén",
+  "settingChat.enableAutoCreateTopic.desc": "Tự động tạo chủ đề trong cuộc trò chuyện, chỉ áp dụng cho chủ đề tạm thời",
+  "settingChat.enableAutoCreateTopic.title": "Tự động tạo chủ đề",
+  "settingChat.enableCompressHistory.title": "Bật tóm tắt lịch sử trò chuyện tự động",
+  "settingChat.enableHistoryCount.alias": "Không giới hạn",
+  "settingChat.enableHistoryCount.limited": "Chỉ bao gồm {{number}} tin nhắn hội thoại",
+  "settingChat.enableHistoryCount.setlimited": "Thiết lập giới hạn tin nhắn lịch sử",
+  "settingChat.enableHistoryCount.title": "Giới hạn số lượng tin nhắn lịch sử",
+  "settingChat.enableHistoryCount.unlimited": "Không giới hạn số lượng tin nhắn lịch sử",
+  "settingChat.enableStreaming.desc": "Bật xuất dữ liệu theo luồng để hiển thị phản hồi theo thời gian thực. Khi tắt, chỉ hiển thị phản hồi hoàn chỉnh.",
+  "settingChat.enableStreaming.title": "Bật xuất dữ liệu theo luồng",
+  "settingChat.historyCount.desc": "Số lượng tin nhắn lịch sử được gửi kèm mỗi yêu cầu",
+  "settingChat.historyCount.title": "Số lượng tin nhắn lịch sử đính kèm",
+  "settingChat.inputTemplate.desc": "Tin nhắn mới nhất của người dùng sẽ được chèn vào mẫu này",
+  "settingChat.inputTemplate.placeholder": "Mẫu tiền xử lý {{text}} sẽ được thay thế bằng thông tin nhập thời gian thực",
+  "settingChat.inputTemplate.title": "Tiền xử lý đầu vào người dùng",
+  "settingChat.submit": "Cập nhật tùy chọn trò chuyện",
+  "settingChat.title": "Cài đặt trò chuyện",
+  "settingChatAppearance.fontSize.desc": "Kích thước phông chữ của tin nhắn",
+  "settingChatAppearance.fontSize.marks.normal": "Chuẩn",
+  "settingChatAppearance.fontSize.title": "Kích thước chữ",
+  "settingChatAppearance.highlighterTheme.title": "Chủ đề tô sáng mã",
+  "settingChatAppearance.mermaidTheme.title": "Chủ đề Mermaid",
+  "settingChatAppearance.title": "Giao diện trò chuyện",
+  "settingChatAppearance.transitionMode.desc": "Chọn cách hiển thị tin nhắn trò chuyện",
+  "settingChatAppearance.transitionMode.options.fadeIn": "Hiện dần",
+  "settingChatAppearance.transitionMode.options.none.desc": "Phụ thuộc vào cách mô hình xuất phản hồi; vui lòng tự kiểm tra.",
+  "settingChatAppearance.transitionMode.options.none.value": "Không có",
+  "settingChatAppearance.transitionMode.options.smooth": "Mượt mà",
+  "settingChatAppearance.transitionMode.title": "Hoạt ảnh chuyển tiếp",
+  "settingCommon.devMode.desc": "Bật để hiển thị các tính năng và tùy chọn dành cho nhà phát triển",
+  "settingCommon.devMode.title": "Chế độ nhà phát triển",
+  "settingCommon.lang.autoMode": "Theo hệ thống",
+  "settingCommon.lang.title": "Ngôn ngữ",
+  "settingCommon.liteMode.desc": "Đơn giản hóa giao diện và ẩn các tính năng nâng cao",
+  "settingCommon.liteMode.title": "Chế độ đơn giản",
+  "settingCommon.responseLanguage.auto": "Theo hệ thống",
+  "settingCommon.responseLanguage.desc": "Chọn ngôn ngữ phản hồi của Tác nhân",
+  "settingCommon.responseLanguage.placeholder": "Chọn ngôn ngữ phản hồi",
+  "settingCommon.responseLanguage.title": "Ngôn ngữ phản hồi",
+  "settingCommon.themeMode.auto": "Tự động",
+  "settingCommon.themeMode.dark": "Tối",
+  "settingCommon.themeMode.light": "Sáng",
+  "settingCommon.themeMode.title": "Chủ đề",
+  "settingCommon.title": "Cài đặt chung",
+  "settingGroup.description.placeholder": "Nhập mô tả Nhóm",
+  "settingGroup.description.title": "Mô tả Nhóm",
+  "settingGroup.name.placeholder": "Nhập tên Nhóm",
+  "settingGroup.name.title": "Tên Nhóm",
+  "settingGroup.scene.desc": "Chọn ngữ cảnh Nhóm",
+  "settingGroup.scene.options.casual": "Thân mật",
+  "settingGroup.scene.options.productive": "Hiệu quả",
+  "settingGroup.scene.title": "Ngữ cảnh Nhóm",
+  "settingGroup.submit": "Cập nhật Nhóm",
+  "settingGroup.systemPrompt.placeholder": "Vui lòng nhập lời nhắc hệ thống chủ",
+  "settingGroup.systemPrompt.title": "Lời nhắc hệ thống chủ",
+  "settingGroup.title": "Thông tin Nhóm",
+  "settingGroupChat.allowDM.desc": "Khi tắt, bạn vẫn có thể gửi tin nhắn trực tiếp đến tác nhân",
+  "settingGroupChat.allowDM.title": "Cho phép tin nhắn trực tiếp từ Tác nhân",
+  "settingGroupChat.enableSupervisor.desc": "Bật tính năng điều phối để quản lý cuộc trò chuyện Nhóm",
+  "settingGroupChat.enableSupervisor.title": "Bật Điều phối viên",
+  "settingGroupChat.maxResponseInRow.desc": "Chọn số lượng tin nhắn liên tiếp mà một thành viên có thể trả lời. Đặt 0 để tắt giới hạn.",
+  "settingGroupChat.maxResponseInRow.title": "Số lần trả lời liên tiếp",
+  "settingGroupChat.model.desc": "Thành viên nhóm không bị ảnh hưởng. Một số mô hình không thể dùng làm mô hình Điều phối viên.",
+  "settingGroupChat.model.title": "Mô hình Điều phối viên",
+  "settingGroupChat.orchestratorTitle": "Điều phối viên",
+  "settingGroupChat.responseOrder.desc": "Tác nhân trả lời theo thứ tự trong cuộc trò chuyện",
+  "settingGroupChat.responseOrder.options.natural": "Tự nhiên",
+  "settingGroupChat.responseOrder.options.sequential": "Tuần tự",
+  "settingGroupChat.responseOrder.placeholder": "Chọn thứ tự trả lời",
+  "settingGroupChat.responseOrder.title": "Thứ tự trả lời",
+  "settingGroupChat.responseSpeed.desc": "Kiểm soát tốc độ tổng thể của cuộc trò chuyện",
+  "settingGroupChat.responseSpeed.options.fast": "Nhanh",
+  "settingGroupChat.responseSpeed.options.medium": "Trung bình",
+  "settingGroupChat.responseSpeed.options.slow": "Chậm",
+  "settingGroupChat.responseSpeed.placeholder": "Chọn tốc độ trả lời",
+  "settingGroupChat.responseSpeed.title": "Tốc độ trả lời",
+  "settingGroupChat.revealDM.desc": "Hiển thị các tin nhắn riêng tư gửi đến thành viên khác cho bạn.",
+  "settingGroupChat.revealDM.title": "Hiển thị tin nhắn riêng tư",
+  "settingGroupChat.submit": "Cập nhật cài đặt",
+  "settingGroupChat.systemPrompt.desc": "Lời nhắc hệ thống tùy chỉnh cho chủ trò chuyện nhóm. Có thể ảnh hưởng đến hành vi mặc định của chủ.",
+  "settingGroupChat.systemPrompt.placeholder": "Vui lòng nhập lời nhắc hệ thống chủ tùy chỉnh...",
+  "settingGroupChat.systemPrompt.title": "Lời nhắc hệ thống chủ",
+  "settingGroupChat.title": "Cài đặt trò chuyện",
+  "settingGroupMembers.addToGroup": "Thêm vào Nhóm",
+  "settingGroupMembers.availableAgents": "Tác nhân khả dụng",
+  "settingGroupMembers.createMember": "Tạo thành viên",
+  "settingGroupMembers.defaultAgent": "Tác nhân tùy chỉnh",
+  "settingGroupMembers.disableHost": "Tắt Điều phối viên",
+  "settingGroupMembers.edit": "Chỉnh sửa thành viên",
+  "settingGroupMembers.empty": "Nhóm này chưa có thành viên. Nhấn + để thêm thành viên.",
+  "settingGroupMembers.enableHost": "Bật Điều phối viên",
+  "settingGroupMembers.groupHost": "Điều phối viên",
+  "settingGroupMembers.groupMembers": "Thành viên Nhóm",
+  "settingGroupMembers.host.description": "Với Điều phối viên, Nhóm có thể hoạt động tự động hơn—phù hợp với các nhiệm vụ mở.",
+  "settingGroupMembers.host.title": "Điều phối viên",
+  "settingGroupMembers.noAvailableAgents": "Không có tác nhân khả dụng",
+  "settingGroupMembers.noDescription": "Không có mô tả",
+  "settingGroupMembers.noMembersInGroup": "Không có thành viên trong nhóm",
+  "settingGroupMembers.owner": "Bạn (Chủ sở hữu)",
+  "settingGroupMembers.remove": "Xóa thành viên",
+  "settingGroupMembers.removeFromGroup": "Xóa khỏi Nhóm",
+  "settingGroupMembers.you": "Bạn",
+  "settingImage.defaultCount.desc": "Đặt số lượng hình ảnh mặc định được tạo khi tạo tác vụ mới trong bảng tạo hình ảnh.",
+  "settingImage.defaultCount.label": "Số Lượng Hình Ảnh Mặc Định",
+  "settingImage.defaultCount.title": "Nghệ Thuật AI",
+  "settingModel.enableMaxTokens.title": "Bật Giới Hạn Số Token",
+  "settingModel.enableReasoningEffort.title": "Bật Điều Chỉnh Nỗ Lực Lý Luận",
+  "settingModel.frequencyPenalty.desc": "Giá trị càng cao, từ vựng càng phong phú và đa dạng; giá trị càng thấp, ngôn ngữ càng đơn giản và trực tiếp.",
+  "settingModel.frequencyPenalty.title": "Độ Phong Phú Từ Vựng",
+  "settingModel.maxTokens.desc": "Số lượng token tối đa được sử dụng cho mỗi tương tác",
+  "settingModel.maxTokens.title": "Giới Hạn Token Tối Đa",
+  "settingModel.model.desc": "Mô hình {{provider}}",
+  "settingModel.model.title": "Mô Hình",
+  "settingModel.params.title": "Tham Số Nâng Cao",
+  "settingModel.presencePenalty.desc": "Giá trị càng cao, càng có xu hướng sử dụng cách diễn đạt khác nhau và tránh lặp lại khái niệm; giá trị càng thấp, càng có xu hướng lặp lại khái niệm hoặc cách diễn đạt, tạo ra sự nhất quán.",
+  "settingModel.presencePenalty.title": "Độ Đa Dạng Diễn Đạt",
+  "settingModel.reasoningEffort.desc": "Giá trị cao hơn tăng khả năng lý luận nhưng có thể làm tăng thời gian phản hồi và số lượng token sử dụng.",
+  "settingModel.reasoningEffort.options.high": "Cao",
+  "settingModel.reasoningEffort.options.low": "Thấp",
+  "settingModel.reasoningEffort.options.medium": "Trung Bình",
+  "settingModel.reasoningEffort.title": "Nỗ Lực Lý Luận",
+  "settingModel.submit": "Cập Nhật Cài Đặt Mô Hình",
+  "settingModel.temperature.desc": "Giá trị càng cao, phản hồi càng sáng tạo và giàu trí tưởng tượng; giá trị càng thấp, phản hồi càng chính xác và nghiêm ngặt.",
+  "settingModel.temperature.title": "Mức Độ Sáng Tạo",
+  "settingModel.temperature.warning": "Nếu mức độ sáng tạo được đặt quá cao, đầu ra có thể trở nên khó hiểu.",
+  "settingModel.title": "Cài Đặt Mô Hình",
+  "settingModel.topP.desc": "Số lượng khả năng được xem xét; giá trị cao chấp nhận nhiều câu trả lời tiềm năng hơn, trong khi giá trị thấp có xu hướng chọn câu trả lời có khả năng cao nhất. Không nên thay đổi cùng lúc với mức độ sáng tạo.",
+  "settingModel.topP.title": "Mức Độ Mở Rộng Ý Tưởng",
+  "settingOpening.openingMessage.desc": "Tin nhắn mở đầu hiển thị khi bắt đầu cuộc trò chuyện, dùng để giới thiệu tính năng của tác nhân",
+  "settingOpening.openingMessage.placeholder": "Xin chào, tôi là Tác Nhân Tùy Chỉnh của bạn. Bạn có thể bắt đầu trò chuyện ngay hoặc vào Cài Đặt Tác Nhân để hoàn thiện thông tin của tôi.",
+  "settingOpening.openingMessage.title": "Tin Nhắn Mở Đầu",
+  "settingOpening.openingQuestions.desc": "Câu hỏi gợi ý hiển thị ở đầu cuộc trò chuyện",
+  "settingOpening.openingQuestions.empty": "Thêm câu hỏi mở đầu để giúp người dùng bắt đầu cuộc trò chuyện nhanh chóng",
+  "settingOpening.openingQuestions.placeholder": "Vui lòng nhập câu hỏi",
+  "settingOpening.openingQuestions.repeat": "Câu hỏi đã tồn tại",
+  "settingOpening.openingQuestions.title": "Câu Hỏi Mở Đầu",
+  "settingOpening.title": "Cài Đặt Mở Đầu",
+  "settingPlugin.title": "Danh Sách Kỹ Năng",
+  "settingSystem.oauth.info.desc": "Đã đăng nhập",
+  "settingSystem.oauth.info.title": "Thông Tin Tài Khoản",
+  "settingSystem.oauth.signin.action": "Đăng Nhập",
+  "settingSystem.oauth.signin.desc": "Đăng nhập bằng SSO để mở khóa ứng dụng",
+  "settingSystem.oauth.signin.title": "Đăng Nhập Tài Khoản",
+  "settingSystem.oauth.signout.action": "Đăng Xuất",
+  "settingSystem.oauth.signout.confirm": "Xác nhận đăng xuất?",
+  "settingSystem.oauth.signout.success": "Đăng xuất thành công",
+  "settingSystem.title": "Cài Đặt Hệ Thống",
+  "settingTTS.openai.sttModel": "Mô Hình Chuyển Giọng Nói Thành Văn Bản của OpenAI",
+  "settingTTS.openai.title": "OpenAI",
+  "settingTTS.openai.ttsModel": "Mô Hình Chuyển Văn Bản Thành Giọng Nói của OpenAI",
+  "settingTTS.showAllLocaleVoice.desc": "Nếu tắt, chỉ hiển thị giọng nói theo ngôn ngữ hiện tại",
+  "settingTTS.showAllLocaleVoice.title": "Hiển Thị Tất Cả Giọng Nói Theo Ngôn Ngữ",
+  "settingTTS.stt": "Cài Đặt Nhận Diện Giọng Nói",
+  "settingTTS.sttAutoStop.desc": "Khi tắt, nhận diện giọng nói sẽ không tự động kết thúc và cần nhấn dừng thủ công",
+  "settingTTS.sttAutoStop.title": "Tự Động Dừng Nhận Diện Giọng Nói",
+  "settingTTS.sttLocale.desc": "Ngôn ngữ đầu vào giọng nói, tùy chọn này có thể cải thiện độ chính xác của nhận diện giọng nói",
+  "settingTTS.sttLocale.title": "Ngôn Ngữ Nhận Diện Giọng Nói",
+  "settingTTS.sttService.desc": "‘Trình duyệt’ là dịch vụ nhận diện giọng nói gốc của trình duyệt",
+  "settingTTS.sttService.title": "Dịch Vụ Nhận Diện Giọng Nói",
+  "settingTTS.submit": "Cập Nhật Dịch Vụ Giọng Nói",
+  "settingTTS.title": "Dịch Vụ Giọng Nói",
+  "settingTTS.tts": "Cài Đặt Chuyển Văn Bản Thành Giọng Nói",
+  "settingTTS.ttsService.desc": "Nếu sử dụng dịch vụ chuyển văn bản thành giọng nói của OpenAI, hãy đảm bảo dịch vụ mô hình OpenAI đã được bật",
+  "settingTTS.ttsService.title": "Dịch Vụ Chuyển Văn Bản Thành Giọng Nói",
+  "settingTTS.voice.desc": "Chọn giọng nói cho tác nhân hiện tại, các dịch vụ TTS khác nhau hỗ trợ các giọng nói khác nhau",
+  "settingTTS.voice.preview": "Xem Trước Giọng Nói",
+  "settingTTS.voice.title": "Giọng Nói Chuyển Văn Bản",
+  "startConversation": "Bắt Đầu Trò Chuyện",
+  "storage.actions.export.button": "Xuất",
+  "storage.actions.export.exportType.agent": "Xuất Cài Đặt Tác Nhân",
+  "storage.actions.export.exportType.agentWithMessage": "Xuất Tác Nhân và Tin Nhắn",
+  "storage.actions.export.exportType.all": "Xuất Cài Đặt Toàn Cục và Tất Cả Dữ Liệu Tác Nhân",
+  "storage.actions.export.exportType.allAgent": "Xuất Tất Cả Cài Đặt Tác Nhân",
+  "storage.actions.export.exportType.allAgentWithMessage": "Xuất Tất Cả Tác Nhân và Tin Nhắn",
+  "storage.actions.export.exportType.globalSetting": "Xuất Cài Đặt Toàn Cục",
+  "storage.actions.export.title": "Xuất Dữ Liệu",
+  "storage.actions.import.button": "Nhập",
+  "storage.actions.import.title": "Nhập Dữ Liệu",
+  "storage.actions.title": "Tác Vụ Nâng Cao",
+  "storage.desc": "Mức sử dụng bộ nhớ hiện tại trong trình duyệt",
+  "storage.embeddings.used": "Lưu Trữ Vector",
+  "storage.title": "Lưu Trữ Dữ Liệu",
+  "storage.used": "Dung Lượng Đã Dùng",
+  "submitAgentModal.button": "Gửi Tác Nhân",
+  "submitAgentModal.identifier": "Định Danh Tác Nhân",
+  "submitAgentModal.metaMiss": "Vui lòng hoàn thiện thông tin tác nhân trước khi gửi. Cần bao gồm tên, mô tả và thẻ.",
+  "submitAgentModal.placeholder": "Nhập định danh duy nhất cho tác nhân, ví dụ: web-development",
+  "submitAgentModal.success": "Gửi tác nhân thành công",
+  "submitAgentModal.tooltips": "Chia sẻ đến Cộng Đồng Tác Nhân",
+  "sync.device.deviceName.hint": "Thêm tên để dễ nhận diện",
+  "sync.device.deviceName.placeholder": "Nhập tên thiết bị",
+  "sync.device.deviceName.title": "Tên Thiết Bị",
+  "sync.device.title": "Thông Tin Thiết Bị",
+  "sync.device.unknownBrowser": "Trình Duyệt Không Xác Định",
+  "sync.device.unknownOS": "Hệ Điều Hành Không Xác Định",
+  "sync.warning.tip": "Sau một thời gian dài thử nghiệm cộng đồng, đồng bộ WebRTC có thể không đáp ứng đáng tin cậy cho nhu cầu đồng bộ dữ liệu chung. Vui lòng <1>triển khai máy chủ tín hiệu</1> trước khi sử dụng.",
+  "sync.webrtc.channelName.desc": "WebRTC sẽ sử dụng tên này để tạo kênh đồng bộ. Đảm bảo tên kênh là duy nhất.",
+  "sync.webrtc.channelName.placeholder": "Nhập tên kênh đồng bộ",
+  "sync.webrtc.channelName.shuffle": "Tạo Ngẫu Nhiên",
+  "sync.webrtc.channelName.title": "Tên Kênh Đồng Bộ",
+  "sync.webrtc.channelPassword.desc": "Thêm mật khẩu để đảm bảo quyền riêng tư của kênh. Chỉ thiết bị có mật khẩu đúng mới có thể tham gia.",
+  "sync.webrtc.channelPassword.placeholder": "Nhập mật khẩu kênh đồng bộ",
+  "sync.webrtc.channelPassword.title": "Mật Khẩu Kênh Đồng Bộ",
+  "sync.webrtc.desc": "Giao tiếp dữ liệu thời gian thực, ngang hàng yêu cầu tất cả thiết bị phải trực tuyến để đồng bộ.",
+  "sync.webrtc.enabled.invalid": "Vui lòng điền địa chỉ máy chủ tín hiệu và tên kênh đồng bộ trước khi bật.",
+  "sync.webrtc.enabled.title": "Bật Đồng Bộ",
+  "sync.webrtc.signaling.desc": "WebRTC sẽ sử dụng địa chỉ này để đồng bộ",
+  "sync.webrtc.signaling.placeholder": "Nhập địa chỉ máy chủ tín hiệu",
+  "sync.webrtc.signaling.title": "Máy Chủ Tín Hiệu",
+  "sync.webrtc.title": "Đồng Bộ WebRTC",
+  "systemAgent.agentMeta.label": "Mô Hình",
+  "systemAgent.agentMeta.modelDesc": "Mô hình được chỉ định để tạo tên, mô tả, ảnh đại diện và thẻ cho tác nhân",
+  "systemAgent.agentMeta.title": "Trợ Lý Tạo Thông Tin Tác Nhân",
+  "systemAgent.customPrompt.addPrompt": "Thêm Prompt Tùy Chỉnh",
+  "systemAgent.customPrompt.desc": "Khi đã điền, tác nhân hệ thống sẽ sử dụng prompt tùy chỉnh khi tạo nội dung",
+  "systemAgent.customPrompt.placeholder": "Vui lòng nhập prompt tùy chỉnh",
+  "systemAgent.customPrompt.title": "Prompt Tùy Chỉnh",
+  "systemAgent.generationTopic.label": "Mô Hình",
+  "systemAgent.generationTopic.modelDesc": "Mô hình được chỉ định để tự động đặt tên chủ đề nghệ thuật AI",
+  "systemAgent.generationTopic.title": "Tác Nhân Đặt Tên Chủ Đề Nghệ Thuật AI",
+  "systemAgent.helpInfo": "Khi tạo tác nhân mới, cài đặt mặc định của tác nhân sẽ được sử dụng làm giá trị thiết lập sẵn.",
+  "systemAgent.historyCompress.label": "Mô Hình",
+  "systemAgent.historyCompress.modelDesc": "Chỉ định mô hình dùng để nén lịch sử trò chuyện",
+  "systemAgent.historyCompress.title": "Tác Nhân Nén Lịch Sử Trò Chuyện",
+  "systemAgent.queryRewrite.label": "Mô Hình",
+  "systemAgent.queryRewrite.modelDesc": "Chỉ định mô hình dùng để tối ưu hóa câu hỏi người dùng",
+  "systemAgent.queryRewrite.title": "Tác Nhân Viết Lại Truy Vấn Thư Viện",
+  "systemAgent.thread.label": "Mô Hình",
+  "systemAgent.thread.modelDesc": "Mô hình được chỉ định để tự động đặt tên cho các chủ đề phụ",
+  "systemAgent.thread.title": "Tác Nhân Đặt Tên Chủ Đề Phụ Tự Động",
+  "systemAgent.title": "Tác Nhân Hệ Thống",
+  "systemAgent.topic.label": "Mô Hình",
+  "systemAgent.topic.modelDesc": "Mô hình được chỉ định để tự động đổi tên chủ đề",
+  "systemAgent.topic.title": "Tác Nhân Đổi Tên Chủ Đề Tự Động",
+  "systemAgent.translation.label": "Mô Hình",
+  "systemAgent.translation.modelDesc": "Chỉ định mô hình dùng để dịch",
+  "systemAgent.translation.title": "Tác Nhân Dịch Tin Nhắn",
+  "tab.about": "Giới Thiệu",
+  "tab.agent": "Dịch Vụ Tác Nhân",
+  "tab.apikey": "Quản Lý API Key",
+  "tab.chatAppearance": "Giao Diện Trò Chuyện",
+  "tab.common": "Giao Diện",
+  "tab.experiment": "Thử Nghiệm",
+  "tab.hotkey": "Phím Tắt",
+  "tab.image": "Dịch Vụ Tạo Hình Ảnh",
+  "tab.llm": "Mô Hình Ngôn Ngữ",
+  "tab.memory": "Bộ Nhớ",
+  "tab.profile": "Tài Khoản Của Tôi",
+  "tab.provider": "Nhà Cung Cấp AI",
+  "tab.proxy": "Proxy Mạng",
+  "tab.security": "Bảo Mật",
+  "tab.stats": "Phân Tích",
+  "tab.storage": "Lưu Trữ Dữ Liệu",
+  "tab.sync": "Đồng Bộ Đám Mây",
+  "tab.tts": "Chuyển Văn Bản Thành Giọng Nói",
+  "tab.usage": "Thống Kê Sử Dụng",
+  "tools.add": "Thêm Kỹ Năng",
+  "tools.builtins.groupName": "Tích Hợp Sẵn",
+  "tools.disabled": "Mô hình hiện tại không hỗ trợ gọi hàm và không thể sử dụng kỹ năng",
+  "tools.klavis.addServer": "Thêm Máy Chủ",
+  "tools.klavis.authCompleted": "Xác Thực Hoàn Tất",
+  "tools.klavis.authFailed": "Xác Thực Thất Bại",
+  "tools.klavis.authRequired": "Yêu Cầu Xác Thực",
+  "tools.klavis.connected": "Đã Kết Nối",
+  "tools.klavis.error": "Lỗi",
+  "tools.klavis.groupName": "Công Cụ Klavis",
+  "tools.klavis.manage": "Quản Lý Klavis",
+  "tools.klavis.manageTitle": "Quản Lý Tích Hợp Klavis",
+  "tools.klavis.noServers": "Không có máy chủ nào được kết nối",
+  "tools.klavis.notEnabled": "Dịch vụ Klavis chưa được bật",
+  "tools.klavis.oauthRequired": "Vui lòng hoàn tất xác thực OAuth trong cửa sổ mới",
+  "tools.klavis.pendingAuth": "Đang Chờ Xác Thực",
+  "tools.klavis.serverCreated": "Tạo máy chủ thành công",
+  "tools.klavis.serverCreatedFailed": "Tạo máy chủ thất bại",
+  "tools.klavis.serverRemoved": "Đã xóa máy chủ",
+  "tools.klavis.servers": "máy chủ",
+  "tools.klavis.tools": "công cụ",
+  "tools.klavis.verifyAuth": "Tôi đã hoàn tất xác thực",
+  "tools.notInstalled": "Chưa Cài Đặt",
+  "tools.notInstalledWarning": "Kỹ năng này hiện chưa được cài đặt, điều này có thể ảnh hưởng đến chức năng của tác nhân.",
+  "tools.plugins.enabled": "Đã bật: {{num}}",
+  "tools.plugins.groupName": "Kỹ Năng",
+  "tools.plugins.noEnabled": "Chưa bật kỹ năng nào",
+  "tools.plugins.store": "Cửa Hàng Kỹ Năng",
+  "tools.tabs.all": "Tất Cả",
+  "tools.tabs.installed": "Đã Bật",
+  "tools.title": "Công Cụ Mở Rộng"
 }

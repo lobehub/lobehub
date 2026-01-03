@@ -8,7 +8,7 @@ module.exports = defineConfig({
     'ar',
     'bg-BG',
     'zh-TW',
-    'en-US',
+    'en',
     'ru-RU',
     'ja-JP',
     'ko-KR',

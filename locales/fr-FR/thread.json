@@ -1,10 +1,6 @@
 {
-  "actions": {
-    "confirmRemoveThread": "Vous allez supprimer ce sous-sujet. Une fois supprimé, il ne pourra pas être récupéré. Veuillez agir avec prudence."
-  },
-  "newPortalThread": {
-    "includeContext": "Inclure le contexte du sujet",
-    "title": "Ouvrir un nouveau sous-sujet"
-  },
-  "notSupportMultiModals": "Les sous-sujets ne prennent pas encore en charge le téléchargement de fichiers/images. Si besoin, n'hésitez pas à laisser un message : <1>💬 Forum de discussion</1>"
+  "actions.confirmRemoveThread": "Vous êtes sur le point de supprimer ce sous-sujet. Une fois supprimé, il ne pourra pas être récupéré. Veuillez procéder avec prudence.",
+  "newPortalThread.includeContext": "Inclure le contexte du sujet",
+  "newPortalThread.title": "Démarrer un nouveau sous-sujet",
+  "notSupportMultiModals": "Les sous-sujets ne prennent actuellement pas en charge le téléchargement de fichiers/images. Si vous avez des demandes, n'hésitez pas à laisser un message : <1>💬 Espace de discussion</1>"
 }

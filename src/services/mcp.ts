@@ -1,11 +1,17 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
-import { ChatToolPayload, CheckMcpInstallResult, CustomPluginMetadata } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type CheckMcpInstallResult,
+  type CustomPluginMetadata,
+} from '@lobechat/types';
 import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
-import { PluginManifest } from '@lobehub/market-sdk';
-import { CallReportRequest } from '@lobehub/market-types';
+import { type PluginManifest } from '@lobehub/market-sdk';
+import { type CallReportRequest } from '@lobehub/market-types';
+import superjson from 'superjson';
 
-import { MCPToolCallResult } from '@/libs/mcp';
-import { desktopClient, lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { type MCPToolCallResult } from '@/libs/mcp';
+import { toolsClient } from '@/libs/trpc/client';
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { discoverService } from './discover';
 
@@ -29,6 +35,8 @@ class MCPService {
     payload: ChatToolPayload,
     { signal, topicId }: { signal?: AbortSignal; topicId?: string },
   ) {
+    await discoverService.injectMPToken();
+
     const { pluginSelectors } = await import('@/store/tool/selectors');
     const { getToolStoreState } = await import('@/store/tool/store');
 
@@ -76,15 +84,33 @@ class MCPService {
       };
     }
 
+    const isStdio = plugin?.customParams?.mcp?.type === 'stdio';
+    const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
+    const isCustomPlugin = !!customPlugin;
+
+    // Build meta for server-side reporting
+    const meta = {
+      customPluginInfo: isCustomPlugin
+        ? {
+            avatar: plugin.manifest?.meta.avatar,
+            description: plugin.manifest?.meta.description,
+            name: plugin.manifest?.meta.title,
+          }
+        : undefined,
+      isCustomPlugin,
+      sessionId: topicId,
+      version: plugin.manifest?.version || 'unknown',
+    };
+
     const data = {
-      args,
+      // For desktop IPC, always pass a record/object for tool "arguments"
+      // (IPC layer will superjson serialize the whole payload).
+      args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
       env: connection?.type === 'stdio' ? params.env : (pluginSettings ?? connection?.env),
+      meta,
       params,
       toolName: apiName,
     };
-
-    const isStdio = plugin?.customParams?.mcp?.type === 'stdio';
-    const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
 
     // Record call start time
     const callStartTime = Date.now();
@@ -99,17 +125,22 @@ class MCPService {
         // Parse args
         const apiParams = safeParseJSON(args) || {};
 
-        // Call cloud gateway via lambda market endpoint
+        // Call cloud gateway via tools market endpoint
         // Server will automatically get user access token from database
         // and format the result to MCPToolCallResult
-        result = await lambdaClient.market.callCloudMcpEndpoint.mutate({
+        // Server-side also handles telemetry reporting
+        result = await toolsClient.market.callCloudMcpEndpoint.mutate({
           apiParams,
           identifier,
+          meta,
           toolName: apiName,
         });
       } else if (isDesktop && isStdio) {
-        // For desktop and stdio, use the desktopClient
-        result = await desktopClient.mcp.callTool.mutate(data, { signal });
+        // For desktop and stdio, use IPC (main process)
+        // Note: IPC doesn't support AbortSignal yet
+        const serialized = superjson.serialize(data);
+        const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
+        result = superjson.deserialize(serializedResult as any) as any;
       } else {
         // For other types, use the toolsClient
         result = await toolsClient.mcp.callTool.mutate(data, { signal });
@@ -126,50 +157,46 @@ class MCPService {
       // Rethrow error, maintain original error handling logic
       throw error;
     } finally {
-      // Asynchronously report call result without affecting main flow
-      const callEndTime = Date.now();
-      const callDurationMs = callEndTime - callStartTime;
+      // HTTP/SSE/streamable types: reporting is handled by server-side via mcp.callTool
+      // Cloud type: reporting is handled by server-side via market.callCloudMcpEndpoint
+      // Only report from frontend for stdio types (desktop only)
+      if (isStdio) {
+        const callEndTime = Date.now();
+        const callDurationMs = callEndTime - callStartTime;
 
-      // Calculate request size
-      const inputParams = safeParseJSON(args) || args;
+        // Calculate request size
+        const inputParams = safeParseJSON(args) || args;
+        const requestSizeBytes = calculateObjectSizeBytes(inputParams);
+        // Calculate response size
+        const responseSizeBytes = success && result ? calculateObjectSizeBytes(result.state) : 0;
 
-      const requestSizeBytes = calculateObjectSizeBytes(inputParams);
-      // Calculate response size
-      const responseSizeBytes = success && result ? calculateObjectSizeBytes(result.state) : 0;
+        // Construct report data
+        const reportData: CallReportRequest = {
+          callDurationMs,
+          customPluginInfo: meta.customPluginInfo,
+          errorCode,
+          errorMessage,
+          identifier,
+          isCustomPlugin,
+          metadata: {
+            appVersion: CURRENT_VERSION,
+            command: plugin.customParams?.mcp?.command,
+            mcpType: plugin.customParams?.mcp?.type,
+          },
+          methodName: apiName,
+          methodType: 'tool' as const,
+          requestSizeBytes,
+          responseSizeBytes,
+          sessionId: topicId,
+          success,
+          version: meta.version,
+        };
 
-      const isCustomPlugin = !!customPlugin;
-      // Construct report data
-      const reportData: CallReportRequest = {
-        callDurationMs,
-        customPluginInfo: isCustomPlugin
-          ? {
-              avatar: plugin.manifest?.meta.avatar,
-              description: plugin.manifest?.meta.description,
-              name: plugin.manifest?.meta.title,
-            }
-          : undefined,
-        errorCode,
-        errorMessage,
-        identifier,
-        isCustomPlugin,
-        metadata: {
-          appVersion: CURRENT_VERSION,
-          command: plugin.customParams?.mcp?.command,
-          mcpType: plugin.customParams?.mcp?.type,
-        },
-        methodName: apiName,
-        methodType: 'tool' as const,
-        requestSizeBytes,
-        responseSizeBytes,
-        sessionId: topicId,
-        success,
-        version: plugin.manifest!.version || 'unknown',
-      };
-
-      // Asynchronously report without affecting main flow
-      discoverService.reportPluginCall(reportData).catch((reportError) => {
-        console.warn('Failed to report MCP tool call:', reportError);
-      });
+        // Asynchronously report without affecting main flow
+        discoverService.reportPluginCall(reportData).catch((reportError) => {
+          console.warn('Failed to report MCP tool call:', reportError);
+        });
+      }
     }
   }
 
@@ -187,10 +214,15 @@ class MCPService {
     },
     signal?: AbortSignal,
   ) {
-    // If in Desktop mode and URL is local address, use desktopClient
+    // If in Desktop mode and URL is local address, use IPC (main process)
     // This avoids accessing user local services through remote server in production
     if (isDesktop && isLocalOrPrivateUrl(params.url)) {
-      return desktopClient.mcp.getStreamableMcpServerManifest.query(params, { signal });
+      // Note: IPC doesn't support AbortSignal yet
+      const serialized = superjson.serialize(params);
+      const serializedResult = await ensureElectronIpc().mcp.getStreamableMcpServerManifest(
+        serialized as any,
+      );
+      return superjson.deserialize(serializedResult as any) as any;
     }
 
     // Otherwise use toolsClient (via server relay)
@@ -205,12 +237,15 @@ class MCPService {
       name: string;
     },
     metadata?: CustomPluginMetadata,
-    signal?: AbortSignal,
+    _signal?: AbortSignal,
   ) {
-    return desktopClient.mcp.getStdioMcpServerManifest.query(
-      { ...stdioParams, metadata },
-      { signal },
+    void _signal;
+    // Note: IPC doesn't support AbortSignal yet
+    const serialized = superjson.serialize({ ...stdioParams, metadata });
+    const serializedResult = await ensureElectronIpc().mcp.getStdioMcpServerManifest(
+      serialized as any,
     );
+    return superjson.deserialize(serializedResult as any) as any;
   }
 
   /**
@@ -221,13 +256,18 @@ class MCPService {
    */
   async checkInstallation(
     manifest: PluginManifest,
-    signal?: AbortSignal,
+    _signal?: AbortSignal,
   ): Promise<CheckMcpInstallResult> {
+    void _signal;
     // Pass all deployment options to main process for checking
-    return desktopClient.mcp.validMcpServerInstallable.mutate(
-      { deploymentOptions: manifest.deploymentOptions as any },
-      { signal },
+    // Note: IPC doesn't support AbortSignal yet
+    const serialized = superjson.serialize({
+      deploymentOptions: manifest.deploymentOptions as any,
+    });
+    const serializedResult = await ensureElectronIpc().mcp.validMcpServerInstallable(
+      serialized as any,
     );
+    return superjson.deserialize(serializedResult as any) as any;
   }
 }
 

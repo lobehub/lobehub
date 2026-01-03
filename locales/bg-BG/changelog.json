@@ -1,18 +1,14 @@
 {
-  "actions": {
-    "followOnX": "Последвайте ни в X",
-    "subscribeToUpdates": "Абонирайте се за актуализации",
-    "versions": "Детайли за версиите"
-  },
-  "addedWhileAway": "Докато ви нямаше, добавихме нови функции.",
-  "allChangelog": "Вижте всички актуализации",
-  "description": "Следете новите функции и подобрения на {{appName}}",
-  "pagination": {
-    "next": "Следваща страница",
-    "older": "Преглед на историческите промени"
-  },
+  "actions.followOnX": "Последвайте ни в X",
+  "actions.subscribeToUpdates": "Абонирайте се за новини",
+  "actions.versions": "Детайли за версиите",
+  "addedWhileAway": "Добавихме нови функции, докато ви нямаше.",
+  "allChangelog": "Вижте всички промени",
+  "description": "Бъдете в течение с новите функции и подобрения на {{appName}}",
+  "pagination.next": "Следваща страница",
+  "pagination.older": "Преглед на предишни промени",
   "readDetails": "Прочетете подробности",
-  "title": "Актуализации",
-  "versionDetails": "Детайли за версиите",
-  "welcomeBack": "Добре дошли обратно!"
+  "title": "Дневник на промените",
+  "versionDetails": "Детайли за версията",
+  "welcomeBack": "Добре дошли отново!"
 }

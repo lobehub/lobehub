@@ -7,7 +7,7 @@ const akashChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'DeepSeek V3.1：下一代推理模型，提升了复杂推理与链路思考能力，适合需要深入分析的任务。',
+      'DeepSeek V3.1 is a next-gen reasoning model with improved complex reasoning and chain-of-thought, suited for deep analysis tasks.',
     displayName: 'DeepSeek V3.1',
     enabled: true,
     id: 'DeepSeek-V3-1',
@@ -22,7 +22,8 @@ const akashChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'GPT-OSS-120B MXFP4 量化的 Transformer 结构，在资源受限时仍能保持强劲性能。',
+    description:
+      'GPT-OSS-120B uses MXFP4-quantized Transformer architecture, maintaining strong performance under resource constraints.',
     displayName: 'GPT-OSS-120B',
     enabled: true,
     id: 'gpt-oss-120b',
@@ -34,7 +35,7 @@ const akashChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 262_144,
     description:
-      'Qwen3 235B A22B Instruct 2507：面向高级推理与对话指令优化的模型，混合专家架构以在大规模参数下保持推理效率。',
+      'Qwen3 235B A22B Instruct 2507 is optimized for advanced reasoning and instruction-following, using MoE to keep reasoning efficient at scale.',
     displayName: 'Qwen3 235B A22B Instruct 2507',
     id: 'Qwen3-235B-A22B-Instruct-2507-FP8',
     type: 'chat',
@@ -54,7 +55,7 @@ const akashChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 4 Maverick：基于 Mixture-of-Experts 的大规模模型，提供高效的专家激活策略以在推理中表现优异。',
+      'Llama 4 Maverick is a large MoE model with efficient expert activation for strong reasoning performance.',
     displayName: 'Llama 4 Maverick (17Bx128E)',
     id: 'Meta-Llama-4-Maverick-17B-128E-Instruct-FP8',
     type: 'chat',
@@ -64,7 +65,7 @@ const akashChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Llama 3.3 70B：通用性强的 Transformer 模型，适用于对话和生成任务。',
+    description: 'Llama 3.3 70B is a versatile Transformer model for chat and generation tasks.',
     displayName: 'Llama 3.3 70B',
     id: 'Meta-Llama-3-3-70B-Instruct',
     type: 'chat',

@@ -1,7 +1,7 @@
-import { ControllerModule, ipcClientEvent } from './index';
+import { ControllerModule, IpcMethod } from './index';
 
 export default class DevtoolsCtr extends ControllerModule {
-  @ipcClientEvent('openDevtools')
+  @IpcMethod()
   async openDevtools() {
     const devtoolsBrowser = this.app.browserManager.retrieveByIdentifier('devtools');
     devtoolsBrowser.show();

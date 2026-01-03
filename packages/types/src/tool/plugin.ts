@@ -1,4 +1,4 @@
-import { LobeChatPluginManifest, Meta } from '@lobehub/chat-plugin-sdk';
+import type { LobeChatPluginManifest, Meta } from '@lobehub/chat-plugin-sdk';
 
 import { LobeToolType } from './tool';
 
@@ -36,6 +36,16 @@ export interface CustomPluginParams {
     };
     // Added headers configuration support
     headers?: Record<string, string>;
+  };
+  /**
+   * Klavis integration parameters
+   */
+  klavis?: {
+    instanceId: string;
+    isAuthenticated: boolean;
+    oauthUrl?: string;
+    serverName: string;
+    serverUrl: string;
   };
   avatar?: string;
   description?: string;

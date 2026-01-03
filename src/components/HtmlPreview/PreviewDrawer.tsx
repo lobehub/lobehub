@@ -1,16 +1,15 @@
 import { exportFile } from '@lobechat/utils/client';
-import { Block, Button, Highlighter, Segmented } from '@lobehub/ui';
+import { Block, Button, Flexbox, Highlighter, Segmented } from '@lobehub/ui';
 import { Drawer } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Code2, Download, Eye } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { isDesktop } from '@/const/version';
 import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     height: 100%;
   `,
@@ -28,7 +27,6 @@ interface HtmlPreviewDrawerProps {
 }
 
 const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('components');
   const [mode, setMode] = useState<'preview' | 'code'>('preview');
 

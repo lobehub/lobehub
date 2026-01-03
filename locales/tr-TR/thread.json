@@ -1,10 +1,6 @@
 {
-  "actions": {
-    "confirmRemoveThread": "Bu alt konuyu silmek üzeresiniz. Silindikten sonra geri alınamaz, lütfen dikkatli olun."
-  },
-  "newPortalThread": {
-    "includeContext": "Konu bağlamını dahil et",
-    "title": "Yeni alt konu aç"
-  },
-  "notSupportMultiModals": "Alt konular şu anda dosya/görüntü yüklemeyi desteklemiyor, ihtiyaç duyarsanız lütfen mesaj bırakın: <1>💬 Tartışma Alanı</1>"
+  "actions.confirmRemoveThread": "Bu alt konuyu silmek üzeresiniz. Silindikten sonra geri getirilemez. Lütfen dikkatli ilerleyin.",
+  "newPortalThread.includeContext": "Konu bağlamını dahil et",
+  "newPortalThread.title": "Yeni bir alt konu başlat",
+  "notSupportMultiModals": "Alt konular şu anda dosya/görsel yüklemeyi desteklememektedir. Herhangi bir talebiniz varsa, lütfen bir mesaj bırakın: <1>💬 Tartışma Alanı</1>"
 }

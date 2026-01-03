@@ -6,12 +6,13 @@ import {
 
 import { createLogger } from '@/utils/logger';
 
-import { ControllerModule, ipcClientEvent } from './index';
+import { ControllerModule, IpcMethod } from './index';
 
 // Create logger
 const logger = createLogger('controllers:TrayMenuCtr');
 
 export default class TrayMenuCtr extends ControllerModule {
+  static override readonly groupName = 'tray';
   async toggleMainWindow() {
     logger.debug('Toggle main window visibility via shortcut');
     const mainWindow = this.app.browserManager.getMainWindow();
@@ -23,7 +24,7 @@ export default class TrayMenuCtr extends ControllerModule {
    * @param options Balloon options
    * @returns Operation result
    */
-  @ipcClientEvent('showTrayNotification')
+  @IpcMethod()
   async showNotification(options: ShowTrayNotificationParams) {
     logger.debug('Show tray balloon notification');
 
@@ -52,7 +53,7 @@ export default class TrayMenuCtr extends ControllerModule {
    * @param options Icon options
    * @returns Operation result
    */
-  @ipcClientEvent('updateTrayIcon')
+  @IpcMethod()
   async updateTrayIcon(options: UpdateTrayIconParams) {
     logger.debug('Update tray icon');
 
@@ -84,7 +85,7 @@ export default class TrayMenuCtr extends ControllerModule {
    * @param options Tooltip text options
    * @returns Operation result
    */
-  @ipcClientEvent('updateTrayTooltip')
+  @IpcMethod()
   async updateTrayTooltip(options: UpdateTrayTooltipParams) {
     logger.debug('Update tray tooltip text');
 

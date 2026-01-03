@@ -1,17 +1,17 @@
 import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { ImageStoreState, initialState } from './initialState';
-import { CreateImageAction, createCreateImageSlice } from './slices/createImage/action';
-import { GenerationBatchAction, createGenerationBatchSlice } from './slices/generationBatch/action';
+import { type ImageStoreState, initialState } from './initialState';
+import { type CreateImageAction, createCreateImageSlice } from './slices/createImage/action';
+import { type GenerationBatchAction, createGenerationBatchSlice } from './slices/generationBatch/action';
 import {
-  GenerationConfigAction,
+  type GenerationConfigAction,
   createGenerationConfigSlice,
 } from './slices/generationConfig/action';
-import { GenerationTopicAction, createGenerationTopicSlice } from './slices/generationTopic/action';
+import { type GenerationTopicAction, createGenerationTopicSlice } from './slices/generationTopic/action';
 
 //  ===============  aggregate createStoreFn ============ //
 

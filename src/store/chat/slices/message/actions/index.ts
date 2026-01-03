@@ -1,12 +1,12 @@
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
-import { MessageInternalsAction, messageInternals } from './internals';
-import { MessageOptimisticUpdateAction, messageOptimisticUpdate } from './optimisticUpdate';
-import { MessagePublicApiAction, messagePublicApi } from './publicApi';
-import { MessageQueryAction, messageQuery } from './query';
-import { MessageRuntimeStateAction, messageRuntimeState } from './runtimeState';
+import { type MessageInternalsAction, messageInternals } from './internals';
+import { type MessageOptimisticUpdateAction, messageOptimisticUpdate } from './optimisticUpdate';
+import { type MessagePublicApiAction, messagePublicApi } from './publicApi';
+import { type MessageQueryAction, messageQuery } from './query';
+import { type MessageRuntimeStateAction, messageRuntimeState } from './runtimeState';
 
 /**
  * Combined message action interface

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { MarketAuthContextType } from '@/layout/AuthProvider/MarketAuth/types';
+import { type MarketAuthContextType } from '@/layout/AuthProvider/MarketAuth/types';
 import { marketApiService } from '@/services/marketApi';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 interface AgentOwnershipResult {
   // null = loading, true = 是用户的, false = 不是用户的
@@ -51,6 +52,10 @@ function getCurrentAccountId(marketAuth: MarketAuthContextType): string | number
 interface CheckOwnershipParams {
   accessToken?: string;
   accountId?: string | number | null;
+  /**
+   * 是否启用了 trustedClient 模式，启用时不需要 accessToken
+   */
+  enableMarketTrustedClient?: boolean;
   marketIdentifier?: string;
   skipCache?: boolean;
 }
@@ -61,13 +66,16 @@ interface CheckOwnershipParams {
 export const checkOwnership = async ({
   accountId,
   accessToken,
+  enableMarketTrustedClient = false,
   marketIdentifier,
   skipCache = false,
 }: CheckOwnershipParams): Promise<boolean> => {
-  if (!marketIdentifier || !accountId || !accessToken) {
+  // 在 trustedClient 模式下，不需要 accessToken；否则需要
+  if (!marketIdentifier || !accountId || (!enableMarketTrustedClient && !accessToken)) {
     console.warn('[checkOwnership] Missing required parameters', {
       accessToken: Boolean(accessToken),
       accountId,
+      enableMarketTrustedClient,
       marketIdentifier,
     });
     return false;
@@ -80,7 +88,11 @@ export const checkOwnership = async ({
     return cached.result;
   }
 
-  marketApiService.setAccessToken(accessToken);
+  // 只有在非 trustedClient 模式下才设置 accessToken
+  if (!enableMarketTrustedClient && accessToken) {
+    marketApiService.setAccessToken(accessToken);
+  }
+
   const agentDetail = await marketApiService.getAgentDetail(marketIdentifier);
   console.log('[checkOwnership] Agent detail:', agentDetail);
 
@@ -100,6 +112,11 @@ export const useAgentOwnershipCheck = (marketIdentifier?: string): AgentOwnershi
   const [result, setResult] = useState<AgentOwnershipResult>({ isOwnAgent: null });
   const marketAuth = useMarketAuth();
   const { isAuthenticated } = marketAuth;
+
+  // 检查是否启用了 Market Trusted Client 认证
+  const enableMarketTrustedClient = useServerConfigStore(
+    serverConfigSelectors.enableMarketTrustedClient,
+  );
 
   useEffect(() => {
     if (!marketIdentifier || !isAuthenticated) {
@@ -121,17 +138,15 @@ export const useAgentOwnershipCheck = (marketIdentifier?: string): AgentOwnershi
           return;
         }
 
-        // 优先从 DB 获取 access token，如果没有则从 session 获取
-        const accessToken = marketAuth.getAccessToken();
-        if (!accessToken) {
-          console.warn('[useAgentOwnershipCheck] No access token available');
-          setResult({ isOwnAgent: false });
-          return;
-        }
+        // trustedClient 模式下不需要获取 accessToken
+        const accessToken = enableMarketTrustedClient
+          ? undefined
+          : (marketAuth.getAccessToken() ?? undefined);
 
         const isOwner = await checkOwnership({
           accessToken,
           accountId: currentAccountId,
+          enableMarketTrustedClient,
           marketIdentifier,
         });
 
@@ -145,7 +160,7 @@ export const useAgentOwnershipCheck = (marketIdentifier?: string): AgentOwnershi
     };
 
     runOwnershipCheck();
-  }, [marketIdentifier, isAuthenticated, marketAuth]);
+  }, [marketIdentifier, isAuthenticated, marketAuth, enableMarketTrustedClient]);
 
   return result;
 };

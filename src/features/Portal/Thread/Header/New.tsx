@@ -1,8 +1,7 @@
-import { Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { GitBranch } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors } from '@/store/chat/selectors';

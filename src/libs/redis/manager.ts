@@ -1,5 +1,5 @@
 import { IoRedisRedisProvider } from './redis';
-import { BaseRedisProvider, RedisConfig } from './types';
+import { type BaseRedisProvider, type RedisConfig } from './types';
 import { UpstashRedisProvider } from './upstash';
 
 class RedisManager {
@@ -23,7 +23,11 @@ class RedisManager {
       if (config.provider === 'redis') {
         provider = new IoRedisRedisProvider(config);
       } else if (config.provider === 'upstash') {
-        provider = new UpstashRedisProvider({ token: config.token, url: config.url });
+        provider = new UpstashRedisProvider({
+          prefix: config.prefix,
+          token: config.token,
+          url: config.url,
+        });
       } else {
         throw new Error(`Unsupported redis provider: ${String((config as any).provider)}`);
       }

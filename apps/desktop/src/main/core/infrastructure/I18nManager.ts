@@ -31,7 +31,7 @@ export class I18nManager {
     // Priority: parameter language > stored locale > system language
     const storedLocale = this.app.storeManager.get('locale', 'auto') as string;
     const defaultLanguage =
-      lang || (storedLocale !== 'auto' ? storedLocale : app.getLocale()) || 'en-US';
+      lang || (storedLocale !== 'auto' ? storedLocale : app.getLocale()) || 'en';
 
     logger.info(
       `Initializing i18n, app locale: ${defaultLanguage}, stored locale: ${storedLocale}`,
@@ -39,15 +39,15 @@ export class I18nManager {
 
     await this.i18n.init({
       defaultNS: 'menu',
-      fallbackLng: 'en-US',
+      fallbackLng: 'en',
       // Load resources as needed
       initAsync: true,
       interpolation: {
         escapeValue: false,
       },
 
+      keySeparator: false,
       lng: defaultLanguage,
-
       ns: ['menu', 'dialog', 'common'],
       partialBundledLanguages: true,
     });
@@ -175,6 +175,7 @@ export class I18nManager {
     try {
       logger.debug(`Loading namespace: ${lng}/${ns}`);
       const resources = await loadResources(lng, ns);
+
       this.i18n.addResourceBundle(lng, ns, resources, true, true);
       return true;
     } catch (error) {

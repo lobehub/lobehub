@@ -1,12 +1,12 @@
-import { AuthObject } from '@clerk/backend';
+import { type AuthObject } from '@clerk/backend';
 import {
   AgentRuntimeError,
-  ChatCompletionErrorPayload,
-  ModelRuntime,
+  type ChatCompletionErrorPayload,
+  type ModelRuntime,
 } from '@lobechat/model-runtime';
-import { ChatErrorType, ClientSecretPayload } from '@lobechat/types';
+import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 
 import {
   LOBE_CHAT_AUTH_HEADER,
@@ -92,7 +92,6 @@ export const checkAuth =
 
       if (!isUseOidcAuth)
         checkAuthMethod({
-          accessCode: jwtPayload.accessCode,
           apiKey: jwtPayload.apiKey,
           betterAuthAuthorized,
           clerkAuth,

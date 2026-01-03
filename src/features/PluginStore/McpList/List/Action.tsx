@@ -1,9 +1,8 @@
-import { ActionIcon, Button, Dropdown, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Dropdown, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';

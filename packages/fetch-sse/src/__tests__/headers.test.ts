@@ -145,7 +145,7 @@ describe('headersToRecord', () => {
     it('should handle object with special characters in values', () => {
       // Arrange
       const headersObj = {
-        'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
+        'authorization': 'Bearer test-token',
         'x-special': 'value with spaces and symbols: !@#$%',
       };
 
@@ -154,7 +154,7 @@ describe('headersToRecord', () => {
 
       // Assert
       expect(result).toEqual({
-        'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
+        'authorization': 'Bearer test-token',
         'x-special': 'value with spaces and symbols: !@#$%',
       });
     });

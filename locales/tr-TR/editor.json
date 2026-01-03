@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Daralt",
-      "on": "Genişlet"
-    },
-    "typobar": {
-      "off": "Biçim araç çubuğunu gizle",
-      "on": "Biçim araç çubuğunu göster"
-    }
-  },
+  "actions.expand.off": "Daralt",
+  "actions.expand.on": "Genişlet",
+  "actions.typobar.off": "Biçimlendirme araç çubuğunu gizle",
+  "actions.typobar.on": "Biçimlendirme araç çubuğunu göster",
+  "autoSave.latest": "En son sürüm yüklendi",
+  "autoSave.saved": "Kaydedildi",
+  "autoSave.saving": "Otomatik kaydediliyor...",
   "cancel": "İptal",
+  "codemirror.copyFailed": "Kopyalama başarısız",
+  "codemirror.copySuccess": "Kod panoya kopyalandı",
+  "codemirror.selectLanguage": "Dil seç",
+  "codemirror.selectTheme": "Tema seç",
+  "codemirror.showLineNumbers": "Satır numaralarını göster",
+  "codemirror.tabSize": "Sekme boyutu",
+  "codemirror.theme": "Tema",
+  "codemirror.useTabs": "Sekme kullan",
   "confirm": "Onayla",
-  "file": {
-    "error": "Hata: {{message}}",
-    "uploading": "Dosya yükleniyor..."
-  },
-  "image": {
-    "broken": "Resim bozuk"
-  },
-  "link": {
-    "edit": "Bağlantıyı düzenle",
-    "open": "Bağlantıyı aç",
-    "placeholder": "Bağlantı URL'si girin",
-    "unlink": "Bağlantıyı kaldır"
-  },
-  "math": {
-    "placeholder": "Lütfen TeX formülünü girin"
-  },
-  "slash": {
-    "h1": "Birinci Seviye Başlık",
-    "h2": "İkinci Seviye Başlık",
-    "h3": "Üçüncü Seviye Başlık",
-    "hr": "Ayırıcı Çizgi",
-    "table": "Tablo",
-    "tex": "TeX Formülü"
-  },
-  "table": {
-    "delete": "Tabloyu sil",
-    "deleteColumn": "Sütunu sil",
-    "deleteRow": "Satırı sil",
-    "insertColumnLeft": "Sol tarafa {{count}} sütun ekle",
-    "insertColumnRight": "Sağ tarafa {{count}} sütun ekle",
-    "insertRowAbove": "Üst tarafa {{count}} satır ekle",
-    "insertRowBelow": "Alt tarafa {{count}} satır ekle"
-  },
-  "typobar": {
-    "blockquote": "Alıntı",
-    "bold": "Kalın",
-    "bulletList": "Sırasız liste",
-    "code": "Satır içi kod",
-    "codeblock": "Kod bloğu",
-    "italic": "İtalik",
-    "link": "Bağlantı",
-    "numberList": "Numaralı liste",
-    "strikethrough": "Üstü çizili",
-    "table": "tablo",
-    "taskList": "Görev Listesi",
-    "tex": "TeX Formülü",
-    "underline": "Altı çizili"
-  }
+  "file.error": "Hata: {{message}}",
+  "file.uploading": "Dosya yükleniyor...",
+  "image.broken": "Görsel bozuk",
+  "link.edit": "Bağlantıyı düzenle",
+  "link.editLinkTitle": "Bağlantı",
+  "link.editTextTitle": "Başlık",
+  "link.open": "Bağlantıyı aç",
+  "link.placeholder": "Bağlantı URL'sini girin",
+  "link.unlink": "Bağlantıyı kaldır",
+  "markdown.cancel": "İptal",
+  "markdown.confirm": "Dönüştür",
+  "markdown.parseMessage": "Markdown biçimine dönüştürülecek. Mevcut içerik üzerine yazılacak. Emin misiniz? (5 saniye içinde otomatik kapanır)",
+  "markdown.parseTitle": "Markdown olarak biçimlendir",
+  "math.placeholder": "Lütfen bir TeX formülü girin",
+  "modifier.accept": "Koru",
+  "modifier.acceptAll": "Tümünü koru",
+  "modifier.reject": "Geri al",
+  "modifier.rejectAll": "Tümünü geri al",
+  "slash.h1": "Başlık 1",
+  "slash.h2": "Başlık 2",
+  "slash.h3": "Başlık 3",
+  "slash.hr": "Ayraç",
+  "slash.table": "Tablo",
+  "slash.tex": "TeX Formülü",
+  "table.delete": "Tabloyu sil",
+  "table.deleteColumn": "Sütunu sil",
+  "table.deleteRow": "Satırı sil",
+  "table.insertColumnLeft": "Sola {{count}} sütun ekle",
+  "table.insertColumnRight": "Sağa {{count}} sütun ekle",
+  "table.insertRowAbove": "Üste {{count}} satır ekle",
+  "table.insertRowBelow": "Alta {{count}} satır ekle",
+  "typobar.blockquote": "Alıntı",
+  "typobar.bold": "Kalın",
+  "typobar.bulletList": "Madde işaretli liste",
+  "typobar.code": "Satır içi kod",
+  "typobar.codeblock": "Kod bloğu",
+  "typobar.image": "Görsel",
+  "typobar.italic": "İtalik",
+  "typobar.link": "Bağlantı",
+  "typobar.numberList": "Numaralı liste",
+  "typobar.redo": "Yinele",
+  "typobar.strikethrough": "Üstü çizili",
+  "typobar.table": "Tablo",
+  "typobar.taskList": "Görev listesi",
+  "typobar.tex": "TeX Formülü",
+  "typobar.underline": "Altı çizili",
+  "typobar.undo": "Geri al"
 }

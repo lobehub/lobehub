@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import { useStoreApi } from '../store';
-import { PublicAction } from '../store/action';
+import { type PublicAction } from '../store/action';
 
 export type AgentSettingsInstance = PublicAction;
 

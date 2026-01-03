@@ -2,7 +2,7 @@
 
 import { StyleProvider, extractStaticStyle } from 'antd-style';
 import { useServerInsertedHTML } from 'next/navigation';
-import { PropsWithChildren, useRef } from 'react';
+import { type PropsWithChildren, useRef } from 'react';
 
 const StyleRegistry = ({ children }: PropsWithChildren) => {
   const isInsert = useRef(false);

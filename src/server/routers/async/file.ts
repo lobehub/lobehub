@@ -1,15 +1,17 @@
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { TRPCError } from '@trpc/server';
-import { chunk } from 'lodash-es';
+import { chunk } from 'es-toolkit/compat';
 import pMap from 'p-map';
 import { z } from 'zod';
 
+import { checkBudgetsUsage, checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
 import { serverDBEnv } from '@/config/db';
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
-import { ASYNC_TASK_TIMEOUT, AsyncTaskModel } from '@/database/models/asyncTask';
+import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
-import { NewChunkItem, NewEmbeddingsItem } from '@/database/schemas';
+import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
 import { fileEnv } from '@/envs/file';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
@@ -20,7 +22,7 @@ import {
   AsyncTaskError,
   AsyncTaskErrorType,
   AsyncTaskStatus,
-  IAsyncTaskError,
+  type IAsyncTaskError,
 } from '@/types/asyncTask';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
@@ -42,6 +44,8 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
 
 export const fileRouter = router({
   embeddingChunks: fileProcedure
+    .use(checkEmbeddingUsage)
+    .use(checkBudgetsUsage)
     .input(
       z.object({
         fileId: z.string(),
@@ -111,9 +115,9 @@ export const fileRouter = router({
               },
               { concurrency: CONCURRENCY },
             );
-          } catch (e) {
+          } catch (e: any) {
             throw {
-              message: JSON.stringify(e),
+              message: e.errorType ?? e.message ?? JSON.stringify(e),
               name: AsyncTaskErrorType.EmbeddingError,
             };
           }

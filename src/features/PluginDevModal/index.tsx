@@ -1,15 +1,14 @@
-import { Alert, Button, Drawer, Icon, Segmented, Tag } from '@lobehub/ui';
+import { Alert, Button, Drawer, Flexbox, Icon, Segmented, Tag } from '@lobehub/ui';
 import { App, Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
 import { MoveUpRight } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { WIKI_PLUGIN_GUIDE } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
-import { LobeToolCustomPlugin } from '@/types/tool/plugin';
+import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
@@ -153,7 +152,7 @@ const DevModal = memo<DevModalProps>(
                       <Flexbox align={'center'} gap={4} horizontal justify={'center'}>
                         {t('dev.manifest.mode.mcp')}
                         <div>
-                          <Tag bordered={false} color={'warning'}>
+                          <Tag color={'warning'} variant={'filled'}>
                             {t('dev.manifest.mode.mcpExp')}
                           </Tag>
                         </div>
@@ -173,7 +172,8 @@ const DevModal = memo<DevModalProps>(
               {configMode === 'url' && (
                 <>
                   <Alert
-                    message={
+                    showIcon
+                    title={
                       <Trans i18nKey={'dev.modalDesc'} ns={'plugin'}>
                         添加自定义插件后，可用于插件开发验证，也可直接在会话中使用。插件开发文档请参考：
                         <a
@@ -187,7 +187,6 @@ const DevModal = memo<DevModalProps>(
                         <Icon icon={MoveUpRight} />
                       </Trans>
                     }
-                    showIcon
                     type={'info'}
                   />
                   <UrlManifestForm form={form} isEditMode={isEditMode} />

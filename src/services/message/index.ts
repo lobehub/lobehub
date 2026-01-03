@@ -1,55 +1,43 @@
 import {
-  ChatMessageError,
-  ChatMessagePluginError,
-  ChatTTS,
-  ChatTranslate,
-  CreateMessageParams,
-  CreateMessageResult,
-  MessageMetadata,
-  MessagePluginItem,
-  ModelRankItem,
-  UIChatMessage,
-  UpdateMessageParams,
-  UpdateMessageRAGParams,
-  UpdateMessageResult,
+  type ChatMessageError,
+  type ChatMessagePluginError,
+  type ChatTTS,
+  type ChatTranslate,
+  type CreateMessageParams,
+  type CreateMessageResult,
+  type MessageMetadata,
+  type MessagePluginItem,
+  type ModelRankItem,
+  type UIChatMessage,
+  type UpdateMessageParams,
+  type UpdateMessageRAGParams,
+  type UpdateMessageResult,
 } from '@lobechat/types';
 import type { HeatmapsProps } from '@lobehub/charts';
 
-import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { abortableRequest } from '../utils/abortableRequest';
 
+/**
+ * Query context for message operations
+ * Contains identifiers needed for querying/filtering messages after mutations
+ */
+export interface MessageQueryContext {
+  agentId?: string;
+  groupId?: string;
+  threadId?: string | null;
+  topicId?: string | null;
+}
+
 export class MessageService {
-  createMessage = async ({
-    sessionId,
-    ...params
-  }: CreateMessageParams): Promise<CreateMessageResult> => {
-    return lambdaClient.message.createMessage.mutate({
-      ...params,
-      sessionId: sessionId ? this.toDbSessionId(sessionId) : undefined,
-    });
+  createMessage = async (params: CreateMessageParams): Promise<CreateMessageResult> => {
+    return lambdaClient.message.createMessage.mutate(params as any);
   };
 
-  getMessages = async (
-    sessionId: string,
-    topicId?: string,
-    groupId?: string,
-  ): Promise<UIChatMessage[]> => {
-    const data = await lambdaClient.message.getMessages.query({
-      groupId,
-      sessionId: this.toDbSessionId(sessionId),
-      topicId,
-    });
+  getMessages = async (params: MessageQueryContext): Promise<UIChatMessage[]> => {
+    const data = await lambdaClient.message.getMessages.query(params);
 
-    return data as unknown as UIChatMessage[];
-  };
-
-  getGroupMessages = async (groupId: string, topicId?: string): Promise<UIChatMessage[]> => {
-    const data = await lambdaClient.message.getMessages.query({
-      groupId,
-      topicId,
-    });
     return data as unknown as UIChatMessage[];
   };
 
@@ -77,19 +65,14 @@ export class MessageService {
     return lambdaClient.message.getHeatmaps.query();
   };
 
-  updateMessageError = async (
-    id: string,
-    value: ChatMessageError,
-    options?: { sessionId?: string | null; topicId?: string | null },
-  ) => {
+  updateMessageError = async (id: string, value: ChatMessageError, ctx?: MessageQueryContext) => {
     const error = value.type
       ? value
       : { body: value, message: value.message, type: 'ApplicationRuntimeError' };
 
     return lambdaClient.message.update.mutate({
+      ...ctx,
       id,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
       value: { error },
     });
   };
@@ -99,15 +82,30 @@ export class MessageService {
     return lambdaClient.message.updateMessagePlugin.mutate({ id, value: { arguments: args } });
   };
 
+  /**
+   * Update tool arguments by toolCallId - updates both tool message and parent assistant message in one transaction
+   * This is the preferred method for updating tool arguments as it prevents race conditions
+   *
+   * @param toolCallId - The tool call ID (stable identifier from AI response)
+   * @param value - The new arguments value
+   * @param ctx - Message query context
+   */
+  updateToolArguments = async (
+    toolCallId: string,
+    value: string | Record<string, unknown>,
+    ctx?: MessageQueryContext,
+  ) => {
+    return lambdaClient.message.updateToolArguments.mutate({ ...ctx, toolCallId, value });
+  };
+
   updateMessage = async (
     id: string,
     value: Partial<UpdateMessageParams>,
-    options?: { sessionId?: string | null; topicId?: string | null },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
     return lambdaClient.message.update.mutate({
+      ...ctx,
       id,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
       value,
     });
   };
@@ -123,115 +121,98 @@ export class MessageService {
   updateMessageMetadata = async (
     id: string,
     value: Partial<MessageMetadata>,
-    options?: { sessionId?: string | null; topicId?: string | null },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
     return abortableRequest.execute(`message-metadata-${id}`, (signal) =>
-      lambdaClient.message.updateMetadata.mutate(
-        {
-          id,
-          sessionId: options?.sessionId,
-          topicId: options?.topicId,
-          value,
-        },
-        { signal },
-      ),
+      lambdaClient.message.updateMetadata.mutate({ ...ctx, id, value }, { signal }),
     );
   };
 
   updateMessagePluginState = async (
     id: string,
     value: Record<string, any>,
-    options?: { sessionId?: string | null; topicId?: string | null },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.updatePluginState.mutate({
-      id,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
-      value,
-    });
+    return lambdaClient.message.updatePluginState.mutate({ ...ctx, id, value });
   };
 
   updateMessagePluginError = async (
     id: string,
     error: ChatMessagePluginError | null,
-    options?: { sessionId?: string | null; topicId?: string | null },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.updatePluginError.mutate({
-      id,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
-      value: error as any,
-    });
+    return lambdaClient.message.updatePluginError.mutate({ ...ctx, id, value: error as any });
   };
 
   updateMessagePlugin = async (
     id: string,
     value: Partial<Omit<MessagePluginItem, 'id'>>,
-    options?: { sessionId?: string | null; topicId?: string | null },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.updateMessagePlugin.mutate({
-      id,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
-      value,
-    });
+    return lambdaClient.message.updateMessagePlugin.mutate({ ...ctx, id, value });
   };
 
   updateMessageRAG = async (
     id: string,
     data: UpdateMessageRAGParams,
-    options?: { sessionId?: string | null; topicId?: string | null },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.updateMessageRAG.mutate({
-      id,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
-      value: data,
-    });
+    return lambdaClient.message.updateMessageRAG.mutate({ ...ctx, id, value: data });
   };
 
-  removeMessage = async (
+  /**
+   * Update tool message with content, metadata, pluginState, and pluginError in a single request
+   * This prevents race conditions when updating multiple fields
+   * Uses abortableRequest to cancel previous requests for the same message
+   */
+  updateToolMessage = async (
     id: string,
-    options?: { sessionId?: string | null; topicId?: string | null },
+    value: {
+      content?: string;
+      metadata?: Record<string, any>;
+      pluginError?: any;
+      pluginState?: Record<string, any>;
+    },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.removeMessage.mutate({
-      id,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
-    });
+    return abortableRequest.execute(`tool-message-${id}`, (signal) =>
+      lambdaClient.message.updateToolMessage.mutate({ ...ctx, id, value }, { signal }),
+    );
+  };
+
+  removeMessage = async (id: string, ctx?: MessageQueryContext): Promise<UpdateMessageResult> => {
+    return lambdaClient.message.removeMessage.mutate({ ...ctx, id });
   };
 
   removeMessages = async (
     ids: string[],
-    options?: { sessionId?: string | null; topicId?: string | null },
+    ctx?: MessageQueryContext,
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.removeMessages.mutate({
-      ids,
-      sessionId: options?.sessionId,
-      topicId: options?.topicId,
-    });
+    return lambdaClient.message.removeMessages.mutate({ ...ctx, ids });
   };
 
   removeMessagesByAssistant = async (sessionId: string, topicId?: string) => {
-    return lambdaClient.message.removeMessagesByAssistant.mutate({
-      sessionId: this.toDbSessionId(sessionId),
-      topicId,
-    });
+    return lambdaClient.message.removeMessagesByAssistant.mutate({ sessionId, topicId });
   };
 
   removeMessagesByGroup = async (groupId: string, topicId?: string) => {
-    return lambdaClient.message.removeMessagesByGroup.mutate({
-      groupId,
-      topicId,
-    });
+    return lambdaClient.message.removeMessagesByGroup.mutate({ groupId, topicId });
   };
 
   removeAllMessages = async () => {
     return lambdaClient.message.removeAllMessages.mutate();
   };
 
-  private toDbSessionId = (sessionId: string | undefined) => {
-    return sessionId === INBOX_SESSION_ID ? null : sessionId;
+  /**
+   * Add files to a message
+   * Used to associate exported files from code interpreter with the tool message
+   */
+  addFilesToMessage = async (
+    id: string,
+    fileIds: string[],
+    ctx?: MessageQueryContext,
+  ): Promise<UpdateMessageResult> => {
+    return lambdaClient.message.addFilesToMessage.mutate({ ...ctx, fileIds, id });
   };
 }
 

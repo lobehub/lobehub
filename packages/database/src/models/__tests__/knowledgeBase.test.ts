@@ -2,7 +2,7 @@
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { LobeChatDatabase } from '../../type';import { sleep } from '@/utils/sleep';
+import { sleep } from '@/utils/sleep';
 
 import {
   NewKnowledgeBase,
@@ -12,6 +12,7 @@ import {
   knowledgeBases,
   users,
 } from '../../schemas';
+import { LobeChatDatabase } from '../../type';
 import { KnowledgeBaseModel } from '../knowledgeBase';
 import { getTestDB } from './_util';
 
@@ -227,6 +228,34 @@ describe('KnowledgeBaseModel', () => {
       });
       expect(remainingFiles).toHaveLength(1);
       expect(remainingFiles[0].fileId).toBe('file2');
+    });
+
+    it('should not allow removing files from another user knowledge base', async () => {
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/document.pdf',
+          size: 1000,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+
+      await serverDB.insert(files).values([fileList[0]]);
+
+      const { id: knowledgeBaseId } = await knowledgeBaseModel.create({ name: 'Test Group' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(knowledgeBaseId, ['file1']);
+
+      // Another user tries to remove files from this knowledge base
+      const attackerModel = new KnowledgeBaseModel(serverDB, 'user2');
+      await attackerModel.removeFilesFromKnowledgeBase(knowledgeBaseId, ['file1']);
+
+      // Files should still exist since the attacker doesn't own them
+      const remainingFiles = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
+      });
+      expect(remainingFiles).toHaveLength(1);
+      expect(remainingFiles[0].fileId).toBe('file1');
     });
   });
 

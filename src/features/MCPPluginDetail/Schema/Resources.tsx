@@ -1,25 +1,27 @@
-import { Block, Highlighter, Tag } from '@lobehub/ui';
-import { Empty } from 'antd';
+import { Block, Empty, Highlighter, Tag } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
 
 import { useDetailContext } from '../DetailProvider';
-import { useStyles } from './style';
+import { styles } from './style';
 import { ModeType } from './types';
 
 const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
-  const { t } = useTranslation('discover');
+  const { t } = useTranslation(['discover', 'plugin']);
   const { resources } = useDetailContext();
-  const { styles, theme } = useStyles();
 
   if (!resources)
     return (
       <Block variant={'outlined'}>
         <Empty
-          description={t('mcp.details.schema.resources.empty')}
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={t('plugin:mcpEmpty.resources')}
+          descriptionProps={{ fontSize: 14 }}
+          icon={Database}
+          style={{ maxWidth: 400 }}
         />
       </Block>
     );
@@ -32,7 +34,7 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
             dataIndex: 'name',
             key: 'name',
             render: (text) => (
-              <span className={styles.code} style={{ color: theme.gold }}>
+              <span className={styles.code} style={{ color: cssVar.gold }}>
                 {text}
               </span>
             ),

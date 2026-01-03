@@ -1,13 +1,15 @@
-import { Select, type SelectProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
-import { WorkingModel } from '@/types/agent';
-import { EnabledProviderWithModels } from '@/types/aiProvider';
+import { type WorkingModel } from '@/types/agent';
+import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   select: css`
     &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
       padding-inline-start: 12px;
@@ -29,8 +31,6 @@ interface ModelSelectProps extends SelectProps {
 
 const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
   const enabledList = useEnabledChatModels();
-
-  const { styles } = useStyles();
 
   const options = useMemo<SelectProps['options']>(() => {
     const getChatModels = (provider: EnabledProviderWithModels) =>
@@ -68,18 +68,20 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
   }, [enabledList]);
 
   return (
-    <Select
-      onChange={(value, option) => {
-        const model = value.split('/').slice(1).join('/');
-        onChange?.({ model, provider: (option as unknown as ModelOption).provider });
-      }}
-      options={options}
-      popupClassName={styles.select}
-      popupMatchSelectWidth={false}
-      value={`${value?.provider}/${value?.model}`}
-      variant={'filled'}
-      {...rest}
-    />
+    <TooltipGroup>
+      <Select
+        onChange={(value, option) => {
+          const model = value.split('/').slice(1).join('/');
+          onChange?.({ model, provider: (option as unknown as ModelOption).provider });
+        }}
+        options={options}
+        popupClassName={styles.select}
+        popupMatchSelectWidth={false}
+        value={`${value?.provider}/${value?.model}`}
+        variant={'filled'}
+        {...rest}
+      />
+    </TooltipGroup>
   );
 });
 

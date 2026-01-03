@@ -1,23 +1,25 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SpeedInsights } from '@vercel/speed-insights/next';
-import { ThemeAppearance } from 'antd-style';
-import { ResolvingViewport } from 'next';
-import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { ReactNode } from 'react';
+import { type ThemeAppearance } from 'antd-style';
+import { type ResolvingViewport } from 'next';
+import Script from 'next/script';
+import { type ReactNode, Suspense } from 'react';
 import { isRtlLang } from 'rtl-detect';
 
+import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import Analytics from '@/components/Analytics';
 import { DEFAULT_LANG } from '@/const/locale';
 import { isDesktop } from '@/const/version';
 import PWAInstall from '@/features/PWAInstall';
 import AuthProvider from '@/layout/AuthProvider';
 import GlobalProvider from '@/layout/GlobalProvider';
-import { Locales } from '@/locales/resources';
-import { DynamicLayoutProps } from '@/types/next';
+import { type Locales } from '@/locales/resources';
+import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
 const inVercel = process.env.VERCEL === '1';
 
-interface RootLayoutProps extends DynamicLayoutProps {
+export interface RootLayoutProps extends DynamicLayoutProps {
   children: ReactNode;
 }
 
@@ -29,32 +31,45 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
 
   const direction = isRtlLang(locale) ? 'rtl' : 'ltr';
 
+  const renderContent = () => {
+    return (
+      <GlobalProvider
+        appearance={theme}
+        isMobile={isMobile}
+        locale={locale}
+        neutralColor={neutralColor}
+        primaryColor={primaryColor}
+        variants={variants}
+      >
+        <AuthProvider>{children}</AuthProvider>
+        <Suspense fallback={null}>
+          <PWAInstall />
+        </Suspense>
+      </GlobalProvider>
+    );
+  };
+
   return (
     <html dir={direction} lang={locale}>
       <head>
         {process.env.DEBUG_REACT_SCAN === '1' && (
-          // eslint-disable-next-line @next/next/no-sync-scripts
-          <script crossOrigin="anonymous" src="https://unpkg.com/react-scan/dist/auto.global.js" />
+          <Script
+            crossOrigin={'anonymous'}
+            src={'https://unpkg.com/react-scan/dist/auto.global.js'}
+            strategy={'lazyOnload'}
+          />
         )}
       </head>
       <body>
-        <NuqsAdapter>
-          <GlobalProvider
-            appearance={theme}
-            isMobile={isMobile}
-            locale={locale}
-            neutralColor={neutralColor}
-            primaryColor={primaryColor}
-            variants={variants}
-          >
-            <AuthProvider>
-              {children}
-            </AuthProvider>
-            <PWAInstall />
-          </GlobalProvider>
-        </NuqsAdapter>
-        <Analytics />
-        {inVercel && <SpeedInsights />}
+        {ENABLE_BUSINESS_FEATURES ? (
+          <BusinessGlobalProvider>{renderContent()}</BusinessGlobalProvider>
+        ) : (
+          renderContent()
+        )}
+        <Suspense fallback={null}>
+          <Analytics />
+          {inVercel && <SpeedInsights />}
+        </Suspense>
       </body>
     </html>
   );
@@ -95,7 +110,11 @@ export const generateStaticParams = () => {
     for (const theme of themes) {
       for (const isMobile of mobileOptions) {
         variants.push({
-          variants: RouteVariants.serializeVariants({ isMobile, locale, theme }),
+          variants: RouteVariants.serializeVariants({
+            isMobile,
+            locale,
+            theme: theme as 'dark' | 'light',
+          }),
         });
       }
     }

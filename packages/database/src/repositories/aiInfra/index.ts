@@ -5,16 +5,17 @@ import type {
   EnabledProvider,
   ProviderConfig,
 } from '@lobechat/types';
-import { isEmpty } from 'lodash-es';
+import { isEmpty } from 'es-toolkit/compat';
 import {
   AIChatModelCard,
   AiModelSourceEnum,
   AiProviderModelListItem,
   EnabledAiModel,
 } from 'model-bank';
+import * as modelBank from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import pMap from 'p-map';
 
-import { DEFAULT_MODEL_PROVIDER_LIST } from '@/config/modelProviders';
 import { merge, mergeArrayById } from '@/utils/merge';
 
 import { AiModelModel } from '../../models/aiModel';
@@ -24,8 +25,8 @@ import { LobeChatDatabase } from '../../type';
 type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
 
 /**
- * Provider 级默认表（只在本地内置模型没给出 settings.searchImpl 和 settings.searchProvider 时使用）
- * 注意：不在 DB 存储，纯读取时注入
+ * Provider-level search defaults (only used when built-in models don't provide settings.searchImpl and settings.searchProvider)
+ * Note: Not stored in DB, only injected during read
  */
 const PROVIDER_SEARCH_DEFAULTS: Record<
   string,
@@ -40,12 +41,12 @@ const PROVIDER_SEARCH_DEFAULTS: Record<
   hunyuan: { searchImpl: 'params' },
   jina: { searchImpl: 'internal' },
   minimax: { searchImpl: 'params' },
-  // openai: 默认 params，但对 -search- 型号做 internal 特判
+  // openai: defaults to params, but -search- models use internal as special case
   openai: { searchImpl: 'params' },
-  // perplexity: 默认 internal
+  // perplexity: defaults to internal
   perplexity: { searchImpl: 'internal' },
   qwen: { searchImpl: 'params' },
-  spark: { searchImpl: 'params' }, // 某些模型（如 max-32k）若内置标了 internal，会优先使用内置
+  spark: { searchImpl: 'params' }, // Some models (like max-32k) will prioritize built-in if marked as internal
   stepfun: { searchImpl: 'params' },
   vertexai: { searchImpl: 'params', searchProvider: 'google' },
   wenxin: { searchImpl: 'params' },
@@ -53,7 +54,7 @@ const PROVIDER_SEARCH_DEFAULTS: Record<
   zhipu: { searchImpl: 'params' },
 };
 
-// 特殊模型配置 - 模型级别的特殊设置会覆盖服务商默认配置
+// Special model configuration - model-level settings override provider defaults
 const MODEL_SEARCH_DEFAULTS: Record<
   string,
   Record<string, { searchImpl?: 'tool' | 'params' | 'internal'; searchProvider?: string }>
@@ -61,15 +62,15 @@ const MODEL_SEARCH_DEFAULTS: Record<
   openai: {
     'gpt-4o-mini-search-preview': { searchImpl: 'internal' },
     'gpt-4o-search-preview': { searchImpl: 'internal' },
-    // 可在此处添加其他特殊模型配置
+    // Add other special model configurations here
   },
   spark: {
     'max-32k': { searchImpl: 'internal' },
   },
-  // 可在此处添加其他服务商的特殊模型配置
+  // Add special model configurations for other providers here
 };
 
-// 根据 providerId + modelId 推断默认 settings
+// Infer default settings based on providerId + modelId
 const inferProviderSearchDefaults = (
   providerId: string | undefined,
   modelId: string,
@@ -82,11 +83,11 @@ const inferProviderSearchDefaults = (
   return (providerId && PROVIDER_SEARCH_DEFAULTS[providerId]) || PROVIDER_SEARCH_DEFAULTS.default;
 };
 
-// 仅在读取时注入 settings; 根据 abilities.search 来添加或删去settings 中的 search 相关字段
+// Only inject settings during read; add or remove search-related fields in settings based on abilities.search
 const injectSearchSettings = (providerId: string, item: any) => {
   const abilities = item?.abilities || {};
 
-  // 模型显式关闭搜索能力：移除 settings 中的 search 相关字段，确保 UI 不显示启用模型内置搜索
+  // Model explicitly disables search capability: remove search-related fields from settings to prevent UI from showing built-in search
   if (abilities.search === false) {
     if (item?.settings?.searchImpl || item?.settings?.searchProvider) {
       const next = { ...item } as any;
@@ -100,12 +101,12 @@ const injectSearchSettings = (providerId: string, item: any) => {
     return item;
   }
 
-  // 模型显式开启搜索能力：添加 settings 中的 search 相关字段
+  // Model explicitly enables search capability: add search-related fields to settings
   else if (abilities.search === true) {
-    // 内置（本地）模型如果已经带了任一字段，直接保留，不覆盖
+    // If built-in (local) model already has either field, preserve it without overriding
     if (item?.settings?.searchImpl || item?.settings?.searchProvider) return item;
 
-    // 否则按 providerId + modelId
+    // Otherwise use providerId + modelId
     const searchSettings = inferProviderSearchDefaults(providerId, item.id);
 
     return {
@@ -117,7 +118,7 @@ const injectSearchSettings = (providerId: string, item: any) => {
     };
   }
 
-  // 兼容老版本中数据库没有存储 abilities.search 字段的情况
+  // Compatibility for legacy versions where database doesn't store abilities.search field
   return item;
 };
 
@@ -146,7 +147,7 @@ export class AiInfraRepos {
   getAiProviderList = async () => {
     const userProviders = await this.aiProviderModel.getAiProviderList();
 
-    // 1. 先创建一个基于 DEFAULT_MODEL_PROVIDER_LIST id 顺序的映射
+    // 1. First create a mapping based on DEFAULT_MODEL_PROVIDER_LIST id order
     const orderMap = new Map(DEFAULT_MODEL_PROVIDER_LIST.map((item, index) => [item.id, index]));
 
     const builtinProviders = DEFAULT_MODEL_PROVIDER_LIST.map((item) => ({
@@ -161,7 +162,7 @@ export class AiInfraRepos {
 
     const mergedProviders = mergeArrayById(builtinProviders, userProviders);
 
-    // 3. 根据 orderMap 排序
+    // 3. Sort based on orderMap
     return mergedProviders.sort((a, b) => {
       const orderA = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
       const orderB = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
@@ -205,7 +206,7 @@ export class AiInfraRepos {
           .map<EnabledAiModel & { enabled?: boolean | null }>((item) => {
             const user = allModels.find((m) => m.id === item.id && m.providerId === provider.id);
 
-            // 用户未修改本地模型
+            // User hasn't modified local model
             if (!user)
               return {
                 ...item,
@@ -229,7 +230,7 @@ export class AiInfraRepos {
               sort: user.sort || undefined,
               type: user.type || item.type,
             };
-            return injectSearchSettings(provider.id, mergedModel); // 用户修改本地模型，检查搜索设置
+            return injectSearchSettings(provider.id, mergedModel); // User modified local model, check search settings
           })
           .filter((item) => (filterEnabled ? item.enabled : true));
       },
@@ -237,7 +238,7 @@ export class AiInfraRepos {
     );
 
     const enabledProviderIds = new Set(enabledProviders.map((item) => item.id));
-    // 用户数据库模型，检查搜索设置
+    // User database models, check search settings
     const appendedUserModels = allModels
       .filter((item) =>
         filterEnabled ? enabledProviderIds.has(item.providerId) && item.enabled : true,
@@ -279,19 +280,41 @@ export class AiInfraRepos {
     };
   };
 
-  getAiProviderModelList = async (providerId: string) => {
+  getAiProviderModelList = async (
+    providerId: string,
+    options?: {
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+  ) => {
     const aiModels = await this.aiModelModel.getModelListByProviderId(providerId);
 
     const defaultModels: AiProviderModelListItem[] =
       (await this.fetchBuiltinModels(providerId)) || [];
-    // 这里不修改搜索设置不影响使用，但是为了get数据统一
+    // Not modifying search settings here doesn't affect usage, but done for data consistency on get
     const mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
 
-    return mergedModel.map((m) => injectSearchSettings(providerId, m));
+    let list = mergedModel.map((m) =>
+      injectSearchSettings(providerId, m),
+    ) as AiProviderModelListItem[];
+
+    if (typeof options?.enabled === 'boolean') {
+      list = list.filter((m) => m.enabled === options.enabled);
+    }
+
+    if (typeof options?.offset === 'number' || typeof options?.limit === 'number') {
+      const offset = Math.max(0, options?.offset ?? 0);
+      const limit = options?.limit;
+      if (typeof limit === 'number') return list.slice(offset, offset + Math.max(0, limit));
+      return list.slice(offset);
+    }
+
+    return list;
   };
 
   /**
-   * use in the `/settings?active=provider&provider=[id]` page
+   * use in the `/settings/provider/[id]` page
    */
   getAiProviderDetail = async (id: string, decryptor?: DecryptUserKeyVaults) => {
     const config = await this.aiProviderModel.getAiProviderById(id, decryptor);
@@ -306,11 +329,9 @@ export class AiInfraRepos {
     providerId: string,
   ): Promise<AiProviderModelListItem[] | undefined> => {
     try {
-      const modules = await import('model-bank');
-
       // TODO: when model-bank is a separate module, we will try import from model-bank/[prividerId] again
       // @ts-expect-error providerId is string
-      const providerModels = modules[providerId];
+      const providerModels = modelBank[providerId];
 
       // use the serverModelLists as the defined server model list
       // fallback to empty array for custom provider

@@ -31,6 +31,7 @@ export const AiProviderSDKEnum = {
   Ollama: 'ollama',
   Openai: 'openai',
   Qwen: 'qwen',
+  Replicate: 'replicate',
   Router: 'router',
   Volcengine: 'volcengine',
 } as const;
@@ -48,6 +49,7 @@ const AiProviderSdkTypes = [
   'cloudflare',
   'google',
   'huggingface',
+  'replicate',
   'router',
   'volcengine',
   'qwen',

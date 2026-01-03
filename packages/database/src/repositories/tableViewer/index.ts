@@ -19,7 +19,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 获取数据库中所有的表
+   * Get all tables in the database
    */
   async getAllTables(schema = 'public'): Promise<TableBasicInfo[]> {
     const query = sql`
@@ -47,7 +47,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 获取指定表的详细结构信息
+   * Get detailed structure information for a specified table
    */
   async getTableDetails(tableName: string): Promise<TableColumnInfo[]> {
     const query = sql`
@@ -56,7 +56,7 @@ export class TableViewerRepo {
         c.data_type,
         c.is_nullable,
         c.column_default,
-        -- 主键信息
+        -- Primary key information
         (
           SELECT true
           FROM information_schema.table_constraints tc
@@ -66,7 +66,7 @@ export class TableViewerRepo {
             AND kcu.column_name = c.column_name
             AND tc.constraint_type = 'PRIMARY KEY'
         ) is_primary_key,
-        -- 外键信息
+        -- Foreign key information
         (
           SELECT json_build_object(
             'table', ccu.table_name,
@@ -100,15 +100,15 @@ export class TableViewerRepo {
   }
 
   /**
-   * 获取表数据，支持分页、排序和筛选
+   * Get table data with support for pagination, sorting, and filtering
    */
   async getTableData(tableName: string, pagination: PaginationParams, filters?: FilterCondition[]) {
     const offset = (pagination.page - 1) * pagination.pageSize;
 
-    // 构建基础查询
+    // Build base query
     let baseQuery = sql`SELECT * FROM ${sql.identifier(tableName)}`;
 
-    // 添加筛选条件
+    // Add filter conditions
     if (filters && filters.length > 0) {
       const whereConditions = filters.map((filter) => {
         const column = sql.identifier(filter.column);
@@ -135,19 +135,19 @@ export class TableViewerRepo {
       baseQuery = sql`${baseQuery} WHERE ${sql.join(whereConditions, sql` AND `)}`;
     }
 
-    // 添加排序
+    // Add sorting
     if (pagination.sortBy) {
       const direction = pagination.sortOrder === 'desc' ? sql`DESC` : sql`ASC`;
       baseQuery = sql`${baseQuery} ORDER BY ${sql.identifier(pagination.sortBy)} ${direction}`;
     }
 
-    // 添加分页
+    // Add pagination
     const query = sql`${baseQuery} LIMIT ${pagination.pageSize} OFFSET ${offset}`;
 
-    // 获取总数
+    // Get total count
     const countQuery = sql`SELECT COUNT(*) as total FROM ${sql.identifier(tableName)}`;
 
-    // 并行执行查询
+    // Execute queries in parallel
     const [data, count] = await Promise.all([this.db.execute(query), this.db.execute(countQuery)]);
 
     return {
@@ -161,7 +161,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 更新表中的一行数据
+   * Update a row in the table
    */
   async updateRow(
     tableName: string,
@@ -185,7 +185,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 删除表中的一行数据
+   * Delete a row from the table
    */
   async deleteRow(tableName: string, id: string, primaryKeyColumn: string) {
     const query = sql`
@@ -197,7 +197,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 插入新行数据
+   * Insert new row data
    */
   async insertRow(tableName: string, data: Record<string, any>) {
     const columns = Object.keys(data).map((key) => sql.identifier(key));
@@ -218,7 +218,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 获取表的总记录数
+   * Get total record count of a table
    */
   async getTableCount(tableName: string): Promise<number> {
     const query = sql`SELECT COUNT(*) as total FROM ${sql.identifier(tableName)}`;
@@ -227,7 +227,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 批量删除数据
+   * Batch delete data
    */
   async batchDelete(tableName: string, ids: string[], primaryKeyColumn: string) {
     const query = sql`
@@ -239,7 +239,7 @@ export class TableViewerRepo {
   }
 
   /**
-   * 导出表数据（支持分页导出）
+   * Export table data (supports paginated export)
    */
   async exportTableData(
     tableName: string,

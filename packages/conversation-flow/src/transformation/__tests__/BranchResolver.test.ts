@@ -12,7 +12,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         metadata: { activeBranchIndex: 1 },
         role: 'user',
         updatedAt: 0,
@@ -34,7 +33,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         role: 'user',
         updatedAt: 0,
       };
@@ -55,7 +53,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         role: 'user',
         updatedAt: 0,
       };
@@ -76,7 +73,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         metadata: { activeBranchIndex: 2 }, // index = children.length (optimistic update)
         role: 'user',
         updatedAt: 0,
@@ -100,7 +96,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         metadata: { activeBranchIndex: 5 }, // > children.length (invalid)
         role: 'user',
         updatedAt: 0,
@@ -125,7 +120,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         metadata: { activeBranchIndex: 1 },
         role: 'user',
         updatedAt: 0,
@@ -142,7 +136,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         role: 'user',
         updatedAt: 0,
       };
@@ -161,7 +154,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         role: 'user',
         updatedAt: 0,
       };
@@ -177,7 +169,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         metadata: { activeBranchIndex: 2 }, // index = childIds.length (optimistic update)
         role: 'user',
         updatedAt: 0,
@@ -198,7 +189,6 @@ describe('BranchResolver', () => {
         content: 'test',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         metadata: { activeBranchIndex: 5 }, // > childIds.length (invalid)
         role: 'user',
         updatedAt: 0,

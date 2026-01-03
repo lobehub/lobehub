@@ -1,5 +1,5 @@
-import { SSOProvider } from '@lobechat/types';
-import { StateCreator } from 'zustand/vanilla';
+import { type SSOProvider } from '@lobechat/types';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
 import { userService } from '@/services/user';
@@ -7,7 +7,7 @@ import { userService } from '@/services/user';
 import type { UserStore } from '../../store';
 
 interface AuthProvidersData {
-  isEmailPasswordAuth: boolean;
+  hasPasswordAccount: boolean;
   providers: SSOProvider[];
 }
 
@@ -36,7 +36,7 @@ const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
     const { accountInfo, listAccounts } = await import('@/libs/better-auth/auth-client');
     const result = await listAccounts();
     const accounts = result.data || [];
-    const isEmailPasswordAuth = accounts.some((account) => account.providerId === 'credential');
+    const hasPasswordAccount = accounts.some((account) => account.providerId === 'credential');
     const providers = await Promise.all(
       accounts
         .filter((account) => account.providerId !== 'credential')
@@ -51,12 +51,12 @@ const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
           };
         }),
     );
-    return { isEmailPasswordAuth, providers };
+    return { hasPasswordAccount, providers };
   }
 
   // Fallback for NextAuth
   const providers = await userService.getUserSSOProviders();
-  return { isEmailPasswordAuth: false, providers };
+  return { hasPasswordAccount: false, providers };
 };
 
 export const createAuthSlice: StateCreator<
@@ -73,8 +73,8 @@ export const createAuthSlice: StateCreator<
     if (get().isLoadedAuthProviders) return;
 
     try {
-      const { isEmailPasswordAuth, providers } = await fetchAuthProvidersData();
-      set({ authProviders: providers, isEmailPasswordAuth, isLoadedAuthProviders: true });
+      const { hasPasswordAccount, providers } = await fetchAuthProvidersData();
+      set({ authProviders: providers, hasPasswordAccount, isLoadedAuthProviders: true });
     } catch (error) {
       console.error('Failed to fetch auth providers:', error);
       set({ isLoadedAuthProviders: true });
@@ -108,6 +108,16 @@ export const createAuthSlice: StateCreator<
     }
   },
   openLogin: async () => {
+    // Skip if already on a login page
+    const pathname = location.pathname;
+    if (
+      pathname.startsWith('/signin') ||
+      pathname.startsWith('/signup') ||
+      pathname.startsWith('/login')
+    ) {
+      return;
+    }
+
     if (enableClerk) {
       const redirectUrl = location.toString();
       get().clerkSignIn?.({
@@ -139,8 +149,8 @@ export const createAuthSlice: StateCreator<
   },
   refreshAuthProviders: async () => {
     try {
-      const { isEmailPasswordAuth, providers } = await fetchAuthProvidersData();
-      set({ authProviders: providers, isEmailPasswordAuth });
+      const { hasPasswordAccount, providers } = await fetchAuthProvidersData();
+      set({ authProviders: providers, hasPasswordAccount });
     } catch (error) {
       console.error('Failed to refresh auth providers:', error);
     }

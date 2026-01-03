@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "確定",
-    "detail": "大規模言語モデルに基づくチャットアプリ",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "について"
-  },
-  "confirm": {
-    "cancel": "キャンセル",
-    "no": "いいえ",
-    "title": "確認",
-    "yes": "はい"
-  },
-  "error": {
-    "button": "確定",
-    "detail": "操作中にエラーが発生しました。後で再試行してください。",
-    "message": "エラーが発生しました",
-    "title": "エラー"
-  },
-  "update": {
-    "downloadAndInstall": "ダウンロードしてインストール",
-    "downloadComplete": "ダウンロード完了",
-    "downloadCompleteMessage": "更新パッケージのダウンロードが完了しました。今すぐインストールしますか？",
-    "installLater": "後でインストール",
-    "installNow": "今すぐインストール",
-    "later": "後でリマインド",
-    "newVersion": "新しいバージョンが見つかりました",
-    "newVersionAvailable": "新しいバージョンが見つかりました: {{version}}",
-    "skipThisVersion": "このバージョンをスキップ"
-  }
+  "about.button": "確定",
+  "about.detail": "大規模言語モデルに基づくチャットアプリ",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "について",
+  "confirm.cancel": "キャンセル",
+  "confirm.no": "いいえ",
+  "confirm.title": "確認",
+  "confirm.yes": "はい",
+  "error.button": "確定",
+  "error.detail": "操作中にエラーが発生しました。後で再試行してください。",
+  "error.message": "エラーが発生しました",
+  "error.title": "エラー",
+  "update.downloadAndInstall": "ダウンロードしてインストール",
+  "update.downloadComplete": "ダウンロード完了",
+  "update.downloadCompleteMessage": "更新パッケージのダウンロードが完了しました。今すぐインストールしますか？",
+  "update.installLater": "後でインストール",
+  "update.installNow": "今すぐインストール",
+  "update.later": "後でリマインド",
+  "update.newVersion": "新しいバージョンが見つかりました",
+  "update.newVersionAvailable": "新しいバージョンが見つかりました: {{version}}",
+  "update.skipThisVersion": "このバージョンをスキップ"
 }

@@ -1,8 +1,14 @@
 import type { PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { SSOProvider, UserGuide, UserInitializationState, UserPreference } from '@/types/user';
-import { UserSettings } from '@/types/user/settings';
+import {
+  type SSOProvider,
+  type UserGuide,
+  type UserInitializationState,
+  type UserOnboarding,
+  type UserPreference,
+} from '@/types/user';
+import { type UserSettings } from '@/types/user/settings';
 
 export class UserService {
   getUserRegistrationDuration = async (): Promise<{
@@ -29,12 +35,24 @@ export class UserService {
     return lambdaClient.user.makeUserOnboarded.mutate();
   };
 
+  updateOnboarding = async (onboarding: UserOnboarding) => {
+    return lambdaClient.user.updateOnboarding.mutate(onboarding);
+  };
+
   updateAvatar = async (avatar: string) => {
     return lambdaClient.user.updateAvatar.mutate(avatar);
   };
 
+  updateInterests = async (interests: string[]) => {
+    return lambdaClient.user.updateInterests.mutate(interests);
+  };
+
   updateFullName = async (fullName: string) => {
     return lambdaClient.user.updateFullName.mutate(fullName);
+  };
+
+  updateUsername = async (username: string) => {
+    return lambdaClient.user.updateUsername.mutate(username);
   };
 
   updatePreference = async (preference: Partial<UserPreference>) => {

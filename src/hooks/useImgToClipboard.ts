@@ -18,7 +18,7 @@ export const useImgToClipboard = ({
       const blob = await fetch(dataUrl).then((res) => res.blob());
       navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       setLoading(false);
-      message.success(t('copySuccess', { defaultValue: 'Copy Success', ns: 'common' }));
+      message.success(t('copySuccess', { ns: 'common' }));
     } catch (error) {
       console.error('Failed to copy image', error);
       setLoading(false);

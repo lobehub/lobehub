@@ -1,4 +1,4 @@
-import { UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/settings';
 
@@ -57,7 +57,7 @@ export const createMockChatConfig = (overrides = {}) => ({
 
 // Mock Store State Factory
 export const createMockStoreState = (overrides = {}) => ({
-  activeId: TEST_IDS.SESSION_ID,
+  activeAgentId: TEST_IDS.SESSION_ID,
   activeTopicId: TEST_IDS.TOPIC_ID,
   messagesMap: {},
   toolCallingStreamIds: {},

@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { createSSEDataExtractor, createTokenSpeedCalculator, createSSEProtocolTransformer } from './protocol';
+import {
+  createCallbacksTransformer,
+  createSSEDataExtractor,
+  createSSEProtocolTransformer,
+  createTokenSpeedCalculator,
+} from './protocol';
 
 describe('createSSEDataExtractor', () => {
   // Helper function to convert string to Uint8Array
@@ -257,38 +262,36 @@ describe('createSSEProtocolTransformer', () => {
 
   it('should convert chunk into SSE formatted lines without enforcing terminal (default)', async () => {
     const transformerFn = (chunk: any) => ({ type: 'text', id: chunk.id, data: chunk.data });
-  const transformer = createSSEProtocolTransformer(transformerFn as any);
+    const transformer = createSSEProtocolTransformer(transformerFn as any);
 
     const input = { id: '1', data: 'hello' };
     const results = await processChunk(transformer, input);
 
     // Should only output the text event, no injected error on flush (default not enforced)
-    expect(results).toEqual([
-      `id: 1\n`,
-      `event: text\n`,
-      `data: ${JSON.stringify('hello')}\n\n`,
-    ]);
+    expect(results).toEqual([`id: 1\n`, `event: text\n`, `data: ${JSON.stringify('hello')}\n\n`]);
   });
 
   it('should not emit flush error if a terminal event was received (enforced)', async () => {
     const transformerFn = (chunk: any) => ({ type: 'stop', id: chunk.id, data: chunk.data });
-  const transformer = createSSEProtocolTransformer(transformerFn as any, { id: 'stream_ok' }, { requireTerminalEvent: true });
+    const transformer = createSSEProtocolTransformer(
+      transformerFn as any,
+      { id: 'stream_ok' },
+      { requireTerminalEvent: true },
+    );
 
     const input = { id: 'ok', data: 'bye' };
     const results = await processChunk(transformer, input);
 
     // Only the stop event lines should be present (no extra error event from flush)
-    expect(results).toEqual([
-      `id: ok\n`,
-      `event: stop\n`,
-      `data: ${JSON.stringify('bye')}\n\n`,
-    ]);
+    expect(results).toEqual([`id: ok\n`, `event: stop\n`, `data: ${JSON.stringify('bye')}\n\n`]);
   });
 
   it('should emit an error event on flush when no terminal event received (enforced)', async () => {
     const transformerFn = (chunk: any) => ({ type: 'text', id: chunk.id, data: chunk.data });
     const streamStack = { id: 'stream_missing_term' } as any;
-  const transformer = createSSEProtocolTransformer(transformerFn as any, streamStack, { requireTerminalEvent: true });
+    const transformer = createSSEProtocolTransformer(transformerFn as any, streamStack, {
+      requireTerminalEvent: true,
+    });
 
     const input = { id: '1', data: 'partial' };
     const results = await processChunk(transformer, input);
@@ -310,5 +313,334 @@ describe('createSSEProtocolTransformer', () => {
       `event: error\n`,
       `data: ${JSON.stringify(expectedData)}\n\n`,
     ]);
+  });
+});
+
+describe('createCallbacksTransformer', () => {
+  // Helper function to process chunks through transformer
+  const processChunks = async (
+    transformer: TransformStream<string, Uint8Array>,
+    chunks: string[],
+  ) => {
+    const results: Uint8Array[] = [];
+    const readable = new ReadableStream<string>({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk);
+        }
+        controller.close();
+      },
+    });
+
+    const writable = new WritableStream<Uint8Array>({
+      write(chunk) {
+        results.push(chunk);
+      },
+    });
+
+    await readable.pipeThrough(transformer).pipeTo(writable);
+
+    return results;
+  };
+
+  it('should call onStart callback when stream starts', async () => {
+    const onStart = vi.fn();
+    const transformer = createCallbacksTransformer({ onStart });
+
+    await processChunks(transformer, []);
+
+    expect(onStart).toHaveBeenCalledOnce();
+  });
+
+  it('should handle text chunks and call onText callback', async () => {
+    const onText = vi.fn();
+    const transformer = createCallbacksTransformer({ onText });
+
+    const chunks = ['event: text\n', 'data: "Hello"\n\n', 'event: text\n', 'data: " World"\n\n'];
+
+    await processChunks(transformer, chunks);
+
+    expect(onText).toHaveBeenCalledTimes(2);
+    expect(onText).toHaveBeenNthCalledWith(1, 'Hello');
+    expect(onText).toHaveBeenNthCalledWith(2, ' World');
+  });
+
+  it('should handle reasoning chunks and call onThinking callback', async () => {
+    const onThinking = vi.fn();
+    const transformer = createCallbacksTransformer({ onThinking });
+
+    const chunks = [
+      'event: reasoning\n',
+      'data: "Let me think..."\n\n',
+      'event: reasoning\n',
+      'data: " about this"\n\n',
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onThinking).toHaveBeenCalledTimes(2);
+    expect(onThinking).toHaveBeenNthCalledWith(1, 'Let me think...');
+    expect(onThinking).toHaveBeenNthCalledWith(2, ' about this');
+  });
+
+  it('should handle base64_image chunks and call onBase64Image callback', async () => {
+    const receivedCalls: Array<{
+      image: { id: string; data: string };
+      images: Array<{ id: string; data: string }>;
+    }> = [];
+    const onBase64Image = vi.fn((data) => {
+      // Clone the data to capture the state at call time
+      receivedCalls.push({
+        image: { ...data.image },
+        images: [...data.images],
+      });
+    });
+    const transformer = createCallbacksTransformer({ onBase64Image });
+
+    const imageData1 = { image: { id: 'img1', data: 'base64data1' }, images: [] };
+    const imageData2 = { image: { id: 'img2', data: 'base64data2' }, images: [] };
+
+    const chunks = [
+      'event: base64_image\n',
+      `data: ${JSON.stringify(imageData1)}\n\n`,
+      'event: base64_image\n',
+      `data: ${JSON.stringify(imageData2)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onBase64Image).toHaveBeenCalledTimes(2);
+    // Check the captured state at each call time
+    expect(receivedCalls[0]).toEqual({
+      image: { id: 'img1', data: 'base64data1' },
+      images: [{ id: 'img1', data: 'base64data1' }],
+    });
+    expect(receivedCalls[1]).toEqual({
+      image: { id: 'img2', data: 'base64data2' },
+      images: [
+        { id: 'img1', data: 'base64data1' },
+        { id: 'img2', data: 'base64data2' },
+      ],
+    });
+  });
+
+  it('should handle content_part chunks and call onContentPart callback', async () => {
+    const onContentPart = vi.fn();
+    const transformer = createCallbacksTransformer({ onContentPart });
+
+    const partData = {
+      content: 'Hello',
+      partType: 'text',
+      mimeType: 'text/plain',
+      thoughtSignature: 'sig123',
+    };
+
+    const chunks = ['event: content_part\n', `data: ${JSON.stringify(partData)}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onContentPart).toHaveBeenCalledOnce();
+    expect(onContentPart).toHaveBeenCalledWith({
+      content: 'Hello',
+      partType: 'text',
+      mimeType: 'text/plain',
+      thoughtSignature: 'sig123',
+    });
+  });
+
+  it('should handle reasoning_part chunks and call onReasoningPart callback', async () => {
+    const onReasoningPart = vi.fn();
+    const transformer = createCallbacksTransformer({ onReasoningPart });
+
+    const partData = {
+      content: 'base64ImageData',
+      partType: 'image',
+      mimeType: 'image/png',
+      inReasoning: true,
+    };
+
+    const chunks = ['event: reasoning_part\n', `data: ${JSON.stringify(partData)}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onReasoningPart).toHaveBeenCalledOnce();
+    expect(onReasoningPart).toHaveBeenCalledWith({
+      content: 'base64ImageData',
+      partType: 'image',
+      mimeType: 'image/png',
+    });
+  });
+
+  it('should handle usage chunks and call onUsage callback', async () => {
+    const onUsage = vi.fn();
+    const transformer = createCallbacksTransformer({ onUsage });
+
+    const usageData = {
+      inputTextTokens: 10,
+      outputTextTokens: 20,
+      totalTokens: 30,
+    };
+
+    const chunks = ['event: usage\n', `data: ${JSON.stringify(usageData)}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onUsage).toHaveBeenCalledOnce();
+    expect(onUsage).toHaveBeenCalledWith(usageData);
+  });
+
+  it('should handle grounding chunks and call onGrounding callback', async () => {
+    const onGrounding = vi.fn();
+    const transformer = createCallbacksTransformer({ onGrounding });
+
+    const groundingData = {
+      sources: [{ url: 'https://example.com', title: 'Example' }],
+    };
+
+    const chunks = ['event: grounding\n', `data: ${JSON.stringify(groundingData)}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onGrounding).toHaveBeenCalledOnce();
+    expect(onGrounding).toHaveBeenCalledWith(groundingData);
+  });
+
+  it('should handle tool_calls chunks and call onToolsCalling callback', async () => {
+    const onToolsCalling = vi.fn();
+    const transformer = createCallbacksTransformer({ onToolsCalling });
+
+    const toolCallData = [
+      {
+        index: 0,
+        id: 'call_123',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '{"city":"SF"}' },
+      },
+    ];
+
+    const chunks = ['event: tool_calls\n', `data: ${JSON.stringify(toolCallData)}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onToolsCalling).toHaveBeenCalledOnce();
+    expect(onToolsCalling).toHaveBeenCalledWith({
+      chunk: toolCallData,
+      toolsCalling: expect.any(Array),
+    });
+  });
+
+  it('should call onCompletion and onFinal callbacks on flush with aggregated data', async () => {
+    const onCompletion = vi.fn();
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion, onFinal });
+
+    const chunks = [
+      'event: text\n',
+      'data: "Hello"\n\n',
+      'event: text\n',
+      'data: " World"\n\n',
+      'event: reasoning\n',
+      'data: "Thinking..."\n\n',
+      'event: usage\n',
+      `data: ${JSON.stringify({ totalTokens: 10 })}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledOnce();
+    expect(onFinal).toHaveBeenCalledOnce();
+
+    const expectedData = {
+      text: 'Hello World',
+      thinking: 'Thinking...',
+      usage: { totalTokens: 10 },
+      grounding: undefined,
+      speed: undefined,
+      toolsCalling: undefined,
+    };
+
+    expect(onCompletion).toHaveBeenCalledWith(expectedData);
+    expect(onFinal).toHaveBeenCalledWith(expectedData);
+  });
+
+  it('should handle speed chunks and include in final data', async () => {
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onFinal });
+
+    const speedData = { tps: 50, ttft: 100, duration: 500, latency: 600 };
+
+    const chunks = [
+      'event: text\n',
+      'data: "Hi"\n\n',
+      'event: speed\n',
+      `data: ${JSON.stringify(speedData)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speed: speedData,
+      }),
+    );
+  });
+
+  it('should work without any callbacks', async () => {
+    const transformer = createCallbacksTransformer(undefined);
+
+    const chunks = ['event: text\n', 'data: "Hello"\n\n'];
+
+    // Should not throw
+    await expect(processChunks(transformer, chunks)).resolves.toBeDefined();
+  });
+
+  it('should ignore invalid JSON data gracefully', async () => {
+    const onText = vi.fn();
+    const transformer = createCallbacksTransformer({ onText });
+
+    const chunks = [
+      'event: text\n',
+      'data: invalid-json\n\n',
+      'event: text\n',
+      'data: "Valid"\n\n',
+    ];
+
+    await processChunks(transformer, chunks);
+
+    // Only the valid JSON should trigger callback
+    expect(onText).toHaveBeenCalledOnce();
+    expect(onText).toHaveBeenCalledWith('Valid');
+  });
+
+  it('should handle multiple tool_calls chunks and accumulate them', async () => {
+    const onToolsCalling = vi.fn();
+    const transformer = createCallbacksTransformer({ onToolsCalling });
+
+    const toolCall1 = [
+      {
+        index: 0,
+        id: 'call_1',
+        type: 'function',
+        function: { name: 'func1', arguments: '' },
+      },
+    ];
+
+    const toolCall2 = [
+      {
+        index: 0,
+        function: { arguments: '{"a":1}' },
+      },
+    ];
+
+    const chunks = [
+      'event: tool_calls\n',
+      `data: ${JSON.stringify(toolCall1)}\n\n`,
+      'event: tool_calls\n',
+      `data: ${JSON.stringify(toolCall2)}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onToolsCalling).toHaveBeenCalledTimes(2);
   });
 });

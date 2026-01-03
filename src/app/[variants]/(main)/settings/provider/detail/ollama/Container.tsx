@@ -1,10 +1,9 @@
-import { ActionIcon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { createStaticStyles , responsive } from 'antd-style';
 import { XIcon } from 'lucide-react';
-import { ReactNode, useState } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { type ReactNode, useState } from 'react';
 
-const useStyles = createStyles(({ css, token, responsive }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   close: css`
     position: absolute;
     inset-block-start: 16px;
@@ -15,12 +14,12 @@ const useStyles = createStyles(({ css, token, responsive }) => ({
 
     width: 100%;
     padding-inline: 40px;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 8px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
-    ${responsive.mobile} {
+    ${responsive.sm} {
       width: 100%;
       padding-inline: 12px;
     }
@@ -34,7 +33,6 @@ const Container = ({
   children: ReactNode;
   setError: (error?: any) => void;
 }) => {
-  const { styles } = useStyles();
   const [show, setShow] = useState(true);
 
   return (

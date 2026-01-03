@@ -36,13 +36,13 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 1. **创建控制器 (Controller)**
    - 位置：`apps/desktop/src/main/controllers/`
    - 示例：创建 `NewFeatureCtr.ts`
-   - 规范：按 `_template.ts` 模板格式实现
-   - 注册：在 `apps/desktop/src/main/controllers/index.ts` 导出
+   - 需继承 `ControllerModule`，并设置 `static readonly groupName`（例如 `static override readonly groupName = 'newFeature';`）
+   - 按 `_template.ts` 模板格式实现，并在 `apps/desktop/src/main/controllers/registry.ts` 的 `controllerIpcConstructors`（或 `controllerServerIpcConstructors`）中注册，保证类型推导与自动装配
 
 2. **定义 IPC 事件处理器**
-   - 使用 `@ipcClientEvent('eventName')` 装饰器注册事件处理函数
-   - 处理函数应接收前端传递的参数并返回结果
-   - 处理可能的错误情况
+   - 使用 `@IpcMethod()` 装饰器暴露渲染进程可访问的通道，或使用 `@IpcServerMethod()` 声明仅供 Next.js 服务器调用的 IPC
+   - 通道名称基于 `groupName.methodName` 自动生成，不再手动拼接字符串
+   - 处理函数可通过 `getIpcContext()` 获取 `sender`、`event` 等上下文信息，并按照需要返回结构化结果
 
 3. **实现业务逻辑**
    - 可能需要调用 Electron API 或 Node.js 原生模块
@@ -60,15 +60,17 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 1. **创建服务层**
    - 位置：`src/services/electron/`
    - 添加服务方法调用 IPC
-   - 使用 `dispatch` 或 `invoke` 函数
+   - 使用 `ensureElectronIpc()` 生成的类型安全代理，避免手动拼通道名称
 
    ```typescript
    // src/services/electron/newFeatureService.ts
-   import { dispatch } from '@lobechat/electron-client-ipc';
-   import { NewFeatureParams } from 'types';
+   import { ensureElectronIpc } from '@/utils/electron/ipc';
+   import type { NewFeatureParams } from '@lobechat/electron-client-ipc';
+
+   const ipc = ensureElectronIpc();
 
    export const newFeatureService = async (params: NewFeatureParams) => {
-     return dispatch('newFeatureEventName', params);
+     return ipc.newFeature.doSomething(params);
    };
    ```
 
@@ -118,36 +120,31 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
 ```typescript
 // apps/desktop/src/main/controllers/NotificationCtr.ts
-import { BrowserWindow, Notification } from 'electron';
-import { ipcClientEvent } from 'electron-client-ipc';
+import { Notification } from 'electron';
+import { ControllerModule, IpcMethod } from '@/controllers';
+import type {
+  DesktopNotificationResult,
+  ShowDesktopNotificationParams,
+} from '@lobechat/electron-client-ipc';
 
-interface ShowNotificationParams {
-  title: string;
-  body: string;
-}
+export default class NotificationCtr extends ControllerModule {
+  static override readonly groupName = 'notification';
 
-export class NotificationCtr {
-  @ipcClientEvent('showNotification')
-  async handleShowNotification({ title, body }: ShowNotificationParams) {
+  @IpcMethod()
+  async showDesktopNotification(
+    params: ShowDesktopNotificationParams,
+  ): Promise<DesktopNotificationResult> {
+    if (!Notification.isSupported()) {
+      return { error: 'Notifications not supported', success: false };
+    }
+
     try {
-      if (!Notification.isSupported()) {
-        return { success: false, error: 'Notifications not supported' };
-      }
-
-      const notification = new Notification({
-        title,
-        body,
-      });
-
+      const notification = new Notification({ body: params.body, title: params.title });
       notification.show();
-
       return { success: true };
     } catch (error) {
-      console.error('Failed to show notification:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+      console.error('[NotificationCtr] Failed to show notification:', error);
+      return { error: error instanceof Error ? error.message : 'Unknown error', success: false };
     }
   }
 }

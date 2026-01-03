@@ -1,197 +1,137 @@
 {
-  "ArgsInput": {
-    "addArgument": "إضافة وسيط",
-    "argumentPlaceholder": "الوسيط {{index}}",
-    "enterFirstArgument": "أدخل الوسيط الأول..."
-  },
-  "DragUpload": {
-    "dragDesc": "اسحب الملفات هنا، يدعم تحميل عدة صور.",
-    "dragFileDesc": "اسحب الصور والملفات هنا، يدعم تحميل عدة صور وملفات.",
-    "dragFileTitle": "تحميل الملفات",
-    "dragTitle": "تحميل الصور"
-  },
-  "FileManager": {
-    "actions": {
-      "addToKnowledgeBase": "إضافة إلى قاعدة المعرفة",
-      "addToOtherKnowledgeBase": "إضافة إلى قاعدة معرفة أخرى",
-      "batchChunking": "تقسيم دفعي",
-      "chunking": "تقسيم",
-      "chunkingTooltip": "قم بتقسيم الملف إلى عدة كتل نصية وتحويلها إلى متجهات، يمكن استخدامها في البحث الدلالي والمحادثة حول الملفات",
-      "chunkingUnsupported": "هذا الملف لا يدعم تقسيم الأجزاء",
-      "confirmDelete": "سيتم حذف هذا الملف، ولن يمكن استعادته بعد الحذف، يرجى تأكيد العملية",
-      "confirmDeleteMultiFiles": "سيتم حذف {{count}} ملفًا محددًا، ولن يمكن استعادته بعد الحذف، يرجى تأكيد العملية",
-      "confirmRemoveFromKnowledgeBase": "سيتم إزالة {{count}} ملفًا محددًا من قاعدة المعرفة، لا يزال بإمكانك رؤية الملفات في جميع الملفات، يرجى تأكيد العملية",
-      "copyUrl": "نسخ الرابط",
-      "copyUrlSuccess": "تم نسخ عنوان الملف بنجاح",
-      "createChunkingTask": "جارٍ التحضير...",
-      "deleteSuccess": "تم حذف الملف بنجاح",
-      "downloading": "جارٍ تحميل الملف...",
-      "removeFromKnowledgeBase": "إزالة من قاعدة المعرفة",
-      "removeFromKnowledgeBaseSuccess": "تمت إزالة الملف بنجاح"
-    },
-    "bottom": "لقد وصلت إلى النهاية",
-    "config": {
-      "showFilesInKnowledgeBase": "عرض المحتوى في قاعدة المعرفة"
-    },
-    "emptyStatus": {
-      "actions": {
-        "file": "رفع ملف",
-        "folder": "رفع مجلد",
-        "knowledgeBase": "إنشاء قاعدة معرفة جديدة"
-      },
-      "or": "أو",
-      "title": "قم بسحب الملف أو المجلد هنا"
-    },
-    "title": {
-      "createdAt": "تاريخ الإنشاء",
-      "size": "الحجم",
-      "title": "ملف"
-    },
-    "total": {
-      "fileCount": "إجمالي {{count}} عنصر",
-      "selectedCount": "تم تحديد {{count}} عنصر"
-    },
-    "view": {
-      "list": "عرض القائمة",
-      "masonry": "عرض الشبكة"
-    }
-  },
-  "FileParsingStatus": {
-    "chunks": {
-      "embeddingStatus": {
-        "empty": "لم يتم تحويل كتل النص بالكامل إلى متجهات، مما سيؤدي إلى عدم توفر وظيفة البحث الدلالي، لتحسين جودة البحث، يرجى تحويل كتل النص إلى متجهات",
-        "error": "فشل في تحويل البيانات إلى متجهات",
-        "errorResult": "فشل في تحويل البيانات إلى متجهات، يرجى التحقق والمحاولة مرة أخرى. سبب الفشل:",
-        "processing": "يتم تحويل كتل النص إلى متجهات، يرجى الانتظار",
-        "success": "تم تحويل جميع كتل النص الحالية إلى متجهات"
-      },
-      "embeddings": "تحويل إلى متجهات",
-      "status": {
-        "error": "فشل في التقسيم",
-        "errorResult": "فشل في التقسيم، يرجى التحقق والمحاولة مرة أخرى. سبب الفشل:",
-        "processing": "جارٍ التقسيم",
-        "processingTip": "الخادم يقوم بتقسيم كتل النص، إغلاق الصفحة لا يؤثر على تقدم التقسيم"
-      }
-    }
-  },
-  "GoBack": {
-    "back": "عودة"
-  },
-  "HtmlPreview": {
-    "actions": {
-      "download": "تنزيل",
-      "preview": "معاينة"
-    },
-    "iframeTitle": "معاينة HTML",
-    "mode": {
-      "code": "رمز",
-      "preview": "معاينة"
-    },
-    "title": "معاينة HTML"
-  },
-  "ImageUpload": {
-    "actions": {
-      "changeImage": "انقر لتغيير الصورة",
-      "dropMultipleFiles": "لا يدعم تحميل ملفات متعددة في آن واحد، سيتم استخدام الملف الأول فقط"
-    },
-    "placeholder": {
-      "primary": "إضافة صورة",
-      "secondary": "انقر أو اسحب للإرفاق"
-    }
-  },
-  "KeyValueEditor": {
-    "addButton": "إضافة صف جديد",
-    "deleteTooltip": "حذف",
-    "duplicateKeyError": "يجب أن يكون اسم المفتاح فريدًا",
-    "keyPlaceholder": "المفتاح",
-    "valuePlaceholder": "القيمة"
-  },
-  "LocalFile": {
-    "action": {
-      "open": "فتح",
-      "showInFolder": "عرض في المجلد"
-    }
-  },
-  "MaxTokenSlider": {
-    "unlimited": "غير محدود"
-  },
-  "ModelSelect": {
-    "featureTag": {
-      "custom": "نموذج مخصص، الإعداد الافتراضي يدعم الاستدعاء الوظيفي والتعرف البصري، يرجى التحقق من قدرة النموذج على القيام بذلك بناءً على الحالة الفعلية",
-      "file": "يدعم هذا النموذج قراءة وتعرف الملفات المرفوعة",
-      "functionCall": "يدعم هذا النموذج استدعاء الوظائف",
-      "imageOutput": "يدعم هذا النموذج إنشاء الصور",
-      "reasoning": "يدعم هذا النموذج التفكير العميق",
-      "search": "يدعم هذا النموذج البحث عبر الإنترنت",
-      "tokens": "يدعم هذا النموذج حتى {{tokens}} رمزًا في جلسة واحدة",
-      "video": "هذا النموذج يدعم التعرف على الفيديو",
-      "vision": "يدعم هذا النموذج التعرف البصري"
-    },
-    "removed": "هذا النموذج لم يعد متوفر في القائمة، سيتم إزالته تلقائيًا إذا تم إلغاء تحديده"
-  },
-  "ModelSwitchPanel": {
-    "emptyModel": "لا توجد نماذج ممكن تمكينها، يرجى الانتقال إلى الإعدادات لتمكينها",
-    "emptyProvider": "لا توجد مزودات مفعلة، يرجى الذهاب إلى الإعدادات لتفعيلها",
-    "goToSettings": "اذهب إلى الإعدادات",
-    "provider": "مزود",
-    "title": "نموذج"
-  },
-  "MultiImagesUpload": {
-    "actions": {
-      "uploadMore": "انقر أو اسحب لإضافة المزيد"
-    },
-    "modal": {
-      "complete": "اكتمل",
-      "newFileIndicator": "جديد",
-      "selectImageToPreview": "يرجى اختيار صورة للمعاينة",
-      "title": "إدارة الصور ({{count}})",
-      "upload": "تحميل الصور"
-    },
-    "placeholder": {
-      "primary": "انقر أو اسحب لتحميل الصور",
-      "secondary": "يدعم اختيار عدة صور"
-    },
-    "progress": {
-      "uploadingWithCount": "تم تحميل {{completed}} من أصل {{total}}"
-    },
-    "validation": {
-      "fileSizeExceeded": "تجاوز حجم الملف الحد المسموح",
-      "fileSizeExceededDetail": "{{fileName}} ({{actualSize}}) يتجاوز الحد الأقصى للحجم {{maxSize}}",
-      "fileSizeExceededMultiple": "{{count}} ملفات تتجاوز الحد الأقصى للحجم {{maxSize}}: {{fileList}}",
-      "imageCountExceeded": "تجاوز عدد الصور الحد المسموح"
-    }
-  },
-  "OllamaSetupGuide": {
-    "action": {
-      "close": "إغلاق الإشعار",
-      "start": "تم التثبيت والتشغيل، ابدأ المحادثة"
-    },
-    "cors": {
-      "description": "بسبب قيود أمان المتصفح، تحتاج إلى تكوين CORS لـ Ollama لاستخدامه بشكل صحيح.",
-      "linux": {
-        "env": "أضف `Environment` تحت قسم [Service]، وأضف متغير البيئة OLLAMA_ORIGINS:",
-        "reboot": "أعد تحميل systemd وأعد تشغيل Ollama",
-        "systemd": "استخدم systemd لتحرير خدمة ollama:"
-      },
-      "macos": "يرجى فتح تطبيق «الطرفية» ولصق الأوامر التالية ثم الضغط على Enter للتنفيذ",
-      "reboot": "يرجى إعادة تشغيل خدمة Ollama بعد الانتهاء من التنفيذ",
-      "title": "تكوين Ollama للسماح بالوصول عبر النطاقات المتعددة",
-      "windows": "على نظام Windows، انقر على «لوحة التحكم»، ثم انتقل إلى تحرير متغيرات البيئة للنظام. أنشئ متغير بيئة جديد باسم «OLLAMA_ORIGINS» لقائمة المستخدم الخاصة بك، وقيمته هي *، ثم انقر على «موافق/تطبيق» لحفظ التغييرات."
-    },
-    "install": {
-      "description": "يرجى التأكد من أنك قد قمت بتشغيل Ollama، إذا لم تقم بتنزيل Ollama، يرجى زيارة الموقع الرسمي <1>للتنزيل</1>",
-      "docker": "إذا كنت تفضل استخدام Docker، فإن Ollama يوفر أيضًا صورة Docker رسمية، يمكنك سحبها باستخدام الأمر التالي:",
-      "linux": {
-        "command": "قم بتثبيت باستخدام الأمر التالي:",
-        "manual": "أو يمكنك الرجوع إلى <1>دليل التثبيت اليدوي لنظام Linux</1> للتثبيت بنفسك."
-      },
-      "title": "تثبيت وتشغيل تطبيق Ollama محليًا",
-      "windowsTab": "Windows (نسخة المعاينة)"
-    }
-  },
-  "Thinking": {
-    "thinking": "في حالة تفكير عميق...",
-    "thought": "لقد فكرت بعمق (استغرق الأمر {{duration}} ثانية)",
-    "thoughtWithDuration": "لقد فكرت بعمق"
-  }
+  "ArgsInput.addArgument": "إضافة وسيطة",
+  "ArgsInput.argumentPlaceholder": "وسيطة {{index}}",
+  "ArgsInput.enterFirstArgument": "أدخل الوسيطة الأولى...",
+  "DragUpload.dragDesc": "اسحب الملفات وأفلتها هنا لتحميل صور متعددة.",
+  "DragUpload.dragFileDesc": "اسحب الصور والملفات وأفلتها هنا لتحميل صور وملفات متعددة.",
+  "DragUpload.dragFileTitle": "تحميل الملفات",
+  "DragUpload.dragTitle": "تحميل الصور",
+  "FileManager.actions.addToKnowledgeBase": "إضافة إلى المكتبة",
+  "FileManager.actions.addToOtherKnowledgeBase": "إضافة إلى مكتبة أخرى",
+  "FileManager.actions.batchChunking": "تجزئة جماعية",
+  "FileManager.actions.chunking": "تجزئة",
+  "FileManager.actions.chunkingTooltip": "تقسيم الملف إلى أجزاء نصية متعددة وتضمينها للبحث الدلالي والحوار مع الملف.",
+  "FileManager.actions.chunkingUnsupported": "هذا الملف لا يدعم التجزئة.",
+  "FileManager.actions.confirmDelete": "أنت على وشك حذف هذا الملف. لا يمكن استعادته بعد الحذف. يرجى تأكيد الإجراء.",
+  "FileManager.actions.confirmDeleteFolder": "أنت على وشك حذف هذا المجلد وجميع محتوياته. لا يمكن التراجع عن هذا الإجراء. يرجى تأكيد القرار.",
+  "FileManager.actions.confirmDeleteMultiFiles": "أنت على وشك حذف {{count}} ملفًا محددًا. لا يمكن استعادتها بعد الحذف. يرجى تأكيد الإجراء.",
+  "FileManager.actions.confirmRemoveFromKnowledgeBase": "أنت على وشك إزالة {{count}} ملف(ات) من المكتبة. ستظل متاحة في جميع الملفات. يرجى التأكيد للمتابعة.",
+  "FileManager.actions.copyUrl": "نسخ الرابط",
+  "FileManager.actions.copyUrlSuccess": "تم نسخ رابط الملف بنجاح.",
+  "FileManager.actions.createChunkingTask": "جارٍ التحضير...",
+  "FileManager.actions.deleteSuccess": "تم حذف الملف بنجاح.",
+  "FileManager.actions.downloading": "جارٍ تنزيل الملف...",
+  "FileManager.actions.goBack": "العودة إلى الصفحة السابقة",
+  "FileManager.actions.goForward": "الانتقال إلى الصفحة التالية",
+  "FileManager.actions.goToParent": "الانتقال إلى المجلد الرئيسي",
+  "FileManager.actions.moveError": "فشل في نقل الملف",
+  "FileManager.actions.moveHere": "نقل إلى هنا",
+  "FileManager.actions.moveSuccess": "تم نقل الملف بنجاح",
+  "FileManager.actions.moveToFolder": "نقل إلى...",
+  "FileManager.actions.moveToRoot": "نقل إلى الدليل الرئيسي",
+  "FileManager.actions.moving": "جارٍ النقل...",
+  "FileManager.actions.removeFromKnowledgeBase": "إزالة من المكتبة",
+  "FileManager.actions.removeFromKnowledgeBaseSuccess": "تمت إزالة الملف بنجاح.",
+  "FileManager.actions.rename": "إعادة التسمية",
+  "FileManager.actions.renameError": "فشل في إعادة التسمية",
+  "FileManager.actions.renameSuccess": "تمت إعادة التسمية بنجاح",
+  "FileManager.bottom": "لقد وصلت إلى النهاية.",
+  "FileManager.config.showFilesInKnowledgeBase": "عرض المحتوى في المكتبة",
+  "FileManager.emptyStatus.actions.file": "تحميل ملف",
+  "FileManager.emptyStatus.actions.folder": "تحميل مجلد",
+  "FileManager.emptyStatus.actions.knowledgeBase": "إنشاء مكتبة",
+  "FileManager.emptyStatus.or": "أو",
+  "FileManager.emptyStatus.title": "اسحب الملفات أو المجلدات إلى هنا",
+  "FileManager.noFolders": "لا توجد مجلدات متاحة",
+  "FileManager.sort.dateAdded": "تاريخ الإضافة",
+  "FileManager.sort.name": "الاسم",
+  "FileManager.sort.size": "الحجم",
+  "FileManager.title.createdAt": "تاريخ الإنشاء",
+  "FileManager.title.size": "الحجم",
+  "FileManager.title.title": "الملف",
+  "FileManager.total.fileCount": "الإجمالي {{count}} عنصر",
+  "FileManager.total.selectedCount": "المحدد {{count}} عنصر",
+  "FileManager.view.list": "عرض القائمة",
+  "FileManager.view.masonry": "عرض الشبكة",
+  "FileParsingStatus.chunks.embeddingStatus.empty": "لم يتم تضمين جميع أجزاء النص، مما يجعل ميزة البحث الدلالي غير متاحة. لتحسين جودة البحث، يرجى تضمين أجزاء النص.",
+  "FileParsingStatus.chunks.embeddingStatus.error": "فشل في التضمين",
+  "FileParsingStatus.chunks.embeddingStatus.errorResult": "فشل في التوجيه الشعاعي، يرجى التحقق والمحاولة مرة أخرى. تفاصيل الخطأ:",
+  "FileParsingStatus.chunks.embeddingStatus.processing": "جارٍ تضمين أجزاء النص، يرجى الانتظار.",
+  "FileParsingStatus.chunks.embeddingStatus.success": "تم تضمين جميع أجزاء النص الحالية",
+  "FileParsingStatus.chunks.embeddings": "التضمين",
+  "FileParsingStatus.chunks.status.error": "فشل في التجزئة",
+  "FileParsingStatus.chunks.status.errorResult": "فشل في التجزئة، يرجى التحقق والمحاولة مرة أخرى. تفاصيل الخطأ:",
+  "FileParsingStatus.chunks.status.processing": "جارٍ التجزئة",
+  "FileParsingStatus.chunks.status.processingTip": "الخادم يقوم بتقسيم أجزاء النص؛ إغلاق الصفحة لن يؤثر على تقدم التجزئة.",
+  "GoBack.back": "رجوع",
+  "HtmlPreview.actions.download": "تنزيل",
+  "HtmlPreview.actions.preview": "معاينة",
+  "HtmlPreview.iframeTitle": "معاينة HTML",
+  "HtmlPreview.mode.code": "كود",
+  "HtmlPreview.mode.preview": "معاينة",
+  "HtmlPreview.title": "معاينة HTML",
+  "ImageUpload.actions.changeImage": "انقر لتغيير الصورة",
+  "ImageUpload.actions.dropMultipleFiles": "تحميل ملفات متعددة غير مدعوم؛ سيتم استخدام الملف الأول فقط",
+  "ImageUpload.placeholder.primary": "إضافة صورة",
+  "ImageUpload.placeholder.secondary": "انقر أو اسحب للتحميل",
+  "KeyValueEditor.addButton": "إضافة صف",
+  "KeyValueEditor.deleteTooltip": "حذف",
+  "KeyValueEditor.duplicateKeyError": "يجب أن يكون المفتاح فريدًا",
+  "KeyValueEditor.keyPlaceholder": "المفتاح",
+  "KeyValueEditor.valuePlaceholder": "القيمة",
+  "LocalFile.action.open": "فتح",
+  "LocalFile.action.showInFolder": "عرض في المجلد",
+  "MaxTokenSlider.unlimited": "غير محدود",
+  "ModelSelect.featureTag.custom": "نموذج مخصص، يدعم افتراضيًا استدعاء الوظائف والتعرف البصري. يرجى التحقق من توفر هذه القدرات حسب الحالة الفعلية.",
+  "ModelSelect.featureTag.file": "يدعم هذا النموذج تحميل الملفات للقراءة والتعرف.",
+  "ModelSelect.featureTag.functionCall": "يدعم هذا النموذج استدعاء الوظائف.",
+  "ModelSelect.featureTag.imageOutput": "يدعم هذا النموذج توليد الصور.",
+  "ModelSelect.featureTag.reasoning": "يدعم هذا النموذج التفكير العميق.",
+  "ModelSelect.featureTag.search": "يدعم هذا النموذج البحث عبر الإنترنت.",
+  "ModelSelect.featureTag.tokens": "يدعم هذا النموذج حتى {{tokens}} رمزًا في جلسة واحدة.",
+  "ModelSelect.featureTag.video": "يدعم هذا النموذج التعرف على الفيديو",
+  "ModelSelect.featureTag.vision": "يدعم هذا النموذج التعرف البصري.",
+  "ModelSelect.removed": "النموذج غير موجود في القائمة. سيتم حذفه تلقائيًا إذا تم إلغاء تحديده.",
+  "ModelSwitchPanel.emptyModel": "لا يوجد نموذج مفعل. يرجى الذهاب إلى الإعدادات لتفعيله.",
+  "ModelSwitchPanel.emptyProvider": "لا يوجد مزود مفعل. يرجى الذهاب إلى الإعدادات لتفعيل أحدهم.",
+  "ModelSwitchPanel.goToSettings": "الذهاب إلى الإعدادات",
+  "ModelSwitchPanel.provider": "المزود",
+  "ModelSwitchPanel.title": "النموذج",
+  "MultiImagesUpload.actions.uploadMore": "انقر أو اسحب لتحميل المزيد",
+  "MultiImagesUpload.modal.complete": "تم",
+  "MultiImagesUpload.modal.newFileIndicator": "جديد",
+  "MultiImagesUpload.modal.selectImageToPreview": "يرجى اختيار صورة للمعاينة",
+  "MultiImagesUpload.modal.title": "إدارة الصور ({{count}})",
+  "MultiImagesUpload.modal.upload": "تحميل الصور",
+  "MultiImagesUpload.placeholder.primary": "انقر أو اسحب لتحميل الصور",
+  "MultiImagesUpload.placeholder.secondary": "يدعم اختيار صور متعددة",
+  "MultiImagesUpload.progress.uploadingWithCount": "{{completed}}/{{total}} تم تحميلها",
+  "MultiImagesUpload.validation.fileSizeExceeded": "يتجاوز حجم الملف الحد الأقصى المسموح به",
+  "MultiImagesUpload.validation.fileSizeExceededDetail": "{{fileName}} ({{actualSize}}) يتجاوز الحد الأقصى المسموح به وهو {{maxSize}}",
+  "MultiImagesUpload.validation.fileSizeExceededMultiple": "{{count}} ملف(ات) تتجاوز الحد الأقصى المسموح به وهو {{maxSize}}: {{fileList}}",
+  "MultiImagesUpload.validation.imageCountExceeded": "تم تجاوز الحد الأقصى لعدد الصور",
+  "OllamaSetupGuide.action.close": "إغلاق النافذة",
+  "OllamaSetupGuide.action.start": "تم التثبيت",
+  "OllamaSetupGuide.cors.description": "بسبب قيود أمان المتصفح، تحتاج إلى تكوين إعدادات الوصول عبر النطاقات ليعمل Ollama بشكل صحيح.",
+  "OllamaSetupGuide.cors.linux.env": "أضف `Environment` ضمن قسم [Service]، وقم بتعيين متغير البيئة OLLAMA_ORIGINS:",
+  "OllamaSetupGuide.cors.linux.reboot": "أعد تحميل systemd وأعد تشغيل Ollama",
+  "OllamaSetupGuide.cors.linux.systemd": "قم بتحرير خدمة ollama باستخدام systemd:",
+  "OllamaSetupGuide.cors.macos": "يرجى فتح تطبيق 'Terminal'، ولصق الأمر التالي، ثم الضغط على Enter لتنفيذه.",
+  "OllamaSetupGuide.cors.reboot": "يرجى إعادة تشغيل خدمة Ollama بعد الانتهاء من التنفيذ.",
+  "OllamaSetupGuide.cors.title": "تكوين Ollama للوصول عبر النطاقات",
+  "OllamaSetupGuide.cors.windows": "في Windows، انقر على 'لوحة التحكم' واذهب إلى تحرير متغيرات بيئة النظام. أنشئ متغير بيئة جديد باسم 'OLLAMA_ORIGINS' لحساب المستخدم الخاص بك، واجعل القيمة *، ثم انقر على 'موافق/تطبيق' للحفظ.",
+  "OllamaSetupGuide.install.description": "يرجى التأكد من أنك قمت بتشغيل Ollama. إذا لم تقم بتنزيله بعد، يرجى زيارة الموقع الرسمي لـ<1>تحميله</1>.",
+  "OllamaSetupGuide.install.docker": "إذا كنت تفضل استخدام Docker، فإن Ollama يوفر أيضًا صورة Docker رسمية يمكنك سحبها باستخدام الأمر التالي:",
+  "OllamaSetupGuide.install.linux.command": "قم بالتثبيت باستخدام الأمر التالي:",
+  "OllamaSetupGuide.install.linux.manual": "بدلاً من ذلك، يمكنك الرجوع إلى <1>دليل التثبيت اليدوي لنظام Linux</1>.",
+  "OllamaSetupGuide.install.title": "تثبيت وتشغيل تطبيق Ollama محليًا",
+  "OllamaSetupGuide.install.windowsTab": "Windows (معاينة)",
+  "Thinking.thinking": "تفكير عميق...",
+  "Thinking.thought": "تم التفكير بعمق (في {{duration}} ثانية)",
+  "Thinking.thoughtWithDuration": "تم التفكير بعمق",
+  "devTools.cache.empty": "الذاكرة المؤقتة فارغة",
+  "devTools.metadata.empty": "لا توجد بيانات وصفية متاحة",
+  "knowledgeBase.empty.description": "أنشئ مكتبة لتنظيم وإدارة مواردك",
+  "knowledgeBase.empty.search": "لم يتم العثور على مكتبة مطابقة",
+  "knowledgeBase.empty.title": "لا توجد مكتبة متاحة"
 }

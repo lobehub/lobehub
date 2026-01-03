@@ -5,6 +5,10 @@ import type { App } from '@/core/App';
 
 import NotificationCtr from '../NotificationCtr';
 
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
 // Mock logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
@@ -25,6 +29,9 @@ vi.mock('electron', () => {
   MockNotification.isSupported = vi.fn(() => true);
 
   return {
+    ipcMain: {
+      handle: ipcMainHandleMock,
+    },
     Notification: MockNotification,
     app: {
       setAppUserModelId: vi.fn(),
@@ -65,6 +72,7 @@ describe('NotificationCtr', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    ipcMainHandleMock.mockClear();
     vi.useFakeTimers();
     controller = new NotificationCtr(mockApp);
   });

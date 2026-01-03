@@ -1,17 +1,17 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { AiProviderModelListItem } from 'model-bank';
-import { mutate } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withSWR } from '~test-utils';
 
+import { mutate } from '@/libs/swr';
 import { aiModelService } from '@/services/aiModel';
 
 import { useAiInfraStore as useStore } from '../../store';
 
 vi.mock('zustand/traditional');
 
-// Mock SWR
-vi.mock('swr', async () => {
-  const actual = await vi.importActual('swr');
+vi.mock('@/libs/swr', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/libs/swr')>();
   return {
     ...actual,
     mutate: vi.fn(),
@@ -493,8 +493,9 @@ describe('AiModelAction', () => {
 
       vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(mockModels);
 
-      const { result } = renderHook(() =>
-        useStore.getState().useFetchAiProviderModels('test-provider'),
+      const { result } = renderHook(
+        () => useStore.getState().useFetchAiProviderModels('test-provider'),
+        { wrapper: withSWR },
       );
 
       await waitFor(() => {
@@ -518,7 +519,9 @@ describe('AiModelAction', () => {
 
       vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(mockModels);
 
-      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'));
+      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         const state = useStore.getState();
@@ -550,7 +553,9 @@ describe('AiModelAction', () => {
 
       const setStateSpy = vi.spyOn(useStore, 'setState');
 
-      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'));
+      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         expect(aiModelService.getAiProviderModelList).toHaveBeenCalled();
@@ -592,7 +597,9 @@ describe('AiModelAction', () => {
 
       vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(newModels);
 
-      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'));
+      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
         const state = useStore.getState();

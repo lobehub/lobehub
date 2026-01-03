@@ -1,8 +1,8 @@
-import { Empty } from 'antd';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
 import { useTheme } from 'antd-style';
+import { Boxes } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import Deployment from '@/features/MCPPluginDetail/Deployment';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
@@ -25,7 +25,7 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier }) => {
   const [activeTab, setActiveTab] = useState(McpNavKey.Overview);
   const { t } = useTranslation('plugin');
 
-  const theme = useTheme();
+  const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
   const [activeMCPIdentifier, isMcpListInit] = useToolStore((s) => [
     s.activeMCPIdentifier,
     s.isMcpListInit,
@@ -47,7 +47,12 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier }) => {
         }}
         width={'100%'}
       >
-        <Empty description={t('store.emptySelectHint')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty
+          description={t('store.emptySelectHint')}
+          descriptionProps={{ fontSize: 14 }}
+          icon={Boxes}
+          style={{ maxWidth: 400 }}
+        />
       </Center>
     );
 

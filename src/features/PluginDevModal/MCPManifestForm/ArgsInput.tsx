@@ -1,8 +1,8 @@
 import { ActionIcon, Button, Input, type InputProps } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Plus, X } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 interface ArgsInputProps extends Omit<InputProps, 'value' | 'onChange'> {
   onChange?: (value: string[]) => void;

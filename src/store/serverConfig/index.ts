@@ -1,2 +1,2 @@
-export { featureFlagsSelectors } from './selectors';
+export { featureFlagsSelectors, serverConfigSelectors } from './selectors';
 export { useServerConfigStore } from './store';

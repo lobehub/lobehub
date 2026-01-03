@@ -1,8 +1,7 @@
 'use client';
 
+import { NewAPIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
-
-import { NewAPIProviderCard } from '@/config/modelProviders';
 
 import ProviderDetail from '../default';
 

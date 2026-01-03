@@ -1,4 +1,4 @@
-import { OAuth2Config } from '@auth/core/providers';
+import { type OAuth2Config } from '@auth/core/providers';
 import type { Profile } from 'next-auth';
 
 export const CommonProviderConfig = {

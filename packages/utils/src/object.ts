@@ -1,4 +1,4 @@
-import { isNil, omitBy } from 'lodash-es';
+import { isNil, omitBy } from 'es-toolkit/compat';
 
 /**
  * Clean empty values (undefined, null, empty string) from an object

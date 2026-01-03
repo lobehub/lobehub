@@ -1,6 +1,6 @@
 'use client';
 
-import { Center } from 'react-layout-kit';
+import { Center } from '@lobehub/ui';
 
 import { useImageStore } from '@/store/image';
 import { generationBatchSelectors, generationTopicSelectors } from '@/store/image/selectors';

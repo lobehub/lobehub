@@ -1,4 +1,4 @@
-import { LobeChatPluginManifest, LobePluginType } from '@lobehub/chat-plugin-sdk';
+import type { LobeChatPluginManifest, LobePluginType } from '@lobehub/chat-plugin-sdk';
 
 import { CustomPluginParams } from './plugin';
 import { LobeToolType } from './tool';

@@ -1,197 +1,137 @@
 {
-  "ArgsInput": {
-    "addArgument": "引数を追加",
-    "argumentPlaceholder": "引数 {{index}}",
-    "enterFirstArgument": "最初の引数を入力してください..."
-  },
-  "DragUpload": {
-    "dragDesc": "ここにファイルをドラッグ＆ドロップしてください。複数の画像のアップロードがサポートされています。",
-    "dragFileDesc": "ここに画像やファイルをドラッグ＆ドロップしてください。複数の画像やファイルのアップロードがサポートされています。",
-    "dragFileTitle": "ファイルをアップロード",
-    "dragTitle": "画像をアップロード"
-  },
-  "FileManager": {
-    "actions": {
-      "addToKnowledgeBase": "知識ベースに追加",
-      "addToOtherKnowledgeBase": "他の知識ベースに追加",
-      "batchChunking": "バッチ分割",
-      "chunking": "分割",
-      "chunkingTooltip": "ファイルを複数のテキストブロックに分割し、ベクトル化した後、意味検索やファイル対話に使用できます",
-      "chunkingUnsupported": "このファイルはチャンク分割をサポートしていません",
-      "confirmDelete": "このファイルを削除しようとしています。削除後は復元できませんので、操作を確認してください",
-      "confirmDeleteMultiFiles": "選択した {{count}} 個のファイルを削除しようとしています。削除後は復元できませんので、操作を確認してください",
-      "confirmRemoveFromKnowledgeBase": "選択した {{count}} 個のファイルを知識ベースから削除しようとしています。削除後もファイルはすべてのファイルで表示できますので、操作を確認してください",
-      "copyUrl": "リンクをコピー",
-      "copyUrlSuccess": "ファイルのアドレスがコピーされました",
-      "createChunkingTask": "準備中...",
-      "deleteSuccess": "ファイルが正常に削除されました",
-      "downloading": "ファイルをダウンロード中...",
-      "removeFromKnowledgeBase": "知識ベースから削除",
-      "removeFromKnowledgeBaseSuccess": "ファイルが正常に削除されました"
-    },
-    "bottom": "これ以上ありません",
-    "config": {
-      "showFilesInKnowledgeBase": "知識ベースの内容を表示"
-    },
-    "emptyStatus": {
-      "actions": {
-        "file": "ファイルをアップロード",
-        "folder": "フォルダーをアップロード",
-        "knowledgeBase": "新しい知識ベースを作成"
-      },
-      "or": "または",
-      "title": "ここにファイルまたはフォルダーをドラッグしてください"
-    },
-    "title": {
-      "createdAt": "作成日時",
-      "size": "サイズ",
-      "title": "ファイル"
-    },
-    "total": {
-      "fileCount": "合計 {{count}} 件",
-      "selectedCount": "選択済み {{count}} 件"
-    },
-    "view": {
-      "list": "リスト表示",
-      "masonry": "グリッド表示"
-    }
-  },
-  "FileParsingStatus": {
-    "chunks": {
-      "embeddingStatus": {
-        "empty": "テキストブロックはまだ完全にベクトル化されていません。これにより意味検索機能が使用できなくなります。検索品質を向上させるために、テキストブロックをベクトル化してください",
-        "error": "ベクトル化に失敗しました",
-        "errorResult": "ベクトル化に失敗しました。再試行する前に確認してください。失敗の理由：",
-        "processing": "テキストブロックをベクトル化中です。しばらくお待ちください",
-        "success": "現在のテキストブロックはすべてベクトル化されています"
-      },
-      "embeddings": "ベクトル化",
-      "status": {
-        "error": "分割に失敗しました",
-        "errorResult": "分割に失敗しました。再試行する前に確認してください。失敗の理由：",
-        "processing": "分割中",
-        "processingTip": "サーバーがテキストブロックを分割しています。ページを閉じても分割の進行には影響しません"
-      }
-    }
-  },
-  "GoBack": {
-    "back": "戻る"
-  },
-  "HtmlPreview": {
-    "actions": {
-      "download": "ダウンロード",
-      "preview": "プレビュー"
-    },
-    "iframeTitle": "HTML プレビュー",
-    "mode": {
-      "code": "コード",
-      "preview": "プレビュー"
-    },
-    "title": "HTML プレビュー"
-  },
-  "ImageUpload": {
-    "actions": {
-      "changeImage": "画像を変更するにはクリックしてください",
-      "dropMultipleFiles": "複数ファイルの同時アップロードはサポートされていません。最初のファイルのみが使用されます。"
-    },
-    "placeholder": {
-      "primary": "画像を追加",
-      "secondary": "クリックまたはドラッグしてアップロード"
-    }
-  },
-  "KeyValueEditor": {
-    "addButton": "新しい行を追加",
-    "deleteTooltip": "削除",
-    "duplicateKeyError": "キー名は一意でなければなりません",
-    "keyPlaceholder": "キー",
-    "valuePlaceholder": "値"
-  },
-  "LocalFile": {
-    "action": {
-      "open": "開く",
-      "showInFolder": "フォルダーで表示"
-    }
-  },
-  "MaxTokenSlider": {
-    "unlimited": "無制限"
-  },
-  "ModelSelect": {
-    "featureTag": {
-      "custom": "カスタムモデル、デフォルトでは関数呼び出しとビジョン認識の両方をサポートしています。上記機能の有効性を確認してください。",
-      "file": "このモデルはファイルのアップロードと認識をサポートしています。",
-      "functionCall": "このモデルは関数呼び出し（Function Call）をサポートしています。",
-      "imageOutput": "このモデルは画像生成をサポートしています",
-      "reasoning": "このモデルは深い思考をサポートしています",
-      "search": "このモデルはオンライン検索をサポートしています",
-      "tokens": "このモデルは1つのセッションあたり最大{{tokens}}トークンをサポートしています。",
-      "video": "このモデルは動画認識に対応しています",
-      "vision": "このモデルはビジョン認識をサポートしています。"
-    },
-    "removed": "選択されたモデルはリストから削除されました。選択を解除すると自動的に削除されます。"
-  },
-  "ModelSwitchPanel": {
-    "emptyModel": "有効なモデルがありません。設定に移動して有効にしてください。",
-    "emptyProvider": "有効なサービスプロバイダーがありません。設定に移動して有効にしてください。",
-    "goToSettings": "設定に移動",
-    "provider": "プロバイダー",
-    "title": "モデル"
-  },
-  "MultiImagesUpload": {
-    "actions": {
-      "uploadMore": "クリックまたはドラッグしてさらにアップロード"
-    },
-    "modal": {
-      "complete": "完了",
-      "newFileIndicator": "新規追加",
-      "selectImageToPreview": "プレビューする画像を選択してください",
-      "title": "画像管理 ({{count}})",
-      "upload": "画像をアップロード"
-    },
-    "placeholder": {
-      "primary": "クリックまたはドラッグして画像をアップロード",
-      "secondary": "複数の画像を選択可能"
-    },
-    "progress": {
-      "uploadingWithCount": "{{completed}}/{{total}} アップロード済み"
-    },
-    "validation": {
-      "fileSizeExceeded": "ファイルサイズが上限を超えています",
-      "fileSizeExceededDetail": "{{fileName}}（{{actualSize}}）は最大サイズ {{maxSize}} を超えています",
-      "fileSizeExceededMultiple": "{{count}} 個のファイルが最大サイズ {{maxSize}} を超えています：{{fileList}}",
-      "imageCountExceeded": "画像の数が上限を超えています"
-    }
-  },
-  "OllamaSetupGuide": {
-    "action": {
-      "close": "ヒントを閉じる",
-      "start": "インストールされ、実行中です。対話を開始します"
-    },
-    "cors": {
-      "description": "ブラウザのセキュリティ制限により、Ollamaを正常に使用するにはクロスオリジン設定が必要です。",
-      "linux": {
-        "env": "[Service] セクションに `Environment` を追加し、OLLAMA_ORIGINS 環境変数を設定します：",
-        "reboot": "systemdをリロードし、Ollamaを再起動します",
-        "systemd": "systemdを呼び出してollamaサービスを編集します："
-      },
-      "macos": "「ターミナル」アプリを開き、以下のコマンドを貼り付けてEnterを押して実行します",
-      "reboot": "実行が完了したらOllamaサービスを再起動してください",
-      "title": "Ollamaのクロスオリジンアクセスを許可する設定",
-      "windows": "Windowsでは、「コントロールパネル」をクリックし、システム環境変数を編集します。ユーザーアカウント用に「OLLAMA_ORIGINS」という名前の環境変数を新規作成し、値を * に設定して「OK/適用」をクリックして保存します"
-    },
-    "install": {
-      "description": "Ollamaが起動していることを確認してください。まだOllamaをダウンロードしていない場合は、公式サイト<1>からダウンロード</1>してください。",
-      "docker": "Dockerを使用することを好む場合、Ollamaは公式のDockerイメージも提供しています。以下のコマンドでプルできます：",
-      "linux": {
-        "command": "以下のコマンドでインストールします：",
-        "manual": "または、<1>Linux手動インストールガイド</1>を参照して自分でインストールすることもできます。"
-      },
-      "title": "ローカルにOllamaアプリをインストールして起動する",
-      "windowsTab": "Windows（プレビュー版)"
-    }
-  },
-  "Thinking": {
-    "thinking": "深く考えています...",
-    "thought": "深く考えました（所要時間 {{duration}} 秒）",
-    "thoughtWithDuration": "深く考えました"
-  }
+  "ArgsInput.addArgument": "引数を追加",
+  "ArgsInput.argumentPlaceholder": "引数 {{index}}",
+  "ArgsInput.enterFirstArgument": "最初の引数を入力してください...",
+  "DragUpload.dragDesc": "ここにファイルをドラッグ＆ドロップしてください。複数の画像のアップロードがサポートされています。",
+  "DragUpload.dragFileDesc": "ここに画像やファイルをドラッグ＆ドロップしてください。複数の画像やファイルのアップロードがサポートされています。",
+  "DragUpload.dragFileTitle": "ファイルをアップロード",
+  "DragUpload.dragTitle": "画像をアップロード",
+  "FileManager.actions.addToKnowledgeBase": "ナレッジベースに追加",
+  "FileManager.actions.addToOtherKnowledgeBase": "他のナレッジベースに追加",
+  "FileManager.actions.batchChunking": "バッチ分割",
+  "FileManager.actions.chunking": "分割",
+  "FileManager.actions.chunkingTooltip": "ファイルを複数のテキストブロックに分割し、ベクトル化した後、意味検索やファイル対話に使用できます",
+  "FileManager.actions.chunkingUnsupported": "このファイルはチャンク分割をサポートしていません",
+  "FileManager.actions.confirmDelete": "このファイルを削除しようとしています。削除後は復元できませんので、操作を確認してください",
+  "FileManager.actions.confirmDeleteFolder": "このフォルダーとそのすべての内容を削除しようとしています。削除後は元に戻せません。本当に実行しますか？",
+  "FileManager.actions.confirmDeleteMultiFiles": "選択した {{count}} 個のファイルを削除しようとしています。削除後は復元できませんので、操作を確認してください",
+  "FileManager.actions.confirmRemoveFromKnowledgeBase": "選択された {{count}} 件のファイルをナレッジベースから削除しようとしています。削除後もすべてのファイル一覧から閲覧可能です。操作を確認してください。",
+  "FileManager.actions.copyUrl": "リンクをコピー",
+  "FileManager.actions.copyUrlSuccess": "ファイルのアドレスがコピーされました",
+  "FileManager.actions.createChunkingTask": "準備中...",
+  "FileManager.actions.deleteSuccess": "ファイルが正常に削除されました",
+  "FileManager.actions.downloading": "ファイルをダウンロード中...",
+  "FileManager.actions.goBack": "前のページに戻る",
+  "FileManager.actions.goForward": "次のページへ進む",
+  "FileManager.actions.goToParent": "親フォルダへ移動",
+  "FileManager.actions.moveError": "ファイルの移動に失敗しました",
+  "FileManager.actions.moveHere": "ここに移動",
+  "FileManager.actions.moveSuccess": "ファイルを正常に移動しました",
+  "FileManager.actions.moveToFolder": "フォルダへ移動...",
+  "FileManager.actions.moveToRoot": "ルートディレクトリへ移動",
+  "FileManager.actions.moving": "移動中...",
+  "FileManager.actions.removeFromKnowledgeBase": "ナレッジベースから削除",
+  "FileManager.actions.removeFromKnowledgeBaseSuccess": "ファイルが正常に削除されました",
+  "FileManager.actions.rename": "名前を変更",
+  "FileManager.actions.renameError": "名前の変更に失敗しました",
+  "FileManager.actions.renameSuccess": "名前の変更に成功しました",
+  "FileManager.bottom": "これ以上ありません",
+  "FileManager.config.showFilesInKnowledgeBase": "ナレッジベースの内容を表示",
+  "FileManager.emptyStatus.actions.file": "ファイルをアップロード",
+  "FileManager.emptyStatus.actions.folder": "フォルダーをアップロード",
+  "FileManager.emptyStatus.actions.knowledgeBase": "ナレッジベースを新規作成",
+  "FileManager.emptyStatus.or": "または",
+  "FileManager.emptyStatus.title": "ここにファイルまたはフォルダーをドラッグしてください",
+  "FileManager.noFolders": "フォルダがありません",
+  "FileManager.sort.dateAdded": "追加日",
+  "FileManager.sort.name": "名前",
+  "FileManager.sort.size": "サイズ",
+  "FileManager.title.createdAt": "作成日時",
+  "FileManager.title.size": "サイズ",
+  "FileManager.title.title": "ファイル",
+  "FileManager.total.fileCount": "合計 {{count}} 件",
+  "FileManager.total.selectedCount": "選択済み {{count}} 件",
+  "FileManager.view.list": "リスト表示",
+  "FileManager.view.masonry": "グリッド表示",
+  "FileParsingStatus.chunks.embeddingStatus.empty": "テキストブロックはまだ完全にベクトル化されていません。これにより意味検索機能が使用できなくなります。検索品質を向上させるために、テキストブロックをベクトル化してください",
+  "FileParsingStatus.chunks.embeddingStatus.error": "ベクトル化に失敗しました",
+  "FileParsingStatus.chunks.embeddingStatus.errorResult": "ベクトル化に失敗しました。再試行する前に確認してください。失敗の理由：",
+  "FileParsingStatus.chunks.embeddingStatus.processing": "テキストブロックをベクトル化中です。しばらくお待ちください",
+  "FileParsingStatus.chunks.embeddingStatus.success": "現在のテキストブロックはすべてベクトル化されています",
+  "FileParsingStatus.chunks.embeddings": "ベクトル化",
+  "FileParsingStatus.chunks.status.error": "分割に失敗しました",
+  "FileParsingStatus.chunks.status.errorResult": "分割に失敗しました。再試行する前に確認してください。失敗の理由：",
+  "FileParsingStatus.chunks.status.processing": "分割中",
+  "FileParsingStatus.chunks.status.processingTip": "サーバーがテキストブロックを分割しています。ページを閉じても分割の進行には影響しません",
+  "GoBack.back": "戻る",
+  "HtmlPreview.actions.download": "ダウンロード",
+  "HtmlPreview.actions.preview": "プレビュー",
+  "HtmlPreview.iframeTitle": "HTML プレビュー",
+  "HtmlPreview.mode.code": "コード",
+  "HtmlPreview.mode.preview": "プレビュー",
+  "HtmlPreview.title": "HTML プレビュー",
+  "ImageUpload.actions.changeImage": "画像を変更するにはクリックしてください",
+  "ImageUpload.actions.dropMultipleFiles": "複数ファイルの同時アップロードはサポートされていません。最初のファイルのみが使用されます。",
+  "ImageUpload.placeholder.primary": "画像を追加",
+  "ImageUpload.placeholder.secondary": "クリックまたはドラッグしてアップロード",
+  "KeyValueEditor.addButton": "新しい行を追加",
+  "KeyValueEditor.deleteTooltip": "削除",
+  "KeyValueEditor.duplicateKeyError": "キー名は一意でなければなりません",
+  "KeyValueEditor.keyPlaceholder": "キー",
+  "KeyValueEditor.valuePlaceholder": "値",
+  "LocalFile.action.open": "開く",
+  "LocalFile.action.showInFolder": "フォルダーで表示",
+  "MaxTokenSlider.unlimited": "無制限",
+  "ModelSelect.featureTag.custom": "カスタムモデル、デフォルトでは関数呼び出しとビジョン認識の両方をサポートしています。上記機能の有効性を確認してください。",
+  "ModelSelect.featureTag.file": "このモデルはファイルのアップロードと認識をサポートしています。",
+  "ModelSelect.featureTag.functionCall": "このモデルは関数呼び出し（Function Call）をサポートしています。",
+  "ModelSelect.featureTag.imageOutput": "このモデルは画像生成をサポートしています",
+  "ModelSelect.featureTag.reasoning": "このモデルは深い思考をサポートしています",
+  "ModelSelect.featureTag.search": "このモデルはオンライン検索をサポートしています",
+  "ModelSelect.featureTag.tokens": "このモデルは1つのセッションあたり最大{{tokens}}トークンをサポートしています。",
+  "ModelSelect.featureTag.video": "このモデルは動画認識に対応しています",
+  "ModelSelect.featureTag.vision": "このモデルはビジョン認識をサポートしています。",
+  "ModelSelect.removed": "選択されたモデルはリストから削除されました。選択を解除すると自動的に削除されます。",
+  "ModelSwitchPanel.emptyModel": "有効なモデルがありません。設定に移動して有効にしてください。",
+  "ModelSwitchPanel.emptyProvider": "有効なサービスプロバイダーがありません。設定に移動して有効にしてください。",
+  "ModelSwitchPanel.goToSettings": "設定に移動",
+  "ModelSwitchPanel.provider": "プロバイダー",
+  "ModelSwitchPanel.title": "モデル",
+  "MultiImagesUpload.actions.uploadMore": "クリックまたはドラッグしてさらにアップロード",
+  "MultiImagesUpload.modal.complete": "完了",
+  "MultiImagesUpload.modal.newFileIndicator": "新規追加",
+  "MultiImagesUpload.modal.selectImageToPreview": "プレビューする画像を選択してください",
+  "MultiImagesUpload.modal.title": "画像管理 ({{count}})",
+  "MultiImagesUpload.modal.upload": "画像をアップロード",
+  "MultiImagesUpload.placeholder.primary": "クリックまたはドラッグして画像をアップロード",
+  "MultiImagesUpload.placeholder.secondary": "複数の画像を選択可能",
+  "MultiImagesUpload.progress.uploadingWithCount": "{{completed}}/{{total}} アップロード済み",
+  "MultiImagesUpload.validation.fileSizeExceeded": "ファイルサイズが上限を超えています",
+  "MultiImagesUpload.validation.fileSizeExceededDetail": "{{fileName}}（{{actualSize}}）は最大サイズ {{maxSize}} を超えています",
+  "MultiImagesUpload.validation.fileSizeExceededMultiple": "{{count}} 個のファイルが最大サイズ {{maxSize}} を超えています：{{fileList}}",
+  "MultiImagesUpload.validation.imageCountExceeded": "画像の数が上限を超えています",
+  "OllamaSetupGuide.action.close": "ヒントを閉じる",
+  "OllamaSetupGuide.action.start": "インストール済み",
+  "OllamaSetupGuide.cors.description": "ブラウザのセキュリティ制限により、Ollamaを正常に使用するにはクロスオリジン設定が必要です。",
+  "OllamaSetupGuide.cors.linux.env": "[Service] セクションに `Environment` を追加し、OLLAMA_ORIGINS 環境変数を設定します：",
+  "OllamaSetupGuide.cors.linux.reboot": "systemdをリロードし、Ollamaを再起動します",
+  "OllamaSetupGuide.cors.linux.systemd": "systemdを呼び出してollamaサービスを編集します：",
+  "OllamaSetupGuide.cors.macos": "「ターミナル」アプリを開き、以下のコマンドを貼り付けてEnterを押して実行します",
+  "OllamaSetupGuide.cors.reboot": "実行が完了したらOllamaサービスを再起動してください",
+  "OllamaSetupGuide.cors.title": "Ollamaのクロスオリジンアクセスを許可する設定",
+  "OllamaSetupGuide.cors.windows": "Windowsでは、「コントロールパネル」をクリックし、システム環境変数を編集します。ユーザーアカウント用に「OLLAMA_ORIGINS」という名前の環境変数を新規作成し、値を * に設定して「OK/適用」をクリックして保存します",
+  "OllamaSetupGuide.install.description": "Ollamaが起動していることを確認してください。まだOllamaをダウンロードしていない場合は、公式サイト<1>からダウンロード</1>してください。",
+  "OllamaSetupGuide.install.docker": "Dockerを使用することを好む場合、Ollamaは公式のDockerイメージも提供しています。以下のコマンドでプルできます：",
+  "OllamaSetupGuide.install.linux.command": "以下のコマンドでインストールします：",
+  "OllamaSetupGuide.install.linux.manual": "または、<1>Linux手動インストールガイド</1>を参照して自分でインストールすることもできます。",
+  "OllamaSetupGuide.install.title": "ローカルにOllamaアプリをインストールして起動する",
+  "OllamaSetupGuide.install.windowsTab": "Windows（プレビュー版)",
+  "Thinking.thinking": "深く考えています...",
+  "Thinking.thought": "深く考えました（所要時間 {{duration}} 秒）",
+  "Thinking.thoughtWithDuration": "深く考えました",
+  "devTools.cache.empty": "キャッシュが空です",
+  "devTools.metadata.empty": "メタデータはありません",
+  "knowledgeBase.empty.description": "ナレッジベースを作成して、リソースを整理・管理しましょう",
+  "knowledgeBase.empty.search": "一致するナレッジベースが見つかりませんでした",
+  "knowledgeBase.empty.title": "ナレッジベースがまだありません"
 }

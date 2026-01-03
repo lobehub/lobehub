@@ -1,4 +1,4 @@
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox } from '@lobehub/ui';
 
 import Files from './Files';
 import Plugins from './Plugins';

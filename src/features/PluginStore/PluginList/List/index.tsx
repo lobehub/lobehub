@@ -1,14 +1,13 @@
-import { Icon } from '@lobehub/ui';
-import { Empty } from 'antd';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 import { Virtuoso } from 'react-virtuoso';
 
 import { useToolStore } from '@/store/tool';
 
 import SearchLoading from '../../Loading';
+import PluginEmpty from '../../PluginEmpty';
 import VirtuosoLoading from '../../VirtuosoLoading';
 import Item from './Item';
 
@@ -61,13 +60,9 @@ export const List = memo(() => {
     );
 
   const isEmpty = allItems.length === 0;
+  const hasSearchKeywords = Boolean(keywords && keywords.trim());
 
-  if (isEmpty)
-    return (
-      <Center paddingBlock={40}>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      </Center>
-    );
+  if (isEmpty) return <PluginEmpty search={hasSearchKeywords} />;
 
   return (
     <Virtuoso
@@ -76,6 +71,7 @@ export const List = memo(() => {
       }}
       data={allItems}
       endReached={loadMorePlugins}
+      increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
       itemContent={(_, item) => (
         <Flexbox
           key={item.identifier}
@@ -88,7 +84,7 @@ export const List = memo(() => {
           <Item active={identifier === item.identifier} {...item} />
         </Flexbox>
       )}
-      overscan={400}
+      overscan={24}
       style={{ height: '100%', width: '100%' }}
       totalCount={totalCount || 0}
     />

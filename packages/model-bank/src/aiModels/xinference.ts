@@ -7,7 +7,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-V3 是一个强大的专家混合（MoE）语言模型，拥有总计 6710 亿参数，每个 token 激活 370 亿参数。',
+      'DeepSeek-V3 is a powerful MoE model with 671B total parameters and 37B active per token.',
     displayName: 'DeepSeek V3',
     enabled: true,
     id: 'deepseek-v3',
@@ -19,7 +19,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-R1 在强化学习（RL）之前引入了冷启动数据，在数学、代码和推理任务上表现可与 OpenAI-o1 相媲美。',
+      'DeepSeek-R1 uses cold-start data before RL and performs comparably to OpenAI-o1 on math, coding, and reasoning.',
     displayName: 'DeepSeek R1',
     enabled: true,
     id: 'deepseek-r1',
@@ -30,7 +30,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'deepseek-r1-distill-llama 是基于 Llama 从 DeepSeek-R1 蒸馏而来的模型。',
+    description: 'deepseek-r1-distill-llama is distilled from DeepSeek-R1 on Llama.',
     displayName: 'DeepSeek R1 Distill Llama',
     enabled: true,
     id: 'deepseek-r1-distill-llama',
@@ -41,7 +41,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'deepseek-r1-distill-qwen 是基于 Qwen 从 DeepSeek-R1 蒸馏而来的模型。',
+    description: 'deepseek-r1-distill-qwen is distilled from DeepSeek-R1 on Qwen.',
     displayName: 'DeepSeek R1 Distill Qwen',
     enabled: true,
     id: 'deepseek-r1-distill-qwen',
@@ -53,7 +53,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'QwQ 是 Qwen 系列的推理模型。与传统的指令微调模型相比，QwQ 具备思考和推理能力，在下游任务中，尤其是复杂问题上，能够实现显著增强的性能。QwQ-32B 是一款中型推理模型，其性能可与最先进的推理模型（如 DeepSeek-R1、o1-mini）相媲美。',
+      'QwQ is a reasoning model in the Qwen family. Compared with standard instruction-tuned models, it brings thinking and reasoning that significantly boost downstream performance, especially on complex problems. QwQ-32B is a mid-sized reasoning model that rivals top reasoning models like DeepSeek-R1 and o1-mini.',
     displayName: 'QwQ 32B',
     enabled: true,
     id: 'qwq-32b',
@@ -65,7 +65,8 @@ const xinferenceChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'QVQ-72B-Preview 是由 Qwen 团队开发的实验性研究模型，专注于提升视觉推理能力。',
+    description:
+      'QVQ-72B-Preview is an experimental research model from Qwen focused on improving visual reasoning.',
     displayName: 'QVQ 72B Preview',
     enabled: true,
     id: 'qvq-72b-preview',
@@ -77,7 +78,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5 是 Qwen 大型语言模型的最新系列。对于 Qwen2.5，我们发布了多个基础语言模型和指令微调语言模型，参数范围从 5 亿到 72 亿不等。',
+      'Qwen2.5 is the latest Qwen LLM series, with base and instruction-tuned models ranging from 0.5B to 72B parameters.',
     displayName: 'Qwen2.5 Instruct',
     enabled: true,
     id: 'qwen2.5-instruct',
@@ -88,7 +89,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Qwen2.5-Coder 是 Qwen 系列中最新的代码专用大型语言模型（前身为 CodeQwen）。',
+    description: 'Qwen2.5-Coder is the latest code-focused LLM in the Qwen family (formerly CodeQwen).',
     displayName: 'Qwen2.5 Coder Instruct',
     enabled: true,
     id: 'qwen2.5-coder-instruct',
@@ -99,7 +100,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'Qwen2.5-VL 是 Qwen 模型家族中视觉语言模型的最新版本。',
+    description: 'Qwen2.5-VL is the latest vision-language model in the Qwen family.',
     displayName: 'Qwen2.5 VL Instruct',
     enabled: true,
     id: 'qwen2.5-vl-instruct',
@@ -108,7 +109,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 1_024_000,
     description:
-      'Mistral-Nemo-Instruct-2407 大型语言模型（LLM）是 Mistral-Nemo-Base-2407 的指令微调版本。',
+      'Mistral-Nemo-Instruct-2407 is the instruction-tuned version of Mistral-Nemo-Base-2407.',
     displayName: 'Mistral Nemo Instruct',
     enabled: true,
     id: 'mistral-nemo-instruct',
@@ -117,7 +118,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Mistral-Large-Instruct-2407 是一款先进的稠密大型语言模型（LLM），拥有 1230 亿参数，具备最先进的推理、知识和编码能力。',
+      'Mistral-Large-Instruct-2407 is an advanced dense LLM with 123B parameters and state-of-the-art reasoning, knowledge, and coding.',
     displayName: 'Mistral Large Instruct',
     enabled: true,
     id: 'mistral-large-instruct',
@@ -129,7 +130,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.3 指令微调模型针对对话场景进行了优化，在常见的行业基准测试中，超越了许多现有的开源聊天模型。',
+      'Llama 3.3 instruction-tuned model is optimized for chat and beats many open chat models on common industry benchmarks.',
     displayName: 'Llama 3.3 Instruct',
     enabled: true,
     id: 'llama-3.3-instruct',
@@ -141,7 +142,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'Llama 3.2-Vision 指令微调模型针对视觉识别、图像推理、图像描述和回答与图像相关的常规问题进行了优化。',
+      'Llama 3.2-Vision instruction-tuned model is optimized for visual recognition, image reasoning, captioning, and general image Q&A.',
     displayName: 'Llama 3.2 Vision Instruct',
     enabled: true,
     id: 'llama-3.2-vision-instruct',
@@ -153,7 +154,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1 指令微调模型针对对话场景进行了优化，在常见的行业基准测试中，超越了许多现有的开源聊天模型。',
+      'Llama 3.1 instruction-tuned model is optimized for chat and beats many open chat models on common industry benchmarks.',
     displayName: 'Llama 3.1 Instruct',
     enabled: true,
     id: 'llama-3.1-instruct',

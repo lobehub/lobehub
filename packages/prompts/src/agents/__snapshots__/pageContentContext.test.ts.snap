@@ -1,0 +1,48 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`formatPageContentContext > should format context with both markdown and xml 1`] = `
+"<current_page title="Test Document">
+<markdown chars="14" lines="3">
+# Hello
+
+World
+</markdown>
+<doc_xml_structure>
+<instruction>IMPORTANT: Use node IDs from this XML structure when performing modify or remove operations with modifyNodes.</instruction>
+<root><h1 id="1">Hello</h1><p id="2">World</p></root>
+</doc_xml_structure>
+</current_page>"
+`;
+
+exports[`formatPageContentContext > should format context with markdown content 1`] = `
+"<current_page title="Test Document">
+<markdown chars="24" lines="3">
+# Hello
+
+This is a test.
+</markdown>
+</current_page>"
+`;
+
+exports[`formatPageContentContext > should format context with only title 1`] = `
+"<current_page title="Test Document">
+
+</current_page>"
+`;
+
+exports[`formatPageContentContext > should format context with xml structure 1`] = `
+"<current_page title="Test Document">
+<doc_xml_structure>
+<instruction>IMPORTANT: Use node IDs from this XML structure when performing modify or remove operations with modifyNodes.</instruction>
+<root><p id="1">Hello</p></root>
+</doc_xml_structure>
+</current_page>"
+`;
+
+exports[`formatPageContentContext > should use provided charCount and lineCount from metadata 1`] = `
+"<current_page title="Test Document">
+<markdown chars="100" lines="10">
+# Test
+</markdown>
+</current_page>"
+`;

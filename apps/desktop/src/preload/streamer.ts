@@ -1,4 +1,4 @@
-import type { ProxyTRPCRequestParams } from '@lobechat/electron-client-ipc';
+import type { StreamInvokeRequestParams } from '@lobechat/electron-client-ipc';
 import { ipcRenderer } from 'electron';
 import { v4 as uuid } from 'uuid';
 
@@ -21,7 +21,7 @@ export interface StreamerCallbacks {
  * @param callbacks The callbacks to handle stream events.
  */
 export const onStreamInvoke = (
-  params: ProxyTRPCRequestParams,
+  params: StreamInvokeRequestParams,
   callbacks: StreamerCallbacks,
 ): (() => void) => {
   const requestId = uuid();

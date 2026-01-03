@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "النسبة",
-      "lock": "قفل نسبة العرض إلى الارتفاع",
-      "unlock": "إلغاء قفل نسبة العرض إلى الارتفاع"
-    },
-    "cfg": {
-      "label": "شدة التوجيه"
-    },
-    "header": {
-      "desc": "وصف بسيط، ابتكر فورًا",
-      "title": "الرسم"
-    },
-    "height": {
-      "label": "الارتفاع"
-    },
-    "imageNum": {
-      "label": "عدد الصور"
-    },
-    "imageUrl": {
-      "label": "صورة مرجعية"
-    },
-    "imageUrls": {
-      "label": "صور مرجعية"
-    },
-    "model": {
-      "label": "النموذج"
-    },
-    "prompt": {
-      "placeholder": "وصف المحتوى الذي ترغب في إنشائه"
-    },
-    "quality": {
-      "label": "جودة الصورة",
-      "options": {
-        "hd": "عالي الدقة",
-        "standard": "عادي"
-      }
-    },
-    "resolution": {
-      "label": "الدقة",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "البذرة",
-      "random": "بذرة عشوائية"
-    },
-    "size": {
-      "label": "الحجم"
-    },
-    "steps": {
-      "label": "عدد الخطوات"
-    },
-    "title": "الرسم بالذكاء الاصطناعي",
-    "width": {
-      "label": "العرض"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "تطبيق البذرة",
-      "copyError": "نسخ رسالة الخطأ",
-      "copyPrompt": "نسخ العبارة التحفيزية",
-      "copySeed": "نسخ البذرة",
-      "delete": "حذف",
-      "deleteBatch": "حذف الدفعة",
-      "download": "تنزيل",
-      "downloadFailed": "فشل تنزيل الصورة",
-      "errorCopied": "تم نسخ رسالة الخطأ إلى الحافظة",
-      "errorCopyFailed": "فشل نسخ رسالة الخطأ",
-      "generate": "إنشاء",
-      "promptCopied": "تم نسخ النص التوجيهي إلى الحافظة",
-      "promptCopyFailed": "فشل نسخ النص التوجيهي",
-      "reuseSettings": "إعادة استخدام الإعدادات",
-      "seedApplied": "تم تطبيق البذرة على الإعدادات",
-      "seedApplyFailed": "فشل في تطبيق البذرة",
-      "seedCopied": "تم نسخ البذرة إلى الحافظة",
-      "seedCopyFailed": "فشل نسخ البذرة"
-    },
-    "metadata": {
-      "count": "{{count}} صورة"
-    },
-    "status": {
-      "failed": "فشل في الإنشاء",
-      "generating": "جارٍ الإنشاء..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "الوحدة الحالية تعمل بنمط قاعدة بيانات العميل، ولا تدعم ميزة إنشاء الصور بالذكاء الاصطناعي. يرجى التبديل إلى <1>نمط نشر قاعدة بيانات الخادم</1>، أو استخدام <3>سحابة LobeChat</3> مباشرةً",
-    "features": {
-      "fileIntegration": {
-        "desc": "تكامل عميق مع نظام إدارة الملفات، حيث تُحفظ الصور المُنشأة تلقائيًا في نظام الملفات، مع دعم الإدارة والتنظيم الموحد",
-        "title": "تكامل نظام الملفات"
-      },
-      "llmAssisted": {
-        "desc": "يجمع بين قدرات نماذج اللغة الكبيرة لتحسين وتوسيع النصوص التوجيهية بذكاء، مما يعزز جودة إنشاء الصور (قريبًا)",
-        "title": "مساعدة نموذج اللغة الكبير"
-      },
-      "multiProviders": {
-        "desc": "يدعم عدة مزودي خدمات رسم بالذكاء الاصطناعي، بما في ذلك OpenAI gpt-image-1، Google Imagen، FAL.ai وغيرها، لتوفير خيارات نماذج متنوعة",
-        "title": "دعم مزودين متعددين"
-      }
-    },
-    "title": "نمط النشر الحالي لا يدعم الرسم بالذكاء الاصطناعي"
-  },
-  "topic": {
-    "createNew": "إنشاء موضوع جديد",
-    "deleteConfirm": "تأكيد حذف الموضوع",
-    "deleteConfirmDesc": "سيتم حذف هذا الموضوع نهائيًا ولن يمكن استعادته، يرجى توخي الحذر.",
-    "empty": "لا توجد مواضيع تم إنشاؤها",
-    "title": "موضوع الرسم",
-    "untitled": "الموضوع الافتراضي"
-  }
+  "config.aspectRatio.label": "نسبة العرض إلى الارتفاع",
+  "config.aspectRatio.lock": "قفل نسبة العرض إلى الارتفاع",
+  "config.aspectRatio.unlock": "فتح نسبة العرض إلى الارتفاع",
+  "config.cfg.label": "شدة التوجيه",
+  "config.header.desc": "وصف موجز، أنشئ فورًا",
+  "config.header.title": "رسم",
+  "config.height.label": "الارتفاع",
+  "config.imageNum.label": "عدد الصور",
+  "config.imageUrl.label": "صورة مرجعية",
+  "config.imageUrls.label": "صور مرجعية",
+  "config.model.label": "النموذج",
+  "config.prompt.placeholder": "صف ما ترغب في إنشائه",
+  "config.quality.label": "جودة الصورة",
+  "config.quality.options.hd": "عالية الدقة",
+  "config.quality.options.standard": "قياسية",
+  "config.resolution.label": "الدقة",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "البذرة",
+  "config.seed.random": "بذرة عشوائية",
+  "config.size.label": "الحجم",
+  "config.steps.label": "الخطوات",
+  "config.title": "صورة بالذكاء الاصطناعي",
+  "config.width.label": "العرض",
+  "generation.actions.applySeed": "تطبيق البذرة",
+  "generation.actions.copyError": "نسخ رسالة الخطأ",
+  "generation.actions.copyPrompt": "نسخ الوصف",
+  "generation.actions.copySeed": "نسخ البذرة",
+  "generation.actions.delete": "حذف",
+  "generation.actions.deleteBatch": "حذف الدفعة",
+  "generation.actions.download": "تنزيل",
+  "generation.actions.downloadFailed": "فشل في تنزيل الصورة. يرجى التحقق من اتصال الشبكة أو إعدادات CORS لتخزين S3.",
+  "generation.actions.errorCopied": "تم نسخ رسالة الخطأ إلى الحافظة",
+  "generation.actions.errorCopyFailed": "فشل في نسخ رسالة الخطأ",
+  "generation.actions.generate": "إنشاء",
+  "generation.actions.promptCopied": "تم نسخ الوصف إلى الحافظة",
+  "generation.actions.promptCopyFailed": "فشل في نسخ الوصف",
+  "generation.actions.reuseSettings": "إعادة استخدام الإعدادات",
+  "generation.actions.seedApplied": "تم تطبيق البذرة على الإعدادات",
+  "generation.actions.seedApplyFailed": "فشل في تطبيق البذرة",
+  "generation.actions.seedCopied": "تم نسخ البذرة إلى الحافظة",
+  "generation.actions.seedCopyFailed": "فشل في نسخ البذرة",
+  "generation.metadata.count": "{{count}} صورة",
+  "generation.status.failed": "فشل في الإنشاء",
+  "generation.status.generating": "جارٍ الإنشاء...",
+  "notSupportGuide.desc": "وضع النشر الحالي لا يدعم إنشاء الصور بالذكاء الاصطناعي. قم بالتبديل إلى <1>وضع نشر قاعدة بيانات الخادم</1>، أو استخدم <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "تكامل عميق مع نظام إدارة الملفات؛ يتم حفظ الصور المُنشأة تلقائيًا في نظام الملفات لإدارة وتنظيم موحد.",
+  "notSupportGuide.features.fileIntegration.title": "تكامل مع نظام الملفات",
+  "notSupportGuide.features.llmAssisted.desc": "يجمع بين قدرات نماذج اللغة الكبيرة لتحسين وتوسيع الأوصاف بذكاء، مما يعزز جودة إنشاء الصور (قريبًا).",
+  "notSupportGuide.features.llmAssisted.title": "إنشاء صور بمساعدة LLM",
+  "notSupportGuide.features.multiProviders.desc": "يدعم عدة مزودي خدمات لإنشاء الصور بالذكاء الاصطناعي، بما في ذلك OpenAI gpt-image-1 وGoogle Imagen وFAL.ai والمزيد، مما يوفر مجموعة واسعة من النماذج.",
+  "notSupportGuide.features.multiProviders.title": "دعم متعدد المزودين",
+  "notSupportGuide.title": "وضع النشر الحالي لا يدعم إنشاء الصور بالذكاء الاصطناعي",
+  "topic.createNew": "موضوع جديد",
+  "topic.deleteConfirm": "حذف موضوع الإنشاء",
+  "topic.deleteConfirmDesc": "أنت على وشك حذف موضوع الإنشاء هذا. لا يمكن التراجع عن هذا الإجراء، يرجى المتابعة بحذر.",
+  "topic.empty": "لا توجد مواضيع إنشاء",
+  "topic.title": "موضوع الرسم",
+  "topic.untitled": "موضوع افتراضي"
 }

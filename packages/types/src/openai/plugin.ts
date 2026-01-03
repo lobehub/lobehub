@@ -53,5 +53,5 @@ export interface OpenAIPluginManifest {
   name_for_human: string;
   name_for_model: string;
   schema_version: string;
-  // 其他可能的字段...
+  // Other possible fields...
 }

@@ -1,10 +1,10 @@
 import {
-  SupportedTextSplitterLanguage,
+  type SupportedTextSplitterLanguage,
   SupportedTextSplitterLanguages,
 } from 'langchain/text_splitter';
 
 import { LANGCHAIN_SUPPORT_TEXT_LIST } from '@/libs/langchain/file';
-import { LangChainLoaderType } from '@/libs/langchain/types';
+import { type LangChainLoaderType } from '@/libs/langchain/types';
 
 import { CodeLoader } from './code';
 import { CsVLoader } from './csv';

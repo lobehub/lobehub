@@ -1,10 +1,9 @@
-import { ActionIcon, Icon } from '@lobehub/ui';
-import { Popover, type PopoverProps } from 'antd';
+import { ActionIcon, Dropdown, type DropdownProps, Icon } from '@lobehub/ui';
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { FC, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Menu, { type MenuProps } from '@/components/Menu';
+import { type MenuProps } from '@/components/Menu';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -14,7 +13,10 @@ const themeIcons = {
   light: Sun,
 };
 
-const ThemeButton = memo<{ placement?: PopoverProps['placement'] }>(({ placement = 'right' }) => {
+const ThemeButton: FC<{ placement?: DropdownProps['placement']; size?: number }> = ({
+  placement,
+  size,
+}) => {
   const [themeMode, switchThemeMode] = useGlobalStore((s) => [
     systemStatusSelectors.themeMode(s),
     s.switchThemeMode,
@@ -47,20 +49,18 @@ const ThemeButton = memo<{ placement?: PopoverProps['placement'] }>(({ placement
   );
 
   return (
-    <Popover
+    <Dropdown
       arrow={false}
-      content={<Menu items={items} selectable selectedKeys={[themeMode]} />}
-      placement={placement}
-      styles={{
-        body: {
-          padding: 0,
-        },
+      menu={{
+        items,
+        selectable: true,
+        selectedKeys: [themeMode],
       }}
-      trigger={['click', 'hover']}
+      placement={placement}
     >
-      <ActionIcon icon={themeIcons[themeMode]} size={{ blockSize: 32, size: 16 }} />
-    </Popover>
+      <ActionIcon icon={themeIcons[themeMode]} size={size || { blockSize: 32, size: 16 }} />
+    </Dropdown>
   );
-});
+};
 
 export default ThemeButton;

@@ -1,11 +1,10 @@
-import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import React, { ReactNode } from 'react';
-import { Flexbox, FlexboxProps } from 'react-layout-kit';
+import { ActionIcon, type ActionIconProps, Flexbox, type FlexboxProps } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import React, { type ReactNode } from 'react';
 
-const useStyles = createStyles(({ token, css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   title: css`
     font-weight: 550;
@@ -19,7 +18,6 @@ interface HeaderProps extends Omit<FlexboxProps, 'title' | 'children'> {
 }
 
 const Header = ({ title, actions = [], extra, ...rest }: HeaderProps) => {
-  const { styles } = useStyles();
 
   return (
     <Flexbox

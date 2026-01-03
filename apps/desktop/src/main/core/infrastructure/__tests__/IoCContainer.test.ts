@@ -13,52 +13,6 @@ describe('IoCContainer', () => {
     // For each test, use fresh class instances
   });
 
-  describe('controllers WeakMap', () => {
-    it('should store controller metadata', () => {
-      const metadata = [{ methodName: 'handleMessage', mode: 'client' as const, name: 'message' }];
-
-      IoCContainer.controllers.set(TestController, metadata);
-
-      expect(IoCContainer.controllers.get(TestController)).toEqual(metadata);
-    });
-
-    it('should allow multiple controllers', () => {
-      const metadata1 = [{ methodName: 'method1', mode: 'client' as const, name: 'action1' }];
-      const metadata2 = [{ methodName: 'method2', mode: 'server' as const, name: 'action2' }];
-
-      IoCContainer.controllers.set(TestController, metadata1);
-      IoCContainer.controllers.set(AnotherController, metadata2);
-
-      expect(IoCContainer.controllers.get(TestController)).toEqual(metadata1);
-      expect(IoCContainer.controllers.get(AnotherController)).toEqual(metadata2);
-    });
-
-    it('should allow overwriting controller metadata', () => {
-      const oldMetadata = [{ methodName: 'oldMethod', mode: 'client' as const, name: 'old' }];
-      const newMetadata = [{ methodName: 'newMethod', mode: 'server' as const, name: 'new' }];
-
-      IoCContainer.controllers.set(TestController, oldMetadata);
-      IoCContainer.controllers.set(TestController, newMetadata);
-
-      expect(IoCContainer.controllers.get(TestController)).toEqual(newMetadata);
-    });
-
-    it('should support multiple methods per controller', () => {
-      const metadata = [
-        { methodName: 'method1', mode: 'client' as const, name: 'action1' },
-        { methodName: 'method2', mode: 'server' as const, name: 'action2' },
-        { methodName: 'method3', mode: 'client' as const, name: 'action3' },
-      ];
-
-      IoCContainer.controllers.set(TestController, metadata);
-
-      const stored = IoCContainer.controllers.get(TestController);
-      expect(stored).toHaveLength(3);
-      expect(stored?.[0].mode).toBe('client');
-      expect(stored?.[1].mode).toBe('server');
-    });
-  });
-
   describe('shortcuts WeakMap', () => {
     it('should store shortcut metadata', () => {
       const metadata = [{ methodName: 'toggleDarkMode', name: 'CmdOrCtrl+Shift+D' }];
@@ -141,10 +95,6 @@ describe('IoCContainer', () => {
   });
 
   describe('static properties', () => {
-    it('should have controllers as a WeakMap', () => {
-      expect(IoCContainer.controllers).toBeInstanceOf(WeakMap);
-    });
-
     it('should have shortcuts as a WeakMap', () => {
       expect(IoCContainer.shortcuts).toBeInstanceOf(WeakMap);
     });

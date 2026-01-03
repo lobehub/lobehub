@@ -5,7 +5,7 @@
 //
 // Read more here: https://github.com/capricorn86/happy-dom/issues/1042#issuecomment-3585851354
 import { Buffer } from 'node:buffer';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { UpstashConfig } from './types';
 
@@ -139,9 +139,9 @@ describe('mocked', () => {
     await provider.hset(bufKey, 'field', 'value');
     await provider.del(bufKey);
 
-    expect(mocks.mockSet).toHaveBeenCalledWith('buffer-key', 'value', undefined);
-    expect(mocks.mockHset).toHaveBeenCalledWith('buffer-key', { field: 'value' });
-    expect(mocks.mockDel).toHaveBeenCalledWith('buffer-key');
+    expect(mocks.mockSet).toHaveBeenCalledWith('mock:buffer-key', 'value', undefined);
+    expect(mocks.mockHset).toHaveBeenCalledWith('mock:buffer-key', { field: 'value' });
+    expect(mocks.mockDel).toHaveBeenCalledWith('mock:buffer-key');
   });
 
   it('passes set options through to upstash client', async () => {
@@ -149,6 +149,10 @@ describe('mocked', () => {
 
     await provider.set('key', 'value', { ex: 10, nx: true, get: true });
 
-    expect(mocks.mockSet).toHaveBeenCalledWith('key', 'value', { ex: 10, nx: true, get: true });
+    expect(mocks.mockSet).toHaveBeenCalledWith('mock:key', 'value', {
+      ex: 10,
+      nx: true,
+      get: true,
+    });
   });
 });

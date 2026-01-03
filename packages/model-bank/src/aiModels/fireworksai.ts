@@ -4,7 +4,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.3 70B Instruct 是 Llama 3.1 70B 的 12 月更新版本。该模型在 Llama 3.1 70B（于 2024 年 7 月发布）的基础上进行了改进，增强了工具调用、多语言文本支持、数学和编程能力。该模型在推理、数学和指令遵循方面达到了行业领先水平，并且能够提供与 3.1 405B 相似的性能，同时在速度和成本上具有显著优势。',
+      'Llama 3.3 70B Instruct is the December update to Llama 3.1 70B. It improves tool use, multilingual text support, math, and coding over the July 2024 release. It reaches industry-leading performance in reasoning, math, and instruction following, offering performance comparable to 3.1 405B with significant speed and cost advantages.',
     displayName: 'Llama 3.3 70B Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
@@ -19,7 +19,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.2 3B Instruct 是 Meta 推出的轻量级多语言模型。该模型专为高效运行而设计，相较于更大型的模型，具有显著的延迟和成本优势。其典型应用场景包括查询和提示重写，以及写作辅助。',
+      'Llama 3.2 3B Instruct is a lightweight multilingual model from Meta, designed for efficient runtime with significant latency and cost advantages over larger models. Typical use cases include query/prompt rewriting and writing assistance.',
     displayName: 'Llama 3.2 3B Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p2-3b-instruct',
@@ -37,7 +37,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Meta 推出的指令微调图像推理模型，拥有 110 亿参数。该模型针对视觉识别、图像推理、图片字幕生成以及图片相关的常规问答进行了优化。它能够理解视觉数据，如图表和图形，并通过生成文本描述图像细节，弥合视觉与语言之间的鸿沟。',
+      'An instruction-tuned vision reasoning model from Meta with 11B parameters, optimized for visual recognition, image reasoning, captioning, and image-related Q&A. It understands visual data such as charts and graphs and bridges vision and language by generating textual descriptions of image details.',
     displayName: 'Llama 3.2 11B Vision Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p2-11b-vision-instruct',
@@ -55,7 +55,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Meta 推出的指令微调图像推理模型，拥有 900 亿参数。该模型针对视觉识别、图像推理、图片字幕生成以及图片相关的常规问答进行了优化。它能够理解视觉数据，如图表和图形，并通过生成文本描述图像细节，弥合视觉与语言之间的鸿沟。注意：该模型目前作为无服务器模型进行实验性提供。如果用于生产环境，请注意 Fireworks 可能会在短时间内取消部署该模型。',
+      'An instruction-tuned vision reasoning model from Meta with 90B parameters, optimized for visual recognition, image reasoning, captioning, and image-related Q&A. It understands visual data such as charts and graphs and bridges vision and language by generating textual descriptions of image details. Note: this model is currently provided experimentally as a serverless model. For production use, note that Fireworks may retire the deployment on short notice.',
     displayName: 'Llama 3.2 90B Vision Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p2-90b-vision-instruct',
@@ -70,7 +70,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Meta Llama 3.1 系列是多语言大语言模型（LLM）集合，包含 8B、70B 和 405B 三种参数规模的预训练和指令微调生成模型。Llama 3.1 指令微调文本模型（8B、70B、405B）专为多语言对话应用优化，并在常见的行业基准测试中优于许多现有的开源和闭源聊天模型。',
+      'Meta Llama 3.1 is a multilingual LLM family with pre-trained and instruction-tuned generation models at 8B, 70B, and 405B sizes. The instruction-tuned text models are optimized for multilingual dialogue and outperform many existing open and closed chat models on common industry benchmarks.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
     pricing: {
@@ -87,7 +87,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Meta Llama 3.1 系列是多语言大语言模型（LLM）集合，包含 8B、70B 和 405B 三种参数规模的预训练和指令微调生成模型。Llama 3.1 指令微调文本模型（8B、70B、405B）专为多语言对话应用优化，并在常见的行业基准测试中优于许多现有的开源和闭源聊天模型。',
+      'Meta Llama 3.1 is a multilingual LLM family with pre-trained and instruction-tuned generation models at 8B, 70B, and 405B sizes. The instruction-tuned text models are optimized for multilingual dialogue and outperform many existing open and closed chat models on common industry benchmarks.',
     displayName: 'Llama 3.1 70B Instruct',
     id: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
     pricing: {
@@ -104,7 +104,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Meta Llama 3.1 系列是多语言大语言模型（LLM）集合，包含 8B、70B 和 405B 参数规模的预训练和指令微调生成模型。Llama 3.1 指令微调文本模型（8B、70B、405B）专为多语言对话场景优化，在常见的行业基准测试中优于许多现有的开源和闭源聊天模型。405B 是 Llama 3.1 家族中能力最强的模型。该模型采用 FP8 进行推理，与参考实现高度匹配。',
+      'Meta Llama 3.1 is a multilingual LLM family with pre-trained and instruction-tuned generation models at 8B, 70B, and 405B sizes. The instruction-tuned text models are optimized for multilingual dialogue and outperform many existing open and closed chat models on common industry benchmarks. 405B is the most capable model in the Llama 3.1 family, using FP8 inference that closely matches the reference implementation.',
     displayName: 'Llama 3.1 405B Instruct',
     id: 'accounts/fireworks/models/llama-v3p1-405b-instruct',
     pricing: {
@@ -118,7 +118,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Meta 开发并发布了 Meta Llama 3 系列大语言模型（LLM），这是一个包含 8B 和 70B 参数规模的预训练和指令微调生成文本模型的集合。Llama 3 指令微调模型专为对话应用场景优化，并在常见的行业基准测试中优于许多现有的开源聊天模型。',
+      'Meta developed and released the Meta Llama 3 LLM series, a collection of pre-trained and instruction-tuned text generation models at 8B and 70B. The Llama 3 instruction-tuned models are optimized for conversational use and outperform many existing open chat models on common industry benchmarks.',
     displayName: 'Llama 3 8B Instruct',
     id: 'accounts/fireworks/models/llama-v3-8b-instruct',
     pricing: {
@@ -132,7 +132,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Meta 开发并发布了 Meta Llama 3 系列大语言模型（LLM），该系列包含 8B 和 70B 参数规模的预训练和指令微调生成文本模型。Llama 3 指令微调模型专为对话应用场景优化，并在常见的行业基准测试中优于许多现有的开源聊天模型。',
+      'Meta developed and released the Meta Llama 3 LLM series, which includes pre-trained and instruction-tuned text generation models at 8B and 70B. The Llama 3 instruction-tuned models are optimized for conversational use and outperform many existing open chat models on common industry benchmarks.',
     displayName: 'Llama 3 70B Instruct',
     id: 'accounts/fireworks/models/llama-v3-70b-instruct',
     pricing: {
@@ -146,7 +146,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Meta Llama 3 指令微调模型专为对话应用场景优化，并在常见的行业基准测试中优于许多现有的开源聊天模型。Llama 3 8B Instruct（HF 版本）是 Llama 3 8B Instruct 的原始 FP16 版本，其结果应与官方 Hugging Face 实现一致。',
+      'The Meta Llama 3 instruction-tuned models are optimized for conversational use and outperform many existing open chat models on common industry benchmarks. Llama 3 8B Instruct (HF version) is the original FP16 version of Llama 3 8B Instruct, with results expected to match the official Hugging Face implementation.',
     displayName: 'Llama 3 8B Instruct (HF version)',
     id: 'accounts/fireworks/models/llama-v3-8b-instruct-hf',
     pricing: {
@@ -159,7 +159,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: '24B 参数模型，具备与更大型模型相当的最先进能力。',
+    description: 'A 24B-parameter model with state-of-the-art capability comparable to larger models.',
     displayName: 'Mistral Small 3 Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/mistral-small-24b-instruct-2501',
@@ -174,7 +174,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Mixtral MoE 8x7B Instruct 是 Mixtral MoE 8x7B 的指令微调版本，已启用聊天完成功能 API。',
+      'Mixtral MoE 8x7B Instruct is the instruction-tuned version of Mixtral MoE 8x7B, with the chat completion API enabled.',
     displayName: 'Mixtral MoE 8x7B Instruct',
     id: 'accounts/fireworks/models/mixtral-8x7b-instruct',
     pricing: {
@@ -191,7 +191,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'Mixtral MoE 8x22B Instruct v0.1 是 Mixtral MoE 8x22B v0.1 的指令微调版本，已启用聊天完成功能 API。',
+      'Mixtral MoE 8x22B Instruct v0.1 is the instruction-tuned version of Mixtral MoE 8x22B v0.1, with the chat completion API enabled.',
     displayName: 'Mixtral MoE 8x22B Instruct',
     id: 'accounts/fireworks/models/mixtral-8x22b-instruct',
     pricing: {
@@ -208,7 +208,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_064,
     description:
-      'Phi-3-Vision-128K-Instruct 是一个轻量级的、最先进的开放多模态模型，基于包括合成数据和筛选后的公开网站数据集构建，重点关注文本和视觉方面的高质量、推理密集型数据。该模型属于 Phi-3 模型家族，其多模态版本支持 128K 上下文长度（以标记为单位）。该模型经过严格的增强过程，包括监督微调和直接偏好优化，以确保精确的指令遵循和强大的安全措施。',
+      'Phi-3-Vision-128K-Instruct is a lightweight, state-of-the-art open multimodal model built from synthetic data and curated public web datasets, focusing on high-quality, reasoning-intensive text and vision data. It belongs to the Phi-3 family, with a multimodal version supporting a 128K context length (in tokens). The model undergoes rigorous enhancement, including supervised fine-tuning and direct preference optimization, to ensure accurate instruction following and strong safety measures.',
     displayName: 'Phi 3.5 Vision Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/phi-3-vision-128k-instruct',
@@ -223,7 +223,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'MythoMix 的改进版，可能是其更为完善的变体，是 MythoLogic-L2 和 Huginn 的合并，采用了高度实验性的张量类型合并技术。由于其独特的性质，该模型在讲故事和角色扮演方面表现出色。',
+      'An improved variant of MythoMix, possibly its more refined form, merging MythoLogic-L2 and Huginn with a highly experimental tensor-type merge technique. Its unique nature makes it excellent for storytelling and roleplay.',
     displayName: 'MythoMax L2 13b',
     id: 'accounts/fireworks/models/mythomax-l2-13b',
     pricing: {
@@ -237,7 +237,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Deepseek 提供的强大 Mixture-of-Experts (MoE) 语言模型，总参数量为 671B，每个标记激活 37B 参数。',
+      'A powerful Mixture-of-Experts (MoE) language model from DeepSeek with 671B total parameters and 37B active parameters per token.',
     displayName: 'Deepseek V3',
     enabled: true,
     id: 'accounts/fireworks/models/deepseek-v3',
@@ -255,7 +255,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-R1 是一款最先进的大型语言模型，经过强化学习和冷启动数据的优化，具有出色的推理、数学和编程性能。',
+      'DeepSeek-R1 is a state-of-the-art LLM optimized with reinforcement learning and cold-start data, delivering excellent reasoning, math, and coding performance.',
     displayName: 'Deepseek R1',
     enabled: true,
     id: 'accounts/fireworks/models/deepseek-r1',
@@ -273,7 +273,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Qwen QwQ 模型专注于推动 AI 推理，并展示了开放模型在推理能力上与闭源前沿模型匹敌的力量。QwQ-32B-Preview 是一个实验性发布版本，在 GPQA、AIME、MATH-500 和 LiveCodeBench 基准测试中，在分析和推理能力上可与 o1 相媲美，并超越 GPT-4o 和 Claude 3.5 Sonnet。注意：该模型目前作为无服务器模型进行实验性提供。如果用于生产环境，请注意 Fireworks 可能会在短时间内取消部署该模型。',
+      'The Qwen QwQ model focuses on advancing AI reasoning, demonstrating that open models can rival closed frontier models in reasoning. QwQ-32B-Preview is an experimental release that matches o1 and surpasses GPT-4o and Claude 3.5 Sonnet on reasoning and analysis across GPQA, AIME, MATH-500, and LiveCodeBench. Note: this model is currently provided experimentally as a serverless model. For production use, note that Fireworks may retire the deployment on short notice.',
     displayName: 'Qwen Qwq 32b Preview',
     enabled: true,
     id: 'accounts/fireworks/models/qwen-qwq-32b-preview',
@@ -288,7 +288,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5 是由 Qwen 团队和阿里云开发的一系列仅解码语言模型，提供 0.5B、1.5B、3B、7B、14B、32B 和 72B 不同参数规模，并包含基础版和指令微调版。',
+      'Qwen2.5 is a decoder-only LLM series developed by the Qwen team and Alibaba Cloud, offering 0.5B, 1.5B, 3B, 7B, 14B, 32B, and 72B sizes, with both base and instruction-tuned variants.',
     displayName: 'Qwen2.5 72B Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/qwen2p5-72b-instruct',
@@ -305,7 +305,8 @@ const fireworksaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Qwen-VL 模型的 72B 版本是阿里巴巴最新迭代的成果，代表了近一年的创新。',
+    description:
+      'The 72B Qwen-VL model is Alibaba’s latest iteration, reflecting nearly a year of innovation.',
     displayName: 'Qwen2 VL 72B Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/qwen2-vl-72b-instruct',
@@ -320,7 +321,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5-Coder 是最新一代专为代码设计的 Qwen 大型语言模型（前称为 CodeQwen）。注意：该模型目前作为无服务器模型进行实验性提供。如果用于生产环境，请注意 Fireworks 可能会在短时间内取消部署该模型。',
+      'Qwen2.5-Coder is the latest Qwen LLM designed for code (formerly CodeQwen). Note: this model is currently provided experimentally as a serverless model. For production use, note that Fireworks may retire the deployment on short notice.',
     displayName: 'Qwen2.5-Coder-32B-Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/qwen2p5-coder-32b-instruct',
@@ -335,7 +336,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Yi-Large 是顶尖的大型语言模型之一，在 LMSYS 基准测试排行榜上，其表现仅次于 GPT-4、Gemini 1.5 Pro 和 Claude 3 Opus。它在多语言能力方面表现卓越，特别是在西班牙语、中文、日语、德语和法语方面。Yi-Large 还具有用户友好性，采用与 OpenAI 相同的 API 定义，便于集成。',
+      'Yi-Large is a top-tier LLM that ranks just below GPT-4, Gemini 1.5 Pro, and Claude 3 Opus on the LMSYS leaderboard. It excels in multilingual capability, especially Spanish, Chinese, Japanese, German, and French. Yi-Large is also developer-friendly, using the same API schema as OpenAI for easy integration.',
     displayName: 'Yi-Large',
     enabled: true,
     id: 'accounts/yi-01-ai/models/yi-large',

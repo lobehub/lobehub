@@ -39,6 +39,7 @@ export default defineConfig({
     resolve: {
       alias: {
         '~common': resolve(__dirname, 'src/common'),
+        '@': resolve(__dirname, 'src/main'),
       },
     },
   },

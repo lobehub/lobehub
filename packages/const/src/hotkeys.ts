@@ -18,13 +18,13 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.CommandPalette,
-    keys: combineKeys([KeyEnum.Mod, 'j']),
+    keys: combineKeys([KeyEnum.Mod, 'k']),
     scopes: [HotkeyScopeEnum.Global],
   },
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.Search,
-    keys: combineKeys([KeyEnum.Mod, 'k']),
+    keys: combineKeys([KeyEnum.Mod, 'j']),
     scopes: [HotkeyScopeEnum.Global],
   },
   {
@@ -42,21 +42,15 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
   },
   {
     group: HotkeyGroupEnum.Essential,
-    id: HotkeyEnum.ToggleZenMode,
-    keys: combineKeys([KeyEnum.Mod, KeyEnum.Backslash]),
-    scopes: [HotkeyScopeEnum.Chat],
-  },
-  {
-    group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.ToggleLeftPanel,
     keys: combineKeys([KeyEnum.Mod, KeyEnum.BracketLeft]),
-    scopes: [HotkeyScopeEnum.Chat, HotkeyScopeEnum.Files, HotkeyScopeEnum.Image],
+    scopes: [HotkeyScopeEnum.Global],
   },
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.ToggleRightPanel,
     keys: combineKeys([KeyEnum.Mod, KeyEnum.BracketRight]),
-    scopes: [HotkeyScopeEnum.Chat, HotkeyScopeEnum.Image],
+    scopes: [HotkeyScopeEnum.Global],
   },
   {
     group: HotkeyGroupEnum.Essential,
@@ -65,6 +59,12 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     scopes: [HotkeyScopeEnum.Global],
   },
   // Chat
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.ToggleZenMode,
+    keys: combineKeys([KeyEnum.Mod, KeyEnum.Backslash]),
+    scopes: [HotkeyScopeEnum.Chat],
+  },
   {
     group: HotkeyGroupEnum.Conversation,
     id: HotkeyEnum.OpenChatSettings,
@@ -99,7 +99,7 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     group: HotkeyGroupEnum.Conversation,
     id: HotkeyEnum.AddUserMessage,
     keys: combineKeys([KeyEnum.Alt, KeyEnum.Enter]),
-    // Not activated through Scope mode
+    scopes: [HotkeyScopeEnum.Chat],
   },
   {
     group: HotkeyGroupEnum.Conversation,
@@ -113,6 +113,12 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     id: HotkeyEnum.ClearCurrentMessages,
     keys: combineKeys([KeyEnum.Alt, KeyEnum.Shift, KeyEnum.Backspace]),
     scopes: [HotkeyScopeEnum.Chat],
+  },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.SaveDocument,
+    keys: combineKeys([KeyEnum.Mod, 's']),
+    scopes: [HotkeyScopeEnum.Files],
   },
 ];
 

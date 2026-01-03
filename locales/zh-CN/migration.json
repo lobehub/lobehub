@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "清空本地数据",
-      "downloadBackup": "下载数据备份",
-      "reUpgrade": "重新升级",
-      "start": "开始使用",
-      "upgrade": "一键升级"
-    },
-    "clear": {
-      "confirm": "即将清空本地数据（全局设置不受影响），请确认你已经下载了数据备份。"
-    },
-    "description": "在新版本中，{{appName}} 的数据存储有了巨大的飞跃。因此我们要对旧版数据进行升级，进而为你带来更好的使用体验。",
-    "features": {
-      "capability": {
-        "desc": "基于 IndexedDB 技术，足以装下你一生的会话消息",
-        "title": "大容量"
-      },
-      "performance": {
-        "desc": "百万条消息自动索引，检索查询毫秒级响应",
-        "title": "高性能"
-      },
-      "use": {
-        "desc": "支持标题、描述、标签、消息内容乃至翻译文本检索，日常搜索效率大大提升",
-        "title": "更易用"
-      }
-    },
-    "title": "{{appName}} 数据进化",
-    "upgrade": {
-      "error": {
-        "subTitle": "非常抱歉，数据库升级过程发生异常。请尝试以下方案：A. 清空本地数据后，重新导入备份数据； B.点击 「重新升级」按钮。<br><br> 如仍然出错，请 <1>提交问题</1> ，我们将会第一时间帮你排查",
-        "title": "数据库升级失败"
-      },
-      "success": {
-        "subTitle": "{{appName}} 的数据库已经升级到最新版本，立即开始体验吧",
-        "title": "数据库升级成功"
-      }
-    },
-    "upgradeTip": "升级大致需要 10~20 秒，升级过程中请不要关闭 {{appName}}"
-  },
-  "migrateError": {
-    "missVersion": "导入数据缺少版本号，请检查文件后重试",
-    "noMigration": "没有找到当前版本对应的迁移方案，请检查版本号后重试。如仍有问题请提交问题反馈"
-  }
+  "dbV1.action.clearDB": "清空本地数据",
+  "dbV1.action.downloadBackup": "下载数据备份",
+  "dbV1.action.reUpgrade": "重新升级",
+  "dbV1.action.start": "开始使用",
+  "dbV1.action.upgrade": "一键升级",
+  "dbV1.clear.confirm": "将清空本地数据（全局设置不受影响），且不可撤销。建议先下载数据备份，再确认继续",
+  "dbV1.description": "在新版本中，{{appName}} 的数据存储有了巨大的飞跃。因此我们要对旧版数据进行升级，进而为你带来更好的使用体验。",
+  "dbV1.features.capability.desc": "基于 IndexedDB 技术，足以装下你一生的会话消息",
+  "dbV1.features.capability.title": "大容量",
+  "dbV1.features.performance.desc": "百万条消息自动索引，检索查询毫秒级响应",
+  "dbV1.features.performance.title": "高性能",
+  "dbV1.features.use.desc": "支持标题、描述、标签、消息内容乃至翻译文本检索，日常搜索效率大大提升",
+  "dbV1.features.use.title": "更易用",
+  "dbV1.title": "{{appName}} 数据进化",
+  "dbV1.upgrade.error.subTitle": "升级过程中遇到问题。你可以：A. 先清空本地数据，再导入备份；B. 点击「重新升级」再试一次。\n\n如果仍然失败：请通过 <1>提交问题</1> 发送错误信息，我们会尽快排查。",
+  "dbV1.upgrade.error.title": "数据库升级遇到了问题",
+  "dbV1.upgrade.success.subTitle": "数据库已升级到最新版本。现在可以继续使用了",
+  "dbV1.upgrade.success.title": "数据库升级完成",
+  "dbV1.upgradeTip": "升级大约需要 10–20 秒。升级过程中请不要关闭 {{appName}}",
+  "migrateError.missVersion": "导入的数据缺少版本号。请检查文件后重试",
+  "migrateError.noMigration": "未找到与当前版本匹配的迁移方案。请检查版本号后重试；如仍有问题，可提交反馈"
 }

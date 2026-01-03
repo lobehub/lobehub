@@ -1,15 +1,34 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { ChatMessageError, ChatToolPayload, MessagePluginItem } from '@lobechat/types';
+import {
+  type ChatMessageError,
+  type ChatMessagePluginError,
+  type ChatToolPayload,
+  type MessagePluginItem,
+} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { messageService } from '@/services/message';
-import { OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
-import { ChatStore } from '@/store/chat/store';
+import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
+import { type ChatStore } from '@/store/chat/store';
 import { merge } from '@/utils/merge';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import { displayMessageSelectors } from '../../message/selectors';
+
+/**
+ * Params for batch updating tool message content, state, and error
+ */
+export interface UpdateToolMessageParams {
+  content?: string;
+  /**
+   * Metadata to attach to the tool message
+   * Used to mark messages for special handling (e.g., agentCouncil for parallel display)
+   */
+  metadata?: Record<string, any>;
+  pluginError?: ChatMessagePluginError | null;
+  pluginState?: any;
+}
 
 /**
  * Optimistic update operations for plugin-related data
@@ -78,6 +97,16 @@ export interface PluginOptimisticUpdateAction {
     id: string,
     context?: OptimisticUpdateContext,
   ) => Promise<void>;
+
+  /**
+   * Batch update tool message content, state, and error in a single call
+   * This is optimized for builtin tool executors to reduce multiple update calls
+   */
+  optimisticUpdateToolMessage: (
+    id: string,
+    params: UpdateToolMessageParams,
+    context?: OptimisticUpdateContext,
+  ) => Promise<void>;
 }
 
 export const pluginOptimisticUpdate: StateCreator<
@@ -87,7 +116,7 @@ export const pluginOptimisticUpdate: StateCreator<
   PluginOptimisticUpdateAction
 > = (set, get) => ({
   optimisticUpdatePluginState: async (id, value, context) => {
-    const { replaceMessages, internal_getSessionContext } = get();
+    const { replaceMessages, internal_getConversationContext } = get();
 
     // optimistic update
     get().internal_dispatchMessage(
@@ -95,15 +124,11 @@ export const pluginOptimisticUpdate: StateCreator<
       context,
     );
 
-    const { sessionId, topicId } = internal_getSessionContext(context);
-
-    const result = await messageService.updateMessagePluginState(id, value, {
-      sessionId,
-      topicId,
-    });
+    const ctx = internal_getConversationContext(context);
+    const result = await messageService.updateMessagePluginState(id, value, ctx);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages, { sessionId, topicId });
+      replaceMessages(result.messages, { context: ctx });
     }
   },
 
@@ -157,7 +182,7 @@ export const pluginOptimisticUpdate: StateCreator<
   },
 
   optimisticUpdatePlugin: async (id, value, context) => {
-    const { replaceMessages, internal_getSessionContext } = get();
+    const { replaceMessages, internal_getConversationContext } = get();
 
     // optimistic update
     get().internal_dispatchMessage(
@@ -169,15 +194,11 @@ export const pluginOptimisticUpdate: StateCreator<
       context,
     );
 
-    const { sessionId, topicId } = internal_getSessionContext(context);
-
-    const result = await messageService.updateMessagePlugin(id, value, {
-      sessionId,
-      topicId,
-    });
+    const ctx = internal_getConversationContext(context);
+    const result = await messageService.updateMessagePlugin(id, value, ctx);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages, { sessionId, topicId });
+      replaceMessages(result.messages, { context: ctx });
     }
   },
 
@@ -212,22 +233,14 @@ export const pluginOptimisticUpdate: StateCreator<
   },
 
   optimisticUpdatePluginError: async (id, error, context) => {
-    const { replaceMessages, internal_getSessionContext } = get();
+    const { replaceMessages, internal_getConversationContext } = get();
 
     get().internal_dispatchMessage({ id, type: 'updateMessage', value: { error } }, context);
 
-    const { sessionId, topicId } = internal_getSessionContext(context);
-
-    const result = await messageService.updateMessage(
-      id,
-      { error },
-      {
-        sessionId,
-        topicId,
-      },
-    );
+    const ctx = internal_getConversationContext(context);
+    const result = await messageService.updateMessage(id, { error }, ctx);
     if (result?.success && result.messages) {
-      replaceMessages(result.messages, { sessionId, topicId });
+      replaceMessages(result.messages, { context: ctx });
     }
   },
 
@@ -236,23 +249,50 @@ export const pluginOptimisticUpdate: StateCreator<
     const message = dbMessageSelectors.getDbMessageById(id)(get());
     if (!message || !message.tools) return;
 
-    const { internal_toggleMessageLoading, replaceMessages, internal_getSessionContext } = get();
+    const { internal_toggleMessageLoading, replaceMessages, internal_getConversationContext } =
+      get();
 
-    const { sessionId, topicId } = internal_getSessionContext(context);
+    const ctx = internal_getConversationContext(context);
 
     internal_toggleMessageLoading(true, id);
-    const result = await messageService.updateMessage(
-      id,
-      { tools: message.tools },
-      {
-        sessionId,
-        topicId,
-      },
-    );
+    const result = await messageService.updateMessage(id, { tools: message.tools }, ctx);
     internal_toggleMessageLoading(false, id);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages, { sessionId, topicId });
+      replaceMessages(result.messages, { context: ctx });
+    }
+  },
+
+  optimisticUpdateToolMessage: async (id, params, context) => {
+    const { replaceMessages, internal_getConversationContext, internal_dispatchMessage } = get();
+
+    const { content, metadata, pluginState, pluginError } = params;
+
+    // Batch optimistic updates - update frontend immediately
+    internal_dispatchMessage(
+      { id, type: 'updateMessage', value: { pluginState, content, metadata } },
+      context,
+    );
+
+    if (pluginError !== undefined) {
+      internal_dispatchMessage(
+        { id, type: 'updateMessagePlugin', value: { error: pluginError } },
+        context,
+      );
+    }
+
+    const ctx = internal_getConversationContext(context);
+
+    // Use single API call to update all fields in one transaction
+    // This prevents race conditions that occurred with multiple parallel requests
+    const result = await messageService.updateToolMessage(
+      id,
+      { content, metadata, pluginError, pluginState },
+      ctx,
+    );
+
+    if (result?.success && result.messages) {
+      replaceMessages(result.messages, { context: ctx });
     }
   },
 });

@@ -115,8 +115,10 @@ describe('DocumentModel', () => {
       const userDocs = await documentModel.query();
       const otherUserDocs = await documentModel2.query();
 
-      expect(userDocs).toHaveLength(0);
-      expect(otherUserDocs).toHaveLength(1);
+      expect(userDocs.items).toHaveLength(0);
+      expect(userDocs.total).toBe(0);
+      expect(otherUserDocs.items).toHaveLength(1);
+      expect(otherUserDocs.total).toBe(1);
     });
   });
 
@@ -127,7 +129,8 @@ describe('DocumentModel', () => {
 
       const result = await documentModel.query();
 
-      expect(result).toHaveLength(2);
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
     });
 
     it('should only return documents for the current user', async () => {
@@ -136,8 +139,9 @@ describe('DocumentModel', () => {
 
       const result = await documentModel.query();
 
-      expect(result).toHaveLength(1);
-      expect(result[0].content).toBe('User 1 document');
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.items[0].content).toBe(null); // content is excluded in query
     });
 
     it('should return documents ordered by updatedAt desc', async () => {
@@ -160,8 +164,8 @@ describe('DocumentModel', () => {
 
       const result = await documentModel.query();
 
-      expect(result[0].id).toBe(doc1Id);
-      expect(result[1].id).toBe(doc2Id);
+      expect(result.items[0].id).toBe(doc1Id);
+      expect(result.items[1].id).toBe(doc2Id);
     });
   });
 

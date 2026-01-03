@@ -1,786 +1,536 @@
 {
-  "about": {
-    "title": "درباره"
-  },
-  "agentInfoDescription": {
-    "basic": {
-      "avatar": "تصویر نمایه",
-      "description": "توضیحات",
-      "name": "نام",
-      "tags": "برچسب‌ها",
-      "title": "اطلاعات دستیار"
-    },
-    "chat": {
-      "displayMode": "حالت نمایش",
-      "enableHistoryCount": "فعال‌سازی شمارش پیام‌های پیشین",
-      "historyCount": "تعداد پیام‌های پیشین",
-      "no": "خیر",
-      "searchMode": "حالت جستجو",
-      "title": "ترجیحات گفتگو",
-      "yes": "بله"
-    },
-    "model": {
-      "maxTokens": "حداکثر تعداد توکن",
-      "model": "مدل",
-      "provider": "ارائه‌دهنده",
-      "temperature": "دمای مدل",
-      "title": "تنظیمات مدل",
-      "topP": "مقدار Top P"
-    },
-    "plugins": {
-      "count": "تنظیمات افزونه ({{count}})",
-      "empty": "افزونه‌ای نصب نشده است",
-      "title": "افزونه‌های نصب‌شده"
-    },
-    "role": {
-      "systemRole": "دستورالعمل سیستمی",
-      "title": "تنظیمات نقش"
-    },
-    "value": {
-      "unset": "تنظیم‌نشده",
-      "untitled": "دستیار بدون عنوان"
-    }
-  },
-  "agentTab": {
-    "chat": "ترجیحات گفتگو",
-    "meta": "اطلاعات دستیار",
-    "modal": "تنظیمات مدل",
-    "opening": "تنظیمات آغازین",
-    "plugin": "تنظیمات افزونه",
-    "prompt": "تنظیمات شخصیت",
-    "tts": "خدمات صوتی"
-  },
-  "analytics": {
-    "telemetry": {
-      "desc": "با انتخاب ارسال داده‌های تله‌متری، می‌توانید به ما در بهبود تجربه کلی کاربری {{appName}} کمک کنید",
-      "title": "ارسال داده‌های ناشناس استفاده"
-    },
-    "title": "آمار و داده‌ها"
-  },
+  "_cloud.officialProvider": "سرویس مدل رسمی {{name}}",
+  "about.title": "درباره",
+  "advancedSettings": "تنظیمات پیشرفته",
+  "agentInfoDescription.basic.avatar": "آواتار",
+  "agentInfoDescription.basic.description": "توضیحات",
+  "agentInfoDescription.basic.name": "نام",
+  "agentInfoDescription.basic.tags": "برچسب‌ها",
+  "agentInfoDescription.basic.title": "اطلاعات عامل",
+  "agentInfoDescription.chat.enableHistoryCount": "فعال‌سازی شمارش تاریخچه پیام‌ها",
+  "agentInfoDescription.chat.historyCount": "تعداد پیام‌های تاریخچه",
+  "agentInfoDescription.chat.no": "خیر",
+  "agentInfoDescription.chat.searchMode": "حالت جستجو",
+  "agentInfoDescription.chat.title": "تنظیمات گفتگو",
+  "agentInfoDescription.chat.yes": "بله",
+  "agentInfoDescription.model.maxTokens": "حداکثر تعداد توکن",
+  "agentInfoDescription.model.model": "مدل",
+  "agentInfoDescription.model.provider": "ارائه‌دهنده",
+  "agentInfoDescription.model.temperature": "درجه خلاقیت",
+  "agentInfoDescription.model.title": "تنظیمات مدل",
+  "agentInfoDescription.model.topP": "مقدار Top P",
+  "agentInfoDescription.plugins.count": "تنظیمات مهارت ({{count}})",
+  "agentInfoDescription.plugins.empty": "هنوز مهارتی نصب نشده است",
+  "agentInfoDescription.plugins.title": "مهارت‌های نصب‌شده",
+  "agentInfoDescription.role.systemRole": "پروفایل عامل",
+  "agentInfoDescription.role.title": "پروفایل عامل",
+  "agentInfoDescription.value.unset": "تنظیم نشده",
+  "agentInfoDescription.value.untitled": "عامل بدون عنوان",
+  "agentTab.chat": "تنظیمات گفتگو",
+  "agentTab.meta": "اطلاعات عامل",
+  "agentTab.modal": "تنظیمات مدل",
+  "agentTab.opening": "تنظیمات آغازین",
+  "agentTab.plugin": "تنظیمات مهارت",
+  "agentTab.prompt": "پروفایل عامل",
+  "agentTab.tts": "سرویس صوتی",
+  "analytics.telemetry.desc": "با ارسال داده‌های ناشناس به ما در بهبود {{appName}} کمک کنید",
+  "analytics.telemetry.title": "ارسال داده‌های استفاده ناشناس",
+  "analytics.title": "تحلیل‌ها",
   "checking": "در حال بررسی...",
   "checkingPermissions": "در حال بررسی مجوزها...",
-  "danger": {
-    "clear": {
-      "action": "پاکسازی فوری",
-      "confirm": "آیا از پاکسازی تمام داده‌های گفتگو مطمئن هستید؟",
-      "desc": "تمام داده‌های جلسه، از جمله دستیار، فایل‌ها، پیام‌ها، افزونه‌ها و غیره پاک خواهد شد",
-      "success": "تمام پیام‌های جلسه پاک شد",
-      "title": "پاکسازی تمام پیام‌های جلسه"
-    },
-    "reset": {
-      "action": "بازنشانی فوری",
-      "confirm": "آیا از بازنشانی تمام تنظیمات مطمئن هستید؟",
-      "currentVersion": "نسخه فعلی",
-      "desc": "تمام تنظیمات بازنشانی شده و به مقادیر پیش‌فرض بازمی‌گردد",
-      "success": "تمام تنظیمات بازنشانی شد",
-      "title": "بازنشانی تمام تنظیمات"
-    }
-  },
-  "groupTab": {
-    "chat": "گفت‌وگو",
-    "members": "اعضا",
-    "meta": "اطلاعات پایه"
-  },
-  "header": {
-    "desc": "ترجیحات و تنظیمات مدل",
-    "global": "تنظیمات کلی",
-    "group": "تنظیمات تیم",
-    "groupDesc": "مدیریت تیم Agent و ترجیحات گفتگو",
-    "session": "تنظیمات جلسه",
-    "sessionDesc": "تنظیمات نقش و ترجیحات جلسه",
-    "sessionWithName": "تنظیمات جلسه · {{name}}",
-    "title": "تنظیمات"
-  },
-  "hotkey": {
-    "conflicts": "تداخل با کلیدهای میانبر موجود",
-    "errors": {
-      "CONFLICT": "تداخل کلید میانبر: این کلید میانبر قبلاً توسط عملکرد دیگری استفاده شده است",
-      "INVALID_FORMAT": "فرمت کلید میانبر نامعتبر است: لطفاً از فرمت صحیح استفاده کنید (مانند CommandOrControl+E)",
-      "INVALID_ID": "شناسه کلید میانبر نامعتبر است",
-      "NO_MODIFIER": "کلید میانبر باید شامل کلیدهای تغییر دهنده (Ctrl، Alt، Shift و غیره) باشد",
-      "SYSTEM_OCCUPIED": "کلید میانبر توسط سیستم یا برنامه‌های دیگر اشغال شده است",
-      "UNKNOWN": "به‌روزرسانی ناموفق بود: خطای ناشناخته"
-    },
-    "group": {
-      "conversation": "گفتگو",
-      "desktop": "نسخه دسکتاپ",
-      "essential": "اساسی"
-    },
-    "invalidCombination": "کلیدهای میانبر باید حداقل شامل یک کلید اصلاحی (Ctrl, Alt, Shift) و یک کلید معمولی باشند",
-    "record": "برای ضبط کلید میانبر، کلید را فشار دهید",
-    "reset": "بازنشانی به کلیدهای میانبر پیش‌فرض",
-    "title": "کلیدهای میانبر",
-    "updateError": "به‌روزرسانی کلید میانبر ناموفق بود: خطای شبکه یا سیستم",
-    "updateSuccess": "کلید میانبر با موفقیت به‌روزرسانی شد"
-  },
-  "llm": {
-    "aesGcm": "کلید و آدرس پروکسی شما با استفاده از الگوریتم رمزنگاری <1>AES-GCM</1> رمزگذاری خواهد شد",
-    "apiKey": {
-      "desc": "لطفاً {{name}} API Key خود را وارد کنید",
-      "placeholder": "{{name}} API Key",
-      "title": "API Key"
-    },
-    "checker": {
-      "button": "بررسی",
-      "desc": "تست کنید که آیا Api Key و آدرس پروکسی به درستی وارد شده‌اند",
-      "pass": "بررسی موفقیت‌آمیز",
-      "title": "بررسی اتصال"
-    },
-    "customModelCards": {
-      "addNew": "ایجاد و افزودن مدل {{id}}",
-      "config": "پیکربندی مدل",
-      "confirmDelete": "این مدل سفارشی در حال حذف است و پس از حذف قابل بازیابی نخواهد بود، لطفاً با دقت عمل کنید.",
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "فیلدی که در Azure OpenAI برای درخواست واقعی استفاده می‌شود",
-          "placeholder": "لطفاً نام استقرار مدل در Azure را وارد کنید",
-          "title": "نام استقرار مدل"
-        },
-        "displayName": {
-          "placeholder": "لطفاً نام نمایشی مدل را وارد کنید، مانند ChatGPT، GPT-4 و غیره",
-          "title": "نام نمایشی مدل"
-        },
-        "files": {
-          "extra": "پیاده‌سازی فعلی آپلود فایل تنها یک راه‌حل موقت است و فقط برای آزمایش شخصی است. قابلیت کامل آپلود فایل در آینده ارائه خواهد شد",
-          "title": "پشتیبانی از آپلود فایل"
-        },
-        "functionCall": {
-          "extra": "این پیکربندی تنها قابلیت فراخوانی توابع در برنامه را فعال می‌کند. پشتیبانی از فراخوانی توابع کاملاً به خود مدل بستگی دارد، لطفاً قابلیت فراخوانی توابع مدل را به صورت مستقل تست کنید",
-          "title": "پشتیبانی از فراخوانی توابع"
-        },
-        "id": {
-          "extra": "به عنوان برچسب مدل نمایش داده خواهد شد",
-          "placeholder": "لطفاً شناسه مدل را وارد کنید، مانند gpt-4-turbo-preview یا claude-2.1",
-          "title": "شناسه مدل"
-        },
-        "modalTitle": "پیکربندی مدل سفارشی",
-        "tokens": {
-          "title": "حداکثر تعداد توکن‌ها"
-        },
-        "vision": {
-          "extra": "این پیکربندی تنها قابلیت آپلود تصویر در برنامه را فعال می‌کند. پشتیبانی از تشخیص تصویر کاملاً به خود مدل بستگی دارد، لطفاً قابلیت تشخیص تصویر مدل را به صورت مستقل تست کنید",
-          "title": "پشتیبانی از تشخیص تصویر"
-        }
-      }
-    },
-    "fetchOnClient": {
-      "desc": "حالت درخواست از سمت کلاینت، درخواست‌ها را مستقیماً از مرورگر ارسال می‌کند و می‌تواند سرعت پاسخگویی را افزایش دهد",
-      "title": "استفاده از حالت درخواست از سمت کلاینت"
-    },
-    "fetcher": {
-      "clear": "پاک کردن مدل‌های دریافت شده",
-      "fetch": "دریافت لیست مدل‌ها",
-      "fetching": "در حال دریافت لیست مدل‌ها...",
-      "latestTime": "آخرین زمان به‌روزرسانی: {{time}}",
-      "noLatestTime": "هنوز لیستی دریافت نشده است"
-    },
-    "helpDoc": "راهنمای پیکربندی",
-    "modelList": {
-      "desc": "مدل‌هایی را که در جلسه نمایش داده می‌شوند انتخاب کنید. مدل‌های انتخاب‌شده در لیست مدل‌ها نمایش داده خواهند شد",
-      "placeholder": "لطفاً مدلی را از لیست انتخاب کنید",
-      "title": "لیست مدل‌ها",
-      "total": "در مجموع {{count}} مدل موجود است"
-    },
-    "proxyUrl": {
-      "desc": "باید شامل http(s):// باشد، به جز آدرس پیش‌فرض",
-      "title": "آدرس پروکسی API"
-    },
-    "waitingForMore": "مدل‌های بیشتری در حال <1>برنامه‌ریزی برای اضافه شدن</1> هستند، لطفاً منتظر بمانید"
-  },
-  "marketPublish": {
-    "modal": {
-      "changelog": {
-        "extra": "توضیحی درباره تغییرات و بهبودهای اصلی این نسخه ارائه دهید",
-        "label": "گزارش تغییرات",
-        "maxLengthError": "گزارش تغییرات نباید بیش از ۵۰۰ کاراکتر باشد",
-        "placeholder": "لطفاً گزارش تغییرات را وارد کنید",
-        "required": "لطفاً گزارش تغییرات را وارد کنید"
-      },
-      "comparison": {
-        "local": "نسخه فعلی محلی",
-        "remote": "نسخه منتشرشده فعلی"
-      },
-      "identifier": {
-        "extra": "شناسه به‌عنوان شناسه یکتای دستیار استفاده می‌شود. استفاده از حروف کوچک، اعداد و خط تیره توصیه می‌شود",
-        "label": "شناسه دستیار",
-        "lengthError": "طول شناسه باید بین ۳ تا ۵۰ کاراکتر باشد",
-        "patternError": "شناسه فقط می‌تواند شامل حروف کوچک، اعداد و خط تیره باشد",
-        "placeholder": "لطفاً شناسه یکتای دستیار را وارد کنید، مانند: web-development",
-        "required": "لطفاً شناسه دستیار را وارد کنید"
-      },
-      "loading": {
-        "fetchingRemote": "در حال بارگذاری داده‌های راه دور...",
-        "submit": "در حال انتشار دستیار...",
-        "upload": "در حال انتشار نسخه جدید..."
-      },
-      "messages": {
-        "createVersionFailed": "ایجاد نسخه با شکست مواجه شد: {{message}}",
-        "fetchRemoteFailed": "دریافت داده‌های دستیار از راه دور با شکست مواجه شد",
-        "missingIdentifier": "این دستیار هنوز شناسه بازار ندارد",
-        "notAuthenticated": "لطفاً ابتدا وارد حساب بازار شوید",
-        "publishFailed": "انتشار با شکست مواجه شد: {{message}}"
-      },
-      "submitButton": "انتشار",
-      "title": {
-        "submit": "اشتراک‌گذاری در بازار دستیار",
-        "upload": "انتشار نسخه جدید"
-      }
-    },
-    "resultModal": {
-      "message": "دستیار برای بررسی ارسال شد. پس از تأیید، به‌صورت خودکار منتشر خواهد شد. برای مشاهده دستیار منتشرشده، روی «مشاهده در بازار» کلیک کنید.",
-      "view": "مشاهده در بازار"
-    },
-    "submit": {
-      "button": "اشتراک‌گذاری در بازار",
-      "tooltip": "دستیار را در بازار به اشتراک بگذارید"
-    },
-    "upload": {
-      "button": "انتشار نسخه جدید",
-      "tooltip": "نسخه جدیدی از دستیار را در بازار منتشر کنید"
-    }
-  },
-  "message": {
-    "success": "به‌روزرسانی با موفقیت انجام شد"
-  },
-  "plugin": {
-    "addMCPPlugin": "افزودن افزونه MCP",
-    "addTooltip": "افزودن افزونه سفارشی",
-    "clearDeprecated": "حذف افزونه‌های نامعتبر",
-    "empty": "هیچ افزونه‌ای نصب نشده است، به <1>فروشگاه افزونه‌ها</1> بروید و کاوش کنید",
-    "installStatus": {
-      "deprecated": "حذف شده"
-    },
-    "settings": {
-      "hint": "لطفاً بر اساس توضیحات، تنظیمات زیر را پر کنید",
-      "title": "تنظیمات افزونه {{id}}",
-      "tooltip": "تنظیمات افزونه"
-    },
-    "store": "فروشگاه افزونه‌ها"
-  },
-  "settingAgent": {
-    "avatar": {
-      "title": "آواتار"
-    },
-    "backgroundColor": {
-      "title": "رنگ پس‌زمینه"
-    },
-    "description": {
-      "desc": "معرفی ساده دستیار خود، نه به عنوان تنظیمات نقش",
-      "placeholder": "لطفاً توضیحات دستیار را وارد کنید",
-      "title": "توضیحات دستیار"
-    },
-    "name": {
-      "placeholder": "لطفاً نام دستیار را وارد کنید",
-      "title": "نام"
-    },
-    "prompt": {
-      "placeholder": "لطفاً کلمات کلیدی نقش را وارد کنید",
-      "title": "تنظیمات نقش"
-    },
-    "submit": "به‌روزرسانی اطلاعات دستیار",
-    "tag": {
-      "desc": "برچسب‌های دستیار در بازار دستیارها نمایش داده خواهند شد",
-      "placeholder": "لطفاً برچسب‌ها را وارد کنید",
-      "title": "برچسب"
-    },
-    "title": "اطلاعات دستیار"
-  },
-  "settingAppearance": {
-    "animationMode": {
-      "agile": "چابک",
-      "desc": "سرعت انیمیشن پاسخ عملیات برنامه را انتخاب کنید",
-      "disabled": "خاموش",
-      "elegant": "ظریف",
-      "title": "انیمیشن پاسخ"
-    },
-    "contextMenuMode": {
-      "default": "پیش‌فرض",
-      "desc": "انتخاب طرح نمایش منوی کلیک راست پیام‌های چت",
-      "disabled": "استفاده نشود",
-      "title": "طرح منوی کلیک راست"
-    },
-    "neutralColor": {
-      "desc": "سفارشی‌سازی مقیاس خاکستری با تم‌های رنگی مختلف",
-      "title": "رنگ‌های خنثی"
-    },
-    "noAnimation": {
-      "desc": "تمام جلوه‌های انیمیشنی در برنامه را غیرفعال کنید",
-      "title": "حالت بدون انیمیشن"
-    },
-    "preview": {
-      "title": "پالت رنگ"
-    },
-    "primaryColor": {
-      "desc": "سفارشی‌سازی رنگ تم",
-      "title": "رنگ تم"
-    },
-    "title": "ظاهر برنامه"
-  },
-  "settingChat": {
-    "autoCreateTopicThreshold": {
-      "desc": "پس از اینکه تعداد پیام‌های فعلی از این مقدار بیشتر شود، به‌طور خودکار موضوع ایجاد می‌شود",
-      "title": "آستانه تعداد پیام‌ها"
-    },
-    "chatStyleType": {
-      "title": "سبک پنجره چت",
-      "type": {
-        "chat": "حالت گفتگو",
-        "docs": "حالت سند"
-      }
-    },
-    "compressThreshold": {
-      "desc": "وقتی تعداد پیام‌های تاریخی فشرده‌نشده از این مقدار بیشتر شود، فشرده‌سازی انجام می‌شود",
-      "title": "آستانه فشرده‌سازی طول پیام‌های تاریخی"
-    },
-    "enableAutoCreateTopic": {
-      "desc": "آیا در طول مکالمه به‌طور خودکار موضوع ایجاد شود، فقط در موضوعات موقت اعمال می‌شود",
-      "title": "ایجاد خودکار موضوع"
-    },
-    "enableCompressHistory": {
-      "title": "فعال‌سازی خلاصه‌سازی خودکار تاریخچه پیام‌ها"
-    },
-    "enableHistoryCount": {
-      "alias": "بدون محدودیت",
-      "limited": "فقط شامل {{number}} پیام مکالمه",
-      "setlimited": "استفاده از تعداد پیام‌های تاریخی",
-      "title": "محدودیت تعداد پیام‌های تاریخی",
-      "unlimited": "بدون محدودیت در تعداد پیام‌های تاریخی"
-    },
-    "enableStreaming": {
-      "desc": "فعال‌سازی خروجی جریانی برای نمایش پاسخ‌ها به‌صورت زنده. در صورت غیرفعال بودن، فقط پاسخ کامل نمایش داده می‌شود.",
-      "title": "فعال‌سازی خروجی جریانی"
-    },
-    "historyCount": {
-      "desc": "تعداد پیام‌هایی که در هر درخواست ارسال می‌شوند (شامل آخرین سوال نوشته‌شده. هر سوال و پاسخ به‌عنوان 1 محاسبه می‌شود)",
-      "title": "تعداد پیام‌های همراه"
-    },
-    "inputTemplate": {
-      "desc": "آخرین پیام کاربر در این قالب پر می‌شود",
-      "placeholder": "قالب پیش‌پردازش {{text}} با اطلاعات ورودی لحظه‌ای جایگزین می‌شود",
-      "title": "پیش‌پردازش ورودی کاربر"
-    },
-    "submit": "به‌روزرسانی ترجیحات چت",
-    "title": "تنظیمات چت"
-  },
-  "settingChatAppearance": {
-    "fontSize": {
-      "desc": "اندازه فونت محتوای چت",
-      "marks": {
-        "normal": "استاندارد"
-      },
-      "title": "اندازه فونت"
-    },
-    "highlighterTheme": {
-      "title": "تم هایلایت کد"
-    },
-    "mermaidTheme": {
-      "title": "تم مرمید"
-    },
-    "title": "ظاهر چت",
-    "transitionMode": {
-      "desc": "انیمیشن انتقال پیام‌های چت",
-      "options": {
-        "fadeIn": "نمایش تدریجی",
-        "none": {
-          "desc": "این بستگی به نحوه خروجی مدل دارد، لطفاً خودتان تست کنید.",
-          "value": "بدون انیمیشن"
-        },
-        "smooth": "نرم"
-      },
-      "title": "انیمیشن انتقال"
-    }
-  },
-  "settingCommon": {
-    "lang": {
-      "autoMode": "پیروی از سیستم",
-      "title": "زبان"
-    },
-    "themeMode": {
-      "auto": "خودکار",
-      "dark": "تیره",
-      "light": "روشن",
-      "title": "تم"
-    },
-    "title": "تنظیمات عمومی"
-  },
-  "settingGroup": {
-    "description": {
-      "placeholder": "لطفاً توضیحی برای تیم وارد کنید",
-      "title": "توضیحات تیم"
-    },
-    "name": {
-      "placeholder": "لطفاً نام تیم را وارد کنید",
-      "title": "نام تیم"
-    },
-    "scene": {
-      "desc": "انتخاب سناریوی تیم",
-      "options": {
-        "casual": "غیررسمی",
-        "productive": "بهره‌ور"
-      },
-      "title": "سناریوی تیم"
-    },
-    "submit": "به‌روزرسانی تیم",
-    "systemPrompt": {
-      "placeholder": "لطفاً متن راهنمای سیستم میزبان را وارد کنید",
-      "title": "متن راهنمای سیستم میزبان"
-    },
-    "title": "اطلاعات تیم Agent"
-  },
-  "settingGroupChat": {
-    "allowDM": {
-      "desc": "در صورت غیرفعال بودن، همچنان می‌توانید به صورت مستقیم به دستیار پیام دهید",
-      "title": "اجازه ارسال پیام خصوصی توسط دستیار"
-    },
-    "enableSupervisor": {
-      "desc": "فعال‌سازی قابلیت ناظر تیم Agent، ناظر روند گفتگوهای تیم را مدیریت خواهد کرد",
-      "title": "فعال‌سازی مدیر گروه"
-    },
-    "maxResponseInRow": {
-      "desc": "تعداد پیام‌هایی که اعضا می‌توانند به صورت متوالی پاسخ دهند را انتخاب کنید. تنظیم روی ۰ این محدودیت را غیرفعال می‌کند.",
-      "title": "تعداد پاسخ‌های متوالی"
-    },
-    "model": {
-      "desc": "صحبت اعضای گروه تحت تأثیر قرار نمی‌گیرد. برخی مدل‌ها قابل استفاده به عنوان مدل مدیر نیستند.",
-      "title": "مدل میزبان"
-    },
-    "orchestratorTitle": "تنظیمات میزبان",
-    "responseOrder": {
-      "desc": "نمایندگان به ترتیب تعیین‌شده در گفتگو پاسخ خواهند داد",
-      "options": {
-        "natural": "طبیعی",
-        "sequential": "ترتیبی"
-      },
-      "placeholder": "انتخاب ترتیب پاسخ",
-      "title": "ترتیب پاسخ"
-    },
-    "responseSpeed": {
-      "desc": "کنترل سرعت کلی پیشرفت گفتگو",
-      "options": {
-        "fast": "سریع",
-        "medium": "متوسط",
-        "slow": "کند"
-      },
-      "placeholder": "انتخاب سرعت پاسخ",
-      "title": "سرعت پاسخ"
-    },
-    "revealDM": {
-      "desc": "محتوای پیام‌های خصوصی ارسال شده به دیگر اعضا را برای خود قابل مشاهده کنید.",
-      "title": "نمایش محتوای پیام خصوصی"
-    },
-    "submit": "به‌روزرسانی تنظیمات",
-    "systemPrompt": {
-      "desc": "متن راهنمای سیستم سفارشی برای میزبان گفتگوهای گروهی. این ممکن است رفتار پیش‌فرض میزبان را تحت تأثیر قرار دهد.",
-      "placeholder": "لطفاً متن راهنمای سیستم میزبان سفارشی را وارد کنید...",
-      "title": "متن راهنمای سیستم میزبان"
-    },
-    "title": "تنظیمات گفتگو"
-  },
-  "settingGroupMembers": {
-    "addToGroup": "افزودن به گروه",
-    "availableAgents": "دستیارهای موجود",
-    "createMember": "ایجاد عضو",
-    "defaultAgent": "دستیار سفارشی",
-    "disableHost": "غیرفعال کردن دستیار میزبان",
-    "edit": "ویرایش اعضا",
-    "empty": "در حال حاضر هیچ عضوی در این تیم وجود ندارد. برای افزودن اعضا روی دکمه + کلیک کنید.",
-    "enableHost": "فعال کردن دستیار میزبان",
-    "groupHost": "میزبان گروه",
-    "groupMembers": "اعضای گروه",
-    "host": {
-      "description": "وقتی میزبان در گروه حضور دارد، چت گروهی به صورت خودکار مدیریت می‌شود و برای وظایف خلاقانه مناسب است.",
-      "title": "میزبان"
-    },
-    "noAvailableAgents": "دستیار موجودی نیست",
-    "noDescription": "بدون توضیح",
-    "noMembersInGroup": "گروه هیچ عضوی ندارد",
-    "owner": "شما (مالک)",
-    "remove": "حذف عضو",
-    "removeFromGroup": "خارج کردن از گروه",
-    "you": "شما"
-  },
-  "settingImage": {
-    "defaultCount": {
-      "desc": "تعداد پیش‌فرض تصاویر تولیدشده هنگام ایجاد یک وظیفه جدید را در پنل تولید تصویر تنظیم کنید.",
-      "label": "تعداد پیش‌فرض تصاویر",
-      "title": "تنظیمات نقاشی هوش مصنوعی"
-    }
-  },
-  "settingModel": {
-    "enableMaxTokens": {
-      "title": "فعال‌سازی محدودیت پاسخ"
-    },
-    "enableReasoningEffort": {
-      "title": "فعال‌سازی تنظیم شدت استدلال"
-    },
-    "frequencyPenalty": {
-      "desc": "هر چه مقدار بزرگتر باشد، واژگان متنوع‌تر و غنی‌تری استفاده می‌شود؛ هر چه مقدار کوچکتر باشد، واژگان ساده‌تر و عادی‌تر خواهند بود.",
-      "title": "تنوع واژگان"
-    },
-    "maxTokens": {
-      "desc": "حداکثر تعداد توکن‌های استفاده‌شده در هر تعامل",
-      "title": "محدودیت پاسخ"
-    },
-    "model": {
-      "desc": "مدل {{provider}}",
-      "title": "مدل"
-    },
-    "params": {
-      "title": "پارامترهای پیشرفته"
-    },
-    "presencePenalty": {
-      "desc": "هر چه مقدار بزرگتر باشد، تمایل به استفاده از عبارات مختلف بیشتر می‌شود و از تکرار مفاهیم جلوگیری می‌کند؛ هر چه مقدار کوچکتر باشد، تمایل به استفاده از مفاهیم یا روایت‌های تکراری بیشتر می‌شود و بیان یکدست‌تری خواهد داشت.",
-      "title": "گستردگی بیان"
-    },
-    "reasoningEffort": {
-      "desc": "هرچه مقدار بیشتر باشد، توانایی استدلال قوی‌تر است، اما ممکن است زمان پاسخ و مصرف توکن افزایش یابد",
-      "options": {
-        "high": "زیاد",
-        "low": "کم",
-        "medium": "متوسط"
-      },
-      "title": "شدت استدلال"
-    },
-    "submit": "به‌روزرسانی تنظیمات مدل",
-    "temperature": {
-      "desc": "هر چه عدد بزرگتر باشد، پاسخ‌ها خلاقانه‌تر و تخیلی‌تر خواهند بود؛ هر چه عدد کوچکتر باشد، پاسخ‌ها دقیق‌تر خواهند بود",
-      "title": "فعالیت خلاقانه",
-      "warning": "اگر عدد فعالیت خلاقانه بیش از حد بزرگ باشد، خروجی ممکن است دچار اختلال شود"
-    },
-    "title": "تنظیمات مدل",
-    "topP": {
-      "desc": "چند احتمال را در نظر می‌گیرد، هر چه عدد بزرگتر باشد، پاسخ‌های بیشتری را می‌پذیرد؛ هر چه عدد کوچکتر باشد، تمایل به انتخاب پاسخ‌های محتمل‌تر دارد. تغییر همزمان با فعالیت خلاقانه توصیه نمی‌شود",
-      "title": "باز بودن ذهن"
-    }
-  },
-  "settingOpening": {
-    "openingMessage": {
-      "desc": "پیام آغازین هنگام باز کردن گفتگو، برای معرفی قابلیت‌های دستیار",
-      "placeholder": "سلام، من دستیار سفارشی هستم، می‌توانید بلافاصله با من گفتگو کنید یا به تنظیمات دستیار بروید تا اطلاعات من را تکمیل کنید.",
-      "title": "پیام آغازین"
-    },
-    "openingQuestions": {
-      "desc": "سوالات راهنمایی که در ابتدای گفتگو نمایش داده می‌شوند",
-      "empty": "سوالی وجود ندارد",
-      "placeholder": "لطفاً سوال را وارد کنید",
-      "repeat": "سوال قبلاً وجود دارد",
-      "title": "سوالات آغازین"
-    },
-    "title": "تنظیمات آغازین"
-  },
-  "settingPlugin": {
-    "title": "فهرست افزونه‌ها"
-  },
-  "settingSystem": {
-    "accessCode": {
-      "desc": "مدیر دسترسی رمزگذاری شده را فعال کرده است",
-      "placeholder": "لطفاً رمز عبور دسترسی را وارد کنید",
-      "title": "رمز عبور دسترسی"
-    },
-    "oauth": {
-      "info": {
-        "desc": "وارد شده‌اید",
-        "title": "اطلاعات حساب"
-      },
-      "signin": {
-        "action": "ورود",
-        "desc": "برای باز کردن قفل برنامه با SSO وارد شوید",
-        "title": "ورود به حساب"
-      },
-      "signout": {
-        "action": "خروج",
-        "confirm": "آیا از خروج مطمئن هستید؟",
-        "success": "خروج با موفقیت انجام شد"
-      }
-    },
-    "title": "تنظیمات سیستم"
-  },
-  "settingTTS": {
-    "openai": {
-      "sttModel": "مدل تشخیص گفتار OpenAI",
-      "title": "OpenAI",
-      "ttsModel": "مدل تبدیل متن به گفتار OpenAI"
-    },
-    "showAllLocaleVoice": {
-      "desc": "در صورت غیرفعال بودن، فقط منابع صوتی زبان فعلی نمایش داده می‌شود",
-      "title": "نمایش منابع صوتی همه زبان‌ها"
-    },
-    "stt": "تنظیمات تشخیص گفتار",
-    "sttAutoStop": {
-      "desc": "در صورت غیرفعال بودن، تشخیص گفتار به‌طور خودکار پایان نمی‌یابد و باید به‌صورت دستی دکمه پایان را فشار دهید",
-      "title": "پایان خودکار تشخیص گفتار"
-    },
-    "sttLocale": {
-      "desc": "زبان ورودی گفتار، این گزینه می‌تواند دقت تشخیص گفتار را افزایش دهد",
-      "title": "زبان تشخیص گفتار"
-    },
-    "sttService": {
-      "desc": "در این میان، browser به سرویس تشخیص گفتار بومی مرورگر اشاره دارد",
-      "title": "سرویس تشخیص گفتار"
-    },
-    "submit": "به‌روزرسانی خدمات صوتی",
-    "title": "سرویس‌های گفتاری",
-    "tts": "تنظیمات تبدیل متن به گفتار",
-    "ttsService": {
-      "desc": "در صورت استفاده از سرویس تبدیل متن به گفتار OpenAI، باید اطمینان حاصل کنید که سرویس مدل OpenAI فعال است",
-      "title": "سرویس تبدیل متن به گفتار"
-    },
-    "voice": {
-      "desc": "برای دستیار فعلی یک صدا انتخاب کنید، منابع صوتی پشتیبانی شده توسط سرویس‌های مختلف TTS متفاوت است",
-      "preview": "پیش‌نمایش منبع صوتی",
-      "title": "منبع صوتی تبدیل متن به گفتار"
-    }
-  },
-  "storage": {
-    "actions": {
-      "export": {
-        "button": "صادر کردن",
-        "exportType": {
-          "agent": "صادر کردن تنظیمات دستیار",
-          "agentWithMessage": "صادر کردن دستیار و پیام",
-          "all": "صادر کردن تنظیمات جهانی و تمام داده‌های دستیار",
-          "allAgent": "صادر کردن تمام تنظیمات دستیار",
-          "allAgentWithMessage": "صادر کردن تمام دستیارها و پیام‌ها",
-          "globalSetting": "صادر کردن تنظیمات جهانی"
-        },
-        "title": "صادر کردن داده‌ها"
-      },
-      "import": {
-        "button": "وارد کردن",
-        "title": "وارد کردن داده‌ها"
-      },
-      "title": "عملیات پیشرفته"
-    },
-    "desc": "مقدار ذخیره‌سازی در مرورگر فعلی",
-    "embeddings": {
-      "used": "ذخیره‌سازی برداری"
-    },
-    "title": "ذخیره‌سازی داده‌ها",
-    "used": "مقدار ذخیره‌سازی"
-  },
-  "submitAgentModal": {
-    "button": "ارسال دستیار",
-    "identifier": "شناسه دستیار (identifier)",
-    "metaMiss": "لطفاً اطلاعات دستیار را تکمیل کنید و سپس ارسال نمایید. باید شامل نام، توضیحات و برچسب‌ها باشد.",
-    "placeholder": "لطفاً شناسه دستیار را وارد کنید. باید منحصربه‌فرد باشد، مانند web-development",
-    "tooltips": "اشتراک‌گذاری در بازار دستیار"
-  },
-  "submitFooter": {
-    "reset": "بازنشانی",
-    "submit": "ذخیره",
-    "unSaved": "تغییرات ذخیره نشده",
-    "unSavedWarning": "در حال حاضر تغییرات ذخیره نشده‌ای وجود دارد"
-  },
-  "sync": {
-    "device": {
-      "deviceName": {
-        "hint": "برای شناسایی آسان‌تر، یک نام اضافه کنید",
-        "placeholder": "لطفاً نام دستگاه را وارد کنید",
-        "title": "نام دستگاه"
-      },
-      "title": "اطلاعات دستگاه",
-      "unknownBrowser": "مرورگر ناشناخته",
-      "unknownOS": "سیستم عامل ناشناخته"
-    },
-    "warning": {
-      "tip": "پس از یک دوره طولانی آزمایش عمومی در جامعه، ممکن است همگام‌سازی WebRTC نتواند به‌طور پایدار نیازهای عمومی همگام‌سازی داده‌ها را برآورده کند. لطفاً پس از <1>راه‌اندازی سرور سیگنال‌دهی</1>، از آن استفاده کنید."
-    },
-    "webrtc": {
-      "channelName": {
-        "desc": "WebRTC از این نام برای ایجاد کانال همگام‌سازی استفاده می‌کند، اطمینان حاصل کنید که نام کانال منحصربه‌فرد است",
-        "placeholder": "لطفاً نام کانال همگام‌سازی را وارد کنید",
-        "shuffle": "تولید تصادفی",
-        "title": "نام کانال همگام‌سازی"
-      },
-      "channelPassword": {
-        "desc": "برای اطمینان از خصوصی بودن کانال، رمز عبور اضافه کنید. فقط در صورت وارد کردن رمز عبور صحیح، دستگاه می‌تواند به کانال بپیوندد",
-        "placeholder": "لطفاً رمز عبور کانال همگام‌سازی را وارد کنید",
-        "title": "رمز عبور کانال همگام‌سازی"
-      },
-      "desc": "ارتباط داده‌ای هم‌زمان و نقطه‌به‌نقطه، دستگاه‌ها باید هم‌زمان آنلاین باشند تا همگام‌سازی انجام شود",
-      "enabled": {
-        "invalid": "لطفاً پس از وارد کردن سرور سیگنال‌دهی و نام کانال همگام‌سازی، آن را فعال کنید",
-        "title": "فعال‌سازی همگام‌سازی"
-      },
-      "signaling": {
-        "desc": "WebRTC از این آدرس برای همگام‌سازی استفاده می‌کند",
-        "placeholder": "لطفاً آدرس سرور سیگنال‌دهی را وارد کنید",
-        "title": "سرور سیگنال‌دهی"
-      },
-      "title": "همگام‌سازی WebRTC"
-    }
-  },
-  "systemAgent": {
-    "agentMeta": {
-      "label": "مدل تولید متادیتای دستیار",
-      "modelDesc": "مدلی که برای تولید نام، توضیحات، آواتار و برچسب‌های دستیار استفاده می‌شود",
-      "title": "تولید خودکار اطلاعات دستیار"
-    },
-    "customPrompt": {
-      "addPrompt": "افزودن اعلان سفارشی",
-      "desc": "پس از پر کردن، دستیار سیستم از اعلان سفارشی برای تولید محتوا استفاده خواهد کرد",
-      "placeholder": "لطفاً اعلان سفارشی خود را وارد کنید",
-      "title": "اعلان سفارشی"
-    },
-    "generationTopic": {
-      "label": "مدل نام‌گذاری موضوع نقاشی هوش مصنوعی",
-      "modelDesc": "مدلی که برای نام‌گذاری خودکار موضوع نقاشی هوش مصنوعی استفاده می‌شود",
-      "title": "نام‌گذاری خودکار موضوع نقاشی هوش مصنوعی"
-    },
-    "helpInfo": "هنگام ایجاد دستیار جدید، تنظیمات پیش‌فرض دستیار به عنوان مقادیر پیش‌فرض استفاده خواهد شد.",
-    "historyCompress": {
-      "label": "مدل تاریخچه گفتگو",
-      "modelDesc": "مدلی که برای فشرده‌سازی تاریخچه گفتگو استفاده می‌شود",
-      "title": "خلاصه‌سازی خودکار تاریخچه گفتگو"
-    },
-    "queryRewrite": {
-      "label": "مدل بازنویسی پرسش",
-      "modelDesc": "مدلی که برای بهینه‌سازی پرسش‌های کاربران استفاده می‌شود",
-      "title": "بازنویسی پرسش‌های پایگاه دانش"
-    },
-    "thread": {
-      "label": "مدل نام‌گذاری زیرموضوع",
-      "modelDesc": "مدل مشخص شده برای تغییر نام خودکار زیرموضوع‌ها",
-      "title": "نام‌گذاری خودکار زیرموضوع"
-    },
-    "title": "دستیار سیستم",
-    "topic": {
-      "label": "مدل نام‌گذاری موضوع",
-      "modelDesc": "مدلی که برای تغییر خودکار نام موضوعات استفاده می‌شود",
-      "title": "نام‌گذاری خودکار موضوع"
-    },
-    "translation": {
-      "label": "مدل ترجمه",
-      "modelDesc": "مدلی که برای ترجمه استفاده می‌شود",
-      "title": "ترجمه محتوای پیام"
-    }
-  },
-  "tab": {
-    "about": "درباره",
-    "agent": "دستیار پیش‌فرض",
-    "common": "تنظیمات عمومی",
-    "experiment": "آزمایش",
-    "hotkey": "کلیدهای میانبر",
-    "image": "نقاشی هوش مصنوعی",
-    "llm": "مدل زبان",
-    "provider": "ارائه دهنده خدمات هوش مصنوعی",
-    "proxy": "پروکسی شبکه",
-    "storage": "ذخیره‌سازی داده‌ها",
-    "sync": "همگام‌سازی ابری",
-    "system-agent": "دستیار سیستم",
-    "tts": "خدمات صوتی"
-  },
-  "tools": {
-    "builtins": {
-      "groupName": "افزونه‌های داخلی"
-    },
-    "disabled": "مدل فعلی از فراخوانی توابع پشتیبانی نمی‌کند و نمی‌توان از افزونه‌ها استفاده کرد",
-    "plugins": {
-      "enabled": "{{num}} فعال شده است",
-      "groupName": "افزونه‌های شخص ثالث",
-      "noEnabled": "هیچ افزونه فعالی وجود ندارد",
-      "store": "فروشگاه افزونه‌ها"
-    },
-    "title": "افزونه‌های گسترش"
-  }
+  "danger.clear.action": "پاک‌سازی اکنون",
+  "danger.clear.confirm": "آیا همه داده‌های گفتگو پاک شوند؟ این عمل قابل بازگشت نیست.",
+  "danger.clear.desc": "حذف تمام داده‌ها شامل عامل‌ها، فایل‌ها، پیام‌ها و مهارت‌ها. حساب شما حذف نخواهد شد.",
+  "danger.clear.success": "همه پیام‌های جلسه پاک شدند",
+  "danger.clear.title": "پاک‌سازی داده‌ها",
+  "danger.reset.action": "بازنشانی اکنون",
+  "danger.reset.confirm": "آیا همه تنظیمات بازنشانی شوند؟",
+  "danger.reset.currentVersion": "نسخه فعلی",
+  "danger.reset.desc": "بازگرداندن همه تنظیمات به حالت پیش‌فرض. داده‌های شما حذف نخواهند شد.",
+  "danger.reset.success": "همه تنظیمات بازنشانی شدند",
+  "danger.reset.title": "بازنشانی همه تنظیمات",
+  "defaultAgent.model.desc": "مدل پیش‌فرض هنگام ایجاد عامل جدید",
+  "defaultAgent.model.title": "مدل",
+  "defaultAgent.title": "تنظیمات پیش‌فرض عامل",
+  "group.aiConfig": "مدل",
+  "group.common": "عمومی",
+  "group.profile": "حساب کاربری",
+  "group.subscription": "اشتراک",
+  "group.system": "سیستم",
+  "groupTab.chat": "گفتگو",
+  "groupTab.members": "اعضا",
+  "groupTab.meta": "اطلاعات پایه",
+  "header.desc": "ترجیحات و تنظیمات مدل",
+  "header.global": "تنظیمات کلی",
+  "header.group": "تنظیمات گروه",
+  "header.groupDesc": "مدیریت گروه و ترجیحات گفتگو",
+  "header.session": "تنظیمات جلسه",
+  "header.sessionDesc": "پروفایل عامل و ترجیحات جلسه",
+  "header.sessionWithName": "تنظیمات جلسه · {{name}}",
+  "header.title": "تنظیمات",
+  "hotkey.conflicts": "تداخل با کلیدهای میانبر موجود",
+  "hotkey.errors.CONFLICT": "تداخل کلید میانبر: این کلید قبلاً به عملکرد دیگری اختصاص داده شده است",
+  "hotkey.errors.INVALID_FORMAT": "فرمت نامعتبر کلید میانبر: لطفاً از فرمت صحیح استفاده کنید (مثلاً CommandOrControl+E)",
+  "hotkey.errors.INVALID_ID": "شناسه کلید میانبر نامعتبر است",
+  "hotkey.errors.NO_MODIFIER": "کلید میانبر باید شامل یک کلید اصلاح‌گر (Ctrl، Alt، Shift و غیره) باشد",
+  "hotkey.errors.SYSTEM_OCCUPIED": "کلید میانبر توسط سیستم یا برنامه دیگری اشغال شده است",
+  "hotkey.errors.UNKNOWN": "به‌روزرسانی ناموفق: خطای ناشناخته",
+  "hotkey.group.conversation": "گفتگو",
+  "hotkey.group.desktop": "رومیزی",
+  "hotkey.group.essential": "ضروری",
+  "hotkey.invalidCombination": "کلید میانبر باید حداقل شامل یک کلید اصلاح‌گر (Ctrl، Alt، Shift) و یک کلید معمولی باشد",
+  "hotkey.record": "برای ضبط کلید میانبر، کلیدی را فشار دهید",
+  "hotkey.reset": "بازنشانی به کلیدهای پیش‌فرض",
+  "hotkey.title": "کلیدهای میانبر",
+  "hotkey.updateError": "به‌روزرسانی کلید میانبر ناموفق بود: خطای شبکه یا سیستم",
+  "hotkey.updateSuccess": "کلید میانبر با موفقیت به‌روزرسانی شد",
+  "llm.aesGcm": "کلیدها و آدرس پراکسی شما با استفاده از الگوریتم رمزنگاری <1>AES-GCM</1> رمزگذاری خواهند شد",
+  "llm.apiKey.desc": "لطفاً کلید API {{name}} خود را وارد کنید",
+  "llm.apiKey.placeholder": "کلید API {{name}}",
+  "llm.apiKey.title": "کلید API",
+  "llm.checker.button": "بررسی",
+  "llm.checker.desc": "بررسی کنید که آیا کلید API و آدرس پراکسی به درستی وارد شده‌اند",
+  "llm.checker.pass": "بررسی موفقیت‌آمیز بود",
+  "llm.checker.title": "بررسی اتصال",
+  "llm.customModelCards.addNew": "ایجاد و افزودن مدل {{id}}",
+  "llm.customModelCards.config": "پیکربندی مدل",
+  "llm.customModelCards.confirmDelete": "در حال حذف این مدل سفارشی هستید. پس از حذف، قابل بازیابی نخواهد بود. لطفاً با احتیاط ادامه دهید.",
+  "llm.customModelCards.modelConfig.azureDeployName.extra": "فیلدی که در واقع در Azure OpenAI درخواست می‌شود",
+  "llm.customModelCards.modelConfig.azureDeployName.placeholder": "نام استقرار مدل در Azure را وارد کنید",
+  "llm.customModelCards.modelConfig.azureDeployName.title": "نام استقرار مدل",
+  "llm.customModelCards.modelConfig.displayName.placeholder": "نام نمایشی مدل را وارد کنید، مانند ChatGPT، GPT-4 و غیره",
+  "llm.customModelCards.modelConfig.displayName.title": "نام نمایشی مدل",
+  "llm.customModelCards.modelConfig.files.extra": "پیاده‌سازی فعلی بارگذاری فایل فقط یک راه‌حل موقتی است و فقط برای آزمایش شخصی در نظر گرفته شده است. لطفاً منتظر قابلیت کامل بارگذاری فایل در به‌روزرسانی‌های آینده باشید.",
+  "llm.customModelCards.modelConfig.files.title": "پشتیبانی از بارگذاری فایل",
+  "llm.customModelCards.modelConfig.functionCall.extra": "این فقط امکان فراخوانی مهارت در برنامه را فعال می‌کند. پشتیبانی واقعی مدل از این ویژگی بستگی به خود مدل دارد—لطفاً آن را آزمایش کنید.",
+  "llm.customModelCards.modelConfig.functionCall.title": "پشتیبانی از فراخوانی مهارت",
+  "llm.customModelCards.modelConfig.id.extra": "به عنوان برچسب مدل نمایش داده خواهد شد",
+  "llm.customModelCards.modelConfig.id.placeholder": "شناسه مدل را وارد کنید، مانند gpt-4-turbo-preview یا claude-2.1",
+  "llm.customModelCards.modelConfig.id.title": "شناسه مدل",
+  "llm.customModelCards.modelConfig.modalTitle": "پیکربندی مدل سفارشی",
+  "llm.customModelCards.modelConfig.tokens.title": "حداکثر تعداد توکن",
+  "llm.customModelCards.modelConfig.vision.extra": "این فقط امکان بارگذاری تصویر در برنامه را فعال می‌کند. پشتیبانی واقعی مدل از بینایی بستگی به خود مدل دارد—لطفاً آن را آزمایش کنید.",
+  "llm.customModelCards.modelConfig.vision.title": "پشتیبانی از بینایی",
+  "llm.fetchOnClient.desc": "ارسال درخواست‌ها مستقیماً از مرورگر برای بهبود تأخیر.",
+  "llm.fetchOnClient.title": "استفاده از حالت درخواست کلاینت",
+  "llm.fetcher.clear": "پاک‌سازی مدل دریافت‌شده",
+  "llm.fetcher.fetch": "دریافت لیست مدل‌ها",
+  "llm.fetcher.fetching": "در حال دریافت لیست مدل‌ها...",
+  "llm.fetcher.latestTime": "آخرین به‌روزرسانی: {{time}}",
+  "llm.fetcher.noLatestTime": "هنوز لیستی در دسترس نیست",
+  "llm.helpDoc": "راهنمای پیکربندی",
+  "llm.modelList.desc": "مدل‌هایی را که می‌خواهید در جلسه نمایش داده شوند انتخاب کنید. مدل‌های انتخاب‌شده در لیست مدل‌ها نمایش داده خواهند شد.",
+  "llm.modelList.placeholder": "لطفاً مدلی را از لیست انتخاب کنید",
+  "llm.modelList.title": "لیست مدل‌ها",
+  "llm.modelList.total": "{{count}} مدل در مجموع در دسترس است",
+  "llm.proxyUrl.desc": "باید شامل http(s):// علاوه بر آدرس پیش‌فرض باشد",
+  "llm.proxyUrl.title": "آدرس پراکسی API",
+  "llm.waitingForMore": "مدل‌های بیشتری <1>در حال برنامه‌ریزی برای افزودن</1> هستند، با ما همراه باشید",
+  "llm.waitingForMoreLinkAriaLabel": "فرم درخواست ارائه‌دهنده را باز کنید",
+  "marketPublish.modal.changelog.extra": "توضیحی درباره تغییرات و بهبودهای کلیدی در این نسخه ارائه دهید",
+  "marketPublish.modal.changelog.label": "تغییرات نسخه",
+  "marketPublish.modal.changelog.maxLengthError": "تغییرات نسخه نباید بیش از ۵۰۰ کاراکتر باشد",
+  "marketPublish.modal.changelog.placeholder": "تغییرات نسخه را وارد کنید",
+  "marketPublish.modal.changelog.required": "لطفاً تغییرات نسخه را وارد کنید",
+  "marketPublish.modal.comparison.local": "نسخه محلی فعلی",
+  "marketPublish.modal.comparison.remote": "نسخه منتشرشده فعلی",
+  "marketPublish.modal.identifier.extra": "این شناسه منحصربه‌فرد عامل است. از حروف کوچک، اعداد و خط تیره استفاده کنید.",
+  "marketPublish.modal.identifier.label": "شناسه عامل",
+  "marketPublish.modal.identifier.lengthError": "شناسه باید بین ۳ تا ۵۰ کاراکتر باشد",
+  "marketPublish.modal.identifier.patternError": "شناسه فقط می‌تواند شامل حروف کوچک، اعداد و خط تیره باشد",
+  "marketPublish.modal.identifier.placeholder": "یک شناسه منحصربه‌فرد برای عامل وارد کنید، مثلاً web-development",
+  "marketPublish.modal.identifier.required": "لطفاً شناسه عامل را وارد کنید",
+  "marketPublish.modal.loading.fetchingRemote": "در حال بارگذاری داده‌های از راه دور...",
+  "marketPublish.modal.loading.submit": "در حال ارسال عامل...",
+  "marketPublish.modal.loading.upload": "در حال انتشار نسخه جدید...",
+  "marketPublish.modal.messages.createVersionFailed": "ایجاد نسخه با خطا مواجه شد: {{message}}",
+  "marketPublish.modal.messages.fetchRemoteFailed": "دریافت داده‌های عامل از راه دور با خطا مواجه شد",
+  "marketPublish.modal.messages.missingIdentifier": "این عامل هنوز شناسه‌ای در انجمن ندارد.",
+  "marketPublish.modal.messages.notAuthenticated": "ابتدا وارد حساب کاربری انجمن خود شوید.",
+  "marketPublish.modal.messages.publishFailed": "انتشار با خطا مواجه شد: {{message}}",
+  "marketPublish.modal.submitButton": "انتشار",
+  "marketPublish.modal.title.submit": "اشتراک‌گذاری در انجمن عامل‌ها",
+  "marketPublish.modal.title.upload": "انتشار نسخه جدید",
+  "marketPublish.resultModal.message": "عامل شما برای بررسی ارسال شد. پس از تأیید، به‌صورت خودکار منتشر خواهد شد.",
+  "marketPublish.resultModal.title": "ارسال با موفقیت انجام شد",
+  "marketPublish.resultModal.view": "مشاهده در انجمن",
+  "marketPublish.submit.button": "اشتراک‌گذاری در انجمن",
+  "marketPublish.submit.tooltip": "این عامل را در انجمن به اشتراک بگذارید",
+  "marketPublish.upload.button": "انتشار نسخه جدید",
+  "marketPublish.upload.tooltip": "نسخه جدیدی را در انجمن عامل‌ها منتشر کنید",
+  "memory.enabled.desc": "به LobeHub اجازه دهید ترجیحات و اطلاعات را از مکالمات استخراج کرده و بعداً از آن‌ها استفاده کند. شما می‌توانید حافظه را در هر زمان مشاهده، ویرایش یا پاک کنید.",
+  "memory.enabled.title": "فعال‌سازی حافظه",
+  "memory.title": "تنظیمات حافظه",
+  "message.success": "به‌روزرسانی با موفقیت انجام شد",
+  "myAgents.actions.cancel": "لغو",
+  "myAgents.actions.confirmDeprecate": "تأیید غیرفعال‌سازی",
+  "myAgents.actions.deprecate": "غیرفعال‌سازی دائمی",
+  "myAgents.actions.deprecateConfirmContent": "پس از غیرفعال‌سازی، این عامل به‌طور دائمی از بازار حذف شده و قابل انتشار مجدد نخواهد بود. این اقدام غیرقابل بازگشت است، لطفاً با احتیاط ادامه دهید.",
+  "myAgents.actions.deprecateConfirmTitle": "آیا از غیرفعال‌سازی عامل اطمینان دارید؟",
+  "myAgents.actions.deprecateError": "غیرفعال‌سازی عامل با خطا مواجه شد",
+  "myAgents.actions.deprecateLoading": "در حال غیرفعال‌سازی عامل...",
+  "myAgents.actions.deprecateSuccess": "عامل با موفقیت غیرفعال شد",
+  "myAgents.actions.edit": "ویرایش عامل",
+  "myAgents.actions.publish": "انتشار عامل",
+  "myAgents.actions.publishError": "انتشار عامل با خطا مواجه شد",
+  "myAgents.actions.publishLoading": "در حال انتشار عامل...",
+  "myAgents.actions.publishSuccess": "عامل با موفقیت منتشر شد",
+  "myAgents.actions.unpublish": "لغو انتشار عامل",
+  "myAgents.actions.unpublishError": "لغو انتشار عامل با خطا مواجه شد",
+  "myAgents.actions.unpublishLoading": "در حال لغو انتشار عامل...",
+  "myAgents.actions.unpublishSuccess": "عامل با موفقیت لغو انتشار شد",
+  "myAgents.actions.viewDetail": "مشاهده جزئیات",
+  "myAgents.detail.category": "دسته‌بندی",
+  "myAgents.detail.description": "توضیحات",
+  "myAgents.detail.identifier": "شناسه",
+  "myAgents.detail.title": "جزئیات عامل",
+  "myAgents.empty.description": "شما هنوز هیچ عاملی را در بازار منتشر نکرده‌اید",
+  "myAgents.empty.title": "عامل منتشرشده‌ای وجود ندارد",
+  "myAgents.errors.editFailed": "ویرایش عامل با خطا مواجه شد، لطفاً بعداً دوباره تلاش کنید",
+  "myAgents.errors.fetchFailed": "دریافت جزئیات عامل با خطا مواجه شد",
+  "myAgents.errors.notAuthenticated": "لطفاً ابتدا وارد حساب بازار خود شوید",
+  "myAgents.loginRequired.button": "ورود به بازار",
+  "myAgents.loginRequired.description": "برای مشاهده عامل‌های منتشرشده خود، لطفاً وارد حساب بازار شوید",
+  "myAgents.loginRequired.title": "ورود لازم است",
+  "myAgents.status.archived": "بایگانی‌شده",
+  "myAgents.status.deprecated": "غیرفعال‌شده",
+  "myAgents.status.published": "منتشرشده",
+  "myAgents.status.unpublished": "لغو انتشار",
+  "myAgents.title": "عامل‌های منتشرشده من",
+  "plugin.addMCPPlugin": "افزودن MCP",
+  "plugin.addTooltip": "مهارت‌های سفارشی",
+  "plugin.clearDeprecated": "حذف مهارت‌های منسوخ",
+  "plugin.empty": "هنوز هیچ مهارتی نصب نشده است. برای شروع به <1>فروشگاه مهارت</1> مراجعه کنید.",
+  "plugin.installStatus.deprecated": "حذف شده",
+  "plugin.settings.hint": "لطفاً تنظیمات زیر را بر اساس توضیحات پر کنید",
+  "plugin.settings.title": "پیکربندی مهارت {{id}}",
+  "plugin.settings.tooltip": "پیکربندی مهارت",
+  "plugin.store": "فروشگاه مهارت",
+  "settingAgent.avatar.sizeExceeded": "حجم تصویر بیش از ۱ مگابایت است، لطفاً تصویر کوچکتری انتخاب کنید",
+  "settingAgent.avatar.title": "آواتار",
+  "settingAgent.backgroundColor.title": "رنگ پس‌زمینه",
+  "settingAgent.description.desc": "معرفی کوتاهی از عامل شما، نه برای تنظیم شخصیت",
+  "settingAgent.description.placeholder": "توضیحی برای عامل وارد کنید",
+  "settingAgent.description.title": "توضیحات عامل",
+  "settingAgent.name.placeholder": "نام عامل را وارد کنید",
+  "settingAgent.name.title": "نام",
+  "settingAgent.prompt.placeholder": "تنظیمات عامل را وارد کنید، برای باز کردن منوی دستورات / را فشار دهید",
+  "settingAgent.prompt.templatePlaceholder": "#### هدف\nهدف اصلی و مقصود این عامل را توضیح دهید.\n\n#### مهارت‌ها\n- فهرستی از توانایی‌های کلیدی\n- و حوزه‌های دانش تخصصی\n\n#### جریان کاری\n1. فرآیند گام‌به‌گام\n2. نحوه‌ی برخورد عامل با وظایف\n3. تعاملات مورد انتظار با کاربران\n\n#### محدودیت‌ها\n- محدودیت‌های مهمی که باید رعایت شوند\n- دستورالعمل‌هایی برای رفتار",
+  "settingAgent.prompt.title": "پروفایل عامل",
+  "settingAgent.submit": "به‌روزرسانی عامل",
+  "settingAgent.tag.desc": "برچسب‌های عامل در جامعه عامل نمایش داده می‌شوند",
+  "settingAgent.tag.placeholder": "برچسب وارد کنید",
+  "settingAgent.tag.title": "برچسب",
+  "settingAgent.title": "اطلاعات عامل",
+  "settingAppearance.animationMode.agile": "سریع",
+  "settingAppearance.animationMode.desc": "سرعت انیمیشن واکنش‌های برنامه را انتخاب کنید",
+  "settingAppearance.animationMode.disabled": "خاموش",
+  "settingAppearance.animationMode.elegant": "زیبا",
+  "settingAppearance.animationMode.title": "انیمیشن پاسخ",
+  "settingAppearance.contextMenuMode.default": "پیش‌فرض",
+  "settingAppearance.contextMenuMode.desc": "فعال‌سازی منوی راست‌کلیک برای برخی از آیتم‌های لیست.",
+  "settingAppearance.contextMenuMode.disabled": "غیرفعال",
+  "settingAppearance.contextMenuMode.title": "حالت منوی راست‌کلیک",
+  "settingAppearance.neutralColor.desc": "طیف خاکستری سفارشی با تمایلات رنگی مختلف",
+  "settingAppearance.neutralColor.title": "رنگ خنثی",
+  "settingAppearance.noAnimation.desc": "غیرفعال‌سازی تمام افکت‌های انیمیشن در برنامه",
+  "settingAppearance.noAnimation.title": "حالت بدون انیمیشن",
+  "settingAppearance.preview.title": "پالت رنگ",
+  "settingAppearance.primaryColor.desc": "رنگ تم سفارشی",
+  "settingAppearance.primaryColor.title": "رنگ تم",
+  "settingAppearance.title": "ظاهر برنامه",
+  "settingChat.autoCreateTopicThreshold.desc": "هنگامی که تعداد پیام‌ها از این مقدار بیشتر شود، موضوع جدیدی به‌طور خودکار ایجاد می‌شود",
+  "settingChat.autoCreateTopicThreshold.title": "آستانه تعداد پیام",
+  "settingChat.chatStyleType.title": "سبک پنجره گفتگو",
+  "settingChat.chatStyleType.type.chat": "حالت مکالمه",
+  "settingChat.chatStyleType.type.docs": "حالت صفحه",
+  "settingChat.compressThreshold.desc": "وقتی تعداد پیام‌های تاریخچه فشرده‌نشده از این مقدار بیشتر شود، فشرده‌سازی اعمال می‌شود",
+  "settingChat.compressThreshold.title": "آستانه فشرده‌سازی پیام‌های تاریخچه",
+  "settingChat.enableAutoCreateTopic.desc": "آیا در طول مکالمه موضوع به‌طور خودکار ایجاد شود، فقط در موضوعات موقت مؤثر است",
+  "settingChat.enableAutoCreateTopic.title": "ایجاد خودکار موضوع",
+  "settingChat.enableCompressHistory.title": "فعال‌سازی خلاصه‌سازی خودکار تاریخچه گفتگو",
+  "settingChat.enableHistoryCount.alias": "نامحدود",
+  "settingChat.enableHistoryCount.limited": "فقط {{number}} پیام مکالمه را شامل می‌شود",
+  "settingChat.enableHistoryCount.setlimited": "تنظیم محدودیت پیام‌های تاریخچه",
+  "settingChat.enableHistoryCount.title": "محدودیت تعداد پیام‌های تاریخچه",
+  "settingChat.enableHistoryCount.unlimited": "تعداد پیام‌های تاریخچه نامحدود",
+  "settingChat.enableStreaming.desc": "فعال‌سازی خروجی جریانی برای نمایش پاسخ‌ها به‌صورت زنده. در صورت غیرفعال بودن، فقط پاسخ کامل نمایش داده می‌شود.",
+  "settingChat.enableStreaming.title": "فعال‌سازی خروجی جریانی",
+  "settingChat.historyCount.desc": "تعداد پیام‌های تاریخچه‌ای که با هر درخواست ارسال می‌شود",
+  "settingChat.historyCount.title": "تعداد پیام‌های همراه",
+  "settingChat.inputTemplate.desc": "آخرین پیام کاربر در این قالب قرار می‌گیرد",
+  "settingChat.inputTemplate.placeholder": "قالب پیش‌پردازش {{text}} با ورودی واقعی جایگزین می‌شود",
+  "settingChat.inputTemplate.title": "پیش‌پردازش ورودی کاربر",
+  "settingChat.submit": "به‌روزرسانی تنظیمات گفتگو",
+  "settingChat.title": "تنظیمات گفتگو",
+  "settingChatAppearance.fontSize.desc": "اندازه فونت پیام‌ها",
+  "settingChatAppearance.fontSize.marks.normal": "استاندارد",
+  "settingChatAppearance.fontSize.title": "اندازه فونت",
+  "settingChatAppearance.highlighterTheme.title": "تم برجسته‌سازی کد",
+  "settingChatAppearance.mermaidTheme.title": "تم Mermaid",
+  "settingChatAppearance.title": "ظاهر گفتگو",
+  "settingChatAppearance.transitionMode.desc": "نحوه نمایش پیام‌های گفتگو را انتخاب کنید",
+  "settingChatAppearance.transitionMode.options.fadeIn": "نمایش تدریجی",
+  "settingChatAppearance.transitionMode.options.none.desc": "این مورد به روش خروجی پاسخ مدل بستگی دارد؛ لطفاً خودتان تست کنید.",
+  "settingChatAppearance.transitionMode.options.none.value": "هیچ‌کدام",
+  "settingChatAppearance.transitionMode.options.smooth": "نرم",
+  "settingChatAppearance.transitionMode.title": "انیمیشن انتقال",
+  "settingCommon.devMode.desc": "برای نمایش ویژگی‌ها و گزینه‌های مربوط به توسعه‌دهنده فعال کنید",
+  "settingCommon.devMode.title": "حالت توسعه‌دهنده",
+  "settingCommon.lang.autoMode": "مطابق سیستم",
+  "settingCommon.lang.title": "زبان",
+  "settingCommon.liteMode.desc": "ساده‌سازی رابط و پنهان‌سازی ویژگی‌های پیشرفته",
+  "settingCommon.liteMode.title": "حالت ساده",
+  "settingCommon.responseLanguage.auto": "مطابق سیستم",
+  "settingCommon.responseLanguage.desc": "زبان پاسخ عامل را انتخاب کنید",
+  "settingCommon.responseLanguage.placeholder": "زبان پاسخ را انتخاب کنید",
+  "settingCommon.responseLanguage.title": "زبان پاسخ",
+  "settingCommon.themeMode.auto": "خودکار",
+  "settingCommon.themeMode.dark": "تاریک",
+  "settingCommon.themeMode.light": "روشن",
+  "settingCommon.themeMode.title": "تم",
+  "settingCommon.title": "تنظیمات عمومی",
+  "settingGroup.description.placeholder": "توضیحی برای گروه وارد کنید",
+  "settingGroup.description.title": "توضیحات گروه",
+  "settingGroup.name.placeholder": "نام گروه را وارد کنید",
+  "settingGroup.name.title": "نام گروه",
+  "settingGroup.scene.desc": "سناریوی گروه را انتخاب کنید",
+  "settingGroup.scene.options.casual": "غیررسمی",
+  "settingGroup.scene.options.productive": "مولد",
+  "settingGroup.scene.title": "سناریوی گروه",
+  "settingGroup.submit": "به‌روزرسانی گروه",
+  "settingGroup.systemPrompt.placeholder": "لطفاً اعلان سیستم میزبان را وارد کنید",
+  "settingGroup.systemPrompt.title": "اعلان سیستم میزبان",
+  "settingGroup.title": "اطلاعات گروه",
+  "settingGroupChat.allowDM.desc": "در صورت غیرفعال بودن، همچنان می‌توانید پیام مستقیم به عامل ارسال کنید",
+  "settingGroupChat.allowDM.title": "اجازه پیام مستقیم از عامل",
+  "settingGroupChat.enableSupervisor.desc": "فعال‌سازی ویژگی ناظر برای مدیریت گفتگوهای گروهی",
+  "settingGroupChat.enableSupervisor.title": "فعال‌سازی هماهنگ‌کننده",
+  "settingGroupChat.maxResponseInRow.desc": "تعداد پیام‌های متوالی که یک عضو می‌تواند ارسال کند را انتخاب کنید. برای غیرفعال کردن این محدودیت، مقدار را ۰ قرار دهید.",
+  "settingGroupChat.maxResponseInRow.title": "تعداد پاسخ متوالی",
+  "settingGroupChat.model.desc": "اعضای گروه تحت تأثیر قرار نمی‌گیرند. برخی مدل‌ها نمی‌توانند به‌عنوان مدل هماهنگ‌کننده استفاده شوند.",
+  "settingGroupChat.model.title": "مدل هماهنگ‌کننده",
+  "settingGroupChat.orchestratorTitle": "هماهنگ‌کننده",
+  "settingGroupChat.responseOrder.desc": "عوامل بر اساس ترتیب خود در گفتگو پاسخ می‌دهند",
+  "settingGroupChat.responseOrder.options.natural": "طبیعی",
+  "settingGroupChat.responseOrder.options.sequential": "پیاپی",
+  "settingGroupChat.responseOrder.placeholder": "ترتیب پاسخ را انتخاب کنید",
+  "settingGroupChat.responseOrder.title": "ترتیب پاسخ",
+  "settingGroupChat.responseSpeed.desc": "کنترل سرعت کلی مکالمه",
+  "settingGroupChat.responseSpeed.options.fast": "سریع",
+  "settingGroupChat.responseSpeed.options.medium": "متوسط",
+  "settingGroupChat.responseSpeed.options.slow": "کند",
+  "settingGroupChat.responseSpeed.placeholder": "سرعت پاسخ را انتخاب کنید",
+  "settingGroupChat.responseSpeed.title": "سرعت پاسخ",
+  "settingGroupChat.revealDM.desc": "پیام‌های خصوصی ارسال‌شده به سایر اعضا را برای شما قابل مشاهده می‌کند.",
+  "settingGroupChat.revealDM.title": "نمایش پیام‌های خصوصی",
+  "settingGroupChat.submit": "به‌روزرسانی تنظیمات",
+  "settingGroupChat.systemPrompt.desc": "اعلان سیستم سفارشی برای میزبان گفتگوی گروهی. این ممکن است بر رفتار پیش‌فرض میزبان تأثیر بگذارد.",
+  "settingGroupChat.systemPrompt.placeholder": "لطفاً اعلان سیستم سفارشی میزبان را وارد کنید...",
+  "settingGroupChat.systemPrompt.title": "اعلان سیستم میزبان",
+  "settingGroupChat.title": "تنظیمات گفتگو",
+  "settingGroupMembers.addToGroup": "افزودن به گروه",
+  "settingGroupMembers.availableAgents": "عوامل در دسترس",
+  "settingGroupMembers.createMember": "ایجاد عضو",
+  "settingGroupMembers.defaultAgent": "عامل سفارشی",
+  "settingGroupMembers.disableHost": "غیرفعال‌سازی هماهنگ‌کننده",
+  "settingGroupMembers.edit": "ویرایش عضو",
+  "settingGroupMembers.empty": "این گروه هنوز عضوی ندارد. برای افزودن اعضا روی + کلیک کنید.",
+  "settingGroupMembers.enableHost": "فعال‌سازی هماهنگ‌کننده",
+  "settingGroupMembers.groupHost": "هماهنگ‌کننده",
+  "settingGroupMembers.groupMembers": "اعضای گروه",
+  "settingGroupMembers.host.description": "با داشتن یک هماهنگ‌کننده، گروه می‌تواند به‌صورت خودکارتر عمل کند — مناسب برای وظایف باز.",
+  "settingGroupMembers.host.title": "هماهنگ‌کننده",
+  "settingGroupMembers.noAvailableAgents": "هیچ عامل در دسترسی وجود ندارد",
+  "settingGroupMembers.noDescription": "بدون توضیح",
+  "settingGroupMembers.noMembersInGroup": "هیچ عضوی در گروه وجود ندارد",
+  "settingGroupMembers.owner": "شما (مالک)",
+  "settingGroupMembers.remove": "حذف عضو",
+  "settingGroupMembers.removeFromGroup": "حذف از گروه",
+  "settingGroupMembers.you": "شما",
+  "settingImage.defaultCount.desc": "تعداد پیش‌فرض تصاویر تولیدشده هنگام ایجاد یک وظیفه جدید در پنل تولید تصویر را تنظیم کنید.",
+  "settingImage.defaultCount.label": "تعداد پیش‌فرض تصویر",
+  "settingImage.defaultCount.title": "هنر هوش مصنوعی",
+  "settingModel.enableMaxTokens.title": "فعال‌سازی محدودیت حداکثر توکن",
+  "settingModel.enableReasoningEffort.title": "فعال‌سازی تنظیم تلاش استدلالی",
+  "settingModel.frequencyPenalty.desc": "هرچه مقدار بیشتر باشد، واژگان متنوع‌تر و غنی‌تر خواهد بود؛ مقدار کمتر منجر به زبان ساده‌تر و مستقیم‌تر می‌شود.",
+  "settingModel.frequencyPenalty.title": "غنای واژگان",
+  "settingModel.maxTokens.desc": "حداکثر تعداد توکن‌های استفاده‌شده در هر تعامل",
+  "settingModel.maxTokens.title": "محدودیت توکن",
+  "settingModel.model.desc": "مدل {{provider}}",
+  "settingModel.model.title": "مدل",
+  "settingModel.params.title": "پارامترهای پیشرفته",
+  "settingModel.presencePenalty.desc": "مقدار بالاتر باعث استفاده از بیانات متنوع‌تر و اجتناب از تکرار مفاهیم می‌شود؛ مقدار پایین‌تر منجر به تکرار مفاهیم و بیانی یکنواخت‌تر خواهد شد.",
+  "settingModel.presencePenalty.title": "تنوع بیانی",
+  "settingModel.reasoningEffort.desc": "مقادیر بالاتر توانایی استدلال را افزایش می‌دهند اما ممکن است زمان پاسخ و مصرف توکن را نیز افزایش دهند.",
+  "settingModel.reasoningEffort.options.high": "زیاد",
+  "settingModel.reasoningEffort.options.low": "کم",
+  "settingModel.reasoningEffort.options.medium": "متوسط",
+  "settingModel.reasoningEffort.title": "تلاش استدلالی",
+  "settingModel.submit": "به‌روزرسانی تنظیمات مدل",
+  "settingModel.temperature.desc": "مقدار بالاتر پاسخ‌های خلاقانه‌تر و تخیلی‌تری تولید می‌کند؛ مقدار پایین‌تر پاسخ‌هایی دقیق‌تر و منطقی‌تر ارائه می‌دهد.",
+  "settingModel.temperature.title": "سطح خلاقیت",
+  "settingModel.temperature.warning": "اگر سطح خلاقیت بیش از حد بالا باشد، خروجی ممکن است نامفهوم شود.",
+  "settingModel.title": "تنظیمات مدل",
+  "settingModel.topP.desc": "تعداد گزینه‌های احتمالی در نظر گرفته‌شده؛ مقدار بالاتر پاسخ‌های متنوع‌تری را می‌پذیرد، در حالی که مقدار پایین‌تر به پاسخ‌های محتمل‌تر گرایش دارد. توصیه نمی‌شود همزمان با سطح خلاقیت تغییر یابد.",
+  "settingModel.topP.title": "گشودگی به ایده‌ها",
+  "settingOpening.openingMessage.desc": "پیام آغازین که هنگام شروع گفتگو نمایش داده می‌شود و برای معرفی قابلیت‌های عامل استفاده می‌شود",
+  "settingOpening.openingMessage.placeholder": "سلام، من عامل سفارشی شما هستم. می‌توانید همین حالا با من گفتگو را آغاز کنید یا به تنظیمات عامل بروید و اطلاعات من را کامل کنید.",
+  "settingOpening.openingMessage.title": "پیام آغازین",
+  "settingOpening.openingQuestions.desc": "سؤالات راهنما که در ابتدای گفتگو نمایش داده می‌شوند",
+  "settingOpening.openingQuestions.empty": "سؤالات آغازین اضافه کنید تا کاربران راحت‌تر گفتگو را شروع کنند",
+  "settingOpening.openingQuestions.placeholder": "لطفاً یک سؤال وارد کنید",
+  "settingOpening.openingQuestions.repeat": "این سؤال قبلاً اضافه شده است",
+  "settingOpening.openingQuestions.title": "سؤالات آغازین",
+  "settingOpening.title": "تنظیمات آغازین",
+  "settingPlugin.title": "فهرست مهارت‌ها",
+  "settingSystem.oauth.info.desc": "وارد شده‌اید",
+  "settingSystem.oauth.info.title": "اطلاعات حساب",
+  "settingSystem.oauth.signin.action": "ورود",
+  "settingSystem.oauth.signin.desc": "برای دسترسی به برنامه با SSO وارد شوید",
+  "settingSystem.oauth.signin.title": "ورود به حساب کاربری",
+  "settingSystem.oauth.signout.action": "خروج",
+  "settingSystem.oauth.signout.confirm": "آیا از خروج اطمینان دارید؟",
+  "settingSystem.oauth.signout.success": "خروج با موفقیت انجام شد",
+  "settingSystem.title": "تنظیمات سیستم",
+  "settingTTS.openai.sttModel": "مدل تبدیل گفتار به متن OpenAI",
+  "settingTTS.openai.title": "OpenAI",
+  "settingTTS.openai.ttsModel": "مدل تبدیل متن به گفتار OpenAI",
+  "settingTTS.showAllLocaleVoice.desc": "در صورت غیرفعال بودن، فقط صداهای زبان فعلی نمایش داده می‌شوند",
+  "settingTTS.showAllLocaleVoice.title": "نمایش همه صداهای زبان‌ها",
+  "settingTTS.stt": "تنظیمات تشخیص گفتار",
+  "settingTTS.sttAutoStop.desc": "در صورت غیرفعال بودن، تشخیص گفتار به‌صورت خودکار متوقف نمی‌شود و نیاز به توقف دستی دارد",
+  "settingTTS.sttAutoStop.title": "توقف خودکار تشخیص گفتار",
+  "settingTTS.sttLocale.desc": "زبان ورودی گفتار، این گزینه دقت تشخیص گفتار را افزایش می‌دهد",
+  "settingTTS.sttLocale.title": "زبان تشخیص گفتار",
+  "settingTTS.sttService.desc": "در اینجا 'مرورگر' به سرویس بومی تشخیص گفتار مرورگر اشاره دارد",
+  "settingTTS.sttService.title": "سرویس تشخیص گفتار",
+  "settingTTS.submit": "به‌روزرسانی سرویس صوتی",
+  "settingTTS.title": "سرویس صوتی",
+  "settingTTS.tts": "تنظیمات تبدیل متن به گفتار",
+  "settingTTS.ttsService.desc": "در صورت استفاده از سرویس تبدیل متن به گفتار OpenAI، اطمینان حاصل کنید که سرویس مدل OpenAI فعال است",
+  "settingTTS.ttsService.title": "سرویس تبدیل متن به گفتار",
+  "settingTTS.voice.desc": "یک صدا برای عامل فعلی انتخاب کنید، سرویس‌های مختلف TTS از صداهای متفاوتی پشتیبانی می‌کنند",
+  "settingTTS.voice.preview": "پیش‌نمایش صدا",
+  "settingTTS.voice.title": "صدای تبدیل متن به گفتار",
+  "startConversation": "شروع گفتگو",
+  "storage.actions.export.button": "خروجی گرفتن",
+  "storage.actions.export.exportType.agent": "خروجی تنظیمات عامل",
+  "storage.actions.export.exportType.agentWithMessage": "خروجی عامل و پیام‌ها",
+  "storage.actions.export.exportType.all": "خروجی تنظیمات کلی و تمام داده‌های عامل",
+  "storage.actions.export.exportType.allAgent": "خروجی تمام تنظیمات عامل",
+  "storage.actions.export.exportType.allAgentWithMessage": "خروجی تمام عامل‌ها و پیام‌ها",
+  "storage.actions.export.exportType.globalSetting": "خروجی تنظیمات کلی",
+  "storage.actions.export.title": "خروجی گرفتن از داده‌ها",
+  "storage.actions.import.button": "وارد کردن",
+  "storage.actions.import.title": "وارد کردن داده‌ها",
+  "storage.actions.title": "عملیات پیشرفته",
+  "storage.desc": "میزان استفاده فعلی از فضای ذخیره‌سازی در مرورگر",
+  "storage.embeddings.used": "ذخیره‌سازی برداری",
+  "storage.title": "ذخیره‌سازی داده",
+  "storage.used": "میزان استفاده از ذخیره‌سازی",
+  "submitAgentModal.button": "ارسال عامل",
+  "submitAgentModal.identifier": "شناسه عامل",
+  "submitAgentModal.metaMiss": "لطفاً اطلاعات عامل را قبل از ارسال کامل کنید. این اطلاعات باید شامل نام، توضیح و برچسب‌ها باشد.",
+  "submitAgentModal.placeholder": "یک شناسه منحصربه‌فرد برای عامل وارد کنید، مثلاً web-development",
+  "submitAgentModal.success": "عامل با موفقیت ارسال شد",
+  "submitAgentModal.tooltips": "اشتراک‌گذاری در جامعه عامل‌ها",
+  "sync.device.deviceName.hint": "برای شناسایی آسان، یک نام اضافه کنید",
+  "sync.device.deviceName.placeholder": "نام دستگاه را وارد کنید",
+  "sync.device.deviceName.title": "نام دستگاه",
+  "sync.device.title": "اطلاعات دستگاه",
+  "sync.device.unknownBrowser": "مرورگر ناشناخته",
+  "sync.device.unknownOS": "سیستم‌عامل ناشناخته",
+  "sync.warning.tip": "پس از مدت طولانی آزمایش در جامعه، همگام‌سازی WebRTC ممکن است نیازهای عمومی همگام‌سازی داده را به‌درستی برآورده نکند. لطفاً <1>یک سرور سیگنال‌دهی راه‌اندازی کنید</1> قبل از استفاده.",
+  "sync.webrtc.channelName.desc": "WebRTC از این نام برای ایجاد کانال همگام‌سازی استفاده می‌کند. اطمینان حاصل کنید که نام کانال منحصربه‌فرد باشد.",
+  "sync.webrtc.channelName.placeholder": "نام کانال همگام‌سازی را وارد کنید",
+  "sync.webrtc.channelName.shuffle": "تولید تصادفی",
+  "sync.webrtc.channelName.title": "نام کانال همگام‌سازی",
+  "sync.webrtc.channelPassword.desc": "برای حفظ حریم خصوصی کانال، یک رمز عبور اضافه کنید. فقط دستگاه‌هایی با رمز صحیح می‌توانند به کانال بپیوندند.",
+  "sync.webrtc.channelPassword.placeholder": "رمز عبور کانال همگام‌سازی را وارد کنید",
+  "sync.webrtc.channelPassword.title": "رمز عبور کانال همگام‌سازی",
+  "sync.webrtc.desc": "ارتباط داده همتا به همتای بلادرنگ نیاز دارد که همه دستگاه‌ها برای همگام‌سازی آنلاین باشند.",
+  "sync.webrtc.enabled.invalid": "لطفاً قبل از فعال‌سازی، آدرس سرور سیگنال‌دهی و نام کانال همگام‌سازی را وارد کنید.",
+  "sync.webrtc.enabled.title": "فعال‌سازی همگام‌سازی",
+  "sync.webrtc.signaling.desc": "WebRTC از این آدرس برای همگام‌سازی استفاده خواهد کرد",
+  "sync.webrtc.signaling.placeholder": "آدرس سرور سیگنال‌دهی را وارد کنید",
+  "sync.webrtc.signaling.title": "سرور سیگنال‌دهی",
+  "sync.webrtc.title": "همگام‌سازی WebRTC",
+  "systemAgent.agentMeta.label": "مدل",
+  "systemAgent.agentMeta.modelDesc": "مدلی که برای تولید نام، توضیح، آواتار و برچسب‌های عامل استفاده می‌شود",
+  "systemAgent.agentMeta.title": "دستیار تولید اطلاعات عامل",
+  "systemAgent.customPrompt.addPrompt": "افزودن درخواست سفارشی",
+  "systemAgent.customPrompt.desc": "پس از تکمیل، عامل سیستمی از این درخواست سفارشی برای تولید محتوا استفاده خواهد کرد",
+  "systemAgent.customPrompt.placeholder": "لطفاً درخواست سفارشی را وارد کنید",
+  "systemAgent.customPrompt.title": "درخواست سفارشی",
+  "systemAgent.generationTopic.label": "مدل",
+  "systemAgent.generationTopic.modelDesc": "مدلی که برای نام‌گذاری خودکار موضوعات هنر هوش مصنوعی استفاده می‌شود",
+  "systemAgent.generationTopic.title": "عامل نام‌گذاری موضوع هنر هوش مصنوعی",
+  "systemAgent.helpInfo": "هنگام ایجاد یک عامل جدید، تنظیمات پیش‌فرض عامل به‌عنوان مقادیر اولیه استفاده می‌شوند.",
+  "systemAgent.historyCompress.label": "مدل",
+  "systemAgent.historyCompress.modelDesc": "مدلی که برای فشرده‌سازی تاریخچه گفتگو استفاده می‌شود",
+  "systemAgent.historyCompress.title": "عامل فشرده‌سازی تاریخچه گفتگو",
+  "systemAgent.queryRewrite.label": "مدل",
+  "systemAgent.queryRewrite.modelDesc": "مدلی که برای بهینه‌سازی پرسش‌های کاربران استفاده می‌شود",
+  "systemAgent.queryRewrite.title": "عامل بازنویسی پرسش کتابخانه",
+  "systemAgent.thread.label": "مدل",
+  "systemAgent.thread.modelDesc": "مدلی که برای نام‌گذاری خودکار زیرموضوعات استفاده می‌شود",
+  "systemAgent.thread.title": "عامل نام‌گذاری خودکار زیرموضوع",
+  "systemAgent.title": "عامل‌های سیستمی",
+  "systemAgent.topic.label": "مدل",
+  "systemAgent.topic.modelDesc": "مدلی که برای نام‌گذاری خودکار موضوعات استفاده می‌شود",
+  "systemAgent.topic.title": "عامل نام‌گذاری خودکار موضوع",
+  "systemAgent.translation.label": "مدل",
+  "systemAgent.translation.modelDesc": "مدلی که برای ترجمه پیام‌ها استفاده می‌شود",
+  "systemAgent.translation.title": "عامل ترجمه پیام",
+  "tab.about": "درباره",
+  "tab.agent": "سرویس عامل",
+  "tab.apikey": "مدیریت کلید API",
+  "tab.chatAppearance": "ظاهر گفتگو",
+  "tab.common": "ظاهر",
+  "tab.experiment": "آزمایش",
+  "tab.hotkey": "کلیدهای میانبر",
+  "tab.image": "سرویس تولید تصویر",
+  "tab.llm": "مدل زبانی",
+  "tab.memory": "حافظه",
+  "tab.profile": "حساب من",
+  "tab.provider": "ارائه‌دهنده سرویس هوش مصنوعی",
+  "tab.proxy": "پروکسی شبکه",
+  "tab.security": "امنیت",
+  "tab.stats": "تحلیل‌ها",
+  "tab.storage": "ذخیره‌سازی داده",
+  "tab.sync": "همگام‌سازی ابری",
+  "tab.tts": "تبدیل متن به گفتار",
+  "tab.usage": "آمار استفاده",
+  "tools.add": "افزودن مهارت",
+  "tools.builtins.groupName": "داخلی‌ها",
+  "tools.disabled": "مدل فعلی از فراخوانی توابع پشتیبانی نمی‌کند و نمی‌تواند از این مهارت استفاده کند",
+  "tools.klavis.addServer": "افزودن سرور",
+  "tools.klavis.authCompleted": "احراز هویت کامل شد",
+  "tools.klavis.authFailed": "احراز هویت ناموفق بود",
+  "tools.klavis.authRequired": "احراز هویت لازم است",
+  "tools.klavis.connected": "متصل شد",
+  "tools.klavis.error": "خطا",
+  "tools.klavis.groupName": "ابزارهای Klavis",
+  "tools.klavis.manage": "مدیریت Klavis",
+  "tools.klavis.manageTitle": "مدیریت یکپارچه‌سازی Klavis",
+  "tools.klavis.noServers": "هیچ سرور متصلی وجود ندارد",
+  "tools.klavis.notEnabled": "سرویس Klavis فعال نیست",
+  "tools.klavis.oauthRequired": "لطفاً احراز هویت OAuth را در پنجره جدید کامل کنید",
+  "tools.klavis.pendingAuth": "در انتظار احراز هویت",
+  "tools.klavis.serverCreated": "سرور با موفقیت ایجاد شد",
+  "tools.klavis.serverCreatedFailed": "ایجاد سرور ناموفق بود",
+  "tools.klavis.serverRemoved": "سرور حذف شد",
+  "tools.klavis.servers": "سرورها",
+  "tools.klavis.tools": "ابزارها",
+  "tools.klavis.verifyAuth": "احراز هویت را کامل کرده‌ام",
+  "tools.notInstalled": "نصب نشده",
+  "tools.notInstalledWarning": "این مهارت در حال حاضر نصب نشده است و ممکن است عملکرد عامل را تحت تأثیر قرار دهد.",
+  "tools.plugins.enabled": "فعال‌شده: {{num}}",
+  "tools.plugins.groupName": "مهارت‌ها",
+  "tools.plugins.noEnabled": "هیچ مهارتی فعال نیست",
+  "tools.plugins.store": "فروشگاه مهارت‌ها",
+  "tools.tabs.all": "همه",
+  "tools.tabs.installed": "فعال‌شده",
+  "tools.title": "ابزارهای افزونه"
 }

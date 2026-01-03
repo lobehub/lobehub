@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "將當前輸入內容添加為使用者消息，但不觸發生成",
-    "title": "添加一條使用者消息"
-  },
-  "clearCurrentMessages": {
-    "desc": "清空當前會話的消息和上傳的檔案",
-    "title": "清空會話消息"
-  },
-  "commandPalette": {
-    "desc": "開啟全域指令面板以快速存取功能",
-    "title": "指令面板"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "刪除最後一則訊息並重新產生",
-    "title": "刪除並重新產生"
-  },
-  "deleteLastMessage": {
-    "desc": "刪除最後一則訊息",
-    "title": "刪除最後一則訊息"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "打開應用設定頁面",
-      "title": "應用設定"
-    },
-    "showApp": {
-      "desc": "全域快速鍵顯示或隱藏主視窗",
-      "title": "顯示/隱藏主視窗"
-    }
-  },
-  "editMessage": {
-    "desc": "通過按住 Alt 並雙擊消息進入編輯模式",
-    "title": "編輯消息"
-  },
-  "navigateToChat": {
-    "desc": "切換至會話標籤並進入隨便聊聊",
-    "title": "切換至預設會話"
-  },
-  "openChatSettings": {
-    "desc": "查看和修改當前會話的設定",
-    "title": "打開會話設定"
-  },
-  "openHotkeyHelper": {
-    "desc": "查看所有快捷鍵的使用說明",
-    "title": "打開快捷鍵幫助"
-  },
-  "regenerateMessage": {
-    "desc": "重新生成最後一條消息",
-    "title": "重新生成消息"
-  },
-  "saveTopic": {
-    "desc": "保存當前話題並打開新話題",
-    "title": "開啟新話題"
-  },
-  "search": {
-    "desc": "喚起當前頁面主要搜尋框",
-    "title": "搜尋"
-  },
-  "showApp": {
-    "desc": "快速喚起應用主窗口",
-    "title": "顯示主窗口"
-  },
-  "switchAgent": {
-    "desc": "通過按住 Ctrl 加數字 0~9 切換固定在側邊欄的助手",
-    "title": "快捷切換助手"
-  },
-  "toggleLeftPanel": {
-    "desc": "顯示或隱藏左側助手面板",
-    "title": "顯示/隱藏助手面板"
-  },
-  "toggleRightPanel": {
-    "desc": "顯示或隱藏右側話題面板",
-    "title": "顯示/隱藏話題面板"
-  },
-  "toggleZenMode": {
-    "desc": "專注模式下，只顯示當前會話，隱藏其他 UI",
-    "title": "切換專注模式"
-  }
+  "addUserMessage.desc": "將當前輸入內容添加為使用者消息，但不觸發生成",
+  "addUserMessage.title": "添加一條使用者消息",
+  "clearCurrentMessages.desc": "清空當前會話的消息和上傳的檔案",
+  "clearCurrentMessages.title": "清空會話消息",
+  "commandPalette.desc": "開啟全域指令面板以快速存取功能",
+  "commandPalette.title": "指令面板",
+  "deleteAndRegenerateMessage.desc": "刪除最後一則訊息並重新產生",
+  "deleteAndRegenerateMessage.title": "刪除並重新產生",
+  "deleteLastMessage.desc": "刪除最後一則訊息",
+  "deleteLastMessage.title": "刪除最後一則訊息",
+  "desktop.openSettings.desc": "打開應用設定頁面",
+  "desktop.openSettings.title": "應用設定",
+  "desktop.showApp.desc": "全域快速鍵顯示或隱藏主視窗",
+  "desktop.showApp.title": "顯示/隱藏主視窗",
+  "editMessage.desc": "通過按住 Alt 並雙擊消息進入編輯模式",
+  "editMessage.title": "編輯消息",
+  "navigateToChat.desc": "切換至對話標籤並進入 Lobe AI",
+  "navigateToChat.title": "切換至預設會話",
+  "openChatSettings.desc": "查看和修改當前會話的設定",
+  "openChatSettings.title": "打開會話設定",
+  "openHotkeyHelper.desc": "查看所有快捷鍵的使用說明",
+  "openHotkeyHelper.title": "打開快捷鍵幫助",
+  "regenerateMessage.desc": "重新生成最後一條消息",
+  "regenerateMessage.title": "重新生成消息",
+  "saveDocument.desc": "立即儲存目前文件的所有變更",
+  "saveDocument.title": "儲存文件",
+  "saveTopic.desc": "保存當前話題並打開新話題",
+  "saveTopic.title": "開啟新話題",
+  "search.desc": "喚起當前頁面主要搜尋框",
+  "search.title": "搜尋",
+  "showApp.desc": "快速喚起應用主窗口",
+  "showApp.title": "顯示主窗口",
+  "switchAgent.desc": "通過按住 Ctrl 加數字 0~9 切換固定在側邊欄的助手",
+  "switchAgent.title": "快捷切換助手",
+  "toggleLeftPanel.desc": "顯示或隱藏左側面板",
+  "toggleLeftPanel.title": "顯示/隱藏左側面板",
+  "toggleRightPanel.desc": "顯示或隱藏右側面板",
+  "toggleRightPanel.title": "顯示/隱藏右側面板",
+  "toggleZenMode.desc": "專注模式下，只顯示當前會話，隱藏其他 UI",
+  "toggleZenMode.title": "切換專注模式"
 }

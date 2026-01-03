@@ -1,4 +1,4 @@
-import { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
+import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
@@ -23,6 +23,11 @@ export interface ChatPluginPayload {
   type: LobeToolRenderType;
 }
 
+/**
+ * Tool source indicates where the tool comes from
+ */
+export type ToolSource = 'builtin' | 'plugin' | 'mcp' | 'klavis';
+
 export interface ChatToolPayload {
   apiName: string;
   arguments: string;
@@ -30,6 +35,10 @@ export interface ChatToolPayload {
   identifier: string;
   intervention?: ToolIntervention;
   result_msg_id?: string;
+  /**
+   * Tool source indicates where the tool comes from
+   */
+  source?: ToolSource;
   thoughtSignature?: string;
   type: LobeToolRenderType;
 }

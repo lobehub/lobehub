@@ -1,11 +1,11 @@
-import { ConnectionConfig } from '@lobehub/market-types';
+import { type ConnectionConfig } from '@lobehub/market-types';
 import { Block, Highlighter } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
 import { genServerConfig } from '@/features/MCP/utils';
 
-const useStyles = createStyles(({ css }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     lite: css`
       pre {
@@ -24,7 +24,6 @@ interface PlatformProps {
 
 const Platform = memo<PlatformProps>(({ lite, identifier, connection }) => {
   const serverConfig = genServerConfig(identifier, connection);
-  const { cx, styles } = useStyles();
 
   return (
     <Block gap={lite ? 0 : 16} padding={4} variant={lite ? 'outlined' : 'borderless'}>

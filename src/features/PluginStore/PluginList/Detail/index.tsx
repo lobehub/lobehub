@@ -1,5 +1,5 @@
+import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';

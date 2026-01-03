@@ -5,8 +5,7 @@
     "content": "What's the weather like in San Francisco and Beijing today?",
     "parentId": null,
     "createdAt": 1704067200000,
-    "updatedAt": 1704067200000,
-    "meta": {}
+    "updatedAt": 1704067200000
   },
   {
     "id": "msg-102",
@@ -31,7 +30,6 @@
     ],
     "createdAt": 1704067202000,
     "updatedAt": 1704067202000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 28,
       "totalOutputTokens": 45,
@@ -48,22 +46,26 @@
     "role": "tool",
     "tool_call_id": "tool-sf",
     "content": "{\"location\": \"San Francisco, CA\", \"temperature\": 18, \"conditions\": \"Partly Cloudy\", \"humidity\": 72, \"wind_speed\": 15}",
-    "pluginState": { "cached": false, "executionTime": 234 },
+    "pluginState": {
+      "cached": false,
+      "executionTime": 234
+    },
     "parentId": "msg-102",
     "createdAt": 1704067203000,
-    "updatedAt": 1704067203000,
-    "meta": {}
+    "updatedAt": 1704067203000
   },
   {
     "id": "msg-104",
     "role": "tool",
     "tool_call_id": "tool-bj",
     "content": "{\"location\": \"Beijing, China\", \"temperature\": 12, \"conditions\": \"Clear\", \"humidity\": 45, \"wind_speed\": 8}",
-    "pluginState": { "cached": false, "executionTime": 189 },
+    "pluginState": {
+      "cached": false,
+      "executionTime": 189
+    },
     "parentId": "msg-102",
     "createdAt": 1704067203100,
-    "updatedAt": 1704067203100,
-    "meta": {}
+    "updatedAt": 1704067203100
   },
   {
     "id": "msg-105",
@@ -88,7 +90,6 @@
     ],
     "createdAt": 1704067205000,
     "updatedAt": 1704067205000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 156,
       "totalOutputTokens": 42,
@@ -106,22 +107,26 @@
     "role": "tool",
     "tool_call_id": "tool-sf-forecast",
     "content": "{\"location\": \"San Francisco, CA\", \"date\": \"2024-01-02\", \"high\": 20, \"low\": 14, \"conditions\": \"Sunny\"}",
-    "pluginState": { "cached": false, "executionTime": 198 },
+    "pluginState": {
+      "cached": false,
+      "executionTime": 198
+    },
     "parentId": "msg-105",
     "createdAt": 1704067206000,
-    "updatedAt": 1704067206000,
-    "meta": {}
+    "updatedAt": 1704067206000
   },
   {
     "id": "msg-107",
     "role": "tool",
     "tool_call_id": "tool-bj-forecast",
     "content": "{\"location\": \"Beijing, China\", \"date\": \"2024-01-02\", \"high\": 15, \"low\": 8, \"conditions\": \"Partly Cloudy\"}",
-    "pluginState": { "cached": false, "executionTime": 176 },
+    "pluginState": {
+      "cached": false,
+      "executionTime": 176
+    },
     "parentId": "msg-105",
     "createdAt": 1704067206100,
-    "updatedAt": 1704067206100,
-    "meta": {}
+    "updatedAt": 1704067206100
   },
   {
     "id": "msg-108",
@@ -130,7 +135,6 @@
     "parentId": "msg-106",
     "createdAt": 1704067208000,
     "updatedAt": 1704067208000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 245,
       "totalOutputTokens": 112,

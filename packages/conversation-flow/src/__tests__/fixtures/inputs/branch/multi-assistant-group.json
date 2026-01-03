@@ -6,7 +6,6 @@
     "parentId": null,
     "createdAt": 1704067200000,
     "updatedAt": 1704067200000,
-    "meta": {},
     "metadata": {
       "activeBranchIndex": 2
     }
@@ -18,7 +17,6 @@
     "parentId": "msg-user-1",
     "createdAt": 1704067202000,
     "updatedAt": 1704067202000,
-    "meta": {},
     "metadata": {
       "totalTokens": 3751,
       "totalInputTokens": 3441,
@@ -41,7 +39,6 @@
     "parentId": "msg-assistant-1",
     "createdAt": 1704067205000,
     "updatedAt": 1704067205000,
-    "meta": {},
     "tool_call_id": "call-1",
     "plugin": {
       "apiName": "search",
@@ -66,7 +63,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1704067208000,
     "updatedAt": 1704067208000,
-    "meta": {},
     "metadata": {
       "totalTokens": 4311,
       "totalInputTokens": 4128,
@@ -89,7 +85,6 @@
     "parentId": "msg-assistant-2",
     "createdAt": 1704067211000,
     "updatedAt": 1704067211000,
-    "meta": {},
     "tool_call_id": "call-2",
     "plugin": {
       "apiName": "search",
@@ -104,7 +99,6 @@
     "parentId": "msg-tool-2",
     "createdAt": 1704067214000,
     "updatedAt": 1704067214000,
-    "meta": {},
     "metadata": {
       "totalTokens": 6643,
       "totalInputTokens": 6135,
@@ -121,7 +115,6 @@
     "parentId": "msg-user-1",
     "createdAt": 1704067220000,
     "updatedAt": 1704067220000,
-    "meta": {},
     "metadata": {
       "totalTokens": 3809,
       "totalInputTokens": 3440,
@@ -151,7 +144,6 @@
     "parentId": "msg-assistant-4",
     "createdAt": 1704067223000,
     "updatedAt": 1704067223000,
-    "meta": {},
     "tool_call_id": "call-3",
     "plugin": {
       "apiName": "search",
@@ -170,7 +162,6 @@
     "parentId": "msg-assistant-4",
     "createdAt": 1704067226000,
     "updatedAt": 1704067226000,
-    "meta": {},
     "tool_call_id": "call-4",
     "plugin": {
       "apiName": "search",
@@ -189,7 +180,6 @@
     "parentId": "msg-tool-4",
     "createdAt": 1704067229000,
     "updatedAt": 1704067229000,
-    "meta": {},
     "metadata": {
       "totalTokens": 7100,
       "totalInputTokens": 6425,
@@ -203,7 +193,6 @@
     "parentId": "msg-user-1",
     "createdAt": 1704067240000,
     "updatedAt": 1704067240000,
-    "meta": {},
     "metadata": {
       "totalTokens": 3627,
       "totalInputTokens": 3441,
@@ -226,7 +215,6 @@
     "parentId": "msg-assistant-6",
     "createdAt": 1704067243000,
     "updatedAt": 1704067243000,
-    "meta": {},
     "tool_call_id": "call-5",
     "plugin": {
       "apiName": "search",
@@ -250,7 +238,6 @@
     "parentId": "msg-tool-5",
     "createdAt": 1704067246000,
     "updatedAt": 1704067246000,
-    "meta": {},
     "metadata": {
       "totalTokens": 8188,
       "totalInputTokens": 7604,

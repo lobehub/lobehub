@@ -1,10 +1,10 @@
-import { SearchParams, UniformSearchResponse, UniformSearchResult } from '@lobechat/types';
+import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { SearchServiceImpl } from '../type';
-import { TavilyResponse, TavilySearchParameters } from './type';
+import { type SearchServiceImpl } from '../type';
+import { type TavilyResponse, type TavilySearchParameters } from './type';
 
 const log = debug('lobe-search:Tavily');
 

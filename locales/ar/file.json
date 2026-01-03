@@ -1,181 +1,134 @@
 {
   "addFolder": "إنشاء مجلد",
-  "addKnowledge": "إضافة معرفة",
-  "addPage": "إنشاء مستند",
-  "desc": "نظّم معرفتك في العمل، الدراسة والحياة.",
-  "detail": {
-    "basic": {
-      "createdAt": "تاريخ الإنشاء",
-      "filename": "اسم الملف",
-      "size": "حجم الملف",
-      "title": "معلومات أساسية",
-      "type": "الصيغة",
-      "updatedAt": "تاريخ التحديث"
-    },
-    "data": {
-      "chunkCount": "عدد الأجزاء",
-      "embedding": {
-        "default": "لم يتم تحويله إلى متجهات بعد",
-        "error": "فشل",
-        "pending": "في انتظار البدء",
-        "processing": "جارٍ المعالجة",
-        "success": "اكتمل"
-      },
-      "embeddingStatus": "تحويل إلى متجهات"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "إضافة أيقونة",
-    "autoSaveMessage": "يتم حفظ المستند تلقائيًا، لا حاجة للحفظ اليدوي",
-    "chooseIcon": "اختر أيقونة",
-    "deleteConfirm": {
-      "content": "سيتم حذف هذا المستند، ولا يمكن استعادته بعد الحذف. يرجى توخي الحذر.",
-      "title": "حذف المستند"
-    },
-    "deleteError": "فشل في حذف المستند",
-    "deleteSuccess": "تم حذف المستند بنجاح",
-    "editedAt": "آخر تعديل في {{time}}",
-    "editedBy": "آخر من عدّل: {{name}}",
-    "editorPlaceholder": "أدخل محتوى المستند، اضغط / لفتح قائمة الأوامر",
-    "empty": {
-      "createNewDocument": "إنشاء مستند جديد",
-      "title": "اختر مستندًا للبدء",
-      "uploadMarkdown": "رفع ملف Markdown"
-    },
-    "linkCopied": "تم نسخ الرابط",
-    "menu": {
-      "copyLink": "نسخ الرابط",
-      "exportDocument": "تصدير المستند",
-      "importDocument": "استيراد مستند",
-      "pin": "تثبيت المستند"
-    },
-    "saving": "جارٍ الحفظ...",
-    "titlePlaceholder": "بدون عنوان",
-    "wordCount": "{{wordCount}} كلمة"
-  },
-  "documentList": {
-    "copyContent": "نسخ المحتوى الكامل",
-    "duplicate": "إنشاء نسخة",
-    "empty": "لا توجد مستندات حالياً، انقر على الزر أعلاه لإنشاء أول مستند لك",
-    "noResults": "لم يتم العثور على مستندات مطابقة",
-    "pageCount": "إجمالي {{count}} مستند",
-    "selectNote": "اختر مستندًا لبدء التحرير",
-    "untitled": "بدون عنوان"
-  },
-  "empty": "لا توجد ملفات/مجلدات تم تحميلها بعد",
-  "header": {
-    "actions": {
-      "newFolder": "إنشاء مجلد جديد",
-      "newPage": "مستند جديد",
-      "uploadFile": "رفع ملف",
-      "uploadFolder": "رفع مجلد"
-    },
-    "newNoteDialog": {
-      "cancel": "إلغاء",
-      "editTitle": "تحرير المستند",
-      "emptyContent": "لا يمكن أن يكون محتوى المستند فارغًا",
-      "loadError": "فشل في تحميل المستند، يرجى المحاولة مرة أخرى",
-      "loading": "جارٍ التحميل...",
-      "save": "حفظ",
-      "saveError": "فشل في حفظ المستند، يرجى المحاولة مرة أخرى",
-      "saveSuccess": "تم حفظ المستند بنجاح",
-      "title": "مستند جديد",
-      "updateSuccess": "تم تحديث المستند بنجاح"
-    },
-    "newPageButton": "إنشاء مستند جديد",
-    "uploadButton": "رفع"
-  },
-  "home": {
-    "getStarted": "ابدأ الآن",
-    "greeting": "ابدأ",
-    "quickActions": "إجراءات سريعة",
-    "recentFiles": "الملفات الأخيرة",
-    "recentPages": "الصفحات الأخيرة",
-    "subtitle": "مرحبًا بك في قاعدة المعرفة، ابدأ من هنا لإدارة مستنداتك وملاحظاتك",
-    "uploadEntries": {
-      "files": {
-        "title": "رفع ملفات"
-      },
-      "folder": {
-        "title": "رفع مجلد"
-      },
-      "knowledgeBase": {
-        "title": "قاعدة معرفة جديدة"
-      },
-      "newPage": {
-        "title": "إنشاء مستند جديد"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "سيتم حذف هذه المكتبة المعرفية، ولن يتم حذف الملفات الموجودة بها، بل ستنتقل إلى جميع الملفات. بعد حذف المكتبة المعرفية، لن يمكن استعادتها، يرجى توخي الحذر.",
-      "empty": "انقر على <1>+</1> لبدء إنشاء مكتبة معرفية"
-    },
-    "new": "إنشاء مكتبة معرفية جديدة",
-    "title": "المكتبة المعرفية"
-  },
-  "menu": {
-    "allFiles": "جميع الملفات",
-    "allPages": "جميع المستندات"
-  },
-  "networkError": "فشل في الحصول على قاعدة المعرفة، يرجى التحقق من اتصال الشبكة ثم إعادة المحاولة",
-  "notSupportGuide": {
-    "desc": "الوضع الحالي للنشر هو وضع قاعدة بيانات العميل، ولا يمكن استخدام وظيفة إدارة الملفات. يرجى التبديل إلى <1>وضع نشر قاعدة بيانات الخادم</1>، أو استخدام <3>LobeChat Cloud</3> مباشرة.",
-    "features": {
-      "allKind": {
-        "desc": "يدعم أنواع الملفات الشائعة، بما في ذلك تنسيقات المستندات الشائعة مثل Word وPPT وExcel وPDF وTXT، بالإضافة إلى ملفات الشيفرة الشائعة مثل JS وPython.",
-        "title": "تحليل أنواع متعددة من الملفات"
-      },
-      "embeddings": {
-        "desc": "استخدام نماذج متجهات عالية الأداء لتحويل النصوص إلى متجهات، مما يتيح البحث الدلالي في محتوى الملفات.",
-        "title": "تحويل دلالي إلى متجهات"
-      },
-      "repos": {
-        "desc": "يدعم إنشاء مكتبات معرفية، ويسمح بإضافة أنواع مختلفة من الملفات، لبناء معرفتك في مجالك.",
-        "title": "المكتبة المعرفية"
-      }
-    },
-    "title": "الوضع الحالي للنشر لا يدعم إدارة الملفات"
-  },
-  "preview": {
-    "downloadFile": "تحميل الملف",
-    "unsupportedFileAndContact": "هذا التنسيق من الملفات غير مدعوم للمعاينة عبر الإنترنت، إذا كان لديك طلب للمعاينة، فلا تتردد في <1>إبلاغنا</1>"
-  },
-  "searchFilePlaceholder": "بحث عن ملف",
-  "searchPagePlaceholder": "ابحث في المستندات",
-  "tab": {
-    "all": "الكل",
-    "audios": "الصوتيات",
-    "documents": "المستندات",
-    "home": "الرئيسية",
-    "images": "الصور",
-    "moreTypes": "أنواع أخرى",
-    "pages": "المستندات",
-    "videos": "الفيديوهات",
-    "websites": "المواقع"
-  },
-  "title": "قاعدة المعرفة",
-  "toggleLeftPanel": "إظهار/إخفاء اللوحة الجانبية اليسرى",
-  "uploadDock": {
-    "body": {
-      "collapse": "طي",
-      "item": {
-        "done": "تم الرفع",
-        "error": "فشل الرفع، يرجى المحاولة مرة أخرى",
-        "pending": "جاهز للرفع...",
-        "processing": "جارٍ معالجة الملف...",
-        "restTime": "الوقت المتبقي {{time}}"
-      }
-    },
-    "fileQueueInfo": "يتم حاليًا تحميل {{count}} ملفًا، وسيتم وضع {{remaining}} ملفًا في قائمة الانتظار للتحميل",
-    "totalCount": "إجمالي {{count}} عنصر",
-    "uploadStatus": {
-      "error": "حدث خطأ أثناء الرفع",
-      "pending": "في انتظار الرفع",
-      "processing": "جارٍ الرفع",
-      "success": "اكتمل الرفع",
-      "uploading": "جارٍ الرفع"
-    }
-  }
+  "addLibrary": "إضافة",
+  "addPage": "إنشاء صفحة",
+  "detail.basic.createdAt": "وقت الإنشاء",
+  "detail.basic.filename": "اسم الملف",
+  "detail.basic.size": "حجم الملف",
+  "detail.basic.title": "معلومات أساسية",
+  "detail.basic.type": "التنسيق",
+  "detail.basic.updatedAt": "وقت التحديث",
+  "detail.data.chunkCount": "عدد الأجزاء",
+  "detail.data.embedding.default": "غير مضمّن",
+  "detail.data.embedding.error": "فشل",
+  "detail.data.embedding.pending": "بانتظار البدء",
+  "detail.data.embedding.processing": "قيد المعالجة",
+  "detail.data.embedding.success": "اكتمل",
+  "detail.data.embeddingStatus": "التضمين",
+  "empty": "لم يتم تحميل أي ملفات أو مجلدات بعد.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} ملف تم تصفيته (من أصل {{total}})",
+  "header.actions.connect": "اتصال...",
+  "header.actions.gitignore.apply": "تطبيق القواعد",
+  "header.actions.gitignore.cancel": "تجاهل القواعد",
+  "header.actions.gitignore.content": "تم اكتشاف ملف .gitignore ({{count}} ملفًا إجمالاً). هل ترغب في تطبيق قواعد التجاهل؟",
+  "header.actions.gitignore.filtered": "{{ignored}} ملف تم تجاهله (من أصل {{total}})",
+  "header.actions.gitignore.title": "تم اكتشاف .gitignore",
+  "header.actions.newFolder": "مجلد جديد",
+  "header.actions.newPage": "صفحة جديدة",
+  "header.actions.notion.error": "فشل في استيراد ملفات Notion",
+  "header.actions.notion.foundFiles": "تم العثور على {{count}} ملف",
+  "header.actions.notion.importing": "جارٍ استيراد محتوى Notion...",
+  "header.actions.notion.noMarkdownFiles": "لم يتم العثور على ملفات Markdown في الأرشيف المضغوط",
+  "header.actions.notion.partial": "تم استيراد {{success}} ملف بنجاح، وفشل {{failed}}",
+  "header.actions.notion.success": "تم استيراد {{count}} ملف بنجاح",
+  "header.actions.notionGuide.cancel": "ليس الآن",
+  "header.actions.notionGuide.desc": "أولاً، قم بتصدير المحتوى من Notion كملف Markdown (ZIP). ثم انقر على متابعة لتحديد ملف ZIP واستيراد جميع الصفحات.",
+  "header.actions.notionGuide.ok": "تحديد ملف ZIP من Notion",
+  "header.actions.notionGuide.title": "الاستيراد من Notion",
+  "header.actions.uploadFile": "تحميل ملف",
+  "header.actions.uploadFolder": "تحميل مجلد",
+  "header.newPageButton": "صفحة جديدة",
+  "header.uploadButton": "تحميل",
+  "home.getStarted": "ابدأ الآن",
+  "home.greeting": "ابدأ الآن",
+  "home.quickActions": "إجراءات سريعة",
+  "home.recentFiles": "الملفات الحديثة",
+  "home.recentPages": "الصفحات الحديثة",
+  "home.uploadEntries.files.title": "تحميل ملفات",
+  "home.uploadEntries.folder.title": "تحميل مجلد",
+  "home.uploadEntries.library.title": "إنشاء مكتبة جديدة",
+  "home.uploadEntries.newPage.title": "صفحة جديدة",
+  "library.list.confirmRemoveLibrary": "أنت على وشك حذف هذه المكتبة. لن يتم حذف الملفات الموجودة بداخلها، بل سيتم نقلها إلى جميع الملفات. لا يمكن التراجع عن هذا الإجراء، لذا يرجى المتابعة بحذر.",
+  "library.list.empty": "انقر <1>+</1> لإنشاء مكتبة جديدة",
+  "library.new": "مكتبة جديدة",
+  "library.title": "المكتبة",
+  "loadMore": "تحميل المزيد",
+  "menu.allFiles": "جميع الملفات",
+  "menu.allPages": "جميع الصفحات",
+  "networkError": "فشل في استرداد المكتبات. يرجى التحقق من اتصال الشبكة والمحاولة مرة أخرى.",
+  "notSupportGuide.desc": "وضع النشر الحالي لا يدعم إدارة الملفات. قم بالتبديل إلى <1>وضع قاعدة بيانات الخادم</1>، أو استخدم <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "يدعم أنواع الملفات الشائعة، بما في ذلك تنسيقات الصفحات مثل Word وPPT وExcel وPDF وTXT، بالإضافة إلى ملفات البرمجة مثل JS وPython.",
+  "notSupportGuide.features.allKind.title": "تحليل أنواع ملفات متعددة",
+  "notSupportGuide.features.embeddings.desc": "يستخدم نماذج متجهات عالية الأداء لتحويل أجزاء النص إلى متجهات، مما يتيح البحث الدلالي في محتوى الملفات.",
+  "notSupportGuide.features.embeddings.title": "الدلالات المتجهة",
+  "notSupportGuide.features.libraries.desc": "أنشئ مكتبات وأضف ملفات لبناء مكتبتك الخاصة.",
+  "notSupportGuide.features.libraries.title": "المكتبة",
+  "notSupportGuide.title": "وضع النشر الحالي لا يدعم إدارة الملفات",
+  "pageEditor.addIcon": "إضافة أيقونة",
+  "pageEditor.autoSaveMessage": "يتم حفظ صفحتك تلقائيًا. لا حاجة للحفظ يدويًا.",
+  "pageEditor.chooseIcon": "اختر أيقونة",
+  "pageEditor.deleteConfirm.content": "سيتم حذف هذه الصفحة ولا يمكن استعادتها. يرجى المتابعة بحذر.",
+  "pageEditor.deleteConfirm.title": "حذف الصفحة",
+  "pageEditor.deleteError": "فشل في حذف الصفحة",
+  "pageEditor.deleteSuccess": "تم حذف الصفحة بنجاح",
+  "pageEditor.duplicateError": "فشل في تكرار الصفحة",
+  "pageEditor.duplicateSuccess": "تم تكرار الصفحة بنجاح",
+  "pageEditor.editedAt": "آخر تعديل في {{time}}",
+  "pageEditor.editedBy": "آخر تعديل بواسطة {{name}}",
+  "pageEditor.editorPlaceholder": "ابدأ بكتابة صفحتك. اضغط / لفتح قائمة الأوامر",
+  "pageEditor.empty.createNewDocument": "إنشاء صفحة جديدة",
+  "pageEditor.empty.importNotion": "الاستيراد من Notion",
+  "pageEditor.empty.title": "اختر صفحة للبدء",
+  "pageEditor.empty.uploadFiles": "تحميل ملفات",
+  "pageEditor.exportError": "فشل في تصدير الصفحة",
+  "pageEditor.exportSuccess": "تم تصدير الصفحة بنجاح",
+  "pageEditor.linkCopied": "تم نسخ الرابط",
+  "pageEditor.menu.copyLink": "نسخ الرابط",
+  "pageEditor.menu.export": "تصدير",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "تصدير الصفحة",
+  "pageEditor.menu.importDocument": "استيراد صفحة",
+  "pageEditor.menu.pin": "تثبيت الصفحة",
+  "pageEditor.saving": "جارٍ الحفظ...",
+  "pageEditor.titlePlaceholder": "بدون عنوان",
+  "pageEditor.wordCount": "{{wordCount}} كلمة",
+  "pageList.copyContent": "نسخ النص الكامل",
+  "pageList.duplicate": "تكرار",
+  "pageList.empty": "لا توجد صفحات بعد. انقر على الزر أعلاه لإنشاء أول صفحة.",
+  "pageList.filter.all": "الكل",
+  "pageList.filter.onlyInPages": "في الصفحات فقط",
+  "pageList.noResults": "لم يتم العثور على صفحات مطابقة",
+  "pageList.pageCount": "إجمالي {{count}} صفحة",
+  "pageList.pageSizeItem": "{{count}} عنصر",
+  "pageList.title": "الصفحات",
+  "pageList.untitled": "بدون عنوان",
+  "portal.openInPageEditor": "تحرير في الصفحة",
+  "preview.downloadFile": "تنزيل الملف",
+  "preview.unsupportedFileAndContact": "تنسيق هذا الملف غير مدعوم حاليًا للمعاينة عبر الإنترنت. إذا كان لديك طلب للمعاينة، لا تتردد في <1>الاتصال بنا</1>.",
+  "searchFilePlaceholder": "البحث في الملفات",
+  "searchPagePlaceholder": "البحث في الصفحات",
+  "tab.all": "الكل",
+  "tab.audios": "الصوتيات",
+  "tab.documents": "المستندات",
+  "tab.home": "الرئيسية",
+  "tab.images": "الصور",
+  "tab.moreTypes": "أنواع أخرى",
+  "tab.pages": "الصفحات",
+  "tab.videos": "الفيديوهات",
+  "tab.websites": "المواقع",
+  "title": "الموارد",
+  "toggleLeftPanel": "إظهار/إخفاء اللوحة الجانبية",
+  "uploadDock.body.collapse": "طي",
+  "uploadDock.body.item.done": "تم التحميل",
+  "uploadDock.body.item.error": "فشل في التحميل، يرجى المحاولة مرة أخرى",
+  "uploadDock.body.item.pending": "جارٍ التحضير للتحميل...",
+  "uploadDock.body.item.processing": "جارٍ معالجة الملف...",
+  "uploadDock.body.item.restTime": "المتبقي {{time}}",
+  "uploadDock.fileQueueInfo": "يتم تحميل أول {{count}} ملف، {{remaining}} في الانتظار",
+  "uploadDock.totalCount": "إجمالي {{count}} عنصر",
+  "uploadDock.uploadStatus.error": "خطأ في التحميل",
+  "uploadDock.uploadStatus.pending": "بانتظار التحميل",
+  "uploadDock.uploadStatus.processing": "جارٍ التحميل",
+  "uploadDock.uploadStatus.success": "تم التحميل بنجاح",
+  "uploadDock.uploadStatus.uploading": "جارٍ التحميل"
 }

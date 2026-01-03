@@ -1,197 +1,137 @@
 {
-  "ArgsInput": {
-    "addArgument": "افزودن پارامتر",
-    "argumentPlaceholder": "پارامتر {{index}}",
-    "enterFirstArgument": "اولین پارامتر را وارد کنید..."
-  },
-  "DragUpload": {
-    "dragDesc": "فایل‌ها را اینجا بکشید، امکان بارگذاری چندین تصویر وجود دارد.",
-    "dragFileDesc": "تصاویر و فایل‌ها را اینجا بکشید، امکان بارگذاری چندین تصویر و فایل وجود دارد.",
-    "dragFileTitle": "بارگذاری فایل",
-    "dragTitle": "بارگذاری تصویر"
-  },
-  "FileManager": {
-    "actions": {
-      "addToKnowledgeBase": "افزودن به پایگاه دانش",
-      "addToOtherKnowledgeBase": "افزودن به پایگاه دانش دیگر",
-      "batchChunking": "تقسیم دسته‌ای",
-      "chunking": "تقسیم",
-      "chunkingTooltip": "فایل را به چندین بخش متنی تقسیم کرده و پس از بردارسازی، برای جستجوی معنایی و مکالمه با فایل قابل استفاده است",
-      "chunkingUnsupported": "این فایل از تقسیم‌بندی پشتیبانی نمی‌کند",
-      "confirmDelete": "این فایل در حال حذف است و پس از حذف قابل بازیابی نخواهد بود. لطفاً عملیات خود را تأیید کنید",
-      "confirmDeleteMultiFiles": "در حال حذف {{count}} فایل انتخاب شده هستید. پس از حذف، این فایل‌ها قابل بازیابی نخواهند بود. لطفاً عملیات خود را تأیید کنید",
-      "confirmRemoveFromKnowledgeBase": "در حال حذف {{count}} فایل انتخاب شده از پایگاه دانش هستید. پس از حذف، فایل‌ها همچنان در بخش همه فایل‌ها قابل مشاهده خواهند بود. لطفاً عملیات خود را تأیید کنید",
-      "copyUrl": "کپی کردن لینک",
-      "copyUrlSuccess": "آدرس فایل با موفقیت کپی شد",
-      "createChunkingTask": "در حال آماده‌سازی...",
-      "deleteSuccess": "فایل با موفقیت حذف شد",
-      "downloading": "در حال دانلود فایل...",
-      "removeFromKnowledgeBase": "حذف از پایگاه دانش",
-      "removeFromKnowledgeBaseSuccess": "فایل با موفقیت حذف شد"
-    },
-    "bottom": "به انتها رسیدید",
-    "config": {
-      "showFilesInKnowledgeBase": "نمایش محتویات در پایگاه دانش"
-    },
-    "emptyStatus": {
-      "actions": {
-        "file": "آپلود فایل",
-        "folder": "آپلود پوشه",
-        "knowledgeBase": "ایجاد پایگاه دانش جدید"
-      },
-      "or": "یا",
-      "title": "فایل یا پوشه را به اینجا بکشید"
-    },
-    "title": {
-      "createdAt": "زمان ایجاد",
-      "size": "اندازه",
-      "title": "فایل"
-    },
-    "total": {
-      "fileCount": "مجموعاً {{count}} مورد",
-      "selectedCount": "{{count}} مورد انتخاب شده"
-    },
-    "view": {
-      "list": "نمای فهرست",
-      "masonry": "نمای شبکه‌ای"
-    }
-  },
-  "FileParsingStatus": {
-    "chunks": {
-      "embeddingStatus": {
-        "empty": "بلوک‌های متن هنوز به طور کامل برداری نشده‌اند، که باعث می‌شود قابلیت جستجوی معنایی غیرفعال باشد. برای بهبود کیفیت جستجو، لطفاً بلوک‌های متن را برداری کنید.",
-        "error": "برداری‌سازی ناموفق بود",
-        "errorResult": "برداری‌سازی ناموفق بود، لطفاً بررسی کرده و دوباره تلاش کنید. دلیل شکست:",
-        "processing": "بلوک‌های متن در حال برداری‌سازی هستند، لطفاً صبور باشید",
-        "success": "تمام بلوک‌های متن با موفقیت برداری‌سازی شده‌اند"
-      },
-      "embeddings": "برداری‌سازی",
-      "status": {
-        "error": "تقسیم‌بندی ناموفق بود",
-        "errorResult": "تقسیم‌بندی ناموفق بود، لطفاً بررسی کرده و دوباره تلاش کنید. دلیل شکست:",
-        "processing": "در حال تقسیم‌بندی",
-        "processingTip": "سرور در حال تقسیم‌بندی بلوک‌های متن است، بستن صفحه بر پیشرفت تقسیم‌بندی تأثیری ندارد."
-      }
-    }
-  },
-  "GoBack": {
-    "back": "بازگشت"
-  },
-  "HtmlPreview": {
-    "actions": {
-      "download": "دانلود",
-      "preview": "پیش‌نمایش"
-    },
-    "iframeTitle": "پیش‌نمایش HTML",
-    "mode": {
-      "code": "کد",
-      "preview": "پیش‌نمایش"
-    },
-    "title": "پیش‌نمایش HTML"
-  },
-  "ImageUpload": {
-    "actions": {
-      "changeImage": "برای تغییر تصویر کلیک کنید",
-      "dropMultipleFiles": "بارگذاری چندین فایل به طور همزمان پشتیبانی نمی‌شود، فقط اولین فایل استفاده خواهد شد"
-    },
-    "placeholder": {
-      "primary": "افزودن تصویر",
-      "secondary": "برای آپلود کلیک کنید یا بکشید"
-    }
-  },
-  "KeyValueEditor": {
-    "addButton": "افزودن یک ردیف",
-    "deleteTooltip": "حذف",
-    "duplicateKeyError": "نام کلید باید یکتا باشد",
-    "keyPlaceholder": "کلید",
-    "valuePlaceholder": "مقدار"
-  },
-  "LocalFile": {
-    "action": {
-      "open": "باز کردن",
-      "showInFolder": "نمایش در پوشه"
-    }
-  },
-  "MaxTokenSlider": {
-    "unlimited": "نامحدود"
-  },
-  "ModelSelect": {
-    "featureTag": {
-      "custom": "مدل سفارشی، تنظیمات پیش‌فرض از فراخوانی توابع و تشخیص بصری پشتیبانی می‌کند، لطفاً قابلیت‌های فوق را بر اساس شرایط واقعی بررسی کنید",
-      "file": "این مدل از بارگذاری و شناسایی فایل‌ها پشتیبانی می‌کند",
-      "functionCall": "این مدل از فراخوانی توابع (Function Call) پشتیبانی می‌کند",
-      "imageOutput": "این مدل از تولید تصویر پشتیبانی می‌کند",
-      "reasoning": "این مدل از تفکر عمیق پشتیبانی می‌کند",
-      "search": "این مدل از جستجوی آنلاین پشتیبانی می‌کند",
-      "tokens": "این مدل در هر جلسه حداکثر از {{tokens}} توکن پشتیبانی می‌کند",
-      "video": "این مدل از شناسایی ویدئو پشتیبانی می‌کند",
-      "vision": "این مدل از تشخیص بصری پشتیبانی می‌کند"
-    },
-    "removed": "این مدل دیگر در فهرست نیست، در صورت لغو انتخاب به‌طور خودکار حذف خواهد شد"
-  },
-  "ModelSwitchPanel": {
-    "emptyModel": "هیچ مدلی فعال نیست، لطفاً به تنظیمات بروید و آن را فعال کنید",
-    "emptyProvider": "هیچ ارائه‌دهنده‌ای فعال نیست، لطفاً به تنظیمات بروید و آن را فعال کنید",
-    "goToSettings": "به تنظیمات بروید",
-    "provider": "ارائه‌دهنده",
-    "title": "مدل"
-  },
-  "MultiImagesUpload": {
-    "actions": {
-      "uploadMore": "برای آپلود بیشتر کلیک کنید یا بکشید"
-    },
-    "modal": {
-      "complete": "تکمیل",
-      "newFileIndicator": "جدید",
-      "selectImageToPreview": "لطفاً تصویری برای پیش‌نمایش انتخاب کنید",
-      "title": "مدیریت تصاویر ({{count}})",
-      "upload": "آپلود تصویر"
-    },
-    "placeholder": {
-      "primary": "برای آپلود تصویر کلیک کنید یا بکشید",
-      "secondary": "انتخاب چندین تصویر پشتیبانی می‌شود"
-    },
-    "progress": {
-      "uploadingWithCount": "{{completed}}/{{total}} بارگذاری شده"
-    },
-    "validation": {
-      "fileSizeExceeded": "اندازه فایل از حد مجاز فراتر رفته",
-      "fileSizeExceededDetail": "{{fileName}} ({{actualSize}}) از حداکثر اندازه مجاز {{maxSize}} فراتر رفته است",
-      "fileSizeExceededMultiple": "{{count}} فایل از حداکثر اندازه مجاز {{maxSize}} فراتر رفته‌اند: {{fileList}}",
-      "imageCountExceeded": "تعداد تصاویر از حد مجاز فراتر رفته"
-    }
-  },
-  "OllamaSetupGuide": {
-    "action": {
-      "close": "بستن پیام",
-      "start": "نصب و راه‌اندازی شده، شروع به گفتگو"
-    },
-    "cors": {
-      "description": "به دلیل محدودیت‌های امنیتی مرورگر، شما باید تنظیمات跨域 برای Ollama را انجام دهید تا بتوانید به درستی از آن استفاده کنید.",
-      "linux": {
-        "env": "در بخش [Service]، `Environment` را اضافه کنید و متغیر محیطی OLLAMA_ORIGINS را اضافه کنید:",
-        "reboot": "systemd را بارگذاری مجدد کرده و Ollama را راه‌اندازی مجدد کنید",
-        "systemd": "برای ویرایش سرویس ollama از systemd استفاده کنید:"
-      },
-      "macos": "لطفاً برنامه «ترمینال» را باز کرده و دستورات زیر را کپی کرده و با فشار دادن Enter اجرا کنید",
-      "reboot": "لطفاً پس از اتمام اجرا، سرویس Ollama را راه‌اندازی مجدد کنید",
-      "title": "تنظیمات Ollama برای اجازه دسترسی跨域",
-      "windows": "در ویندوز، بر روی «کنترل پنل» کلیک کنید و به ویرایش متغیرهای محیطی سیستم بروید. برای حساب کاربری خود یک متغیر محیطی جدید به نام «OLLAMA_ORIGINS» با مقدار * ایجاد کنید و بر روی «OK/اعمال» کلیک کنید تا ذخیره شود."
-    },
-    "install": {
-      "description": "لطفاً اطمینان حاصل کنید که Ollama را فعال کرده‌اید. اگر Ollama را دانلود نکرده‌اید، لطفاً به وب‌سایت رسمی <1>دانلود</1> بروید.",
-      "docker": "اگر تمایل دارید از Docker استفاده کنید، Ollama همچنین تصویر Docker رسمی را ارائه می‌دهد که می‌توانید با استفاده از دستور زیر آن را بارگیری کنید:",
-      "linux": {
-        "command": "با استفاده از دستور زیر نصب کنید:",
-        "manual": "یا می‌توانید به <1>راهنمای نصب دستی لینوکس</1> مراجعه کنید و خودتان نصب کنید."
-      },
-      "title": "نصب و راه‌اندازی محلی برنامه Ollama",
-      "windowsTab": "ویندوز (نسخه پیش‌نمایش)"
-    }
-  },
-  "Thinking": {
-    "thinking": "در حال تفکر عمیق...",
-    "thought": "به‌طور عمیق فکر شده است (مدت زمان {{duration}} ثانیه)",
-    "thoughtWithDuration": "به‌طور عمیق فکر شده است"
-  }
+  "ArgsInput.addArgument": "افزودن آرگومان",
+  "ArgsInput.argumentPlaceholder": "آرگومان {{index}}",
+  "ArgsInput.enterFirstArgument": "اولین آرگومان را وارد کنید...",
+  "DragUpload.dragDesc": "فایل‌ها را بکشید و اینجا رها کنید تا چند تصویر را بارگذاری کنید.",
+  "DragUpload.dragFileDesc": "تصاویر و فایل‌ها را بکشید و اینجا رها کنید تا چند فایل و تصویر را بارگذاری کنید.",
+  "DragUpload.dragFileTitle": "بارگذاری فایل‌ها",
+  "DragUpload.dragTitle": "بارگذاری تصاویر",
+  "FileManager.actions.addToKnowledgeBase": "افزودن به کتابخانه",
+  "FileManager.actions.addToOtherKnowledgeBase": "افزودن به کتابخانه دیگر",
+  "FileManager.actions.batchChunking": "تقسیم دسته‌ای",
+  "FileManager.actions.chunking": "تقسیم‌بندی",
+  "FileManager.actions.chunkingTooltip": "فایل را به چند بخش متنی تقسیم کرده و آن‌ها را برای جستجوی معنایی و گفت‌وگوی فایل جاسازی می‌کند.",
+  "FileManager.actions.chunkingUnsupported": "این فایل از تقسیم‌بندی پشتیبانی نمی‌کند.",
+  "FileManager.actions.confirmDelete": "در حال حذف این فایل هستید. پس از حذف، قابل بازیابی نخواهد بود. لطفاً اقدام خود را تأیید کنید.",
+  "FileManager.actions.confirmDeleteFolder": "در حال حذف این پوشه و تمام محتوای آن هستید. این عملیات قابل بازگشت نیست. لطفاً تصمیم خود را تأیید کنید.",
+  "FileManager.actions.confirmDeleteMultiFiles": "در حال حذف {{count}} فایل انتخاب‌شده هستید. پس از حذف، قابل بازیابی نخواهند بود. لطفاً اقدام خود را تأیید کنید.",
+  "FileManager.actions.confirmRemoveFromKnowledgeBase": "در حال حذف {{count}} فایل انتخاب‌شده از کتابخانه هستید. این فایل‌ها همچنان در بخش همه فایل‌ها در دسترس خواهند بود. برای ادامه تأیید کنید.",
+  "FileManager.actions.copyUrl": "کپی لینک",
+  "FileManager.actions.copyUrlSuccess": "لینک فایل با موفقیت کپی شد.",
+  "FileManager.actions.createChunkingTask": "در حال آماده‌سازی...",
+  "FileManager.actions.deleteSuccess": "فایل با موفقیت حذف شد.",
+  "FileManager.actions.downloading": "در حال دانلود فایل...",
+  "FileManager.actions.goBack": "رفتن به صفحه قبل",
+  "FileManager.actions.goForward": "رفتن به صفحه بعد",
+  "FileManager.actions.goToParent": "رفتن به پوشه والد",
+  "FileManager.actions.moveError": "انتقال فایل ناموفق بود",
+  "FileManager.actions.moveHere": "انتقال به اینجا",
+  "FileManager.actions.moveSuccess": "فایل با موفقیت منتقل شد",
+  "FileManager.actions.moveToFolder": "انتقال به...",
+  "FileManager.actions.moveToRoot": "انتقال به پوشه اصلی",
+  "FileManager.actions.moving": "در حال انتقال...",
+  "FileManager.actions.removeFromKnowledgeBase": "حذف از کتابخانه",
+  "FileManager.actions.removeFromKnowledgeBaseSuccess": "فایل با موفقیت حذف شد.",
+  "FileManager.actions.rename": "تغییر نام",
+  "FileManager.actions.renameError": "تغییر نام ناموفق بود",
+  "FileManager.actions.renameSuccess": "تغییر نام با موفقیت انجام شد",
+  "FileManager.bottom": "به انتهای لیست رسیدید.",
+  "FileManager.config.showFilesInKnowledgeBase": "نمایش محتوا در کتابخانه",
+  "FileManager.emptyStatus.actions.file": "بارگذاری فایل",
+  "FileManager.emptyStatus.actions.folder": "بارگذاری پوشه",
+  "FileManager.emptyStatus.actions.knowledgeBase": "ایجاد کتابخانه",
+  "FileManager.emptyStatus.or": "یا",
+  "FileManager.emptyStatus.title": "فایل‌ها یا پوشه‌ها را اینجا بکشید",
+  "FileManager.noFolders": "پوشه‌ای موجود نیست",
+  "FileManager.sort.dateAdded": "تاریخ افزودن",
+  "FileManager.sort.name": "نام",
+  "FileManager.sort.size": "اندازه",
+  "FileManager.title.createdAt": "تاریخ ایجاد",
+  "FileManager.title.size": "اندازه",
+  "FileManager.title.title": "فایل",
+  "FileManager.total.fileCount": "مجموع {{count}} مورد",
+  "FileManager.total.selectedCount": "{{count}} مورد انتخاب شده",
+  "FileManager.view.list": "نمای لیستی",
+  "FileManager.view.masonry": "نمای جدولی",
+  "FileParsingStatus.chunks.embeddingStatus.empty": "بخش‌های متنی هنوز به‌طور کامل جاسازی نشده‌اند، که باعث غیرفعال شدن قابلیت جستجوی معنایی می‌شود. برای بهبود کیفیت جستجو، لطفاً بخش‌های متنی را جاسازی کنید.",
+  "FileParsingStatus.chunks.embeddingStatus.error": "جاسازی ناموفق بود",
+  "FileParsingStatus.chunks.embeddingStatus.errorResult": "بردارسازی ناموفق بود، لطفاً بررسی کرده و دوباره تلاش کنید. جزئیات خطا:",
+  "FileParsingStatus.chunks.embeddingStatus.processing": "در حال جاسازی بخش‌های متنی، لطفاً شکیبا باشید.",
+  "FileParsingStatus.chunks.embeddingStatus.success": "تمام بخش‌های متنی فعلی با موفقیت جاسازی شدند",
+  "FileParsingStatus.chunks.embeddings": "جاسازی",
+  "FileParsingStatus.chunks.status.error": "تقسیم‌بندی ناموفق بود",
+  "FileParsingStatus.chunks.status.errorResult": "تقسیم‌بندی ناموفق بود، لطفاً بررسی کرده و دوباره تلاش کنید. جزئیات خطا:",
+  "FileParsingStatus.chunks.status.processing": "در حال تقسیم‌بندی",
+  "FileParsingStatus.chunks.status.processingTip": "سرور در حال تقسیم متن به بخش‌هاست؛ بستن صفحه تأثیری بر روند تقسیم ندارد.",
+  "GoBack.back": "بازگشت",
+  "HtmlPreview.actions.download": "دانلود",
+  "HtmlPreview.actions.preview": "پیش‌نمایش",
+  "HtmlPreview.iframeTitle": "پیش‌نمایش HTML",
+  "HtmlPreview.mode.code": "کد",
+  "HtmlPreview.mode.preview": "پیش‌نمایش",
+  "HtmlPreview.title": "پیش‌نمایش HTML",
+  "ImageUpload.actions.changeImage": "برای تغییر تصویر کلیک کنید",
+  "ImageUpload.actions.dropMultipleFiles": "بارگذاری چند فایل به‌صورت هم‌زمان پشتیبانی نمی‌شود؛ فقط اولین فایل استفاده خواهد شد",
+  "ImageUpload.placeholder.primary": "افزودن تصویر",
+  "ImageUpload.placeholder.secondary": "برای بارگذاری کلیک یا بکشید",
+  "KeyValueEditor.addButton": "افزودن ردیف",
+  "KeyValueEditor.deleteTooltip": "حذف",
+  "KeyValueEditor.duplicateKeyError": "کلید باید یکتا باشد",
+  "KeyValueEditor.keyPlaceholder": "کلید",
+  "KeyValueEditor.valuePlaceholder": "مقدار",
+  "LocalFile.action.open": "باز کردن",
+  "LocalFile.action.showInFolder": "نمایش در پوشه",
+  "MaxTokenSlider.unlimited": "نامحدود",
+  "ModelSelect.featureTag.custom": "مدل سفارشی که به‌طور پیش‌فرض از تماس‌های تابع و تشخیص بصری پشتیبانی می‌کند. لطفاً بر اساس شرایط واقعی، قابلیت‌های فوق را بررسی کنید.",
+  "ModelSelect.featureTag.file": "این مدل از بارگذاری فایل برای خواندن و تشخیص پشتیبانی می‌کند.",
+  "ModelSelect.featureTag.functionCall": "این مدل از تماس‌های تابع پشتیبانی می‌کند.",
+  "ModelSelect.featureTag.imageOutput": "این مدل از تولید تصویر پشتیبانی می‌کند.",
+  "ModelSelect.featureTag.reasoning": "این مدل از تفکر عمیق پشتیبانی می‌کند.",
+  "ModelSelect.featureTag.search": "این مدل از جستجوی آنلاین پشتیبانی می‌کند.",
+  "ModelSelect.featureTag.tokens": "این مدل تا {{tokens}} توکن را در یک جلسه پشتیبانی می‌کند.",
+  "ModelSelect.featureTag.video": "این مدل از تشخیص ویدیو پشتیبانی می‌کند",
+  "ModelSelect.featureTag.vision": "این مدل از تشخیص بصری پشتیبانی می‌کند.",
+  "ModelSelect.removed": "مدل در فهرست نیست. در صورت عدم انتخاب، به‌طور خودکار حذف خواهد شد.",
+  "ModelSwitchPanel.emptyModel": "مدلی فعال نیست. لطفاً به تنظیمات بروید و فعال کنید.",
+  "ModelSwitchPanel.emptyProvider": "ارائه‌دهنده‌ای فعال نیست. لطفاً به تنظیمات بروید و یکی را فعال کنید.",
+  "ModelSwitchPanel.goToSettings": "رفتن به تنظیمات",
+  "ModelSwitchPanel.provider": "ارائه‌دهنده",
+  "ModelSwitchPanel.title": "مدل",
+  "MultiImagesUpload.actions.uploadMore": "برای بارگذاری بیشتر کلیک یا بکشید",
+  "MultiImagesUpload.modal.complete": "انجام شد",
+  "MultiImagesUpload.modal.newFileIndicator": "جدید",
+  "MultiImagesUpload.modal.selectImageToPreview": "لطفاً یک تصویر برای پیش‌نمایش انتخاب کنید",
+  "MultiImagesUpload.modal.title": "مدیریت تصاویر ({{count}})",
+  "MultiImagesUpload.modal.upload": "بارگذاری تصاویر",
+  "MultiImagesUpload.placeholder.primary": "برای بارگذاری تصاویر کلیک یا بکشید",
+  "MultiImagesUpload.placeholder.secondary": "پشتیبانی از انتخاب چند تصویر",
+  "MultiImagesUpload.progress.uploadingWithCount": "{{completed}}/{{total}} بارگذاری شده",
+  "MultiImagesUpload.validation.fileSizeExceeded": "اندازه فایل از حد مجاز بیشتر است",
+  "MultiImagesUpload.validation.fileSizeExceededDetail": "{{fileName}} ({{actualSize}}) از حداکثر اندازه مجاز {{maxSize}} بیشتر است",
+  "MultiImagesUpload.validation.fileSizeExceededMultiple": "{{count}} فایل از حداکثر اندازه مجاز {{maxSize}} بیشترند: {{fileList}}",
+  "MultiImagesUpload.validation.imageCountExceeded": "تعداد تصاویر از حد مجاز بیشتر است",
+  "OllamaSetupGuide.action.close": "بستن اعلان",
+  "OllamaSetupGuide.action.start": "نصب شد",
+  "OllamaSetupGuide.cors.description": "به دلیل محدودیت‌های امنیتی مرورگر، باید تنظیمات Cross-Origin را برای عملکرد صحیح Ollama پیکربندی کنید.",
+  "OllamaSetupGuide.cors.linux.env": "در بخش [Service] گزینه `Environment` را اضافه کرده و متغیر محیطی OLLAMA_ORIGINS را تنظیم کنید:",
+  "OllamaSetupGuide.cors.linux.reboot": "systemd را بارگذاری مجدد کرده و Ollama را راه‌اندازی مجدد کنید",
+  "OllamaSetupGuide.cors.linux.systemd": "سرویس ollama را با استفاده از systemd ویرایش کنید:",
+  "OllamaSetupGuide.cors.macos": "برنامه 'Terminal' را باز کرده، دستور زیر را وارد کرده و Enter بزنید.",
+  "OllamaSetupGuide.cors.reboot": "پس از اجرای دستور، سرویس Ollama را مجدداً راه‌اندازی کنید.",
+  "OllamaSetupGuide.cors.title": "پیکربندی دسترسی Cross-Origin برای Ollama",
+  "OllamaSetupGuide.cors.windows": "در ویندوز، به 'Control Panel' رفته و متغیر محیطی جدیدی به نام 'OLLAMA_ORIGINS' با مقدار * برای حساب کاربری خود ایجاد کرده و روی 'OK/Apply' کلیک کنید.",
+  "OllamaSetupGuide.install.description": "لطفاً مطمئن شوید که Ollama را راه‌اندازی کرده‌اید. اگر هنوز آن را دانلود نکرده‌اید، به وب‌سایت رسمی برای <1>دانلود</1> مراجعه کنید.",
+  "OllamaSetupGuide.install.docker": "اگر ترجیح می‌دهید از Docker استفاده کنید، Ollama یک تصویر رسمی Docker نیز ارائه می‌دهد که می‌توانید با دستور زیر آن را دریافت کنید:",
+  "OllamaSetupGuide.install.linux.command": "با استفاده از دستور زیر نصب کنید:",
+  "OllamaSetupGuide.install.linux.manual": "همچنین می‌توانید به <1>راهنمای نصب دستی لینوکس</1> مراجعه کنید.",
+  "OllamaSetupGuide.install.title": "نصب و راه‌اندازی برنامه Ollama به‌صورت محلی",
+  "OllamaSetupGuide.install.windowsTab": "ویندوز (پیش‌نمایش)",
+  "Thinking.thinking": "در حال تفکر عمیق...",
+  "Thinking.thought": "تفکر عمیق انجام شد (در {{duration}} ثانیه)",
+  "Thinking.thoughtWithDuration": "تفکر عمیق انجام شد",
+  "devTools.cache.empty": "کش خالی است",
+  "devTools.metadata.empty": "اطلاعات متادیتا موجود نیست",
+  "knowledgeBase.empty.description": "برای سازماندهی و مدیریت منابع خود، یک کتابخانه ایجاد کنید",
+  "knowledgeBase.empty.search": "کتابخانه‌ای مطابق با جستجو یافت نشد",
+  "knowledgeBase.empty.title": "کتابخانه‌ای موجود نیست"
 }

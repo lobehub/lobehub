@@ -37,7 +37,7 @@ interface UploadFileParams {
   type: string;
 }
 
-interface FileMetadata {
+export interface FileMetadata {
   date: string;
   dirname: string;
   filename: string;

@@ -18,10 +18,17 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
 // Mock electron
 vi.mock('electron', () => ({
   BrowserWindow: {
     getAllWindows: vi.fn(() => []),
+  },
+  ipcMain: {
+    handle: ipcMainHandleMock,
   },
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
@@ -99,6 +106,7 @@ describe('AuthCtr', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    ipcMainHandleMock.mockClear();
     randomBytesCounter = 0; // Reset counter for each test
 
     // Reset shell.openExternal to default successful behavior
@@ -123,7 +131,7 @@ describe('AuthCtr', () => {
 
   afterEach(() => {
     // Clean up authCtr intervals (using real timers, not fake timers)
-    authCtr.cleanup();
+    authCtr?.cleanup?.();
     // Clean up any fake timers if used
     vi.clearAllTimers();
   });

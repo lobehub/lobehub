@@ -1,10 +1,10 @@
-import { CreateNewEvalEvaluation, RAGEvalDataSetItem } from '@lobechat/types';
-import { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import { type CreateNewEvalEvaluation, type RAGEvalDataSetItem } from '@lobechat/types';
+import type { SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { ragEvalService } from '@/services/ragEval';
-import { KnowledgeBaseStore } from '@/store/knowledgeBase/store';
+import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
 
 const FETCH_EVALUATION_LIST_KEY = 'FETCH_EVALUATION_LIST_KEY';
 

@@ -1,11 +1,11 @@
 import type { PartialDeep } from 'type-fest';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG, DEFAULT_CHAT_GROUP_META_CONFIG } from '@/const/settings';
-import { LobeChatGroupConfig, LobeChatGroupMetaConfig } from '@/types/chatGroup';
+import { type LobeChatGroupConfig, type LobeChatGroupMetaConfig } from '@/types/agentGroup';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { LoadingState, State, initialState } from './initialState';
+import { type LoadingState, type State, initialState } from './initialState';
 
 export interface PublicAction {
   /**

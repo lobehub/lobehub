@@ -1,8 +1,7 @@
 // @vitest-environment node
+import { BRANDING_NAME } from '@lobechat/business-const';
+import { OG_URL } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
-
-import { BRANDING_NAME } from '@/const/branding';
-import { OG_URL } from '@/const/url';
 
 import { Meta } from './metadata';
 
@@ -115,7 +114,7 @@ describe('Metadata', () => {
         locale: 'es-ES',
         type: 'article',
         url: 'https://example.com/og',
-        siteName: 'LobeChat',
+        siteName: BRANDING_NAME,
         alternateLocale: expect.arrayContaining([
           'ar',
           'bg-BG',

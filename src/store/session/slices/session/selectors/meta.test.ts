@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { DEFAULT_AGENT_CONFIG, DEFAUTT_AGENT_TTS_CONFIG } from '@/const/settings';
-import { SessionStore } from '@/store/session';
 import { MetaData } from '@/types/meta';
-import { LobeAgentSession, LobeSessionType } from '@/types/session';
 
 import { sessionMetaSelectors } from './meta';
 
@@ -12,58 +9,12 @@ vi.mock('i18next', () => ({
   t: vi.fn((key) => key), // Simplified mock return value
 }));
 
-const mockSessionStore = {
-  activeId: '1',
-  sessions: [
-    {
-      id: '1',
-      config: DEFAULT_AGENT_CONFIG,
-      meta: {
-        title: 'title1',
-        description: 'description1',
-      },
-      type: LobeSessionType.Agent,
-    } as LobeAgentSession,
-    {
-      id: '2',
-      meta: {
-        title: 'title2',
-        description: 'description2',
-      },
-      config: DEFAULT_AGENT_CONFIG,
-      type: LobeSessionType.Agent,
-    } as LobeAgentSession,
-  ],
-} as unknown as SessionStore;
-
+/**
+ * Note: Agent-related meta selectors (currentAgentMeta, currentAgentTitle, currentAgentDescription, etc.)
+ * have been moved to agentSelectors in @/store/agent/selectors.
+ * See agentSelectors tests for those.
+ */
 describe('sessionMetaSelectors', () => {
-  describe('currentAgentMeta', () => {
-    it('should return the merged default and session-specific meta data', () => {
-      const meta = sessionMetaSelectors.currentAgentMeta(mockSessionStore);
-      expect(meta).toEqual(expect.objectContaining(mockSessionStore.sessions[0].meta));
-    });
-
-    it('should return inbox defaults if it is an inbox session', () => {
-      // Assume sessionSelectors.isInboxSession() is mocked to return true for this test
-      const meta = sessionMetaSelectors.currentAgentMeta(mockSessionStore);
-      expect(meta.avatar).toBe(DEFAULT_AVATAR);
-    });
-  });
-
-  describe('currentAgentTitle', () => {
-    it('should return the title from the session meta data', () => {
-      const title = sessionMetaSelectors.currentAgentTitle(mockSessionStore);
-      expect(title).toBe(mockSessionStore.sessions[0].meta.title);
-    });
-  });
-
-  describe('currentAgentDescription', () => {
-    it('should return the description from the session meta data', () => {
-      const description = sessionMetaSelectors.currentAgentDescription(mockSessionStore);
-      expect(description).toBe(mockSessionStore.sessions[0].meta.description);
-    });
-  });
-
   describe('getAvatar', () => {
     it('should return the avatar from the meta data', () => {
       const meta: MetaData = { avatar: 'custom-avatar.png' };

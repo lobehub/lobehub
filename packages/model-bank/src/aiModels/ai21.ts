@@ -6,7 +6,7 @@ const ai21ChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 256_000,
-    description: '在同级别中最高效的模型，兼顾速度与质量，具备更小的体积。',
+    description: 'The most efficient model in its class, balancing speed and quality with a smaller footprint.',
     displayName: 'Jamba Mini',
     enabled: true,
     id: 'jamba-mini',
@@ -24,7 +24,8 @@ const ai21ChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 256_000,
-    description: '我们最强大、最先进的模型，专为处理企业级复杂任务而设计，具备卓越的性能。',
+    description:
+      'Our most powerful, advanced model, designed for complex enterprise tasks with outstanding performance.',
     displayName: 'Jamba Large',
     enabled: true,
     id: 'jamba-large',

@@ -1,34 +1,42 @@
-import { DocRenderer, textFileLoader } from '@cyntler/react-doc-viewer';
-import { Highlighter } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import React from 'react';
-import { Center, Flexbox } from 'react-layout-kit';
+'use client';
+
+import { Center, Flexbox, Highlighter } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { memo } from 'react';
 
 import CircleLoading from '@/components/Loading/CircleLoading';
 
-const useStyles = createStyles(({ css, token }) => ({
+import { useTextFileLoader } from '../../hooks/useTextFileLoader';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     width: 100%;
     padding: 24px;
     border-radius: 4px;
 
-    background: ${token.colorBgContainer};
-    box-shadow: ${token.boxShadowTertiary};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
-const TXTViewer: DocRenderer = ({ mainState: { currentDocument } }) => {
-  const { styles } = useStyles();
+interface TXTViewerProps {
+  fileId: string;
+  url: string | null;
+}
+
+const TXTViewer = memo<TXTViewerProps>(({ url }) => {
+  const { fileData, loading } = useTextFileLoader(url);
+
   return (
     <Flexbox className={styles.page} id="txt-renderer">
-      {!!currentDocument?.fileData ? (
+      {!loading && fileData ? (
         <Highlighter
           language={'txt'}
           showLanguage={false}
           style={{ height: '100%' }}
           variant={'borderless'}
         >
-          {currentDocument?.fileData as string}
+          {fileData}
         </Highlighter>
       ) : (
         <Center height={'100%'}>
@@ -37,10 +45,6 @@ const TXTViewer: DocRenderer = ({ mainState: { currentDocument } }) => {
       )}
     </Flexbox>
   );
-};
+});
 
 export default TXTViewer;
-
-TXTViewer.fileTypes = ['txt', 'text/plain'];
-TXTViewer.weight = 0;
-TXTViewer.fileLoader = textFileLoader;

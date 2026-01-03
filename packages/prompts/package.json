@@ -18,10 +18,8 @@
     "test:prompts:translate": "promptfoo eval -c promptfoo/translate/eval.yaml",
     "test:update": "vitest -u"
   },
-  "dependencies": {
-    "@lobechat/types": "workspace:*"
-  },
   "devDependencies": {
+    "@lobechat/types": "workspace:*",
     "promptfoo": "^0.118.17",
     "tsx": "^4.20.6"
   }

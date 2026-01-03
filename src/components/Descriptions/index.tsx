@@ -1,51 +1,77 @@
-import { Grid, type GridProps, Icon, IconProps, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { CSSProperties, ReactNode, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { Grid, type GridProps, Icon, type IconProps, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx , responsive } from 'antd-style';
+import { type CSSProperties, type ReactNode, memo } from 'react';
 
 import CopyableLabel from '../CopyableLabel';
 
-const useStyles = createStyles(({ responsive, css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     bordered: css`
       overflow: hidden;
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: ${token.borderRadiusLG}px;
-      ${responsive.mobile} {
-        background: ${token.colorBgContainer};
+      border: 1px solid ${cssVar.colorBorderSecondary};
+      border-radius: ${cssVar.borderRadiusLG};
+      ${responsive.sm} {
+        background: ${cssVar.colorBgContainer};
       }
     `,
     cell: css`
       overflow: hidden;
-      box-shadow: 0 0 0 0.5px ${token.colorBorderSecondary};
+      box-shadow: 0 0 0 0.5px ${cssVar.colorBorderSecondary};
     `,
     label: css`
       overflow: hidden;
-      border-inline-end: 1px solid ${token.colorBorderSecondary};
-      background: ${token.colorFillQuaternary};
+      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+      background: ${cssVar.colorFillQuaternary};
     `,
   };
 });
 
 export interface DescriptionItem {
+  className?: string;
+  classNames?: {
+    label?: string;
+    value?: string;
+  };
   copyable?: boolean;
   icon?: IconProps['icon'];
   key: string;
   label: ReactNode;
   style?: CSSProperties;
+  styles?: {
+    label?: CSSProperties;
+    value?: CSSProperties;
+  };
   value: ReactNode;
 }
 
 interface DescriptionsProps extends Omit<GridProps, 'children'> {
   bordered?: boolean;
+  classNames?: {
+    item?: string;
+    label?: string;
+    value?: string;
+  };
   items: DescriptionItem[];
   labelWidth?: number | string;
+  styles?: {
+    item?: CSSProperties;
+    label?: CSSProperties;
+    value?: CSSProperties;
+  };
 }
 
 const Descriptions = memo<DescriptionsProps>(
-  ({ labelWidth = 150, title, bordered, className, items, ...rest }) => {
-    const { cx, styles, theme } = useStyles();
-
+  ({
+    labelWidth = 150,
+    title,
+    bordered,
+    className,
+    items,
+    classNames,
+    styles: customStyles,
+    ...rest
+  }) => {
     return (
       <>
         {title && <h3 style={{ marginTop: 12 }}>{title}</h3>}
@@ -58,13 +84,15 @@ const Descriptions = memo<DescriptionsProps>(
           {items.map((item) => (
             <Flexbox
               align={'center'}
-              className={cx(bordered && styles.cell)}
+              className={cx(bordered && styles.cell, item.className, classNames?.item)}
               flex={1}
               horizontal
               key={item.key}
               style={{
                 overflow: 'hidden',
                 position: 'relative',
+                ...customStyles?.item,
+                ...item.style,
               }}
             >
               <Flexbox
@@ -78,11 +106,14 @@ const Descriptions = memo<DescriptionsProps>(
                 style={{ height: '100%', position: 'relative' }}
                 width={labelWidth}
               >
-                {item.icon && <Icon color={theme.colorTextSecondary} icon={item.icon} />}
+                {item.icon && <Icon color={cssVar.colorTextSecondary} icon={item.icon} />}
                 <Text
+                  className={cx(classNames?.label, item.classNames?.label)}
                   ellipsis
                   style={{
-                    color: theme.colorTextSecondary,
+                    color: cssVar.colorTextSecondary,
+                    ...customStyles?.label,
+                    ...item.styles?.label,
                   }}
                 >
                   {item.label}
@@ -99,11 +130,16 @@ const Descriptions = memo<DescriptionsProps>(
               >
                 {item.copyable ? (
                   <CopyableLabel
-                    style={item.style}
+                    className={cx(classNames?.value, item.classNames?.value)}
+                    style={{ ...customStyles?.value, ...item.styles?.value }}
                     value={item.value ? String(item.value) : '--'}
                   />
                 ) : (
-                  <Text ellipsis style={{ ...item.style }}>
+                  <Text
+                    className={cx(classNames?.value, item.classNames?.value)}
+                    ellipsis
+                    style={{ ...customStyles?.value, ...item.styles?.value }}
+                  >
                     {item.value}
                   </Text>
                 )}

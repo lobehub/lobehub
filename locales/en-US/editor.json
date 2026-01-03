@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Collapse",
-      "on": "Expand"
-    },
-    "typobar": {
-      "off": "Hide formatting toolbar",
-      "on": "Show formatting toolbar"
-    }
-  },
+  "actions.expand.off": "Collapse",
+  "actions.expand.on": "Expand",
+  "actions.typobar.off": "Hide formatting toolbar",
+  "actions.typobar.on": "Show formatting toolbar",
+  "autoSave.latest": "Latest version loaded",
+  "autoSave.saved": "Saved",
+  "autoSave.saving": "Auto-saving...",
   "cancel": "Cancel",
+  "codemirror.copyFailed": "Copy failed",
+  "codemirror.copySuccess": "Code copied to clipboard",
+  "codemirror.selectLanguage": "Select language",
+  "codemirror.selectTheme": "Select theme",
+  "codemirror.showLineNumbers": "Show Line Numbers",
+  "codemirror.tabSize": "Tab Size",
+  "codemirror.theme": "Theme",
+  "codemirror.useTabs": "Use Tabs",
   "confirm": "Confirm",
-  "file": {
-    "error": "Error: {{message}}",
-    "uploading": "Uploading file..."
-  },
-  "image": {
-    "broken": "Image is corrupted"
-  },
-  "link": {
-    "edit": "Edit link",
-    "open": "Open link",
-    "placeholder": "Enter link URL",
-    "unlink": "Unlink"
-  },
-  "math": {
-    "placeholder": "Please enter a TeX formula"
-  },
-  "slash": {
-    "h1": "Heading 1",
-    "h2": "Heading 2",
-    "h3": "Heading 3",
-    "hr": "Divider",
-    "table": "Table",
-    "tex": "TeX Formula"
-  },
-  "table": {
-    "delete": "Delete table",
-    "deleteColumn": "Delete column",
-    "deleteRow": "Delete row",
-    "insertColumnLeft": "Insert {{count}} column(s) to the left",
-    "insertColumnRight": "Insert {{count}} column(s) to the right",
-    "insertRowAbove": "Insert {{count}} row(s) above",
-    "insertRowBelow": "Insert {{count}} row(s) below"
-  },
-  "typobar": {
-    "blockquote": "Blockquote",
-    "bold": "Bold",
-    "bulletList": "Bulleted list",
-    "code": "Inline code",
-    "codeblock": "Code block",
-    "italic": "Italic",
-    "link": "Link",
-    "numberList": "Numbered list",
-    "strikethrough": "Strikethrough",
-    "table": "Table",
-    "taskList": "Task List",
-    "tex": "TeX Formula",
-    "underline": "Underline"
-  }
+  "file.error": "Error: {{message}}",
+  "file.uploading": "Uploading file...",
+  "image.broken": "Image is corrupted",
+  "link.edit": "Edit link",
+  "link.editLinkTitle": "Link",
+  "link.editTextTitle": "Title",
+  "link.open": "Open link",
+  "link.placeholder": "Enter link URL",
+  "link.unlink": "Unlink",
+  "markdown.cancel": "Cancel",
+  "markdown.confirm": "Convert",
+  "markdown.parseMessage": "Convert to Markdown format. Existing content will be overwritten. Are you sure? (Closes automatically in 5 seconds)",
+  "markdown.parseTitle": "Format as Markdown",
+  "math.placeholder": "Please enter a TeX formula",
+  "modifier.accept": "Keep",
+  "modifier.acceptAll": "Keep All",
+  "modifier.reject": "Revert",
+  "modifier.rejectAll": "Revert All",
+  "slash.h1": "Heading 1",
+  "slash.h2": "Heading 2",
+  "slash.h3": "Heading 3",
+  "slash.hr": "Divider",
+  "slash.table": "Table",
+  "slash.tex": "TeX Formula",
+  "table.delete": "Delete table",
+  "table.deleteColumn": "Delete column",
+  "table.deleteRow": "Delete row",
+  "table.insertColumnLeft": "Insert {{count}} column(s) to the left",
+  "table.insertColumnRight": "Insert {{count}} column(s) to the right",
+  "table.insertRowAbove": "Insert {{count}} row(s) above",
+  "table.insertRowBelow": "Insert {{count}} row(s) below",
+  "typobar.blockquote": "Blockquote",
+  "typobar.bold": "Bold",
+  "typobar.bulletList": "Bulleted list",
+  "typobar.code": "Inline code",
+  "typobar.codeblock": "Code block",
+  "typobar.image": "Image",
+  "typobar.italic": "Italic",
+  "typobar.link": "Link",
+  "typobar.numberList": "Numbered list",
+  "typobar.redo": "Redo",
+  "typobar.strikethrough": "Strikethrough",
+  "typobar.table": "Table",
+  "typobar.taskList": "Task List",
+  "typobar.tex": "TeX Formula",
+  "typobar.underline": "Underline",
+  "typobar.undo": "Undo"
 }

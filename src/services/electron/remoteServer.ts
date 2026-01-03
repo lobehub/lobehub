@@ -1,39 +1,40 @@
-import { DataSyncConfig, MarketAuthorizationParams, dispatch } from '@lobechat/electron-client-ipc';
+import { type DataSyncConfig, type MarketAuthorizationParams } from '@lobechat/electron-client-ipc';
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class RemoteServerService {
   /**
    * Get remote server configuration
    */
   getRemoteServerConfig = async () => {
-    return dispatch('getRemoteServerConfig');
+    return ensureElectronIpc().remoteServer.getRemoteServerConfig();
   };
 
   /**
    * Set remote server configuration
    */
   setRemoteServerConfig = async (config: DataSyncConfig) => {
-    return dispatch('setRemoteServerConfig', config);
+    return ensureElectronIpc().remoteServer.setRemoteServerConfig(config);
   };
 
   /**
    * Clear remote server configuration
    */
   clearRemoteServerConfig = async () => {
-    return dispatch('clearRemoteServerConfig');
+    return ensureElectronIpc().remoteServer.clearRemoteServerConfig();
   };
 
   /**
    * Request authorization
    */
   requestAuthorization = async (config: DataSyncConfig) => {
-    return dispatch('requestAuthorization', config);
+    return ensureElectronIpc().auth.requestAuthorization(config);
   };
 
   /**
    * Request Market authorization
    */
   requestMarketAuthorization = async (params: MarketAuthorizationParams) => {
-    return dispatch('requestMarketAuthorization', params);
+    return ensureElectronIpc().auth.requestMarketAuthorization(params);
   };
 }
 

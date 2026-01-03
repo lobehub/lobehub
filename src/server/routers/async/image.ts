@@ -1,12 +1,18 @@
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { RuntimeImageGenParams } from 'model-bank';
+import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
-import { ASYNC_TASK_TIMEOUT, AsyncTaskModel } from '@/database/models/asyncTask';
+import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
+import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
+import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
 import { GenerationModel } from '@/database/models/generation';
+import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
 import { GenerationService } from '@/server/services/generation';
@@ -24,6 +30,7 @@ const imageProcedure = asyncAuthedProcedure.use(async (opts) => {
     ctx: {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
+      generationBatchModel: new GenerationBatchModel(ctx.serverDB, ctx.userId),
       generationModel: new GenerationModel(ctx.serverDB, ctx.userId),
       generationService: new GenerationService(ctx.serverDB, ctx.userId),
     },
@@ -31,7 +38,9 @@ const imageProcedure = asyncAuthedProcedure.use(async (opts) => {
 });
 
 const createImageInputSchema = z.object({
+  generationBatchId: z.string(),
   generationId: z.string(),
+  generationTopicId: z.string(),
   model: z.string(),
   params: z
     .object({
@@ -182,183 +191,219 @@ const categorizeError = (
 };
 
 export const imageRouter = router({
-  createImage: imageProcedure.input(createImageInputSchema).mutation(async ({ input, ctx }) => {
-    const { taskId, generationId, provider, model, params } = input;
-
-    log('Starting async image generation: %O', {
-      generationId,
-      imageParams: {
-        cfg: params.cfg,
-        height: params.height,
-        steps: params.steps,
-        width: params.width,
-      },
-      model,
-      prompt: params.prompt,
-      provider,
-      taskId,
-    });
-
-    log('Updating task status to Processing: %s', taskId);
-    await ctx.asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
-
-    // Use AbortController to prevent resource leaks
-    const abortController = new AbortController();
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const isEditingImage =
-      Boolean((params as any).imageUrl) || Boolean(params.imageUrls && params.imageUrls.length > 0);
-
-    try {
-      const imageGenerationPromise = async (signal: AbortSignal) => {
-        log('Initializing agent runtime for provider: %s', provider);
-
-        const agentRuntime = initModelRuntimeWithUserPayload(provider, ctx.jwtPayload);
-
-        // Check if operation has been cancelled
-        checkAbortSignal(signal);
-        log('Agent runtime initialized, calling createImage');
-        const response = await agentRuntime.createImage!({
-          model,
-          params: params as unknown as RuntimeImageGenParams,
-        });
-
-        if (!response) {
-          log('Create image response is empty');
-          throw new Error('Create image response is empty');
-        }
-
-        log('Create image response: %O', {
-          ...response,
-          imageUrl: response.imageUrl?.startsWith('data:')
-            ? response.imageUrl.slice(0, IMAGE_URL_PREVIEW_LENGTH) + '...'
-            : response.imageUrl,
-        });
-
-        // Check if operation has been cancelled
-        checkAbortSignal(signal);
-
-        log('Image generation successful: %O', {
-          height: response.height,
-          imageUrl: response.imageUrl.startsWith('data:')
-            ? response.imageUrl.slice(0, IMAGE_URL_PREVIEW_LENGTH) + '...'
-            : response.imageUrl,
-          width: response.width,
-        });
-
-        log('Transforming image for generation');
-        const { imageUrl, width, height } = response;
-
-        // Extract ComfyUI authentication headers if provider is ComfyUI
-        let authHeaders: Record<string, string> | undefined;
-        if (provider === 'comfyui') {
-          // Use the public interface method to get auth headers
-          // This avoids accessing private members and exposing credentials
-          authHeaders = agentRuntime.getAuthHeaders();
-          if (authHeaders) {
-            log('Using authentication headers for ComfyUI image download');
-          } else {
-            log('No authentication configured for ComfyUI');
-          }
-        }
-
-        const { image, thumbnailImage } = await ctx.generationService.transformImageForGeneration(
-          imageUrl,
-          authHeaders,
-        );
-
-        // Check if operation has been cancelled
-        checkAbortSignal(signal);
-
-        log('Uploading image for generation');
-        const { imageUrl: uploadedImageUrl, thumbnailImageUrl } =
-          await ctx.generationService.uploadImageForGeneration(image, thumbnailImage);
-
-        // Check if operation has been cancelled
-        checkAbortSignal(signal);
-
-        log('Updating generation asset and file');
-        await ctx.generationModel.createAssetAndFile(
-          generationId,
-          {
-            height: height ?? image.height,
-            originalUrl: imageUrl,
-            thumbnailUrl: thumbnailImageUrl,
-            type: 'image',
-            url: uploadedImageUrl,
-            width: width ?? image.width,
-          },
-          {
-            fileHash: image.hash,
-            fileType: image.mime,
-            metadata: {
-              generationId,
-              height: image.height,
-              path: uploadedImageUrl,
-              width: image.width,
-            },
-            name: `${params.prompt.slice(0, FILENAME_MAX_LENGTH)}.${image.extension}`,
-            // Use first 50 characters of prompt as filename
-            size: image.size,
-            url: uploadedImageUrl,
-          },
-        );
-
-        log('Updating task status to Success: %s', taskId);
-        await ctx.asyncTaskModel.update(taskId, {
-          status: AsyncTaskStatus.Success,
-        });
-
-        log('Async image generation completed successfully: %s', taskId);
-        return { success: true };
-      };
-
-      // Set timeout to cancel operation and prevent resource leaks
-      timeoutId = setTimeout(() => {
-        log('Image generation timeout, aborting operation: %s', taskId);
-        abortController.abort();
-      }, ASYNC_TASK_TIMEOUT);
-
-      const result = await imageGenerationPromise(abortController.signal);
-
-      // Clean up timeout timer
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-
-      return result;
-    } catch (error: any) {
-      // Clean up timeout timer
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-
-      log('Async image generation failed: %O', {
-        error: error.message || error,
+  createImage: imageProcedure
+    .use(createImageBusinessMiddleware)
+    .input(createImageInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const {
+        taskId,
         generationId,
+        generationBatchId,
+        generationTopicId,
+        provider,
+        model,
+        params,
+      } = input;
+
+      log('Starting async image generation: %O', {
+        generationId,
+        imageParams: {
+          cfg: params.cfg,
+          height: params.height,
+          steps: params.steps,
+          width: params.width,
+        },
+        model,
+        prompt: params.prompt,
+        provider,
         taskId,
       });
 
-      // Improved error categorization logic
-      const { errorType, errorMessage } = categorizeError(
-        error,
-        abortController.signal.aborted,
-        isEditingImage,
-      );
+      // Check if generationBatch exists before processing
+      const generationBatch = await ctx.generationBatchModel.findById(generationBatchId);
+      if (!generationBatch) {
+        log('Generation batch not found: %s, skipping image generation', generationBatchId);
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid Request!' });
+      }
 
-      await ctx.asyncTaskModel.update(taskId, {
-        error: new AsyncTaskError(errorType, errorMessage),
-        status: AsyncTaskStatus.Error,
-      });
+      log('Updating task status to Processing: %s', taskId);
+      await ctx.asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
 
-      log('Task status updated to Error: %s, errorType: %s', taskId, errorType);
+      // Use AbortController to prevent resource leaks
+      const abortController = new AbortController();
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-      return {
-        message: `Image generation ${taskId} failed: ${errorMessage}`,
-        success: false,
-      };
-    }
-  }),
+      const isEditingImage =
+        Boolean((params as any).imageUrl) ||
+        Boolean(params.imageUrls && params.imageUrls.length > 0);
+
+      try {
+        const imageGenerationPromise = async (signal: AbortSignal) => {
+          log('Initializing agent runtime for provider: %s', provider);
+
+          const agentRuntime = initModelRuntimeWithUserPayload(provider, ctx.jwtPayload);
+
+          // Check if operation has been cancelled
+          checkAbortSignal(signal);
+          log('Agent runtime initialized, calling createImage');
+          const response = await agentRuntime.createImage!({
+            model,
+            params: params as unknown as RuntimeImageGenParams,
+          });
+
+          if (!response) {
+            log('Create image response is empty');
+            throw new Error('Create image response is empty');
+          }
+
+          log('Create image response: %O', {
+            ...response,
+            imageUrl: response.imageUrl?.startsWith('data:')
+              ? response.imageUrl.slice(0, IMAGE_URL_PREVIEW_LENGTH) + '...'
+              : response.imageUrl,
+          });
+
+          const { modelUsage } = response;
+
+          if (ENABLE_BUSINESS_FEATURES) {
+            await chargeAfterGenerate({
+              metadata: {
+                asyncTaskId: taskId,
+                generationBatchId: generationBatchId,
+                modelId: model,
+                topicId: generationTopicId,
+              },
+              modelUsage,
+              provider,
+              userId: ctx.userId,
+            });
+          }
+
+          // Check if operation has been cancelled
+          checkAbortSignal(signal);
+
+          log('Image generation successful: %O', {
+            height: response.height,
+            imageUrl: response.imageUrl.startsWith('data:')
+              ? response.imageUrl.slice(0, IMAGE_URL_PREVIEW_LENGTH) + '...'
+              : response.imageUrl,
+            width: response.width,
+          });
+
+          log('Transforming image for generation');
+          const { imageUrl, width, height } = response;
+
+          // Extract ComfyUI authentication headers if provider is ComfyUI
+          let authHeaders: Record<string, string> | undefined;
+          if (provider === 'comfyui') {
+            // Use the public interface method to get auth headers
+            // This avoids accessing private members and exposing credentials
+            authHeaders = agentRuntime.getAuthHeaders();
+            if (authHeaders) {
+              log('Using authentication headers for ComfyUI image download');
+            } else {
+              log('No authentication configured for ComfyUI');
+            }
+          }
+
+          const { image, thumbnailImage } = await ctx.generationService.transformImageForGeneration(
+            imageUrl,
+            authHeaders,
+          );
+
+          // Check if operation has been cancelled
+          checkAbortSignal(signal);
+
+          log('Uploading image for generation');
+          const { imageUrl: uploadedImageUrl, thumbnailImageUrl } =
+            await ctx.generationService.uploadImageForGeneration(image, thumbnailImage);
+
+          // Check if operation has been cancelled
+          checkAbortSignal(signal);
+
+          log('Updating generation asset and file');
+          await ctx.generationModel.createAssetAndFile(
+            generationId,
+            {
+              height: height ?? image.height,
+              // If imageUrl is base64 data, use uploadedImageUrl instead to avoid storing large base64 in DB
+              originalUrl: imageUrl.startsWith('data:') ? uploadedImageUrl : imageUrl,
+              thumbnailUrl: thumbnailImageUrl,
+              type: 'image',
+              url: uploadedImageUrl,
+              width: width ?? image.width,
+            },
+            {
+              fileHash: image.hash,
+              fileType: image.mime,
+              metadata: {
+                generationId,
+                height: image.height,
+                path: uploadedImageUrl,
+                width: image.width,
+              },
+              name: `${params.prompt.slice(0, FILENAME_MAX_LENGTH)}.${image.extension}`,
+              // Use first 50 characters of prompt as filename
+              size: image.size,
+              url: uploadedImageUrl,
+            },
+          );
+
+          log('Updating task status to Success: %s', taskId);
+          await ctx.asyncTaskModel.update(taskId, {
+            status: AsyncTaskStatus.Success,
+          });
+
+          log('Async image generation completed successfully: %s', taskId);
+          return { success: true };
+        };
+
+        // Set timeout to cancel operation and prevent resource leaks
+        timeoutId = setTimeout(() => {
+          log('Image generation timeout, aborting operation: %s', taskId);
+          abortController.abort();
+        }, ASYNC_TASK_TIMEOUT);
+
+        const result = await imageGenerationPromise(abortController.signal);
+
+        // Clean up timeout timer
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+
+        return result;
+      } catch (error: any) {
+        // Clean up timeout timer
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+
+        log('Async image generation failed: %O', {
+          error: error.message || error,
+          generationId,
+          taskId,
+        });
+
+        // Improved error categorization logic
+        const { errorType, errorMessage } = categorizeError(
+          error,
+          abortController.signal.aborted,
+          isEditingImage,
+        );
+
+        await ctx.asyncTaskModel.update(taskId, {
+          error: new AsyncTaskError(errorType, errorMessage),
+          status: AsyncTaskStatus.Error,
+        });
+
+        log('Task status updated to Error: %s, errorType: %s', taskId, errorType);
+
+        return {
+          message: `Image generation ${taskId} failed: ${errorMessage}`,
+          success: false,
+        };
+      }
+    }),
 });

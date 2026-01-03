@@ -67,6 +67,9 @@ vi.mock('@/store/tool/selectors', () => ({
   pluginSelectors: {
     installedPluginManifestList: () => [],
   },
+  klavisStoreSelectors: {
+    klavisAsLobeTools: () => [],
+  },
 }));
 
 vi.mock('../isCanUseFC', () => ({

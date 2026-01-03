@@ -30,8 +30,7 @@
       "role": "user",
       "content": "What's the weather?",
       "createdAt": 1000,
-      "updatedAt": 1000,
-      "meta": {}
+      "updatedAt": 1000
     },
     {
       "id": "msg-2",
@@ -40,7 +39,6 @@
       "createdAt": 2000,
       "updatedAt": 2000,
       "parentId": "msg-1",
-      "meta": {},
       "children": [
         {
           "content": "Let me check the weather for you.",
@@ -72,8 +70,7 @@
       "content": "Thanks! How about tomorrow?",
       "createdAt": 5000,
       "updatedAt": 5000,
-      "parentId": "msg-3",
-      "meta": {}
+      "parentId": "msg-3"
     }
   ],
   "messageMap": {
@@ -82,8 +79,7 @@
       "role": "user",
       "content": "What's the weather?",
       "createdAt": 1000,
-      "updatedAt": 1000,
-      "meta": {}
+      "updatedAt": 1000
     },
     "msg-2": {
       "id": "msg-2",
@@ -92,7 +88,6 @@
       "createdAt": 2000,
       "updatedAt": 2000,
       "parentId": "msg-1",
-      "meta": {},
       "tools": [
         {
           "id": "tool-1",
@@ -110,7 +105,6 @@
       "createdAt": 3000,
       "updatedAt": 3000,
       "parentId": "msg-2",
-      "meta": {},
       "tool_call_id": "tool-1"
     },
     "msg-3": {
@@ -119,8 +113,7 @@
       "content": "The weather in New York is 72F and sunny.",
       "createdAt": 4000,
       "updatedAt": 4000,
-      "parentId": "tool-1",
-      "meta": {}
+      "parentId": "tool-1"
     },
     "msg-4": {
       "id": "msg-4",
@@ -128,8 +121,7 @@
       "content": "Thanks! How about tomorrow?",
       "createdAt": 5000,
       "updatedAt": 5000,
-      "parentId": "msg-3",
-      "meta": {}
+      "parentId": "msg-3"
     }
   }
 }

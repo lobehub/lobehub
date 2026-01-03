@@ -1,13 +1,13 @@
 import { TraceEventType } from '@lobechat/types';
 import { diffChars } from 'diff';
-import { LangfuseTraceClient } from 'langfuse-core';
+import { type LangfuseTraceClient } from 'langfuse-core';
 
 import {
-  TraceEventBasePayload,
-  TraceEventCopyMessage,
-  TraceEventDeleteAndRegenerateMessage,
-  TraceEventModifyMessage,
-  TraceEventRegenerateMessage,
+  type TraceEventBasePayload,
+  type TraceEventCopyMessage,
+  type TraceEventDeleteAndRegenerateMessage,
+  type TraceEventModifyMessage,
+  type TraceEventRegenerateMessage,
 } from '@/types/trace';
 
 /**

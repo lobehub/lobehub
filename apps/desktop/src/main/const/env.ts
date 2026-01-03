@@ -1,9 +1,11 @@
 import { dev, linux, macOS, windows } from 'electron-is';
 import os from 'node:os';
 
+import { getDesktopEnv } from '@/env';
+
 export const isDev = dev();
 
-export const OFFICIAL_CLOUD_SERVER = process.env.OFFICIAL_CLOUD_SERVER || 'https://lobechat.com';
+export const OFFICIAL_CLOUD_SERVER = getDesktopEnv().OFFICIAL_CLOUD_SERVER;
 
 export const isMac = macOS();
 export const isWindows = windows();

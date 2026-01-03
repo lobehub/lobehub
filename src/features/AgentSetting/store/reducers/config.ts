@@ -1,7 +1,7 @@
 import { produce } from 'immer';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { LobeAgentConfig } from '@/types/agent';
+import { type LobeAgentConfig } from '@/types/agent';
 import { merge } from '@/utils/merge';
 
 export type ConfigDispatch =
@@ -25,20 +25,25 @@ export const configReducer = (state: LobeAgentConfig, payload: ConfigDispatch): 
         }
 
         if (typeof state === 'undefined') {
+          // @ts-ignore
           if (config.plugins.includes(id)) {
+            // @ts-ignore
             config.plugins.splice(config.plugins.indexOf(id), 1);
 
             return;
           }
-
+          // @ts-ignore
           config.plugins.push(id);
           return;
         }
 
         if (!state) {
-          config.plugins = config.plugins.filter((pluginId) => pluginId !== id);
-        } else {
-          config.plugins.push(id);
+          // @ts-ignore
+          config.plugins = config?.plugins?.filter?.((pluginId) => pluginId !== id);
+          // @ts-ignore
+        } else if (!config?.plugins?.includes?.(id)) {
+          // @ts-ignore
+          config?.plugins?.push(id);
         }
       });
     }

@@ -1,362 +1,312 @@
 {
-  "guide": {
-    "agents": {
-      "replaceBtn": "別のグループ",
-      "title": "新しいアシスタントのおすすめ："
+  "guide.agents.replaceBtn": "別の候補を表示",
+  "guide.agents.title": "おすすめの新しいアシスタント：",
+  "guide.defaultMessage": "私はあなたのパーソナルAIアシスタント {{appName}} です。今、何かお手伝いできることはありますか？<br />より専門的でカスタマイズされたアシスタントをご希望の場合は、<plus /> をクリックして作成してください。",
+  "guide.defaultMessageWithoutCreate": "私はあなたのパーソナルAIアシスタント {{appName}} です。今、何かお手伝いできることはありますか？",
+  "guide.groupActivities.analysis.codeReview.description": "コードの変更や実装に関する技術的な議論とレビュー",
+  "guide.groupActivities.analysis.codeReview.emoji": "💻",
+  "guide.groupActivities.analysis.codeReview.prompt": "一緒にコードをレビューしましょう。改善点を見つける手助けをしてくれますか？",
+  "guide.groupActivities.analysis.codeReview.title": "コードレビュー",
+  "guide.groupActivities.analysis.investment.description": "市場分析、投資戦略の議論、経済インサイトの共有",
+  "guide.groupActivities.analysis.investment.emoji": "📈",
+  "guide.groupActivities.analysis.investment.prompt": "市場を一緒に分析しましょう。投資戦略について議論し、インサイトを共有してくれますか？",
+  "guide.groupActivities.analysis.investment.title": "投資クラブ",
+  "guide.groupActivities.analysis.research.description": "科学的な概念の探求、実験、発見の共有",
+  "guide.groupActivities.analysis.research.emoji": "🔬",
+  "guide.groupActivities.analysis.research.prompt": "科学の世界を一緒に探求しましょう！実験を行い、発見を共有してくれますか？",
+  "guide.groupActivities.analysis.research.title": "サイエンスフェア",
+  "guide.groupActivities.analysis.study.description": "協力的な学習セッションで概念を議論し、問題を解決",
+  "guide.groupActivities.analysis.study.emoji": "📚",
+  "guide.groupActivities.analysis.study.prompt": "学習グループを作りましょう。概念を理解し、一緒に問題を解決してくれますか？",
+  "guide.groupActivities.analysis.study.title": "学習グループ",
+  "guide.groupActivities.brainstorm.artWorkshop.description": "視覚芸術やデジタルアートの創作、批評、鑑賞",
+  "guide.groupActivities.brainstorm.artWorkshop.emoji": "🖼️",
+  "guide.groupActivities.brainstorm.artWorkshop.prompt": "アートワークショップを開催しましょう！作品の創作、批評、鑑賞を手伝ってくれますか？",
+  "guide.groupActivities.brainstorm.artWorkshop.title": "アートワークショップ",
+  "guide.groupActivities.brainstorm.debate.description": "様々なトピックや時事問題に関する構造的な議論と討論",
+  "guide.groupActivities.brainstorm.debate.emoji": "⚖️",
+  "guide.groupActivities.brainstorm.debate.prompt": "構造的なディベートをしましょう。このトピックについて理論的な議論を組み立ててくれますか？",
+  "guide.groupActivities.brainstorm.debate.title": "ディベートクラブ",
+  "guide.groupActivities.brainstorm.designReview.description": "デザインコンセプトやプロトタイプに対するフィードバックセッション",
+  "guide.groupActivities.brainstorm.designReview.emoji": "🎨",
+  "guide.groupActivities.brainstorm.designReview.prompt": "デザインレビューを行いましょう。コンセプトやプロトタイプに建設的なフィードバックをくれますか？",
+  "guide.groupActivities.brainstorm.designReview.title": "デザインレビュー",
+  "guide.groupActivities.brainstorm.ideation.description": "多角的な視点からの創造的なアイデア出しと問題解決",
+  "guide.groupActivities.brainstorm.ideation.emoji": "🧠",
+  "guide.groupActivities.brainstorm.ideation.prompt": "プロジェクトのためにブレインストーミングを始めましょう。アイデアや解決策を出してくれますか？",
+  "guide.groupActivities.brainstorm.ideation.title": "ブレインストーミング",
+  "guide.groupActivities.game.debateClub.description": "様々なトピックや時事問題に関する構造的な議論と討論",
+  "guide.groupActivities.game.debateClub.emoji": "⚖️",
+  "guide.groupActivities.game.debateClub.prompt": "構造的なディベートをしましょう。このトピックについて理論的な議論を組み立ててくれますか？",
+  "guide.groupActivities.game.debateClub.title": "ディベートクラブ",
+  "guide.groupActivities.game.gameNight.description": "楽しいインタラクティブなゲームでチームの絆を深める",
+  "guide.groupActivities.game.gameNight.emoji": "🎲",
+  "guide.groupActivities.game.gameNight.prompt": "ゲームナイトを始めましょう！チームビルディングのために楽しいゲームを企画してくれますか？",
+  "guide.groupActivities.game.gameNight.title": "ゲームナイト",
+  "guide.groupActivities.game.modelUN.description": "模擬国連形式のディベートと国際問題に関する外交交渉",
+  "guide.groupActivities.game.modelUN.emoji": "🌍",
+  "guide.groupActivities.game.modelUN.prompt": "模擬国連ディベートを行いましょう。国際問題に関する外交交渉を設定してくれますか？",
+  "guide.groupActivities.game.modelUN.title": "模擬国連",
+  "guide.groupActivities.game.werewolf.description": "戦略と議論を通じて人狼を見つけるソーシャル推理ゲーム",
+  "guide.groupActivities.game.werewolf.emoji": "🐺",
+  "guide.groupActivities.game.werewolf.prompt": "人狼ゲームをしましょう！ルールを設定し、進行を手伝ってくれますか？",
+  "guide.groupActivities.game.werewolf.title": "人狼ゲーム",
+  "guide.groupActivities.general.brainstorm.description": "多角的な視点からの創造的なアイデア出しと問題解決",
+  "guide.groupActivities.general.brainstorm.emoji": "🧠",
+  "guide.groupActivities.general.brainstorm.prompt": "プロジェクトのためにブレインストーミングを始めましょう。アイデアや解決策を出してくれますか？",
+  "guide.groupActivities.general.brainstorm.title": "ブレインストーミング",
+  "guide.groupActivities.general.debate.description": "様々なトピックや時事問題に関する構造的な議論と討論",
+  "guide.groupActivities.general.debate.emoji": "⚖️",
+  "guide.groupActivities.general.debate.prompt": "構造的なディベートをしましょう。このトピックについて理論的な議論を組み立ててくれますか？",
+  "guide.groupActivities.general.debate.title": "ディベートクラブ",
+  "guide.groupActivities.general.languagePractice.description": "ネイティブスピーカーと一緒に会話練習や語学学習",
+  "guide.groupActivities.general.languagePractice.emoji": "🗣️",
+  "guide.groupActivities.general.languagePractice.prompt": "一緒に新しい言語を練習しましょう。学習と会話の練習を手伝ってくれますか？",
+  "guide.groupActivities.general.languagePractice.title": "語学練習",
+  "guide.groupActivities.general.studyGroup.description": "協力的な学習セッションで概念を議論し、問題を解決",
+  "guide.groupActivities.general.studyGroup.emoji": "📚",
+  "guide.groupActivities.general.studyGroup.prompt": "学習グループを作りましょう。概念を理解し、一緒に問題を解決してくれますか？",
+  "guide.groupActivities.general.studyGroup.title": "学習グループ",
+  "guide.groupActivities.planning.cookingClass.description": "料理の技術、レシピ、伝統を学び共有する",
+  "guide.groupActivities.planning.cookingClass.emoji": "👨‍🍳",
+  "guide.groupActivities.planning.cookingClass.prompt": "料理教室を始めましょう！新しいレシピや技術を一緒に学んでくれますか？",
+  "guide.groupActivities.planning.cookingClass.title": "料理教室",
+  "guide.groupActivities.planning.fitnessChallenge.description": "グループでフィットネス目標を設定し、励まし合う",
+  "guide.groupActivities.planning.fitnessChallenge.emoji": "💪",
+  "guide.groupActivities.planning.fitnessChallenge.prompt": "フィットネスチャレンジを始めましょう！目標を設定し、健康維持を励まし合ってくれますか？",
+  "guide.groupActivities.planning.fitnessChallenge.title": "フィットネスチャレンジ",
+  "guide.groupActivities.planning.planningPoker.description": "カードを使ってタスクと作業量を見積もるアジャイル手法",
+  "guide.groupActivities.planning.planningPoker.emoji": "🃏",
+  "guide.groupActivities.planning.planningPoker.prompt": "プロジェクトのためにプランニングポーカーを行いましょう。アジャイル手法で作業量を見積もってくれますか？",
+  "guide.groupActivities.planning.planningPoker.title": "プランニングポーカー",
+  "guide.groupActivities.planning.travelPlanning.description": "旅行の計画、体験の共有、新しい目的地の発見",
+  "guide.groupActivities.planning.travelPlanning.emoji": "✈️",
+  "guide.groupActivities.planning.travelPlanning.prompt": "旅行の計画を立てましょう！目的地を調べ、旅程を組むのを手伝ってくれますか？",
+  "guide.groupActivities.planning.travelPlanning.title": "旅行プランニング",
+  "guide.groupActivities.product.codeReview.description": "コードの変更や実装に関する技術的な議論とレビュー",
+  "guide.groupActivities.product.codeReview.emoji": "💻",
+  "guide.groupActivities.product.codeReview.prompt": "一緒にコードをレビューしましょう。改善点を見つける手助けをしてくれますか？",
+  "guide.groupActivities.product.codeReview.title": "コードレビュー",
+  "guide.groupActivities.product.designReview.description": "デザインコンセプトやプロトタイプに対するフィードバックセッション",
+  "guide.groupActivities.product.designReview.emoji": "🎨",
+  "guide.groupActivities.product.designReview.prompt": "デザインレビューを行いましょう。コンセプトやプロトタイプに建設的なフィードバックをくれますか？",
+  "guide.groupActivities.product.designReview.title": "デザインレビュー",
+  "guide.groupActivities.product.sprintPlanning.description": "カードを使ってタスクと作業量を見積もるアジャイル手法",
+  "guide.groupActivities.product.sprintPlanning.emoji": "🃏",
+  "guide.groupActivities.product.sprintPlanning.prompt": "プロジェクトのためにプランニングポーカーを行いましょう。アジャイル手法で作業量を見積もってくれますか？",
+  "guide.groupActivities.product.sprintPlanning.title": "プランニングポーカー",
+  "guide.groupActivities.product.techExchange.description": "新技術、イノベーション、業界トレンドの議論",
+  "guide.groupActivities.product.techExchange.emoji": "🚀",
+  "guide.groupActivities.product.techExchange.prompt": "技術交流をしましょう！新しい技術や業界のトレンドについて議論してくれますか？",
+  "guide.groupActivities.product.techExchange.title": "技術交流",
+  "guide.groupActivities.title": "チームチャットでのおすすめの使い方",
+  "guide.groupActivities.writing.bookClub.description": "本や物語、文学作品についての議論と分析",
+  "guide.groupActivities.writing.bookClub.emoji": "📖",
+  "guide.groupActivities.writing.bookClub.prompt": "読書クラブを始めましょう。この本を分析し、テーマについて一緒に考えてくれますか？",
+  "guide.groupActivities.writing.bookClub.title": "読書クラブ",
+  "guide.groupActivities.writing.movieClub.description": "映画やドキュメンタリー、映像作品の鑑賞と議論",
+  "guide.groupActivities.writing.movieClub.emoji": "🎬",
+  "guide.groupActivities.writing.movieClub.prompt": "映画クラブを始めましょう。この映画を分析し、テーマについて一緒に考えてくれますか？",
+  "guide.groupActivities.writing.movieClub.title": "映画クラブ",
+  "guide.groupActivities.writing.musicSession.description": "音楽の共同制作、共有、鑑賞セッション",
+  "guide.groupActivities.writing.musicSession.emoji": "🎵",
+  "guide.groupActivities.writing.musicSession.prompt": "音楽セッションを始めましょう！一緒に音楽を作り、楽しんでくれますか？",
+  "guide.groupActivities.writing.musicSession.title": "音楽セッション",
+  "guide.groupActivities.writing.studyGroup.description": "協力的な学習セッションで概念を議論し、問題を解決",
+  "guide.groupActivities.writing.studyGroup.emoji": "📚",
+  "guide.groupActivities.writing.studyGroup.prompt": "学習グループを作りましょう。概念を理解し、一緒に問題を解決してくれますか？",
+  "guide.groupActivities.writing.studyGroup.title": "学習グループ",
+  "guide.groupMessage": "グループチャットへようこそ！複数のAIアシスタントと共有スペースで協力しましょう。",
+  "guide.groupTemplates.analysis.description": "データに基づく洞察と深い分析研究",
+  "guide.groupTemplates.analysis.members": [
+    {
+      "avatar": "📊",
+      "backgroundColor": "#E8F8F5",
+      "plugins": ["steam"],
+      "systemRole": "あなたはデータの処理と解釈に長けており、グラフや統計分析を通じてデータの背後にある法則や傾向を明らかにします。",
+      "title": "データアナリスト"
     },
-    "defaultMessage": "私はあなたのプライベートインテリジェントアシスタント {{appName}} です。今、何をお手伝いできますか？<br />より専門的またはカスタマイズされたアシスタントが必要な場合は、<plus /> をクリックしてカスタムアシスタントを作成してください。",
-    "defaultMessageWithoutCreate": "私はあなたのプライベートインテリジェントアシスタント {{appName}} です。今、何をお手伝いできますか？",
-    "groupActivities": {
-      "analysis": {
-        "codeReview": {
-          "description": "コードの変更と実装について技術的な議論とピアレビューを行う",
-          "emoji": "💻",
-          "prompt": "一緒にコードをレビューしましょう。これらのコードを分析し、改善点を見つける手助けをしてもらえますか？",
-          "title": "コードレビュー"
-        },
-        "investment": {
-          "description": "市場を分析し、投資戦略を議論し、金融の洞察を共有する",
-          "emoji": "📈",
-          "prompt": "一緒に市場を分析しましょう。投資戦略を議論し、金融の洞察を共有する手助けをしてもらえますか？",
-          "title": "投資クラブ"
-        },
-        "research": {
-          "description": "科学的な概念を探求し、実験を行い、発見を共有する",
-          "emoji": "🔬",
-          "prompt": "一緒に科学を探求しましょう！実験を行い、発見を共有する手助けをしてもらえますか？",
-          "title": "科学展"
-        },
-        "study": {
-          "description": "協力して学習会を行い、概念を議論し、共に問題を解決する",
-          "emoji": "📚",
-          "prompt": "学習グループを作りましょう。これらの概念を理解し、一緒に問題を解決する手助けをしてもらえますか？",
-          "title": "学習グループ"
-        }
-      },
-      "brainstorm": {
-        "artWorkshop": {
-          "description": "様々な形式の視覚芸術やデジタルアートを創作、評論、鑑賞する",
-          "emoji": "🖼️",
-          "prompt": "アートワークショップを開催しましょう！様々な形式のアートを創作、評論、鑑賞する手助けをしてもらえますか？",
-          "title": "アートワークショップ"
-        },
-        "debate": {
-          "description": "様々なトピックや時事問題について構造化された議論と討論を行う",
-          "emoji": "⚖️",
-          "prompt": "構造化されたディベートを行いましょう。このトピックについて理論的な議論を組織する手助けをしてもらえますか？",
-          "title": "ディベートクラブ"
-        },
-        "designReview": {
-          "description": "デザインのコンセプト、プロトタイプ、クリエイティブ作品に対する協力的なフィードバック会議",
-          "emoji": "🎨",
-          "prompt": "いくつかのデザイン作品をレビューする必要があります。デザインのコンセプトやプロトタイプに建設的なフィードバックを提供する手助けをしてもらえますか？",
-          "title": "デザインレビュー"
-        },
-        "ideation": {
-          "description": "多角的な協力による創造的なアイデア出しと問題解決",
-          "emoji": "🧠",
-          "prompt": "プロジェクトのためにブレインストーミングを始めましょう。創造的なアイデアや解決策を生み出す手助けをしてもらえますか？",
-          "title": "ブレインストーミング"
-        }
-      },
-      "game": {
-        "debateClub": {
-          "description": "様々なトピックや時事問題について構造化された議論と討論を行う",
-          "emoji": "⚖️",
-          "prompt": "構造化されたディベートを行いましょう。このトピックについて理論的な議論を組織する手助けをしてもらえますか？",
-          "title": "ディベートクラブ"
-        },
-        "gameNight": {
-          "description": "楽しいインタラクティブゲームやアクティビティでチームの絆を深め、楽しむ",
-          "emoji": "🎲",
-          "prompt": "ゲームナイトの始まりです！楽しいインタラクティブゲームを企画してチームの絆を深める手助けをしてもらえますか？",
-          "title": "ゲームナイト"
-        },
-        "modelUN": {
-          "description": "国連模擬ディベートとグローバルな課題に関する外交交渉",
-          "emoji": "🌍",
-          "prompt": "国連模擬ディベートを行いましょう。グローバルな課題に関する外交交渉の設定を手助けしてもらえますか？",
-          "title": "模擬国連"
-        },
-        "werewolf": {
-          "description": "プレイヤーが戦略と議論を通じて人狼を見つけ出すソーシャル推理ゲーム",
-          "emoji": "🐺",
-          "prompt": "人狼ゲームをしましょう！ルールの設定とこのソーシャル推理ゲームの進行を手助けしてもらえますか？",
-          "title": "人狼ゲーム"
-        }
-      },
-      "general": {
-        "brainstorm": {
-          "description": "多角的な協力による創造的なアイデア出しと問題解決",
-          "emoji": "🧠",
-          "prompt": "プロジェクトのためにブレインストーミングを始めましょう。創造的なアイデアや解決策を生み出す手助けをしてもらえますか？",
-          "title": "ブレインストーミング"
-        },
-        "debate": {
-          "description": "様々なトピックや時事問題について構造化された議論と討論を行う",
-          "emoji": "⚖️",
-          "prompt": "構造化されたディベートを行いましょう。このトピックについて理論的な議論を組織する手助けをしてもらえますか？",
-          "title": "ディベートクラブ"
-        },
-        "languagePractice": {
-          "description": "ネイティブスピーカーと一緒に会話練習や新しい言語を学ぶ",
-          "emoji": "🗣️",
-          "prompt": "一緒に新しい言語を練習しましょう。この言語の学習と会話練習を手助けしてもらえますか？",
-          "title": "言語練習"
-        },
-        "studyGroup": {
-          "description": "協力して学習会を行い、概念を議論し、共に問題を解決する",
-          "emoji": "📚",
-          "prompt": "学習グループを作りましょう。これらの概念を理解し、一緒に問題を解決する手助けをしてもらえますか？",
-          "title": "学習グループ"
-        }
-      },
-      "planning": {
-        "cookingClass": {
-          "description": "料理の技術、レシピ、料理の伝統を学び共有する",
-          "emoji": "👨‍🍳",
-          "prompt": "料理教室を始めましょう！新しいレシピや料理技術を一緒に学ぶ手助けをしてもらえますか？",
-          "title": "料理教室"
-        },
-        "fitnessChallenge": {
-          "description": "グループでフィットネス目標を設定し、トレーニング方法を共有し、互いに励ます",
-          "emoji": "💪",
-          "prompt": "フィットネスチャレンジを始めましょう！目標を設定し、健康を維持するために互いに励まし合う手助けをしてもらえますか？",
-          "title": "フィットネスチャレンジ"
-        },
-        "planningPoker": {
-          "description": "カードを使ってプロジェクトのタスクや作業量を見積もるアジャイル見積もり技術",
-          "emoji": "🃏",
-          "prompt": "プロジェクトのためにプランニングポーカーを行っています。これらのタスクの作業量をアジャイル技術で見積もる手助けをしてもらえますか？",
-          "title": "プランニングポーカー"
-        },
-        "travelPlanning": {
-          "description": "旅行の計画、旅行体験の共有、新しい目的地の発見",
-          "emoji": "✈️",
-          "prompt": "一緒に旅行の計画を立てましょう！目的地を調査し、旅行の行程を計画する手助けをしてもらえますか？",
-          "title": "旅行計画"
-        }
-      },
-      "product": {
-        "codeReview": {
-          "description": "コードの変更と実装について技術的な議論とピアレビューを行う",
-          "emoji": "💻",
-          "prompt": "一緒にコードをレビューしましょう。これらのコードを分析し、改善点を見つける手助けをしてもらえますか？",
-          "title": "コードレビュー"
-        },
-        "designReview": {
-          "description": "デザインのコンセプト、プロトタイプ、クリエイティブ作品に対する協力的なフィードバック会議",
-          "emoji": "🎨",
-          "prompt": "いくつかのデザイン作品をレビューする必要があります。デザインのコンセプトやプロトタイプに建設的なフィードバックを提供する手助けをしてもらえますか？",
-          "title": "デザインレビュー"
-        },
-        "sprintPlanning": {
-          "description": "カードを使ってプロジェクトのタスクや作業量を見積もるアジャイル見積もり技術",
-          "emoji": "🃏",
-          "prompt": "プロジェクトのためにプランニングポーカーを行っています。これらのタスクの作業量をアジャイル技術で見積もる手助けをしてもらえますか？",
-          "title": "プランニングポーカー"
-        },
-        "techExchange": {
-          "description": "新興技術、イノベーション、業界動向について議論する",
-          "emoji": "🚀",
-          "prompt": "技術交流をしましょう！新興技術や業界動向について議論する手助けをしてもらえますか？",
-          "title": "技術交流"
-        }
-      },
-      "title": "グループチャットの活用方法のおすすめ",
-      "writing": {
-        "bookClub": {
-          "description": "書籍、物語、文学作品について文学的な議論と分析を行う",
-          "emoji": "📖",
-          "prompt": "読書クラブの議論を始めましょう。この本を分析し、そのテーマについて一緒に考察する手助けをしてもらえますか？",
-          "title": "読書クラブ"
-        },
-        "movieClub": {
-          "description": "映画、ドキュメンタリー、映像メディアを一緒に鑑賞し議論する",
-          "emoji": "🎬",
-          "prompt": "映画クラブの議論を始めましょう。この映画を分析し、そのテーマについて一緒に考察する手助けをしてもらえますか？",
-          "title": "映画クラブ"
-        },
-        "musicSession": {
-          "description": "協力して音楽を創作、共有、鑑賞する会議",
-          "emoji": "🎵",
-          "prompt": "音楽の即興演奏をしましょう！一緒に音楽を創作し、鑑賞する手助けをしてもらえますか？",
-          "title": "音楽セッション"
-        },
-        "studyGroup": {
-          "description": "協力して学習会を行い、概念を議論し、共に問題を解決する",
-          "emoji": "📚",
-          "prompt": "学習グループを作りましょう。これらの概念を理解し、一緒に問題を解決する手助けをしてもらえますか？",
-          "title": "学習グループ"
-        }
-      }
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "あなたはリサーチの専門家であり、情報収集と深い調査を担当し、さまざまな視点から問題を総合的に分析します。",
+      "title": "リサーチスペシャリスト"
     },
-    "groupMessage": "グループチャットへようこそ！複数のAIアシスタントと共有の会話スペースで協力できます。",
-    "groupTemplates": {
-      "analysis": {
-        "description": "データ駆動の洞察、深度な研究分析",
-        "members": [
-          {
-            "avatar": "📊",
-            "backgroundColor": "#E8F8F5",
-            "plugins": ["steam"],
-            "systemRole": "あなたはデータの処理と解釈に長けており、グラフや統計分析を通じてデータの背後にある法則や傾向を明らかにします。",
-            "title": "データアナリスト"
-          },
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "あなたはリサーチエキスパートです。情報収集と深い調査を専門とし、多角的な視点から問題を包括的に分析できます。",
-            "title": "リサーチエキスパート"
-          },
-          {
-            "avatar": "📈",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "あなたは統計の専門家です。様々な統計手法やモデルに精通し、データから価値あるビジネスインサイトを抽出します。",
-            "title": "統計専門家"
-          },
-          {
-            "avatar": "🧮",
-            "backgroundColor": "#F0F8FF",
-            "systemRole": "あなたはクオンツアナリストです。定量モデルの構築とリスク評価を専門とし、数学的手法で複雑な問題を解決します。",
-            "title": "クオンツアナリスト"
-          }
-        ],
-        "title": "分析チーム"
-      },
-      "brainstorm": {
-        "description": "多角的な創造的思考、無限の可能性を刺激",
-        "members": [
-          {
-            "avatar": "🧠",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "あなたはクリエイティブディレクターです。マクロな視点から創造の方向性を把握し、抽象的な概念を具体的で実行可能なクリエイティブプランに変換します。",
-            "title": "クリエイティブディレクター"
-          },
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "あなたはイノベーションエキスパートです。新しい解決策や画期的な思考を発見することを専門とし、既成概念にとらわれない発想が得意です。",
-            "title": "イノベーションエキスパート"
-          },
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "あなたはデザイン思考の専門家です。ユーザー体験と視覚的表現の観点から問題を考え、創造性の可視化に注力します。",
-            "title": "デザイン思考スペシャリスト"
-          }
-        ],
-        "title": "ブレインストーミンググループ"
-      },
-      "game": {
-        "description": "様々なマルチプレイヤーテキストゲームを楽しむ、例：人狼やワードウルフ",
-        "members": [
-          null,
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "あなたは様々なマルチプレイヤーテキストゲームに参加するのが得意で、ゲームのルールに従ってプレイできます。",
-            "title": "ゲームプレイヤー"
-          },
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "あなたは様々なマルチプレイヤーテキストゲームに参加するのが得意で、ゲームのルールに従ってプレイできます。",
-            "title": "ゲームプレイヤー"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "あなたは様々なマルチプレイヤーテキストゲームに参加するのが得意で、ゲームのルールに従ってプレイできます。",
-            "title": "ゲームプレイヤー"
-          }
-        ],
-        "title": "ゲームルーム"
-      },
-      "planning": {
-        "description": "戦略的計画とプロジェクト管理、全体の統括",
-        "members": [
-          {
-            "avatar": "📋",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "あなたはプロジェクトの全体計画、進捗管理、リソース調整を担当し、プロジェクトを期限内に高品質で完了させます。",
-            "title": "シェフ"
-          },
-          {
-            "avatar": "🎯",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "あなたは長期的な戦略計画の策定、市場機会の分析、目標と実現方法の設定を担当します。",
-            "title": "食材調達エキスパート"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#F0F8FF",
-            "systemRole": "あなたは詳細な実行計画の策定、各部門のリソース調整、計画の実行可能性の確保を担当します。",
-            "title": "料理開発エキスパート"
-          }
-        ],
-        "title": "料理開発チーム"
-      },
-      "product": {
-        "description": "製品設計と開発、高品質な製品を創造",
-        "members": [
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "あなたはデザイナーです。様々なタイプの製品設計に長けており、製品のニーズに応じてデザインを行います。",
-            "title": "デザイナー"
-          },
-          {
-            "avatar": "🧑",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "あなたはプロダクトマネージャーです。製品の企画、設計、開発、保守を担当し、製品の品質とユーザー体験を確保します。",
-            "title": "プロダクトマネージャー"
-          },
-          {
-            "avatar": "🧑‍💻",
-            "backgroundColor": "#E8F8F5",
-            "systemRole": "あなたは経験豊富なフルスタックエンジニアです。様々なタイプの製品開発に長けており、製品のニーズに応じて開発を行います。",
-            "title": "フルスタックエンジニア"
-          }
-        ],
-        "title": "製品開発チーム"
-      },
-      "writing": {
-        "description": "コンテンツ制作と編集、高品質なコピーを作成",
-        "members": [
-          {
-            "avatar": "✍️",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "あなたは様々な文体のコンテンツ作成が得意で、異なるシーンや対象に応じて執筆スタイルを調整できます。",
-            "title": "コンテンツライター"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#E8F8F5",
-            "systemRole": "あなたは編集者です。テキストの校正、推敲、最適化を担当し、内容の正確性、流暢さ、専門性を確保します。",
-            "title": "編集者"
-          }
-        ],
-        "title": "ライティングチーム"
-      }
+    {
+      "avatar": "📈",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "あなたは統計の専門家であり、さまざまな統計手法とモデルに精通し、データから価値あるビジネスインサイトを導き出します。",
+      "title": "統計スペシャリスト"
     },
-    "questions": {
-      "moreBtn": "さらに詳しく",
-      "title": "試しに聞いてみましょう："
-    },
-    "welcome": {
-      "afternoon": "こんにちは",
-      "morning": "おはようございます",
-      "night": "こんばんは",
-      "noon": "こんにちは"
+    {
+      "avatar": "🧮",
+      "backgroundColor": "#F0F8FF",
+      "systemRole": "あなたはクオンツアナリストであり、定量的モデリングやリスク評価を専門とし、数学的手法で複雑な問題を解決します。",
+      "title": "クオンツアナリスト"
     }
-  },
+  ],
+  "guide.groupTemplates.analysis.title": "分析チーム",
+  "guide.groupTemplates.brainstorm.description": "多角的な創造的思考で無限の可能性を引き出す",
+  "guide.groupTemplates.brainstorm.members": [
+    {
+      "avatar": "🧠",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "あなたはクリエイティブディレクターであり、マクロな視点から創造の方向性を把握し、抽象的な概念を具体的で実行可能なアイデアに変換します。",
+      "title": "クリエイティブディレクター"
+    },
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "あなたはイノベーションの専門家であり、斬新な解決策やブレークスルーの発想を見つけ出し、既成概念にとらわれずに問題を考えることが得意です。",
+      "title": "イノベーションスペシャリスト"
+    },
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "あなたはデザイン思考の専門家であり、ユーザー体験やビジュアル表現の観点から問題を考え、創造性の視覚的な表現を重視します。",
+      "title": "デザイン思考スペシャリスト"
+    }
+  ],
+  "guide.groupTemplates.brainstorm.title": "ブレインストーミングチーム",
+  "guide.groupTemplates.game.description": "人狼ゲームやワードウルフなど、さまざまなマルチプレイヤー文字ゲームを楽しもう",
+  "guide.groupTemplates.game.members": [
+    {
+      "avatar": "🧠",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "あなたは司会者として、さまざまなマルチプレイヤー文字ゲームを企画・運営し、プレイヤーを導くことが得意です。",
+      "title": "ゲーム司会者"
+    },
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "あなたはマルチプレイヤー文字ゲームに積極的に参加し、ルールに従ってゲームを進行することが得意です。",
+      "title": "ゲームプレイヤー"
+    },
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "あなたはマルチプレイヤー文字ゲームに積極的に参加し、ルールに従ってゲームを進行することが得意です。",
+      "title": "ゲームプレイヤー"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "あなたはマルチプレイヤー文字ゲームに積極的に参加し、ルールに従ってゲームを進行することが得意です。",
+      "title": "ゲームプレイヤー"
+    }
+  ],
+  "guide.groupTemplates.game.title": "ゲームルーム",
+  "guide.groupTemplates.planning.description": "戦略立案とプロジェクト管理で全体を統括",
+  "guide.groupTemplates.planning.members": [
+    {
+      "avatar": "📋",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "あなたはプロジェクト全体の計画、進捗管理、リソース調整を担当し、期限内に高品質な成果を実現します。",
+      "title": "シェフ"
+    },
+    {
+      "avatar": "🎯",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "あなたは長期的な戦略計画を立案し、市場機会を分析し、目標とその達成ルートを策定します。",
+      "title": "食材調達スペシャリスト"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#F0F8FF",
+      "systemRole": "あなたは実行可能な詳細計画を策定し、各部門のリソースを調整して、計画の実現性を確保します。",
+      "title": "料理開発スペシャリスト"
+    }
+  ],
+  "guide.groupTemplates.planning.title": "料理開発チーム",
+  "guide.groupTemplates.product.description": "製品の設計と開発で高品質なプロダクトを創出",
+  "guide.groupTemplates.product.members": [
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "あなたはデザイナーであり、さまざまなタイプの製品を設計し、製品の要件に応じたデザインが可能です。",
+      "title": "デザイナー"
+    },
+    {
+      "avatar": "🧑",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "あなたはプロダクトマネージャーであり、製品の企画、設計、開発、保守を担当し、品質とユーザー体験を保証します。",
+      "title": "プロダクトマネージャー"
+    },
+    {
+      "avatar": "🧑‍💻",
+      "backgroundColor": "#E8F8F5",
+      "systemRole": "あなたは経験豊富なフルスタックエンジニアであり、さまざまなタイプの製品を開発し、製品の要件に応じた開発が可能です。",
+      "title": "フルスタックエンジニア"
+    }
+  ],
+  "guide.groupTemplates.product.title": "製品開発チーム",
+  "guide.groupTemplates.writing.description": "コンテンツ制作と編集で高品質な文章を創出",
+  "guide.groupTemplates.writing.members": [
+    {
+      "avatar": "✍️",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "あなたはさまざまな文体のコンテンツ制作に長けており、シーンや読者に応じて文体を調整できます。",
+      "title": "コンテンツライター"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#E8F8F5",
+      "systemRole": "あなたは編集者であり、文章の校正、リライト、最適化を担当し、内容の正確性、流暢さ、専門性を確保します。",
+      "title": "編集者"
+    }
+  ],
+  "guide.groupTemplates.writing.title": "ライティングサークル",
+  "guide.questions.moreBtn": "もっと見る",
+  "guide.questions.title": "こんな質問はどう？",
+  "guide.welcome.afternoon": "こんにちは",
+  "guide.welcome.morning": "おはようございます",
+  "guide.welcome.night": "こんばんは",
+  "guide.welcome.noon": "こんにちは",
   "header": "ようこそ",
-  "pickAgent": "または以下のエージェントテンプレートから選択してください",
+  "pickAgent": "または以下のアシスタントテンプレートから選択",
   "skip": "作成をスキップ",
-  "slogan": {
-    "desc1": "脳のクラスターを開始し、創造性を引き出しましょう。あなたのスマートエージェントは常にそこにあります。",
-    "desc2": "最初のエージェントを作成して、始めましょう〜",
-    "title": "より賢い脳を自分に与える"
+  "slogan.desc1": "脳のクラスタを起動し、ひらめきを引き出そう。あなたのAIアシスタント、いつでもそばに。",
+  "slogan.desc2": "最初のアシスタントを作成して、さあ始めましょう～",
+  "slogan.title": "もっと賢い頭脳をあなたに",
+  "welcomeMessages": {
+    "1": "おかえりなさい 😊",
+    "2": "こんにちは、ここにいますよ",
+    "3": "準備完了です！",
+    "4": "お会いできてうれしいです",
+    "5": "始める準備はできましたか？",
+    "6": "今日のタスク、お任せください",
+    "7": "さあ、進みましょう！",
+    "8": "一緒に頑張りましょう 💪",
+    "9": "始動します 🏃‍♂️",
+    "10": "生産性フルパワー～",
+    "11": "ご命令を！",
+    "12": "お待たせしました～☕",
+    "13": "行動開始 ✅",
+    "14": "新しい質問を持ってきましたか？",
+    "15": "今日もお疲れさまです！",
+    "16": "インスピレーションを読み込み中",
+    "17": "オンラインでフル充電 ⚡",
+    "18": "出発！🚀",
+    "19": "思考が追いつきました。",
+    "20": "ひらめきがもうすぐ現れます",
+    "21": "あなたの呼びかけを待っています",
+    "22": "高効率モード再起動！",
+    "23": "待機状態に入りました",
+    "24": "挑戦を迎える準備完了",
+    "25": "新しいアイデアを生成中",
+    "26": "道は明確、出発！",
+    "27": "システムオンライン、いつでもお手伝い 💡",
+    "28": "良い気分を読み込み中",
+    "29": "リズムをつかんで、今からスタート 🎵",
+    "30": "効率アップ中 …",
+    "31": "今日の目標、着実に達成 🎯",
+    "32": "インスピレーションにもっと輝きを ✨",
+    "33": "タスク更新完了",
+    "34": "すべて準備完了",
+    "35": "加速モード起動",
+    "36": "よし！始めましょう 😎",
+    "37": "ここであなたの帰りを待っていました",
+    "38": "その調子でいきましょう！",
+    "39": "少し休憩も忘れずに～ 💤"
   }
 }

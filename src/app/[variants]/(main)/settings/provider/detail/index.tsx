@@ -2,25 +2,52 @@ import dynamic from 'next/dynamic';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 
-const NewAPI = dynamic(() => import('./newapi'), { loading: () => <Loading />, ssr: false });
-const OpenAI = dynamic(() => import('./openai'), { loading: () => <Loading />, ssr: false });
-const VertexAI = dynamic(() => import('./vertexai'), { loading: () => <Loading />, ssr: false });
-const GitHub = dynamic(() => import('./github'), { loading: () => <Loading />, ssr: false });
-const Ollama = dynamic(() => import('./ollama'), { loading: () => <Loading />, ssr: false });
-const ComfyUI = dynamic(() => import('./comfyui'), { loading: () => <Loading />, ssr: false });
-const Cloudflare = dynamic(() => import('./cloudflare'), {
-  loading: () => <Loading />,
+const NewAPI = dynamic(() => import('./newapi'), {
+  loading: () => <Loading debugId="Provider > NewAPI" />,
   ssr: false,
 });
-const Bedrock = dynamic(() => import('./bedrock'), { loading: () => <Loading />, ssr: false });
-const AzureAI = dynamic(() => import('./azureai'), { loading: () => <Loading />, ssr: false });
-const Azure = dynamic(() => import('./azure'), { loading: () => <Loading />, ssr: false });
+const OpenAI = dynamic(() => import('./openai'), {
+  loading: () => <Loading debugId="Provider > OpenAI" />,
+  ssr: false,
+});
+const VertexAI = dynamic(() => import('./vertexai'), {
+  loading: () => <Loading debugId="Provider > VertexAI" />,
+  ssr: false,
+});
+const GitHub = dynamic(() => import('./github'), {
+  loading: () => <Loading debugId="Provider > GitHub" />,
+  ssr: false,
+});
+const Ollama = dynamic(() => import('./ollama'), {
+  loading: () => <Loading debugId="Provider > Ollama" />,
+  ssr: false,
+});
+const ComfyUI = dynamic(() => import('./comfyui'), {
+  loading: () => <Loading debugId="Provider > ComfyUI" />,
+  ssr: false,
+});
+const Cloudflare = dynamic(() => import('./cloudflare'), {
+  loading: () => <Loading debugId="Provider > Cloudflare" />,
+  ssr: false,
+});
+const Bedrock = dynamic(() => import('./bedrock'), {
+  loading: () => <Loading debugId="Provider > Bedrock" />,
+  ssr: false,
+});
+const AzureAI = dynamic(() => import('./azureai'), {
+  loading: () => <Loading debugId="Provider > AzureAI" />,
+  ssr: false,
+});
+const Azure = dynamic(() => import('./azure'), {
+  loading: () => <Loading debugId="Provider > Azure" />,
+  ssr: false,
+});
 const ProviderGrid = dynamic(() => import('../(list)/ProviderGrid'), {
-  loading: () => <Loading />,
+  loading: () => <Loading debugId="Provider > Grid" />,
   ssr: false,
 });
 const DefaultPage = dynamic(() => import('./default/ProviderDetialPage'), {
-  loading: () => <Loading />,
+  loading: () => <Loading debugId="Provider > Default" />,
   ssr: false,
 });
 

@@ -1,6 +1,6 @@
 ---
 description: Best practices for testing Zustand store actions
-globs: "src/store/**/*.test.ts"
+globs: 'src/store/**/*.test.ts'
 alwaysApply: false
 ---
 
@@ -15,6 +15,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
+
 import { useChatStore } from '../../store';
 
 // Keep zustand mock as it's needed globally
@@ -229,8 +230,7 @@ it('should handle topic creation flow', async () => {
   const { result } = renderHook(() => useChatStore());
 
   // Spy on action dependencies
-  const createTopicSpy = vi.spyOn(result.current, 'createTopic')
-    .mockResolvedValue('new-topic-id');
+  const createTopicSpy = vi.spyOn(result.current, 'createTopic').mockResolvedValue('new-topic-id');
   const toggleLoadingSpy = vi.spyOn(result.current, 'internal_toggleMessageLoading');
 
   // Execute
@@ -251,9 +251,7 @@ When testing streaming responses, simulate the flow properly:
 ```typescript
 it('should handle streaming chunks', async () => {
   const { result } = renderHook(() => useChatStore());
-  const messages = [
-    { id: 'msg-1', role: 'user', content: 'Hello', sessionId: 'test-session' },
-  ];
+  const messages = [{ id: 'msg-1', role: 'user', content: 'Hello', sessionId: 'test-session' }];
 
   const streamSpy = vi
     .spyOn(chatService, 'createAssistantMessageStream')
@@ -287,9 +285,7 @@ Always test error scenarios:
 it('should handle errors gracefully', async () => {
   const { result } = renderHook(() => useChatStore());
 
-  vi.spyOn(messageService, 'createMessage').mockRejectedValue(
-    new Error('create message error'),
-  );
+  vi.spyOn(messageService, 'createMessage').mockRejectedValue(new Error('create message error'));
 
   await act(async () => {
     try {
@@ -330,8 +326,7 @@ it('should test something', async () => {
 it('should call internal methods', async () => {
   const { result } = renderHook(() => useChatStore());
 
-  const internalMethodSpy = vi.spyOn(result.current, 'internal_method')
-    .mockResolvedValue();
+  const internalMethodSpy = vi.spyOn(result.current, 'internal_method').mockResolvedValue();
 
   await act(async () => {
     await result.current.publicMethod();
@@ -456,6 +451,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { discoverService } from '@/services/discover';
 import { globalHelpers } from '@/store/global/helpers';
+
 import { useDiscoverStore as useStore } from '../../store';
 
 vi.mock('zustand/traditional');
@@ -486,6 +482,7 @@ describe('SWR Hook Actions', () => {
 ```
 
 **Key points**:
+
 - **DO NOT mock useSWR** - let it use the real implementation
 - Only mock the **service methods** (fetchers)
 - Use `waitFor` from `@testing-library/react` to wait for async operations
@@ -559,21 +556,19 @@ it('should not fetch when required parameter is missing', () => {
 7. **Type assertions**: Use `as any` for test mock data where type definitions are strict
 
 **Why this matters**:
+
 - The fetcher (service method) is what we're testing - it must be called
 - Hardcoding the return value bypasses the actual fetcher logic
 - SWR returns Promises in real usage, tests should mirror this behavior
 
 ## Benefits of This Approach
 
-✅ **Clear test layers** - Each test only spies on direct dependencies
-✅ **Correct mocks** - Mocks match actual implementation
-✅ **Better maintainability** - Changes to implementation require fewer test updates
-✅ **Improved coverage** - Structured approach ensures all branches are tested
-✅ **Reduced coupling** - Tests are independent and can run in any order
+✅ **Clear test layers** - Each test only spies on direct dependencies ✅ **Correct mocks** - Mocks match actual implementation ✅ **Better maintainability** - Changes to implementation require fewer test updates ✅ **Improved coverage** - Structured approach ensures all branches are tested ✅ **Reduced coupling** - Tests are independent and can run in any order
 
 ## Reference
 
 See example implementation in:
+
 - `src/store/chat/slices/aiChat/actions/__tests__/generateAIChat.test.ts` (Regular actions)
 - `src/store/discover/slices/plugin/action.test.ts` (SWR hooks)
 - `src/store/discover/slices/mcp/action.test.ts` (SWR hooks)

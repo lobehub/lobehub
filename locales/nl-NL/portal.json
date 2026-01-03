@@ -1,30 +1,25 @@
 {
-  "Artifacts": "Artifacts",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Chunk",
-      "file": "Bestand"
-    }
-  },
-  "Plugins": "Plugins",
-  "artifacts": {
-    "display": {
-      "code": "Code",
-      "preview": "Voorbeeld"
-    },
-    "svg": {
-      "copyAsImage": "Kopieer als afbeelding",
-      "copyFail": "Kopiëren mislukt, foutmelding: {{error}}",
-      "copySuccess": "Afbeelding succesvol gekopieerd",
-      "download": {
-        "png": "Download als PNG",
-        "svg": "Download als SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "De huidige lijst met Artifacts is leeg. Gebruik plugins in de sessie en bekijk deze later opnieuw.",
-  "emptyKnowledgeList": "De huidige kennislijst is leeg. Gelieve de kennisbank in de sessie te openen voordat u deze bekijkt.",
+  "Artifacts": "Artefacten",
+  "FilePreview.tabs.chunk": "Fragment",
+  "FilePreview.tabs.file": "Bestand",
+  "Plugins": "Vaardigheden",
+  "artifacts.display.code": "Code",
+  "artifacts.display.preview": "Voorbeeld",
+  "artifacts.svg.copyAsImage": "Kopiëren als afbeelding",
+  "artifacts.svg.copyFail": "Kopiëren mislukt: {{error}}. Probeer het opnieuw.",
+  "artifacts.svg.copySuccess": "Afbeelding succesvol gekopieerd",
+  "artifacts.svg.download.png": "Downloaden als PNG",
+  "artifacts.svg.download.svg": "Downloaden als SVG",
+  "document.todos.allCompleted": "Alle taken voltooid",
+  "document.todos.title": "Taken",
+  "emptyArtifactList": "Nog geen artefacten. Gebruik Vaardigheden in het gesprek en kom dan hier terug.",
+  "emptyKnowledgeList": "Deze lijst is leeg.",
   "files": "Bestanden",
   "messageDetail": "Berichtdetails",
-  "title": "Uitbreidingsvenster"
+  "notebook.confirmDelete": "Deze pagina verwijderen?",
+  "notebook.delete": "Verwijderen",
+  "notebook.empty": "Nog geen pagina's. Pagina's die aan dit onderwerp zijn gekoppeld, verschijnen hier.",
+  "notebook.title": "Notitieboek",
+  "openInPageEditor": "Bewerken in pagina",
+  "title": "Werkruimte"
 }

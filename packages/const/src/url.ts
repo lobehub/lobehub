@@ -1,17 +1,12 @@
-import qs from 'query-string';
 import urlJoin from 'url-join';
-
-import { INBOX_SESSION_ID } from './session';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-export const UTM_SOURCE = 'chat_preview';
-
-export const OFFICIAL_URL = 'https://lobechat.com';
+export const OFFICIAL_URL = 'https://app.lobehub.com';
 export const OFFICIAL_SITE = 'https://lobehub.com';
 export const OFFICIAL_DOMAIN = 'lobehub.com';
 
-export const OG_URL = '/og/cover.png?v=1';
+export const OG_URL = '/og/cover.png?v=4';
 
 export const GITHUB = 'https://github.com/lobehub/lobe-chat';
 export const GITHUB_ISSUES = urlJoin(GITHUB, 'issues/new/choose');
@@ -23,7 +18,7 @@ export const SELF_HOSTING_DOCUMENTS = urlJoin(DOCUMENTS, '/self-hosting');
 export const DATABASE_SELF_HOSTING_URL = urlJoin(SELF_HOSTING_DOCUMENTS, '/server-database');
 
 // use this for the link
-export const DOCUMENTS_REFER_URL = `${DOCUMENTS}?utm_source=${UTM_SOURCE}`;
+export const DOCUMENTS_REFER_URL = `${DOCUMENTS}?utm_source=chat_preview`;
 
 export const WIKI_PLUGIN_GUIDE = urlJoin(USAGE_DOCUMENTS, '/plugins/development');
 export const MANUAL_UPGRADE_URL = urlJoin(SELF_HOSTING_DOCUMENTS, '/advanced/upstream-sync');
@@ -47,11 +42,14 @@ export const AGENTS_INDEX_GITHUB = 'https://github.com/lobehub/lobe-chat-agents'
 export const AGENTS_INDEX_GITHUB_ISSUE = urlJoin(AGENTS_INDEX_GITHUB, 'issues/new');
 export const AGENTS_OFFICIAL_URL = 'https://lobehub.com/agent';
 
-export const SESSION_CHAT_URL = (id: string = INBOX_SESSION_ID, mobile?: boolean) =>
-  qs.stringifyUrl({
-    query: mobile ? { session: id, showMobileWorkspace: mobile } : { session: id },
-    url: '/chat',
-  });
+export const SESSION_CHAT_URL = (agentId: string, mobile?: boolean) => {
+  if (mobile) return `/agent/${agentId}`;
+  return `/agent/${agentId}`;
+};
+
+export const GROUP_CHAT_URL = (groupId: string) => `/group/${groupId}`;
+
+export const LIBRARY_URL = (id: string) => urlJoin('/resource/library', id);
 
 export const imageUrl = (filename: string) => `/images/${filename}`;
 

@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "Azure 的 API 版本，遵循 YYYY-MM-DD 格式，查閱[最新版本](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "獲取列表",
-      "title": "Azure API 版本"
-    },
-    "empty": "請輸入模型 ID 添加第一個模型",
-    "endpoint": {
-      "desc": "從 Azure 門戶檢查資源時，可在“金鑰和終點”部分中找到此值",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "Azure API 地址"
-    },
-    "modelListPlaceholder": "請選擇或添加你部署的 OpenAI 模型",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "從 Azure 門戶檢查資源時，可在“金鑰和終點”部分中找到此值。 可以使用 KEY1 或 KEY2",
-      "placeholder": "Azure API 金鑰",
-      "title": "API 金鑰"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "Azure 的 API 版本，遵循 YYYY-MM-DD 格式，查閱[最新版本](https://learn.microsoft.com/zh-tw/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "獲取列表",
-      "title": "Azure API 版本"
-    },
-    "endpoint": {
-      "desc": "從 Azure AI 專案概述找到 Azure AI 模型推理終結點",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "Azure AI 終結點"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "從 Azure AI 專案概述找到 API 密鑰",
-      "placeholder": "Azure 密鑰",
-      "title": "密鑰"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "填入AWS Access Key Id",
-      "placeholder": "AWS Access Key Id",
-      "title": "AWS Access Key Id"
-    },
-    "checker": {
-      "desc": "測試 AccessKeyId / SecretAccessKey 是否填寫正確"
-    },
-    "region": {
-      "desc": "填入 AWS Region",
-      "placeholder": "AWS Region",
-      "title": "AWS Region"
-    },
-    "secretAccessKey": {
-      "desc": "填入 AWS Secret Access Key",
-      "placeholder": "AWS Secret Access Key",
-      "title": "AWS Secret Access Key"
-    },
-    "sessionToken": {
-      "desc": "如果你正在使用 AWS SSO/STS，請輸入你的 AWS Session Token",
-      "placeholder": "AWS Session Token",
-      "title": "AWS Session Token (可選)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "自定義服務區域",
-      "customSessionToken": "自訂 Session Token",
-      "description": "輸入你的 AWS AccessKeyId / SecretAccessKey 即可開始會話。應用程式不會記錄你的驗證配置",
-      "imageGenerationDescription": "輸入你的 AWS AccessKeyId / SecretAccessKey 即可開始生成。應用不會記錄你的鑑權配置",
-      "title": "使用自定義 Bedrock 驗證資訊"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "請填入 Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "填入 Cloudflare 帳戶 ID 或 自定義 API 位址",
-      "placeholder": "Cloudflare 帳戶 ID / 自定義 API 位址",
-      "title": "Cloudflare 帳戶 ID / API 位址"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "Bearer Token 認證所需的 API 金鑰",
-      "placeholder": "請輸入 API 金鑰",
-      "required": "請輸入 API 金鑰",
-      "title": "API 金鑰"
-    },
-    "authType": {
-      "desc": "選擇與 ComfyUI 伺服器的認證方式",
-      "options": {
-        "basic": "帳號/密碼",
-        "bearer": "Bearer（API 金鑰）",
-        "custom": "自訂請求標頭",
-        "none": "無需認證"
-      },
-      "placeholder": "請選擇認證類型",
-      "title": "認證類型"
-    },
-    "baseURL": {
-      "desc": "ComfyUI 網頁存取位址",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "請輸入 ComfyUI 服務位址",
-      "title": "ComfyUI 服務位址"
-    },
-    "checker": {
-      "desc": "測試連線是否正確設定",
-      "title": "連線檢查"
-    },
-    "customHeaders": {
-      "addButton": "新增請求標頭",
-      "deleteTooltip": "刪除此請求標頭",
-      "desc": "自訂認證方式所需的請求標頭，格式為鍵值對",
-      "duplicateKeyError": "請求標頭鍵名不能重複",
-      "keyPlaceholder": "鍵名",
-      "required": "請輸入自訂請求標頭",
-      "title": "自訂請求標頭",
-      "valuePlaceholder": "值"
-    },
-    "password": {
-      "desc": "基本認證所需的密碼",
-      "placeholder": "請輸入密碼",
-      "required": "請輸入密碼",
-      "title": "密碼"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "基本認證所需的使用者名稱",
-      "placeholder": "請輸入使用者名稱",
-      "required": "請輸入使用者名稱",
-      "title": "使用者名稱"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "請填寫你的 API Key",
-      "title": "API Key"
-    },
-    "basicTitle": "基本資訊",
-    "configTitle": "配置信息",
-    "confirm": "新建",
-    "createSuccess": "新建成功",
-    "description": {
-      "placeholder": "服務商簡介（選填）",
-      "title": "服務商簡介"
-    },
-    "id": {
-      "desc": "作為服務商唯一標識，創建後將不可修改",
-      "format": "只能包含數字、小寫字母、連字符（-）和底線（_）",
-      "placeholder": "建議全小寫，例如 openai，創建後將不可修改",
-      "required": "請填寫服務商 ID",
-      "title": "服務商 ID"
-    },
-    "logo": {
-      "required": "請上傳正確的服務商 Logo",
-      "title": "服務商 Logo"
-    },
-    "name": {
-      "placeholder": "請輸入服務商的展示名稱",
-      "required": "請填寫服務商名稱",
-      "title": "服務商名稱"
-    },
-    "proxyUrl": {
-      "required": "請填寫代理地址",
-      "title": "代理地址"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "請選擇 SDK 類型",
-      "title": "請求格式"
-    },
-    "title": "創建自定義 AI 服務商"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "填入你的 Github 個人存取權杖，點擊[這裡](https://github.com/settings/tokens) 創建",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "填入你的 HuggingFace Token，點擊 [這裡](https://huggingface.co/settings/tokens) 創建",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "HuggingFace Token"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "未啟用自訂服務商",
-      "disabled": "未啟用服務商",
-      "enabled": "已啟用服務商"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "添加自定義服務商",
-    "all": "全部",
-    "list": {
-      "custom": "自訂未啟用",
-      "disabled": "未啟用",
-      "disabledActions": {
-        "sort": "排序方式",
-        "sortAlphabetical": "按字母排序",
-        "sortAlphabeticalDesc": "按字母倒序排序",
-        "sortDefault": "預設排序"
-      },
-      "enabled": "已啟用"
-    },
-    "notFound": "未找到搜索結果",
-    "searchProviders": "搜索服務商...",
-    "sort": "自定義排序"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "New API 平台提供的 API 密鑰",
-      "placeholder": "New API API 密鑰",
-      "required": "API 密鑰是必需的",
-      "title": "API 密鑰"
-    },
-    "apiUrl": {
-      "desc": "New API 服務的 API 位址，大部分時候需要帶 /v1",
-      "title": "API 位址"
-    },
-    "enabled": {
-      "title": "啟用 New API"
-    },
-    "models": {
-      "batchSelect": "批次選擇模型 ({{count}} 個)",
-      "fetch": "取得模型列表",
-      "selected": "已選擇的模型",
-      "title": "可用模型"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "測試代理地址是否正確填寫",
-      "title": "連通性檢查"
-    },
-    "customModelName": {
-      "desc": "增加自定義模型，多個模型使用逗號（,）隔開",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "自定義模型名稱"
-    },
-    "download": {
-      "desc": "Ollama 正在下載該模型，請儘量不要關閉本頁面。重新下載時將會中斷處繼續",
-      "failed": "模型下載失敗，請檢查網路或 Ollama 設定後重試",
-      "remainingTime": "剩餘時間",
-      "speed": "下載速度",
-      "title": "正在下載模型 {{model}}"
-    },
-    "endpoint": {
-      "desc": "必須包含http(s)://，本地未額外指定可留空",
-      "title": "接口代理地址"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "取消下載",
-      "confirm": "下載",
-      "description": "輸入你的 Ollama 模型標籤，完成即可繼續會話",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "開始下載...",
-      "title": "下載指定的 Ollama 模型"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "已選擇 {{count}} 個模型",
-      "title": "批次選擇"
-    },
-    "config": {
-      "aesGcm": "您的秘鑰與代理地址等將使用 <1>AES-GCM</1> 加密算法進行加密",
-      "apiKey": {
-        "desc": "請填寫你的 {{name}} API Key",
-        "descWithUrl": "請填寫你的 {{name}} API Key，<3>點此獲取</3>",
-        "placeholder": "{{name}} API Key",
-        "title": "API Key"
-      },
-      "baseURL": {
-        "desc": "必須包含 http(s)://",
-        "invalid": "請輸入合法的 URL",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "API 代理地址"
-      },
-      "checker": {
-        "button": "檢查",
-        "desc": "測試 Api Key 與代理地址是否正確填寫",
-        "pass": "檢查通過",
-        "title": "連通性檢查"
-      },
-      "fetchOnClient": {
-        "desc": "客戶端請求模式將從瀏覽器直接發起會話請求，可提升響應速度",
-        "title": "使用客戶端請求模式"
-      },
-      "helpDoc": "配置教程",
-      "responsesApi": {
-        "desc": "採用 OpenAI 新一代請求格式規範，解鎖思維鏈等進階功能（僅支援 OpenAI 模型）",
-        "title": "使用 Responses API 規範"
-      },
-      "waitingForMore": "更多模型正在 <1>計劃接入</1> 中，敬請期待"
-    },
-    "createNew": {
-      "title": "創建自定義 AI 模型"
-    },
-    "item": {
-      "config": "配置模型",
-      "customModelCards": {
-        "addNew": "創建並添加 {{id}} 模型",
-        "confirmDelete": "即將刪除該自定義模型，刪除後將不可恢復，請謹慎操作。"
-      },
-      "delete": {
-        "confirm": "確認刪除模型 {{displayName}}？",
-        "success": "刪除成功",
-        "title": "刪除模型"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "在 Azure OpenAI 中實際請求的字段",
-          "placeholder": "請輸入 Azure 中的模型部署名稱",
-          "title": "模型部署名稱"
-        },
-        "deployName": {
-          "extra": "發送請求時會將該字段作為模型 ID",
-          "placeholder": "請輸入模型實際部署的名稱或 id",
-          "title": "模型部署名稱"
-        },
-        "displayName": {
-          "placeholder": "請輸入模型的展示名稱，例如 ChatGPT、GPT-4 等",
-          "title": "模型展示名稱"
-        },
-        "files": {
-          "extra": "當前文件上傳實現僅為一種 Hack 方案，僅限自行嘗試。完整文件上傳能力請等待後續實現",
-          "title": "支持文件上傳"
-        },
-        "functionCall": {
-          "extra": "此配置將僅開啟模型使用工具的能力，進而可以為模型添加工具類的插件。但是否支持真正使用工具完全取決於模型本身，請自行測試其可用性",
-          "title": "支持工具使用"
-        },
-        "id": {
-          "extra": "創建後不可修改，調用 AI 時將作為模型 id 使用",
-          "placeholder": "請輸入模型 id，例如 gpt-4o 或 claude-3.5-sonnet",
-          "title": "模型 ID"
-        },
-        "imageOutput": {
-          "extra": "此設定僅會啟用模型生成圖片的能力，具體效果完全取決於模型本身，請自行測試該模型是否具備可用的圖片生成能力",
-          "title": "支援圖片生成"
-        },
-        "modalTitle": "自定義模型配置",
-        "reasoning": {
-          "extra": "此配置將僅開啟模型深度思考的能力，具體效果完全取決於模型本身，請自行測試該模型是否具備可用的深度思考能力",
-          "title": "支持深度思考"
-        },
-        "search": {
-          "extra": "此設定僅會啟用模型內建搜尋引擎的連網搜尋能力，是否支援內建搜尋引擎取決於模型本身，請自行測試該模型的內建搜尋引擎能力可用性",
-          "title": "支援連網搜尋"
-        },
-        "tokens": {
-          "extra": "設定模型支持的最大 Token 數",
-          "title": "最大上下文窗口",
-          "unlimited": "無限制"
-        },
-        "type": {
-          "extra": "不同模型類型擁有差異化的使用場景與能力",
-          "options": {
-            "chat": "對話",
-            "embedding": "向量化",
-            "image": "圖片生成",
-            "realtime": "即時對話",
-            "stt": "語音轉文字",
-            "text2music": "文本轉音樂",
-            "text2video": "文本轉影片",
-            "tts": "語音合成"
-          },
-          "placeholder": "請選擇模型類型",
-          "title": "模型類型"
-        },
-        "video": {
-          "extra": "此設定僅會啟用應用中的影片識別設定，是否支援識別完全取決於模型本身，請自行測試該模型的影片識別能力可用性",
-          "title": "支援影片識別"
-        },
-        "vision": {
-          "extra": "此配置將僅開啟應用中的圖片上傳配置，是否支持識別完全取決於模型本身，請自行測試該模型的視覺識別能力可用性",
-          "title": "支持視覺識別"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/圖片",
-        "inputCharts": "${{amount}}/M 字符",
-        "inputMinutes": "${{amount}}/分鐘",
-        "inputTokens": "輸入 ${{amount}}/M",
-        "outputTokens": "輸出 ${{amount}}/M"
-      },
-      "releasedAt": "發佈於{{releasedAt}}"
-    },
-    "list": {
-      "addNew": "新增模型",
-      "disabled": "未啟用",
-      "disabledActions": {
-        "showMore": "顯示全部",
-        "sort": "排序方式",
-        "sortAlphabetical": "按字母排序",
-        "sortAlphabeticalDesc": "按字母倒序排序",
-        "sortDefault": "預設排序",
-        "sortReleasedAt": "按最早發布時間排序",
-        "sortReleasedAtDesc": "按最新發布時間排序"
-      },
-      "empty": {
-        "desc": "請創建自定義模型或拉取模型後開始使用吧",
-        "title": "暫無可用模型"
-      },
-      "enabled": "已啟用",
-      "enabledActions": {
-        "disableAll": "全部禁用",
-        "enableAll": "全部啟用",
-        "sort": "自訂模型排序"
-      },
-      "enabledEmpty": "暫無啟用模型，請從下方列表中啟用心儀的模型吧~",
-      "fetcher": {
-        "clear": "清除取得的模型",
-        "fetch": "取得模型列表",
-        "fetching": "正在取得模型列表...",
-        "latestTime": "上次更新時間：{{time}}",
-        "noLatestTime": "尚未取得列表"
-      },
-      "noModelsInCategory": "該分類下暫無啟用的模型",
-      "resetAll": {
-        "conform": "確認重置當前模型的所有修改？重置後當前模型列表將會回到預設狀態",
-        "success": "重置成功",
-        "title": "重置所有修改"
-      },
-      "search": "搜尋模型...",
-      "searchResult": "搜尋到 {{count}} 個模型",
-      "title": "模型列表",
-      "total": "共 {{count}} 個模型可用"
-    },
-    "searchNotFound": "未找到搜尋結果",
-    "tabs": {
-      "all": "全部",
-      "chat": "對話",
-      "embedding": "向量化",
-      "image": "圖片",
-      "stt": "ASR",
-      "tts": "TTS"
-    }
-  },
-  "sortModal": {
-    "success": "排序更新成功",
-    "title": "自定義排序",
-    "update": "更新"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "即將刪除該 AI 服務商，刪除後將無法找回，確認是否刪除？",
-    "deleteSuccess": "刪除成功",
-    "tooltip": "更新服務商基礎配置",
-    "updateSuccess": "更新成功"
-  },
-  "updateCustomAiProvider": {
-    "title": "更新自訂 AI 服務商配置"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "填入你的 Vertex AI 金鑰",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "Vertex AI 金鑰"
-    },
-    "region": {
-      "desc": "選擇 Vertex AI 服務的區域。某些模型如 Gemini 2.5 僅在特定區域可用（例如 global）",
-      "placeholder": "選擇區域",
-      "title": "Vertex AI 區域"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI 零一萬物"
-  },
-  "zhipu": {
-    "title": "智譜"
-  }
+  "azure.azureApiVersion.desc": "Azure 的 API 版本，遵循 YYYY-MM-DD 格式，查閱[最新版本](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "獲取列表",
+  "azure.azureApiVersion.title": "Azure API 版本",
+  "azure.empty": "請輸入模型 ID 添加第一個模型",
+  "azure.endpoint.desc": "從 Azure 門戶檢查資源時，可在“金鑰和終點”部分中找到此值",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "Azure API 地址",
+  "azure.modelListPlaceholder": "請選擇或添加你部署的 OpenAI 模型",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "從 Azure 門戶檢查資源時，可在“金鑰和終點”部分中找到此值。 可以使用 KEY1 或 KEY2",
+  "azure.token.placeholder": "Azure API 金鑰",
+  "azure.token.title": "API 金鑰",
+  "azureai.azureApiVersion.desc": "Azure 的 API 版本，遵循 YYYY-MM-DD 格式，查閱[最新版本](https://learn.microsoft.com/zh-tw/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "獲取列表",
+  "azureai.azureApiVersion.title": "Azure API 版本",
+  "azureai.endpoint.desc": "從 Azure AI 專案概述找到 Azure AI 模型推理終結點",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "Azure AI 終結點",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "從 Azure AI 專案概述找到 API 密鑰",
+  "azureai.token.placeholder": "Azure 密鑰",
+  "azureai.token.title": "密鑰",
+  "bedrock.accessKeyId.desc": "填入AWS Access Key Id",
+  "bedrock.accessKeyId.placeholder": "AWS Access Key Id",
+  "bedrock.accessKeyId.title": "AWS Access Key Id",
+  "bedrock.checker.desc": "測試 AccessKeyId / SecretAccessKey 是否填寫正確",
+  "bedrock.region.desc": "填入 AWS Region",
+  "bedrock.region.placeholder": "AWS Region",
+  "bedrock.region.title": "AWS Region",
+  "bedrock.secretAccessKey.desc": "填入 AWS Secret Access Key",
+  "bedrock.secretAccessKey.placeholder": "AWS Secret Access Key",
+  "bedrock.secretAccessKey.title": "AWS Secret Access Key",
+  "bedrock.sessionToken.desc": "如果你正在使用 AWS SSO/STS，請輸入你的 AWS Session Token",
+  "bedrock.sessionToken.placeholder": "AWS Session Token",
+  "bedrock.sessionToken.title": "AWS Session Token (可選)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "自定義服務區域",
+  "bedrock.unlock.customSessionToken": "自訂 Session Token",
+  "bedrock.unlock.description": "輸入你的 AWS AccessKeyId / SecretAccessKey 即可開始會話。應用程式不會記錄你的驗證配置",
+  "bedrock.unlock.imageGenerationDescription": "輸入你的 AWS AccessKeyId / SecretAccessKey 即可開始生成。應用不會記錄你的鑑權配置",
+  "bedrock.unlock.title": "使用自定義 Bedrock 驗證資訊",
+  "cloudflare.apiKey.desc": "請填入 Cloudflare API Key",
+  "cloudflare.apiKey.placeholder": "Cloudflare API Key",
+  "cloudflare.apiKey.title": "Cloudflare API Key",
+  "cloudflare.baseURLOrAccountID.desc": "填入 Cloudflare 帳戶 ID 或 自定義 API 位址",
+  "cloudflare.baseURLOrAccountID.placeholder": "Cloudflare 帳戶 ID / 自定義 API 位址",
+  "cloudflare.baseURLOrAccountID.title": "Cloudflare 帳戶 ID / API 位址",
+  "comfyui.apiKey.desc": "Bearer Token 認證所需的 API 金鑰",
+  "comfyui.apiKey.placeholder": "請輸入 API 金鑰",
+  "comfyui.apiKey.required": "請輸入 API 金鑰",
+  "comfyui.apiKey.title": "API 金鑰",
+  "comfyui.authType.desc": "選擇與 ComfyUI 伺服器的認證方式",
+  "comfyui.authType.options.basic": "帳號/密碼",
+  "comfyui.authType.options.bearer": "Bearer（API 金鑰）",
+  "comfyui.authType.options.custom": "自訂請求標頭",
+  "comfyui.authType.options.none": "無需認證",
+  "comfyui.authType.placeholder": "請選擇認證類型",
+  "comfyui.authType.title": "認證類型",
+  "comfyui.baseURL.desc": "ComfyUI 網頁存取位址",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "請輸入 ComfyUI 服務位址",
+  "comfyui.baseURL.title": "ComfyUI 服務位址",
+  "comfyui.checker.desc": "測試連線是否正確設定",
+  "comfyui.checker.title": "連線檢查",
+  "comfyui.customHeaders.addButton": "新增請求標頭",
+  "comfyui.customHeaders.deleteTooltip": "刪除此請求標頭",
+  "comfyui.customHeaders.desc": "自訂認證方式所需的請求標頭，格式為鍵值對",
+  "comfyui.customHeaders.duplicateKeyError": "請求標頭鍵名不能重複",
+  "comfyui.customHeaders.keyPlaceholder": "鍵名",
+  "comfyui.customHeaders.required": "請輸入自訂請求標頭",
+  "comfyui.customHeaders.title": "自訂請求標頭",
+  "comfyui.customHeaders.valuePlaceholder": "值",
+  "comfyui.password.desc": "基本認證所需的密碼",
+  "comfyui.password.placeholder": "請輸入密碼",
+  "comfyui.password.required": "請輸入密碼",
+  "comfyui.password.title": "密碼",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "基本認證所需的使用者名稱",
+  "comfyui.username.placeholder": "請輸入使用者名稱",
+  "comfyui.username.required": "請輸入使用者名稱",
+  "comfyui.username.title": "使用者名稱",
+  "createNewAiProvider.apiKey.placeholder": "請填寫你的 API Key",
+  "createNewAiProvider.apiKey.title": "API Key",
+  "createNewAiProvider.basicTitle": "基本資訊",
+  "createNewAiProvider.configTitle": "配置信息",
+  "createNewAiProvider.confirm": "新建",
+  "createNewAiProvider.createSuccess": "新建成功",
+  "createNewAiProvider.description.placeholder": "服務商簡介（選填）",
+  "createNewAiProvider.description.title": "服務商簡介",
+  "createNewAiProvider.id.desc": "作為服務商唯一標識，創建後將不可修改",
+  "createNewAiProvider.id.format": "只能包含數字、小寫字母、連字符（-）和底線（_）",
+  "createNewAiProvider.id.placeholder": "建議全小寫，例如 openai，創建後將不可修改",
+  "createNewAiProvider.id.required": "請填寫服務商 ID",
+  "createNewAiProvider.id.title": "服務商 ID",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "請上傳正確的服務商 Logo",
+  "createNewAiProvider.logo.title": "服務商 Logo",
+  "createNewAiProvider.name.placeholder": "請輸入服務商的展示名稱",
+  "createNewAiProvider.name.required": "請填寫服務商名稱",
+  "createNewAiProvider.name.title": "服務商名稱",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "請填寫代理地址",
+  "createNewAiProvider.proxyUrl.title": "代理地址",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "請選擇 SDK 類型",
+  "createNewAiProvider.sdkType.title": "請求格式",
+  "createNewAiProvider.title": "創建自定義 AI 服務商",
+  "github.personalAccessToken.desc": "填入你的 Github 個人存取權杖，點擊[這裡](https://github.com/settings/tokens) 創建",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "GitHub PAT",
+  "huggingface.accessToken.desc": "填入你的 HuggingFace Token，點擊 [這裡](https://huggingface.co/settings/tokens) 創建",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "HuggingFace Token",
+  "list.title.custom": "未啟用自訂服務商",
+  "list.title.disabled": "未啟用服務商",
+  "list.title.enabled": "已啟用服務商",
+  "menu.addCustomProvider": "添加自定義服務商",
+  "menu.all": "全部",
+  "menu.list.custom": "自訂未啟用",
+  "menu.list.disabled": "未啟用",
+  "menu.list.disabledActions.sort": "排序方式",
+  "menu.list.disabledActions.sortAlphabetical": "按字母排序",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "按字母倒序排序",
+  "menu.list.disabledActions.sortDefault": "預設排序",
+  "menu.list.enabled": "已啟用",
+  "menu.notFound": "未找到搜索結果",
+  "menu.searchProviders": "搜索服務商...",
+  "menu.sort": "自定義排序",
+  "newapi.apiKey.desc": "New API 平台提供的 API 密鑰",
+  "newapi.apiKey.placeholder": "New API API 密鑰",
+  "newapi.apiKey.required": "API 密鑰是必需的",
+  "newapi.apiKey.title": "API 密鑰",
+  "newapi.apiUrl.desc": "New API 服務的 API 位址，大部分時候需要帶 /v1",
+  "newapi.apiUrl.title": "API 位址",
+  "newapi.enabled.title": "啟用 New API",
+  "newapi.models.batchSelect": "批次選擇模型 ({{count}} 個)",
+  "newapi.models.fetch": "取得模型列表",
+  "newapi.models.selected": "已選擇的模型",
+  "newapi.models.title": "可用模型",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "測試代理地址是否正確填寫",
+  "ollama.checker.title": "連通性檢查",
+  "ollama.customModelName.desc": "增加自定義模型，多個模型使用逗號（,）隔開",
+  "ollama.customModelName.placeholder": "vicuna,llava,codellama,llama2:13b-text",
+  "ollama.customModelName.title": "自定義模型名稱",
+  "ollama.download.desc": "Ollama 正在下載該模型，請儘量不要關閉本頁面。重新下載時將會中斷處繼續",
+  "ollama.download.failed": "模型下載失敗，請檢查網路或 Ollama 設定後重試",
+  "ollama.download.remainingTime": "剩餘時間",
+  "ollama.download.speed": "下載速度",
+  "ollama.download.title": "正在下載模型 {{model}}",
+  "ollama.endpoint.desc": "必須包含http(s)://，本地未額外指定可留空",
+  "ollama.endpoint.title": "接口代理地址",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "取消下載",
+  "ollama.unlock.confirm": "下載",
+  "ollama.unlock.description": "輸入你的 Ollama 模型標籤，完成即可繼續會話",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "開始下載...",
+  "ollama.unlock.title": "下載指定的 Ollama 模型",
+  "providerModels.batchSelect.selected": "已選擇 {{count}} 個模型",
+  "providerModels.batchSelect.title": "批次選擇",
+  "providerModels.config.aesGcm": "您的秘鑰與代理地址等將使用 <1>AES-GCM</1> 加密算法進行加密",
+  "providerModels.config.apiKey.desc": "請填寫你的 {{name}} API Key",
+  "providerModels.config.apiKey.descWithUrl": "請填寫你的 {{name}} API Key，<3>點此獲取</3>",
+  "providerModels.config.apiKey.placeholder": "{{name}} API Key",
+  "providerModels.config.apiKey.title": "API Key",
+  "providerModels.config.baseURL.desc": "必須包含 http(s)://",
+  "providerModels.config.baseURL.invalid": "請輸入合法的 URL",
+  "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
+  "providerModels.config.baseURL.title": "API 代理地址",
+  "providerModels.config.checker.button": "檢查",
+  "providerModels.config.checker.desc": "測試 Api Key 與代理地址是否正確填寫",
+  "providerModels.config.checker.pass": "檢查通過",
+  "providerModels.config.checker.title": "連通性檢查",
+  "providerModels.config.fetchOnClient.desc": "客戶端請求模式將從瀏覽器直接發起會話請求，可提升響應速度",
+  "providerModels.config.fetchOnClient.title": "使用客戶端請求模式",
+  "providerModels.config.helpDoc": "配置教程",
+  "providerModels.config.responsesApi.desc": "採用 OpenAI 新一代請求格式規範，解鎖思維鏈等進階功能（僅支援 OpenAI 模型）",
+  "providerModels.config.responsesApi.title": "使用 Responses API 規範",
+  "providerModels.config.waitingForMore": "更多模型正在 <1>計劃接入</1> 中，敬請期待",
+  "providerModels.createNew.title": "創建自定義 AI 模型",
+  "providerModels.item.config": "配置模型",
+  "providerModels.item.customModelCards.addNew": "創建並添加 {{id}} 模型",
+  "providerModels.item.customModelCards.confirmDelete": "即將刪除該自定義模型，刪除後將不可恢復，請謹慎操作。",
+  "providerModels.item.delete.confirm": "確認刪除模型 {{displayName}}？",
+  "providerModels.item.delete.success": "刪除成功",
+  "providerModels.item.delete.title": "刪除模型",
+  "providerModels.item.modelConfig.azureDeployName.extra": "在 Azure OpenAI 中實際請求的字段",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "請輸入 Azure 中的模型部署名稱",
+  "providerModels.item.modelConfig.azureDeployName.title": "模型部署名稱",
+  "providerModels.item.modelConfig.deployName.extra": "發送請求時會將該字段作為模型 ID",
+  "providerModels.item.modelConfig.deployName.placeholder": "請輸入模型實際部署的名稱或 id",
+  "providerModels.item.modelConfig.deployName.title": "模型部署名稱",
+  "providerModels.item.modelConfig.displayName.placeholder": "請輸入模型的展示名稱，例如 ChatGPT、GPT-4 等",
+  "providerModels.item.modelConfig.displayName.title": "模型展示名稱",
+  "providerModels.item.modelConfig.files.extra": "當前文件上傳實現僅為一種 Hack 方案，僅限自行嘗試。完整文件上傳能力請等待後續實現",
+  "providerModels.item.modelConfig.files.title": "支持文件上傳",
+  "providerModels.item.modelConfig.functionCall.extra": "此配置將僅開啟模型使用工具的能力，進而可以為模型添加工具類的插件。但是否支持真正使用工具完全取決於模型本身，請自行測試其可用性",
+  "providerModels.item.modelConfig.functionCall.title": "支持工具使用",
+  "providerModels.item.modelConfig.id.extra": "創建後不可修改，調用 AI 時將作為模型 id 使用",
+  "providerModels.item.modelConfig.id.placeholder": "請輸入模型 id，例如 gpt-4o 或 claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "模型 ID",
+  "providerModels.item.modelConfig.imageOutput.extra": "此設定僅會啟用模型生成圖片的能力，具體效果完全取決於模型本身，請自行測試該模型是否具備可用的圖片生成能力",
+  "providerModels.item.modelConfig.imageOutput.title": "支援圖片生成",
+  "providerModels.item.modelConfig.modalTitle": "自定義模型配置",
+  "providerModels.item.modelConfig.reasoning.extra": "此配置將僅開啟模型深度思考的能力，具體效果完全取決於模型本身，請自行測試該模型是否具備可用的深度思考能力",
+  "providerModels.item.modelConfig.reasoning.title": "支持深度思考",
+  "providerModels.item.modelConfig.search.extra": "此設定僅會啟用模型內建搜尋引擎的連網搜尋能力，是否支援內建搜尋引擎取決於模型本身，請自行測試該模型的內建搜尋引擎能力可用性",
+  "providerModels.item.modelConfig.search.title": "支援連網搜尋",
+  "providerModels.item.modelConfig.tokens.extra": "設定模型支持的最大 Token 數",
+  "providerModels.item.modelConfig.tokens.title": "最大上下文窗口",
+  "providerModels.item.modelConfig.tokens.unlimited": "無限制",
+  "providerModels.item.modelConfig.type.extra": "不同模型類型擁有差異化的使用場景與能力",
+  "providerModels.item.modelConfig.type.options.chat": "對話",
+  "providerModels.item.modelConfig.type.options.embedding": "向量化",
+  "providerModels.item.modelConfig.type.options.image": "圖片生成",
+  "providerModels.item.modelConfig.type.options.realtime": "即時對話",
+  "providerModels.item.modelConfig.type.options.stt": "語音轉文字",
+  "providerModels.item.modelConfig.type.options.text2music": "文本轉音樂",
+  "providerModels.item.modelConfig.type.options.text2video": "文本轉影片",
+  "providerModels.item.modelConfig.type.options.tts": "語音合成",
+  "providerModels.item.modelConfig.type.placeholder": "請選擇模型類型",
+  "providerModels.item.modelConfig.type.title": "模型類型",
+  "providerModels.item.modelConfig.video.extra": "此設定僅會啟用應用中的影片識別設定，是否支援識別完全取決於模型本身，請自行測試該模型的影片識別能力可用性",
+  "providerModels.item.modelConfig.video.title": "支援影片識別",
+  "providerModels.item.modelConfig.vision.extra": "此配置將僅開啟應用中的圖片上傳配置，是否支持識別完全取決於模型本身，請自行測試該模型的視覺識別能力可用性",
+  "providerModels.item.modelConfig.vision.title": "支持視覺識別",
+  "providerModels.item.pricing.image": "${{amount}}/圖片",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/M 字符",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/分鐘",
+  "providerModels.item.pricing.inputTokens": "輸入 ${{amount}}/M",
+  "providerModels.item.pricing.outputTokens": "輸出 ${{amount}}/M",
+  "providerModels.item.releasedAt": "發佈於{{releasedAt}}",
+  "providerModels.list.addNew": "新增模型",
+  "providerModels.list.disabled": "未啟用",
+  "providerModels.list.disabledActions.showMore": "顯示全部",
+  "providerModels.list.disabledActions.sort": "排序方式",
+  "providerModels.list.disabledActions.sortAlphabetical": "按字母排序",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "按字母倒序排序",
+  "providerModels.list.disabledActions.sortDefault": "預設排序",
+  "providerModels.list.disabledActions.sortReleasedAt": "按最早發布時間排序",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "按最新發布時間排序",
+  "providerModels.list.empty.desc": "請創建自定義模型或拉取模型後開始使用吧",
+  "providerModels.list.empty.title": "暫無可用模型",
+  "providerModels.list.enabled": "已啟用",
+  "providerModels.list.enabledActions.disableAll": "全部禁用",
+  "providerModels.list.enabledActions.enableAll": "全部啟用",
+  "providerModels.list.enabledActions.sort": "自訂模型排序",
+  "providerModels.list.enabledEmpty": "暫無啟用模型，請從下方列表中啟用心儀的模型吧~",
+  "providerModels.list.fetcher.clear": "清除取得的模型",
+  "providerModels.list.fetcher.fetch": "取得模型列表",
+  "providerModels.list.fetcher.fetching": "正在取得模型列表...",
+  "providerModels.list.fetcher.latestTime": "上次更新時間：{{time}}",
+  "providerModels.list.fetcher.noLatestTime": "尚未取得列表",
+  "providerModels.list.noModelsInCategory": "該分類下暫無啟用的模型",
+  "providerModels.list.resetAll.conform": "確認重置當前模型的所有修改？重置後當前模型列表將會回到預設狀態",
+  "providerModels.list.resetAll.success": "重置成功",
+  "providerModels.list.resetAll.title": "重置所有修改",
+  "providerModels.list.search": "搜尋模型...",
+  "providerModels.list.searchResult": "搜尋到 {{count}} 個模型",
+  "providerModels.list.title": "模型列表",
+  "providerModels.list.total": "共 {{count}} 個模型可用",
+  "providerModels.searchNotFound": "未找到搜尋結果",
+  "providerModels.tabs.all": "全部",
+  "providerModels.tabs.chat": "對話",
+  "providerModels.tabs.embedding": "向量化",
+  "providerModels.tabs.image": "圖片",
+  "providerModels.tabs.stt": "ASR",
+  "providerModels.tabs.tts": "TTS",
+  "sortModal.success": "排序更新成功",
+  "sortModal.title": "自定義排序",
+  "sortModal.update": "更新",
+  "updateAiProvider.confirmDelete": "即將刪除該 AI 服務商，刪除後將無法找回，確認是否刪除？",
+  "updateAiProvider.deleteSuccess": "刪除成功",
+  "updateAiProvider.tooltip": "更新服務商基礎配置",
+  "updateAiProvider.updateSuccess": "更新成功",
+  "updateCustomAiProvider.title": "更新自訂 AI 服務商配置",
+  "vertexai.apiKey.desc": "填入你的 Vertex AI 金鑰",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "Vertex AI 金鑰",
+  "vertexai.region.desc": "選擇 Vertex AI 服務的區域。某些模型如 Gemini 2.5 僅在特定區域可用（例如 global）",
+  "vertexai.region.placeholder": "選擇區域",
+  "vertexai.region.title": "Vertex AI 區域",
+  "zeroone.title": "01.AI 零一萬物",
+  "zhipu.title": "智譜"
 }

@@ -1,10 +1,10 @@
 @discover @smoke
-Feature: Discover Smoke Tests
-  Critical path tests to ensure the discover module is functional
+Feature: Community Smoke Tests
+  Critical path tests to ensure the community/discover module is functional
 
   @DISCOVER-SMOKE-001 @P0
-  Scenario: Load Discover Home Page
-    Given I navigate to "/discover"
+  Scenario: Load Community Home Page
+    Given I navigate to "/community"
     Then the page should load without errors
     And I should see the page body
     And I should see the featured assistants section
@@ -12,7 +12,7 @@ Feature: Discover Smoke Tests
 
   @DISCOVER-SMOKE-002 @P0
   Scenario: Load Assistant List Page
-    Given I navigate to "/discover/assistant"
+    Given I navigate to "/community/assistant"
     Then the page should load without errors
     And I should see the page body
     And I should see the search bar
@@ -22,7 +22,7 @@ Feature: Discover Smoke Tests
 
   @DISCOVER-SMOKE-003 @P0
   Scenario: Load Model List Page
-    Given I navigate to "/discover/model"
+    Given I navigate to "/community/model"
     Then the page should load without errors
     And I should see the page body
     And I should see model cards
@@ -30,14 +30,14 @@ Feature: Discover Smoke Tests
 
   @DISCOVER-SMOKE-004 @P0
   Scenario: Load Provider List Page
-    Given I navigate to "/discover/provider"
+    Given I navigate to "/community/provider"
     Then the page should load without errors
     And I should see the page body
     And I should see provider cards
 
   @DISCOVER-SMOKE-005 @P0
   Scenario: Load MCP List Page
-    Given I navigate to "/discover/mcp"
+    Given I navigate to "/community/mcp"
     Then the page should load without errors
     And I should see the page body
     And I should see MCP cards

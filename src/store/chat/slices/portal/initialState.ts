@@ -1,4 +1,4 @@
-import { PortalArtifact } from '@/types/artifact';
+import { type PortalArtifact } from '@/types/artifact';
 
 export enum ArtifactDisplayMode {
   Code = 'code',
@@ -14,10 +14,12 @@ export interface PortalFile {
 export interface ChatPortalState {
   portalArtifact?: PortalArtifact;
   portalArtifactDisplayMode?: ArtifactDisplayMode;
+  portalDocumentId?: string;
   portalFile?: PortalFile;
   portalMessageDetail?: string;
   portalThreadId?: string;
   portalToolMessage?: { id: string; identifier: string };
+  showNotebook?: boolean;
   showPortal: boolean;
 }
 

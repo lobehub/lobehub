@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "D'accord",
-    "detail": "Une application de chat basée sur un grand modèle de langage",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "À propos"
-  },
-  "confirm": {
-    "cancel": "Annuler",
-    "no": "Non",
-    "title": "Confirmer",
-    "yes": "Oui"
-  },
-  "error": {
-    "button": "D'accord",
-    "detail": "Une erreur s'est produite lors de l'opération, veuillez réessayer plus tard",
-    "message": "Une erreur s'est produite",
-    "title": "Erreur"
-  },
-  "update": {
-    "downloadAndInstall": "Télécharger et installer",
-    "downloadComplete": "Téléchargement terminé",
-    "downloadCompleteMessage": "Le paquet de mise à jour a été téléchargé, souhaitez-vous l'installer maintenant ?",
-    "installLater": "Installer plus tard",
-    "installNow": "Installer maintenant",
-    "later": "Rappeler plus tard",
-    "newVersion": "Nouvelle version détectée",
-    "newVersionAvailable": "Nouvelle version disponible : {{version}}",
-    "skipThisVersion": "Ignorer cette version"
-  }
+  "about.button": "D'accord",
+  "about.detail": "Une application de chat basée sur un grand modèle de langage",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "À propos",
+  "confirm.cancel": "Annuler",
+  "confirm.no": "Non",
+  "confirm.title": "Confirmer",
+  "confirm.yes": "Oui",
+  "error.button": "D'accord",
+  "error.detail": "Une erreur s'est produite lors de l'opération, veuillez réessayer plus tard",
+  "error.message": "Une erreur s'est produite",
+  "error.title": "Erreur",
+  "update.downloadAndInstall": "Télécharger et installer",
+  "update.downloadComplete": "Téléchargement terminé",
+  "update.downloadCompleteMessage": "Le paquet de mise à jour a été téléchargé, souhaitez-vous l'installer maintenant ?",
+  "update.installLater": "Installer plus tard",
+  "update.installNow": "Installer maintenant",
+  "update.later": "Rappeler plus tard",
+  "update.newVersion": "Nouvelle version détectée",
+  "update.newVersionAvailable": "Nouvelle version disponible : {{version}}",
+  "update.skipThisVersion": "Ignorer cette version"
 }

@@ -1,20 +1,20 @@
-import { dispatch } from '@lobechat/electron-client-ipc';
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class AutoUpdateService {
   checkUpdate = async () => {
-    return dispatch('checkUpdate');
+    return ensureElectronIpc().autoUpdate.checkForUpdates();
   };
 
   installNow = async () => {
-    return dispatch('installNow');
+    return ensureElectronIpc().autoUpdate.quitAndInstallUpdate();
   };
 
   installLater = async () => {
-    return dispatch('installLater');
+    return ensureElectronIpc().autoUpdate.installLater();
   };
 
   downloadUpdate() {
-    return dispatch('downloadUpdate');
+    return ensureElectronIpc().autoUpdate.downloadUpdate();
   }
 }
 

@@ -1,15 +1,14 @@
 'use client';
 
-import { ForwardedRef, memo, useImperativeHandle } from 'react';
+import { type ForwardedRef, memo, useImperativeHandle } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
-import { AgentSettingsInstance, useAgentSettings } from './hooks/useAgentSettings';
-import { State, useStoreApi } from './store';
+import { type AgentSettingsInstance, useAgentSettings } from './hooks/useAgentSettings';
+import { type State, useStoreApi } from './store';
 
-export interface StoreUpdaterProps
-  extends Partial<
-    Pick<State, 'onMetaChange' | 'onConfigChange' | 'meta' | 'config' | 'id' | 'loading'>
-  > {
+export interface StoreUpdaterProps extends Partial<
+  Pick<State, 'onMetaChange' | 'onConfigChange' | 'meta' | 'config' | 'id' | 'loading'>
+> {
   instanceRef?: ForwardedRef<AgentSettingsInstance> | null;
 }
 

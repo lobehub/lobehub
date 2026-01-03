@@ -1,8 +1,8 @@
+import { EdgeConfig } from '@lobechat/edge-config';
 import { createEnv } from '@t3-oss/env-nextjs';
 import debug from 'debug';
 import { z } from 'zod';
 
-import { EdgeConfig } from '@/server/modules/EdgeConfig';
 import { merge } from '@/utils/merge';
 
 import { DEFAULT_FEATURE_FLAGS, mapFeatureFlagsEnvToState } from './schema';

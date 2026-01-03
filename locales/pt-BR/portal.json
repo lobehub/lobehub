@@ -1,30 +1,25 @@
 {
   "Artifacts": "Artefatos",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Parte",
-      "file": "Arquivo"
-    }
-  },
-  "Plugins": "Plugins",
-  "artifacts": {
-    "display": {
-      "code": "Código",
-      "preview": "Prévia"
-    },
-    "svg": {
-      "copyAsImage": "Copiar como imagem",
-      "copyFail": "Falha ao copiar, motivo do erro: {{error}}",
-      "copySuccess": "Imagem copiada com sucesso",
-      "download": {
-        "png": "Baixar como PNG",
-        "svg": "Baixar como SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "A lista de Artefatos atual está vazia. Por favor, use os plugins conforme necessário durante a sessão e depois verifique novamente.",
-  "emptyKnowledgeList": "A lista de conhecimentos atual está vazia. Por favor, ative o repositório de conhecimentos conforme necessário durante a conversa antes de visualizar.",
+  "FilePreview.tabs.chunk": "Trecho",
+  "FilePreview.tabs.file": "Arquivo",
+  "Plugins": "Habilidades",
+  "artifacts.display.code": "Código",
+  "artifacts.display.preview": "Pré-visualização",
+  "artifacts.svg.copyAsImage": "Copiar como imagem",
+  "artifacts.svg.copyFail": "Falha ao copiar: {{error}}. Tente novamente.",
+  "artifacts.svg.copySuccess": "Imagem copiada com sucesso",
+  "artifacts.svg.download.png": "Baixar como PNG",
+  "artifacts.svg.download.svg": "Baixar como SVG",
+  "document.todos.allCompleted": "Todas as tarefas concluídas",
+  "document.todos.title": "Tarefas",
+  "emptyArtifactList": "Nenhum artefato ainda. Use habilidades na conversa e depois volte aqui.",
+  "emptyKnowledgeList": "Esta lista está vazia.",
   "files": "Arquivos",
   "messageDetail": "Detalhes da mensagem",
-  "title": "Janela de Expansão"
+  "notebook.confirmDelete": "Excluir esta página?",
+  "notebook.delete": "Excluir",
+  "notebook.empty": "Nenhuma página ainda. Páginas vinculadas a este tópico aparecerão aqui.",
+  "notebook.title": "Caderno",
+  "openInPageEditor": "Editar na página",
+  "title": "Área de trabalho"
 }

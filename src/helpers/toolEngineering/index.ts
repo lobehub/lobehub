@@ -1,17 +1,17 @@
 /**
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
+import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { ToolsEngine } from '@lobechat/context-engine';
 import type { PluginEnableChecker } from '@lobechat/context-engine';
-import { ChatCompletionTool, WorkingModel } from '@lobechat/types';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ChatCompletionTool, type WorkingModel } from '@lobechat/types';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
-import { pluginSelectors } from '@/store/tool/selectors';
-import { KnowledgeBaseManifest } from '@/tools/knowledge-base';
-import { WebBrowsingManifest } from '@/tools/web-browsing';
+import { klavisStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
@@ -45,8 +45,19 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     (tool) => tool.manifest as LobeChatPluginManifest,
   );
 
+  // Get Klavis tool manifests
+  const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
+  const klavisManifests = klavisTools
+    .map((tool) => tool.manifest as LobeChatPluginManifest)
+    .filter(Boolean);
+
   // Combine all manifests
-  const allManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
+  const allManifests = [
+    ...pluginManifests,
+    ...builtinManifests,
+    ...klavisManifests,
+    ...additionalManifests,
+  ];
 
   return new ToolsEngine({
     defaultToolIds,

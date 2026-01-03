@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "Authorize",
-      "deny": "Deny"
-    },
-    "description": "The application {{clientName}} is requesting authorization for your account",
-    "error": {
-      "sessionInvalid": {
-        "message": "The authorization session has expired or is invalid. Please restart the authorization process.",
-        "title": "Invalid Authorization Session"
-      },
-      "title": "An Error Occurred",
-      "unsupportedInteraction": {
-        "message": "Unsupported interaction type: {promptName}",
-        "title": "Unsupported Interaction Type"
-      }
-    },
-    "permissionsTitle": "Requesting the following permissions:",
-    "redirectUri": "You will be redirected to after successful authorization",
-    "redirecting": "Authorization successful, redirecting...",
-    "scope": {
-      "email": "Access your email address",
-      "offline_access": "Allow the client to access your data",
-      "openid": "Authenticate using your LobeChat account",
-      "profile": "Access your basic profile information (name, avatar, etc.)",
-      "sync-read": "Read your synchronized data",
-      "sync-write": "Write and update your synchronized data"
-    },
-    "title": "Authorize {{clientName}}"
-  },
-  "error": {
-    "backToHome": "Back to Home",
-    "desc": "OAuth authorization failed, reason: {{reason}}",
-    "reason": {
-      "internal_error": "Internal Server Error",
-      "invalid_request": "Invalid Request Parameters"
-    },
-    "title": "Authorization Failed"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "The application is processing the authorization and will redirect to the next page soon...",
-      "success": "An attempt has been made to open the desktop application. If it does not open automatically, please switch manually. You can close this browser window later."
-    },
-    "title": {
-      "processing": "Authorization in progress...",
-      "success": "Authorization completed"
-    }
-  },
-  "login": {
-    "button": "Confirm Login",
-    "description": "The application {{clientName}} is requesting to use your account for login",
-    "title": "Login to {{clientName}}",
-    "userWelcome": "Welcome back, "
-  },
-  "success": {
-    "subTitle": "You have successfully authorized the application to access your account. You may now close this page.",
-    "title": "Authorization Successful"
-  }
+  "consent.buttons.accept": "Authorize",
+  "consent.buttons.deny": "Deny",
+  "consent.description": "The application {{clientName}} is requesting authorization for your account",
+  "consent.error.sessionInvalid.message": "The authorization session has expired or is invalid. Please restart the authorization process.",
+  "consent.error.sessionInvalid.title": "Invalid Authorization Session",
+  "consent.error.title": "An Error Occurred",
+  "consent.error.unknown.message": "An unknown error occurred while loading authorization details.",
+  "consent.error.unsupportedInteraction.message": "Unsupported interaction type: {{promptName}}",
+  "consent.error.unsupportedInteraction.title": "Unsupported Interaction Type",
+  "consent.permissionsTitle": "Requesting the following permissions:",
+  "consent.redirectUri": "You will be redirected to after successful authorization",
+  "consent.redirecting": "Authorization successful, redirecting...",
+  "consent.scope.email": "Access your email address",
+  "consent.scope.offline_access": "Allow the client to access your data",
+  "consent.scope.openid": "Authenticate using your LobeHub account",
+  "consent.scope.profile": "Access your basic profile information (name, avatar, etc.)",
+  "consent.scope.sync-read": "Read your synchronized data",
+  "consent.scope.sync-write": "Write and update your synchronized data",
+  "consent.title": "Authorize {{clientName}}",
+  "error.backToHome": "Back to Home",
+  "error.desc": "OAuth authorization failed, reason: {{reason}}",
+  "error.reason.internal_error": "Internal Server Error",
+  "error.reason.invalid_request": "Invalid Request Parameters",
+  "error.title": "Authorization Failed",
+  "handoff.desc.processing": "The application is processing the authorization and will redirect to the next page soon...",
+  "handoff.desc.success": "An attempt has been made to open the desktop application. If it does not open automatically, please switch manually. You can close this browser window later.",
+  "handoff.title.processing": "Authorization in progress...",
+  "handoff.title.success": "Authorization completed",
+  "login.button": "Confirm Login",
+  "login.description": "The application {{clientName}} is requesting to use your account for login",
+  "login.title": "Login to {{clientName}}",
+  "login.userWelcome": "Welcome back, ",
+  "success.subTitle": "You have successfully authorized the application to access your account. You may now close this page.",
+  "success.title": "Authorization Successful"
 }

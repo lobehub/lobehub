@@ -1,7 +1,7 @@
 import {
-  DataSyncConfig,
-  ElectronAppState,
-  NetworkProxySettings,
+  type DataSyncConfig,
+  type ElectronAppState,
+  type NetworkProxySettings,
 } from '@lobechat/electron-client-ipc';
 
 export type RemoteServerError = 'CONFIG_ERROR' | 'AUTH_ERROR' | 'DISCONNECT_ERROR';
@@ -30,7 +30,7 @@ export interface ElectronState {
 
 export const initialState: ElectronState = {
   appState: {},
-  dataSyncConfig: { storageMode: 'local' },
+  dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},
   isAppStateInit: false,
   isConnectingServer: false,

@@ -1,181 +1,134 @@
 {
   "addFolder": "フォルダーを作成",
-  "addKnowledge": "知識を追加",
+  "addLibrary": "追加",
   "addPage": "ドキュメントを作成",
-  "desc": "仕事、学習、生活の知識を管理しましょう。",
-  "detail": {
-    "basic": {
-      "createdAt": "作成日時",
-      "filename": "ファイル名",
-      "size": "ファイルサイズ",
-      "title": "基本情報",
-      "type": "フォーマット",
-      "updatedAt": "更新日時"
-    },
-    "data": {
-      "chunkCount": "チャンク数",
-      "embedding": {
-        "default": "ベクトル化されていません",
-        "error": "失敗",
-        "pending": "開始待ち",
-        "processing": "処理中",
-        "success": "完了"
-      },
-      "embeddingStatus": "ベクトル化"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "アイコンを追加",
-    "autoSaveMessage": "ドキュメントは自動的に保存されます。手動で保存する必要はありません。",
-    "chooseIcon": "アイコンを選択",
-    "deleteConfirm": {
-      "content": "このドキュメントを削除しようとしています。削除後は復元できませんので、ご注意ください。",
-      "title": "ドキュメントの削除"
-    },
-    "deleteError": "ドキュメントの削除に失敗しました",
-    "deleteSuccess": "ドキュメントを削除しました",
-    "editedAt": "最終編集：{{time}}",
-    "editedBy": "最終編集者：{{name}}",
-    "editorPlaceholder": "ドキュメントの内容を入力し、「/」でコマンドメニューを開く",
-    "empty": {
-      "createNewDocument": "新しいドキュメントを作成",
-      "title": "ドキュメントを選択して開始",
-      "uploadMarkdown": "Markdownファイルをアップロード"
-    },
-    "linkCopied": "リンクをコピーしました",
-    "menu": {
-      "copyLink": "リンクをコピー",
-      "exportDocument": "ドキュメントをエクスポート",
-      "importDocument": "ドキュメントをインポート",
-      "pin": "ドキュメントをピン留め"
-    },
-    "saving": "保存中...",
-    "titlePlaceholder": "無題",
-    "wordCount": "{{wordCount}} 文字"
-  },
-  "documentList": {
-    "copyContent": "全文をコピー",
-    "duplicate": "複製を作成",
-    "empty": "まだ文書がありません。上のボタンをクリックして最初の文書を作成しましょう",
-    "noResults": "一致する文書が見つかりませんでした",
-    "pageCount": "全 {{count}} 件の文書",
-    "selectNote": "編集を始める文書を選択してください",
-    "untitled": "無題"
-  },
+  "detail.basic.createdAt": "作成日時",
+  "detail.basic.filename": "ファイル名",
+  "detail.basic.size": "ファイルサイズ",
+  "detail.basic.title": "基本情報",
+  "detail.basic.type": "フォーマット",
+  "detail.basic.updatedAt": "更新日時",
+  "detail.data.chunkCount": "チャンク数",
+  "detail.data.embedding.default": "ベクトル化されていません",
+  "detail.data.embedding.error": "失敗",
+  "detail.data.embedding.pending": "開始待ち",
+  "detail.data.embedding.processing": "処理中",
+  "detail.data.embedding.success": "完了",
+  "detail.data.embeddingStatus": "ベクトル化",
   "empty": "アップロードされたファイル/フォルダーはありません",
-  "header": {
-    "actions": {
-      "newFolder": "新しいフォルダーを作成",
-      "newPage": "新しいドキュメント",
-      "uploadFile": "ファイルをアップロード",
-      "uploadFolder": "フォルダーをアップロード"
-    },
-    "newNoteDialog": {
-      "cancel": "キャンセル",
-      "editTitle": "ドキュメントを編集",
-      "emptyContent": "ドキュメントの内容は空にできません",
-      "loadError": "ドキュメントの読み込みに失敗しました。再試行してください。",
-      "loading": "読み込み中...",
-      "save": "保存",
-      "saveError": "ドキュメントの保存に失敗しました。再試行してください。",
-      "saveSuccess": "ドキュメントを保存しました",
-      "title": "新規ドキュメント",
-      "updateSuccess": "ドキュメントを更新しました"
-    },
-    "newPageButton": "新しいドキュメントを作成",
-    "uploadButton": "アップロード"
-  },
-  "home": {
-    "getStarted": "はじめに",
-    "greeting": "はじめに",
-    "quickActions": "クイック操作",
-    "recentFiles": "最近のファイル",
-    "recentPages": "最近のドキュメント",
-    "subtitle": "ナレッジベースへようこそ。ここからドキュメントの管理を始めましょう。",
-    "uploadEntries": {
-      "files": {
-        "title": "ファイルをアップロード"
-      },
-      "folder": {
-        "title": "フォルダをアップロード"
-      },
-      "knowledgeBase": {
-        "title": "新しいナレッジベースを作成"
-      },
-      "newPage": {
-        "title": "新規文書の作成"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "この知識ベースを削除しようとしています。ファイルは削除されず、すべてのファイルに移動されます。知識ベースを削除すると復元できませんので、慎重に操作してください。",
-      "empty": "クリックして <1>+</1> 知識ベースを作成を開始"
-    },
-    "new": "新しい知識ベース",
-    "title": "知識ベース"
-  },
-  "menu": {
-    "allFiles": "すべてのファイル",
-    "allPages": "すべてのドキュメント"
-  },
-  "networkError": "知識ベースの取得に失敗しました。ネットワーク接続を確認してから再試行してください",
-  "notSupportGuide": {
-    "desc": "現在のデプロイメントインスタンスはクライアントデータベースモードであり、ファイル管理機能を使用できません。<1>サーバーデータベースデプロイメントモード</1>に切り替えるか、直接 <3>LobeChat Cloud</3> を使用してください。",
-    "features": {
-      "allKind": {
-        "desc": "Word、PPT、Excel、PDF、TXTなどの一般的な文書形式や、JS、Pythonなどの主流のコードファイルを含む、主流のファイルタイプをサポートしています。",
-        "title": "多様なファイルタイプの解析"
-      },
-      "embeddings": {
-        "desc": "高性能ベクトルモデルを使用して、テキストチャンクをベクトル化し、ファイル内容の意味的検索を実現します。",
-        "title": "ベクトルの意味化"
-      },
-      "repos": {
-        "desc": "知識ベースの作成をサポートし、さまざまなタイプのファイルを追加して、あなたの専門知識を構築できます。",
-        "title": "知識ベース"
-      }
-    },
-    "title": "現在のデプロイメントモードはファイル管理をサポートしていません"
-  },
-  "preview": {
-    "downloadFile": "ファイルをダウンロード",
-    "unsupportedFileAndContact": "このファイル形式はオンラインプレビューをサポートしていません。プレビューのリクエストがある場合は、ぜひ<1>ご連絡ください</1>。"
-  },
+  "header.actions.builtInBlockList.filtered": "{{total}} 件のファイルのうち {{ignored}} 件がフィルターされました",
+  "header.actions.connect": "接続中...",
+  "header.actions.gitignore.apply": "ルールを適用",
+  "header.actions.gitignore.cancel": "ルールを無視",
+  "header.actions.gitignore.content": ".gitignore ファイルが検出されました（合計 {{count}} 件のファイル）。無視ルールを適用しますか？",
+  "header.actions.gitignore.filtered": "{{total}} 件のファイルのうち {{ignored}} 件がフィルターされました",
+  "header.actions.gitignore.title": ".gitignore が検出されました",
+  "header.actions.newFolder": "新しいフォルダーを作成",
+  "header.actions.newPage": "新しいドキュメント",
+  "header.actions.notion.error": "Notion ファイルのインポートに失敗しました",
+  "header.actions.notion.foundFiles": "{{count}} 件のファイルが見つかりました",
+  "header.actions.notion.importing": "Notionのコンテンツをインポート中...",
+  "header.actions.notion.noMarkdownFiles": "ZIP ファイル内に Markdown ファイルが見つかりませんでした",
+  "header.actions.notion.partial": "{{success}} 件のファイルを正常にインポートし、{{failed}} 件が失敗しました",
+  "header.actions.notion.success": "{{count}} 件のファイルを正常にインポートしました",
+  "header.actions.notionGuide.cancel": "今はしない",
+  "header.actions.notionGuide.desc": "まず Notion で Markdown（ZIP）形式でエクスポートしてください。「続ける」をクリックしてZIPファイルを選択すると、すべてのページをインポートできます。",
+  "header.actions.notionGuide.ok": "Notion ZIP を選択",
+  "header.actions.notionGuide.title": "Notion コンテンツをインポート",
+  "header.actions.uploadFile": "ファイルをアップロード",
+  "header.actions.uploadFolder": "フォルダーをアップロード",
+  "header.newPageButton": "新しいドキュメントを作成",
+  "header.uploadButton": "アップロード",
+  "home.getStarted": "はじめに",
+  "home.greeting": "はじめに",
+  "home.quickActions": "クイック操作",
+  "home.recentFiles": "最近のファイル",
+  "home.recentPages": "最近のドキュメント",
+  "home.uploadEntries.files.title": "ファイルをアップロード",
+  "home.uploadEntries.folder.title": "フォルダをアップロード",
+  "home.uploadEntries.library.title": "新しいライブラリを作成",
+  "home.uploadEntries.newPage.title": "新規文書の作成",
+  "library.list.confirmRemoveLibrary": "このライブラリを削除しようとしています。中のファイルは削除されず、「すべてのファイル」に移動されます。ライブラリは削除後に復元できませんので、ご注意ください。",
+  "library.list.empty": "<1>+</1> をクリックしてライブラリを作成",
+  "library.new": "新しいライブラリを作成",
+  "library.title": "ライブラリ",
+  "loadMore": "さらに読み込む",
+  "menu.allFiles": "すべてのファイル",
+  "menu.allPages": "すべてのドキュメント",
+  "networkError": "ライブラリの取得に失敗しました。ネットワーク接続を確認してから再試行してください。",
+  "notSupportGuide.desc": "現在のデプロイメントインスタンスはクライアントデータベースモードであり、ファイル管理機能を使用できません。<1>サーバーデータベースデプロイメントモード</1>に切り替えるか、直接 <3>LobeChat Cloud</3> を使用してください。",
+  "notSupportGuide.features.allKind.desc": "Word、PPT、Excel、PDF、TXTなどの一般的な文書形式や、JS、Pythonなどの主流のコードファイルを含む、主流のファイルタイプをサポートしています。",
+  "notSupportGuide.features.allKind.title": "多様なファイルタイプの解析",
+  "notSupportGuide.features.embeddings.desc": "高性能ベクトルモデルを使用して、テキストチャンクをベクトル化し、ファイル内容の意味的検索を実現します。",
+  "notSupportGuide.features.embeddings.title": "ベクトルの意味化",
+  "notSupportGuide.features.libraries.desc": "ライブラリの作成をサポートし、さまざまな種類のファイルを追加して、あなた専用のリソースを構築できます。",
+  "notSupportGuide.features.libraries.title": "ライブラリ",
+  "notSupportGuide.title": "現在のデプロイメントモードはファイル管理をサポートしていません",
+  "pageEditor.addIcon": "アイコンを追加",
+  "pageEditor.autoSaveMessage": "ドキュメントは自動的に保存されます。手動で保存する必要はありません。",
+  "pageEditor.chooseIcon": "アイコンを選択",
+  "pageEditor.deleteConfirm.content": "このドキュメントを削除しようとしています。削除後は元に戻せませんので、慎重に操作してください。",
+  "pageEditor.deleteConfirm.title": "ドキュメントの削除",
+  "pageEditor.deleteError": "ドキュメントの削除に失敗しました",
+  "pageEditor.deleteSuccess": "ドキュメントを削除しました",
+  "pageEditor.duplicateError": "ページの複製に失敗しました",
+  "pageEditor.duplicateSuccess": "ページを正常に複製しました",
+  "pageEditor.editedAt": "最終編集：{{time}}",
+  "pageEditor.editedBy": "最終編集者：{{name}}",
+  "pageEditor.editorPlaceholder": "ドキュメントの内容を入力し、「/」キーでコマンドメニューを開きます",
+  "pageEditor.empty.createNewDocument": "新しいドキュメントを作成",
+  "pageEditor.empty.importNotion": "Notionからインポート",
+  "pageEditor.empty.title": "ドキュメントを選択して開始",
+  "pageEditor.empty.uploadFiles": "ファイルをアップロード",
+  "pageEditor.exportError": "ページのエクスポートに失敗しました",
+  "pageEditor.exportSuccess": "ページを正常にエクスポートしました",
+  "pageEditor.linkCopied": "リンクをコピーしました",
+  "pageEditor.menu.copyLink": "リンクをコピー",
+  "pageEditor.menu.export": "エクスポート",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "ドキュメントをエクスポート",
+  "pageEditor.menu.importDocument": "ドキュメントをインポート",
+  "pageEditor.menu.pin": "ドキュメントをピン留め",
+  "pageEditor.saving": "保存中...",
+  "pageEditor.titlePlaceholder": "無題",
+  "pageEditor.wordCount": "{{wordCount}} 文字",
+  "pageList.copyContent": "全文をコピー",
+  "pageList.duplicate": "複製を作成",
+  "pageList.empty": "ドキュメントがまだありません。上のボタンをクリックして最初のドキュメントを作成しましょう。",
+  "pageList.filter.all": "すべて",
+  "pageList.filter.onlyInPages": "ドキュメント内のみ",
+  "pageList.noResults": "一致するドキュメントが見つかりませんでした",
+  "pageList.pageCount": "全 {{count}} 件のドキュメント",
+  "pageList.pageSizeItem": "{{count}} 件の項目",
+  "pageList.title": "ドキュメント",
+  "pageList.untitled": "無題",
+  "portal.openInPageEditor": "ドキュメントで編集",
+  "preview.downloadFile": "ファイルをダウンロード",
+  "preview.unsupportedFileAndContact": "このファイル形式はオンラインプレビューをサポートしていません。プレビューのリクエストがある場合は、ぜひ<1>ご連絡ください</1>。",
   "searchFilePlaceholder": "ファイルを検索",
   "searchPagePlaceholder": "文書を検索",
-  "tab": {
-    "all": "すべて",
-    "audios": "音声",
-    "documents": "文書",
-    "home": "ホーム",
-    "images": "画像",
-    "moreTypes": "その他の種類",
-    "pages": "ドキュメント",
-    "videos": "動画",
-    "websites": "ウェブサイト"
-  },
-  "title": "ナレッジベース",
+  "tab.all": "すべて",
+  "tab.audios": "音声",
+  "tab.documents": "ドキュメント",
+  "tab.home": "ホーム",
+  "tab.images": "画像",
+  "tab.moreTypes": "その他の種類",
+  "tab.pages": "ドキュメント",
+  "tab.videos": "動画",
+  "tab.websites": "ウェブサイト",
+  "title": "リソース",
   "toggleLeftPanel": "左パネルの表示/非表示を切り替え",
-  "uploadDock": {
-    "body": {
-      "collapse": "折りたたむ",
-      "item": {
-        "done": "アップロード完了",
-        "error": "アップロード失敗、再試行してください",
-        "pending": "アップロード準備中...",
-        "processing": "ファイル処理中...",
-        "restTime": "残り {{time}}"
-      }
-    },
-    "fileQueueInfo": "最初の {{count}} 件のファイルをアップロード中、残りの {{remaining}} 件は順番待ちです",
-    "totalCount": "合計 {{count}} 件",
-    "uploadStatus": {
-      "error": "アップロードエラー",
-      "pending": "アップロード待機中",
-      "processing": "アップロード中",
-      "success": "アップロード完了",
-      "uploading": "アップロード中"
-    }
-  }
+  "uploadDock.body.collapse": "折りたたむ",
+  "uploadDock.body.item.done": "アップロード完了",
+  "uploadDock.body.item.error": "アップロード失敗、再試行してください",
+  "uploadDock.body.item.pending": "アップロード準備中...",
+  "uploadDock.body.item.processing": "ファイル処理中...",
+  "uploadDock.body.item.restTime": "残り {{time}}",
+  "uploadDock.fileQueueInfo": "最初の {{count}} 件のファイルをアップロード中、残りの {{remaining}} 件は順番待ちです",
+  "uploadDock.totalCount": "合計 {{count}} 件",
+  "uploadDock.uploadStatus.error": "アップロードエラー",
+  "uploadDock.uploadStatus.pending": "アップロード待機中",
+  "uploadDock.uploadStatus.processing": "アップロード中",
+  "uploadDock.uploadStatus.success": "アップロード完了",
+  "uploadDock.uploadStatus.uploading": "アップロード中"
 }

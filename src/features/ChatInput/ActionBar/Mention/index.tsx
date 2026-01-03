@@ -30,7 +30,7 @@ const Mention = memo(() => {
             <Avatar
               avatar={agent.avatar}
               background={agent.backgroundColor ?? undefined}
-              shape="circle"
+              shape={'square'}
               size={24}
             />
           ),

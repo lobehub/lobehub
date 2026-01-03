@@ -1,5 +1,5 @@
 // import { FileStore } from '../../store';
-import { FilesStoreState } from '@/store/file/initialState';
+import { type FilesStoreState } from '@/store/file/initialState';
 
 const showSimilaritySearchResult = (s: FilesStoreState) => s.isSimilaritySearch;
 const enabledChunkFileId = (s: FilesStoreState) => s.chunkDetailId;

@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Hinzufügen",
-    "back": "Zurück",
-    "cancel": "Abbrechen",
-    "close": "Schließen",
-    "confirm": "Bestätigen",
-    "delete": "Löschen",
-    "edit": "Bearbeiten",
-    "more": "Mehr",
-    "next": "Weiter",
-    "ok": "OK",
-    "previous": "Zurück",
-    "refresh": "Aktualisieren",
-    "remove": "Entfernen",
-    "retry": "Erneut versuchen",
-    "save": "Speichern",
-    "search": "Suchen",
-    "submit": "Einreichen"
-  },
-  "app": {
-    "description": "Ihre KI-Assistenten-Kollaborationsplattform",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Fehler",
-    "info": "Information",
-    "loading": "Lädt",
-    "success": "Erfolg",
-    "warning": "Warnung"
-  }
+  "actions.add": "Hinzufügen",
+  "actions.back": "Zurück",
+  "actions.cancel": "Abbrechen",
+  "actions.close": "Schließen",
+  "actions.confirm": "Bestätigen",
+  "actions.delete": "Löschen",
+  "actions.edit": "Bearbeiten",
+  "actions.more": "Mehr",
+  "actions.next": "Weiter",
+  "actions.ok": "OK",
+  "actions.previous": "Zurück",
+  "actions.refresh": "Aktualisieren",
+  "actions.remove": "Entfernen",
+  "actions.retry": "Erneut versuchen",
+  "actions.save": "Speichern",
+  "actions.search": "Suchen",
+  "actions.submit": "Einreichen",
+  "app.description": "Ihre KI-Assistenten-Kollaborationsplattform",
+  "app.name": "LobeHub",
+  "status.error": "Fehler",
+  "status.info": "Information",
+  "status.loading": "Lädt",
+  "status.success": "Erfolg",
+  "status.warning": "Warnung"
 }

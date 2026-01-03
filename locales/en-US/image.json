@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Aspect Ratio",
-      "lock": "Lock Aspect Ratio",
-      "unlock": "Unlock Aspect Ratio"
-    },
-    "cfg": {
-      "label": "Guidance Intensity"
-    },
-    "header": {
-      "desc": "Brief description, create instantly",
-      "title": "Painting"
-    },
-    "height": {
-      "label": "Height"
-    },
-    "imageNum": {
-      "label": "Number of Images"
-    },
-    "imageUrl": {
-      "label": "Reference Image"
-    },
-    "imageUrls": {
-      "label": "Reference Images"
-    },
-    "model": {
-      "label": "Model"
-    },
-    "prompt": {
-      "placeholder": "Describe what you want to generate"
-    },
-    "quality": {
-      "label": "Image Quality",
-      "options": {
-        "hd": "High Definition",
-        "standard": "Standard"
-      }
-    },
-    "resolution": {
-      "label": "Resolution",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Seed",
-      "random": "Random Seed"
-    },
-    "size": {
-      "label": "Size"
-    },
-    "steps": {
-      "label": "Steps"
-    },
-    "title": "AI Image",
-    "width": {
-      "label": "Width"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Apply Seed",
-      "copyError": "Copy Error Message",
-      "copyPrompt": "Copy Prompt",
-      "copySeed": "Copy Seed",
-      "delete": "Delete",
-      "deleteBatch": "Delete Batch",
-      "download": "Download",
-      "downloadFailed": "Failed to download image. Please check your network connection or S3 storage CORS configuration.",
-      "errorCopied": "Error Message Copied to Clipboard",
-      "errorCopyFailed": "Failed to Copy Error Message",
-      "generate": "Generate",
-      "promptCopied": "Prompt Copied to Clipboard",
-      "promptCopyFailed": "Failed to Copy Prompt",
-      "reuseSettings": "Reuse Settings",
-      "seedApplied": "Seed Applied to Configuration",
-      "seedApplyFailed": "Failed to Apply Seed",
-      "seedCopied": "Seed Copied to Clipboard",
-      "seedCopyFailed": "Failed to Copy Seed"
-    },
-    "metadata": {
-      "count": "{{count}} Images"
-    },
-    "status": {
-      "failed": "Generation Failed",
-      "generating": "Generating..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "The current deployment instance uses client-side database mode and does not support AI image generation. Please switch to the <1>server-side database deployment mode</1>, or use <3>LobeChat Cloud</3> directly.",
-    "features": {
-      "fileIntegration": {
-        "desc": "Deep integration with the file management system; generated images are automatically saved to the file system for unified management and organization.",
-        "title": "File System Integration"
-      },
-      "llmAssisted": {
-        "desc": "Combines large language model capabilities to intelligently optimize and expand prompts, enhancing image generation quality (Coming Soon).",
-        "title": "LLM-Assisted Image Generation"
-      },
-      "multiProviders": {
-        "desc": "Supports multiple AI image generation providers, including OpenAI gpt-image-1, Google Imagen, FAL.ai, and more, offering a wide selection of models.",
-        "title": "Multi-Provider Support"
-      }
-    },
-    "title": "Current Deployment Mode Does Not Support AI Image Generation"
-  },
-  "topic": {
-    "createNew": "New Topic",
-    "deleteConfirm": "Delete Generation Topic",
-    "deleteConfirmDesc": "You are about to delete this generation topic. This action cannot be undone, please proceed with caution.",
-    "empty": "No generation topics",
-    "title": "Painting Theme",
-    "untitled": "Default Topic"
-  }
+  "config.aspectRatio.label": "Aspect Ratio",
+  "config.aspectRatio.lock": "Lock Aspect Ratio",
+  "config.aspectRatio.unlock": "Unlock Aspect Ratio",
+  "config.cfg.label": "Guidance Intensity",
+  "config.header.desc": "Brief description, create instantly",
+  "config.header.title": "Painting",
+  "config.height.label": "Height",
+  "config.imageNum.label": "Number of Images",
+  "config.imageUrl.label": "Reference Image",
+  "config.imageUrls.label": "Reference Images",
+  "config.model.label": "Model",
+  "config.prompt.placeholder": "Describe what you want to generate",
+  "config.quality.label": "Image Quality",
+  "config.quality.options.hd": "High Definition",
+  "config.quality.options.standard": "Standard",
+  "config.resolution.label": "Resolution",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Seed",
+  "config.seed.random": "Random Seed",
+  "config.size.label": "Size",
+  "config.steps.label": "Steps",
+  "config.title": "AI Image",
+  "config.width.label": "Width",
+  "generation.actions.applySeed": "Apply Seed",
+  "generation.actions.copyError": "Copy Error Message",
+  "generation.actions.copyPrompt": "Copy Prompt",
+  "generation.actions.copySeed": "Copy Seed",
+  "generation.actions.delete": "Delete",
+  "generation.actions.deleteBatch": "Delete Batch",
+  "generation.actions.download": "Download",
+  "generation.actions.downloadFailed": "Failed to download image. Please check your network connection or S3 storage CORS configuration.",
+  "generation.actions.errorCopied": "Error Message Copied to Clipboard",
+  "generation.actions.errorCopyFailed": "Failed to Copy Error Message",
+  "generation.actions.generate": "Generate",
+  "generation.actions.promptCopied": "Prompt Copied to Clipboard",
+  "generation.actions.promptCopyFailed": "Failed to Copy Prompt",
+  "generation.actions.reuseSettings": "Reuse Settings",
+  "generation.actions.seedApplied": "Seed Applied to Configuration",
+  "generation.actions.seedApplyFailed": "Failed to Apply Seed",
+  "generation.actions.seedCopied": "Seed Copied to Clipboard",
+  "generation.actions.seedCopyFailed": "Failed to Copy Seed",
+  "generation.metadata.count": "{{count}} Images",
+  "generation.status.failed": "Generation Failed",
+  "generation.status.generating": "Generating...",
+  "notSupportGuide.desc": "The current deployment mode does not support AI image generation. Switch to the <1>server database deployment mode</1>, or use <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Deep integration with the file management system; generated images are automatically saved to the file system for unified management and organization.",
+  "notSupportGuide.features.fileIntegration.title": "File System Integration",
+  "notSupportGuide.features.llmAssisted.desc": "Combines large language model capabilities to intelligently optimize and expand prompts, enhancing image generation quality (Coming Soon).",
+  "notSupportGuide.features.llmAssisted.title": "LLM-Assisted Image Generation",
+  "notSupportGuide.features.multiProviders.desc": "Supports multiple AI image generation providers, including OpenAI gpt-image-1, Google Imagen, FAL.ai, and more, offering a wide selection of models.",
+  "notSupportGuide.features.multiProviders.title": "Multi-Provider Support",
+  "notSupportGuide.title": "Current Deployment Mode Does Not Support AI Image Generation",
+  "topic.createNew": "New Topic",
+  "topic.deleteConfirm": "Delete Generation Topic",
+  "topic.deleteConfirmDesc": "You are about to delete this generation topic. This action cannot be undone, please proceed with caution.",
+  "topic.empty": "No generation topics",
+  "topic.title": "Painting Theme",
+  "topic.untitled": "Default Topic"
 }

@@ -1,11 +1,11 @@
-import { EnabledAiModel } from 'model-bank';
+import { type EnabledAiModel } from 'model-bank';
 
 import {
-  AiProviderDetailItem,
-  AiProviderListItem,
-  AiProviderRuntimeConfig,
-  EnabledProvider,
-  EnabledProviderWithModels,
+  type AiProviderDetailItem,
+  type AiProviderListItem,
+  type AiProviderRuntimeConfig,
+  type EnabledProvider,
+  type EnabledProviderWithModels,
 } from '@/types/aiProvider';
 
 export interface AIProviderState {

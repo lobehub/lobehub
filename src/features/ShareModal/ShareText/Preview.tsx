@@ -1,17 +1,16 @@
 import { Markdown } from '@lobehub/ui';
+import { cx } from 'antd-style';
 import { memo } from 'react';
 
-import { useIsMobile } from '@/hooks/useIsMobile';
-
-import { useContainerStyles } from '../style';
+import { containerStyles } from '../style';
 
 const Preview = memo<{ content: string }>(({ content }) => {
-  const { styles } = useContainerStyles();
-  const isMobile = useIsMobile();
-
   return (
-    <div className={styles.preview} style={{ padding: 12 }}>
-      <Markdown variant={isMobile ? 'chat' : undefined}>{content}</Markdown>
+    <div
+      className={cx(containerStyles.preview, containerStyles.previewWide)}
+      style={{ padding: 12 }}
+    >
+      <Markdown variant={'chat'}>{content}</Markdown>
     </div>
   );
 });

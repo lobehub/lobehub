@@ -309,4 +309,415 @@ describe('KnowledgeRepo', () => {
       expect(results[0].name).toBe('Meeting Notes');
     });
   });
+
+  describe('query - category filters', () => {
+    beforeEach(async () => {
+      // Create files of different types
+      await serverDB.insert(files).values([
+        {
+          id: 'image-file',
+          fileType: 'image/png',
+          name: 'photo.png',
+          size: 1024,
+          url: 'image-url',
+          userId,
+        },
+        {
+          id: 'video-file',
+          fileType: 'video/mp4',
+          name: 'video.mp4',
+          size: 2048,
+          url: 'video-url',
+          userId,
+        },
+        {
+          id: 'audio-file',
+          fileType: 'audio/mp3',
+          name: 'music.mp3',
+          size: 512,
+          url: 'audio-url',
+          userId,
+        },
+        {
+          id: 'html-file',
+          fileType: 'text/html',
+          name: 'page.html',
+          size: 256,
+          url: 'html-url',
+          userId,
+        },
+      ]);
+    });
+
+    it('should filter by Images category', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.Images });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].name).toBe('photo.png');
+      expect(results[0].fileType).toBe('image/png');
+    });
+
+    it('should filter by Videos category', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.Videos });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].name).toBe('video.mp4');
+      expect(results[0].fileType).toBe('video/mp4');
+    });
+
+    it('should filter by Audios category', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.Audios });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].name).toBe('music.mp3');
+      expect(results[0].fileType).toBe('audio/mp3');
+    });
+
+    it('should filter by Websites category', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.Websites });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].name).toBe('page.html');
+      expect(results[0].fileType).toBe('text/html');
+    });
+  });
+
+  describe('query - sorting', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'file-a',
+          fileType: 'application/pdf',
+          name: 'a-file.pdf',
+          size: 100,
+          url: 'url-a',
+          userId,
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          updatedAt: new Date('2024-01-05T10:00:00Z'),
+        },
+        {
+          id: 'file-b',
+          fileType: 'application/pdf',
+          name: 'b-file.pdf',
+          size: 200,
+          url: 'url-b',
+          userId,
+          createdAt: new Date('2024-01-02T10:00:00Z'),
+          updatedAt: new Date('2024-01-03T10:00:00Z'),
+        },
+      ]);
+    });
+
+    it('should sort by name ascending', async () => {
+      const results = await knowledgeRepo.query({
+        category: FilesTabs.All,
+        sorter: 'name',
+        sortType: 'asc',
+      });
+
+      expect(results[0].name).toBe('a-file.pdf');
+      expect(results[1].name).toBe('b-file.pdf');
+    });
+
+    it('should sort by name descending', async () => {
+      const results = await knowledgeRepo.query({
+        category: FilesTabs.All,
+        sorter: 'name',
+        sortType: 'desc',
+      });
+
+      expect(results[0].name).toBe('b-file.pdf');
+      expect(results[1].name).toBe('a-file.pdf');
+    });
+
+    it('should sort by size ascending', async () => {
+      const results = await knowledgeRepo.query({
+        category: FilesTabs.All,
+        sorter: 'size',
+        sortType: 'asc',
+      });
+
+      expect(results[0].size).toBe(100);
+      expect(results[1].size).toBe(200);
+    });
+  });
+
+  describe('query - pagination', () => {
+    beforeEach(async () => {
+      // Create 5 files
+      const testFiles = Array.from({ length: 5 }, (_, i) => ({
+        id: `paginate-file-${i}`,
+        fileType: 'application/pdf',
+        name: `file-${i}.pdf`,
+        size: 100 * (i + 1),
+        url: `url-${i}`,
+        userId,
+        createdAt: new Date(`2024-01-0${i + 1}T10:00:00Z`),
+      }));
+
+      await serverDB.insert(files).values(testFiles);
+    });
+
+    it('should respect limit parameter', async () => {
+      const results = await knowledgeRepo.query({ limit: 2 });
+
+      expect(results).toHaveLength(2);
+    });
+
+    it('should respect offset parameter', async () => {
+      const results = await knowledgeRepo.query({ limit: 2, offset: 2 });
+
+      expect(results).toHaveLength(2);
+    });
+  });
+
+  describe('queryRecent', () => {
+    beforeEach(async () => {
+      // Create files with different updated times
+      await serverDB.insert(files).values([
+        {
+          id: 'recent-file-1',
+          fileType: 'application/pdf',
+          name: 'recent-1.pdf',
+          size: 1024,
+          url: 'url-1',
+          userId,
+          updatedAt: new Date('2024-01-03T10:00:00Z'),
+        },
+        {
+          id: 'recent-file-2',
+          fileType: 'application/pdf',
+          name: 'recent-2.pdf',
+          size: 1024,
+          url: 'url-2',
+          userId,
+          updatedAt: new Date('2024-01-01T10:00:00Z'),
+        },
+        {
+          id: 'other-user-file',
+          fileType: 'application/pdf',
+          name: 'other-recent.pdf',
+          size: 1024,
+          url: 'url-other',
+          userId: otherUserId,
+          updatedAt: new Date('2024-01-05T10:00:00Z'),
+        },
+      ]);
+
+      // Create documents
+      await serverDB.insert(documents).values([
+        {
+          id: 'recent-doc-1',
+          content: 'Recent document content',
+          fileType: 'custom/other',
+          filename: 'recent-doc.txt',
+          source: 'api-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+          updatedAt: new Date('2024-01-02T10:00:00Z'),
+        },
+      ]);
+    });
+
+    it('should return recent items ordered by updatedAt desc', async () => {
+      const results = await knowledgeRepo.queryRecent(10);
+
+      // Should return items for current user only, ordered by updatedAt desc
+      expect(results).toHaveLength(3);
+      expect(results[0].name).toBe('recent-1.pdf'); // Most recent
+      expect(results[1].name).toBe('recent-doc.txt');
+      expect(results[2].name).toBe('recent-2.pdf'); // Least recent
+    });
+
+    it('should respect limit parameter', async () => {
+      const results = await knowledgeRepo.queryRecent(2);
+
+      expect(results).toHaveLength(2);
+    });
+
+    it('should not return other users items', async () => {
+      const results = await knowledgeRepo.queryRecent(10);
+
+      const otherUserItem = results.find((item) => item.name === 'other-recent.pdf');
+      expect(otherUserItem).toBeUndefined();
+    });
+  });
+
+  describe('deleteItem', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values({
+        id: 'delete-file',
+        fileType: 'application/pdf',
+        name: 'to-delete.pdf',
+        size: 1024,
+        url: 'delete-url',
+        userId,
+      });
+
+      await serverDB.insert(documents).values({
+        id: 'delete-doc',
+        content: 'Document to delete',
+        fileType: 'custom/other',
+        filename: 'to-delete-doc.txt',
+        source: 'source',
+        sourceType: 'api',
+        totalCharCount: 100,
+        totalLineCount: 10,
+        userId,
+      });
+    });
+
+    it('should delete a file by id', async () => {
+      await knowledgeRepo.deleteItem('delete-file', 'file');
+
+      // Verify file was deleted
+      const result = await serverDB.query.files.findFirst({
+        where: (f, { eq }) => eq(f.id, 'delete-file'),
+      });
+      expect(result).toBeUndefined();
+    });
+
+    it('should delete a document by id', async () => {
+      await knowledgeRepo.deleteItem('delete-doc', 'document');
+
+      // Verify document was deleted
+      const result = await serverDB.query.documents.findFirst({
+        where: (d, { eq }) => eq(d.id, 'delete-doc'),
+      });
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('deleteMany', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'delete-many-file-1',
+          fileType: 'application/pdf',
+          name: 'delete-1.pdf',
+          size: 1024,
+          url: 'url-1',
+          userId,
+        },
+        {
+          id: 'delete-many-file-2',
+          fileType: 'application/pdf',
+          name: 'delete-2.pdf',
+          size: 1024,
+          url: 'url-2',
+          userId,
+        },
+      ]);
+
+      await serverDB.insert(documents).values([
+        {
+          id: 'delete-many-doc-1',
+          content: 'Delete doc 1',
+          fileType: 'custom/other',
+          filename: 'delete-doc-1.txt',
+          source: 'source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+        },
+      ]);
+    });
+
+    it('should delete multiple items of mixed types', async () => {
+      await knowledgeRepo.deleteMany([
+        { id: 'delete-many-file-1', sourceType: 'file' },
+        { id: 'delete-many-file-2', sourceType: 'file' },
+        { id: 'delete-many-doc-1', sourceType: 'document' },
+      ]);
+
+      // Verify files were deleted
+      const file1 = await serverDB.query.files.findFirst({
+        where: (f, { eq }) => eq(f.id, 'delete-many-file-1'),
+      });
+      const file2 = await serverDB.query.files.findFirst({
+        where: (f, { eq }) => eq(f.id, 'delete-many-file-2'),
+      });
+      const doc1 = await serverDB.query.documents.findFirst({
+        where: (d, { eq }) => eq(d.id, 'delete-many-doc-1'),
+      });
+
+      expect(file1).toBeUndefined();
+      expect(file2).toBeUndefined();
+      expect(doc1).toBeUndefined();
+    });
+
+    it('should handle empty items array', async () => {
+      // Should not throw
+      await expect(knowledgeRepo.deleteMany([])).resolves.not.toThrow();
+    });
+
+    it('should delete only files when no documents provided', async () => {
+      await knowledgeRepo.deleteMany([{ id: 'delete-many-file-1', sourceType: 'file' }]);
+
+      // Verify only specified file was deleted
+      const file1 = await serverDB.query.files.findFirst({
+        where: (f, { eq }) => eq(f.id, 'delete-many-file-1'),
+      });
+      const file2 = await serverDB.query.files.findFirst({
+        where: (f, { eq }) => eq(f.id, 'delete-many-file-2'),
+      });
+
+      expect(file1).toBeUndefined();
+      expect(file2).toBeDefined();
+    });
+  });
+
+  describe('findById', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values({
+        id: 'find-file',
+        fileType: 'application/pdf',
+        name: 'find-me.pdf',
+        size: 1024,
+        url: 'find-url',
+        userId,
+      });
+
+      await serverDB.insert(documents).values({
+        id: 'find-doc',
+        content: 'Find this document',
+        fileType: 'custom/other',
+        filename: 'find-me-doc.txt',
+        source: 'source',
+        sourceType: 'api',
+        totalCharCount: 100,
+        totalLineCount: 10,
+        userId,
+      });
+    });
+
+    it('should find a file by id', async () => {
+      const result = await knowledgeRepo.findById('find-file', 'file');
+
+      expect(result).toBeDefined();
+      expect(result?.name).toBe('find-me.pdf');
+    });
+
+    it('should find a document by id', async () => {
+      const result = await knowledgeRepo.findById('find-doc', 'document');
+
+      expect(result).toBeDefined();
+      expect(result?.filename).toBe('find-me-doc.txt');
+    });
+
+    it('should return undefined for non-existent file', async () => {
+      const result = await knowledgeRepo.findById('non-existent', 'file');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent document', async () => {
+      const result = await knowledgeRepo.findById('non-existent', 'document');
+
+      expect(result).toBeUndefined();
+    });
+  });
 });

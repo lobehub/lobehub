@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "Adiciona o conteúdo atual como uma mensagem do usuário, mas não aciona a geração",
-    "title": "Adicionar uma mensagem do usuário"
-  },
-  "clearCurrentMessages": {
-    "desc": "Limpar as mensagens da conversa atual e os arquivos enviados",
-    "title": "Limpar mensagens da conversa"
-  },
-  "commandPalette": {
-    "desc": "Abra o painel de comandos global para acessar funções rapidamente",
-    "title": "Painel de Comandos"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "Excluir a última mensagem e gerar novamente",
-    "title": "Excluir e gerar novamente"
-  },
-  "deleteLastMessage": {
-    "desc": "Excluir a última mensagem",
-    "title": "Excluir a última mensagem"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "Abrir a página de configurações do aplicativo",
-      "title": "Configurações do Aplicativo"
-    },
-    "showApp": {
-      "desc": "Atalho global para mostrar ou ocultar a janela principal",
-      "title": "Mostrar/Ocultar Janela Principal"
-    }
-  },
-  "editMessage": {
-    "desc": "Entre no modo de edição pressionando Alt e clicando duas vezes na mensagem",
-    "title": "Editar mensagem"
-  },
-  "navigateToChat": {
-    "desc": "Mudar para a aba de conversas e entrar em bate-papo casual",
-    "title": "Mudar para a conversa padrão"
-  },
-  "openChatSettings": {
-    "desc": "Ver e modificar as configurações da conversa atual",
-    "title": "Abrir configurações de conversa"
-  },
-  "openHotkeyHelper": {
-    "desc": "Ver as instruções de uso de todos os atalhos",
-    "title": "Abrir ajuda de atalhos"
-  },
-  "regenerateMessage": {
-    "desc": "Regenerar a última mensagem",
-    "title": "Regenerar mensagem"
-  },
-  "saveTopic": {
-    "desc": "Salvar o tópico atual e abrir um novo tópico",
-    "title": "Iniciar novo tópico"
-  },
-  "search": {
-    "desc": "Abrir a caixa de pesquisa principal da página atual",
-    "title": "Pesquisar"
-  },
-  "showApp": {
-    "desc": "Abrir rapidamente a janela principal do aplicativo",
-    "title": "Mostrar janela principal"
-  },
-  "switchAgent": {
-    "desc": "Troque o assistente fixo na barra lateral pressionando Ctrl e um número de 0 a 9",
-    "title": "Troca rápida de assistente"
-  },
-  "toggleLeftPanel": {
-    "desc": "Mostrar ou ocultar o painel de assistente à esquerda",
-    "title": "Mostrar/Ocultar painel do assistente"
-  },
-  "toggleRightPanel": {
-    "desc": "Mostrar ou ocultar o painel de tópicos à direita",
-    "title": "Mostrar/Ocultar painel de tópicos"
-  },
-  "toggleZenMode": {
-    "desc": "No modo de foco, exibe apenas a conversa atual, ocultando outras interfaces",
-    "title": "Alternar modo de foco"
-  }
+  "addUserMessage.desc": "Adicione a entrada atual como uma mensagem do usuário sem iniciar a geração",
+  "addUserMessage.title": "Adicionar Mensagem do Usuário",
+  "clearCurrentMessages.desc": "Limpe as mensagens e arquivos enviados da conversa atual",
+  "clearCurrentMessages.title": "Limpar Mensagens da Conversa",
+  "commandPalette.desc": "Abra o painel de comandos global para acesso rápido às funcionalidades",
+  "commandPalette.title": "Painel de Comandos",
+  "deleteAndRegenerateMessage.desc": "Excluir a última mensagem e gerar novamente",
+  "deleteAndRegenerateMessage.title": "Excluir e Regenerar",
+  "deleteLastMessage.desc": "Excluir a última mensagem",
+  "deleteLastMessage.title": "Excluir Última Mensagem",
+  "desktop.openSettings.desc": "Abrir a página de configurações do aplicativo",
+  "desktop.openSettings.title": "Configurações do Aplicativo",
+  "desktop.showApp.desc": "Alternar a visibilidade da janela principal com um atalho global",
+  "desktop.showApp.title": "Mostrar/Ocultar Janela Principal",
+  "editMessage.desc": "Entre no modo de edição segurando Alt e clicando duas vezes na mensagem",
+  "editMessage.title": "Editar Mensagem",
+  "navigateToChat.desc": "Ir para a aba de Chat e entrar no Lobe AI",
+  "navigateToChat.title": "Ir para o Chat Padrão",
+  "openChatSettings.desc": "Visualizar e modificar as configurações da conversa atual",
+  "openChatSettings.title": "Abrir Configurações do Chat",
+  "openHotkeyHelper.desc": "Ver instruções para todos os atalhos de teclado",
+  "openHotkeyHelper.title": "Ajuda de Atalhos",
+  "regenerateMessage.desc": "Regenerar a última mensagem",
+  "regenerateMessage.title": "Regenerar Mensagem",
+  "saveDocument.desc": "Salvar imediatamente todas as alterações da página atual",
+  "saveDocument.title": "Salvar Página",
+  "saveTopic.desc": "Salvar o tópico atual e iniciar um novo",
+  "saveTopic.title": "Iniciar Novo Tópico",
+  "search.desc": "Ativar a caixa de pesquisa principal na página atual",
+  "search.title": "Pesquisar",
+  "showApp.desc": "Abrir rapidamente a janela principal do aplicativo",
+  "showApp.title": "Mostrar Janela Principal",
+  "switchAgent.desc": "Alternar entre agentes fixados na barra lateral segurando Ctrl e pressionando os números de 0 a 9",
+  "switchAgent.title": "Trocar Agente Rapidamente",
+  "toggleLeftPanel.desc": "Mostrar ou ocultar o painel esquerdo",
+  "toggleLeftPanel.title": "Alternar Painel Esquerdo",
+  "toggleRightPanel.desc": "Mostrar ou ocultar o painel direito",
+  "toggleRightPanel.title": "Alternar Painel Direito",
+  "toggleZenMode.desc": "No modo de foco, exibir apenas a conversa atual e ocultar outros elementos da interface",
+  "toggleZenMode.title": "Alternar Modo de Foco"
 }

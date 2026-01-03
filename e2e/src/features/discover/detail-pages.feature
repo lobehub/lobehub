@@ -11,7 +11,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-001 @P1
   Scenario: Load assistant detail page and verify content
-    Given I navigate to "/discover/assistant"
+    Given I navigate to "/community/assistant"
     And I wait for the page to fully load
     When I click on the first assistant card
     Then I should be on an assistant detail page
@@ -22,7 +22,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-002 @P1
   Scenario: Navigate back from assistant detail page
-    Given I navigate to "/discover/assistant"
+    Given I navigate to "/community/assistant"
     And I wait for the page to fully load
     And I click on the first assistant card
     When I click the back button
@@ -34,7 +34,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-003 @P1
   Scenario: Load model detail page and verify content
-    Given I navigate to "/discover/model"
+    Given I navigate to "/community/model"
     And I wait for the page to fully load
     When I click on the first model card
     Then I should be on a model detail page
@@ -44,7 +44,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-004 @P1
   Scenario: Navigate back from model detail page
-    Given I navigate to "/discover/model"
+    Given I navigate to "/community/model"
     And I wait for the page to fully load
     And I click on the first model card
     When I click the back button
@@ -56,7 +56,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-005 @P1
   Scenario: Load provider detail page and verify content
-    Given I navigate to "/discover/provider"
+    Given I navigate to "/community/provider"
     And I wait for the page to fully load
     When I click on the first provider card
     Then I should be on a provider detail page
@@ -66,7 +66,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-006 @P1
   Scenario: Navigate back from provider detail page
-    Given I navigate to "/discover/provider"
+    Given I navigate to "/community/provider"
     And I wait for the page to fully load
     And I click on the first provider card
     When I click the back button
@@ -78,7 +78,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-007 @P1
   Scenario: Load MCP detail page and verify content
-    Given I navigate to "/discover/mcp"
+    Given I navigate to "/community/mcp"
     And I wait for the page to fully load
     When I click on the first MCP card
     Then I should be on an MCP detail page
@@ -88,7 +88,7 @@ Feature: Discover Detail Pages
 
   @DISCOVER-DETAIL-008 @P1
   Scenario: Navigate back from MCP detail page
-    Given I navigate to "/discover/mcp"
+    Given I navigate to "/community/mcp"
     And I wait for the page to fully load
     And I click on the first MCP card
     When I click the back button

@@ -1,0 +1,27 @@
+{
+  "name": "@lobechat/builtin-tool-local-system",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executor": "./src/executor/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/electron-client-ipc": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^4",
+    "antd": "^6",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "path-browserify-esm": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

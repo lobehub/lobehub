@@ -1,9 +1,8 @@
 'use client';
 
-import { Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 export default () => {
   const { t } = useTranslation('common');

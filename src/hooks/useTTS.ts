@@ -1,23 +1,25 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import {
-  EdgeSpeechOptions,
-  MicrosoftSpeechOptions,
-  OpenAITTSOptions,
-  TTSOptions,
+  type EdgeSpeechOptions,
+  type MicrosoftSpeechOptions,
+  type OpenAITTSOptions,
+  type TTSOptions,
   useEdgeSpeech,
   useMicrosoftSpeech,
   useOpenAITTS,
 } from '@lobehub/tts/react';
 import isEqual from 'fast-deep-equal';
 
+import { useBusinessTTSProvider } from '@/business/client/hooks/useBusinessTTSProvider';
 import { createHeaderWithOpenAI } from '@/services/_header';
 import { API_ENDPOINTS } from '@/services/_url';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/slices/chat';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { TTSServer } from '@/types/agent';
+import { type TTSServer } from '@/types/agent';
 
 interface TTSConfig extends TTSOptions {
   onUpload?: (currentVoice: string, arraybuffers: ArrayBuffer[]) => void;
@@ -30,6 +32,7 @@ export const useTTS = (content: string, config?: TTSConfig) => {
   const ttsAgentSettings = useAgentStore(agentSelectors.currentAgentTTS, isEqual);
   const lang = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const voice = useAgentStore(agentSelectors.currentAgentTTSVoice(lang));
+  const businessTTSProvider = useBusinessTTSProvider();
   let useSelectedTTS;
   let options: any = {};
   switch (config?.server || ttsAgentSettings.ttsService) {
@@ -38,7 +41,7 @@ export const useTTS = (content: string, config?: TTSConfig) => {
       options = {
         api: {
           headers: createHeaderWithOpenAI(),
-          serviceUrl: API_ENDPOINTS.tts,
+          serviceUrl: API_ENDPOINTS.tts(ENABLE_BUSINESS_FEATURES ? businessTTSProvider : 'openai'),
         },
         options: {
           model: ttsSettings.openAI.ttsModel,

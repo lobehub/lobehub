@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "تابع الميزات الجديدة والتحسينات في {{appName}} باستمرار",
-    "title": "سجل التحديثات"
-  },
-  "chat": {
-    "description": "{{appName}} يقدم لك أفضل تجربة لاستخدام ChatGPT وClaude وGemini وOLLaMA WebUI",
-    "title": "{{appName}}: أداة الذكاء الاصطناعي الشخصية، امنح نفسك دماغًا أكثر ذكاءً"
-  },
-  "discover": {
-    "assistants": {
-      "description": "إنشاء المحتوى، الكتابة، الأسئلة والأجوبة، توليد الصور، توليد الفيديو، توليد الصوت، الوكلاء الذكيون، سير العمل الآلي، تخصيص مساعد الذكاء الاصطناعي / GPTs / OLLaMA الخاص بك",
-      "title": "مساعدات الذكاء الاصطناعي"
-    },
-    "description": "إنشاء المحتوى، الكتابة، الأسئلة والأجوبة، توليد الصور، توليد الفيديو، توليد الصوت، الوكلاء الذكيون، سير العمل الآلي، تطبيقات الذكاء الاصطناعي المخصصة، تخصيص منصة تطبيقات الذكاء الاصطناعي الخاصة بك",
-    "mcp": {
-      "description": "ابحث وقارن واتصل بآلاف خوادم MCP، مما يساعد أنظمة الذكاء الاصطناعي على الوصول بسهولة إلى أنظمة الملفات وقواعد البيانات وواجهات برمجة التطبيقات وغيرها من الموارد الحيوية، لتوسيع قدرات الذكاء الاصطناعي الخاصة بك بشكل شامل",
-      "title": "سوق خوادم MCP"
-    },
-    "models": {
-      "description": "استكشاف نماذج الذكاء الاصطناعي الرائجة OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
-      "title": "نماذج الذكاء الاصطناعي"
-    },
-    "plugins": {
-      "description": "استكشف توليد الرسوم البيانية، والأبحاث الأكاديمية، وتوليد الصور، وتوليد الفيديو، وتوليد الصوت، وأتمتة سير العمل، ودمج قدرات إضافية غنية لمساعدتك.",
-      "title": "إضافات الذكاء الاصطناعي"
-    },
-    "providers": {
-      "description": "استكشاف مزودي النماذج الرائجة OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
-      "title": "مزودو خدمات نماذج الذكاء الاصطناعي"
-    },
-    "search": "بحث",
-    "title": "اكتشاف"
-  },
-  "image": {
-    "description": "{{appName}} يقدم لك أفضل تجربة استخدام لـ GPT Image و Flux و Midjourney و Stable Diffusion",
-    "title": "الرسم بالذكاء الاصطناعي"
-  },
-  "plugins": {
-    "description": "البحث، توليد الرسوم البيانية، الأكاديميات، توليد الصور، توليد الفيديو، توليد الصوت، سير العمل الآلي، خصص قدرات ToolCall الخاصة بـ ChatGPT / Claude",
-    "title": "سوق الإضافات"
-  },
-  "welcome": {
-    "description": "{{appName}} يقدم لك أفضل تجربة لاستخدام ChatGPT وClaude وGemini وOLLaMA WebUI",
-    "title": "مرحبًا بك في {{appName}}: أداة الذكاء الاصطناعي الشخصية، امنح نفسك دماغًا أكثر ذكاءً"
-  }
+  "changelog.description": "ابقَ على اطلاع بأحدث الميزات والتحسينات في {{appName}}",
+  "changelog.title": "سجل التغييرات",
+  "chat.description": "{{appName}} يقدم لك أفضل تجربة واجهة مستخدم لـ ChatGPT وClaude وGemini وOLLaMA.",
+  "chat.title": "{{appName}} · للوكلاء التعاونيين",
+  "discover.assistants.description": "محتوى، أسئلة وأجوبة، صور، فيديو، صوت، سير عمل—تصفح وأضف وكلاء من المجتمع.",
+  "discover.assistants.title": "مجتمع الوكلاء",
+  "discover.description": "استكشف الوكلاء، المهارات، المزودين، النماذج، وخوادم MCP.",
+  "discover.mcp.description": "ابحث، قارن، واتصل بآلاف خوادم MCP، مما يمكّن أنظمة الذكاء الاصطناعي من الوصول بسهولة إلى أنظمة الملفات، قواعد البيانات، واجهات البرمجة، وغيرها من الموارد الأساسية، لتوسيع قدراتك في الذكاء الاصطناعي بشكل شامل.",
+  "discover.mcp.title": "مجتمع خوادم MCP",
+  "discover.models.description": "استكشف نماذج الذكاء الاصطناعي الرائدة OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "مجتمع النماذج",
+  "discover.plugins.description": "استكشف الرسوم البيانية، الأدوات الأكاديمية، توليد الصور/الفيديو/الصوت، وسير العمل—أضف مهارات إلى وكلائك.",
+  "discover.plugins.title": "مجتمع المهارات",
+  "discover.providers.description": "استكشف أبرز مزودي النماذج OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "مجتمع المزودين",
+  "discover.search": "بحث",
+  "discover.title": "استكشاف",
+  "image.description": "{{appName}} يقدم لك أفضل تجربة مع GPT Image وFlux وMidjourney وStable Diffusion",
+  "image.title": "فن الذكاء الاصطناعي",
+  "plugins.description": "بحث، رسوم بيانية، أدوات أكاديمية، توليد الصور/الفيديو/الصوت، سير العمل—أضف مهارات إلى وكلائك.",
+  "plugins.title": "مجتمع المهارات",
+  "welcome.description": "{{appName}} يقدم لك أفضل تجربة واجهة مستخدم لـ ChatGPT وClaude وGemini وOLLaMA.",
+  "welcome.title": "مرحبًا بك في {{appName}} · للوكلاء التعاونيين"
 }

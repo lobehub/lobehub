@@ -1,222 +1,242 @@
+import { businessErrorsLocales } from '@/business/locales/errors';
+
 export default {
-  clerkAuth: {
-    loginSuccess: {
-      action: '继续会话',
-      desc: '{{greeting}}，很高兴能够继续为你服务。让我们接着刚刚的话题聊下去吧',
-      title: '欢迎回来， {{nickName}}',
-    },
-  },
-  error: {
-    backHome: '返回首页',
-    desc: '待会来试试，或者回到已知的世界',
-    retry: '重新加载',
-    title: '页面遇到一点问题..',
-  },
-  fetchError: {
-    detail: '错误详情',
-    title: '请求失败',
-  },
-  import: {
-    importConfigFile: {
-      description: '出错原因: {{reason}}',
-      title: '导入失败',
-    },
-    incompatible: {
-      description: '该文件由更高版本导出，请尝试升级到最新版本后再重新导入',
-      title: '当前应用不支持导入该文件',
-    },
-  },
-  loginRequired: {
-    desc: '即将自动跳转到登录页面',
-    title: '请登录后使用该功能',
-  },
-  notFound: {
-    backHome: '返回首页',
-    check: '请检查你的 URL 是否正确',
-    desc: '我们找不到你寻找的页面',
-    title: '进入了未知领域？',
-  },
-  pluginSettings: {
-    desc: '完成以下配置，即可开始使用该插件',
-    title: '{{name}} 插件配置',
-  },
-  response: {
-    400: '很抱歉，服务器不明白您的请求，请确认您的请求参数是否正确',
-    401: '很抱歉，服务器拒绝了您的请求，可能是因为您的权限不足或未提供有效的身份验证',
-    403: '很抱歉，服务器拒绝了您的请求，您没有访问此内容的权限 ',
-    404: '很抱歉，服务器找不到您请求的页面或资源，请确认您的 URL 是否正确',
-    405: '很抱歉，服务器不支持您使用的请求方法，请确认您的请求方法是否正确',
-    406: '很抱歉，服务器无法根据您请求的内容特性完成请求',
-    407: '很抱歉，您需要进行代理认证后才能继续此请求',
-    408: '很抱歉，服务器在等待请求时超时，请检查您的网络连接后再试',
-    409: '很抱歉，请求存在冲突无法处理，可能是因为资源状态与请求不兼容',
-    410: '很抱歉，您请求的资源已被永久移除，无法找到',
-    411: '很抱歉，服务器无法处理不含有效内容长度的请求',
-    412: '很抱歉，您的请求未满足服务器端的条件，无法完成请求',
-    413: '很抱歉，您的请求数据量过大，服务器无法处理',
-    414: '很抱歉，您的请求的 URI 过长，服务器无法处理',
-    415: '很抱歉，服务器无法处理请求附带的媒体格式',
-    416: '很抱歉，服务器无法满足您请求的范围',
-    417: '很抱歉，服务器无法满足您的期望值',
-    422: '很抱歉，您的请求格式正确，但是由于含有语义错误，无法响应',
-    423: '很抱歉，您请求的资源被锁定',
-    424: '很抱歉，由于之前的请求失败，导致当前请求无法完成',
-    426: '很抱歉，服务器要求您的客户端升级到更高的协议版本',
-    428: '很抱歉，服务器要求先决条件，要求您的请求包含正确的条件头',
-    429: '很抱歉，您的请求太多，服务器有点累了，请稍后再试',
-    431: '很抱歉，您的请求头字段太大，服务器无法处理',
-    451: '很抱歉，由于法律原因，服务器拒绝提供此资源',
-    499: '很抱歉，您的请求在服务器处理中被意外中断，可能是因为您主动取消了操作或网络连接不稳定。请检查网络状况后重试。',
-    500: '很抱歉，服务器似乎遇到了一些困难，暂时无法完成您的请求，请稍后再试',
-    501: '很抱歉，服务器还不知道如何处理这个请求，请确认您的操作是否正确',
-    502: '很抱歉，服务器似乎迷失了方向，暂时无法提供服务，请稍后再试',
-    503: '很抱歉，服务器当前无法处理您的请求，可能是由于过载或正在进行维护，请稍后再试',
-    504: '很抱歉，服务器没有等到上游服务器的回应，请稍后再试',
-    505: '很抱歉，服务器不支持您使用的HTTP版本，请更新后再试',
-    506: '很抱歉，服务器配置出现问题，请联系管理员解决',
-    507: '很抱歉，服务器存储空间不足，无法处理您的请求，请稍后再试',
-    509: '很抱歉，服务器的带宽已用尽，请稍后再试',
-    510: '很抱歉，服务器不支持请求的扩展功能，请联系管理员',
-    520: '很抱歉，服务器遇到了一个意外的问题，导致无法完成您的请求。请稍后再试，我们正努力解决这个问题。',
-    522: '很抱歉，服务器连接超时，未能及时响应您的请求。可能是网络不稳定或服务器暂时无法访问。请稍后再试，我们正在努力恢复服务。',
-    524: '很抱歉，服务器在等回复时超时了，可能是因为响应太慢，请稍后再试',
-
-    /* eslint-disable sort-keys-fix/sort-keys-fix */
-    PluginMarketIndexNotFound: '很抱歉，服务器没有找到插件索引，请检查索引地址是否正确',
-    PluginMarketIndexInvalid: '很抱歉，插件索引校验未通过，请检查索引文件格式是否规范',
-    PluginMetaNotFound: '很抱歉，没有在索引中发现该插件，请插件在索引中的配置信息',
-    PluginMetaInvalid: '很抱歉，该插件的元信息校验未通过，请检查插件元信息格式是否规范',
-    PluginManifestNotFound:
-      '很抱歉，服务器没有找到该插件的描述清单 (manifest.json)，请检查插件描述文件地址是否正确',
-    PluginManifestInvalid: '很抱歉，该插件的描述清单校验未通过，请检查描述清单格式是否规范',
-    PluginApiNotFound:
-      '很抱歉，插件描述清单中不存在该 API ，请检查你的请求方法与插件清单 API 是否匹配',
-    PluginApiParamsError: '很抱歉，该插件请求的入参校验未通过，请检查入参与 Api 描述信息是否匹配',
-    PluginSettingsInvalid: '该插件需要正确配置后才可以使用，请检查你的配置是否正确',
-    PluginServerError:
-      '插件服务端请求返回出错，请检查根据下面的报错信息检查你的插件描述文件、插件配置或服务端实现',
-    PluginGatewayError: '很抱歉，插件网关出现错误，请检查插件网关配置是否正确',
-    PluginOpenApiInitError: '很抱歉，OpenAPI 客户端初始化失败，请检查 OpenAPI 的配置信息是否正确',
-
-    PluginFailToTransformArguments:
-      '很抱歉，插件调用参数解析失败，请尝试重新生成助手消息，或更换 Tools Calling 能力更强的 AI 模型后重试',
-
-    InvalidAccessCode: '密码不正确或为空，请输入正确的访问密码，或者添加自定义 API Key',
-    InvalidClerkUser: '很抱歉，你当前尚未登录，请先登录或注册账号后继续操作',
-    SystemTimeNotMatchError: '很抱歉，您的系统时间和服务器不匹配，请检查您的系统时间后重试',
-    SubscriptionKeyMismatch:
-      '很抱歉，由于系统偶发故障，当前订阅用量暂时失效，请点击下方按钮恢复订阅，或邮件联系我们获取支持',
-    CreateMessageError:
-      '很抱歉，消息未能正常发送，请复制内容后重新发送，刷新页面后此消息将不会保留',
-    LocationNotSupportError:
-      '很抱歉，你的所在地区不支持此模型服务，可能是由于区域限制或服务未开通。请确认当前地区是否支持使用此服务，或尝试使用切换到其他地区后重试。',
-    InsufficientQuota:
-      '很抱歉，该密钥的配额 (quota) 已达上限，请检查账户余额是否充足，或增大密钥配额后再试',
-    ModelNotFound:
-      '很抱歉，无法请求到相应的模型，可能是模型不存在或者没有访问权限导致，请更换 API Key 或调整访问权限后重试',
-    ExceededContextWindow: '当前请求内容超出模型可处理的长度，请减少内容量后重试',
-    QuotaLimitReached:
-      '很抱歉，当前 Token 用量或请求次数已达该密钥的配额 (quota) 上限，请增加该密钥的配额或稍后再试',
-    PermissionDenied: '很抱歉，你没有权限访问该服务，请检查你的密钥是否有访问权限',
-    InvalidProviderAPIKey: '{{provider}} API Key 不正确或为空，请检查 {{provider}} API Key 后重试',
-    ProviderBizError: '请求 {{provider}} 服务出错，请根据以下信息排查或重试',
-
-    GoogleAIBlockReason: {
-      BLOCKLIST: '您的内容包含被禁止的词汇。请检查并修改您的输入内容后重试。',
-      IMAGE_SAFETY: '生成的图像内容因安全原因被阻止。请尝试修改您的图像生成请求。',
-      LANGUAGE: '您使用的语言暂不被支持。请尝试使用英语或其他支持的语言重新提问。',
-      OTHER: '内容因未知原因被阻止。请尝试重新表述您的请求。',
-      PROHIBITED_CONTENT: '您的请求可能包含违禁内容。请调整您的请求，确保内容符合使用规范。',
-      RECITATION: '您的内容因可能涉及版权问题而被阻止。请尝试使用原创内容或重新表述您的请求。',
-      SAFETY: '您的内容因安全策略而被阻止。请尝试调整您的请求内容，避免包含可能的有害或不当内容。',
-      SPII: '您的内容可能包含敏感个人身份信息。为保护隐私，请移除相关敏感信息后重试。',
-      default: '内容被阻止：{{blockReason}}。请调整您的请求内容后重试。',
-    },
-    /**
-     * @deprecated
-     */
-    NoOpenAIAPIKey: 'OpenAI API Key 不正确或为空，请添加自定义 OpenAI API Key',
-
-    InvalidVertexCredentials: 'Vertex 鉴权未通过，请检查鉴权凭证后重试',
-    InvalidBedrockCredentials: 'Bedrock 鉴权未通过，请检查 AccessKeyId/SecretAccessKey 后重试',
-    StreamChunkError:
-      '流式请求的消息块解析错误，请检查当前 API 接口是否符合标准规范，或联系你的 API 供应商咨询',
-    UnknownChatFetchError: '很抱歉，遇到未知请求错误，请根据以下信息排查或重试',
-    InvalidOllamaArgs: 'Ollama 配置不正确，请检查 Ollama 配置后重试',
-    OllamaBizError: '请求 Ollama 服务出错，请根据以下信息排查或重试',
-    OllamaServiceUnavailable:
-      'Ollama 服务连接失败，请检查 Ollama 是否运行正常，或是否正确设置 Ollama 的跨域配置',
-
-    InvalidComfyUIArgs: 'ComfyUI 配置不正确，请检查 ComfyUI 配置后重试',
-    ComfyUIBizError: '请求 ComfyUI 服务出错，请根据以下信息排查或重试',
-    ComfyUIServiceUnavailable:
-      'ComfyUI 服务连接失败，请检查 ComfyUI 是否运行正常，或检查服务地址配置是否正确',
-    ComfyUIEmptyResult: 'ComfyUI 未生成任何图像，请检查模型配置或重试',
-    ComfyUIUploadFailed: 'ComfyUI 图片上传失败，请检查服务器连接或重试',
-    ComfyUIWorkflowError: 'ComfyUI 工作流执行失败，请检查工作流配置',
-    ComfyUIModelError: 'ComfyUI 模型加载失败，请检查模型文件是否存在',
-
-    AgentRuntimeError: 'Lobe AI Runtime 执行出错，请根据以下信息排查或重试',
-
-    // cloud
-    FreePlanLimit: '当前为免费用户，无法使用该功能，请升级到付费计划后继续使用',
-    SubscriptionPlanLimit:
-      '您的订阅积分已用尽，无法使用该功能，请升级到更高计划，或配置自定义模型 API 后继续使用',
-
-    // Github Token
-    InvalidGithubToken: 'Github PAT 不正确或为空，请检查 Github PAT 后重试',
-    ConnectionCheckFailed: '请求返回为空，请检查 API 代理地址末尾是否未包含 `/v1`',
-
-    /* eslint-enable */
-  },
-  stt: {
-    responseError: '服务请求失败，请检查配置或重试',
-  },
-  supervisor: {
-    decisionFailed:
-      '群组主持人无法工作。请检查你的主持人配置，确保配置了正确的模型、API Key 和 API 地址。',
-  },
-  testConnectionFailed: '测试连接失败：{{error}}',
-  tts: {
-    responseError: '服务请求失败，请检查配置或重试',
-  },
-  unlock: {
-    addProxyUrl: '添加 OpenAI 代理地址（可选）',
-    apiKey: {
-      description: '输入你的 {{name}} API Key 即可开始会话',
-      imageGenerationDescription: '输入你的 {{name}} API Key 即可开始生成',
-      title: '使用自定义 {{name}} API Key',
-    },
-    closeMessage: '关闭提示',
-    comfyui: {
-      description: '请输入正确的 {{name}} 认证信息即可开始生图',
-      modifyBaseUrl: '修改 Comfy UI 服务地址',
-      title: '确认你的 {{name}} 认证信息',
-    },
-    confirm: '确认并重试',
-    oauth: {
-      description: '管理员已开启统一登录认证，点击下方按钮登录，即可解锁应用',
-      success: '登录成功',
-      title: '登录账号',
-      welcome: '欢迎你！',
-    },
-    password: {
-      description: '管理员已开启应用加密，输入应用密码后即可解锁应用。密码只需填写一次',
-      placeholder: '请输入密码',
-      title: '输入密码解锁应用',
-    },
-    tabs: {
-      apiKey: '自定义 API Key',
-      password: '密码',
-    },
-  },
-  upload: {
-    desc: '详情: {{detail}}',
-    fileOnlySupportInServerMode:
-      '当前部署模式不支持上传非图片文件，如需上传 {{ext}} 格式，请切换到服务端数据库部署或使用 {{cloud}} 服务',
-    networkError: '请确认你的网络是否正常，并检查文件存储服务跨域配置是否正确',
-    title: '文件上传失败，请检查网络连接或稍后再试',
-    unknownError: '错误原因: {{reason}}',
-    uploadFailed: '文件上传失败',
-  },
+  'clerkAuth.loginSuccess.action': 'Continue Session',
+  'clerkAuth.loginSuccess.desc':
+    "{{greeting}}, it's great to continue serving you. Let's pick up where we left off.",
+  'clerkAuth.loginSuccess.title': 'Welcome back, {{nickName}}',
+  'error.backHome': 'Back to Home',
+  'error.desc': 'Give it a try later, or go back to the known world.',
+  'error.retry': 'Reload',
+  'error.title': 'Oops, something went wrong..',
+  'fetchError.detail': 'Error details',
+  'fetchError.title': 'Request failed',
+  'import.importConfigFile.description': 'Error reason: {{reason}}',
+  'import.importConfigFile.title': 'Import Failed',
+  'import.incompatible.description':
+    'This file was exported from a higher version. Please try upgrading to the latest version and then re-importing.',
+  'import.incompatible.title': 'Current application does not support importing this file',
+  'loginRequired.desc': 'You will be redirected to the login page shortly',
+  'loginRequired.title': 'Please log in to use this feature',
+  'notFound.backHome': 'Back to Home',
+  'notFound.check': 'Please check if your URL is correct.',
+  'notFound.desc': "We couldn't find the page you were looking for.",
+  'notFound.title': 'Entered Unknown Territory?',
+  'pluginSettings.desc': 'Complete the following configuration to start using this skill',
+  'pluginSettings.title': '{{name}} Skill Settings',
+  'response.400':
+    'Sorry, the server does not understand your request. Please make sure your request parameters are correct.',
+  'response.401':
+    'Sorry, the server has rejected your request, possibly due to insufficient permissions or invalid authentication.',
+  'response.403':
+    'Sorry, the server has rejected your request. You do not have permission to access this content.',
+  'response.404':
+    'Sorry, the server cannot find the page or resource you requested. Please make sure your URL is correct.',
+  'response.405':
+    'Sorry, the server does not support the request method you are using. Please make sure your request method is correct.',
+  'response.406':
+    'Sorry, the server cannot complete the request based on the characteristics of the content you requested',
+  'response.407': 'Sorry, you need to authenticate the proxy before continuing with this request',
+  'response.408':
+    'Sorry, the server timed out while waiting for the request, please check your network connection and try again',
+  'response.409':
+    'Sorry, the request cannot be processed due to a conflict, possibly because the resource state is incompatible with the request',
+  'response.410':
+    'Sorry, the resource you requested has been permanently removed and cannot be found',
+  'response.411': 'Sorry, the server cannot process the request without a valid content length',
+  'response.412':
+    "Sorry, your request does not meet the server's conditions and cannot be completed",
+  'response.413': 'Sorry, your request data is too large for the server to process',
+  'response.414': 'Sorry, the URI of your request is too long for the server to process',
+  'response.415': 'Sorry, the server cannot process the media format attached to the request',
+  'response.416': 'Sorry, the server cannot satisfy the range of your request',
+  'response.417': 'Sorry, the server cannot meet your expectations',
+  'response.422':
+    'Sorry, your request is in the correct format, but due to semantic errors, it cannot be responded to',
+  'response.423': 'Sorry, the resource you requested is locked',
+  'response.424':
+    'Sorry, the current request cannot be completed due to a previous request failure',
+  'response.426': 'Sorry, the server requires your client to upgrade to a higher protocol version',
+  'response.428':
+    'Sorry, the server requires a precondition, and requests that your request contain the correct conditional header',
+  'response.429':
+    'Sorry, your request is too frequent and the server is a bit tired. Please try again later.',
+  'response.431':
+    'Sorry, the header fields of your request are too large for the server to process',
+  'response.451': 'Sorry, the server refuses to provide this resource due to legal reasons',
+  'response.499':
+    'We apologize, your request was unexpectedly interrupted while being processed by the server, possibly due to your cancellation of the operation or an unstable network connection. Please check your network status and try again.',
+  'response.500':
+    'Sorry, the server seems to be experiencing some difficulties and is temporarily unable to complete your request. Please try again later.',
+  'response.501':
+    'Sorry, the server does not know how to handle this request yet. Please confirm that your operation is correct.',
+  'response.502':
+    'Sorry, the server seems to be lost and is temporarily unable to provide service. Please try again later.',
+  'response.503':
+    'Sorry, the server is currently unable to process your request, possibly due to overload or maintenance. Please try again later.',
+  'response.504':
+    'Sorry, the server did not receive a response from the upstream server. Please try again later.',
+  'response.505':
+    'Sorry, the server does not support the HTTP version you are using. Please update and try again.',
+  'response.506':
+    'Sorry, there is a configuration issue with the server. Please contact the administrator for resolution.',
+  'response.507':
+    'Sorry, the server has insufficient storage space to process your request. Please try again later.',
+  'response.509': "Sorry, the server's bandwidth has been exhausted. Please try again later.",
+  'response.510':
+    'Sorry, the server does not support the requested extension. Please contact the administrator.',
+  'response.520':
+    'We apologize, the server encountered an unexpected issue that prevented it from completing your request. Please try again later; we are working to resolve this issue.',
+  'response.522':
+    'We apologize, the server connection timed out and was unable to respond to your request in a timely manner. This may be due to an unstable network or the server being temporarily inaccessible. Please try again later; we are working to restore service.',
+  'response.524':
+    'We apologize, the server timed out while waiting for a response, possibly due to a slow reply. Please try again later.',
+  'response.AgentRuntimeError':
+    'Lobe language model runtime execution error. Please troubleshoot or retry based on the following information.',
+  'response.ComfyUIBizError':
+    'An error occurred while requesting the ComfyUI service. Please troubleshoot using the information below or try again.',
+  'response.ComfyUIEmptyResult':
+    'No image was generated by ComfyUI. Please check the model configuration or try again.',
+  'response.ComfyUIModelError':
+    'Failed to load the ComfyUI model. Please ensure the model file exists.',
+  'response.ComfyUIServiceUnavailable':
+    'Failed to connect to the ComfyUI service. Please ensure it is running properly and the service URL is correctly configured.',
+  'response.ComfyUIUploadFailed':
+    'Failed to upload image to ComfyUI. Please check the server connection or try again.',
+  'response.ComfyUIWorkflowError':
+    'ComfyUI workflow execution failed. Please verify the workflow configuration.',
+  'response.ConnectionCheckFailed':
+    'The request returned empty. Please check if the API proxy address does not end with `/v1`.',
+  'response.CreateMessageError':
+    'Sorry, the message could not be sent successfully. Please copy the content and try sending it again. This message will not be retained after refreshing the page.',
+  'response.ExceededContextWindow':
+    'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  'response.FreePlanLimit':
+    'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+  'response.GoogleAIBlockReason.BLOCKLIST':
+    'Your content contains prohibited terms. Please review and modify your input, then try again.',
+  'response.GoogleAIBlockReason.IMAGE_SAFETY':
+    'The generated image was blocked for safety reasons. Please try modifying your image request.',
+  'response.GoogleAIBlockReason.LANGUAGE':
+    'The language you are using is not supported. Please try again in English or another supported language.',
+  'response.GoogleAIBlockReason.OTHER':
+    'The content was blocked for an unknown reason. Please try rephrasing your request.',
+  'response.GoogleAIBlockReason.PROHIBITED_CONTENT':
+    'Your request may contain prohibited content. Please adjust your request to comply with the usage guidelines.',
+  'response.GoogleAIBlockReason.RECITATION':
+    'Your content was blocked due to potential copyright concerns. Please try using original content or rephrase your request.',
+  'response.GoogleAIBlockReason.SAFETY':
+    'Your content was blocked for safety policy reasons. Please adjust your request to avoid potentially harmful or inappropriate content.',
+  'response.GoogleAIBlockReason.SPII':
+    'Your content may contain sensitive personally identifiable information (PII). To protect privacy, please remove any sensitive details and try again.',
+  'response.GoogleAIBlockReason.default':
+    'Content blocked: {{blockReason}}. Please adjust your request and try again.',
+  'response.InsufficientQuota':
+    "Sorry, the quota for this key has been reached. Please check if your account balance is sufficient or try again after increasing the key's quota.",
+  'response.InvalidAccessCode':
+    'Invalid access code or empty. Please enter the correct access code or add a custom API Key.',
+  'response.InvalidBedrockCredentials':
+    'Bedrock authentication failed. Please check the AccessKeyId/SecretAccessKey and retry.',
+  'response.InvalidClerkUser':
+    'Sorry, you are not currently logged in. Please log in or register an account to continue.',
+  'response.InvalidComfyUIArgs':
+    'Invalid ComfyUI configuration. Please check the settings and try again.',
+  'response.InvalidGithubToken':
+    'The GitHub Personal Access Token is incorrect or empty. Please check your GitHub Personal Access Token and try again.',
+  'response.InvalidOllamaArgs':
+    'Invalid Ollama configuration, please check Ollama configuration and try again',
+  'response.InvalidProviderAPIKey':
+    '{{provider}} API Key is incorrect or empty, please check your {{provider}} API Key and try again',
+  'response.InvalidVertexCredentials':
+    'Vertex authentication failed. Please check your credentials and try again.',
+  'response.LocationNotSupportError':
+    "We're sorry, your current location does not support this model service. This may be due to regional restrictions or the service not being available. Please confirm if the current location supports using this service, or try using a different location.",
+  'response.ModelNotFound':
+    'Sorry, the requested model could not be found. It may not exist or you may not have the necessary access permissions. Please try again after changing the API Key or adjusting your access permissions.',
+  'response.NoOpenAIAPIKey': 'OpenAI API Key is empty, please add a custom OpenAI API Key',
+  'response.OllamaBizError':
+    'Error requesting Ollama service, please troubleshoot or retry based on the following information',
+  'response.OllamaServiceUnavailable':
+    'Ollama service is unavailable. Please check if Ollama is running properly or if the cross-origin configuration of Ollama is set correctly.',
+  'response.PermissionDenied':
+    'Sorry, you do not have permission to access this service. Please check if your key has the necessary access rights.',
+  'response.PluginApiNotFound':
+    "Sorry, the API does not exist in the skill's manifest. Please check if your request method matches the skill manifest API",
+  'response.PluginApiParamsError':
+    'Sorry, the input parameter validation for the skill request failed. Please check if the input parameters match the API description',
+  'response.PluginFailToTransformArguments':
+    'Sorry, the skill failed to parse the arguments. Please try regenerating the agent message or switch to a more powerful AI model with Tools Calling capability and try again',
+  'response.PluginGatewayError':
+    'Sorry, there was an error with the skill gateway. Please check if the skill gateway configuration is correct.',
+  'response.PluginManifestInvalid':
+    "Sorry, the skill's manifest validation failed. Please check if the manifest format is correct",
+  'response.PluginManifestNotFound':
+    "Sorry, the server could not find the skill's manifest file (manifest.json). Please check if the skill manifest file address is correct",
+  'response.PluginMarketIndexInvalid':
+    'Sorry, the skill index validation failed. Please check if the index file format is correct',
+  'response.PluginMarketIndexNotFound':
+    'Sorry, the server could not find the skill index. Please check if the index address is correct',
+  'response.PluginMetaInvalid':
+    "Sorry, the skill's metadata validation failed. Please check if the skill metadata format is correct",
+  'response.PluginMetaNotFound':
+    "Sorry, the skill was not found in the index. Please check the skill's configuration information in the index",
+  'response.PluginOpenApiInitError':
+    'Sorry, the OpenAPI client failed to initialize. Please check if the OpenAPI configuration information is correct.',
+  'response.PluginServerError':
+    'Skill server request returned an error. Please check your skill manifest file, skill configuration, or server implementation based on the error information below',
+  'response.PluginSettingsInvalid':
+    'This skill needs to be correctly configured before it can be used. Please check if your configuration is correct',
+  'response.ProviderBizError':
+    'Error requesting {{provider}} service, please troubleshoot or retry based on the following information',
+  'response.QuotaLimitReached':
+    "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
+  'response.ServerAgentRuntimeError':
+    'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
+  'response.StreamChunkError':
+    'Error parsing the message chunk of the streaming request. Please check if the current API interface complies with the standard specifications, or contact your API provider for assistance.',
+  'response.SubscriptionKeyMismatch':
+    'We apologize for the inconvenience. Due to a temporary system malfunction, your current subscription usage is inactive. Please click the button below to restore your subscription, or contact us via email for support.',
+  'response.SubscriptionPlanLimit':
+    'Your subscription points have been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.',
+  'response.SubscriptionPlanLimitUltimate':
+    'Your subscription points have been exhausted, and you cannot use this feature. Please top up credits or configure a custom model API to continue using it.',
+  'response.SystemTimeNotMatchError':
+    'Sorry, your system time does not match the server. Please check your system time and try again.',
+  'response.UnknownChatFetchError':
+    'Sorry, an unknown request error occurred. Please check the information below or try again.',
+  'stt.responseError': 'Service request failed, please check the configuration or try again',
+  'supervisor.decisionFailed':
+    'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',
+  'testConnectionFailed': 'Test connection failed: {{error}}',
+  'tts.responseError': 'Service request failed, please check the configuration or try again',
+  'unlock.addProxyUrl': 'Add OpenAI proxy URL (optional)',
+  'unlock.apiKey.description': 'Enter your {{name}} API Key to start the session',
+  'unlock.apiKey.imageGenerationDescription': 'Enter your {{name}} API Key to start generating',
+  'unlock.apiKey.title': 'Use custom {{name}} API Key',
+  'unlock.closeMessage': 'Close message',
+  'unlock.comfyui.description': 'Enter valid {{name}} credentials to start generating images.',
+  'unlock.comfyui.modifyBaseUrl': 'Edit ComfyUI service URL',
+  'unlock.comfyui.title': 'Verify your {{name}} credentials',
+  'unlock.confirm': 'Confirm and Retry',
+  'unlock.goToSettings': 'Go to Settings',
+  'unlock.oauth.description':
+    'The administrator has enabled unified login authentication. Click the button below to log in and unlock the application.',
+  'unlock.oauth.success': 'Login successful',
+  'unlock.oauth.title': 'Log in to your account',
+  'unlock.oauth.welcome': 'Welcome!',
+  'unlock.password.description':
+    'The application encryption has been enabled by the administrator. Enter the application password to unlock the application. The password only needs to be filled in once.',
+  'unlock.password.placeholder': 'Please enter password',
+  'unlock.password.title': 'Enter Password to Unlock Application',
+  'unlock.tabs.apiKey': 'Custom API Key',
+  'unlock.tabs.password': 'Password',
+  'upload.desc': 'Details: {{detail}}',
+  'upload.fileOnlySupportInServerMode':
+    'The current deployment mode does not support uploading non-image files. To upload files in {{ext}} format, please switch to server database deployment or use the {{cloud}} service.',
+  'upload.networkError':
+    "Please check your network connection and ensure that the file storage service's cross-origin configuration is correct.",
+  'upload.title': 'File upload failed. Please check your network connection or try again later',
+  'upload.unknownError': 'Error reason: {{reason}}',
+  'upload.uploadFailed': 'File upload failed.',
+  ...businessErrorsLocales,
 };

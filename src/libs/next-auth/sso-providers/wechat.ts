@@ -1,4 +1,4 @@
-import WeChat, { WeChatProfile } from '@auth/core/providers/wechat';
+import WeChat, { type WeChatProfile } from '@auth/core/providers/wechat';
 
 import { CommonProviderConfig } from './sso.config';
 

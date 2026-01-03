@@ -7,7 +7,10 @@ import { isRtlLang } from 'rtl-detect';
 import { DEFAULT_LANG } from '@/const/locale';
 import { getDebugConfig } from '@/envs/debug';
 import { normalizeLocale } from '@/locales/resources';
-import { isDev, isOnServerSide } from '@/utils/env';
+import { isOnServerSide } from '@/utils/env';
+import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
+
+import { loadI18nNamespaceModule } from '../utils/i18n/loadI18nNamespaceModule';
 
 const { I18N_DEBUG, I18N_DEBUG_BROWSER, I18N_DEBUG_SERVER } = getDebugConfig();
 const debugMode = (I18N_DEBUG ?? isOnServerSide) ? I18N_DEBUG_SERVER : I18N_DEBUG_BROWSER;
@@ -18,9 +21,14 @@ export const createI18nNext = (lang?: string) => {
     .use(LanguageDetector)
     .use(
       resourcesToBackend(async (lng: string, ns: string) => {
-        if (isDev && lng === 'zh-CN') return import(`./default/${ns}`);
-
-        return import(`@/../locales/${normalizeLocale(lng)}/${ns}.json`);
+        return unwrapESMModule(
+          await loadI18nNamespaceModule({
+            defaultLang: DEFAULT_LANG,
+            lng,
+            normalizeLocale,
+            ns,
+          }),
+        );
       }),
     );
   // Dynamically set HTML direction on language change
@@ -37,6 +45,7 @@ export const createI18nNext = (lang?: string) => {
       return instance.init({
         debug: debugMode,
         defaultNS: ['error', 'common', 'chat'],
+
         // detection: {
         //   caches: ['cookie'],
         //   cookieMinutes: 60 * 24 * COOKIE_CACHE_DAYS,
@@ -54,9 +63,14 @@ export const createI18nNext = (lang?: string) => {
         fallbackLng: DEFAULT_LANG,
 
         initAsync,
+
         interpolation: {
           escapeValue: false,
         },
+        // Use flat keys with dots (e.g. "notFound.title") instead of nested objects.
+        // This keeps both runtime lookup and TS key inference consistent.
+        keySeparator: false,
+
         lng: lang,
       });
     },

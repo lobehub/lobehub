@@ -1,15 +1,14 @@
-import { Alert, Button, Highlighter, Icon } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Highlighter, Icon } from '@lobehub/ui';
 import { Result } from 'antd';
 import { ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import React, { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import Balancer from 'react-wrap-balancer';
 
 import { GITHUB_ISSUES } from '@/const/url';
 import { githubService } from '@/services/github';
-import { ErrorShape } from '@/types/importer';
+import { type ErrorShape } from '@/types/importer';
 
 interface ErrorProps {
   error?: ErrorShape;
@@ -28,8 +27,8 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
                 {JSON.stringify(error, null, 2)}
               </Highlighter>
             }
-            message={error?.message}
             style={{ flex: 1 }}
+            title={error?.message}
             type={'error'}
           />
           <Button onClick={onClick}>{t('close')}</Button>

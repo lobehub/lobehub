@@ -1,4 +1,4 @@
-import { ThreadItem, ThreadType } from '@/types/topic';
+import { type IThreadType, type ThreadItem, ThreadType } from '@lobechat/types';
 
 export interface ChatThreadState {
   activeThreadId?: string;
@@ -7,7 +7,7 @@ export interface ChatThreadState {
    */
   isCreatingThread?: boolean;
   isCreatingThreadMessage?: boolean;
-  newThreadMode: ThreadType;
+  newThreadMode: IThreadType;
   /**
    * if true it mean to start to fork a new thread
    */

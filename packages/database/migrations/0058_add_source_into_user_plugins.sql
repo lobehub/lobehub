@@ -1,0 +1,1 @@
+ALTER TABLE "user_installed_plugins" ADD COLUMN IF NOT EXISTS "source" varchar(255);

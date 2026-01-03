@@ -1,17 +1,17 @@
 'use client';
 
-import { SearchBar } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
-import { ReactNode, memo } from 'react';
+import { Flexbox, Icon, SearchBar } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { SearchIcon } from 'lucide-react';
+import { type ReactNode, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 
 import AddNew from './AddNew';
 import ProviderList from './List';
 import SearchResult from './SearchResult';
-import SkeletonList from './SkeletonList';
 
 interface ProviderMenuProps {
   children: ReactNode;
@@ -19,7 +19,6 @@ interface ProviderMenuProps {
 }
 const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
   const { t } = useTranslation('modelProvider');
-  const theme = useTheme();
 
   const [providerSearchKeyword, useFetchAiProviderList] = useAiInfraStore((s) => [
     s.providerSearchKeyword,
@@ -33,20 +32,23 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
   return (
     <Flexbox
       style={{
-        background: theme.colorBgLayout,
-        borderRight: `1px solid ${theme.colorBorderSecondary}`,
+        background: cssVar.colorBgContainer,
+        borderRight: `1px solid ${cssVar.colorBorderSecondary}`,
         minWidth: width,
         overflow: mobile ? undefined : 'scroll',
       }}
       width={width}
     >
       <Flexbox
+        align={'center'}
         gap={8}
         horizontal
         justify={'space-between'}
-        padding={'16px 12px 12px'}
+        padding={8}
         style={{
-          background: theme.colorBgLayout,
+          background: cssVar.colorBgContainer,
+          borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
+          marginBottom: 8,
           position: 'sticky',
           top: 0,
           zIndex: 50,
@@ -55,11 +57,29 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
       >
         <SearchBar
           allowClear
-          onChange={(e) => useAiInfraStore.setState({ providerSearchKeyword: e.target.value })}
+          defaultValue={providerSearchKeyword}
+          onInputChange={(v) => {
+            if (!v) useAiInfraStore.setState({ providerSearchKeyword: '' });
+          }}
+          onSearch={(v) => useAiInfraStore.setState({ providerSearchKeyword: v })}
           placeholder={t('menu.searchProviders')}
+          prefix={
+            <Icon
+              color={cssVar.colorTextDescription}
+              icon={SearchIcon}
+              style={{
+                marginRight: 12,
+              }}
+            />
+          }
           style={{ width: '100%' }}
-          value={providerSearchKeyword}
-          variant={'filled'}
+          styles={{
+            input: {
+              paddingBlock: 3,
+              paddingLeft: 6,
+            },
+          }}
+          variant={'borderless'}
         />
         <AddNew />
       </Flexbox>

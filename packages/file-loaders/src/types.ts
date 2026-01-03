@@ -2,199 +2,199 @@
 export type SupportedFileType = 'pdf' | 'doc' | 'docx' | 'txt' | 'excel' | 'pptx'; // | 'pptx' | 'latex' | 'epub' | 'code' | 'markdown';
 
 /**
- * 代表一个完整的已加载文件，包含文件级信息和其所有页面/块。
+ * Represents a complete loaded file, including file-level information and all its pages/chunks.
  */
 export interface FileDocument {
   /**
-   * 文件内容
+   * File content
    */
   content: string;
 
   /**
-   * 文件创建时间戳。
+   * File creation timestamp.
    */
   createdTime: Date;
 
   /**
-   * 文件类型或扩展名。
+   * File type or extension.
    */
   fileType: string;
 
   /**
-   * 原始文件名。
+   * Original filename.
    */
   filename: string;
 
   /**
-   * 文件级别的元数据。
-   * 例如从文件属性中提取的标题、作者，或整个文件加载失败时的错误。
+   * File-level metadata.
+   * For example, title and author extracted from file properties, or errors when the entire file loading fails.
    */
   metadata: {
     /**
-     * 允许添加其他文件级别的元数据。
+     * Allows adding other file-level metadata.
      */
     [key: string]: any;
     /**
-     * 文档作者 (如果可用)。
+     * Document author (if available).
      */
     author?: string;
     /**
-     * 如果整个文件加载失败，记录错误信息。
+     * If the entire file loading fails, record error information.
      */
     error?: string;
     /**
-     * 文档标题 (如果可用)。
+     * Document title (if available).
      */
     title?: string;
   };
 
   /**
-   * 文件最后修改时间戳。
+   * File last modified timestamp.
    */
   modifiedTime: Date;
 
   /**
-   * 包含文档中所有逻辑页面/块的数组。
-   * 顺序通常对应文件中的自然顺序。
+   * Array containing all logical pages/chunks in the document.
+   * The order typically corresponds to the natural order in the file.
    */
   pages?: DocumentPage[];
 
   /**
-   * 原始文件的完整路径。
+   * Full path of the original file.
    */
   source: string;
 
   /**
-   * 整个文档的总字符数 (所有 Page 的 charCount 之和)。
-   * 需要在所有 Page 加载和计算后得出。
+   * Total character count of the entire document (sum of all Page charCounts).
+   * Needs to be calculated after all Pages are loaded and computed.
    */
   totalCharCount: number;
 
   /**
-   * 整个文档的总行数 (所有 Page 的 lineCount 之和)。
-   * 需要在所有 Page 加载和计算后得出。
+   * Total line count of the entire document (sum of all Page lineCounts).
+   * Needs to be calculated after all Pages are loaded and computed.
    */
   totalLineCount: number;
 }
 
 /**
- * 代表文件中的一个逻辑单元/页面/块。
+ * Represents a logical unit/page/chunk in a file.
  */
 export interface DocumentPage {
   /**
-   * 此页/块内容的字符数。
+   * Character count of this page/chunk content.
    */
   charCount: number;
 
   /**
-   * 此页/块内容的行数。
+   * Line count of this page/chunk content.
    */
   lineCount: number;
 
   /**
-   * 与此页/块相关的元数据。
+   * Metadata related to this page/chunk.
    */
   metadata: {
     /**
-     * 允许添加其他特定于页/块的元数据。
+     * Allows adding other page/chunk-specific metadata.
      */
     [key: string]: any;
 
     /**
-     * 如果原始文件单元被进一步分割成块，这是当前块的索引。
+     * If the original file unit is further divided into chunks, this is the index of the current chunk.
      */
     chunkIndex?: number;
 
     /**
-     * 处理此页/块时发生的错误。
+     * Error that occurred when processing this page/chunk.
      */
     error?: string;
 
     /**
-     * 此页/块在原始文件中的结束行号。
+     * Ending line number of this page/chunk in the original file.
      */
     lineNumberEnd?: number;
 
     /**
-     * 此页/块在原始文件中的起始行号。
+     * Starting line number of this page/chunk in the original file.
      */
     lineNumberStart?: number;
 
     /**
-     * 页码 (适用于 PDF, DOCX)。
+     * Page number (applicable for PDF, DOCX).
      */
     pageNumber?: number;
 
     /**
-     * 与此页/块相关的章节标题。
+     * Section title related to this page/chunk.
      */
     sectionTitle?: string;
 
     /**
-     * 工作表名称 (适用于 XLSX)。
+     * Sheet name (applicable for XLSX).
      */
     sheetName?: string;
 
     /**
-     * 幻灯片编号 (适用于 PPTX)。
+     * Slide number (applicable for PPTX).
      */
     slideNumber?: number;
 
     /**
-     * 如果原始文件单元被进一步分割成块，这是该单元的总块数。
+     * If the original file unit is further divided into chunks, this is the total number of chunks for that unit.
      */
     totalChunks?: number;
   };
 
   /**
-   * 此页/块的核心文本内容。
+   * Core text content of this page/chunk.
    */
   pageContent: string;
 }
 
 /**
- * 可选的文件元数据，用于覆盖从文件系统读取的信息。
+ * Optional file metadata used to override information read from the filesystem.
  */
 export interface FileMetadata {
   /**
-   * 文件创建时间戳。
+   * File creation timestamp.
    */
   createdTime?: Date;
   /**
-   * 文件类型或扩展名。
+   * File type or extension.
    */
   fileType?: string;
   /**
-   * 文件名。
+   * Filename.
    */
   filename?: string;
   /**
-   * 文件最后修改时间戳。
+   * File last modified timestamp.
    */
   modifiedTime?: Date;
   /**
-   * 文件来源标识 (例如 S3 URL 或原始路径)。
+   * File source identifier (e.g., S3 URL or original path).
    */
   source?: string;
 }
 
 /**
- * 定义所有文件加载器类必须实现的接口。
+ * Defines the interface that all file loader classes must implement.
  */
 export interface FileLoaderInterface {
   /**
-   * 将从 loadPages 获取的页面内容聚合成单一的字符串。
-   * @param pages DocumentPage 对象的数组。
-   * @returns 返回聚合后的文本内容的 Promise。
+   * Aggregates the page content obtained from loadPages into a single string.
+   * @param pages Array of DocumentPage objects.
+   * @returns Promise that returns the aggregated text content.
    */
   aggregateContent(pages: DocumentPage[]): Promise<string>;
 
   attachDocumentMetadata?(filePath: string): Promise<Record<string, any>>;
 
   /**
-   * 根据文件路径加载文件内容，并将其分割为逻辑页面/块。
-   * @param filePath 文件的完整路径。
-   * @returns 返回包含 DocumentPage 对象的数组的 Promise。
+   * Loads file content based on the file path and splits it into logical pages/chunks.
+   * @param filePath Full path of the file.
+   * @returns Promise that returns an array containing DocumentPage objects.
    */
   loadPages(filePath: string): Promise<DocumentPage[]>;
 }

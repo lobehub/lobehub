@@ -1,25 +1,25 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { PropsWithChildren, memo, useEffect, useState } from 'react';
+import { type PropsWithChildren, memo, useEffect, useState } from 'react';
 
+import UsageFooter from '@/business/client/features/FileSidePanel/UsageFooter';
 import { FOLDER_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css }) => ({
   panel: css`
     height: 100%;
-    background: ${token.colorBgLayout};
+    background: ${cssVar.colorBgLayout};
   `,
 }));
 
 const FileSidePanel = memo<PropsWithChildren>(({ children }) => {
   const { md = true } = useResponsive();
-
-  const { styles } = useStyles();
   const [filePanelWidth, showFilePanel, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.filePanelWidth(s),
     systemStatusSelectors.showFilePanel(s),
@@ -71,6 +71,7 @@ const FileSidePanel = memo<PropsWithChildren>(({ children }) => {
         }}
       >
         {children}
+        {ENABLE_BUSINESS_FEATURES && <UsageFooter />}
       </DraggablePanelContainer>
     </DraggablePanel>
   );

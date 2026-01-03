@@ -1,22 +1,22 @@
 import { chainSummaryGenerationTitle } from '@lobechat/prompts';
 import isEqual from 'fast-deep-equal';
-import { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import type { SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { LOADING_FLAT } from '@/const/message';
-import { useClientDataSWR } from '@/libs/swr';
-import { UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
 import { globalHelpers } from '@/store/global/helpers';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
-import { ImageGenerationTopic } from '@/types/generation';
+import { type ImageGenerationTopic } from '@/types/generation';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { ImageStore } from '../../store';
-import { GenerationTopicDispatch, generationTopicReducer } from './reducer';
+import { type GenerationTopicDispatch, generationTopicReducer } from './reducer';
 import { generationTopicSelectors } from './selectors';
 
 const FETCH_GENERATION_TOPICS_KEY = 'fetchGenerationTopics';
@@ -106,7 +106,7 @@ export const createGenerationTopicSlice: StateCreator<
         .split(/\s+/) // Split by whitespace
         .slice(0, 3) // Take first 3 words
         .join(' ')
-        .slice(0, 10); // Limit to 10 characters
+        .slice(0, 20); // Limit to 20 characters
 
       return title;
     };

@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (Token mỗi giây): Số token tạo ra mỗi giây",
+  "duration.TTFT": "TTFT (Thời gian đến token đầu tiên): Độ trễ token đầu tiên",
+  "duration.completion": "Thời gian hoàn tất đầu ra",
+  "duration.latency": "Thời lượng",
+  "duration.stage.end": "Kết thúc",
+  "duration.stage.firstToken": "Token đầu tiên",
+  "duration.stage.start": "Bắt đầu",
+  "table.columns.TTFT.tooltip": "Thời gian đến token đầu tiên, đơn vị: giây",
+  "table.columns.duration": "Thời lượng",
+  "table.columns.model": "Mô hình",
+  "table.columns.spend": "Tín dụng",
+  "table.columns.startTime": "Thời gian tạo",
+  "table.columns.totalTokens": "Sử dụng token",
+  "table.columns.type.enums.chat": "Tạo văn bản",
+  "table.columns.type.enums.imageGeneration": "Tạo hình ảnh",
+  "table.columns.type.title": "Loại",
+  "table.desc": "Chi tiết sử dụng tín dụng tính toán cho tạo văn bản, nhúng, tạo hình ảnh, v.v.",
+  "table.more": "Xem chi tiết",
+  "table.title": "Chi tiết sử dụng tín dụng tính toán",
+  "table.totalToken.input": "Đầu vào",
+  "table.totalToken.output": "Đầu ra"
+}

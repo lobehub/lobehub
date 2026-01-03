@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "Verfolgen Sie kontinuierlich die neuen Funktionen und Verbesserungen von {{appName}}",
-    "title": "Änderungsprotokoll"
-  },
-  "chat": {
-    "description": "{{appName}} bietet dir das beste Erlebnis mit ChatGPT, Claude, Gemini und OLLaMA WebUI",
-    "title": "{{appName}}: Persönliches KI-Effizienzwerkzeug, gib dir selbst ein schlaueres Gehirn"
-  },
-  "discover": {
-    "assistants": {
-      "description": "Inhaltserstellung, Textverfassung, Fragen und Antworten, Bildgenerierung, Videoerstellung, Sprachsynthese, intelligente Agenten, automatisierte Workflows, passe deinen eigenen AI / GPTs / OLLaMA intelligenten Assistenten an",
-      "title": "KI-Assistenten"
-    },
-    "description": "Inhaltserstellung, Textverfassung, Fragen und Antworten, Bildgenerierung, Videoerstellung, Sprachsynthese, intelligente Agenten, automatisierte Workflows, benutzerdefinierte AI-Anwendungen, passe deine eigene AI-Anwendungsplattform an",
-    "mcp": {
-      "description": "Durchsuchen, vergleichen und verbinden Sie Tausende von MCP-Servern, um KI-Systemen den einfachen Zugriff auf Dateisysteme, Datenbanken, APIs und andere wichtige Ressourcen zu ermöglichen und Ihre KI-Fähigkeiten umfassend zu erweitern.",
-      "title": "MCP-Server-Marktplatz"
-    },
-    "models": {
-      "description": "Entdecke gängige AI-Modelle wie OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
-      "title": "KI-Modelle"
-    },
-    "plugins": {
-      "description": "Entdecken Sie die Möglichkeiten zur Erstellung von Diagrammen, wissenschaftlichen Inhalten, Bildgenerierung, Videoerstellung, Sprachsynthese und automatisierten Workflows, um Ihrem Assistenten eine Vielzahl von Plugin-Funktionen zu integrieren.",
-      "title": "KI-Plugins"
-    },
-    "providers": {
-      "description": "Entdecke führende Modellanbieter wie OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
-      "title": "Anbieter von KI-Modellen"
-    },
-    "search": "Suche",
-    "title": "Entdecken"
-  },
-  "image": {
-    "description": "{{appName}} bietet Ihnen das beste Nutzungserlebnis für GPT Image, Flux, Midjourney und Stable Diffusion",
-    "title": "KI-Grafik"
-  },
-  "plugins": {
-    "description": "Suche, Diagrammerstellung, akademisch, Bilderzeugung, Videoerzeugung, Spracherzeugung, automatisierte Workflows, passe die ToolCall-Plugin-Funktionen von ChatGPT / Claude an",
-    "title": "Plugin-Markt"
-  },
-  "welcome": {
-    "description": "{{appName}} bietet dir das beste Erlebnis mit ChatGPT, Claude, Gemini und OLLaMA WebUI",
-    "title": "Willkommen bei {{appName}}: Persönliches KI-Effizienzwerkzeug, gib dir selbst ein schlaueres Gehirn"
-  }
+  "changelog.description": "Bleiben Sie über neue Funktionen und Verbesserungen von {{appName}} auf dem Laufenden",
+  "changelog.title": "Änderungsprotokoll",
+  "chat.description": "{{appName}} bietet Ihnen das beste UI-Erlebnis für ChatGPT, Claude, Gemini und OLLaMA.",
+  "chat.title": "{{appName}} · Für kollaborative Agenten",
+  "discover.assistants.description": "Inhalte, Fragen & Antworten, Bilder, Videos, Sprache, Workflows – durchstöbern und fügen Sie Agenten aus der Community hinzu.",
+  "discover.assistants.title": "Agenten-Community",
+  "discover.description": "Entdecken Sie Agenten, Skills, Anbieter, Modelle und MCP-Server.",
+  "discover.mcp.description": "Suchen, vergleichen und verbinden Sie sich mit Tausenden von MCP-Servern, um KI-Systemen einfachen Zugriff auf Dateisysteme, Datenbanken, APIs und andere wichtige Ressourcen zu ermöglichen – und erweitern Sie so Ihre KI-Fähigkeiten umfassend.",
+  "discover.mcp.title": "MCP-Server-Community",
+  "discover.models.description": "Entdecken Sie führende KI-Modelle: OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "Modell-Community",
+  "discover.plugins.description": "Entdecken Sie Diagramme, wissenschaftliche Tools, Bild-/Video-/Sprachgenerierung und Workflows – fügen Sie Ihren Agenten Skills hinzu.",
+  "discover.plugins.title": "Skill-Community",
+  "discover.providers.description": "Entdecken Sie führende Modellanbieter: OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "Anbieter-Community",
+  "discover.search": "Suchen",
+  "discover.title": "Entdecken",
+  "image.description": "{{appName}} bietet Ihnen das beste Erlebnis mit GPT Image, Flux, Midjourney und Stable Diffusion",
+  "image.title": "KI-Kunst",
+  "plugins.description": "Suchen, Diagramme, wissenschaftliche Tools, Bild-/Video-/Sprachgenerierung, Workflows – fügen Sie Ihren Agenten Skills hinzu.",
+  "plugins.title": "Skill-Community",
+  "welcome.description": "{{appName}} bietet Ihnen das beste UI-Erlebnis für ChatGPT, Claude, Gemini und OLLaMA.",
+  "welcome.title": "Willkommen bei {{appName}} · Für kollaborative Agenten"
 }

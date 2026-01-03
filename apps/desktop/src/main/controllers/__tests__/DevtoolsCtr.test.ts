@@ -4,6 +4,16 @@ import type { App } from '@/core/App';
 
 import DevtoolsCtr from '../DevtoolsCtr';
 
+const { ipcMainHandleMock } = vi.hoisted(() => ({
+  ipcMainHandleMock: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+}));
+
 // 模拟 App 及其依赖项
 const mockShow = vi.fn();
 const mockRetrieveByIdentifier = vi.fn(() => ({
@@ -24,10 +34,9 @@ describe('DevtoolsCtr', () => {
 
   beforeEach(() => {
     vi.clearAllMocks(); // 只清除 vi.fn() 创建的模拟函数的记录，不影响 IoCContainer 状态
+    ipcMainHandleMock.mockClear();
 
-    // 实例化 DevtoolsCtr。
-    // 它将继承自真实的 ControllerModule。
-    // 其 @ipcClientEvent 装饰器会执行并与真实的 IoCContainer 交互。
+    // 实例化 DevtoolsCtr。其 @IpcMethod 装饰器会执行并与真实的 IoCContainer 交互。
     devtoolsCtr = new DevtoolsCtr(mockApp);
   });
 

@@ -1,33 +1,31 @@
 'use client';
 
-import { Button } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { EditableMessage } from '@lobehub/ui/chat';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { PencilLine } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     border: unset;
   `,
   wrapper: css`
     width: 100%;
     padding: 8px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusLG - 1}px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: calc(${cssVar.borderRadiusLG} - 1px);
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const OpeningMessage = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
 
   const openingMessage = useStore(selectors.openingMessage);
   const updateConfig = useStore((s) => s.setAgentConfig);

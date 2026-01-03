@@ -1,7 +1,8 @@
+import { isDesktop } from '@/const/version';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 
 import { MarketAuthError } from './errors';
-import { OIDCConfig, PKCEParams, TokenResponse } from './types';
+import { type OIDCConfig, type PKCEParams, type TokenResponse } from './types';
 
 /**
  * Market OIDC 授权工具类
@@ -89,9 +90,7 @@ export class MarketOIDC {
 
     console.log('[MarketOIDC] this.config:', this.config);
 
-    const authUrl = new URL(
-      `${this.config.baseUrl.replace(/\/$/, '')}${MARKET_OIDC_ENDPOINTS.auth}`,
-    );
+    const authUrl = new URL(MARKET_OIDC_ENDPOINTS.auth, this.config.baseUrl);
     authUrl.searchParams.set('client_id', this.config.clientId);
     authUrl.searchParams.set('redirect_uri', this.config.redirectUri);
     authUrl.searchParams.set('response_type', 'code');
@@ -132,14 +131,6 @@ export class MarketOIDC {
       grant_type: 'authorization_code',
       redirect_uri: this.config.redirectUri,
     });
-
-    console.log('[MarketOIDC] Sending token exchange request', {
-      client_id: this.config.clientId,
-      code,
-      code_verifier: codeVerifier,
-      grant_type: 'authorization_code',
-      redirect_uri: this.config.redirectUri,
-    });
     const response = await fetch(tokenUrl, {
       body: body.toString(),
       headers: {
@@ -148,11 +139,8 @@ export class MarketOIDC {
       method: 'POST',
     });
 
-    console.log('[MarketOIDC] Token exchange response:', response);
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => undefined);
-      console.log('[MarketOIDC] Token exchange error data:', errorData);
       const errorMessage =
         `Token exchange failed: ${response.status} ${response.statusText} ${errorData?.error_description || errorData?.error || ''}`.trim();
       console.error('[MarketOIDC]', errorMessage);
@@ -180,7 +168,6 @@ export class MarketOIDC {
    * 启动授权流程并返回授权结果
    */
   async startAuthorization(): Promise<{ code: string; state: string }> {
-    console.log('[MarketOIDC] Starting authorization flow');
     const authUrl = await this.buildAuthUrl();
 
     if (typeof window === 'undefined') {
@@ -197,11 +184,9 @@ export class MarketOIDC {
       });
     }
 
-    const isDesktopApp = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
-
     // 在新窗口中打开授权页面
     let popup: Window | null = null;
-    if (isDesktopApp) {
+    if (isDesktop) {
       // Electron 桌面端：使用 IPC 调用主进程打开系统浏览器
       console.log('[MarketOIDC] Desktop app detected, opening system browser via IPC');
       const { remoteServerService } = await import('@/services/electron/remoteServer');

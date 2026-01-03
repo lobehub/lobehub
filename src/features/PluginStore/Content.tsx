@@ -1,8 +1,7 @@
-import { Segmented } from '@lobehub/ui';
-import { SegmentedOptions } from 'antd/es/segmented';
+import { Flexbox, Segmented } from '@lobehub/ui';
+import { type SegmentedOptions } from 'antd/es/segmented';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -44,7 +43,7 @@ export const Content = memo(() => {
             value={listType}
             variant={'filled'}
           />
-         {mobile ? null : <AddPluginButton />}
+          {mobile ? null : <AddPluginButton />}
         </Flexbox>
         <Search />
       </Flexbox>

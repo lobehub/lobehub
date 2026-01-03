@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Ekle",
-    "back": "Geri",
-    "cancel": "İptal",
-    "close": "Kapat",
-    "confirm": "Onayla",
-    "delete": "Sil",
-    "edit": "Düzenle",
-    "more": "Daha Fazla",
-    "next": "Sonraki",
-    "ok": "Tamam",
-    "previous": "Önceki",
-    "refresh": "Yenile",
-    "remove": "Kaldır",
-    "retry": "Yeniden Dene",
-    "save": "Kaydet",
-    "search": "Ara",
-    "submit": "Gönder"
-  },
-  "app": {
-    "description": "AI asistanınız için işbirliği platformu",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Hata",
-    "info": "Bilgi",
-    "loading": "Yükleniyor",
-    "success": "Başarılı",
-    "warning": "Uyarı"
-  }
+  "actions.add": "Ekle",
+  "actions.back": "Geri",
+  "actions.cancel": "İptal",
+  "actions.close": "Kapat",
+  "actions.confirm": "Onayla",
+  "actions.delete": "Sil",
+  "actions.edit": "Düzenle",
+  "actions.more": "Daha Fazla",
+  "actions.next": "Sonraki",
+  "actions.ok": "Tamam",
+  "actions.previous": "Önceki",
+  "actions.refresh": "Yenile",
+  "actions.remove": "Kaldır",
+  "actions.retry": "Yeniden Dene",
+  "actions.save": "Kaydet",
+  "actions.search": "Ara",
+  "actions.submit": "Gönder",
+  "app.description": "AI asistanınız için işbirliği platformu",
+  "app.name": "LobeHub",
+  "status.error": "Hata",
+  "status.info": "Bilgi",
+  "status.loading": "Yükleniyor",
+  "status.success": "Başarılı",
+  "status.warning": "Uyarı"
 }

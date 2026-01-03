@@ -1,14 +1,13 @@
 'use client';
 
-import { Button, Modal, Text } from '@lobehub/ui';
+import { Button, Flexbox, Modal, Text } from '@lobehub/ui';
 import { Table } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
-import { ImportPgDataStructure } from '@/types/export';
+import { type ImportPgDataStructure } from '@/types/export';
 
 const getNonEmptyTables = (data: ImportPgDataStructure) => {
   const result = [];
@@ -29,54 +28,54 @@ const getTotalRecords = (tables: { count: number; name: string }[]): number => {
   return tables.reduce((sum, table) => sum + table.count, 0);
 };
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     duplicateAlert: css`
-      margin-block-start: ${token.marginMD}px;
-      padding: ${token.paddingMD}px;
-      border: 1px solid ${token.colorWarningBorder};
-      border-radius: ${token.borderRadiusLG}px;
+      margin-block-start: ${cssVar.marginMD};
+      padding: ${cssVar.paddingMD};
+      border: 1px solid ${cssVar.colorWarningBorder};
+      border-radius: ${cssVar.borderRadiusLG};
 
-      background-color: ${token.colorWarningBg};
+      background-color: ${cssVar.colorWarningBg};
     `,
     duplicateDescription: css`
-      margin-block-start: ${token.marginXS}px;
-      font-size: ${token.fontSizeSM}px;
-      color: ${token.colorTextSecondary};
+      margin-block-start: ${cssVar.marginXS};
+      font-size: ${cssVar.fontSizeSM};
+      color: ${cssVar.colorTextSecondary};
     `,
     duplicateOptions: css`
-      margin-block-start: ${token.marginSM}px;
+      margin-block-start: ${cssVar.marginSM};
     `,
     duplicateTag: css`
-      border-color: ${token.colorWarningBorder};
-      color: ${token.colorWarning};
-      background-color: ${token.colorWarningBg};
+      border-color: ${cssVar.colorWarningBorder};
+      color: ${cssVar.colorWarning};
+      background-color: ${cssVar.colorWarningBg};
     `,
     hash: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 12px;
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
     `,
     infoIcon: css`
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     modalContent: css`
-      padding-block: ${token.paddingMD}px;
+      padding-block: ${cssVar.paddingMD};
       padding-inline: 0;
     `,
     successIcon: css`
-      color: ${token.colorSuccess};
+      color: ${cssVar.colorSuccess};
     `,
     tableContainer: css`
       overflow: hidden;
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: ${token.borderRadiusLG}px;
+      border: 1px solid ${cssVar.colorBorderSecondary};
+      border-radius: ${cssVar.borderRadiusLG};
     `,
     tableName: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
     `,
     warningIcon: css`
-      color: ${token.colorWarning};
+      color: ${cssVar.colorWarning};
     `,
   };
 });
@@ -97,7 +96,6 @@ const ImportPreviewModal = ({
   importData,
 }: ImportPreviewModalProps) => {
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
   const [duplicateAction] = useState<string>('skip');
   const tables = getNonEmptyTables(importData);
   const totalRecords = getTotalRecords(tables);
@@ -158,7 +156,7 @@ const ImportPreviewModal = ({
               </Flexbox>
             </Flexbox>
             <Flexbox className={styles.hash} gap={4} horizontal>
-              Hash: <span>{importData.schemaHash}</span>
+              {t('importPreview.hashLabel')}: <span>{importData.schemaHash}</span>
             </Flexbox>
           </Flexbox>
 

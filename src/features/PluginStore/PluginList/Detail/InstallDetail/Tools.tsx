@@ -1,6 +1,6 @@
-import { Block, Collapse, Highlighter, Markdown, Tag } from '@lobehub/ui';
-import { Empty } from 'antd';
-import { isString } from 'lodash-es';
+import { Block, Collapse, Empty, Highlighter, Markdown, Tag } from '@lobehub/ui';
+import { isString } from 'es-toolkit/compat';
+import { Wrench } from 'lucide-react';
 import { markdownToTxt } from 'markdown-to-txt';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,7 @@ import { ModeType } from '@/features/MCPPluginDetail/Schema/types';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 
-import Title from '../../../../../app/[variants]/(main)/discover/features/Title';
+import Title from '../../../../../app/[variants]/(main)/community/features/Title';
 
 interface ToolProps {
   mode?: ModeType;
@@ -30,7 +30,9 @@ const Tools = memo<ToolProps>(({ mode }) => {
       <Block variant={'outlined'}>
         <Empty
           description={t('mcp.details.schema.tools.empty')}
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          descriptionProps={{ fontSize: 14 }}
+          icon={Wrench}
+          style={{ maxWidth: 400 }}
         />
       </Block>
     );
@@ -38,7 +40,7 @@ const Tools = memo<ToolProps>(({ mode }) => {
   return (
     <Collapse
       activeKey={activeKey}
-      expandIconPosition={'end'}
+      expandIconPlacement={'end'}
       gap={8}
       items={manifest.api.map((item) => {
         const parameters = Object.entries(item.parameters?.properties || {}).map(

@@ -209,13 +209,57 @@ export interface OnFinishData {
   usage?: ModelUsage;
 }
 
+/**
+ * Base64 image data from model output
+ */
+export interface Base64ImageData {
+  /** Base64 encoded image data (with or without data URI prefix) */
+  data: string;
+  /** Unique identifier for the image */
+  id: string;
+}
+
+/**
+ * Content part data for multimodal output
+ */
+export interface ContentPartData {
+  /** Text content or base64 image data */
+  content: string;
+  /** Image MIME type (for image parts) */
+  mimeType?: string;
+  /** Part type: text or image */
+  partType: 'text' | 'image';
+  /** Optional signature for reasoning verification (Google Gemini feature) */
+  thoughtSignature?: string;
+}
+
 export interface ChatStreamCallbacks {
+  /**
+   * `onBase64Image`: Called when a base64 image is received from the model.
+   * Used for models that generate images (e.g., GPT-4 with DALL-E, Gemini with image output)
+   */
+  onBase64Image?: (data: {
+    /** The newly received image */
+    image: Base64ImageData;
+    /** All images received so far */
+    images: Base64ImageData[];
+  }) => Promise<void> | void;
   onCompletion?: (data: OnFinishData) => Promise<void> | void;
+  /**
+   * `onContentPart`: Called for each content part in multimodal output.
+   * Used for models that return structured content with mixed text and images.
+   */
+  onContentPart?: (data: ContentPartData) => Promise<void> | void;
   /**
    * `onFinal`: Called once when the stream is closed with the final completion message.
    **/
   onFinal?: (data: OnFinishData) => Promise<void> | void;
   onGrounding?: (grounding: any) => Promise<void> | void;
+  /**
+   * `onReasoningPart`: Called for each reasoning/thinking part in multimodal output.
+   * Used for models that return structured reasoning with mixed text and images.
+   */
+  onReasoningPart?: (data: ContentPartData) => Promise<void> | void;
   /** `onStart`: Called once when the stream is initialized. */
   onStart?: () => Promise<void> | void;
   /** `onText`: Called for each text chunk. */

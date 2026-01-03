@@ -1,10 +1,10 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { MentionAction, createMentionSlice } from './action';
-import { MentionState, initialMentionState } from './initialState';
+import { type MentionAction, createMentionSlice } from './action';
+import { type MentionState, initialMentionState } from './initialState';
 
 export type MentionStore = MentionState & MentionAction;
 

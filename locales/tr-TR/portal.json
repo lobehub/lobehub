@@ -1,30 +1,25 @@
 {
-  "Artifacts": "Artefaktlar",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Parça",
-      "file": "Dosya"
-    }
-  },
-  "Plugins": "Eklentiler",
-  "artifacts": {
-    "display": {
-      "code": "Kod",
-      "preview": "Önizleme"
-    },
-    "svg": {
-      "copyAsImage": "Resmi Kopyala",
-      "copyFail": "Kopyalama başarısız, hata nedeni: {{error}}",
-      "copySuccess": "Resim başarıyla kopyalandı",
-      "download": {
-        "png": "PNG olarak indir",
-        "svg": "SVG olarak indir"
-      }
-    }
-  },
-  "emptyArtifactList": "Mevcut Artefakt listesi boş, lütfen eklentileri kullanarak oturumda gerektiğinde göz atın",
-  "emptyKnowledgeList": "Mevcut bilgi listesi boş. Lütfen sohbet sırasında ihtiyaç duyduğunuz bilgi havuzunu açtıktan sonra tekrar kontrol edin.",
+  "Artifacts": "Eserler",
+  "FilePreview.tabs.chunk": "Parça",
+  "FilePreview.tabs.file": "Dosya",
+  "Plugins": "Yetenekler",
+  "artifacts.display.code": "Kod",
+  "artifacts.display.preview": "Önizleme",
+  "artifacts.svg.copyAsImage": "Görsel olarak kopyala",
+  "artifacts.svg.copyFail": "Kopyalama başarısız: {{error}}. Lütfen tekrar deneyin.",
+  "artifacts.svg.copySuccess": "Görsel başarıyla kopyalandı",
+  "artifacts.svg.download.png": "PNG olarak indir",
+  "artifacts.svg.download.svg": "SVG olarak indir",
+  "document.todos.allCompleted": "Tüm görevler tamamlandı",
+  "document.todos.title": "Görevler",
+  "emptyArtifactList": "Henüz eser yok. Sohbette Yetenekleri kullanın, ardından buraya geri dönün.",
+  "emptyKnowledgeList": "Bu liste boş.",
   "files": "Dosyalar",
-  "messageDetail": "Mesaj Detayı",
-  "title": "Genişletme Penceresi"
+  "messageDetail": "Mesaj Detayları",
+  "notebook.confirmDelete": "Bu Sayfa silinsin mi?",
+  "notebook.delete": "Sil",
+  "notebook.empty": "Henüz sayfa yok. Bu Konuya bağlı sayfalar burada görünecek.",
+  "notebook.title": "Not Defteri",
+  "openInPageEditor": "Sayfada Düzenle",
+  "title": "Çalışma Alanı"
 }

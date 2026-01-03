@@ -41,6 +41,10 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
+vi.mock('@/libs/trpc/utils/internalJwt', () => ({
+  signInternalJWT: vi.fn().mockResolvedValue('mock-internal-jwt-token'),
+}));
+
 describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,14 +138,14 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
   });
 
   describe('authentication and headers', () => {
-    it('should include Authorization header with KEY_VAULTS_SECRET', async () => {
+    it('should include Authorization header with internal JWT token', async () => {
       await createAsyncServerClient('user-auth', {});
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
 
       expect(httpLinkOptions.headers).toHaveProperty('Authorization');
-      expect(httpLinkOptions.headers.Authorization).toBe('Bearer test-secret-key');
+      expect(httpLinkOptions.headers.Authorization).toBe('mock-internal-jwt-token');
     });
 
     it('should encrypt and include user payload in x-lobe-chat-auth header', async () => {

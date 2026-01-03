@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Einklappen",
-      "on": "Ausklappen"
-    },
-    "typobar": {
-      "off": "Formatierungsleiste ausblenden",
-      "on": "Formatierungsleiste anzeigen"
-    }
-  },
+  "actions.expand.off": "Einklappen",
+  "actions.expand.on": "Ausklappen",
+  "actions.typobar.off": "Formatierungsleiste ausblenden",
+  "actions.typobar.on": "Formatierungsleiste anzeigen",
+  "autoSave.latest": "Neueste Version geladen",
+  "autoSave.saved": "Gespeichert",
+  "autoSave.saving": "Automatisches Speichern...",
   "cancel": "Abbrechen",
+  "codemirror.copyFailed": "Kopieren fehlgeschlagen",
+  "codemirror.copySuccess": "Code in Zwischenablage kopiert",
+  "codemirror.selectLanguage": "Sprache auswählen",
+  "codemirror.selectTheme": "Design auswählen",
+  "codemirror.showLineNumbers": "Zeilennummern anzeigen",
+  "codemirror.tabSize": "Tabulatorgröße",
+  "codemirror.theme": "Design",
+  "codemirror.useTabs": "Tabs verwenden",
   "confirm": "Bestätigen",
-  "file": {
-    "error": "Fehler: {{message}}",
-    "uploading": "Datei wird hochgeladen..."
-  },
-  "image": {
-    "broken": "Bild beschädigt"
-  },
-  "link": {
-    "edit": "Link bearbeiten",
-    "open": "Link öffnen",
-    "placeholder": "Link-URL eingeben",
-    "unlink": "Link entfernen"
-  },
-  "math": {
-    "placeholder": "Bitte TeX-Formel eingeben"
-  },
-  "slash": {
-    "h1": "Überschrift 1. Ordnung",
-    "h2": "Überschrift 2. Ordnung",
-    "h3": "Überschrift 3. Ordnung",
-    "hr": "Trennlinie",
-    "table": "Tabelle",
-    "tex": "TeX-Formel"
-  },
-  "table": {
-    "delete": "Tabelle löschen",
-    "deleteColumn": "Spalte löschen",
-    "deleteRow": "Zeile löschen",
-    "insertColumnLeft": "Links {{count}} Spalten einfügen",
-    "insertColumnRight": "Rechts {{count}} Spalten einfügen",
-    "insertRowAbove": "Oben {{count}} Zeilen einfügen",
-    "insertRowBelow": "Unten {{count}} Zeilen einfügen"
-  },
-  "typobar": {
-    "blockquote": "Zitat",
-    "bold": "Fett",
-    "bulletList": "Ungeordnete Liste",
-    "code": "Inline-Code",
-    "codeblock": "Codeblock",
-    "italic": "Kursiv",
-    "link": "Link",
-    "numberList": "Nummerierte Liste",
-    "strikethrough": "Durchgestrichen",
-    "table": "Tabelle",
-    "taskList": "Aufgabenliste",
-    "tex": "TeX-Formel",
-    "underline": "Unterstrichen"
-  }
+  "file.error": "Fehler: {{message}}",
+  "file.uploading": "Datei wird hochgeladen...",
+  "image.broken": "Bild ist beschädigt",
+  "link.edit": "Link bearbeiten",
+  "link.editLinkTitle": "Link",
+  "link.editTextTitle": "Titel",
+  "link.open": "Link öffnen",
+  "link.placeholder": "Link-URL eingeben",
+  "link.unlink": "Link entfernen",
+  "markdown.cancel": "Abbrechen",
+  "markdown.confirm": "Konvertieren",
+  "markdown.parseMessage": "In Markdown-Format umwandeln. Bestehender Inhalt wird überschrieben. Sind Sie sicher? (Schließt sich automatisch in 5 Sekunden)",
+  "markdown.parseTitle": "Als Markdown formatieren",
+  "math.placeholder": "Bitte eine TeX-Formel eingeben",
+  "modifier.accept": "Beibehalten",
+  "modifier.acceptAll": "Alle beibehalten",
+  "modifier.reject": "Zurücksetzen",
+  "modifier.rejectAll": "Alle zurücksetzen",
+  "slash.h1": "Überschrift 1",
+  "slash.h2": "Überschrift 2",
+  "slash.h3": "Überschrift 3",
+  "slash.hr": "Trennlinie",
+  "slash.table": "Tabelle",
+  "slash.tex": "TeX-Formel",
+  "table.delete": "Tabelle löschen",
+  "table.deleteColumn": "Spalte löschen",
+  "table.deleteRow": "Zeile löschen",
+  "table.insertColumnLeft": "{{count}} Spalte(n) links einfügen",
+  "table.insertColumnRight": "{{count}} Spalte(n) rechts einfügen",
+  "table.insertRowAbove": "{{count}} Zeile(n) oberhalb einfügen",
+  "table.insertRowBelow": "{{count}} Zeile(n) unterhalb einfügen",
+  "typobar.blockquote": "Zitatblock",
+  "typobar.bold": "Fett",
+  "typobar.bulletList": "Aufzählungsliste",
+  "typobar.code": "Inline-Code",
+  "typobar.codeblock": "Codeblock",
+  "typobar.image": "Bild",
+  "typobar.italic": "Kursiv",
+  "typobar.link": "Link",
+  "typobar.numberList": "Nummerierte Liste",
+  "typobar.redo": "Wiederholen",
+  "typobar.strikethrough": "Durchgestrichen",
+  "typobar.table": "Tabelle",
+  "typobar.taskList": "Aufgabenliste",
+  "typobar.tex": "TeX-Formel",
+  "typobar.underline": "Unterstrichen",
+  "typobar.undo": "Rückgängig"
 }

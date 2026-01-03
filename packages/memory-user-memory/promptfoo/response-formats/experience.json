@@ -1,0 +1,129 @@
+{
+  "json_schema": {
+    "type": "object",
+    "properties": {
+      "memories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "details": {
+              "type": "string",
+              "description": "Optional detailed information"
+            },
+            "memoryCategory": {
+              "type": "string",
+              "description": "Memory category"
+            },
+            "memoryLayer": {
+              "type": "string",
+              "const": "experience",
+              "description": "Memory layer"
+            },
+            "memoryType": {
+              "type": "string",
+              "enum": [
+                "activity",
+                "context",
+                "event",
+                "fact",
+                "location",
+                "other",
+                "people",
+                "preference",
+                "technology",
+                "topic"
+              ],
+              "description": "Memory type"
+            },
+            "summary": {
+              "type": "string",
+              "description": "Concise overview of this specific memory"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Model generated tags that summarize the experience facets"
+            },
+            "title": {
+              "type": "string",
+              "description": "Brief descriptive title"
+            },
+            "withExperience": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "description": "Narrative describing actions taken or behaviors exhibited"
+                },
+                "keyLearning": {
+                  "type": "string",
+                  "description": "Narrative describing key insights or lessons learned"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Model generated tags that summarize the experience facets"
+                },
+                "possibleOutcome": {
+                  "type": "string",
+                  "description": "Narrative describing potential outcomes or learnings"
+                },
+                "reasoning": {
+                  "type": "string",
+                  "description": "Narrative describing the thought process or motivations"
+                },
+                "scoreConfidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Numeric score (0-1 (0% to 100%)) describing confidence in the experience details"
+                },
+                "situation": {
+                  "type": "string",
+                  "description": "Narrative describing the situation or event"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Type of experience being recorded"
+                }
+              },
+              "required": [
+                "action",
+                "keyLearning",
+                "labels",
+                "possibleOutcome",
+                "reasoning",
+                "scoreConfidence",
+                "situation",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "details",
+            "memoryCategory",
+            "memoryLayer",
+            "memoryType",
+            "summary",
+            "tags",
+            "title",
+            "withExperience"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Array of extracted experience memory items, could be empty if decided no relevant experience to extract"
+      }
+    },
+    "required": [
+      "memories"
+    ],
+    "additionalProperties": false
+  },
+  "type": "json_schema"
+}

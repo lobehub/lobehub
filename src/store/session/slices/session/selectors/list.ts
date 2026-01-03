@@ -1,17 +1,26 @@
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
 import { sessionHelpers } from '@/store/session/slices/session/helpers';
-import { MetaData } from '@/types/meta';
+import { type MetaData } from '@/types/meta';
 import {
-  CustomSessionGroup,
-  GroupMemberWithAgent,
-  LobeGroupSession,
-  LobeSession,
-  LobeSessions,
+  type CustomSessionGroup,
+  type GroupMemberWithAgent,
+  type LobeGroupSession,
+  type LobeSession,
+  type LobeSessions,
 } from '@/types/session';
 
-import { SessionStore } from '../../../store';
+import { type SessionStore } from '../../../store';
 
 const defaultSessions = (s: SessionStore): LobeSessions => s.defaultSessions;
+
+// Limit default sessions for sidebar display based on page size
+const defaultSessionsLimited =
+  (pageSize: number) =>
+  (s: SessionStore): LobeSessions =>
+    s.defaultSessions.slice(0, pageSize);
+
+const defaultSessionsCount = (s: SessionStore): number => s.defaultSessions.length;
+
 const pinnedSessions = (s: SessionStore): LobeSessions => s.pinnedSessions;
 const customSessionGroups = (s: SessionStore): CustomSessionGroup[] => s.customSessionGroups;
 
@@ -69,6 +78,8 @@ export const sessionSelectors = {
   currentSessionSafe,
   customSessionGroups,
   defaultSessions,
+  defaultSessionsCount,
+  defaultSessionsLimited,
   getSessionById,
   getSessionMetaById,
   hasCustomAgents,
