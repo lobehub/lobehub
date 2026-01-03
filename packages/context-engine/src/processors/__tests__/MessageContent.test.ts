@@ -45,7 +45,6 @@ describe('MessageContentProcessor', () => {
           imageList: [{ url: 'image_url', alt: '', id: 'test' } as ChatImageItem],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -75,7 +74,6 @@ describe('MessageContentProcessor', () => {
           ],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -108,7 +106,6 @@ describe('MessageContentProcessor', () => {
           imageList: [{ url: 'image_url', alt: '', id: 'test' } as ChatImageItem],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -139,7 +136,6 @@ describe('MessageContentProcessor', () => {
           ],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -171,7 +167,6 @@ describe('MessageContentProcessor', () => {
           ],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -204,7 +199,6 @@ describe('MessageContentProcessor', () => {
           ],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -245,7 +239,6 @@ describe('MessageContentProcessor', () => {
           ],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -286,7 +279,6 @@ describe('MessageContentProcessor', () => {
           ],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -317,7 +309,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -366,7 +357,6 @@ describe('MessageContentProcessor', () => {
           ],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
         {
           id: 'test2',
@@ -378,7 +368,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -409,7 +398,6 @@ describe('MessageContentProcessor', () => {
           videoList: [{ url: 'video_url', alt: 'test video', id: 'test' } as ChatVideoItem],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -440,7 +428,6 @@ describe('MessageContentProcessor', () => {
           ] as ChatVideoItem[],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -476,7 +463,6 @@ describe('MessageContentProcessor', () => {
           ] as ChatVideoItem[],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -510,7 +496,6 @@ describe('MessageContentProcessor', () => {
           ] as ChatVideoItem[],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -550,7 +535,6 @@ describe('MessageContentProcessor', () => {
           ] as ChatVideoItem[],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -590,7 +574,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -631,7 +614,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -675,7 +657,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -717,7 +698,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -753,7 +733,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 
@@ -778,7 +757,11 @@ describe('MessageContentProcessor', () => {
           role: 'assistant',
           content: JSON.stringify([
             { type: 'text', text: 'Analysis result:', thoughtSignature: 'sig-001' },
-            { type: 'image', image: 'https://s3.example.com/chart.png', thoughtSignature: 'sig-002' },
+            {
+              type: 'image',
+              image: 'https://s3.example.com/chart.png',
+              thoughtSignature: 'sig-002',
+            },
             { type: 'text', text: 'Conclusion' },
           ]),
           metadata: {
@@ -786,7 +769,6 @@ describe('MessageContentProcessor', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
         },
       ];
 

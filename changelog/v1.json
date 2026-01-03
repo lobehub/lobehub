@@ -1,6 +1,46 @@
 [
   {
     "children": {
+      "improvements": ["Refactor to remove access code."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.196"
+  },
+  {
+    "children": {
+      "fixes": ["Fix tool call message content missing."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.195"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.194"
+  },
+  {
+    "children": {},
+    "date": "2026-01-02",
+    "version": "2.0.0-next.193"
+  },
+  {
+    "children": {
+      "fixes": ["Fix model edit icon missing."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.192"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove meta in message."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.191"
+  },
+  {
+    "children": {
       "improvements": ["Update i18n."]
     },
     "date": "2026-01-02",

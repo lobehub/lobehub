@@ -67,8 +67,8 @@ interface ImageForGeneration {
 }
 
 /**
- * 图片生成服务
- * 负责处理AI生成图片的转换、上传和封面创建
+ * Image generation service
+ * Handles conversion, upload and cover creation for AI-generated images
  */
 export class GenerationService {
   private fileService: FileService;

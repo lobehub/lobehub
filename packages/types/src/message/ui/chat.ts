@@ -1,4 +1,3 @@
-import { MetaData } from '../../meta';
 import { GroundingSearch } from '../../search';
 import { ThreadStatus } from '../../topic/thread';
 import {
@@ -121,7 +120,6 @@ export interface UIChatMessage {
   id: string;
   imageList?: ChatImageItem[];
   members?: UIChatMessage[];
-  meta: MetaData;
   metadata?: MessageMetadata | null;
   model?: string | null;
   /**

@@ -311,7 +311,7 @@ export function defineConfig(config: CustomNextConfig) {
     ],
 
     // when external packages in dev mode with turbopack, this config will lead to bundle error
-    serverExternalPackages: isProd ? ['@electric-sql/pglite', 'pdfkit'] : ['pdfkit'],
+    serverExternalPackages: ['pdfkit'],
 
     transpilePackages: ['pdfjs-dist', 'mermaid', 'better-auth-harmony'],
     turbopack: {

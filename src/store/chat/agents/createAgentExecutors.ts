@@ -91,7 +91,7 @@ export const createAgentExecutors = (context: {
       let assistantMessageId: string;
 
       if (shouldSkipCreateMessage) {
-        // 跳过第一次创建，后续就不再跳过了
+        // Skip first creation, subsequent calls will not skip
         assistantMessageId = context.parentId;
         shouldSkipCreateMessage = false;
       } else {
@@ -100,9 +100,9 @@ export const createAgentExecutors = (context: {
         // Get effective agentId (subAgentId for group orchestration, agentId otherwise)
         const effectiveAgentId = getEffectiveAgentId();
 
-        // 如果是 userMessage 的第一次 regenerated 创建， llmPayload 不存在 parentMessageId
-        // 因此用这种方式做个赋值
-        // TODO: 也许未来这个应该用 init 方法实现
+        // If this is the first regenerated creation of userMessage, llmPayload doesn't have parentMessageId
+        // So we assign it this way
+        // TODO: Maybe this should be implemented with an init method in the future
         if (!llmPayload.parentMessageId) {
           llmPayload.parentMessageId = context.parentId;
         }

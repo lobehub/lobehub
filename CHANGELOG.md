@@ -2,6 +2,156 @@
 
 # Changelog
 
+## [Version 2.0.0-next.196](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.195...v2.0.0-next.196)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Refactor to remove access code.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Refactor to remove access code, closes [#11120](https://github.com/lobehub/lobe-chat/issues/11120) ([0e9f98c](https://github.com/lobehub/lobe-chat/commit/0e9f98c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.195](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.194...v2.0.0-next.195)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix tool call message content missing.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix tool call message content missing, closes [#11116](https://github.com/lobehub/lobe-chat/issues/11116) ([885964e](https://github.com/lobehub/lobe-chat/commit/885964e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.194](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.193...v2.0.0-next.194)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Update i18n, closes [#11115](https://github.com/lobehub/lobe-chat/issues/11115) ([072e0dd](https://github.com/lobehub/lobe-chat/commit/072e0dd))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.193](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.192...v2.0.0-next.193)
+
+<sup>Released on **2026-01-02**</sup>
+
+#### 🐛 Bug Fixes
+
+- **database**: Add userId authorization check in removeFilesFromKnowledgeBase.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **database**: Add userId authorization check in removeFilesFromKnowledgeBase, closes [#11108](https://github.com/lobehub/lobe-chat/issues/11108) ([2c1762b](https://github.com/lobehub/lobe-chat/commit/2c1762b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.192](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.191...v2.0.0-next.192)
+
+<sup>Released on **2026-01-02**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix model edit icon missing.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix model edit icon missing, closes [#11105](https://github.com/lobehub/lobe-chat/issues/11105) ([0f88995](https://github.com/lobehub/lobe-chat/commit/0f88995))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.191](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.190...v2.0.0-next.191)
+
+<sup>Released on **2026-01-02**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Refactor to remove meta in message.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Refactor to remove meta in message, closes [#11103](https://github.com/lobehub/lobe-chat/issues/11103) ([527c1cd](https://github.com/lobehub/lobe-chat/commit/527c1cd))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.190](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.189...v2.0.0-next.190)
 
 <sup>Released on **2026-01-02**</sup>

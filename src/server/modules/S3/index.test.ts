@@ -3,6 +3,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -301,6 +302,63 @@ describe('FileS3', () => {
       await expect(s3.getFileByteArray('test-file.bin')).rejects.toThrow(
         'No body in response with test-file.bin',
       );
+    });
+  });
+
+  describe('getFileMetadata', () => {
+    it('should retrieve file metadata with content length and type', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({
+        ContentLength: 1024,
+        ContentType: 'image/png',
+      });
+
+      const result = await s3.getFileMetadata('test-file.png');
+
+      expect(HeadObjectCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'test-file.png',
+      });
+      expect(result).toEqual({
+        contentLength: 1024,
+        contentType: 'image/png',
+      });
+    });
+
+    it('should return 0 for content length when not provided', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({
+        ContentType: 'application/octet-stream',
+      });
+
+      const result = await s3.getFileMetadata('test-file.bin');
+
+      expect(result).toEqual({
+        contentLength: 0,
+        contentType: 'application/octet-stream',
+      });
+    });
+
+    it('should handle missing content type', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({
+        ContentLength: 2048,
+      });
+
+      const result = await s3.getFileMetadata('test-file.bin');
+
+      expect(result).toEqual({
+        contentLength: 2048,
+        contentType: undefined,
+      });
+    });
+
+    it('should handle S3 errors', async () => {
+      const s3 = new FileS3();
+      const error = new Error('File not found');
+      mockS3ClientSend.mockRejectedValue(error);
+
+      await expect(s3.getFileMetadata('non-existent-file.txt')).rejects.toThrow('File not found');
     });
   });
 

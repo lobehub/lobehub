@@ -41,7 +41,6 @@
       "parentId": null,
       "createdAt": 1704067200000,
       "updatedAt": 1704067200000,
-      "meta": {},
       "metadata": {
         "compare": true
       }
@@ -59,7 +58,6 @@
             "provider": "openai",
             "createdAt": 1704067205000,
             "updatedAt": 1704067205000,
-            "meta": {},
             "metadata": {
               "totalInputTokens": 12,
               "totalOutputTokens": 145,
@@ -82,7 +80,6 @@
             "provider": "anthropic",
             "createdAt": 1704067205100,
             "updatedAt": 1704067205100,
-            "meta": {},
             "metadata": {
               "totalInputTokens": 12,
               "totalOutputTokens": 158,
@@ -103,7 +100,6 @@
         "parentMessageId": "msg-601"
       },
       "id": "compare-msg-601-msg-602-msg-603",
-      "meta": {},
       "role": "compare",
       "updatedAt": 1704067205100
     },
@@ -113,8 +109,7 @@
       "content": "What about performance differences?",
       "parentId": "msg-603",
       "createdAt": 1704067215000,
-      "updatedAt": 1704067215000,
-      "meta": {}
+      "updatedAt": 1704067215000
     },
     {
       "id": "msg-605",
@@ -123,7 +118,6 @@
       "parentId": "msg-604",
       "createdAt": 1704067217000,
       "updatedAt": 1704067217000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 182,
         "totalOutputTokens": 167,
@@ -144,7 +138,6 @@
       "parentId": null,
       "createdAt": 1704067200000,
       "updatedAt": 1704067200000,
-      "meta": {},
       "metadata": {
         "compare": true
       }
@@ -158,7 +151,6 @@
       "provider": "openai",
       "createdAt": 1704067205000,
       "updatedAt": 1704067205000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 12,
         "totalOutputTokens": 145,
@@ -179,7 +171,6 @@
       "provider": "anthropic",
       "createdAt": 1704067205100,
       "updatedAt": 1704067205100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 12,
         "totalOutputTokens": 158,
@@ -198,8 +189,7 @@
       "content": "What about performance differences?",
       "parentId": "msg-603",
       "createdAt": 1704067215000,
-      "updatedAt": 1704067215000,
-      "meta": {}
+      "updatedAt": 1704067215000
     },
     "msg-605": {
       "id": "msg-605",
@@ -208,7 +198,6 @@
       "parentId": "msg-604",
       "createdAt": 1704067217000,
       "updatedAt": 1704067217000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 182,
         "totalOutputTokens": 167,

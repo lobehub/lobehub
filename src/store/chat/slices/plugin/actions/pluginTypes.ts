@@ -261,12 +261,6 @@ export const pluginTypes: StateCreator<
   },
 
   invokeCloudCodeInterpreterTool: async (id, payload) => {
-    const {
-      optimisticUpdateMessageContent,
-      optimisticUpdatePluginState,
-      optimisticUpdateMessagePluginError,
-    } = get();
-
     // Get message to extract topicId
     const message = dbMessageSelectors.getDbMessageById(id)(get());
 
@@ -336,16 +330,16 @@ export const pluginTypes: StateCreator<
 
     const context = operationId ? { operationId } : undefined;
 
-    await Promise.all([
-      optimisticUpdateMessageContent(id, data.content, undefined, context),
-      (async () => {
-        if (data.success && data.state) {
-          await optimisticUpdatePluginState(id, data.state, context);
-        } else if (!data.success && data.error) {
-          await optimisticUpdateMessagePluginError(id, data.error, context);
-        }
-      })(),
-    ]);
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
 
     // Handle exportFile: save exported file and associate with assistant message (parent)
     if (payload.apiName === 'exportFile' && data.success && data.state) {
@@ -422,12 +416,6 @@ export const pluginTypes: StateCreator<
   },
 
   invokeKlavisTypePlugin: async (id, payload) => {
-    const {
-      optimisticUpdateMessageContent,
-      optimisticUpdatePluginState,
-      optimisticUpdateMessagePluginError,
-    } = get();
-
     let data: MCPToolCallResult | undefined;
 
     // Get message to extract sessionId/topicId
@@ -510,13 +498,16 @@ export const pluginTypes: StateCreator<
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;
 
-    await Promise.all([
-      optimisticUpdateMessageContent(id, data.content, undefined, context),
-      (async () => {
-        if (data.success) await optimisticUpdatePluginState(id, data.state, context);
-        else await optimisticUpdateMessagePluginError(id, data.error, context);
-      })(),
-    ]);
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
 
     return data.content;
   },
@@ -561,12 +552,6 @@ export const pluginTypes: StateCreator<
   },
 
   invokeMCPTypePlugin: async (id, payload) => {
-    const {
-      optimisticUpdateMessageContent,
-      internal_constructToolsCallingContext,
-      optimisticUpdatePluginState,
-      optimisticUpdateMessagePluginError,
-    } = get();
     let data: MCPToolCallResult | undefined;
 
     // Get message to extract agentId/topicId
@@ -586,10 +571,9 @@ export const pluginTypes: StateCreator<
     );
 
     try {
-      const context = internal_constructToolsCallingContext(id);
       const result = await mcpService.invokeMcpToolCall(payload, {
         signal: abortController?.signal,
-        topicId: context?.topicId,
+        topicId: message?.topicId,
       });
 
       if (!!result) data = result;
@@ -620,13 +604,16 @@ export const pluginTypes: StateCreator<
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;
 
-    await Promise.all([
-      optimisticUpdateMessageContent(id, data.content, undefined, context),
-      (async () => {
-        if (data.success) await optimisticUpdatePluginState(id, data.state, context);
-        else await optimisticUpdateMessagePluginError(id, data.error, context);
-      })(),
-    ]);
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
 
     return data.content;
   },

@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/lobehub",
-  "version": "2.0.0-next.190",
+  "version": "2.0.0-next.196",
   "description": "LobeHub - an open-source,comprehensive AI Agent framework that supports speech synthesis, multimodal, and extensible Function Call plugin system. Supports one-click free deployment of your private ChatGPT/LLM web application.",
   "keywords": [
     "framework",
@@ -154,7 +154,6 @@
     "@codesandbox/sandpack-react": "^2.20.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/utilities": "^3.2.2",
-    "@electric-sql/pglite": "0.2.17",
     "@emotion/react": "^11.14.0",
     "@fal-ai/client": "^1.8.0",
     "@formkit/auto-animate": "^0.9.0",

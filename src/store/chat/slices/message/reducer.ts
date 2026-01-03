@@ -221,7 +221,7 @@ export const messagesReducer = (
       return produce(state, (draftState) => {
         const { value, id } = payload;
 
-        draftState.push({ ...value, createdAt: Date.now(), id, meta: {}, updatedAt: Date.now() });
+        draftState.push({ ...value, createdAt: Date.now(), id, updatedAt: Date.now() });
       });
     }
 

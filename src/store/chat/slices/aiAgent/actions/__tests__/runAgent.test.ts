@@ -49,7 +49,6 @@ const createStreamStartEvent = (overrides = {}): StreamEvent => ({
       content: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      meta: {},
     },
   },
   ...overrides,
@@ -170,7 +169,6 @@ describe('runAgent actions', () => {
               content: '',
               createdAt: Date.now(),
               updatedAt: Date.now(),
-              meta: {},
             },
           },
         });
@@ -203,7 +201,6 @@ describe('runAgent actions', () => {
               content: '',
               createdAt: Date.now(),
               updatedAt: Date.now(),
-              meta: {},
             },
           },
         });

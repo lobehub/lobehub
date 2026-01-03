@@ -25,11 +25,11 @@ export class UsageRecordService {
    * @returns UsageRecordItem[]
    */
   findByMonth = async (mo?: string): Promise<UsageRecordItem[]> => {
-    // 设置 startAt 和 endAt
+    // Set startAt and endAt
     let startAt: string;
     let endAt: string;
     if (mo) {
-      // mo 格式: "YYYY-MM"
+      // mo format: "YYYY-MM"
       startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
       endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
     } else {
@@ -86,11 +86,11 @@ export class UsageRecordService {
   };
 
   findAndGroupByDay = async (mo?: string): Promise<UsageLog[]> => {
-    // 设置 startAt 和 endAt
+    // Set startAt and endAt
     let startAt: string;
     let endAt: string;
     if (mo) {
-      // mo 格式: "YYYY-MM"
+      // mo format: "YYYY-MM"
       startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
       endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
     } else {

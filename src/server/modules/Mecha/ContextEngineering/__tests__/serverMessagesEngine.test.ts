@@ -9,7 +9,6 @@ describe('serverMessagesEngine', () => {
       content: 'Hello',
       createdAt: Date.now(),
       id: 'msg-1',
-      meta: {},
       role: 'user',
       updatedAt: Date.now(),
     } as UIChatMessage,
@@ -17,7 +16,6 @@ describe('serverMessagesEngine', () => {
       content: 'Hi there!',
       createdAt: Date.now(),
       id: 'msg-2',
-      meta: {},
       role: 'assistant',
       updatedAt: Date.now(),
     } as UIChatMessage,
@@ -78,7 +76,6 @@ describe('serverMessagesEngine', () => {
           content: `Message ${i}`,
           createdAt: Date.now(),
           id: `msg-${i}`,
-          meta: {},
           role: i % 2 === 0 ? 'user' : 'assistant',
           updatedAt: Date.now(),
         } as UIChatMessage);
@@ -260,7 +257,9 @@ describe('serverMessagesEngine', () => {
 
       // User memories are injected as a consolidated user message before the first user message
       // Note: meta/id fields are removed by the engine cleanup step, so assert via content.
-      const injection = result.find((m: any) => m.role === 'user' && String(m.content).includes('<user_memory>'));
+      const injection = result.find(
+        (m: any) => m.role === 'user' && String(m.content).includes('<user_memory>'),
+      );
       expect(injection).toBeDefined();
       expect(injection!.role).toBe('user');
     });
@@ -329,7 +328,6 @@ describe('serverMessagesEngine', () => {
           content: 'user input',
           createdAt: Date.now(),
           id: 'msg-1',
-          meta: {},
           role: 'user',
           updatedAt: Date.now(),
         } as UIChatMessage,

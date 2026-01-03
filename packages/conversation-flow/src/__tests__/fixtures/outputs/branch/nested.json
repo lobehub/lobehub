@@ -110,8 +110,7 @@
       "content": "What's your favorite programming paradigm?",
       "parentId": null,
       "createdAt": 1704067200000,
-      "updatedAt": 1704067200000,
-      "meta": {}
+      "updatedAt": 1704067200000
     },
     {
       "id": "msg-302",
@@ -120,7 +119,6 @@
       "parentId": "msg-301",
       "createdAt": 1704067202000,
       "updatedAt": 1704067202000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 10,
         "totalOutputTokens": 15,
@@ -139,7 +137,6 @@
       "parentId": "msg-302",
       "createdAt": 1704067210000,
       "updatedAt": 1704067210000,
-      "meta": {},
       "metadata": {
         "activeBranchIndex": 1
       }
@@ -151,7 +148,6 @@
       "parentId": "msg-305",
       "createdAt": 1704067212100,
       "updatedAt": 1704067212100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 30,
         "totalOutputTokens": 22,
@@ -169,8 +165,7 @@
       "content": "What are some benefits of immutability?",
       "parentId": "msg-307",
       "createdAt": 1704067220000,
-      "updatedAt": 1704067220000,
-      "meta": {}
+      "updatedAt": 1704067220000
     },
     {
       "id": "msg-311",
@@ -179,7 +174,6 @@
       "parentId": "msg-310",
       "createdAt": 1704067222000,
       "updatedAt": 1704067222000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 55,
         "totalOutputTokens": 16,
@@ -198,7 +192,6 @@
       "parentId": "msg-311",
       "createdAt": 1704067230000,
       "updatedAt": 1704067230000,
-      "meta": {},
       "metadata": {
         "activeBranchIndex": 1
       }
@@ -210,7 +203,6 @@
       "parentId": "msg-314",
       "createdAt": 1704067232100,
       "updatedAt": 1704067232100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 75,
         "totalOutputTokens": 42,
@@ -230,8 +222,7 @@
       "content": "What's your favorite programming paradigm?",
       "parentId": null,
       "createdAt": 1704067200000,
-      "updatedAt": 1704067200000,
-      "meta": {}
+      "updatedAt": 1704067200000
     },
     "msg-302": {
       "id": "msg-302",
@@ -240,7 +231,6 @@
       "parentId": "msg-301",
       "createdAt": 1704067202000,
       "updatedAt": 1704067202000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 10,
         "totalOutputTokens": 15,
@@ -255,7 +245,6 @@
       "parentId": "msg-301",
       "createdAt": 1704067202100,
       "updatedAt": 1704067202100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 10,
         "totalOutputTokens": 12,
@@ -270,7 +259,6 @@
       "parentId": "msg-301",
       "createdAt": 1704067202200,
       "updatedAt": 1704067202200,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 10,
         "totalOutputTokens": 13,
@@ -285,7 +273,6 @@
       "parentId": "msg-302",
       "createdAt": 1704067210000,
       "updatedAt": 1704067210000,
-      "meta": {},
       "metadata": {
         "activeBranchIndex": 1
       }
@@ -297,7 +284,6 @@
       "parentId": "msg-305",
       "createdAt": 1704067212000,
       "updatedAt": 1704067212000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 30,
         "totalOutputTokens": 18,
@@ -312,7 +298,6 @@
       "parentId": "msg-305",
       "createdAt": 1704067212100,
       "updatedAt": 1704067212100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 30,
         "totalOutputTokens": 22,
@@ -326,8 +311,7 @@
       "content": "What are some benefits of immutability?",
       "parentId": "msg-307",
       "createdAt": 1704067220000,
-      "updatedAt": 1704067220000,
-      "meta": {}
+      "updatedAt": 1704067220000
     },
     "msg-311": {
       "id": "msg-311",
@@ -336,7 +320,6 @@
       "parentId": "msg-310",
       "createdAt": 1704067222000,
       "updatedAt": 1704067222000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 55,
         "totalOutputTokens": 16,
@@ -351,7 +334,6 @@
       "parentId": "msg-310",
       "createdAt": 1704067222100,
       "updatedAt": 1704067222100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 55,
         "totalOutputTokens": 14,
@@ -366,7 +348,6 @@
       "parentId": "msg-311",
       "createdAt": 1704067230000,
       "updatedAt": 1704067230000,
-      "meta": {},
       "metadata": {
         "activeBranchIndex": 1
       }
@@ -378,7 +359,6 @@
       "parentId": "msg-314",
       "createdAt": 1704067232000,
       "updatedAt": 1704067232000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 75,
         "totalOutputTokens": 35,
@@ -393,7 +373,6 @@
       "parentId": "msg-314",
       "createdAt": 1704067232100,
       "updatedAt": 1704067232100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 75,
         "totalOutputTokens": 42,

@@ -64,7 +64,6 @@ describe('ChatEnhanceAction', () => {
                 updatedAt: Date.now(),
                 role: 'assistant',
                 sessionId: 'session',
-                meta: {},
               },
             ],
           },

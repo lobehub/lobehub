@@ -22,13 +22,14 @@ import ModelConfigModal from './ModelConfigModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
 const styles = createStaticStyles(({ css, cx }) => {
-  const config = css`
-    opacity: 0;
-    transition: all 100ms ease-in-out;
-  `;
-
   return {
-    config,
+    config: cx(
+      'model-item-config',
+      css`
+        opacity: 0;
+        transition: all 100ms ease-in-out;
+      `,
+    ),
     container: css`
       position: relative;
       border-radius: ${cssVar.borderRadiusLG}px;
@@ -37,7 +38,7 @@ const styles = createStaticStyles(({ css, cx }) => {
       &:hover {
         background-color: ${cssVar.colorFillTertiary};
 
-        .${cx(config)} {
+        .model-item-config {
           opacity: 1;
         }
       }

@@ -165,6 +165,14 @@ export class UserModel {
     return this.db.query.userSettings.findFirst({ where: eq(userSettings.id, this.userId) });
   };
 
+  getUserPreference = async (): Promise<UserPreference | undefined> => {
+    const user = await this.db.query.users.findFirst({
+      columns: { preference: true },
+      where: eq(users.id, this.userId),
+    });
+    return user?.preference as UserPreference | undefined;
+  };
+
   getUserSettingsDefaultAgentConfig = async () => {
     const result = await this.db
       .select({ defaultAgent: userSettings.defaultAgent })

@@ -1,11 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clientDB, initializeDB } from '@/database/client/db';
-
+import { getTestDB } from '../../models/__tests__/_util';
+import { LobeChatDatabase } from '../../type';
 import { TableViewerRepo } from './index';
 
 const userId = 'user-table-viewer';
-const repo = new TableViewerRepo(clientDB as any, userId);
 
 // Mock database execution
 const mockExecute = vi.fn();
@@ -13,20 +12,20 @@ const mockDB = {
   execute: mockExecute,
 };
 
-beforeEach(async () => {
-  await initializeDB();
-  vi.clearAllMocks();
+let serverDB: LobeChatDatabase;
+let repo: TableViewerRepo;
+
+beforeAll(async () => {
+  serverDB = await getTestDB();
+  repo = new TableViewerRepo(serverDB, userId);
 }, 30000);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('TableViewerRepo', () => {
   describe('getAllTables', () => {
-    it('should return all tables with counts', async () => {
-      const result = await repo.getAllTables();
-
-      expect(result.length).toEqual(73);
-      expect(result[0]).toEqual({ name: 'accounts', count: 0, type: 'BASE TABLE' });
-    });
-
     it('should handle custom schema', async () => {
       const result = await repo.getAllTables('custom_schema');
       expect(result).toBeDefined();

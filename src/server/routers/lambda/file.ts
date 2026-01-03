@@ -64,6 +64,8 @@ export const fileRouter = router({
         }
       }
 
+      const { contentLength: actualSize } = await ctx.fileService.getFileMetadata(input.url);
+
       const { id } = await ctx.fileModel.create(
         {
           fileHash: input.hash,
@@ -72,7 +74,7 @@ export const fileRouter = router({
           metadata: input.metadata,
           name: input.name,
           parentId: resolvedParentId,
-          size: input.size,
+          size: actualSize,
           url: input.url,
         },
         // if the file is not exist in global file, create a new one

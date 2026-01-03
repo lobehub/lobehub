@@ -497,7 +497,6 @@ export class FlatListBuilder {
         parentMessageId: parentMessage.id,
       },
       id: compareId,
-      meta: parentMessage.meta || {},
       role: 'compare' as any,
       updatedAt,
     } as Message;
@@ -585,7 +584,6 @@ export class FlatListBuilder {
       id: agentCouncilId,
       // members is a flat array of messages (not nested arrays)
       members: members as any,
-      meta: parentMessage.meta || {},
       role: 'agentCouncil' as any,
       updatedAt,
     } as Message;
@@ -611,7 +609,6 @@ export class FlatListBuilder {
         parentMessageId: group.parentMessageId,
       },
       id: group.id,
-      meta: members[0]?.meta || {},
       role: 'compare' as any,
       updatedAt: Math.max(...members.map((m) => m.updatedAt)),
     } as Message;
@@ -925,7 +922,6 @@ export class FlatListBuilder {
         parentMessageId: parentMessage.id,
       },
       id: tasksId,
-      meta: parentMessage.meta || {},
       role: 'tasks' as any,
       tasks: taskMessages as any,
       updatedAt,

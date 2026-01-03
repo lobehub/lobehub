@@ -41,7 +41,6 @@ describe('GET handler', () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
       });
 
@@ -73,7 +72,6 @@ describe('GET handler', () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
       });
 
@@ -103,7 +101,6 @@ describe('GET handler', () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
       });
 
@@ -128,7 +125,6 @@ describe('GET handler', () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
       });
 
@@ -145,7 +141,6 @@ describe('GET handler', () => {
       const mockParams = Promise.resolve({ provider: 'openai' });
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
       });
 
@@ -165,7 +160,6 @@ describe('GET handler', () => {
       const mockParams = Promise.resolve({ provider: 'openai' });
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
       });
 

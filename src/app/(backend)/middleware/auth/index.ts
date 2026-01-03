@@ -92,7 +92,6 @@ export const checkAuth =
 
       if (!isUseOidcAuth)
         checkAuthMethod({
-          accessCode: jwtPayload.accessCode,
           apiKey: jwtPayload.apiKey,
           betterAuthAuthorized,
           clerkAuth,

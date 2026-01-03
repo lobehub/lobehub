@@ -6,10 +6,10 @@ import type {
 } from '@lobechat/types';
 import { AiProviderModelListItem, EnabledAiModel } from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clientDB, initializeDB } from '@/database/client/db';
-
+import { getTestDB } from '../../models/__tests__/_util';
+import { LobeChatDatabase } from '../../type';
 import { AiInfraRepos } from './index';
 
 const userId = 'test-user-id';
@@ -18,14 +18,17 @@ const mockProviderConfigs = {
   anthropic: { enabled: false },
 };
 
+let serverDB: LobeChatDatabase;
 let repo: AiInfraRepos;
 
-beforeEach(async () => {
-  await initializeDB();
-  vi.clearAllMocks();
-
-  repo = new AiInfraRepos(clientDB as any, userId, mockProviderConfigs);
+beforeAll(async () => {
+  serverDB = await getTestDB();
 }, 30000);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  repo = new AiInfraRepos(serverDB, userId, mockProviderConfigs);
+});
 
 describe('AiInfraRepos', () => {
   describe('getAiProviderList', () => {

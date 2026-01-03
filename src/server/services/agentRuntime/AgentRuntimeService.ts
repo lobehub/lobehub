@@ -43,36 +43,36 @@ const log = debug('lobe-server:agent-runtime-service');
 
 export interface AgentRuntimeServiceOptions {
   /**
-   * Coordinator 配置选项
-   * 可以注入自定义的 stateManager 和 streamEventManager
+   * Coordinator configuration options
+   * Allows injection of custom stateManager and streamEventManager
    */
   coordinatorOptions?: AgentRuntimeCoordinatorOptions;
   /**
-   * 自定义 QueueService
-   * 设置为 null 时禁用队列调度（用于同步执行测试）
+   * Custom QueueService
+   * Set to null to disable queue scheduling (for synchronous execution tests)
    */
   queueService?: QueueService | null;
   /**
-   * 自定义 StreamEventManager
-   * 默认使用 Redis 实现的 StreamEventManager
-   * 测试环境可以传入 InMemoryStreamEventManager
+   * Custom StreamEventManager
+   * Defaults to Redis-based StreamEventManager
+   * Can pass InMemoryStreamEventManager in test environments
    */
   streamEventManager?: IStreamEventManager;
 }
 
 /**
  * Agent Runtime Service
- * 封装 Agent 执行相关的逻辑，提供统一的服务接口
+ * Encapsulates Agent execution logic and provides a unified service interface
  *
- * 支持依赖注入，可以使用内存实现进行测试：
+ * Supports dependency injection for testing with in-memory implementations:
  * ```ts
- * // 生产环境（默认使用 Redis）
+ * // Production environment (uses Redis by default)
  * const service = new AgentRuntimeService(db, userId);
  *
- * // 测试环境
+ * // Test environment
  * const service = new AgentRuntimeService(db, userId, {
  *   streamEventManager: new InMemoryStreamEventManager(),
- *   queueService: null, // 禁用队列，使用 executeSync
+ *   queueService: null, // Disable queue, use executeSync
  * });
  * ```
  */
@@ -82,7 +82,7 @@ export class AgentRuntimeService {
   private queueService: QueueService | null;
   private toolExecutionService: ToolExecutionService;
   /**
-   * Step 生命周期回调注册表
+   * Step lifecycle callback registry
    * key: operationId, value: callbacks
    */
   private stepCallbacks: Map<string, StepLifecycleCallbacks> = new Map();
@@ -148,9 +148,9 @@ export class AgentRuntimeService {
   // ==================== Step Lifecycle Callbacks ====================
 
   /**
-   * 注册 step 生命周期回调
-   * @param operationId - 操作 ID
-   * @param callbacks - 回调函数集合
+   * Register step lifecycle callbacks
+   * @param operationId - Operation ID
+   * @param callbacks - Callback function collection
    */
   registerStepCallbacks(operationId: string, callbacks: StepLifecycleCallbacks): void {
     this.stepCallbacks.set(operationId, callbacks);
@@ -158,8 +158,8 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 移除 step 生命周期回调
-   * @param operationId - 操作 ID
+   * Remove step lifecycle callbacks
+   * @param operationId - Operation ID
    */
   unregisterStepCallbacks(operationId: string): void {
     this.stepCallbacks.delete(operationId);
@@ -167,8 +167,8 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 获取 step 生命周期回调
-   * @param operationId - 操作 ID
+   * Get step lifecycle callbacks
+   * @param operationId - Operation ID
    */
   getStepCallbacks(operationId: string): StepLifecycleCallbacks | undefined {
     return this.stepCallbacks.get(operationId);
@@ -177,7 +177,7 @@ export class AgentRuntimeService {
   // ==================== Operation Management ====================
 
   /**
-   * 创建新的 Agent 操作
+   * Create a new Agent operation
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
@@ -197,13 +197,13 @@ export class AgentRuntimeService {
     try {
       log('[%s] Creating new operation (autoStart: %s)', operationId, autoStart);
 
-      // 初始化操作状态 - 先创建状态再保存
+      // Initialize operation state - create state before saving
       const initialState = {
         createdAt: new Date().toISOString(),
         // Store initialContext for executeSync to use
         initialContext,
         lastModified: new Date().toISOString(),
-        // 使用传入的初始消息
+        // Use the passed initial messages
         messages: initialMessages,
         metadata: {
           agentConfig,
@@ -221,17 +221,17 @@ export class AgentRuntimeService {
         tools,
       } as Partial<AgentState>;
 
-      // 使用协调器创建操作，自动发送初始化事件
+      // Use coordinator to create operation, automatically sends initialization event
       await this.coordinator.createAgentOperation(operationId, {
         agentConfig,
         modelRuntimeConfig,
         userId,
       });
 
-      // 保存初始状态
+      // Save initial state
       await this.coordinator.saveAgentState(operationId, initialState as any);
 
-      // 注册 step 生命周期回调
+      // Register step lifecycle callbacks
       if (stepCallbacks) {
         this.registerStepCallbacks(operationId, stepCallbacks);
       }
@@ -245,7 +245,7 @@ export class AgentRuntimeService {
         // QStashQueueServiceImpl schedules HTTP requests
         messageId = await this.queueService.scheduleMessage({
           context: initialContext,
-          delay: 50, // 短延迟启动
+          delay: 50, // Short delay for startup
           endpoint: `${this.baseURL}/run`,
           operationId,
           priority: 'high',
@@ -267,26 +267,26 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 执行 Agent 步骤
+   * Execute Agent step
    */
   async executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
     const { operationId, stepIndex, context, humanInput, approvedToolCall, rejectionReason } =
       params;
 
-    // 获取已注册的回调
+    // Get registered callbacks
     const callbacks = this.getStepCallbacks(operationId);
 
     try {
       log('[%s] Executing step %d', operationId, stepIndex);
 
-      // 发布步骤开始事件
+      // Publish step start event
       await this.streamManager.publishStreamEvent(operationId, {
         data: {},
         stepIndex,
         type: 'step_start',
       });
 
-      // 获取操作状态和元数据
+      // Get operation state and metadata
       const [agentState, operationMetadata] = await Promise.all([
         this.coordinator.loadAgentState(operationId),
         this.coordinator.getOperationMetadata(operationId),
@@ -296,7 +296,7 @@ export class AgentRuntimeService {
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
 
-      // 调用 onBeforeStep 回调
+      // Call onBeforeStep callback
       if (callbacks?.onBeforeStep) {
         try {
           await callbacks.onBeforeStep({
@@ -310,14 +310,14 @@ export class AgentRuntimeService {
         }
       }
 
-      // 创建 Agent 和 Runtime 实例
+      // Create Agent and Runtime instances
       const { runtime } = await this.createAgentRuntime({
         metadata: operationMetadata,
         operationId,
         stepIndex,
       });
 
-      // 处理人工干预
+      // Handle human intervention
       let currentContext = context;
       let currentState = agentState;
 
@@ -331,25 +331,25 @@ export class AgentRuntimeService {
         currentContext = interventionResult.nextContext;
       }
 
-      // 执行步骤
+      // Execute step
       const startAt = Date.now();
       const stepResult = await runtime.step(currentState, currentContext);
 
-      // 保存状态，协调器会自动处理事件发送
+      // Save state, coordinator will handle event sending automatically
       await this.coordinator.saveStepResult(operationId, {
         ...stepResult,
         executionTime: Date.now() - startAt,
         stepIndex, // placeholder
       });
 
-      // 决定是否调度下一步
+      // Decide whether to schedule next step
       const shouldContinue = this.shouldContinueExecution(
         stepResult.newState,
         stepResult.nextContext,
       );
       let nextStepScheduled = false;
 
-      // 发布步骤完成事件
+      // Publish step complete event
       await this.streamManager.publishStreamEvent(operationId, {
         data: {
           finalState: stepResult.newState,
@@ -362,7 +362,7 @@ export class AgentRuntimeService {
 
       log('[%s] Step %d completed', operationId, stepIndex);
 
-      // 调用 onAfterStep 回调
+      // Call onAfterStep callback
       if (callbacks?.onAfterStep) {
         try {
           await callbacks.onAfterStep({
@@ -395,7 +395,7 @@ export class AgentRuntimeService {
         log('[%s] Scheduled next step %d', operationId, nextStepIndex);
       }
 
-      // 检查是否操作完成，调用 onComplete 回调
+      // Check if operation is complete, call onComplete callback
       if (!shouldContinue && callbacks?.onComplete) {
         const reason = this.determineCompletionReason(stepResult.newState);
         try {
@@ -404,7 +404,7 @@ export class AgentRuntimeService {
             operationId,
             reason,
           });
-          // 操作完成后清理回调
+          // Clean up callbacks after operation completes
           this.unregisterStepCallbacks(operationId);
         } catch (callbackError) {
           log('[%s] onComplete callback error: %O', operationId, callbackError);
@@ -420,7 +420,7 @@ export class AgentRuntimeService {
     } catch (error) {
       log('Step %d failed for operation %s: %O', stepIndex, operationId, error);
 
-      // 发布错误事件
+      // Publish error event
       await this.streamManager.publishStreamEvent(operationId, {
         data: {
           error: (error as Error).message,
@@ -431,7 +431,7 @@ export class AgentRuntimeService {
         type: 'error',
       });
 
-      // 执行失败时也调用 onComplete 回调
+      // Also call onComplete callback when execution fails
       if (callbacks?.onComplete) {
         try {
           const errorState = await this.coordinator.loadAgentState(operationId);
@@ -451,7 +451,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 获取操作状态
+   * Get operation status
    */
   async getOperationStatus(params: {
     historyLimit?: number;
@@ -463,19 +463,19 @@ export class AgentRuntimeService {
     try {
       log('Getting operation status for %s', operationId);
 
-      // 获取当前状态和元数据
+      // Get current state and metadata
       const [currentState, operationMetadata] = await Promise.all([
         this.coordinator.loadAgentState(operationId),
         this.coordinator.getOperationMetadata(operationId),
       ]);
 
-      // Operation 可能已过期或不存在，返回 null
+      // Operation may have expired or does not exist, return null
       if (!currentState || !operationMetadata) {
         log('Operation %s not found (may have expired)', operationId);
         return null;
       }
 
-      // 获取执行历史（如果需要）
+      // Get execution history (if needed)
       let executionHistory;
       if (includeHistory) {
         try {
@@ -486,7 +486,7 @@ export class AgentRuntimeService {
         }
       }
 
-      // 获取最近的流式事件（用于调试）
+      // Get recent stream events (for debugging)
       let recentEvents;
       if (includeHistory) {
         try {
@@ -497,7 +497,7 @@ export class AgentRuntimeService {
         }
       }
 
-      // 计算操作统计信息
+      // Calculate operation statistics
       const stats = {
         lastActiveTime: operationMetadata.lastActiveAt
           ? Date.now() - new Date(operationMetadata.lastActiveAt).getTime()
@@ -542,7 +542,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 获取待处理的人工干预列表
+   * Get list of pending human interventions
    */
   async getPendingInterventions(params: {
     operationId?: string;
@@ -558,11 +558,11 @@ export class AgentRuntimeService {
       if (operationId) {
         operations = [operationId];
       } else if (userId) {
-        // 获取用户的所有活跃操作
+        // Get all active operations for the user
         try {
           const activeOperations = await this.coordinator.getActiveOperations();
 
-          // 过滤出属于该用户的操作
+          // Filter operations belonging to this user
           const userOperations = [];
           for (const operation of activeOperations) {
             try {
@@ -581,7 +581,7 @@ export class AgentRuntimeService {
         }
       }
 
-      // 检查每个操作的状态
+      // Check status of each operation
       const pendingInterventions = [];
 
       for (const operation of operations) {
@@ -601,7 +601,7 @@ export class AgentRuntimeService {
               userId: metadata?.userId,
             };
 
-            // 添加具体的待处理内容
+            // Add specific pending content
             if (state.pendingToolsCalling) {
               intervention.type = 'tool_approval';
               intervention.pendingToolsCalling = state.pendingToolsCalling;
@@ -632,7 +632,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 显式启动操作执行
+   * Explicitly start operation execution
    */
   async startExecution(params: StartExecutionParams): Promise<StartExecutionResult> {
     const { operationId, context, priority = 'normal', delay = 50 } = params;
@@ -640,19 +640,19 @@ export class AgentRuntimeService {
     try {
       log('Starting execution for operation %s', operationId);
 
-      // 检查操作是否存在
+      // Check if operation exists
       const operationMetadata = await this.coordinator.getOperationMetadata(operationId);
       if (!operationMetadata) {
         throw new Error(`Operation ${operationId} not found`);
       }
 
-      // 获取当前状态
+      // Get current state
       const currentState = await this.coordinator.loadAgentState(operationId);
       if (!currentState) {
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
 
-      // 检查操作状态
+      // Check operation status
       if (currentState.status === 'running') {
         throw new Error(`Operation ${operationId} is already running`);
       }
@@ -665,10 +665,10 @@ export class AgentRuntimeService {
         throw new Error(`Operation ${operationId} is in error state`);
       }
 
-      // 构建执行上下文
+      // Build execution context
       let executionContext = context;
       if (!executionContext) {
-        // 如果没有提供上下文，从元数据构建默认上下文
+        // If no context provided, build default context from metadata
         // Note: AgentRuntimeContext requires sessionId for compatibility with @lobechat/agent-runtime
         executionContext = {
           payload: {
@@ -685,14 +685,14 @@ export class AgentRuntimeService {
         };
       }
 
-      // 更新操作状态为运行中
+      // Update operation status to running
       await this.coordinator.saveAgentState(operationId, {
         ...currentState,
         lastModified: new Date().toISOString(),
         status: 'running',
       });
 
-      // 调度执行（如果队列服务可用）
+      // Schedule execution (if queue service is available)
       let messageId: string | undefined;
       if (this.queueService) {
         messageId = await this.queueService.scheduleMessage({
@@ -721,7 +721,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 处理人工干预
+   * Process human intervention
    */
   async processHumanIntervention(params: {
     action: 'approve' | 'reject' | 'input' | 'select';
@@ -742,11 +742,11 @@ export class AgentRuntimeService {
         action,
       );
 
-      // 高优先级调度执行（如果队列服务可用）
+      // Schedule execution with high priority (if queue service is available)
       let messageId: string | undefined;
       if (this.queueService) {
         messageId = await this.queueService.scheduleMessage({
-          context: undefined, // 会从状态管理器中获取
+          context: undefined, // Will be retrieved from state manager
           delay: 100,
           endpoint: `${this.baseURL}/run`,
           operationId,
@@ -771,7 +771,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 创建 Agent Runtime 实例
+   * Create Agent Runtime instance
    */
   private async createAgentRuntime({
     metadata,
@@ -782,7 +782,7 @@ export class AgentRuntimeService {
     operationId: string;
     stepIndex: number;
   }) {
-    // 创建 Durable Agent 实例
+    // Create Durable Agent instance
     const agent = new GeneralChatAgent({
       agentConfig: metadata?.agentConfig,
       modelRuntimeConfig: metadata?.modelRuntimeConfig,
@@ -790,7 +790,7 @@ export class AgentRuntimeService {
       userId: metadata?.userId,
     });
 
-    // 创建流式执行器上下文
+    // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       messageModel: this.messageModel,
       operationId,
@@ -800,7 +800,7 @@ export class AgentRuntimeService {
       userId: metadata?.userId,
     };
 
-    // 创建 Agent Runtime 实例
+    // Create Agent Runtime instance
     const runtime = new AgentRuntime(agent as any, {
       executors: createRuntimeExecutors(executorContext),
     });
@@ -809,7 +809,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 处理人工干预逻辑
+   * Handle human intervention logic
    */
   private async handleHumanIntervention(
     runtime: AgentRuntime,
@@ -819,13 +819,13 @@ export class AgentRuntimeService {
     const { humanInput, approvedToolCall, rejectionReason } = intervention;
 
     if (approvedToolCall && state.status === 'waiting_for_human') {
-      // TODO: 实现 approveToolCall 逻辑
+      // TODO: implement approveToolCall logic
       return { newState: state, nextContext: undefined };
     } else if (rejectionReason && state.status === 'waiting_for_human') {
-      // TODO: 实现 rejectToolCall 逻辑
+      // TODO: implement rejectToolCall logic
       return { newState: state, nextContext: undefined };
     } else if (humanInput) {
-      // TODO: 实现 processHumanInput 逻辑
+      // TODO: implement processHumanInput logic
       return { newState: state, nextContext: undefined };
     }
 
@@ -833,47 +833,47 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 决定是否继续执行
+   * Decide whether to continue execution
    */
   private shouldContinueExecution(state: any, context?: any): boolean {
-    // 已完成
+    // Completed
     if (state.status === 'done') return false;
 
-    // 需要人工干预
+    // Needs human intervention
     if (state.status === 'waiting_for_human') return false;
 
-    // 出错了
+    // Error occurred
     if (state.status === 'error') return false;
 
-    // 被中断
+    // Interrupted
     if (state.status === 'interrupted') return false;
 
-    // 达到最大步数
+    // Reached maximum steps
     if (state.maxSteps && state.stepCount >= state.maxSteps) return false;
 
-    // 超过成本限制
+    // Exceeded cost limit
     if (state.costLimit && state.cost?.total >= state.costLimit.maxTotalCost) {
       return state.costLimit.onExceeded !== 'stop';
     }
 
-    // 没有下一个上下文
+    // No next context
     if (!context) return false;
 
     return true;
   }
 
   /**
-   * 计算步骤延迟
+   * Calculate step delay
    */
   private calculateStepDelay(stepResult: any): number {
     const baseDelay = 50;
 
-    // 如果有工具调用，延迟长一点
+    // If there are tool calls, add longer delay
     if (stepResult.events?.some((e: any) => e.type === 'tool_result')) {
       return baseDelay + 50;
     }
 
-    // 如果有错误，使用指数退避
+    // If there are errors, use exponential backoff
     if (stepResult.events?.some((e: any) => e.type === 'error')) {
       return Math.min(baseDelay * 2, 1000);
     }
@@ -882,15 +882,15 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 计算优先级
+   * Calculate priority
    */
   private calculatePriority(stepResult: any): 'high' | 'normal' | 'low' {
-    // 如果需要人工干预，高优先级
+    // If human intervention needed, high priority
     if (stepResult.newState?.status === 'waiting_for_human') {
       return 'high';
     }
 
-    // 如果有错误，正常优先级
+    // If there are errors, normal priority
     if (stepResult.events?.some((e: any) => e.type === 'error')) {
       return 'normal';
     }
@@ -899,7 +899,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 确定操作完成原因
+   * Determine operation completion reason
    */
   private determineCompletionReason(state: AgentState): StepCompletionReason {
     if (state.status === 'done') return 'done';
@@ -912,20 +912,20 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 同步执行 Agent 操作直到完成
+   * Synchronously execute Agent operation until completion
    *
-   * 用于测试场景，不依赖 QueueService，直接在当前进程中执行所有步骤。
+   * Used in test scenarios, doesn't depend on QueueService, executes all steps directly in the current process.
    *
-   * @param operationId 操作 ID
-   * @param options 执行选项
-   * @returns 最终状态
+   * @param operationId Operation ID
+   * @param options Execution options
+   * @returns Final state
    *
    * @example
    * ```ts
-   * // 创建操作（不自动启动队列）
+   * // Create operation (without auto-starting queue)
    * const result = await service.createOperation({ ...params, autoStart: false });
    *
-   * // 同步执行到完成
+   * // Synchronously execute to completion
    * const finalState = await service.executeSync(result.operationId);
    * expect(finalState.status).toBe('done');
    * ```
@@ -933,11 +933,11 @@ export class AgentRuntimeService {
   async executeSync(
     operationId: string,
     options?: {
-      /** 初始上下文（如果不提供，从状态中推断） */
+      /** Initial context (if not provided, inferred from state) */
       initialContext?: AgentRuntimeContext;
-      /** 最大步数限制，防止无限循环，默认 9999 */
+      /** Maximum step limit to prevent infinite loops, defaults to 9999 */
       maxSteps?: number;
-      /** 每步执行后的回调（用于调试） */
+      /** Callback after each step execution (for debugging) */
       onStepComplete?: (stepIndex: number, state: AgentState) => void;
     },
   ): Promise<AgentState> {
@@ -945,7 +945,7 @@ export class AgentRuntimeService {
 
     log('[%s] Starting sync execution (maxSteps: %d)', operationId, maxSteps);
 
-    // 加载初始状态
+    // Load initial state
     const initialState = await this.coordinator.loadAgentState(operationId);
     if (!initialState) {
       throw new Error(`Agent state not found for operation ${operationId}`);
@@ -953,7 +953,7 @@ export class AgentRuntimeService {
 
     let state: AgentState = initialState;
 
-    // 构建初始上下文
+    // Build initial context
     // Priority: explicit initialContext param > saved initialContext in state > default
     let context: AgentRuntimeContext | undefined =
       initialContext ??
@@ -971,21 +971,21 @@ export class AgentRuntimeService {
 
     let stepIndex = state.stepCount;
 
-    // 执行循环
+    // Execution loop
     while (stepIndex < maxSteps) {
-      // 检查终止条件
+      // Check termination conditions
       if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
         log('[%s] Sync execution finished with status: %s', operationId, state.status);
         break;
       }
 
-      // 检查是否需要人工干预
+      // Check if human intervention is needed
       if (state.status === 'waiting_for_human') {
         log('[%s] Sync execution paused: waiting for human intervention', operationId);
         break;
       }
 
-      // 执行一步
+      // Execute one step
       log('[%s] Executing step %d', operationId, stepIndex);
       const result = await this.executeStep({
         context,
@@ -997,12 +997,12 @@ export class AgentRuntimeService {
       context = result.stepResult.nextContext;
       stepIndex++;
 
-      // 回调
+      // Callback
       if (onStepComplete) {
         onStepComplete(stepIndex, state);
       }
 
-      // 检查是否应该继续
+      // Check if should continue
       if (!this.shouldContinueExecution(state, context)) {
         log('[%s] Sync execution stopped: shouldContinue=false', operationId);
         break;
@@ -1011,8 +1011,8 @@ export class AgentRuntimeService {
 
     if (stepIndex >= maxSteps) {
       log('[%s] Sync execution stopped: reached maxSteps (%d)', operationId, maxSteps);
-      // 如果因为 executeSync 的 maxSteps 限制停止，需要手动调用 onComplete
-      // 注意：如果是因为 state.maxSteps 达到，onComplete 已经在 executeStep 中被调用
+      // If stopped due to executeSync's maxSteps limit, need to manually call onComplete
+      // Note: If stopped due to state.maxSteps being reached, onComplete has already been called in executeStep
       const callbacks = this.getStepCallbacks(operationId);
       if (callbacks?.onComplete && state.status !== 'done' && state.status !== 'error') {
         try {
@@ -1032,7 +1032,7 @@ export class AgentRuntimeService {
   }
 
   /**
-   * 获取 Coordinator 实例（用于测试）
+   * Get Coordinator instance (for testing)
    */
   getCoordinator(): AgentRuntimeCoordinator {
     return this.coordinator;

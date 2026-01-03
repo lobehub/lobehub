@@ -47,7 +47,6 @@ export class SystemRoleInjector extends BaseProvider {
       content: this.config.systemRole,
       createdAt: Date.now(),
       id: `system-${Date.now()}`,
-      meta: {},
       role: 'system' as const,
       updatedAt: Date.now(),
     };

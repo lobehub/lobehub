@@ -262,7 +262,6 @@ describe('contextEngineering', () => {
         content: 'Continue our discussion',
         createdAt: Date.now(),
         id: 'test-history',
-        meta: {},
         updatedAt: Date.now(),
       },
     ];
@@ -292,7 +291,6 @@ describe('contextEngineering', () => {
           imageList: [{ id: 'img1', url: 'http://example.com/image.png', alt: 'test.png' }],
           createdAt: Date.now(),
           id: 'test-id',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -319,7 +317,6 @@ describe('contextEngineering', () => {
           imageList: [{ id: 'img1', url: 'http://example.com/image.png', alt: 'test.png' }],
           createdAt: Date.now(),
           id: 'test-id-2',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -354,7 +351,6 @@ describe('contextEngineering', () => {
         ],
         createdAt: Date.now(),
         id: 'test-id-3',
-        meta: {},
         updatedAt: Date.now(),
       },
     ];
@@ -377,7 +373,6 @@ describe('contextEngineering', () => {
           content: 'Hello {{username}}, today is {{date}} and the time is {{time}}',
           createdAt: Date.now(),
           id: 'test-placeholder-1',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -385,7 +380,6 @@ describe('contextEngineering', () => {
           content: 'Hi there! Your random number is {{random}}',
           createdAt: Date.now(),
           id: 'test-placeholder-2',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -418,7 +412,6 @@ describe('contextEngineering', () => {
           ],
           createdAt: Date.now(),
           id: 'test-placeholder-array',
-          meta: {},
           updatedAt: Date.now(),
         },
       ] as any;
@@ -443,7 +436,6 @@ describe('contextEngineering', () => {
             'Memory load: available={{memory_available}}, total contexts={{memory_contexts_count}}\n{{memory_summary}}',
           createdAt: Date.now(),
           id: 'memory-placeholder-test',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -451,7 +443,6 @@ describe('contextEngineering', () => {
           content: 'Hello',
           createdAt: Date.now(),
           id: 'memory-placeholder-user',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -497,7 +488,9 @@ describe('contextEngineering', () => {
 
       // Memory context is injected as a consolidated user message before the first user message
       // Note: meta/id fields are removed by the engine cleanup step, so assert via content.
-      const injection = result.find((m: any) => m.role === 'user' && String(m.content).includes('<user_memory>'));
+      const injection = result.find(
+        (m: any) => m.role === 'user' && String(m.content).includes('<user_memory>'),
+      );
       expect(injection).toBeDefined();
       expect(injection!.role).toBe('user');
       expect(injection!.content).toContain('<user_memory>');
@@ -512,7 +505,6 @@ describe('contextEngineering', () => {
           content: 'Hello {{username}}, missing: {{missing_var}}',
           createdAt: Date.now(),
           id: 'test-placeholder-missing',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -533,7 +525,6 @@ describe('contextEngineering', () => {
           content: 'Hello there, no variables here',
           createdAt: Date.now(),
           id: 'test-no-placeholders',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -564,7 +555,6 @@ describe('contextEngineering', () => {
           ],
           createdAt: Date.now(),
           id: 'test-combined',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -600,7 +590,6 @@ describe('contextEngineering', () => {
           content: 'Message 1',
           createdAt: Date.now(),
           id: 'test-1',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -608,7 +597,6 @@ describe('contextEngineering', () => {
           content: 'Response 1',
           createdAt: Date.now(),
           id: 'test-2',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -616,7 +604,6 @@ describe('contextEngineering', () => {
           content: 'Message 2',
           createdAt: Date.now(),
           id: 'test-3',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -624,7 +611,6 @@ describe('contextEngineering', () => {
           content: 'Response 2',
           createdAt: Date.now(),
           id: 'test-4',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -632,7 +618,6 @@ describe('contextEngineering', () => {
           content: 'Latest message',
           createdAt: Date.now(),
           id: 'test-5',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -662,7 +647,6 @@ describe('contextEngineering', () => {
           content: 'Original user input',
           createdAt: Date.now(),
           id: 'test-template',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -670,7 +654,6 @@ describe('contextEngineering', () => {
           content: 'Assistant response',
           createdAt: Date.now(),
           id: 'test-assistant',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -703,7 +686,6 @@ describe('contextEngineering', () => {
           content: 'User message',
           createdAt: Date.now(),
           id: 'test-user',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -729,7 +711,6 @@ describe('contextEngineering', () => {
           content: 'Old message 1',
           createdAt: Date.now(),
           id: 'test-old-1',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -737,7 +718,6 @@ describe('contextEngineering', () => {
           content: 'Old response',
           createdAt: Date.now(),
           id: 'test-old-2',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -745,7 +725,6 @@ describe('contextEngineering', () => {
           content: 'Recent input with {{username}}',
           createdAt: Date.now(),
           id: 'test-recent',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -784,7 +763,6 @@ describe('contextEngineering', () => {
           content: 'Simple message',
           createdAt: Date.now(),
           id: 'test-simple',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -811,7 +789,6 @@ describe('contextEngineering', () => {
           content: 'Message 1',
           createdAt: Date.now(),
           id: 'test-1',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -819,7 +796,6 @@ describe('contextEngineering', () => {
           content: 'Message 2',
           createdAt: Date.now(),
           id: 'test-2',
-          meta: {},
           updatedAt: Date.now(),
         },
         {
@@ -827,7 +803,6 @@ describe('contextEngineering', () => {
           content: 'Message 3',
           createdAt: Date.now(),
           id: 'test-3',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
@@ -861,7 +836,6 @@ describe('contextEngineering', () => {
           content: 'User message',
           createdAt: Date.now(),
           id: 'test-error',
-          meta: {},
           updatedAt: Date.now(),
         },
       ];
