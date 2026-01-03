@@ -18,10 +18,10 @@ import {
   type RuntimeStepContext,
   type UIChatMessage,
 } from '@lobechat/types';
-import { VARIABLE_GENERATORS } from '@lobechat/utils/client';
 import debug from 'debug';
 
 import { isCanUseFC } from '@/helpers/isCanUseFC';
+import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';

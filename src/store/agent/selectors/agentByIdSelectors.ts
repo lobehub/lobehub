@@ -1,7 +1,7 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG } from '@lobechat/const';
 import type { AgentBuilderContext } from '@lobechat/context-engine';
-import { type LobeAgentTTSConfig } from '@lobechat/types';
+import { type AgentMode, type LobeAgentTTSConfig, type LocalSystemConfig } from '@lobechat/types';
 
 import type { AgentStoreState } from '../initialState';
 import { agentSelectors } from './selectors';
@@ -45,10 +45,50 @@ const getAgentKnowledgeBasesById = (agentId: string) => (s: AgentStoreState) =>
 const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
   !agentId || !s.agentMap[agentId];
 
+/**
+ * Get agent mode by agentId
+ * Now reads from chatConfig.agentMode and chatConfig.enableAgentMode
+ */
+const getAgentModeById =
+  (agentId: string) =>
+  (s: AgentStoreState): AgentMode | undefined => {
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+
+    // Fallback: convert enableAgentMode to mode
+    if (config?.enableAgentMode) {
+      return 'auto';
+    }
+
+    return undefined;
+  };
+
+/**
+ * Check if agent mode is enabled by agentId
+ * Supports backward compatibility with deprecated enableAgentMode field
+ */
 const getAgentEnableModeById =
   (agentId: string) =>
-  (s: AgentStoreState): boolean =>
-    agentSelectors.getAgentConfigById(agentId)(s)?.enableAgentMode || false;
+  (s: AgentStoreState): boolean => {
+    const mode = getAgentModeById(agentId)(s);
+    return mode !== undefined;
+  };
+
+/**
+ * Get local system config by agentId
+ * Now reads from chatConfig.localSystem
+ */
+const getAgentLocalSystemConfigById =
+  (agentId: string) =>
+  (s: AgentStoreState): LocalSystemConfig | undefined =>
+    agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig?.localSystem;
+
+/**
+ * Get working directory by agentId
+ */
+const getAgentWorkingDirectoryById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    getAgentLocalSystemConfigById(agentId)(s)?.workingDirectory;
 
 /**
  * Get agent builder context by agentId
@@ -81,10 +121,13 @@ export const agentByIdSelectors = {
   getAgentEnableModeById,
   getAgentFilesById,
   getAgentKnowledgeBasesById,
+  getAgentLocalSystemConfigById,
+  getAgentModeById,
   getAgentModelById,
   getAgentModelProviderById,
   getAgentPluginsById,
   getAgentSystemRoleById,
   getAgentTTSById,
+  getAgentWorkingDirectoryById,
   isAgentConfigLoadingById,
 };

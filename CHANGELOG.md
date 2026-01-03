@@ -2,6 +2,114 @@
 
 # Changelog
 
+## [Version 2.0.0-next.200](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.199...v2.0.0-next.200)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### ✨ Features
+
+- **misc**: Add work path for local system.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Add work path for local system, closes [#11128](https://github.com/lobehub/lobe-chat/issues/11128) ([d8deadd](https://github.com/lobehub/lobe-chat/commit/d8deadd))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.199](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.198...v2.0.0-next.199)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Filter empty assistant messages for Anthropic API.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Filter empty assistant messages for Anthropic API, closes [#11129](https://github.com/lobehub/lobe-chat/issues/11129) ([7af750b](https://github.com/lobehub/lobe-chat/commit/7af750b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.198](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.197...v2.0.0-next.198)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Support thoughtSignature for openrouter.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Support thoughtSignature for openrouter, closes [#11117](https://github.com/lobehub/lobe-chat/issues/11117) ([bf5d41e](https://github.com/lobehub/lobe-chat/commit/bf5d41e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.197](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.196...v2.0.0-next.197)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Remove client db and refactor test.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix file upload issue.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Remove client db and refactor test, closes [#11123](https://github.com/lobehub/lobe-chat/issues/11123) ([bb2799d](https://github.com/lobehub/lobe-chat/commit/bb2799d))
+
+#### What's fixed
+
+- **misc**: Fix file upload issue, closes [#11122](https://github.com/lobehub/lobe-chat/issues/11122) ([1ae327a](https://github.com/lobehub/lobe-chat/commit/1ae327a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.196](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.195...v2.0.0-next.196)
 
 <sup>Released on **2026-01-03**</sup>

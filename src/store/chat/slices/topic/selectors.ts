@@ -61,6 +61,15 @@ const currentActiveTopicSummary = (s: ChatStoreState): ChatTopicSummary | undefi
   };
 };
 
+/**
+ * Get current active topic's working directory
+ * Returns undefined if no topic is active or no working directory is set
+ */
+const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => {
+  const activeTopic = currentActiveTopic(s);
+  return activeTopic?.metadata?.workingDirectory;
+};
+
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
 const isUndefinedTopics = (s: ChatStoreState) => !currentTopics(s);
 const isInSearchMode = (s: ChatStoreState) => s.inSearchingMode;
@@ -132,6 +141,7 @@ export const topicSelectors = {
   currentTopicCount,
   currentTopicData,
   currentTopicLength,
+  currentTopicWorkingDirectory,
   currentTopics,
   currentUnFavTopics,
   displayTopics,

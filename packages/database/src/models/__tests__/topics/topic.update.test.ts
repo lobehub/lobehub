@@ -52,4 +52,75 @@ describe('TopicModel - Update', () => {
       expect(item).toHaveLength(0);
     });
   });
+
+  describe('updateMetadata', () => {
+    it('should update metadata on a topic with no existing metadata', async () => {
+      const topicId = 'metadata-test-1';
+      await serverDB.insert(topics).values({ userId, id: topicId, title: 'Test' });
+
+      const result = await topicModel.updateMetadata(topicId, {
+        workingDirectory: '/path/to/dir',
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].metadata).toEqual({ workingDirectory: '/path/to/dir' });
+    });
+
+    it('should merge metadata with existing metadata', async () => {
+      const topicId = 'metadata-test-2';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: { model: 'gpt-4', provider: 'openai' },
+      });
+
+      const result = await topicModel.updateMetadata(topicId, {
+        workingDirectory: '/new/path',
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].metadata).toEqual({
+        model: 'gpt-4',
+        provider: 'openai',
+        workingDirectory: '/new/path',
+      });
+    });
+
+    it('should overwrite existing metadata fields when updating', async () => {
+      const topicId = 'metadata-test-3';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: { workingDirectory: '/old/path', model: 'gpt-4' },
+      });
+
+      const result = await topicModel.updateMetadata(topicId, {
+        workingDirectory: '/new/path',
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].metadata).toEqual({
+        model: 'gpt-4',
+        workingDirectory: '/new/path',
+      });
+    });
+
+    it('should not update metadata if user ID does not match', async () => {
+      await serverDB.insert(users).values([{ id: 'other-user' }]);
+      const topicId = 'metadata-test-4';
+      await serverDB.insert(topics).values({
+        userId: 'other-user',
+        id: topicId,
+        title: 'Test',
+      });
+
+      const result = await topicModel.updateMetadata(topicId, {
+        workingDirectory: '/path/to/dir',
+      });
+
+      expect(result).toHaveLength(0);
+    });
+  });
 });

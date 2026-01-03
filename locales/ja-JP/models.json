@@ -413,6 +413,7 @@
   "deepseek_r1_distill_llama_70b.description": "DeepSeek-R1-Distill-Llama-70Bは、Llama-3.3-70B-Instructをベースに、DeepSeek-R1が生成したサンプルでファインチューニングされた蒸留モデルで、数学、コーディング、推論において高い性能を発揮します。",
   "deepseek_r1_distill_qwen_14b.description": "DeepSeek-R1-Distill-Qwen-14Bは、Qwen2.5-14Bをベースに、DeepSeek-R1が生成した80万件の厳選サンプルでファインチューニングされた蒸留モデルで、強力な推論能力を持ちます。",
   "deepseek_r1_distill_qwen_32b.description": "DeepSeek-R1-Distill-Qwen-32Bは、Qwen2.5-32Bをベースに、DeepSeek-R1が生成した80万件の厳選サンプルでファインチューニングされた蒸留モデルで、数学、コーディング、推論において優れた性能を発揮します。",
+  "devstral-2:123b.description": "Devstral 2 123B は、ツールを活用してコードベースを探索し、複数ファイルを編集し、ソフトウェアエンジニアリングエージェントを支援することに優れています。",
   "gemini-flash-latest.description": "Gemini Flash の最新リリース",
   "gemini-flash-lite-latest.description": "Gemini Flash-Lite の最新リリース",
   "gemini-pro-latest.description": "Gemini Pro の最新リリース",

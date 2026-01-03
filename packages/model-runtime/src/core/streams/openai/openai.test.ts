@@ -1048,6 +1048,161 @@ describe('OpenAIStream', () => {
         ].map((i) => `${i}\n`),
       );
     });
+
+    it('should handle OpenRouter tool calls with thoughtSignature (for Gemini models)', async () => {
+      // OpenRouter returns thoughtSignature in tool_calls for Gemini models
+      // This is required for preserving reasoning blocks across turns
+      // Ref: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      function: { name: 'github__get_me', arguments: '{}' },
+                      id: 'call_123',
+                      index: 0,
+                      type: 'function',
+                      // OpenRouter adds thoughtSignature for Gemini 3 models
+                      thoughtSignature: 'ErEDCq4DAdHtim...',
+                    },
+                  ],
+                },
+                index: 0,
+              },
+            ],
+            id: 'or-123',
+          });
+
+          controller.close();
+        },
+      });
+
+      const onToolCallMock = vi.fn();
+
+      const protocolStream = OpenAIStream(mockOpenAIStream, {
+        callbacks: {
+          onToolsCalling: onToolCallMock,
+        },
+      });
+
+      const decoder = new TextDecoder();
+      const chunks = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      expect(chunks).toEqual([
+        'id: or-123\n',
+        'event: tool_calls\n',
+        // thoughtSignature should be preserved in the output
+        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"ErEDCq4DAdHtim..."}]\n\n`,
+      ]);
+
+      // Verify the callback receives thoughtSignature
+      expect(onToolCallMock).toHaveBeenCalledWith({
+        chunk: [
+          {
+            function: { arguments: '{}', name: 'github__get_me' },
+            id: 'call_123',
+            index: 0,
+            thoughtSignature: 'ErEDCq4DAdHtim...',
+            type: 'function',
+          },
+        ],
+        toolsCalling: [
+          {
+            function: { arguments: '{}', name: 'github__get_me' },
+            id: 'call_123',
+            thoughtSignature: 'ErEDCq4DAdHtim...',
+            type: 'function',
+          },
+        ],
+      });
+    });
+
+    it('should NOT include thoughtSignature in output when not present in tool call', async () => {
+      // Standard tool calls without thoughtSignature should not include the field
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      function: { name: 'search', arguments: '{"query":"test"}' },
+                      id: 'call_456',
+                      index: 0,
+                      type: 'function',
+                      // No thoughtSignature field
+                    },
+                  ],
+                },
+                index: 0,
+              },
+            ],
+            id: 'standard-123',
+          });
+
+          controller.close();
+        },
+      });
+
+      const onToolCallMock = vi.fn();
+
+      const protocolStream = OpenAIStream(mockOpenAIStream, {
+        callbacks: {
+          onToolsCalling: onToolCallMock,
+        },
+      });
+
+      const decoder = new TextDecoder();
+      const chunks = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      expect(chunks).toEqual([
+        'id: standard-123\n',
+        'event: tool_calls\n',
+        // thoughtSignature should NOT be in the output
+        `data: [{"function":{"arguments":"{\\"query\\":\\"test\\"}","name":"search"},"id":"call_456","index":0,"type":"function"}]\n\n`,
+      ]);
+
+      // Verify the callback does NOT receive thoughtSignature
+      expect(onToolCallMock).toHaveBeenCalledWith({
+        chunk: [
+          {
+            function: { arguments: '{"query":"test"}', name: 'search' },
+            id: 'call_456',
+            index: 0,
+            // thoughtSignature should not be present
+            type: 'function',
+          },
+        ],
+        toolsCalling: [
+          {
+            function: { arguments: '{"query":"test"}', name: 'search' },
+            id: 'call_456',
+            // thoughtSignature should not be present
+            type: 'function',
+          },
+        ],
+      });
+
+      // Verify thoughtSignature is not in the chunk
+      expect(onToolCallMock.mock.calls[0][0].chunk[0]).not.toHaveProperty('thoughtSignature');
+      expect(onToolCallMock.mock.calls[0][0].toolsCalling[0]).not.toHaveProperty(
+        'thoughtSignature',
+      );
+    });
   });
 
   describe('Reasoning', () => {
