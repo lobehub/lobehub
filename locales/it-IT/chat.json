@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} sottocompiti in batch",
   "task.metrics.stepsShort": "passi",
   "task.metrics.toolCallsShort": "usi strumento",
+  "task.status.cancelled": "Attività annullata",
+  "task.status.failed": "Attività non riuscita",
   "task.status.initializing": "Inizializzazione attività...",
   "task.subtask": "Sottocompito",
   "thread.divider": "Sottotema",

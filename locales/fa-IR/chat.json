@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} زیرکار گروهی",
   "task.metrics.stepsShort": "گام",
   "task.metrics.toolCallsShort": "استفاده از ابزار",
+  "task.status.cancelled": "وظیفه لغو شد",
+  "task.status.failed": "وظیفه ناموفق بود",
   "task.status.initializing": "در حال آغاز وظیفه...",
   "task.subtask": "زیرکار",
   "thread.divider": "زیرموضوع",
