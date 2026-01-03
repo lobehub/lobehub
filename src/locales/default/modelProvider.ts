@@ -230,6 +230,14 @@ export default {
     'For GPT-5 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint':
     'For GPT-5.1 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint':
+    'For GPT-5.2 Pro series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
+    'For GPT-5.2 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
+    'For Gemini image generation models; controls aspect ratio of generated images.',
+  'providerModels.item.modelConfig.extendParams.options.imageResolution.hint':
+    'For Gemini 3 image generation models; controls resolution of generated images.',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
     'For Claude, Qwen3 and similar; controls token budget for reasoning.',
   'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
@@ -241,7 +249,9 @@ export default {
   'providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint':
     'For Gemini series; controls thinking budget.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint':
-    'For Gemini 3 series; controls thinking depth.',
+    'For Gemini 3 Flash Preview models; controls thinking depth.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint':
+    'For Gemini 3 Pro Preview models; controls thinking depth.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':

@@ -7,10 +7,15 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import GPT5ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT51ReasoningEffortSlider';
+import GPT52ProReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT52ProReasoningEffortSlider';
+import GPT52ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT52ReasoningEffortSlider';
+import ImageAspectRatioSelect from '@/features/ChatInput/ActionBar/Model/ImageAspectRatioSelect';
+import ImageResolutionSlider from '@/features/ChatInput/ActionBar/Model/ImageResolutionSlider';
 import ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/ReasoningEffortSlider';
 import ReasoningTokenSlider from '@/features/ChatInput/ActionBar/Model/ReasoningTokenSlider';
 import TextVerbositySlider from '@/features/ChatInput/ActionBar/Model/TextVerbositySlider';
 import ThinkingBudgetSlider from '@/features/ChatInput/ActionBar/Model/ThinkingBudgetSlider';
+import ThinkingLevel2Slider from '@/features/ChatInput/ActionBar/Model/ThinkingLevel2Slider';
 import ThinkingLevelSlider from '@/features/ChatInput/ActionBar/Model/ThinkingLevelSlider';
 import ThinkingSlider from '@/features/ChatInput/ActionBar/Model/ThinkingSlider';
 
@@ -45,6 +50,14 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'gpt5_1ReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint',
+    key: 'gpt5_2ReasoningEffort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint',
+    key: 'gpt5_2ProReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint',
     key: 'textVerbosity',
   },
@@ -61,8 +74,20 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'thinkingLevel',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint',
+    key: 'thinkingLevel2',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.urlContext.hint',
     key: 'urlContext',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint',
+    key: 'imageAspectRatio',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.imageResolution.hint',
+    key: 'imageResolution',
   },
 ];
 
@@ -78,12 +103,21 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   enableReasoning: { previewWidth: 300, tag: 'thinking.type' },
   gpt5ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
   gpt5_1ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
+  gpt5_2ProReasoningEffort: {
+    labelSuffix: ' (GPT-5.2 Pro)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
+  gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
+  imageAspectRatio: { labelSuffix: '', previewWidth: 350 },
+  imageResolution: { labelSuffix: '', previewWidth: 350 },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningEffort: { previewWidth: 250, tag: 'reasoning_effort' },
   textVerbosity: { labelSuffix: ' (GPT-5)', previewWidth: 250, tag: 'text_verbosity' },
   thinking: { labelSuffix: ' (Doubao)', previewWidth: 300, tag: 'thinking.type' },
   thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 500, tag: 'thinkingBudget' },
-  thinkingLevel: { labelSuffix: ' (Gemini)', previewWidth: 280, tag: 'thinkingLevel' },
+  thinkingLevel: { labelSuffix: ' (Gemini 3)', previewWidth: 280, tag: 'thinkingLevel' },
+  thinkingLevel2: { labelSuffix: ' (Gemini 3)', previewWidth: 280, tag: 'thinkingLevel' },
   urlContext: { labelSuffix: ' (Gemini)', previewWidth: 400, tag: 'urlContext' },
 };
 
@@ -170,12 +204,17 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       enableReasoning: <Switch checked disabled />,
       gpt5ReasoningEffort: <GPT5ReasoningEffortSlider />,
       gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider />,
+      gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider />,
+      gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider />,
+      imageAspectRatio: <ImageAspectRatioSelect />,
+      imageResolution: <ImageResolutionSlider />,
       reasoningBudgetToken: <ReasoningTokenSlider defaultValue={1 * 1024} />,
       reasoningEffort: <ReasoningEffortSlider />,
       textVerbosity: <TextVerbositySlider />,
       thinking: <ThinkingSlider />,
       thinkingBudget: <ThinkingBudgetSlider defaultValue={2 * 1024} />,
       thinkingLevel: <ThinkingLevelSlider />,
+      thinkingLevel2: <ThinkingLevel2Slider />,
       urlContext: <Switch checked disabled />,
     }),
     [],
