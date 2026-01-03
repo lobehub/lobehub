@@ -31,7 +31,9 @@ export const AssociatedSubjectSchema = z.object({
   name: z.string().describe('Name of the associated subject'),
   type: z
     .nativeEnum(UserMemoryContextSubjectType)
-    .describe('Type/category of the associated subject'),
+    .describe(
+      "Type/category of the associated subject. Must be one of: 'person' (for all humans including friends, colleagues, family, etc.), 'pet' (for animals), 'item' (for inanimate objects), 'other' (for anything else)",
+    ),
 });
 
 /**
@@ -46,7 +48,7 @@ export const WithContextSchema = z.object({
   associatedSubjects: z
     .array(AssociatedSubjectSchema)
     .describe(
-      'Array of JSON objects describing involved subjects or participants, [] empty if none',
+      'Array of subjects/participants involved in this context (people, pets, etc.). Each subject must have a name and type. Use [] if none',
     ),
   currentStatus: z
     .nativeEnum(ContextStatusEnum)
