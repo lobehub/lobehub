@@ -43,7 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     height: 3px;
     margin-block: 12px;
-    margin-inline: 16px;
+    margin-inline: 8px;
     border-radius: 2px;
 
     background: ${cssVar.colorFillSecondary};

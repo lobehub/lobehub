@@ -20,7 +20,6 @@ const shimmer = keyframes`
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 12px;
-    padding-inline: 16px;
   `,
   progress: css`
     position: relative;
