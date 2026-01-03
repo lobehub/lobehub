@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getTestDB } from '../../models/__tests__/_util';
+import { getTestDB } from '../../core/getTestDB';
 import { LobeChatDatabase } from '../../type';
 import { TableViewerRepo } from './index';
 

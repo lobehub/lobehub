@@ -8,7 +8,7 @@ import { sleep } from '@/utils/sleep';
 import { aiProviders, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { AiProviderModel } from '../aiProvider';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

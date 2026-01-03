@@ -12,7 +12,7 @@ import {
   users,
 } from '../../schemas';
 import { ChatGroupModel } from '../chatGroup';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const userId = 'test-user';
 const otherUserId = 'other-user';

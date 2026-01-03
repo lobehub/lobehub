@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../../models/__tests__/_util';
+import { getTestDB } from '../../../core/getTestDB';
 import { agents, messages, sessions, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { AgentMigrationRepo } from '../index';
