@@ -1,3 +1,15 @@
+Lobe Chat 没有为 next 分支提供 docker 镜像，所以我自己做了个
+  
+`docker pull docker.io/pigeonszz/lobe-chat-database:next`，也可以用`latest`，两者是等价的，也可以用 `package.json` 中的 `version` 字样固定版本
+
+每 UTC 00:00 同步一次上游，在此期间可能会跳过部分版本
+
+Lobe Chat didn't provide docker image for next branch, so i make one
+
+`docker pull docker.io/pigeonszz/lobe-chat-database:next`, or use`latest`,two are equal, or use the `version` in `package.json` to lock the version
+
+sync every UTC 00:00, may skip some versions during the time
+
 > \[!NOTE]
 >
 > **Version Information**
