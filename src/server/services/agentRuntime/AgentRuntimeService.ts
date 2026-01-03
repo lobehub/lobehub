@@ -92,6 +92,7 @@ export class AgentRuntimeService {
 
     return urlJoin(baseUrl, '/api/agent');
   }
+  private serverDB: LobeChatDatabase;
   private userId: string;
   private messageModel: MessageModel;
 
@@ -107,6 +108,7 @@ export class AgentRuntimeService {
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
+    this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
 
@@ -794,6 +796,7 @@ export class AgentRuntimeService {
     const executorContext: RuntimeExecutorContext = {
       messageModel: this.messageModel,
       operationId,
+      serverDB: this.serverDB,
       stepIndex,
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,

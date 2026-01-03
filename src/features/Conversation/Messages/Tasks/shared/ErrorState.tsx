@@ -49,7 +49,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
   const formattedDuration = useMemo(() => formatDuration(duration), [duration]);
   const formattedCost = useMemo(() => formatCost(totalCost), [totalCost]);
 
-  const hasMetrics = formattedDuration || totalToolCalls || totalMessages || formattedCost;
+  const hasMetrics = !!(formattedDuration || totalToolCalls || totalMessages || formattedCost);
 
   return (
     <Flexbox gap={12}>
@@ -63,9 +63,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
         }
         type={'secondary'}
       />
-
-      {/* Footer with metrics */}
-      {hasMetrics && (
+      {hasMetrics ? (
         <Flexbox align="center" gap={12} horizontal wrap="wrap">
           {/* Duration */}
           {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
@@ -102,7 +100,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
             </>
           )}
         </Flexbox>
-      )}
+      ) : null}
     </Flexbox>
   );
 });

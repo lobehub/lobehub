@@ -120,7 +120,6 @@ export const StructureSchema = z.object({
 });
 
 export const StructureOutputSchema = z.object({
-  keyVaultsPayload: z.string(),
   messages: z.array(z.any()),
   model: z.string(),
   provider: z.string(),
