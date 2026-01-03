@@ -353,7 +353,7 @@ export class UserMemoryModel {
           const extra = JSON.parse(parsed.data.extra || '{}');
           parsed.data.extra = extra;
         } catch {
-          parsed.data.extra = {};
+          parsed.data.extra = '{}';
         }
         associations.push(parsed.data);
         return;
@@ -384,7 +384,7 @@ export class UserMemoryModel {
           const extra = JSON.parse(parsed.data.extra || '{}');
           parsed.data.extra = extra;
         } catch {
-          parsed.data.extra = {};
+          parsed.data.extra = '{}';
         }
         associations.push(parsed.data);
       }
