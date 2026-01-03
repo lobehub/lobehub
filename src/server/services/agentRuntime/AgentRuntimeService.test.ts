@@ -364,6 +364,70 @@ describe('AgentRuntimeService', () => {
       });
     });
 
+    it('should call onComplete with error in finalState when execution fails', async () => {
+      const error = new Error('Runtime error');
+      const mockRuntime = { step: vi.fn().mockRejectedValue(error) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      // Register onComplete callback
+      const mockOnComplete = vi.fn();
+      service.registerStepCallbacks('test-operation-1', {
+        onComplete: mockOnComplete,
+      });
+
+      await expect(service.executeStep(mockParams)).rejects.toThrow('Runtime error');
+
+      // Verify onComplete is called with error in finalState as ChatMessageError
+      // ChatErrorType.InternalServerError = 500
+      expect(mockOnComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'test-operation-1',
+          reason: 'error',
+          finalState: expect.objectContaining({
+            error: expect.objectContaining({
+              type: 500, // ChatErrorType.InternalServerError
+              message: 'Runtime error',
+              body: expect.objectContaining({ name: 'Error' }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should call onComplete with ChatCompletionErrorPayload in finalState', async () => {
+      // Simulate LLM error format: { errorType: 'InvalidProviderAPIKey', error: { ... } }
+      const llmError = {
+        errorType: 'InvalidProviderAPIKey',
+        error: { status: 401 },
+        provider: 'openai',
+      };
+      const mockRuntime = { step: vi.fn().mockRejectedValue(llmError) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      // Register onComplete callback
+      const mockOnComplete = vi.fn();
+      service.registerStepCallbacks('test-operation-1', {
+        onComplete: mockOnComplete,
+      });
+
+      await expect(service.executeStep(mockParams)).rejects.toEqual(llmError);
+
+      // Verify error is formatted correctly with type from errorType
+      expect(mockOnComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'test-operation-1',
+          reason: 'error',
+          finalState: expect.objectContaining({
+            error: expect.objectContaining({
+              type: 'InvalidProviderAPIKey',
+              message: 'InvalidProviderAPIKey',
+              body: expect.objectContaining({ status: 401 }),
+            }),
+          }),
+        }),
+      );
+    });
+
     it('should handle human intervention', async () => {
       const paramsWithIntervention = {
         ...mockParams,
