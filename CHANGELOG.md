@@ -2,6 +2,81 @@
 
 # Changelog
 
+## [Version 2.0.0-next.196](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.195...v2.0.0-next.196)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Refactor to remove access code.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Refactor to remove access code, closes [#11120](https://github.com/lobehub/lobe-chat/issues/11120) ([0e9f98c](https://github.com/lobehub/lobe-chat/commit/0e9f98c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.195](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.194...v2.0.0-next.195)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix tool call message content missing.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix tool call message content missing, closes [#11116](https://github.com/lobehub/lobe-chat/issues/11116) ([885964e](https://github.com/lobehub/lobe-chat/commit/885964e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.194](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.193...v2.0.0-next.194)
+
+<sup>Released on **2026-01-03**</sup>
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Update i18n, closes [#11115](https://github.com/lobehub/lobe-chat/issues/11115) ([072e0dd](https://github.com/lobehub/lobe-chat/commit/072e0dd))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.193](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.192...v2.0.0-next.193)
 
 <sup>Released on **2026-01-02**</sup>

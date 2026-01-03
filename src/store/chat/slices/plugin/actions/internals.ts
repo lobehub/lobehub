@@ -1,6 +1,6 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { ToolNameResolver } from '@lobechat/context-engine';
-import { type ChatToolPayload, type MessageToolCall, type ToolsCallingContext } from '@lobechat/types';
+import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { type StateCreator } from 'zustand/vanilla';
 
@@ -8,8 +8,6 @@ import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { builtinTools } from '@/tools';
-
-import { displayMessageSelectors } from '../../message/selectors';
 
 /**
  * Internal utility methods and runtime state management
@@ -20,11 +18,6 @@ export interface PluginInternalsAction {
    * Transform tool calls from runtime format to storage format
    */
   internal_transformToolCalls: (toolCalls: MessageToolCall[]) => ChatToolPayload[];
-
-  /**
-   * Construct tools calling context for plugin invocation
-   */
-  internal_constructToolsCallingContext: (id: string) => ToolsCallingContext | undefined;
 }
 
 export const pluginInternals: StateCreator<
@@ -32,7 +25,7 @@ export const pluginInternals: StateCreator<
   [['zustand/devtools', never]],
   [],
   PluginInternalsAction
-> = (set, get) => ({
+> = () => ({
   internal_transformToolCalls: (toolCalls) => {
     const toolNameResolver = new ToolNameResolver();
 
@@ -76,14 +69,5 @@ export const pluginInternals: StateCreator<
       ...payload,
       source: sourceMap[payload.identifier],
     }));
-  },
-
-  internal_constructToolsCallingContext: (id: string) => {
-    const message = displayMessageSelectors.getDisplayMessageById(id)(get());
-    if (!message) return;
-
-    return {
-      topicId: message.topicId,
-    };
   },
 });

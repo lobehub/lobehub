@@ -1,10 +1,9 @@
-import { ChatErrorType, type ErrorType } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 import type OpenAI from 'openai';
 
 import { getOpenAIAuthFromRequest } from '@/const/fetch';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-import { checkAuth } from './auth';
 import { createOpenai } from './createOpenai';
 
 /**
@@ -13,13 +12,7 @@ import { createOpenai } from './createOpenai';
  * if auth not pass ,just return error response
  */
 export const createBizOpenAI = (req: Request): Response | OpenAI => {
-  const { apiKey, accessCode, endpoint, oauthAuthorized } = getOpenAIAuthFromRequest(req);
-
-  const result = checkAuth({ accessCode, apiKey, oauthAuthorized });
-
-  if (!result.auth) {
-    return createErrorResponse(result.error as ErrorType);
-  }
+  const { apiKey, endpoint } = getOpenAIAuthFromRequest(req);
 
   let openai: OpenAI;
 

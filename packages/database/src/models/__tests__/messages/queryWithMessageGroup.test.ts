@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { messageGroups, messages, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../_util';
+import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'message-query-test-user';
 const topicId = 'test-topic-1';

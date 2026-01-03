@@ -1,8 +1,6 @@
 import { type AuthObject } from '@clerk/backend';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getAppConfig } from '@/envs/app';
-
 import { checkAuthMethod } from './utils';
 
 let enableClerkMock = false;
@@ -26,15 +24,9 @@ vi.mock('@/const/auth', async (importOriginal) => {
   };
 });
 
-vi.mock('@/envs/app', () => ({
-  getAppConfig: vi.fn(),
-}));
-
 describe('checkAuthMethod', () => {
   beforeEach(() => {
-    vi.mocked(getAppConfig).mockReturnValue({
-      ACCESS_CODES: ['validAccessCode'],
-    } as any);
+    vi.clearAllMocks();
   });
 
   it('should pass with valid Clerk auth', () => {
@@ -91,39 +83,7 @@ describe('checkAuthMethod', () => {
     ).not.toThrow();
   });
 
-  it('should pass with no access code required', () => {
-    vi.mocked(getAppConfig).mockReturnValueOnce({
-      ACCESS_CODES: [],
-    } as any);
-
+  it('should pass with no auth params', () => {
     expect(() => checkAuthMethod({})).not.toThrow();
-  });
-
-  it('should pass with valid access code', () => {
-    expect(() =>
-      checkAuthMethod({
-        accessCode: 'validAccessCode',
-      }),
-    ).not.toThrow();
-  });
-
-  it('should throw error with invalid access code', () => {
-    try {
-      checkAuthMethod({
-        accessCode: 'invalidAccessCode',
-      });
-    } catch (e) {
-      expect(e).toEqual({
-        errorType: 'InvalidAccessCode',
-      });
-    }
-
-    try {
-      checkAuthMethod({});
-    } catch (e) {
-      expect(e).toEqual({
-        errorType: 'InvalidAccessCode',
-      });
-    }
   });
 });

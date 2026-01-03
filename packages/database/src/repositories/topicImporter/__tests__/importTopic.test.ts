@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../../models/__tests__/_util';
+import { getTestDB } from '../../../core/getTestDB';
 import { agents, messagePlugins, messages, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { TopicImporterRepo } from '../index';

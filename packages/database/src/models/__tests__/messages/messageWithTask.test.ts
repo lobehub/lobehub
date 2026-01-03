@@ -5,7 +5,7 @@ import { ThreadStatus, ThreadType } from '@/types/index';
 import { messages, sessions, threads, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../_util';
+import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'message-task-user-test';
 const sessionId = 'message-task-session';

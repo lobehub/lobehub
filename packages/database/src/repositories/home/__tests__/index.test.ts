@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../../models/__tests__/_util';
+import { getTestDB } from '../../../core/getTestDB';
 import * as Schema from '../../../schemas';
 import { HomeRepository } from '../index';
 

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../models/__tests__/_util';
+import { getTestDB } from '../../core/getTestDB';
 import { NewAgent, agents } from '../../schemas/agent';
 import { NewFile, files } from '../../schemas/file';
 import { messages } from '../../schemas/message';

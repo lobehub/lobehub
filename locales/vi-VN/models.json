@@ -298,6 +298,7 @@
   "codeqwen.description": "CodeQwen1.5 là mô hình ngôn ngữ lớn được huấn luyện trên dữ liệu mã phong phú, được xây dựng cho các tác vụ lập trình phức tạp.",
   "codestral-latest.description": "Codestral là mô hình lập trình tiên tiến nhất của chúng tôi; phiên bản v2 (tháng 1 năm 2025) nhắm đến các tác vụ tần suất cao, độ trễ thấp như FIM, sửa mã và sinh bài kiểm tra.",
   "codestral.description": "Codestral là mô hình lập trình đầu tiên của Mistral AI, cung cấp hỗ trợ sinh mã mạnh mẽ.",
+  "codex-mini-latest.description": "codex-mini-latest là một mô hình o4-mini được tinh chỉnh dành cho Codex CLI. Đối với việc sử dụng API trực tiếp, chúng tôi khuyến nghị bắt đầu với gpt-4.1.",
   "meta.llama3-8b-instruct-v1:0.description": "Meta Llama 3 là một mô hình ngôn ngữ mở dành cho nhà phát triển, nhà nghiên cứu và doanh nghiệp, được thiết kế để hỗ trợ xây dựng, thử nghiệm và mở rộng các ý tưởng AI sinh ngữ một cách có trách nhiệm. Là một phần trong nền tảng đổi mới cộng đồng toàn cầu, mô hình này phù hợp với môi trường có tài nguyên hạn chế, thiết bị biên và yêu cầu thời gian huấn luyện nhanh hơn.",
   "meta/Llama-3.2-11B-Vision-Instruct.description": "Khả năng suy luận hình ảnh mạnh mẽ trên ảnh độ phân giải cao, phù hợp cho các ứng dụng hiểu thị giác.",
   "meta/Llama-3.2-90B-Vision-Instruct.description": "Khả năng suy luận hình ảnh tiên tiến dành cho các ứng dụng tác tử hiểu thị giác.",

@@ -15,7 +15,7 @@ import {
 } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { GenerationModel } from '../generation';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

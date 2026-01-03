@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sessions, threads, topics, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { ThreadModel } from '../thread';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const userId = 'thread-user-test';
 const otherUserId = 'other-user-test';

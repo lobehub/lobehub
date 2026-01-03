@@ -245,7 +245,35 @@ describe('fileRouter', () => {
       );
     });
 
-    it('should handle getFileMetadata errors', async () => {
+    it('should fallback to input size when getFileMetadata fails', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+      mockFileServiceGetFileMetadata.mockRejectedValue(new Error('File not found in S3'));
+
+      const result = await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/non-existent.txt',
+        metadata: {},
+      });
+
+      expect(result).toEqual({
+        id: 'new-file-id',
+        url: 'https://lobehub.com/f/new-file-id',
+      });
+
+      // Verify create was called with input size as fallback
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size: 100,
+        }),
+        true,
+      );
+    });
+
+    it('should throw error when getFileMetadata fails and input size is less than 1', async () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileServiceGetFileMetadata.mockRejectedValue(new Error('File not found in S3'));
 
@@ -254,11 +282,56 @@ describe('fileRouter', () => {
           hash: 'test-hash',
           fileType: 'text',
           name: 'test.txt',
-          size: 100,
+          size: 0,
           url: 'files/non-existent.txt',
           metadata: {},
         }),
-      ).rejects.toThrow('File not found in S3');
+      ).rejects.toThrow('File size must be at least 1 byte');
+    });
+
+    it('should use input size when getFileMetadata returns contentLength less than 1', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+      mockFileServiceGetFileMetadata.mockResolvedValue({
+        contentLength: 0,
+        contentType: 'text/plain',
+      });
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        name: 'test.txt',
+        size: 100,
+        url: 'files/test.txt',
+        metadata: {},
+      });
+
+      // Verify create was called with input size since contentLength < 1
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size: 100,
+        }),
+        true,
+      );
+    });
+
+    it('should throw error when both getFileMetadata contentLength and input size are less than 1', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileServiceGetFileMetadata.mockResolvedValue({
+        contentLength: 0,
+        contentType: 'text/plain',
+      });
+
+      await expect(
+        caller.createFile({
+          hash: 'test-hash',
+          fileType: 'text',
+          name: 'test.txt',
+          size: 0,
+          url: 'files/test.txt',
+          metadata: {},
+        }),
+      ).rejects.toThrow('File size must be at least 1 byte');
     });
   });
 
