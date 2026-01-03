@@ -155,9 +155,9 @@ describe('anthropicHelpers', () => {
         role: 'user',
       };
       const result = await buildAnthropicMessage(message);
-      expect(result.role).toBe('user');
-      expect(result.content).toHaveLength(2);
-      expect((result.content[1] as any).type).toBe('image');
+      expect(result!.role).toBe('user');
+      expect(result!.content).toHaveLength(2);
+      expect((result!.content[1] as any).type).toBe('image');
     });
 
     it('should correctly convert tool message', async () => {
@@ -167,8 +167,8 @@ describe('anthropicHelpers', () => {
         tool_call_id: 'tool123',
       };
       const result = await buildAnthropicMessage(message);
-      expect(result.role).toBe('user');
-      expect(result.content).toEqual([
+      expect(result!.role).toBe('user');
+      expect(result!.content).toEqual([
         {
           content: 'Tool result content',
           tool_use_id: 'tool123',
@@ -193,8 +193,8 @@ describe('anthropicHelpers', () => {
         ],
       };
       const result = await buildAnthropicMessage(message);
-      expect(result.role).toBe('assistant');
-      expect(result.content).toEqual([
+      expect(result!.role).toBe('assistant');
+      expect(result!.content).toEqual([
         { text: 'Here is the result:', type: 'text' },
         {
           id: 'call1',
@@ -266,14 +266,34 @@ describe('anthropicHelpers', () => {
 
         const contents = await buildAnthropicMessages(messages);
 
+        // Empty assistant messages should be filtered out
         expect(contents).toEqual([
           {
             content: '## Tools\n\nYou can use these tools',
             role: 'user',
           },
+        ]);
+      });
+
+      it('should filter out assistant message with whitespace-only content', async () => {
+        const messages: OpenAIChatMessage[] = [
           {
-            content: '',
+            content: 'Hello',
+            role: 'user',
+          },
+          {
+            content: '   \n\t  ',
             role: 'assistant',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        // Whitespace-only assistant messages should be filtered out
+        expect(contents).toEqual([
+          {
+            content: 'Hello',
+            role: 'user',
           },
         ]);
       });
