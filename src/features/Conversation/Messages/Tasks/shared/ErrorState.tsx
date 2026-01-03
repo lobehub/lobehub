@@ -55,7 +55,6 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
     <Flexbox gap={12}>
       {/* Error Content */}
       <Alert
-        description={error?.error?.message}
         extra={
           error?.error?.body && (
             <Highlighter
