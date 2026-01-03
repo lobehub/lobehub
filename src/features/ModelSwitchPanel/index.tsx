@@ -85,10 +85,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
+
+      .settings-icon {
+        opacity: 1;
+      }
     }
   `,
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};
+  `,
+  settingsIcon: css`
+    opacity: 0;
   `,
   tag: css`
     cursor: pointer;
@@ -417,8 +424,13 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
             const { data } = item;
             const hasSingleProvider = data.providers.length === 1;
 
-            // Check if this model is currently active
-            const isActive = data.providers.some((p) => menuKey(p.id, data.model.id) === activeKey);
+            // Check if this model is currently active and find active provider
+            const activeProvider = data.providers.find(
+              (p) => menuKey(p.id, data.model.id) === activeKey,
+            );
+            const isActive = !!activeProvider;
+            // Use active provider if found, otherwise use first provider for settings link
+            const settingsProvider = activeProvider || data.providers[0];
 
             // Single provider - direct click without submenu
             if (hasSingleProvider) {
@@ -429,18 +441,43 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 <div
                   className={cx(styles.menuItem, isActive && styles.menuItemActive)}
                   key={key}
-                  onClick={async () => {
-                    await handleModelChange(data.model.id, singleProvider.id);
-                    handleOpenChange(false);
-                  }}
                 >
-                  <ModelItemRender
-                    {...data.model}
-                    {...data.model.abilities}
-                    infoTagTooltip={false}
-                    newBadgeLabel={newLabel}
-                    showInfoTag={false}
-                  />
+                  <Flexbox
+                    align={'center'}
+                    gap={8}
+                    horizontal
+                    justify={'space-between'}
+                    onClick={async () => {
+                      await handleModelChange(data.model.id, singleProvider.id);
+                      handleOpenChange(false);
+                    }}
+                    style={{ flex: 1, minWidth: 0 }}
+                  >
+                    <ModelItemRender
+                      {...data.model}
+                      {...data.model.abilities}
+                      infoTagTooltip={false}
+                      newBadgeLabel={newLabel}
+                      showInfoTag={false}
+                    />
+                  </Flexbox>
+                  <div className={cx(styles.settingsIcon, 'settings-icon')}>
+                    <ActionIcon
+                      icon={LucideBolt}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const url = urlJoin('/settings/provider', settingsProvider.id || 'all');
+                        if (e.ctrlKey || e.metaKey) {
+                          window.open(url, '_blank');
+                        } else {
+                          navigate(url);
+                        }
+                      }}
+                      size={'small'}
+                      title={t('ModelSwitchPanel.goToSettings')}
+                    />
+                  </div>
                 </div>
               );
             }
@@ -459,6 +496,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                       key: menuKey(p.id, data.model.id),
                       label: (
                         <Flexbox
+                          align={'center'}
                           gap={8}
                           horizontal
                           justify={'space-between'}
@@ -481,10 +519,20 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                               source={p.source}
                             />
                           </Flexbox>
-                          <ModelInfoTags
-                            {...data.model.abilities}
-                            contextWindowTokens={data.model.contextWindowTokens}
-                            withTooltip
+                          <ActionIcon
+                            icon={LucideBolt}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const url = urlJoin('/settings/provider', p.id || 'all');
+                              if (e.ctrlKey || e.metaKey) {
+                                window.open(url, '_blank');
+                              } else {
+                                navigate(url);
+                              }
+                            }}
+                            size={'small'}
+                            title={t('ModelSwitchPanel.goToSettings')}
                           />
                         </Flexbox>
                       ),
