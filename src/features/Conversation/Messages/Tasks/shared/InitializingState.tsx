@@ -2,9 +2,10 @@
 
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, keyframes } from 'antd-style';
-import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 const shimmer = keyframes`
   0% {
@@ -13,16 +14,6 @@ const shimmer = keyframes`
 
   100% {
     transform: translateX(100%);
-  }
-`;
-
-const spin = keyframes`
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
   }
 `;
 
@@ -53,9 +44,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     animation: ${shimmer} 2s infinite;
   `,
-  spin: css`
-    animation: ${spin} 1s linear infinite;
-  `,
 }));
 
 const InitializingState = memo(() => {
@@ -65,7 +53,7 @@ const InitializingState = memo(() => {
     <Flexbox className={styles.container} gap={12}>
       {/* Status Row */}
       <Flexbox align="center" gap={8} horizontal>
-        <Loader2 className={styles.spin} size={14} />
+        <NeuralNetworkLoading size={14} />
         <Text fontSize={13} type={'secondary'} weight={500}>
           {t('task.status.initializing', { defaultValue: 'Starting task...' })}
         </Text>
