@@ -217,10 +217,10 @@ export class AiModelModel {
       .values(allRecords)
       .onConflictDoUpdate({
         set: {
-          enabled: sql.raw('excluded.enabled'),
+          enabled: sql`excluded.enabled`,
           // Preserve existing type in database, only update if new type is provided
           type: sql`COALESCE(excluded.type, ${aiModels.type})`,
-          updatedAt: sql.raw('excluded.updated_at'),
+          updatedAt: sql`excluded.updated_at`,
         },
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
       });
