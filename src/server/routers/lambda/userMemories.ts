@@ -15,7 +15,6 @@ import {
 } from '@lobechat/memory-user-memory';
 import { LayersEnum, type SearchMemoryResult, searchMemorySchema } from '@lobechat/types';
 import { type SQL, and, asc, eq, gte, lte } from 'drizzle-orm';
-import { ModelProvider } from 'model-bank';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -135,11 +134,14 @@ const searchUserMemories = async (
 };
 
 const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
-  const provider = ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : ModelProvider.OpenAI;
-  // Read user's provider config from database
-  const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider);
-  const { model: embeddingModel } =
+  const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+  // Read user's provider config from database
+  const agentRuntime = await initModelRuntimeFromDB(
+    serverDB,
+    userId,
+    ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
+  );
 
   return { agentRuntime, embeddingModel };
 };
