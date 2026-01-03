@@ -40,7 +40,7 @@
     "build:analyze": "NODE_OPTIONS=--max-old-space-size=8192 ANALYZE=true next build --webpack",
     "build:docker": "npm run prebuild && NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build --webpack && npm run build-sitemap",
     "build:electron": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NEXT_PUBLIC_IS_DESKTOP_APP=1 tsx scripts/electronWorkflow/buildNextApp.mts",
-    "build:vercel": "npm run prebuild && cross-env NODE_OPTIONS=--max-old-space-size=6144 next build --webpack",
+    "build:vercel": "npm run prebuild && cross-env NODE_OPTIONS=--max-old-space-size=6144 next build --webpack && npm run postbuild",
     "clean:node_modules": "bash -lc 'set -e; echo \"Removing all node_modules...\"; rm -rf node_modules; pnpm -r exec rm -rf node_modules; rm -rf apps/desktop/node_modules; echo \"All node_modules removed.\"'",
     "db:generate": "drizzle-kit generate && npm run workflow:dbml",
     "db:migrate": "MIGRATION_DB=1 tsx ./scripts/migrateServerDB/index.ts",
