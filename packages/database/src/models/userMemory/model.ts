@@ -1,4 +1,4 @@
-import { AssociatedObjectSchema } from '@lobechat/memory-user-memory';
+import { AssociatedObjectSchema, AssociatedSubjectSchema } from '@lobechat/memory-user-memory';
 import {
   IdentityTypeEnum,
   LayersEnum,
@@ -349,8 +349,12 @@ export class UserMemoryModel {
     value.forEach((item) => {
       const parsed = AssociatedObjectSchema.safeParse(item);
       if (parsed.success) {
-        const extra = JSON.parse(parsed.data.extra || '{}');
-        parsed.data.extra = extra;
+        try {
+          const extra = JSON.parse(parsed.data.extra || '{}');
+          parsed.data.extra = extra;
+        } catch {
+          parsed.data.extra = {};
+        }
         associations.push(parsed.data);
         return;
       }
@@ -374,10 +378,14 @@ export class UserMemoryModel {
     const associations: Record<string, unknown>[] = [];
 
     value.forEach((item) => {
-      const parsed = AssociatedObjectSchema.safeParse(item);
+      const parsed = AssociatedSubjectSchema.safeParse(item);
       if (parsed.success) {
-        const extra = JSON.parse(parsed.data.extra || '{}');
-        parsed.data.extra = extra;
+        try {
+          const extra = JSON.parse(parsed.data.extra || '{}');
+          parsed.data.extra = extra;
+        } catch {
+          parsed.data.extra = {};
+        }
         associations.push(parsed.data);
       }
     });
