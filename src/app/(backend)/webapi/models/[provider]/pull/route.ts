@@ -2,14 +2,15 @@ import { type ChatCompletionErrorPayload, type PullModelParams } from '@lobechat
 import { ChatErrorType } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-export const POST = checkAuth(async (req, { params, jwtPayload }) => {
+export const POST = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 
   try {
-    const agentRuntime = await initModelRuntimeWithUserPayload(provider, jwtPayload);
+    // Read user's provider config from database
+    const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider);
 
     const data = (await req.json()) as PullModelParams;
 

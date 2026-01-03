@@ -1,10 +1,10 @@
 import debug from 'debug';
 
+import { appEnv } from '@/envs/app';
+
 import { AgentStateManager } from './AgentStateManager';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
-import {
-  inMemoryStreamEventManager,
-} from './InMemoryStreamEventManager';
+import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
 import { StreamEventManager } from './StreamEventManager';
 import { getAgentRuntimeRedisClient } from './redis';
 import type { IAgentStateManager, IStreamEventManager } from './types';
@@ -19,33 +19,52 @@ export const isRedisAvailable = (): boolean => {
 };
 
 /**
- * Create AgentStateManager based on Redis availability
- *
- * - Redis available: RedisAgentStateManager
- * - Redis not available: InMemoryAgentStateManager (for local development)
+ * Check if queue-based agent runtime is enabled
+ * When disabled (default), use InMemory implementations for local/simple deployments
  */
-export const createAgentStateManager = (): IAgentStateManager => {
-  if (isRedisAvailable()) {
-    log('Creating Redis-based AgentStateManager');
-    return new AgentStateManager();
-  }
-
-  log('Redis not available, using InMemoryAgentStateManager for local development');
-  return inMemoryAgentStateManager;
+const isQueueModeEnabled = (): boolean => {
+  return appEnv.enableQueueAgentRuntime === true;
 };
 
 /**
- * Create StreamEventManager based on Redis availability
- *
- * - Redis available: RedisStreamEventManager
- * - Redis not available: InMemoryStreamEventManager (for local development)
+ * Create AgentStateManager based on configuration
  */
-export const createStreamEventManager = (): IStreamEventManager => {
-  if (isRedisAvailable()) {
-    log('Creating Redis-based StreamEventManager');
-    return new StreamEventManager();
+export const createAgentStateManager = (): IAgentStateManager => {
+  // When queue mode is disabled, always use InMemory for simplicity
+  if (!isQueueModeEnabled()) {
+    log('Queue mode disabled, using InMemoryAgentStateManager');
+    return inMemoryAgentStateManager;
   }
 
-  log('Redis not available, using InMemoryStreamEventManager for local development');
-  return inMemoryStreamEventManager;
+  // Queue mode enabled, Redis is required
+  if (!isRedisAvailable()) {
+    throw new Error(
+      'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
+    );
+  }
+
+  return new AgentStateManager();
+};
+
+/**
+ * Create StreamEventManager based on configuration
+ *
+ * - If enableQueueAgentRuntime=false (default): InMemoryStreamEventManager
+ * - If enableQueueAgentRuntime=true: RedisStreamEventManager (requires Redis)
+ */
+export const createStreamEventManager = (): IStreamEventManager => {
+  // When queue mode is disabled, always use InMemory for simplicity
+  if (!isQueueModeEnabled()) {
+    log('Queue mode disabled, using InMemoryStreamEventManager');
+    return inMemoryStreamEventManager;
+  }
+
+  // Queue mode enabled, Redis is required
+  if (!isRedisAvailable()) {
+    throw new Error(
+      'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
+    );
+  }
+
+  return new StreamEventManager();
 };

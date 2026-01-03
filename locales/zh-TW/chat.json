@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} 個批次子任務",
   "task.metrics.stepsShort": "步驟",
   "task.metrics.toolCallsShort": "次使用工具",
+  "task.status.cancelled": "任務已取消",
+  "task.status.failed": "任務失敗",
   "task.status.initializing": "任務啟動中...",
   "task.subtask": "子任務",
   "thread.divider": "子話題",

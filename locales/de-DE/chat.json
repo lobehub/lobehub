@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} Teilaufgaben",
   "task.metrics.stepsShort": "Schritte",
   "task.metrics.toolCallsShort": "Tool-Nutzungen",
+  "task.status.cancelled": "Aufgabe abgebrochen",
+  "task.status.failed": "Aufgabe fehlgeschlagen",
   "task.status.initializing": "Aufgabe wird initialisiert...",
   "task.subtask": "Teilaufgabe",
   "thread.divider": "Unterthema",

@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} пакетных подзадач",
   "task.metrics.stepsShort": "шагов",
   "task.metrics.toolCallsShort": "вызовов",
+  "task.status.cancelled": "Задача отменена",
+  "task.status.failed": "Ошибка выполнения задачи",
   "task.status.initializing": "Инициализация задачи...",
   "task.subtask": "Подзадача",
   "thread.divider": "Подтема",

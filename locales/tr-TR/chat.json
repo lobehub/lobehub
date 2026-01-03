@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} Toplu Alt Görev",
   "task.metrics.stepsShort": "adım",
   "task.metrics.toolCallsShort": "araç kullanımı",
+  "task.status.cancelled": "Görev İptal Edildi",
+  "task.status.failed": "Görev Başarısız Oldu",
   "task.status.initializing": "Görev başlatılıyor...",
   "task.subtask": "Alt Görev",
   "thread.divider": "Alt Konu",

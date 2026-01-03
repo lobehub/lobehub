@@ -201,9 +201,9 @@ export const ragEvalRouter = router({
         })),
       );
 
+      // Async router will read keyVaults from DB, no need to pass jwtPayload
       const asyncCaller = await createAsyncCaller({
         userId: ctx.userId,
-        jwtPayload: ctx.jwtPayload,
       });
 
       await ctx.evaluationModel.update(input.id, { status: EvalEvaluationStatus.Processing });

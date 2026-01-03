@@ -1,15 +1,12 @@
+import { type LobeChatDatabase } from '@lobechat/database';
 import { type SQL, and } from 'drizzle-orm';
-import { ModelProvider } from 'model-bank';
 
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { UserMemoryModel } from '@/database/models/userMemory';
-import { authedProcedure,  } from '@/libs/trpc/lambda';
+import { authedProcedure } from '@/libs/trpc/lambda';
 import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
-import { type ClientSecretPayload } from '@/types/auth';
-
-
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 export const EMBEDDING_VECTOR_DIMENSION = 1024;
 
@@ -25,10 +22,11 @@ export const memoryProcedure = authedProcedure
     });
   });
 
-export const getEmbeddingRuntime = async (jwtPayload: ClientSecretPayload) => {
-  const agentRuntime = await initModelRuntimeWithUserPayload(ModelProvider.OpenAI, jwtPayload);
-  const { model: embeddingModel } =
+export const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
+  const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+  // Read user's provider config from database
+  const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider);
 
   return { agentRuntime, embeddingModel };
 };
@@ -62,4 +60,4 @@ export const normalizeEmbeddable = (value?: string | null): string | undefined =
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-export {router} from '@/libs/trpc/lambda';
+export { router } from '@/libs/trpc/lambda';

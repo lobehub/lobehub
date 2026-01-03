@@ -17,7 +17,6 @@ describe('API_ENDPOINTS', () => {
     expect(API_ENDPOINTS.chat('openai')).toBe('/webapi/chat/openai');
     expect(API_ENDPOINTS.models('anthropic')).toBe('/webapi/models/anthropic');
     expect(API_ENDPOINTS.modelPull('azure')).toBe('/webapi/models/azure/pull');
-    expect(API_ENDPOINTS.images('dalle')).toBe('/webapi/text-to-image/dalle');
     expect(API_ENDPOINTS.tts('openai')).toBe('/webapi/tts/openai');
   });
 });

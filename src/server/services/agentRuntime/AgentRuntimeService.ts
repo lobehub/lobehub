@@ -4,6 +4,7 @@ import {
   type AgentState,
   GeneralChatAgent,
 } from '@lobechat/agent-runtime';
+import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -40,6 +41,43 @@ import type {
 } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
+
+/**
+ * Formats an error into ChatMessageError structure
+ * Handles various error formats from LLM execution and other sources
+ */
+function formatErrorForState(error: unknown): ChatMessageError {
+  // Handle ChatCompletionErrorPayload format from LLM errors
+  // e.g., { errorType: 'InvalidProviderAPIKey', error: { ... }, provider: 'openai' }
+  if (error && typeof error === 'object' && 'errorType' in error) {
+    const payload = error as {
+      error?: unknown;
+      errorType: ChatMessageError['type'];
+      message?: string;
+    };
+    return {
+      body: payload.error || error,
+      message: payload.message || String(payload.errorType),
+      type: payload.errorType,
+    };
+  }
+
+  // Handle standard Error objects
+  if (error instanceof Error) {
+    return {
+      body: { name: error.name },
+      message: error.message,
+      type: ChatErrorType.InternalServerError,
+    };
+  }
+
+  // Fallback for unknown error types
+  return {
+    body: error,
+    message: String(error),
+    type: AgentRuntimeErrorType.AgentRuntimeError,
+  };
+}
 
 export interface AgentRuntimeServiceOptions {
   /**
@@ -92,6 +130,7 @@ export class AgentRuntimeService {
 
     return urlJoin(baseUrl, '/api/agent');
   }
+  private serverDB: LobeChatDatabase;
   private userId: string;
   private messageModel: MessageModel;
 
@@ -107,6 +146,7 @@ export class AgentRuntimeService {
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
+    this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
 
@@ -431,12 +471,22 @@ export class AgentRuntimeService {
         type: 'error',
       });
 
+      // Build and save error state so it's persisted for later retrieval
+      const errorState = await this.coordinator.loadAgentState(operationId);
+      const finalStateWithError = {
+        ...errorState!,
+        error: formatErrorForState(error),
+        status: 'error' as const,
+      };
+
+      // Save the error state to coordinator so getOperationStatus can retrieve it
+      await this.coordinator.saveAgentState(operationId, finalStateWithError);
+
       // Also call onComplete callback when execution fails
       if (callbacks?.onComplete) {
         try {
-          const errorState = await this.coordinator.loadAgentState(operationId);
           await callbacks.onComplete({
-            finalState: errorState!,
+            finalState: finalStateWithError,
             operationId,
             reason: 'error',
           });
@@ -794,6 +844,7 @@ export class AgentRuntimeService {
     const executorContext: RuntimeExecutorContext = {
       messageModel: this.messageModel,
       operationId,
+      serverDB: this.serverDB,
       stepIndex,
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,

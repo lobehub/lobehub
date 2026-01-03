@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} nhiệm vụ hàng loạt",
   "task.metrics.stepsShort": "bước",
   "task.metrics.toolCallsShort": "lượt dùng công cụ",
+  "task.status.cancelled": "Nhiệm vụ đã hủy",
+  "task.status.failed": "Nhiệm vụ thất bại",
   "task.status.initializing": "Đang khởi tạo nhiệm vụ...",
   "task.subtask": "Nhiệm vụ phụ",
   "thread.divider": "Chủ đề phụ",

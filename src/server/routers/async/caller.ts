@@ -1,4 +1,3 @@
-import { type ClientSecretPayload } from '@lobechat/types';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import superjson from 'superjson';
 import urlJoin from 'url-join';
@@ -12,12 +11,12 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { asyncRouter } from './index';
 import type { AsyncRouter } from './index';
 
-export const createAsyncServerClient = async (userId: string, payload: ClientSecretPayload) => {
+export const createAsyncServerClient = async (userId: string) => {
   const token = await signInternalJWT();
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const headers: Record<string, string> = {
     Authorization: token,
-    [LOBE_CHAT_AUTH_HEADER]: await gateKeeper.encrypt(JSON.stringify({ payload, userId })),
+    [LOBE_CHAT_AUTH_HEADER]: await gateKeeper.encrypt(JSON.stringify({ userId })),
   };
 
   if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
@@ -49,7 +48,6 @@ const helperFunc = () => {
 export type UnifiedAsyncCaller = ReturnType<typeof helperFunc>;
 
 interface CreateCallerOptions {
-  jwtPayload: any;
   userId: string;
 }
 
@@ -60,9 +58,9 @@ interface CreateCallerOptions {
 export const createAsyncCaller = async (
   options: CreateCallerOptions,
 ): Promise<UnifiedAsyncCaller> => {
-  const { userId, jwtPayload } = options;
+  const { userId } = options;
 
-  const httpClient = await createAsyncServerClient(userId, jwtPayload);
+  const httpClient = await createAsyncServerClient(userId);
   const createRecursiveProxy = (client: any, path: string[]): any => {
     // The target is a dummy function, so that 'apply' can be triggered.
     return new Proxy(() => {}, {
