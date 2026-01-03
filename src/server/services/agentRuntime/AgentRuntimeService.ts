@@ -471,15 +471,22 @@ export class AgentRuntimeService {
         type: 'error',
       });
 
+      // Build and save error state so it's persisted for later retrieval
+      const errorState = await this.coordinator.loadAgentState(operationId);
+      const finalStateWithError = {
+        ...errorState!,
+        error: formatErrorForState(error),
+        status: 'error' as const,
+      };
+
+      // Save the error state to coordinator so getOperationStatus can retrieve it
+      await this.coordinator.saveAgentState(operationId, finalStateWithError);
+
       // Also call onComplete callback when execution fails
       if (callbacks?.onComplete) {
         try {
-          const errorState = await this.coordinator.loadAgentState(operationId);
           await callbacks.onComplete({
-            finalState: {
-              ...errorState!,
-              error: formatErrorForState(error),
-            },
+            finalState: finalStateWithError,
             operationId,
             reason: 'error',
           });

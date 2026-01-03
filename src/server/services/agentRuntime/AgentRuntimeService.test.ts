@@ -428,6 +428,29 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should save error state to coordinator for later retrieval (inMemory mode fix)', async () => {
+      const error = new Error('Test error for inMemory mode');
+      const mockRuntime = { step: vi.fn().mockRejectedValue(error) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      // Spy on coordinator.saveAgentState to verify it's called with error state
+      const saveStateSpy = vi.spyOn((service as any).coordinator, 'saveAgentState');
+
+      await expect(service.executeStep(mockParams)).rejects.toThrow('Test error for inMemory mode');
+
+      // Verify saveAgentState is called with error state before onComplete
+      expect(saveStateSpy).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          error: expect.objectContaining({
+            type: 500, // ChatErrorType.InternalServerError
+            message: 'Test error for inMemory mode',
+          }),
+          status: 'error',
+        }),
+      );
+    });
+
     it('should handle human intervention', async () => {
       const paramsWithIntervention = {
         ...mockParams,
