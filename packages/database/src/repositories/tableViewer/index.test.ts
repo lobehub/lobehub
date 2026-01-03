@@ -1,11 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clientDB, initializeDB } from '@/database/client/db';
-
+import { getTestDB } from '../../models/__tests__/_util';
+import { LobeChatDatabase } from '../../type';
 import { TableViewerRepo } from './index';
 
 const userId = 'user-table-viewer';
-const repo = new TableViewerRepo(clientDB as any, userId);
 
 // Mock database execution
 const mockExecute = vi.fn();
@@ -13,10 +12,17 @@ const mockDB = {
   execute: mockExecute,
 };
 
-beforeEach(async () => {
-  await initializeDB();
-  vi.clearAllMocks();
+let serverDB: LobeChatDatabase;
+let repo: TableViewerRepo;
+
+beforeAll(async () => {
+  serverDB = await getTestDB();
+  repo = new TableViewerRepo(serverDB, userId);
 }, 30000);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('TableViewerRepo', () => {
   describe('getAllTables', () => {

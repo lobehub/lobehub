@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clientDB, initializeDB } from '@/database/client/db';
-
+import { getTestDB } from '../../models/__tests__/_util';
 import {
   agents,
   agentsKnowledgeBases,
@@ -21,7 +20,7 @@ import {
 import { LobeChatDatabase } from '../../type';
 import { DATA_EXPORT_CONFIG, DataExporterRepos } from './index';
 
-let db = clientDB as LobeChatDatabase;
+let db: LobeChatDatabase;
 
 // 设置测试数据
 describe('DataExporterRepos', () => {
@@ -38,7 +37,11 @@ describe('DataExporterRepos', () => {
   };
 
   // 设置测试环境
-  let userId: string = testIds.userId;
+  const userId: string = testIds.userId;
+
+  beforeAll(async () => {
+    db = await getTestDB();
+  }, 30000);
 
   const setupTestData = async () => {
     await db.transaction(async (trx) => {
@@ -152,10 +155,9 @@ describe('DataExporterRepos', () => {
   };
 
   beforeEach(async () => {
-    // 创建内存数据库
-    await initializeDB();
-
-    // 插入测试数据
+    // 清理并插入测试数据
+    await db.delete(users);
+    await db.delete(globalFiles);
     await setupTestData();
   }, 30000);
 
