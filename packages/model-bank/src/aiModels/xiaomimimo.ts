@@ -7,7 +7,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 262_144,
-    description: 'MiMo-V2-Flash: 高效推理、代码与 Agent 基座模型。',
+    description: 'MiMo-V2-Flash: An efficient model for reasoning, coding, and agent foundations.',
     displayName: 'MiMo-V2 Flash',
     enabled: true,
     id: 'mimo-v2-flash',

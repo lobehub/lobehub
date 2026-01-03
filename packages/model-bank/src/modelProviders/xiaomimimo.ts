@@ -4,7 +4,7 @@ const XiaomiMiMo: ModelProviderCard = {
   chatModels: [],
   checkModel: 'mimo-v2-flash',
   description:
-    'Xiaomi MiMo 提供 OpenAI 兼容接口的对话模型服务。mimo-v2-flash 支持深度思考、流式输出与函数调用，256K 上下文，最大输出 128K。',
+    'Xiaomi MiMo provides a conversational model service with an OpenAI-compatible API. The mimo-v2-flash model supports deep reasoning, streaming output, function calling, a 256K context window, and a maximum output of 128K.',
   id: 'xiaomimimo',
   modelList: { showModelFetcher: true },
   name: 'Xiaomi MiMo',
