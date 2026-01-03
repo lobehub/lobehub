@@ -6,7 +6,7 @@ import {
   RouteVariants,
 } from '@lobechat/desktop-bridge';
 import { ElectronIPCEventHandler, ElectronIPCServer } from '@lobechat/electron-server-ipc';
-import { app, protocol, session } from 'electron';
+import { app, nativeTheme, protocol, session } from 'electron';
 import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
 import { macOS, windows } from 'electron-is';
 import { pathExistsSync } from 'fs-extra';
@@ -154,7 +154,25 @@ export class App {
     // 统一处理 before-quit 事件
     app.on('before-quit', this.handleBeforeQuit);
 
+    // Initialize theme mode from store
+    this.initializeThemeMode();
+
     logger.info('App initialization completed');
+  }
+
+  /**
+   * Initialize nativeTheme.themeSource from stored themeMode preference
+   * This allows nativeTheme.shouldUseDarkColors to be used consistently everywhere
+   */
+  private initializeThemeMode() {
+    const themeMode = this.storeManager.get('themeMode');
+
+    if (themeMode) {
+      nativeTheme.themeSource = themeMode === 'auto' ? 'system' : themeMode;
+      logger.debug(
+        `Theme mode initialized to: ${themeMode} (themeSource: ${nativeTheme.themeSource})`,
+      );
+    }
   }
 
   bootstrap = async () => {

@@ -39,7 +39,6 @@ export default class SystemController extends ControllerModule {
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',
       platform: platform as 'darwin' | 'win32' | 'linux',
-      systemAppearance: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
       userPath: {
         // User Paths (ensure keys match UserPathData / DesktopAppState interface)
         desktop: app.getPath('desktop'),
@@ -264,11 +263,6 @@ export default class SystemController extends ControllerModule {
     }
 
     logger.info('Initializing system theme listener');
-
-    // Get initial system theme
-    const initialDarkMode = nativeTheme.shouldUseDarkColors;
-    const initialSystemTheme: ThemeMode = initialDarkMode ? 'dark' : 'light';
-    logger.info(`Initial system theme: ${initialSystemTheme}`);
 
     // Listen for system theme changes
     nativeTheme.on('updated', () => {

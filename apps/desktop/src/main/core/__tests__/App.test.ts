@@ -28,7 +28,7 @@ vi.mock('electron', () => ({
   },
   nativeTheme: {
     on: vi.fn(),
-    shouldUseDarkColors: false,
+    themeSource: 'system',
   },
   protocol: {
     registerSchemesAsPrivileged: vi.fn(),
