@@ -28,7 +28,7 @@ import {
 } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../_util';
+import { getTestDB } from '../../../core/getTestDB';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();

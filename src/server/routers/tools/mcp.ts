@@ -8,10 +8,12 @@ import { z } from 'zod';
 
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
+
+import { scheduleToolCallReport } from './_helpers';
 
 // Define Zod schemas for MCP Client parameters
 const httpParamsSchema = z.object({
@@ -41,13 +43,36 @@ const checkStdioEnvironment = (params: z.infer<typeof mcpClientParamsSchema>) =>
   }
 };
 
-const mcpProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
-  return next({
-    ctx: {
-      fileService: new FileService(ctx.serverDB, ctx.userId),
-    },
+// Schema for metadata that frontend needs to pass (fields that backend cannot determine)
+const metaSchema = z
+  .object({
+    // Custom plugin info (only for custom plugins)
+    customPluginInfo: z
+      .object({
+        avatar: z.string().optional(),
+        description: z.string().optional(),
+        name: z.string().optional(),
+      })
+      .optional(),
+    // Whether this is a custom plugin
+    isCustomPlugin: z.boolean().optional(),
+    // Session/topic ID
+    sessionId: z.string().optional(),
+    // Plugin manifest version
+    version: z.string().optional(),
+  })
+  .optional();
+
+const mcpProcedure = authedProcedure
+  .use(serverDatabase)
+  .use(telemetry)
+  .use(async ({ ctx, next }) => {
+    return next({
+      ctx: {
+        fileService: new FileService(ctx.serverDB, ctx.userId),
+      },
+    });
   });
-});
 
 export const mcpRouter = router({
   getStreamableMcpServerManifest: mcpProcedure
@@ -100,8 +125,9 @@ export const mcpRouter = router({
   callTool: mcpProcedure
     .input(
       z.object({
-        params: mcpClientParamsSchema, // Use the unified schema for client params
         args: z.any(), // Arguments for the tool call
+        meta: metaSchema, // Optional metadata for reporting
+        params: mcpClientParamsSchema, // Use the unified schema for client params
         toolName: z.string(),
       }),
     )
@@ -109,17 +135,48 @@ export const mcpRouter = router({
       // Stdio check can be done here or rely on the service/client layer
       checkStdioEnvironment(input.params);
 
-      // Create a closure that binds fileService and userId to processContentBlocks
-      const boundProcessContentBlocks = async (blocks: ToolCallContent[]) => {
-        return processContentBlocks(blocks, ctx.fileService);
-      };
+      const startTime = Date.now();
+      let success = true;
+      let errorCode: string | undefined;
+      let errorMessage: string | undefined;
+      let result: Awaited<ReturnType<typeof mcpService.callTool>> | undefined;
 
-      // Pass the validated params, toolName, args, and bound processContentBlocks to the service
-      return await mcpService.callTool({
-        clientParams: input.params,
-        toolName: input.toolName,
-        argsStr: input.args,
-        processContentBlocks: boundProcessContentBlocks,
-      });
+      try {
+        // Create a closure that binds fileService and userId to processContentBlocks
+        const boundProcessContentBlocks = async (blocks: ToolCallContent[]) => {
+          return processContentBlocks(blocks, ctx.fileService);
+        };
+
+        // Pass the validated params, toolName, args, and bound processContentBlocks to the service
+        result = await mcpService.callTool({
+          argsStr: input.args,
+          clientParams: input.params,
+          processContentBlocks: boundProcessContentBlocks,
+          toolName: input.toolName,
+        });
+
+        return result;
+      } catch (error) {
+        success = false;
+        const err = error as Error;
+        errorCode = 'CALL_FAILED';
+        errorMessage = err.message;
+        throw error;
+      } finally {
+        scheduleToolCallReport({
+          errorCode,
+          errorMessage,
+          identifier: input.params.name,
+          marketAccessToken: ctx.marketAccessToken,
+          mcpType: 'http',
+          meta: input.meta,
+          requestPayload: input.args,
+          result,
+          startTime,
+          success,
+          telemetryEnabled: ctx.telemetryEnabled,
+          toolName: input.toolName,
+        });
+      }
     }),
 });

@@ -29,7 +29,7 @@ export const params = {
               type: 'web_search',
               web_search: {
                 enable: true,
-                result_sequence: 'before', // 将搜索结果返回顺序更改为 before 适配最小化 OpenAIStream 改动
+                result_sequence: 'before', // Change search result return sequence to 'before' to minimize OpenAIStream modifications
                 search_engine: process.env.ZHIPU_SEARCH_ENGINE || 'search_std', // search_std, search_pro
                 search_result: true,
               },
@@ -69,16 +69,16 @@ export const params = {
       const readableStream =
         stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
 
-      // GLM-4.5 系列模型在 tool_calls 中返回的 index 为 -1，需要在进入 OpenAIStream 之前修正
-      // 因为 OpenAIStream 内部会过滤掉 index < 0 的 tool_calls (openai.ts:58-60)
+      // GLM-4.5 series models return index -1 in tool_calls, needs to be fixed before entering OpenAIStream
+      // because OpenAIStream internally filters out tool_calls with index < 0 (openai.ts:58-60)
       const preprocessedStream = readableStream.pipeThrough(
         new TransformStream({
           transform(chunk, controller) {
-            // 处理原始的 OpenAI ChatCompletionChunk 格式
+            // Handle raw OpenAI ChatCompletionChunk format
             if (chunk.choices && chunk.choices[0]) {
               const choice = chunk.choices[0];
               if (choice.delta?.tool_calls && Array.isArray(choice.delta.tool_calls)) {
-                // 修正负数 index，将 -1 转换为基于数组位置的正数 index
+                // Fix negative index, convert -1 to positive index based on array position
                 const fixedToolCalls = choice.delta.tool_calls.map(
                   (toolCall: any, globalIndex: number) => ({
                     ...toolCall,
@@ -86,7 +86,7 @@ export const params = {
                   }),
                 );
 
-                // 创建修正后的 chunk
+                // Create fixed chunk
                 const fixedChunk = {
                   ...chunk,
                   choices: [

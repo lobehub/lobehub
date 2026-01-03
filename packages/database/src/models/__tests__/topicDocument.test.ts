@@ -5,7 +5,7 @@ import { documents, sessions, topicDocuments, topics, users } from '../../schema
 import { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 import { TopicDocumentModel } from '../topicDocument';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

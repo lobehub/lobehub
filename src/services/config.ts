@@ -8,7 +8,7 @@ import { exportService } from './export';
 
 class ConfigService {
   exportAll = async () => {
-    const { data, url } = await exportService.exportData();
+    const { data, url, schemaHash } = await exportService.exportData();
     const filename = `${dayjs().format('YYYY-MM-DD-hh-mm')}_${BRANDING_NAME}-data.json`;
 
     // if url exists, means export data from server and upload the data to S3
@@ -18,23 +18,9 @@ class ConfigService {
       return;
     }
 
-    // or export to file with the data
-    const result = await this.createDataStructure(data, 'postgres');
+    const result: ImportPgDataStructure = { data, mode: 'postgres', schemaHash };
 
     exportJSONFile(result, filename);
-  };
-
-  private createDataStructure = async (
-    data: any,
-    mode: 'pglite' | 'postgres',
-  ): Promise<ImportPgDataStructure> => {
-    const { default: json } = await import('@/database/core/migrations.json');
-    const latestHash = json.at(-1)?.hash;
-    if (!latestHash) {
-      throw new Error('Not find database sql hash');
-    }
-
-    return { data, mode, schemaHash: latestHash };
   };
 }
 

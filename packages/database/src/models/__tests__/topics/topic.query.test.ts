@@ -11,7 +11,7 @@ import {
 } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
-import { getTestDB } from '../_util';
+import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'topic-query-user';
 const userId2 = 'topic-query-user-2';

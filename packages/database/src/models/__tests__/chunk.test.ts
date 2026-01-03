@@ -6,7 +6,7 @@ import { LobeChatDatabase } from '../../type';import { uuid } from '@/utils/uuid
 
 import { chunks, embeddings, fileChunks, files, unstructuredChunks, users } from '../../schemas';
 import { ChunkModel } from '../chunk';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 import { codeEmbedding, designThinkingQuery, designThinkingQuery2 } from './fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();

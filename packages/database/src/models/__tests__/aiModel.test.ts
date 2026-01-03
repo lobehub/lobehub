@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AiModelSelectItem, NewAiModelItem, aiModels, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { AiModelModel } from '../aiModel';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

@@ -2,10 +2,10 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../core/getTestDB';
 import { sessionGroups, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { SessionGroupModel } from '../sessionGroup';
-import { getTestDB } from './_util';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

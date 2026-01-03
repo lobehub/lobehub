@@ -87,6 +87,7 @@ const MasonryView = memo<MasonryViewProps>(
             data={data || []}
             style={{
               gap: '16px',
+              overflow: 'hidden',
             }}
           />
           {isLoadingMore && (

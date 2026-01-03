@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LobeChatDatabase } from '../../type';
 import { NewInstalledPlugin, userInstalledPlugins, users } from '../../schemas';
 import { PluginModel } from '../plugin';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

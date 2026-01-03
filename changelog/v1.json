@@ -1,5 +1,41 @@
 [
   {
+    "children": {
+      "fixes": ["Support thoughtSignature for openrouter."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.198"
+  },
+  {
+    "children": {
+      "improvements": ["Remove client db and refactor test."],
+      "fixes": ["Fix file upload issue."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.197"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove access code."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.196"
+  },
+  {
+    "children": {
+      "fixes": ["Fix tool call message content missing."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.195"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.194"
+  },
+  {
     "children": {},
     "date": "2026-01-02",
     "version": "2.0.0-next.193"
