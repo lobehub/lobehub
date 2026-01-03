@@ -1,5 +1,6 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { AIBaseModelCard } from 'model-bank';
+import type { AiModelSettings, ExtendParamsType } from 'model-bank';
 
 import type { ModelProviderKey } from '../types';
 
@@ -338,6 +339,75 @@ const processDisplayName = (displayName: string): string => {
   return displayName;
 };
 
+const mergeExtendParams = (
+  modelExtendParams?: ReadonlyArray<ExtendParamsType>,
+  knownExtendParams?: ReadonlyArray<ExtendParamsType>,
+  options?: { includeKnownExtendParams?: boolean },
+): ExtendParamsType[] | undefined => {
+  const includeKnown = options?.includeKnownExtendParams ?? true;
+
+  const combined = [
+    ...(includeKnown ? (knownExtendParams ?? []) : []),
+    ...(modelExtendParams ?? []),
+  ];
+
+  if (combined.length === 0) return undefined;
+
+  return Array.from(new Set(combined));
+};
+
+const mergeSettings = (
+  modelSettings?: AiModelSettings,
+  knownSettings?: AiModelSettings,
+  options?: { includeKnownExtendParams?: boolean; includeSearchSettings?: boolean },
+): AiModelSettings | undefined => {
+  if (!modelSettings && !knownSettings) return undefined;
+
+  const merged: AiModelSettings = {};
+
+  if (knownSettings) {
+    Object.assign(merged, knownSettings);
+  }
+
+  if (modelSettings) {
+    Object.assign(merged, modelSettings);
+  }
+
+  const extendParams = mergeExtendParams(
+    modelSettings?.extendParams,
+    knownSettings?.extendParams,
+    options,
+  );
+  if (extendParams) {
+    merged.extendParams = extendParams;
+  } else {
+    delete merged.extendParams;
+  }
+
+  const includeSearchSettings = options?.includeSearchSettings ?? true;
+
+  if (includeSearchSettings) {
+    const searchImpl = modelSettings?.searchImpl ?? knownSettings?.searchImpl;
+    if (searchImpl) {
+      merged.searchImpl = searchImpl;
+    } else {
+      delete merged.searchImpl;
+    }
+
+    const searchProvider = modelSettings?.searchProvider ?? knownSettings?.searchProvider;
+    if (searchProvider) {
+      merged.searchProvider = searchProvider;
+    } else {
+      delete merged.searchProvider;
+    }
+  } else {
+    delete merged.searchImpl;
+    delete merged.searchProvider;
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+};
+
 /**
  * 获取模型提供商的本地配置
  * @param provider 模型提供商
@@ -383,6 +453,7 @@ const processModelCard = (
   model: { [key: string]: any; id: string },
   config: ModelProcessorConfig,
   knownModel?: any,
+  options?: { includeKnownExtendParams?: boolean; includeSearchSettings?: boolean },
 ): ChatModelCard | undefined => {
   const {
     functionCallKeywords = [],
@@ -414,6 +485,8 @@ const processModelCard = (
   if (modelType === 'image' && !model.parameters && !knownModel?.parameters) {
     return undefined;
   }
+
+  const mergedSettings = mergeSettings(model.settings, knownModel?.settings, options);
 
   const formatPricing = (pricing?: {
     cachedInput?: number;
@@ -504,6 +577,7 @@ const processModelCard = (
     ...(modelType === 'image' && {
       parameters: model.parameters ?? knownModel?.parameters,
     }),
+    ...(mergedSettings ? { settings: mergedSettings } : {}),
     video:
       model.video ??
       knownModel?.abilities?.video ??
@@ -600,13 +674,46 @@ export const processMultiProviderModelList = async (
         );
       }
 
+      const includeKnownExtendParams =
+        providerid === 'aihubmix' ||
+        providerid === 'newapi' ||
+        detectedProvider === 'openai' ||
+        detectedProvider === 'google';
+      const includeSearchSettings = providerid === 'aihubmix' || providerid === 'newapi';
+
       // 如果提供了 providerid 且有本地配置，尝试从中获取模型的 enabled 状态
       const providerLocalModelConfig = getModelLocalEnableConfig(
         providerLocalConfig as any[],
         model,
       );
 
-      const processedModel = processModelCard(model, config, knownModel);
+      const processedModel = processModelCard(model, config, knownModel, {
+        includeKnownExtendParams,
+        includeSearchSettings,
+      });
+
+      if (processedModel && includeSearchSettings && providerLocalModelConfig?.settings) {
+        const localSettings = providerLocalModelConfig.settings as AiModelSettings | undefined;
+        const searchImpl = localSettings?.searchImpl;
+        const searchProvider = localSettings?.searchProvider;
+
+        if (searchImpl || searchProvider) {
+          const updatedSettings: AiModelSettings = processedModel.settings
+            ? { ...processedModel.settings }
+            : ({} as AiModelSettings);
+
+          if (searchImpl) {
+            updatedSettings.searchImpl = searchImpl;
+          }
+
+          if (searchProvider) {
+            updatedSettings.searchProvider = searchProvider;
+          }
+
+          processedModel.settings =
+            Object.keys(updatedSettings).length > 0 ? updatedSettings : undefined;
+        }
+      }
 
       // 如果找到了本地配置中的模型，使用其 enabled 状态
       if (
