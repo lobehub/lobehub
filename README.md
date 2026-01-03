@@ -1,5 +1,7 @@
 Lobe Chat 没有为 next 分支提供 docker 镜像，所以我自己做了个
-  
+
+**升级前一定要备份数据**
+
 `docker pull docker.io/pigeonszz/lobe-chat-database:next`，也可以用`latest`，两者是等价的，也可以用 `package.json` 中的 `version` 字样固定版本
 
 每 UTC 00:00 同步一次上游，在此期间可能会错过部分版本
@@ -15,6 +17,8 @@ next 分支不支持 client 模式，如有需要请使用 [`main`](https://gith
 e.g. `EXTRA_BUILD_ARG` = `--build-arg NEXT_PUBLIC_ENABLE_NEXT_AUTH=0 --build-arg NEXT_PUBLIC_ENABLE_CLERK_AUTH=1 --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxx`
 
 Lobe Chat didn't provide docker image for next branch, so i make one
+
+**Always backup before update**
 
 `docker pull docker.io/pigeonszz/lobe-chat-database:next`, or use`latest`, two are equal, or use the `version` in `package.json` to lock the version
 
