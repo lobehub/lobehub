@@ -335,6 +335,7 @@
   "computer-use-preview.description": "computer-use-preview è un modello specializzato per lo strumento \"uso del computer\", addestrato per comprendere ed eseguire compiti legati al computer.",
   "dall-e-2.description": "Modello DALL·E di seconda generazione con generazione di immagini più realistica e accurata e risoluzione 4× rispetto alla prima generazione.",
   "dall-e-3.description": "L'ultimo modello DALL·E, rilasciato a novembre 2023, supporta generazione di immagini più realistica e accurata con maggiore dettaglio.",
+  "databricks/dbrx-instruct.description": "DBRX Instruct offre una gestione delle istruzioni altamente affidabile in diversi settori.",
   "meta.llama3-8b-instruct-v1:0.description": "Meta Llama 3 è un LLM open-source pensato per sviluppatori, ricercatori e aziende, progettato per supportare la creazione, la sperimentazione e la scalabilità responsabile di idee basate su IA generativa. Parte integrante dell’ecosistema globale per l’innovazione comunitaria, è ideale per ambienti con risorse limitate, dispositivi edge e tempi di addestramento ridotti.",
   "meta/Llama-3.2-11B-Vision-Instruct.description": "Solido ragionamento visivo su immagini ad alta risoluzione, ideale per applicazioni di comprensione visiva.",
   "meta/Llama-3.2-90B-Vision-Instruct.description": "Ragionamento visivo avanzato per applicazioni agenti di comprensione visiva.",
