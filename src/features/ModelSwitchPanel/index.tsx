@@ -16,7 +16,7 @@ import { Rnd } from 'react-rnd';
 import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
-import { ModelInfoTags, ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -438,10 +438,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
               const key = menuKey(singleProvider.id, data.model.id);
 
               return (
-                <div
-                  className={cx(styles.menuItem, isActive && styles.menuItemActive)}
-                  key={key}
-                >
+                <div className={cx(styles.menuItem, isActive && styles.menuItemActive)} key={key}>
                   <Flexbox
                     align={'center'}
                     gap={8}
@@ -543,6 +540,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                     };
                   }),
                 }}
+                // @ts-ignore
                 placement="rightTop"
                 trigger={['hover']}
               >
@@ -626,7 +624,9 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                   value={groupMode}
                 />
               </div>
-              <div style={{ height: panelHeight - TOOLBAR_HEIGHT, overflow: 'auto', width: '100%' }}>
+              <div
+                style={{ height: panelHeight - TOOLBAR_HEIGHT, overflow: 'auto', width: '100%' }}
+              >
                 {(renderAll ? virtualItems : virtualItems.slice(0, INITIAL_RENDER_COUNT)).map(
                   renderVirtualItem,
                 )}
