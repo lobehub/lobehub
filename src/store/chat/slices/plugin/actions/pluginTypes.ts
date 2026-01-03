@@ -563,7 +563,6 @@ export const pluginTypes: StateCreator<
   invokeMCPTypePlugin: async (id, payload) => {
     const {
       optimisticUpdateMessageContent,
-      internal_constructToolsCallingContext,
       optimisticUpdatePluginState,
       optimisticUpdateMessagePluginError,
     } = get();
@@ -586,10 +585,9 @@ export const pluginTypes: StateCreator<
     );
 
     try {
-      const context = internal_constructToolsCallingContext(id);
       const result = await mcpService.invokeMcpToolCall(payload, {
         signal: abortController?.signal,
-        topicId: context?.topicId,
+        topicId: message?.topicId,
       });
 
       if (!!result) data = result;
