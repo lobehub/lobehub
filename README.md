@@ -2,13 +2,33 @@ Lobe Chat 没有为 next 分支提供 docker 镜像，所以我自己做了个
   
 `docker pull docker.io/pigeonszz/lobe-chat-database:next`，也可以用`latest`，两者是等价的，也可以用 `package.json` 中的 `version` 字样固定版本
 
-每 UTC 00:00 同步一次上游，在此期间可能会跳过部分版本
+每 UTC 00:00 同步一次上游，在此期间可能会错过部分版本
+
+next 分支不支持 client 模式，如有需要请使用 [`main`](https://github.com/lobehub/lobe-chat/tree/main) 分支 [(issue#10807)](https://github.com/lobehub/lobe-chat/issues/10807#issuecomment-3703827333)
+
+如果你想自定义，[Fork](https://github.com/Pigeonszz/lobe-chat/fork) 此项目，启用 actions `upstream-sync` 和 `next-docker-build`
+
+配置 Docker 环境变量 `DOCKER_REGISTRY`（使用docker.io可以忽略此项）和秘密 `DOCKER_REGISTRY_USER` `DOCKER_REGISTRY_PASSWORD`
+
+配置环境变量 `EXTRA_BUILD_ARG`
+
+e.g. `EXTRA_BUILD_ARG` = `--build-arg NEXT_PUBLIC_ENABLE_NEXT_AUTH=0 --build-arg NEXT_PUBLIC_ENABLE_CLERK_AUTH=1 --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxx`
 
 Lobe Chat didn't provide docker image for next branch, so i make one
 
-`docker pull docker.io/pigeonszz/lobe-chat-database:next`, or use`latest`,two are equal, or use the `version` in `package.json` to lock the version
+`docker pull docker.io/pigeonszz/lobe-chat-database:next`, or use`latest`, two are equal, or use the `version` in `package.json` to lock the version
 
-sync every UTC 00:00, may skip some versions during the time
+sync every UTC 00:00, may miss some versions during the time
+
+next branch does not support client mode, use [`main`](https://github.com/lobehub/lobe-chat/tree/main) branch instead [(issue#10807)](https://github.com/lobehub/lobe-chat/issues/10807#issuecomment-3703827333)
+
+if you want to custom, [Fork](https://github.com/Pigeonszz/lobe-chat/fork) the project, enable actions `upstream-sync` and `next-docker-build`
+
+setup Docker variable `DOCKER_REGISTRY` (igrone when you use docker.io) and secrets `DOCKER_REGISTRY_USER` `DOCKER_REGISTRY_PASSWORD`
+
+setup variable `EXTRA_BUILD_ARG`
+
+e.g. `EXTRA_BUILD_ARG` = `--build-arg NEXT_PUBLIC_ENABLE_NEXT_AUTH=0 --build-arg NEXT_PUBLIC_ENABLE_CLERK_AUTH=1 --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxx`
 
 > \[!NOTE]
 >
