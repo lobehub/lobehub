@@ -36,7 +36,7 @@ export const ExecTaskInspector = memo<BuiltinInspectorProps<ExecTaskParams, Exec
         );
 
       return (
-        <div className={styles.root}>
+        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-gtd.apiName.execTask.loading')}</span>
           <span className={highlightTextStyles.primary}>{description}</span>
         </div>
