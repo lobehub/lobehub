@@ -10,7 +10,7 @@ import { type CallReportRequest } from '@lobehub/market-types';
 import superjson from 'superjson';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
-import { lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { toolsClient } from '@/libs/trpc/client';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { discoverService } from './discover';
@@ -35,6 +35,8 @@ class MCPService {
     payload: ChatToolPayload,
     { signal, topicId }: { signal?: AbortSignal; topicId?: string },
   ) {
+    await discoverService.injectMPToken();
+
     const { pluginSelectors } = await import('@/store/tool/selectors');
     const { getToolStoreState } = await import('@/store/tool/store');
 
@@ -86,8 +88,8 @@ class MCPService {
     const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
     const isCustomPlugin = !!customPlugin;
 
-    // Build reportMeta for server-side reporting
-    const reportMeta = {
+    // Build meta for server-side reporting
+    const meta = {
       customPluginInfo: isCustomPlugin
         ? {
             avatar: plugin.manifest?.meta.avatar,
@@ -105,8 +107,8 @@ class MCPService {
       // (IPC layer will superjson serialize the whole payload).
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
       env: connection?.type === 'stdio' ? params.env : (pluginSettings ?? connection?.env),
+      meta,
       params,
-      reportMeta,
       toolName: apiName,
     };
 
@@ -123,13 +125,14 @@ class MCPService {
         // Parse args
         const apiParams = safeParseJSON(args) || {};
 
-        // Call cloud gateway via lambda market endpoint
+        // Call cloud gateway via tools market endpoint
         // Server will automatically get user access token from database
         // and format the result to MCPToolCallResult
-        // @ts-ignore tsgo 误报错误
-        result = await lambdaClient.market.callCloudMcpEndpoint.mutate({
+        // Server-side also handles telemetry reporting
+        result = await toolsClient.market.callCloudMcpEndpoint.mutate({
           apiParams,
           identifier,
+          meta,
           toolName: apiName,
         });
       } else if (isDesktop && isStdio) {
@@ -155,8 +158,9 @@ class MCPService {
       throw error;
     } finally {
       // HTTP/SSE/streamable types: reporting is handled by server-side via mcp.callTool
-      // Only report from frontend for cloud and stdio types
-      if (isCloud || isStdio) {
+      // Cloud type: reporting is handled by server-side via market.callCloudMcpEndpoint
+      // Only report from frontend for stdio types (desktop only)
+      if (isStdio) {
         const callEndTime = Date.now();
         const callDurationMs = callEndTime - callStartTime;
 
@@ -169,7 +173,7 @@ class MCPService {
         // Construct report data
         const reportData: CallReportRequest = {
           callDurationMs,
-          customPluginInfo: reportMeta.customPluginInfo,
+          customPluginInfo: meta.customPluginInfo,
           errorCode,
           errorMessage,
           identifier,
@@ -185,7 +189,7 @@ class MCPService {
           responseSizeBytes,
           sessionId: topicId,
           success,
-          version: reportMeta.version,
+          version: meta.version,
         };
 
         // Asynchronously report without affecting main flow

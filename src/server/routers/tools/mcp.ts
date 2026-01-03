@@ -1,20 +1,19 @@
-import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import {
   GetStreamableMcpServerManifestInputSchema,
   StreamableHTTPAuthSchema,
 } from '@lobechat/types';
-import { type CallReportRequest } from '@lobehub/market-types';
 import { TRPCError } from '@trpc/server';
-import { after } from 'next/server';
 import { z } from 'zod';
 
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
-import { DiscoverService } from '@/server/services/discover';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
+
+import { scheduleToolCallReport } from './_helpers';
 
 // Define Zod schemas for MCP Client parameters
 const httpParamsSchema = z.object({
@@ -44,9 +43,8 @@ const checkStdioEnvironment = (params: z.infer<typeof mcpClientParamsSchema>) =>
   }
 };
 
-// Schema for report metadata that frontend needs to pass
-// (fields that backend cannot determine)
-const reportMetaSchema = z
+// Schema for metadata that frontend needs to pass (fields that backend cannot determine)
+const metaSchema = z
   .object({
     // Custom plugin info (only for custom plugins)
     customPluginInfo: z
@@ -64,18 +62,6 @@ const reportMetaSchema = z
     version: z.string().optional(),
   })
   .optional();
-
-/**
- * Calculate byte size of object
- */
-const calculateObjectSizeBytes = (obj: unknown): number => {
-  try {
-    const jsonString = JSON.stringify(obj);
-    return new TextEncoder().encode(jsonString).length;
-  } catch {
-    return 0;
-  }
-};
 
 const mcpProcedure = authedProcedure
   .use(serverDatabase)
@@ -140,8 +126,8 @@ export const mcpRouter = router({
     .input(
       z.object({
         args: z.any(), // Arguments for the tool call
+        meta: metaSchema, // Optional metadata for reporting
         params: mcpClientParamsSchema, // Use the unified schema for client params
-        reportMeta: reportMetaSchema, // Optional metadata for reporting
         toolName: z.string(),
       }),
     )
@@ -177,50 +163,20 @@ export const mcpRouter = router({
         errorMessage = err.message;
         throw error;
       } finally {
-        console.log(
-          'telemetryEnabled:',
-          ctx.telemetryEnabled,
-          'marketAccessToken:',
-          ctx.marketAccessToken,
-        );
-        // Only report when telemetry is enabled and marketAccessToken exists
-        if (ctx.telemetryEnabled && ctx.marketAccessToken) {
-          // Use Next.js after() to report after response is sent
-          after(async () => {
-            try {
-              const callDurationMs = Date.now() - startTime;
-              const requestSizeBytes = calculateObjectSizeBytes(input.args);
-              const responseSizeBytes = success && result ? calculateObjectSizeBytes(result) : 0;
-
-              const reportData: CallReportRequest = {
-                callDurationMs,
-                customPluginInfo: input.reportMeta?.customPluginInfo,
-                errorCode,
-                errorMessage,
-                identifier: input.params.name,
-                isCustomPlugin: input.reportMeta?.isCustomPlugin,
-                metadata: {
-                  appVersion: CURRENT_VERSION,
-                  mcpType: 'http',
-                },
-                methodName: input.toolName,
-                methodType: 'tool',
-                requestSizeBytes,
-                responseSizeBytes,
-                sessionId: input.reportMeta?.sessionId,
-                success,
-                version: input.reportMeta?.version || 'unknown',
-              };
-
-              const discoverService = new DiscoverService({ accessToken: ctx.marketAccessToken });
-              console.log('sendData:', reportData);
-
-              await discoverService.reportCall(reportData);
-            } catch (reportError) {
-              console.error('Failed to report MCP tool call: %O', reportError);
-            }
-          });
-        }
+        scheduleToolCallReport({
+          errorCode,
+          errorMessage,
+          identifier: input.params.name,
+          marketAccessToken: ctx.marketAccessToken,
+          mcpType: 'http',
+          meta: input.meta,
+          requestPayload: input.args,
+          result,
+          startTime,
+          success,
+          telemetryEnabled: ctx.telemetryEnabled,
+          toolName: input.toolName,
+        });
       }
     }),
 });
