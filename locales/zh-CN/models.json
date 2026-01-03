@@ -103,6 +103,7 @@
   "Pro/deepseek-ai/DeepSeek-V3.description": "DeepSeek-V3 是一个拥有 6710 亿参数的 MoE 模型，采用 MLA 和 DeepSeekMoE 架构，并通过无损负载均衡实现高效推理与训练。预训练数据量达 14.8 万亿高质量 token，并通过 SFT 和 RL 进一步调优，性能超越其他开源模型，接近领先的闭源模型。",
   "Pro/moonshotai/Kimi-K2-Instruct-0905.description": "Kimi K2-Instruct-0905 是最新且最强大的 Kimi K2 模型。作为顶级 MoE 模型，拥有 1 万亿总参数和 320 亿激活参数。其主要特点包括更强的代理式编程智能，在基准测试和真实代理任务中取得显著提升，同时前端代码美观性和可用性也得到优化。",
   "Pro/moonshotai/Kimi-K2-Thinking.description": "Kimi K2 Thinking Turbo 是 K2 Thinking 的高性能变体，在保持多步骤推理和工具使用能力的同时，优化了推理速度和吞吐量。该模型为 MoE 架构，拥有约 1 万亿总参数，原生支持 256K 上下文，并在生产场景中具备稳定的大规模工具调用能力，满足更严格的延迟与并发需求。",
+  "Pro/zai-org/glm-4.7.description": "GLM-4.7 是智谱新一代旗舰模型，总参数量达 355B，激活参数量为 32B，在通用对话、推理和智能体能力方面实现了全面升级。GLM-4.7 强化了交错思考（Interleaved Thinking），并引入了保留思考（Preserved Thinking）和轮级思考（Turn-level Thinking）。",
   "QwQ-32B-Preview.description": "Qwen QwQ 是一个实验性研究模型，专注于提升推理能力。",
   "Qwen/QVQ-72B-Preview.description": "QVQ-72B-Preview 是 Qwen 团队推出的研究模型，专注于视觉推理，擅长复杂场景理解和视觉数学问题。",
   "Qwen/QwQ-32B-Preview.description": "Qwen QwQ 是一个实验性研究模型，致力于提升 AI 的推理能力。",
