@@ -1,12 +1,20 @@
-import { Flexbox, Icon, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, TooltipGroup } from '@lobehub/ui';
 import { Dropdown, Segmented } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { LucideArrowRight, LucideBoxes, LucideCheck, LucideChevronRight, LucideLayers } from 'lucide-react';
+import {
+  LucideArrowRight,
+  LucideBolt,
+  LucideBoxes,
+  LucideCheck,
+  LucideChevronRight,
+  LucideLayers,
+} from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Rnd } from 'react-rnd';
 import { useNavigate } from 'react-router-dom';
+import urlJoin from 'url-join';
 
 import { ModelInfoTags, ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -345,6 +353,21 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                     name={item.provider.name}
                     provider={item.provider.id}
                     source={item.provider.source}
+                  />
+                  <ActionIcon
+                    icon={LucideBolt}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const url = urlJoin('/settings/provider', item.provider.id || 'all');
+                      if (e.ctrlKey || e.metaKey) {
+                        window.open(url, '_blank');
+                      } else {
+                        navigate(url);
+                      }
+                    }}
+                    size={'small'}
+                    title={t('ModelSwitchPanel.goToSettings')}
                   />
                 </Flexbox>
               </div>
