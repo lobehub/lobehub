@@ -69,7 +69,7 @@ export interface TaskDetail {
   /** Execution duration in milliseconds */
   duration?: number;
   /** Error message if task failed */
-  error?: string;
+  error?: Record<string, any>;
   /** Task start time (ISO string) */
   startedAt?: string;
   /** Task status */

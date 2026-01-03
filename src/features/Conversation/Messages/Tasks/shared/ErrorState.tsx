@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Flexbox } from '@lobehub/ui';
+import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -55,12 +55,20 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
     <Flexbox gap={12}>
       {/* Error Content */}
       <Alert
-        description={error}
-        title={
-          isCancelled
-            ? t('task.status.cancelled', { defaultValue: 'Cancelled' })
-            : t('task.status.failed', { defaultValue: 'Failed' })
+        description={error?.error?.message}
+        extra={
+          error?.error?.body && (
+            <Highlighter
+              actionIconSize={'small'}
+              language={'json'}
+              padding={8}
+              variant={'borderless'}
+            >
+              {JSON.stringify(error?.error?.body, null, 2)}
+            </Highlighter>
+          )
         }
+        title={isCancelled ? t('task.status.cancelled') : t('task.status.failed')}
         type={'secondary'}
       />
       {hasMetrics ? (

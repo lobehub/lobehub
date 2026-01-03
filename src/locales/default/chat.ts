@@ -322,6 +322,8 @@ export default {
   'task.batchTasks': '{{count}} Batch Subtasks',
   'task.metrics.stepsShort': 'steps',
   'task.metrics.toolCallsShort': 'tool uses',
+  'task.status.cancelled': 'Task Cancelled',
+  'task.status.failed': 'Task Failed',
   'task.status.initializing': 'Initializing task...',
   'task.subtask': 'Subtask',
   'thread.divider': 'Subtopic',

@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { shinyTextStyles } from '@/styles';
 
 const shimmer = keyframes`
   0% {
@@ -50,15 +51,13 @@ const InitializingState = memo(() => {
 
   return (
     <Flexbox className={styles.container} gap={12}>
-      {/* Status Row */}
       <Flexbox align="center" gap={8} horizontal>
         <NeuralNetworkLoading size={14} />
-        <Text fontSize={13} type={'secondary'} weight={500}>
-          {t('task.status.initializing', { defaultValue: 'Starting task...' })}
+        <Text className={shinyTextStyles.shinyText} weight={500}>
+          {t('task.status.initializing')}
         </Text>
       </Flexbox>
 
-      {/* Progress Bar (indeterminate) */}
       <div className={styles.progress}>
         <div className={styles.progressShimmer} />
       </div>
