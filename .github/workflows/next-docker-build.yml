@@ -73,12 +73,12 @@ jobs:
   build:
     name: Build ${{ matrix.platform }} Docker Image
     needs: check-version
-    # 只在 upstream-sync 成功完成时运行，并且版本不存在时才构建
+    # 只在版本不存在且满足触发条件时才运行构建
     if: |
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-    # 只在版本不存在时才运行构建
-    if: needs.check-version.outputs.version_exists == 'false'
+      needs.check-version.outputs.version_exists == 'false' && (
+        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      )
     strategy:
       matrix:
         include:
@@ -153,7 +153,7 @@ jobs:
     name: Merge and Publish
     needs: [check-version, build]
     runs-on: ubuntu-latest
-    # 只在版本不存在且构建成功时才运行
+    # 只在版本不存在时才运行
     if: needs.check-version.outputs.version_exists == 'false'
     steps:
       - name: Checkout next branch
