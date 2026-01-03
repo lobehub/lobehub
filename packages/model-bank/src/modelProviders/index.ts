@@ -166,7 +166,6 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   Ai21Provider,
   UpstageProvider,
   XAIProvider,
-  XiaomiMiMoProvider,
   JinaProvider,
   SambaNovaProvider,
   CohereProvider,
@@ -200,6 +199,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
+  XiaomiMiMoProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
