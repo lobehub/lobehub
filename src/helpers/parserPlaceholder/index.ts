@@ -1,12 +1,14 @@
+import { uuid } from '@lobechat/utils';
 import { template } from 'es-toolkit/compat';
 
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { uuid } from '../uuid';
-import { globalAgentContextManager } from './GlobalAgentContextManager';
+import { globalAgentContextManager } from '../GlobalAgentContextManager';
 
 const placeholderVariablesRegex = /{{(.*?)}}/g;
 
@@ -140,6 +142,7 @@ export const VARIABLE_GENERATORS = {
    * | `{{picturesPath}}` | /Users/username/Pictures |
    * | `{{videosPath}}` | /Users/username/Videos |
    * | `{{userDataPath}}` | /Users/username/Library/Application Support/LobeChat |
+   * | `{{workingDirectory}}` | /Users/username/Projects/my-project |
    *
    */
   homePath: () => globalAgentContextManager.getContext().homePath ?? '',
@@ -150,6 +153,18 @@ export const VARIABLE_GENERATORS = {
   picturesPath: () => globalAgentContextManager.getContext().picturesPath ?? '',
   videosPath: () => globalAgentContextManager.getContext().videosPath ?? '',
   userDataPath: () => globalAgentContextManager.getContext().userDataPath ?? '',
+  /**
+   * Working directory: Topic-level setting takes priority over Agent-level setting
+   */
+  workingDirectory: () => {
+    // First check topic-level working directory
+    const topicWorkingDir = topicSelectors.currentTopicWorkingDirectory(useChatStore.getState());
+    if (topicWorkingDir) return topicWorkingDir;
+
+    // Fallback to agent-level working directory
+    const agentWorkingDir = agentSelectors.currentAgentWorkingDirectory(useAgentStore.getState());
+    return agentWorkingDir ?? '(not specified, use user Desktop directory as default)';
+  },
 } as Record<string, () => string>;
 
 /**

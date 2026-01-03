@@ -1,4 +1,4 @@
-import { DBMessageItem, TopicRankItem } from '@lobechat/types';
+import { ChatTopicMetadata, DBMessageItem, TopicRankItem } from '@lobechat/types';
 import {
   SQL,
   and,
@@ -579,6 +579,29 @@ export class TopicModel {
     return this.db
       .update(topics)
       .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(topics.id, id), eq(topics.userId, this.userId)))
+      .returning();
+  };
+
+  /**
+   * Update topic metadata with merge logic
+   * This method merges new metadata with existing metadata instead of replacing it
+   */
+  updateMetadata = async (id: string, metadata: Partial<ChatTopicMetadata>) => {
+    // Get existing topic to merge metadata
+    const existing = await this.db.query.topics.findFirst({
+      columns: { metadata: true },
+      where: and(eq(topics.id, id), eq(topics.userId, this.userId)),
+    });
+
+    const mergedMetadata: ChatTopicMetadata = {
+      ...existing?.metadata,
+      ...metadata,
+    };
+
+    return this.db
+      .update(topics)
+      .set({ metadata: mergedMetadata })
       .where(and(eq(topics.id, id), eq(topics.userId, this.userId)))
       .returning();
   };

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 import { SearchMode } from '../search';
+import { LocalSystemConfig } from './agentConfig';
 
 export interface WorkingModel {
   model: string;
@@ -9,6 +10,10 @@ export interface WorkingModel {
 }
 
 export interface LobeAgentChatConfig {
+  /**
+   * Local System 配置（桌面端专用）
+   */
+  localSystem?: LocalSystemConfig;
   enableAutoCreateTopic?: boolean;
   autoCreateTopicThreshold: number;
 
@@ -74,6 +79,13 @@ export interface LobeAgentChatConfig {
 }
 /* eslint-enable */
 
+/**
+ * Zod schema for LocalSystemConfig
+ */
+export const LocalSystemConfigSchema = z.object({
+  workingDirectory: z.string().optional(),
+});
+
 export const AgentChatConfigSchema = z.object({
   autoCreateTopicThreshold: z.number().default(2),
   disableContextCaching: z.boolean().optional(),
@@ -91,6 +103,7 @@ export const AgentChatConfigSchema = z.object({
   historyCount: z.number().optional(),
   imageAspectRatio: z.string().optional(),
   imageResolution: z.enum(['1K', '2K', '4K']).optional(),
+  localSystem: LocalSystemConfigSchema.optional(),
   reasoningBudgetToken: z.number().optional(),
   reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
   searchFCModel: z

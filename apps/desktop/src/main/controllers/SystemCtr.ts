@@ -1,5 +1,5 @@
 import { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
-import { app, nativeTheme, shell, systemPreferences } from 'electron';
+import { app, dialog, nativeTheme, shell, systemPreferences } from 'electron';
 import { macOS } from 'electron-is';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -192,6 +192,29 @@ export default class SystemController extends ControllerModule {
   @IpcMethod()
   openExternalLink(url: string) {
     return shell.openExternal(url);
+  }
+
+  /**
+   * Open native folder picker dialog
+   */
+  @IpcMethod()
+  async selectFolder(payload?: {
+    defaultPath?: string;
+    title?: string;
+  }): Promise<string | undefined> {
+    const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
+
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      defaultPath: payload?.defaultPath,
+      properties: ['openDirectory', 'createDirectory'],
+      title: payload?.title || 'Select Folder',
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return undefined;
+    }
+
+    return result.filePaths[0];
   }
 
   /**

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parsePlaceholderVariablesMessages } from './parserPlaceholder';
+import { parsePlaceholderVariablesMessages } from './index';
 
 // Mock dependencies
-vi.mock('../uuid', () => ({
+vi.mock('@lobechat/utils', () => ({
   uuid: () => 'mocked-uuid-12345',
 }));
 
@@ -18,6 +18,44 @@ vi.mock('@/store/user/selectors', () => ({
     displayUserName: () => 'testuser',
     nickName: () => 'Test User',
     fullName: () => 'Test Full Name',
+    email: () => 'test@example.com',
+  },
+}));
+
+vi.mock('@/store/agent', () => ({
+  useAgentStore: {
+    getState: () => ({}),
+  },
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentSelectors: {
+    currentAgentModel: () => 'gpt-4',
+    currentAgentModelProvider: () => 'openai',
+    currentAgentWorkingDirectory: () => undefined,
+  },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: {
+    getState: () => ({}),
+  },
+}));
+
+vi.mock('@/store/chat/selectors', () => ({
+  topicSelectors: {
+    currentTopicWorkingDirectory: () => undefined,
+  },
+}));
+
+vi.mock('./GlobalAgentContextManager', () => ({
+  globalAgentContextManager: {
+    getContext: () => ({
+      homePath: '/Users/test',
+      desktopPath: '/Users/test/Desktop',
+      documentsPath: '/Users/test/Documents',
+      downloadsPath: '/Users/test/Downloads',
+    }),
   },
 }));
 

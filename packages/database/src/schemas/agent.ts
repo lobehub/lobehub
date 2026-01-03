@@ -1,5 +1,6 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import type { LobeAgentChatConfig, LobeAgentTTSConfig } from '@lobechat/types';
+import { AgentChatConfigSchema } from '@lobechat/types';
 import {
   boolean,
   index,
@@ -77,7 +78,10 @@ export const agents = pgTable(
   ],
 );
 
-export const insertAgentSchema = createInsertSchema(agents);
+export const insertAgentSchema = createInsertSchema(agents, {
+  // Override chatConfig type to use the proper schema
+  chatConfig: AgentChatConfigSchema.nullable().optional(),
+});
 
 export type NewAgent = typeof agents.$inferInsert;
 export type AgentItem = typeof agents.$inferSelect;

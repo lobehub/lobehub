@@ -38,6 +38,11 @@ export interface ChatTopicMetadata {
   provider?: string;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
+  /**
+   * Local System 工作目录（桌面端专用）
+   * 优先级高于 Agent 级别的设置
+   */
+  workingDirectory?: string;
 }
 
 export interface ChatTopicSummary {
