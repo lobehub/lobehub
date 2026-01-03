@@ -107,6 +107,8 @@ export default {
   'ModelSelect.featureTag.vision': 'This model supports visual recognition.',
   'ModelSelect.removed':
     'The model is not in the list. It will be automatically removed if deselected.',
+  'ModelSwitchPanel.byModel': 'By Model',
+  'ModelSwitchPanel.byProvider': 'By Provider',
   'ModelSwitchPanel.emptyModel': 'No enabled model. Please go to settings to enable.',
   'ModelSwitchPanel.emptyProvider': 'No enabled providers. Please go to settings to enable one.',
   'ModelSwitchPanel.goToSettings': 'Go to settings',

@@ -1,25 +1,26 @@
-import { ActionIcon, Flexbox, Icon, TooltipGroup } from '@lobehub/ui';
-import { Dropdown } from 'antd';
+import { Flexbox, Icon, TooltipGroup } from '@lobehub/ui';
+import { Dropdown, Segmented } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { LucideArrowRight, LucideBolt } from 'lucide-react';
+import { LucideArrowRight, LucideBoxes, LucideCheck, LucideChevronRight, LucideLayers } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Rnd } from 'react-rnd';
 import { useNavigate } from 'react-router-dom';
-import urlJoin from 'url-join';
 
-import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+import { ModelInfoTags, ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 const STORAGE_KEY = 'MODEL_SWITCH_PANEL_WIDTH';
+const STORAGE_KEY_MODE = 'MODEL_SWITCH_PANEL_MODE';
 const DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 600;
 const MAX_PANEL_HEIGHT = 550;
+const TOOLBAR_HEIGHT = 48;
 
 const INITIAL_RENDER_COUNT = 15;
 const RENDER_ALL_DELAY_MS = 500;
@@ -30,6 +31,8 @@ const ITEM_HEIGHT = {
   'model-item': 38,
   'no-provider': 38,
 } as const;
+
+type GroupMode = 'byModel' | 'byProvider';
 
 const ENABLE_RESIZING = {
   bottom: false,
@@ -82,11 +85,40 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   tag: css`
     cursor: pointer;
   `,
+  toolbar: css`
+    position: sticky;
+    top: 0;
+    z-index: 10;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 8px 12px;
+
+    background: ${cssVar.colorBgElevated};
+    border-bottom: 1px solid ${cssVar.colorBorderSecondary};
+  `,
 }));
 
 const menuKey = (provider: string, model: string) => `${provider}-${model}`;
 
+interface ModelWithProviders {
+  displayName: string;
+  model: AiModelForSelect;
+  providers: Array<{
+    id: string;
+    logo?: string;
+    name: string;
+    source?: EnabledProviderWithModels['source'];
+  }>;
+}
+
 type VirtualItem =
+  | {
+      data: ModelWithProviders;
+      type: 'model-item';
+    }
   | {
       provider: EnabledProviderWithModels;
       type: 'group-header';
@@ -94,7 +126,7 @@ type VirtualItem =
   | {
       model: AiModelForSelect;
       provider: EnabledProviderWithModels;
-      type: 'model-item';
+      type: 'provider-model-item';
     }
   | {
       provider: EnabledProviderWithModels;
@@ -148,6 +180,12 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
       return stored ? Number(stored) : DEFAULT_WIDTH;
     });
 
+    const [groupMode, setGroupMode] = useState<GroupMode>(() => {
+      if (typeof window === 'undefined') return 'byModel';
+      const stored = localStorage.getItem(STORAGE_KEY_MODE);
+      return (stored as GroupMode) || 'byModel';
+    });
+
     const [renderAll, setRenderAll] = useState(false);
     const [internalOpen, setInternalOpen] = useState(false);
 
@@ -198,41 +236,85 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
       [onModelChange, updateAgentConfig],
     );
 
-    // Flatten the provider/model tree into a flat list for virtual scrolling
+    // Build virtual items based on group mode
     const { virtualItems, panelHeight } = useMemo(() => {
       if (enabledList.length === 0) {
         return {
-          panelHeight: ITEM_HEIGHT['no-provider'],
+          panelHeight: TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider'],
           virtualItems: [{ type: 'no-provider' }] as VirtualItem[],
         };
       }
 
-      const items: VirtualItem[] = [];
-      let totalHeight = 0;
+      if (groupMode === 'byModel') {
+        // Group models by display name
+        const modelMap = new Map<string, ModelWithProviders>();
 
-      for (const providerItem of enabledList) {
-        // Add provider group header
-        items.push({ provider: providerItem, type: 'group-header' });
-        totalHeight += ITEM_HEIGHT['group-header'];
-
-        if (providerItem.children.length === 0) {
-          // Add empty model placeholder
-          items.push({ provider: providerItem, type: 'empty-model' });
-          totalHeight += ITEM_HEIGHT['empty-model'];
-        } else {
-          // Add each model item
+        for (const providerItem of enabledList) {
           for (const modelItem of providerItem.children) {
-            items.push({ model: modelItem, provider: providerItem, type: 'model-item' });
-            totalHeight += ITEM_HEIGHT['model-item'];
+            const displayName = modelItem.displayName || modelItem.id;
+
+            if (!modelMap.has(displayName)) {
+              modelMap.set(displayName, {
+                displayName,
+                model: modelItem,
+                providers: [],
+              });
+            }
+
+            const entry = modelMap.get(displayName)!;
+            entry.providers.push({
+              id: providerItem.id,
+              logo: providerItem.logo,
+              name: providerItem.name,
+              source: providerItem.source,
+            });
           }
         }
-      }
 
-      return {
-        panelHeight: Math.min(totalHeight, MAX_PANEL_HEIGHT),
-        virtualItems: items,
-      };
-    }, [enabledList]);
+        // Convert to array and sort by display name
+        const items: VirtualItem[] = Array.from(modelMap.values())
+          .sort((a, b) => a.displayName.localeCompare(b.displayName))
+          .map((data) => ({ data, type: 'model-item' as const }));
+
+        const totalHeight = items.length * ITEM_HEIGHT['model-item'];
+
+        return {
+          panelHeight: Math.min(totalHeight + TOOLBAR_HEIGHT, MAX_PANEL_HEIGHT),
+          virtualItems: items,
+        };
+      } else {
+        // Group by provider (original structure)
+        const items: VirtualItem[] = [];
+        let totalHeight = 0;
+
+        for (const providerItem of enabledList) {
+          // Add provider group header
+          items.push({ provider: providerItem, type: 'group-header' });
+          totalHeight += ITEM_HEIGHT['group-header'];
+
+          if (providerItem.children.length === 0) {
+            // Add empty model placeholder
+            items.push({ provider: providerItem, type: 'empty-model' });
+            totalHeight += ITEM_HEIGHT['empty-model'];
+          } else {
+            // Add each model item
+            for (const modelItem of providerItem.children) {
+              items.push({
+                model: modelItem,
+                provider: providerItem,
+                type: 'provider-model-item',
+              });
+              totalHeight += ITEM_HEIGHT['model-item'];
+            }
+          }
+        }
+
+        return {
+          panelHeight: Math.min(totalHeight + TOOLBAR_HEIGHT, MAX_PANEL_HEIGHT),
+          virtualItems: items,
+        };
+      }
+    }, [enabledList, groupMode]);
 
     const activeKey = menuKey(provider, model);
 
@@ -264,21 +346,6 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                     provider={item.provider.id}
                     source={item.provider.source}
                   />
-                  <ActionIcon
-                    icon={LucideBolt}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const url = urlJoin('/settings/provider', item.provider.id || 'all');
-                      if (e.ctrlKey || e.metaKey) {
-                        window.open(url, '_blank');
-                      } else {
-                        navigate(url);
-                      }
-                    }}
-                    size={'small'}
-                    title={t('ModelSwitchPanel.goToSettings')}
-                  />
                 </Flexbox>
               </div>
             );
@@ -299,7 +366,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
             );
           }
 
-          case 'model-item': {
+          case 'provider-model-item': {
             const key = menuKey(item.provider.id, item.model.id);
             const isActive = key === activeKey;
 
@@ -315,11 +382,122 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 <ModelItemRender
                   {...item.model}
                   {...item.model.abilities}
-                  infoTagTooltipOnHover
+                  infoTagTooltip={false}
                   newBadgeLabel={newLabel}
                   showInfoTag
                 />
               </div>
+            );
+          }
+
+          case 'model-item': {
+            const { data } = item;
+            const hasSingleProvider = data.providers.length === 1;
+
+            // Check if this model is currently active
+            const isActive = data.providers.some((p) => menuKey(p.id, data.model.id) === activeKey);
+
+            // Single provider - direct click without submenu
+            if (hasSingleProvider) {
+              const singleProvider = data.providers[0];
+              const key = menuKey(singleProvider.id, data.model.id);
+
+              return (
+                <div
+                  className={cx(styles.menuItem, isActive && styles.menuItemActive)}
+                  key={key}
+                  onClick={async () => {
+                    await handleModelChange(data.model.id, singleProvider.id);
+                    handleOpenChange(false);
+                  }}
+                >
+                  <ModelItemRender
+                    {...data.model}
+                    {...data.model.abilities}
+                    infoTagTooltip={false}
+                    newBadgeLabel={newLabel}
+                    showInfoTag={false}
+                  />
+                </div>
+              );
+            }
+
+            // Multiple providers - show submenu on hover
+            return (
+              <Dropdown
+                align={{ offset: [4, 0] }}
+                arrow={false}
+                dropdownRender={(menu) => <div style={{ minWidth: 240 }}>{menu}</div>}
+                key={data.displayName}
+                menu={{
+                  items: data.providers.map((p) => {
+                    const isCurrentProvider = menuKey(p.id, data.model.id) === activeKey;
+                    return {
+                      key: menuKey(p.id, data.model.id),
+                      label: (
+                        <Flexbox
+                          gap={8}
+                          horizontal
+                          justify={'space-between'}
+                          style={{ minWidth: 0 }}
+                        >
+                          <Flexbox align={'center'} gap={8} horizontal style={{ minWidth: 0 }}>
+                            <div style={{ flexShrink: 0, width: 16 }}>
+                              {isCurrentProvider && (
+                                <Icon
+                                  icon={LucideCheck}
+                                  size={16}
+                                  style={{ color: cssVar.colorPrimary }}
+                                />
+                              )}
+                            </div>
+                            <ProviderItemRender
+                              logo={p.logo}
+                              name={p.name}
+                              provider={p.id}
+                              source={p.source}
+                            />
+                          </Flexbox>
+                          <ModelInfoTags
+                            {...data.model.abilities}
+                            contextWindowTokens={data.model.contextWindowTokens}
+                            withTooltip
+                          />
+                        </Flexbox>
+                      ),
+                      onClick: async () => {
+                        await handleModelChange(data.model.id, p.id);
+                        handleOpenChange(false);
+                      },
+                    };
+                  }),
+                }}
+                placement="rightTop"
+                trigger={['hover']}
+              >
+                <div className={cx(styles.menuItem, isActive && styles.menuItemActive)}>
+                  <Flexbox
+                    align={'center'}
+                    gap={8}
+                    horizontal
+                    justify={'space-between'}
+                    style={{ width: '100%' }}
+                  >
+                    <ModelItemRender
+                      {...data.model}
+                      {...data.model.abilities}
+                      infoTagTooltip={false}
+                      newBadgeLabel={newLabel}
+                      showInfoTag={false}
+                    />
+                    <Icon
+                      icon={LucideChevronRight}
+                      size={16}
+                      style={{ color: cssVar.colorTextSecondary, flexShrink: 0 }}
+                    />
+                  </Flexbox>
+                </div>
+              </Dropdown>
             );
           }
 
@@ -354,7 +532,30 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
               size={{ height: panelHeight, width: panelWidth }}
               style={{ position: 'relative' }}
             >
-              <div style={{ height: panelHeight, overflow: 'auto', width: '100%' }}>
+              <div className={styles.toolbar}>
+                <Segmented
+                  onChange={(value) => {
+                    const mode = value as GroupMode;
+                    setGroupMode(mode);
+                    localStorage.setItem(STORAGE_KEY_MODE, mode);
+                  }}
+                  options={[
+                    {
+                      icon: <Icon icon={LucideBoxes} size={16} />,
+                      title: t('ModelSwitchPanel.byModel'),
+                      value: 'byModel',
+                    },
+                    {
+                      icon: <Icon icon={LucideLayers} size={16} />,
+                      title: t('ModelSwitchPanel.byProvider'),
+                      value: 'byProvider',
+                    },
+                  ]}
+                  size="small"
+                  value={groupMode}
+                />
+              </div>
+              <div style={{ height: panelHeight - TOOLBAR_HEIGHT, overflow: 'auto', width: '100%' }}>
                 {(renderAll ? virtualItems : virtualItems.slice(0, INITIAL_RENDER_COUNT)).map(
                   renderVirtualItem,
                 )}

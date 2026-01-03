@@ -283,16 +283,22 @@ interface ModelItemRenderProps extends ChatModelCard {
    */
   infoTagTooltipOnHover?: boolean;
   newBadgeLabel?: string;
+  /**
+   * When true, only shows context badge and moves feature info to model name tooltip
+   */
+  onlyContextBadge?: boolean;
   showInfoTag?: boolean;
 }
 
 export const ModelItemRender = memo<ModelItemRenderProps>(({ showInfoTag = true, ...model }) => {
+  const { t } = useTranslation('components');
   const { mobile } = useResponsive();
   const [hovered, setHovered] = useState(false);
   const {
     abilities,
     infoTagTooltip = true,
     infoTagTooltipOnHover = false,
+    onlyContextBadge = false,
     contextWindowTokens,
     files,
     functionCall,
@@ -311,6 +317,53 @@ export const ModelItemRender = memo<ModelItemRenderProps>(({ showInfoTag = true,
    */
   const withTooltip = infoTagTooltip && (!shouldLazyMountTooltip || hovered);
   const displayName = model.displayName || model.id;
+
+  // Build feature info for tooltip when in onlyContextBadge mode
+  const { featureTooltipContent, hasFeatures } = onlyContextBadge ? (() => {
+    const features: string[] = [];
+    const actualFiles = files ?? abilities?.files;
+    const actualImageOutput = imageOutput ?? abilities?.imageOutput;
+    const actualVision = vision ?? abilities?.vision;
+    const actualVideo = video ?? abilities?.video;
+    const actualFunctionCall = functionCall ?? abilities?.functionCall;
+    const actualReasoning = reasoning ?? abilities?.reasoning;
+    const actualSearch = search ?? abilities?.search;
+
+    if (actualFiles) features.push(t('ModelSelect.featureTag.file'));
+    if (actualImageOutput) features.push(t('ModelSelect.featureTag.imageOutput'));
+    if (actualVision) features.push(t('ModelSelect.featureTag.vision'));
+    if (actualVideo) features.push(t('ModelSelect.featureTag.video'));
+    if (actualFunctionCall) features.push(t('ModelSelect.featureTag.functionCall'));
+    if (actualReasoning) features.push(t('ModelSelect.featureTag.reasoning'));
+    if (actualSearch) features.push(t('ModelSelect.featureTag.search'));
+
+    return {
+      featureTooltipContent: features.length > 0 ? (
+        <Flexbox gap={4}>
+          <div>{displayName}</div>
+          <div style={{ opacity: 0.8 }}>{features.join(' • ')}</div>
+        </Flexbox>
+      ) : null,
+      hasFeatures: features.length > 0,
+    };
+  })() : { featureTooltipContent: null, hasFeatures: false };
+
+  const textElement = (
+    <Text
+      ellipsis={
+        onlyContextBadge && !hasFeatures && withTooltip
+          ? { tooltip: displayName }
+          : onlyContextBadge
+            ? true
+            : withTooltip
+              ? { tooltip: displayName }
+              : true
+      }
+      style={mobile ? { maxWidth: '60vw' } : { minWidth: 0, overflow: 'hidden' }}
+    >
+      {displayName}
+    </Text>
+  );
 
   return (
     <Flexbox
@@ -332,18 +385,11 @@ export const ModelItemRender = memo<ModelItemRenderProps>(({ showInfoTag = true,
         style={{ flexShrink: 1, minWidth: 0, overflow: 'hidden' }}
       >
         <ModelIcon model={model.id} size={20} />
-        <Text
-          ellipsis={
-            withTooltip
-              ? {
-                  tooltip: displayName,
-                }
-              : true
-          }
-          style={mobile ? { maxWidth: '60vw' } : { minWidth: 0, overflow: 'hidden' }}
-        >
-          {displayName}
-        </Text>
+        {onlyContextBadge && hasFeatures && withTooltip ? (
+          <Tooltip title={featureTooltipContent}>{textElement}</Tooltip>
+        ) : (
+          textElement
+        )}
         {newBadgeLabel ? (
           <NewModelBadgeCore label={newBadgeLabel} releasedAt={model.releasedAt} />
         ) : (
@@ -351,17 +397,29 @@ export const ModelItemRender = memo<ModelItemRenderProps>(({ showInfoTag = true,
         )}
       </Flexbox>
       {showInfoTag && (
-        <ModelInfoTags
-          contextWindowTokens={contextWindowTokens}
-          files={files ?? abilities?.files}
-          functionCall={functionCall ?? abilities?.functionCall}
-          imageOutput={imageOutput ?? abilities?.imageOutput}
-          reasoning={reasoning ?? abilities?.reasoning}
-          search={search ?? abilities?.search}
-          video={video ?? abilities?.video}
-          vision={vision ?? abilities?.vision}
-          withTooltip={withTooltip}
-        />
+        onlyContextBadge ? (
+          // Only show context badge when in compact mode
+          typeof contextWindowTokens === 'number' && (
+            <Context
+              contextWindowTokens={contextWindowTokens}
+              placement="top"
+              styles={styles}
+              withTooltip={withTooltip}
+            />
+          )
+        ) : (
+          <ModelInfoTags
+            contextWindowTokens={contextWindowTokens}
+            files={files ?? abilities?.files}
+            functionCall={functionCall ?? abilities?.functionCall}
+            imageOutput={imageOutput ?? abilities?.imageOutput}
+            reasoning={reasoning ?? abilities?.reasoning}
+            search={search ?? abilities?.search}
+            video={video ?? abilities?.video}
+            vision={vision ?? abilities?.vision}
+            withTooltip={withTooltip}
+          />
+        )
       )}
     </Flexbox>
   );
