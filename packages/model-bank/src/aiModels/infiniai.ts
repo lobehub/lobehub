@@ -114,7 +114,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'GLM-4.7 是智谱AI推出的最新大语言模型，具备更强的推理和生成能力。',
+    description:
+      'GLM-4.7 is the latest large language model released by Zhipu AI, featuring stronger reasoning and generation capabilities.',
     displayName: 'GLM-4.7',
     enabled: true,
     id: 'glm-4.7',
@@ -137,7 +138,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'GLM-4.6 是智谱AI推出的最新大语言模型，具备更强的推理和生成能力。',
+    description:
+      'GLM-4.6 is the latest large language model released by Zhipu AI, featuring stronger reasoning and generation capabilities.',
     displayName: 'GLM-4.6',
     id: 'glm-4.6',
     maxOutput: 4096,
@@ -159,7 +161,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
-    description: 'DeepSeek-V3.2-Exp is an experimental DeepSeek LLM with stronger reasoning and generation.',
+    description:
+      'DeepSeek-V3.2-Exp is an experimental DeepSeek LLM with stronger reasoning and generation.',
     displayName: 'DeepSeek V3.2 Exp',
     id: 'deepseek-v3.2-exp',
     maxOutput: 65_536,
@@ -324,7 +327,8 @@ const infiniaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'GLM-4.5V is a multimodal model from Zhipu AI for vision understanding and reasoning.',
+    description:
+      'GLM-4.5V is a multimodal model from Zhipu AI for vision understanding and reasoning.',
     displayName: 'GLM-4.5V',
     id: 'glm-4.5v',
     maxOutput: 4096,
@@ -423,8 +427,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description:
-      'Kimi K2 Instruct is a Moonshot AI LLM with ultra-long context handling.',
+    description: 'Kimi K2 Instruct is a Moonshot AI LLM with ultra-long context handling.',
     displayName: 'Kimi K2 Instruct',
     id: 'kimi-k2-instruct',
     maxOutput: 32_768,

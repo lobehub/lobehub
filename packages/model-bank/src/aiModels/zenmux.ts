@@ -690,7 +690,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'Gemini 2.5 Flash（Lite/Pro/Flash）系列是 Google 的中低延迟到高性能推理模型。',
+    description:
+      "The Gemini 2.5 Flash (Lite/Pro/Flash) series are Google's medium-to-low latency to high-performance reasoning models.",
     displayName: 'Gemini 2.5 Flash',
     id: 'google/gemini-2.5-flash',
     maxOutput: 65_530,

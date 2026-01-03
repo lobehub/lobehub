@@ -27,7 +27,8 @@ const mistralChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 262_144,
-    description: 'Devstral Small 2 擅长使用工具探索代码库、编辑多个文件并为软件工程代理提供动力。',
+    description:
+      'Devstral Small 2 excels at using tools to explore codebases, edit multiple files, and power software engineering agents.',
     displayName: 'Devstral Small 2',
     id: 'labs-devstral-small-2512',
     pricing: {
@@ -44,7 +45,8 @@ const mistralChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Mistral Medium 3 以 8 倍的成本提供最先进的性能，并从根本上简化了企业部署。',
+    description:
+      'Mistral Medium 3 delivers state-of-the-art performance at 8x the cost and fundamentally simplifies enterprise deployment.',
     displayName: 'Mistral Medium 3.1',
     enabled: true,
     id: 'mistral-medium-latest',
@@ -62,7 +64,8 @@ const mistralChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Magistral Medium 1.2 是Mistral AI于2025年9月发布的前沿级推理模型，具有视觉支持。',
+    description:
+      'Magistral Medium 1.2 is a cutting-edge reasoning model released by Mistral AI in September 2025, with vision support.',
     displayName: 'Magistral Medium 1.2',
     enabled: true,
     id: 'magistral-medium-latest',
@@ -115,7 +118,8 @@ const mistralChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Mistral Small是成本效益高、快速且可靠的选项，适用于翻译、摘要和情感分析等用例。',
+    description:
+      'Mistral Small is a cost-effective, fast, and reliable option for use cases like translation, summarization, and sentiment analysis.',
     displayName: 'Mistral Small 3.2',
     id: 'mistral-small-latest',
     pricing: {
