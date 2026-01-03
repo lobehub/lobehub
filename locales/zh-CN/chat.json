@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "推理强度",
   "extendParams.textVerbosity.title": "输出详细程度",
   "extendParams.thinking.title": "深度思考开关",
+  "extendParams.thinkingBudget.title": "思考预算",
   "extendParams.thinkingLevel.title": "思考水平",
   "extendParams.title": "模型扩展功能",
   "extendParams.urlContext.desc": "开启后会自动解析网页链接，提取网页内容作为上下文",
