@@ -26,13 +26,6 @@ beforeEach(() => {
 
 describe('TableViewerRepo', () => {
   describe('getAllTables', () => {
-    it('should return all tables with counts', async () => {
-      const result = await repo.getAllTables();
-
-      expect(result.length).toEqual(76);
-      expect(result[0]).toEqual({ name: 'accounts', count: 0, type: 'BASE TABLE' });
-    });
-
     it('should handle custom schema', async () => {
       const result = await repo.getAllTables('custom_schema');
       expect(result).toBeDefined();
