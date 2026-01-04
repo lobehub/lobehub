@@ -127,30 +127,43 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
     params: UpdateTodosParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    console.log('[updateTodos] called with params:', params);
+    console.log('[updateTodos] context: topicId=%s, messageId=%s', ctx.topicId, ctx.messageId);
+
     const { operations } = params;
 
     if (!operations || operations.length === 0) {
+      console.log('[updateTodos] no operations provided, returning early');
       return {
         content: 'No operations provided.',
         success: false,
       };
     }
 
+    console.log('[updateTodos] processing %d operations', operations.length);
+
     const existingTodos = getTodosFromContext(ctx);
+    console.log('[updateTodos] existingTodos count=%d, items=', existingTodos.length, existingTodos);
+
     let updatedTodos = [...existingTodos];
     const results: string[] = [];
 
     for (const op of operations) {
+      console.log('[updateTodos] processing operation type=%s, op=', op.type, op);
       switch (op.type) {
         case 'add': {
           if (op.text) {
+            console.log('[updateTodos] [add] adding text=%s', op.text);
             updatedTodos.push({ completed: false, text: op.text });
             results.push(`Added: "${op.text}"`);
+          } else {
+            console.log('[updateTodos] [add] skipped - no text provided');
           }
           break;
         }
         case 'update': {
           if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
+            console.log('[updateTodos] [update] updating index=%d, newText=%s, completed=%s', op.index, op.newText, op.completed);
             const item = updatedTodos[op.index];
             if (op.newText !== undefined) {
               item.text = op.newText;
@@ -159,25 +172,36 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
               item.completed = op.completed;
             }
             results.push(`Updated item ${op.index + 1}`);
+          } else {
+            console.log('[updateTodos] [update] skipped - invalid index=%d, todosLength=%d', op.index, updatedTodos.length);
           }
           break;
         }
         case 'remove': {
           if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
+            console.log('[updateTodos] [remove] removing index=%d', op.index);
             const removed = updatedTodos.splice(op.index, 1)[0];
             results.push(`Removed: "${removed.text}"`);
+          } else {
+            console.log('[updateTodos] [remove] skipped - invalid index=%d, todosLength=%d', op.index, updatedTodos.length);
           }
           break;
         }
         case 'complete': {
           if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
+            console.log('[updateTodos] [complete] completing index=%d', op.index);
             updatedTodos[op.index].completed = true;
             results.push(`Completed: "${updatedTodos[op.index].text}"`);
+          } else {
+            console.log('[updateTodos] [complete] skipped - invalid index=%d, todosLength=%d', op.index, updatedTodos.length);
           }
           break;
         }
       }
     }
+
+    console.log('[updateTodos] operations completed, results=', results);
+    console.log('[updateTodos] updatedTodos count=%d, items=', updatedTodos.length, updatedTodos);
 
     const now = new Date().toISOString();
 
@@ -188,12 +212,18 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
         : 'No operations applied.';
 
     const todoState = { items: updatedTodos, updatedAt: now };
+    console.log('[updateTodos] todoState created:', todoState);
 
     // Sync todos to Plan document if topic exists
     if (ctx.topicId) {
+      console.log('[updateTodos] syncing todos to plan, topicId=%s', ctx.topicId);
       await syncTodosToPlan(ctx.topicId, todoState);
+      console.log('[updateTodos] syncTodosToPlan completed');
+    } else {
+      console.log('[updateTodos] skipping syncTodosToPlan - no topicId');
     }
 
+    console.log('[updateTodos] returning success');
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
