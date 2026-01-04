@@ -2,13 +2,14 @@
 
 import { ChatInput } from '@lobehub/editor/react';
 import { Button, Flexbox, TextArea } from '@lobehub/ui';
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Sparkles } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useImageStore } from '@/store/image';
 import { createImageSelectors } from '@/store/image/selectors';
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
@@ -39,7 +40,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const { t } = useTranslation('image');
   const { value, setValue } = useGenerationConfigParam('prompt');
   const isCreating = useImageStore(createImageSelectors.isCreating);

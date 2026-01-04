@@ -1,9 +1,10 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Loader2 } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsDark } from '@/hooks/useIsDark';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, messageStateSelectors } from '@/store/chat/selectors';
 import { dotLoading } from '@/styles/loading';
@@ -57,7 +58,7 @@ interface ArtifactProps extends MarkdownElementProps {
 
 const Render = memo<ArtifactProps>(({ identifier, title, type, language, children, id }) => {
   const { t } = useTranslation('chat');
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   const hasChildren = !!children;
   const str = ((children as string) || '').toString?.();

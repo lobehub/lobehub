@@ -1,9 +1,9 @@
 import { Avatar, Block, Flexbox, Input } from '@lobehub/ui';
 import { Popover } from 'antd';
-import { useThemeMode } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 
 import EmojiPicker from '@/components/EmojiPicker';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useAgentStore } from '@/store/agent';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -18,7 +18,7 @@ interface EditingProps {
 
 const Editing = memo<EditingProps>(({ id, title, avatar, toggleEditing }) => {
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   const editing = useHomeStore((s) => s.agentRenamingId === id);
 

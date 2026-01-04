@@ -150,16 +150,22 @@ const AppTheme = memo<AppThemeProps>(
       antdMessage.config({ top: messageTop });
     }, [messageTop]);
 
+    const currentAppearence = isDark ? 'dark' : 'light';
+
+    console.log('currentAppearence', currentAppearence);
     return (
       <AppConfigContext.Provider value={appConfig}>
         <ThemeProvider
-          appearance={isDark ? 'dark' : 'light'}
+          appearance={currentAppearence}
           className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
           customTheme={{
             neutralColor: neutralColor ?? defaultNeutralColor,
             primaryColor: primaryColor ?? defaultPrimaryColor,
           }}
+          defaultAppearance={currentAppearence}
+          defaultThemeMode={currentAppearence}
           theme={{
+            cssVar: { key: 'lobe-vars' },
             token: {
               fontFamily: customFontFamily
                 ? `${customFontFamily},${antdTheme.fontFamily}`

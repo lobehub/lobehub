@@ -6,5 +6,6 @@ import { useTheme as useNextThemesTheme } from 'next-themes';
  */
 export const useIsDark = (): boolean => {
   const { resolvedTheme } = useNextThemesTheme();
+
   return resolvedTheme === 'dark';
 };

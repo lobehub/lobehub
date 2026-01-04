@@ -48,8 +48,131 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
   };
 
   return (
-    <html dir={direction} lang={locale}>
+    <html dir={direction} lang={locale} suppressHydrationWarning>
       <head>
+        {/* <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+  const SELECTOR =
+    '#lobe-ui-theme-app > div > div > div:nth-child(2) > div > div > div > span.ant-tag';
+  const VAR_NAME = '--ant-color-fill-tertiary';
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function waitForElement(selector, timeoutMs = 10000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const el = document.querySelector(selector);
+      if (el) return el;
+      await sleep(50);
+    }
+    throw new Error(\`[cssvar watch] element not found within \${timeoutMs}ms: \${selector}\`);
+  }
+
+  function readState(el) {
+    const elCS = getComputedStyle(el);
+    const rootCS = getComputedStyle(document.documentElement);
+
+    // 变量值（可能是 rgba/hex/hsl 等字符串）
+    const varValue = rootCS.getPropertyValue(VAR_NAME).trim();
+
+    // computed 背景（通常会解析成 rgb/rgba）
+    const bgColor = elCS.backgroundColor; // 最常用
+    const bg = elCS.background;           // 更完整，可能包含 image/repeat 等
+
+    return { varValue, bgColor, bg };
+  }
+
+  function diff(prev, next) {
+    const changed = {};
+    for (const k of Object.keys(next)) {
+      if (prev[k] !== next[k]) changed[k] = { from: prev[k], to: next[k] };
+    }
+    return changed;
+  }
+
+  (async () => {
+    const el = await waitForElement(SELECTOR, 20000);
+    console.log('[cssvar watch] target found:', el);
+
+    let prev = readState(el);
+    console.log('[cssvar watch] start state:', prev);
+
+    const reportIfChanged = (reason, muts) => {
+      const next = readState(el);
+      const changed = diff(prev, next);
+      if (Object.keys(changed).length) {
+        console.groupCollapsed(
+          \`[cssvar watch] changed (\${reason}) @ \${new Date().toISOString()}\`
+        );
+        console.log('changed:', changed);
+        if (muts) console.log('mutations:', muts);
+        console.log('element:', el);
+        console.groupEnd();
+
+        prev = next;
+
+        // 想“一变就停住”就保留；不想断就注释掉
+        debugger;
+      }
+    };
+
+    // 1) 盯 DOM/CSS 相关变化：class/style 属性、style 标签内容等
+    const mo = new MutationObserver((muts) => {
+      // 粗略过滤一下：减少无意义触发
+      for (const m of muts) {
+        if (m.type === 'attributes') {
+          if (m.attributeName === 'class' || m.attributeName === 'style') {
+            reportIfChanged('attribute mutation', muts);
+            return;
+          }
+        } else {
+          // childList / characterData：常见于 <style> 内容变化、主题注入
+          reportIfChanged('dom mutation', muts);
+          return;
+        }
+      }
+    });
+
+    mo.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'style'],
+    });
+
+    // 2) 额外盯目标元素自身（有的库会直接改它的 class/style）
+    const moEl = new MutationObserver((muts) => reportIfChanged('target mutation', muts));
+    moEl.observe(el, { attributes: true, attributeFilter: ['class', 'style'] });
+
+    // 3) Hook setProperty：谁改了 VAR_NAME 立刻抓到
+    const origSetProperty = CSSStyleDeclaration.prototype.setProperty;
+    CSSStyleDeclaration.prototype.setProperty = function (name, value, priority) {
+      const r = origSetProperty.call(this, name, value, priority);
+      if (name === VAR_NAME) {
+        console.groupCollapsed(
+          \`[cssvar watch] setProperty(\${name}) = \${String(value)} @ \${new Date().toISOString()}\`
+        );
+        console.log('priority:', priority);
+        console.log('styleDeclaration:', this);
+        console.trace('stack');
+        console.groupEnd();
+
+        reportIfChanged('setProperty hook');
+        // 想直接停在改变量的那一行，就保留
+        debugger;
+      }
+      return r;
+    };
+
+    console.log('[cssvar watch] armed: MutationObserver + setProperty hook');
+    console.log('[cssvar watch] watching:', { SELECTOR, VAR_NAME });
+  })().catch((e) => console.error(e));
+})();
+`,
+          }}
+        /> */}
         {process.env.DEBUG_REACT_SCAN === '1' && (
           <Script
             crossOrigin={'anonymous'}
