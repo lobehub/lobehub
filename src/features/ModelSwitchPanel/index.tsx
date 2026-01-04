@@ -153,6 +153,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  submenu: css`
+    .ant-dropdown-menu {
+      padding: 4px;
+    }
+
+    .ant-dropdown-menu-item {
+      margin-inline: 0;
+      padding-block: 6px;
+      padding-inline: 8px;
+      border-radius: ${cssVar.borderRadiusSM};
+    }
+
+    .ant-dropdown-menu-item-group-title {
+      padding-block: 6px;
+      padding-inline: 8px;
+      color: ${cssVar.colorTextSecondary};
+      font-size: 12px;
+    }
+  `,
 }));
 
 const menuKey = (provider: string, model: string) => `${provider}-${model}`;
@@ -511,7 +530,11 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
               <Dropdown
                 align={{ offset: [4, 0] }}
                 arrow={false}
-                dropdownRender={(menu) => <div style={{ minWidth: 240 }}>{menu}</div>}
+                dropdownRender={(menu) => (
+                  <div className={styles.submenu} style={{ minWidth: 240 }}>
+                    {menu}
+                  </div>
+                )}
                 key={data.displayName}
                 menu={{
                   items: [
