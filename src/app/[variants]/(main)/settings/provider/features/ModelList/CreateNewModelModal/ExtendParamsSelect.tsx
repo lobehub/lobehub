@@ -91,6 +91,16 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   },
 ];
 
+// Map variant keys to their base i18n title key (synced with ControlsForm.tsx)
+// This allows reusing existing i18n translations instead of adding new ones
+const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
+  gpt5ReasoningEffort: 'reasoningEffort',
+  gpt5_1ReasoningEffort: 'reasoningEffort',
+  gpt5_2ProReasoningEffort: 'reasoningEffort',
+  gpt5_2ReasoningEffort: 'reasoningEffort',
+  thinkingLevel2: 'thinkingLevel',
+};
+
 type PreviewMeta = {
   labelOverride?: string;
   labelSuffix?: string;
@@ -102,22 +112,22 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
   enableReasoning: { previewWidth: 300, tag: 'thinking.type' },
   gpt5ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
-  gpt5_1ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
+  gpt5_1ReasoningEffort: { labelSuffix: ' (GPT-5.1)', previewWidth: 300, tag: 'reasoning_effort' },
   gpt5_2ProReasoningEffort: {
     labelSuffix: ' (GPT-5.2 Pro)',
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
   gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
-  imageAspectRatio: { labelSuffix: '', previewWidth: 350 },
-  imageResolution: { labelSuffix: '', previewWidth: 350 },
+  imageAspectRatio: { labelSuffix: '', previewWidth: 350, tag: 'aspect_ratio' },
+  imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningEffort: { previewWidth: 250, tag: 'reasoning_effort' },
-  textVerbosity: { labelSuffix: ' (GPT-5)', previewWidth: 250, tag: 'text_verbosity' },
+  textVerbosity: { labelSuffix: '', previewWidth: 250, tag: 'text_verbosity' },
   thinking: { labelSuffix: ' (Doubao)', previewWidth: 300, tag: 'thinking.type' },
   thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 500, tag: 'thinkingBudget' },
   thinkingLevel: { labelSuffix: ' (Gemini 3)', previewWidth: 280, tag: 'thinkingLevel' },
-  thinkingLevel2: { labelSuffix: ' (Gemini 3)', previewWidth: 280, tag: 'thinkingLevel' },
+  thinkingLevel2: { labelSuffix: ' (Gemini 3)', previewWidth: 200, tag: 'thinkingLevel' },
   urlContext: { labelSuffix: ' (Gemini)', previewWidth: 400, tag: 'urlContext' },
 };
 
@@ -264,8 +274,10 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
         typeof rawDesc === 'string' && rawDesc !== '' && rawDesc !== descKey ? rawDesc : undefined;
       const desc = descOverrides[item.key] ?? normalizedDesc;
       const meta = PREVIEW_META[item.key];
+      // Use alias key for title if available (synced with ControlsForm.tsx)
+      const titleKey = TITLE_KEY_ALIASES[item.key] ?? item.key;
       const baseLabel = String(
-        tChat(`extendParams.${item.key}.title` as any, { defaultValue: item.key }),
+        tChat(`extendParams.${titleKey}.title` as any, { defaultValue: item.key }),
       );
 
       const label = meta?.labelOverride

@@ -243,7 +243,7 @@ export default {
   'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
     'For OpenAI and other reasoning-capable models; controls reasoning effort.',
   'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint':
-    'For GPT-5 series; controls output verbosity.',
+    'For GPT-5+ series; controls output verbosity.',
   'providerModels.item.modelConfig.extendParams.options.thinking.hint':
     'For some Doubao models; allow model to decide whether to think deeply.',
   'providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint':
