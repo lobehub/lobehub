@@ -5,20 +5,20 @@ interface UriParserResult {
 }
 
 export const parseDataUri = (dataUri: string): UriParserResult => {
-  // 正则表达式匹配整个 Data URI 结构
+  // Regular expression to match the entire Data URI structure
   const dataUriMatch = dataUri.match(/^data:([^;]+);base64,(.+)$/);
 
   if (dataUriMatch) {
-    // 如果是合法的 Data URI
+    // If it's a valid Data URI
     return { base64: dataUriMatch[2], mimeType: dataUriMatch[1], type: 'base64' };
   }
 
   try {
     new URL(dataUri);
-    // 如果是合法的 URL
+    // If it's a valid URL
     return { base64: null, mimeType: null, type: 'url' };
   } catch {
-    // 既不是 Data URI 也不是合法 URL
+    // Neither a Data URI nor a valid URL
     return { base64: null, mimeType: null, type: null };
   }
 };
