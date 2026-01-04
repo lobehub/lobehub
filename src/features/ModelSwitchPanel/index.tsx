@@ -8,6 +8,7 @@ import {
   LucideCheck,
   LucideChevronRight,
   LucideLayers,
+  LucideSettings,
 } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -27,17 +28,18 @@ const STORAGE_KEY_MODE = 'MODEL_SWITCH_PANEL_MODE';
 const DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 600;
-const MAX_PANEL_HEIGHT = 550;
-const TOOLBAR_HEIGHT = 48;
+const MAX_PANEL_HEIGHT = 460;
+const TOOLBAR_HEIGHT = 40;
+const FOOTER_HEIGHT = 48;
 
 const INITIAL_RENDER_COUNT = 15;
 const RENDER_ALL_DELAY_MS = 500;
 
 const ITEM_HEIGHT = {
-  'empty-model': 38,
-  'group-header': 40,
-  'model-item': 38,
-  'no-provider': 38,
+  'empty-model': 32,
+  'group-header': 32,
+  'model-item': 32,
+  'no-provider': 32,
 } as const;
 
 type GroupMode = 'byModel' | 'byProvider';
@@ -66,8 +68,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     box-shadow: ${cssVar.boxShadowSecondary};
   `,
   groupHeader: css`
-    padding-block: 8px;
-    padding-inline: 12px;
+    padding-block: 6px;
+    padding-inline: 8px;
     color: ${cssVar.colorTextSecondary};
   `,
   menuItem: css`
@@ -78,10 +80,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     box-sizing: border-box;
-    padding-block: 8px;
-    padding-inline: 12px;
+    margin-inline: 8px;
+    padding-block: 6px;
+    padding-inline: 8px;
 
     white-space: nowrap;
+    border-radius: ${cssVar.borderRadiusSM};
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
@@ -107,12 +111,47 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-end;
 
-    padding: 8px 12px;
+    padding: 6px 8px;
 
     background: ${cssVar.colorBgElevated};
     border-bottom: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  footer: css`
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+
+    padding-block: 6px;
+    padding-inline: 0;
+
+    background: ${cssVar.colorBgElevated};
+    border-top: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  footerButton: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+
+    box-sizing: border-box;
+    margin-inline: 8px;
+    padding-block: 6px;
+    padding-inline: 8px;
+
+    color: ${cssVar.colorTextSecondary};
+
+    border-radius: ${cssVar.borderRadiusSM};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
 }));
 
@@ -252,12 +291,9 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     );
 
     // Build virtual items based on group mode
-    const { virtualItems, panelHeight } = useMemo(() => {
+    const virtualItems = useMemo(() => {
       if (enabledList.length === 0) {
-        return {
-          panelHeight: TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider'],
-          virtualItems: [{ type: 'no-provider' }] as VirtualItem[],
-        };
+        return [{ type: 'no-provider' }] as VirtualItem[];
       }
 
       if (groupMode === 'byModel') {
@@ -287,30 +323,20 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
         }
 
         // Convert to array and sort by display name
-        const items: VirtualItem[] = Array.from(modelMap.values())
+        return Array.from(modelMap.values())
           .sort((a, b) => a.displayName.localeCompare(b.displayName))
           .map((data) => ({ data, type: 'model-item' as const }));
-
-        const totalHeight = items.length * ITEM_HEIGHT['model-item'];
-
-        return {
-          panelHeight: Math.min(totalHeight + TOOLBAR_HEIGHT, MAX_PANEL_HEIGHT),
-          virtualItems: items,
-        };
       } else {
         // Group by provider (original structure)
         const items: VirtualItem[] = [];
-        let totalHeight = 0;
 
         for (const providerItem of enabledList) {
           // Add provider group header
           items.push({ provider: providerItem, type: 'group-header' });
-          totalHeight += ITEM_HEIGHT['group-header'];
 
           if (providerItem.children.length === 0) {
             // Add empty model placeholder
             items.push({ provider: providerItem, type: 'empty-model' });
-            totalHeight += ITEM_HEIGHT['empty-model'];
           } else {
             // Add each model item
             for (const modelItem of providerItem.children) {
@@ -319,17 +345,18 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 provider: providerItem,
                 type: 'provider-model-item',
               });
-              totalHeight += ITEM_HEIGHT['model-item'];
             }
           }
         }
 
-        return {
-          panelHeight: Math.min(totalHeight + TOOLBAR_HEIGHT, MAX_PANEL_HEIGHT),
-          virtualItems: items,
-        };
+        return items;
       }
     }, [enabledList, groupMode]);
+
+    // Use a fixed panel height to prevent shifting when switching modes
+    const panelHeight = enabledList.length === 0
+      ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider'] + FOOTER_HEIGHT
+      : MAX_PANEL_HEIGHT;
 
     const activeKey = menuKey(provider, model);
 
@@ -487,58 +514,65 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 dropdownRender={(menu) => <div style={{ minWidth: 240 }}>{menu}</div>}
                 key={data.displayName}
                 menu={{
-                  items: data.providers.map((p) => {
-                    const isCurrentProvider = menuKey(p.id, data.model.id) === activeKey;
-                    return {
-                      key: menuKey(p.id, data.model.id),
-                      label: (
-                        <Flexbox
-                          align={'center'}
-                          gap={8}
-                          horizontal
-                          justify={'space-between'}
-                          style={{ minWidth: 0 }}
-                        >
-                          <Flexbox align={'center'} gap={8} horizontal style={{ minWidth: 0 }}>
-                            <div style={{ flexShrink: 0, width: 16 }}>
-                              {isCurrentProvider && (
-                                <Icon
-                                  icon={LucideCheck}
-                                  size={16}
-                                  style={{ color: cssVar.colorPrimary }}
-                                />
-                              )}
-                            </div>
-                            <ProviderItemRender
-                              logo={p.logo}
-                              name={p.name}
-                              provider={p.id}
-                              source={p.source}
+                  items: [
+                    {
+                      key: 'header',
+                      label: t('ModelSwitchPanel.useModelFrom'),
+                      type: 'group',
+                    },
+                    ...data.providers.map((p) => {
+                      const isCurrentProvider = menuKey(p.id, data.model.id) === activeKey;
+                      return {
+                        key: menuKey(p.id, data.model.id),
+                        label: (
+                          <Flexbox
+                            align={'center'}
+                            gap={8}
+                            horizontal
+                            justify={'space-between'}
+                            style={{ minWidth: 0 }}
+                          >
+                            <Flexbox align={'center'} gap={8} horizontal style={{ minWidth: 0 }}>
+                              <div style={{ flexShrink: 0, width: 16 }}>
+                                {isCurrentProvider && (
+                                  <Icon
+                                    icon={LucideCheck}
+                                    size={16}
+                                    style={{ color: cssVar.colorPrimary }}
+                                  />
+                                )}
+                              </div>
+                              <ProviderItemRender
+                                logo={p.logo}
+                                name={p.name}
+                                provider={p.id}
+                                source={p.source}
+                              />
+                            </Flexbox>
+                            <ActionIcon
+                              icon={LucideBolt}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const url = urlJoin('/settings/provider', p.id || 'all');
+                                if (e.ctrlKey || e.metaKey) {
+                                  window.open(url, '_blank');
+                                } else {
+                                  navigate(url);
+                                }
+                              }}
+                              size={'small'}
+                              title={t('ModelSwitchPanel.goToSettings')}
                             />
                           </Flexbox>
-                          <ActionIcon
-                            icon={LucideBolt}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              const url = urlJoin('/settings/provider', p.id || 'all');
-                              if (e.ctrlKey || e.metaKey) {
-                                window.open(url, '_blank');
-                              } else {
-                                navigate(url);
-                              }
-                            }}
-                            size={'small'}
-                            title={t('ModelSwitchPanel.goToSettings')}
-                          />
-                        </Flexbox>
-                      ),
-                      onClick: async () => {
-                        await handleModelChange(data.model.id, p.id);
-                        handleOpenChange(false);
-                      },
-                    };
-                  }),
+                        ),
+                        onClick: async () => {
+                          await handleModelChange(data.model.id, p.id);
+                          handleOpenChange(false);
+                        },
+                      };
+                    }),
+                  ],
                 }}
                 // @ts-ignore
                 placement="rightTop"
@@ -625,11 +659,30 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 />
               </div>
               <div
-                style={{ height: panelHeight - TOOLBAR_HEIGHT, overflow: 'auto', width: '100%' }}
+                style={{
+                  height: panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT,
+                  overflow: 'auto',
+                  width: '100%',
+                }}
               >
                 {(renderAll ? virtualItems : virtualItems.slice(0, INITIAL_RENDER_COUNT)).map(
                   renderVirtualItem,
                 )}
+              </div>
+              <div className={styles.footer}>
+                <div
+                  className={styles.footerButton}
+                  onClick={() => {
+                    navigate('/settings/provider/all');
+                    handleOpenChange(false);
+                  }}
+                >
+                  <Flexbox align={'center'} gap={8} horizontal style={{ flex: 1 }}>
+                    <Icon icon={LucideSettings} size={16} />
+                    {t('ModelSwitchPanel.manageProvider')}
+                  </Flexbox>
+                  <Icon icon={LucideArrowRight} size={16} />
+                </div>
               </div>
             </Rnd>
           )}
