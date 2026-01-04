@@ -71,7 +71,7 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
     it('should add reasoning_effort to providerOptions.openai', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'o1-preview',
+        model: 'openai/o1-preview',
         reasoning_effort: 'high',
       });
 
@@ -83,7 +83,7 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
     it('should handle both reasoning_effort and verbosity', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'o1-preview',
+        model: 'openai/o1-preview',
         reasoning_effort: 'medium',
         verbosity: 'low',
       });
@@ -96,7 +96,7 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
     it('should handle verbosity without reasoning_effort', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'gpt-4o',
+        model: 'openai/gpt-4o',
         verbosity: 'high',
       });
 
@@ -119,13 +119,13 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
       await instance.chat({
         max_tokens: 1000,
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'o1-preview',
+        model: 'openai/o1-preview',
         reasoning_effort: 'high',
         temperature: 0.7,
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.model).toBe('o1-preview');
+      expect(calledPayload.model).toBe('openai/o1-preview');
       expect(calledPayload.temperature).toBe(0.7);
       expect(calledPayload.max_tokens).toBe(1000);
       expect(calledPayload.reasoning_effort).toBeUndefined();
@@ -138,7 +138,7 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
         vi.clearAllMocks();
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'o1-preview',
+          model: 'openai/o1-preview',
           reasoning_effort: effort,
         } as any);
 

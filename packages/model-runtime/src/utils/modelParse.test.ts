@@ -722,7 +722,7 @@ describe('modelParse', () => {
         expect(glm.vision).toBe(true);
       });
 
-      it('should restrict known extendParams to OpenAI when provider is not aihubmix or newapi', async () => {
+      it('should include known extendParams for OpenAI and Google providers regardless of providerid', async () => {
         const mockModule = await import('model-bank');
         mockModule.LOBE_DEFAULT_MODEL_LIST.push(
           {
@@ -751,8 +751,9 @@ describe('modelParse', () => {
         const openaiModel = result.find((m) => m.id === 'gpt-openai-extend-restricted');
         const googleModel = result.find((m) => m.id === 'gemini-extend-restricted');
 
+        // Both OpenAI and Google providers always include known extendParams
         expect(openaiModel?.settings?.extendParams).toEqual(['openaiParam']);
-        expect(googleModel?.settings).toBeUndefined();
+        expect(googleModel?.settings?.extendParams).toEqual(['thinkingBudget', 'urlContext']);
       });
 
       it('should allow known extendParams for non-OpenAI providers when provider is aihubmix', async () => {
