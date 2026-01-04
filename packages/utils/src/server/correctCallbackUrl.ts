@@ -1,5 +1,7 @@
 import { type NextRequest } from 'next/server';
 
+import { getSafeOrigin } from './getSafeOrigin';
+
 /**
  * Get the correct origin for building callback URLs in reverse proxy scenarios.
  *
@@ -8,6 +10,12 @@ import { type NextRequest } from 'next/server';
  * 1. x-forwarded-proto: the real protocol (https/http)
  * 2. x-forwarded-host: the real host (e.g., lobehub.com)
  * 3. Falls back to host header and nextUrl if proxy headers are not present
+ *
+ * SECURITY: Uses getSafeOrigin for comprehensive security validation:
+ * - Protocol whitelist (http, https only)
+ * - Host validation against APP_URL
+ * - Multiple hosts handling (RFC 7239)
+ * - Fallback logic for invalid forwarded values
  *
  * @param request - The Next.js request object
  * @returns The correct origin string (e.g., "https://lobehub.com")
@@ -25,19 +33,14 @@ import { type NextRequest } from 'next/server';
  * ```
  */
 export const getCallbackUrlOrigin = (request: NextRequest): string => {
-  // Get the real protocol from x-forwarded-proto header, or fall back to nextUrl
-  const protocol = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.slice(0, -1);
+  const safeOrigin = getSafeOrigin(request);
 
-  // Get the real host from x-forwarded-host header first, then try host header,
-  // and finally fall back to nextUrl host
-  const host =
-    request.headers.get('x-forwarded-host') ||
-    request.headers.get('host') ||
-    request.nextUrl.host;
+  if (!safeOrigin) {
+    // Fallback to request origin if safe origin cannot be determined
+    return request.nextUrl.origin;
+  }
 
-  const origin = `${protocol}://${host}`;
-
-  return origin;
+  return safeOrigin;
 };
 
 /**

@@ -1,7 +1,7 @@
 import debug from 'debug';
 import { NextRequest } from 'next/server';
 
-import { validateRedirectHost } from './validateRedirectHost';
+import { getSafeOrigin } from './getSafeOrigin';
 
 const log = debug('lobe-oidc:correctOIDCUrl');
 
@@ -12,32 +12,24 @@ const log = debug('lobe-oidc:correctOIDCUrl');
  * @returns Fixed URL object
  */
 export const correctOIDCUrl = (req: NextRequest, url: URL): URL => {
-  const requestHost = req.headers.get('host');
-  const forwardedHost = req.headers.get('x-forwarded-host');
-  const forwardedProto =
-    req.headers.get('x-forwarded-proto') || req.headers.get('x-forwarded-protocol');
-
   log('Input URL: %s', url.toString());
-  log(
-    'Request headers - host: %s, x-forwarded-host: %s, x-forwarded-proto: %s',
-    requestHost,
-    forwardedHost,
-    forwardedProto,
-  );
 
-  // Determine actual hostname and protocol with fallback values
-  const actualHost = forwardedHost || requestHost;
-  const actualProto = forwardedProto || (url.protocol === 'https:' ? 'https' : 'http');
+  // Get safe origin using centralized security logic
+  // Use URL's protocol as fallback to preserve original behavior
+  const fallbackProtocol = url.protocol === 'https:' ? 'https' : 'http';
+  const safeOrigin = getSafeOrigin(req, fallbackProtocol);
 
-  // If unable to determine valid hostname, return original URL
-  if (!actualHost || actualHost === 'null') {
-    log('Warning: Cannot determine valid host, returning original URL');
+  if (!safeOrigin) {
+    log('Warning: Unable to determine safe origin from request headers, returning original URL');
     return url;
   }
 
-  // Validate target host for security, prevent Open Redirect attacks
-  if (!validateRedirectHost(actualHost)) {
-    log('Warning: Target host %s failed validation, returning original URL', actualHost);
+  // Parse safe origin to get hostname and protocol
+  let safeOriginUrl: URL;
+  try {
+    safeOriginUrl = new URL(safeOrigin);
+  } catch (error) {
+    log('Error parsing safe origin: %O', error);
     return url;
   }
 
@@ -46,24 +38,28 @@ export const correctOIDCUrl = (req: NextRequest, url: URL): URL => {
     url.hostname === 'localhost' ||
     url.hostname === '127.0.0.1' ||
     url.hostname === '0.0.0.0' ||
-    url.hostname !== actualHost;
+    url.hostname !== safeOriginUrl.hostname;
 
-  if (needsCorrection) {
-    log('URL needs correction. Original hostname: %s, correcting to: %s', url.hostname, actualHost);
-
-    try {
-      const correctedUrl = new URL(url.toString());
-      correctedUrl.protocol = actualProto + ':';
-      correctedUrl.host = actualHost;
-
-      log('Corrected URL: %s', correctedUrl.toString());
-      return correctedUrl;
-    } catch (error) {
-      log('Error creating corrected URL, returning original: %O', error);
-      return url;
-    }
+  if (!needsCorrection) {
+    log('URL does not need correction, returning original: %s', url.toString());
+    return url;
   }
 
-  log('URL does not need correction, returning original: %s', url.toString());
-  return url;
+  log(
+    'URL needs correction. Original hostname: %s, correcting to: %s',
+    url.hostname,
+    safeOriginUrl.hostname,
+  );
+
+  try {
+    const correctedUrl = new URL(url.toString());
+    correctedUrl.protocol = safeOriginUrl.protocol;
+    correctedUrl.host = safeOriginUrl.host;
+
+    log('Corrected URL: %s', correctedUrl.toString());
+    return correctedUrl;
+  } catch (error) {
+    log('Error creating corrected URL, returning original: %O', error);
+    return url;
+  }
 };

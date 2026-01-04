@@ -1,5 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { parseDefaultThemeFromCountry } from '@lobechat/utils/server';
+import { parseDefaultThemeFromCountry , buildCallbackUrl, getCallbackUrlOrigin } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 import { UAParser } from 'ua-parser-js';
@@ -16,8 +16,6 @@ import NextAuth from '@/libs/next-auth';
 import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
-
-import { buildCallbackUrl, getCallbackUrlOrigin } from './callback-url';
 
 // Create debug logger instances
 const logDefault = debug('middleware:default');
