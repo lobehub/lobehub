@@ -22,7 +22,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const CreateDocumentInspector = memo<
   BuiltinInspectorProps<CreateDocumentArgs, CreateDocumentState>
->(({ args, partialArgs, isArgumentsStreaming }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
 
   const title = args?.title || partialArgs?.title;
@@ -37,7 +37,9 @@ export const CreateDocumentInspector = memo<
   }
 
   return (
-    <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+    <div
+      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
+    >
       <span>{t('builtins.lobe-notebook.apiName.createDocument')}: </span>
       {title && <span className={highlightTextStyles.primary}>{title}</span>}
     </div>
