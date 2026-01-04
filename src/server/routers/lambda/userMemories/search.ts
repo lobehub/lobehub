@@ -1,18 +1,18 @@
-import { ModelProvider } from 'model-bank';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { type z } from 'zod';
 
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { type UserMemoryModel } from '@/database/models/userMemory';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
-import { type ClientSecretPayload } from '@/types/auth';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type SearchMemoryResult, searchMemorySchema } from '@/types/userMemory';
 
 import { EMBEDDING_VECTOR_DIMENSION, memoryProcedure, router } from './shared';
 
 type MemorySearchContext = {
-  jwtPayload: ClientSecretPayload;
   memoryModel: UserMemoryModel;
+  serverDB: LobeChatDatabase;
+  userId: string;
 };
 
 type MemorySearchResult = Awaited<ReturnType<UserMemoryModel['searchWithEmbedding']>>;
@@ -80,10 +80,10 @@ export const searchUserMemories = async (
   ctx: MemorySearchContext,
   input: z.infer<typeof searchMemorySchema>,
 ): Promise<SearchMemoryResult> => {
-  const agentRuntime = await initModelRuntimeWithUserPayload(ModelProvider.OpenAI, ctx.jwtPayload);
-
-  const { model: embeddingModel } =
+  const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+  // Read user's provider config from database
+  const agentRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
   const queryEmbeddings = await agentRuntime.embeddings({
     dimensions: EMBEDDING_VECTOR_DIMENSION,

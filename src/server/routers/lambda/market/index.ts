@@ -4,15 +4,9 @@ import { serialize } from 'cookie';
 import debug from 'debug';
 import { z } from 'zod';
 
-import { type ToolCallContent } from '@/libs/mcp';
-import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
-import { FileService } from '@/server/services/file';
-import {
-  contentBlocksToString,
-  processContentBlocks,
-} from '@/server/services/mcp/contentProcessor';
 import {
   AssistantSorts,
   McpConnectionType,
@@ -41,93 +35,7 @@ const marketProcedure = publicProcedure
     });
   });
 
-// Procedure with user authentication for operations requiring user access token
-const authedMarketProcedure = authedProcedure
-  .use(serverDatabase)
-  .use(marketUserInfo)
-  .use(async ({ ctx, next }) => {
-    const { UserModel } = await import('@/database/models/user');
-    const userModel = new UserModel(ctx.serverDB, ctx.userId);
-
-    return next({
-      ctx: {
-        discoverService: new DiscoverService({
-          accessToken: ctx.marketAccessToken,
-          userInfo: ctx.marketUserInfo,
-        }),
-        fileService: new FileService(ctx.serverDB, ctx.userId),
-        userModel,
-      },
-    });
-  });
-
 export const marketRouter = router({
-  // ============================== Cloud MCP Gateway ==============================
-  callCloudMcpEndpoint: authedMarketProcedure
-    .input(
-      z.object({
-        apiParams: z.record(z.any()),
-        identifier: z.string(),
-        toolName: z.string(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      log('callCloudMcpEndpoint input: %O', input);
-
-      try {
-        // Query user_settings to get market.accessToken
-        const userState = await ctx.userModel.getUserState(async () => ({}));
-        const userAccessToken = userState.settings?.market?.accessToken;
-
-        log('callCloudMcpEndpoint: userAccessToken exists=%s', !!userAccessToken);
-
-        if (!userAccessToken) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'User access token not found. Please sign in to Market first.',
-          });
-        }
-
-        const cloudResult = await ctx.discoverService.callCloudMcpEndpoint({
-          apiParams: input.apiParams,
-          identifier: input.identifier,
-          toolName: input.toolName,
-          userAccessToken,
-        });
-        const cloudResultContent = (cloudResult?.content ?? []) as ToolCallContent[];
-
-        // Format the cloud result to MCPToolCallResult format
-        // Process content blocks (upload images, etc.)
-        const newContent =
-          cloudResult?.isError || !ctx.fileService
-            ? cloudResultContent
-            : // FIXME: the type assertion here is a temporary solution, need to remove it after refactoring
-              await processContentBlocks(cloudResultContent, ctx.fileService);
-
-        // Convert content blocks to string
-        const content = contentBlocksToString(newContent);
-        const state = { ...cloudResult, content: newContent };
-
-        if (cloudResult?.isError) {
-          return { content, state, success: true };
-        }
-
-        return { content, state, success: true };
-      } catch (error) {
-        log('Error calling cloud MCP endpoint: %O', error);
-
-        // Re-throw TRPCError as-is
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to call cloud MCP endpoint',
-        });
-      }
-    }),
-
   // ============================== Assistant Market ==============================
   getAssistantCategories: marketProcedure
     .input(

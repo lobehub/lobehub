@@ -8,7 +8,7 @@ import { contextEngineering } from './contextEngineering';
 import * as memoryManager from './memoryManager';
 
 // Mock VARIABLE_GENERATORS
-vi.mock('@/utils/client/parserPlaceholder', () => ({
+vi.mock('@/helpers/parserPlaceholder', () => ({
   VARIABLE_GENERATORS: {
     date: () => '2023-12-25',
     time: () => '14:30:45',

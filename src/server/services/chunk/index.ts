@@ -1,5 +1,4 @@
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type ClientSecretPayload } from '@lobechat/types';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
@@ -31,7 +30,7 @@ export class ChunkService {
     return this.chunkClient.chunkContent(params);
   }
 
-  async asyncEmbeddingFileChunks(fileId: string, payload: ClientSecretPayload) {
+  async asyncEmbeddingFileChunks(fileId: string) {
     const result = await this.fileModel.findById(fileId);
 
     if (!result) return;
@@ -44,7 +43,8 @@ export class ChunkService {
 
     await this.fileModel.update(fileId, { embeddingTaskId: asyncTaskId });
 
-    const asyncCaller = await createAsyncCaller({ jwtPayload: payload, userId: this.userId });
+    // Async router will read keyVaults from DB, no need to pass jwtPayload
+    const asyncCaller = await createAsyncCaller({ userId: this.userId });
 
     // trigger embedding task asynchronously
     try {
@@ -67,7 +67,7 @@ export class ChunkService {
   /**
    * parse file to chunks with async task
    */
-  async asyncParseFileToChunks(fileId: string, payload: ClientSecretPayload, skipExist?: boolean) {
+  async asyncParseFileToChunks(fileId: string, skipExist?: boolean) {
     const result = await this.fileModel.findById(fileId);
 
     if (!result) return;
@@ -83,7 +83,8 @@ export class ChunkService {
 
     await this.fileModel.update(fileId, { chunkTaskId: asyncTaskId });
 
-    const asyncCaller = await createAsyncCaller({ jwtPayload: payload, userId: this.userId });
+    // Async router will read keyVaults from DB, no need to pass jwtPayload
+    const asyncCaller = await createAsyncCaller({ userId: this.userId });
 
     // trigger parse file task asynchronously
     asyncCaller.file.parseFileToChunks({ fileId: fileId, taskId: asyncTaskId }).catch(async (e) => {

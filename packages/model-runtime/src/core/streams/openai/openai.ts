@@ -20,6 +20,23 @@ import {
   generateToolCallId,
 } from '../protocol';
 
+/**
+ * Extended type for OpenAI tool calls that includes provider-specific extensions
+ * like OpenRouter's thoughtSignature for Gemini models
+ */
+type OpenAIExtendedToolCall = OpenAI.ChatCompletionChunk.Choice.Delta.ToolCall & {
+  thoughtSignature?: string;
+};
+
+/**
+ * Type guard to check if a tool call has thoughtSignature
+ */
+const hasThoughtSignature = (
+  toolCall: OpenAI.ChatCompletionChunk.Choice.Delta.ToolCall,
+): toolCall is OpenAIExtendedToolCall => {
+  return 'thoughtSignature' in toolCall && typeof toolCall.thoughtSignature === 'string';
+};
+
 // Process markdown base64 images: extract URLs and clean text in one pass
 const processMarkdownBase64Images = (text: string): { cleanedText: string; urls: string[] } => {
   if (!text) return { cleanedText: text, urls: [] };
@@ -150,7 +167,7 @@ const transformOpenAIStream = (
               };
             }
 
-            return {
+            const baseData: StreamToolCallChunkData = {
               function: {
                 arguments: value.function?.arguments ?? '',
                 name: value.function?.name ?? null,
@@ -170,6 +187,14 @@ const transformOpenAIStream = (
               index: typeof value.index !== 'undefined' ? value.index : index,
               type: value.type || 'function',
             };
+
+            // OpenRouter returns thoughtSignature in tool_calls for Gemini models (e.g. gemini-3-flash-preview)
+            // [{"id":"call_123","type":"function","function":{"name":"get_weather","arguments":"{}"},"thoughtSignature":"abc123"}]
+            if (hasThoughtSignature(value)) {
+              baseData.thoughtSignature = value.thoughtSignature;
+            }
+
+            return baseData;
           }),
           id: chunk.id,
           type: 'tool_calls',

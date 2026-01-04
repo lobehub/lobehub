@@ -25,7 +25,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
     getApiKey: vi.fn(),
   })),
   initializeRuntimeOptions: vi.fn(),
-  initModelRuntimeWithUserPayload: vi.fn().mockReturnValue({
+  initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     chat: vi.fn(),
   }),
 }));

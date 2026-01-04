@@ -15,7 +15,7 @@ import {
   EvaluationRecordModel,
 } from '@/database/server/models/ragEval';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { AsyncTaskError } from '@/types/asyncTask';
 
@@ -51,9 +51,11 @@ export const ragEvalRouter = router({
 
       const now = Date.now();
       try {
-        const agentRuntime = await initModelRuntimeWithUserPayload(
+        // Read user's provider config from database
+        const modelRuntime = await initModelRuntimeFromDB(
+          ctx.serverDB,
+          ctx.userId,
           ModelProvider.OpenAI,
-          ctx.jwtPayload,
         );
 
         const { question, languageModel, embeddingModel } = evalRecord;
@@ -63,7 +65,7 @@ export const ragEvalRouter = router({
 
         // 如果不存在 questionEmbeddingId，那么就需要做一次 embedding
         if (!questionEmbeddingId) {
-          const embeddings = await agentRuntime.embeddings({
+          const embeddings = await modelRuntime.embeddings({
             dimensions: 1024,
             input: question,
             model: !!embeddingModel ? embeddingModel : DEFAULT_EMBEDDING_MODEL,
@@ -100,7 +102,7 @@ export const ragEvalRouter = router({
         // 做一次生成 LLM 答案生成
         const { messages } = chainAnswerWithContext({ context, knowledge: [], question });
 
-        const response = await agentRuntime.chat({
+        const response = await modelRuntime.chat({
           messages: messages!,
           model: !!languageModel ? languageModel : DEFAULT_MODEL,
           responseMode: 'json',

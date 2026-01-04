@@ -1,12 +1,12 @@
 import { toolsClient } from '@/libs/trpc/client';
 import type {
-  CallToolInput,
+  CallCodeInterpreterToolInput,
   CallToolResult,
   GetExportFileUploadUrlInput,
   GetExportFileUploadUrlResult,
   SaveExportedFileContentInput,
   SaveExportedFileContentResult,
-} from '@/server/routers/tools/codeInterpreter';
+} from '@/server/routers/tools/market';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors/settings';
 
@@ -32,7 +32,7 @@ class CodeInterpreterService {
   ): Promise<CallToolResult> {
     const marketAccessToken = getMarketAccessToken();
 
-    const input: CallToolInput = {
+    const input: CallCodeInterpreterToolInput = {
       marketAccessToken,
       params,
       toolName,
@@ -40,7 +40,7 @@ class CodeInterpreterService {
       userId: context.userId,
     };
 
-    return toolsClient.codeInterpreter.callTool.mutate(input);
+    return toolsClient.market.callCodeInterpreterTool.mutate(input);
   }
 
   /**
@@ -57,7 +57,7 @@ class CodeInterpreterService {
       topicId,
     };
 
-    return toolsClient.codeInterpreter.getExportFileUploadUrl.mutate(input);
+    return toolsClient.market.getExportFileUploadUrl.mutate(input);
   }
 
   /**
@@ -68,7 +68,7 @@ class CodeInterpreterService {
   async saveExportedFileContent(
     params: SaveExportedFileContentInput,
   ): Promise<SaveExportedFileContentResult> {
-    return toolsClient.codeInterpreter.saveExportedFileContent.mutate(params);
+    return toolsClient.market.saveExportedFileContent.mutate(params);
   }
 }
 

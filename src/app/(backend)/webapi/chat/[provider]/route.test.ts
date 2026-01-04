@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { checkAuthMethod } from '@/app/(backend)/middleware/auth/utils';
 import { LOBE_CHAT_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/const/auth';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { POST } from './route';
 
@@ -20,6 +21,11 @@ vi.mock('@/app/(backend)/middleware/auth/utils', () => ({
 
 vi.mock('@lobechat/utils/server', () => ({
   getXorPayload: vi.fn(),
+}));
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+  createTraceOptions: vi.fn().mockReturnValue({}),
 }));
 
 // Use vi.hoisted to ensure mockState is initialized before mocks are set up
@@ -60,26 +66,27 @@ describe('POST handler', () => {
     it('should initialize ModelRuntime correctly with valid authorization', async () => {
       const mockParams = Promise.resolve({ provider: 'test-provider' });
 
-      // 设置 getJWTPayload 和 initModelRuntimeWithUserPayload 的模拟返回值
+      // 设置 getJWTPayload 的模拟返回值
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
       });
 
       const mockRuntime: LobeRuntimeAI = { baseURL: 'abc', chat: vi.fn() };
 
-      // migrate to new ModelRuntime init api
-      const spy = vi
-        .spyOn(ModelRuntime, 'initializeWithProvider')
-        .mockResolvedValue(new ModelRuntime(mockRuntime));
+      // Mock initModelRuntimeFromDB
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
 
       // 调用 POST 函数
       await POST(request as unknown as Request, { params: mockParams });
 
       // 验证是否正确调用了模拟函数
       expect(getXorPayload).toHaveBeenCalledWith('Bearer some-valid-token');
-      expect(spy).toHaveBeenCalledWith('test-provider', expect.anything());
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(String),
+        'test-provider',
+      );
     });
 
     it('should return Unauthorized error when LOBE_CHAT_AUTH_HEADER is missing', async () => {
@@ -105,21 +112,18 @@ describe('POST handler', () => {
       mockState.enableClerk = true;
 
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
       });
 
       const mockParams = Promise.resolve({ provider: 'test-provider' });
-      // 设置 initModelRuntimeWithUserPayload 的模拟返回值
       vi.mocked(getAuth).mockReturnValue({} as any);
       vi.mocked(checkAuthMethod).mockReset();
 
       const mockRuntime: LobeRuntimeAI = { baseURL: 'abc', chat: vi.fn() };
 
-      vi.spyOn(ModelRuntime, 'initializeWithProvider').mockResolvedValue(
-        new ModelRuntime(mockRuntime),
-      );
+      // Mock initModelRuntimeFromDB
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
 
       const request = new Request(new URL('https://test.com'), {
         method: 'POST',
@@ -133,7 +137,6 @@ describe('POST handler', () => {
       await POST(request, { params: mockParams });
 
       expect(checkAuthMethod).toBeCalledWith({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         betterAuthAuthorized: false,
         clerkAuth: {},
@@ -163,7 +166,6 @@ describe('POST handler', () => {
   describe('chat', () => {
     it('should correctly handle chat completion with valid payload', async () => {
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
         userId: 'abc',
@@ -178,22 +180,24 @@ describe('POST handler', () => {
       });
 
       const mockChatResponse: any = { success: true, message: 'Reply from agent' };
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockResolvedValue(mockChatResponse),
+      };
 
-      vi.spyOn(ModelRuntime.prototype, 'chat').mockResolvedValue(mockChatResponse);
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
 
       const response = await POST(request as unknown as Request, { params: mockParams });
 
       expect(response).toEqual(mockChatResponse);
-      expect(ModelRuntime.prototype.chat).toHaveBeenCalledWith(mockChatPayload, {
-        user: 'abc',
+      expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
+        user: expect.any(String),
         signal: expect.anything(),
       });
     });
 
     it('should return an error response when chat completion fails', async () => {
-      // 设置 getJWTPayload 和 initAgentRuntimeWithUserPayload 的模拟返回值
       vi.mocked(getXorPayload).mockReturnValueOnce({
-        accessCode: 'test-access-code',
         apiKey: 'test-api-key',
         azureApiVersion: 'v1',
       });
@@ -208,10 +212,16 @@ describe('POST handler', () => {
 
       const mockErrorResponse = {
         errorType: ChatErrorType.InternalServerError,
+        error: { errorMessage: 'Something went wrong', errorType: 500 },
         errorMessage: 'Something went wrong',
       };
 
-      vi.spyOn(ModelRuntime.prototype, 'chat').mockRejectedValue(mockErrorResponse);
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockRejectedValue(mockErrorResponse),
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
 
       const response = await POST(request, { params: mockParams });
 

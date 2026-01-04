@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generationBatches, generationTopics, generations, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { GenerationTopicModel } from '../generationTopic';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 // Mock FileService
 const mockGetFullFileUrl = vi.fn();

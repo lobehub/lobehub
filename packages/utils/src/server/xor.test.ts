@@ -7,7 +7,6 @@ describe('getXorPayload', () => {
   it('should correctly decode XOR obfuscated payload with user data', () => {
     const originalPayload = {
       userId: '001362c3-48c5-4635-bd3b-837bfff58fc0',
-      accessCode: 'test-access-code',
       apiKey: 'test-api-key',
       baseURL: 'https://api.example.com',
     };
@@ -86,7 +85,7 @@ describe('getXorPayload', () => {
   it('should handle payload with undefined values', () => {
     const originalPayload = {
       userId: 'test-user',
-      accessCode: undefined,
+      baseURL: undefined,
       apiKey: 'test-key',
     };
 

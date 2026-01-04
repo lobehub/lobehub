@@ -2,9 +2,11 @@
 
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, keyframes } from 'antd-style';
-import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { shinyTextStyles } from '@/styles';
 
 const shimmer = keyframes`
   0% {
@@ -16,20 +18,9 @@ const shimmer = keyframes`
   }
 `;
 
-const spin = keyframes`
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-`;
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 12px;
-    padding-inline: 16px;
   `,
   progress: css`
     position: relative;
@@ -53,9 +44,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     animation: ${shimmer} 2s infinite;
   `,
-  spin: css`
-    animation: ${spin} 1s linear infinite;
-  `,
 }));
 
 const InitializingState = memo(() => {
@@ -63,15 +51,13 @@ const InitializingState = memo(() => {
 
   return (
     <Flexbox className={styles.container} gap={12}>
-      {/* Status Row */}
       <Flexbox align="center" gap={8} horizontal>
-        <Loader2 className={styles.spin} size={14} />
-        <Text fontSize={13} type={'secondary'} weight={500}>
-          {t('task.status.initializing', { defaultValue: 'Starting task...' })}
+        <NeuralNetworkLoading size={14} />
+        <Text className={shinyTextStyles.shinyText} weight={500}>
+          {t('task.status.initializing')}
         </Text>
       </Flexbox>
 
-      {/* Progress Bar (indeterminate) */}
       <div className={styles.progress}>
         <div className={styles.progressShimmer} />
       </div>

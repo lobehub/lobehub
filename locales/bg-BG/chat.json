@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} групови подзадачи",
   "task.metrics.stepsShort": "стъпки",
   "task.metrics.toolCallsShort": "използвания на инструменти",
+  "task.status.cancelled": "Задачата е отменена",
+  "task.status.failed": "Задачата е неуспешна",
   "task.status.initializing": "Инициализиране на задачата...",
   "task.subtask": "Подзадача",
   "thread.divider": "Подтема",

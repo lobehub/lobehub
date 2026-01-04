@@ -20,7 +20,7 @@ vi.mock('@/database/models/message', () => ({
 // Mock ModelRuntime
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initializeRuntimeOptions: vi.fn(),
-  initModelRuntimeWithUserPayload: vi.fn().mockReturnValue({
+  initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     chat: vi.fn(),
   }),
   ApiKeyManager: vi.fn().mockImplementation(() => ({
@@ -269,11 +269,7 @@ describe('AgentRuntimeService.executeSync', () => {
         await streamEventManager.publishAgentRuntimeEnd(operationId, 1, { status: 'done' });
       }, 10);
 
-      const event = await streamEventManager.waitForEvent(
-        operationId,
-        'agent_runtime_end',
-        1000,
-      );
+      const event = await streamEventManager.waitForEvent(operationId, 'agent_runtime_end', 1000);
 
       expect(event.type).toBe('agent_runtime_end');
     });

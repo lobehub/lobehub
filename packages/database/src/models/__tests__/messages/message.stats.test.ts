@@ -7,7 +7,7 @@ import { uuid } from '@/utils/uuid';
 import { embeddings, files, messageQueries, messages, sessions, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../_util';
+import { getTestDB } from '../../../core/getTestDB';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();

@@ -24,7 +24,7 @@ import {
   CreateUserMemoryPreferenceParams,
   UserMemoryModel,
 } from '../userMemory';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

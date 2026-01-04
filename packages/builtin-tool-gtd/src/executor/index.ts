@@ -151,13 +151,15 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
         }
         case 'update': {
           if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
-            const item = updatedTodos[op.index];
+            // Create a new object to avoid mutating frozen/immutable objects from store
+            const updatedItem = { ...updatedTodos[op.index] };
             if (op.newText !== undefined) {
-              item.text = op.newText;
+              updatedItem.text = op.newText;
             }
             if (op.completed !== undefined) {
-              item.completed = op.completed;
+              updatedItem.completed = op.completed;
             }
+            updatedTodos[op.index] = updatedItem;
             results.push(`Updated item ${op.index + 1}`);
           }
           break;
@@ -171,7 +173,8 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
         }
         case 'complete': {
           if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
-            updatedTodos[op.index].completed = true;
+            // Create a new object to avoid mutating frozen/immutable objects from store
+            updatedTodos[op.index] = { ...updatedTodos[op.index], completed: true };
             results.push(`Completed: "${updatedTodos[op.index].text}"`);
           }
           break;

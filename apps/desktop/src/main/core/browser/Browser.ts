@@ -78,11 +78,9 @@ export default class Browser {
   /**
    * Get platform-specific theme configuration for window creation
    */
-  private getPlatformThemeConfig(isDarkMode?: boolean): Record<string, any> {
-    const darkMode = isDarkMode ?? nativeTheme.shouldUseDarkColors;
-
+  private getPlatformThemeConfig(): Record<string, any> {
     if (isWindows) {
-      return this.getWindowsThemeConfig(darkMode);
+      return this.getWindowsThemeConfig(this.isDarkMode);
     }
 
     return {};
@@ -164,10 +162,7 @@ export default class Browser {
   }
 
   private get isDarkMode() {
-    const themeMode = this.app.storeManager.get('themeMode');
-    if (themeMode === 'auto') return nativeTheme.shouldUseDarkColors;
-
-    return themeMode === 'dark';
+    return nativeTheme.shouldUseDarkColors;
   }
 
   loadUrl = async (path: string) => {
@@ -328,13 +323,11 @@ export default class Browser {
       `[${this.identifier}] Saved window state (only size used): ${JSON.stringify(savedState)}`,
     );
 
-    const isDarkMode = nativeTheme.shouldUseDarkColors;
-
     const browserWindow = new BrowserWindow({
       ...res,
       autoHideMenuBar: true,
       backgroundColor: '#00000000',
-      darkTheme: isDarkMode,
+      darkTheme: this.isDarkMode,
       frame: false,
       height: savedState?.height || height,
       show: false,
@@ -348,7 +341,7 @@ export default class Browser {
         sandbox: false,
       },
       width: savedState?.width || width,
-      ...this.getPlatformThemeConfig(isDarkMode),
+      ...this.getPlatformThemeConfig(),
     });
 
     this._browserWindow = browserWindow;

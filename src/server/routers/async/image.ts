@@ -14,7 +14,7 @@ import { FileModel } from '@/database/models/file';
 import { GenerationModel } from '@/database/models/generation';
 import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { GenerationService } from '@/server/services/generation';
 
 const log = debug('lobe-image:async');
@@ -241,12 +241,13 @@ export const imageRouter = router({
         const imageGenerationPromise = async (signal: AbortSignal) => {
           log('Initializing agent runtime for provider: %s', provider);
 
-          const agentRuntime = initModelRuntimeWithUserPayload(provider, ctx.jwtPayload);
+          // Read user's provider config from database
+          const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
           // Check if operation has been cancelled
           checkAbortSignal(signal);
           log('Agent runtime initialized, calling createImage');
-          const response = await agentRuntime.createImage!({
+          const response = await modelRuntime.createImage!({
             model,
             params: params as unknown as RuntimeImageGenParams,
           });
@@ -298,7 +299,7 @@ export const imageRouter = router({
           if (provider === 'comfyui') {
             // Use the public interface method to get auth headers
             // This avoids accessing private members and exposing credentials
-            authHeaders = agentRuntime.getAuthHeaders();
+            authHeaders = modelRuntime.getAuthHeaders();
             if (authHeaders) {
               log('Using authentication headers for ComfyUI image download');
             } else {

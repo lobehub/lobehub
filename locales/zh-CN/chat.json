@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} 个批量子任务",
   "task.metrics.stepsShort": "步",
   "task.metrics.toolCallsShort": "次技能调用",
+  "task.status.cancelled": "任务已取消",
+  "task.status.failed": "任务失败",
   "task.status.initializing": "任务启动中…",
   "task.subtask": "子任务",
   "thread.divider": "子话题",

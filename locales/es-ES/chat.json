@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} subtareas en lote",
   "task.metrics.stepsShort": "pasos",
   "task.metrics.toolCallsShort": "usos de herramientas",
+  "task.status.cancelled": "Tarea cancelada",
+  "task.status.failed": "Tarea fallida",
   "task.status.initializing": "Inicializando tarea...",
   "task.subtask": "Subtarea",
   "thread.divider": "Subtema",

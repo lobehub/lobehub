@@ -120,6 +120,11 @@ export const MODEL_LIST_CONFIGS = {
     reasoningKeywords: ['mini', 'grok-4', 'grok-code-fast', '!non-reasoning'],
     visionKeywords: ['vision', 'grok-4'],
   },
+  xiaomimimo: {
+    functionCallKeywords: ['mimo'],
+    reasoningKeywords: ['mimo'],
+    visionKeywords: [],
+  },
   zeroone: {
     functionCallKeywords: ['fc'],
     visionKeywords: ['vision'],
@@ -149,6 +154,7 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   volcengine: ['doubao'],
   wenxin: ['ernie', 'qianfan'],
   xai: ['grok'],
+  xiaomimimo: ['mimo-'],
   zeroone: ['yi-'],
   zhipu: ['glm'],
 } as const;

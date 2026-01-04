@@ -6,10 +6,11 @@ import { memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 
-import WideScreenButton from '../../../../../../../features/WideScreenContainer/WideScreenButton';
+import HeaderActions from './HeaderActions';
 import NotebookButton from './NotebookButton';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
+import WorkingDirectory from './WorkingDirectory';
 
 const Header = memo(() => {
   return (
@@ -20,10 +21,11 @@ const Header = memo(() => {
         </Flexbox>
       }
       right={
-        <Flexbox horizontal style={{ backgroundColor: cssVar.colorBgContainer }}>
-          <WideScreenButton />
+        <Flexbox align={'center'} horizontal style={{ backgroundColor: cssVar.colorBgContainer }}>
+          <WorkingDirectory />
           <NotebookButton />
           <ShareButton />
+          <HeaderActions />
         </Flexbox>
       }
     />

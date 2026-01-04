@@ -72,6 +72,7 @@ vi.mock('electron', () => ({
   nativeTheme: {
     on: vi.fn(),
     shouldUseDarkColors: false,
+    themeSource: 'system',
   },
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
@@ -138,7 +139,6 @@ describe('SystemController', () => {
       expect(result).toMatchObject({
         arch: expect.any(String),
         platform: expect.any(String),
-        systemAppearance: 'light',
         userPath: {
           desktop: '/mock/path/desktop',
           documents: '/mock/path/documents',
@@ -150,18 +150,6 @@ describe('SystemController', () => {
           videos: '/mock/path/videos',
         },
       });
-    });
-
-    it('should return dark appearance when nativeTheme is dark', async () => {
-      const { nativeTheme } = await import('electron');
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColors', { value: true });
-
-      const result = await invokeIpc('system.getAppState');
-
-      expect(result.systemAppearance).toBe('dark');
-
-      // Reset
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColors', { value: false });
     });
   });
 

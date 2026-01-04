@@ -129,8 +129,6 @@ class ChatService {
 
     const targetAgentId = getTargetAgentId(agentId);
 
-    console.log('[chatService.createAssistantMessage] Resolving with scope:', scope);
-
     // Resolve agent config with builtin agent runtime config merged
     // plugins is already merged (runtime plugins > agent config plugins)
     const {

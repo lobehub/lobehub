@@ -1,15 +1,112 @@
 import { type GoogleGenAIOptions } from '@google/genai';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
-import { type ClientSecretPayload } from '@lobechat/types';
+import {
+  type AWSBedrockKeyVault,
+  type AzureOpenAIKeyVault,
+  type ClientSecretPayload,
+  type CloudflareKeyVault,
+  type ComfyUIKeyVault,
+  type OpenAICompatibleKeyVault,
+  type VertexAIKeyVault,
+} from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
 
+import { AiProviderModel } from '@/database/models/aiProvider';
+import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
 
+import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';
 
 export * from './trace';
+
+/**
+ * Combined KeyVaults type for all providers
+ */
+type ProviderKeyVaults = OpenAICompatibleKeyVault &
+  AzureOpenAIKeyVault &
+  AWSBedrockKeyVault &
+  CloudflareKeyVault &
+  ComfyUIKeyVault &
+  VertexAIKeyVault;
+
+/**
+ * Build ClientSecretPayload from keyVaults stored in database
+ *
+ * This is the server-side equivalent of the frontend's getProviderAuthPayload function.
+ * It converts the keyVaults object from database to the ClientSecretPayload format
+ * expected by initModelRuntimeWithUserPayload.
+ *
+ * @param provider - The model provider
+ * @param keyVaults - The keyVaults object from database (already decrypted)
+ * @returns ClientSecretPayload for the provider
+ */
+export const buildPayloadFromKeyVaults = (
+  provider: string,
+  keyVaults: ProviderKeyVaults,
+): ClientSecretPayload => {
+  switch (provider) {
+    case ModelProvider.Bedrock: {
+      const { accessKeyId, region, secretAccessKey, sessionToken } = keyVaults;
+      const apiKey = (secretAccessKey || '') + (accessKeyId || '');
+
+      return {
+        apiKey,
+        awsAccessKeyId: accessKeyId,
+        awsRegion: region,
+        awsSecretAccessKey: secretAccessKey,
+        awsSessionToken: sessionToken,
+      };
+    }
+
+    case ModelProvider.Azure: {
+      return {
+        apiKey: keyVaults.apiKey,
+        azureApiVersion: keyVaults.apiVersion,
+        baseURL: keyVaults.baseURL || keyVaults.endpoint,
+      };
+    }
+
+    case ModelProvider.Ollama: {
+      return { baseURL: keyVaults.baseURL };
+    }
+
+    case ModelProvider.Cloudflare: {
+      return {
+        apiKey: keyVaults.apiKey,
+        cloudflareBaseURLOrAccountID: keyVaults.baseURLOrAccountID,
+      };
+    }
+
+    case ModelProvider.ComfyUI: {
+      return {
+        apiKey: keyVaults.apiKey,
+        authType: keyVaults.authType,
+        baseURL: keyVaults.baseURL,
+        customHeaders: keyVaults.customHeaders,
+        password: keyVaults.password,
+        username: keyVaults.username,
+      };
+    }
+
+    case ModelProvider.VertexAI: {
+      return {
+        apiKey: keyVaults.apiKey,
+        baseURL: keyVaults.baseURL,
+        vertexAIRegion: keyVaults.region,
+      };
+    }
+
+    default: {
+      return {
+        apiKey: keyVaults.apiKey,
+        baseURL: keyVaults.baseURL,
+      };
+    }
+  }
+};
 
 /**
  * Retrieves the options object from environment and apikeymanager
@@ -219,4 +316,44 @@ export const initModelRuntimeWithUserPayload = (
     ...getParamsFromPayload(runtimeProvider, payload),
     ...params,
   });
+};
+
+/**
+ * Initialize ModelRuntime by reading user's provider configuration from database
+ *
+ * This function replaces the pattern of passing userPayload from frontend.
+ * It reads the user's AI provider configuration from the database, decrypts
+ * the keyVaults, and initializes the ModelRuntime.
+ *
+ * @param db - The database instance
+ * @param userId - The user ID
+ * @param provider - The model provider (e.g., 'openai', 'azure')
+ * @returns Promise<ModelRuntime> - The initialized ModelRuntime instance
+ *
+ * @example
+ * ```typescript
+ * const modelRuntime = await initModelRuntimeFromDB(db, userId, 'openai');
+ * const response = await modelRuntime.chat({ messages, model });
+ * ```
+ */
+export const initModelRuntimeFromDB = async (
+  db: LobeChatDatabase,
+  userId: string,
+  provider: string,
+): Promise<ModelRuntime> => {
+  // 1. Get user's provider configuration from database
+  const aiProviderModel = new AiProviderModel(db, userId);
+
+  // Use getAiProviderById with KeyVaultsGateKeeper.getUserKeyVaults as decryptor
+  const providerConfig = await aiProviderModel.getAiProviderById(
+    provider,
+    KeyVaultsGateKeeper.getUserKeyVaults,
+  );
+
+  // 2. Build ClientSecretPayload from keyVaults
+  const keyVaults = (providerConfig?.keyVaults || {}) as ProviderKeyVaults;
+  const payload = buildPayloadFromKeyVaults(provider, keyVaults);
+
+  // 3. Initialize ModelRuntime with the payload
+  return initModelRuntimeWithUserPayload(provider, payload);
 };

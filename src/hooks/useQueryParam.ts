@@ -103,8 +103,6 @@ export function useQueryParam<T>(
               newSearchParams.set(key, serialized);
             }
 
-            console.log('updateParams', newSearchParams.toString());
-
             return newSearchParams;
           },
           { replace: currentHistory === 'replace' },

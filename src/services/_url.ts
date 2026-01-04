@@ -21,9 +21,6 @@ export const API_ENDPOINTS = {
   modelPull: (provider: string) =>
     withElectronProtocolIfElectron(`/webapi/models/${provider}/pull`),
 
-  // image
-  images: (provider: string) => withElectronProtocolIfElectron(`/webapi/text-to-image/${provider}`),
-
   // STT
   stt: withElectronProtocolIfElectron('/webapi/stt/openai'),
 

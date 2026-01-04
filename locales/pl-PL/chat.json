@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} zadań zbiorczych",
   "task.metrics.stepsShort": "kroków",
   "task.metrics.toolCallsShort": "użycia narzędzi",
+  "task.status.cancelled": "Zadanie anulowane",
+  "task.status.failed": "Zadanie nie powiodło się",
   "task.status.initializing": "Inicjalizacja zadania...",
   "task.subtask": "Podzadanie",
   "thread.divider": "Podtemat",

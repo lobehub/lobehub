@@ -164,8 +164,6 @@ export const streamingExecutor: StateCreator<
     const operation = operationId ? get().operations[operationId] : undefined;
     const scope = operation?.context.scope;
 
-    console.log('[internal_createAgentState] Operation scope:', { operationId, scope });
-
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
     const { agentConfig: agentConfigData, plugins: pluginIds } = resolveAgentConfig({
