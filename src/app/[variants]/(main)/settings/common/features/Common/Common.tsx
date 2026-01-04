@@ -29,8 +29,8 @@ const Common = memo(() => {
   const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
   const [loading, setLoading] = useState(false);
 
-  // Use the theme value from next-themes, default to 'auto' (system)
-  const currentTheme = theme || 'auto';
+  // Use the theme value from next-themes, default to 'system'
+  const currentTheme = theme || 'system';
 
   const handleLangChange = (value: LocaleMode) => {
     switchLocale(value);
