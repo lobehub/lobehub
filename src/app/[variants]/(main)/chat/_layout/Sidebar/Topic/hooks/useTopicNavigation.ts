@@ -2,6 +2,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback } from 'react';
 import urlJoin from 'url-join';
 
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
@@ -12,10 +13,14 @@ import { useGlobalStore } from '@/store/global';
  */
 export const useTopicNavigation = () => {
   const pathname = usePathname();
+  const isMobile = useIsMobile();
   const activeAgentId = useChatStore((s) => s.activeAgentId);
   const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
-  const switchTopic = useChatStore((s) => s.switchTopic);
+  const [switchTopic, closeAllTopicsDrawer] = useChatStore((s) => [
+    s.switchTopic,
+    s.closeAllTopicsDrawer,
+  ]);
 
   const isInAgentSubRoute = useCallback(() => {
     if (!activeAgentId) return false;
@@ -36,9 +41,16 @@ export const useTopicNavigation = () => {
       }
 
       switchTopic(topicId);
-      toggleConfig(false);
+
+      // Only close drawers/modals on mobile
+      if (isMobile) {
+        // Close AllTopicsDrawer if open
+        closeAllTopicsDrawer();
+        // Close mobile topic modal
+        toggleConfig(false);
+      }
     },
-    [activeAgentId, router, switchTopic, toggleConfig, isInAgentSubRoute],
+    [activeAgentId, router, switchTopic, toggleConfig, isInAgentSubRoute, closeAllTopicsDrawer, isMobile],
   );
 
   return {
