@@ -1,6 +1,6 @@
-import { ActionIcon, Flexbox, Icon, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Segmented, TooltipGroup } from '@lobehub/ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
-import { Dropdown, Segmented } from 'antd';
+import { Dropdown } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   Brain,
@@ -686,6 +686,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                 style={{
                   height: panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT,
                   overflow: 'auto',
+                  paddingBlock: groupMode === 'byModel' ? 8 : 0,
                   width: '100%',
                 }}
               >
