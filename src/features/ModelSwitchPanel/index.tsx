@@ -25,7 +25,7 @@ import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 const STORAGE_KEY = 'MODEL_SWITCH_PANEL_WIDTH';
 const STORAGE_KEY_MODE = 'MODEL_SWITCH_PANEL_MODE';
-const DEFAULT_WIDTH = 320;
+const DEFAULT_WIDTH = 430;
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 600;
 const MAX_PANEL_HEIGHT = 460;
