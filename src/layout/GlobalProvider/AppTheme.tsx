@@ -152,7 +152,6 @@ const AppTheme = memo<AppThemeProps>(
 
     const currentAppearence = isDark ? 'dark' : 'light';
 
-    console.log('currentAppearence', currentAppearence);
     return (
       <AppConfigContext.Provider value={appConfig}>
         <ThemeProvider
