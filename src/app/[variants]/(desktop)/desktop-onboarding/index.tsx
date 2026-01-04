@@ -117,8 +117,14 @@ const DesktopOnboardingPage = memo(() => {
         case 4: {
           // 如果是第4步（LoginStep），完成 onboarding
           setDesktopOnboardingCompleted();
-          // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
-          window.location.replace('/');
+          // Restore window resizable before hard reload (cleanup won't run due to hard navigation)
+          electronSystemService
+            .setWindowResizable({ resizable: true })
+            .catch(console.error)
+            .finally(() => {
+              // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
+              window.location.replace('/');
+            });
           return prev;
         }
         default: {

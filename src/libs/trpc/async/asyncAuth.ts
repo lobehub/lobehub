@@ -43,11 +43,9 @@ export const asyncAuth = asyncTrpc.middleware(async (opts) => {
     }
 
     log('User authentication successful: %s', ctx.userId);
-    log('Passing jwtPayload keys: %O', Object.keys(ctx.jwtPayload || {}));
 
     return opts.next({
       ctx: {
-        jwtPayload: ctx.jwtPayload,
         userId: ctx.userId,
       },
     });

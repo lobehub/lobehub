@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}}개의 일괄 하위 작업",
   "task.metrics.stepsShort": "단계",
   "task.metrics.toolCallsShort": "회 기능 호출",
+  "task.status.cancelled": "작업이 취소되었습니다",
+  "task.status.failed": "작업에 실패했습니다",
   "task.status.initializing": "작업 시작 중…",
   "task.subtask": "하위 작업",
   "thread.divider": "하위 주제",

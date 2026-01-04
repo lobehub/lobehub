@@ -1,5 +1,4 @@
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type ClientSecretPayload } from '@lobechat/types';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
@@ -10,7 +9,6 @@ const log = debug('lobe-async:context');
 
 export interface AsyncAuthContext {
   authorizationToken?: string;
-  jwtPayload: ClientSecretPayload;
   serverDB?: LobeChatDatabase;
   userId?: string | null;
 }
@@ -21,11 +19,9 @@ export interface AsyncAuthContext {
  */
 export const createAsyncContextInner = async (params?: {
   authorizationToken?: string;
-  jwtPayload?: ClientSecretPayload;
   userId?: string | null;
 }): Promise<AsyncAuthContext> => ({
   authorizationToken: params?.authorizationToken,
-  jwtPayload: params?.jwtPayload || {},
   userId: params?.userId,
 });
 
@@ -60,15 +56,11 @@ export const createAsyncRouteContext = async (request: NextRequest): Promise<Asy
     const { plaintext } = await gateKeeper.decrypt(lobeChatAuthorization);
 
     log('Parsing decrypted authorization data');
-    const { userId, payload } = JSON.parse(plaintext);
+    const { userId } = JSON.parse(plaintext);
 
-    log(
-      'Successfully parsed authorization data - userId: %s, payload keys: %O',
-      userId,
-      Object.keys(payload || {}),
-    );
+    log('Successfully parsed authorization data - userId: %s', userId);
 
-    return createAsyncContextInner({ authorizationToken: authorization, jwtPayload: payload, userId });
+    return createAsyncContextInner({ authorizationToken: authorization, userId });
   } catch (error) {
     log('Error creating async route context: %O', error);
     throw error;

@@ -1,4 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -33,18 +33,31 @@ const ContentBlock = memo<ContentBlockProps>(
       continueGeneration(assistantId);
     }, [id]);
 
-    if (error && (content === LOADING_FLAT || !content))
+    if (error && (content === LOADING_FLAT || !content)) {
       return (
         <ErrorContent
           error={
             errorContent && error && (content === LOADING_FLAT || !content)
-              ? errorContent
+              ? {
+                  ...errorContent,
+                  extra: error?.body && (
+                    <Highlighter
+                      actionIconSize={'small'}
+                      language={'json'}
+                      padding={8}
+                      variant={'borderless'}
+                    >
+                      {JSON.stringify(error?.body, null, 2)}
+                    </Highlighter>
+                  ),
+                }
               : undefined
           }
           id={id}
           onRegenerate={handleRegenerate}
         />
       );
+    }
 
     return (
       <Flexbox gap={8} id={id}>
