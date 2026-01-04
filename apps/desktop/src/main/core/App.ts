@@ -2,16 +2,14 @@ import { ElectronIPCEventHandler, ElectronIPCServer } from '@lobechat/electron-s
 import { app, nativeTheme, protocol } from 'electron';
 import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
 import { macOS, windows } from 'electron-is';
-import { pathExistsSync } from 'fs-extra';
 import os from 'node:os';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 
 import { name } from '@/../../package.json';
-import { buildDir, nextExportDir } from '@/const/dir';
+import { buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import { IControlModule } from '@/controllers';
-import { getDesktopEnv } from '@/env';
 import { IServiceModule } from '@/services';
 import { getServerMethodMetadata } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
@@ -20,7 +18,7 @@ import { BrowserManager } from './browser/BrowserManager';
 import { I18nManager } from './infrastructure/I18nManager';
 import { IoCContainer } from './infrastructure/IoCContainer';
 import { ProtocolManager } from './infrastructure/ProtocolManager';
-import { RendererProtocolManager } from './infrastructure/RendererProtocolManager';
+import { RendererUrlManager } from './infrastructure/RendererUrlManager';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
 import { UpdaterManager } from './infrastructure/UpdaterManager';
@@ -38,11 +36,7 @@ type Class<T> = new (...args: any[]) => T;
 
 const importAll = (r: any) => Object.values(r).map((v: any) => v.default);
 
-const devDefaultRendererUrl = 'http://localhost:3015';
-
 export class App {
-  rendererLoadedUrl: string;
-
   browserManager: BrowserManager;
   menuManager: MenuManager;
   i18n: I18nManager;
@@ -52,12 +46,8 @@ export class App {
   trayManager: TrayManager;
   staticFileServerManager: StaticFileServerManager;
   protocolManager: ProtocolManager;
-  rendererProtocolManager: RendererProtocolManager;
+  rendererUrlManager: RendererUrlManager;
   chromeFlags: string[] = ['OverlayScrollbar', 'FluentOverlayScrollbar', 'FluentScrollbar'];
-  /**
-   * Escape hatch: allow testing static renderer in dev via env
-   */
-  private readonly rendererStaticOverride = getDesktopEnv().DESKTOP_RENDERER_STATIC;
 
   /**
    * whether app is in quiting
@@ -89,10 +79,7 @@ export class App {
     // Initialize store manager
     this.storeManager = new StoreManager(this);
 
-    this.rendererProtocolManager = new RendererProtocolManager({
-      nextExportDir,
-      resolveRendererFilePath: this.resolveRendererFilePath.bind(this),
-    });
+    this.rendererUrlManager = new RendererUrlManager();
     protocol.registerSchemesAsPrivileged([
       {
         privileges: {
@@ -104,11 +91,8 @@ export class App {
         },
         scheme: ELECTRON_BE_PROTOCOL_SCHEME,
       },
-      this.rendererProtocolManager.protocolScheme,
+      this.rendererUrlManager.protocolScheme,
     ]);
-
-    // Initialize rendererLoadedUrl from RendererProtocolManager
-    this.rendererLoadedUrl = this.rendererProtocolManager.getRendererUrl();
 
     // load controllers
     const controllers: IControlModule[] = importAll(
@@ -139,7 +123,7 @@ export class App {
 
     // Configure renderer loading strategy (dev server vs static export)
     // should register before app ready
-    this.configureRendererLoader();
+    this.rendererUrlManager.configureRendererLoader();
 
     // initialize protocol handlers
     this.protocolManager.initialize();
@@ -378,102 +362,11 @@ export class App {
     }
   };
 
-  private resolveExportFilePath(pathname: string) {
-    // Normalize by removing leading/trailing slashes so extname works as expected
-    const normalizedPath = decodeURIComponent(pathname).replace(/^\/+/, '').replace(/\/$/, '');
-
-    if (!normalizedPath) return join(nextExportDir, 'index.html');
-
-    const basePath = join(nextExportDir, normalizedPath);
-    const ext = extname(normalizedPath);
-
-    // If the request explicitly includes an extension (e.g. html, ico, txt),
-    // treat it as a direct asset.
-    if (ext) {
-      return pathExistsSync(basePath) ? basePath : null;
-    }
-
-    const candidates = [`${basePath}.html`, join(basePath, 'index.html'), basePath];
-
-    for (const candidate of candidates) {
-      if (pathExistsSync(candidate)) return candidate;
-    }
-
-    const fallback404 = join(nextExportDir, '404.html');
-    if (pathExistsSync(fallback404)) return fallback404;
-
-    return null;
-  }
-
-  /**
-   * Configure renderer loading strategy for dev/prod
-   */
-  private configureRendererLoader() {
-    if (isDev && !this.rendererStaticOverride) {
-      this.rendererLoadedUrl = devDefaultRendererUrl;
-      this.setupDevRenderer();
-      return;
-    }
-
-    if (isDev && this.rendererStaticOverride) {
-      logger.warn('Dev mode: DESKTOP_RENDERER_STATIC enabled, using static renderer handler');
-    }
-
-    this.setupProdRenderer();
-  }
-
-  /**
-   * Development: use Next dev server directly
-   */
-  private setupDevRenderer() {
-    logger.info('Development mode: renderer served from Next dev server, no protocol hook');
-  }
-
-  /**
-   * Production: serve static Next export assets
-   */
-  private setupProdRenderer() {
-    // Use the URL from RendererProtocolManager
-    this.rendererLoadedUrl = this.rendererProtocolManager.getRendererUrl();
-    this.rendererProtocolManager.registerHandler();
-  }
-
-  /**
-   * Resolve renderer file path in production.
-   * Static assets map directly; app routes fall back to index.html.
-   */
-  private async resolveRendererFilePath(url: URL) {
-    const pathname = url.pathname;
-    const normalizedPathname = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-
-    // Static assets should be resolved from root
-    if (
-      pathname.startsWith('/_next/') ||
-      pathname.startsWith('/static/') ||
-      pathname === '/favicon.ico' ||
-      pathname === '/manifest.json'
-    ) {
-      return this.resolveExportFilePath(pathname);
-    }
-
-    // If the incoming path already contains an extension (like .html or .ico),
-    // treat it as a direct asset lookup.
-    const extension = extname(normalizedPathname);
-    if (extension) {
-      return this.resolveExportFilePath(pathname);
-    }
-
-    return this.resolveExportFilePath('/');
-  }
-
   /**
    * Build renderer URL for dev/prod.
    */
   async buildRendererUrl(path: string): Promise<string> {
-    // Ensure path starts with /
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
-
-    return `${this.rendererLoadedUrl}${cleanPath}`;
+    return this.rendererUrlManager.buildRendererUrl(path);
   }
 
   private initializeServerIpcEvents() {

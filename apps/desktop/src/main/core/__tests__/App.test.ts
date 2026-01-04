@@ -12,6 +12,7 @@ vi.mock('electron', () => ({
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn(() => '/mock/user/path'),
     requestSingleInstanceLock: vi.fn(() => true),
+    isReady: vi.fn(() => true),
     whenReady: vi.fn(() => Promise.resolve()),
     on: vi.fn(),
     commandLine: {
@@ -32,6 +33,7 @@ vi.mock('electron', () => ({
   },
   protocol: {
     registerSchemesAsPrivileged: vi.fn(),
+    handle: vi.fn(),
   },
   session: {
     defaultSession: {
@@ -81,6 +83,10 @@ vi.mock('fix-path', () => ({
 
 vi.mock('@/const/env', () => ({
   isDev: false,
+}));
+
+vi.mock('@/env', () => ({
+  getDesktopEnv: vi.fn(() => ({ DESKTOP_RENDERER_STATIC: false })),
 }));
 
 vi.mock('@/const/dir', () => ({
@@ -188,48 +194,6 @@ describe('App', () => {
       const storagePath = appInstance.appStoragePath;
 
       expect(storagePath).toBe('/mock/storage/path');
-    });
-  });
-
-  describe('resolveRendererFilePath', () => {
-    it('should retry missing .txt requests with variant-prefixed lookup', async () => {
-      appInstance = new App();
-
-      // Avoid touching the electron session cookie code path in this unit test
-      (appInstance as any).getRouteVariantFromCookies = vi.fn(async () => 'en-US__0__light');
-
-      mockPathExistsSync.mockImplementation((p: string) => {
-        // root miss
-        if (p === '/mock/export/out/__next._tree.txt') return false;
-        // variant hit
-        if (p === '/mock/export/out/en-US__0__light/__next._tree.txt') return true;
-        return false;
-      });
-
-      const resolved = await (appInstance as any).resolveRendererFilePath(
-        new URL('app://next/__next._tree.txt'),
-      );
-
-      expect(resolved).toBe('/mock/export/out/en-US__0__light/__next._tree.txt');
-    });
-
-    it('should keep direct lookup for existing root .txt assets (no variant retry)', async () => {
-      appInstance = new App();
-
-      (appInstance as any).getRouteVariantFromCookies = vi.fn(async () => {
-        throw new Error('should not be called');
-      });
-
-      mockPathExistsSync.mockImplementation((p: string) => {
-        if (p === '/mock/export/out/en-US__0__light.txt') return true;
-        return false;
-      });
-
-      const resolved = await (appInstance as any).resolveRendererFilePath(
-        new URL('app://next/en-US__0__light.txt'),
-      );
-
-      expect(resolved).toBe('/mock/export/out/en-US__0__light.txt');
     });
   });
 });
