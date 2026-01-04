@@ -18,7 +18,7 @@ const AddButton = memo(() => {
     createGroupChatMenuItem,
     createPageMenuItem,
     createAgent,
-    isValidatingAgent,
+    isMutatingAgent,
     isCreatingGroup,
   } = useCreateMenuItems();
 
@@ -39,7 +39,7 @@ const AddButton = memo(() => {
     <Flexbox horizontal>
       <ActionIcon
         icon={CreateBotIcon}
-        loading={isValidatingAgent || isCreatingGroup}
+        loading={isMutatingAgent || isCreatingGroup}
         onClick={handleMainIconClick}
         size={DESKTOP_HEADER_ICON_SIZE}
         title={tChat('newAgent')}
