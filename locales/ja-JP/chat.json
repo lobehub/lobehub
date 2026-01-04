@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} 件のバッチサブタスク",
   "task.metrics.stepsShort": "ステップ",
   "task.metrics.toolCallsShort": "回のスキル呼び出し",
+  "task.status.cancelled": "タスクがキャンセルされました",
+  "task.status.failed": "タスクが失敗しました",
   "task.status.initializing": "タスクを起動中…",
   "task.subtask": "サブタスク",
   "thread.divider": "サブトピック",

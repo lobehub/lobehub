@@ -3,7 +3,6 @@ import {
   type SendMessageServerResponse,
   StructureOutputSchema,
 } from '@lobechat/types';
-import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -13,11 +12,10 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
 import { FileService } from '@/server/services/file';
-import { getXorPayload } from '@/utils/server';
 
 const log = debug('lobe-lambda-router:ai-chat');
 
@@ -37,28 +35,14 @@ const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
 });
 
 export const aiChatRouter = router({
-  outputJSON: aiChatProcedure.input(StructureOutputSchema).mutation(async ({ input }) => {
+  outputJSON: aiChatProcedure.input(StructureOutputSchema).mutation(async ({ input, ctx }) => {
     log('outputJSON called with provider: %s, model: %s', input.provider, input.model);
     log('messages count: %d', input.messages.length);
     log('schema: %O', input.schema);
 
-    let payload: object | undefined;
-
-    try {
-      payload = getXorPayload(input.keyVaultsPayload);
-      log('payload parsed successfully');
-    } catch (e) {
-      log('payload parse error: %O', e);
-      console.warn('user payload parse error', e);
-    }
-
-    if (!payload) {
-      log('payload is empty, throwing error');
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'keyVaultsPayload is not correct' });
-    }
-
-    log('initializing model runtime with provider: %s', input.provider);
-    const modelRuntime = initModelRuntimeWithUserPayload(input.provider, payload);
+    log('initializing model runtime from DB with provider: %s', input.provider);
+    // Read user's provider config from database
+    const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, input.provider);
 
     log('calling generateObject');
     const result = await modelRuntime.generateObject({

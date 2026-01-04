@@ -15,6 +15,8 @@ import {
   enableBetterAuth,
   enableClerk,
 } from '@/const/auth';
+import { getServerDB } from '@/database/core/db-adaptor';
+import { type LobeChatDatabase } from '@/database/type';
 import { ClerkAuth } from '@/libs/clerk-auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
@@ -28,6 +30,8 @@ export type RequestHandler = (
   req: Request,
   options: RequestOptions & {
     jwtPayload: ClientSecretPayload;
+    serverDB: LobeChatDatabase;
+    userId: string;
   },
 ) => Promise<Response>;
 
@@ -38,10 +42,18 @@ export const checkAuth =
     // This ensures the handler can safely read the request body
     const clonedReq = req.clone();
 
+    // Get serverDB for database access
+    const serverDB = await getServerDB();
+
     // we have a special header to debug the api endpoint in development mode
     const isDebugApi = req.headers.get('lobe-auth-dev-backend-api') === '1';
     if (process.env.NODE_ENV === 'development' && isDebugApi) {
-      return handler(clonedReq, { ...options, jwtPayload: { userId: 'DEV_USER' } });
+      return handler(clonedReq, {
+        ...options,
+        jwtPayload: { userId: 'DEV_USER' },
+        serverDB,
+        userId: 'DEV_USER',
+      });
     }
 
     let jwtPayload: ClientSecretPayload;
@@ -124,5 +136,7 @@ export const checkAuth =
       return createErrorResponse(errorType, { error, ...res, provider: params?.provider });
     }
 
-    return handler(clonedReq, { ...options, jwtPayload });
+    const userId = jwtPayload.userId || '';
+
+    return handler(clonedReq, { ...options, jwtPayload, serverDB, userId });
   };

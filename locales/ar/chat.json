@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} مهمة فرعية مجمعة",
   "task.metrics.stepsShort": "خطوات",
   "task.metrics.toolCallsShort": "استخدامات الأداة",
+  "task.status.cancelled": "تم إلغاء المهمة",
+  "task.status.failed": "فشلت المهمة",
   "task.status.initializing": "جارٍ تهيئة المهمة...",
   "task.subtask": "مهمة فرعية",
   "thread.divider": "موضوع فرعي",

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { UserMemoryModel } from '@/database/models/userMemory';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { userMemoriesRouter } from './userMemories';
 
@@ -19,11 +19,7 @@ vi.mock('@/server/globalConfig', () => ({
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
-  initModelRuntimeWithUserPayload: vi.fn(),
-}));
-
-vi.mock('@lobechat/utils/server', () => ({
-  getXorPayload: vi.fn().mockReturnValue({ userId: 'test-user' }),
+  initModelRuntimeFromDB: vi.fn(),
 }));
 
 vi.mock('@/database/models/userMemory', async (importOriginal) => {
@@ -47,7 +43,7 @@ beforeEach(() => {
     return items.map((_, index) => [index + 1]);
   });
 
-  vi.mocked(initModelRuntimeWithUserPayload).mockResolvedValue({
+  vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
     embeddings: embeddingsMock,
   } as any);
 });

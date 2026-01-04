@@ -15,7 +15,7 @@ import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
 import { fileEnv } from '@/envs/file';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { FileService } from '@/server/services/file';
 import {
@@ -95,9 +95,14 @@ export const fileRouter = router({
             await pMap(
               requestArray,
               async (chunks) => {
-                const agentRuntime = initModelRuntimeWithUserPayload(provider, ctx.jwtPayload);
+                // Read user's provider config from database
+                const modelRuntime = await initModelRuntimeFromDB(
+                  ctx.serverDB,
+                  ctx.userId,
+                  provider,
+                );
 
-                const embeddings = await agentRuntime.embeddings({
+                const embeddings = await modelRuntime.embeddings({
                   dimensions: 1024,
                   input: chunks.map((c) => c.text),
                   model,
@@ -243,7 +248,7 @@ export const fileRouter = router({
 
           // if enable auto embedding, trigger the embedding task
           if (fileEnv.CHUNKS_AUTO_EMBEDDING) {
-            await chunkService.asyncEmbeddingFileChunks(input.fileId, ctx.jwtPayload);
+            await chunkService.asyncEmbeddingFileChunks(input.fileId);
           }
 
           return { success: true };
