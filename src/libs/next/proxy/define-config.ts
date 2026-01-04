@@ -7,7 +7,6 @@ import urlJoin from 'url-join';
 import { auth } from '@/auth';
 import { OAUTH_AUTHORIZED } from '@/const/auth';
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
-import { LOBE_THEME_APPEARANCE } from '@/const/theme';
 import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -62,7 +61,6 @@ export function defineConfig() {
       deviceType: device.type,
       hasCookies: {
         locale: !!request.cookies.get(LOBE_LOCALE_COOKIE)?.value,
-        theme: !!request.cookies.get(LOBE_THEME_APPEARANCE)?.value,
       },
       locale,
     });

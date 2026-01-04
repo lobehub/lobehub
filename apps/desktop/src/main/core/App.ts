@@ -145,7 +145,7 @@ export class App {
     const themeMode = this.storeManager.get('themeMode');
 
     if (themeMode) {
-      nativeTheme.themeSource = themeMode === 'auto' ? 'system' : themeMode;
+      nativeTheme.themeSource = themeMode;
       logger.debug(
         `Theme mode initialized to: ${themeMode} (themeSource: ${nativeTheme.themeSource})`,
       );
