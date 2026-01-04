@@ -136,8 +136,6 @@ interface ExtendParamsSelectProps {
   value?: ExtendParamsType[];
 }
 
-const noop = () => {};
-
 const PreviewContent = ({
   desc,
   hint,
@@ -205,19 +203,19 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
     () => ({
       disableContextCaching: <Switch checked disabled />,
       enableReasoning: <Switch checked disabled />,
-      gpt5ReasoningEffort: <GPT5ReasoningEffortSlider onChange={noop} value="medium" />,
-      gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider onChange={noop} value="none" />,
-      gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider onChange={noop} value="medium" />,
-      gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider onChange={noop} value="none" />,
-      imageAspectRatio: <ImageAspectRatioSelect onChange={noop} value="1:1" />,
-      imageResolution: <ImageResolutionSlider onChange={noop} value="1K" />,
+      gpt5ReasoningEffort: <GPT5ReasoningEffortSlider value="medium" />,
+      gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
+      gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
+      gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
+      imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
+      imageResolution: <ImageResolutionSlider value="1K" />,
       reasoningBudgetToken: <ReasoningTokenSlider defaultValue={1 * 1024} />,
-      reasoningEffort: <ReasoningEffortSlider onChange={noop} value="medium" />,
-      textVerbosity: <TextVerbositySlider onChange={noop} value="medium" />,
-      thinking: <ThinkingSlider onChange={noop} value="auto" />,
+      reasoningEffort: <ReasoningEffortSlider value="medium" />,
+      textVerbosity: <TextVerbositySlider value="medium" />,
+      thinking: <ThinkingSlider value="auto" />,
       thinkingBudget: <ThinkingBudgetSlider defaultValue={2 * 1024} />,
-      thinkingLevel: <ThinkingLevelSlider onChange={noop} value="high" />,
-      thinkingLevel2: <ThinkingLevel2Slider onChange={noop} value="high" />,
+      thinkingLevel: <ThinkingLevelSlider value="high" />,
+      thinkingLevel2: <ThinkingLevel2Slider value="high" />,
       urlContext: <Switch checked disabled />,
     }),
     [],

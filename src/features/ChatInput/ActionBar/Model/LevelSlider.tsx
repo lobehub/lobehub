@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Slider } from 'antd';
 import { type SliderSingleProps } from 'antd/es/slider';
-import { memo, useMemo } from 'react';
+import { type CSSProperties, memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
 
 export interface LevelSliderProps<T extends string = string> {
@@ -18,13 +18,13 @@ export interface LevelSliderProps<T extends string = string> {
    */
   marks?: SliderSingleProps['marks'];
   /**
-   * Minimum width of the slider container
-   */
-  minWidth?: number;
-  /**
    * Callback when value changes
    */
   onChange?: (value: T) => void;
+  /**
+   * Style for the slider container
+   */
+  style?: CSSProperties;
   /**
    * Controlled value
    */
@@ -37,7 +37,7 @@ function LevelSlider<T extends string = string>({
   defaultValue,
   onChange,
   marks: customMarks,
-  minWidth = 200,
+  style,
 }: LevelSliderProps<T>) {
   const defaultLevel = defaultValue ?? levels[Math.floor(levels.length / 2)];
 
@@ -72,7 +72,7 @@ function LevelSlider<T extends string = string>({
       gap={12}
       horizontal
       paddingInline={'0 20px'}
-      style={{ minWidth, width: '100%' }}
+      style={{ minWidth: 200, width: '100%', ...style }}
     >
       <Flexbox flex={1}>
         <Slider
