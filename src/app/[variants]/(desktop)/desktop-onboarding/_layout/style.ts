@@ -6,6 +6,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 24px;
   `,
 
+  drag: css`
+    -webkit-app-region: drag;
+  `,
   // 内层容器 - 深色模式
   innerContainerDark: css`
     position: relative;

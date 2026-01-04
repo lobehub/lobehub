@@ -22,6 +22,7 @@ const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
       >
         <Flexbox
           align={'center'}
+          className={cx(styles.drag)}
           gap={8}
           horizontal
           justify={'space-between'}
