@@ -31,5 +31,5 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   networkProxy: defaultProxySettings,
   shortcuts: DEFAULT_SHORTCUTS_CONFIG,
   storagePath: appStorageDir,
-  themeMode: 'auto',
+  themeMode: 'system',
 };

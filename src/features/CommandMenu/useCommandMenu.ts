@@ -107,7 +107,7 @@ export const useCommandMenu = () => {
   };
 
   const handleThemeChange = (theme: ThemeMode) => {
-    setTheme(theme === 'auto' ? 'system' : theme);
+    setTheme(theme);
     closeCommandMenu();
   };
 

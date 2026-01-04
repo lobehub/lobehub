@@ -20,7 +20,6 @@ import AntdStaticMethods from '@/components/AntdStaticMethods';
 import { LOBE_THEME_NEUTRAL_COLOR, LOBE_THEME_PRIMARY_COLOR } from '@/const/theme';
 import { isDesktop } from '@/const/version';
 import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
-import { useWatchThemeFromNextThemes } from '@/features/ElectronTitlebar/hooks/useWatchThemeFromNextThemes';
 import { useIsDark } from '@/hooks/useIsDark';
 import { getUILocaleAndResources } from '@/libs/getUILocaleAndResources';
 import { useGlobalStore } from '@/store/global';
@@ -107,9 +106,6 @@ const AppTheme = memo<AppThemeProps>(
     const language = useGlobalStore(systemStatusSelectors.language);
     const antdTheme = useTheme();
     const isDark = useIsDark();
-
-    // Watch theme changes and sync to Electron main process
-    useWatchThemeFromNextThemes();
 
     const [primaryColor, neutralColor, animationMode] = useUserStore((s) => [
       userGeneralSettingsSelectors.primaryColor(s),
