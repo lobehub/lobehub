@@ -1,5 +1,3 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -7,53 +5,50 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import LevelSlider from './LevelSlider';
 
-const TextVerbositySlider = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+const TEXT_VERBOSITY_LEVELS = ['low', 'medium', 'high'] as const;
+type TextVerbosity = (typeof TEXT_VERBOSITY_LEVELS)[number];
 
-  const textVerbosity = config.textVerbosity || 'medium'; // Default to 'medium' if not set
+export interface TextVerbositySliderProps {
+  defaultValue?: TextVerbosity;
+  onChange?: (value: TextVerbosity) => void;
+  value?: TextVerbosity;
+}
 
-  const marks = {
-    0: 'low',
-    1: 'medium',
-    2: 'high',
-  };
+const TextVerbositySlider = memo<TextVerbositySliderProps>(
+  ({ value: controlledValue, onChange: controlledOnChange, defaultValue = 'medium' }) => {
+    const agentId = useAgentId();
+    const { updateAgentChatConfig } = useUpdateAgentConfig();
+    const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const verbosityValues = ['low', 'medium', 'high'];
-  const indexValue = verbosityValues.indexOf(textVerbosity);
-  const currentValue = indexValue === -1 ? 1 : indexValue;
+    // Controlled mode: use props; Uncontrolled mode: use store
+    const isControlled = controlledValue !== undefined || controlledOnChange !== undefined;
+    const currentValue = isControlled
+      ? (controlledValue ?? defaultValue)
+      : (config.textVerbosity as TextVerbosity) || defaultValue;
 
-  const updateTextVerbosity = useCallback(
-    (value: number) => {
-      const verbosity = verbosityValues[value] as 'low' | 'medium' | 'high';
-      updateAgentChatConfig({ textVerbosity: verbosity });
-    },
-    [updateAgentChatConfig],
-  );
+    const handleChange = useCallback(
+      (verbosity: TextVerbosity) => {
+        if (isControlled) {
+          controlledOnChange?.(verbosity);
+        } else {
+          updateAgentChatConfig({ textVerbosity: verbosity });
+        }
+      },
+      [isControlled, controlledOnChange, updateAgentChatConfig],
+    );
 
-  return (
-    <Flexbox
-      align={'center'}
-      gap={12}
-      horizontal
-      paddingInline={'0 20px'}
-      style={{ minWidth: 160, width: '100%' }}
-    >
-      <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={2}
-          min={0}
-          onChange={updateTextVerbosity}
-          step={1}
-          tooltip={{ open: false }}
-          value={currentValue}
-        />
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    return (
+      <LevelSlider<TextVerbosity>
+        defaultValue={defaultValue}
+        levels={TEXT_VERBOSITY_LEVELS}
+        minWidth={160}
+        onChange={handleChange}
+        value={currentValue}
+      />
+    );
+  },
+);
 
 export default TextVerbositySlider;

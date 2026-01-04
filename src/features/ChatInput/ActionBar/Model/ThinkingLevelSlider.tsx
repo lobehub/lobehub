@@ -1,5 +1,3 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -7,54 +5,50 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import LevelSlider from './LevelSlider';
 
-const ThinkingLevelSlider = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+const THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'] as const;
+type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
-  const thinkingLevel = config.thinkingLevel || 'high'; // Default to 'high' if not set
+export interface ThinkingLevelSliderProps {
+  defaultValue?: ThinkingLevel;
+  onChange?: (value: ThinkingLevel) => void;
+  value?: ThinkingLevel;
+}
 
-  const marks = {
-    0: 'minimal',
-    1: 'low',
-    2: 'medium',
-    3: 'high',
-  };
+const ThinkingLevelSlider = memo<ThinkingLevelSliderProps>(
+  ({ value: controlledValue, onChange: controlledOnChange, defaultValue = 'high' }) => {
+    const agentId = useAgentId();
+    const { updateAgentChatConfig } = useUpdateAgentConfig();
+    const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const levelValues = ['minimal', 'low', 'medium', 'high'];
-  const indexValue = levelValues.indexOf(thinkingLevel as any);
-  const currentValue = indexValue === -1 ? 3 : indexValue;
+    // Controlled mode: use props; Uncontrolled mode: use store
+    const isControlled = controlledValue !== undefined || controlledOnChange !== undefined;
+    const currentValue = isControlled
+      ? (controlledValue ?? defaultValue)
+      : (config.thinkingLevel as ThinkingLevel) || defaultValue;
 
-  const updateThinkingLevel = useCallback(
-    (value: number) => {
-      const level = levelValues[value] as 'minimal' | 'low' | 'medium' | 'high';
-      updateAgentChatConfig({ thinkingLevel: level });
-    },
-    [updateAgentChatConfig],
-  );
+    const handleChange = useCallback(
+      (level: ThinkingLevel) => {
+        if (isControlled) {
+          controlledOnChange?.(level);
+        } else {
+          updateAgentChatConfig({ thinkingLevel: level });
+        }
+      },
+      [isControlled, controlledOnChange, updateAgentChatConfig],
+    );
 
-  return (
-    <Flexbox
-      align={'center'}
-      gap={12}
-      horizontal
-      paddingInline={'0 20px'}
-      style={{ minWidth: 200, width: '100%' }}
-    >
-      <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={3}
-          min={0}
-          onChange={updateThinkingLevel}
-          step={1}
-          tooltip={{ open: false }}
-          value={currentValue}
-        />
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    return (
+      <LevelSlider<ThinkingLevel>
+        defaultValue={defaultValue}
+        levels={THINKING_LEVELS}
+        minWidth={200}
+        onChange={handleChange}
+        value={currentValue}
+      />
+    );
+  },
+);
 
 export default ThinkingLevelSlider;

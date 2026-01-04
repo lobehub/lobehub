@@ -1,5 +1,3 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -7,54 +5,50 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import LevelSlider from './LevelSlider';
 
-const GPT5ReasoningEffortSlider = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+const GPT5_REASONING_EFFORT_LEVELS = ['minimal', 'low', 'medium', 'high'] as const;
+type GPT5ReasoningEffort = (typeof GPT5_REASONING_EFFORT_LEVELS)[number];
 
-  const gpt5ReasoningEffort = config.gpt5ReasoningEffort || 'medium'; // Default to 'medium' if not set
+export interface GPT5ReasoningEffortSliderProps {
+  defaultValue?: GPT5ReasoningEffort;
+  onChange?: (value: GPT5ReasoningEffort) => void;
+  value?: GPT5ReasoningEffort;
+}
 
-  const marks = {
-    0: 'minimal',
-    1: 'low',
-    2: 'medium',
-    3: 'high',
-  };
+const GPT5ReasoningEffortSlider = memo<GPT5ReasoningEffortSliderProps>(
+  ({ value: controlledValue, onChange: controlledOnChange, defaultValue = 'medium' }) => {
+    const agentId = useAgentId();
+    const { updateAgentChatConfig } = useUpdateAgentConfig();
+    const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const effortValues = ['minimal', 'low', 'medium', 'high'];
-  const indexValue = effortValues.indexOf(gpt5ReasoningEffort);
-  const currentValue = indexValue === -1 ? 2 : indexValue;
+    // Controlled mode: use props; Uncontrolled mode: use store
+    const isControlled = controlledValue !== undefined || controlledOnChange !== undefined;
+    const currentValue = isControlled
+      ? (controlledValue ?? defaultValue)
+      : (config.gpt5ReasoningEffort as GPT5ReasoningEffort) || defaultValue;
 
-  const updateGPT5ReasoningEffort = useCallback(
-    (value: number) => {
-      const effort = effortValues[value] as 'minimal' | 'low' | 'medium' | 'high';
-      updateAgentChatConfig({ gpt5ReasoningEffort: effort });
-    },
-    [updateAgentChatConfig],
-  );
+    const handleChange = useCallback(
+      (effort: GPT5ReasoningEffort) => {
+        if (isControlled) {
+          controlledOnChange?.(effort);
+        } else {
+          updateAgentChatConfig({ gpt5ReasoningEffort: effort });
+        }
+      },
+      [isControlled, controlledOnChange, updateAgentChatConfig],
+    );
 
-  return (
-    <Flexbox
-      align={'center'}
-      gap={12}
-      horizontal
-      paddingInline={'0 20px'}
-      style={{ minWidth: 200, width: '100%' }}
-    >
-      <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={3}
-          min={0}
-          onChange={updateGPT5ReasoningEffort}
-          step={1}
-          tooltip={{ open: false }}
-          value={currentValue}
-        />
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    return (
+      <LevelSlider<GPT5ReasoningEffort>
+        defaultValue={defaultValue}
+        levels={GPT5_REASONING_EFFORT_LEVELS}
+        minWidth={200}
+        onChange={handleChange}
+        value={currentValue}
+      />
+    );
+  },
+);
 
 export default GPT5ReasoningEffortSlider;

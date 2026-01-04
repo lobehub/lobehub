@@ -1,5 +1,3 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -7,53 +5,50 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import LevelSlider from './LevelSlider';
 
-const ReasoningEffortSlider = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+const REASONING_EFFORT_LEVELS = ['low', 'medium', 'high'] as const;
+type ReasoningEffort = (typeof REASONING_EFFORT_LEVELS)[number];
 
-  const reasoningEffort = config.reasoningEffort || 'medium'; // Default to 'medium' if not set
+export interface ReasoningEffortSliderProps {
+  defaultValue?: ReasoningEffort;
+  onChange?: (value: ReasoningEffort) => void;
+  value?: ReasoningEffort;
+}
 
-  const marks = {
-    0: 'low',
-    1: 'medium',
-    2: 'high',
-  };
+const ReasoningEffortSlider = memo<ReasoningEffortSliderProps>(
+  ({ value: controlledValue, onChange: controlledOnChange, defaultValue = 'medium' }) => {
+    const agentId = useAgentId();
+    const { updateAgentChatConfig } = useUpdateAgentConfig();
+    const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const effortValues = ['low', 'medium', 'high'];
-  const indexValue = effortValues.indexOf(reasoningEffort);
-  const currentValue = indexValue === -1 ? 1 : indexValue;
+    // Controlled mode: use props; Uncontrolled mode: use store
+    const isControlled = controlledValue !== undefined || controlledOnChange !== undefined;
+    const currentValue = isControlled
+      ? (controlledValue ?? defaultValue)
+      : (config.reasoningEffort as ReasoningEffort) || defaultValue;
 
-  const updateReasoningEffort = useCallback(
-    (value: number) => {
-      const effort = effortValues[value] as 'low' | 'medium' | 'high';
-      updateAgentChatConfig({ reasoningEffort: effort });
-    },
-    [updateAgentChatConfig],
-  );
+    const handleChange = useCallback(
+      (effort: ReasoningEffort) => {
+        if (isControlled) {
+          controlledOnChange?.(effort);
+        } else {
+          updateAgentChatConfig({ reasoningEffort: effort });
+        }
+      },
+      [isControlled, controlledOnChange, updateAgentChatConfig],
+    );
 
-  return (
-    <Flexbox
-      align={'center'}
-      gap={12}
-      horizontal
-      paddingInline={'0 20px'}
-      style={{ minWidth: 200, width: '100%' }}
-    >
-      <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={2}
-          min={0}
-          onChange={updateReasoningEffort}
-          step={1}
-          tooltip={{ open: false }}
-          value={currentValue}
-        />
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    return (
+      <LevelSlider<ReasoningEffort>
+        defaultValue={defaultValue}
+        levels={REASONING_EFFORT_LEVELS}
+        minWidth={200}
+        onChange={handleChange}
+        value={currentValue}
+      />
+    );
+  },
+);
 
 export default ReasoningEffortSlider;

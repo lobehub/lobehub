@@ -1,5 +1,3 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -7,53 +5,58 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import LevelSlider from './LevelSlider';
 
-const ThinkingSlider = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+const THINKING_MODES = ['disabled', 'auto', 'enabled'] as const;
+type ThinkingMode = (typeof THINKING_MODES)[number];
 
-  const thinking = config.thinking || 'auto'; // Default to 'auto' if not set
+// Display marks for the slider
+const THINKING_MARKS = {
+  0: 'OFF',
+  1: 'Auto',
+  2: 'ON',
+};
 
-  const marks = {
-    0: 'OFF',
-    1: 'Auto',
-    2: 'ON',
-  };
+export interface ThinkingSliderProps {
+  defaultValue?: ThinkingMode;
+  onChange?: (value: ThinkingMode) => void;
+  value?: ThinkingMode;
+}
 
-  const thinkingValues = ['disabled', 'auto', 'enabled'];
-  const indexValue = thinkingValues.indexOf(thinking);
-  const currentValue = indexValue === -1 ? 1 : indexValue;
+const ThinkingSlider = memo<ThinkingSliderProps>(
+  ({ value: controlledValue, onChange: controlledOnChange, defaultValue = 'auto' }) => {
+    const agentId = useAgentId();
+    const { updateAgentChatConfig } = useUpdateAgentConfig();
+    const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const updateThinking = useCallback(
-    (value: number) => {
-      const thinkingMode = thinkingValues[value] as 'disabled' | 'auto' | 'enabled';
-      updateAgentChatConfig({ thinking: thinkingMode });
-    },
-    [updateAgentChatConfig],
-  );
+    // Controlled mode: use props; Uncontrolled mode: use store
+    const isControlled = controlledValue !== undefined || controlledOnChange !== undefined;
+    const currentValue = isControlled
+      ? (controlledValue ?? defaultValue)
+      : (config.thinking as ThinkingMode) || defaultValue;
 
-  return (
-    <Flexbox
-      align={'center'}
-      gap={12}
-      horizontal
-      paddingInline={'0 20px'}
-      style={{ minWidth: 200, width: '100%' }}
-    >
-      <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={2}
-          min={0}
-          onChange={updateThinking}
-          step={1}
-          tooltip={{ open: false }}
-          value={currentValue}
-        />
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    const handleChange = useCallback(
+      (mode: ThinkingMode) => {
+        if (isControlled) {
+          controlledOnChange?.(mode);
+        } else {
+          updateAgentChatConfig({ thinking: mode });
+        }
+      },
+      [isControlled, controlledOnChange, updateAgentChatConfig],
+    );
+
+    return (
+      <LevelSlider<ThinkingMode>
+        defaultValue={defaultValue}
+        levels={THINKING_MODES}
+        marks={THINKING_MARKS}
+        minWidth={200}
+        onChange={handleChange}
+        value={currentValue}
+      />
+    );
+  },
+);
 
 export default ThinkingSlider;

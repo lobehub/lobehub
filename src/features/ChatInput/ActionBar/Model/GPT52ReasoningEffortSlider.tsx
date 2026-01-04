@@ -1,5 +1,3 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -7,55 +5,50 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import LevelSlider from './LevelSlider';
 
-const GPT52ReasoningEffortSlider = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+const GPT52_REASONING_EFFORT_LEVELS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
+type GPT52ReasoningEffort = (typeof GPT52_REASONING_EFFORT_LEVELS)[number];
 
-  const gpt5_2ReasoningEffort = config.gpt5_2ReasoningEffort || 'none';
+export interface GPT52ReasoningEffortSliderProps {
+  defaultValue?: GPT52ReasoningEffort;
+  onChange?: (value: GPT52ReasoningEffort) => void;
+  value?: GPT52ReasoningEffort;
+}
 
-  const marks = {
-    0: 'none',
-    1: 'low',
-    2: 'medium',
-    3: 'high',
-    4: 'xhigh',
-  };
+const GPT52ReasoningEffortSlider = memo<GPT52ReasoningEffortSliderProps>(
+  ({ value: controlledValue, onChange: controlledOnChange, defaultValue = 'none' }) => {
+    const agentId = useAgentId();
+    const { updateAgentChatConfig } = useUpdateAgentConfig();
+    const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const effortValues = ['none', 'low', 'medium', 'high', 'xhigh'];
-  const indexValue = effortValues.indexOf(gpt5_2ReasoningEffort);
-  const currentValue = indexValue === -1 ? 0 : indexValue;
+    // Controlled mode: use props; Uncontrolled mode: use store
+    const isControlled = controlledValue !== undefined || controlledOnChange !== undefined;
+    const currentValue = isControlled
+      ? (controlledValue ?? defaultValue)
+      : (config.gpt5_2ReasoningEffort as GPT52ReasoningEffort) || defaultValue;
 
-  const updateGPT52ReasoningEffort = useCallback(
-    (value: number) => {
-      const effort = effortValues[value] as 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-      updateAgentChatConfig({ gpt5_2ReasoningEffort: effort });
-    },
-    [updateAgentChatConfig],
-  );
+    const handleChange = useCallback(
+      (effort: GPT52ReasoningEffort) => {
+        if (isControlled) {
+          controlledOnChange?.(effort);
+        } else {
+          updateAgentChatConfig({ gpt5_2ReasoningEffort: effort });
+        }
+      },
+      [isControlled, controlledOnChange, updateAgentChatConfig],
+    );
 
-  return (
-    <Flexbox
-      align={'center'}
-      gap={12}
-      horizontal
-      paddingInline={'0 20px'}
-      style={{ minWidth: 230, width: '100%' }}
-    >
-      <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={4}
-          min={0}
-          onChange={updateGPT52ReasoningEffort}
-          step={1}
-          tooltip={{ open: false }}
-          value={currentValue}
-        />
-      </Flexbox>
-    </Flexbox>
-  );
-});
+    return (
+      <LevelSlider<GPT52ReasoningEffort>
+        defaultValue={defaultValue}
+        levels={GPT52_REASONING_EFFORT_LEVELS}
+        minWidth={230}
+        onChange={handleChange}
+        value={currentValue}
+      />
+    );
+  },
+);
 
 export default GPT52ReasoningEffortSlider;

@@ -18,39 +18,57 @@ const NANO_BANANA_ASPECT_RATIOS = [
   '9:16', // 768x1376 / 1536x2752 / 3072x5504
   '16:9', // 1376x768 / 2752x1536 / 5504x3072
   '21:9', // 1584x672 / 3168x1344 / 6336x2688
-];
+] as const;
 
-const ImageAspectRatioSelect = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
+type AspectRatio = (typeof NANO_BANANA_ASPECT_RATIOS)[number];
 
-  const imageAspectRatio = config.imageAspectRatio || '1:1';
+export interface ImageAspectRatioSelectProps {
+  defaultValue?: AspectRatio;
+  onChange?: (value: AspectRatio) => void;
+  value?: AspectRatio;
+}
 
-  const options = useMemo(
-    () =>
-      NANO_BANANA_ASPECT_RATIOS.map((ratio) => ({
-        label: ratio,
-        value: ratio,
-      })),
-    [],
-  );
+const ImageAspectRatioSelect = memo<ImageAspectRatioSelectProps>(
+  ({ value: controlledValue, onChange: controlledOnChange, defaultValue = '1:1' }) => {
+    const agentId = useAgentId();
+    const { updateAgentChatConfig } = useUpdateAgentConfig();
+    const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-  const updateAspectRatio = useCallback(
-    (value: string) => {
-      updateAgentChatConfig({ imageAspectRatio: value });
-    },
-    [updateAgentChatConfig],
-  );
+    // Controlled mode: use props; Uncontrolled mode: use store
+    const isControlled = controlledValue !== undefined || controlledOnChange !== undefined;
+    const currentValue = isControlled
+      ? (controlledValue ?? defaultValue)
+      : (config.imageAspectRatio as AspectRatio) || defaultValue;
 
-  return (
-    <Select
-      onChange={updateAspectRatio}
-      options={options}
-      style={{ height: 32, marginRight: 10, width: 75 }}
-      value={imageAspectRatio}
-    />
-  );
-});
+    const options = useMemo(
+      () =>
+        NANO_BANANA_ASPECT_RATIOS.map((ratio) => ({
+          label: ratio,
+          value: ratio,
+        })),
+      [],
+    );
+
+    const handleChange = useCallback(
+      (ratio: string) => {
+        if (isControlled) {
+          controlledOnChange?.(ratio as AspectRatio);
+        } else {
+          updateAgentChatConfig({ imageAspectRatio: ratio });
+        }
+      },
+      [isControlled, controlledOnChange, updateAgentChatConfig],
+    );
+
+    return (
+      <Select
+        onChange={handleChange}
+        options={options}
+        style={{ height: 32, marginRight: 10, width: 75 }}
+        value={currentValue}
+      />
+    );
+  },
+);
 
 export default ImageAspectRatioSelect;
