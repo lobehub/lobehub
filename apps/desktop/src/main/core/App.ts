@@ -1,12 +1,5 @@
-import {
-  DEFAULT_VARIANTS,
-  LOBE_LOCALE_COOKIE,
-  LOBE_THEME_APPEARANCE,
-  Locales,
-  RouteVariants,
-} from '@lobechat/desktop-bridge';
 import { ElectronIPCEventHandler, ElectronIPCServer } from '@lobechat/electron-server-ipc';
-import { app, nativeTheme, protocol, session } from 'electron';
+import { app, nativeTheme, protocol } from 'electron';
 import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
 import { macOS, windows } from 'electron-is';
 import { pathExistsSync } from 'fs-extra';
@@ -395,7 +388,7 @@ export class App {
     const ext = extname(normalizedPath);
 
     // If the request explicitly includes an extension (e.g. html, ico, txt),
-    // treat it as a direct asset without variant injection.
+    // treat it as a direct asset.
     if (ext) {
       return pathExistsSync(basePath) ? basePath : null;
     }
@@ -446,14 +439,14 @@ export class App {
   }
 
   /**
-   * Resolve renderer file path in production by combining variant prefix and pathname.
-   * Falls back to default variant when cookies are missing or invalid.
+   * Resolve renderer file path in production.
+   * Static assets map directly; app routes fall back to index.html.
    */
   private async resolveRendererFilePath(url: URL) {
     const pathname = url.pathname;
     const normalizedPathname = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 
-    // Static assets should be resolved from root (no variant prefix)
+    // Static assets should be resolved from root
     if (
       pathname.startsWith('/_next/') ||
       pathname.startsWith('/static/') ||
@@ -464,87 +457,23 @@ export class App {
     }
 
     // If the incoming path already contains an extension (like .html or .ico),
-    // treat it as a direct asset lookup to avoid double variant prefixes.
+    // treat it as a direct asset lookup.
     const extension = extname(normalizedPathname);
     if (extension) {
-      const directPath = this.resolveExportFilePath(pathname);
-      if (directPath) return directPath;
-
-      // Next.js RSC payloads are emitted under variant folders (e.g. /en-US__0__light/__next._tree.txt),
-      // but the runtime may request them without the variant prefix. For missing .txt requests,
-      // retry resolution with variant injection.
-      if (extension === '.txt' && normalizedPathname.includes('__next.')) {
-        const variant = await this.getRouteVariantFromCookies();
-
-        return (
-          this.resolveExportFilePath(`/${variant}${pathname}`) ||
-          this.resolveExportFilePath(`/${this.defaultRouteVariant}${pathname}`) ||
-          null
-        );
-      }
-
-      return null;
+      return this.resolveExportFilePath(pathname);
     }
 
-    const variant = await this.getRouteVariantFromCookies();
-    const variantPrefixedPath = `/${variant}${pathname}`;
-
-    // Try variant-specific path first, then default variant as fallback
-    return (
-      this.resolveExportFilePath(variantPrefixedPath) ||
-      this.resolveExportFilePath(`/${this.defaultRouteVariant}${pathname}`) ||
-      null
-    );
-  }
-
-  private readonly defaultRouteVariant = RouteVariants.serializeVariants(DEFAULT_VARIANTS);
-  private readonly localeCookieName = LOBE_LOCALE_COOKIE;
-  private readonly themeCookieName = LOBE_THEME_APPEARANCE;
-
-  /**
-   * Build variant string from Electron session cookies to match Next export structure.
-   * Desktop is always treated as non-mobile (0).
-   */
-  private async getRouteVariantFromCookies(): Promise<string> {
-    try {
-      const cookies = await session.defaultSession.cookies.get({
-        url: `${this.rendererLoadedUrl}/`,
-      });
-      const locale = cookies.find((c) => c.name === this.localeCookieName)?.value;
-      const themeCookie = cookies.find((c) => c.name === this.themeCookieName)?.value;
-
-      const serialized = RouteVariants.serializeVariants(
-        RouteVariants.createVariants({
-          isMobile: false,
-          locale: locale as Locales | undefined,
-          theme: themeCookie === 'dark' || themeCookie === 'light' ? themeCookie : undefined,
-        }),
-      );
-
-      return RouteVariants.serializeVariants(RouteVariants.deserializeVariants(serialized));
-    } catch (error) {
-      logger.warn('Failed to read route variant cookies, using default', error);
-      return this.defaultRouteVariant;
-    }
+    return this.resolveExportFilePath('/');
   }
 
   /**
-   * Build renderer URL with variant prefix injected into the path.
-   * In dev mode (without static override), Next.js dev server handles routing automatically.
-   * In prod or dev with static override, we need to inject variant to match export structure: /[variants]/path
+   * Build renderer URL for dev/prod.
    */
   async buildRendererUrl(path: string): Promise<string> {
     // Ensure path starts with /
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-    // In dev mode without static override, use dev server directly (no variant needed)
-    if (isDev && !this.rendererStaticOverride) {
-      return `${this.rendererLoadedUrl}${cleanPath}`;
-    }
-
-    // In prod or dev with static override, inject variant for static export structure
-    const variant = await this.getRouteVariantFromCookies();
-    return `${this.rendererLoadedUrl}/${variant}.html${cleanPath}`;
+    return `${this.rendererLoadedUrl}${cleanPath}`;
   }
 
   private initializeServerIpcEvents() {

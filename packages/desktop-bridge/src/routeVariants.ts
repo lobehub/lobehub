@@ -1,7 +1,5 @@
 // Shared route variants utilities for desktop and web builds
 
-export const LOBE_LOCALE_COOKIE = 'LOBE_LOCALE';
-export const LOBE_THEME_APPEARANCE = 'LOBE_THEME_APPEARANCE';
 export const DEFAULT_LANG = 'en-US';
 
 // Supported locales (keep aligned with web resources)
