@@ -12,10 +12,11 @@ const StyleRegistry = ({ children }: PropsWithChildren) => {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-              html[data-theme="dark"] { background-color: #000; }
-              ${isDesktop ? 'html { background: none; }' : ''}
-              ${isDesktop ? 'html[data-theme="dark"] { background: color-mix(in srgb, #000 86%, transparent); }' : ''}
-              ${isDesktop ? 'html[data-theme="light"] { background: color-mix(in srgb, #f8f8f8 86%, transparent); }' : ''}
+              html body {background: #f8f8f8;}
+              html[data-theme="dark"] body { background-color: #000; }
+              ${isDesktop ? 'html body, html { background: none; }' : ''}
+              ${isDesktop ? 'html[data-theme="dark"] body { background: color-mix(in srgb, #000 86%, transparent); }' : ''}
+              ${isDesktop ? 'html[data-theme="light"] body { background: color-mix(in srgb, #f8f8f8 86%, transparent); }' : ''}
             `,
         }}
       />
