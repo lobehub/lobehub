@@ -6,7 +6,7 @@ import { type AiModelForSelect } from 'model-bank';
 import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Rnd } from 'react-rnd';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
@@ -88,21 +88,21 @@ const menuKey = (provider: string, model: string) => `${provider}-${model}`;
 
 type VirtualItem =
   | {
-      provider: EnabledProviderWithModels;
-      type: 'group-header';
-    }
+    provider: EnabledProviderWithModels;
+    type: 'group-header';
+  }
   | {
-      model: AiModelForSelect;
-      provider: EnabledProviderWithModels;
-      type: 'model-item';
-    }
+    model: AiModelForSelect;
+    provider: EnabledProviderWithModels;
+    type: 'model-item';
+  }
   | {
-      provider: EnabledProviderWithModels;
-      type: 'empty-model';
-    }
+    provider: EnabledProviderWithModels;
+    type: 'empty-model';
+  }
   | {
-      type: 'no-provider';
-    };
+    type: 'no-provider';
+  };
 
 type DropdownPlacement = 'bottom' | 'bottomLeft' | 'bottomRight' | 'top' | 'topLeft' | 'topRight';
 
@@ -255,6 +255,8 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
           }
 
           case 'group-header': {
+            const url = urlJoin('/settings/provider', item.provider.id || 'all');
+
             return (
               <div className={styles.groupHeader} key={`header-${item.provider.id}`}>
                 <Flexbox horizontal justify="space-between">
@@ -264,21 +266,18 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                     provider={item.provider.id}
                     source={item.provider.source}
                   />
-                  <ActionIcon
-                    icon={LucideBolt}
+                  <Link
                     onClick={(e) => {
-                      e.preventDefault();
                       e.stopPropagation();
-                      const url = urlJoin('/settings/provider', item.provider.id || 'all');
-                      if (e.ctrlKey || e.metaKey) {
-                        window.open(url, '_blank');
-                      } else {
-                        navigate(url);
-                      }
                     }}
-                    size={'small'}
-                    title={t('ModelSwitchPanel.goToSettings')}
-                  />
+                    to={url}
+                  >
+                    <ActionIcon
+                      icon={LucideBolt}
+                      size={'small'}
+                      title={t('ModelSwitchPanel.goToSettings')}
+                    />
+                  </Link>
                 </Flexbox>
               </div>
             );
