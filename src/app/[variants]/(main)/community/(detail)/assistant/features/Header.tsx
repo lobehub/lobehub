@@ -13,7 +13,14 @@ import {
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
-import { BookTextIcon, BookmarkCheckIcon, BookmarkIcon, CoinsIcon, DotIcon } from 'lucide-react';
+import {
+  BookTextIcon,
+  BookmarkCheckIcon,
+  BookmarkIcon,
+  CoinsIcon,
+  DotIcon,
+  HeartIcon,
+} from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,8 +61,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
   const [favoriteLoading, setFavoriteLoading] = useState(false);
-  // TODO: enable like feature
-  // const [likeLoading, setLikeLoading] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
 
   // Set access token for social service
   if (session?.accessToken) {
@@ -71,13 +77,13 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
   const isFavorited = favoriteStatus?.isFavorited ?? false;
 
-  // TODO: enable like feature
-  // const { data: likeStatus, mutate: mutateLike } = useSWR(
-  //   identifier && isAuthenticated ? ['like-status', 'agent', identifier] : null,
-  //   () => socialService.checkLikeStatus('agent', identifier!),
-  //   { revalidateOnFocus: false },
-  // );
-  // const isLiked = likeStatus?.isLiked ?? false;
+  // Fetch like status
+  const { data: likeStatus, mutate: mutateLike } = useSWR(
+    identifier && isAuthenticated ? ['like-status', 'agent', identifier] : null,
+    () => socialService.checkLikeStatus('agent', identifier!),
+    { revalidateOnFocus: false },
+  );
+  const isLiked = likeStatus?.isLiked ?? false;
 
   const handleFavoriteClick = async () => {
     if (!isAuthenticated) {
@@ -105,30 +111,29 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     }
   };
 
-  // TODO: enable like feature
-  // const handleLikeClick = async () => {
-  //   if (!isAuthenticated) {
-  //     await signIn();
-  //     return;
-  //   }
-  //   if (!identifier) return;
-  //   setLikeLoading(true);
-  //   try {
-  //     if (isLiked) {
-  //       await socialService.unlike('agent', identifier);
-  //       message.success(t('assistant.unlikeSuccess'));
-  //     } else {
-  //       await socialService.like('agent', identifier);
-  //       message.success(t('assistant.likeSuccess'));
-  //     }
-  //     await mutateLike();
-  //   } catch (error) {
-  //     console.error('Like action failed:', error);
-  //     message.error(t('assistant.likeFailed'));
-  //   } finally {
-  //     setLikeLoading(false);
-  //   }
-  // };
+  const handleLikeClick = async () => {
+    if (!isAuthenticated) {
+      await signIn();
+      return;
+    }
+    if (!identifier) return;
+    setLikeLoading(true);
+    try {
+      if (isLiked) {
+        await socialService.unlike('agent', identifier);
+        message.success(t('assistant.unlikeSuccess'));
+      } else {
+        await socialService.like('agent', identifier);
+        message.success(t('assistant.likeSuccess'));
+      }
+      await mutateLike();
+    } catch (error) {
+      console.error('Like action failed:', error);
+      message.error(t('assistant.likeFailed'));
+    } finally {
+      setLikeLoading(false);
+    }
+  };
 
   const categories = useCategory();
   const cate = categories.find((c) => c.key === category);
@@ -186,6 +191,14 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
                 {title}
               </Text>
             </Flexbox>
+            <Tooltip title={isLiked ? t('assistant.unlike') : t('assistant.like')}>
+              <ActionIcon
+                icon={HeartIcon}
+                loading={likeLoading}
+                onClick={handleLikeClick}
+                style={isLiked ? { color: '#ff4d4f' } : undefined}
+              />
+            </Tooltip>
             <Tooltip title={isFavorited ? t('assistant.unfavorite') : t('assistant.favorite')}>
               <ActionIcon
                 icon={isFavorited ? BookmarkCheckIcon : BookmarkIcon}
