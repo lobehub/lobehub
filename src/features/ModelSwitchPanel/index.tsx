@@ -67,7 +67,42 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
   `,
+  footer: css`
+    position: sticky;
+    z-index: 10;
+    inset-block-end: 0;
+
+    padding-block: 6px;
+    padding-inline: 0;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgElevated};
+  `,
+  footerButton: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+
+    box-sizing: border-box;
+    margin-inline: 8px;
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    color: ${cssVar.colorTextSecondary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
   groupHeader: css`
+    margin-inline: 8px;
     padding-block: 6px;
     padding-inline: 8px;
     color: ${cssVar.colorTextSecondary};
@@ -83,9 +118,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-inline: 8px;
     padding-block: 6px;
     padding-inline: 8px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     white-space: nowrap;
-    border-radius: ${cssVar.borderRadiusSM};
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
@@ -100,58 +135,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   settingsIcon: css`
     opacity: 0;
-  `,
-  tag: css`
-    cursor: pointer;
-  `,
-  toolbar: css`
-    position: sticky;
-    top: 0;
-    z-index: 10;
-
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-
-    padding: 6px 8px;
-
-    background: ${cssVar.colorBgElevated};
-    border-bottom: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  footer: css`
-    position: sticky;
-    bottom: 0;
-    z-index: 10;
-
-    padding-block: 6px;
-    padding-inline: 0;
-
-    background: ${cssVar.colorBgElevated};
-    border-top: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  footerButton: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    box-sizing: border-box;
-    margin-inline: 8px;
-    padding-block: 6px;
-    padding-inline: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    border-radius: ${cssVar.borderRadiusSM};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
   submenu: css`
     .ant-dropdown-menu {
@@ -168,9 +151,27 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     .ant-dropdown-menu-item-group-title {
       padding-block: 6px;
       padding-inline: 8px;
-      color: ${cssVar.colorTextSecondary};
       font-size: 12px;
+      color: ${cssVar.colorTextSecondary};
     }
+  `,
+  tag: css`
+    cursor: pointer;
+  `,
+  toolbar: css`
+    position: sticky;
+    z-index: 10;
+    inset-block-start: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgElevated};
   `,
 }));
 
@@ -668,12 +669,12 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                   }}
                   options={[
                     {
-                      icon: <Icon icon={Brain} size={16} />,
+                      icon: <Icon icon={Brain} />,
                       title: t('ModelSwitchPanel.byModel'),
                       value: 'byModel',
                     },
                     {
-                      icon: <Icon icon={ProviderIcon} size={16} />,
+                      icon: <Icon icon={ProviderIcon} />,
                       title: t('ModelSwitchPanel.byProvider'),
                       value: 'byProvider',
                     },

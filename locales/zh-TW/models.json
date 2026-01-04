@@ -103,7 +103,7 @@
   "Pro/deepseek-ai/DeepSeek-V3.description": "DeepSeek-V3 是一款擁有 6710 億參數的 MoE 模型，採用 MLA 與 DeepSeekMoE 架構，並透過無損負載平衡實現高效推理與訓練。預訓練於 14.8 兆高品質詞元上，並經過 SFT 與強化學習微調，表現超越其他開源模型，接近領先的封閉模型。",
   "Pro/moonshotai/Kimi-K2-Instruct-0905.description": "Kimi K2-Instruct-0905 是最新且最強大的 Kimi K2 模型。這是一款頂級的 MoE 模型，總參數達 1 兆，啟用參數為 320 億。其主要特點包括更強的代理式程式設計智能，在基準測試與真實世界代理任務中表現大幅提升，並且前端程式碼的美學與可用性也獲得顯著改善。",
   "Pro/moonshotai/Kimi-K2-Thinking.description": "Kimi K2 Thinking Turbo 是 K2 Thinking 的 Turbo 變體，針對推理速度與吞吐量進行優化，同時保留多步推理與工具使用能力。這是一款 MoE 模型，總參數約為 1 兆，原生支援 256K 上下文，並具備穩定的大規模工具調用能力，適用於對延遲與併發有嚴格要求的生產場景。",
-  "Pro/zai-org/glm-4.7.description": "GLM-4.7 是智譜推出的新一代旗艦模型，總參數量達 355B，激活參數量為 32B，在通用對話、推理與智能體能力方面全面升級。GLM-4.7 強化了交錯思考（Interleaved Thinking），並引入保留思考（Preserved Thinking）與輪級思考（Turn-level Thinking），在多輪對話與複雜任務中展現更高效的推理與決策能力。",
+  "Pro/zai-org/glm-4.7.description": "GLM-4.7 是智譜推出的新一代旗艦模型，總參數量達 355B，激活參數量為 32B，在通用對話、推理與智能體能力方面全面升級。GLM-4.7 強化了交錯思考（Interleaved Thinking），並引入保留思考（Preserved Thinking）與輪級思考（Turn-level Thinking），在多輪對話與複雜任務中展現更強的邏輯與連貫性。",
   "QwQ-32B-Preview.description": "Qwen QwQ 是一個實驗性研究模型，專注於提升推理能力。",
   "Qwen/QVQ-72B-Preview.description": "QVQ-72B-Preview 是來自 Qwen 的研究模型，專注於視覺推理，擅長複雜場景理解與視覺數學問題。",
   "Qwen/QwQ-32B-Preview.description": "Qwen QwQ 是一個實驗性研究模型，致力於提升 AI 推理能力。",
