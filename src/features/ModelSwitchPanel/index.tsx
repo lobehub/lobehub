@@ -1,13 +1,13 @@
 import { ActionIcon, Flexbox, Icon, TooltipGroup } from '@lobehub/ui';
+import { ProviderIcon } from '@lobehub/ui/icons';
 import { Dropdown, Segmented } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
+  Brain,
   LucideArrowRight,
   LucideBolt,
-  LucideBoxes,
   LucideCheck,
   LucideChevronRight,
-  LucideLayers,
   LucideSettings,
 } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
@@ -373,9 +373,10 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     }, [enabledList, groupMode]);
 
     // Use a fixed panel height to prevent shifting when switching modes
-    const panelHeight = enabledList.length === 0
-      ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider'] + FOOTER_HEIGHT
-      : MAX_PANEL_HEIGHT;
+    const panelHeight =
+      enabledList.length === 0
+        ? TOOLBAR_HEIGHT + ITEM_HEIGHT['no-provider'] + FOOTER_HEIGHT
+        : MAX_PANEL_HEIGHT;
 
     const activeKey = menuKey(provider, model);
 
@@ -667,12 +668,12 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
                   }}
                   options={[
                     {
-                      icon: <Icon icon={LucideBoxes} size={16} />,
+                      icon: <Icon icon={Brain} size={16} />,
                       title: t('ModelSwitchPanel.byModel'),
                       value: 'byModel',
                     },
                     {
-                      icon: <Icon icon={LucideLayers} size={16} />,
+                      icon: <Icon icon={ProviderIcon} size={16} />,
                       title: t('ModelSwitchPanel.byProvider'),
                       value: 'byProvider',
                     },
