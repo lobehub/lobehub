@@ -168,15 +168,23 @@ export default class Browser {
   loadUrl = async (path: string) => {
     const initUrl = await this.app.buildRendererUrl(path);
 
-    console.log('[Browser] initUrl', initUrl);
+    // Inject locale from store to help renderer boot with the correct language.
+    // Skip when set to auto to let the renderer detect locale normally.
+    const storedLocale = this.app.storeManager.get('locale', 'auto');
+    const urlWithLocale =
+      storedLocale && storedLocale !== 'auto'
+        ? `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${storedLocale}`
+        : initUrl;
+
+    console.log('[Browser] initUrl', urlWithLocale);
 
     try {
-      logger.debug(`[${this.identifier}] Attempting to load URL: ${initUrl}`);
-      await this._browserWindow.loadURL(initUrl);
+      logger.debug(`[${this.identifier}] Attempting to load URL: ${urlWithLocale}`);
+      await this._browserWindow.loadURL(urlWithLocale);
 
-      logger.debug(`[${this.identifier}] Successfully loaded URL: ${initUrl}`);
+      logger.debug(`[${this.identifier}] Successfully loaded URL: ${urlWithLocale}`);
     } catch (error) {
-      logger.error(`[${this.identifier}] Failed to load URL (${initUrl}):`, error);
+      logger.error(`[${this.identifier}] Failed to load URL (${urlWithLocale}):`, error);
 
       // Try to load local error page
       try {
@@ -190,13 +198,13 @@ export default class Browser {
 
         // Set retry logic
         ipcMain.handle('retry-connection', async () => {
-          logger.info(`[${this.identifier}] Retry connection requested for: ${initUrl}`);
+          logger.info(`[${this.identifier}] Retry connection requested for: ${urlWithLocale}`);
           try {
-            await this._browserWindow?.loadURL(initUrl);
-            logger.info(`[${this.identifier}] Reconnection successful to ${initUrl}`);
+            await this._browserWindow?.loadURL(urlWithLocale);
+            logger.info(`[${this.identifier}] Reconnection successful to ${urlWithLocale}`);
             return { success: true };
           } catch (err) {
-            logger.error(`[${this.identifier}] Retry connection failed for ${initUrl}:`, err);
+            logger.error(`[${this.identifier}] Retry connection failed for ${urlWithLocale}:`, err);
             // Reload error page
             try {
               logger.info(`[${this.identifier}] Reloading error page after failed retry...`);

@@ -38,6 +38,8 @@ export default class SystemController extends ControllerModule {
       isLinux: platform === 'linux',
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',
+      locale: this.app.storeManager.get('locale', 'auto'),
+
       platform: platform as 'darwin' | 'win32' | 'linux',
       userPath: {
         // User Paths (ensure keys match UserPathData / DesktopAppState interface)
@@ -214,6 +216,14 @@ export default class SystemController extends ControllerModule {
     }
 
     return result.filePaths[0];
+  }
+
+  /**
+   * Get the OS system locale
+   */
+  @IpcMethod()
+  getSystemLocale(): string {
+    return app.getLocale();
   }
 
   /**

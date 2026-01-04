@@ -21,6 +21,7 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
 
   console.log(`  Processing ${path.relative(TEMP_DIR, nextConfigPath)}...`);
   await updateFile({
+    assertAfter: (code) => /output\s*:\s*["']export["']/.test(code) && !/withPWA\s*\(/.test(code),
     filePath: nextConfigPath,
     name: 'modifyNextConfig',
     transformer: (code) => {
@@ -147,7 +148,6 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
 
       return newCode;
     },
-    assertAfter: (code) => /output\s*:\s*['"]export['"]/.test(code) && !/withPWA\s*\(/.test(code),
   });
 };
 
