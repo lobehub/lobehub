@@ -8,6 +8,8 @@ interface CreateDocumentParams {
   content: string;
   description: string;
   metadata?: Record<string, any>;
+  source?: string;
+  sourceType?: 'file' | 'web' | 'api' | 'topic';
   title: string;
   topicId: string;
   type?: ExtendedDocumentType;
