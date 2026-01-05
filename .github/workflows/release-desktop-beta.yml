@@ -32,7 +32,7 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.23
+          bun-version: latest
 
       - name: Install deps
         run: bun i
@@ -216,7 +216,7 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.23
+          bun-version: latest
 
       # 下载所有平台的构建产物
       - name: Download artifacts

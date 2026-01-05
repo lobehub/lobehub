@@ -33,7 +33,7 @@ jobs:
         uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          bun-version: 1.2.23
+          bun-version: latest
           package-manager-cache: 'false'
 
       - name: Install deps
@@ -224,7 +224,7 @@ jobs:
         uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          bun-version: 1.2.23
+          bun-version: latest
           package-manager-cache: 'false'
 
       # 下载所有平台的构建产物
