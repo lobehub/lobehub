@@ -1,7 +1,7 @@
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
 import { Command } from 'cmdk';
-import { Image } from 'lucide-react';
+import { Bot, Image } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -15,7 +15,7 @@ import { styles } from './styles';
 import { useCommandMenu } from './useCommandMenu';
 
 const AskAIMenu = memo(() => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'chat']);
   const navigate = useNavigate();
   const { handleAskLobeAI, handleAIPainting, closeCommandMenu } = useCommandMenu();
   const { search } = useCommandMenuContext();
@@ -27,6 +27,15 @@ const AskAIMenu = memo(() => {
   const heading = search.trim()
     ? t('cmdk.askAIHeading', { query: `"${search.trim()}"` })
     : t('cmdk.askAIHeadingEmpty');
+
+  const handleAgentBuilder = async () => {
+    const trimmedSearch = search.trim();
+    if (trimmedSearch) {
+      // Use sendAsAgent to create a blank agent and open agent builder
+      await useHomeStore.getState().sendAsAgent(trimmedSearch);
+    }
+    closeCommandMenu();
+  };
 
   const handleAgentSelect = (agentId: string) => {
     if (search.trim()) {
@@ -44,6 +53,12 @@ const AskAIMenu = memo(() => {
         <Avatar avatar={DEFAULT_INBOX_AVATAR} emojiScaleWithBackground shape="square" size={18} />
         <div className={styles.itemContent}>
           <div className={styles.itemLabel}>Lobe AI</div>
+        </div>
+      </Command.Item>
+      <Command.Item onSelect={handleAgentBuilder} value="agent-builder">
+        <Bot className={styles.icon} />
+        <div className={styles.itemContent}>
+          <div className={styles.itemLabel}>{t('agentBuilder.title', { ns: 'chat' })}</div>
         </div>
       </Command.Item>
       <Command.Item onSelect={handleAIPainting} value="ai-painting">
