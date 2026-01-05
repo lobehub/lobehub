@@ -165,13 +165,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
 
     padding-block: 6px;
     padding-inline: 8px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgElevated};
+  `,
+  toolbarModelName: css`
+    overflow: hidden;
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -380,6 +387,17 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
         : MAX_PANEL_HEIGHT;
 
     const activeKey = menuKey(provider, model);
+
+    // Find current model's display name
+    const currentModelName = useMemo(() => {
+      for (const providerItem of enabledList) {
+        const modelItem = providerItem.children.find((m) => m.id === model);
+        if (modelItem) {
+          return modelItem.displayName || modelItem.id;
+        }
+      }
+      return model;
+    }, [enabledList, model]);
 
     const renderVirtualItem = useCallback(
       (item: VirtualItem) => {
@@ -661,6 +679,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
               style={{ position: 'relative' }}
             >
               <div className={styles.toolbar}>
+                <div className={styles.toolbarModelName}>{currentModelName}</div>
                 <Segmented
                   onChange={(value) => {
                     const mode = value as GroupMode;

@@ -5,11 +5,13 @@ import { Button, Flexbox, TextArea } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Sparkles } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { useGeminiChineseWarning } from '@/hooks/useGeminiChineseWarning';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useQueryState } from '@/hooks/useQueryParam';
 import { useImageStore } from '@/store/image';
 import { createImageSelectors } from '@/store/image/selectors';
 import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/hooks';
@@ -49,6 +51,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const checkGeminiChineseWarning = useGeminiChineseWarning();
 
+  // Read prompt from query parameter
+  const [promptParam, setPromptParam] = useQueryState('prompt');
+  const hasProcessedPrompt = useRef(false);
+
   const handleGenerate = async () => {
     if (!isLogin) {
       loginRequired.redirect({ timeout: 2000 });
@@ -65,6 +71,44 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
     await createImage();
   };
+
+  // Auto-fill and auto-send when prompt query parameter is present
+  useEffect(() => {
+    if (promptParam && !hasProcessedPrompt.current && isLogin) {
+      // Decode the prompt parameter
+      const decodedPrompt = decodeURIComponent(promptParam);
+
+      // Set the prompt value in the store
+      setValue(decodedPrompt);
+
+      // Mark as processed to avoid running this effect again
+      hasProcessedPrompt.current = true;
+
+      // Clear the query parameter
+      setPromptParam(null);
+
+      // Auto-trigger generation after a short delay to ensure state is updated
+      setTimeout(async () => {
+        const shouldContinue = await checkGeminiChineseWarning({
+          model: currentModel,
+          prompt: decodedPrompt,
+          scenario: 'image',
+        });
+
+        if (shouldContinue) {
+          await createImage();
+        }
+      }, 100);
+    }
+  }, [
+    promptParam,
+    isLogin,
+    setValue,
+    setPromptParam,
+    checkGeminiChineseWarning,
+    currentModel,
+    createImage,
+  ]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {

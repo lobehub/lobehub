@@ -10,6 +10,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useCommandMenuContext } from './CommandMenuContext';
+import { CommandItem } from './components';
 import { styles } from './styles';
 import { useCommandMenu } from './useCommandMenu';
 
@@ -53,21 +54,22 @@ const AskAIMenu = memo(() => {
       </Command.Item>
 
       {agents.map((agent) => (
-        <Command.Item
+        <CommandItem
+          icon={
+            <Avatar
+              avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+              emojiScaleWithBackground
+              shape="square"
+              size={18}
+            />
+          }
           key={agent.id}
           onSelect={() => handleAgentSelect(agent.id)}
+          title={agent.title || t('defaultAgent')}
+          trailingLabel={t('cmdk.search.agent')}
           value={`agent-${agent.id}`}
-        >
-          <Avatar
-            avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
-            emojiScaleWithBackground
-            shape="square"
-            size={18}
-          />
-          <div className={styles.itemContent}>
-            <div className={styles.itemLabel}>{agent.title || t('defaultAgent')}</div>
-          </div>
-        </Command.Item>
+          variant="detailed"
+        />
       ))}
     </Command.Group>
   );
