@@ -1,7 +1,6 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { pwaInstallHandler } from 'pwa-install-handler';
 import { memo, useEffect, useState } from 'react';
 
 import { usePlatform } from '@/hooks/usePlatform';
@@ -14,30 +13,18 @@ const Install: any = dynamic(() => import('./Install'), {
 });
 
 const PWAInstall = memo(() => {
+  const [mounted, setMounted] = useState(false);
   const { isPWA, isSupportInstallPWA } = usePlatform();
   const isShowPWAGuide = useUserStore((s) => s.isShowPWAGuide);
   const hidePWAInstaller = useGlobalStore((s) => systemStatusSelectors.hidePWAInstaller(s));
-  const [canInstallFromPWAInstallHandler, setCanInstallFromPWAInstallHandler] = useState<
-    boolean | undefined
-  >();
 
   useEffect(() => {
-    pwaInstallHandler.addListener((canInstall) => {
-      setCanInstallFromPWAInstallHandler(canInstall);
-    });
-    return () => {
-      pwaInstallHandler.removeListener(setCanInstallFromPWAInstallHandler);
-    };
+    setMounted(true);
   }, []);
 
-  if (
-    isPWA ||
-    !isShowPWAGuide ||
-    !isSupportInstallPWA ||
-    hidePWAInstaller ||
-    canInstallFromPWAInstallHandler === false
-  )
+  if (!mounted || isPWA || !isShowPWAGuide || !isSupportInstallPWA || hidePWAInstaller) {
     return null;
+  }
 
   // only when the user is suitable for the pwa install and not install the pwa
   // then show the installation guide

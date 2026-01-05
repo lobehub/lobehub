@@ -1,6 +1,7 @@
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ThemeAppearance } from 'antd-style';
 import { ResolvingViewport } from 'next';
+import Script from 'next/dist/client/script';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { ReactNode } from 'react';
 import { isRtlLang } from 'rtl-detect';
@@ -38,6 +39,7 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
         )}
       </head>
       <body>
+        <Script src="/beforeinstallprompt.js" strategy="beforeInteractive" />
         <NuqsAdapter>
           <GlobalProvider
             appearance={theme}
@@ -47,9 +49,7 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
             primaryColor={primaryColor}
             variants={variants}
           >
-            <AuthProvider>
-              {children}
-            </AuthProvider>
+            <AuthProvider>{children}</AuthProvider>
             <PWAInstall />
           </GlobalProvider>
         </NuqsAdapter>

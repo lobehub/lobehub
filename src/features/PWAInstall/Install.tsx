@@ -1,7 +1,7 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { memo, useEffect, useLayoutEffect } from 'react';
+import type { PWAInstallElement } from '@khmyznikov/pwa-install';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BRANDING_NAME } from '@/const/branding';
@@ -11,13 +11,11 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 
-// @ts-ignore
-const PWA: any = dynamic(() => import('@khmyznikov/pwa-install/dist/pwa-install.react.js'), {
-  ssr: false,
-});
-
 const PWAInstall = memo(() => {
   const { t } = useTranslation('metadata');
+
+  const [mounted, setMounted] = useState(false);
+  const pwaInstallRef = useRef<PWAInstallElement | null>(null);
 
   const { install, canInstall } = usePWAInstall();
 
@@ -27,52 +25,55 @@ const PWAInstall = memo(() => {
     s.updateSystemStatus,
   ]);
 
-  // we need to make the pwa installer hidden by default
-  useLayoutEffect(() => {
-    sessionStorage.setItem('pwa-hide-install', 'true');
+  // Initialize component: load PWA install library
+  useEffect(() => {
+    import('@khmyznikov/pwa-install').then(() => setMounted(true));
   }, []);
 
-  const pwaInstall =
-    // eslint-disable-next-line unicorn/prefer-query-selector
-    typeof window === 'undefined' ? undefined : document.getElementById(PWA_INSTALL_ID);
-
-  // add an event listener to control the user close installer action
+  // Setup event listener for dismiss action and trigger PWA guide when needed
   useEffect(() => {
-    if (!pwaInstall) return;
+    if (!mounted) return;
+
+    const element = pwaInstallRef.current;
+    if (!element) return;
 
     const handler = (e: Event) => {
       const event = e as CustomEvent;
-
       // it means user hide installer
       if (event.detail.message === 'dismissed') {
         updateSystemStatus({ hidePWAInstaller: true });
       }
     };
 
-    pwaInstall.addEventListener('pwa-user-choice-result-event', handler);
-    return () => {
-      pwaInstall.removeEventListener('pwa-user-choice-result-event', handler);
-    };
-  }, [pwaInstall]);
+    element.addEventListener('pwa-user-choice-result-event', handler);
 
-  // trigger the PWA guide on demand
-  useEffect(() => {
-    if (!canInstall || hidePWAInstaller) return;
-
-    // trigger the pwa installer and register the service worker
-    if (isShowPWAGuide) {
+    // trigger the PWA guide on demand
+    if (canInstall && !hidePWAInstaller && isShowPWAGuide) {
       install();
       if ('serviceWorker' in navigator && window.serwist !== undefined) {
         window.serwist.register();
       }
     }
-  }, [canInstall, hidePWAInstaller, isShowPWAGuide]);
+
+    return () => {
+      element.removeEventListener('pwa-user-choice-result-event', handler);
+    };
+  }, [mounted, canInstall, hidePWAInstaller, install, isShowPWAGuide, updateSystemStatus]);
+
+  if (!mounted) return null;
+
+  const description = t('chat.description', { appName: BRANDING_NAME });
 
   return (
-    <PWA
-      description={t('chat.description', { appName: BRANDING_NAME })}
+    <pwa-install
+      description={description}
       id={PWA_INSTALL_ID}
-      manifest-url={'/manifest.webmanifest'}
+      manifest-url="/manifest.webmanifest"
+      manual-apple="true"
+      manual-chrome="true"
+      ref={(el) => {
+        pwaInstallRef.current = el;
+      }}
     />
   );
 });

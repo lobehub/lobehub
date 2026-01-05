@@ -84,6 +84,7 @@ public/swe-worker*
 
 # Generated files
 public/*.js
+!public/beforeinstallprompt.js
 public/sitemap.xml
 public/sitemap-index.xml
 sitemap*.xml

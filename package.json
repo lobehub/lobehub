@@ -151,7 +151,7 @@
     "@google/genai": "^1.33.0",
     "@huggingface/inference": "^4.13.5",
     "@icons-pack/react-simple-icons": "^13.8.0",
-    "@khmyznikov/pwa-install": "0.3.9",
+    "@khmyznikov/pwa-install": "^0.6.2",
     "@langchain/community": "^0.3.58",
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/const": "workspace:*",
