@@ -2,6 +2,7 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { form } from 'motion/react-m';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   BusinessSignupFomData,
@@ -17,6 +18,7 @@ import { BaseSignUpFormValues } from './types';
 export type SignUpFormValues = BaseSignUpFormValues & BusinessSignupFomData;
 
 export const useSignUp = () => {
+  const { t } = useTranslation('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -50,16 +52,16 @@ export const useSignUp = () => {
           (error as any)?.details?.cause?.code === '23505';
 
         if (isEmailDuplicate) {
-          message.error('betterAuth.errors.emailExists');
+          message.error(t('betterAuth.errors.emailExists'));
           return;
         }
 
         if (error.code === 'INVALID_EMAIL') {
-          message.error('betterAuth.errors.emailInvalid');
+          message.error(t('betterAuth.errors.emailInvalid'));
           return;
         }
 
-        message.error(error.message || 'betterAuth.signup.error');
+        message.error(error.message || t('betterAuth.signup.error'));
         return;
       }
 
@@ -71,7 +73,7 @@ export const useSignUp = () => {
         router.push(callbackUrl);
       }
     } catch {
-      message.error('betterAuth.signup.error');
+      message.error(t('betterAuth.signup.error'));
     } finally {
       setLoading(false);
     }
