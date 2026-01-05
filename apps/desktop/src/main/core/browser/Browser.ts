@@ -374,14 +374,10 @@ export default class Browser {
       | undefined;
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Options for new window: ${JSON.stringify(this.options)}`);
-    logger.debug(
-      `[${this.identifier}] Saved window state: ${JSON.stringify(savedState)}`,
-    );
+    logger.debug(`[${this.identifier}] Saved window state: ${JSON.stringify(savedState)}`);
 
     const resolvedState = this.resolveWindowState(savedState, { height, width });
-    logger.debug(
-      `[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`,
-    );
+    logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
 
     const browserWindow = new BrowserWindow({
       ...res,
@@ -569,33 +565,40 @@ export default class Browser {
   }
 
   /**
-   * Setup CORS bypass for local file server (127.0.0.1:*)
-   * This is needed for Electron to access files from the local static file server
+   * Setup CORS bypass for ALL requests
+   * In production, the renderer uses app://next protocol which triggers CORS for all external requests
+   * This completely bypasses CORS by removing Origin headers and adding permissive CORS response headers
    */
   private setupCORSBypass(browserWindow: BrowserWindow): void {
-    logger.debug(`[${this.identifier}] Setting up CORS bypass for local file server`);
+    logger.debug(`[${this.identifier}] Setting up CORS bypass for all requests`);
 
     const session = browserWindow.webContents.session;
 
-    // Intercept response headers to add CORS headers
-    session.webRequest.onHeadersReceived((details, callback) => {
-      const url = details.url;
+    // Remove Origin header from ALL requests to prevent CORS issues
+    session.webRequest.onBeforeSendHeaders((details, callback) => {
+      const requestHeaders = { ...details.requestHeaders };
 
-      // Only modify headers for local file server requests (127.0.0.1)
-      if (url.includes('127.0.0.1') || url.includes('lobe-desktop-file')) {
-        const responseHeaders = details.responseHeaders || {};
-
-        // Add CORS headers
-        responseHeaders['Access-Control-Allow-Origin'] = ['*'];
-        responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS'];
-        responseHeaders['Access-Control-Allow-Headers'] = ['*'];
-
-        callback({
-          responseHeaders,
-        });
-      } else {
-        callback({ responseHeaders: details.responseHeaders });
+      // Remove Origin header for all HTTP/HTTPS requests
+      // This prevents CORS preflight requests and is safe for Electron apps
+      if (requestHeaders['Origin']) {
+        delete requestHeaders['Origin'];
+        logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
+
+      callback({ requestHeaders });
+    });
+
+    // Add CORS headers to ALL responses
+    session.webRequest.onHeadersReceived((details, callback) => {
+      const responseHeaders = details.responseHeaders || {};
+
+      // Add permissive CORS headers to all responses
+      responseHeaders['Access-Control-Allow-Origin'] = ['*'];
+      responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS'];
+      responseHeaders['Access-Control-Allow-Headers'] = ['*'];
+      responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
+
+      callback({ responseHeaders });
     });
 
     logger.debug(`[${this.identifier}] CORS bypass setup completed`);
