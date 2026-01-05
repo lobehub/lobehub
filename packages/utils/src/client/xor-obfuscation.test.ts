@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SECRET_XOR_KEY } from '@/const/auth';
+import { SECRET_XOR_KEY } from '@/envs/auth';
 
 import { obfuscatePayloadWithXOR } from './xor-obfuscation';
 

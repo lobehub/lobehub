@@ -1,4 +1,4 @@
-import { SECRET_XOR_KEY } from '@/const/auth';
+import { SECRET_XOR_KEY } from '@/envs/auth';
 
 /**
  * Convert string to Uint8Array (UTF-8 encoding)

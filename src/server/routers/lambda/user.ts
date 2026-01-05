@@ -1,5 +1,5 @@
 import { type UserJSON } from '@clerk/backend';
-import { enableClerk, isDesktop } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import {
   NextAuthAccountSchame,
   Plans,
@@ -20,6 +20,7 @@ import { getIsInWaitList, getReferralStatus, getSubscriptionPlan } from '@/busin
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel, UserNotFoundError } from '@/database/models/user';
+import { enableClerk } from '@/envs/auth';
 import { ClerkAuth } from '@/libs/clerk-auth';
 import { pino } from '@/libs/logger';
 import { authedProcedure, router } from '@/libs/trpc/lambda';

@@ -1,5 +1,4 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@lobechat/const';
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
@@ -290,13 +289,15 @@ export const getAuthConfig = () => {
 
     runtimeEnv: {
       // Clerk
-      NEXT_PUBLIC_ENABLE_CLERK_AUTH: enableClerk,
+      NEXT_PUBLIC_ENABLE_CLERK_AUTH:
+        process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === '1' ||
+        !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
       CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
       CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET,
 
       // ---------------------------------- better auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_BETTER_AUTH: enableBetterAuth,
+      NEXT_PUBLIC_ENABLE_BETTER_AUTH: process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1',
       // Fallback to NEXTAUTH_URL origin or Vercel deployment domain for seamless migration from next-auth
       NEXT_PUBLIC_AUTH_URL: resolvePublicAuthUrl(),
       // Fallback to NEXT_PUBLIC_* for seamless migration
@@ -317,7 +318,7 @@ export const getAuthConfig = () => {
       AUTH_COGNITO_USERPOOL_ID: process.env.AUTH_COGNITO_USERPOOL_ID,
 
       // ---------------------------------- next auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_NEXT_AUTH: enableNextAuth,
+      NEXT_PUBLIC_ENABLE_NEXT_AUTH: process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1',
       NEXT_AUTH_SSO_PROVIDERS: process.env.NEXT_AUTH_SSO_PROVIDERS,
       NEXT_AUTH_SECRET: process.env.NEXT_AUTH_SECRET,
       NEXT_AUTH_DEBUG: !!process.env.NEXT_AUTH_DEBUG,
@@ -419,3 +420,15 @@ export const getAuthConfig = () => {
 };
 
 export const authEnv = getAuthConfig();
+
+// Auth flags derived from authEnv
+export const enableClerk = authEnv.NEXT_PUBLIC_ENABLE_CLERK_AUTH;
+export const enableBetterAuth = authEnv.NEXT_PUBLIC_ENABLE_BETTER_AUTH;
+export const enableNextAuth = authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH;
+export const enableAuth = enableClerk || enableBetterAuth || enableNextAuth || false;
+
+// Auth headers and constants
+export const LOBE_CHAT_AUTH_HEADER = 'X-lobe-chat-auth';
+export const LOBE_CHAT_OIDC_AUTH_HEADER = 'Oidc-Auth';
+export const OAUTH_AUTHORIZED = 'X-oauth-authorized';
+export const SECRET_XOR_KEY = 'LobeHub · LobeHub';
