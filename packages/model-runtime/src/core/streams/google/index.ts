@@ -120,7 +120,6 @@ const transformGoogleGenerativeAIStream = (
     const hasReasoningParts = parts.some((p: any) => p.thought === true);
     const hasImageParts = parts.some((p: any) => p.inlineData);
     const hasThoughtSignature = parts.some((p: any) => p.thoughtSignature);
-    const hasThoughtsInMetadata = (usageMetadata as any)?.thoughtsTokenCount > 0;
 
     // Check model version to determine if new format should be used
     const modelVersion = (chunk as any).modelVersion || '';
@@ -144,8 +143,7 @@ const transformGoogleGenerativeAIStream = (
     // 1. There are reasoning parts in current chunk (thought: true)
     // 2. There are multiple parts with images (multimodal content)
     // 3. There are thoughtSignature in parts (reasoning metadata attached to content)
-    // 4. There is thoughtsTokenCount in metadata (indicates response contains reasoning)
-    // 5. This is Gemini 3 model with image generation (always use new format for consistency)
+    // 4. This is Gemini 3 model with image generation (always use new format for consistency)
     // BUT NOT for:
     // - The legacy single-image scenario
     // - Grounding metadata scenario (uses legacy text + grounding events)
@@ -153,7 +151,6 @@ const transformGoogleGenerativeAIStream = (
       (hasReasoningParts ||
         (hasImageParts && parts.length > 1) ||
         hasThoughtSignature ||
-        hasThoughtsInMetadata ||
         isGemini3Model) &&
       !isSingleImageWithFinish &&
       !hasGroundingMetadata;
