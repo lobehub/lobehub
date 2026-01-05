@@ -7,12 +7,7 @@ import {
   INSERT_HEADING_COMMAND,
   getHotkeyById,
 } from '@lobehub/editor';
-import {
-  ChatInputActions,
-  type ChatInputActionsProps,
-  CodeLanguageSelect,
-  FloatActions,
-} from '@lobehub/editor/react';
+import { ChatInputActions, type ChatInputActionsProps, FloatActions } from '@lobehub/editor/react';
 import { Block } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -283,17 +278,6 @@ const TypoBar = memo<ToolbarProps>(({ floating, style, className }) => {
         label: t('typobar.codeblock'),
         onClick: editorState.codeblock,
       },
-      !floating &&
-        editorState.isCodeblock && {
-          children: (
-            <CodeLanguageSelect
-              onSelect={(value) => editorState.updateCodeblockLang(value)}
-              value={editorState.codeblockLang}
-            />
-          ),
-          disabled: !editorState.isCodeblock,
-          key: 'codeblockLang',
-        },
     ];
 
     return baseItems.filter(Boolean) as ChatInputActionsProps['items'];

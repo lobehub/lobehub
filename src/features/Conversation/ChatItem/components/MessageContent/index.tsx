@@ -7,7 +7,10 @@ import { useConversationStore } from '@/features/Conversation/store';
 
 import { type ChatItemProps } from '../../type';
 
-const EditableModal = dynamic(() => import('./EditableModal'), { ssr: false });
+const EditorModal = dynamic(
+  () => import('@/features/EditorModal').then((mode) => mode.EditorModal),
+  { ssr: false },
+);
 
 export const MSG_CONTENT_CLASSNAME = 'msg_content_flag';
 
@@ -60,13 +63,6 @@ const MessageContent = memo<MessageContentProps>(
       s.updateMessageContent,
     ]);
 
-    const onChange = useCallback(
-      (value: string) => {
-        updateMessageContent(id, value);
-      },
-      [id, updateMessageContent],
-    );
-
     const onEditingChange = useCallback(
       (edit: boolean) => toggleMessageEditing(id, edit),
       [id, toggleMessageEditing],
@@ -90,10 +86,13 @@ const MessageContent = memo<MessageContentProps>(
         </Flexbox>
         <Suspense fallback={null}>
           {editing && (
-            <EditableModal
-              editing={editing}
-              onChange={onChange}
-              onEditingChange={onEditingChange}
+            <EditorModal
+              onCancel={() => onEditingChange(false)}
+              onConfirm={async (value) => {
+                await updateMessageContent(id, value);
+                onEditingChange(false);
+              }}
+              open={editing}
               value={message ? String(message) : ''}
             />
           )}
