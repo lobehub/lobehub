@@ -52,7 +52,8 @@ declare global {
       // ===== Auth (shared by Better Auth / Next Auth) ===== //
       AUTH_SECRET?: string;
       NEXT_PUBLIC_AUTH_URL?: string;
-      NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION?: string;
+      AUTH_EMAIL_VERIFICATION?: string;
+      ENABLE_MAGIC_LINK?: string;
       AUTH_SSO_PROVIDERS?: string;
       AUTH_TRUSTED_ORIGINS?: string;
 
@@ -172,8 +173,6 @@ export const getAuthConfig = () => {
       // ---------------------------------- better auth ----------------------------------
       NEXT_PUBLIC_ENABLE_BETTER_AUTH: z.boolean().optional(),
       NEXT_PUBLIC_AUTH_URL: z.string().optional(),
-      NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
-      NEXT_PUBLIC_ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
 
       // ---------------------------------- next auth ----------------------------------
       NEXT_PUBLIC_ENABLE_NEXT_AUTH: z.boolean().optional(),
@@ -187,6 +186,8 @@ export const getAuthConfig = () => {
       AUTH_SECRET: z.string().optional(),
       AUTH_SSO_PROVIDERS: z.string().optional().default(''),
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
+      AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
+      ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
 
       // ---------------------------------- next auth ----------------------------------
       NEXT_AUTH_SECRET: z.string().optional(),
@@ -298,8 +299,12 @@ export const getAuthConfig = () => {
       NEXT_PUBLIC_ENABLE_BETTER_AUTH: enableBetterAuth,
       // Fallback to NEXTAUTH_URL origin or Vercel deployment domain for seamless migration from next-auth
       NEXT_PUBLIC_AUTH_URL: resolvePublicAuthUrl(),
-      NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: process.env.NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION === '1',
-      NEXT_PUBLIC_ENABLE_MAGIC_LINK: process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === '1',
+      // Fallback to NEXT_PUBLIC_* for seamless migration
+      AUTH_EMAIL_VERIFICATION:
+        process.env.AUTH_EMAIL_VERIFICATION === '1' ||
+        process.env.NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION === '1',
+      ENABLE_MAGIC_LINK:
+        process.env.ENABLE_MAGIC_LINK === '1' || process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === '1',
       // Fallback to NEXT_AUTH_SECRET for seamless migration from next-auth
       AUTH_SECRET: process.env.AUTH_SECRET || process.env.NEXT_AUTH_SECRET,
       // Fallback to NEXT_AUTH_SSO_PROVIDERS for seamless migration from next-auth

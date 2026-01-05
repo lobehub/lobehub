@@ -10,7 +10,6 @@ import type { auth } from '@/auth';
 import { getAuthConfig } from '@/envs/auth';
 
 const { NEXT_PUBLIC_AUTH_URL } = getAuthConfig();
-const enableMagicLink = getAuthConfig().NEXT_PUBLIC_ENABLE_MAGIC_LINK;
 
 export const {
   linkSocial,
@@ -31,6 +30,7 @@ export const {
     adminClient(),
     inferAdditionalFields<typeof auth>(),
     genericOAuthClient(),
-    ...(enableMagicLink ? [magicLinkClient()] : []),
+    // Always include magicLinkClient - server will reject if not enabled
+    magicLinkClient(),
   ],
 });
