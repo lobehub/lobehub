@@ -1,5 +1,57 @@
 [
   {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.210"
+  },
+  {
+    "children": {
+      "fixes": ["Use configured embedding provider instead of hardcoded OpenAI."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.209"
+  },
+  {
+    "children": {
+      "fixes": ["Auto jump to group."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.208"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the old agents open profiles error problem."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.207"
+  },
+  {
+    "children": {
+      "fixes": ["Fix data inconsistency in ai provider config."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.206"
+  },
+  {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.205"
+  },
+  {
+    "children": {
+      "features": ["Add new provider Xiaomi MiMo."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.204"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.203"
+  },
+  {
     "children": {
       "improvements": ["Refactor and fix model runtime initialize."]
     },

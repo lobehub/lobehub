@@ -66,6 +66,7 @@ import { default as vllm } from './vllm';
 import { default as volcengine } from './volcengine';
 import { default as wenxin } from './wenxin';
 import { default as xai } from './xai';
+import { default as xiaomimimo } from './xiaomimimo';
 import { default as xinference } from './xinference';
 import { default as zenmux } from './zenmux';
 import { default as zeroone } from './zeroone';
@@ -156,6 +157,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   volcengine,
   wenxin,
   xai,
+  xiaomimimo,
   xinference,
   zenmux,
   zeroone,
@@ -227,6 +229,7 @@ export { default as vllm } from './vllm';
 export { default as volcengine } from './volcengine';
 export { default as wenxin } from './wenxin';
 export { default as xai } from './xai';
+export { default as xiaomimimo } from './xiaomimimo';
 export { default as xinference } from './xinference';
 export { default as zenmux } from './zenmux';
 export { default as zeroone } from './zeroone';

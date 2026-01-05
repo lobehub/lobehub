@@ -47,7 +47,7 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
         )}
       >
         <span>{t('builtins.lobe-web-browsing.apiName.search')}: </span>
-        {query && <span className={highlightTextStyles.gold}>{query}</span>}
+        {query && <span className={highlightTextStyles.primary}>{query}</span>}
         {!isLoading &&
           !isArgumentsStreaming &&
           pluginState?.results &&

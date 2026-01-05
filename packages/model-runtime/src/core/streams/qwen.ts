@@ -72,7 +72,15 @@ export const transformQwenStream = (
     return {
       data: item.delta.tool_calls.map(
         (value, index): StreamToolCallChunkData => ({
-          function: value.function,
+          // Qwen models may send tool_calls in two separate chunks:
+          // 1. First chunk: {id, name} without arguments
+          // 2. Second chunk: {id, arguments} without name
+          // We need to provide default values to handle both cases
+          // Use null for missing name (same as OpenAI stream behavior)
+          function: {
+            arguments: value.function?.arguments ?? '',
+            name: value.function?.name ?? null,
+          },
           id: value.id || generateToolCallId(index, value.function?.name),
           index: typeof value.index !== 'undefined' ? value.index : index,
           type: value.type || 'function',

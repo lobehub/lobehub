@@ -57,7 +57,7 @@ export class TrayManager {
     logger.debug('初始化主托盘');
     return this.retrieveOrInitialize({
       iconPath: isMac
-        ? nativeTheme.shouldUseDarkColors
+        ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
           ? 'tray-dark.png'
           : 'tray-light.png'
         : 'tray.png',

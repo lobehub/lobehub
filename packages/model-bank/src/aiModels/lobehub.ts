@@ -28,7 +28,6 @@ const lobehubChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-11',
     settings: {
       extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -56,7 +55,6 @@ const lobehubChatModels: AIChatModelCard[] = [
     releasedAt: '2025-11-13',
     settings: {
       extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -84,7 +82,6 @@ const lobehubChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['reasoningEffort'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },

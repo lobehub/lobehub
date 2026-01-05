@@ -2,6 +2,208 @@
 
 # Changelog
 
+## [Version 2.0.0-next.210](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.209...v2.0.0-next.210)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 🐛 Bug Fixes
+
+- **model-runtime**: Handle Qwen tool_calls without initial arguments.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **model-runtime**: Handle Qwen tool_calls without initial arguments, closes [#11211](https://github.com/lobehub/lobe-chat/issues/11211) ([5321d91](https://github.com/lobehub/lobe-chat/commit/5321d91))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.209](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.208...v2.0.0-next.209)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 🐛 Bug Fixes
+
+- **model-runtime**: Handle array content in anthropic assistant messages.
+- **misc**: Use configured embedding provider instead of hardcoded OpenAI.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **model-runtime**: Handle array content in anthropic assistant messages, closes [#11206](https://github.com/lobehub/lobe-chat/issues/11206) ([b03845d](https://github.com/lobehub/lobe-chat/commit/b03845d))
+- **misc**: Use configured embedding provider instead of hardcoded OpenAI, closes [#11133](https://github.com/lobehub/lobe-chat/issues/11133) ([503c3eb](https://github.com/lobehub/lobe-chat/commit/503c3eb))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.208](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.207...v2.0.0-next.208)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Auto jump to group.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Auto jump to group, closes [#11187](https://github.com/lobehub/lobe-chat/issues/11187) ([e43578a](https://github.com/lobehub/lobe-chat/commit/e43578a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.207](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.206...v2.0.0-next.207)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Slove the old agents open profiles error problem.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Slove the old agents open profiles error problem, closes [#11204](https://github.com/lobehub/lobe-chat/issues/11204) ([7d650b6](https://github.com/lobehub/lobe-chat/commit/7d650b6))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.206](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.205...v2.0.0-next.206)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix data inconsistency in ai provider config.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix data inconsistency in ai provider config, closes [#11198](https://github.com/lobehub/lobe-chat/issues/11198) ([f8346f2](https://github.com/lobehub/lobe-chat/commit/f8346f2))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.205](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.204...v2.0.0-next.205)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 🐛 Bug Fixes
+
+- **gtd**: Fix frozen object mutation in updateTodos.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **gtd**: Fix frozen object mutation in updateTodos, closes [#11184](https://github.com/lobehub/lobe-chat/issues/11184) ([4970794](https://github.com/lobehub/lobe-chat/commit/4970794))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.204](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.203...v2.0.0-next.204)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### ✨ Features
+
+- **misc**: Add new provider Xiaomi MiMo.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Add new provider Xiaomi MiMo, closes [#10834](https://github.com/lobehub/lobe-chat/issues/10834) ([62f7858](https://github.com/lobehub/lobe-chat/commit/62f7858))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.203](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.202...v2.0.0-next.203)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Update i18n, closes [#11145](https://github.com/lobehub/lobe-chat/issues/11145) ([fdadef2](https://github.com/lobehub/lobe-chat/commit/fdadef2))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.202](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.201...v2.0.0-next.202)
 
 <sup>Released on **2026-01-03**</sup>

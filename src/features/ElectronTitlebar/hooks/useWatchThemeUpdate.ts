@@ -7,6 +7,10 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
+const sidebarColors = {
+  dark: '#000',
+  light: '#f8f8f8',
+};
 export const useWatchThemeUpdate = () => {
   const [isAppStateInit, systemAppearance, updateElectronAppState, isMac] = useElectronStore(
     (s) => [
@@ -43,8 +47,9 @@ export const useWatchThemeUpdate = () => {
 
     const lobeApp = document.querySelector('#' + LOBE_THEME_APP_ID);
     if (!lobeApp) return;
-    const hexColor = getComputedStyle(lobeApp).getPropertyValue('--ant-color-bg-layout');
 
-    document.body.style.background = `color-mix(in srgb, ${hexColor} 86%, transparent)`;
+    if (systemAppearance) {
+      document.body.style.background = `color-mix(in srgb, ${sidebarColors[systemAppearance as 'dark' | 'light']} 86%, transparent)`;
+    }
   }, [systemAppearance, isAppStateInit, isMac]);
 };

@@ -53,6 +53,7 @@ const { mockBrowserWindow, mockNativeTheme, mockIpcMain, mockScreen, MockBrowser
         off: vi.fn(),
         on: vi.fn(),
         shouldUseDarkColors: false,
+        themeSource: 'system',
       },
       mockScreen: {
         getDisplayNearestPoint: vi.fn().mockReturnValue({
@@ -272,7 +273,7 @@ describe('Browser', () => {
 
   describe('theme management', () => {
     describe('getPlatformThemeConfig', () => {
-      it('should return Windows dark theme config', () => {
+      it('should return Windows dark theme config when shouldUseDarkColors is true', () => {
         mockNativeTheme.shouldUseDarkColors = true;
 
         // Create browser with dark mode
@@ -289,7 +290,7 @@ describe('Browser', () => {
         );
       });
 
-      it('should return Windows light theme config', () => {
+      it('should return Windows light theme config when shouldUseDarkColors is false', () => {
         mockNativeTheme.shouldUseDarkColors = false;
 
         expect(MockBrowserWindow).toHaveBeenCalledWith(
@@ -334,11 +335,8 @@ describe('Browser', () => {
     });
 
     describe('isDarkMode', () => {
-      it('should return true when themeMode is dark', () => {
-        mockStoreManagerGet.mockImplementation((key: string) => {
-          if (key === 'themeMode') return 'dark';
-          return undefined;
-        });
+      it('should return true when shouldUseDarkColors is true', () => {
+        mockNativeTheme.shouldUseDarkColors = true;
 
         const darkBrowser = new Browser(defaultOptions, mockApp);
         // Access private getter through handleAppThemeChange which uses isDarkMode
@@ -348,18 +346,14 @@ describe('Browser', () => {
         expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#1a1a1a');
       });
 
-      it('should use system theme when themeMode is auto', () => {
-        mockStoreManagerGet.mockImplementation((key: string) => {
-          if (key === 'themeMode') return 'auto';
-          return undefined;
-        });
-        mockNativeTheme.shouldUseDarkColors = true;
+      it('should return false when shouldUseDarkColors is false', () => {
+        mockNativeTheme.shouldUseDarkColors = false;
 
-        const autoBrowser = new Browser(defaultOptions, mockApp);
-        autoBrowser.handleAppThemeChange();
+        const lightBrowser = new Browser(defaultOptions, mockApp);
+        lightBrowser.handleAppThemeChange();
         vi.advanceTimersByTime(0);
 
-        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#1a1a1a');
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#ffffff');
       });
     });
   });
