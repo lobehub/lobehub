@@ -1,5 +1,4 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { buildCallbackUrl, getCallbackUrlOrigin } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 import { UAParser } from 'ua-parser-js';
@@ -236,8 +235,10 @@ export function defineConfig() {
       // ref: https://authjs.dev/getting-started/session-management/protecting
       if (isProtected) {
         logNextAuth('Request a protected route, redirecting to sign-in page');
-        const nextLoginUrl = new URL('/next-auth/signin', getCallbackUrlOrigin(req));
-        nextLoginUrl.searchParams.set('callbackUrl', buildCallbackUrl(req));
+        const authUrl = authEnv.NEXT_PUBLIC_AUTH_URL;
+        const callbackUrl = `${authUrl}${req.nextUrl.pathname}${req.nextUrl.search}`;
+        const nextLoginUrl = new URL('/next-auth/signin', authUrl);
+        nextLoginUrl.searchParams.set('callbackUrl', callbackUrl);
         const hl = req.nextUrl.searchParams.get('hl');
         if (hl) {
           nextLoginUrl.searchParams.set('hl', hl);
@@ -322,8 +323,10 @@ export function defineConfig() {
       // If request a protected route, redirect to sign-in page
       if (isProtected) {
         logBetterAuth('Request a protected route, redirecting to sign-in page');
-        const signInUrl = new URL('/signin', getCallbackUrlOrigin(req));
-        signInUrl.searchParams.set('callbackUrl', buildCallbackUrl(req));
+        const authUrl = authEnv.NEXT_PUBLIC_AUTH_URL;
+        const callbackUrl = `${authUrl}${req.nextUrl.pathname}${req.nextUrl.search}`;
+        const signInUrl = new URL('/signin', authUrl);
+        signInUrl.searchParams.set('callbackUrl', callbackUrl);
         const hl = req.nextUrl.searchParams.get('hl');
         if (hl) {
           signInUrl.searchParams.set('hl', hl);
