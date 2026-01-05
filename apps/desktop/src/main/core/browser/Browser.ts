@@ -567,36 +567,61 @@ export default class Browser {
   /**
    * Setup CORS bypass for ALL requests
    * In production, the renderer uses app://next protocol which triggers CORS for all external requests
-   * This completely bypasses CORS by removing Origin headers and adding permissive CORS response headers
+   * This completely bypasses CORS by:
+   * 1. Removing Origin header from requests (prevents OPTIONS preflight)
+   * 2. Adding proper CORS response headers using the stored origin value
    */
   private setupCORSBypass(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] Setting up CORS bypass for all requests`);
 
     const session = browserWindow.webContents.session;
 
-    // Remove Origin header from ALL requests to prevent CORS issues
+    // Store origin values for each request ID
+    const originMap = new Map<number, string>();
+
+    // Remove Origin header and store it for later use
     session.webRequest.onBeforeSendHeaders((details, callback) => {
       const requestHeaders = { ...details.requestHeaders };
 
-      // Remove Origin header for all HTTP/HTTPS requests
-      // This prevents CORS preflight requests and is safe for Electron apps
+      // Store and remove Origin header to prevent CORS preflight
       if (requestHeaders['Origin']) {
+        originMap.set(details.id, requestHeaders['Origin']);
         delete requestHeaders['Origin'];
-        logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
+        logger.debug(
+          `[${this.identifier}] Removed Origin header for: ${details.url} (stored: ${requestHeaders['Origin']})`,
+        );
       }
 
       callback({ requestHeaders });
     });
 
-    // Add CORS headers to ALL responses
+    // Add CORS headers to ALL responses using stored origin
     session.webRequest.onHeadersReceived((details, callback) => {
       const responseHeaders = details.responseHeaders || {};
 
-      // Add permissive CORS headers to all responses
-      responseHeaders['Access-Control-Allow-Origin'] = ['*'];
-      responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS'];
+      // Get the original origin from our map, fallback to default
+      const origin = originMap.get(details.id) || '*';
+
+      // Cannot use '*' when Access-Control-Allow-Credentials is true
+      responseHeaders['Access-Control-Allow-Origin'] = [origin];
+      responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS, PATCH'];
       responseHeaders['Access-Control-Allow-Headers'] = ['*'];
       responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
+
+      // Clean up the stored origin after response
+      originMap.delete(details.id);
+
+      // For OPTIONS requests, add preflight cache and override status
+      if (details.method === 'OPTIONS') {
+        responseHeaders['Access-Control-Max-Age'] = ['86400']; // 24 hours
+        logger.debug(`[${this.identifier}] Adding CORS headers to OPTIONS response`);
+
+        callback({
+          responseHeaders,
+          statusLine: 'HTTP/1.1 200 OK',
+        });
+        return;
+      }
 
       callback({ responseHeaders });
     });
