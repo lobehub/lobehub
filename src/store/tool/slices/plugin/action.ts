@@ -12,7 +12,7 @@ import { pluginStoreSelectors } from '../oldStore/selectors';
 import { pluginSelectors } from './selectors';
 
 /**
- * 插件接口
+ * Plugin interface
  */
 export interface PluginAction {
   checkPluginsIsInstalled: (plugins: string[]) => Promise<void>;
