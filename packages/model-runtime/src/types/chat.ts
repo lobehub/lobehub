@@ -62,15 +62,15 @@ export interface OpenAIChatMessage {
 export interface ChatStreamPayload {
   apiMode?: 'chatCompletion' | 'responses';
   /**
-   * 开启上下文缓存
+   * Enable context caching
    */
   enabledContextCaching?: boolean;
   /**
-   * 是否开启搜索
+   * Whether to enable search
    */
   enabledSearch?: boolean;
   /**
-   * @title 控制生成文本中的惩罚系数，用于减少重复性
+   * @title Penalty coefficient for reducing repetitiveness in generated text
    * @default 0
    */
   frequency_penalty?: number;
@@ -83,23 +83,23 @@ export interface ChatStreamPayload {
    */
   imageResolution?: '1K' | '2K' | '4K';
   /**
-   * @title 生成文本的最大长度
+   * @title Maximum length of generated text
    */
   max_tokens?: number;
   /**
-   * @title 聊天信息列表
+   * @title List of chat messages
    */
   messages: OpenAIChatMessage[];
   /**
-   * @title 模型名称
+   * @title Model name
    */
   model: string;
   /**
-   * @title 返回的文本数量
+   * @title Number of text responses to return
    */
   n?: number;
   /**
-   * @title 控制生成文本中的惩罚系数，用于减少主题的变化
+   * @title Penalty coefficient for reducing topic variation in generated text
    * @default 0
    */
   presence_penalty?: number;
@@ -112,12 +112,12 @@ export interface ChatStreamPayload {
   responseMode?: 'stream' | 'json';
   response_format?: ChatResponseFormat;
   /**
-   * @title 是否开启流式请求
+   * @title Whether to enable streaming requests
    * @default true
    */
   stream?: boolean;
   /**
-   * @title 生成文本的随机度量，用于控制文本的创造性和多样性
+   * @title Randomness measure for generated text, controls creativity and diversity
    * @default 1
    */
   temperature?: number;
@@ -139,13 +139,13 @@ export interface ChatStreamPayload {
   tool_choice?: string;
   tools?: ChatCompletionTool[];
   /**
-   * @title 控制生成文本中最高概率的单个令牌
+   * @title Controls the highest probability single token in generated text
    * @default 1
    */
   top_p?: number;
   truncation?: 'auto' | 'disabled';
   /**
-   * @title Gemini URL 上下文获取工具开关
+   * @title Gemini URL context fetching tool toggle
    */
   urlContext?: boolean;
   verbosity?: 'low' | 'medium' | 'high';
