@@ -2,11 +2,12 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { cssVar, cx, useThemeMode } from 'antd-style';
+import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
+import { useIsDark } from '@/hooks/useIsDark';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';
@@ -19,7 +20,7 @@ interface ProviderCardProps extends AiProviderListItem {
 const ProviderCard = memo<ProviderCardProps>(
   ({ id, description, name, enabled, source, logo, loading, onProviderSelect }) => {
     const { t } = useTranslation('providers');
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
 
     if (loading)
       return (

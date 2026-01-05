@@ -1,16 +1,16 @@
 /**
  * Prompt Optimizer Configuration
- * 提示词优化器配置 - 用于智能分割和优化提示词
+ * Prompt optimizer configuration - for intelligent splitting and optimization of prompts
  */
 
 /**
  * Style keywords configuration - organized by category
- * 风格关键词配置 - 按类别组织便于维护和扩展
+ * Style keyword configuration - organized by category for easy maintenance and extension
  */
 
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 export const STYLE_KEYWORDS = {
-  // Artists and platforms / 艺术家和平台
+  // Artists and platforms
   ARTISTS: [
     'by greg rutkowski',
     'by artgerm',
@@ -34,7 +34,7 @@ export const STYLE_KEYWORDS = {
     'digital painting',
   ],
 
-  // Art styles / 艺术风格
+  // Art styles
   ART_STYLES: [
     'photorealistic',
     'photo realistic',
@@ -90,7 +90,7 @@ export const STYLE_KEYWORDS = {
     'retrowave',
   ],
 
-  // Lighting effects / 光照效果
+  // Lighting effects
   LIGHTING: [
     'dramatic lighting',
     'soft lighting',
@@ -131,7 +131,7 @@ export const STYLE_KEYWORDS = {
     'incandescent',
   ],
 
-  // Photography terms / 摄影术语
+  // Photography terms
   PHOTOGRAPHY: [
     'depth of field',
     'shallow depth of field',
@@ -184,7 +184,7 @@ export const STYLE_KEYWORDS = {
     'instant photo',
   ],
 
-  // Quality descriptions / 质量描述
+  // Quality descriptions
   QUALITY: [
     'high quality',
     'best quality',
@@ -227,7 +227,7 @@ export const STYLE_KEYWORDS = {
     'exquisite',
   ],
 
-  // Rendering and effects / 渲染和效果
+  // Rendering and effects
   RENDERING: [
     'octane render',
     'octane',
@@ -270,7 +270,7 @@ export const STYLE_KEYWORDS = {
     'high dynamic range',
   ],
 
-  // Color and mood / 颜色和氛围
+  // Color and mood
   COLOR_MOOD: [
     'vibrant',
     'vibrant colors',
@@ -330,7 +330,7 @@ export const STYLE_KEYWORDS = {
     'gothic atmosphere',
   ],
 
-  // Texture and materials / 纹理和材质
+  // Texture and materials
   TEXTURE_MATERIAL: [
     'glossy',
     'matte',
@@ -397,7 +397,7 @@ export const STYLE_KEYWORDS = {
 
 /**
  * Style synonyms mapping for better recognition
- * 同义词映射，提高识别准确率
+ * Synonym mapping to improve recognition accuracy
  */
 export const STYLE_SYNONYMS: Record<string, string[]> = {
   // Photography variations
@@ -443,7 +443,7 @@ export const STYLE_SYNONYMS: Record<string, string[]> = {
 
 /**
  * Compound styles that should be recognized as a whole
- * 组合风格，应该作为整体识别
+ * Compound styles that should be recognized as a complete unit
  */
 export const COMPOUND_STYLES = [
   // Studio and brand styles
@@ -536,37 +536,37 @@ export const COMPOUND_STYLES = [
 
 /**
  * Precise adjective patterns for style extraction
- * 精确的形容词模式，用于风格提取
+ * Precise adjective patterns for style extraction
  */
 export const STYLE_ADJECTIVE_PATTERNS = {
-  // Visual quality related / 视觉质量相关
+  // Visual quality related
   quality:
     /^(sharp|blur(ry)?|clear|crisp|clean|smooth|rough|grainy|noisy|pristine|flawless|perfect|polished)$/i,
 
-  // Artistic style related / 艺术风格相关
+  // Artistic style related
   artistic:
     /^(abstract|surreal|minimal(ist)?|ornate|baroque|gothic|modern|contemporary|traditional|classical|vintage|retro|antique|futuristic|avant-garde)$/i,
 
-  // Color and lighting / 颜色和光照
+  // Color and lighting
   visual:
     /^(bright|dark|dim|vibrant|vivid|muted|saturated|desaturated|warm|cool|cold|hot|soft|hard|harsh|gentle|subtle|bold|pale|rich|deep)$/i,
 
-  // Mood and atmosphere / 情绪和氛围
+  // Mood and atmosphere
   mood: /^(dramatic|peaceful|chaotic|serene|calm|mysterious|mystical|magical|epic|legendary|heroic|romantic|melancholic|nostalgic|whimsical|playful|serious|solemn|cheerful|gloomy|ominous|eerie|creepy|scary|dreamy|ethereal|fantastical|moody|atmospheric)$/i,
 
-  // Texture and material / 纹理和材质
+  // Texture and material
   texture:
     /^(metallic|wooden|glass(y)?|crystalline|fabric|leather|plastic|rubber|organic|synthetic|liquid|solid|transparent|translucent|opaque|reflective|matte|glossy|satin|rough|smooth|wet|dry|dusty|rusty|weathered|aged|new|fresh|worn)$/i,
 
-  // Size and scale / 尺寸和规模
+  // Size and scale
   scale:
     /^(tiny|small|medium|large|huge|massive|gigantic|colossal|enormous|microscopic|miniature|oversized|epic-scale|human-scale|intimate|vast|infinite)$/i,
 
-  // Complexity and detail / 复杂度和细节
+  // Complexity and detail
   detail:
     /^(simple|complex|intricate|elaborate|detailed|minimal|advanced|sophisticated|primitive|refined|crude|delicate|robust)$/i,
 
-  // Professional quality / 专业质量
+  // Professional quality
   professional:
     /^(professional|amateur|masterful|skilled|expert|novice|polished|raw|finished|unfinished|complete|incomplete|refined|rough)$/i,
 } as const;
@@ -575,7 +575,7 @@ export const STYLE_ADJECTIVE_PATTERNS = {
 
 /**
  * Get all style keywords as a flattened array
- * 获取所有风格关键词的扁平数组
+ * Get all style keywords as a flattened array
  */
 export function getAllStyleKeywords(): readonly string[] {
   return Object.values(STYLE_KEYWORDS).flat();
@@ -583,7 +583,7 @@ export function getAllStyleKeywords(): readonly string[] {
 
 /**
  * Get all compound styles
- * 获取所有组合风格
+ * Get all compound styles
  */
 export function getCompoundStyles(): readonly string[] {
   return COMPOUND_STYLES;
@@ -591,7 +591,7 @@ export function getCompoundStyles(): readonly string[] {
 
 /**
  * Normalize a style term using synonyms
- * 使用同义词标准化风格术语
+ * Normalize a style term using synonyms
  */
 export function normalizeStyleTerm(term: string): string {
   const lowerTerm = term.toLowerCase();
@@ -608,7 +608,7 @@ export function normalizeStyleTerm(term: string): string {
 
 /**
  * Check if a word matches any style adjective pattern
- * 检查词语是否匹配任何风格形容词模式
+ * Check if a word matches any style adjective pattern
  */
 export function isStyleAdjective(word: string): boolean {
   const lowerWord = word.toLowerCase();
@@ -617,7 +617,7 @@ export function isStyleAdjective(word: string): boolean {
 
 /**
  * Extract style adjectives from words based on precise patterns
- * 基于精确模式从词语中提取风格形容词
+ * Extract style adjectives from words based on precise patterns
  */
 export function extractStyleAdjectives(words: string[]): string[] {
   return words.filter((word) => isStyleAdjective(word));

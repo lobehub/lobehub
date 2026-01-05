@@ -1,12 +1,13 @@
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Popover } from 'antd';
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { type AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
 import { memo, useMemo } from 'react';
 
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
+import { useIsDark } from '@/hooks/useIsDark';
 
 const POPOVER_MAX_WIDTH = 320;
 
@@ -59,7 +60,7 @@ const ImageModelItem = memo<ImageModelItemProps>(
     showBadge = true,
     ...model
   }) => {
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
 
     const priceLabel = useMemo(() => {
       // Priority 1: Use exact price

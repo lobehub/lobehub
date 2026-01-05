@@ -1,15 +1,16 @@
 import { Flexbox } from '@lobehub/ui';
-import { cssVar, useThemeMode } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { type FC, type PropsWithChildren, useMemo } from 'react';
 
 import { isDesktop } from '@/const/version';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { styles } from './DesktopLayoutContainer/style';
 
 const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
 
   // CSS 变量用于动态样式

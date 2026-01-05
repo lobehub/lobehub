@@ -118,8 +118,15 @@ export const buildAnthropicMessage = async (
       }
 
       // or it's a plain assistant message
+      // Handle array content (e.g., content with thinking blocks)
+      if (Array.isArray(content)) {
+        const messageContent = await buildArrayContent(content);
+        if (messageContent.length === 0) return undefined;
+        return { content: messageContent, role: 'assistant' };
+      }
+
       // Anthropic API requires non-empty content, filter out empty/whitespace-only content
-      const textContent = (content as string)?.trim();
+      const textContent = content?.trim();
       if (!textContent) return undefined;
       return { content: textContent, role: 'assistant' };
     }

@@ -118,7 +118,7 @@ const Footer = memo(() => {
             </a>
           )}
         </Flexbox>
-        <ThemeButton placement={'top'} size={16} />
+        <ThemeButton placement={'topCenter'} size={16} />
       </Flexbox>
       <LabsModal onClose={handleCloseLabsModal} open={isLabsModalOpen} />
       <ChangelogModal

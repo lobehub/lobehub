@@ -2,12 +2,11 @@ import { RouteVariants } from '@lobechat/desktop-bridge';
 
 import { type DynamicLayoutProps } from '@/types/next';
 
+export { LOBE_LOCALE_COOKIE } from '@/const/locale';
 export {
   DEFAULT_LANG,
   DEFAULT_VARIANTS,
   type IRouteVariants,
-  LOBE_LOCALE_COOKIE,
-  LOBE_THEME_APPEARANCE,
   type Locales,
   locales,
 } from '@lobechat/desktop-bridge';

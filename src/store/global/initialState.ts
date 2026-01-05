@@ -1,4 +1,3 @@
-import type { ThemeMode } from 'antd-style';
 import type { NavigateFunction } from 'react-router-dom';
 
 import { DatabaseLoadingState, type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
@@ -130,10 +129,6 @@ export interface SystemStatus {
   showSystemRole?: boolean;
   systemRoleExpandedMap: Record<string, boolean>;
   /**
-   * theme mode
-   */
-  themeMode?: ThemeMode;
-  /**
    * 是否使用短格式显示 token
    */
   tokenDisplayFormatShort?: boolean;
@@ -196,7 +191,6 @@ export const INITIAL_STATUS = {
   showRightPanel: true,
   showSystemRole: false,
   systemRoleExpandedMap: {},
-  themeMode: 'auto',
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   zenMode: false,

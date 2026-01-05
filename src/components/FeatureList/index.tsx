@@ -1,7 +1,9 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, useThemeMode , responsive } from 'antd-style';
+import { createStaticStyles, responsive } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   desc: css`
@@ -48,7 +50,7 @@ interface FeatureListProps {
 }
 
 const FeatureList = memo<FeatureListProps>(({ data }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   return (
     <Flexbox gap={32}>

@@ -41,10 +41,7 @@ const ResourceExplorer = memo(() => {
     isTransitioning,
     isMasonryReady,
     searchQuery,
-    selectedFileIds,
     setSelectedFileIds,
-    loadMoreKnowledgeItems,
-    fileListHasMore,
     sorter,
     sortType,
   ] = useResourceManagerStore((s) => [
@@ -54,10 +51,7 @@ const ResourceExplorer = memo(() => {
     s.isTransitioning,
     s.isMasonryReady,
     s.searchQuery,
-    s.selectedFileIds,
     s.setSelectedFileIds,
-    s.loadMoreKnowledgeItems,
-    s.fileListHasMore,
     s.sorter,
     s.sortType,
   ]);
@@ -114,14 +108,7 @@ const ResourceExplorer = memo(() => {
       ) : viewMode === 'list' ? (
         <ListView />
       ) : (
-        <MasonryView
-          data={data}
-          hasMore={fileListHasMore}
-          isMasonryReady={isMasonryReady}
-          loadMore={loadMoreKnowledgeItems}
-          selectFileIds={selectedFileIds}
-          setSelectedFileIds={setSelectedFileIds}
-        />
+        <MasonryView />
       )}
     </Flexbox>
   );

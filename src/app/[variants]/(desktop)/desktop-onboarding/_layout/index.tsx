@@ -2,16 +2,17 @@
 
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { cx, useThemeMode } from 'antd-style';
+import { cx } from 'antd-style';
 import type { FC, PropsWithChildren } from 'react';
 
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
+import { useIsDark } from '@/hooks/useIsDark';
 
 import { styles } from './style';
 
 const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   return (
     <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
       <Flexbox
@@ -21,6 +22,7 @@ const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
       >
         <Flexbox
           align={'center'}
+          className={cx(styles.drag)}
           gap={8}
           horizontal
           justify={'space-between'}

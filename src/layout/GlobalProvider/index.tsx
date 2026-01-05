@@ -17,12 +17,12 @@ import AppTheme from './AppTheme';
 import { GroupWizardProvider } from './GroupWizardProvider';
 import ImportSettings from './ImportSettings';
 import Locale from './Locale';
+import NextThemeProvider from './NextThemeProvider';
 import QueryProvider from './Query';
 import StoreInitialization from './StoreInitialization';
 import StyleRegistry from './StyleRegistry';
 
 interface GlobalLayoutProps {
-  appearance: string;
   children: ReactNode;
   isMobile: boolean;
   locale: string;
@@ -36,7 +36,7 @@ const GlobalLayout = async ({
   neutralColor,
   primaryColor,
   locale: userLocale,
-  appearance,
+
   isMobile,
   variants,
 }: GlobalLayoutProps) => {
@@ -45,44 +45,46 @@ const GlobalLayout = async ({
   // get default feature flags to use with ssr
   const serverFeatureFlags = getServerFeatureFlagsValue();
   const serverConfig = await getServerGlobalConfig();
+
   return (
     <StyleRegistry>
       <Locale antdLocale={antdLocale} defaultLang={userLocale}>
-        <AppTheme
-          customFontFamily={appEnv.CUSTOM_FONT_FAMILY}
-          customFontURL={appEnv.CUSTOM_FONT_URL}
-          defaultAppearance={appearance}
-          defaultNeutralColor={neutralColor as any}
-          defaultPrimaryColor={primaryColor as any}
-          globalCDN={appEnv.CDN_USE_GLOBAL}
-        >
-          <ServerConfigStoreProvider
-            featureFlags={serverFeatureFlags}
-            isMobile={isMobile}
-            segmentVariants={variants}
-            serverConfig={serverConfig}
+        <NextThemeProvider>
+          <AppTheme
+            customFontFamily={appEnv.CUSTOM_FONT_FAMILY}
+            customFontURL={appEnv.CUSTOM_FONT_URL}
+            defaultNeutralColor={neutralColor as any}
+            defaultPrimaryColor={primaryColor as any}
+            globalCDN={appEnv.CDN_USE_GLOBAL}
           >
-            <QueryProvider>
-              <GroupWizardProvider>
-                <DragUploadProvider>
-                  <LazyMotion features={domMax}>
-                    <TooltipGroup layoutAnimation={false}>
-                      <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
-                    </TooltipGroup>
-                    <ModalHost />
-                    <ContextMenuHost />
-                  </LazyMotion>
-                </DragUploadProvider>
-              </GroupWizardProvider>
-            </QueryProvider>
-            <StoreInitialization />
-            <Suspense>
-              {ENABLE_BUSINESS_FEATURES ? <ReferralProvider /> : null}
-              <ImportSettings />
-              {process.env.NODE_ENV === 'development' && <DevPanel />}
-            </Suspense>
-          </ServerConfigStoreProvider>
-        </AppTheme>
+            <ServerConfigStoreProvider
+              featureFlags={serverFeatureFlags}
+              isMobile={isMobile}
+              segmentVariants={variants}
+              serverConfig={serverConfig}
+            >
+              <QueryProvider>
+                <GroupWizardProvider>
+                  <DragUploadProvider>
+                    <LazyMotion features={domMax}>
+                      <TooltipGroup layoutAnimation={false}>
+                        <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                      </TooltipGroup>
+                      <ModalHost />
+                      <ContextMenuHost />
+                    </LazyMotion>
+                  </DragUploadProvider>
+                </GroupWizardProvider>
+              </QueryProvider>
+              <StoreInitialization />
+              <Suspense>
+                {ENABLE_BUSINESS_FEATURES ? <ReferralProvider /> : null}
+                <ImportSettings />
+                {process.env.NODE_ENV === 'development' && <DevPanel />}
+              </Suspense>
+            </ServerConfigStoreProvider>
+          </AppTheme>
+        </NextThemeProvider>
       </Locale>
     </StyleRegistry>
   );

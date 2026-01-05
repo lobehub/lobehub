@@ -1,65 +1,54 @@
-import { ActionIcon, Dropdown, type DropdownProps, Icon } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, type DropdownMenuProps, Icon } from '@lobehub/ui';
 import { Monitor, Moon, Sun } from 'lucide-react';
+import { useTheme as useNextThemesTheme } from 'next-themes';
 import { FC, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type MenuProps } from '@/components/Menu';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
-
 const themeIcons = {
-  auto: Monitor,
   dark: Moon,
   light: Sun,
+  system: Monitor,
 };
 
-const ThemeButton: FC<{ placement?: DropdownProps['placement']; size?: number }> = ({
+const ThemeButton: FC<{ placement?: DropdownMenuProps['placement']; size?: number }> = ({
   placement,
   size,
 }) => {
-  const [themeMode, switchThemeMode] = useGlobalStore((s) => [
-    systemStatusSelectors.themeMode(s),
-    s.switchThemeMode,
-  ]);
+  const { setTheme, theme } = useNextThemesTheme();
 
   const { t } = useTranslation('setting');
 
-  const items: MenuProps['items'] = useMemo(
+  const items = useMemo<DropdownMenuProps['items']>(
     () => [
       {
-        icon: <Icon icon={themeIcons.auto} />,
-        key: 'auto',
+        icon: <Icon icon={themeIcons.system} />,
+        key: 'system',
         label: t('settingCommon.themeMode.auto'),
-        onClick: () => switchThemeMode('auto'),
+        onClick: () => setTheme('system'),
       },
       {
         icon: <Icon icon={themeIcons.light} />,
         key: 'light',
         label: t('settingCommon.themeMode.light'),
-        onClick: () => switchThemeMode('light'),
+        onClick: () => setTheme('light'),
       },
       {
         icon: <Icon icon={themeIcons.dark} />,
         key: 'dark',
         label: t('settingCommon.themeMode.dark'),
-        onClick: () => switchThemeMode('dark'),
+        onClick: () => setTheme('dark'),
       },
     ],
-    [t],
+    [setTheme, t],
   );
 
   return (
-    <Dropdown
-      arrow={false}
-      menu={{
-        items,
-        selectable: true,
-        selectedKeys: [themeMode],
-      }}
-      placement={placement}
-    >
-      <ActionIcon icon={themeIcons[themeMode]} size={size || { blockSize: 32, size: 16 }} />
-    </Dropdown>
+    <DropdownMenu items={items} placement={placement}>
+      <ActionIcon
+        icon={themeIcons[(theme as 'dark' | 'light' | 'system') || 'system']}
+        size={size || { blockSize: 32, size: 16 }}
+      />
+    </DropdownMenu>
   );
 };
 

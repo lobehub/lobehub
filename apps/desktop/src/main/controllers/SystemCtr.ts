@@ -38,6 +38,8 @@ export default class SystemController extends ControllerModule {
       isLinux: platform === 'linux',
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',
+      locale: this.app.storeManager.get('locale', 'auto'),
+
       platform: platform as 'darwin' | 'win32' | 'linux',
       userPath: {
         // User Paths (ensure keys match UserPathData / DesktopAppState interface)
@@ -217,6 +219,14 @@ export default class SystemController extends ControllerModule {
   }
 
   /**
+   * Get the OS system locale
+   */
+  @IpcMethod()
+  getSystemLocale(): string {
+    return app.getLocale();
+  }
+
+  /**
    * 更新应用语言设置
    */
   @IpcMethod()
@@ -248,9 +258,8 @@ export default class SystemController extends ControllerModule {
     return nativeTheme.themeSource;
   }
 
-  @IpcMethod()
-  async setSystemThemeMode(themeMode: ThemeMode) {
-    nativeTheme.themeSource = themeMode === 'auto' ? 'system' : themeMode;
+  private async setSystemThemeMode(themeMode: ThemeMode) {
+    nativeTheme.themeSource = themeMode;
   }
 
   /**

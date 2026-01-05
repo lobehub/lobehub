@@ -4,7 +4,7 @@ import { AIBaseModelCard } from 'model-bank';
 import type { ModelProviderKey } from '../types';
 
 export interface ModelProcessorConfig {
-  excludeKeywords?: readonly string[]; // 对符合的模型不添加标签
+  excludeKeywords?: readonly string[]; // Do not add tags to models that match
   functionCallKeywords?: readonly string[];
   imageOutputKeywords?: readonly string[];
   reasoningKeywords?: readonly string[];
@@ -13,10 +13,10 @@ export interface ModelProcessorConfig {
   visionKeywords?: readonly string[];
 }
 
-// 默认关键字：任意包含 -search 的模型 ID 视为支持联网搜索
+// Default keyword: any model ID containing -search is considered to support internet search
 const DEFAULT_SEARCH_KEYWORDS = ['-search'] as const;
 
-// 模型能力标签关键词配置
+// Model capability tag keyword configuration
 export const MODEL_LIST_CONFIGS = {
   anthropic: {
     functionCallKeywords: ['claude'],
@@ -136,7 +136,7 @@ export const MODEL_LIST_CONFIGS = {
   },
 } as const;
 
-// 模型所有者 (提供商) 关键词配置
+// Model owner (provider) keyword configuration
 export const MODEL_OWNER_DETECTION_CONFIG = {
   anthropic: ['claude'],
   comfyui: ['comfyui/'], // ComfyUI models detection - all ComfyUI models have comfyui/ prefix
@@ -159,7 +159,7 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   zhipu: ['glm'],
 } as const;
 
-// 图像模型关键词配置
+// Image model keyword configuration
 export const IMAGE_MODEL_KEYWORDS = [
   'dall-e',
   'dalle',
@@ -173,25 +173,25 @@ export const IMAGE_MODEL_KEYWORDS = [
   'wanxiang',
   'DESCRIBE',
   'UPSCALE',
-  '!gemini', // 排除 gemini 模型，即使包含 -image 也是 chat 模型
+  '!gemini', // Exclude gemini models, they are chat models even if they contain -image
   '-image',
   '^V3',
   '^V_2',
   '^V_1',
 ] as const;
 
-// 嵌入模型关键词配置
+// Embedding model keyword configuration
 export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
 
 /**
- * 检测关键词列表是否匹配模型ID（支持多种匹配模式）
- * @param modelId 模型ID（小写）
- * @param keywords 关键词列表，支持以下前缀：
- *   - ^ 开头：只在模型ID开头匹配
- *   - ! 开头：排除匹配，优先级最高
- *   - re: 开头：正则表达式匹配（支持 !re: 正则排除）
- *   - 无前缀：包含匹配（默认行为）
- * @returns 是否匹配（排除逻辑优先）
+ * Detect whether a keyword list matches a model ID (supports multiple matching patterns)
+ * @param modelId Model ID (lowercase)
+ * @param keywords Keyword list, supports the following prefixes:
+ *   - ^ prefix: match only at the start of model ID
+ *   - ! prefix: exclude match, highest priority
+ *   - re: prefix: regular expression match (supports !re: for regex exclusion)
+ *   - no prefix: contains match (default behavior)
+ * @returns Whether it matches (exclusion logic takes priority)
  */
 const isKeywordListMatch = (modelId: string, keywords: readonly string[]): boolean => {
   const matchKeyword = (keyword: string): boolean => {
@@ -212,7 +212,7 @@ const isKeywordListMatch = (modelId: string, keywords: readonly string[]): boole
     return modelId.includes(rawKeyword);
   };
 
-  // 先检查排除规则（感叹号开头，包括 !re:）
+  // First check exclusion rules (starting with exclamation mark, including !re:)
   const excludeKeywords = keywords.filter((keyword) => keyword.startsWith('!'));
   const includeKeywords = keywords.filter((keyword) => !keyword.startsWith('!'));
 
@@ -222,15 +222,15 @@ const isKeywordListMatch = (modelId: string, keywords: readonly string[]): boole
     }
   }
 
-  // 检查包含规则
+  // Check inclusion rules
   return includeKeywords.some((keyword) => matchKeyword(keyword));
 };
 
 /**
- * 根据提供商类型查找对应的本地模型配置
- * @param modelId 模型ID
- * @param provider 提供商类型
- * @returns 匹配的本地模型配置
+ * Find the corresponding local model configuration based on provider type
+ * @param modelId Model ID
+ * @param provider Provider type
+ * @returns Matching local model configuration
  */
 const findKnownModelByProvider = async (
   modelId: string,
@@ -239,32 +239,32 @@ const findKnownModelByProvider = async (
   const lowerModelId = modelId.toLowerCase();
 
   try {
-    // 尝试动态导入对应的配置文件
+    // Attempt to dynamically import the corresponding configuration file
     const modules = await import('model-bank');
 
-    // 如果提供商配置文件不存在，跳过
+    // If provider configuration file doesn't exist, skip
     if (!(provider in modules)) {
       return null;
     }
 
     const providerModels = modules[provider as keyof typeof modules] as AIBaseModelCard[];
 
-    // 如果导入成功且有数据，进行查找
+    // If import succeeds and has data, perform search
     if (Array.isArray(providerModels)) {
       return providerModels.find((m) => m.id.toLowerCase() === lowerModelId);
     }
 
     return null;
   } catch {
-    // 如果导入失败（文件不存在或其他错误），返回 null
+    // If import fails (file doesn't exist or other error), return null
     return null;
   }
 };
 
 /**
- * 检测单个模型的提供商类型
- * @param modelId 模型ID
- * @returns 检测到的提供商配置键名，默认为 'openai'
+ * Detect the provider type of a single model
+ * @param modelId Model ID
+ * @returns Detected provider configuration key name, defaults to 'openai'
  */
 export const detectModelProvider = (modelId: string): keyof typeof MODEL_LIST_CONFIGS => {
   const lowerModelId = modelId.toLowerCase();
@@ -281,20 +281,20 @@ export const detectModelProvider = (modelId: string): keyof typeof MODEL_LIST_CO
 };
 
 /**
- * 将时间戳转换为日期字符串
- * @param timestamp 时间戳（秒）
- * @returns 格式化的日期字符串 (YYYY-MM-DD)
+ * Convert timestamp to date string
+ * @param timestamp Timestamp (seconds)
+ * @returns Formatted date string (YYYY-MM-DD)
  */
 const formatTimestampToDate = (timestamp: number): string | undefined => {
   if (timestamp === null || timestamp === undefined || Number.isNaN(timestamp)) return undefined;
 
-  // 支持秒级或毫秒级时间戳：
-  // - 如果是毫秒级（>= 1e12），直接当作毫秒；
-  // - 否则视为秒，需要 *1000 转为毫秒
+  // Support both second-level and millisecond-level timestamps:
+  // - If millisecond-level (>= 1e12), use as milliseconds directly;
+  // - Otherwise treat as seconds, need to *1000 to convert to milliseconds
   const msTimestamp = timestamp > 1e12 ? timestamp : timestamp * 1000;
   const date = new Date(msTimestamp);
 
-  // 验证解析结果和年份范围（只接受 4 位年份，避免超出 varchar(10) 的 YYYY-MM-DD）
+  // Validate parsing result and year range (only accept 4-digit years to avoid exceeding varchar(10) YYYY-MM-DD)
   const year = date.getUTCFullYear();
   if (year < 1000 || year > 9999) return undefined;
 
@@ -303,22 +303,22 @@ const formatTimestampToDate = (timestamp: number): string | undefined => {
 };
 
 /**
- * 处理 releasedAt 字段
- * @param model 模型对象
- * @param knownModel 已知模型配置
- * @returns 处理后的 releasedAt 值
+ * Process releasedAt field
+ * @param model Model object
+ * @param knownModel Known model configuration
+ * @returns Processed releasedAt value
  */
 const processReleasedAt = (model: any, knownModel?: any): string | undefined => {
-  // 优先检查 model.created
+  // Check model.created first
   if (model.created !== undefined && model.created !== null) {
-    // 检查是否为时间戳格式
+    // Check if it's in timestamp format
     if (typeof model.created === 'number' && model.created > 1_630_000_000) {
-      // AiHubMix 错误时间戳为 1626777600
+      // AiHubMix incorrect timestamp is 1626777600
       return formatTimestampToDate(model.created);
     }
-    // 如果 created 是字符串且已经是日期格式，直接返回
+    // If created is a string and already in date format, return directly
     if (typeof model.created === 'string') {
-      // Anthropic：若为 '2025-02-19T00:00:00Z' 只取日期部分
+      // Anthropic: if it's '2025-02-19T00:00:00Z', only take the date part
       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(model.created)) {
         return model.created.split('T')[0];
       }
@@ -326,17 +326,17 @@ const processReleasedAt = (model: any, knownModel?: any): string | undefined => 
     }
   }
 
-  // 回退到原有逻辑
+  // Fall back to original logic
   return model.releasedAt ?? knownModel?.releasedAt ?? undefined;
 };
 
 /**
- * 处理模型显示名称
- * @param displayName 原始显示名称
- * @returns 处理后的显示名称
+ * Process model display name
+ * @param displayName Original display name
+ * @returns Processed display name
  */
 const processDisplayName = (displayName: string): string => {
-  // 如果包含 "Gemini 2.5 Flash Image Preview"，替换对应部分为 "Nano Banana"
+  // If it contains "Gemini 2.5 Flash Image Preview", replace the corresponding part with "Nano Banana"
   if (displayName.includes('Gemini 2.5 Flash Image Preview')) {
     return displayName.replace('Gemini 2.5 Flash Image Preview', 'Nano Banana');
   }
@@ -345,9 +345,9 @@ const processDisplayName = (displayName: string): string => {
 };
 
 /**
- * 获取模型提供商的本地配置
- * @param provider 模型提供商
- * @returns 模型提供商的本地配置
+ * Get the local configuration of the model provider
+ * @param provider Model provider
+ * @returns Local configuration of the model provider
  */
 const getProviderLocalConfig = async (provider?: ModelProviderKey): Promise<any[] | null> => {
   let providerLocalConfig: any[] | null = null;
@@ -357,7 +357,7 @@ const getProviderLocalConfig = async (provider?: ModelProviderKey): Promise<any[
 
       providerLocalConfig = modules[provider];
     } catch {
-      // 如果配置文件不存在或导入失败，保持为 null
+      // If configuration file doesn't exist or import fails, keep as null
       providerLocalConfig = null;
     }
   }
@@ -365,16 +365,16 @@ const getProviderLocalConfig = async (provider?: ModelProviderKey): Promise<any[
 };
 
 /**
- * 获取模型本地配置
- * @param providerLocalConfig 模型提供商的本地配置
- * @param model 模型对象
- * @returns 模型本地配置
+ * Get model local configuration
+ * @param providerLocalConfig Local configuration of the model provider
+ * @param model Model object
+ * @returns Model local configuration
  */
 const getModelLocalEnableConfig = (
   providerLocalConfig: any[],
   model: { id: string },
 ): any | null => {
-  // 如果提供了 providerid 且有本地配置，尝试从中获取模型的 enabled 状态
+  // If providerid is provided and has local configuration, try to get the model's enabled status from it
   let providerLocalModelConfig = null;
   if (providerLocalConfig && Array.isArray(providerLocalConfig)) {
     providerLocalModelConfig = providerLocalConfig.find((m) => m.id === model.id);
@@ -383,7 +383,7 @@ const getModelLocalEnableConfig = (
 };
 
 /**
- * 处理模型卡片的通用逻辑
+ * Common logic for processing model cards
  */
 const processModelCard = (
   model: { [key: string]: any; id: string },
@@ -522,11 +522,11 @@ const processModelCard = (
 };
 
 /**
- * 处理单一提供商的模型列表
- * @param modelList 模型列表
- * @param config 提供商配置
- * @param provider 提供商类型（可选，用于优先匹配对应的本地配置, 当提供了 provider 时，才会尝试从本地配置覆盖 enabled）
- * @returns 处理后的模型卡片列表
+ * Process model list for a single provider
+ * @param modelList Model list
+ * @param config Provider configuration
+ * @param provider Provider type (optional, used to prioritize matching corresponding local configuration, will only attempt to override enabled from local configuration when provider is provided)
+ * @returns Processed model card list
  */
 export const processModelList = async (
   modelList: Array<{ id: string }>,
@@ -535,19 +535,19 @@ export const processModelList = async (
 ): Promise<ChatModelCard[]> => {
   const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
-  // 如果提供了 provider，尝试获取该提供商的本地配置
+  // If provider is provided, try to get the local configuration for that provider
   const providerLocalConfig = await getProviderLocalConfig(provider as ModelProviderKey);
 
   return Promise.all(
     modelList.map(async (model) => {
       let knownModel: any = null;
 
-      // 如果提供了provider，优先使用提供商特定的配置
+      // If provider is provided, prioritize using provider-specific configuration
       if (provider) {
         knownModel = await findKnownModelByProvider(model.id, provider);
       }
 
-      // 如果未找到，回退到全局配置
+      // If not found, fall back to global configuration
       if (!knownModel) {
         knownModel = LOBE_DEFAULT_MODEL_LIST.find(
           (m) => model.id.toLowerCase() === m.id.toLowerCase(),
@@ -556,13 +556,13 @@ export const processModelList = async (
 
       const processedModel = processModelCard(model, config, knownModel);
 
-      // 如果提供了 provider 且有本地配置，尝试从中获取模型的 enabled 状态
+      // If provider is provided and has local configuration, try to get the model's enabled status from it
       const providerLocalModelConfig = getModelLocalEnableConfig(
         providerLocalConfig as any[],
         model,
       );
 
-      // 如果找到了本地配置中的模型，使用其 enabled 状态
+      // If model is found in local configuration, use its enabled status
       if (
         processedModel &&
         providerLocalModelConfig &&
@@ -577,10 +577,10 @@ export const processModelList = async (
 };
 
 /**
- * 处理混合提供商的模型列表
- * @param modelList 模型列表
- * @param providerid 可选的提供商ID，用于获取其本地配置文件
- * @returns 处理后的模型卡片列表
+ * Process model list for mixed providers
+ * @param modelList Model list
+ * @param providerid Optional provider ID, used to get its local configuration file
+ * @returns Processed model card list
  */
 export const processMultiProviderModelList = async (
   modelList: Array<{ id: string }>,
@@ -588,7 +588,7 @@ export const processMultiProviderModelList = async (
 ): Promise<ChatModelCard[]> => {
   const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
-  // 如果提供了 providerid，尝试获取该提供商的本地配置
+  // If providerid is provided, try to get the local configuration for that provider
   const providerLocalConfig = await getProviderLocalConfig(providerid);
 
   return Promise.all(
@@ -596,17 +596,17 @@ export const processMultiProviderModelList = async (
       const detectedProvider = detectModelProvider(model.id);
       const config = MODEL_LIST_CONFIGS[detectedProvider];
 
-      // 优先使用提供商特定的配置
+      // Prioritize using provider-specific configuration
       let knownModel = await findKnownModelByProvider(model.id, detectedProvider);
 
-      // 如果未找到，回退到全局配置
+      // If not found, fall back to global configuration
       if (!knownModel) {
         knownModel = LOBE_DEFAULT_MODEL_LIST.find(
           (m) => model.id.toLowerCase() === m.id.toLowerCase(),
         );
       }
 
-      // 如果提供了 providerid 且有本地配置，尝试从中获取模型的 enabled 状态
+      // If providerid is provided and has local configuration, try to get the model's enabled status from it
       const providerLocalModelConfig = getModelLocalEnableConfig(
         providerLocalConfig as any[],
         model,
@@ -614,7 +614,7 @@ export const processMultiProviderModelList = async (
 
       const processedModel = processModelCard(model, config, knownModel);
 
-      // 如果找到了本地配置中的模型，使用其 enabled 状态
+      // If model is found in local configuration, use its enabled status
       if (
         processedModel &&
         providerLocalModelConfig &&

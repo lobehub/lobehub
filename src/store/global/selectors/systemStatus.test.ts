@@ -87,24 +87,4 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.portalWidth(noPortalWidth)).toBe(400);
     });
   });
-
-  describe('theme mode', () => {
-    it('should return the correct theme', () => {
-      const s: GlobalState = merge(initialState, {
-        status: {
-          themeMode: 'light',
-        },
-      });
-      expect(systemStatusSelectors.themeMode(s)).toBe('light');
-    });
-
-    it('should return auto if not set', () => {
-      const s: GlobalState = merge(initialState, {
-        status: {
-          themeMode: undefined,
-        },
-      });
-      expect(systemStatusSelectors.themeMode(s)).toBe('auto');
-    });
-  });
 });

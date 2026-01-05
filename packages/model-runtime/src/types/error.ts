@@ -23,7 +23,7 @@ export const StandardErrorType = {
 export type ErrorType = (typeof StandardErrorType)[keyof typeof StandardErrorType];
 
 /**
- * 聊天消息错误对象
+ * Chat message error object
  */
 export interface ChatMessageError {
   body?: any;

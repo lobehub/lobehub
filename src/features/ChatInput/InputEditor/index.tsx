@@ -99,6 +99,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
               underline: false,
               underlineStrikethrough: false,
             },
+            plugins: [ReactCodemirrorPlugin],
           }
         : {
             plugins: [

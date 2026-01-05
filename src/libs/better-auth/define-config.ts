@@ -64,10 +64,7 @@ const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
 
 async function customEmailValidator(email: string): Promise<boolean> {
-  if (ENABLE_BUSINESS_FEATURES && !(await businessEmailValidator(email))) {
-    return false;
-  }
-  return validateEmail(email);
+  return ENABLE_BUSINESS_FEATURES ? businessEmailValidator(email) : validateEmail(email);
 }
 
 interface CustomBetterAuthOptions {

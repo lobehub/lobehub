@@ -8,7 +8,7 @@ import {
   ThemeProvider,
 } from '@lobehub/ui';
 import { message as antdMessage } from 'antd';
-import { type ThemeAppearance, createStaticStyles, cx, useTheme } from 'antd-style';
+import { createStaticStyles, cx, useTheme } from 'antd-style';
 import 'antd/dist/reset.css';
 import { AppConfigContext } from 'antd/es/app/context';
 import * as motion from 'motion/react-m';
@@ -17,13 +17,10 @@ import Link from 'next/link';
 import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
 
 import AntdStaticMethods from '@/components/AntdStaticMethods';
-import {
-  LOBE_THEME_APPEARANCE,
-  LOBE_THEME_NEUTRAL_COLOR,
-  LOBE_THEME_PRIMARY_COLOR,
-} from '@/const/theme';
+import { LOBE_THEME_NEUTRAL_COLOR, LOBE_THEME_PRIMARY_COLOR } from '@/const/theme';
 import { isDesktop } from '@/const/version';
 import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
+import { useIsDark } from '@/hooks/useIsDark';
 import { getUILocaleAndResources } from '@/libs/getUILocaleAndResources';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -92,7 +89,6 @@ export interface AppThemeProps {
   children?: ReactNode;
   customFontFamily?: string;
   customFontURL?: string;
-  defaultAppearance?: ThemeAppearance;
   defaultNeutralColor?: NeutralColors;
   defaultPrimaryColor?: PrimaryColors;
   globalCDN?: boolean;
@@ -101,16 +97,16 @@ export interface AppThemeProps {
 const AppTheme = memo<AppThemeProps>(
   ({
     children,
-    defaultAppearance,
     defaultPrimaryColor,
     defaultNeutralColor,
     globalCDN,
     customFontURL,
     customFontFamily,
   }) => {
-    const themeMode = useGlobalStore(systemStatusSelectors.themeMode);
     const language = useGlobalStore(systemStatusSelectors.language);
-    const theme = useTheme();
+    const antdTheme = useTheme();
+    const isDark = useIsDark();
+
     const [primaryColor, neutralColor, animationMode] = useUserStore((s) => [
       userGeneralSettingsSelectors.primaryColor(s),
       userGeneralSettingsSelectors.neutralColor(s),
@@ -154,29 +150,29 @@ const AppTheme = memo<AppThemeProps>(
       antdMessage.config({ top: messageTop });
     }, [messageTop]);
 
+    const currentAppearence = isDark ? 'dark' : 'light';
+
     return (
       <AppConfigContext.Provider value={appConfig}>
         <ThemeProvider
-          appearance={themeMode !== 'auto' ? themeMode : undefined}
+          appearance={currentAppearence}
           className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}
           customTheme={{
             neutralColor: neutralColor ?? defaultNeutralColor,
             primaryColor: primaryColor ?? defaultPrimaryColor,
           }}
-          defaultAppearance={defaultAppearance}
-          onAppearanceChange={(appearance) => {
-            if (themeMode !== 'auto') return;
-
-            setCookie(LOBE_THEME_APPEARANCE, appearance);
-          }}
+          defaultAppearance={currentAppearence}
+          defaultThemeMode={currentAppearence}
           theme={{
+            cssVar: { key: 'lobe-vars' },
             token: {
-              fontFamily: customFontFamily ? `${customFontFamily},${theme.fontFamily}` : undefined,
+              fontFamily: customFontFamily
+                ? `${customFontFamily},${antdTheme.fontFamily}`
+                : undefined,
               motion: animationMode !== 'disabled',
               motionUnit: animationMode === 'agile' ? 0.05 : 0.1,
             },
           }}
-          themeMode={themeMode}
         >
           {!!customFontURL && <FontLoader url={customFontURL} />}
           <GlobalStyle />

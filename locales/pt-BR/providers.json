@@ -63,6 +63,7 @@
   "volcengine.description": "A plataforma de serviços de modelos da ByteDance oferece acesso seguro, completo e competitivo a modelos, além de ferramentas de ponta a ponta para dados, ajuste fino, inferência e avaliação.",
   "wenxin.description": "Uma plataforma empresarial tudo-em-um para modelos fundamentais e desenvolvimento de aplicativos nativos de IA, oferecendo ferramentas completas para fluxos de trabalho de modelos e aplicativos generativos.",
   "xai.description": "A xAI desenvolve IA para acelerar descobertas científicas, com a missão de aprofundar a compreensão humana do universo.",
+  "xiaomimimo.description": "O Xiaomi MiMo oferece um serviço de modelo conversacional com uma API compatível com o OpenAI. O modelo mimo-v2-flash suporta raciocínio profundo, saída em tempo real, chamadas de função, uma janela de contexto de 256K e uma saída máxima de 128K.",
   "xinference.description": "O Xorbits Inference (Xinference) é uma plataforma open-source que simplifica a execução e integração de modelos de IA. Permite executar LLMs, modelos de embedding e modelos multimodais localmente ou na nuvem para construir aplicativos de IA poderosos.",
   "zenmux.description": "O ZenMux é uma plataforma unificada de agregação de IA que suporta OpenAI, Anthropic, Google VertexAI e outros, com roteamento flexível para alternar e gerenciar modelos com facilidade.",
   "zeroone.description": "A 01.AI lidera uma revolução de IA 2.0 centrada no ser humano, usando LLMs para criar valor econômico e social e construir novos ecossistemas e modelos de negócios com IA.",

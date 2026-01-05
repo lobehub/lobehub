@@ -216,6 +216,33 @@ describe('anthropicHelpers', () => {
         role: 'assistant',
       });
     });
+
+    it('should correctly convert assistant message with array content but no tool_calls', async () => {
+      const message: OpenAIChatMessage = {
+        content: [
+          { thinking: 'Let me think about this...', type: 'thinking', signature: 'sig123' },
+          { type: 'text', text: 'Here is my response.' },
+        ],
+        role: 'assistant',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toEqual({
+        content: [
+          { thinking: 'Let me think about this...', type: 'thinking', signature: 'sig123' },
+          { type: 'text', text: 'Here is my response.' },
+        ],
+        role: 'assistant',
+      });
+    });
+
+    it('should return undefined for assistant message with empty array content', async () => {
+      const message: OpenAIChatMessage = {
+        content: [],
+        role: 'assistant',
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('buildAnthropicMessages', () => {

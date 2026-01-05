@@ -56,7 +56,13 @@ const { mockBrowserWindow, mockNativeTheme, mockIpcMain, mockScreen, MockBrowser
         themeSource: 'system',
       },
       mockScreen: {
+        getDisplayMatching: vi.fn().mockReturnValue({
+          workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+        }),
         getDisplayNearestPoint: vi.fn().mockReturnValue({
+          workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+        }),
+        getPrimaryDisplay: vi.fn().mockReturnValue({
           workArea: { height: 1080, width: 1920, x: 0, y: 0 },
         }),
       },
@@ -236,6 +242,47 @@ describe('Browser', () => {
         expect.objectContaining({
           height: 700,
           width: 900,
+        }),
+      );
+    });
+
+    it('should restore window position from store and clamp within display', () => {
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 700, width: 900, x: 1800, y: 900 };
+        }
+        return undefined;
+      });
+
+      new Browser(defaultOptions, mockApp);
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 700,
+          width: 900,
+          x: 1020,
+          y: 380,
+        }),
+      );
+    });
+
+    it('should clamp saved size when it exceeds current display bounds', () => {
+      mockScreen.getDisplayMatching.mockReturnValueOnce({
+        workArea: { height: 800, width: 1200, x: 0, y: 0 },
+      });
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 1200, width: 2000, x: 0, y: 0 };
+        }
+        return undefined;
+      });
+
+      new Browser(defaultOptions, mockApp);
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 800,
+          width: 1200,
         }),
       );
     });
@@ -541,6 +588,8 @@ describe('Browser', () => {
       expect(mockStoreManagerSet).toHaveBeenCalledWith('windowSize_test-window', {
         height: 600,
         width: 800,
+        x: 0,
+        y: 0,
       });
       expect(mockEvent.preventDefault).not.toHaveBeenCalled();
     });
@@ -572,6 +621,8 @@ describe('Browser', () => {
       expect(mockStoreManagerSet).toHaveBeenCalledWith('windowSize_test-window', {
         height: 600,
         width: 800,
+        x: 0,
+        y: 0,
       });
     });
   });

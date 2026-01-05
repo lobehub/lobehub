@@ -59,6 +59,11 @@ export interface StreamContext {
     name: string;
   };
   toolIndex?: number;
+  /**
+   * Map of tool information by index for parallel tool calls
+   * Used when multiple tools are called in parallel (e.g., GPT-5.2 parallel search)
+   */
+  tools?: Record<number, { id: string; index: number; name: string }>;
   usage?: ModelUsage;
 }
 

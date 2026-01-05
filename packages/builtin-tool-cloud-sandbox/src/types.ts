@@ -90,10 +90,10 @@ export interface GlobFilesState {
 }
 
 export interface ExportFileState {
-  /** File content for text files (only when mimeType is text-like and size <= 1MB) */
-  content?: string;
-  /** The download URL for the exported file */
+  /** The download URL for the exported file (permanent /f/:id URL) */
   downloadUrl: string;
+  /** The file ID in database (returned from server) */
+  fileId?: string;
   /** The exported file name */
   filename: string;
   /** The MIME type of the file */
