@@ -1,5 +1,6 @@
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
+import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import { Bot, Image } from 'lucide-react';
 import { memo } from 'react';
@@ -15,7 +16,7 @@ import { styles } from './styles';
 import { useCommandMenu } from './useCommandMenu';
 
 const AskAIMenu = memo(() => {
-  const { t } = useTranslation(['common', 'chat']);
+  const { t } = useTranslation(['common', 'chat', 'home']);
   const navigate = useNavigate();
   const { handleAskLobeAI, handleAIPainting, closeCommandMenu } = useCommandMenu();
   const { search } = useCommandMenuContext();
@@ -33,6 +34,15 @@ const AskAIMenu = memo(() => {
     if (trimmedSearch) {
       // Use sendAsAgent to create a blank agent and open agent builder
       await useHomeStore.getState().sendAsAgent(trimmedSearch);
+    }
+    closeCommandMenu();
+  };
+
+  const handleGroupBuilder = async () => {
+    const trimmedSearch = search.trim();
+    if (trimmedSearch) {
+      // Use sendAsGroup to create a blank group and open group builder
+      await useHomeStore.getState().sendAsGroup(trimmedSearch);
     }
     closeCommandMenu();
   };
@@ -59,6 +69,12 @@ const AskAIMenu = memo(() => {
         <Bot className={styles.icon} />
         <div className={styles.itemContent}>
           <div className={styles.itemLabel}>{t('agentBuilder.title', { ns: 'chat' })}</div>
+        </div>
+      </Command.Item>
+      <Command.Item onSelect={handleGroupBuilder} value="group-builder">
+        <GroupBotSquareIcon className={styles.icon} />
+        <div className={styles.itemContent}>
+          <div className={styles.itemLabel}>{t('starter.createGroup', { ns: 'home' })}</div>
         </div>
       </Command.Item>
       <Command.Item onSelect={handleAIPainting} value="ai-painting">
