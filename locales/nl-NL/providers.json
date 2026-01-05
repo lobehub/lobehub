@@ -63,6 +63,7 @@
   "volcengine.description": "Het modelserviceplatform van ByteDance biedt veilige, uitgebreide en kosteneffectieve toegang tot modellen, plus end-to-end tooling voor data, fine-tuning, inferentie en evaluatie.",
   "wenxin.description": "Een alles-in-één platform voor fundamentele modellen en AI-native appontwikkeling voor bedrijven, met end-to-end tooling voor generatieve AI-workflows.",
   "xai.description": "xAI ontwikkelt AI om wetenschappelijke ontdekkingen te versnellen, met als missie het verdiepen van het menselijk begrip van het universum.",
+  "xiaomimimo.description": "Xiaomi MiMo biedt een conversatiemodelservice met een OpenAI-compatibele API. Het mimo-v2-flash-model ondersteunt diepgaande redenering, streamingoutput, functieaanroepen, een contextvenster van 256K en een maximale output van 128K.",
   "xinference.description": "Xorbits Inference (Xinference) is een open-source platform dat het uitvoeren en integreren van AI-modellen vereenvoudigt. Je kunt open-source LLM’s, embeddingmodellen en multimodale modellen lokaal of in de cloud draaien om krachtige AI-apps te bouwen.",
   "zenmux.description": "ZenMux is een uniform AI-aggregatieplatform dat OpenAI, Anthropic, Google VertexAI en meer ondersteunt, met flexibele routering om modellen eenvoudig te wisselen en beheren.",
   "zeroone.description": "01.AI leidt een mensgerichte AI 2.0-revolutie, waarbij LLM’s worden ingezet om economische en sociale waarde te creëren en nieuwe AI-ecosystemen en bedrijfsmodellen te bouwen.",

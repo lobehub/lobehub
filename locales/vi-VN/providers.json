@@ -63,6 +63,7 @@
   "volcengine.description": "Nền tảng dịch vụ mô hình của ByteDance cung cấp quyền truy cập mô hình an toàn, giàu tính năng, cạnh tranh về chi phí cùng công cụ toàn diện cho dữ liệu, tinh chỉnh, suy luận và đánh giá.",
   "wenxin.description": "Nền tảng doanh nghiệp tất cả trong một cho mô hình nền tảng và phát triển ứng dụng gốc AI, cung cấp công cụ toàn diện cho quy trình mô hình và ứng dụng AI sinh.",
   "xai.description": "xAI xây dựng AI để thúc đẩy khám phá khoa học, với sứ mệnh làm sâu sắc hiểu biết của nhân loại về vũ trụ.",
+  "xiaomimimo.description": "Xiaomi MiMo cung cấp dịch vụ mô hình hội thoại với API tương thích OpenAI. Mô hình mimo-v2-flash hỗ trợ suy luận sâu, xuất dữ liệu theo luồng, gọi hàm, cửa sổ ngữ cảnh 256K và đầu ra tối đa 128K.",
   "xinference.description": "Xorbits Inference (Xinference) là nền tảng mã nguồn mở giúp đơn giản hóa việc chạy và tích hợp mô hình AI. Cho phép bạn chạy LLM mã nguồn mở, mô hình nhúng và mô hình đa phương thức tại chỗ hoặc trên đám mây để xây dựng ứng dụng AI mạnh mẽ.",
   "zenmux.description": "ZenMux là nền tảng tổng hợp AI thống nhất hỗ trợ OpenAI, Anthropic, Google VertexAI và nhiều hơn nữa, với định tuyến linh hoạt để dễ dàng chuyển đổi và quản lý mô hình.",
   "zeroone.description": "01.AI thúc đẩy cuộc cách mạng AI 2.0 lấy con người làm trung tâm, sử dụng LLM để tạo ra giá trị kinh tế và xã hội, xây dựng hệ sinh thái và mô hình kinh doanh AI mới.",

@@ -63,6 +63,7 @@
   "volcengine.description": "ByteDance’in model hizmet platformu, güvenli, özellik açısından zengin ve uygun maliyetli model erişimi ile veri, ince ayar, çıkarım ve değerlendirme için uçtan uca araçlar sunar.",
   "wenxin.description": "Kurumsal düzeyde temel modeller ve yapay zeka tabanlı uygulama geliştirme için uçtan uca araçlar sunan hepsi bir arada bir platformdur.",
   "xai.description": "xAI, bilimsel keşifleri hızlandırmak ve insanlığın evreni anlama düzeyini derinleştirmek amacıyla yapay zeka geliştirir.",
+  "xiaomimimo.description": "Xiaomi MiMo, OpenAI ile uyumlu bir API aracılığıyla sohbet tabanlı model hizmeti sunar. mimo-v2-flash modeli derinlemesine akıl yürütme, akışlı çıktı, fonksiyon çağırma, 256K bağlam penceresi ve maksimum 128K çıktı desteği sağlar.",
   "xinference.description": "Xorbits Inference (Xinference), yapay zeka modellerini çalıştırmayı ve entegre etmeyi kolaylaştıran açık kaynaklı bir platformdur. Açık kaynaklı LLM’leri, gömme modellerini ve çok modlu modelleri yerel veya bulutta çalıştırarak güçlü yapay zeka uygulamaları geliştirmenizi sağlar.",
   "zenmux.description": "ZenMux, OpenAI, Anthropic, Google VertexAI ve daha fazlasını destekleyen birleşik bir yapay zeka toplama platformudur. Modelleri kolayca yönlendirme ve yönetme imkanı sunar.",
   "zeroone.description": "01.AI, insan merkezli bir Yapay Zeka 2.0 devrimini yönlendirir. LLM’leri kullanarak ekonomik ve sosyal değer yaratır, yeni yapay zeka ekosistemleri ve iş modelleri inşa eder.",
