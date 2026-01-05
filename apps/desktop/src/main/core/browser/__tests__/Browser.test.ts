@@ -36,6 +36,7 @@ const { mockBrowserWindow, mockNativeTheme, mockIpcMain, mockScreen, MockBrowser
         send: vi.fn(),
         session: {
           webRequest: {
+            onBeforeSendHeaders: vi.fn(),
             onHeadersReceived: vi.fn(),
           },
         },
