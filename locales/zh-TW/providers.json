@@ -63,6 +63,7 @@
   "volcengine.description": "字節跳動的模型服務平台，提供安全、功能豐富且具成本效益的模型存取，並支援資料、微調、推理與評估的端到端工具鏈。",
   "wenxin.description": "文心是一個企業級的基礎模型與 AI 原生應用開發平台，提供生成式 AI 模型與應用流程的端到端工具。",
   "xai.description": "xAI 致力於加速科學發現，目標是深化人類對宇宙的理解。",
+  "xiaomimimo.description": "小米 MiMo 提供一項支援 OpenAI 相容 API 的對話模型服務。mimo-v2-flash 模型支援深度推理、串流輸出、函式呼叫、256K 上下文視窗，以及最多 128K 的輸出。",
   "xinference.description": "Xorbits Inference（Xinference）是一個開源平台，簡化 AI 模型的運行與整合，支援在本地或雲端運行開源 LLM、嵌入模型與多模態模型，打造強大的 AI 應用。",
   "zenmux.description": "ZenMux 是一個統一的 AI 聚合平台，支援 OpenAI、Anthropic、Google VertexAI 等，具備靈活路由功能，便於模型切換與管理。",
   "zeroone.description": "01.AI 推動以人為本的 AI 2.0 革命，透過大型語言模型創造經濟與社會價值，構建全新 AI 生態與商業模式。",

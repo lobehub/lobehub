@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
@@ -22,7 +23,7 @@ const Header = memo(() => {
       }
       right={
         <Flexbox align={'center'} horizontal style={{ backgroundColor: cssVar.colorBgContainer }}>
-          <WorkingDirectory />
+          {isDesktop && <WorkingDirectory />}
           <NotebookButton />
           <ShareButton />
           <HeaderActions />

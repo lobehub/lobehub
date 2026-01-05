@@ -861,6 +861,7 @@
   "microsoft/Phi-3.5-vision-instruct.description": "An updated version of the Phi-3-vision model.",
   "microsoft/WizardLM-2-8x22B.description": "WizardLM 2 is a language model from Microsoft AI that excels at complex dialogue, multilingual tasks, reasoning, and assistants.",
   "microsoft/wizardlm-2-8x22b.description": "WizardLM-2 8x22B is Microsoft AI’s most advanced Wizard model with highly competitive performance.",
+  "mimo-v2-flash.description": "MiMo-V2-Flash: An efficient model for reasoning, coding, and agent foundations.",
   "minicpm-v.description": "MiniCPM-V is OpenBMB’s next-generation multimodal model with excellent OCR and multimodal understanding for wide-ranging use cases.",
   "minimax-m2.1.description": "MiniMax-M2.1 是 MiniMax 系列的最新版本，专为多语言编程和真实世界复杂任务优化。作为一款 AI 原生模型，MiniMax-M2.1 在模型性能、智能体框架支持以及多场景适配方面实现了显著提升，旨在帮助企业和个人更快地找到 AI 原生的工作与生活方式。",
   "minimax-m2.description": "MiniMax M2 是专为编码和代理工作流程构建的高效大型语言模型。",

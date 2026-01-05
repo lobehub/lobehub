@@ -157,13 +157,35 @@ const transformOpenAIStream = (
       );
 
       if (tool_calls.length > 0) {
+        // Validate tool calls - function must exist for valid tool calls
+        // This ensures proper error handling for malformed chunks
+        const hasInvalidToolCall = item.delta.tool_calls.some((tc) => tc.function === null);
+        if (hasInvalidToolCall) {
+          throw new Error('Invalid tool call: function is null');
+        }
+
         return {
-          data: item.delta.tool_calls.map((value, index): StreamToolCallChunkData => {
-            if (streamContext && !streamContext.tool) {
+          data: item.delta.tool_calls.map((value, mapIndex): StreamToolCallChunkData => {
+            // Determine the actual tool index
+            const toolIndex = typeof value.index !== 'undefined' ? value.index : mapIndex;
+
+            // Store tool info by index for parallel tool calls (e.g., GPT-5.2)
+            // When a chunk has id and name, it's the start of a new tool call
+            if (streamContext && value.id && value.function?.name) {
+              if (!streamContext.tools) streamContext.tools = {};
+              streamContext.tools[toolIndex] = {
+                id: value.id,
+                index: toolIndex,
+                name: value.function.name,
+              };
+            }
+
+            // Also maintain backward compatibility with single tool context
+            if (streamContext && !streamContext.tool && value.id) {
               streamContext.tool = {
                 id: value.id!,
-                index: value.index,
-                name: value.function!.name!,
+                index: toolIndex,
+                name: value.function?.name ?? '',
               };
             }
 
@@ -172,10 +194,12 @@ const transformOpenAIStream = (
                 arguments: value.function?.arguments ?? '',
                 name: value.function?.name ?? null,
               },
+              // Priority: explicit id > tools map by index > single tool fallback > generated id
               id:
                 value.id ||
+                streamContext?.tools?.[toolIndex]?.id ||
                 streamContext?.tool?.id ||
-                generateToolCallId(index, value.function?.name),
+                generateToolCallId(mapIndex, value.function?.name),
 
               // mistral's tool calling don't have index and function field, it's data like:
               // [{"id":"xbhnmTtY7","function":{"name":"lobe-image-designer____text2image____builtin","arguments":"{\"prompts\": [\"A photo of a small, fluffy dog with a playful expression and wagging tail.\", \"A watercolor painting of a small, energetic dog with a glossy coat and bright eyes.\", \"A vector illustration of a small, adorable dog with a short snout and perky ears.\", \"A drawing of a small, scruffy dog with a mischievous grin and a wagging tail.\"], \"quality\": \"standard\", \"seeds\": [123456, 654321, 111222, 333444], \"size\": \"1024x1024\", \"style\": \"vivid\"}"}}]
@@ -184,7 +208,7 @@ const transformOpenAIStream = (
               // [{"id":"call_function_4752059746","type":"function","function":{"name":"lobe-image-designer____text2image____builtin","arguments":"{\"prompts\": [\"一个流浪的地球，背景是浩瀚"}}]
 
               // so we need to add these default values
-              index: typeof value.index !== 'undefined' ? value.index : index,
+              index: toolIndex,
               type: value.type || 'function',
             };
 

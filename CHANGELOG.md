@@ -2,6 +2,114 @@
 
 # Changelog
 
+## [Version 2.0.0-next.213](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.212...v2.0.0-next.213)
+
+<sup>Released on **2026-01-05**</sup>
+
+#### 🐛 Bug Fixes
+
+- **model-runtime**: Handle incremental tool call chunks in Qwen stream.
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **model-runtime**: Handle incremental tool call chunks in Qwen stream, closes [#11219](https://github.com/lobehub/lobe-chat/issues/11219) ([03b9407](https://github.com/lobehub/lobe-chat/commit/03b9407))
+
+#### Styles
+
+- **misc**: Update i18n, closes [#11213](https://github.com/lobehub/lobe-chat/issues/11213) ([00e0980](https://github.com/lobehub/lobe-chat/commit/00e0980))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.212](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.211...v2.0.0-next.212)
+
+<sup>Released on **2026-01-05**</sup>
+
+#### ♻ Code Refactoring
+
+- **redis**: Disable automatic deserialization in upstash provider.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **redis**: Disable automatic deserialization in upstash provider, closes [#11210](https://github.com/lobehub/lobe-chat/issues/11210) ([eb5c76c](https://github.com/lobehub/lobe-chat/commit/eb5c76c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.211](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.210...v2.0.0-next.211)
+
+<sup>Released on **2026-01-05**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Add lost like button in discover detail page.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Add lost like button in discover detail page, closes [#11182](https://github.com/lobehub/lobe-chat/issues/11182) ([41215d4](https://github.com/lobehub/lobe-chat/commit/41215d4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.210](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.209...v2.0.0-next.210)
+
+<sup>Released on **2026-01-04**</sup>
+
+#### 🐛 Bug Fixes
+
+- **model-runtime**: Handle Qwen tool_calls without initial arguments.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **model-runtime**: Handle Qwen tool_calls without initial arguments, closes [#11211](https://github.com/lobehub/lobe-chat/issues/11211) ([5321d91](https://github.com/lobehub/lobe-chat/commit/5321d91))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.209](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.208...v2.0.0-next.209)
 
 <sup>Released on **2026-01-04**</sup>

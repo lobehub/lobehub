@@ -63,6 +63,7 @@
   "volcengine.description": "Die Modellserviceplattform von ByteDance bietet sicheren, funktionsreichen und kostengünstigen Modellzugang sowie End-to-End-Tools für Daten, Feintuning, Inferenz und Bewertung.",
   "wenxin.description": "Eine All-in-One-Plattform für Unternehmen zur Entwicklung von Foundation-Modellen und KI-nativen Anwendungen – mit End-to-End-Tools für generative KI-Workflows.",
   "xai.description": "xAI entwickelt KI zur Beschleunigung wissenschaftlicher Entdeckungen – mit dem Ziel, das Verständnis des Universums durch die Menschheit zu vertiefen.",
+  "xiaomimimo.description": "Xiaomi MiMo bietet einen Konversationsmodell-Service mit einer OpenAI-kompatiblen API. Das Modell mimo-v2-flash unterstützt tiefgreifendes Schlussfolgern, Streaming-Ausgaben, Funktionsaufrufe, ein Kontextfenster von 256K sowie eine maximale Ausgabe von 128K.",
   "xinference.description": "Xorbits Inference (Xinference) ist eine Open-Source-Plattform, die das Ausführen und Integrieren von KI-Modellen vereinfacht – lokal oder in der Cloud, für leistungsstarke KI-Anwendungen.",
   "zenmux.description": "ZenMux ist eine einheitliche KI-Aggregationsplattform mit Unterstützung für OpenAI, Anthropic, Google VertexAI und mehr – mit flexiblem Routing zur einfachen Modellverwaltung.",
   "zeroone.description": "01.AI treibt eine menschenzentrierte KI-2.0-Revolution voran – mit LLMs zur Schaffung wirtschaftlicher und gesellschaftlicher Werte sowie neuer KI-Ökosysteme und Geschäftsmodelle.",
