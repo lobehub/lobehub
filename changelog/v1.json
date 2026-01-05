@@ -1,6 +1,21 @@
 [
   {
     "children": {
+      "improvements": ["Convert glossary from JSON to Markdown table format."],
+      "fixes": ["Resolve desktop upload CORS issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.221"
+  },
+  {
+    "children": {
+      "fixes": ["Restore getBounds mock in Browser test beforeEach."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.220"
+  },
+  {
+    "children": {
       "fixes": ["Resolve BaseUI dropdown compatibility issue."]
     },
     "date": "2026-01-05",
