@@ -61,15 +61,17 @@ const Header = () => {
       </Flexbox>
       <Flexbox align={'center'} gap={8} horizontal>
         <AutoSaveHint />
-        <Button
-          icon={<ExternalLink size={14} />}
-          loading={loading}
-          onClick={handleOpenInPageEditor}
-          size={'small'}
-          type={'text'}
-        >
-          {t('openInPageEditor')}
-        </Button>
+        {document.fileType !== 'agent/plan' && (
+          <Button
+            icon={<ExternalLink size={14} />}
+            loading={loading}
+            onClick={handleOpenInPageEditor}
+            size={'small'}
+            type={'text'}
+          >
+            {t('openInPageEditor')}
+          </Button>
+        )}
       </Flexbox>
     </Flexbox>
   );
