@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 1
 
       - name: Run Claude Code slash command
-        uses: anthropics/claude-code-action@main
+        uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           allowed_non_write_users: "*"
