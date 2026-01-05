@@ -133,6 +133,7 @@ describe('Browser', () => {
     vi.useFakeTimers();
 
     // Reset mock behaviors
+    mockBrowserWindow.getBounds.mockReturnValue({ height: 600, width: 800, x: 0, y: 0 });
     mockBrowserWindow.isDestroyed.mockReturnValue(false);
     mockBrowserWindow.isVisible.mockReturnValue(true);
     mockBrowserWindow.isFocused.mockReturnValue(true);

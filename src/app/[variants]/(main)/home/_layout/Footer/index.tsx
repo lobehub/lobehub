@@ -1,7 +1,7 @@
 'use client';
 
 import { BRANDING_EMAIL, SOCIAL_URL } from '@lobechat/business-const';
-import { ActionIcon, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
 import { Book, CircleHelp, Feather, FileClockIcon, FlaskConical, Github, Mail } from 'lucide-react';
@@ -103,15 +103,9 @@ const Footer = memo(() => {
     <>
       <Flexbox align={'center'} gap={2} horizontal justify={'space-between'} padding={8}>
         <Flexbox align={'center'} flex={1} gap={2} horizontal>
-          <Dropdown
-            menu={{
-              items: helpMenuItems,
-            }}
-            placement="topLeft"
-            trigger={['click']}
-          >
+          <DropdownMenu items={helpMenuItems} nativeButton={false} placement="topLeft">
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
-          </Dropdown>
+          </DropdownMenu>
           {!hideGitHub && (
             <a aria-label={'GitHub'} href={GITHUB} rel="noopener noreferrer" target={'_blank'}>
               <ActionIcon icon={Github} size={16} title={'GitHub'} />

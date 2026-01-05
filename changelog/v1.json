@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "fixes": ["Resolve BaseUI dropdown compatibility issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.219"
+  },
+  {
+    "children": {
       "features": ["Update the sandbox export files & save files way."],
       "fixes": ["Fix editor modal when Markdown rendering off."]
     },
