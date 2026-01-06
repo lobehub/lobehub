@@ -12,6 +12,7 @@ export class MarketApiService {
    * @deprecated This method is no longer needed as authentication is now handled
    * automatically through tRPC middleware. Keeping for backward compatibility.
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setAccessToken(_token: string) {
     // No-op: Authentication is now handled through tRPC authedProcedure middleware
   }
