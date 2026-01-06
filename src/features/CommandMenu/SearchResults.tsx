@@ -261,44 +261,77 @@ const SearchResults = memo<SearchResultsProps>(
       const titleText = `${t('cmdk.search.searchMore', { type: typeLabel })} with "${searchQuery}"`;
 
       return (
-        <CommandItem
+        <Command.Item
           forceMount
-          icon={getIcon(type)}
           key={`search-more-${type}`}
+          keywords={[`zzz-action-${type}`]}
           onSelect={() => handleSearchMore(type)}
-          title={titleText}
-          value={`action-show-more-results-for-type-${type}`}
-          variant="detailed"
-        />
+          value={`zzz-action-${type}-search-more`}
+        >
+          <div className={styles.itemContent}>
+            <div className={styles.itemIcon}>{getIcon(type)}</div>
+            <div className={styles.itemDetails}>
+              <div className={styles.itemTitle}>{titleText}</div>
+            </div>
+          </div>
+        </Command.Item>
       );
     };
 
     return (
       <>
-        {/* Render all search results in a single group without headers */}
-        {hasResults && (
+        {/* Render search results grouped by type without headers */}
+        {messageResults.length > 0 && (
           <Command.Group>
             {messageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('message', messageResults.length)}
+          </Command.Group>
+        )}
 
+        {agentResults.length > 0 && (
+          <Command.Group>
             {agentResults.map((result) => renderResultItem(result))}
             {renderSearchMore('agent', agentResults.length)}
+          </Command.Group>
+        )}
 
+        {topicResults.length > 0 && (
+          <Command.Group>
             {topicResults.map((result) => renderResultItem(result))}
             {renderSearchMore('topic', topicResults.length)}
+          </Command.Group>
+        )}
 
+        {pageResults.length > 0 && (
+          <Command.Group>
             {pageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('page', pageResults.length)}
+          </Command.Group>
+        )}
 
+        {fileResults.length > 0 && (
+          <Command.Group>
             {fileResults.map((result) => renderResultItem(result))}
             {renderSearchMore('file', fileResults.length)}
+          </Command.Group>
+        )}
 
+        {mcpResults.length > 0 && (
+          <Command.Group>
             {mcpResults.map((result) => renderResultItem(result))}
             {renderSearchMore('mcp', mcpResults.length)}
+          </Command.Group>
+        )}
 
+        {pluginResults.length > 0 && (
+          <Command.Group>
             {pluginResults.map((result) => renderResultItem(result))}
             {renderSearchMore('plugin', pluginResults.length)}
+          </Command.Group>
+        )}
 
+        {assistantResults.length > 0 && (
+          <Command.Group>
             {assistantResults.map((result) => renderResultItem(result))}
             {renderSearchMore('communityAgent', assistantResults.length)}
           </Command.Group>
