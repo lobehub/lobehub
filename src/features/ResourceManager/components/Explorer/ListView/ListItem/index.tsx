@@ -35,6 +35,7 @@ const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       cursor: pointer;
+      min-width: 800px;
 
       &:hover {
         background: ${cssVar.colorFillTertiary};
@@ -83,7 +84,6 @@ const styles = createStaticStyles(({ css }) => {
       overflow: hidden;
       flex: 1;
       min-width: 0;
-      max-width: 600px;
     `,
     selected: css`
       background: ${cssVar.colorFillTertiary};
@@ -363,9 +363,9 @@ const FileListItem = memo<FileListItemProps>(
             align={'center'}
             className={styles.item}
             distribution={'space-between'}
-            flex={1}
             horizontal
             onClick={handleItemClick}
+            style={{ flexShrink: 0, maxWidth: 600, minWidth: 240 }}
           >
             <Flexbox align={'center'} className={styles.nameContainer} horizontal>
               <Center
@@ -479,10 +479,10 @@ const FileListItem = memo<FileListItemProps>(
           </Flexbox>
           {!isDragging && (
             <>
-              <Flexbox className={styles.item} width={FILE_DATE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={FILE_DATE_WIDTH}>
                 {displayTime}
               </Flexbox>
-              <Flexbox className={styles.item} width={FILE_SIZE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={FILE_SIZE_WIDTH}>
                 {isFolder || isPage ? '-' : formatSize(size)}
               </Flexbox>
             </>

@@ -31,6 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
     outline-offset: -4px;
   `,
   header: css`
+    min-width: 800px;
     height: 40px;
     min-height: 40px;
     color: ${cssVar.colorTextDescription};
@@ -43,6 +44,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding: 16px;
     font-size: 14px;
     color: ${cssVar.colorTextDescription};
+  `,
+  scrollContainer: css`
+    overflow: auto hidden;
+    flex: 1;
   `,
 }));
 
@@ -256,79 +261,84 @@ const ListView = memo(() => {
 
   return (
     <Flexbox height={'100%'}>
-      <Flexbox
-        align={'center'}
-        className={styles.header}
-        horizontal
-        paddingInline={8}
-        style={{
-          borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-          fontSize: 12,
-        }}
-      >
-        <Center height={40} style={{ paddingInline: 4 }}>
-          <Checkbox
-            checked={allSelected}
-            indeterminate={indeterminate}
-            onChange={handleSelectAll}
-          />
-        </Center>
-        <Flexbox className={styles.headerItem} flex={1} style={{ paddingInline: 8 }}>
-          {t('FileManager.title.title')}
-        </Flexbox>
-        <Flexbox className={styles.headerItem} width={FILE_DATE_WIDTH}>
-          {t('FileManager.title.createdAt')}
-        </Flexbox>
-        <Flexbox className={styles.headerItem} width={FILE_SIZE_WIDTH}>
-          {t('FileManager.title.size')}
-        </Flexbox>
-      </Flexbox>
-      <div
-        className={cx(styles.dropZone, isDropZoneActive && styles.dropZoneActive)}
-        data-drop-target-id={currentFolderId || undefined}
-        data-is-folder="true"
-        onDragLeave={handleDropZoneDragLeave}
-        onDragOver={(e) => {
-          handleDropZoneDragOver(e);
-          handleDragMove(e);
-        }}
-        onDrop={handleDropZoneDrop}
-        ref={containerRef}
-        style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
-      >
-        <Virtuoso
-          data={data || []}
-          defaultItemHeight={48}
-          endReached={handleEndReached}
-          increaseViewportBy={{ bottom: 800, top: 1200 }}
-          initialItemCount={30}
-          itemContent={(index, item) => {
-            if (!item) return null;
-            return (
-              <FileListItem
-                index={index}
-                key={item.id}
-                onSelectedChange={handleSelectionChange}
-                pendingRenameItemId={pendingRenameItemId}
-                selected={selectFileIds.includes(item.id)}
-                {...item}
-              />
-            );
+      <div className={styles.scrollContainer}>
+        <Flexbox
+          align={'center'}
+          className={styles.header}
+          horizontal
+          paddingInline={8}
+          style={{
+            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            fontSize: 12,
           }}
-          overscan={48 * 5}
-          ref={virtuosoRef}
-          style={{ height: '100%' }}
-        />
-        {isLoadingMore && (
-          <Center
-            className={styles.loadingIndicator}
-            style={{
-              borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
-            }}
-          >
-            {t('loading', { defaultValue: 'Loading...', ns: 'file' })}
+        >
+          <Center height={40} style={{ paddingInline: 4 }}>
+            <Checkbox
+              checked={allSelected}
+              indeterminate={indeterminate}
+              onChange={handleSelectAll}
+            />
           </Center>
-        )}
+          <Flexbox
+            className={styles.headerItem}
+            style={{ flexShrink: 0, maxWidth: 1200, minWidth: 574, paddingInline: 8 }}
+          >
+            {t('FileManager.title.title')}
+          </Flexbox>
+          <Flexbox className={styles.headerItem} style={{ flexShrink: 0 }} width={FILE_DATE_WIDTH}>
+            {t('FileManager.title.createdAt')}
+          </Flexbox>
+          <Flexbox className={styles.headerItem} style={{ flexShrink: 0 }} width={FILE_SIZE_WIDTH}>
+            {t('FileManager.title.size')}
+          </Flexbox>
+        </Flexbox>
+        <div
+          className={cx(styles.dropZone, isDropZoneActive && styles.dropZoneActive)}
+          data-drop-target-id={currentFolderId || undefined}
+          data-is-folder="true"
+          onDragLeave={handleDropZoneDragLeave}
+          onDragOver={(e) => {
+            handleDropZoneDragOver(e);
+            handleDragMove(e);
+          }}
+          onDrop={handleDropZoneDrop}
+          ref={containerRef}
+          style={{ overflow: 'hidden', position: 'relative' }}
+        >
+          <Virtuoso
+            data={data || []}
+            defaultItemHeight={48}
+            endReached={handleEndReached}
+            increaseViewportBy={{ bottom: 800, top: 1200 }}
+            initialItemCount={30}
+            itemContent={(index, item) => {
+              if (!item) return null;
+              return (
+                <FileListItem
+                  index={index}
+                  key={item.id}
+                  onSelectedChange={handleSelectionChange}
+                  pendingRenameItemId={pendingRenameItemId}
+                  selected={selectFileIds.includes(item.id)}
+                  {...item}
+                />
+              );
+            }}
+            overscan={48 * 5}
+            ref={virtuosoRef}
+            style={{ height: 'calc(100vh - 200px)' }}
+          />
+          {isLoadingMore && (
+            <Center
+              className={styles.loadingIndicator}
+              style={{
+                borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
+              }}
+            >
+              {t('loading', { defaultValue: 'Loading...', ns: 'file' })}
+            </Center>
+          )}
+        </div>
       </div>
     </Flexbox>
   );
