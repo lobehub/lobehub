@@ -13,6 +13,7 @@ concurrency:
 jobs:
   # Check for duplicate runs
   check-duplicate-run:
+    name: Check Duplicate Run
     runs-on: ubuntu-latest
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
