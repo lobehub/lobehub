@@ -3,27 +3,36 @@ name: Test CI
 on: [push, pull_request]
 
 permissions:
+  actions: write
   contents: read
 
-jobs:
-  # Package tests - using each package's own test script
-  test-intenral-packages:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        package:
-          - file-loaders
-          - prompts
-          - model-runtime
-          - web-crawler
-          - electron-server-ipc
-          - utils
-          - python-interpreter
-          - context-engine
-          - agent-runtime
-          - conversation-flow
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-    name: Test package ${{ matrix.package }}
+jobs:
+  # Check for duplicate runs
+  check-duplicate-run:
+    name: Check Duplicate Run
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          concurrent_skipping: "same_content_newer"
+          skip_after_successful_duplicate: "true"
+          do_not_skip: '["workflow_dispatch", "schedule"]'
+
+  # Package tests - all packages in single job to save runner resources
+  test-packages:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    name: Test Packages
+    env:
+      PACKAGES: "@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/python-interpreter @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory model-bank"
 
     steps:
       - uses: actions/checkout@v6
@@ -42,53 +51,35 @@ jobs:
       - name: Install deps
         run: bun i
 
-      - name: Test ${{ matrix.package }} package with coverage
-        run: bun run --filter @lobechat/${{ matrix.package }} test:coverage
+      - name: Test packages with coverage
+        run: |
+          for package in $PACKAGES; do
+            echo "::group::Testing $package"
+            bun run --filter $package test:coverage
+            echo "::endgroup::"
+          done
 
-      - name: Upload ${{ matrix.package }} coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/${{ matrix.package }}/coverage/lcov.info
-          flags: packages/${{ matrix.package }}
-
-  test-packages:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        package: [model-bank]
-
-    name: Test package ${{ matrix.package }}
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install deps
-        run: bun i
-
-      - name: Test ${{ matrix.package }} package with coverage
-        run: bun run --filter ${{ matrix.package }} test:coverage
-
-      - name: Upload ${{ matrix.package }} coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/${{ matrix.package }}/coverage/lcov.info
-          flags: packages/${{ matrix.package }}
+      - name: Upload coverage to Codecov
+        if: always()
+        run: |
+          curl -Os https://cli.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          for package in $PACKAGES; do
+            dir="${package#@lobechat/}"
+            if [ -f "./packages/$dir/coverage/lcov.info" ]; then
+              echo "Uploading coverage for $dir..."
+              ./codecov upload-process \
+                -t ${{ secrets.CODECOV_TOKEN }} \
+                -f ./packages/$dir/coverage/lcov.info \
+                -F packages/$dir \
+                --disable-search
+            fi
+          done
 
   # App tests
   test-website:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Website
 
     runs-on: ubuntu-latest
@@ -121,6 +112,8 @@ jobs:
           flags: app
 
   test-desktop:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Desktop App
 
     runs-on: ubuntu-latest
@@ -161,6 +154,8 @@ jobs:
           flags: desktop
 
   test-databsae:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Database
 
     runs-on: ubuntu-latest
@@ -172,7 +167,6 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
-
 
         ports:
           - 5432:5432

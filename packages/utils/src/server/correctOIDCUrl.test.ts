@@ -338,9 +338,8 @@ describe('correctOIDCUrl', () => {
       const originalUrl = new URL('http://localhost:3000/auth/callback');
       const result = correctOIDCUrl(mockRequest, originalUrl);
 
-      // Should return original URL because example.com:8443 doesn't match configured APP_URL (https://example.com)
-      expect(result).toBe(originalUrl);
-      expect(result.toString()).toBe('http://localhost:3000/auth/callback');
+      // Should fall back to host header because example.com:8443 doesn't match configured APP_URL
+      expect(result.toString()).toBe('https://internal.com:3000/auth/callback');
     });
 
     it('should not need correction when URL hostname matches actual host', () => {
@@ -358,18 +357,18 @@ describe('correctOIDCUrl', () => {
   });
 
   describe('Open Redirect protection', () => {
-    it('should prevent redirection to malicious external domains', () => {
+    it('should prevent redirection to malicious external domains via x-forwarded-host', () => {
       (mockRequest.headers.get as any).mockImplementation((header: string) => {
-        if (header === 'host') return 'malicious.com';
+        if (header === 'host') return 'example.com';
+        if (header === 'x-forwarded-host') return 'malicious.com';
         return null;
       });
 
       const originalUrl = new URL('http://localhost:3000/auth/callback');
       const result = correctOIDCUrl(mockRequest, originalUrl);
 
-      // Should return original URL and not redirect to malicious.com
-      expect(result).toBe(originalUrl);
-      expect(result.toString()).toBe('http://localhost:3000/auth/callback');
+      // Should fall back to host header and not redirect to malicious.com
+      expect(result.toString()).toBe('http://example.com:3000/auth/callback');
     });
 
     it('should allow redirection to configured domain (example.com)', () => {
@@ -410,9 +409,9 @@ describe('correctOIDCUrl', () => {
       const originalUrl = new URL('http://localhost:3000/auth/callback');
       const result = correctOIDCUrl(mockRequest, originalUrl);
 
-      // Should return original URL and not redirect to evil.com
-      expect(result).toBe(originalUrl);
-      expect(result.toString()).toBe('http://localhost:3000/auth/callback');
+      // Should fall back to request host (example.com) and not redirect to evil.com
+      expect(result.toString()).toBe('http://example.com:3000/auth/callback');
+      expect(result.hostname).not.toBe('evil.com');
     });
 
     it('should allow localhost in development environment', () => {
@@ -437,30 +436,92 @@ describe('correctOIDCUrl', () => {
       delete process.env.APP_URL;
 
       (mockRequest.headers.get as any).mockImplementation((header: string) => {
-        if (header === 'host') return 'any-domain.com';
+        if (header === 'host') return 'example.com';
+        if (header === 'x-forwarded-host') return 'any-domain.com';
         return null;
       });
 
       const originalUrl = new URL('http://localhost:3000/auth/callback');
       const result = correctOIDCUrl(mockRequest, originalUrl);
 
-      // Should return original URL when APP_URL is not configured
-      expect(result).toBe(originalUrl);
-      expect(result.toString()).toBe('http://localhost:3000/auth/callback');
+      // Should fall back to host header when APP_URL is not configured and forwarded host is present
+      expect(result.toString()).toBe('http://example.com:3000/auth/callback');
     });
 
     it('should handle domains that look like subdomains but are not', () => {
       (mockRequest.headers.get as any).mockImplementation((header: string) => {
-        if (header === 'host') return 'fakeexample.com'; // Not a subdomain of example.com
+        if (header === 'host') return 'example.com';
+        if (header === 'x-forwarded-host') return 'fakeexample.com'; // Not a subdomain of example.com
         return null;
       });
 
       const originalUrl = new URL('http://localhost:3000/auth/callback');
       const result = correctOIDCUrl(mockRequest, originalUrl);
 
-      // Should prevent redirection to fake domain
-      expect(result).toBe(originalUrl);
-      expect(result.toString()).toBe('http://localhost:3000/auth/callback');
+      // Should fall back to host header
+      expect(result.toString()).toBe('http://example.com:3000/auth/callback');
+    });
+
+    it('should reject invalid forwarded protocol', () => {
+      (mockRequest.headers.get as any).mockImplementation((header: string) => {
+        if (header === 'host') return 'example.com';
+        if (header === 'x-forwarded-host') return 'example.com';
+        if (header === 'x-forwarded-proto') return 'javascript'; // Invalid protocol
+        return null;
+      });
+
+      const originalUrl = new URL('http://localhost:3000/auth/callback');
+      const result = correctOIDCUrl(mockRequest, originalUrl);
+
+      // Should fall back to http protocol from URL
+      expect(result.protocol).toBe('http:');
+      expect(result.toString()).toBe('http://example.com:3000/auth/callback');
+    });
+
+    it('should handle uppercase in forwarded protocol', () => {
+      (mockRequest.headers.get as any).mockImplementation((header: string) => {
+        if (header === 'host') return 'example.com';
+        if (header === 'x-forwarded-host') return 'example.com';
+        if (header === 'x-forwarded-proto') return 'HTTPS'; // Uppercase
+        return null;
+      });
+
+      const originalUrl = new URL('http://localhost:3000/auth/callback');
+      const result = correctOIDCUrl(mockRequest, originalUrl);
+
+      // Should normalize to lowercase
+      expect(result.protocol).toBe('https:');
+      expect(result.toString()).toBe('https://example.com:3000/auth/callback');
+    });
+
+    it('should handle multiple hosts in x-forwarded-host', () => {
+      (mockRequest.headers.get as any).mockImplementation((header: string) => {
+        if (header === 'host') return 'internal.com';
+        if (header === 'x-forwarded-host') return 'example.com,attacker.com'; // Multiple hosts
+        return null;
+      });
+
+      const originalUrl = new URL('http://localhost:3000/auth/callback');
+      const result = correctOIDCUrl(mockRequest, originalUrl);
+
+      // Should use the first (leftmost) host
+      expect(result.hostname).toBe('example.com');
+      expect(result.toString()).toBe('http://example.com:3000/auth/callback');
+    });
+
+    it('should fall back to request host when forwarded host is invalid', () => {
+      (mockRequest.headers.get as any).mockImplementation((header: string) => {
+        if (header === 'host') return 'example.com';
+        if (header === 'x-forwarded-host') return 'evil.com'; // Invalid
+        return null;
+      });
+
+      const originalUrl = new URL('http://localhost:3000/auth/callback');
+      const result = correctOIDCUrl(mockRequest, originalUrl);
+
+      // Should fall back to request host
+      expect(result.hostname).toBe('example.com');
+      expect(result.toString()).toBe('http://example.com:3000/auth/callback');
     });
   });
 });

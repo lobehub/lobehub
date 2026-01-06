@@ -7,7 +7,7 @@ let enableClerkMock = false;
 let enableNextAuthMock = false;
 let enableBetterAuthMock = false;
 
-vi.mock('@/const/auth', async (importOriginal) => {
+vi.mock('@/envs/auth', async (importOriginal) => {
   const data = await importOriginal();
 
   return {
