@@ -2,9 +2,10 @@ import {
   DesktopNotificationResult,
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
-import { Notification, app } from 'electron';
+import { Notification, app, systemPreferences } from 'electron';
 import { macOS, windows } from 'electron-is';
 
+import { getIpcContext } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -13,6 +14,54 @@ const logger = createLogger('controllers:NotificationCtr');
 
 export default class NotificationCtr extends ControllerModule {
   static override readonly groupName = 'notification';
+
+  @IpcMethod()
+  async getNotificationPermissionStatus(): Promise<string> {
+    if (!Notification.isSupported()) return 'denied';
+    // Keep a stable status string for renderer-side UI mapping.
+    // Screen3 expects macOS to return 'authorized' when granted.
+    if (!macOS()) return 'authorized';
+
+    // Electron 38 no longer exposes `systemPreferences.getNotificationSettings()` in types,
+    // and some runtimes don't provide it at all. Use the renderer's Notification.permission
+    // as a reliable fallback.
+    const context = getIpcContext();
+    const sender = context?.sender;
+    if (!sender) return 'notDetermined';
+    const permission = await sender.executeJavaScript('Notification.permission', true);
+    return permission === 'granted' ? 'authorized' : 'denied';
+  }
+
+  @IpcMethod()
+  async requestNotificationPermission(): Promise<void> {
+    logger.debug('Requesting notification permission by sending a test notification');
+
+    if (!Notification.isSupported()) {
+      logger.warn('System does not support desktop notifications');
+      return;
+    }
+
+    // On macOS, ask permission via Web Notification API first when possible.
+    // This helps keep `Notification.permission` in sync for subsequent status checks.
+    if (macOS()) {
+      try {
+        const mainWindow = this.app.browserManager.getMainWindow().browserWindow;
+        await mainWindow.webContents.executeJavaScript('Notification.requestPermission()', true);
+      } catch (error) {
+        logger.debug(
+          'Notification.requestPermission() failed or is unavailable, continuing with test notification',
+          error,
+        );
+      }
+    }
+
+    const notification = new Notification({
+      body: 'LobeHub can now send you notifications.',
+      title: 'Notification Permission',
+    });
+
+    notification.show();
+  }
   /**
    * Set up desktop notifications after the application is ready
    */

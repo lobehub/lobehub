@@ -1,30 +1,25 @@
 {
-  "Artifacts": "Artifacts",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Fragment",
-      "file": "Fichier"
-    }
-  },
-  "Plugins": "Plugins",
-  "artifacts": {
-    "display": {
-      "code": "Code",
-      "preview": "Aperçu"
-    },
-    "svg": {
-      "copyAsImage": "Copier en tant qu'image",
-      "copyFail": "Échec de la copie, raison de l'erreur : {{error}}",
-      "copySuccess": "Image copiée avec succès",
-      "download": {
-        "png": "Télécharger en tant que PNG",
-        "svg": "Télécharger en tant que SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "La liste des Artifacts est actuellement vide. Veuillez utiliser les plugins dans la conversation avant de consulter à nouveau.",
-  "emptyKnowledgeList": "La liste des connaissances est actuellement vide. Veuillez activer la base de connaissances selon vos besoins dans la conversation avant de consulter.",
+  "Artifacts": "Artefacts",
+  "FilePreview.tabs.chunk": "Fragment",
+  "FilePreview.tabs.file": "Fichier",
+  "Plugins": "Compétences",
+  "artifacts.display.code": "Code",
+  "artifacts.display.preview": "Aperçu",
+  "artifacts.svg.copyAsImage": "Copier comme image",
+  "artifacts.svg.copyFail": "Échec de la copie : {{error}}. Veuillez réessayer.",
+  "artifacts.svg.copySuccess": "Image copiée avec succès",
+  "artifacts.svg.download.png": "Télécharger en PNG",
+  "artifacts.svg.download.svg": "Télécharger en SVG",
+  "document.todos.allCompleted": "Toutes les tâches sont terminées",
+  "document.todos.title": "Tâches",
+  "emptyArtifactList": "Aucun artefact pour le moment. Utilisez des compétences dans la conversation, puis revenez ici.",
+  "emptyKnowledgeList": "Cette liste est vide.",
   "files": "Fichiers",
   "messageDetail": "Détails du message",
-  "title": "Fenêtre d'extension"
+  "notebook.confirmDelete": "Supprimer cette page ?",
+  "notebook.delete": "Supprimer",
+  "notebook.empty": "Aucune page pour le moment. Les pages liées à ce sujet apparaîtront ici.",
+  "notebook.title": "Carnet",
+  "openInPageEditor": "Modifier dans la page",
+  "title": "Espace de travail"
 }

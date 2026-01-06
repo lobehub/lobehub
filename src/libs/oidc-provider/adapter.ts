@@ -1,4 +1,4 @@
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import {
   oidcAccessTokens,
   oidcAuthorizationCodes,

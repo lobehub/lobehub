@@ -2,33 +2,36 @@
 // Note: To make the code more logic and readable, we just disable the auto sort key eslint rule
 // DON'T REMOVE THE FIRST LINE
 import { chainSummaryTitle } from '@lobechat/prompts';
-import { TraceNameMap, UIChatMessage } from '@lobechat/types';
+import {
+  type ChatTopicMetadata,
+  type MessageMapScope,
+  TraceNameMap,
+  type UIChatMessage,
+} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
-import { produce } from 'immer';
-import useSWR, { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import useSWR, { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import type { ChatStore } from '@/store/chat';
-import type { ChatStoreState } from '@/store/chat/initialState';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
-import { useSessionStore } from '@/store/session';
-import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
-import { ChatTopic, CreateTopicParams } from '@/types/topic';
+import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
-import { ChatTopicDispatch, topicReducer } from './reducer';
+import { type TopicData } from './initialState';
+import { type ChatTopicDispatch, topicReducer } from './reducer';
 import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');
@@ -36,8 +39,28 @@ const n = setNamespace('t');
 const SWR_USE_FETCH_TOPIC = 'SWR_USE_FETCH_TOPIC';
 const SWR_USE_SEARCH_TOPIC = 'SWR_USE_SEARCH_TOPIC';
 
+/**
+ * Options for switchTopic action
+ */
+export interface SwitchTopicOptions {
+  /**
+   * Explicit scope for clearing new key data
+   * If not provided, will be inferred from store state (activeGroupId)
+   */
+  scope?: MessageMapScope;
+  /**
+   * Skip refreshing messages after switching topic
+   * @default false
+   */
+  skipRefreshMessage?: boolean;
+}
+
 export interface ChatTopicAction {
+  closeAllTopicsDrawer: () => void;
   favoriteTopic: (id: string, favState: boolean) => Promise<void>;
+  importTopic: (data: string) => Promise<string | undefined>;
+  loadMoreTopics: () => Promise<void>;
+  openAllTopicsDrawer: () => void;
   openNewTopicOrSaveTopic: () => Promise<void>;
   refreshTopic: () => Promise<void>;
   removeAllTopics: () => Promise<void>;
@@ -45,23 +68,40 @@ export interface ChatTopicAction {
   removeGroupTopics: (groupId: string) => Promise<void>;
   removeTopic: (id: string) => Promise<void>;
   removeUnstarredTopic: () => Promise<void>;
-  saveToTopic: (sessionId?: string, groupId?: string) => Promise<string | undefined>;
-  createTopic: (sessionId?: string, groupId?: string) => Promise<string | undefined>;
+  saveToTopic: (sessionId?: string) => Promise<string | undefined>;
+  createTopic: (sessionId?: string) => Promise<string | undefined>;
 
   autoRenameTopicTitle: (id: string) => Promise<void>;
   duplicateTopic: (id: string) => Promise<void>;
   summaryTopicTitle: (topicId: string, messages: UIChatMessage[]) => Promise<void>;
-  switchTopic: (id?: string, skipRefreshMessage?: boolean) => Promise<void>;
+  /**
+   * Switch to a topic or create new topic state
+   * @param id - Topic ID to switch to, or undefined/null to switch to "new" state
+   * @param options - Options object or boolean for backward compatibility (skipRefreshMessage)
+   */
+  switchTopic: (id?: string, options?: boolean | SwitchTopicOptions) => Promise<void>;
+  /**
+   * Update topic metadata
+   * @param id - Topic ID to update
+   * @param metadata - Partial metadata to merge with existing metadata
+   */
+  updateTopicMetadata: (id: string, metadata: Partial<ChatTopicMetadata>) => Promise<void>;
   updateTopicTitle: (id: string, title: string) => Promise<void>;
   useFetchTopics: (
     enable: boolean,
-    sessionId?: string,
-    groupId?: string,
-  ) => SWRResponse<ChatTopic[]>;
+    params: {
+      agentId?: string;
+      groupId?: string;
+      isInbox?: boolean;
+      pageSize?: number;
+    },
+  ) => SWRResponse<{ items: ChatTopic[]; total: number }>;
   useSearchTopics: (
-    keywords?: string,
-    sessionId?: string,
-    groupId?: string,
+    keywords: string | undefined,
+    params: {
+      agentId?: string;
+      groupId?: string;
+    },
   ) => SWRResponse<ChatTopic[]>;
 
   internal_updateTopicTitleInSummary: (id: string, title: string) => void;
@@ -69,6 +109,21 @@ export interface ChatTopicAction {
   internal_createTopic: (params: CreateTopicParams) => Promise<string>;
   internal_updateTopic: (id: string, data: Partial<ChatTopic>) => Promise<void>;
   internal_dispatchTopic: (payload: ChatTopicDispatch, action?: any) => void;
+  internal_updateTopics: (
+    agentId: string,
+    params: {
+      append?: boolean;
+      currentPage?: number;
+      groupId?: string;
+      items: ChatTopic[];
+      pageSize: number;
+      total: number;
+    },
+  ) => void;
+  /**
+   * Update TopicData properties (loading states, pagination, etc.)
+   */
+  internal_updateTopicData: (key: string, data: Partial<TopicData>) => void;
 }
 
 export const chatTopic: StateCreator<
@@ -77,6 +132,14 @@ export const chatTopic: StateCreator<
   [],
   ChatTopicAction
 > = (set, get) => ({
+  closeAllTopicsDrawer: () => {
+    set({ allTopicsDrawerOpen: false }, false, n('closeAllTopicsDrawer'));
+  },
+
+  openAllTopicsDrawer: () => {
+    set({ allTopicsDrawerOpen: true }, false, n('openAllTopicsDrawer'));
+  },
+
   // create
   openNewTopicOrSaveTopic: async () => {
     const { switchTopic, saveToTopic, refreshMessages, activeTopicId } = get();
@@ -89,8 +152,8 @@ export const chatTopic: StateCreator<
     }
   },
 
-  createTopic: async (sessionId, groupId) => {
-    const { activeId, activeSessionType, internal_createTopic } = get();
+  createTopic: async (sessionId) => {
+    const { activeAgentId, internal_createTopic } = get();
 
     const messages = displayMessageSelectors.activeDisplayMessages(get());
 
@@ -98,59 +161,31 @@ export const chatTopic: StateCreator<
     const topicId = await internal_createTopic({
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
-      ...(activeSessionType === 'group'
-        ? { groupId: groupId || activeId }
-        : { sessionId: sessionId || activeId }),
+      sessionId: sessionId || activeAgentId,
     });
     set({ creatingTopic: false }, false, n('creatingTopic/end'));
 
     return topicId;
   },
 
-  saveToTopic: async (sessionId, groupId) => {
+  saveToTopic: async (sessionId) => {
     // if there is no message, stop
     const messages = displayMessageSelectors.activeDisplayMessages(get());
     if (messages.length === 0) return;
 
-    const { activeId, activeSessionType, summaryTopicTitle, internal_createTopic } = get();
+    const { activeAgentId, summaryTopicTitle, internal_createTopic } = get();
 
     // 1. create topic and bind these messages
     const topicId = await internal_createTopic({
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
-      ...(activeSessionType === 'group'
-        ? { groupId: groupId || activeId }
-        : { sessionId: sessionId || activeId }),
+      sessionId: sessionId || activeAgentId,
     });
 
     get().internal_updateTopicLoading(topicId, true);
     // 2. auto summary topic Title
     // we don't need to wait for summary, just let it run async
     summaryTopicTitle(topicId, messages);
-
-    // Clear supervisor todos for temporary topic in current container after saving
-    try {
-      const { activeId, activeSessionType } = get();
-      let isGroupSession = activeSessionType === 'group';
-      if (activeSessionType === undefined) {
-        const sessionStore = useSessionStore.getState();
-        isGroupSession = sessionSelectors.isCurrentSessionGroupSession(sessionStore);
-      }
-
-      if (isGroupSession) {
-        set(
-          produce((state: ChatStoreState) => {
-            state.supervisorTodos[messageMapKey(groupId || activeId, null)] = [];
-          }),
-          false,
-          n('resetSupervisorTodosOnSaveToTopic', { groupId: groupId || activeId }),
-        );
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('Failed to reset supervisor todos on save to topic:', error);
-      }
-    }
 
     return topicId;
   },
@@ -175,6 +210,39 @@ export const chatTopic: StateCreator<
     message.success(t('duplicateSuccess', { ns: 'topic' }));
 
     await switchTopic(newTopicId);
+  },
+
+  importTopic: async (data) => {
+    const { activeAgentId, activeGroupId, refreshTopic, switchTopic } = get();
+
+    if (!activeAgentId) return;
+
+    message.loading({
+      content: t('importLoading', { ns: 'topic' }),
+      duration: 0,
+      key: 'importTopic',
+    });
+
+    try {
+      const result = await topicService.importTopic({
+        agentId: activeAgentId,
+        data,
+        groupId: activeGroupId,
+      });
+
+      await refreshTopic();
+      message.destroy('importTopic');
+      message.success(t('importSuccess', { count: result.messageCount, ns: 'topic' }));
+
+      await switchTopic(result.topicId);
+
+      return result.topicId;
+    } catch (error) {
+      message.destroy('importTopic');
+      message.error(t('importError', { ns: 'topic' }));
+      console.error('[importTopic] Failed:', error);
+      return undefined;
+    }
   },
   // update
   summaryTopicTitle: async (topicId, messages) => {
@@ -217,52 +285,179 @@ export const chatTopic: StateCreator<
     await get().internal_updateTopic(id, { favorite });
   },
 
+  updateTopicMetadata: async (id, metadata) => {
+    const topic = topicSelectors.getTopicById(id)(get());
+    if (!topic) return;
+
+    // Optimistic update with merged metadata
+    const mergedMetadata = { ...topic.metadata, ...metadata };
+    get().internal_dispatchTopic({ type: 'updateTopic', id, value: { metadata: mergedMetadata } });
+
+    get().internal_updateTopicLoading(id, true);
+    await topicService.updateTopicMetadata(id, metadata);
+    await get().refreshTopic();
+    get().internal_updateTopicLoading(id, false);
+  },
+
   updateTopicTitle: async (id, title) => {
     await get().internal_updateTopic(id, { title });
   },
 
   autoRenameTopicTitle: async (id) => {
-    const { activeId: sessionId, summaryTopicTitle, internal_updateTopicLoading } = get();
+    const { activeAgentId: agentId, summaryTopicTitle, internal_updateTopicLoading } = get();
 
     internal_updateTopicLoading(id, true);
-    const messages = await messageService.getMessages(sessionId, id);
+    const messages = await messageService.getMessages({ agentId, topicId: id });
 
     await summaryTopicTitle(id, messages);
     internal_updateTopicLoading(id, false);
   },
 
   // query
-  useFetchTopics: (enable, containerId) =>
-    useClientDataSWR<ChatTopic[]>(
-      enable ? [SWR_USE_FETCH_TOPIC, containerId] : null,
-      async ([, containerId]: [string, string | undefined]) =>
-        topicService.getTopics({ containerId }),
+  useFetchTopics: (enable, { agentId, groupId, pageSize: customPageSize, isInbox }) => {
+    const pageSize = customPageSize || 20;
+    // Use topicMapKey to generate the container key for topic data map
+    const containerKey = topicMapKey({ agentId, groupId });
+    const hasValidContainer = !!(groupId || agentId);
+
+    return useClientDataSWRWithSync<{ items: ChatTopic[]; total: number }>(
+      enable && hasValidContainer
+        ? [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
+        : null,
+      async () => {
+        // agentId, groupId, isInbox, pageSize come from the outer scope closure
+        if (!agentId && !groupId) return { items: [], total: 0 };
+
+        const currentData = get().topicDataMap[containerKey];
+        const lastPageSize = currentData?.pageSize;
+        const hasExistingItems = (currentData?.items?.length || 0) > 0;
+
+        // Only treat as "expanding page size" when user actually increases pageSize,
+        // not when SWR revalidates or when total items < pageSize.
+        const isExpanding =
+          hasExistingItems && typeof lastPageSize === 'number' && pageSize > lastPageSize;
+        if (isExpanding) {
+          get().internal_updateTopicData(containerKey, { isExpandingPageSize: true });
+        }
+
+        const result = await topicService.getTopics({
+          agentId,
+          current: 0,
+          groupId,
+          isInbox,
+          pageSize,
+        });
+
+        // Reset expanding state after fetch completes
+        if (isExpanding) {
+          get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
+        }
+
+        return result;
+      },
       {
-        onSuccess: (topics) => {
-          if (!containerId) return;
+        // onData: responsible for state updates (fires for both cached and fresh data)
+        onData: (result) => {
+          if (!hasValidContainer) return;
 
-          const nextMap = { ...get().topicMaps, [containerId]: topics };
+          const { items: topics, total: totalCount } = result;
+          const hasMore = topics.length >= pageSize;
 
-          // no need to update map if the topics have been init and the map is the same
-          if (get().topicsInit && isEqual(nextMap, get().topicMaps)) return;
+          const currentData = get().topicDataMap[containerKey];
+
+          // no need to update map if the current key's data exists and is the same
+          if (currentData && isEqual(topics, currentData.items)) return;
 
           set(
-            { topicMaps: nextMap, topicsInit: true },
+            {
+              topicDataMap: {
+                ...get().topicDataMap,
+                [containerKey]: {
+                  currentPage: 0,
+                  hasMore,
+                  isExpandingPageSize: false,
+                  items: topics,
+                  pageSize,
+                  total: totalCount,
+                },
+              },
+            },
             false,
-            n('useFetchTopics(success)', { containerId }),
+            n('useFetchTopics(onData)', { containerKey }),
           );
         },
       },
-    ),
-  useSearchTopics: (keywords, sessionId, groupId) =>
+    );
+  },
+
+  loadMoreTopics: async () => {
+    const { activeAgentId, activeGroupId, topicDataMap } = get();
+    const key = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const currentData = topicDataMap[key];
+
+    if ((!activeAgentId && !activeGroupId) || currentData?.isLoadingMore) return;
+
+    const currentPage = currentData?.currentPage || 0;
+    const nextPage = currentPage + 1;
+
+    set(
+      {
+        topicDataMap: {
+          ...topicDataMap,
+          [key]: { ...currentData!, isLoadingMore: true },
+        },
+      },
+      false,
+      n('loadMoreTopics(start)'),
+    );
+
+    try {
+      const pageSize = useGlobalStore.getState().status.topicPageSize || 20;
+      const result = await topicService.getTopics({
+        agentId: activeAgentId,
+        current: nextPage,
+        groupId: activeGroupId,
+        pageSize,
+      });
+
+      const currentTopics = currentData?.items || [];
+      const hasMore = result.items.length >= pageSize;
+
+      set(
+        {
+          topicDataMap: {
+            ...get().topicDataMap,
+            [key]: {
+              currentPage: nextPage,
+              hasMore,
+              isLoadingMore: false,
+              items: [...currentTopics, ...result.items],
+              pageSize,
+              total: result.total,
+            },
+          },
+        },
+        false,
+        n('loadMoreTopics(success)'),
+      );
+    } catch {
+      set(
+        {
+          topicDataMap: {
+            ...get().topicDataMap,
+            [key]: { ...get().topicDataMap[key]!, isLoadingMore: false },
+          },
+        },
+        false,
+        n('loadMoreTopics(error)'),
+      );
+    }
+  },
+  useSearchTopics: (keywords, { agentId, groupId }) =>
     useSWR<ChatTopic[]>(
-      [SWR_USE_SEARCH_TOPIC, keywords, sessionId, groupId],
-      ([, keywords, sessionId, groupId]: [
-        string,
-        string,
-        string | undefined,
-        string | undefined,
-      ]) => topicService.searchTopics(keywords, sessionId, groupId),
+      keywords ? [SWR_USE_SEARCH_TOPIC, keywords, agentId, groupId] : null,
+      ([, keywords, agentId, groupId]: [string, string, string | undefined, string | undefined]) =>
+        topicService.searchTopics(keywords, agentId, groupId),
       {
         onSuccess: (data) => {
           set(
@@ -274,48 +469,45 @@ export const chatTopic: StateCreator<
       },
     ),
 
-  switchTopic: async (id, skipRefreshMessage) => {
+  switchTopic: async (id, options) => {
+    // Backward compatibility: support both boolean and options object
+    const opts: SwitchTopicOptions =
+      typeof options === 'boolean' ? { skipRefreshMessage: options } : (options ?? {});
+
+    const { activeAgentId, activeGroupId } = get();
+
+    // When switching to "new" state (id is undefined/null), clear the new key data
+    // This prevents stale data from previous conversations showing up
+    if (!id && activeAgentId) {
+      // Determine scope: use explicit scope from options, or infer from activeGroupId
+      const scope = opts.scope ?? (activeGroupId ? 'group' : 'main');
+
+      get().replaceMessages([], {
+        context: {
+          agentId: activeAgentId,
+          groupId: activeGroupId,
+          scope,
+          topicId: null,
+        },
+        action: n('clearNewKeyData'),
+      });
+    }
+
     set(
       { activeTopicId: !id ? (null as any) : id, activeThreadId: undefined },
       false,
       n('toggleTopic'),
     );
 
-    // Reset supervisor todos when switching topics in group chats
-    try {
-      const { activeId, activeSessionType, internal_cancelSupervisorDecision } = get();
-      // Determine group session robustly (cached flag or from session store)
-      let isGroupSession = activeSessionType === 'group';
-      if (activeSessionType === undefined) {
-        const sessionStore = useSessionStore.getState();
-        isGroupSession = sessionSelectors.isCurrentSessionGroupSession(sessionStore);
-      }
-
-      if (isGroupSession) {
-        const newKey = messageMapKey(activeId, id ?? null);
-        set(
-          produce((state: ChatStoreState) => {
-            state.supervisorTodos[newKey] = [];
-          }),
-          false,
-          n('resetSupervisorTodosOnTopicSwitch', { groupId: activeId, topicId: id ?? null }),
-        );
-
-        // Also cancel any pending supervisor decisions tied to this group
-        internal_cancelSupervisorDecision?.(activeId);
-      }
-    } catch {
-      // no-op: resetting todos should not block topic switching
-    }
-
-    if (skipRefreshMessage) return;
+    if (opts.skipRefreshMessage) return;
     await get().refreshMessages();
   },
   // delete
   removeSessionTopics: async () => {
-    const { switchTopic, activeId, refreshTopic } = get();
+    const { switchTopic, activeAgentId, refreshTopic } = get();
+    if (!activeAgentId) return;
 
-    await topicService.removeTopics(activeId);
+    await topicService.removeTopics(activeAgentId);
     await refreshTopic();
 
     // switch to default topic
@@ -325,8 +517,9 @@ export const chatTopic: StateCreator<
   removeGroupTopics: async (groupId: string) => {
     const { switchTopic, refreshTopic } = get();
 
-    // Get topics for this specific group from the topic map
-    const groupTopics = get().topicMaps[groupId] || [];
+    // Get topics for this specific group from the topic map using topicMapKey
+    const key = topicMapKey({ groupId });
+    const groupTopics = get().topicDataMap[key]?.items || [];
     const topicIds = groupTopics.map((t) => t.id);
 
     if (topicIds.length > 0) {
@@ -345,17 +538,15 @@ export const chatTopic: StateCreator<
     await refreshTopic();
   },
   removeTopic: async (id) => {
-    const { activeId, activeTopicId, switchTopic, refreshTopic } = get();
-
-    // remove messages in the topic
-    // TODO: Need to remove because server service don't need to call it
-    await messageService.removeMessagesByAssistant(activeId, id);
+    const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = get();
+    // Allow deletion when either agentId or groupId is active
+    if (!activeAgentId && !activeGroupId) return;
 
     // remove topic
     await topicService.removeTopic(id);
     await refreshTopic();
 
-    // switch bach to default topic
+    // switch back to default topic
     if (activeTopicId === id) switchTopic();
   },
   removeUnstarredTopic: async () => {
@@ -377,7 +568,13 @@ export const chatTopic: StateCreator<
     );
   },
   refreshTopic: async () => {
-    return mutate([SWR_USE_FETCH_TOPIC, get().activeId]);
+    const { activeAgentId, activeGroupId } = get();
+    // Use topicMapKey to generate the same key used in useFetchTopics
+    // Key format: [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
+    const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    await mutate(
+      (key) => Array.isArray(key) && key[0] === SWR_USE_FETCH_TOPIC && key[1] === containerKey,
+    );
   },
 
   internal_updateTopicLoading: (id, loading) => {
@@ -419,12 +616,75 @@ export const chatTopic: StateCreator<
   },
 
   internal_dispatchTopic: (payload, action) => {
-    const nextTopics = topicReducer(topicSelectors.currentTopics(get()), payload);
-    const nextMap = { ...get().topicMaps, [get().activeId]: nextTopics };
+    const { activeAgentId, activeGroupId } = get();
+    const key = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const currentData = get().topicDataMap[key];
+    const nextItems = topicReducer(currentData?.items, payload);
 
-    // no need to update map if is the same
-    if (isEqual(nextMap, get().topicMaps)) return;
+    // no need to update if is the same
+    if (isEqual(nextItems, currentData?.items)) return;
 
-    set({ topicMaps: nextMap }, false, action ?? n(`dispatchTopic/${payload.type}`));
+    set(
+      {
+        topicDataMap: {
+          ...get().topicDataMap,
+          [key]: {
+            ...currentData,
+            currentPage: currentData?.currentPage ?? 0,
+            hasMore: currentData?.hasMore ?? false,
+            items: nextItems,
+            total: currentData?.total ?? nextItems.length,
+          },
+        },
+      },
+      false,
+      action ?? n(`dispatchTopic/${payload.type}`),
+    );
+  },
+
+  internal_updateTopics: (agentId, params) => {
+    const { items, total, pageSize, currentPage = 0, append = false, groupId } = params;
+    const key = topicMapKey({ agentId, groupId });
+    const currentData = get().topicDataMap[key];
+
+    const nextItems = append ? [...(currentData?.items || []), ...items] : items;
+
+    set(
+      {
+        topicDataMap: {
+          ...get().topicDataMap,
+          [key]: {
+            currentPage,
+            hasMore: items.length >= pageSize,
+            isExpandingPageSize: false,
+            isLoadingMore: false,
+            items: nextItems,
+            pageSize,
+            total,
+          },
+        },
+      },
+      false,
+      n('internal_updateTopics', { key, append }),
+    );
+  },
+
+  internal_updateTopicData: (key, data) => {
+    const currentData = get().topicDataMap[key];
+    if (!currentData) return;
+
+    set(
+      {
+        topicDataMap: {
+          ...get().topicDataMap,
+          [key]: {
+            ...currentData,
+            ...data,
+          },
+        },
+      },
+      false,
+      n('internal_updateTopicData', { key, data }),
+    );
   },
 });

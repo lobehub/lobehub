@@ -40,13 +40,13 @@ describe('systemStatusSelectors', () => {
         showSystemRole: true,
         mobileShowTopic: true,
         mobileShowPortal: true,
-        showChatSideBar: true,
-        showSessionPanel: true,
+        showRightPanel: true,
+        showLeftPanel: true,
         showFilePanel: true,
         hidePWAInstaller: true,
         isShowCredit: true,
         zenMode: false,
-        sessionsWidth: 300,
+        leftPanelWidth: 300,
         portalWidth: 500,
         filePanelWidth: 400,
         inputHeight: 150,
@@ -58,14 +58,14 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.showSystemRole(s)).toBe(true);
       expect(systemStatusSelectors.mobileShowTopic(s)).toBe(true);
       expect(systemStatusSelectors.mobileShowPortal(s)).toBe(true);
-      expect(systemStatusSelectors.showChatSideBar(s)).toBe(true);
-      expect(systemStatusSelectors.showSessionPanel(s)).toBe(true);
+      expect(systemStatusSelectors.showRightPanel(s)).toBe(true);
+      expect(systemStatusSelectors.showLeftPanel(s)).toBe(true);
       expect(systemStatusSelectors.showFilePanel(s)).toBe(true);
       expect(systemStatusSelectors.hidePWAInstaller(s)).toBe(true);
       expect(systemStatusSelectors.isShowCredit(s)).toBe(true);
       expect(systemStatusSelectors.showChatHeader(s)).toBe(true);
       expect(systemStatusSelectors.inZenMode(s)).toBe(false);
-      expect(systemStatusSelectors.sessionWidth(s)).toBe(300);
+      expect(systemStatusSelectors.leftPanelWidth(s)).toBe(300);
       expect(systemStatusSelectors.portalWidth(s)).toBe(500);
       expect(systemStatusSelectors.filePanelWidth(s)).toBe(400);
       expect(systemStatusSelectors.wideScreen(s)).toBe(false);
@@ -75,8 +75,8 @@ describe('systemStatusSelectors', () => {
       const zenState = merge(s, {
         status: { zenMode: true },
       });
-      expect(systemStatusSelectors.showChatSideBar(zenState)).toBe(false);
-      expect(systemStatusSelectors.showSessionPanel(zenState)).toBe(false);
+      expect(systemStatusSelectors.showRightPanel(zenState)).toBe(false);
+      expect(systemStatusSelectors.showLeftPanel(zenState)).toBe(false);
       expect(systemStatusSelectors.showChatHeader(zenState)).toBe(false);
     });
 

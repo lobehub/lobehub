@@ -1,8 +1,8 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import {
-  ModelParamsSchema,
+  type ModelParamsSchema,
   ModelProvider,
-  RuntimeImageGenParams,
+  type RuntimeImageGenParams,
   extractDefaultValues,
   gptImage1ParamsSchema,
 } from 'model-bank';

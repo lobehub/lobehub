@@ -1,11 +1,10 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { Block, Icon, Text } from '@lobehub/ui';
-import { Form as AForm, Button, FormInstance } from 'antd';
-import { useTheme } from 'antd-style';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Form as AForm, type FormInstance } from 'antd';
+import { cssVar } from 'antd-style';
 import { FileCode } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import ManifestPreviewer from '@/components/ManifestPreviewer';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -17,13 +16,12 @@ import PluginEmptyState from './EmptyState';
 
 const PluginPreview = memo<{ form: FormInstance }>(({ form }) => {
   const { t } = useTranslation('plugin');
-  const theme = useTheme();
   const manifest: LobeChatPluginManifest = AForm.useWatch(['manifest'], form);
   const meta = manifest?.meta;
 
   if (!manifest)
     return (
-      <Flexbox flex={2} height={'100%'} style={{ background: theme.colorBgLayout }}>
+      <Flexbox flex={2} height={'100%'} style={{ background: cssVar.colorBgLayout }}>
         <PluginEmptyState />
       </Flexbox>
     );
@@ -33,7 +31,7 @@ const PluginPreview = memo<{ form: FormInstance }>(({ form }) => {
       flex={2}
       gap={24}
       padding={12}
-      style={{ background: theme.colorBgLayout, overflowY: 'auto' }}
+      style={{ background: cssVar.colorBgLayout, overflowY: 'auto' }}
     >
       <Block
         gap={16}

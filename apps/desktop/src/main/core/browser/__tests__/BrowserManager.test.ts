@@ -33,10 +33,10 @@ const { MockBrowser, mockAppBrowsers, mockWindowTemplates } = vi.hoisted(() => {
   return {
     MockBrowser,
     mockAppBrowsers: {
-      chat: {
-        identifier: 'chat',
+      app: {
+        identifier: 'app',
         keepAlive: true,
-        path: '/chat',
+        path: '/app',
       },
       settings: {
         identifier: 'settings',
@@ -61,6 +61,10 @@ vi.mock('../Browser', () => ({
 
 // Mock appBrowsers config
 vi.mock('../../../appBrowsers', () => ({
+  BrowsersIdentifiers: {
+    app: 'app',
+    devtools: 'devtools',
+  },
   appBrowsers: mockAppBrowsers,
   windowTemplates: mockWindowTemplates,
 }));
@@ -102,10 +106,10 @@ describe('BrowserManager', () => {
   });
 
   describe('getMainWindow', () => {
-    it('should return chat window', () => {
+    it('should return app window', () => {
       const mainWindow = manager.getMainWindow();
 
-      expect(mainWindow.identifier).toBe('chat');
+      expect(mainWindow.identifier).toBe('app');
     });
   });
 
@@ -113,27 +117,27 @@ describe('BrowserManager', () => {
     it('should show the main window', () => {
       manager.showMainWindow();
 
-      const chatBrowser = manager.browsers.get('chat');
-      expect(chatBrowser?.show).toHaveBeenCalled();
+      const appBrowser = manager.browsers.get('app');
+      expect(appBrowser?.show).toHaveBeenCalled();
     });
   });
 
   describe('retrieveByIdentifier', () => {
     it('should return existing browser', () => {
       // First call creates the browser
-      const browser1 = manager.retrieveByIdentifier('chat');
+      const browser1 = manager.retrieveByIdentifier('app');
       // Second call should return same instance
-      const browser2 = manager.retrieveByIdentifier('chat');
+      const browser2 = manager.retrieveByIdentifier('app');
 
       expect(browser1).toBe(browser2);
       expect(MockBrowser).toHaveBeenCalledTimes(1);
     });
 
     it('should create static browser when not exists', () => {
-      const browser = manager.retrieveByIdentifier('chat');
+      const browser = manager.retrieveByIdentifier('app');
 
-      expect(MockBrowser).toHaveBeenCalledWith(mockAppBrowsers.chat, mockApp);
-      expect(browser.identifier).toBe('chat');
+      expect(MockBrowser).toHaveBeenCalledWith(mockAppBrowsers.app, mockApp);
+      expect(browser.identifier).toBe('app');
     });
 
     it('should throw error for non-static browser that does not exist', () => {
@@ -188,13 +192,13 @@ describe('BrowserManager', () => {
     it('should return windows matching template prefix', () => {
       manager.createMultiInstanceWindow('popup' as any, '/path1', 'popup_1');
       manager.createMultiInstanceWindow('popup' as any, '/path2', 'popup_2');
-      manager.retrieveByIdentifier('chat'); // This should not be included
+      manager.retrieveByIdentifier('app'); // This should not be included
 
       const popupWindows = manager.getWindowsByTemplate('popup');
 
       expect(popupWindows).toContain('popup_1');
       expect(popupWindows).toContain('popup_2');
-      expect(popupWindows).not.toContain('chat');
+      expect(popupWindows).not.toContain('app');
     });
 
     it('should return empty array when no matching windows', () => {
@@ -228,23 +232,23 @@ describe('BrowserManager', () => {
     it('should initialize keepAlive browsers', () => {
       manager.initializeBrowsers();
 
-      // chat has keepAlive: true, settings has keepAlive: false
-      expect(manager.browsers.has('chat')).toBe(true);
+      // app has keepAlive: true, settings has keepAlive: false
+      expect(manager.browsers.has('app')).toBe(true);
       expect(manager.browsers.has('settings')).toBe(false);
     });
   });
 
   describe('broadcastToAllWindows', () => {
     it('should broadcast to all browsers', () => {
-      manager.retrieveByIdentifier('chat');
+      manager.retrieveByIdentifier('app');
       manager.retrieveByIdentifier('settings');
 
       manager.broadcastToAllWindows('updateAvailable' as any, { version: '1.0.0' } as any);
 
-      const chatBrowser = manager.browsers.get('chat');
+      const appBrowser = manager.browsers.get('app');
       const settingsBrowser = manager.browsers.get('settings');
 
-      expect(chatBrowser?.broadcast).toHaveBeenCalledWith('updateAvailable', { version: '1.0.0' });
+      expect(appBrowser?.broadcast).toHaveBeenCalledWith('updateAvailable', { version: '1.0.0' });
       expect(settingsBrowser?.broadcast).toHaveBeenCalledWith('updateAvailable', {
         version: '1.0.0',
       });
@@ -253,15 +257,15 @@ describe('BrowserManager', () => {
 
   describe('broadcastToWindow', () => {
     it('should broadcast to specific window', () => {
-      manager.retrieveByIdentifier('chat');
+      manager.retrieveByIdentifier('app');
       manager.retrieveByIdentifier('settings');
 
-      const chatBrowser = manager.browsers.get('chat');
+      const appBrowser = manager.browsers.get('app');
       const settingsBrowser = manager.browsers.get('settings');
 
-      manager.broadcastToWindow('chat', 'updateAvailable' as any, { version: '1.0.0' } as any);
+      manager.broadcastToWindow('app', 'updateAvailable' as any, { version: '1.0.0' } as any);
 
-      expect(chatBrowser?.broadcast).toHaveBeenCalledWith('updateAvailable', { version: '1.0.0' });
+      expect(appBrowser?.broadcast).toHaveBeenCalledWith('updateAvailable', { version: '1.0.0' });
       expect(settingsBrowser?.broadcast).not.toHaveBeenCalled();
     });
 
@@ -274,35 +278,35 @@ describe('BrowserManager', () => {
 
   describe('redirectToPage', () => {
     it('should load URL and show window', async () => {
-      const browser = await manager.redirectToPage('chat', 'agent');
+      const browser = await manager.redirectToPage('app', 'agent');
 
       expect(browser.hide).toHaveBeenCalled();
-      expect(browser.loadUrl).toHaveBeenCalledWith('/chat/agent');
+      expect(browser.loadUrl).toHaveBeenCalledWith('/app/agent');
       expect(browser.show).toHaveBeenCalled();
     });
 
     it('should handle subPath correctly', async () => {
-      const browser = await manager.redirectToPage('chat', 'settings/profile');
+      const browser = await manager.redirectToPage('app', 'settings/profile');
 
-      expect(browser.loadUrl).toHaveBeenCalledWith('/chat/settings/profile');
+      expect(browser.loadUrl).toHaveBeenCalledWith('/app/settings/profile');
     });
 
     it('should handle search parameters', async () => {
-      const browser = await manager.redirectToPage('chat', 'agent', 'id=123');
+      const browser = await manager.redirectToPage('app', 'agent', 'id=123');
 
-      expect(browser.loadUrl).toHaveBeenCalledWith('/chat/agent?id=123');
+      expect(browser.loadUrl).toHaveBeenCalledWith('/app/agent?id=123');
     });
 
     it('should handle search parameters starting with ?', async () => {
-      const browser = await manager.redirectToPage('chat', undefined, '?id=123');
+      const browser = await manager.redirectToPage('app', undefined, '?id=123');
 
-      expect(browser.loadUrl).toHaveBeenCalledWith('/chat?id=123');
+      expect(browser.loadUrl).toHaveBeenCalledWith('/app?id=123');
     });
 
     it('should handle no subPath', async () => {
-      const browser = await manager.redirectToPage('chat');
+      const browser = await manager.redirectToPage('app');
 
-      expect(browser.loadUrl).toHaveBeenCalledWith('/chat');
+      expect(browser.loadUrl).toHaveBeenCalledWith('/app');
     });
 
     it('should throw error on failure', async () => {
@@ -315,7 +319,7 @@ describe('BrowserManager', () => {
         hide: vi.fn(),
         identifier: options.identifier,
         loadUrl: vi.fn().mockRejectedValue(mockError),
-        options: { path: '/chat' },
+        options: { path: '/app' },
         show: vi.fn(),
         webContents: { id: 1 },
       }));
@@ -323,18 +327,18 @@ describe('BrowserManager', () => {
       // Clear the browser cache
       manager.browsers.clear();
 
-      await expect(manager.redirectToPage('chat', 'agent')).rejects.toThrow('Load failed');
+      await expect(manager.redirectToPage('app', 'agent')).rejects.toThrow('Load failed');
     });
   });
 
   describe('window operations', () => {
     describe('closeWindow', () => {
       it('should close specified window', () => {
-        manager.retrieveByIdentifier('chat');
+        manager.retrieveByIdentifier('app');
 
-        manager.closeWindow('chat');
+        manager.closeWindow('app');
 
-        const browser = manager.browsers.get('chat');
+        const browser = manager.browsers.get('app');
         expect(browser?.close).toHaveBeenCalled();
       });
 
@@ -345,33 +349,33 @@ describe('BrowserManager', () => {
 
     describe('minimizeWindow', () => {
       it('should minimize specified window', () => {
-        manager.retrieveByIdentifier('chat');
+        manager.retrieveByIdentifier('app');
 
-        manager.minimizeWindow('chat');
+        manager.minimizeWindow('app');
 
-        const browser = manager.browsers.get('chat');
+        const browser = manager.browsers.get('app');
         expect(browser?.browserWindow.minimize).toHaveBeenCalled();
       });
     });
 
     describe('maximizeWindow', () => {
       it('should maximize when not maximized', () => {
-        manager.retrieveByIdentifier('chat');
-        const browser = manager.browsers.get('chat');
+        manager.retrieveByIdentifier('app');
+        const browser = manager.browsers.get('app');
         browser!.browserWindow.isMaximized = vi.fn().mockReturnValue(false);
 
-        manager.maximizeWindow('chat');
+        manager.maximizeWindow('app');
 
         expect(browser?.browserWindow.maximize).toHaveBeenCalled();
         expect(browser?.browserWindow.unmaximize).not.toHaveBeenCalled();
       });
 
       it('should unmaximize when already maximized', () => {
-        manager.retrieveByIdentifier('chat');
-        const browser = manager.browsers.get('chat');
+        manager.retrieveByIdentifier('app');
+        const browser = manager.browsers.get('app');
         browser!.browserWindow.isMaximized = vi.fn().mockReturnValue(true);
 
-        manager.maximizeWindow('chat');
+        manager.maximizeWindow('app');
 
         expect(browser?.browserWindow.unmaximize).toHaveBeenCalled();
         expect(browser?.browserWindow.maximize).not.toHaveBeenCalled();
@@ -381,12 +385,12 @@ describe('BrowserManager', () => {
 
   describe('getIdentifierByWebContents', () => {
     it('should return identifier for known webContents', () => {
-      const browser = manager.retrieveByIdentifier('chat');
+      const browser = manager.retrieveByIdentifier('app');
       const webContents = browser.browserWindow.webContents;
 
       const identifier = manager.getIdentifierByWebContents(webContents as any);
 
-      expect(identifier).toBe('chat');
+      expect(identifier).toBe('app');
     });
 
     it('should return null for unknown webContents', () => {
@@ -400,15 +404,15 @@ describe('BrowserManager', () => {
 
   describe('handleAppThemeChange', () => {
     it('should notify all browsers of theme change', () => {
-      manager.retrieveByIdentifier('chat');
+      manager.retrieveByIdentifier('app');
       manager.retrieveByIdentifier('settings');
 
       manager.handleAppThemeChange();
 
-      const chatBrowser = manager.browsers.get('chat');
+      const appBrowser = manager.browsers.get('app');
       const settingsBrowser = manager.browsers.get('settings');
 
-      expect(chatBrowser?.handleAppThemeChange).toHaveBeenCalled();
+      expect(appBrowser?.handleAppThemeChange).toHaveBeenCalled();
       expect(settingsBrowser?.handleAppThemeChange).toHaveBeenCalled();
     });
   });

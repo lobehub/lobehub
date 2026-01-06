@@ -1,15 +1,14 @@
-import { Button } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { Popover, Space } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, FolderOpen } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import FileIcon from '@/components/FileIcon';
 import { localFileService } from '@/services/electron/localFileService';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     cursor: pointer;
 
@@ -17,11 +16,11 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-inline: 4px 8px;
     border-radius: 4px;
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
     :hover {
-      color: ${token.colorText};
-      background: ${token.colorFillTertiary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   title: css`
@@ -42,7 +41,6 @@ interface LocalFileProps {
 }
 
 export const LocalFile = ({ name, path, isDirectory = false }: LocalFileProps) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('components');
 
   const handleOpenFile = () => {
@@ -103,7 +101,7 @@ export const LocalFile = ({ name, path, isDirectory = false }: LocalFileProps) =
       arrow={false}
       content={popoverContent}
       styles={{
-        body: { padding: 0 },
+        container: { padding: 0 },
       }}
       trigger={['hover']}
     >

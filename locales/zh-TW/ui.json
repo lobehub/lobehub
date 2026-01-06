@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "頭像",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "超額",
+    "tokenTag.remained": "剩餘",
+    "tokenTag.used": "已用"
+  },
+  "common": {
+    "common.cancel": "取消",
+    "common.confirm": "確認",
+    "common.delete": "刪除",
+    "common.edit": "編輯"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "添加屬性",
+    "editableMessage.delete": "刪除",
+    "editableMessage.input": "輸入",
+    "editableMessage.inputPlaceholder": "請輸入示例輸入內容",
+    "editableMessage.output": "輸出",
+    "editableMessage.outputPlaceholder": "請輸入示例輸出內容",
+    "editableMessage.system": "系統"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "刪除",
+    "emojiPicker.draggerDesc": "點擊或拖動圖片到此處上傳",
+    "emojiPicker.emoji": "表情",
+    "emojiPicker.fileTypeError": "只能上傳圖片檔案！",
+    "emojiPicker.upload": "上傳",
+    "emojiPicker.uploadBtn": "裁剪並上傳"
+  },
+  "form": {
+    "form.reset": "重置",
+    "form.submit": "提交",
+    "form.unsavedChanges": "未儲存的變更",
+    "form.unsavedWarning": "您有未儲存的變更。確定要離開嗎？"
+  },
+  "hotkey": {
+    "hotkey.conflict": "此快捷鍵與現有快捷鍵衝突。",
+    "hotkey.invalidCombination": "快捷鍵必須包含修飾鍵（Ctrl、Alt、Shift）且只能有一個一般鍵。",
+    "hotkey.placeholder": "按鍵錄製快捷鍵",
+    "hotkey.reset": "重置為預設"
+  },
+  "messageModal": {
+    "messageModal.cancel": "取消",
+    "messageModal.confirm": "確認",
+    "messageModal.edit": "編輯"
+  },
+  "sideNav": {
+    "sideNav.collapse": "折疊側邊欄",
+    "sideNav.demoActiveLabel": "啟用",
+    "sideNav.demoFeatureAutoCollapseDesc": "拖動到閾值以下智慧折疊",
+    "sideNav.demoFeatureAutoCollapseTitle": "自動折疊",
+    "sideNav.demoFeaturePerformanceDesc": "無動畫開銷，效能更佳",
+    "sideNav.demoFeaturePerformanceTitle": "效能最佳化",
+    "sideNav.demoFeatureResizeDesc": "拖動調整面板寬度",
+    "sideNav.demoFeatureResizeTitle": "彈性調整",
+    "sideNav.demoFeatureSmartHandleDesc": "懸停顯示切換按鈕",
+    "sideNav.demoFeatureSmartHandleTitle": "智慧手柄",
+    "sideNav.demoFeaturesTitle": "功能特色",
+    "sideNav.demoHint": "嘗試拖動面板邊緣並使用切換按鈕 ->",
+    "sideNav.demoSubtitle": "可拖動調整的工作區風格側邊面板",
+    "sideNav.demoTitle": "DraggableSideNav 示範",
+    "sideNav.expand": "展開側邊欄"
+  }
+}

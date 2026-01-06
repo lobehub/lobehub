@@ -51,10 +51,24 @@ describe('setupElectronApi', () => {
     });
   });
 
+  it('should expose lobeEnv with darwinMajorVersion', () => {
+    setupElectronApi();
+
+    const call = mockContextBridgeExposeInMainWorld.mock.calls.find((i) => i[0] === 'lobeEnv');
+    expect(call).toBeTruthy();
+    const exposedEnv = call?.[1] as any;
+
+    expect(Object.prototype.hasOwnProperty.call(exposedEnv, 'darwinMajorVersion')).toBe(true);
+    expect(
+      exposedEnv.darwinMajorVersion === undefined ||
+        typeof exposedEnv.darwinMajorVersion === 'number',
+    ).toBe(true);
+  });
+
   it('should expose both APIs in correct order', () => {
     setupElectronApi();
 
-    expect(mockContextBridgeExposeInMainWorld).toHaveBeenCalledTimes(2);
+    expect(mockContextBridgeExposeInMainWorld).toHaveBeenCalledTimes(3);
 
     // First call should be for 'electron'
     expect(mockContextBridgeExposeInMainWorld.mock.calls[0][0]).toBe('electron');
@@ -66,6 +80,9 @@ describe('setupElectronApi', () => {
       invoke: mockInvoke,
       onStreamInvoke: mockOnStreamInvoke,
     });
+
+    // Third call should be for 'lobeEnv'
+    expect(mockContextBridgeExposeInMainWorld.mock.calls[2][0]).toBe('lobeEnv');
   });
 
   it('should handle errors when exposing electron API fails', () => {
@@ -77,8 +94,8 @@ describe('setupElectronApi', () => {
     setupElectronApi();
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(error);
-    // Should still try to expose electronAPI even if first one fails
-    expect(mockContextBridgeExposeInMainWorld).toHaveBeenCalledTimes(2);
+    // Should still try to expose electronAPI and lobeEnv even if first one fails
+    expect(mockContextBridgeExposeInMainWorld).toHaveBeenCalledTimes(3);
   });
 
   it('should continue execution if exposing electronAPI fails', () => {
@@ -136,7 +153,7 @@ describe('setupElectronApi', () => {
     setupElectronApi();
     setupElectronApi();
 
-    // Should be called 4 times total (2 per setup call)
-    expect(mockContextBridgeExposeInMainWorld).toHaveBeenCalledTimes(4);
+    // Should be called 6 times total (3 per setup call)
+    expect(mockContextBridgeExposeInMainWorld).toHaveBeenCalledTimes(6);
   });
 });

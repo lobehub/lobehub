@@ -1,181 +1,134 @@
 {
   "addFolder": "ایجاد پوشه",
-  "addKnowledge": "افزودن دانش",
-  "addPage": "ایجاد سند",
-  "desc": "مدیریت دانش کاری، تحصیلی و زندگی شما.",
-  "detail": {
-    "basic": {
-      "createdAt": "زمان ایجاد",
-      "filename": "نام فایل",
-      "size": "اندازه فایل",
-      "title": "اطلاعات پایه",
-      "type": "فرمت",
-      "updatedAt": "زمان به‌روزرسانی"
-    },
-    "data": {
-      "chunkCount": "تعداد بخش‌ها",
-      "embedding": {
-        "default": "هنوز برداری نشده",
-        "error": "ناموفق",
-        "pending": "در انتظار شروع",
-        "processing": "در حال پردازش",
-        "success": "تکمیل شد"
-      },
-      "embeddingStatus": "برداری‌سازی"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "افزودن آیکون",
-    "autoSaveMessage": "سند به‌صورت خودکار ذخیره می‌شود، نیازی به ذخیره دستی نیست",
-    "chooseIcon": "انتخاب آیکون",
-    "deleteConfirm": {
-      "content": "در شرف حذف این سند هستید. پس از حذف، قابل بازیابی نخواهد بود. لطفاً با احتیاط عمل کنید.",
-      "title": "حذف سند"
-    },
-    "deleteError": "حذف سند ناموفق بود",
-    "deleteSuccess": "سند با موفقیت حذف شد",
-    "editedAt": "آخرین ویرایش در {{time}}",
-    "editedBy": "آخرین ویرایش توسط {{name}}",
-    "editorPlaceholder": "محتوای سند را وارد کنید، برای باز کردن منوی دستورات / را فشار دهید",
-    "empty": {
-      "createNewDocument": "ایجاد سند جدید",
-      "title": "برای شروع یک سند انتخاب کنید",
-      "uploadMarkdown": "بارگذاری فایل Markdown"
-    },
-    "linkCopied": "پیوند کپی شد",
-    "menu": {
-      "copyLink": "کپی پیوند",
-      "exportDocument": "صادرات سند",
-      "importDocument": "وارد کردن سند",
-      "pin": "سند را سنجاق کن"
-    },
-    "saving": "در حال ذخیره‌سازی...",
-    "titlePlaceholder": "بدون عنوان",
-    "wordCount": "{{wordCount}} کلمه"
-  },
-  "documentList": {
-    "copyContent": "کپی کل محتوا",
-    "duplicate": "ایجاد نسخه مشابه",
-    "empty": "هنوز هیچ سندی وجود ندارد، برای ایجاد اولین سند خود روی دکمه بالا کلیک کنید",
-    "noResults": "هیچ سندی مطابق با جستجو یافت نشد",
-    "pageCount": "مجموعاً {{count}} سند",
-    "selectNote": "برای ویرایش، یک سند را انتخاب کنید",
-    "untitled": "بدون عنوان"
-  },
-  "empty": "هیچ فایل/پوشه‌ای بارگذاری نشده است",
-  "header": {
-    "actions": {
-      "newFolder": "ایجاد پوشه جدید",
-      "newPage": "ایجاد سند جدید",
-      "uploadFile": "بارگذاری فایل",
-      "uploadFolder": "بارگذاری پوشه"
-    },
-    "newNoteDialog": {
-      "cancel": "لغو",
-      "editTitle": "ویرایش سند",
-      "emptyContent": "محتوای سند نمی‌تواند خالی باشد",
-      "loadError": "بارگذاری سند ناموفق بود، لطفاً دوباره تلاش کنید",
-      "loading": "در حال بارگذاری...",
-      "save": "ذخیره",
-      "saveError": "ذخیره سند ناموفق بود، لطفاً دوباره تلاش کنید",
-      "saveSuccess": "سند با موفقیت ذخیره شد",
-      "title": "سند جدید",
-      "updateSuccess": "سند با موفقیت به‌روزرسانی شد"
-    },
-    "newPageButton": "ایجاد سند جدید",
-    "uploadButton": "بارگذاری"
-  },
-  "home": {
-    "getStarted": "شروع کنید",
-    "greeting": "شروع",
-    "quickActions": "دسترسی سریع",
-    "recentFiles": "فایل‌های اخیر",
-    "recentPages": "اسناد اخیر",
-    "subtitle": "به پایگاه دانش خوش آمدید، از اینجا مدیریت اسناد خود را آغاز کنید",
-    "uploadEntries": {
-      "files": {
-        "title": "بارگذاری فایل"
-      },
-      "folder": {
-        "title": "بارگذاری پوشه"
-      },
-      "knowledgeBase": {
-        "title": "ایجاد پایگاه دانش جدید"
-      },
-      "newPage": {
-        "title": "ایجاد سند جدید"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "این پایگاه دانش به زودی حذف خواهد شد، اما فایل‌های آن حذف نخواهند شد و به بخش همه فایل‌ها منتقل می‌شوند. پس از حذف پایگاه دانش، امکان بازیابی آن وجود نخواهد داشت، لطفاً با دقت عمل کنید.",
-      "empty": "برای شروع ایجاد پایگاه دانش، روی <1>+</1> کلیک کنید."
-    },
-    "new": "ایجاد پایگاه دانش جدید",
-    "title": "پایگاه دانش"
-  },
-  "menu": {
-    "allFiles": "تمام فایل‌ها",
-    "allPages": "همهٔ نوشته‌ها"
-  },
-  "networkError": "دریافت مخزن دانش ناموفق بود، لطفاً پس از بررسی اتصال شبکه دوباره تلاش کنید.",
-  "notSupportGuide": {
-    "desc": "استقرار فعلی در حالت پایگاه داده کلاینت است و امکان استفاده از قابلیت مدیریت فایل وجود ندارد. لطفاً به <1>حالت استقرار پایگاه داده سرور</1> تغییر دهید، یا مستقیماً از <3>LobeChat Cloud</3> استفاده کنید.",
-    "features": {
-      "allKind": {
-        "desc": "پشتیبانی از انواع فایل‌های رایج، از جمله فرمت‌های متداول اسناد مانند Word، PPT، Excel، PDF، TXT و همچنین فایل‌های کد مانند JS، Python و غیره",
-        "title": "تجزیه و تحلیل انواع فایل‌ها"
-      },
-      "embeddings": {
-        "desc": "استفاده از مدل‌های برداری با کارایی بالا برای برداری‌سازی بخش‌های متنی و دستیابی به جستجوی معنایی در محتوای فایل",
-        "title": "برداری‌سازی معنایی"
-      },
-      "repos": {
-        "desc": "پشتیبانی از ایجاد مخازن دانش و امکان افزودن انواع مختلف فایل‌ها برای ساخت دانش تخصصی خودتان",
-        "title": "مخزن دانش"
-      }
-    },
-    "title": "حالت استقرار فعلی از مدیریت فایل پشتیبانی نمی‌کند"
-  },
-  "preview": {
-    "downloadFile": "دانلود فایل",
-    "unsupportedFileAndContact": "فرمت این فایل در حال حاضر از پیش‌نمایش آنلاین پشتیبانی نمی‌کند. در صورت نیاز به پیش‌نمایش، لطفاً <1>به ما بازخورد دهید</1>."
-  },
-  "searchFilePlaceholder": "جستجوی فایل",
-  "searchPagePlaceholder": "جستجوی سند",
-  "tab": {
-    "all": "همه",
-    "audios": "صداها",
-    "documents": "اسناد",
-    "home": "خانه",
-    "images": "تصاویر",
-    "moreTypes": "انواع بیشتر",
-    "pages": "اسناد",
-    "videos": "ویدیوها",
-    "websites": "وب‌سایت‌ها"
-  },
-  "title": "پایگاه دانش",
-  "toggleLeftPanel": "نمایش/پنهان‌سازی پنل سمت چپ",
-  "uploadDock": {
-    "body": {
-      "collapse": "بستن",
-      "item": {
-        "done": "بارگذاری شد",
-        "error": "بارگذاری ناموفق بود، لطفاً دوباره تلاش کنید",
-        "pending": "آماده برای بارگذاری...",
-        "processing": "در حال پردازش فایل...",
-        "restTime": "زمان باقی‌مانده {{time}}"
-      }
-    },
-    "fileQueueInfo": "در حال بارگذاری {{count}} فایل اول، {{remaining}} فایل باقی‌مانده در صف بارگذاری قرار خواهند گرفت",
-    "totalCount": "مجموعاً {{count}} مورد",
-    "uploadStatus": {
-      "error": "خطا در بارگذاری",
-      "pending": "در انتظار بارگذاری",
-      "processing": "در حال بارگذاری",
-      "success": "بارگذاری کامل شد",
-      "uploading": "در حال بارگذاری"
-    }
-  }
+  "addLibrary": "افزودن",
+  "addPage": "ایجاد صفحه",
+  "detail.basic.createdAt": "زمان ایجاد",
+  "detail.basic.filename": "نام فایل",
+  "detail.basic.size": "حجم فایل",
+  "detail.basic.title": "اطلاعات پایه",
+  "detail.basic.type": "فرمت",
+  "detail.basic.updatedAt": "زمان به‌روزرسانی",
+  "detail.data.chunkCount": "تعداد بخش‌ها",
+  "detail.data.embedding.default": "بدون تعبیه",
+  "detail.data.embedding.error": "ناموفق",
+  "detail.data.embedding.pending": "در انتظار شروع",
+  "detail.data.embedding.processing": "در حال انجام",
+  "detail.data.embedding.success": "تکمیل شد",
+  "detail.data.embeddingStatus": "تعبیه",
+  "empty": "هنوز هیچ فایل یا پوشه‌ای بارگذاری نشده است.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} فایل فیلتر شد (از مجموع {{total}})",
+  "header.actions.connect": "اتصال...",
+  "header.actions.gitignore.apply": "اعمال قوانین",
+  "header.actions.gitignore.cancel": "نادیده گرفتن قوانین",
+  "header.actions.gitignore.content": "فایل .gitignore شناسایی شد (مجموعاً {{count}} فایل). آیا می‌خواهید قوانین نادیده‌گیری را اعمال کنید؟",
+  "header.actions.gitignore.filtered": "{{ignored}} فایل فیلتر شد (از مجموع {{total}} فایل)",
+  "header.actions.gitignore.title": "شناسایی .gitignore",
+  "header.actions.newFolder": "پوشه جدید",
+  "header.actions.newPage": "صفحه جدید",
+  "header.actions.notion.error": "وارد کردن فایل‌های Notion ناموفق بود",
+  "header.actions.notion.foundFiles": "{{count}} فایل یافت شد",
+  "header.actions.notion.importing": "در حال وارد کردن محتوای Notion...",
+  "header.actions.notion.noMarkdownFiles": "هیچ فایل Markdown در فایل ZIP یافت نشد",
+  "header.actions.notion.partial": "{{success}} فایل با موفقیت وارد شد، {{failed}} ناموفق",
+  "header.actions.notion.success": "{{count}} فایل با موفقیت وارد شد",
+  "header.actions.notionGuide.cancel": "فعلاً نه",
+  "header.actions.notionGuide.desc": "ابتدا محتوای خود را از Notion به صورت فایل Markdown (ZIP) صادر کنید. سپس روی ادامه کلیک کرده و فایل ZIP را انتخاب کنید تا همه صفحات وارد شوند.",
+  "header.actions.notionGuide.ok": "انتخاب فایل ZIP از Notion",
+  "header.actions.notionGuide.title": "وارد کردن از Notion",
+  "header.actions.uploadFile": "بارگذاری فایل",
+  "header.actions.uploadFolder": "بارگذاری پوشه",
+  "header.newPageButton": "صفحه جدید",
+  "header.uploadButton": "بارگذاری",
+  "home.getStarted": "شروع کنید",
+  "home.greeting": "شروع کنید",
+  "home.quickActions": "اقدامات سریع",
+  "home.recentFiles": "فایل‌های اخیر",
+  "home.recentPages": "صفحات اخیر",
+  "home.uploadEntries.files.title": "بارگذاری فایل‌ها",
+  "home.uploadEntries.folder.title": "بارگذاری پوشه",
+  "home.uploadEntries.library.title": "ایجاد کتابخانه جدید",
+  "home.uploadEntries.newPage.title": "صفحه جدید",
+  "library.list.confirmRemoveLibrary": "در حال حذف این کتابخانه هستید. فایل‌های داخل آن حذف نمی‌شوند بلکه به بخش همه فایل‌ها منتقل می‌شوند. این عملیات قابل بازگشت نیست، لطفاً با احتیاط ادامه دهید.",
+  "library.list.empty": "برای ایجاد کتابخانه جدید روی <1>+</1> کلیک کنید",
+  "library.new": "کتابخانه جدید",
+  "library.title": "کتابخانه",
+  "loadMore": "بارگذاری بیشتر",
+  "menu.allFiles": "همه فایل‌ها",
+  "menu.allPages": "همه صفحات",
+  "networkError": "دریافت کتابخانه‌ها ناموفق بود. لطفاً اتصال شبکه خود را بررسی کرده و دوباره تلاش کنید.",
+  "notSupportGuide.desc": "حالت فعلی استقرار از مدیریت فایل پشتیبانی نمی‌کند. به <1>حالت استقرار پایگاه‌داده سرور</1> تغییر دهید یا از <3>LobeHub Cloud</3> استفاده کنید.",
+  "notSupportGuide.features.allKind.desc": "پشتیبانی از انواع فایل‌های رایج، شامل فرمت‌های متنی مانند Word، PPT، Excel، PDF، TXT و همچنین فایل‌های کد مانند JS و Python.",
+  "notSupportGuide.features.allKind.title": "پشتیبانی از انواع فایل",
+  "notSupportGuide.features.embeddings.desc": "استفاده از مدل‌های برداری قدرتمند برای بردارسازی بخش‌های متنی و امکان جستجوی معنایی در محتوای فایل‌ها.",
+  "notSupportGuide.features.embeddings.title": "بردار معنایی",
+  "notSupportGuide.features.libraries.desc": "کتابخانه ایجاد کرده و فایل‌ها را برای ساخت کتابخانه شخصی خود اضافه کنید.",
+  "notSupportGuide.features.libraries.title": "کتابخانه",
+  "notSupportGuide.title": "حالت فعلی استقرار از مدیریت فایل پشتیبانی نمی‌کند",
+  "pageEditor.addIcon": "افزودن آیکون",
+  "pageEditor.autoSaveMessage": "صفحه شما به‌صورت خودکار ذخیره می‌شود. نیازی به ذخیره دستی نیست.",
+  "pageEditor.chooseIcon": "انتخاب آیکون",
+  "pageEditor.deleteConfirm.content": "این صفحه حذف خواهد شد و قابل بازیابی نیست. لطفاً با احتیاط ادامه دهید.",
+  "pageEditor.deleteConfirm.title": "حذف صفحه",
+  "pageEditor.deleteError": "حذف صفحه ناموفق بود",
+  "pageEditor.deleteSuccess": "صفحه با موفقیت حذف شد",
+  "pageEditor.duplicateError": "تکثیر صفحه ناموفق بود",
+  "pageEditor.duplicateSuccess": "صفحه با موفقیت تکثیر شد",
+  "pageEditor.editedAt": "آخرین ویرایش در {{time}}",
+  "pageEditor.editedBy": "آخرین ویرایش توسط {{name}}",
+  "pageEditor.editorPlaceholder": "نوشتن صفحه را آغاز کنید. برای باز کردن منوی دستورات / را فشار دهید",
+  "pageEditor.empty.createNewDocument": "ایجاد صفحه جدید",
+  "pageEditor.empty.importNotion": "وارد کردن از Notion",
+  "pageEditor.empty.title": "برای شروع یک صفحه انتخاب کنید",
+  "pageEditor.empty.uploadFiles": "بارگذاری فایل‌ها",
+  "pageEditor.exportError": "صادرات صفحه ناموفق بود",
+  "pageEditor.exportSuccess": "صفحه با موفقیت صادر شد",
+  "pageEditor.linkCopied": "لینک کپی شد",
+  "pageEditor.menu.copyLink": "کپی لینک",
+  "pageEditor.menu.export": "صادرات",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "صادرات صفحه",
+  "pageEditor.menu.importDocument": "وارد کردن صفحه",
+  "pageEditor.menu.pin": "سنجاق کردن صفحه",
+  "pageEditor.saving": "در حال ذخیره...",
+  "pageEditor.titlePlaceholder": "بدون عنوان",
+  "pageEditor.wordCount": "{{wordCount}} کلمه",
+  "pageList.copyContent": "کپی متن کامل",
+  "pageList.duplicate": "تکثیر",
+  "pageList.empty": "هنوز هیچ صفحه‌ای وجود ندارد. برای ایجاد اولین صفحه روی دکمه بالا کلیک کنید.",
+  "pageList.filter.all": "همه",
+  "pageList.filter.onlyInPages": "فقط در صفحات",
+  "pageList.noResults": "هیچ صفحه‌ای مطابق با جستجو یافت نشد",
+  "pageList.pageCount": "مجموع {{count}} صفحه",
+  "pageList.pageSizeItem": "{{count}} مورد",
+  "pageList.title": "صفحات",
+  "pageList.untitled": "بدون عنوان",
+  "portal.openInPageEditor": "ویرایش در صفحه",
+  "preview.downloadFile": "دانلود فایل",
+  "preview.unsupportedFileAndContact": "این فرمت فایل در حال حاضر برای پیش‌نمایش آنلاین پشتیبانی نمی‌شود. در صورت نیاز به پیش‌نمایش، لطفاً <1>با ما تماس بگیرید</1>.",
+  "searchFilePlaceholder": "جستجوی فایل‌ها",
+  "searchPagePlaceholder": "جستجوی صفحات",
+  "tab.all": "همه",
+  "tab.audios": "صوتی",
+  "tab.documents": "اسناد",
+  "tab.home": "خانه",
+  "tab.images": "تصاویر",
+  "tab.moreTypes": "انواع بیشتر",
+  "tab.pages": "صفحات",
+  "tab.videos": "ویدیوها",
+  "tab.websites": "وب‌سایت‌ها",
+  "title": "منابع",
+  "toggleLeftPanel": "نمایش/مخفی کردن پنل کناری",
+  "uploadDock.body.collapse": "جمع کردن",
+  "uploadDock.body.item.done": "بارگذاری شد",
+  "uploadDock.body.item.error": "بارگذاری ناموفق بود، لطفاً دوباره تلاش کنید",
+  "uploadDock.body.item.pending": "در حال آماده‌سازی برای بارگذاری...",
+  "uploadDock.body.item.processing": "در حال پردازش فایل...",
+  "uploadDock.body.item.restTime": "زمان باقی‌مانده: {{time}}",
+  "uploadDock.fileQueueInfo": "در حال بارگذاری {{count}} فایل اول، {{remaining}} فایل در صف باقی مانده",
+  "uploadDock.totalCount": "مجموع {{count}} مورد",
+  "uploadDock.uploadStatus.error": "خطای بارگذاری",
+  "uploadDock.uploadStatus.pending": "در انتظار بارگذاری",
+  "uploadDock.uploadStatus.processing": "در حال بارگذاری",
+  "uploadDock.uploadStatus.success": "بارگذاری کامل شد",
+  "uploadDock.uploadStatus.uploading": "در حال بارگذاری"
 }

@@ -1,10 +1,10 @@
-import { SearchParams, UniformSearchResponse, UniformSearchResult } from '@lobechat/types';
+import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { SearchServiceImpl } from '../type';
-import { ExaResponse, ExaSearchParameters } from './type';
+import { type SearchServiceImpl } from '../type';
+import { type ExaResponse, type ExaSearchParameters } from './type';
 
 const log = debug('lobe-search:Exa');
 

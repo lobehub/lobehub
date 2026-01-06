@@ -8,6 +8,6 @@
     "electron": "^34.0.0"
   },
   "peerDependencies": {
-    "react": "^19.2.0"
+    "react": "*"
   }
 }

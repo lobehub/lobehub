@@ -13,7 +13,6 @@ describe('MessageTransformer', () => {
         content: 'Hello',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         metadata: {
           cost: 0.001,
           duration: 1000,
@@ -53,7 +52,6 @@ describe('MessageTransformer', () => {
         content: 'Hello',
         createdAt: 0,
         id: 'msg-1',
-        meta: {},
         role: 'assistant',
         updatedAt: 0,
       };

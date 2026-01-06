@@ -8,13 +8,16 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@icons-pack/react-simple-icons": "^13.8.0",
-    "@lobechat/types": "workspace:*",
-    "@lobehub/ui": "^2.13.8",
-    "klavis": "^2.15.0",
-    "lodash-es": "^4.17.21",
-    "model-bank": "workspace:*",
+    "@lobechat/business-const": "workspace:*",
     "query-string": "^9.3.1",
     "url-join": "^5.0.0"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@icons-pack/react-simple-icons": "^13.8.0",
+    "@lobehub/ui": "^4",
+    "klavis": "^2.15.0"
   }
 }

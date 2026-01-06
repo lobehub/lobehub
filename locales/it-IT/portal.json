@@ -1,30 +1,25 @@
 {
   "Artifacts": "Artefatti",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Blocco",
-      "file": "File"
-    }
-  },
-  "Plugins": "Plugin",
-  "artifacts": {
-    "display": {
-      "code": "Codice",
-      "preview": "Anteprima"
-    },
-    "svg": {
-      "copyAsImage": "Copia come immagine",
-      "copyFail": "Copia fallita, motivo dell'errore: {{error}}",
-      "copySuccess": "Immagine copiata con successo",
-      "download": {
-        "png": "Scarica come PNG",
-        "svg": "Scarica come SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "La lista degli Artefatti attuale è vuota, si prega di utilizzare i plugin necessari durante la sessione e poi controllare di nuovo",
-  "emptyKnowledgeList": "L'elenco delle conoscenze attuale è vuoto. Si prega di attivare il database delle conoscenze durante la conversazione per visualizzarlo.",
+  "FilePreview.tabs.chunk": "Frammento",
+  "FilePreview.tabs.file": "File",
+  "Plugins": "Competenze",
+  "artifacts.display.code": "Codice",
+  "artifacts.display.preview": "Anteprima",
+  "artifacts.svg.copyAsImage": "Copia come immagine",
+  "artifacts.svg.copyFail": "Copia non riuscita: {{error}}. Riprova.",
+  "artifacts.svg.copySuccess": "Immagine copiata con successo",
+  "artifacts.svg.download.png": "Scarica come PNG",
+  "artifacts.svg.download.svg": "Scarica come SVG",
+  "document.todos.allCompleted": "Tutti i compiti completati",
+  "document.todos.title": "Compiti",
+  "emptyArtifactList": "Nessun artefatto al momento. Usa le Competenze nella conversazione, poi torna qui.",
+  "emptyKnowledgeList": "Questa lista è vuota.",
   "files": "File",
   "messageDetail": "Dettagli del messaggio",
-  "title": "Finestra di espansione"
+  "notebook.confirmDelete": "Eliminare questa pagina?",
+  "notebook.delete": "Elimina",
+  "notebook.empty": "Nessuna pagina al momento. Le pagine collegate a questo argomento appariranno qui.",
+  "notebook.title": "Taccuino",
+  "openInPageEditor": "Modifica nella pagina",
+  "title": "Spazio di lavoro"
 }

@@ -13,7 +13,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 Pro 是 GPT-5 系列的高级版本，具备增强的推理能力。支持结构化输出、函数调用和文本/图像处理，适用于复杂的专业任务。',
+      'GPT-5 Pro is the advanced version in the GPT-5 series with enhanced reasoning. It supports structured output, function calling, and text/image processing, making it ideal for complex professional tasks.',
     displayName: 'GPT-5 Pro',
     enabled: true,
     id: 'gpt-5-pro',
@@ -37,7 +37,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 Codex 专为编程任务优化，针对 Codex CLI 和 VS Code 扩展进行了优化。支持结构化输出和函数调用，适用于代码生成和分析。',
+      'GPT-5 Codex is optimized for programming tasks, including Codex CLI and the VS Code extension. It supports structured output and function calling for code generation and analysis.',
     displayName: 'GPT-5 Codex',
     enabled: true,
     id: 'gpt-5-codex',
@@ -64,7 +64,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 是 OpenAI 最新的旗舰模型，具备卓越的推理能力。支持文本和图像输入，结构化输出和并行工具调用，适用于需要深度理解和分析的复杂任务。',
+      'GPT-5 is OpenAI’s latest flagship model with exceptional reasoning. It supports text and image input, structured output, and parallel tool calls, suitable for complex tasks requiring deep understanding and analysis.',
     displayName: 'GPT-5',
     enabled: true,
     id: 'gpt-5',
@@ -91,7 +91,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 Mini 提供与 GPT-5 相似的能力，但更加高效和经济。支持推理、函数调用和视觉功能，适合大规模部署和对成本敏感的应用场景。',
+      'GPT-5 Mini offers capabilities similar to GPT-5 but is more efficient and cost-effective. It supports reasoning, function calling, and vision, making it suitable for large-scale deployment and cost-sensitive use cases.',
     displayName: 'GPT-5 Mini',
     enabled: true,
     id: 'gpt-5-mini',
@@ -118,7 +118,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 400_000,
     description:
-      'GPT-5 Nano 是 GPT-5 系列中最小、最快的版本。在保持核心能力的同时，提供超低延迟和成本效益，适合边缘计算和实时应用。',
+      'GPT-5 Nano is the smallest and fastest GPT-5 variant. It retains core capabilities while delivering ultra-low latency and cost efficiency, ideal for edge computing and real-time applications.',
     displayName: 'GPT-5 Nano',
     enabled: true,
     id: 'gpt-5-nano',
@@ -142,7 +142,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-5 Chat 专为对话场景优化的预览版本。支持文本和图像输入，仅输出文本，适用于聊天机器人和对话式AI应用。',
+      'GPT-5 Chat is a preview model optimized for conversational scenarios. It supports text and image input, outputs text only, and fits chatbots and conversational AI applications.',
     displayName: 'GPT-5 Chat',
     id: 'gpt-5-chat',
     maxOutput: 16_384,
@@ -167,7 +167,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3 是一款全能强大的模型，在多个领域表现出色。它为数学、科学、编程和视觉推理任务树立了新标杆。它也擅长技术写作和指令遵循。用户可利用它分析文本、代码和图像，解决多步骤的复杂问题。',
+      'o3 is a versatile, powerful model that excels across domains, setting a new bar for math, science, coding, and visual reasoning. It is also strong in technical writing and instruction following, and can analyze text, code, and images to solve multi-step problems.',
     displayName: 'o3',
     enabled: true,
     id: 'o3',
@@ -193,7 +193,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini 是我们最新的小型 o 系列模型。 它专为快速有效的推理而优化，在编码和视觉任务中表现出极高的效率和性能。',
+      'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning and high performance in coding and vision tasks.',
     displayName: 'o4-mini',
     enabled: true,
     id: 'o4-mini',
@@ -218,7 +218,7 @@ const azureChatModels: AIChatModelCard[] = [
       deploymentName: 'gpt-4.1',
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 是我们用于复杂任务的旗舰模型。它非常适合跨领域解决问题。',
+    description: 'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
     id: 'gpt-4.1',
@@ -243,7 +243,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_047_576,
     description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+      'GPT-4.1 mini balances intelligence, speed, and cost, making it an attractive model for many use cases.',
     displayName: 'GPT-4.1 mini',
     enabled: true,
     id: 'gpt-4.1-mini',
@@ -268,7 +268,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_047_576,
     description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+      'GPT-4.1 mini balances intelligence, speed, and cost, making it an attractive model for many use cases.',
     displayName: 'GPT-4.1 nano',
     id: 'gpt-4.1-nano',
     maxOutput: 32_768,
@@ -292,7 +292,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-mini 是我们最新的小型推理模型，在与 o1-mini 相同的成本和延迟目标下提供高智能。',
+      'o3-mini is our latest small reasoning model, delivering high intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'o3-mini',
     maxOutput: 100_000,
@@ -315,7 +315,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'o1-mini是一款针对编程、数学和科学应用场景而设计的快速、经济高效的推理模型。该模型具有128K上下文和2023年10月的知识截止日期。',
+      'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-mini',
     id: 'o1-mini',
     maxOutput: 65_536,
@@ -338,7 +338,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o1是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务。该模型具有200K上下文和2023年10月的知识截止日期。',
+      'o1 is OpenAI’s new reasoning model that supports text and image input and outputs text, suitable for complex tasks requiring broad general knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
     id: 'o1',
     maxOutput: 100_000,
@@ -361,7 +361,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'o1是OpenAI新的推理模型，适用于需要广泛通用知识的复杂任务。该模型具有128K上下文和2023年10月的知识截止日期。',
+      'o1 is OpenAI’s new reasoning model for complex tasks requiring broad general knowledge. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-preview',
     id: 'o1-preview',
     maxOutput: 32_768,
@@ -384,7 +384,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
     displayName: 'GPT-4o',
     enabled: true,
     id: 'gpt-4o',
@@ -408,7 +408,8 @@ const azureChatModels: AIChatModelCard[] = [
       deploymentName: 'gpt-4-turbo',
     },
     contextWindowTokens: 128_000,
-    description: 'GPT 4 Turbo，多模态模型，提供杰出的语言理解和生成能力，同时支持图像输入。',
+    description:
+      'GPT-4 Turbo is a multimodal model with strong understanding and generation, supporting image input.',
     displayName: 'GPT 4 Turbo',
     id: 'gpt-4',
     maxOutput: 4096,
@@ -423,7 +424,7 @@ const azureChatModels: AIChatModelCard[] = [
       deploymentName: 'gpt-4o-mini',
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o Mini，小型高效模型，具备与GPT-4o相似的卓越性能。',
+    description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
     displayName: 'GPT 4o Mini',
     id: 'gpt-4o-mini',
     maxOutput: 4096,

@@ -1,11 +1,16 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { useTheme } from 'antd-style';
-import { rgba } from 'polished';
-import { useEffect } from 'react';
+import { LOBE_THEME_APP_ID } from '@lobehub/ui';
+import { useLayoutEffect } from 'react';
 
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
+const sidebarColors = {
+  dark: '#000',
+  light: '#f8f8f8',
+};
 export const useWatchThemeUpdate = () => {
   const [isAppStateInit, systemAppearance, updateElectronAppState, isMac] = useElectronStore(
     (s) => [
@@ -20,8 +25,6 @@ export const useWatchThemeUpdate = () => {
     s.switchLocale,
   ]);
 
-  const theme = useTheme();
-
   useWatchBroadcast('themeChanged', ({ themeMode }) => {
     switchThemeMode(themeMode, { skipBroadcast: true });
   });
@@ -33,14 +36,20 @@ export const useWatchThemeUpdate = () => {
   useWatchBroadcast('systemThemeChanged', ({ themeMode }) => {
     updateElectronAppState({ systemAppearance: themeMode });
   });
+  const themeMode = useGlobalStore(systemStatusSelectors.themeMode);
+  useLayoutEffect(() => {
+    ensureElectronIpc().system.setSystemThemeMode(themeMode);
+  }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isAppStateInit || !isMac) return;
     document.documentElement.style.background = 'none';
 
-    // https://x.com/alanblogsooo/status/1939208908993896684
-    const isNotSameTheme = !systemAppearance ? true : theme.appearance !== systemAppearance;
+    const lobeApp = document.querySelector('#' + LOBE_THEME_APP_ID);
+    if (!lobeApp) return;
 
-    document.body.style.background = rgba(theme.colorBgLayout, isNotSameTheme ? 0.95 : 0.66);
-  }, [theme, systemAppearance, isAppStateInit, isMac]);
+    if (systemAppearance) {
+      document.body.style.background = `color-mix(in srgb, ${sidebarColors[systemAppearance as 'dark' | 'light']} 86%, transparent)`;
+    }
+  }, [systemAppearance, isAppStateInit, isMac]);
 };

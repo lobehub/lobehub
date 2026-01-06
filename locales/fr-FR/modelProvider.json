@@ -1,481 +1,287 @@
 {
-  "azure": {
-    "azureApiVersion": {
-      "desc": "Version de l'API Azure, au format YYYY-MM-DD, consultez [la dernière version](https://learn.microsoft.com/zh-cn/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Obtenir la liste",
-      "title": "Version de l'API Azure"
-    },
-    "empty": "Veuillez saisir l'ID du modèle pour ajouter le premier modèle",
-    "endpoint": {
-      "desc": "Lors de l'inspection des ressources sur le portail Azure, vous pouvez trouver cette valeur dans la section 'Clés et points de terminaison'",
-      "placeholder": "https://docs-test-001.openai.azure.com",
-      "title": "Adresse de l'API Azure"
-    },
-    "modelListPlaceholder": "Sélectionnez ou ajoutez le modèle OpenAI que vous avez déployé",
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Lors de l'inspection des ressources sur le portail Azure, vous pouvez trouver cette valeur dans la section 'Clés et points de terminaison'. Vous pouvez utiliser KEY1 ou KEY2",
-      "placeholder": "Clé API Azure",
-      "title": "Clé API"
-    }
-  },
-  "azureai": {
-    "azureApiVersion": {
-      "desc": "Version de l'API Azure, au format YYYY-MM-DD. Consultez la [dernière version](https://learn.microsoft.com/fr-fr/azure/ai-services/openai/reference#chat-completions)",
-      "fetch": "Obtenir la liste",
-      "title": "Version de l'API Azure"
-    },
-    "endpoint": {
-      "desc": "Trouvez le point de terminaison d'inférence du modèle Azure AI dans l'aperçu du projet Azure AI",
-      "placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
-      "title": "Point de terminaison Azure AI"
-    },
-    "title": "Azure OpenAI",
-    "token": {
-      "desc": "Trouvez la clé API dans l'aperçu du projet Azure AI",
-      "placeholder": "Clé Azure",
-      "title": "Clé"
-    }
-  },
-  "bedrock": {
-    "accessKeyId": {
-      "desc": "Saisissez l'ID de clé d'accès AWS",
-      "placeholder": "ID de clé d'accès AWS",
-      "title": "ID de clé d'accès AWS"
-    },
-    "checker": {
-      "desc": "Vérifiez si l'AccessKeyId / SecretAccessKey est correctement saisi"
-    },
-    "region": {
-      "desc": "Saisissez la région AWS",
-      "placeholder": "Région AWS",
-      "title": "Région AWS"
-    },
-    "secretAccessKey": {
-      "desc": "Saisissez la clé d'accès secrète AWS",
-      "placeholder": "Clé d'accès secrète AWS",
-      "title": "Clé d'accès secrète AWS"
-    },
-    "sessionToken": {
-      "desc": "Si vous utilisez AWS SSO/STS, veuillez entrer votre jeton de session AWS",
-      "placeholder": "Jeton de session AWS",
-      "title": "Jeton de session AWS (facultatif)"
-    },
-    "title": "Bedrock",
-    "unlock": {
-      "customRegion": "Région de service personnalisée",
-      "customSessionToken": "Jeton de session personnalisé",
-      "description": "Entrez votre ID de clé d'accès AWS / SecretAccessKey pour commencer la session. L'application ne stockera pas votre configuration d'authentification.",
-      "imageGenerationDescription": "Saisissez votre AWS AccessKeyId / SecretAccessKey pour commencer la génération. L'application ne conservera pas vos informations d'authentification.",
-      "title": "Utiliser des informations d'authentification Bedrock personnalisées"
-    }
-  },
-  "cloudflare": {
-    "apiKey": {
-      "desc": "Veuillez remplir l'Cloudflare API Key",
-      "placeholder": "Cloudflare API Key",
-      "title": "Cloudflare API Key"
-    },
-    "baseURLOrAccountID": {
-      "desc": "Saisir l'ID de compte Cloudflare ou l'adresse API personnalisée",
-      "placeholder": "ID de compte Cloudflare / URL API personnalisée",
-      "title": "ID de compte Cloudflare / adresse API"
-    }
-  },
-  "comfyui": {
-    "apiKey": {
-      "desc": "Clé API requise pour l'authentification par jeton Bearer",
-      "placeholder": "Veuillez saisir la clé API",
-      "required": "Veuillez saisir la clé API",
-      "title": "Clé API"
-    },
-    "authType": {
-      "desc": "Choisissez le mode d'authentification avec le serveur ComfyUI",
-      "options": {
-        "basic": "Identifiant/Mot de passe",
-        "bearer": "Bearer (Clé API)",
-        "custom": "En-têtes personnalisés",
-        "none": "Aucune authentification"
-      },
-      "placeholder": "Veuillez sélectionner un type d'authentification",
-      "title": "Type d'authentification"
-    },
-    "baseURL": {
-      "desc": "Adresse Web d'accès à ComfyUI",
-      "placeholder": "http://127.0.0.1:8000",
-      "required": "Veuillez saisir l'adresse du service ComfyUI",
-      "title": "Adresse du service ComfyUI"
-    },
-    "checker": {
-      "desc": "Tester si la connexion est correctement configurée",
-      "title": "Vérification de la connectivité"
-    },
-    "customHeaders": {
-      "addButton": "Ajouter un en-tête",
-      "deleteTooltip": "Supprimer cet en-tête",
-      "desc": "En-têtes requis pour l'authentification personnalisée, au format clé-valeur",
-      "duplicateKeyError": "Les noms de clé des en-têtes ne doivent pas être dupliqués",
-      "keyPlaceholder": "Nom de la clé",
-      "required": "Veuillez saisir les en-têtes personnalisés",
-      "title": "En-têtes personnalisés",
-      "valuePlaceholder": "Valeur"
-    },
-    "password": {
-      "desc": "Mot de passe requis pour l'authentification de base",
-      "placeholder": "Veuillez saisir le mot de passe",
-      "required": "Veuillez saisir le mot de passe",
-      "title": "Mot de passe"
-    },
-    "title": "ComfyUI",
-    "username": {
-      "desc": "Nom d'utilisateur requis pour l'authentification de base",
-      "placeholder": "Veuillez saisir le nom d'utilisateur",
-      "required": "Veuillez saisir le nom d'utilisateur",
-      "title": "Nom d'utilisateur"
-    }
-  },
-  "createNewAiProvider": {
-    "apiKey": {
-      "placeholder": "Veuillez entrer votre clé API",
-      "title": "Clé API"
-    },
-    "basicTitle": "Informations de base",
-    "configTitle": "Informations de configuration",
-    "confirm": "Créer",
-    "createSuccess": "Création réussie",
-    "description": {
-      "placeholder": "Description du fournisseur (facultatif)",
-      "title": "Description du fournisseur"
-    },
-    "id": {
-      "desc": "Identifiant unique du fournisseur de services, qui ne peut pas être modifié après sa création",
-      "format": "Ne peut contenir que des chiffres, des lettres minuscules, des tirets (-) et des underscores (_) ",
-      "placeholder": "Utilisez uniquement des lettres minuscules, par exemple openai, non modifiable après création",
-      "required": "Veuillez entrer l'ID du fournisseur",
-      "title": "ID du fournisseur"
-    },
-    "logo": {
-      "required": "Veuillez télécharger un logo valide pour le fournisseur",
-      "title": "Logo du fournisseur"
-    },
-    "name": {
-      "placeholder": "Veuillez entrer le nom d'affichage du fournisseur",
-      "required": "Veuillez entrer le nom du fournisseur",
-      "title": "Nom du fournisseur"
-    },
-    "proxyUrl": {
-      "required": "Veuillez remplir l'adresse du proxy",
-      "title": "Adresse du proxy"
-    },
-    "sdkType": {
-      "placeholder": "openai/anthropic/azureai/ollama/...",
-      "required": "Veuillez sélectionner le type de SDK",
-      "title": "Format de requête"
-    },
-    "title": "Créer un fournisseur AI personnalisé"
-  },
-  "github": {
-    "personalAccessToken": {
-      "desc": "Entrez votre PAT GitHub, cliquez [ici](https://github.com/settings/tokens) pour en créer un.",
-      "placeholder": "ghp_xxxxxx",
-      "title": "GitHub PAT"
-    }
-  },
-  "huggingface": {
-    "accessToken": {
-      "desc": "Entrez votre jeton HuggingFace, cliquez [ici](https://huggingface.co/settings/tokens) pour en créer un",
-      "placeholder": "hf_xxxxxxxxx",
-      "title": "Jeton HuggingFace"
-    }
-  },
-  "list": {
-    "title": {
-      "custom": "Fournisseur personnalisé non activé",
-      "disabled": "Fournisseur non activé",
-      "enabled": "Fournisseur activé"
-    }
-  },
-  "menu": {
-    "addCustomProvider": "Ajouter un fournisseur personnalisé",
-    "all": "Tout",
-    "list": {
-      "custom": "Personnalisation non activée",
-      "disabled": "Non activé",
-      "disabledActions": {
-        "sort": "Méthode de tri",
-        "sortAlphabetical": "Trier par ordre alphabétique",
-        "sortAlphabeticalDesc": "Trier par ordre alphabétique décroissant",
-        "sortDefault": "Tri par défaut"
-      },
-      "enabled": "Activé"
-    },
-    "notFound": "Aucun résultat trouvé",
-    "searchProviders": "Rechercher des fournisseurs...",
-    "sort": "Tri personnalisé"
-  },
-  "newapi": {
-    "apiKey": {
-      "desc": "Clé API fournie par la plateforme New API",
-      "placeholder": "Clé API New API",
-      "required": "La clé API est obligatoire",
-      "title": "Clé API"
-    },
-    "apiUrl": {
-      "desc": "Adresse API du service New API, généralement avec /v1",
-      "title": "Adresse API"
-    },
-    "enabled": {
-      "title": "Activer New API"
-    },
-    "models": {
-      "batchSelect": "Sélection multiple de modèles ({{count}})",
-      "fetch": "Récupérer la liste des modèles",
-      "selected": "Modèles sélectionnés",
-      "title": "Modèles disponibles"
-    },
-    "title": "New API"
-  },
-  "ollama": {
-    "checker": {
-      "desc": "Vérifiez si l'adresse du proxy est correctement saisie",
-      "title": "Vérification de la connectivité"
-    },
-    "customModelName": {
-      "desc": "Ajoutez un modèle personnalisé, séparez les modèles multiples par des virgules (,)",
-      "placeholder": "vicuna,llava,codellama,llama2:13b-text",
-      "title": "Nom du modèle personnalisé"
-    },
-    "download": {
-      "desc": "Ollama est en train de télécharger ce modèle, veuillez essayer de ne pas fermer cette page. Le téléchargement reprendra à l'endroit où il a été interrompu.",
-      "failed": "Échec du téléchargement du modèle, veuillez vérifier votre connexion réseau ou les paramètres d'Ollama, puis réessayez",
-      "remainingTime": "Temps restant",
-      "speed": "Vitesse de téléchargement",
-      "title": "Téléchargement du modèle {{model}} en cours"
-    },
-    "endpoint": {
-      "desc": "Doit inclure http(s)://, peut rester vide si non spécifié localement",
-      "title": "Adresse du proxy"
-    },
-    "title": "Ollama",
-    "unlock": {
-      "cancel": "Annuler le téléchargement",
-      "confirm": "Télécharger",
-      "description": "Entrez l'étiquette de votre modèle Ollama pour continuer la session.",
-      "downloaded": "{{completed}} / {{total}}",
-      "starting": "Début du téléchargement...",
-      "title": "Télécharger le modèle Ollama spécifié"
-    }
-  },
-  "providerModels": {
-    "batchSelect": {
-      "selected": "{{count}} modèles sélectionnés",
-      "title": "Sélection multiple"
-    },
-    "config": {
-      "aesGcm": "Votre clé et votre adresse de proxy seront chiffrées à l'aide de l'algorithme de chiffrement <1>AES-GCM</1>",
-      "apiKey": {
-        "desc": "Veuillez entrer votre {{name}} clé API",
-        "descWithUrl": "Veuillez saisir votre clé API {{name}}, <3>cliquez ici pour l'obtenir</3>",
-        "placeholder": "{{name}} clé API",
-        "title": "Clé API"
-      },
-      "baseURL": {
-        "desc": "Doit inclure http(s)://",
-        "invalid": "Veuillez entrer une URL valide",
-        "placeholder": "https://your-proxy-url.com/v1",
-        "title": "Adresse du proxy API"
-      },
-      "checker": {
-        "button": "Vérifier",
-        "desc": "Tester si la clé API et l'adresse de proxy sont correctement renseignées",
-        "pass": "Vérification réussie",
-        "title": "Vérification de connectivité"
-      },
-      "fetchOnClient": {
-        "desc": "Le mode de requête client lancera directement la requête de session depuis le navigateur, ce qui peut améliorer la vitesse de réponse",
-        "title": "Utiliser le mode de requête client"
-      },
-      "helpDoc": "Guide de configuration",
-      "responsesApi": {
-        "desc": "Adopte le nouveau format de requête de dernière génération d'OpenAI, permettant de débloquer des fonctionnalités avancées telles que la chaîne de pensée (pris en charge uniquement par les modèles OpenAI)",
-        "title": "Utiliser la norme Responses API"
-      },
-      "waitingForMore": "D'autres modèles sont en <1>planification d'intégration</1>, restez à l'écoute"
-    },
-    "createNew": {
-      "title": "Créer un modèle AI personnalisé"
-    },
-    "item": {
-      "config": "Configurer le modèle",
-      "customModelCards": {
-        "addNew": "Créer et ajouter le modèle {{id}}",
-        "confirmDelete": "Vous allez supprimer ce modèle personnalisé, une fois supprimé, il ne pourra pas être récupéré, veuillez agir avec prudence."
-      },
-      "delete": {
-        "confirm": "Confirmer la suppression du modèle {{displayName}} ?",
-        "success": "Suppression réussie",
-        "title": "Supprimer le modèle"
-      },
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Champ utilisé pour la demande réelle dans Azure OpenAI",
-          "placeholder": "Veuillez entrer le nom de déploiement du modèle dans Azure",
-          "title": "Nom de déploiement du modèle"
-        },
-        "deployName": {
-          "extra": "Ce champ sera utilisé comme ID de modèle lors de l'envoi de la demande",
-          "placeholder": "Veuillez entrer le nom ou l'ID de déploiement réel du modèle",
-          "title": "Nom de déploiement du modèle"
-        },
-        "displayName": {
-          "placeholder": "Veuillez entrer le nom d'affichage du modèle, par exemple ChatGPT, GPT-4, etc.",
-          "title": "Nom d'affichage du modèle"
-        },
-        "files": {
-          "extra": "La mise en œuvre actuelle du téléchargement de fichiers n'est qu'une solution de contournement, à essayer à vos risques et périls. Veuillez attendre la mise en œuvre complète des capacités de téléchargement de fichiers.",
-          "title": "Téléchargement de fichiers pris en charge"
-        },
-        "functionCall": {
-          "extra": "Cette configuration activera uniquement la capacité du modèle à utiliser des outils, permettant ainsi d'ajouter des plugins de type outil au modèle. Cependant, la prise en charge de l'utilisation réelle des outils dépend entièrement du modèle lui-même, veuillez tester la disponibilité par vous-même.",
-          "title": "Support de l'utilisation des outils"
-        },
-        "id": {
-          "extra": "Une fois créé, il ne peut pas être modifié et sera utilisé comme identifiant du modèle lors de l'appel à l'IA",
-          "placeholder": "Veuillez entrer l'identifiant du modèle, par exemple gpt-4o ou claude-3.5-sonnet",
-          "title": "ID du modèle"
-        },
-        "imageOutput": {
-          "extra": "Cette configuration activera uniquement la capacité du modèle à générer des images. L'efficacité dépend entièrement du modèle lui-même. Veuillez tester vous-même si le modèle est capable de générer des images utilisables.",
-          "title": "Prise en charge de la génération d'images"
-        },
-        "modalTitle": "Configuration du modèle personnalisé",
-        "reasoning": {
-          "extra": "Cette configuration activera uniquement la capacité de réflexion approfondie du modèle. Les résultats dépendent entièrement du modèle lui-même, veuillez tester si ce modèle possède une capacité de réflexion approfondie utilisable.",
-          "title": "Support de la réflexion approfondie"
-        },
-        "search": {
-          "extra": "Cette configuration activera uniquement la capacité de recherche en ligne via le moteur de recherche intégré du modèle. La prise en charge dépend du modèle lui-même. Veuillez tester vous-même si le moteur de recherche intégré est fonctionnel.",
-          "title": "Prise en charge de la recherche en ligne"
-        },
-        "tokens": {
-          "extra": "Définir le nombre maximal de tokens pris en charge par le modèle",
-          "title": "Fenêtre de contexte maximale",
-          "unlimited": "Illimité"
-        },
-        "type": {
-          "extra": "Différents types de modèles possèdent des scénarios d'utilisation et des capacités distincts",
-          "options": {
-            "chat": "Conversation",
-            "embedding": "Vectorisation",
-            "image": "Génération d'images",
-            "realtime": "Dialogue en temps réel",
-            "stt": "Reconnaissance vocale",
-            "text2music": "Texte en musique",
-            "text2video": "Texte en vidéo",
-            "tts": "Synthèse vocale"
-          },
-          "placeholder": "Veuillez sélectionner un type de modèle",
-          "title": "Type de modèle"
-        },
-        "video": {
-          "extra": "Cette configuration activera uniquement la reconnaissance vidéo dans l'application. La capacité de reconnaissance dépend entièrement du modèle lui-même. Veuillez tester vous-même si le modèle est capable de reconnaître les vidéos.",
-          "title": "Prise en charge de la reconnaissance vidéo"
-        },
-        "vision": {
-          "extra": "Cette configuration n'activera que la configuration de téléchargement d'images dans l'application, la prise en charge de la reconnaissance dépend entièrement du modèle lui-même, veuillez tester la disponibilité des capacités de reconnaissance visuelle de ce modèle.",
-          "title": "Reconnaissance visuelle prise en charge"
-        }
-      },
-      "pricing": {
-        "image": "${{amount}}/image",
-        "inputCharts": "${{amount}}/M caractères",
-        "inputMinutes": "${{amount}}/minutes",
-        "inputTokens": "Entrée ${{amount}}/M",
-        "outputTokens": "Sortie ${{amount}}/M"
-      },
-      "releasedAt": "Publié le {{releasedAt}}"
-    },
-    "list": {
-      "addNew": "Ajouter un modèle",
-      "disabled": "Non activé",
-      "disabledActions": {
-        "showMore": "Afficher tout",
-        "sort": "Méthode de tri",
-        "sortAlphabetical": "Trier par ordre alphabétique",
-        "sortAlphabeticalDesc": "Trier par ordre alphabétique décroissant",
-        "sortDefault": "Tri par défaut",
-        "sortReleasedAt": "Trier par date de sortie la plus ancienne",
-        "sortReleasedAtDesc": "Trier par date de sortie la plus récente"
-      },
-      "empty": {
-        "desc": "Veuillez créer un modèle personnalisé ou importer un modèle pour commencer à l'utiliser.",
-        "title": "Aucun modèle disponible"
-      },
-      "enabled": "Activé",
-      "enabledActions": {
-        "disableAll": "Désactiver tout",
-        "enableAll": "Activer tout",
-        "sort": "Trier les modèles personnalisés"
-      },
-      "enabledEmpty": "Aucun modèle activé pour le moment, veuillez activer vos modèles préférés dans la liste ci-dessous~",
-      "fetcher": {
-        "clear": "Effacer les modèles récupérés",
-        "fetch": "Récupérer la liste des modèles",
-        "fetching": "Récupération de la liste des modèles en cours...",
-        "latestTime": "Dernière mise à jour : {{time}}",
-        "noLatestTime": "Aucune liste récupérée pour le moment"
-      },
-      "noModelsInCategory": "Aucun modèle activé dans cette catégorie",
-      "resetAll": {
-        "conform": "Êtes-vous sûr de vouloir réinitialiser toutes les modifications du modèle actuel ? Après la réinitialisation, la liste des modèles actuels reviendra à l'état par défaut",
-        "success": "Réinitialisation réussie",
-        "title": "Réinitialiser toutes les modifications"
-      },
-      "search": "Rechercher des modèles...",
-      "searchResult": "Trouvé {{count}} modèle(s)",
-      "title": "Liste des modèles",
-      "total": "Un total de {{count}} modèles disponibles"
-    },
-    "searchNotFound": "Aucun résultat trouvé",
-    "tabs": {
-      "all": "Tous",
-      "chat": "Conversation",
-      "embedding": "Vectorisation",
-      "image": "Image",
-      "stt": "Reconnaissance vocale",
-      "tts": "Synthèse vocale"
-    }
-  },
-  "sortModal": {
-    "success": "Mise à jour du tri réussie",
-    "title": "Tri personnalisé",
-    "update": "Mettre à jour"
-  },
-  "updateAiProvider": {
-    "confirmDelete": "Vous allez supprimer ce fournisseur AI, une fois supprimé, il ne pourra pas être récupéré, confirmez-vous la suppression ?",
-    "deleteSuccess": "Suppression réussie",
-    "tooltip": "Mettre à jour la configuration de base du fournisseur",
-    "updateSuccess": "Mise à jour réussie"
-  },
-  "updateCustomAiProvider": {
-    "title": "Mettre à jour la configuration du fournisseur de services AI personnalisé"
-  },
-  "vertexai": {
-    "apiKey": {
-      "desc": "Entrez vos clés Vertex AI",
-      "placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
-      "title": "Clés Vertex AI"
-    },
-    "region": {
-      "desc": "Sélectionnez la région pour le service Vertex AI. Certains modèles, comme Gemini 2.5, ne sont disponibles que dans certaines régions (par exemple, global).",
-      "placeholder": "Sélectionner une région",
-      "title": "Région Vertex AI"
-    }
-  },
-  "zeroone": {
-    "title": "01.AI Zéro Un Tout"
-  },
-  "zhipu": {
-    "title": "Zhipu"
-  }
+  "azure.azureApiVersion.desc": "Version de l'API Azure, au format AAAA-MM-JJ. Consultez la [dernière version](https://learn.microsoft.com/fr-fr/azure/ai-services/openai/reference#chat-completions)",
+  "azure.azureApiVersion.fetch": "Récupérer la liste",
+  "azure.azureApiVersion.title": "Version de l'API Azure",
+  "azure.empty": "Veuillez saisir un ID de modèle pour ajouter le premier modèle",
+  "azure.endpoint.desc": "En consultant les ressources sur le portail Azure, vous trouverez cette valeur dans la section 'Clés et points de terminaison'",
+  "azure.endpoint.placeholder": "https://docs-test-001.openai.azure.com",
+  "azure.endpoint.title": "Adresse de l'API Azure",
+  "azure.modelListPlaceholder": "Sélectionnez ou ajoutez le modèle OpenAI que vous avez déployé",
+  "azure.title": "Azure OpenAI",
+  "azure.token.desc": "En consultant les ressources sur le portail Azure, vous trouverez cette valeur dans la section 'Clés et points de terminaison'. Vous pouvez utiliser KEY1 ou KEY2",
+  "azure.token.placeholder": "Clé API Azure",
+  "azure.token.title": "Clé API",
+  "azureai.azureApiVersion.desc": "Version de l'API Azure, au format AAAA-MM-JJ. Consultez la [dernière version](https://learn.microsoft.com/fr-fr/azure/ai-services/openai/reference#chat-completions)",
+  "azureai.azureApiVersion.fetch": "Récupérer la liste",
+  "azureai.azureApiVersion.title": "Version de l'API Azure",
+  "azureai.endpoint.desc": "Trouvez le point de terminaison d'inférence du modèle Azure AI dans l'aperçu du projet Azure AI",
+  "azureai.endpoint.placeholder": "https://ai-userxxxxxxxxxx.services.ai.azure.com/models",
+  "azureai.endpoint.title": "Point de terminaison Azure AI",
+  "azureai.title": "Azure OpenAI",
+  "azureai.token.desc": "Trouvez la clé API dans l'aperçu du projet Azure AI",
+  "azureai.token.placeholder": "Clé Azure",
+  "azureai.token.title": "Clé",
+  "bedrock.accessKeyId.desc": "Saisissez l'identifiant de clé d'accès AWS",
+  "bedrock.accessKeyId.placeholder": "Identifiant de clé d'accès AWS",
+  "bedrock.accessKeyId.title": "Identifiant de clé d'accès AWS",
+  "bedrock.checker.desc": "Testez si AccessKeyId / SecretAccessKey sont correctement renseignés",
+  "bedrock.region.desc": "Saisissez la région AWS",
+  "bedrock.region.placeholder": "Région AWS",
+  "bedrock.region.title": "Région AWS",
+  "bedrock.secretAccessKey.desc": "Saisissez la clé d'accès secrète AWS",
+  "bedrock.secretAccessKey.placeholder": "Clé d'accès secrète AWS",
+  "bedrock.secretAccessKey.title": "Clé d'accès secrète AWS",
+  "bedrock.sessionToken.desc": "Si vous utilisez AWS SSO/STS, veuillez saisir votre jeton de session AWS",
+  "bedrock.sessionToken.placeholder": "Jeton de session AWS",
+  "bedrock.sessionToken.title": "Jeton de session AWS (optionnel)",
+  "bedrock.title": "Bedrock",
+  "bedrock.unlock.customRegion": "Région de service personnalisée",
+  "bedrock.unlock.customSessionToken": "Jeton de session personnalisé",
+  "bedrock.unlock.description": "Saisissez votre AccessKeyId / SecretAccessKey AWS pour démarrer la session. L'application ne stockera pas votre configuration d'authentification",
+  "bedrock.unlock.imageGenerationDescription": "Saisissez votre AccessKeyId / SecretAccessKey AWS pour commencer la génération. L'application ne stockera pas vos identifiants d'authentification.",
+  "bedrock.unlock.title": "Utiliser une authentification Bedrock personnalisée",
+  "cloudflare.apiKey.desc": "Veuillez saisir la clé API Cloudflare",
+  "cloudflare.apiKey.placeholder": "Clé API Cloudflare",
+  "cloudflare.apiKey.title": "Clé API Cloudflare",
+  "cloudflare.baseURLOrAccountID.desc": "Saisissez votre identifiant de compte Cloudflare ou une URL API personnalisée",
+  "cloudflare.baseURLOrAccountID.placeholder": "ID de compte Cloudflare / URL API personnalisée",
+  "cloudflare.baseURLOrAccountID.title": "ID de compte Cloudflare / Adresse API",
+  "comfyui.apiKey.desc": "Clé API pour l'authentification par jeton Bearer",
+  "comfyui.apiKey.placeholder": "Saisir la clé API",
+  "comfyui.apiKey.required": "Veuillez saisir la clé API",
+  "comfyui.apiKey.title": "Clé API",
+  "comfyui.authType.desc": "Sélectionnez la méthode d'authentification pour se connecter au serveur ComfyUI",
+  "comfyui.authType.options.basic": "Authentification de base",
+  "comfyui.authType.options.bearer": "Jeton Bearer",
+  "comfyui.authType.options.custom": "Authentification personnalisée",
+  "comfyui.authType.options.none": "Aucune authentification",
+  "comfyui.authType.placeholder": "Veuillez sélectionner un type d'authentification",
+  "comfyui.authType.title": "Type d'authentification",
+  "comfyui.baseURL.desc": "Adresse d'accès au serveur ComfyUI, par ex. http://localhost:8000",
+  "comfyui.baseURL.placeholder": "http://127.0.0.1:8000",
+  "comfyui.baseURL.required": "Veuillez saisir l'URL du service ComfyUI",
+  "comfyui.baseURL.title": "URL du service ComfyUI",
+  "comfyui.checker.desc": "Testez si la connexion est correctement configurée",
+  "comfyui.checker.title": "Vérification de la connectivité",
+  "comfyui.customHeaders.addButton": "Ajouter un en-tête",
+  "comfyui.customHeaders.deleteTooltip": "Supprimer cet en-tête",
+  "comfyui.customHeaders.desc": "En-têtes de requête requis pour l'authentification personnalisée, au format clé-valeur",
+  "comfyui.customHeaders.duplicateKeyError": "Les noms d'en-tête ne peuvent pas être dupliqués",
+  "comfyui.customHeaders.keyPlaceholder": "Clé",
+  "comfyui.customHeaders.required": "Veuillez saisir les en-têtes de requête personnalisés",
+  "comfyui.customHeaders.title": "En-têtes personnalisés",
+  "comfyui.customHeaders.valuePlaceholder": "Valeur",
+  "comfyui.password.desc": "Mot de passe pour l'authentification de base",
+  "comfyui.password.placeholder": "Saisir le mot de passe",
+  "comfyui.password.required": "Veuillez saisir le mot de passe",
+  "comfyui.password.title": "Mot de passe",
+  "comfyui.title": "ComfyUI",
+  "comfyui.username.desc": "Nom d'utilisateur pour l'authentification de base",
+  "comfyui.username.placeholder": "Saisir le nom d'utilisateur",
+  "comfyui.username.required": "Veuillez saisir le nom d'utilisateur",
+  "comfyui.username.title": "Nom d'utilisateur",
+  "createNewAiProvider.apiKey.placeholder": "Veuillez saisir votre clé API",
+  "createNewAiProvider.apiKey.title": "Clé API",
+  "createNewAiProvider.basicTitle": "Informations de base",
+  "createNewAiProvider.configTitle": "Informations de configuration",
+  "createNewAiProvider.confirm": "Créer",
+  "createNewAiProvider.createSuccess": "Création réussie",
+  "createNewAiProvider.description.placeholder": "Description du fournisseur (optionnel)",
+  "createNewAiProvider.description.title": "Description du fournisseur",
+  "createNewAiProvider.id.desc": "Identifiant unique du fournisseur de service, non modifiable après création",
+  "createNewAiProvider.id.format": "Peut contenir uniquement des chiffres, lettres minuscules, tirets (-) et underscores (_)",
+  "createNewAiProvider.id.placeholder": "En minuscules, ex : openai, non modifiable après création",
+  "createNewAiProvider.id.required": "Veuillez saisir l'ID du fournisseur",
+  "createNewAiProvider.id.title": "ID du fournisseur",
+  "createNewAiProvider.logo.placeholder": "https://example.com/logo.png",
+  "createNewAiProvider.logo.required": "Veuillez téléverser un logo valide pour le fournisseur",
+  "createNewAiProvider.logo.title": "Logo du fournisseur",
+  "createNewAiProvider.name.placeholder": "Veuillez saisir le nom d'affichage du fournisseur",
+  "createNewAiProvider.name.required": "Veuillez saisir le nom du fournisseur",
+  "createNewAiProvider.name.title": "Nom du fournisseur",
+  "createNewAiProvider.proxyUrl.placeholder": "https://your-proxy-url.com/v1",
+  "createNewAiProvider.proxyUrl.required": "Veuillez saisir l'adresse du proxy",
+  "createNewAiProvider.proxyUrl.title": "URL du proxy",
+  "createNewAiProvider.sdkType.placeholder": "openai/anthropic/azureai/ollama/...",
+  "createNewAiProvider.sdkType.required": "Veuillez sélectionner le type de SDK",
+  "createNewAiProvider.sdkType.title": "Format de requête",
+  "createNewAiProvider.title": "Créer un fournisseur d'IA personnalisé",
+  "github.personalAccessToken.desc": "Saisissez votre PAT GitHub. Cliquez [ici](https://github.com/settings/tokens) pour en créer un.",
+  "github.personalAccessToken.placeholder": "ghp_xxxxxx",
+  "github.personalAccessToken.title": "PAT GitHub",
+  "huggingface.accessToken.desc": "Saisissez votre jeton HuggingFace, cliquez [ici](https://huggingface.co/settings/tokens) pour en créer un",
+  "huggingface.accessToken.placeholder": "hf_xxxxxxxxx",
+  "huggingface.accessToken.title": "Jeton HuggingFace",
+  "list.title.custom": "Fournisseur personnalisé non activé",
+  "list.title.disabled": "Désactivé",
+  "list.title.enabled": "Activé",
+  "menu.addCustomProvider": "Ajouter un fournisseur personnalisé",
+  "menu.all": "Tous",
+  "menu.list.custom": "Personnalisé non activé",
+  "menu.list.disabled": "Désactivé",
+  "menu.list.disabledActions.sort": "Trier par",
+  "menu.list.disabledActions.sortAlphabetical": "Trier par ordre alphabétique",
+  "menu.list.disabledActions.sortAlphabeticalDesc": "Trier par ordre alphabétique inverse",
+  "menu.list.disabledActions.sortDefault": "Tri par défaut",
+  "menu.list.enabled": "Activé",
+  "menu.notFound": "Aucun résultat trouvé",
+  "menu.searchProviders": "Rechercher des fournisseurs...",
+  "menu.sort": "Tri personnalisé",
+  "newapi.apiKey.desc": "Clé API fournie par la plateforme New API",
+  "newapi.apiKey.placeholder": "Clé API New API",
+  "newapi.apiKey.required": "La clé API est requise",
+  "newapi.apiKey.title": "Clé API",
+  "newapi.apiUrl.desc": "Point de terminaison de l'API pour le service New API, inclut généralement /v1",
+  "newapi.apiUrl.title": "URL de l'API",
+  "newapi.enabled.title": "Activer New API",
+  "newapi.models.batchSelect": "Sélectionner les modèles en lot ({{count}} éléments)",
+  "newapi.models.fetch": "Récupérer la liste des modèles",
+  "newapi.models.selected": "Modèles sélectionnés",
+  "newapi.models.title": "Modèles disponibles",
+  "newapi.title": "New API",
+  "ollama.checker.desc": "Tester si l'adresse du proxy est correctement renseignée",
+  "ollama.checker.title": "Vérification de la connectivité",
+  "ollama.customModelName.desc": "Ajouter des modèles personnalisés, séparer plusieurs modèles par des virgules",
+  "ollama.customModelName.placeholder": "vicuna, llava, codellama, llama2:13b-text",
+  "ollama.customModelName.title": "Nom du modèle personnalisé",
+  "ollama.download.desc": "Ollama télécharge le modèle. Veuillez éviter de fermer cette page. Le téléchargement reprendra là où il s'est arrêté en cas d'interruption.",
+  "ollama.download.failed": "Échec du téléchargement du modèle. Veuillez vérifier votre connexion réseau ou les paramètres Ollama, puis réessayer.",
+  "ollama.download.remainingTime": "Temps restant",
+  "ollama.download.speed": "Vitesse",
+  "ollama.download.title": "Téléchargement du modèle {{model}}",
+  "ollama.endpoint.desc": "Doit inclure http(s):// ; peut être laissé vide si non spécifié localement.",
+  "ollama.endpoint.title": "Adresse proxy de l'interface",
+  "ollama.title": "Ollama",
+  "ollama.unlock.cancel": "Annuler le téléchargement",
+  "ollama.unlock.confirm": "Télécharger",
+  "ollama.unlock.description": "Entrez le tag de votre modèle Ollama pour continuer la session",
+  "ollama.unlock.downloaded": "{{completed}} / {{total}}",
+  "ollama.unlock.starting": "Démarrage du téléchargement...",
+  "ollama.unlock.title": "Télécharger un modèle Ollama spécifique",
+  "providerModels.batchSelect.selected": "{{count}} modèles sélectionnés",
+  "providerModels.batchSelect.title": "Sélection en lot",
+  "providerModels.config.aesGcm": "Votre clé et l'URL du proxy seront chiffrées à l'aide de l'algorithme <1>AES-GCM</1>",
+  "providerModels.config.apiKey.desc": "Veuillez saisir votre clé API {{name}}",
+  "providerModels.config.apiKey.descWithUrl": "Veuillez saisir votre clé API {{name}}. <3>Cliquez ici pour l'obtenir</3>",
+  "providerModels.config.apiKey.placeholder": "Clé API {{name}}",
+  "providerModels.config.apiKey.title": "Clé API",
+  "providerModels.config.baseURL.desc": "Doit inclure http(s)://",
+  "providerModels.config.baseURL.invalid": "Veuillez saisir une URL valide",
+  "providerModels.config.baseURL.placeholder": "https://votre-url-proxy.com/v1",
+  "providerModels.config.baseURL.title": "URL du proxy API",
+  "providerModels.config.checker.button": "Vérifier",
+  "providerModels.config.checker.desc": "Tester si la clé API et l'URL du proxy sont correctement renseignées",
+  "providerModels.config.checker.pass": "Vérification réussie",
+  "providerModels.config.checker.title": "Vérification de la connectivité",
+  "providerModels.config.fetchOnClient.desc": "Le mode de requête client initiera les requêtes de session directement depuis le navigateur, ce qui peut améliorer la vitesse de réponse",
+  "providerModels.config.fetchOnClient.title": "Utiliser le mode de requête client",
+  "providerModels.config.helpDoc": "Guide de configuration",
+  "providerModels.config.responsesApi.desc": "Utilise le format de requête de nouvelle génération d'OpenAI pour débloquer des fonctionnalités avancées comme le raisonnement en chaîne (pris en charge uniquement par les modèles OpenAI)",
+  "providerModels.config.responsesApi.title": "Utiliser la spécification Responses API",
+  "providerModels.config.waitingForMore": "D'autres modèles sont actuellement <1>prévus pour intégration</1>, restez à l'écoute",
+  "providerModels.createNew.title": "Créer un modèle IA personnalisé",
+  "providerModels.item.config": "Configurer le modèle",
+  "providerModels.item.customModelCards.addNew": "Créer et ajouter le modèle {{id}}",
+  "providerModels.item.customModelCards.confirmDelete": "Vous êtes sur le point de supprimer ce modèle personnalisé. Une fois supprimé, il ne pourra pas être récupéré. Veuillez procéder avec prudence.",
+  "providerModels.item.delete.confirm": "Êtes-vous sûr de vouloir supprimer le modèle {{displayName}} ?",
+  "providerModels.item.delete.success": "Suppression réussie",
+  "providerModels.item.delete.title": "Supprimer le modèle",
+  "providerModels.item.modelConfig.azureDeployName.extra": "Champ utilisé pour les requêtes réelles dans Azure OpenAI",
+  "providerModels.item.modelConfig.azureDeployName.placeholder": "Veuillez saisir le nom de déploiement du modèle dans Azure",
+  "providerModels.item.modelConfig.azureDeployName.title": "Nom de déploiement du modèle",
+  "providerModels.item.modelConfig.deployName.extra": "Ce champ sera utilisé comme identifiant du modèle lors de l'envoi des requêtes",
+  "providerModels.item.modelConfig.deployName.placeholder": "Veuillez saisir le nom ou l'identifiant réel du modèle",
+  "providerModels.item.modelConfig.deployName.title": "Nom de déploiement du modèle",
+  "providerModels.item.modelConfig.displayName.placeholder": "Veuillez saisir le nom d'affichage du modèle, par ex. ChatGPT, GPT-4, etc.",
+  "providerModels.item.modelConfig.displayName.title": "Nom d'affichage du modèle",
+  "providerModels.item.modelConfig.files.extra": "L'implémentation actuelle du téléversement de fichiers est une solution temporaire, limitée à l'expérimentation personnelle. Veuillez attendre les fonctionnalités complètes dans les futures versions.",
+  "providerModels.item.modelConfig.files.title": "Prise en charge du téléversement de fichiers",
+  "providerModels.item.modelConfig.functionCall.extra": "Cette configuration activera uniquement la capacité du modèle à utiliser des outils. L'utilisation effective dépend entièrement du modèle lui-même ; veuillez tester sa compatibilité.",
+  "providerModels.item.modelConfig.functionCall.title": "Prise en charge de l'utilisation d'outils",
+  "providerModels.item.modelConfig.id.extra": "Ne peut pas être modifié après création et sera utilisé comme identifiant du modèle lors des appels IA",
+  "providerModels.item.modelConfig.id.placeholder": "Veuillez saisir l'identifiant du modèle, par ex. gpt-4o ou claude-3.5-sonnet",
+  "providerModels.item.modelConfig.id.title": "Identifiant du modèle",
+  "providerModels.item.modelConfig.imageOutput.extra": "Ce paramètre active uniquement la capacité de génération d'images du modèle. Les performances réelles dépendent du modèle. Veuillez tester sa compatibilité.",
+  "providerModels.item.modelConfig.imageOutput.title": "Prise en charge de la génération d'images",
+  "providerModels.item.modelConfig.modalTitle": "Configuration du modèle personnalisé",
+  "providerModels.item.modelConfig.reasoning.extra": "Cette configuration activera les capacités de raisonnement approfondi du modèle. Les effets dépendent du modèle. Veuillez tester sa compatibilité.",
+  "providerModels.item.modelConfig.reasoning.title": "Prise en charge du raisonnement approfondi",
+  "providerModels.item.modelConfig.search.extra": "Ce paramètre active la capacité de recherche web intégrée du modèle. La prise en charge dépend du modèle. Veuillez tester sa compatibilité.",
+  "providerModels.item.modelConfig.search.title": "Prise en charge de la recherche web",
+  "providerModels.item.modelConfig.tokens.extra": "Définir le nombre maximal de tokens pris en charge par le modèle",
+  "providerModels.item.modelConfig.tokens.title": "Fenêtre de contexte maximale",
+  "providerModels.item.modelConfig.tokens.unlimited": "Illimité",
+  "providerModels.item.modelConfig.type.extra": "Les différents types de modèles ont des cas d'utilisation et des capacités distincts",
+  "providerModels.item.modelConfig.type.options.chat": "Chat",
+  "providerModels.item.modelConfig.type.options.embedding": "Embedding",
+  "providerModels.item.modelConfig.type.options.image": "Génération d'images",
+  "providerModels.item.modelConfig.type.options.realtime": "Chat en temps réel",
+  "providerModels.item.modelConfig.type.options.stt": "Reconnaissance vocale",
+  "providerModels.item.modelConfig.type.options.text2music": "Texte en musique",
+  "providerModels.item.modelConfig.type.options.text2video": "Texte en vidéo",
+  "providerModels.item.modelConfig.type.options.tts": "Synthèse vocale",
+  "providerModels.item.modelConfig.type.placeholder": "Veuillez sélectionner un type de modèle",
+  "providerModels.item.modelConfig.type.title": "Type de modèle",
+  "providerModels.item.modelConfig.video.extra": "Ce paramètre active la configuration de reconnaissance vidéo dans l'application. La prise en charge dépend du modèle. Veuillez tester sa compatibilité.",
+  "providerModels.item.modelConfig.video.title": "Prise en charge de la reconnaissance vidéo",
+  "providerModels.item.modelConfig.vision.extra": "Cette configuration active uniquement la capacité de téléversement d'images dans l'application. La reconnaissance dépend du modèle. Veuillez tester ses capacités visuelles.",
+  "providerModels.item.modelConfig.vision.title": "Prise en charge de la vision",
+  "providerModels.item.pricing.image": "${{amount}}/Image",
+  "providerModels.item.pricing.inputCharts": "${{amount}}/M caractères",
+  "providerModels.item.pricing.inputMinutes": "${{amount}}/minute",
+  "providerModels.item.pricing.inputTokens": "Entrée ${{amount}}/M",
+  "providerModels.item.pricing.outputTokens": "Sortie ${{amount}}/M",
+  "providerModels.item.releasedAt": "Publié le {{releasedAt}}",
+  "providerModels.list.addNew": "Ajouter un modèle",
+  "providerModels.list.disabled": "Désactivé",
+  "providerModels.list.disabledActions.showMore": "Afficher tout",
+  "providerModels.list.disabledActions.sort": "Trier par",
+  "providerModels.list.disabledActions.sortAlphabetical": "Trier par ordre alphabétique",
+  "providerModels.list.disabledActions.sortAlphabeticalDesc": "Trier par ordre alphabétique inverse",
+  "providerModels.list.disabledActions.sortDefault": "Tri par défaut",
+  "providerModels.list.disabledActions.sortReleasedAt": "Trier par date de sortie (ancienne)",
+  "providerModels.list.disabledActions.sortReleasedAtDesc": "Trier par date de sortie (récente)",
+  "providerModels.list.empty.desc": "Veuillez créer un modèle personnalisé ou en importer un pour commencer.",
+  "providerModels.list.empty.title": "Aucun modèle disponible",
+  "providerModels.list.enabled": "Activé",
+  "providerModels.list.enabledActions.disableAll": "Tout désactiver",
+  "providerModels.list.enabledActions.enableAll": "Tout activer",
+  "providerModels.list.enabledActions.sort": "Tri personnalisé des modèles",
+  "providerModels.list.enabledEmpty": "Aucun modèle activé disponible. Veuillez activer vos modèles préférés ci-dessous~",
+  "providerModels.list.fetcher.clear": "Effacer les modèles récupérés",
+  "providerModels.list.fetcher.fetch": "Récupérer les modèles",
+  "providerModels.list.fetcher.fetching": "Récupération de la liste des modèles...",
+  "providerModels.list.fetcher.latestTime": "Dernière mise à jour : {{time}}",
+  "providerModels.list.fetcher.noLatestTime": "Liste des modèles non encore récupérée",
+  "providerModels.list.noModelsInCategory": "Aucun modèle activé dans cette catégorie",
+  "providerModels.list.resetAll.conform": "Êtes-vous sûr de vouloir réinitialiser toutes les modifications du modèle actuel ? La liste reviendra à son état par défaut.",
+  "providerModels.list.resetAll.success": "Réinitialisation réussie",
+  "providerModels.list.resetAll.title": "Réinitialiser toutes les modifications",
+  "providerModels.list.search": "Rechercher des modèles...",
+  "providerModels.list.searchResult": "{{count}} modèles trouvés",
+  "providerModels.list.title": "Liste des modèles",
+  "providerModels.list.total": "{{count}} modèles disponibles",
+  "providerModels.searchNotFound": "Aucun résultat trouvé",
+  "providerModels.tabs.all": "Tous",
+  "providerModels.tabs.chat": "Chat",
+  "providerModels.tabs.embedding": "Embedding",
+  "providerModels.tabs.image": "Image",
+  "providerModels.tabs.stt": "ASR",
+  "providerModels.tabs.tts": "TTS",
+  "sortModal.success": "Tri mis à jour avec succès",
+  "sortModal.title": "Ordre personnalisé",
+  "sortModal.update": "Mettre à jour",
+  "updateAiProvider.confirmDelete": "Vous êtes sur le point de supprimer ce fournisseur IA. Une fois supprimé, il ne pourra pas être récupéré. Confirmez-vous la suppression ?",
+  "updateAiProvider.deleteSuccess": "Suppression réussie",
+  "updateAiProvider.tooltip": "Mettre à jour la configuration de base du fournisseur",
+  "updateAiProvider.updateSuccess": "Mise à jour réussie",
+  "updateCustomAiProvider.title": "Mettre à jour la configuration du fournisseur IA personnalisé",
+  "vertexai.apiKey.desc": "Saisissez vos clés Vertex AI",
+  "vertexai.apiKey.placeholder": "{ \"type\": \"service_account\", \"project_id\": \"xxx\", \"private_key_id\": ... }",
+  "vertexai.apiKey.title": "Clés Vertex AI",
+  "vertexai.region.desc": "Sélectionnez la région pour le service Vertex AI. Certains modèles comme Gemini 2.5 ne sont disponibles que dans certaines régions (ex. : global)",
+  "vertexai.region.placeholder": "Sélectionner une région",
+  "vertexai.region.title": "Région Vertex AI",
+  "zeroone.title": "01.AI Zero One Everything",
+  "zhipu.title": "Zhipu"
 }

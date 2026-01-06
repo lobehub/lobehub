@@ -1,7 +1,7 @@
 'use client';
 
 import { Pre, PreSingleLine } from '@lobehub/ui/mdx';
-import { FC, PropsWithChildren } from 'react';
+import { type FC, type PropsWithChildren } from 'react';
 
 const countLines = (str: string): number => {
   const regex = /\n/g;

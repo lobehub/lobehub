@@ -1,4 +1,4 @@
-import { CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
 
 export interface SVGComponent {
   className?: string;

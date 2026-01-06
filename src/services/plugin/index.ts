@@ -1,8 +1,8 @@
-import { LobeTool } from '@lobechat/types';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeTool } from '@lobechat/types';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { LobeToolCustomPlugin } from '@/types/tool/plugin';
+import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 export interface InstallPluginParams {
   customParams?: Record<string, any>;

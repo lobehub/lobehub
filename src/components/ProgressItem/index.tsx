@@ -1,19 +1,19 @@
+import { Flexbox } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { createStyles, useResponsive } from 'antd-style';
-import { CSSProperties, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import { type CSSProperties, memo } from 'react';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   desc: css`
     height: 20px;
     font-size: 12px;
     line-height: 20px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   title: css`
     font-size: 15px;
     font-weight: bold;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -34,7 +34,6 @@ interface ProgressItemProps {
 const ProgressItem = memo<ProgressItemProps>(
   ({ legend, title, desc, usage, percent, style, className }) => {
     const { mobile } = useResponsive();
-    const { styles, theme } = useStyles();
 
     return (
       <Flexbox className={className} paddingInline={16} style={style} width={'100%'}>
@@ -44,7 +43,7 @@ const ProgressItem = memo<ProgressItemProps>(
               <Flexbox
                 height={8}
                 style={{
-                  background: theme.geekblue,
+                  background: cssVar.geekblue,
                   borderRadius: '50%',
                   flex: 'none',
                 }}
@@ -65,7 +64,7 @@ const ProgressItem = memo<ProgressItemProps>(
           percent={percent}
           showInfo={false}
           size={'small'}
-          strokeColor={theme.colorPrimary}
+          strokeColor={cssVar.colorPrimary}
         />
       </Flexbox>
     );

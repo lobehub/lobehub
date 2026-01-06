@@ -1,14 +1,13 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { copyImageToClipboard, sanitizeSVGContent } from '@lobechat/utils/client';
-import { Button, Dropdown, Tooltip } from '@lobehub/ui';
+import { Button, Center, Dropdown, Flexbox, Tooltip } from '@lobehub/ui';
 import { snapdom } from '@zumer/snapdom';
 import { App, Space } from 'antd';
 import { css, cx } from 'antd-style';
 import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
-import { BRANDING_NAME } from '@/const/branding';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 

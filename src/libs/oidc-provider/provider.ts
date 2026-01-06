@@ -1,6 +1,6 @@
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
-import Provider, { Configuration, KoaContextWithOIDC, errors } from 'oidc-provider';
+import Provider, { type Configuration, type KoaContextWithOIDC, errors } from 'oidc-provider';
 import urlJoin from 'url-join';
 
 import { serverDBEnv } from '@/config/db';

@@ -11,7 +11,7 @@ import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
-import { McpInstallRequest } from '../types';
+import { type McpInstallRequest } from '../types';
 import OfficialDetail from './Detail';
 
 interface OfficialPluginInstallModalProps {

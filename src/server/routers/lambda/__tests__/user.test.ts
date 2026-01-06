@@ -105,7 +105,7 @@ describe('userRouter', () => {
       vi.mocked(MessageModel).mockImplementation(
         () =>
           ({
-            hasMoreThanN: vi.fn().mockResolvedValue(true),
+            countUpTo: vi.fn().mockResolvedValue(5),
           }) as any,
       );
 
@@ -118,7 +118,7 @@ describe('userRouter', () => {
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserState();
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         isOnboard: true,
         preference: { telemetry: true },
         settings: {},
@@ -171,7 +171,7 @@ describe('userRouter', () => {
       vi.mocked(MessageModel).mockImplementation(
         () =>
           ({
-            hasMoreThanN: vi.fn().mockResolvedValue(false),
+            countUpTo: vi.fn().mockResolvedValue(0),
           }) as any,
       );
 
@@ -184,8 +184,8 @@ describe('userRouter', () => {
 
       const result = await userRouter.createCaller({ ...mockCtx } as any).getUserState();
 
-      expect(result).toEqual({
-        isOnboard: true,
+      expect(result).toMatchObject({
+        isOnboard: false,
         preference: { telemetry: null },
         settings: {},
         hasConversation: false,

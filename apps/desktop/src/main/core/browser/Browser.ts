@@ -2,14 +2,17 @@ import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-c
 import {
   BrowserWindow,
   BrowserWindowConstructorOptions,
+  session as electronSession,
   ipcMain,
   nativeTheme,
   screen,
 } from 'electron';
+import console from 'node:console';
 import { join } from 'node:path';
 
 import { buildDir, preloadDir, resourcesDir } from '@/const/dir';
 import { isDev, isMac, isWindows } from '@/const/env';
+import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import {
   BACKGROUND_DARK,
   BACKGROUND_LIGHT,
@@ -18,6 +21,8 @@ import {
   THEME_CHANGE_DELAY,
   TITLE_BAR_HEIGHT,
 } from '@/const/theme';
+import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
+import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
@@ -41,7 +46,6 @@ export default class Browser {
   private app: App;
   private _browserWindow?: BrowserWindow;
   private themeListenerSetup = false;
-  private stopInterceptHandler;
   identifier: string;
   options: BrowserWindowOpts;
   private readonly windowStateKey: string;
@@ -74,11 +78,9 @@ export default class Browser {
   /**
    * Get platform-specific theme configuration for window creation
    */
-  private getPlatformThemeConfig(isDarkMode?: boolean): Record<string, any> {
-    const darkMode = isDarkMode ?? nativeTheme.shouldUseDarkColors;
-
+  private getPlatformThemeConfig(): Record<string, any> {
     if (isWindows) {
-      return this.getWindowsThemeConfig(darkMode);
+      return this.getWindowsThemeConfig(this.isDarkMode);
     }
 
     return {};
@@ -160,21 +162,29 @@ export default class Browser {
   }
 
   private get isDarkMode() {
-    const themeMode = this.app.storeManager.get('themeMode');
-    if (themeMode === 'auto') return nativeTheme.shouldUseDarkColors;
-
-    return themeMode === 'dark';
+    return nativeTheme.shouldUseDarkColors;
   }
 
   loadUrl = async (path: string) => {
-    const initUrl = this.app.nextServerUrl + path;
+    const initUrl = await this.app.buildRendererUrl(path);
+
+    // Inject locale from store to help renderer boot with the correct language.
+    // Skip when set to auto to let the renderer detect locale normally.
+    const storedLocale = this.app.storeManager.get('locale', 'auto');
+    const urlWithLocale =
+      storedLocale && storedLocale !== 'auto'
+        ? `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${storedLocale}`
+        : initUrl;
+
+    console.log('[Browser] initUrl', urlWithLocale);
 
     try {
-      logger.debug(`[${this.identifier}] Attempting to load URL: ${initUrl}`);
-      await this._browserWindow.loadURL(initUrl);
-      logger.debug(`[${this.identifier}] Successfully loaded URL: ${initUrl}`);
+      logger.debug(`[${this.identifier}] Attempting to load URL: ${urlWithLocale}`);
+      await this._browserWindow.loadURL(urlWithLocale);
+
+      logger.debug(`[${this.identifier}] Successfully loaded URL: ${urlWithLocale}`);
     } catch (error) {
-      logger.error(`[${this.identifier}] Failed to load URL (${initUrl}):`, error);
+      logger.error(`[${this.identifier}] Failed to load URL (${urlWithLocale}):`, error);
 
       // Try to load local error page
       try {
@@ -188,13 +198,13 @@ export default class Browser {
 
         // Set retry logic
         ipcMain.handle('retry-connection', async () => {
-          logger.info(`[${this.identifier}] Retry connection requested for: ${initUrl}`);
+          logger.info(`[${this.identifier}] Retry connection requested for: ${urlWithLocale}`);
           try {
-            await this._browserWindow?.loadURL(initUrl);
-            logger.info(`[${this.identifier}] Reconnection successful to ${initUrl}`);
+            await this._browserWindow?.loadURL(urlWithLocale);
+            logger.info(`[${this.identifier}] Reconnection successful to ${urlWithLocale}`);
             return { success: true };
           } catch (err) {
-            logger.error(`[${this.identifier}] Retry connection failed for ${initUrl}:`, err);
+            logger.error(`[${this.identifier}] Retry connection failed for ${urlWithLocale}:`, err);
             // Reload error page
             try {
               logger.info(`[${this.identifier}] Reloading error page after failed retry...`);
@@ -295,7 +305,6 @@ export default class Browser {
    */
   destroy() {
     logger.debug(`Destroying window instance: ${this.identifier}`);
-    this.stopInterceptHandler?.();
     this.cleanupThemeListener();
     this._browserWindow = undefined;
   }
@@ -322,13 +331,11 @@ export default class Browser {
       `[${this.identifier}] Saved window state (only size used): ${JSON.stringify(savedState)}`,
     );
 
-    const isDarkMode = nativeTheme.shouldUseDarkColors;
-
     const browserWindow = new BrowserWindow({
       ...res,
       autoHideMenuBar: true,
       backgroundColor: '#00000000',
-      darkTheme: isDarkMode,
+      darkTheme: this.isDarkMode,
       frame: false,
       height: savedState?.height || height,
       show: false,
@@ -339,9 +346,10 @@ export default class Browser {
         backgroundThrottling: false,
         contextIsolation: true,
         preload: join(preloadDir, 'index.js'),
+        sandbox: false,
       },
       width: savedState?.width || width,
-      ...this.getPlatformThemeConfig(isDarkMode),
+      ...this.getPlatformThemeConfig(),
     });
 
     this._browserWindow = browserWindow;
@@ -354,13 +362,10 @@ export default class Browser {
     // Apply initial visual effects
     this.applyVisualEffects();
 
-    logger.debug(`[${this.identifier}] Setting up nextInterceptor.`);
-    this.stopInterceptHandler = this.app.nextInterceptor({
-      session: browserWindow.webContents.session,
-    });
-
     // Setup CORS bypass for local file server
     this.setupCORSBypass(browserWindow);
+    // Setup request hook for remote server sync (base URL rewrite + OIDC header)
+    this.setupRemoteServerRequestHook(browserWindow);
 
     logger.debug(`[${this.identifier}] Initiating placeholder and URL loading sequence.`);
     this.loadPlaceholder().then(() => {
@@ -409,8 +414,7 @@ export default class Browser {
         } catch (error) {
           logger.error(`[${this.identifier}] Failed to save window state on quit:`, error);
         }
-        // Need to clean up intercept handler and theme manager
-        this.stopInterceptHandler?.();
+        // Need to clean up theme manager
         this.cleanupThemeListener();
         return;
       }
@@ -445,8 +449,7 @@ export default class Browser {
         } catch (error) {
           logger.error(`[${this.identifier}] Failed to save window state on close:`, error);
         }
-        // Need to clean up intercept handler and theme manager
-        this.stopInterceptHandler?.();
+        // Need to clean up theme manager
         this.cleanupThemeListener();
       }
     });
@@ -469,6 +472,11 @@ export default class Browser {
       height: boundSize.height || windowSize.height,
       width: boundSize.width || windowSize.width,
     });
+  }
+
+  setWindowResizable(resizable: boolean) {
+    logger.debug(`[${this.identifier}] Setting window resizable: ${resizable}`);
+    this._browserWindow?.setResizable(resizable);
   }
 
   broadcast = <T extends MainBroadcastEventKey>(channel: T, data?: MainBroadcastParams<T>) => {
@@ -527,5 +535,28 @@ export default class Browser {
     });
 
     logger.debug(`[${this.identifier}] CORS bypass setup completed`);
+  }
+
+  /**
+   * Rewrite tRPC requests to remote server and inject OIDC token via webRequest hooks.
+   * Replaces the previous proxyTRPCRequest IPC forwarding.
+   */
+  private setupRemoteServerRequestHook(browserWindow: BrowserWindow) {
+    const session = browserWindow.webContents.session;
+    const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
+
+    const targetSession = session || electronSession.defaultSession;
+    if (!targetSession) return;
+
+    backendProxyProtocolManager.registerWithRemoteBaseUrl(targetSession, {
+      getAccessToken: () => remoteServerConfigCtr.getAccessToken(),
+      getRemoteBaseUrl: async () => {
+        const config = await remoteServerConfigCtr.getRemoteServerConfig();
+        const remoteServerUrl = await remoteServerConfigCtr.getRemoteServerUrl(config);
+        return remoteServerUrl || null;
+      },
+      scheme: ELECTRON_BE_PROTOCOL_SCHEME,
+      source: this.identifier,
+    });
   }
 }

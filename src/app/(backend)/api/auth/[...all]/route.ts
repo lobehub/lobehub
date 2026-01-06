@@ -1,19 +1,31 @@
 import { enableBetterAuth, enableNextAuth } from '@lobechat/const';
-import { toNextJsHandler } from 'better-auth/next-js';
+import type { NextRequest } from 'next/server';
 
-import { auth } from '@/auth';
-import NextAuthNode from '@/libs/next-auth';
+const createHandler = async () => {
+  if (enableBetterAuth) {
+    const [{ toNextJsHandler }, { auth }] = await Promise.all([
+      import('better-auth/next-js'),
+      import('@/auth'),
+    ]);
+    return toNextJsHandler(auth);
+  }
 
-const betterAuthHandler = toNextJsHandler(auth);
+  if (enableNextAuth) {
+    const NextAuthNode = await import('@/libs/next-auth');
+    return NextAuthNode.default.handlers;
+  }
 
-export const GET = enableBetterAuth
-  ? betterAuthHandler.GET
-  : enableNextAuth
-    ? NextAuthNode.handlers.GET
-    : undefined;
+  return { GET: undefined, POST: undefined };
+};
 
-export const POST = enableBetterAuth
-  ? betterAuthHandler.POST
-  : enableNextAuth
-    ? NextAuthNode.handlers.POST
-    : undefined;
+const handler = createHandler();
+
+export const GET = async (req: NextRequest) => {
+  const { GET } = await handler;
+  return GET?.(req);
+};
+
+export const POST = async (req: NextRequest) => {
+  const { POST } = await handler;
+  return POST?.(req);
+};

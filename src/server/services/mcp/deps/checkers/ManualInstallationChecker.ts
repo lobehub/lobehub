@@ -1,4 +1,4 @@
-import { InstallationChecker, PackageInstallCheckResult } from '../types';
+import { type InstallationChecker, type PackageInstallCheckResult } from '../types';
 
 /**
  * Manual Installation Checker

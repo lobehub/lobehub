@@ -13,7 +13,10 @@ export interface SupervisorTodoItem {
 
 const buildGroupMembersTag = (members: GroupMemberInfo[]): string => {
   if (!members || members.length === 0) return '';
-  return `<group_members>\n${JSON.stringify(members, null, 2)}\n</group_members>`;
+  const memberList = members
+    .map((member) => `  <member id="${member.id}" title="${member.title}" />`)
+    .join('\n');
+  return `<group_members>\n${memberList}\n</group_members>`;
 };
 
 export const buildGroupChatSystemPrompt = ({

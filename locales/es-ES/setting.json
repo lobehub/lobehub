@@ -1,811 +1,536 @@
 {
-  "about": {
-    "title": "Acerca de"
-  },
-  "agentInfoDescription": {
-    "basic": {
-      "avatar": "Avatar",
-      "description": "Descripción",
-      "name": "Nombre",
-      "tags": "Etiquetas",
-      "title": "Información del Asistente"
-    },
-    "chat": {
-      "displayMode": "Modo de visualización",
-      "enableHistoryCount": "Habilitar conteo de mensajes históricos",
-      "historyCount": "Cantidad de mensajes históricos",
-      "no": "No",
-      "searchMode": "Modo de búsqueda",
-      "title": "Preferencias de chat",
-      "yes": "Sí"
-    },
-    "model": {
-      "maxTokens": "Máximo de tokens",
-      "model": "Modelo",
-      "provider": "Proveedor",
-      "temperature": "Temperatura",
-      "title": "Configuración del modelo",
-      "topP": "Valor Top P"
-    },
-    "plugins": {
-      "count": "Configuración de plugins ({{count}})",
-      "empty": "Aún no se han instalado plugins",
-      "title": "Plugins instalados"
-    },
-    "role": {
-      "systemRole": "Mensaje del sistema",
-      "title": "Configuración de rol"
-    },
-    "value": {
-      "unset": "No configurado",
-      "untitled": "Asistente sin título"
-    }
-  },
-  "agentTab": {
-    "chat": "Preferencias de chat",
-    "meta": "Información del asistente",
-    "modal": "Configuración del modelo",
-    "opening": "Configuración de apertura",
-    "plugin": "Configuración de complementos",
-    "prompt": "Configuración de roles",
-    "tts": "Servicio de voz"
-  },
-  "analytics": {
-    "telemetry": {
-      "desc": "Al seleccionar enviar datos de telemetría, puedes ayudarnos a mejorar la experiencia general del usuario en {{appName}}",
-      "title": "Enviar datos de uso anónimos"
-    },
-    "title": "Análisis de datos"
-  },
-  "checking": "Comprobando...",
+  "_cloud.officialProvider": "Servicio de Modelo Oficial de {{name}}",
+  "about.title": "Acerca de",
+  "advancedSettings": "Configuración Avanzada",
+  "agentInfoDescription.basic.avatar": "Avatar",
+  "agentInfoDescription.basic.description": "Descripción",
+  "agentInfoDescription.basic.name": "Nombre",
+  "agentInfoDescription.basic.tags": "Etiquetas",
+  "agentInfoDescription.basic.title": "Información del Agente",
+  "agentInfoDescription.chat.enableHistoryCount": "Habilitar Conteo de Historial de Mensajes",
+  "agentInfoDescription.chat.historyCount": "Cantidad de Mensajes en el Historial",
+  "agentInfoDescription.chat.no": "No",
+  "agentInfoDescription.chat.searchMode": "Modo de Búsqueda",
+  "agentInfoDescription.chat.title": "Preferencias de Chat",
+  "agentInfoDescription.chat.yes": "Sí",
+  "agentInfoDescription.model.maxTokens": "Cantidad Máxima de Tokens",
+  "agentInfoDescription.model.model": "Modelo",
+  "agentInfoDescription.model.provider": "Proveedor",
+  "agentInfoDescription.model.temperature": "Temperatura",
+  "agentInfoDescription.model.title": "Configuración del Modelo",
+  "agentInfoDescription.model.topP": "Valor Top P",
+  "agentInfoDescription.plugins.count": "Configuración de Habilidades ({{count}})",
+  "agentInfoDescription.plugins.empty": "Aún no hay habilidades instaladas",
+  "agentInfoDescription.plugins.title": "Habilidades Instaladas",
+  "agentInfoDescription.role.systemRole": "Perfil del Agente",
+  "agentInfoDescription.role.title": "Perfil del Agente",
+  "agentInfoDescription.value.unset": "No Establecido",
+  "agentInfoDescription.value.untitled": "Agente Sin Título",
+  "agentTab.chat": "Preferencias de Chat",
+  "agentTab.meta": "Información del Agente",
+  "agentTab.modal": "Configuración del Modelo",
+  "agentTab.opening": "Configuración de Inicio",
+  "agentTab.plugin": "Configuración de Habilidades",
+  "agentTab.prompt": "Perfil del Agente",
+  "agentTab.tts": "Servicio de Voz",
+  "analytics.telemetry.desc": "Ayúdanos a mejorar {{appName}} con datos de uso anónimos",
+  "analytics.telemetry.title": "Enviar Datos de Uso Anónimos",
+  "analytics.title": "Analítica",
+  "checking": "Verificando...",
   "checkingPermissions": "Verificando permisos...",
-  "danger": {
-    "clear": {
-      "action": "Limpiar ahora",
-      "confirm": "¿Confirmar el borrado de todos los datos de chat?",
-      "desc": "Esto eliminará todos los datos de la conversación, incluyendo asistentes, archivos, mensajes, complementos, etc.",
-      "success": "Todos los mensajes de la conversación han sido eliminados",
-      "title": "Borrar todos los mensajes de la conversación"
-    },
-    "reset": {
-      "action": "Restablecer ahora",
-      "confirm": "¿Confirmar el restablecimiento de todas las configuraciones?",
-      "currentVersion": "Versión actual",
-      "desc": "Restablecer todas las opciones de configuración a sus valores predeterminados",
-      "success": "Se han restablecido todas las configuraciones",
-      "title": "Restablecer todas las configuraciones"
-    }
-  },
-  "groupTab": {
-    "chat": "Chat",
-    "members": "Miembros",
-    "meta": "Información básica"
-  },
-  "header": {
-    "desc": "Preferencias y configuración del modelo.",
-    "global": "Configuración global",
-    "group": "Configuración del equipo",
-    "groupDesc": "Gestiona el equipo de agentes y las preferencias de chat",
-    "session": "Configuración de la sesión",
-    "sessionDesc": "Configuración de roles y preferencias de sesión.",
-    "sessionWithName": "Configuración de la sesión · {{name}}",
-    "title": "Configuración"
-  },
-  "hotkey": {
-    "conflicts": "Conflicto con las teclas de acceso rápido existentes",
-    "errors": {
-      "CONFLICT": "Conflicto de atajo: este atajo ya está asignado a otra función",
-      "INVALID_FORMAT": "Formato de atajo inválido: por favor use el formato correcto (por ejemplo, CommandOrControl+E)",
-      "INVALID_ID": "ID de atajo inválido",
-      "NO_MODIFIER": "El atajo debe incluir una tecla modificadora (Ctrl, Alt, Shift, etc.)",
-      "SYSTEM_OCCUPIED": "El atajo está ocupado por el sistema u otra aplicación",
-      "UNKNOWN": "Error al actualizar: error desconocido"
-    },
-    "group": {
-      "conversation": "Conversación",
-      "desktop": "Escritorio",
-      "essential": "Esencial"
-    },
-    "invalidCombination": "La combinación de teclas de acceso rápido debe incluir al menos una tecla modificadora (Ctrl, Alt, Shift) y una tecla normal",
-    "record": "Presiona una tecla para grabar la tecla de acceso rápido",
-    "reset": "Restablecer a las teclas de acceso rápido predeterminadas",
-    "title": "Atajos de teclado",
-    "updateError": "Error al actualizar el atajo: problema de red o del sistema",
-    "updateSuccess": "Atajo actualizado con éxito"
-  },
-  "llm": {
-    "aesGcm": "Su clave y dirección del agente se cifrarán utilizando el algoritmo de cifrado <1>AES-GCM</1>",
-    "apiKey": {
-      "desc": "Por favor, introduce tu clave de API de {{name}}",
-      "placeholder": "Clave de API de {{name}}",
-      "title": "Clave de API"
-    },
-    "checker": {
-      "button": "Comprobar",
-      "desc": "Comprueba si la clave API y la dirección del proxy están escritas correctamente",
-      "pass": "Comprobación exitosa",
-      "title": "Comprobación de conectividad"
-    },
-    "customModelCards": {
-      "addNew": "Crear y agregar el modelo {{id}}",
-      "config": "Configurar modelo",
-      "confirmDelete": "Estás a punto de eliminar este modelo personalizado. Una vez eliminado, no se podrá recuperar. Por favor, procede con precaución.",
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "Campo utilizado en las solicitudes reales en Azure OpenAI",
-          "placeholder": "Ingresa el nombre de implementación del modelo en Azure",
-          "title": "Nombre de implementación del modelo"
-        },
-        "displayName": {
-          "placeholder": "Ingresa el nombre de visualización del modelo, por ejemplo, ChatGPT, GPT-4, etc.",
-          "title": "Nombre de visualización del modelo"
-        },
-        "files": {
-          "extra": "La implementación actual de carga de archivos es solo una solución temporal, limitada a pruebas personales. Por favor, espera la implementación completa de la capacidad de carga de archivos.",
-          "title": "Soporte de carga de archivos"
-        },
-        "functionCall": {
-          "extra": "Esta configuración solo habilitará la capacidad de llamada a funciones en la aplicación; si se admite la llamada a funciones depende completamente del modelo en sí. Por favor, prueba la disponibilidad de la capacidad de llamada a funciones de este modelo.",
-          "title": "Soporte de llamadas a funciones"
-        },
-        "id": {
-          "extra": "Se mostrará como etiqueta del modelo",
-          "placeholder": "Ingresa el ID del modelo, por ejemplo, gpt-4-turbo-preview o claude-2.1",
-          "title": "ID del modelo"
-        },
-        "modalTitle": "Configuración del modelo personalizado",
-        "tokens": {
-          "title": "Número máximo de tokens"
-        },
-        "vision": {
-          "extra": "Esta configuración solo habilitará la configuración de carga de imágenes en la aplicación; si se admite el reconocimiento depende completamente del modelo en sí. Por favor, prueba la disponibilidad de la capacidad de reconocimiento visual de este modelo.",
-          "title": "Soporte de reconocimiento visual"
-        }
-      }
-    },
-    "fetchOnClient": {
-      "desc": "El modo de solicitud en el cliente iniciará directamente la solicitud de sesión desde el navegador, lo que puede mejorar la velocidad de respuesta",
-      "title": "Usar el modo de solicitud en el cliente"
-    },
-    "fetcher": {
-      "clear": "Eliminar el modelo obtenido",
-      "fetch": "Obtener lista de modelos",
-      "fetching": "Obteniendo lista de modelos...",
-      "latestTime": "Última actualización: {{time}}",
-      "noLatestTime": "Lista no disponible actualmente"
-    },
-    "helpDoc": "Tutorial de configuración",
-    "modelList": {
-      "desc": "Selecciona los modelos que se mostrarán en la conversación. Los modelos seleccionados se mostrarán en la lista de modelos.",
-      "placeholder": "Selecciona un modelo de la lista",
-      "title": "Lista de modelos",
-      "total": "Total de {{count}} modelos disponibles"
-    },
-    "proxyUrl": {
-      "desc": "Además de la dirección predeterminada, debe incluir http(s)://",
-      "title": "Dirección del proxy de la API"
-    },
-    "waitingForMore": "Más modelos están en <1>planificación para su incorporación</1>, ¡estén atentos!"
-  },
-  "marketPublish": {
-    "modal": {
-      "changelog": {
-        "extra": "Describe los principales cambios y mejoras de esta versión",
-        "label": "Registro de cambios",
-        "maxLengthError": "El registro de cambios no puede superar los 500 caracteres",
-        "placeholder": "Introduce el registro de cambios",
-        "required": "Por favor, introduce el registro de cambios"
-      },
-      "comparison": {
-        "local": "Versión local actual",
-        "remote": "Versión publicada actual"
-      },
-      "identifier": {
-        "extra": "El identificador será único para el asistente. Se recomienda usar letras minúsculas, números y guiones",
-        "label": "Identificador del asistente",
-        "lengthError": "La longitud del identificador debe estar entre 3 y 50 caracteres",
-        "patternError": "El identificador solo puede contener letras minúsculas, números y guiones",
-        "placeholder": "Introduce un identificador único para el asistente, por ejemplo: desarrollo-web",
-        "required": "Por favor, introduce el identificador del asistente"
-      },
-      "loading": {
-        "fetchingRemote": "Cargando datos remotos...",
-        "submit": "Publicando asistente...",
-        "upload": "Publicando nueva versión..."
-      },
-      "messages": {
-        "createVersionFailed": "Error al crear la versión: {{message}}",
-        "fetchRemoteFailed": "Error al obtener los datos del asistente remoto",
-        "missingIdentifier": "El asistente actual no tiene un identificador de mercado",
-        "notAuthenticated": "Por favor, inicia sesión en tu cuenta del mercado",
-        "publishFailed": "Error al publicar: {{message}}"
-      },
-      "submitButton": "Publicar",
-      "title": {
-        "submit": "Compartir en el mercado de asistentes",
-        "upload": "Publicar nueva versión"
-      }
-    },
-    "resultModal": {
-      "message": "El asistente ha sido enviado para revisión. Una vez aprobado, se publicará automáticamente. Haz clic en «Ver en el mercado» para ver el asistente publicado.",
-      "view": "Ver en el mercado"
-    },
-    "submit": {
-      "button": "Compartir en el mercado",
-      "tooltip": "Comparte el asistente en el mercado"
-    },
-    "upload": {
-      "button": "Publicar nueva versión",
-      "tooltip": "Publica una nueva versión en el mercado de asistentes"
-    }
-  },
-  "message": {
-    "success": "Actualización exitosa"
-  },
-  "plugin": {
-    "addMCPPlugin": "Agregar complemento MCP",
-    "addTooltip": "Agregar complemento personalizado",
-    "clearDeprecated": "Eliminar complementos obsoletos",
-    "empty": "No hay complementos instalados actualmente, visita la <1>tienda de complementos</1> para explorar",
-    "installStatus": {
-      "deprecated": "Desinstalado"
-    },
-    "settings": {
-      "hint": "Por favor completa la siguiente configuración según la descripción",
-      "title": "Configuración del complemento {{id}}",
-      "tooltip": "Configuración del complemento"
-    },
-    "store": "Tienda de complementos"
-  },
-  "settingAgent": {
-    "avatar": {
-      "title": "Avatar"
-    },
-    "backgroundColor": {
-      "title": "Color de fondo"
-    },
-    "description": {
-      "desc": "Una breve introducción a tu asistente, no como una configuración de personaje",
-      "placeholder": "Ingresa la descripción del asistente",
-      "title": "Descripción del asistente"
-    },
-    "name": {
-      "placeholder": "Ingresa el nombre del asistente",
-      "title": "Nombre"
-    },
-    "prompt": {
-      "placeholder": "Ingresa la palabra de aviso del rol",
-      "title": "Configuración del rol"
-    },
-    "submit": "Actualizar información del asistente",
-    "tag": {
-      "desc": "Las etiquetas del asistente se mostrarán en el mercado de asistentes",
-      "placeholder": "Ingresa la etiqueta",
-      "title": "Etiqueta"
-    },
-    "title": "Información del asistente"
-  },
-  "settingAppearance": {
-    "animationMode": {
-      "agile": "Ágil",
-      "desc": "Selecciona la velocidad de la animación para las respuestas de la aplicación",
-      "disabled": "Desactivado",
-      "elegant": "Elegante",
-      "title": "Animación de respuesta"
-    },
-    "contextMenuMode": {
-      "default": "Predeterminado",
-      "desc": "Seleccione el esquema de visualización del menú contextual en los mensajes de chat",
-      "disabled": "No usar",
-      "title": "Esquema del menú contextual"
-    },
-    "neutralColor": {
-      "desc": "Personalización de escalas de grises con diferentes inclinaciones de color",
-      "title": "Color Neutro"
-    },
-    "noAnimation": {
-      "desc": "Desactiva todos los efectos de animación en la aplicación",
-      "title": "Modo sin animación"
-    },
-    "preview": {
-      "title": "Paleta de Colores"
-    },
-    "primaryColor": {
-      "desc": "Color del tema personalizado",
-      "title": "Color del Tema"
-    },
-    "title": "Apariencia de la Aplicación"
-  },
-  "settingChat": {
-    "autoCreateTopicThreshold": {
-      "desc": "Se creará automáticamente un tema cuando el número de mensajes actuales supere este valor",
-      "title": "Umbral de mensajes"
-    },
-    "chatStyleType": {
-      "title": "Estilo de la ventana de chat",
-      "type": {
-        "chat": "Modo de conversación",
-        "docs": "Modo de documentos"
-      }
-    },
-    "compressThreshold": {
-      "desc": "Se comprimirán los mensajes históricos cuando el valor no comprimido supere este umbral",
-      "title": "Umbral de compresión de longitud de mensajes históricos"
-    },
-    "enableAutoCreateTopic": {
-      "desc": "Indica si se debe crear automáticamente un tema durante la conversación, solo se aplica en temas temporales",
-      "title": "Crear tema automáticamente"
-    },
-    "enableCompressHistory": {
-      "title": "Activar resumen automático de mensajes históricos"
-    },
-    "enableHistoryCount": {
-      "alias": "Sin límite",
-      "limited": "Incluye solo {{number}} mensajes de conversación",
-      "setlimited": "Establecer cantidad de mensajes históricos",
-      "title": "Limitar número de mensajes históricos",
-      "unlimited": "Sin límite de mensajes históricos"
-    },
-    "enableStreaming": {
-      "desc": "Habilita la salida en streaming para mostrar la respuesta en tiempo real. Si se desactiva, solo se mostrará la respuesta completa.",
-      "title": "Habilitar salida en streaming"
-    },
-    "historyCount": {
-      "desc": "Número de mensajes incluidos en cada solicitud (incluyendo las preguntas más recientes. Cada pregunta y respuesta se cuenta como 1)",
-      "title": "Número de mensajes incluidos"
-    },
-    "inputTemplate": {
-      "desc": "El último mensaje del usuario se completará en esta plantilla",
-      "placeholder": "La plantilla de preprocesamiento {{text}} se reemplazará por la información de entrada en tiempo real",
-      "title": "Preprocesamiento de entrada del usuario"
-    },
-    "submit": "Actualizar preferencias de chat",
-    "title": "Configuración de chat"
-  },
-  "settingChatAppearance": {
-    "fontSize": {
-      "desc": "Tamaño de fuente del contenido del chat",
-      "marks": {
-        "normal": "Estándar"
-      },
-      "title": "Tamaño de Fuente"
-    },
-    "highlighterTheme": {
-      "title": "Tema de Resaltado de Código"
-    },
-    "mermaidTheme": {
-      "title": "Tema Sirena"
-    },
-    "title": "Apariencia del Chat",
-    "transitionMode": {
-      "desc": "Animación de transición de los mensajes de chat",
-      "options": {
-        "fadeIn": "Aparecer gradualmente",
-        "none": {
-          "desc": "Depende de la forma en que el modelo genera la respuesta, por favor pruébelo usted mismo.",
-          "value": "Ninguna"
-        },
-        "smooth": "Suave"
-      },
-      "title": "Animación de transición"
-    }
-  },
-  "settingCommon": {
-    "lang": {
-      "autoMode": "Seguir el sistema",
-      "title": "Idioma"
-    },
-    "themeMode": {
-      "auto": "Automático",
-      "dark": "Oscuro",
-      "light": "Claro",
-      "title": "Tema"
-    },
-    "title": "Configuración Común"
-  },
-  "settingGroup": {
-    "description": {
-      "placeholder": "Introduce la descripción del equipo",
-      "title": "Descripción del equipo"
-    },
-    "name": {
-      "placeholder": "Introduce el nombre del equipo",
-      "title": "Nombre del equipo"
-    },
-    "scene": {
-      "desc": "Selecciona el escenario del equipo",
-      "options": {
-        "casual": "Informal",
-        "productive": "Productivo"
-      },
-      "title": "Escenario del equipo"
-    },
-    "submit": "Actualizar equipo",
-    "systemPrompt": {
-      "placeholder": "Por favor, ingrese la indicación del sistema para el anfitrión",
-      "title": "Indicación del sistema para el anfitrión"
-    },
-    "title": "Información del equipo de agentes"
-  },
-  "settingGroupChat": {
-    "allowDM": {
-      "desc": "Si se desactiva, aún podrás enviar mensajes directos al asistente",
-      "title": "Permitir mensajes directos del asistente"
-    },
-    "enableSupervisor": {
-      "desc": "Habilita la función de moderador del equipo de agentes. El moderador gestionará el flujo de conversación del equipo",
-      "title": "Activar moderador"
-    },
-    "maxResponseInRow": {
-      "desc": "Seleccione cuántos mensajes puede responder un miembro de forma consecutiva. Establecer en 0 desactiva esta limitación.",
-      "title": "Número de respuestas consecutivas"
-    },
-    "model": {
-      "desc": "Las intervenciones de los miembros del grupo no se verán afectadas. Algunos modelos no pueden utilizarse como moderadores.",
-      "title": "Modelo del anfitrión"
-    },
-    "orchestratorTitle": "Configuración del anfitrión",
-    "responseOrder": {
-      "desc": "Los agentes responderán en el orden establecido en el chat",
-      "options": {
-        "natural": "Natural",
-        "sequential": "Secuencial"
-      },
-      "placeholder": "Seleccione el orden de respuesta",
-      "title": "Orden de respuesta"
-    },
-    "responseSpeed": {
-      "desc": "Controla la velocidad general del chat",
-      "options": {
-        "fast": "Rápido",
-        "medium": "Medio",
-        "slow": "Lento"
-      },
-      "placeholder": "Seleccione la velocidad de respuesta",
-      "title": "Velocidad de respuesta"
-    },
-    "revealDM": {
-      "desc": "Permite ver los mensajes privados enviados a otros miembros.",
-      "title": "Mostrar contenido de mensajes privados"
-    },
-    "submit": "Actualizar configuración",
-    "systemPrompt": {
-      "desc": "Indicación personalizada del sistema para el anfitrión del chat grupal. Esto puede afectar el comportamiento predeterminado del anfitrión.",
-      "placeholder": "Por favor, ingrese una indicación personalizada para el anfitrión...",
-      "title": "Indicación del sistema para el anfitrión"
-    },
-    "title": "Configuración del chat"
-  },
-  "settingGroupMembers": {
-    "addToGroup": "Unirse al grupo",
-    "availableAgents": "Asistentes disponibles",
-    "createMember": "Crear miembro",
-    "defaultAgent": "Asistente personalizado",
-    "disableHost": "Desactivar asistente del anfitrión",
-    "edit": "Editar miembro",
-    "empty": "Este equipo no tiene miembros por el momento. Haz clic en el botón + para añadir miembros.",
-    "enableHost": "Activar asistente del anfitrión",
-    "groupHost": "Anfitrión del grupo",
-    "groupMembers": "Miembros del grupo",
-    "host": {
-      "description": "Cuando el anfitrión está en el grupo, el chat grupal se automatiza, ideal para tareas creativas.",
-      "title": "Anfitrión"
-    },
-    "noAvailableAgents": "No hay asistentes disponibles",
-    "noDescription": "Sin descripción",
-    "noMembersInGroup": "El grupo no tiene miembros",
-    "owner": "Tú (propietario)",
-    "remove": "Eliminar miembro",
-    "removeFromGroup": "Eliminar del grupo",
-    "you": "Tú"
-  },
-  "settingImage": {
-    "defaultCount": {
-      "desc": "Establece la cantidad predeterminada de imágenes al crear una nueva tarea en el panel de generación de imágenes.",
-      "label": "Cantidad de imágenes predeterminada",
-      "title": "Configuración de dibujo con IA"
-    }
-  },
-  "settingModel": {
-    "enableMaxTokens": {
-      "title": "Activar límite de tokens por respuesta"
-    },
-    "enableReasoningEffort": {
-      "title": "Activar ajuste de intensidad de razonamiento"
-    },
-    "frequencyPenalty": {
-      "desc": "Cuanto mayor sea el valor, más rica y variada será la elección de palabras; cuanto menor sea el valor, más simples y directas serán las palabras.",
-      "title": "Riqueza del vocabulario"
-    },
-    "maxTokens": {
-      "desc": "Número máximo de tokens utilizados en una interacción",
-      "title": "Límite de tokens por respuesta"
-    },
-    "model": {
-      "desc": "{{provider}} modelo",
-      "title": "Modelo"
-    },
-    "params": {
-      "title": "Parámetros avanzados"
-    },
-    "presencePenalty": {
-      "desc": "Cuanto mayor sea el valor, más se inclinará hacia diferentes formas de expresión, evitando la repetición de conceptos; cuanto menor sea el valor, más se inclinará hacia el uso de conceptos o narrativas repetidas, expresando mayor consistencia.",
-      "title": "Diversidad de expresión"
-    },
-    "reasoningEffort": {
-      "desc": "Cuanto mayor sea el valor, más fuerte será la capacidad de razonamiento, pero puede aumentar el tiempo de respuesta y el consumo de tokens",
-      "options": {
-        "high": "Alto",
-        "low": "Bajo",
-        "medium": "Medio"
-      },
-      "title": "Intensidad de razonamiento"
-    },
-    "submit": "Actualizar configuración del modelo",
-    "temperature": {
-      "desc": "Cuanto mayor sea el valor, más creativas e imaginativas serán las respuestas; cuanto menor sea el valor, más rigurosas serán las respuestas",
-      "title": "Nivel de creatividad",
-      "warning": "Un valor de creatividad demasiado alto puede generar salidas confusas"
-    },
-    "title": "Configuración del modelo",
-    "topP": {
-      "desc": "Cuántas posibilidades se consideran, cuanto mayor sea el valor, más respuestas posibles se aceptan; cuanto menor sea el valor, se tiende a elegir la respuesta más probable. No se recomienda cambiarlo junto con el nivel de creatividad",
-      "title": "Apertura mental"
-    }
-  },
-  "settingOpening": {
-    "openingMessage": {
-      "desc": "Mensaje de apertura al iniciar la conversación, utilizado para presentar las funciones del asistente",
-      "placeholder": "Hola, soy el asistente personalizado, puedes comenzar a hablar conmigo de inmediato o ir a la configuración del asistente para completar mi información.",
-      "title": "Mensaje de apertura"
-    },
-    "openingQuestions": {
-      "desc": "Preguntas orientativas que se muestran al inicio de la conversación",
-      "empty": "No hay preguntas disponibles",
-      "placeholder": "Introduce una pregunta",
-      "repeat": "La pregunta ya existe",
-      "title": "Preguntas de apertura"
-    },
-    "title": "Configuración de apertura"
-  },
-  "settingPlugin": {
-    "title": "Lista de complementos"
-  },
-  "settingSystem": {
-    "accessCode": {
-      "desc": "El administrador ha habilitado el acceso cifrado",
-      "placeholder": "Ingrese la contraseña de acceso",
-      "title": "Contraseña de acceso"
-    },
-    "oauth": {
-      "info": {
-        "desc": "Sesión iniciada",
-        "title": "Información de la cuenta"
-      },
-      "signin": {
-        "action": "Iniciar sesión",
-        "desc": "Inicia sesión con SSO para desbloquear la aplicación",
-        "title": "Iniciar sesión en la cuenta"
-      },
-      "signout": {
-        "action": "Cerrar sesión",
-        "confirm": "¿Confirmar cierre de sesión?",
-        "success": "Sesión cerrada con éxito"
-      }
-    },
-    "title": "Configuración del sistema"
-  },
-  "settingTTS": {
-    "openai": {
-      "sttModel": "Modelo de reconocimiento de voz de OpenAI",
-      "title": "OpenAI",
-      "ttsModel": "Modelo de síntesis de voz de OpenAI"
-    },
-    "showAllLocaleVoice": {
-      "desc": "Si está desactivado, solo se mostrarán las voces del idioma actual",
-      "title": "Mostrar todas las voces del idioma"
-    },
-    "stt": "Configuración de reconocimiento de voz",
-    "sttAutoStop": {
-      "desc": "Si está desactivado, el reconocimiento de voz no se detendrá automáticamente y deberá hacer clic en el botón de detener manualmente",
-      "title": "Detención automática del reconocimiento de voz"
-    },
-    "sttLocale": {
-      "desc": "Idioma de entrada de voz, esta opción puede mejorar la precisión del reconocimiento de voz",
-      "title": "Idioma de reconocimiento de voz"
-    },
-    "sttService": {
-      "desc": "El servicio de reconocimiento de voz, donde el navegador es el servicio nativo de reconocimiento de voz del navegador",
-      "title": "Servicio de reconocimiento de voz"
-    },
-    "submit": "Actualizar servicio de voz",
-    "title": "Servicio de voz",
-    "tts": "Configuración de síntesis de voz",
-    "ttsService": {
-      "desc": "Si utiliza el servicio de síntesis de voz de OpenAI, asegúrese de que el servicio de modelo de OpenAI esté habilitado",
-      "title": "Servicio de síntesis de voz"
-    },
-    "voice": {
-      "desc": "Seleccione una voz para el asistente actual, diferentes servicios de TTS admiten diferentes voces",
-      "preview": "Vista previa de la voz",
-      "title": "Voz de síntesis de voz"
-    }
-  },
-  "storage": {
-    "actions": {
-      "export": {
-        "button": "Exportar",
-        "exportType": {
-          "agent": "Exportar configuración del asistente",
-          "agentWithMessage": "Exportar asistente y mensajes",
-          "all": "Exportar configuración global y todos los datos del asistente",
-          "allAgent": "Exportar todas las configuraciones del asistente",
-          "allAgentWithMessage": "Exportar todos los asistentes y mensajes",
-          "globalSetting": "Exportar configuración global"
-        },
-        "title": "Exportar datos"
-      },
-      "import": {
-        "button": "Importar",
-        "title": "Importar datos"
-      },
-      "title": "Operaciones avanzadas"
-    },
-    "desc": "Uso de almacenamiento en el navegador actual",
-    "embeddings": {
-      "used": "Almacenamiento de vectores"
-    },
-    "title": "Almacenamiento de datos",
-    "used": "Uso de almacenamiento"
-  },
-  "submitAgentModal": {
-    "button": "Enviar asistente",
-    "identifier": "Identificador del asistente (identifier)",
-    "metaMiss": "Por favor complete la información del asistente antes de enviar, debe incluir nombre, descripción y etiquetas",
-    "placeholder": "Ingrese el identificador único del asistente, por ejemplo desarrollo-web",
-    "tooltips": "Compartir en el mercado de asistentes"
-  },
-  "submitFooter": {
-    "reset": "Restablecer",
-    "submit": "Guardar",
-    "unSaved": "Cambios no guardados",
-    "unSavedWarning": "Actualmente hay cambios no guardados"
-  },
-  "sync": {
-    "device": {
-      "deviceName": {
-        "hint": "Agrega un nombre para identificar el dispositivo",
-        "placeholder": "Introduce el nombre del dispositivo",
-        "title": "Nombre del dispositivo"
-      },
-      "title": "Información del dispositivo",
-      "unknownBrowser": "Navegador desconocido",
-      "unknownOS": "Sistema operativo desconocido"
-    },
-    "warning": {
-      "tip": "Después de un largo período de pruebas comunitarias, la sincronización WebRTC puede no ser capaz de satisfacer de manera estable las demandas generales de sincronización de datos. Por favor, <1>implementa tu propio servidor de señalización</1> antes de usarlo."
-    },
-    "webrtc": {
-      "channelName": {
-        "desc": "WebRTC utilizará este nombre para crear un canal de sincronización. Asegúrate de que el nombre del canal sea único",
-        "placeholder": "Introduce el nombre del canal de sincronización",
-        "shuffle": "Generar aleatoriamente",
-        "title": "Nombre del canal de sincronización"
-      },
-      "channelPassword": {
-        "desc": "Agrega una contraseña para garantizar la privacidad del canal. Solo los dispositivos con la contraseña correcta podrán unirse al canal",
-        "placeholder": "Introduce la contraseña del canal de sincronización",
-        "title": "Contraseña del canal de sincronización"
-      },
-      "desc": "Comunicación de datos en tiempo real y punto a punto. Los dispositivos deben estar en línea simultáneamente para sincronizarse",
-      "enabled": {
-        "invalid": "Por favor, completa la información del servidor de señalización y el nombre del canal de sincronización antes de habilitarlo",
-        "title": "Activar sincronización"
-      },
-      "signaling": {
-        "desc": "WebRTC utilizará esta dirección para la sincronización",
-        "placeholder": "Introduce la dirección del servidor de señalización",
-        "title": "Servidor de señalización"
-      },
-      "title": "Sincronización WebRTC"
-    }
-  },
-  "systemAgent": {
-    "agentMeta": {
-      "label": "Modelo de generación de metadatos de asistente",
-      "modelDesc": "Modelo designado para generar el nombre, descripción, avatar y etiquetas del asistente",
-      "title": "Generación automática de información del asistente"
-    },
-    "customPrompt": {
-      "addPrompt": "Agregar aviso personalizado",
-      "desc": "Al completarlo, el asistente del sistema utilizará el aviso personalizado al generar contenido",
-      "placeholder": "Introduce la palabra clave personalizada",
-      "title": "Palabra clave personalizada"
-    },
-    "generationTopic": {
-      "label": "Modelo de denominación de temas para pintura AI",
-      "modelDesc": "Modelo designado para la denominación automática de temas en pintura AI",
-      "title": "Denominación automática de temas para pintura AI"
-    },
-    "helpInfo": "Al crear un nuevo asistente, se utilizarán los ajustes predeterminados del asistente como valores predeterminados.",
-    "historyCompress": {
-      "label": "Modelo de historial de conversación",
-      "modelDesc": "Especifica el modelo utilizado para comprimir el historial de conversación",
-      "title": "Resumen automático del historial de conversación"
-    },
-    "queryRewrite": {
-      "label": "Modelo de reescritura de preguntas",
-      "modelDesc": "Modelo designado para optimizar las preguntas de los usuarios",
-      "title": "Reescritura de preguntas de la base de conocimientos"
-    },
-    "thread": {
-      "label": "Modelo de nombramiento de subtemas",
-      "modelDesc": "Modelo designado para el renombramiento automático de subtemas",
-      "title": "Nombramiento automático de subtemas"
-    },
-    "title": "Asistente del sistema",
-    "topic": {
-      "label": "Modelo de nombramiento de temas",
-      "modelDesc": "Modelo designado para el renombramiento automático de temas",
-      "title": "Renombramiento automático de temas"
-    },
-    "translation": {
-      "label": "Modelo de traducción",
-      "modelDesc": "Especifica el modelo a utilizar para la traducción",
-      "title": "Configuración del asistente de traducción"
-    }
-  },
-  "tab": {
-    "about": "Acerca de",
-    "agent": "Asistente predeterminado",
-    "common": "Configuración común",
-    "experiment": "Experimento",
-    "hotkey": "Atajos de teclado",
-    "image": "Dibujo con IA",
-    "llm": "Modelo de lenguaje",
-    "provider": "Proveedor de servicios de IA",
-    "proxy": "Proxy de red",
-    "storage": "Almacenamiento de datos",
-    "sync": "Sincronización en la nube",
-    "system-agent": "Asistente del sistema",
-    "tts": "Servicio de voz"
-  },
-  "tools": {
-    "builtins": {
-      "groupName": "Incorporados"
-    },
-    "disabled": "El modelo actual no admite llamadas de función y no se puede utilizar el complemento",
-    "klavis": {
-      "addServer": "Agregar servidor",
-      "authCompleted": "Autenticación completada",
-      "authFailed": "Autenticación fallida",
-      "authRequired": "Autenticación requerida",
-      "connected": "Conectado",
-      "error": "Error",
-      "groupName": "Herramientas de Klavis",
-      "manage": "Gestionar Klavis",
-      "manageTitle": "Gestionar la integración de Klavis",
-      "noServers": "No hay servidores conectados",
-      "notEnabled": "El servicio de Klavis no está habilitado",
-      "oauthRequired": "Por favor, completa la autenticación OAuth en una nueva ventana",
-      "pendingAuth": "Autenticación pendiente",
-      "serverCreated": "Servidor creado con éxito",
-      "serverCreatedFailed": "Error al crear el servidor",
-      "serverRemoved": "Servidor eliminado",
-      "servers": "servidores",
-      "tools": "herramientas",
-      "verifyAuth": "He completado la autenticación"
-    },
-    "plugins": {
-      "enabled": "Habilitados {{num}}",
-      "groupName": "Complementos",
-      "noEnabled": "No hay complementos habilitados por el momento",
-      "store": "Tienda de complementos"
-    },
-    "tabs": {
-      "all": "Todo",
-      "installed": "Habilitado"
-    },
-    "title": "Herramientas de extensión"
-  }
+  "danger.clear.action": "Borrar Ahora",
+  "danger.clear.confirm": "¿Borrar todos los datos del chat? Esta acción no se puede deshacer.",
+  "danger.clear.desc": "Eliminar todos los datos, incluidos agentes, archivos, mensajes y habilidades. Tu cuenta NO será eliminada.",
+  "danger.clear.success": "Todos los mensajes de la sesión han sido eliminados",
+  "danger.clear.title": "Borrar Datos",
+  "danger.reset.action": "Restablecer Ahora",
+  "danger.reset.confirm": "¿Restablecer todas las configuraciones?",
+  "danger.reset.currentVersion": "Versión Actual",
+  "danger.reset.desc": "Restaurar todas las configuraciones a los valores predeterminados. Tus datos no serán eliminados.",
+  "danger.reset.success": "Todas las configuraciones han sido restablecidas",
+  "danger.reset.title": "Restablecer Todas las Configuraciones",
+  "defaultAgent.model.desc": "Modelo predeterminado utilizado al crear un nuevo Agente",
+  "defaultAgent.model.title": "Modelo",
+  "defaultAgent.title": "Configuración Predeterminada del Agente",
+  "group.aiConfig": "Modelo",
+  "group.common": "General",
+  "group.profile": "Cuenta",
+  "group.subscription": "Suscripción",
+  "group.system": "Sistema",
+  "groupTab.chat": "Chat",
+  "groupTab.members": "Miembros",
+  "groupTab.meta": "Información Básica",
+  "header.desc": "Preferencias y configuración del modelo",
+  "header.global": "Configuración Global",
+  "header.group": "Configuración de Grupo",
+  "header.groupDesc": "Gestionar grupo y preferencias de chat",
+  "header.session": "Configuración de Sesión",
+  "header.sessionDesc": "Perfil del Agente y preferencias de sesión",
+  "header.sessionWithName": "Configuración de Sesión · {{name}}",
+  "header.title": "Configuración",
+  "hotkey.conflicts": "Conflictos con atajos existentes",
+  "hotkey.errors.CONFLICT": "Conflicto de atajo: Este atajo ya está asignado a otra función",
+  "hotkey.errors.INVALID_FORMAT": "Formato de atajo inválido: Usa el formato correcto (ej. CommandOrControl+E)",
+  "hotkey.errors.INVALID_ID": "ID de atajo inválido",
+  "hotkey.errors.NO_MODIFIER": "El atajo debe incluir una tecla modificadora (Ctrl, Alt, Shift, etc.)",
+  "hotkey.errors.SYSTEM_OCCUPIED": "El atajo está ocupado por el sistema u otra aplicación",
+  "hotkey.errors.UNKNOWN": "Error al actualizar: Error desconocido",
+  "hotkey.group.conversation": "Conversación",
+  "hotkey.group.desktop": "Escritorio",
+  "hotkey.group.essential": "Esencial",
+  "hotkey.invalidCombination": "El atajo debe incluir al menos una tecla modificadora (Ctrl, Alt, Shift) y una tecla regular",
+  "hotkey.record": "Presiona una tecla para grabar el atajo",
+  "hotkey.reset": "Restablecer atajos predeterminados",
+  "hotkey.title": "Atajos de Teclado",
+  "hotkey.updateError": "Error al actualizar el atajo: Error de red o del sistema",
+  "hotkey.updateSuccess": "Atajo actualizado con éxito",
+  "llm.aesGcm": "Tus claves y dirección proxy serán cifradas usando el algoritmo de cifrado <1>AES-GCM</1>",
+  "llm.apiKey.desc": "Por favor, introduce tu clave API de {{name}}",
+  "llm.apiKey.placeholder": "Clave API de {{name}}",
+  "llm.apiKey.title": "Clave API",
+  "llm.checker.button": "Verificar",
+  "llm.checker.desc": "Prueba si la clave API y la dirección proxy están correctamente configuradas",
+  "llm.checker.pass": "Verificación Exitosa",
+  "llm.checker.title": "Verificación de Conectividad",
+  "llm.customModelCards.addNew": "Crear y añadir modelo {{id}}",
+  "llm.customModelCards.config": "Configuración del Modelo",
+  "llm.customModelCards.confirmDelete": "Estás a punto de eliminar este modelo personalizado. Una vez eliminado, no se puede recuperar. Procede con precaución.",
+  "llm.customModelCards.modelConfig.azureDeployName.extra": "Campo solicitado en Azure OpenAI",
+  "llm.customModelCards.modelConfig.azureDeployName.placeholder": "Introduce el nombre de despliegue del modelo en Azure",
+  "llm.customModelCards.modelConfig.azureDeployName.title": "Nombre de Despliegue del Modelo",
+  "llm.customModelCards.modelConfig.displayName.placeholder": "Introduce el nombre visible del modelo, como ChatGPT, GPT-4, etc.",
+  "llm.customModelCards.modelConfig.displayName.title": "Nombre Visible del Modelo",
+  "llm.customModelCards.modelConfig.files.extra": "La implementación actual de carga de archivos es una solución temporal para uso personal. Espera futuras actualizaciones para una funcionalidad completa.",
+  "llm.customModelCards.modelConfig.files.title": "Soporte para Carga de Archivos",
+  "llm.customModelCards.modelConfig.functionCall.extra": "Esto solo habilita el uso de habilidades en la app. La compatibilidad real depende del modelo—pruébalo.",
+  "llm.customModelCards.modelConfig.functionCall.title": "Soporta Llamadas de Habilidades",
+  "llm.customModelCards.modelConfig.id.extra": "Se mostrará como la etiqueta del modelo",
+  "llm.customModelCards.modelConfig.id.placeholder": "Introduce el ID del modelo, como gpt-4-turbo-preview o claude-2.1",
+  "llm.customModelCards.modelConfig.id.title": "ID del Modelo",
+  "llm.customModelCards.modelConfig.modalTitle": "Configuración de Modelo Personalizado",
+  "llm.customModelCards.modelConfig.tokens.title": "Cantidad Máxima de Tokens",
+  "llm.customModelCards.modelConfig.vision.extra": "Esto solo habilita la carga de imágenes en la app. La compatibilidad real depende del modelo—pruébalo.",
+  "llm.customModelCards.modelConfig.vision.title": "Soporta Visión",
+  "llm.fetchOnClient.desc": "Enviar solicitudes directamente desde el navegador para mejorar la latencia.",
+  "llm.fetchOnClient.title": "Usar Modo de Solicitud del Cliente",
+  "llm.fetcher.clear": "Borrar modelo obtenido",
+  "llm.fetcher.fetch": "Obtener Lista de Modelos",
+  "llm.fetcher.fetching": "Obteniendo Lista de Modelos...",
+  "llm.fetcher.latestTime": "Última Actualización: {{time}}",
+  "llm.fetcher.noLatestTime": "Aún no hay lista disponible",
+  "llm.helpDoc": "Guía de Configuración",
+  "llm.modelList.desc": "Selecciona los modelos que se mostrarán en la sesión. Los modelos seleccionados aparecerán en la lista.",
+  "llm.modelList.placeholder": "Selecciona un modelo de la lista",
+  "llm.modelList.title": "Lista de Modelos",
+  "llm.modelList.total": "{{count}} modelos disponibles en total",
+  "llm.proxyUrl.desc": "Debe incluir http(s):// además de la dirección predeterminada",
+  "llm.proxyUrl.title": "URL del Proxy de API",
+  "llm.waitingForMore": "Se <1>planea añadir más modelos</1>, mantente atento",
+  "llm.waitingForMoreLinkAriaLabel": "Abrir formulario de solicitud de proveedor",
+  "marketPublish.modal.changelog.extra": "Describe los cambios clave y mejoras en esta versión",
+  "marketPublish.modal.changelog.label": "Registro de cambios",
+  "marketPublish.modal.changelog.maxLengthError": "El registro de cambios no debe exceder los 500 caracteres",
+  "marketPublish.modal.changelog.placeholder": "Introduce el registro de cambios",
+  "marketPublish.modal.changelog.required": "Por favor, introduce el registro de cambios",
+  "marketPublish.modal.comparison.local": "Versión local actual",
+  "marketPublish.modal.comparison.remote": "Versión publicada actualmente",
+  "marketPublish.modal.identifier.extra": "Este es el identificador único del Agente. Usa letras minúsculas, números y guiones.",
+  "marketPublish.modal.identifier.label": "Identificador del Agente",
+  "marketPublish.modal.identifier.lengthError": "El identificador debe tener entre 3 y 50 caracteres",
+  "marketPublish.modal.identifier.patternError": "El identificador solo puede contener letras minúsculas, números y guiones",
+  "marketPublish.modal.identifier.placeholder": "Introduce un identificador único para el agente, por ejemplo, desarrollo-web",
+  "marketPublish.modal.identifier.required": "Por favor, introduce el identificador del agente",
+  "marketPublish.modal.loading.fetchingRemote": "Cargando datos remotos...",
+  "marketPublish.modal.loading.submit": "Enviando Agente...",
+  "marketPublish.modal.loading.upload": "Publicando nueva versión...",
+  "marketPublish.modal.messages.createVersionFailed": "Error al crear la versión: {{message}}",
+  "marketPublish.modal.messages.fetchRemoteFailed": "Error al obtener los datos del agente remoto",
+  "marketPublish.modal.messages.missingIdentifier": "Este Agente aún no tiene un identificador de la Comunidad.",
+  "marketPublish.modal.messages.notAuthenticated": "Inicia sesión en tu cuenta de la Comunidad primero.",
+  "marketPublish.modal.messages.publishFailed": "Error al publicar: {{message}}",
+  "marketPublish.modal.submitButton": "Publicar",
+  "marketPublish.modal.title.submit": "Compartir con la Comunidad de Agentes",
+  "marketPublish.modal.title.upload": "Publicar Nueva Versión",
+  "marketPublish.resultModal.message": "Tu Agente ha sido enviado para revisión. Una vez aprobado, se publicará automáticamente.",
+  "marketPublish.resultModal.title": "Envío Exitoso",
+  "marketPublish.resultModal.view": "Ver en la Comunidad",
+  "marketPublish.submit.button": "Compartir con la Comunidad",
+  "marketPublish.submit.tooltip": "Comparte este Agente con la Comunidad",
+  "marketPublish.upload.button": "Publicar Nueva Versión",
+  "marketPublish.upload.tooltip": "Publica una nueva versión en la Comunidad de Agentes",
+  "memory.enabled.desc": "Permite que LobeHub extraiga preferencias e información de las conversaciones y las utilice más adelante. Puedes ver, editar o borrar la memoria en cualquier momento.",
+  "memory.enabled.title": "Activar Memoria",
+  "memory.title": "Configuración de Memoria",
+  "message.success": "Actualización exitosa",
+  "myAgents.actions.cancel": "Cancelar",
+  "myAgents.actions.confirmDeprecate": "Confirmar Retiro",
+  "myAgents.actions.deprecate": "Retirar Permanentemente",
+  "myAgents.actions.deprecateConfirmContent": "Después del retiro, este agente será eliminado permanentemente del mercado y no podrá volver a publicarse. Esta acción es irreversible, procede con precaución.",
+  "myAgents.actions.deprecateConfirmTitle": "¿Confirmar retiro del Agente?",
+  "myAgents.actions.deprecateError": "Error al retirar el agente",
+  "myAgents.actions.deprecateLoading": "Retirando agente...",
+  "myAgents.actions.deprecateSuccess": "Agente retirado",
+  "myAgents.actions.edit": "Editar Agente",
+  "myAgents.actions.publish": "Publicar Agente",
+  "myAgents.actions.publishError": "Error al publicar el agente",
+  "myAgents.actions.publishLoading": "Publicando agente...",
+  "myAgents.actions.publishSuccess": "Agente publicado",
+  "myAgents.actions.unpublish": "Despublicar Agente",
+  "myAgents.actions.unpublishError": "Error al despublicar el agente",
+  "myAgents.actions.unpublishLoading": "Despublicando agente...",
+  "myAgents.actions.unpublishSuccess": "Agente despublicado",
+  "myAgents.actions.viewDetail": "Ver Detalles",
+  "myAgents.detail.category": "Categoría",
+  "myAgents.detail.description": "Descripción",
+  "myAgents.detail.identifier": "Identificador",
+  "myAgents.detail.title": "Detalles del Agente",
+  "myAgents.empty.description": "Aún no has publicado ningún agente en el mercado",
+  "myAgents.empty.title": "Sin Agentes Publicados",
+  "myAgents.errors.editFailed": "Error al editar el agente, por favor intenta más tarde",
+  "myAgents.errors.fetchFailed": "Error al obtener los detalles del agente",
+  "myAgents.errors.notAuthenticated": "Por favor, inicia sesión en tu cuenta del mercado primero",
+  "myAgents.loginRequired.button": "Iniciar sesión en el Mercado",
+  "myAgents.loginRequired.description": "Por favor, inicia sesión en tu cuenta del mercado para ver tus agentes publicados",
+  "myAgents.loginRequired.title": "Inicio de Sesión Requerido",
+  "myAgents.status.archived": "Archivado",
+  "myAgents.status.deprecated": "Retirado",
+  "myAgents.status.published": "Publicado",
+  "myAgents.status.unpublished": "No Publicado",
+  "myAgents.title": "Mis Agentes Publicados",
+  "plugin.addMCPPlugin": "Agregar MCP",
+  "plugin.addTooltip": "Habilidades Personalizadas",
+  "plugin.clearDeprecated": "Eliminar Habilidades Retiradas",
+  "plugin.empty": "Aún no hay habilidades instaladas. Explora la <1>Tienda de Habilidades</1> para comenzar.",
+  "plugin.installStatus.deprecated": "Desinstalado",
+  "plugin.settings.hint": "Por favor, completa las siguientes configuraciones según la descripción",
+  "plugin.settings.title": "Configuración de Habilidad {{id}}",
+  "plugin.settings.tooltip": "Configuración de Habilidad",
+  "plugin.store": "Tienda de Habilidades",
+  "settingAgent.avatar.sizeExceeded": "El tamaño de la imagen excede el límite de 1MB, por favor elige una imagen más pequeña",
+  "settingAgent.avatar.title": "Avatar",
+  "settingAgent.backgroundColor.title": "Color de Fondo",
+  "settingAgent.description.desc": "Una breve introducción de tu agente, no para configuración de personalidad",
+  "settingAgent.description.placeholder": "Introduce la descripción del agente",
+  "settingAgent.description.title": "Descripción del Agente",
+  "settingAgent.name.placeholder": "Introduce el nombre del agente",
+  "settingAgent.name.title": "Nombre",
+  "settingAgent.prompt.placeholder": "Introduce la configuración del agente, presiona / para abrir el menú de comandos",
+  "settingAgent.prompt.templatePlaceholder": "#### Objetivo\nDescribe el propósito principal y el objetivo de este agente.\n\n#### Habilidades\n- Enumera las capacidades clave\n- Y las áreas de conocimiento especializado\n\n#### Flujo de trabajo\n1. Proceso paso a paso\n2. Cómo debe abordar el agente las tareas\n3. Interacciones esperadas con los usuarios\n\n#### Restricciones\n- Limitaciones importantes a seguir\n- Directrices para el comportamiento",
+  "settingAgent.prompt.title": "Perfil del Agente",
+  "settingAgent.submit": "Actualizar Agente",
+  "settingAgent.tag.desc": "Las etiquetas del agente se mostrarán en la Comunidad de Agentes",
+  "settingAgent.tag.placeholder": "Introduce una etiqueta",
+  "settingAgent.tag.title": "Etiqueta",
+  "settingAgent.title": "Información del Agente",
+  "settingAppearance.animationMode.agile": "Ágil",
+  "settingAppearance.animationMode.desc": "Selecciona la velocidad de animación para las acciones de respuesta de la aplicación",
+  "settingAppearance.animationMode.disabled": "Desactivado",
+  "settingAppearance.animationMode.elegant": "Elegante",
+  "settingAppearance.animationMode.title": "Animación de Respuesta",
+  "settingAppearance.contextMenuMode.default": "Predeterminado",
+  "settingAppearance.contextMenuMode.desc": "Activa el menú contextual con clic derecho para algunos elementos de la lista.",
+  "settingAppearance.contextMenuMode.disabled": "Desactivado",
+  "settingAppearance.contextMenuMode.title": "Modo de Menú Contextual",
+  "settingAppearance.neutralColor.desc": "Escala de grises personalizada con diferentes tendencias de color",
+  "settingAppearance.neutralColor.title": "Color Neutro",
+  "settingAppearance.noAnimation.desc": "Desactiva todos los efectos de animación en la aplicación",
+  "settingAppearance.noAnimation.title": "Modo Sin Animaciones",
+  "settingAppearance.preview.title": "Paleta de Colores",
+  "settingAppearance.primaryColor.desc": "Color de tema personalizado",
+  "settingAppearance.primaryColor.title": "Color del Tema",
+  "settingAppearance.title": "Apariencia de la Aplicación",
+  "settingChat.autoCreateTopicThreshold.desc": "Crea automáticamente un tema cuando el número de mensajes actuales exceda este valor",
+  "settingChat.autoCreateTopicThreshold.title": "Límite de Mensajes",
+  "settingChat.chatStyleType.title": "Estilo de Ventana de Chat",
+  "settingChat.chatStyleType.type.chat": "Modo Conversación",
+  "settingChat.chatStyleType.type.docs": "Modo Página",
+  "settingChat.compressThreshold.desc": "Cuando los mensajes históricos sin comprimir excedan este valor, se aplicará compresión",
+  "settingChat.compressThreshold.title": "Límite de Compresión de Mensajes Históricos",
+  "settingChat.enableAutoCreateTopic.desc": "Si se debe crear automáticamente un tema durante la conversación, solo efectivo en temas temporales",
+  "settingChat.enableAutoCreateTopic.title": "Crear Tema Automáticamente",
+  "settingChat.enableCompressHistory.title": "Activar Resumen Automático del Historial de Chat",
+  "settingChat.enableHistoryCount.alias": "Ilimitado",
+  "settingChat.enableHistoryCount.limited": "Incluir solo {{number}} mensajes de conversación",
+  "settingChat.enableHistoryCount.setlimited": "Establecer límite de mensajes históricos",
+  "settingChat.enableHistoryCount.title": "Limitar Cantidad de Mensajes Históricos",
+  "settingChat.enableHistoryCount.unlimited": "Cantidad ilimitada de mensajes históricos",
+  "settingChat.enableStreaming.desc": "Activa la salida en tiempo real para mostrar respuestas al instante. Si se desactiva, solo se mostrará la respuesta completa.",
+  "settingChat.enableStreaming.title": "Activar Salida en Tiempo Real",
+  "settingChat.historyCount.desc": "Número de mensajes históricos incluidos en cada solicitud",
+  "settingChat.historyCount.title": "Cantidad de Mensajes Adjuntos",
+  "settingChat.inputTemplate.desc": "El último mensaje del usuario se insertará en esta plantilla",
+  "settingChat.inputTemplate.placeholder": "La plantilla de preprocesamiento {{text}} se reemplazará con la entrada en tiempo real",
+  "settingChat.inputTemplate.title": "Preprocesamiento de Entrada del Usuario",
+  "settingChat.submit": "Actualizar Preferencias de Chat",
+  "settingChat.title": "Configuración de Chat",
+  "settingChatAppearance.fontSize.desc": "Tamaño de fuente de los mensajes",
+  "settingChatAppearance.fontSize.marks.normal": "Estándar",
+  "settingChatAppearance.fontSize.title": "Tamaño de Fuente",
+  "settingChatAppearance.highlighterTheme.title": "Tema de Resaltado de Código",
+  "settingChatAppearance.mermaidTheme.title": "Tema de Mermaid",
+  "settingChatAppearance.title": "Apariencia del Chat",
+  "settingChatAppearance.transitionMode.desc": "Elige cómo aparecen los mensajes del chat",
+  "settingChatAppearance.transitionMode.options.fadeIn": "Aparecer Gradualmente",
+  "settingChatAppearance.transitionMode.options.none.desc": "Esto depende del método de salida de respuesta del modelo; por favor, pruébalo tú mismo.",
+  "settingChatAppearance.transitionMode.options.none.value": "Ninguno",
+  "settingChatAppearance.transitionMode.options.smooth": "Suave",
+  "settingChatAppearance.transitionMode.title": "Animación de Transición",
+  "settingCommon.devMode.desc": "Activa para mostrar funciones y opciones para desarrolladores",
+  "settingCommon.devMode.title": "Modo Desarrollador",
+  "settingCommon.lang.autoMode": "Seguir el Sistema",
+  "settingCommon.lang.title": "Idioma",
+  "settingCommon.liteMode.desc": "Simplifica la interfaz y oculta funciones avanzadas",
+  "settingCommon.liteMode.title": "Modo Ligero",
+  "settingCommon.responseLanguage.auto": "Seguir el Sistema",
+  "settingCommon.responseLanguage.desc": "Elige el idioma de respuesta del Agente",
+  "settingCommon.responseLanguage.placeholder": "Selecciona el idioma de respuesta",
+  "settingCommon.responseLanguage.title": "Idioma de Respuesta",
+  "settingCommon.themeMode.auto": "Automático",
+  "settingCommon.themeMode.dark": "Oscuro",
+  "settingCommon.themeMode.light": "Claro",
+  "settingCommon.themeMode.title": "Tema",
+  "settingCommon.title": "Configuración General",
+  "settingGroup.description.placeholder": "Introduce la descripción del Grupo",
+  "settingGroup.description.title": "Descripción del Grupo",
+  "settingGroup.name.placeholder": "Introduce el nombre del Grupo",
+  "settingGroup.name.title": "Nombre del Grupo",
+  "settingGroup.scene.desc": "Selecciona el escenario del Grupo",
+  "settingGroup.scene.options.casual": "Informal",
+  "settingGroup.scene.options.productive": "Productivo",
+  "settingGroup.scene.title": "Escenario del Grupo",
+  "settingGroup.submit": "Actualizar Grupo",
+  "settingGroup.systemPrompt.placeholder": "Por favor, introduce el mensaje del sistema anfitrión",
+  "settingGroup.systemPrompt.title": "Mensaje del Sistema Anfitrión",
+  "settingGroup.title": "Información del Grupo",
+  "settingGroupChat.allowDM.desc": "Si está desactivado, aún puedes enviar mensajes directos al agente",
+  "settingGroupChat.allowDM.title": "Permitir Mensajes Directos del Agente",
+  "settingGroupChat.enableSupervisor.desc": "Activa la función de moderador para gestionar las conversaciones del Grupo",
+  "settingGroupChat.enableSupervisor.title": "Activar Orquestador",
+  "settingGroupChat.maxResponseInRow.desc": "Selecciona cuántos mensajes consecutivos puede responder un miembro. Establece 0 para desactivar este límite.",
+  "settingGroupChat.maxResponseInRow.title": "Cantidad de Respuestas Consecutivas",
+  "settingGroupChat.model.desc": "Los miembros del grupo no se ven afectados. Algunos modelos no pueden usarse como modelo de Orquestador.",
+  "settingGroupChat.model.title": "Modelo de Orquestador",
+  "settingGroupChat.orchestratorTitle": "Orquestador",
+  "settingGroupChat.responseOrder.desc": "Los agentes responden según su orden en el chat",
+  "settingGroupChat.responseOrder.options.natural": "Natural",
+  "settingGroupChat.responseOrder.options.sequential": "Secuencial",
+  "settingGroupChat.responseOrder.placeholder": "Selecciona el orden de respuesta",
+  "settingGroupChat.responseOrder.title": "Orden de Respuesta",
+  "settingGroupChat.responseSpeed.desc": "Controla el ritmo general de la conversación",
+  "settingGroupChat.responseSpeed.options.fast": "Rápido",
+  "settingGroupChat.responseSpeed.options.medium": "Medio",
+  "settingGroupChat.responseSpeed.options.slow": "Lento",
+  "settingGroupChat.responseSpeed.placeholder": "Selecciona la velocidad de respuesta",
+  "settingGroupChat.responseSpeed.title": "Velocidad de Respuesta",
+  "settingGroupChat.revealDM.desc": "Haz visibles los mensajes privados enviados a otros miembros.",
+  "settingGroupChat.revealDM.title": "Mostrar Mensajes Privados",
+  "settingGroupChat.submit": "Actualizar Configuración",
+  "settingGroupChat.systemPrompt.desc": "Mensaje del sistema personalizado para el anfitrión del chat grupal. Esto puede afectar el comportamiento predeterminado del anfitrión.",
+  "settingGroupChat.systemPrompt.placeholder": "Por favor, introduce un mensaje del sistema anfitrión personalizado...",
+  "settingGroupChat.systemPrompt.title": "Mensaje del Sistema Anfitrión",
+  "settingGroupChat.title": "Configuración del Chat",
+  "settingGroupMembers.addToGroup": "Agregar al Grupo",
+  "settingGroupMembers.availableAgents": "Agentes Disponibles",
+  "settingGroupMembers.createMember": "Crear Miembro",
+  "settingGroupMembers.defaultAgent": "Agente Personalizado",
+  "settingGroupMembers.disableHost": "Desactivar Orquestador",
+  "settingGroupMembers.edit": "Editar Miembro",
+  "settingGroupMembers.empty": "Este Grupo aún no tiene miembros. Haz clic en + para agregar miembros.",
+  "settingGroupMembers.enableHost": "Activar Orquestador",
+  "settingGroupMembers.groupHost": "Orquestador",
+  "settingGroupMembers.groupMembers": "Miembros del Grupo",
+  "settingGroupMembers.host.description": "Con un Orquestador, el Grupo puede funcionar de forma más automática—ideal para tareas abiertas.",
+  "settingGroupMembers.host.title": "Orquestador",
+  "settingGroupMembers.noAvailableAgents": "No hay agentes disponibles",
+  "settingGroupMembers.noDescription": "Sin descripción",
+  "settingGroupMembers.noMembersInGroup": "No hay miembros en el grupo",
+  "settingGroupMembers.owner": "Tú (Propietario)",
+  "settingGroupMembers.remove": "Eliminar Miembro",
+  "settingGroupMembers.removeFromGroup": "Eliminar del Grupo",
+  "settingGroupMembers.you": "Tú",
+  "settingImage.defaultCount.desc": "Establece el número predeterminado de imágenes generadas al crear una nueva tarea en el panel de generación de imágenes.",
+  "settingImage.defaultCount.label": "Cantidad de Imágenes Predeterminada",
+  "settingImage.defaultCount.title": "Arte con IA",
+  "settingModel.enableMaxTokens.title": "Activar Límite de Tokens Máximos",
+  "settingModel.enableReasoningEffort.title": "Activar Ajuste de Esfuerzo de Razonamiento",
+  "settingModel.frequencyPenalty.desc": "Cuanto mayor sea el valor, más diverso y rico será el vocabulario; cuanto menor, más simple y directo.",
+  "settingModel.frequencyPenalty.title": "Riqueza de Vocabulario",
+  "settingModel.maxTokens.desc": "Número máximo de tokens utilizados por interacción",
+  "settingModel.maxTokens.title": "Límite de Tokens Máximos",
+  "settingModel.model.desc": "Modelo de {{provider}}",
+  "settingModel.model.title": "Modelo",
+  "settingModel.params.title": "Parámetros Avanzados",
+  "settingModel.presencePenalty.desc": "Cuanto mayor sea el valor, más se evitará la repetición de conceptos; cuanto menor, más se tenderá a repetir ideas, logrando una expresión más coherente.",
+  "settingModel.presencePenalty.title": "Divergencia de Expresión",
+  "settingModel.reasoningEffort.desc": "Valores más altos mejoran la capacidad de razonamiento, pero pueden aumentar el tiempo de respuesta y el uso de tokens.",
+  "settingModel.reasoningEffort.options.high": "Alto",
+  "settingModel.reasoningEffort.options.low": "Bajo",
+  "settingModel.reasoningEffort.options.medium": "Medio",
+  "settingModel.reasoningEffort.title": "Esfuerzo de Razonamiento",
+  "settingModel.submit": "Actualizar Configuración del Modelo",
+  "settingModel.temperature.desc": "Cuanto mayor sea el valor, más creativas e imaginativas serán las respuestas; cuanto menor, más rigurosas.",
+  "settingModel.temperature.title": "Nivel de Creatividad",
+  "settingModel.temperature.warning": "Si el nivel de creatividad es demasiado alto, la salida puede volverse incoherente.",
+  "settingModel.title": "Configuración del Modelo",
+  "settingModel.topP.desc": "Cuántas posibilidades considerar; un valor más alto acepta más respuestas potenciales, mientras que uno más bajo tiende a elegir la más probable. No se recomienda cambiar esto junto con el nivel de creatividad.",
+  "settingModel.topP.title": "Apertura a Ideas",
+  "settingOpening.openingMessage.desc": "Mensaje de apertura que se muestra al iniciar la conversación, usado para presentar las funciones del agente",
+  "settingOpening.openingMessage.placeholder": "Hola, soy tu Agente Personalizado. Puedes empezar a chatear conmigo ahora o ir a Configuración del Agente para completar mi información.",
+  "settingOpening.openingMessage.title": "Mensaje de Apertura",
+  "settingOpening.openingQuestions.desc": "Preguntas guía que se muestran al inicio de la conversación",
+  "settingOpening.openingQuestions.empty": "Agrega preguntas de apertura para ayudar a los usuarios a iniciar la conversación rápidamente",
+  "settingOpening.openingQuestions.placeholder": "Por favor, introduce una pregunta",
+  "settingOpening.openingQuestions.repeat": "La pregunta ya existe",
+  "settingOpening.openingQuestions.title": "Preguntas de Apertura",
+  "settingOpening.title": "Configuración de Apertura",
+  "settingPlugin.title": "Lista de Habilidades",
+  "settingSystem.oauth.info.desc": "Sesión iniciada",
+  "settingSystem.oauth.info.title": "Información de la Cuenta",
+  "settingSystem.oauth.signin.action": "Iniciar Sesión",
+  "settingSystem.oauth.signin.desc": "Inicia sesión con SSO para desbloquear la aplicación",
+  "settingSystem.oauth.signin.title": "Inicia Sesión en tu Cuenta",
+  "settingSystem.oauth.signout.action": "Cerrar Sesión",
+  "settingSystem.oauth.signout.confirm": "¿Confirmar cierre de sesión?",
+  "settingSystem.oauth.signout.success": "Sesión cerrada con éxito",
+  "settingSystem.title": "Configuración del Sistema",
+  "settingTTS.openai.sttModel": "Modelo de Reconocimiento de Voz de OpenAI",
+  "settingTTS.openai.title": "OpenAI",
+  "settingTTS.openai.ttsModel": "Modelo de Texto a Voz de OpenAI",
+  "settingTTS.showAllLocaleVoice.desc": "Si está desactivado, solo se mostrarán las voces del idioma actual",
+  "settingTTS.showAllLocaleVoice.title": "Mostrar Todas las Voces Locales",
+  "settingTTS.stt": "Configuración de Reconocimiento de Voz",
+  "settingTTS.sttAutoStop.desc": "Si está desactivado, el reconocimiento de voz no finalizará automáticamente y requerirá detenerlo manualmente",
+  "settingTTS.sttAutoStop.title": "Detención Automática del Reconocimiento de Voz",
+  "settingTTS.sttLocale.desc": "El idioma de entrada de voz, esta opción puede mejorar la precisión del reconocimiento",
+  "settingTTS.sttLocale.title": "Idioma del Reconocimiento de Voz",
+  "settingTTS.sttService.desc": "Donde 'navegador' es el servicio nativo de reconocimiento de voz del navegador",
+  "settingTTS.sttService.title": "Servicio de Reconocimiento de Voz",
+  "settingTTS.submit": "Actualizar Servicio de Voz",
+  "settingTTS.title": "Servicio de Voz",
+  "settingTTS.tts": "Configuración de Texto a Voz",
+  "settingTTS.ttsService.desc": "Si usas el servicio de texto a voz de OpenAI, asegúrate de que el modelo esté habilitado",
+  "settingTTS.ttsService.title": "Servicio de Texto a Voz",
+  "settingTTS.voice.desc": "Selecciona una voz para el agente actual, los diferentes servicios TTS admiten diferentes voces",
+  "settingTTS.voice.preview": "Vista Previa de Voz",
+  "settingTTS.voice.title": "Voz de Texto a Voz",
+  "startConversation": "Iniciar Conversación",
+  "storage.actions.export.button": "Exportar",
+  "storage.actions.export.exportType.agent": "Exportar Configuración del Agente",
+  "storage.actions.export.exportType.agentWithMessage": "Exportar Agente y Mensajes",
+  "storage.actions.export.exportType.all": "Exportar Configuración Global y Todos los Datos de Agentes",
+  "storage.actions.export.exportType.allAgent": "Exportar Todas las Configuraciones de Agentes",
+  "storage.actions.export.exportType.allAgentWithMessage": "Exportar Todos los Agentes y Mensajes",
+  "storage.actions.export.exportType.globalSetting": "Exportar Configuración Global",
+  "storage.actions.export.title": "Exportar Datos",
+  "storage.actions.import.button": "Importar",
+  "storage.actions.import.title": "Importar Datos",
+  "storage.actions.title": "Operaciones Avanzadas",
+  "storage.desc": "Uso actual de almacenamiento en el navegador",
+  "storage.embeddings.used": "Almacenamiento Vectorial",
+  "storage.title": "Almacenamiento de Datos",
+  "storage.used": "Uso de Almacenamiento",
+  "submitAgentModal.button": "Enviar Agente",
+  "submitAgentModal.identifier": "Identificador del Agente",
+  "submitAgentModal.metaMiss": "Por favor, completa la información del agente antes de enviarlo. Debe incluir nombre, descripción y etiquetas",
+  "submitAgentModal.placeholder": "Introduce un identificador único para el agente, por ejemplo: desarrollo-web",
+  "submitAgentModal.success": "Agente enviado con éxito",
+  "submitAgentModal.tooltips": "Compartir con la Comunidad de Agentes",
+  "sync.device.deviceName.hint": "Agrega un nombre para facilitar la identificación",
+  "sync.device.deviceName.placeholder": "Introduce el nombre del dispositivo",
+  "sync.device.deviceName.title": "Nombre del Dispositivo",
+  "sync.device.title": "Información del Dispositivo",
+  "sync.device.unknownBrowser": "Navegador Desconocido",
+  "sync.device.unknownOS": "Sistema Operativo Desconocido",
+  "sync.warning.tip": "Tras un largo periodo de pruebas comunitarias, la sincronización WebRTC puede no ser fiable para necesidades generales de sincronización de datos. Por favor, <1>despliega un servidor de señalización</1> antes de usar.",
+  "sync.webrtc.channelName.desc": "WebRTC usará este nombre para crear un canal de sincronización. Asegúrate de que sea único.",
+  "sync.webrtc.channelName.placeholder": "Introduce el nombre del canal de sincronización",
+  "sync.webrtc.channelName.shuffle": "Generar Aleatoriamente",
+  "sync.webrtc.channelName.title": "Nombre del Canal de Sincronización",
+  "sync.webrtc.channelPassword.desc": "Agrega una contraseña para garantizar la privacidad del canal. Solo los dispositivos con la contraseña correcta podrán unirse.",
+  "sync.webrtc.channelPassword.placeholder": "Introduce la contraseña del canal",
+  "sync.webrtc.channelPassword.title": "Contraseña del Canal de Sincronización",
+  "sync.webrtc.desc": "La comunicación de datos en tiempo real entre pares requiere que todos los dispositivos estén en línea para sincronizarse.",
+  "sync.webrtc.enabled.invalid": "Por favor, completa la dirección del servidor de señalización y el nombre del canal antes de habilitar.",
+  "sync.webrtc.enabled.title": "Habilitar Sincronización",
+  "sync.webrtc.signaling.desc": "WebRTC usará esta dirección para la sincronización",
+  "sync.webrtc.signaling.placeholder": "Introduce la dirección del servidor de señalización",
+  "sync.webrtc.signaling.title": "Servidor de Señalización",
+  "sync.webrtc.title": "Sincronización WebRTC",
+  "systemAgent.agentMeta.label": "Modelo",
+  "systemAgent.agentMeta.modelDesc": "Modelo designado para generar nombre, descripción, avatar y etiquetas del agente",
+  "systemAgent.agentMeta.title": "Asistente de Generación de Información del Agente",
+  "systemAgent.customPrompt.addPrompt": "Agregar Prompt Personalizado",
+  "systemAgent.customPrompt.desc": "Una vez completado, el agente del sistema usará este prompt personalizado al generar contenido",
+  "systemAgent.customPrompt.placeholder": "Introduce el prompt personalizado",
+  "systemAgent.customPrompt.title": "Prompt Personalizado",
+  "systemAgent.generationTopic.label": "Modelo",
+  "systemAgent.generationTopic.modelDesc": "Modelo designado para nombrar automáticamente temas de arte IA",
+  "systemAgent.generationTopic.title": "Agente de Nombres para Temas de Arte IA",
+  "systemAgent.helpInfo": "Al crear un nuevo agente, se usarán los valores predeterminados como configuración inicial.",
+  "systemAgent.historyCompress.label": "Modelo",
+  "systemAgent.historyCompress.modelDesc": "Especifica el modelo usado para comprimir el historial de conversación",
+  "systemAgent.historyCompress.title": "Agente de Compresión de Historial de Conversación",
+  "systemAgent.queryRewrite.label": "Modelo",
+  "systemAgent.queryRewrite.modelDesc": "Especifica el modelo usado para optimizar las consultas del usuario",
+  "systemAgent.queryRewrite.title": "Agente de Reescritura de Consultas",
+  "systemAgent.thread.label": "Modelo",
+  "systemAgent.thread.modelDesc": "Modelo designado para renombrar automáticamente subtemas",
+  "systemAgent.thread.title": "Agente de Renombrado Automático de Subtemas",
+  "systemAgent.title": "Agentes del Sistema",
+  "systemAgent.topic.label": "Modelo",
+  "systemAgent.topic.modelDesc": "Modelo designado para renombrar automáticamente temas",
+  "systemAgent.topic.title": "Agente de Renombrado Automático de Temas",
+  "systemAgent.translation.label": "Modelo",
+  "systemAgent.translation.modelDesc": "Especifica el modelo usado para traducción",
+  "systemAgent.translation.title": "Agente de Traducción de Mensajes",
+  "tab.about": "Acerca de",
+  "tab.agent": "Servicio de Agente",
+  "tab.apikey": "Gestión de Claves API",
+  "tab.chatAppearance": "Apariencia del Chat",
+  "tab.common": "Apariencia",
+  "tab.experiment": "Experimentos",
+  "tab.hotkey": "Atajos de Teclado",
+  "tab.image": "Servicio de Generación de Imágenes",
+  "tab.llm": "Modelo de Lenguaje",
+  "tab.memory": "Memoria",
+  "tab.profile": "Mi Cuenta",
+  "tab.provider": "Proveedor de Servicios de IA",
+  "tab.proxy": "Proxy de Red",
+  "tab.security": "Seguridad",
+  "tab.stats": "Analíticas",
+  "tab.storage": "Almacenamiento de Datos",
+  "tab.sync": "Sincronización en la Nube",
+  "tab.tts": "Texto a Voz",
+  "tab.usage": "Estadísticas de Uso",
+  "tools.add": "Agregar Habilidad",
+  "tools.builtins.groupName": "Integradas",
+  "tools.disabled": "El modelo actual no admite llamadas a funciones y no puede usar esta habilidad",
+  "tools.klavis.addServer": "Agregar Servidor",
+  "tools.klavis.authCompleted": "Autenticación Completada",
+  "tools.klavis.authFailed": "Autenticación Fallida",
+  "tools.klavis.authRequired": "Autenticación Requerida",
+  "tools.klavis.connected": "Conectado",
+  "tools.klavis.error": "Error",
+  "tools.klavis.groupName": "Herramientas Klavis",
+  "tools.klavis.manage": "Gestionar Klavis",
+  "tools.klavis.manageTitle": "Gestionar Integración de Klavis",
+  "tools.klavis.noServers": "No hay servidores conectados",
+  "tools.klavis.notEnabled": "Servicio Klavis no habilitado",
+  "tools.klavis.oauthRequired": "Por favor, completa la autenticación OAuth en la nueva ventana",
+  "tools.klavis.pendingAuth": "Autenticación Pendiente",
+  "tools.klavis.serverCreated": "Servidor creado con éxito",
+  "tools.klavis.serverCreatedFailed": "Error al crear el servidor",
+  "tools.klavis.serverRemoved": "Servidor eliminado",
+  "tools.klavis.servers": "servidores",
+  "tools.klavis.tools": "herramientas",
+  "tools.klavis.verifyAuth": "He completado la autenticación",
+  "tools.notInstalled": "No Instalado",
+  "tools.notInstalledWarning": "Esta habilidad no está instalada actualmente, lo que puede afectar la funcionalidad del agente.",
+  "tools.plugins.enabled": "Habilitadas: {{num}}",
+  "tools.plugins.groupName": "Habilidades",
+  "tools.plugins.noEnabled": "No hay habilidades habilitadas",
+  "tools.plugins.store": "Tienda de Habilidades",
+  "tools.tabs.all": "Todas",
+  "tools.tabs.installed": "Habilitadas",
+  "tools.title": "Herramientas de Extensión"
 }

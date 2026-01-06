@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiKeys, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { ApiKeyModel } from '../apiKey';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

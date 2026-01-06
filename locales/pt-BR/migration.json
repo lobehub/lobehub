@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Limpar banco de dados",
-      "downloadBackup": "Baixar backup",
-      "reUpgrade": "Reinstalar",
-      "start": "Começar",
-      "upgrade": "Atualização"
-    },
-    "clear": {
-      "confirm": "Você está prestes a limpar os dados locais (as configurações globais não serão afetadas). Por favor, confirme se você fez o download do backup dos dados."
-    },
-    "description": "Na nova versão, o armazenamento de dados do {{appName}} teve um grande avanço. Portanto, precisamos atualizar os dados da versão anterior para proporcionar uma melhor experiência de uso.",
-    "features": {
-      "capability": {
-        "desc": "Baseado na tecnologia IndexedDB, é capaz de armazenar todas as suas mensagens de conversa ao longo da vida.",
-        "title": "Alta Capacidade"
-      },
-      "performance": {
-        "desc": "Milhões de mensagens indexadas automaticamente, com respostas de consulta em milissegundos.",
-        "title": "Alto Desempenho"
-      },
-      "use": {
-        "desc": "Suporta a busca por títulos, descrições, etiquetas, conteúdo de mensagens e até textos traduzidos, aumentando significativamente a eficiência das buscas diárias.",
-        "title": "Mais Fácil de Usar"
-      }
-    },
-    "title": "Evolução dos Dados do {{appName}}",
-    "upgrade": {
-      "error": {
-        "subTitle": "Lamentamos, ocorreu uma anomalia durante o processo de atualização do banco de dados. Por favor, tente as seguintes soluções: A. Limpe os dados locais e reimporte os dados de backup; B. Clique no botão 'Reatualizar'.<br><br> Se o erro persistir, por favor <1>envie um problema</1>, e nós iremos ajudá-lo a resolver o mais rápido possível.",
-        "title": "Falha na Atualização do Banco de Dados"
-      },
-      "success": {
-        "subTitle": "O banco de dados do {{appName}} foi atualizado para a versão mais recente, comece a aproveitar agora!",
-        "title": "Atualização do Banco de Dados Bem-Sucedida"
-      }
-    },
-    "upgradeTip": "A atualização leva aproximadamente 10 a 20 segundos, por favor, não feche o {{appName}} durante o processo."
-  },
-  "migrateError": {
-    "missVersion": "O arquivo de importação está sem o número da versão. Por favor, verifique o arquivo e tente novamente.",
-    "noMigration": "Não foi encontrado um plano de migração correspondente à versão atual. Por favor, verifique o número da versão e tente novamente. Se o problema persistir, por favor, envie um relatório de problema."
-  }
+  "dbV1.action.clearDB": "Limpar Dados Locais",
+  "dbV1.action.downloadBackup": "Baixar Backup dos Dados",
+  "dbV1.action.reUpgrade": "Reatualizar",
+  "dbV1.action.start": "Começar",
+  "dbV1.action.upgrade": "Atualizar",
+  "dbV1.clear.confirm": "Você está prestes a limpar os dados locais (as configurações globais não serão afetadas). Por favor, confirme que você já baixou um backup dos dados.",
+  "dbV1.description": "Na nova versão, o armazenamento de dados do {{appName}} passou por avanços significativos. Por isso, precisamos atualizar os dados antigos para oferecer uma melhor experiência de uso.",
+  "dbV1.features.capability.desc": "Baseado na tecnologia IndexedDB, é capaz de armazenar mensagens de chat por toda a vida.",
+  "dbV1.features.capability.title": "Alta Capacidade",
+  "dbV1.features.performance.desc": "Indexa automaticamente milhões de mensagens, com consultas de busca respondendo em milissegundos.",
+  "dbV1.features.performance.title": "Alto Desempenho",
+  "dbV1.features.use.desc": "Permite buscas por título, descrição, tags, conteúdo das mensagens e até texto traduzido, aumentando significativamente a eficiência nas buscas do dia a dia.",
+  "dbV1.features.use.title": "Mais Intuitivo",
+  "dbV1.title": "Evolução dos Dados do {{appName}}",
+  "dbV1.upgrade.error.subTitle": "Pedimos desculpas, ocorreu um erro durante o processo de atualização do banco de dados. Por favor, tente as seguintes soluções: A. Limpe os dados locais e reimporte o backup; B. Clique no botão 'Reatualizar'.<br><br> Se o problema persistir, por favor, <1>envie um relatório de problema</1> e ajudaremos o mais rápido possível.",
+  "dbV1.upgrade.error.title": "Falha na Atualização do Banco de Dados",
+  "dbV1.upgrade.success.subTitle": "O banco de dados foi atualizado para a versão mais recente. Você pode continuar agora.",
+  "dbV1.upgrade.success.title": "Atualização do Banco de Dados Concluída",
+  "dbV1.upgradeTip": "A atualização levará aproximadamente de 10 a 20 segundos. Por favor, não feche o {{appName}} durante o processo.",
+  "migrateError.missVersion": "Os dados importados estão sem número de versão. Verifique o arquivo e tente novamente.",
+  "migrateError.noMigration": "Nenhuma solução de migração encontrada para a versão atual. Verifique o número da versão e tente novamente. Se o problema persistir, envie um pedido de suporte."
 }

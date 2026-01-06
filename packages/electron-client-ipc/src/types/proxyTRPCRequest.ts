@@ -1,26 +1,17 @@
-export type ProxyTRPCRequestParams = {
-  /** Request body (can be string, ArrayBuffer, or null/undefined) */
+export interface StreamInvokeRequestParams {
   body?: string | ArrayBuffer;
-  /** Request headers */
   headers: Record<string, string>;
-  /** The HTTP method (e.g., 'GET', 'POST') */
   method: string;
-  /** The path and query string of the request (e.g., '/trpc/lambda/...') */
   urlPath: string;
-};
-
-export interface ProxyTRPCStreamRequestParams extends Omit<ProxyTRPCRequestParams, 'body'> {
-  body?: ArrayBuffer;
-  requestId: string;
+  /**
+   * Optional client-generated request id.
+   *
+   * In desktop, the preload layer will generate and override its own `requestId`
+   * when forwarding to the main process, so this is optional at the API boundary.
+   */
+  requestId?: string;
 }
 
-export interface ProxyTRPCRequestResult {
-  /** Response body (likely as ArrayBuffer or string) */
-  body: ArrayBuffer | string;
-  /** Response headers */
-  headers: Record<string, string>;
-  /** Response status code */
-  status: number;
-  /** Response status text */
-  statusText: string;
+export interface ProxyTRPCStreamRequestParams extends StreamInvokeRequestParams {
+  requestId: string;
 }

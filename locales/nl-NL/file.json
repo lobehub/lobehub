@@ -1,181 +1,134 @@
 {
   "addFolder": "Map aanmaken",
-  "addKnowledge": "Kennis toevoegen",
-  "addPage": "Document aanmaken",
-  "desc": "Beheer je kennis over werk, studie en leven.",
-  "detail": {
-    "basic": {
-      "createdAt": "Aanmaakdatum",
-      "filename": "Bestandsnaam",
-      "size": "Bestandsgrootte",
-      "title": "Basisinformatie",
-      "type": "Formaat",
-      "updatedAt": "Bijwerkdatum"
-    },
-    "data": {
-      "chunkCount": "Aantal delen",
-      "embedding": {
-        "default": "Nog niet gevectoriseerd",
-        "error": "Mislukt",
-        "pending": "Te starten",
-        "processing": "Bezig",
-        "success": "Voltooid"
-      },
-      "embeddingStatus": "Vectorisatie"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "Pictogram toevoegen",
-    "autoSaveMessage": "Documenten worden automatisch opgeslagen, handmatig opslaan is niet nodig",
-    "chooseIcon": "Pictogram kiezen",
-    "deleteConfirm": {
-      "content": "Je staat op het punt dit document te verwijderen. Dit kan niet ongedaan worden gemaakt. Wees voorzichtig.",
-      "title": "Document verwijderen"
-    },
-    "deleteError": "Verwijderen van document mislukt",
-    "deleteSuccess": "Document succesvol verwijderd",
-    "editedAt": "Laatst bewerkt op {{time}}",
-    "editedBy": "Laatst bewerkt door {{name}}",
-    "editorPlaceholder": "Voer documentinhoud in, druk op / om het opdrachtmenu te openen",
-    "empty": {
-      "createNewDocument": "Nieuw document aanmaken",
-      "title": "Selecteer een document om te beginnen",
-      "uploadMarkdown": "Markdown-bestand uploaden"
-    },
-    "linkCopied": "Link gekopieerd",
-    "menu": {
-      "copyLink": "Link kopiëren",
-      "exportDocument": "Document exporteren",
-      "importDocument": "Document importeren",
-      "pin": "Document vastzetten"
-    },
-    "saving": "Bezig met opslaan...",
-    "titlePlaceholder": "Zonder titel",
-    "wordCount": "{{wordCount}} woorden"
-  },
-  "documentList": {
-    "copyContent": "Volledige inhoud kopiëren",
-    "duplicate": "Kopie maken",
-    "empty": "Nog geen documenten. Klik op de knop hierboven om je eerste document aan te maken.",
-    "noResults": "Geen overeenkomende documenten gevonden",
-    "pageCount": "Totaal {{count}} documenten",
-    "selectNote": "Selecteer een document om te beginnen met bewerken",
-    "untitled": "Zonder titel"
-  },
-  "empty": "Geen bestanden/mappen geüpload",
-  "header": {
-    "actions": {
-      "newFolder": "Nieuwe map",
-      "newPage": "Nieuw document",
-      "uploadFile": "Bestand uploaden",
-      "uploadFolder": "Map uploaden"
-    },
-    "newNoteDialog": {
-      "cancel": "Annuleren",
-      "editTitle": "Document bewerken",
-      "emptyContent": "Documentinhoud mag niet leeg zijn",
-      "loadError": "Laden van document mislukt, probeer het opnieuw",
-      "loading": "Bezig met laden...",
-      "save": "Opslaan",
-      "saveError": "Opslaan van document mislukt, probeer het opnieuw",
-      "saveSuccess": "Document succesvol opgeslagen",
-      "title": "Nieuw document",
-      "updateSuccess": "Document succesvol bijgewerkt"
-    },
-    "newPageButton": "Nieuw document",
-    "uploadButton": "Uploaden"
-  },
-  "home": {
-    "getStarted": "Aan de slag",
-    "greeting": "Aan de slag",
-    "quickActions": "Snelle acties",
-    "recentFiles": "Recente bestanden",
-    "recentPages": "Recente documenten",
-    "subtitle": "Welkom bij je kennisbank. Begin hier met het beheren van je documenten",
-    "uploadEntries": {
-      "files": {
-        "title": "Bestanden uploaden"
-      },
-      "folder": {
-        "title": "Map uploaden"
-      },
-      "knowledgeBase": {
-        "title": "Nieuwe kennisbank"
-      },
-      "newPage": {
-        "title": "Nieuw document aanmaken"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "Je staat op het punt deze kennisbank te verwijderen. De bestanden hierin worden niet verwijderd, maar verplaatst naar 'Alle bestanden'. Een verwijderde kennisbank kan niet worden hersteld, wees voorzichtig.",
-      "empty": "Klik op <1>+</1> om een kennisbank te maken"
-    },
-    "new": "Nieuwe kennisbank",
-    "title": "Kennisbank"
-  },
-  "menu": {
-    "allFiles": "Alle bestanden",
-    "allPages": "Alle documenten"
-  },
-  "networkError": "Kon de kennisbank niet ophalen, controleer uw netwerkverbinding en probeer het opnieuw",
-  "notSupportGuide": {
-    "desc": "De huidige implementatie is in client-database modus, waardoor de bestandsbeheerfunctie niet beschikbaar is. Schakel over naar <1>server-database implementatiemodus</1>, of gebruik direct <3>LobeChat Cloud</3>",
-    "features": {
-      "allKind": {
-        "desc": "Ondersteunt gangbare bestandstypen, waaronder Word, PPT, Excel, PDF, TXT en andere veelvoorkomende documentformaten, evenals JS, Python en andere gangbare codebestanden",
-        "title": "Meerdere bestandstype-analyse"
-      },
-      "embeddings": {
-        "desc": "Gebruik hoogwaardige vectormodellen om tekstdelen te vectoriseren, waardoor semantische zoekopdrachten in de inhoud van bestanden mogelijk zijn",
-        "title": "Vector-semantisering"
-      },
-      "repos": {
-        "desc": "Ondersteunt het maken van kennisbanken en staat het toevoegen van verschillende bestandstypen toe, zodat je jouw eigen domeinkennis kunt opbouwen",
-        "title": "Kennisbank"
-      }
-    },
-    "title": "De huidige implementatiemodus ondersteunt geen bestandsbeheer"
-  },
-  "preview": {
-    "downloadFile": "Bestand downloaden",
-    "unsupportedFileAndContact": "Dit bestandsformaat wordt momenteel niet ondersteund voor online preview. Als u een preview wilt, neem dan gerust <1>contact met ons op</1>."
-  },
-  "searchFilePlaceholder": "Zoek bestand",
-  "searchPagePlaceholder": "Documenten zoeken",
-  "tab": {
-    "all": "Alles",
-    "audios": "Audio's",
-    "documents": "Documenten",
-    "home": "Startpagina",
-    "images": "Afbeeldingen",
-    "moreTypes": "Meer typen",
-    "pages": "Documenten",
-    "videos": "Video's",
-    "websites": "Websites"
-  },
-  "title": "Kennisbank",
-  "toggleLeftPanel": "Toon/verberg linker paneel",
-  "uploadDock": {
-    "body": {
-      "collapse": "Samenvouwen",
-      "item": {
-        "done": "Geüpload",
-        "error": "Upload mislukt, probeer het opnieuw",
-        "pending": "Voorbereiden om te uploaden...",
-        "processing": "Bestand wordt verwerkt...",
-        "restTime": "Overgebleven {{time}}"
-      }
-    },
-    "fileQueueInfo": "Bezig met uploaden van de eerste {{count}} bestanden, de resterende {{remaining}} bestanden worden in de wachtrij geplaatst",
-    "totalCount": "Totaal {{count}} items",
-    "uploadStatus": {
-      "error": "Uploadfout",
-      "pending": "Wachten op upload",
-      "processing": "Bezig met uploaden",
-      "success": "Upload voltooid",
-      "uploading": "Bezig met uploaden"
-    }
-  }
+  "addLibrary": "Toevoegen",
+  "addPage": "Pagina aanmaken",
+  "detail.basic.createdAt": "Aanmaakdatum",
+  "detail.basic.filename": "Bestandsnaam",
+  "detail.basic.size": "Bestandsgrootte",
+  "detail.basic.title": "Basisinformatie",
+  "detail.basic.type": "Bestandsformaat",
+  "detail.basic.updatedAt": "Bijgewerkt op",
+  "detail.data.chunkCount": "Segmenten",
+  "detail.data.embedding.default": "Niet geümbed",
+  "detail.data.embedding.error": "Mislukt",
+  "detail.data.embedding.pending": "Wacht op start",
+  "detail.data.embedding.processing": "Bezig",
+  "detail.data.embedding.success": "Voltooid",
+  "detail.data.embeddingStatus": "embedding",
+  "empty": "Er zijn nog geen bestanden of mappen geüpload.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} bestanden gefilterd (van {{total}} totaal)",
+  "header.actions.connect": "Verbinden...",
+  "header.actions.gitignore.apply": "Regels toepassen",
+  "header.actions.gitignore.cancel": "Regels negeren",
+  "header.actions.gitignore.content": ".gitignore-bestand gedetecteerd ({{count}} bestanden in totaal). Wil je de negeerregels toepassen?",
+  "header.actions.gitignore.filtered": "{{ignored}} bestanden genegeerd (van {{total}} totaal)",
+  "header.actions.gitignore.title": ".gitignore gedetecteerd",
+  "header.actions.newFolder": "Nieuwe map",
+  "header.actions.newPage": "Nieuwe pagina",
+  "header.actions.notion.error": "Importeren van Notion-bestanden mislukt",
+  "header.actions.notion.foundFiles": "{{count}} bestanden gevonden",
+  "header.actions.notion.importing": "Notion-inhoud importeren...",
+  "header.actions.notion.noMarkdownFiles": "Geen markdown-bestanden gevonden in het ZIP-archief",
+  "header.actions.notion.partial": "{{success}} bestanden succesvol geïmporteerd, {{failed}} mislukt",
+  "header.actions.notion.success": "{{count}} bestanden succesvol geïmporteerd",
+  "header.actions.notionGuide.cancel": "Niet nu",
+  "header.actions.notionGuide.desc": "Exporteer eerst je inhoud uit Notion als een Markdown (ZIP)-bestand. Klik daarna op Doorgaan om het ZIP-bestand te selecteren en alle pagina’s te importeren.",
+  "header.actions.notionGuide.ok": "Selecteer Notion-ZIP",
+  "header.actions.notionGuide.title": "Importeren vanuit Notion",
+  "header.actions.uploadFile": "Bestand uploaden",
+  "header.actions.uploadFolder": "Map uploaden",
+  "header.newPageButton": "Nieuwe pagina",
+  "header.uploadButton": "Uploaden",
+  "home.getStarted": "Aan de slag",
+  "home.greeting": "Aan de slag",
+  "home.quickActions": "Snelle acties",
+  "home.recentFiles": "Recente bestanden",
+  "home.recentPages": "Recente pagina’s",
+  "home.uploadEntries.files.title": "Bestanden uploaden",
+  "home.uploadEntries.folder.title": "Map uploaden",
+  "home.uploadEntries.library.title": "Nieuwe bibliotheek aanmaken",
+  "home.uploadEntries.newPage.title": "Nieuwe pagina",
+  "library.list.confirmRemoveLibrary": "Je staat op het punt deze bibliotheek te verwijderen. De bestanden worden niet verwijderd, maar verplaatst naar Alle bestanden. Deze actie kan niet ongedaan worden gemaakt, wees voorzichtig.",
+  "library.list.empty": "Klik op <1>+</1> om een nieuwe bibliotheek aan te maken",
+  "library.new": "Nieuwe bibliotheek",
+  "library.title": "Bibliotheek",
+  "loadMore": "Meer laden",
+  "menu.allFiles": "Alle bestanden",
+  "menu.allPages": "Alle pagina’s",
+  "networkError": "Kan bibliotheken niet ophalen. Controleer je netwerkverbinding en probeer opnieuw.",
+  "notSupportGuide.desc": "De huidige implementatiemodus ondersteunt geen bestandsbeheer. Schakel over naar <1>serverdatabase-modus</1> of gebruik <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "Ondersteunt gangbare bestandsformaten, waaronder paginaformaten zoals Word, PPT, Excel, PDF, TXT, en populaire codebestanden zoals JS en Python.",
+  "notSupportGuide.features.allKind.title": "Ondersteuning voor meerdere bestandstypen",
+  "notSupportGuide.features.embeddings.desc": "Maakt gebruik van krachtige vectormodellen om tekstsegmenten te vectoriseren, waardoor semantisch zoeken in bestanden mogelijk is.",
+  "notSupportGuide.features.embeddings.title": "Vectorsemantiek",
+  "notSupportGuide.features.libraries.desc": "Maak bibliotheken aan en voeg bestanden toe om je eigen bibliotheek op te bouwen.",
+  "notSupportGuide.features.libraries.title": "Bibliotheek",
+  "notSupportGuide.title": "De huidige implementatiemodus ondersteunt geen bestandsbeheer",
+  "pageEditor.addIcon": "Icoon toevoegen",
+  "pageEditor.autoSaveMessage": "Je pagina wordt automatisch opgeslagen. Handmatig opslaan is niet nodig.",
+  "pageEditor.chooseIcon": "Icoon kiezen",
+  "pageEditor.deleteConfirm.content": "Deze pagina wordt verwijderd en kan niet worden hersteld. Wees voorzichtig.",
+  "pageEditor.deleteConfirm.title": "Pagina verwijderen",
+  "pageEditor.deleteError": "Verwijderen van pagina mislukt",
+  "pageEditor.deleteSuccess": "Pagina succesvol verwijderd",
+  "pageEditor.duplicateError": "Kopiëren van pagina mislukt",
+  "pageEditor.duplicateSuccess": "Pagina succesvol gekopieerd",
+  "pageEditor.editedAt": "Laatst bewerkt op {{time}}",
+  "pageEditor.editedBy": "Laatst bewerkt door {{name}}",
+  "pageEditor.editorPlaceholder": "Begin met schrijven. Druk op / om het commandomenu te openen",
+  "pageEditor.empty.createNewDocument": "Nieuwe pagina aanmaken",
+  "pageEditor.empty.importNotion": "Importeren vanuit Notion",
+  "pageEditor.empty.title": "Selecteer een pagina om te beginnen",
+  "pageEditor.empty.uploadFiles": "Bestanden uploaden",
+  "pageEditor.exportError": "Exporteren van pagina mislukt",
+  "pageEditor.exportSuccess": "Pagina succesvol geëxporteerd",
+  "pageEditor.linkCopied": "Link gekopieerd",
+  "pageEditor.menu.copyLink": "Link kopiëren",
+  "pageEditor.menu.export": "Exporteren",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "Pagina exporteren",
+  "pageEditor.menu.importDocument": "Pagina importeren",
+  "pageEditor.menu.pin": "Pagina vastzetten",
+  "pageEditor.saving": "Bezig met opslaan...",
+  "pageEditor.titlePlaceholder": "Naamloos",
+  "pageEditor.wordCount": "{{wordCount}} woorden",
+  "pageList.copyContent": "Volledige tekst kopiëren",
+  "pageList.duplicate": "Dupliceren",
+  "pageList.empty": "Nog geen pagina’s. Klik hierboven om je eerste aan te maken.",
+  "pageList.filter.all": "Alles",
+  "pageList.filter.onlyInPages": "Alleen in pagina’s",
+  "pageList.noResults": "Geen overeenkomende pagina’s gevonden",
+  "pageList.pageCount": "Totaal {{count}} pagina’s",
+  "pageList.pageSizeItem": "{{count}} items",
+  "pageList.title": "Pagina’s",
+  "pageList.untitled": "Naamloos",
+  "portal.openInPageEditor": "Bewerken in pagina",
+  "preview.downloadFile": "Bestand downloaden",
+  "preview.unsupportedFileAndContact": "Dit bestandsformaat wordt momenteel niet ondersteund voor online voorbeeldweergave. Heb je een verzoek? <1>Neem contact met ons op</1>.",
+  "searchFilePlaceholder": "Bestanden zoeken",
+  "searchPagePlaceholder": "Pagina’s zoeken",
+  "tab.all": "Alles",
+  "tab.audios": "Audio",
+  "tab.documents": "Documenten",
+  "tab.home": "Start",
+  "tab.images": "Afbeeldingen",
+  "tab.moreTypes": "Meer typen",
+  "tab.pages": "Pagina’s",
+  "tab.videos": "Video’s",
+  "tab.websites": "Websites",
+  "title": "Bronnen",
+  "toggleLeftPanel": "Zijpaneel tonen/verbergen",
+  "uploadDock.body.collapse": "Inklappen",
+  "uploadDock.body.item.done": "Geüpload",
+  "uploadDock.body.item.error": "Upload mislukt, probeer opnieuw",
+  "uploadDock.body.item.pending": "Voorbereiden op upload...",
+  "uploadDock.body.item.processing": "Bestand verwerken...",
+  "uploadDock.body.item.restTime": "Resterend: {{time}}",
+  "uploadDock.fileQueueInfo": "Eerste {{count}} bestanden worden geüpload, {{remaining}} in wachtrij",
+  "uploadDock.totalCount": "Totaal {{count}} items",
+  "uploadDock.uploadStatus.error": "Uploadfout",
+  "uploadDock.uploadStatus.pending": "Wacht op upload",
+  "uploadDock.uploadStatus.processing": "Bezig met uploaden",
+  "uploadDock.uploadStatus.success": "Upload voltooid",
+  "uploadDock.uploadStatus.uploading": "Bezig met uploaden"
 }

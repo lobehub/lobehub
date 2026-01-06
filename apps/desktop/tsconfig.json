@@ -3,7 +3,9 @@
     "allowJs": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "noEmit": false,
     "target": "ESNext",
+    "declaration": true,
     "emitDeclarationOnly": true,
     "esModuleInterop": true,
     "emitDecoratorMetadata": true,
@@ -13,9 +15,21 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "paths": {
-      "@/*": ["./src/main/*"],
-      "~common/*": ["./src/common/*"]
+      "@/*": [
+        "./src/main/*"
+      ],
+      "~common/*": [
+        "./src/common/*"
+      ],
+      "*": [
+        "./*"
+      ]
     }
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "src/common/**/*", "electron-builder.js"]
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/common/**/*",
+    "electron-builder.js"
+  ]
 }

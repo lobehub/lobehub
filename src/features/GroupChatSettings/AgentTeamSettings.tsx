@@ -1,5 +1,5 @@
-import { Skeleton } from 'antd';
-import { ReactNode, Suspense, memo } from 'react';
+import { Skeleton } from '@lobehub/ui';
+import { type ReactNode, Suspense, memo } from 'react';
 
 import { GroupSettingsTabs } from '@/store/global/initialState';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -8,7 +8,7 @@ import AgentTeamChatSettings from './AgentTeamChatSettings';
 import AgentTeamMembersSettings from './AgentTeamMembersSettings';
 import AgentTeamMetaSettings from './AgentTeamMetaSettings';
 import { GroupChatSettingsProvider } from './GroupChatSettingsProvider';
-import { StoreUpdaterProps } from './StoreUpdater';
+import { type StoreUpdaterProps } from './StoreUpdater';
 
 export interface AgentTeamSettingsProps extends StoreUpdaterProps {
   tab?: GroupSettingsTabs;

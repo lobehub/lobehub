@@ -2,7 +2,7 @@
 
 import { ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
-import { PropsWithChildren, memo, useEffect, useState } from 'react';
+import { type PropsWithChildren, memo, useEffect, useState } from 'react';
 import { isRtlLang } from 'rtl-detect';
 
 import { createI18nNext } from '@/locales/create';
@@ -34,7 +34,7 @@ interface LocaleLayoutProps extends PropsWithChildren {
 }
 
 const Locale = memo<LocaleLayoutProps>(({ children, defaultLang, antdLocale }) => {
-  const [i18n] = useState(createI18nNext(defaultLang));
+  const [i18n] = useState(() => createI18nNext(defaultLang));
   const [lang, setLang] = useState(defaultLang);
   const [locale, setLocale] = useState(antdLocale);
 

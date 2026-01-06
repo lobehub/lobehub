@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { oauthHandoffs } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { OAuthHandoffModel } from '../oauthHandoff';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const oauthHandoffModel = new OAuthHandoffModel(serverDB);

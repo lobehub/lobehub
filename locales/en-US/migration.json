@@ -1,45 +1,23 @@
 {
-  "dbV1": {
-    "action": {
-      "clearDB": "Clear Local Data",
-      "downloadBackup": "Download Data Backup",
-      "reUpgrade": "Re-upgrade",
-      "start": "Get Started",
-      "upgrade": "Upgrade"
-    },
-    "clear": {
-      "confirm": "You are about to clear local data (global settings will not be affected). Please confirm that you have downloaded a data backup."
-    },
-    "description": "In the new version, the data storage of {{appName}} has made significant advancements. Therefore, we need to upgrade the old data to provide you with a better user experience.",
-    "features": {
-      "capability": {
-        "desc": "Based on IndexedDB technology, capable of storing a lifetime's worth of chat messages.",
-        "title": "Large Capacity"
-      },
-      "performance": {
-        "desc": "Automatically indexes millions of messages, with retrieval queries responding in milliseconds.",
-        "title": "High Performance"
-      },
-      "use": {
-        "desc": "Supports searching by title, description, tags, message content, and even translated text, greatly enhancing daily search efficiency.",
-        "title": "More User-Friendly"
-      }
-    },
-    "title": "{{appName}} Data Evolution",
-    "upgrade": {
-      "error": {
-        "subTitle": "We apologize, an error occurred during the database upgrade process. Please try the following solutions: A. Clear local data and re-import backup data; B. Click the 'Retry Upgrade' button.<br><br> If the issue persists, please <1>submit a problem report</1>, and we will assist you as soon as possible.",
-        "title": "Database Upgrade Failed"
-      },
-      "success": {
-        "subTitle": "{{appName}}'s database has been successfully upgraded to the latest version. Start experiencing it now!",
-        "title": "Database Upgrade Successful"
-      }
-    },
-    "upgradeTip": "The upgrade will take approximately 10 to 20 seconds. Please do not close {{appName}} during the upgrade process."
-  },
-  "migrateError": {
-    "missVersion": "Imported data is missing a version number. Please check the file and try again.",
-    "noMigration": "No migration solution found for the current version. Please check the version number and try again. If the issue persists, please submit a feedback request."
-  }
+  "dbV1.action.clearDB": "Clear Local Data",
+  "dbV1.action.downloadBackup": "Download Data Backup",
+  "dbV1.action.reUpgrade": "Re-upgrade",
+  "dbV1.action.start": "Get Started",
+  "dbV1.action.upgrade": "Upgrade",
+  "dbV1.clear.confirm": "You are about to clear local data (global settings will not be affected). Please confirm that you have downloaded a data backup.",
+  "dbV1.description": "In the new version, the data storage of {{appName}} has made significant advancements. Therefore, we need to upgrade the old data to provide you with a better user experience.",
+  "dbV1.features.capability.desc": "Based on IndexedDB technology, capable of storing a lifetime's worth of chat messages.",
+  "dbV1.features.capability.title": "Large Capacity",
+  "dbV1.features.performance.desc": "Automatically indexes millions of messages, with retrieval queries responding in milliseconds.",
+  "dbV1.features.performance.title": "High Performance",
+  "dbV1.features.use.desc": "Supports searching by title, description, tags, message content, and even translated text, greatly enhancing daily search efficiency.",
+  "dbV1.features.use.title": "More User-Friendly",
+  "dbV1.title": "{{appName}} Data Evolution",
+  "dbV1.upgrade.error.subTitle": "We apologize, an error occurred during the database upgrade process. Please try the following solutions: A. Clear local data and re-import backup data; B. Click the 'Retry Upgrade' button.<br><br> If the issue persists, please <1>submit a problem report</1>, and we will assist you as soon as possible.",
+  "dbV1.upgrade.error.title": "Database Upgrade Failed",
+  "dbV1.upgrade.success.subTitle": "The database has been upgraded to the latest version. You can continue now.",
+  "dbV1.upgrade.success.title": "Database Upgrade Successful",
+  "dbV1.upgradeTip": "The upgrade will take approximately 10 to 20 seconds. Please do not close {{appName}} during the upgrade process.",
+  "migrateError.missVersion": "Imported data is missing a version number. Please check the file and try again.",
+  "migrateError.noMigration": "No migration solution found for the current version. Please check the version number and try again. If the issue persists, please submit a feedback request."
 }

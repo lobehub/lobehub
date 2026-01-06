@@ -1,811 +1,536 @@
 {
-  "about": {
-    "title": "关于"
-  },
-  "agentInfoDescription": {
-    "basic": {
-      "avatar": "头像",
-      "description": "描述",
-      "name": "名称",
-      "tags": "标签",
-      "title": "助手信息"
-    },
-    "chat": {
-      "displayMode": "展示模式",
-      "enableHistoryCount": "启用历史消息计数",
-      "historyCount": "历史消息数量",
-      "no": "否",
-      "searchMode": "搜索模式",
-      "title": "聊天偏好",
-      "yes": "是"
-    },
-    "model": {
-      "maxTokens": "最大 Token 数",
-      "model": "模型",
-      "provider": "服务商",
-      "temperature": "温度",
-      "title": "模型设置",
-      "topP": "Top P 值"
-    },
-    "plugins": {
-      "count": "插件设置（{{count}}）",
-      "empty": "尚未安装插件",
-      "title": "已安装插件"
-    },
-    "role": {
-      "systemRole": "系统提示词",
-      "title": "角色设置"
-    },
-    "value": {
-      "unset": "未设置",
-      "untitled": "未命名助手"
-    }
-  },
-  "agentTab": {
-    "chat": "聊天偏好",
-    "meta": "助手信息",
-    "modal": "模型设置",
-    "opening": "开场设置",
-    "plugin": "插件设置",
-    "prompt": "角色设定",
-    "tts": "语音服务"
-  },
-  "analytics": {
-    "telemetry": {
-      "desc": "通过选择发送遥测数据，你可以帮助我们改善 {{appName}} 整体用户体验",
-      "title": "发送匿名使用数据"
-    },
-    "title": "数据统计"
-  },
-  "checking": "检查中...",
-  "checkingPermissions": "检查权限中...",
-  "danger": {
-    "clear": {
-      "action": "立即清除",
-      "confirm": "确认清除所有聊天数据？",
-      "desc": "将会清除所有会话数据，包括助手、文件、消息、插件等",
-      "success": "已清除所有会话消息",
-      "title": "清除所有会话消息"
-    },
-    "reset": {
-      "action": "立即重置",
-      "confirm": "确认重置所有设置？",
-      "currentVersion": "当前版本",
-      "desc": "重置所有设置，使用默认值",
-      "success": "已重置所有设置",
-      "title": "重置所有设置"
-    }
-  },
-  "groupTab": {
-    "chat": "聊天",
-    "members": "成员",
-    "meta": "基本信息"
-  },
-  "header": {
-    "desc": "偏好与模型设置",
-    "global": "全局设置",
-    "group": "团队设置",
-    "groupDesc": "管理 Agent 团队与聊天偏好",
-    "session": "会话设置",
-    "sessionDesc": "角色设定与会话偏好",
-    "sessionWithName": "会话设置 · {{name}}",
-    "title": "设置"
-  },
-  "hotkey": {
-    "conflicts": "与现有快捷键冲突",
-    "errors": {
-      "CONFLICT": "快捷键冲突：该快捷键已被其他功能占用",
-      "INVALID_FORMAT": "快捷键格式无效：请使用正确的格式（如 CommandOrControl+E）",
-      "INVALID_ID": "无效的快捷键ID",
-      "NO_MODIFIER": "快捷键必须包含修饰键（Ctrl、Alt、Shift等）",
-      "SYSTEM_OCCUPIED": "快捷键已被系统或其他应用程序占用",
-      "UNKNOWN": "更新失败：未知错误"
-    },
-    "group": {
-      "conversation": "会话",
-      "desktop": "桌面端",
-      "essential": "基础"
-    },
-    "invalidCombination": "快捷键需要至少包含一个修饰键 (Ctrl, Alt, Shift) 和一个常规键",
-    "record": "按下按键以录制快捷键",
-    "reset": "重置为默认快捷键",
-    "title": "快捷键",
-    "updateError": "快捷键更新失败：网络或系统错误",
-    "updateSuccess": "快捷键更新成功"
-  },
-  "llm": {
-    "aesGcm": "您的秘钥与代理地址等将使用 <1>AES-GCM</1> 加密算法进行加密",
-    "apiKey": {
-      "desc": "请填写你的 {{name}} API Key",
-      "placeholder": "{{name}} API Key",
-      "title": "API Key"
-    },
-    "checker": {
-      "button": "检查",
-      "desc": "测试 Api Key 与代理地址是否正确填写",
-      "pass": "检查通过",
-      "title": "连通性检查"
-    },
-    "customModelCards": {
-      "addNew": "创建并添加 {{id}} 模型",
-      "config": "配置模型",
-      "confirmDelete": "即将删除该自定义模型，删除后将不可恢复，请谨慎操作。",
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "在 Azure OpenAI 中实际请求的字段",
-          "placeholder": "请输入 Azure 中的模型部署名称",
-          "title": "模型部署名称"
-        },
-        "displayName": {
-          "placeholder": "请输入模型的展示名称，例如 ChatGPT、GPT-4 等",
-          "title": "模型展示名称"
-        },
-        "files": {
-          "extra": "当前文件上传实现仅为一种 Hack 方案，仅限自行尝试。完整文件上传能力请等待后续实现",
-          "title": "支持文件上传"
-        },
-        "functionCall": {
-          "extra": "此配置将仅开启应用中的函数调用能力，是否支持函数调用完全取决于模型本身，请自行测试该模型的函数调用能力可用性",
-          "title": "支持函数调用"
-        },
-        "id": {
-          "extra": "将作为模型标签进行展示",
-          "placeholder": "请输入模型id，例如 gpt-4-turbo-preview 或 claude-2.1",
-          "title": "模型 ID"
-        },
-        "modalTitle": "自定义模型配置",
-        "tokens": {
-          "title": "最大 token 数"
-        },
-        "vision": {
-          "extra": "此配置将仅开启应用中的图片上传配置，是否支持识别完全取决于模型本身，请自行测试该模型的视觉识别能力可用性",
-          "title": "支持视觉识别"
-        }
-      }
-    },
-    "fetchOnClient": {
-      "desc": "客户端请求模式将从浏览器直接发起会话请求，可提升响应速度",
-      "title": "使用客户端请求模式"
-    },
-    "fetcher": {
-      "clear": "清除获取的模型",
-      "fetch": "获取模型列表",
-      "fetching": "正在获取模型列表...",
-      "latestTime": "上次更新时间：{{time}}",
-      "noLatestTime": "暂未获取列表"
-    },
-    "helpDoc": "配置教程",
-    "modelList": {
-      "desc": "选择在会话中展示的模型，选择的模型会在模型列表中展示",
-      "placeholder": "请从列表中选择模型",
-      "title": "模型列表",
-      "total": "共 {{count}} 个模型可用"
-    },
-    "proxyUrl": {
-      "desc": "除默认地址外，必须包含 http(s)://",
-      "title": "API 代理地址"
-    },
-    "waitingForMore": "更多模型正在 <1>计划接入</1> 中，敬请期待"
-  },
-  "marketPublish": {
-    "modal": {
-      "changelog": {
-        "extra": "描述此版本的主要变更和改进",
-        "label": "变更日志",
-        "maxLengthError": "变更日志不能超过500个字符",
-        "placeholder": "请输入变更日志",
-        "required": "请输入变更日志"
-      },
-      "comparison": {
-        "local": "本地当前版本",
-        "remote": "当前发布版本"
-      },
-      "identifier": {
-        "extra": "标识符将作为助手的唯一标识，建议使用小写字母、数字和连字符",
-        "label": "助手标识符",
-        "lengthError": "标识符长度应在3-50个字符之间",
-        "patternError": "标识符只能包含小写字母、数字和连字符",
-        "placeholder": "请输入助手的唯一标识符，如: web-development",
-        "required": "请输入助手标识符"
-      },
-      "loading": {
-        "fetchingRemote": "正在加载远程数据...",
-        "submit": "正在发布助手...",
-        "upload": "正在发布新版本..."
-      },
-      "messages": {
-        "createVersionFailed": "版本创建失败: {{message}}",
-        "fetchRemoteFailed": "获取远程助手数据失败",
-        "missingIdentifier": "当前助手还没有市场标识符",
-        "notAuthenticated": "请先登录市场账户",
-        "publishFailed": "发布失败: {{message}}"
-      },
-      "submitButton": "发布",
-      "title": {
-        "submit": "分享到助手市场",
-        "upload": "发布新版本"
-      }
-    },
-    "resultModal": {
-      "message": "助手已提交审核，审核通过后将自动上线。点击「在市场查看」查看已发布的助手。",
-      "view": "在市场查看"
-    },
-    "submit": {
-      "button": "分享到市场",
-      "tooltip": "分享助手到市场"
-    },
-    "upload": {
-      "button": "发布新版本",
-      "tooltip": "发布新版本到助手市场"
-    }
-  },
-  "message": {
-    "success": "更新成功"
-  },
-  "plugin": {
-    "addMCPPlugin": "添加 MCP 插件",
-    "addTooltip": "自定义插件",
-    "clearDeprecated": "移除无效插件",
-    "empty": "暂无已安装插件，欢迎前往 <1>插件商店</1> 探索",
-    "installStatus": {
-      "deprecated": "已卸载"
-    },
-    "settings": {
-      "hint": "请根据描述填写以下配置",
-      "title": "{{id}} 插件配置",
-      "tooltip": "插件配置"
-    },
-    "store": "插件商店"
-  },
-  "settingAgent": {
-    "avatar": {
-      "title": "助手头像"
-    },
-    "backgroundColor": {
-      "title": "头像背景色"
-    },
-    "description": {
-      "desc": "简单介绍你的助手，不作为角色设定",
-      "placeholder": "请输入助手描述",
-      "title": "助手描述"
-    },
-    "name": {
-      "placeholder": "请输入助手名称",
-      "title": "名称"
-    },
-    "prompt": {
-      "placeholder": "请输入角色 Prompt 提示词",
-      "title": "角色设定"
-    },
-    "submit": "更新助手信息",
-    "tag": {
-      "desc": "助手标签将在助手市场中展示",
-      "placeholder": "请输入标签",
-      "title": "标签"
-    },
-    "title": "助手信息"
-  },
-  "settingAppearance": {
-    "animationMode": {
-      "agile": "敏捷",
-      "desc": "选择应用程序的操作响应的动画速度",
-      "disabled": "关闭",
-      "elegant": "优雅",
-      "title": "响应动画"
-    },
-    "contextMenuMode": {
-      "default": "默认",
-      "desc": "选择聊天消息右键菜单的显示方案",
-      "disabled": "不使用",
-      "title": "右键菜单方案"
-    },
-    "neutralColor": {
-      "desc": "不同色彩倾向的灰阶自定义",
-      "title": "中性色"
-    },
-    "noAnimation": {
-      "desc": "禁用应用程序中的所有动画效果",
-      "title": "无动画模式"
-    },
-    "preview": {
-      "title": "调色盘"
-    },
-    "primaryColor": {
-      "desc": "自定义主题色",
-      "title": "主题色"
-    },
-    "title": "应用外观"
-  },
-  "settingChat": {
-    "autoCreateTopicThreshold": {
-      "desc": "当前消息数超过设定该值后，将自动创建话题",
-      "title": "消息阈值"
-    },
-    "chatStyleType": {
-      "title": "聊天窗口样式",
-      "type": {
-        "chat": "对话模式",
-        "docs": "文档模式"
-      }
-    },
-    "compressThreshold": {
-      "desc": "当未压缩的历史消息超过该值时，将进行压缩",
-      "title": "历史消息长度压缩阈值"
-    },
-    "enableAutoCreateTopic": {
-      "desc": "会话过程中是否自动创建话题，仅在临时话题中生效",
-      "title": "自动创建话题"
-    },
-    "enableCompressHistory": {
-      "title": "开启历史消息自动总结"
-    },
-    "enableHistoryCount": {
-      "alias": "不限制",
-      "limited": "只包含 {{number}} 条会话消息",
-      "setlimited": "使用历史消息数",
-      "title": "限制历史消息数",
-      "unlimited": "不限历史消息数"
-    },
-    "enableStreaming": {
-      "desc": "启用流式输出以实时显示响应。禁用后仅显示完整响应。",
-      "title": "启用流式输出"
-    },
-    "historyCount": {
-      "desc": "每次请求携带的消息数（包括最新编写的提问。每个提问和回答都计算1）",
-      "title": "附带消息数"
-    },
-    "inputTemplate": {
-      "desc": "用户最新的一条消息会填充到此模板",
-      "placeholder": "预处理模版 {{text}} 将替换为实时输入信息",
-      "title": "用户输入预处理"
-    },
-    "submit": "更新聊天偏好",
-    "title": "聊天设置"
-  },
-  "settingChatAppearance": {
-    "fontSize": {
-      "desc": "聊天内容的字体大小",
-      "marks": {
-        "normal": "标准"
-      },
-      "title": "字体大小"
-    },
-    "highlighterTheme": {
-      "title": "代码高亮主题"
-    },
-    "mermaidTheme": {
-      "title": "Mermaid 主题"
-    },
-    "title": "聊天外观",
-    "transitionMode": {
-      "desc": "聊天消息的过渡动画",
-      "options": {
-        "fadeIn": "淡入",
-        "none": {
-          "desc": "这取决于模型的响应输出方式，请自行测试。",
-          "value": "无"
-        },
-        "smooth": "平滑"
-      },
-      "title": "过渡动画"
-    }
-  },
-  "settingCommon": {
-    "lang": {
-      "autoMode": "跟随系统",
-      "title": "语言"
-    },
-    "themeMode": {
-      "auto": "自动",
-      "dark": "深色",
-      "light": "浅色",
-      "title": "主题"
-    },
-    "title": "通用设置"
-  },
-  "settingGroup": {
-    "description": {
-      "placeholder": "请输入团队描述",
-      "title": "团队描述"
-    },
-    "name": {
-      "placeholder": "请输入团队名称",
-      "title": "团队名称"
-    },
-    "scene": {
-      "desc": "选择团队场景",
-      "options": {
-        "casual": "休闲",
-        "productive": "生产力"
-      },
-      "title": "团队场景"
-    },
-    "submit": "更新团队",
-    "systemPrompt": {
-      "placeholder": "请输入主持人系统提示词",
-      "title": "主持人系统提示词"
-    },
-    "title": "Agent 团队信息"
-  },
-  "settingGroupChat": {
-    "allowDM": {
-      "desc": "关闭后，你仍然可以主动向助手发送私信",
-      "title": "允许助手发送私信"
-    },
-    "enableSupervisor": {
-      "desc": "启用 Agent 团队主持人功能，主持人将管理团队对话流程",
-      "title": "启用主持人"
-    },
-    "maxResponseInRow": {
-      "desc": "选择成员可以连续回复多少条消息。设置为 0 则禁用此限制。",
-      "title": "连续回复消息数"
-    },
-    "model": {
-      "desc": "群成员发言不受影响。部分模型无法作为主持人模型使用。",
-      "title": "主持人模型"
-    },
-    "orchestratorTitle": "主持人设置",
-    "responseOrder": {
-      "desc": "代理将按照在聊天中设置的顺序进行回复",
-      "options": {
-        "natural": "自然",
-        "sequential": "顺序"
-      },
-      "placeholder": "选择回复顺序",
-      "title": "回复顺序"
-    },
-    "responseSpeed": {
-      "desc": "控制聊天的整体进行速度",
-      "options": {
-        "fast": "快速",
-        "medium": "中等",
-        "slow": "慢速"
-      },
-      "placeholder": "选择回复速度",
-      "title": "回复速度"
-    },
-    "revealDM": {
-      "desc": "使发送给其他成员的私信内容对你可见。",
-      "title": "显示私信内容"
-    },
-    "submit": "更新设置",
-    "systemPrompt": {
-      "desc": "群聊对话主持人的自定义系统提示词。这可能影响默认的主持人行为。",
-      "placeholder": "请输入自定义主持人系统提示词...",
-      "title": "主持人系统提示词"
-    },
-    "title": "聊天设置"
-  },
-  "settingGroupMembers": {
-    "addToGroup": "加入群组",
-    "availableAgents": "可用助手",
-    "createMember": "创建成员",
-    "defaultAgent": "自定义助手",
-    "disableHost": "关闭主持助手",
-    "edit": "编辑成员",
-    "empty": "该团队中暂无成员。点击 + 按钮添加成员。",
-    "enableHost": "启用主持助手",
-    "groupHost": "群主持",
-    "groupMembers": "群组成员",
-    "host": {
-      "description": "主持人在群组中时，群聊将自动化运行，适合发散性任务。",
-      "title": "主持人"
-    },
-    "noAvailableAgents": "暂无可用助手",
-    "noDescription": "暂无描述",
-    "noMembersInGroup": "群组暂无成员",
-    "owner": "你（所有者）",
-    "remove": "移除成员",
-    "removeFromGroup": "移出群组",
-    "you": "你"
-  },
-  "settingImage": {
-    "defaultCount": {
-      "desc": "设置图像生成面板在创建新任务时的默认图片数量。",
-      "label": "默认图片数量",
-      "title": "AI 绘画设置"
-    }
-  },
-  "settingModel": {
-    "enableMaxTokens": {
-      "title": "开启单次回复限制"
-    },
-    "enableReasoningEffort": {
-      "title": "开启推理强度调整"
-    },
-    "frequencyPenalty": {
-      "desc": "值越大，用词越丰富多样；值越低，用词更朴实简单",
-      "title": "词汇丰富度"
-    },
-    "maxTokens": {
-      "desc": "单次交互所用的最大 Token 数",
-      "title": "单次回复限制"
-    },
-    "model": {
-      "desc": "{{provider}} 模型",
-      "title": "模型"
-    },
-    "params": {
-      "title": "高级参数"
-    },
-    "presencePenalty": {
-      "desc": "值越大，越倾向不同的表达方式，避免概念重复；值越小，越倾向使用重复的概念或叙述，表达更具一致性",
-      "title": "表述发散度"
-    },
-    "reasoningEffort": {
-      "desc": "值越大，推理能力越强，但可能会增加响应时间和 Token 消耗",
-      "options": {
-        "high": "高",
-        "low": "低",
-        "medium": "中"
-      },
-      "title": "推理强度"
-    },
-    "submit": "更新模型设置",
-    "temperature": {
-      "desc": "数值越大，回答越有创意和想象力；数值越小，回答越严谨",
-      "title": "创意活跃度",
-      "warning": "创意活跃度数值过大，输出可能会产生乱码"
-    },
-    "title": "模型设置",
-    "topP": {
-      "desc": "考虑多少种可能性，值越大，接受更多可能的回答；值越小，倾向选择最可能的回答。不推荐和创意活跃度一起更改",
-      "title": "思维开放度"
-    }
-  },
-  "settingOpening": {
-    "openingMessage": {
-      "desc": "打开会话时的开场消息，用来介绍助手的功能",
-      "placeholder": "你好，我是自定义助手。你可以立即与我开始对话，也可以前往助手设置完善我的信息。",
-      "title": "开场消息"
-    },
-    "openingQuestions": {
-      "desc": "会话开始时展示的引导性问题",
-      "empty": "暂无问题",
-      "placeholder": "请输入问题",
-      "repeat": "问题已存在",
-      "title": "开场问题"
-    },
-    "title": "开场设置"
-  },
-  "settingPlugin": {
-    "title": "插件列表"
-  },
-  "settingSystem": {
-    "accessCode": {
-      "desc": "管理员已开启加密访问",
-      "placeholder": "请输入访问密码",
-      "title": "访问密码"
-    },
-    "oauth": {
-      "info": {
-        "desc": "已登录",
-        "title": "账户信息"
-      },
-      "signin": {
-        "action": "登录",
-        "desc": "使用 SSO 登录以解锁应用",
-        "title": "登录账号"
-      },
-      "signout": {
-        "action": "退出登录",
-        "confirm": "确认退出？",
-        "success": "退出登录成功"
-      }
-    },
-    "title": "系统设置"
-  },
-  "settingTTS": {
-    "openai": {
-      "sttModel": "OpenAI 语音识别模型",
-      "title": "OpenAI",
-      "ttsModel": "OpenAI 语音合成模型"
-    },
-    "showAllLocaleVoice": {
-      "desc": "关闭则只显示当前语种的声源",
-      "title": "显示所有语种声源"
-    },
-    "stt": "语音识别设置",
-    "sttAutoStop": {
-      "desc": "关闭后，语音识别将不会自动结束，需要手动点击结束按钮",
-      "title": "自动结束语音识别"
-    },
-    "sttLocale": {
-      "desc": "语音输入的语种，此选项可提高语音识别准确率",
-      "title": "语音识别语种"
-    },
-    "sttService": {
-      "desc": "其中 browser 为浏览器原生的语音识别服务",
-      "title": "语音识别服务"
-    },
-    "submit": "更新语音服务",
-    "title": "语音服务",
-    "tts": "语音合成设置",
-    "ttsService": {
-      "desc": "如使用 OpenAI 语音合成服务，需要保证 OpenAI 模型服务已开启",
-      "title": "语音合成服务"
-    },
-    "voice": {
-      "desc": "为当前助手挑选一个声音，不同 TTS 服务支持的声源不同",
-      "preview": "试听声源",
-      "title": "语音合成声源"
-    }
-  },
-  "storage": {
-    "actions": {
-      "export": {
-        "button": "导出",
-        "exportType": {
-          "agent": "导出助手设定",
-          "agentWithMessage": "导出助手和消息",
-          "all": "导出全局设置和所有助手数据",
-          "allAgent": "导出所有助手设定",
-          "allAgentWithMessage": "导出所有助手和消息",
-          "globalSetting": "导出全局设置"
-        },
-        "title": "导出数据"
-      },
-      "import": {
-        "button": "导入",
-        "title": "导入数据"
-      },
-      "title": "高级操作"
-    },
-    "desc": "当前浏览器中的存储用量",
-    "embeddings": {
-      "used": "向量存储"
-    },
-    "title": "数据存储",
-    "used": "存储用量"
-  },
-  "submitAgentModal": {
-    "button": "提交助手",
-    "identifier": "助手标识符（identifier）",
-    "metaMiss": "请补全助手信息后提交，需要包含名称、描述和标签",
-    "placeholder": "请输入助手的标识符，需要是唯一的，比如 web-development",
-    "tooltips": "分享到助手市场"
-  },
-  "submitFooter": {
-    "reset": "重置",
-    "submit": "保存",
-    "unSaved": "未保存更改",
-    "unSavedWarning": "当前有未保存的更改"
-  },
-  "sync": {
-    "device": {
-      "deviceName": {
-        "hint": "添加名称以便于识别",
-        "placeholder": "请输入设备名称",
-        "title": "设备名称"
-      },
-      "title": "设备信息",
-      "unknownBrowser": "未知浏览器",
-      "unknownOS": "未知系统"
-    },
-    "warning": {
-      "tip": "经过较长一段时间社区公测，WebRTC 同步可能无法稳定满足通用的数据同步诉求。请自行 <1>部署信令服务器</1> 后使用。"
-    },
-    "webrtc": {
-      "channelName": {
-        "desc": "WebRTC 将使用此名创建同步频道，确保频道名称唯一",
-        "placeholder": "请输入同步频道名称",
-        "shuffle": "随机生成",
-        "title": "同步频道名称"
-      },
-      "channelPassword": {
-        "desc": "添加密码确保频道私密性，只有密码正确时，设备才可加入频道",
-        "placeholder": "请输入同步频道密码",
-        "title": "同步频道密码"
-      },
-      "desc": "实时、点对点的数据通信，需设备同时在线才可同步",
-      "enabled": {
-        "invalid": "请填写信令服务器和同步频道名称后再开启",
-        "title": "开启同步"
-      },
-      "signaling": {
-        "desc": "WebRTC 将使用该地址进行同步",
-        "placeholder": "请输入信令服务器地址",
-        "title": "信令服务器"
-      },
-      "title": "WebRTC 同步"
-    }
-  },
-  "systemAgent": {
-    "agentMeta": {
-      "label": "助理元数据生成模型",
-      "modelDesc": "指定用于生成助理名称、描述、头像、标签的模型",
-      "title": "自动生成助理信息"
-    },
-    "customPrompt": {
-      "addPrompt": "添加自定义提示",
-      "desc": "填写后，系统助理将在生成内容时使用自定义提示",
-      "placeholder": "请输入自定义提示词",
-      "title": "自定义提示词"
-    },
-    "generationTopic": {
-      "label": "AI 绘画话题命名模型",
-      "modelDesc": "指定用于 AI 绘画自动命名话题的模型",
-      "title": "AI 绘画自动命名话题"
-    },
-    "helpInfo": "当创建新助手时，将以默认助手设置作为预设值。",
-    "historyCompress": {
-      "label": "会话历史模型",
-      "modelDesc": "指定用于压缩会话历史的模型",
-      "title": "自动总结会话历史"
-    },
-    "queryRewrite": {
-      "label": "提问重写模型",
-      "modelDesc": "指定用于优化用户提问的模型",
-      "title": "知识库提问重写"
-    },
-    "thread": {
-      "label": "子话题命名模型",
-      "modelDesc": "指定用于子话题自动重命名的模型",
-      "title": "子话题自动命名"
-    },
-    "title": "系统助手",
-    "topic": {
-      "label": "话题命名模型",
-      "modelDesc": "指定用于话题自动重命名的模型",
-      "title": "话题自动命名"
-    },
-    "translation": {
-      "label": "翻译模型",
-      "modelDesc": "指定用于翻译的模型",
-      "title": "消息内容翻译"
-    }
-  },
-  "tab": {
-    "about": "关于",
-    "agent": "默认助手",
-    "common": "通用设置",
-    "experiment": "实验",
-    "hotkey": "快捷键",
-    "image": "AI 绘画",
-    "llm": "语言模型",
-    "provider": "AI 服务商",
-    "proxy": "网络代理",
-    "storage": "数据存储",
-    "sync": "云端同步",
-    "system-agent": "系统助手",
-    "tts": "语音服务"
-  },
-  "tools": {
-    "builtins": {
-      "groupName": "内置插件"
-    },
-    "disabled": "当前模型不支持函数调用，无法使用插件",
-    "klavis": {
-      "addServer": "添加服务器",
-      "authCompleted": "认证完成",
-      "authFailed": "认证失败",
-      "authRequired": "需要认证",
-      "connected": "已连接",
-      "error": "错误",
-      "groupName": "Klavis 工具",
-      "manage": "管理 Klavis",
-      "manageTitle": "管理 Klavis 集成",
-      "noServers": "暂无连接的服务器",
-      "notEnabled": "Klavis 服务未启用",
-      "oauthRequired": "请在新窗口中完成 OAuth 认证",
-      "pendingAuth": "待认证",
-      "serverCreated": "服务器创建成功",
-      "serverCreatedFailed": "服务器创建失败",
-      "serverRemoved": "服务器已删除",
-      "servers": "个服务器",
-      "tools": "个工具",
-      "verifyAuth": "我已完成认证"
-    },
-    "plugins": {
-      "enabled": "已启用 {{num}}",
-      "groupName": "三方插件",
-      "noEnabled": "暂无启用插件",
-      "store": "插件商店"
-    },
-    "tabs": {
-      "all": "全部",
-      "installed": "已启用"
-    },
-    "title": "扩展插件"
-  }
+  "_cloud.officialProvider": "{{name}} 官方模型服务",
+  "about.title": "关于",
+  "advancedSettings": "进阶配置",
+  "agentInfoDescription.basic.avatar": "头像",
+  "agentInfoDescription.basic.description": "描述",
+  "agentInfoDescription.basic.name": "名称",
+  "agentInfoDescription.basic.tags": "标签",
+  "agentInfoDescription.basic.title": "助理信息",
+  "agentInfoDescription.chat.enableHistoryCount": "启用历史消息计数",
+  "agentInfoDescription.chat.historyCount": "历史消息数量",
+  "agentInfoDescription.chat.no": "否",
+  "agentInfoDescription.chat.searchMode": "搜索模式",
+  "agentInfoDescription.chat.title": "对话偏好",
+  "agentInfoDescription.chat.yes": "是",
+  "agentInfoDescription.model.maxTokens": "最大 Token 数",
+  "agentInfoDescription.model.model": "模型",
+  "agentInfoDescription.model.provider": "模型服务商",
+  "agentInfoDescription.model.temperature": "温度",
+  "agentInfoDescription.model.title": "模型设置",
+  "agentInfoDescription.model.topP": "Top P 值",
+  "agentInfoDescription.plugins.count": "技能设置（{{count}}）",
+  "agentInfoDescription.plugins.empty": "尚未安装技能",
+  "agentInfoDescription.plugins.title": "已安装技能",
+  "agentInfoDescription.role.systemRole": "助理档案",
+  "agentInfoDescription.role.title": "助理档案",
+  "agentInfoDescription.value.unset": "未设置",
+  "agentInfoDescription.value.untitled": "未命名助理",
+  "agentTab.chat": "对话偏好",
+  "agentTab.meta": "助理信息",
+  "agentTab.modal": "模型设置",
+  "agentTab.opening": "开场设置",
+  "agentTab.plugin": "技能设置",
+  "agentTab.prompt": "助理档案",
+  "agentTab.tts": "语音服务",
+  "analytics.telemetry.desc": "通过匿名使用数据帮助我们改进 {{appName}}",
+  "analytics.telemetry.title": "发送匿名使用数据",
+  "analytics.title": "数据统计",
+  "checking": "检查中…",
+  "checkingPermissions": "检查权限中…",
+  "danger.clear.action": "立即清除",
+  "danger.clear.confirm": "确认清除所有聊天数据吗？此操作不可撤销",
+  "danger.clear.desc": "删除所有数据，包括智能体、文件、消息和技能。您的账户不会被删除。",
+  "danger.clear.success": "已清除所有会话消息",
+  "danger.clear.title": "清除数据",
+  "danger.reset.action": "立即重置",
+  "danger.reset.confirm": "确认重置所有设置吗？",
+  "danger.reset.currentVersion": "当前版本",
+  "danger.reset.desc": "恢复所有设置为默认值。您的数据不会被删除。",
+  "danger.reset.success": "已重置所有设置",
+  "danger.reset.title": "重置所有设置",
+  "defaultAgent.model.desc": "创建新助理时使用的默认模型",
+  "defaultAgent.model.title": "模型",
+  "defaultAgent.title": "默认助理设置",
+  "group.aiConfig": "模型配置",
+  "group.common": "通用",
+  "group.profile": "账号",
+  "group.subscription": "订阅",
+  "group.system": "系统",
+  "groupTab.chat": "对话",
+  "groupTab.members": "成员",
+  "groupTab.meta": "基本信息",
+  "header.desc": "偏好与模型设置",
+  "header.global": "全局设置",
+  "header.group": "群组设置",
+  "header.groupDesc": "管理群组与对话偏好",
+  "header.session": "会话设置",
+  "header.sessionDesc": "助理档案与会话偏好",
+  "header.sessionWithName": "会话设置 · {{name}}",
+  "header.title": "设置",
+  "hotkey.conflicts": "与现有快捷键冲突",
+  "hotkey.errors.CONFLICT": "快捷键冲突：该快捷键已被其他功能占用",
+  "hotkey.errors.INVALID_FORMAT": "快捷键格式无效：请使用正确的格式（如 CommandOrControl+E）",
+  "hotkey.errors.INVALID_ID": "无效的快捷键ID",
+  "hotkey.errors.NO_MODIFIER": "快捷键必须包含修饰键（Ctrl、Alt、Shift等）",
+  "hotkey.errors.SYSTEM_OCCUPIED": "快捷键已被系统或其他应用程序占用",
+  "hotkey.errors.UNKNOWN": "更新失败：未知错误",
+  "hotkey.group.conversation": "会话",
+  "hotkey.group.desktop": "桌面端",
+  "hotkey.group.essential": "基础",
+  "hotkey.invalidCombination": "快捷键需要至少包含一个修饰键 (Ctrl, Alt, Shift) 和一个常规键",
+  "hotkey.record": "按下按键以录制快捷键",
+  "hotkey.reset": "重置为默认快捷键",
+  "hotkey.title": "快捷键",
+  "hotkey.updateError": "快捷键更新失败：网络或系统错误",
+  "hotkey.updateSuccess": "快捷键更新成功",
+  "llm.aesGcm": "你的密钥与代理地址等将使用 <1>AES-GCM</1> 加密算法进行加密",
+  "llm.apiKey.desc": "请填写你的 {{name}} API Key",
+  "llm.apiKey.placeholder": "{{name}} API Key",
+  "llm.apiKey.title": "API Key",
+  "llm.checker.button": "检查",
+  "llm.checker.desc": "测试 Api Key 与代理地址是否正确填写",
+  "llm.checker.pass": "检查通过",
+  "llm.checker.title": "连通性检查",
+  "llm.customModelCards.addNew": "创建并添加 {{id}} 模型",
+  "llm.customModelCards.config": "配置模型",
+  "llm.customModelCards.confirmDelete": "即将删除该自定义模型，删除后将不可恢复。请谨慎操作",
+  "llm.customModelCards.modelConfig.azureDeployName.extra": "在 Azure OpenAI 中实际请求的字段",
+  "llm.customModelCards.modelConfig.azureDeployName.placeholder": "请输入 Azure 中的模型部署名称",
+  "llm.customModelCards.modelConfig.azureDeployName.title": "模型部署名称",
+  "llm.customModelCards.modelConfig.displayName.placeholder": "请输入模型的展示名称，例如 ChatGPT、GPT-4 等",
+  "llm.customModelCards.modelConfig.displayName.title": "模型展示名称",
+  "llm.customModelCards.modelConfig.files.extra": "当前文件上传实现仅为一种 Hack 方案，仅限自行尝试。完整文件上传能力请等待后续实现",
+  "llm.customModelCards.modelConfig.files.title": "支持文件上传",
+  "llm.customModelCards.modelConfig.functionCall.extra": "此配置将仅开启应用中的技能调用能力，是否支持技能调用完全取决于模型本身，请自行测试该模型的技能调用能力可用性",
+  "llm.customModelCards.modelConfig.functionCall.title": "支持技能调用",
+  "llm.customModelCards.modelConfig.id.extra": "将作为模型标签进行展示",
+  "llm.customModelCards.modelConfig.id.placeholder": "请输入模型id，例如 gpt-4-turbo-preview 或 claude-2.1",
+  "llm.customModelCards.modelConfig.id.title": "模型 ID",
+  "llm.customModelCards.modelConfig.modalTitle": "自定义模型配置",
+  "llm.customModelCards.modelConfig.tokens.title": "最大 token 数",
+  "llm.customModelCards.modelConfig.vision.extra": "此配置将仅开启应用中的图片上传配置，是否支持识别完全取决于模型本身，请自行测试该模型的视觉识别能力可用性",
+  "llm.customModelCards.modelConfig.vision.title": "支持视觉识别",
+  "llm.fetchOnClient.desc": "客户端请求模式将从浏览器直接发起会话请求，可提升响应速度",
+  "llm.fetchOnClient.title": "使用客户端请求模式",
+  "llm.fetcher.clear": "清除获取的模型",
+  "llm.fetcher.fetch": "获取模型列表",
+  "llm.fetcher.fetching": "正在获取模型列表…",
+  "llm.fetcher.latestTime": "上次更新时间：{{time}}",
+  "llm.fetcher.noLatestTime": "暂未获取列表",
+  "llm.helpDoc": "配置教程",
+  "llm.modelList.desc": "选择在会话中展示的模型，选择的模型会在模型列表中展示",
+  "llm.modelList.placeholder": "请从列表中选择模型",
+  "llm.modelList.title": "模型列表",
+  "llm.modelList.total": "共 {{count}} 个模型可用",
+  "llm.proxyUrl.desc": "除默认地址外，必须包含 http(s)://",
+  "llm.proxyUrl.title": "API 代理地址",
+  "llm.waitingForMore": "更多模型正在 <1>计划接入</1> 中，敬请期待",
+  "llm.waitingForMoreLinkAriaLabel": "打开模型服务商接入需求表单",
+  "marketPublish.modal.changelog.extra": "描述此版本的主要变更和改进",
+  "marketPublish.modal.changelog.label": "变更日志",
+  "marketPublish.modal.changelog.maxLengthError": "变更日志不能超过500个字符",
+  "marketPublish.modal.changelog.placeholder": "请输入变更日志",
+  "marketPublish.modal.changelog.required": "请输入变更日志",
+  "marketPublish.modal.comparison.local": "本地当前版本",
+  "marketPublish.modal.comparison.remote": "当前发布版本",
+  "marketPublish.modal.identifier.extra": "标识符将作为助理的唯一标识，建议使用小写字母、数字和连字符",
+  "marketPublish.modal.identifier.label": "助理标识符",
+  "marketPublish.modal.identifier.lengthError": "标识符长度应在3-50个字符之间",
+  "marketPublish.modal.identifier.patternError": "标识符只能包含小写字母、数字和连字符",
+  "marketPublish.modal.identifier.placeholder": "请输入助理的唯一标识符，如: web-development",
+  "marketPublish.modal.identifier.required": "请输入助理标识符",
+  "marketPublish.modal.loading.fetchingRemote": "正在加载远程数据…",
+  "marketPublish.modal.loading.submit": "正在发布助理…",
+  "marketPublish.modal.loading.upload": "正在发布新版本…",
+  "marketPublish.modal.messages.createVersionFailed": "版本创建失败: {{message}}",
+  "marketPublish.modal.messages.fetchRemoteFailed": "获取远程助理数据失败",
+  "marketPublish.modal.messages.missingIdentifier": "当前助理还没有社区标识符",
+  "marketPublish.modal.messages.notAuthenticated": "请先登录社区账户",
+  "marketPublish.modal.messages.publishFailed": "发布失败: {{message}}",
+  "marketPublish.modal.submitButton": "发布",
+  "marketPublish.modal.title.submit": "分享到助理社区",
+  "marketPublish.modal.title.upload": "发布新版本",
+  "marketPublish.resultModal.message": "你创作的助理已提交审核，审核通过后将自动上线",
+  "marketPublish.resultModal.title": "提交成功",
+  "marketPublish.resultModal.view": "前往社区查看",
+  "marketPublish.submit.button": "分享到社区",
+  "marketPublish.submit.tooltip": "分享助理到社区",
+  "marketPublish.upload.button": "发布新版本",
+  "marketPublish.upload.tooltip": "发布新版本到助理社区",
+  "memory.enabled.desc": "允许 LobeHub 从对话中提取偏好和信息，并在之后使用。您可以随时查看、编辑或清除记忆内容。",
+  "memory.enabled.title": "启用记忆功能",
+  "memory.title": "记忆设置",
+  "message.success": "更新成功",
+  "myAgents.actions.cancel": "取消",
+  "myAgents.actions.confirmDeprecate": "确认废弃",
+  "myAgents.actions.deprecate": "永久废弃",
+  "myAgents.actions.deprecateConfirmContent": "废弃后该助理将永久从市场移除，且无法重新上架。此操作不可逆，请谨慎操作。",
+  "myAgents.actions.deprecateConfirmTitle": "确认废弃助理？",
+  "myAgents.actions.deprecateError": "废弃助理失败",
+  "myAgents.actions.deprecateLoading": "正在废弃助理…",
+  "myAgents.actions.deprecateSuccess": "助理已废弃",
+  "myAgents.actions.edit": "去编辑助理",
+  "myAgents.actions.publish": "上架助理",
+  "myAgents.actions.publishError": "上架助理失败",
+  "myAgents.actions.publishLoading": "正在上架助理…",
+  "myAgents.actions.publishSuccess": "助理已上架",
+  "myAgents.actions.unpublish": "下架助理",
+  "myAgents.actions.unpublishError": "下架助理失败",
+  "myAgents.actions.unpublishLoading": "正在下架助理…",
+  "myAgents.actions.unpublishSuccess": "助理已下架",
+  "myAgents.actions.viewDetail": "查看详情",
+  "myAgents.detail.category": "分类",
+  "myAgents.detail.description": "描述",
+  "myAgents.detail.identifier": "标识符",
+  "myAgents.detail.title": "助理详情",
+  "myAgents.empty.description": "你还没有发布任何助理到市场",
+  "myAgents.empty.title": "暂无发布的助理",
+  "myAgents.errors.editFailed": "编辑助理失败，请稍后重试",
+  "myAgents.errors.fetchFailed": "获取助理详情失败",
+  "myAgents.errors.notAuthenticated": "请先登录市场账户",
+  "myAgents.loginRequired.button": "登录市场账户",
+  "myAgents.loginRequired.description": "请先登录市场账户以查看你发布的助理",
+  "myAgents.loginRequired.title": "需要登录",
+  "myAgents.status.archived": "已归档",
+  "myAgents.status.deprecated": "已废弃",
+  "myAgents.status.published": "已上架",
+  "myAgents.status.unpublished": "未上架",
+  "myAgents.title": "我发布的助理",
+  "plugin.addMCPPlugin": "添加 MCP",
+  "plugin.addTooltip": "自定义技能",
+  "plugin.clearDeprecated": "移除无效技能",
+  "plugin.empty": "暂无已安装技能，欢迎前往 <1>技能商店</1> 探索",
+  "plugin.installStatus.deprecated": "已卸载",
+  "plugin.settings.hint": "请根据描述填写以下配置",
+  "plugin.settings.title": "{{id}} 技能配置",
+  "plugin.settings.tooltip": "技能配置",
+  "plugin.store": "技能商店",
+  "settingAgent.avatar.sizeExceeded": "图片大小超过 1MB 限制，请选择更小的图片",
+  "settingAgent.avatar.title": "助理头像",
+  "settingAgent.backgroundColor.title": "头像背景色",
+  "settingAgent.description.desc": "简单介绍你的助理，不作为角色设定",
+  "settingAgent.description.placeholder": "请输入助理描述",
+  "settingAgent.description.title": "助理描述",
+  "settingAgent.name.placeholder": "请输入助理名称",
+  "settingAgent.name.title": "名称",
+  "settingAgent.prompt.placeholder": "输入助理设定，按 / 打开命令菜单",
+  "settingAgent.prompt.templatePlaceholder": "#### 目标\n描述该智能体的主要用途和目标。\n\n#### 技能\n- 列出关键能力\n- 以及专业知识领域\n\n#### 工作流程\n1. 分步骤的执行流程\n2. 智能体应如何处理任务\n3. 与用户的预期互动方式\n\n#### 限制条件\n- 需要遵守的重要限制\n- 行为准则",
+  "settingAgent.prompt.title": "助理设定",
+  "settingAgent.submit": "更新助理信息",
+  "settingAgent.tag.desc": "助理标签将在助理社区中展示",
+  "settingAgent.tag.placeholder": "请输入标签",
+  "settingAgent.tag.title": "标签",
+  "settingAgent.title": "助理信息",
+  "settingAppearance.animationMode.agile": "敏捷",
+  "settingAppearance.animationMode.desc": "选择应用程序的操作响应的动画速度",
+  "settingAppearance.animationMode.disabled": "关闭",
+  "settingAppearance.animationMode.elegant": "优雅",
+  "settingAppearance.animationMode.title": "响应动画",
+  "settingAppearance.contextMenuMode.default": "默认",
+  "settingAppearance.contextMenuMode.desc": "为部分列表项启用右键菜单。",
+  "settingAppearance.contextMenuMode.disabled": "不使用",
+  "settingAppearance.contextMenuMode.title": "右键菜单方案",
+  "settingAppearance.neutralColor.desc": "不同色彩倾向的灰阶自定义",
+  "settingAppearance.neutralColor.title": "中性色",
+  "settingAppearance.noAnimation.desc": "禁用应用程序中的所有动画效果",
+  "settingAppearance.noAnimation.title": "无动画模式",
+  "settingAppearance.preview.title": "调色盘",
+  "settingAppearance.primaryColor.desc": "自定义主题色",
+  "settingAppearance.primaryColor.title": "主题色",
+  "settingAppearance.title": "应用外观",
+  "settingChat.autoCreateTopicThreshold.desc": "当前消息数超过设定该值后，将自动创建话题",
+  "settingChat.autoCreateTopicThreshold.title": "消息阈值",
+  "settingChat.chatStyleType.title": "聊天窗口样式",
+  "settingChat.chatStyleType.type.chat": "对话模式",
+  "settingChat.chatStyleType.type.docs": "文档模式",
+  "settingChat.compressThreshold.desc": "当未压缩的历史消息超过该值时，将进行压缩",
+  "settingChat.compressThreshold.title": "历史消息长度压缩阈值",
+  "settingChat.enableAutoCreateTopic.desc": "会话过程中是否自动创建话题，仅在临时话题中生效",
+  "settingChat.enableAutoCreateTopic.title": "自动创建话题",
+  "settingChat.enableCompressHistory.title": "开启历史消息自动总结",
+  "settingChat.enableHistoryCount.alias": "不限制",
+  "settingChat.enableHistoryCount.limited": "只包含 {{number}} 条会话消息",
+  "settingChat.enableHistoryCount.setlimited": "使用历史消息数",
+  "settingChat.enableHistoryCount.title": "限制历史消息数",
+  "settingChat.enableHistoryCount.unlimited": "不限历史消息数",
+  "settingChat.enableStreaming.desc": "启用流式输出以实时显示响应。禁用后仅显示完整响应。",
+  "settingChat.enableStreaming.title": "启用流式输出",
+  "settingChat.historyCount.desc": "每次请求携带的消息数（包括最新编写的提问。每个提问和回答都计算1）",
+  "settingChat.historyCount.title": "附带消息数",
+  "settingChat.inputTemplate.desc": "用户最新的一条消息会填充到此模板",
+  "settingChat.inputTemplate.placeholder": "预处理模版 {{text}} 将替换为实时输入信息",
+  "settingChat.inputTemplate.title": "用户输入预处理",
+  "settingChat.submit": "更新聊天偏好",
+  "settingChat.title": "聊天设置",
+  "settingChatAppearance.fontSize.desc": "消息字体大小",
+  "settingChatAppearance.fontSize.marks.normal": "标准",
+  "settingChatAppearance.fontSize.title": "字体大小",
+  "settingChatAppearance.highlighterTheme.title": "代码高亮主题",
+  "settingChatAppearance.mermaidTheme.title": "Mermaid 主题",
+  "settingChatAppearance.title": "聊天外观",
+  "settingChatAppearance.transitionMode.desc": "选择聊天消息的显示方式",
+  "settingChatAppearance.transitionMode.options.fadeIn": "淡入",
+  "settingChatAppearance.transitionMode.options.none.desc": "这取决于模型的响应输出方式，请自行测试。",
+  "settingChatAppearance.transitionMode.options.none.value": "无",
+  "settingChatAppearance.transitionMode.options.smooth": "平滑",
+  "settingChatAppearance.transitionMode.title": "过渡动画",
+  "settingCommon.devMode.desc": "开启后将显示开发者相关的功能和选项",
+  "settingCommon.devMode.title": "开发者模式",
+  "settingCommon.lang.autoMode": "跟随系统",
+  "settingCommon.lang.title": "语言",
+  "settingCommon.liteMode.desc": "简化界面并隐藏高级功能",
+  "settingCommon.liteMode.title": "精简模式",
+  "settingCommon.responseLanguage.auto": "跟随系统",
+  "settingCommon.responseLanguage.desc": "设置 AI 回复使用的语言",
+  "settingCommon.responseLanguage.placeholder": "选择回复语言",
+  "settingCommon.responseLanguage.title": "回复语言",
+  "settingCommon.themeMode.auto": "自动",
+  "settingCommon.themeMode.dark": "深色",
+  "settingCommon.themeMode.light": "浅色",
+  "settingCommon.themeMode.title": "主题",
+  "settingCommon.title": "通用设置",
+  "settingGroup.description.placeholder": "请输入群组描述",
+  "settingGroup.description.title": "群组描述",
+  "settingGroup.name.placeholder": "请输入群组名称",
+  "settingGroup.name.title": "群组名称",
+  "settingGroup.scene.desc": "选择群组场景",
+  "settingGroup.scene.options.casual": "休闲",
+  "settingGroup.scene.options.productive": "生产力",
+  "settingGroup.scene.title": "群组场景",
+  "settingGroup.submit": "更新群组",
+  "settingGroup.systemPrompt.placeholder": "请输入主持人系统提示词",
+  "settingGroup.systemPrompt.title": "主持人系统提示词",
+  "settingGroup.title": "群组信息",
+  "settingGroupChat.allowDM.desc": "关闭后，你仍然可以主动向助理发送私信",
+  "settingGroupChat.allowDM.title": "允许助理发送私信",
+  "settingGroupChat.enableSupervisor.desc": "启用群组主持人功能，主持人将管理群组对话流程",
+  "settingGroupChat.enableSupervisor.title": "启用主持人",
+  "settingGroupChat.maxResponseInRow.desc": "选择成员可以连续回复多少条消息。设置为 0 则禁用此限制。",
+  "settingGroupChat.maxResponseInRow.title": "连续回复消息数",
+  "settingGroupChat.model.desc": "群成员发言不受影响。部分模型无法作为主持人模型使用。",
+  "settingGroupChat.model.title": "主持人模型",
+  "settingGroupChat.orchestratorTitle": "主持人设置",
+  "settingGroupChat.responseOrder.desc": "代理将按照在聊天中设置的顺序进行回复",
+  "settingGroupChat.responseOrder.options.natural": "自然",
+  "settingGroupChat.responseOrder.options.sequential": "顺序",
+  "settingGroupChat.responseOrder.placeholder": "选择回复顺序",
+  "settingGroupChat.responseOrder.title": "回复顺序",
+  "settingGroupChat.responseSpeed.desc": "控制聊天的整体进行速度",
+  "settingGroupChat.responseSpeed.options.fast": "快速",
+  "settingGroupChat.responseSpeed.options.medium": "中等",
+  "settingGroupChat.responseSpeed.options.slow": "慢速",
+  "settingGroupChat.responseSpeed.placeholder": "选择回复速度",
+  "settingGroupChat.responseSpeed.title": "回复速度",
+  "settingGroupChat.revealDM.desc": "使发送给其他成员的私信内容对你可见。",
+  "settingGroupChat.revealDM.title": "显示私信内容",
+  "settingGroupChat.submit": "更新设置",
+  "settingGroupChat.systemPrompt.desc": "群聊对话主持人的自定义系统提示词。这可能影响默认的主持人行为。",
+  "settingGroupChat.systemPrompt.placeholder": "请输入自定义主持人系统提示词…",
+  "settingGroupChat.systemPrompt.title": "主持人系统提示词",
+  "settingGroupChat.title": "聊天设置",
+  "settingGroupMembers.addToGroup": "加入群组",
+  "settingGroupMembers.availableAgents": "可用助理",
+  "settingGroupMembers.createMember": "创建成员",
+  "settingGroupMembers.defaultAgent": "自定义助理",
+  "settingGroupMembers.disableHost": "关闭主持助理",
+  "settingGroupMembers.edit": "编辑成员",
+  "settingGroupMembers.empty": "该群组中暂无成员。点击 + 按钮添加成员。",
+  "settingGroupMembers.enableHost": "启用主持助理",
+  "settingGroupMembers.groupHost": "群主持",
+  "settingGroupMembers.groupMembers": "群组成员",
+  "settingGroupMembers.host.description": "主持人在群组中时，群聊将自动化运行，适合发散性任务。",
+  "settingGroupMembers.host.title": "主持人",
+  "settingGroupMembers.noAvailableAgents": "暂无可用助理",
+  "settingGroupMembers.noDescription": "暂无描述",
+  "settingGroupMembers.noMembersInGroup": "群组暂无成员",
+  "settingGroupMembers.owner": "你（所有者）",
+  "settingGroupMembers.remove": "移除成员",
+  "settingGroupMembers.removeFromGroup": "移出群组",
+  "settingGroupMembers.you": "你",
+  "settingImage.defaultCount.desc": "设置图像生成面板在创建新任务时的默认图片数量。",
+  "settingImage.defaultCount.label": "默认图片数量",
+  "settingImage.defaultCount.title": "AI 绘画设置",
+  "settingModel.enableMaxTokens.title": "开启单次回复限制",
+  "settingModel.enableReasoningEffort.title": "开启推理强度调整",
+  "settingModel.frequencyPenalty.desc": "值越大，用词越丰富多样；值越低，用词更朴实简单",
+  "settingModel.frequencyPenalty.title": "词汇丰富度",
+  "settingModel.maxTokens.desc": "单次交互所用的最大 Token 数",
+  "settingModel.maxTokens.title": "单次回复限制",
+  "settingModel.model.desc": "{{provider}} 模型",
+  "settingModel.model.title": "模型",
+  "settingModel.params.title": "高级参数",
+  "settingModel.presencePenalty.desc": "值越大，越倾向不同的表达方式，避免概念重复；值越小，越倾向使用重复的概念或叙述，表达更具一致性",
+  "settingModel.presencePenalty.title": "表述发散度",
+  "settingModel.reasoningEffort.desc": "值越大，推理能力越强，但可能会增加响应时间和 Token 消耗",
+  "settingModel.reasoningEffort.options.high": "高",
+  "settingModel.reasoningEffort.options.low": "低",
+  "settingModel.reasoningEffort.options.medium": "中",
+  "settingModel.reasoningEffort.title": "推理强度",
+  "settingModel.submit": "更新模型设置",
+  "settingModel.temperature.desc": "数值越大，回答越有创意和想象力；数值越小，回答越严谨",
+  "settingModel.temperature.title": "创意活跃度",
+  "settingModel.temperature.warning": "创意活跃度数值过大，输出可能会产生乱码",
+  "settingModel.title": "模型设置",
+  "settingModel.topP.desc": "考虑多少种可能性，值越大，接受更多可能的回答；值越小，倾向选择最可能的回答。不推荐和创意活跃度一起更改",
+  "settingModel.topP.title": "思维开放度",
+  "settingOpening.openingMessage.desc": "打开会话时的开场消息，用来介绍助理的功能",
+  "settingOpening.openingMessage.placeholder": "你好，我是自定义助理。你可以立即与我开始对话，也可以前往助理设置完善我的信息。",
+  "settingOpening.openingMessage.title": "开场消息",
+  "settingOpening.openingQuestions.desc": "会话开始时展示的引导性问题",
+  "settingOpening.openingQuestions.empty": "添加开场问题，帮助用户快速开始对话",
+  "settingOpening.openingQuestions.placeholder": "请输入问题",
+  "settingOpening.openingQuestions.repeat": "问题已存在",
+  "settingOpening.openingQuestions.title": "开场问题",
+  "settingOpening.title": "开场设置",
+  "settingPlugin.title": "技能列表",
+  "settingSystem.oauth.info.desc": "已登录",
+  "settingSystem.oauth.info.title": "账户信息",
+  "settingSystem.oauth.signin.action": "登录",
+  "settingSystem.oauth.signin.desc": "使用 SSO 登录以解锁应用",
+  "settingSystem.oauth.signin.title": "登录账号",
+  "settingSystem.oauth.signout.action": "退出登录",
+  "settingSystem.oauth.signout.confirm": "确认退出？",
+  "settingSystem.oauth.signout.success": "退出登录成功",
+  "settingSystem.title": "系统设置",
+  "settingTTS.openai.sttModel": "OpenAI 语音识别模型",
+  "settingTTS.openai.title": "OpenAI",
+  "settingTTS.openai.ttsModel": "OpenAI 语音合成模型",
+  "settingTTS.showAllLocaleVoice.desc": "关闭则只显示当前语种的声源",
+  "settingTTS.showAllLocaleVoice.title": "显示所有语种声源",
+  "settingTTS.stt": "语音识别设置",
+  "settingTTS.sttAutoStop.desc": "关闭后，语音识别将不会自动结束，需要手动点击结束按钮",
+  "settingTTS.sttAutoStop.title": "自动结束语音识别",
+  "settingTTS.sttLocale.desc": "语音输入的语种，此选项可提高语音识别准确率",
+  "settingTTS.sttLocale.title": "语音识别语种",
+  "settingTTS.sttService.desc": "其中 browser 为浏览器原生的语音识别服务",
+  "settingTTS.sttService.title": "语音识别服务",
+  "settingTTS.submit": "更新语音服务",
+  "settingTTS.title": "语音服务",
+  "settingTTS.tts": "语音合成设置",
+  "settingTTS.ttsService.desc": "如使用 OpenAI 语音合成服务，需要保证 OpenAI 模型服务已开启",
+  "settingTTS.ttsService.title": "语音合成服务",
+  "settingTTS.voice.desc": "为当前助理挑选一个声音，不同 TTS 服务支持的声源不同",
+  "settingTTS.voice.preview": "试听声源",
+  "settingTTS.voice.title": "语音合成声源",
+  "startConversation": "开始对话",
+  "storage.actions.export.button": "导出",
+  "storage.actions.export.exportType.agent": "导出助理设定",
+  "storage.actions.export.exportType.agentWithMessage": "导出助理和消息",
+  "storage.actions.export.exportType.all": "导出全局设置和所有助理数据",
+  "storage.actions.export.exportType.allAgent": "导出所有助理设定",
+  "storage.actions.export.exportType.allAgentWithMessage": "导出所有助理和消息",
+  "storage.actions.export.exportType.globalSetting": "导出全局设置",
+  "storage.actions.export.title": "导出数据",
+  "storage.actions.import.button": "导入",
+  "storage.actions.import.title": "导入数据",
+  "storage.actions.title": "高级操作",
+  "storage.desc": "当前浏览器中的存储用量",
+  "storage.embeddings.used": "向量存储",
+  "storage.title": "数据存储",
+  "storage.used": "存储用量",
+  "submitAgentModal.button": "提交助理",
+  "submitAgentModal.identifier": "助理标识符（identifier）",
+  "submitAgentModal.metaMiss": "请补全助理信息后提交，需要包含名称、描述和标签",
+  "submitAgentModal.placeholder": "请输入助理的标识符，需要是唯一的，比如 web-development",
+  "submitAgentModal.success": "助理提交成功",
+  "submitAgentModal.tooltips": "分享到助理社区",
+  "sync.device.deviceName.hint": "添加名称以便于识别",
+  "sync.device.deviceName.placeholder": "请输入设备名称",
+  "sync.device.deviceName.title": "设备名称",
+  "sync.device.title": "设备信息",
+  "sync.device.unknownBrowser": "未知浏览器",
+  "sync.device.unknownOS": "未知系统",
+  "sync.warning.tip": "经过较长一段时间社区公测，WebRTC 同步可能无法稳定满足通用的数据同步诉求。请自行 <1>部署信令服务器</1> 后使用。",
+  "sync.webrtc.channelName.desc": "WebRTC 将使用此名创建同步频道，确保频道名称唯一",
+  "sync.webrtc.channelName.placeholder": "请输入同步频道名称",
+  "sync.webrtc.channelName.shuffle": "随机生成",
+  "sync.webrtc.channelName.title": "同步频道名称",
+  "sync.webrtc.channelPassword.desc": "添加密码确保频道私密性，只有密码正确时，设备才可加入频道",
+  "sync.webrtc.channelPassword.placeholder": "请输入同步频道密码",
+  "sync.webrtc.channelPassword.title": "同步频道密码",
+  "sync.webrtc.desc": "实时、点对点的数据通信，需设备同时在线才可同步",
+  "sync.webrtc.enabled.invalid": "请填写信令服务器和同步频道名称后再开启",
+  "sync.webrtc.enabled.title": "开启同步",
+  "sync.webrtc.signaling.desc": "WebRTC 将使用该地址进行同步",
+  "sync.webrtc.signaling.placeholder": "请输入信令服务器地址",
+  "sync.webrtc.signaling.title": "信令服务器",
+  "sync.webrtc.title": "WebRTC 同步",
+  "systemAgent.agentMeta.label": "模型",
+  "systemAgent.agentMeta.modelDesc": "指定用于生成助理名称、描述、头像、标签的模型",
+  "systemAgent.agentMeta.title": "助理信息生成助理",
+  "systemAgent.customPrompt.addPrompt": "添加自定义提示",
+  "systemAgent.customPrompt.desc": "填写后，系统助理将在生成内容时使用自定义提示",
+  "systemAgent.customPrompt.placeholder": "请输入自定义提示词",
+  "systemAgent.customPrompt.title": "自定义提示词",
+  "systemAgent.generationTopic.label": "模型",
+  "systemAgent.generationTopic.modelDesc": "指定用于 AI 绘画自动命名话题的模型",
+  "systemAgent.generationTopic.title": "AI 绘画话题命名助理",
+  "systemAgent.helpInfo": "当创建新助理时，将以默认助理设置作为预设值。",
+  "systemAgent.historyCompress.label": "模型",
+  "systemAgent.historyCompress.modelDesc": "指定用于压缩会话历史的模型",
+  "systemAgent.historyCompress.title": "会话历史压缩助理",
+  "systemAgent.queryRewrite.label": "模型",
+  "systemAgent.queryRewrite.modelDesc": "指定用于优化用户提问的模型",
+  "systemAgent.queryRewrite.title": "资源库提问重写助理",
+  "systemAgent.thread.label": "模型",
+  "systemAgent.thread.modelDesc": "指定用于子话题自动重命名的模型",
+  "systemAgent.thread.title": "子话题自动命名助理",
+  "systemAgent.title": "系统助理",
+  "systemAgent.topic.label": "模型",
+  "systemAgent.topic.modelDesc": "指定用于话题自动重命名的模型",
+  "systemAgent.topic.title": "话题自动命名助理",
+  "systemAgent.translation.label": "模型",
+  "systemAgent.translation.modelDesc": "指定用于翻译的模型",
+  "systemAgent.translation.title": "消息内容翻译助理",
+  "tab.about": "关于",
+  "tab.agent": "助理服务",
+  "tab.apikey": "API Key 管理",
+  "tab.chatAppearance": "聊天外观",
+  "tab.common": "外观",
+  "tab.experiment": "实验",
+  "tab.hotkey": "快捷键",
+  "tab.image": "绘画服务",
+  "tab.llm": "语言模型",
+  "tab.memory": "记忆设置",
+  "tab.profile": "我的账号",
+  "tab.provider": "AI 服务商",
+  "tab.proxy": "网络代理",
+  "tab.security": "安全",
+  "tab.stats": "数据统计",
+  "tab.storage": "数据存储",
+  "tab.sync": "云端同步",
+  "tab.tts": "语音服务",
+  "tab.usage": "用量统计",
+  "tools.add": "集成技能",
+  "tools.builtins.groupName": "内置技能",
+  "tools.disabled": "当前模型不支持函数调用，无法使用技能",
+  "tools.klavis.addServer": "添加服务器",
+  "tools.klavis.authCompleted": "认证完成",
+  "tools.klavis.authFailed": "认证失败",
+  "tools.klavis.authRequired": "需要认证",
+  "tools.klavis.connected": "已连接",
+  "tools.klavis.error": "错误",
+  "tools.klavis.groupName": "Klavis 工具",
+  "tools.klavis.manage": "管理 Klavis",
+  "tools.klavis.manageTitle": "管理 Klavis 集成",
+  "tools.klavis.noServers": "暂无连接的服务器",
+  "tools.klavis.notEnabled": "Klavis 服务未启用",
+  "tools.klavis.oauthRequired": "请在新窗口中完成 OAuth 认证",
+  "tools.klavis.pendingAuth": "待认证",
+  "tools.klavis.serverCreated": "服务器创建成功",
+  "tools.klavis.serverCreatedFailed": "服务器创建失败",
+  "tools.klavis.serverRemoved": "服务器已删除",
+  "tools.klavis.servers": "个服务器",
+  "tools.klavis.tools": "个工具",
+  "tools.klavis.verifyAuth": "我已完成认证",
+  "tools.notInstalled": "未安装",
+  "tools.notInstalledWarning": "当前技能暂未安装，可能会影响助理使用",
+  "tools.plugins.enabled": "已启用 {{num}}",
+  "tools.plugins.groupName": "三方技能",
+  "tools.plugins.noEnabled": "暂无启用技能",
+  "tools.plugins.store": "技能商店",
+  "tools.tabs.all": "全部",
+  "tools.tabs.installed": "已启用",
+  "tools.title": "扩展技能"
 }

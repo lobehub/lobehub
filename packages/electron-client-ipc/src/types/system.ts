@@ -3,6 +3,7 @@ export interface ElectronAppState {
   isLinux?: boolean;
   isMac?: boolean;
   isWindows?: boolean;
+  locale?: string;
   platform?: 'darwin' | 'win32' | 'linux';
   systemAppearance?: string;
   userPath?: UserPathData;

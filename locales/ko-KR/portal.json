@@ -1,30 +1,25 @@
 {
   "Artifacts": "아티팩트",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "청크",
-      "file": "파일"
-    }
-  },
-  "Plugins": "플러그인",
-  "artifacts": {
-    "display": {
-      "code": "코드",
-      "preview": "미리보기"
-    },
-    "svg": {
-      "copyAsImage": "이미지로 복사",
-      "copyFail": "복사 실패, 오류 원인:{{error}}",
-      "copySuccess": "이미지 복사 성공",
-      "download": {
-        "png": "PNG로 다운로드",
-        "svg": "SVG로 다운로드"
-      }
-    }
-  },
-  "emptyArtifactList": "현재 아티팩트 목록이 비어 있습니다. 세션에서 플러그인을 사용한 후 다시 확인해 주세요.",
+  "FilePreview.tabs.chunk": "청크",
+  "FilePreview.tabs.file": "파일",
+  "Plugins": "기능",
+  "artifacts.display.code": "코드",
+  "artifacts.display.preview": "미리보기",
+  "artifacts.svg.copyAsImage": "이미지로 복사",
+  "artifacts.svg.copyFail": "복사 실패, 오류 원인:{{error}}",
+  "artifacts.svg.copySuccess": "이미지 복사 성공",
+  "artifacts.svg.download.png": "PNG로 다운로드",
+  "artifacts.svg.download.svg": "SVG로 다운로드",
+  "document.todos.allCompleted": "모든 작업이 완료되었습니다",
+  "document.todos.title": "작업",
+  "emptyArtifactList": "현재 아티팩트 목록이 비어 있습니다. 세션에서 기능을 사용한 후 다시 확인해 주세요.",
   "emptyKnowledgeList": "현재 지식 목록이 비어 있습니다. 지식 베이스를 활성화한 후 다시 확인해 주세요.",
   "files": "파일",
   "messageDetail": "메시지 상세",
+  "notebook.confirmDelete": "이 문서를 삭제하시겠습니까?",
+  "notebook.delete": "삭제",
+  "notebook.empty": "문서가 없습니다. 현재 주제와 관련된 문서는 여기에 표시됩니다.",
+  "notebook.title": "노트북",
+  "openInPageEditor": "문서에서 편집",
   "title": "작업 공간"
 }

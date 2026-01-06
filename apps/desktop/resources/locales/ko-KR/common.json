@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "추가",
-    "back": "뒤로",
-    "cancel": "취소",
-    "close": "닫기",
-    "confirm": "확인",
-    "delete": "삭제",
-    "edit": "편집",
-    "more": "더보기",
-    "next": "다음",
-    "ok": "확인",
-    "previous": "이전",
-    "refresh": "새로 고침",
-    "remove": "제거",
-    "retry": "다시 시도",
-    "save": "저장",
-    "search": "검색",
-    "submit": "제출"
-  },
-  "app": {
-    "description": "당신의 AI 비서 협업 플랫폼",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "오류",
-    "info": "정보",
-    "loading": "로딩 중",
-    "success": "성공",
-    "warning": "경고"
-  }
+  "actions.add": "추가",
+  "actions.back": "뒤로",
+  "actions.cancel": "취소",
+  "actions.close": "닫기",
+  "actions.confirm": "확인",
+  "actions.delete": "삭제",
+  "actions.edit": "편집",
+  "actions.more": "더보기",
+  "actions.next": "다음",
+  "actions.ok": "확인",
+  "actions.previous": "이전",
+  "actions.refresh": "새로 고침",
+  "actions.remove": "제거",
+  "actions.retry": "다시 시도",
+  "actions.save": "저장",
+  "actions.search": "검색",
+  "actions.submit": "제출",
+  "app.description": "당신의 AI 비서 협업 플랫폼",
+  "app.name": "LobeHub",
+  "status.error": "오류",
+  "status.info": "정보",
+  "status.loading": "로딩 중",
+  "status.success": "성공",
+  "status.warning": "경고"
 }

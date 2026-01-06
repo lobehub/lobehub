@@ -1,14 +1,12 @@
-import { Icon } from '@lobehub/ui';
-import { Checkbox } from 'antd';
+import { Flexbox, Icon , Checkbox } from '@lobehub/ui';
 import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import { KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -327,6 +325,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
     return (
       <Flexbox
+        align={'center'}
         gap={24}
         horizontal
         justify={'space-between'}

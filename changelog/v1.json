@@ -1,5 +1,235 @@
 [
   {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.213"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.212"
+  },
+  {
+    "children": {
+      "fixes": ["Add lost like button in discover detail page."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.211"
+  },
+  {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.210"
+  },
+  {
+    "children": {
+      "fixes": ["Use configured embedding provider instead of hardcoded OpenAI."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.209"
+  },
+  {
+    "children": {
+      "fixes": ["Auto jump to group."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.208"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the old agents open profiles error problem."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.207"
+  },
+  {
+    "children": {
+      "fixes": ["Fix data inconsistency in ai provider config."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.206"
+  },
+  {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.205"
+  },
+  {
+    "children": {
+      "features": ["Add new provider Xiaomi MiMo."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.204"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.203"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor and fix model runtime initialize."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.202"
+  },
+  {
+    "children": {
+      "fixes": ["Restore window resizable before hard reload in desktop onboarding."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.201"
+  },
+  {
+    "children": {
+      "features": ["Add work path for local system."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.200"
+  },
+  {
+    "children": {
+      "fixes": ["Filter empty assistant messages for Anthropic API."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.199"
+  },
+  {
+    "children": {
+      "fixes": ["Support thoughtSignature for openrouter."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.198"
+  },
+  {
+    "children": {
+      "improvements": ["Remove client db and refactor test."],
+      "fixes": ["Fix file upload issue."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.197"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove access code."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.196"
+  },
+  {
+    "children": {
+      "fixes": ["Fix tool call message content missing."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.195"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.194"
+  },
+  {
+    "children": {},
+    "date": "2026-01-02",
+    "version": "2.0.0-next.193"
+  },
+  {
+    "children": {
+      "fixes": ["Fix model edit icon missing."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.192"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove meta in message."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.191"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.190"
+  },
+  {
+    "children": {
+      "improvements": ["Migrate to new DropdownMenuV2 and showContextMenu API."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.189"
+  },
+  {
+    "children": {
+      "improvements": ["Improve tools UI and fix Google schema compatibility."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.188"
+  },
+  {
+    "children": {
+      "improvements": ["Add Gemini 3 Flash & Doubao Seed 1.8 models."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.187"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor oidc env to auth env."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.186"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.185"
+  },
+  {
+    "children": {
+      "improvements": ["Improve loading and local-system render."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.184"
+  },
+  {
+    "children": {},
+    "date": "2025-12-31",
+    "version": "2.0.0-next.183"
+  },
+  {
+    "children": {
+      "features": ["Brand new 2.0 ui for next."]
+    },
+    "date": "2025-12-31",
+    "version": "2.0.0-next.182"
+  },
+  {
+    "children": {
+      "improvements": [
+        "Improve ExecTask and task message UI, improve gtd tool inspector and todo list, improve page document tool inspector UI, improve RunCommand Inspector, rebranding chat ui, refactor UI in features, rerun i18n, setting style, support streaming and display ui for group mode, support tool streaming and title custom render, update i18n, Update i18n microcopy, update ui."
+      ],
+      "features": [
+        "Add a white waitlist in edge config env, add always show tools render in createPlan & createDoc tools, add batch tasks ui, add Bundle Analyzer workflow for detailed bundle size analysis, add business features support with new components and hooks, add business settings features with dynamic loading for Plans, Funds, Usage, Billing, and Referral tabs, add db and schema feature, add home page create group builder button, Add i18n UI locales and improve tool types, add like action in community detail, add memory implement, add subscription settings group with dynamic loading for Plans, Funds, Usage, Billing, and Referral tabs, add the market auth auto generate way, Add turbopack configuration support to CustomNextConfig, add user memory, agent builder, agent builder, agent builder and group builder, app ui page, brand new 2.0 ui for next, buildin some tools should save into docs, code-interpreter tool, code-interpreter tool, code-interpreter tool, desktop feature, enhance desktop onboarding with sign out and localization, enhance macOS desktop permissions and onboarding, enhance onboarding process by removing mode selection step and adding export functionality in advanced settings, file search feature, gtd create plan support streaming render, implement agent builder, implement builtin agents packages, implement memories package, implement Redis caching for presigned URLs in file proxy service, implement server data feature, include Subscription settings group in the Accordion component, Integrate bcryptjs for password verification in BetterAuth, integrate BrandingProviderCard and update Provider components for branding support, onboarding ui, page and knowledge base, rebranding total UI of app, refactor authentication handler to support dynamic loading of better-auth and next-auth, refactor desktop implement with brand new 2.0, rename codeinterpreter into lobe sandbox, server implement, support CMD K, support exec async sub agent task, support export and import topic JSON, support files upload in chat input, support notebook tool, support swr local cache, topic message swr cache, translate AI model descriptions to English, update agent builder ui, update create group chat use builder, update gtd tools( use editor & update metadata ), update user memory embedding model selection based on business features, user memory, user memory, user onboarding, when use usesend to create agent/group, the model should override by lobeAi, wrap ConversationArea and ModelSwitchPanel in TooltipGroup for enhanced UI."
+      ],
+      "fixes": [
+        "Agent profiles update, agent tools config set, editor placeholder, bump charts 3.0.4 to fix import es path, fix anthropic thinking budget, fix async task and improve tool style, fix default waitlist bug, fix delete agent group bug, Fix desktop test cases and refactor translations, Fix desktop test cases and refactor translations, fix gemini 3 model thinking issue, fix gemini 3 pro parallel tool use, fix gemini 3 thinking params, fix identity memory not working, fix supervisor flag, fix thread not working issue, fix when use branch topic,the branch index error problem, fixed the welcome card the create button not work, handle session invalidation on 401 error by logging out signed-in users, improve test infrastructure and mock configurations, locale resolve bug with ESM module loading, page agent editor, prevent redundant login redirect when already on auth pages, redis read json object, remove openapi pkg patch file, slove input editor on pause emit, slove swr mutate not work in Cache Provider, slove the group add member checkbox not work, slove the model select null problem, slove the mutate not work problem, slove when click agentbuilder should clean topic, slove when first call thread, not show ai chat message, support retry error message and fix continueGenerationMessage, update contextMenu in group tools message, update OFFICIAL_URL to app.lobehub.com, update PlanTag link paths for subscription settings, update test snapshots for model description changes, when use agentbuilder the topic id should use new & clear topic…."
+      ]
+    },
+    "date": "2025-12-31",
+    "version": "2.0.0-next.181"
+  },
+  {
     "children": {},
     "date": "2025-12-26",
     "version": "2.0.0-next.180"

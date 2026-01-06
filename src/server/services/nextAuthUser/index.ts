@@ -1,11 +1,11 @@
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { and, eq } from 'drizzle-orm';
-import { Adapter, AdapterAccount } from 'next-auth/adapters';
+import { type Adapter, type AdapterAccount } from 'next-auth/adapters';
 import { NextResponse } from 'next/server';
 
 import { UserModel } from '@/database/models/user';
 import {
-  UserItem,
+  type UserItem,
   nextauthAccounts,
   nextauthAuthenticators,
   nextauthSessions,
@@ -15,7 +15,6 @@ import {
 import { pino } from '@/libs/logger';
 import { merge } from '@/utils/merge';
 
-import { AgentService } from '../agent';
 import {
   mapAdapterUserToLobeUser,
   mapAuthenticatorQueryResutlToAdapterAuthenticator,
@@ -131,10 +130,6 @@ export class NextAuthUserService {
         name,
       }),
     );
-
-    // 3. Create an inbox session for the user
-    const agentService = new AgentService(this.db, uid);
-    await agentService.createInbox();
 
     return { ...user, id: uid };
   };

@@ -1,8 +1,8 @@
+import { Center } from '@lobehub/ui';
 import { memo } from 'react';
-import { Center } from 'react-layout-kit';
 
 import FileIcon from '@/components/FileIcon';
-import RepoIcon from '@/components/RepoIcon';
+import RepoIcon from '@/components/LibIcon';
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 interface KnowledgeIconProps {

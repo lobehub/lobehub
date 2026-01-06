@@ -80,10 +80,10 @@ describe('useMenu', () => {
 
     act(() => {
       const { mainItems, logoutItems } = result.current;
-      expect(mainItems?.some((item) => item?.key === 'profile')).toBe(true);
+      // 'setting' and 'import' are shown when logged in
       expect(mainItems?.some((item) => item?.key === 'setting')).toBe(true);
       expect(mainItems?.some((item) => item?.key === 'import')).toBe(true);
-      expect(mainItems?.some((item) => item?.key === 'changelog')).toBe(true);
+      // 'logout' is shown when isLoginWithAuth is true
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(true);
     });
   });
@@ -98,10 +98,10 @@ describe('useMenu', () => {
 
     act(() => {
       const { mainItems, logoutItems } = result.current;
-      expect(mainItems?.some((item) => item?.key === 'profile')).toBe(true);
-      expect(mainItems?.some((item) => item?.key === 'setting')).toBe(true);
-      expect(mainItems?.some((item) => item?.key === 'import')).toBe(true);
-      expect(mainItems?.some((item) => item?.key === 'changelog')).toBe(true);
+      // When not logged in (isLogin = false), these items should not be shown
+      // isLogin checks isSignedIn, so with isSignedIn: false, isLogin should be false
+      expect(mainItems?.some((item) => item?.key === 'setting')).toBe(false);
+      expect(mainItems?.some((item) => item?.key === 'import')).toBe(false);
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(false);
     });
   });
@@ -116,11 +116,9 @@ describe('useMenu', () => {
 
     act(() => {
       const { mainItems, logoutItems } = result.current;
-      expect(mainItems?.some((item) => item?.key === 'profile')).toBe(false);
+      // When not logged in, setting and import should not be shown
       expect(mainItems?.some((item) => item?.key === 'setting')).toBe(false);
       expect(mainItems?.some((item) => item?.key === 'import')).toBe(false);
-      expect(mainItems?.some((item) => item?.key === 'export')).toBe(false);
-      expect(mainItems?.some((item) => item?.key === 'changelog')).toBe(true);
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(false);
     });
   });

@@ -1,7 +1,7 @@
 import { consola } from 'consola';
 import { colors } from 'consola/utils';
+import { unset } from 'es-toolkit/compat';
 import { diff } from 'just-diff';
-import { unset } from 'lodash';
 import { existsSync } from 'node:fs';
 
 import {
@@ -34,7 +34,7 @@ export const genDiff = () => {
       continue;
     }
 
-    const clearLocals = [];
+    const clearLocals: string[] = [];
 
     for (const locale of [i18nConfig.entryLocale, ...i18nConfig.outputLocales]) {
       const localeFilepath = outputLocaleJsonFilepath(locale, `${ns}.json`);

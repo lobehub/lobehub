@@ -1,10 +1,9 @@
-import { Icon, Input, Text } from '@lobehub/ui';
-import { Form as AForm, App, Button, Space, Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Form as AForm, App, Space } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { EditIcon, LinkIcon, SaveIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import KeyValueEditor from '@/components/KeyValueEditor';
 import MCPStdioCommandInput from '@/components/MCPStdioCommandInput';
@@ -12,79 +11,79 @@ import ArgsInput from '@/features/PluginDevModal/MCPManifestForm/ArgsInput';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   compactForm: css`
     .ant-form-item {
-      margin-block-end: ${token.marginSM}px;
+      margin-block-end: ${cssVar.marginSM};
     }
 
     .ant-form-item-label {
-      padding-block-end: ${token.paddingXXS}px;
+      padding-block-end: ${cssVar.paddingXXS};
 
       label {
         height: auto;
-        font-size: ${token.fontSizeSM}px;
+        font-size: ${cssVar.fontSizeSM};
       }
     }
   `,
 
   configFormContainer: css`
-    padding: ${token.paddingLG}px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorFillAlter};
+    padding: ${cssVar.paddingLG};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillAlter};
   `,
 
   configHeader: css`
-    margin-block-end: ${token.marginLG}px;
+    margin-block-end: ${cssVar.marginLG};
 
     h5 {
-      margin-block-end: ${token.marginXS}px !important;
-      color: ${token.colorTextHeading};
+      margin-block-end: ${cssVar.marginXS} !important;
+      color: ${cssVar.colorTextHeading};
     }
   `,
 
   connectionForm: css`
-    padding: ${token.paddingMD}px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorFillAlter};
+    padding: ${cssVar.paddingMD};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillAlter};
   `,
 
   connectionPreview: css`
-    padding: ${token.paddingMD}px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadiusLG}px;
-    background: ${token.colorFillAlter};
+    padding: ${cssVar.paddingMD};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillAlter};
   `,
 
   editButton: css`
     position: absolute;
-    inset-block-start: ${token.paddingXS}px;
-    inset-inline-end: ${token.paddingXS}px;
+    inset-block-start: ${cssVar.paddingXS};
+    inset-inline-end: ${cssVar.paddingXS};
   `,
 
   emptyState: css`
-    padding: ${token.paddingXL}px;
-    border: 1px dashed ${token.colorBorder};
-    border-radius: ${token.borderRadiusLG}px;
+    padding: ${cssVar.paddingXL};
+    border: 1px dashed ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-align: center;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
 
   footer: css`
     display: flex;
-    gap: ${token.marginSM}px;
-    margin-block-start: ${token.marginLG}px;
+    gap: ${cssVar.marginSM};
+    margin-block-start: ${cssVar.marginLG};
   `,
 
   markdown: css`
     p {
-      margin-block-end: ${token.marginXS}px;
-      color: ${token.colorTextDescription};
+      margin-block-end: ${cssVar.marginXS};
+      color: ${cssVar.colorTextDescription};
     }
   `,
 
@@ -93,48 +92,48 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
     justify-content: space-between;
 
-    padding-block: ${token.paddingXS}px;
+    padding-block: ${cssVar.paddingXS};
     padding-inline: 0;
 
     &:not(:last-child) {
-      border-block-end: 1px solid ${token.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
 
   previewLabel: css`
     display: flex;
-    gap: ${token.marginXS}px;
+    gap: ${cssVar.marginXS};
     align-items: center;
 
-    font-size: ${token.fontSizeSM}px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 
   previewValue: css`
-    padding-block: ${token.paddingXXS}px;
-    padding-inline: ${token.paddingXS}px;
+    padding-block: ${cssVar.paddingXXS};
+    padding-inline: ${cssVar.paddingXS};
 
-    font-family: ${token.fontFamilyCode};
-    font-size: ${token.fontSizeSM}px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 600;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
 
   sectionTitle: css`
     position: relative;
 
     display: flex;
-    gap: ${token.marginXS}px;
+    gap: ${cssVar.marginXS};
     align-items: center;
 
     height: 32px;
 
-    font-size: ${token.fontSizeLG}px;
+    font-size: ${cssVar.fontSizeLG};
     font-weight: 600;
-    color: ${token.colorTextHeading};
+    color: ${cssVar.colorTextHeading};
 
     &::after {
       content: '';
@@ -142,15 +141,14 @@ const useStyles = createStyles(({ css, token }) => ({
       flex: 1;
 
       height: 1px;
-      margin-inline-start: ${token.marginMD}px;
+      margin-inline-start: ${cssVar.marginMD};
 
-      background: linear-gradient(to right, ${token.colorBorder}, transparent);
+      background: linear-gradient(to right, ${cssVar.colorBorder}, transparent);
     }
   `,
 }));
 
 const Settings = memo<{ identifier: string }>(({ identifier }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation(['plugin', 'common']);
   const [connectionForm] = AForm.useForm();
   const [envForm] = AForm.useForm();
@@ -372,7 +370,7 @@ const Settings = memo<{ identifier: string }>(({ identifier }) => {
               {t('settings.configuration.title')}
             </div>
             <div className={styles.emptyState}>
-              <Typography.Text type="secondary">{t('settings.httpTypeNotice')}</Typography.Text>
+              <Text type="secondary">{t('settings.httpTypeNotice')}</Text>
             </div>
           </div>
         )}

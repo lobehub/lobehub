@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserModel } from '@/database/models/user';
 import { UserItem } from '@/database/schemas';
+import { initializeServerAnalytics } from '@/libs/analytics';
 import { pino } from '@/libs/logger';
-import { AgentService } from '@/server/services/agent';
 
 import { UserService } from './index';
 
@@ -39,11 +39,6 @@ vi.mock('@/libs/logger', () => ({
   },
 }));
 
-vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    createInbox: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
 
 let service: UserService;
 const mockUserId = 'test-user-id';
@@ -90,8 +85,8 @@ describe('UserService', () => {
           clerkCreatedAt: new Date('2023-01-01T00:00:00Z'),
         }),
       );
-      expect(AgentService).toHaveBeenCalledWith(expect.anything(), mockUserId);
-      expect(vi.mocked(AgentService).mock.results[0].value.createInbox).toHaveBeenCalled();
+      // Verify initUser was called (which calls analytics)
+      expect(initializeServerAnalytics).toHaveBeenCalled();
       expect(result).toEqual({
         message: 'user created',
         success: true,
@@ -106,7 +101,6 @@ describe('UserService', () => {
 
       expect(UserModel.findById).toHaveBeenCalledWith(expect.anything(), mockUserId);
       expect(UserModel.createUser).not.toHaveBeenCalled();
-      expect(AgentService).not.toHaveBeenCalled();
       expect(result).toEqual({
         message: 'user not created due to user already existing in the database',
         success: false,
@@ -130,8 +124,8 @@ describe('UserService', () => {
           phone: '+1234567890', // Should use first phone number
         }),
       );
-      expect(AgentService).toHaveBeenCalledWith(expect.anything(), mockUserId);
-      expect(vi.mocked(AgentService).mock.results[0].value.createInbox).toHaveBeenCalled();
+      // Verify initUser was called (which calls analytics)
+      expect(initializeServerAnalytics).toHaveBeenCalled();
     });
   });
 

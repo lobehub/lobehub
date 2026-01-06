@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "Подтвердить",
-    "detail": "Приложение для чата на основе большой языковой модели",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "О приложении"
-  },
-  "confirm": {
-    "cancel": "Отмена",
-    "no": "Нет",
-    "title": "Подтверждение",
-    "yes": "Да"
-  },
-  "error": {
-    "button": "Подтвердить",
-    "detail": "Произошла ошибка во время операции, пожалуйста, попробуйте позже",
-    "message": "Произошла ошибка",
-    "title": "Ошибка"
-  },
-  "update": {
-    "downloadAndInstall": "Скачать и установить",
-    "downloadComplete": "Скачивание завершено",
-    "downloadCompleteMessage": "Обновление загружено, хотите установить сейчас?",
-    "installLater": "Установить позже",
-    "installNow": "Установить сейчас",
-    "later": "Напомнить позже",
-    "newVersion": "Обнаружена новая версия",
-    "newVersionAvailable": "Обнаружена новая версия: {{version}}",
-    "skipThisVersion": "Пропустить эту версию"
-  }
+  "about.button": "Подтвердить",
+  "about.detail": "Приложение для чата на основе большой языковой модели",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "О приложении",
+  "confirm.cancel": "Отмена",
+  "confirm.no": "Нет",
+  "confirm.title": "Подтверждение",
+  "confirm.yes": "Да",
+  "error.button": "Подтвердить",
+  "error.detail": "Произошла ошибка во время операции, пожалуйста, попробуйте позже",
+  "error.message": "Произошла ошибка",
+  "error.title": "Ошибка",
+  "update.downloadAndInstall": "Скачать и установить",
+  "update.downloadComplete": "Скачивание завершено",
+  "update.downloadCompleteMessage": "Обновление загружено, хотите установить сейчас?",
+  "update.installLater": "Установить позже",
+  "update.installNow": "Установить сейчас",
+  "update.later": "Напомнить позже",
+  "update.newVersion": "Обнаружена новая версия",
+  "update.newVersionAvailable": "Обнаружена новая версия: {{version}}",
+  "update.skipThisVersion": "Пропустить эту версию"
 }

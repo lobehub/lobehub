@@ -1,7 +1,7 @@
 import { produce } from 'immer';
 
-import { UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
-import { ImageGenerationTopic } from '@/types/generation';
+import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
+import { type ImageGenerationTopic } from '@/types/generation';
 
 interface AddGenerationTopicAction {
   type: 'addTopic';

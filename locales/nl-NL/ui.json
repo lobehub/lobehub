@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Avatar",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Overbelasting",
+    "tokenTag.remained": "Resterend",
+    "tokenTag.used": "Gebruikt"
+  },
+  "common": {
+    "common.cancel": "Annuleren",
+    "common.confirm": "Bevestigen",
+    "common.delete": "Verwijderen",
+    "common.edit": "Bewerken"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Eigenschappen toevoegen",
+    "editableMessage.delete": "Verwijderen",
+    "editableMessage.input": "Invoer",
+    "editableMessage.inputPlaceholder": "Voer voorbeeldinhoud in",
+    "editableMessage.output": "Uitvoer",
+    "editableMessage.outputPlaceholder": "Voer voorbeelduitvoer in",
+    "editableMessage.system": "Systeem"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Verwijderen",
+    "emojiPicker.draggerDesc": "Klik of sleep een afbeelding naar dit gebied om te uploaden",
+    "emojiPicker.emoji": "Emoji",
+    "emojiPicker.fileTypeError": "Je kunt alleen afbeeldingsbestanden uploaden!",
+    "emojiPicker.upload": "Uploaden",
+    "emojiPicker.uploadBtn": "Bijsnijden en uploaden"
+  },
+  "form": {
+    "form.reset": "Resetten",
+    "form.submit": "Verzenden",
+    "form.unsavedChanges": "Niet-opgeslagen wijzigingen",
+    "form.unsavedWarning": "Je hebt niet-opgeslagen wijzigingen. Weet je zeker dat je wilt verlaten?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Deze sneltoets conflicteert met een bestaande.",
+    "hotkey.invalidCombination": "De sneltoets moet een modificatietoets (Ctrl, Alt, Shift) en slechts één normale toets bevatten.",
+    "hotkey.placeholder": "Druk op toetsen om sneltoets op te nemen",
+    "hotkey.reset": "Herstellen naar standaard"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Annuleren",
+    "messageModal.confirm": "Bevestigen",
+    "messageModal.edit": "Bewerken"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Zijbalk samenvouwen",
+    "sideNav.demoActiveLabel": "Actief",
+    "sideNav.demoFeatureAutoCollapseDesc": "Sleep onder de drempel om slim samen te vouwen",
+    "sideNav.demoFeatureAutoCollapseTitle": "Automatisch samenvouwen",
+    "sideNav.demoFeaturePerformanceDesc": "Geen animatiebelasting voor betere prestaties",
+    "sideNav.demoFeaturePerformanceTitle": "Prestaties",
+    "sideNav.demoFeatureResizeDesc": "Sleep om de paneelbreedte aan te passen",
+    "sideNav.demoFeatureResizeTitle": "Flexibel formaat aanpassen",
+    "sideNav.demoFeatureSmartHandleDesc": "Beweeg erover om de schakelknop te tonen",
+    "sideNav.demoFeatureSmartHandleTitle": "Slimme bediening",
+    "sideNav.demoFeaturesTitle": "Functies",
+    "sideNav.demoHint": "Probeer de rand van het paneel te slepen en gebruik de schakelknop ->",
+    "sideNav.demoSubtitle": "Een zijpaneel in werkruimte-stijl met versleepbare grootte",
+    "sideNav.demoTitle": "DraggableSideNav Demo",
+    "sideNav.expand": "Zijbalk uitvouwen"
+  }
+}

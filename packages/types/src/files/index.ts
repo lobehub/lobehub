@@ -11,6 +11,7 @@ export enum FilesTabs {
 
 export enum FileSource {
   ImageGeneration = 'image_generation',
+  PageEditor = 'page-editor',
 }
 
 export interface FileItem {

@@ -1,4 +1,4 @@
-import { CreateFileParams, ElectronIpcClient, FileMetadata } from '@lobechat/electron-server-ipc';
+import { type CreateFileParams, ElectronIpcClient, type FileMetadata } from '@lobechat/electron-server-ipc';
 import type { DesktopServerIpcServices } from '@lobehub/desktop-ipc-typings';
 
 import packageJSON from '@/../apps/desktop/package.json';

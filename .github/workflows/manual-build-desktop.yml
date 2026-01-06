@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -62,13 +62,9 @@ jobs:
 
       - name: Install deps
         run: bun i
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Lint
         run: bun run lint
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
 
   version:
     name: Determine version
@@ -76,7 +72,7 @@ jobs:
     outputs:
       version: ${{ steps.set_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -118,7 +114,7 @@ jobs:
       matrix:
         os: [macos-latest, macos-15-intel]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -196,7 +192,7 @@ jobs:
     if: inputs.build_windows
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -249,7 +245,7 @@ jobs:
     if: inputs.build_linux
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -303,7 +299,7 @@ jobs:
     if: inputs.build_macos
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Node & Bun
         uses: ./.github/actions/setup-node-bun

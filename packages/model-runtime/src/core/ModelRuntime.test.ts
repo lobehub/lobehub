@@ -1,18 +1,25 @@
 // @vitest-environment node
-import { TraceNameMap } from '@lobechat/types';
 import { ClientSecretPayload } from '@lobechat/types';
-import { Langfuse } from 'langfuse';
-import { LangfuseGenerationClient, LangfuseTraceClient } from 'langfuse-core';
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as langfuseCfg from '@/envs/langfuse';
-import { createTraceOptions } from '@/server/modules/ModelRuntime';
-
-import { ChatStreamPayload, LobeOpenAI, ModelRuntime } from '../index';
+import { ChatStreamCallbacks, ChatStreamPayload, LobeOpenAI, ModelRuntime } from '../index';
 import { providerRuntimeMap } from '../runtimeMap';
 import { CreateImagePayload } from '../types/image';
-import { AgentChatOptions } from './ModelRuntime';
+
+/**
+ * Mock createTraceOptions for testing purposes.
+ * This avoids importing from @/server/modules/ModelRuntime which has database dependencies.
+ */
+const createMockTraceOptions = (callbacks?: Partial<ChatStreamCallbacks>) => ({
+  callback: {
+    onCompletion: callbacks?.onCompletion ?? vi.fn(),
+    onFinal: callbacks?.onFinal ?? vi.fn(),
+    onStart: callbacks?.onStart ?? vi.fn(),
+    onToolsCalling: callbacks?.onToolsCalling ?? vi.fn(),
+  } as ChatStreamCallbacks,
+  headers: new Headers(),
+});
 
 const specialProviders = [
   { id: 'openai', payload: { apiKey: 'user-openai-key', baseURL: 'user-endpoint' } },
@@ -99,85 +106,50 @@ describe('ModelRuntime', () => {
 
       await mockModelRuntime.chat(payload);
     });
-    it('should handle options correctly', async () => {
+    it('should handle options with callbacks correctly', async () => {
       const payload: ChatStreamPayload = {
         messages: [{ role: 'user', content: 'Hello, world!' }],
         model: 'text-davinci-002',
         temperature: 0,
-      };
-
-      const options: AgentChatOptions = {
-        provider: 'openai',
-        trace: {
-          traceId: 'test-trace-id',
-          traceName: TraceNameMap.SummaryTopicTitle,
-          sessionId: 'test-session-id',
-          topicId: 'test-topic-id',
-          tags: [],
-          userId: 'test-user-id',
-        },
       };
 
       vi.spyOn(LobeOpenAI.prototype, 'chat').mockResolvedValue(new Response(''));
 
-      await mockModelRuntime.chat(payload, createTraceOptions(payload, options));
+      await mockModelRuntime.chat(payload, createMockTraceOptions());
     });
 
-    describe('callback', async () => {
+    describe('callback', () => {
       const payload: ChatStreamPayload = {
         messages: [{ role: 'user', content: 'Hello, world!' }],
         model: 'text-davinci-002',
         temperature: 0,
       };
 
-      const options: AgentChatOptions = {
-        provider: 'openai',
-        trace: {
-          traceId: 'test-trace-id',
-          traceName: TraceNameMap.SummaryTopicTitle,
-          sessionId: 'test-session-id',
-          topicId: 'test-topic-id',
-          tags: [],
-          userId: 'test-user-id',
-        },
-        enableTrace: true,
-      };
-
-      const updateMock = vi.fn();
-
       it('should call onToolsCalling correctly', async () => {
-        vi.spyOn(langfuseCfg, 'getLangfuseConfig').mockReturnValue({
-          ENABLE_LANGFUSE: true,
-          LANGFUSE_PUBLIC_KEY: 'abc',
-          LANGFUSE_SECRET_KEY: 'DDD',
-        } as any);
+        const onToolsCallingMock = vi.fn();
 
-        // 使用 spyOn 模拟 chat 方法
         vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
-          async (payload, { callback }: any) => {
-            // 模拟 onToolCall 回调的触发
+          async (_payload, { callback }: any) => {
             if (callback?.onToolsCalling) {
               await callback.onToolsCalling();
             }
             return new Response('abc');
           },
         );
-        vi.spyOn(LangfuseTraceClient.prototype, 'update').mockImplementation(updateMock);
 
-        await mockModelRuntime.chat(payload, createTraceOptions(payload, options));
+        await mockModelRuntime.chat(
+          payload,
+          createMockTraceOptions({ onToolsCalling: onToolsCallingMock }),
+        );
 
-        expect(updateMock).toHaveBeenCalledWith({ tags: ['Tools Calling'] });
+        expect(onToolsCallingMock).toHaveBeenCalled();
       });
-      it('should call onStart correctly', async () => {
-        vi.spyOn(langfuseCfg, 'getLangfuseConfig').mockReturnValue({
-          ENABLE_LANGFUSE: true,
-          LANGFUSE_PUBLIC_KEY: 'abc',
-          LANGFUSE_SECRET_KEY: 'DDD',
-        } as any);
 
-        vi.spyOn(LangfuseGenerationClient.prototype, 'update').mockImplementation(updateMock);
+      it('should call onStart correctly', async () => {
+        const onStartMock = vi.fn();
+
         vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
-          async (payload, { callback }: any) => {
+          async (_payload, { callback }: any) => {
             if (callback?.onStart) {
               callback.onStart();
             }
@@ -185,22 +157,16 @@ describe('ModelRuntime', () => {
           },
         );
 
-        await mockModelRuntime.chat(payload, createTraceOptions(payload, options));
+        await mockModelRuntime.chat(payload, createMockTraceOptions({ onStart: onStartMock }));
 
-        // Verify onStart was called
-        expect(updateMock).toHaveBeenCalledWith({ completionStartTime: expect.any(Date) });
+        expect(onStartMock).toHaveBeenCalled();
       });
 
       it('should call onCompletion correctly', async () => {
-        vi.spyOn(langfuseCfg, 'getLangfuseConfig').mockReturnValue({
-          ENABLE_LANGFUSE: true,
-          LANGFUSE_PUBLIC_KEY: 'abc',
-          LANGFUSE_SECRET_KEY: 'DDD',
-        } as any);
-        // Spy on the chat method and trigger onCompletion callback
-        vi.spyOn(LangfuseGenerationClient.prototype, 'update').mockImplementation(updateMock);
+        const onCompletionMock = vi.fn();
+
         vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
-          async (payload, { callback }: any) => {
+          async (_payload, { callback }: any) => {
             if (callback?.onCompletion) {
               await callback.onCompletion({ text: 'Test completion' });
             }
@@ -208,37 +174,29 @@ describe('ModelRuntime', () => {
           },
         );
 
-        await mockModelRuntime.chat(payload, createTraceOptions(payload, options));
+        await mockModelRuntime.chat(
+          payload,
+          createMockTraceOptions({ onCompletion: onCompletionMock }),
+        );
 
-        // Verify onCompletion was called with expected output
-        expect(updateMock).toHaveBeenCalledWith({
-          endTime: expect.any(Date),
-          metadata: {},
-          output: 'Test completion',
-        });
+        expect(onCompletionMock).toHaveBeenCalledWith({ text: 'Test completion' });
       });
-      it.skip('should call onFinal correctly', async () => {
-        vi.spyOn(langfuseCfg, 'getLangfuseConfig').mockReturnValue({
-          ENABLE_LANGFUSE: true,
-          LANGFUSE_PUBLIC_KEY: 'abc',
-          LANGFUSE_SECRET_KEY: 'DDD',
-        } as any);
+
+      it('should call onFinal correctly', async () => {
+        const onFinalMock = vi.fn();
 
         vi.spyOn(LobeOpenAI.prototype, 'chat').mockImplementation(
-          async (payload, { callback }: any) => {
+          async (_payload, { callback }: any) => {
             if (callback?.onFinal) {
               await callback.onFinal('Test completion');
             }
             return new Response('Success');
           },
         );
-        const shutdownAsyncMock = vi.fn();
-        vi.spyOn(Langfuse.prototype, 'shutdownAsync').mockImplementation(shutdownAsyncMock);
 
-        await mockModelRuntime.chat(payload, createTraceOptions(payload, options));
+        await mockModelRuntime.chat(payload, createMockTraceOptions({ onFinal: onFinalMock }));
 
-        // Verify onCompletion was called with expected output
-        expect(shutdownAsyncMock).toHaveBeenCalled();
+        expect(onFinalMock).toHaveBeenCalledWith('Test completion');
       });
     });
   });

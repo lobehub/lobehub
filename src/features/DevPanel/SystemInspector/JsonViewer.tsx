@@ -1,6 +1,5 @@
-import { Highlighter } from '@lobehub/ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 interface JsonViewerProps {
   data: object;

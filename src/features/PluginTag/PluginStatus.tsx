@@ -1,10 +1,9 @@
-import { ActionIcon, Button, Tag } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Tag } from '@lobehub/ui';
 import { Badge } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { LucideRotateCw, LucideTrash2, RotateCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import ManifestPreviewer from '@/components/ManifestPreviewer';
 import { useAgentStore } from '@/store/agent';
@@ -17,7 +16,7 @@ interface PluginStatusProps {
   title?: string;
 }
 const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation();
   const [status, isCustom, reinstallCustomPlugin] = useToolStore((s) => [
     toolSelectors.getManifestLoadingStatus(id)(s),
     customPluginSelectors.isCustomPlugin(id)(s),
@@ -56,12 +55,12 @@ const PluginStatus = memo<PluginStatusProps>(({ title, id, deprecated }) => {
   const tag =
     // 拒绝标签
     deprecated ? (
-      <Tag bordered={false} color={'red'} style={{ marginRight: 0 }}>
+      <Tag color={'red'} style={{ marginRight: 0 }} variant={'filled'}>
         {t('list.item.deprecated.title', { ns: 'plugin' })}
       </Tag>
     ) : // 自定义标签
     isCustom ? (
-      <Tag bordered={false} color={'gold'}>
+      <Tag color={'gold'} variant={'filled'}>
         {t('list.item.local.title', { ns: 'plugin' })}
       </Tag>
     ) : null;

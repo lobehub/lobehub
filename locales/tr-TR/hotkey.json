@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "Mevcut girdi içeriğini kullanıcı mesajı olarak ekleyin, ancak oluşturmayı tetiklemeyin",
-    "title": "Bir kullanıcı mesajı ekle"
-  },
-  "clearCurrentMessages": {
-    "desc": "Geçerli oturumun mesajlarını ve yüklenen dosyaları temizle",
-    "title": "Oturum mesajlarını temizle"
-  },
-  "commandPalette": {
-    "desc": "Genel komut panelini açarak işlevlere hızlı erişim sağlayın",
-    "title": "Komut Paneli"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "Son mesajı sil ve yeniden oluştur",
-    "title": "Sil ve Yeniden Oluştur"
-  },
-  "deleteLastMessage": {
-    "desc": "Son mesajı sil",
-    "title": "Son Mesajı Sil"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "Uygulama ayarları sayfasını aç",
-      "title": "Uygulama Ayarları"
-    },
-    "showApp": {
-      "desc": "Küresel kısayol tuşu ile ana pencereyi göster veya gizle",
-      "title": "Ana Pencereyi Göster/Gizle"
-    }
-  },
-  "editMessage": {
-    "desc": "Mesaja çift tıklayıp Alt tuşuna basarak düzenleme moduna geçin",
-    "title": "Mesajı düzenle"
-  },
-  "navigateToChat": {
-    "desc": "Sohbet sekmesine geç ve rastgele sohbet et",
-    "title": "Varsayılan sohbete geç"
-  },
-  "openChatSettings": {
-    "desc": "Mevcut oturumun ayarlarını görüntüle ve değiştir",
-    "title": "Sohbet ayarlarını aç"
-  },
-  "openHotkeyHelper": {
-    "desc": "Tüm kısayol tuşlarının kullanım talimatlarını görüntüle",
-    "title": "Kısayol Yardımını Aç"
-  },
-  "regenerateMessage": {
-    "desc": "Son mesajı yeniden oluştur",
-    "title": "Mesajı yeniden oluştur"
-  },
-  "saveTopic": {
-    "desc": "Mevcut konuyu kaydedin ve yeni bir konu açın",
-    "title": "Yeni konu aç"
-  },
-  "search": {
-    "desc": "Mevcut sayfanın ana arama kutusunu aç",
-    "title": "Ara"
-  },
-  "showApp": {
-    "desc": "Uygulamanın ana penceresini hızlıca aç",
-    "title": "Ana Pencereyi Göster"
-  },
-  "switchAgent": {
-    "desc": "Yan panelde sabitlenmiş asistanı değiştirmek için Ctrl tuşuna basılı tutarak 0~9 sayısına basın",
-    "title": "Asistanı hızlıca değiştir"
-  },
-  "toggleLeftPanel": {
-    "desc": "Sol yan paneli göster veya gizle",
-    "title": "Asistan panelini göster/gizle"
-  },
-  "toggleRightPanel": {
-    "desc": "Sağ konu panelini göster veya gizle",
-    "title": "Konu panelini göster/gizle"
-  },
-  "toggleZenMode": {
-    "desc": "Odak modu, yalnızca mevcut oturumu gösterir, diğer UI'ları gizler",
-    "title": "Odak modunu değiştir"
-  }
+  "addUserMessage.desc": "Mevcut girdiyi kullanıcı mesajı olarak ekle, ancak oluşturmayı tetikleme",
+  "addUserMessage.title": "Kullanıcı Mesajı Ekle",
+  "clearCurrentMessages.desc": "Geçerli konuşmadaki mesajları ve yüklenen dosyaları temizle",
+  "clearCurrentMessages.title": "Konuşma Mesajlarını Temizle",
+  "commandPalette.desc": "Özelliklere hızlı erişim için genel komut paletini aç",
+  "commandPalette.title": "Komut Paleti",
+  "deleteAndRegenerateMessage.desc": "Son mesajı sil ve yeniden oluştur",
+  "deleteAndRegenerateMessage.title": "Sil ve Yeniden Oluştur",
+  "deleteLastMessage.desc": "Son mesajı sil",
+  "deleteLastMessage.title": "Son Mesajı Sil",
+  "desktop.openSettings.desc": "Uygulama ayarları sayfasını aç",
+  "desktop.openSettings.title": "Uygulama Ayarları",
+  "desktop.showApp.desc": "Genel kısayol ile ana pencerenin görünürlüğünü değiştir",
+  "desktop.showApp.title": "Ana Pencereyi Göster/Gizle",
+  "editMessage.desc": "Alt tuşuna basılı tutup mesaja çift tıklayarak düzenleme moduna gir",
+  "editMessage.title": "Mesajı Düzenle",
+  "navigateToChat.desc": "Sohbet sekmesine geç ve Lobe AI'ye gir",
+  "navigateToChat.title": "Varsayılan Sohbete Geç",
+  "openChatSettings.desc": "Geçerli konuşmanın ayarlarını görüntüle ve düzenle",
+  "openChatSettings.title": "Sohbet Ayarlarını Aç",
+  "openHotkeyHelper.desc": "Tüm klavye kısayolları için talimatları görüntüle",
+  "openHotkeyHelper.title": "Kısayol Yardımını Aç",
+  "regenerateMessage.desc": "Son mesajı yeniden oluştur",
+  "regenerateMessage.title": "Mesajı Yeniden Oluştur",
+  "saveDocument.desc": "Geçerli sayfadaki tüm değişiklikleri hemen kaydet",
+  "saveDocument.title": "Sayfayı Kaydet",
+  "saveTopic.desc": "Geçerli konuyu kaydet ve yeni bir konu başlat",
+  "saveTopic.title": "Yeni Konuya Başla",
+  "search.desc": "Geçerli sayfadaki ana arama kutusunu etkinleştir",
+  "search.title": "Ara",
+  "showApp.desc": "Ana uygulama penceresini hızlıca aç",
+  "showApp.title": "Ana Pencereyi Göster",
+  "switchAgent.desc": "Ctrl tuşuna basılı tutup 0-9 tuşlarına basarak kenar çubuğundaki sabitlenmiş ajanlar arasında geçiş yap",
+  "switchAgent.title": "Hızlı Ajan Değiştir",
+  "toggleLeftPanel.desc": "Sol paneli göster veya gizle",
+  "toggleLeftPanel.title": "Sol Paneli Aç/Kapat",
+  "toggleRightPanel.desc": "Sağ paneli göster veya gizle",
+  "toggleRightPanel.title": "Sağ Paneli Aç/Kapat",
+  "toggleZenMode.desc": "Odak modunda yalnızca geçerli konuşmayı göster, diğer arayüz öğelerini gizle",
+  "toggleZenMode.title": "Odak Modunu Aç/Kapat"
 }

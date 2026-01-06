@@ -1,4 +1,5 @@
 import { ChatToolPayload, UIChatMessage } from '@lobechat/types';
+import i18n from 'i18next';
 
 import { MessageDispatch, messagesReducer } from './reducer';
 
@@ -13,7 +14,6 @@ describe('messagesReducer', () => {
         createdAt: 1629264000000,
         updatedAt: 1629264000000,
         role: 'user',
-        meta: {},
       },
       {
         id: 'message2',
@@ -21,7 +21,6 @@ describe('messagesReducer', () => {
         createdAt: 1629264000000,
         updatedAt: 1629264000000,
         role: 'assistant',
-        meta: {},
         tools: [
           { identifier: 'tool1', apiName: 'calculator', id: 'abc', type: 'default', arguments: '' },
         ],
@@ -64,7 +63,7 @@ describe('messagesReducer', () => {
       const payload: MessageDispatch = { type: 'unimplementedType' };
 
       expect(() => messagesReducer(initialState, payload)).toThrowError(
-        '暂未实现的 type，请检查 reducer',
+        i18n.t('errors.unimplementedType', { ns: 'common' }),
       );
     });
   });
@@ -101,7 +100,6 @@ describe('messagesReducer', () => {
             createdAt: 1629264000000,
             updatedAt: 1629264000000,
             role: 'user',
-            meta: {},
             extra: { abc: '1' },
           } as UIChatMessage,
           ...initialState,
@@ -231,7 +229,6 @@ describe('messagesReducer', () => {
         content: 'Tool content',
         createdAt: 1629264000000,
         updatedAt: 1629264000000,
-        meta: {},
         plugin: {
           identifier: 'tool1',
           apiName: 'calculator',
@@ -486,7 +483,6 @@ describe('messagesReducer', () => {
       expect(newMessage?.role).toBe('user');
       expect(newMessage?.createdAt).toBeDefined();
       expect(newMessage?.updatedAt).toBeDefined();
-      expect(newMessage?.meta).toEqual({});
     });
   });
 

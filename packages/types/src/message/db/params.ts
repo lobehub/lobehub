@@ -19,10 +19,12 @@ import {
 import { UIChatMessage } from '../ui';
 
 export interface QueryMessageParams {
+  agentId?: string | null;
   current?: number;
   groupId?: string | null;
   pageSize?: number;
   sessionId?: string | null;
+  threadId?: string | null;
   topicId?: string | null;
 }
 
@@ -73,7 +75,7 @@ export interface NewMessage {
   provider?: string | null;
   quotaId?: string | null;
   // optional because it has a default function
-  role: 'user' | 'system' | 'assistant' | 'tool';
+  role: 'user' | 'system' | 'assistant' | 'tool' | 'task';
   // required because it's notNull
   sessionId?: string | null;
   threadId?: string | null;

@@ -87,7 +87,7 @@ All following rules are saved under `.cursor/rules/` directory:
 - `react.mdc` – React component style guide and conventions
 - `i18n.mdc` – Internationalization guide using react-i18next
 - `typescript.mdc` – TypeScript code style guide
-- `packages/react-layout-kit.mdc` – Usage guide for react-layout-kit
+- `packages/react-layout-kit.mdc` – Usage guide for Flexbox and Center components from @lobehub/ui
 
 ### State Management
 

@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import {
-  PropsWithChildren,
+  type PropsWithChildren,
   createContext,
   useContext,
   useEffect,

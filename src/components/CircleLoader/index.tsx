@@ -1,7 +1,13 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles, keyframes } from 'antd-style';
 import { memo } from 'react';
 
-export const useStyles = createStyles(({ css, token }, borderWidth: number = 2.5) => ({
+const smallLoaderAnim = keyframes`
+  100% {
+    transform: rotate(1turn);
+  }
+`;
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
   background: css`
     position: absolute;
     inset: 0;
@@ -10,9 +16,13 @@ export const useStyles = createStyles(({ css, token }, borderWidth: number = 2.5
     width: 100%;
     border-radius: 50%;
 
-    background: ${token.colorFill};
+    background: ${cssVar.colorFill};
 
-    mask: radial-gradient(farthest-side, #0000 calc(100% - ${borderWidth}px), #000 0);
+    mask: radial-gradient(
+      farthest-side,
+      #0000 calc(100% - var(--circle-loader-border-width, 2.5px)),
+      #000 0
+    );
   `,
   container: css`
     position: relative;
@@ -29,25 +39,21 @@ export const useStyles = createStyles(({ css, token }, borderWidth: number = 2.5
     border-radius: 50%;
 
     background:
-      radial-gradient(farthest-side, ${token.colorTextSecondary} 94%, #0000) top/ ${borderWidth}px
-        ${borderWidth}px no-repeat,
-      conic-gradient(#0000 50%, ${token.colorTextSecondary});
+      radial-gradient(farthest-side, ${cssVar.colorTextSecondary} 94%, #0000) top/
+        var(--circle-loader-border-width, 2.5px) var(--circle-loader-border-width, 2.5px) no-repeat,
+      conic-gradient(#0000 50%, ${cssVar.colorTextSecondary});
 
-    mask: radial-gradient(farthest-side, #0000 calc(100% - ${borderWidth}px), #000 0);
+    mask: radial-gradient(
+      farthest-side,
+      #0000 calc(100% - var(--circle-loader-border-width, 2.5px)),
+      #000 0
+    );
 
-    animation: small-loader-anim 1s infinite linear;
-
-    @keyframes small-loader-anim {
-      100% {
-        transform: rotate(1turn);
-      }
-    }
+    animation: ${smallLoaderAnim} 1s infinite linear;
   `,
 }));
 
 const CircleLoader = memo(() => {
-  const { styles } = useStyles();
-
   return (
     <div className={styles.container}>
       <div className={styles.loader} />

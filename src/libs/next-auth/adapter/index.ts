@@ -5,7 +5,7 @@ import type {
   VerificationToken,
 } from '@auth/core/adapters';
 import debug from 'debug';
-import { Adapter, AdapterAccount } from 'next-auth/adapters';
+import { type Adapter, type AdapterAccount } from 'next-auth/adapters';
 import urlJoin from 'url-join';
 
 import { serverDBEnv } from '@/config/db';

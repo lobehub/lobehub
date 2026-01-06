@@ -1,4 +1,9 @@
-import { ChatToolPayload, ModelUsage } from '@lobechat/types';
+import {
+  ChatToolPayload,
+  ModelUsage,
+  RuntimeInitialContext,
+  RuntimeStepContext,
+} from '@lobechat/types';
 
 import type { FinishReason } from './event';
 import { AgentState, ToolRegistry } from './state';
@@ -8,6 +13,13 @@ import type { Cost, CostCalculationContext, Usage } from './usage';
  * Runtime execution context passed to Agent runner
  */
 export interface AgentRuntimeContext {
+  /**
+   * Initial context captured at operation start
+   * Contains static state like initial page content that doesn't change during execution
+   * Set once during initialization and passed through to Context Engine
+   */
+  initialContext?: RuntimeInitialContext;
+
   metadata?: Record<string, unknown>;
 
   /** Operation ID (links to Operation for business context) */
@@ -15,6 +27,7 @@ export interface AgentRuntimeContext {
 
   /** Phase-specific payload/context */
   payload?: unknown;
+
   /** Current execution phase */
   phase:
     | 'init'
@@ -22,9 +35,12 @@ export interface AgentRuntimeContext {
     | 'llm_result'
     | 'tool_result'
     | 'tools_batch_result'
+    | 'task_result'
+    | 'tasks_batch_result'
     | 'human_response'
     | 'human_approved_tool'
     | 'human_abort'
+    | 'compression_result'
     | 'error';
 
   /** Session info (kept for backward compatibility, will be optional in the future) */
@@ -34,6 +50,14 @@ export interface AgentRuntimeContext {
     status: AgentState['status'];
     stepCount: number;
   };
+
+  /**
+   * Step context computed at the beginning of each step
+   * Contains dynamic state like GTD todos that changes between steps
+   * Computed by AgentRuntime and passed to Context Engine and Tool Executors
+   */
+  stepContext?: RuntimeStepContext;
+
   /** Usage statistics from the current step (if applicable) */
   stepUsage?: ModelUsage | unknown;
 }
@@ -184,6 +208,107 @@ export interface AgentInstructionResolveAbortedTools {
 }
 
 /**
+ * Instruction to execute context compression
+ */
+export interface AgentInstructionCompressContext {
+  payload: {
+    /** Current token count before compression */
+    currentTokenCount: number;
+    /** Existing summary to incorporate (for incremental compression) */
+    existingSummary?: string;
+    /** Number of recent messages to keep uncompressed */
+    keepRecentCount: number;
+    /** Messages to compress */
+    messages: any[];
+    /** Topic ID for the conversation */
+    topicId: string;
+  };
+  type: 'compress_context';
+}
+
+/**
+ * Task definition for exec_tasks instruction
+ */
+export interface ExecTaskItem {
+  /** Brief description of what this task does (shown in UI) */
+  description: string;
+  /** Whether to inherit context messages from parent conversation */
+  inheritMessages?: boolean;
+  /** Detailed instruction/prompt for the task execution */
+  instruction: string;
+  /** Timeout in milliseconds (optional, default 30 minutes) */
+  timeout?: number;
+}
+
+/**
+ * Instruction to execute a single async task
+ */
+export interface AgentInstructionExecTask {
+  payload: {
+    /** Parent message ID (tool message that triggered the task) */
+    parentMessageId: string;
+    /** Task to execute */
+    task: ExecTaskItem;
+  };
+  type: 'exec_task';
+}
+
+/**
+ * Instruction to execute multiple async tasks in parallel
+ */
+export interface AgentInstructionExecTasks {
+  payload: {
+    /** Parent message ID (tool message that triggered the tasks) */
+    parentMessageId: string;
+    /** Array of tasks to execute */
+    tasks: ExecTaskItem[];
+  };
+  type: 'exec_tasks';
+}
+
+/**
+ * Payload for task_result phase (single task)
+ */
+export interface TaskResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Result from executed task */
+  result: {
+    /** Error message if task failed */
+    error?: string;
+    /** Task result content */
+    result?: string;
+    /** Whether the task completed successfully */
+    success: boolean;
+    /** Task message ID */
+    taskMessageId: string;
+    /** Thread ID where the task was executed */
+    threadId: string;
+  };
+}
+
+/**
+ * Payload for tasks_batch_result phase (multiple tasks)
+ */
+export interface TasksBatchResultPayload {
+  /** Parent message ID */
+  parentMessageId: string;
+  /** Results from executed tasks */
+  results: Array<{
+    /** Error message if task failed */
+    error?: string;
+    /** Task result content */
+    result?: string;
+    /** Whether the task completed successfully */
+    success: boolean;
+    /** Task message ID */
+    taskMessageId: string;
+    /** Thread ID where the task was executed */
+    threadId: string;
+  }>;
+}
+
+/**
  * A serializable instruction object that the "Agent" (Brain) returns
  * to the "AgentRuntime" (Engine) to execute.
  */
@@ -191,8 +316,11 @@ export type AgentInstruction =
   | AgentInstructionCallLlm
   | AgentInstructionCallTool
   | AgentInstructionCallToolsBatch
+  | AgentInstructionExecTask
+  | AgentInstructionExecTasks
   | AgentInstructionRequestHumanPrompt
   | AgentInstructionRequestHumanSelect
   | AgentInstructionRequestHumanApprove
   | AgentInstructionResolveAbortedTools
+  | AgentInstructionCompressContext
   | AgentInstructionFinish;

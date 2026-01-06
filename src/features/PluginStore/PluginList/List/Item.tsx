@@ -1,18 +1,17 @@
-import { Block, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import { useToolStore } from '@/store/tool';
 import { pluginStoreSelectors } from '@/store/tool/selectors';
 import { PluginInstallStep } from '@/store/tool/slices/oldStore/initialState';
-import { DiscoverPluginItem } from '@/types/discover';
-import { LobeToolType } from '@/types/tool/tool';
+import { type DiscoverPluginItem } from '@/types/discover';
+import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Action';
 
@@ -24,7 +23,6 @@ interface PluginItemProps extends DiscoverPluginItem {
 const Item = memo<PluginItemProps>(
   ({ title, description, avatar, onClick, active, identifier, author }) => {
     const { t } = useTranslation('plugin');
-    const theme = useTheme();
     const installProgress = useToolStore(
       pluginStoreSelectors.getPluginInstallProgress(identifier),
       isEqual,
@@ -77,7 +75,7 @@ const Item = memo<PluginItemProps>(
               showInfo={false}
               size="small"
               status="active"
-              strokeColor={{ '0%': theme.blue, '100%': theme.geekblue }}
+              strokeColor={{ '0%': cssVar.blue, '100%': cssVar.geekblue }}
             />
             {stepText && (
               <Text fontSize={11} style={{ marginTop: 4 }} type={'secondary'}>

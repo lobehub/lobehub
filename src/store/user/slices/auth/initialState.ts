@@ -1,15 +1,15 @@
-import { Session, User } from '@auth/core/types';
+import { type Session, type User } from '@auth/core/types';
 import {
-  SignInProps,
-  SignOut,
-  SignedInSessionResource,
-  UserProfileProps,
-  UserResource,
+  type SignInProps,
+  type SignOut,
+  type SignedInSessionResource,
+  type UserProfileProps,
+  type UserResource,
 } from '@clerk/types';
-import { SSOProvider } from '@lobechat/types';
+import { type SSOProvider } from '@lobechat/types';
 
 import { enableClerk } from '@/const/auth';
-import { LobeUser } from '@/types/user';
+import { type LobeUser } from '@/types/user';
 
 export interface UserAuthState {
   authProviders?: SSOProvider[];

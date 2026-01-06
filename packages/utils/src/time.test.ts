@@ -5,6 +5,7 @@ import {
   daysAgo,
   getYYYYmmddHHMMss,
   hoursAgo,
+  isNewReleaseDate,
   lastMonth,
   monthsAgo,
   thisMonth,
@@ -254,6 +255,40 @@ describe('time utilities', () => {
       expect(result).toHaveLength(15);
       // Should match the local time format
       expect(result).toBe('20240615_143045');
+    });
+  });
+
+  describe('isNewReleaseDate', () => {
+    it('should return true if date is within 14 days', () => {
+      const date = '2024-06-15'; // 0 days before 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(true);
+    });
+
+    it('should return true if date is exactly 13 days ago', () => {
+      const date = '2024-06-02'; // 13 days before 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(true);
+    });
+
+    it('should return false if date is 15 days ago', () => {
+      const date = '2024-05-31'; // 15 days before 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(false);
+    });
+
+    it('should return true if date is in future', () => {
+      const date = '2024-06-16'; // 1 day after 2024-06-15
+      expect(isNewReleaseDate(date)).toBe(true);
+    });
+
+    it('should work with real model release date (gemini-3-pro-preview)', () => {
+      // Released at 2025-11-18, system time is 2024-06-15, so it's in future
+      const date = '2025-11-18';
+      expect(isNewReleaseDate(date)).toBe(true);
+    });
+
+    it('should work with custom days', () => {
+      const date = '2024-06-09'; // 6 days ago from 2024-06-15
+      expect(isNewReleaseDate(date, 7)).toBe(true);
+      expect(isNewReleaseDate(date, 5)).toBe(false);
     });
   });
 });

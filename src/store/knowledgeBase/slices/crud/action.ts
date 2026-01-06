@@ -1,10 +1,10 @@
-import { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import type { SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import { KnowledgeBaseStore } from '@/store/knowledgeBase/store';
-import { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
+import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
+import { type CreateKnowledgeBaseParams, type KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 const FETCH_KNOWLEDGE_BASE_LIST_KEY = 'FETCH_KNOWLEDGE_BASE';
 const FETCH_KNOWLEDGE_BASE_ITEM_KEY = 'FETCH_KNOWLEDGE_BASE_ITEM';

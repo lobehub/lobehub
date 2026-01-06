@@ -50,8 +50,7 @@
       "content": "Can you help me write a function to calculate fibonacci?",
       "parentId": null,
       "createdAt": 1704067200000,
-      "updatedAt": 1704067200000,
-      "meta": {}
+      "updatedAt": 1704067200000
     },
     {
       "id": "msg-402",
@@ -60,7 +59,6 @@
       "parentId": "msg-401",
       "createdAt": 1704067202000,
       "updatedAt": 1704067202000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 15,
         "totalOutputTokens": 12,
@@ -76,12 +74,15 @@
       "parentId": "msg-402",
       "createdAt": 1704067205100,
       "updatedAt": 1704067205100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 30,
         "totalOutputTokens": 52,
         "totalTokens": 82,
         "cost": 0.00025
+      },
+      "branch": {
+        "activeBranchIndex": 1,
+        "count": 3
       }
     },
     {
@@ -90,8 +91,7 @@
       "content": "The iterative approach looks good! Can you add some comments?",
       "parentId": "msg-404",
       "createdAt": 1704067215000,
-      "updatedAt": 1704067215000,
-      "meta": {}
+      "updatedAt": 1704067215000
     },
     {
       "id": "msg-407",
@@ -100,7 +100,6 @@
       "parentId": "msg-406",
       "createdAt": 1704067217000,
       "updatedAt": 1704067217000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 95,
         "totalOutputTokens": 78,
@@ -116,8 +115,7 @@
       "content": "Can you help me write a function to calculate fibonacci?",
       "parentId": null,
       "createdAt": 1704067200000,
-      "updatedAt": 1704067200000,
-      "meta": {}
+      "updatedAt": 1704067200000
     },
     "msg-402": {
       "id": "msg-402",
@@ -126,7 +124,6 @@
       "parentId": "msg-401",
       "createdAt": 1704067202000,
       "updatedAt": 1704067202000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 15,
         "totalOutputTokens": 12,
@@ -142,7 +139,6 @@
       "parentId": "msg-402",
       "createdAt": 1704067205000,
       "updatedAt": 1704067205000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 30,
         "totalOutputTokens": 45,
@@ -157,7 +153,6 @@
       "parentId": "msg-402",
       "createdAt": 1704067205100,
       "updatedAt": 1704067205100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 30,
         "totalOutputTokens": 52,
@@ -172,7 +167,6 @@
       "parentId": "msg-402",
       "createdAt": 1704067205200,
       "updatedAt": 1704067205200,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 30,
         "totalOutputTokens": 58,
@@ -186,8 +180,7 @@
       "content": "The iterative approach looks good! Can you add some comments?",
       "parentId": "msg-404",
       "createdAt": 1704067215000,
-      "updatedAt": 1704067215000,
-      "meta": {}
+      "updatedAt": 1704067215000
     },
     "msg-407": {
       "id": "msg-407",
@@ -196,7 +189,6 @@
       "parentId": "msg-406",
       "createdAt": 1704067217000,
       "updatedAt": 1704067217000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 95,
         "totalOutputTokens": 78,

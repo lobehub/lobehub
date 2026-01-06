@@ -1,0 +1,16 @@
+{
+  "name": "@lobechat/builtin-tool-memory",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./executor": "./src/executor/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/memory-user-memory": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

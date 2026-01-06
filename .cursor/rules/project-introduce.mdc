@@ -23,7 +23,6 @@ logo emoji: 🤯
 - `@lobehub/ui`, antd for component framework
 - antd-style for css-in-js framework
 - lucide-react, `@ant-design/icons` for icons
-- react-layout-kit for flex layout component
 - react-i18next for i18n
 - zustand for state management
 - nuqs for search params management

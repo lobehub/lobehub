@@ -1,30 +1,25 @@
 {
-  "Artifacts": "文物",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "分塊",
-      "file": "檔案"
-    }
-  },
+  "Artifacts": "人工製品",
+  "FilePreview.tabs.chunk": "分塊",
+  "FilePreview.tabs.file": "檔案",
   "Plugins": "外掛",
-  "artifacts": {
-    "display": {
-      "code": "程式碼",
-      "preview": "預覽"
-    },
-    "svg": {
-      "copyAsImage": "複製為圖片",
-      "copyFail": "複製失敗，錯誤原因:{{error}}",
-      "copySuccess": "圖片複製成功",
-      "download": {
-        "png": "下載為 PNG",
-        "svg": "下載為 SVG"
-      }
-    }
-  },
+  "artifacts.display.code": "程式碼",
+  "artifacts.display.preview": "預覽",
+  "artifacts.svg.copyAsImage": "複製為圖片",
+  "artifacts.svg.copyFail": "複製失敗，錯誤原因:{{error}}",
+  "artifacts.svg.copySuccess": "圖片複製成功",
+  "artifacts.svg.download.png": "下載為 PNG",
+  "artifacts.svg.download.svg": "下載為 SVG",
+  "document.todos.allCompleted": "所有任務已完成",
+  "document.todos.title": "任務",
   "emptyArtifactList": "當前文物列表為空，請在會話中按需使用插件後再查看",
   "emptyKnowledgeList": "當前知識列表為空，請在會話中按需開啟知識庫後再查看",
   "files": "檔案",
   "messageDetail": "消息詳情",
+  "notebook.confirmDelete": "確定要刪除這份文件嗎？",
+  "notebook.delete": "刪除",
+  "notebook.empty": "暫無文件，當前主題關聯的文件將會顯示在這裡",
+  "notebook.title": "筆記本",
+  "openInPageEditor": "在文稿中編輯",
   "title": "擴展視窗"
 }

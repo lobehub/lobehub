@@ -19,15 +19,17 @@
   },
   "dependencies": {
     "@lobechat/prompts": "workspace:*",
-    "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",
+    "es-toolkit": "^1.43.0",
     "immer": "^10.2.0",
-    "lodash-es": "^4.17.21",
-    "ts-md5": "^2.0.1"
+    "ts-md5": "^2.0.1",
+    "unist-builder": "^4.0.0",
+    "xast-util-to-xml": "^4.0.0",
+    "xastscript": "^4.0.0"
   },
   "devDependencies": {
-    "@types/debug": "^4.1.12",
-    "@types/lodash-es": "^4.17.12"
+    "@lobechat/types": "workspace:*",
+    "@types/debug": "^4.1.12"
   }
 }

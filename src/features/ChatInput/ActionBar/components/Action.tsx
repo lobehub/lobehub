@@ -1,14 +1,15 @@
 'use client';
 
 import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
-import { isUndefined } from 'lodash-es';
+import { isUndefined } from 'es-toolkit/compat';
 import { memo } from 'react';
 import useMergeState from 'use-merge-value';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 
-import ActionDropdown, { ActionDropdownProps } from './ActionDropdown';
-import ActionPopover, { ActionPopoverProps } from './ActionPopover';
+import { useActionBarContext } from '../context';
+import ActionDropdown, { type ActionDropdownProps } from './ActionDropdown';
+import ActionPopover, { type ActionPopoverProps } from './ActionPopover';
 
 interface ActionProps extends Omit<ActionIconProps, 'popover'> {
   dropdown?: ActionDropdownProps;
@@ -39,6 +40,7 @@ const Action = memo<ActionProps>(
       value: open,
     });
     const mobile = useServerConfigStore((s) => s.isMobile);
+    const { dropdownPlacement } = useActionBarContext();
     const iconNode = (
       <ActionIcon
         disabled={disabled}
@@ -72,7 +74,7 @@ const Action = memo<ActionProps>(
           trigger={trigger}
           {...dropdown}
           minWidth={mobile ? '100%' : dropdown.minWidth}
-          placement={mobile ? 'top' : dropdown.placement}
+          placement={mobile ? 'top' : (dropdownPlacement ?? dropdown.placement)}
         >
           {iconNode}
         </ActionDropdown>
@@ -85,7 +87,7 @@ const Action = memo<ActionProps>(
           trigger={trigger}
           {...popover}
           minWidth={mobile ? '100%' : popover.minWidth}
-          placement={mobile ? 'top' : popover.placement}
+          placement={mobile ? 'top' : (dropdownPlacement ?? popover.placement)}
         >
           {iconNode}
         </ActionPopover>

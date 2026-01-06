@@ -36,14 +36,14 @@ export interface AgentEventToolResult {
 export interface AgentEventHumanApproveRequired {
   type: 'human_approve_required';
   pendingToolsCalling: ChatToolPayload[];
-  sessionId: string;
+  operationId: string;
 }
 
 export interface AgentEventHumanPromptRequired {
   type: 'human_prompt_required';
   metadata?: Record<string, unknown>;
   prompt: string;
-  sessionId: string;
+  operationId: string;
 }
 
 export interface AgentEventHumanSelectRequired {
@@ -52,7 +52,7 @@ export interface AgentEventHumanSelectRequired {
   multi?: boolean;
   options: { label: string; value: string }[];
   prompt?: string;
-  sessionId: string;
+  operationId: string;
 }
 
 /**
@@ -98,6 +98,16 @@ export interface AgentEventResumed {
   metadata?: Record<string, unknown>;
 }
 
+export interface AgentEventCompressionComplete {
+  type: 'compression_complete';
+  groupId: string;
+}
+
+export interface AgentEventCompressionError {
+  type: 'compression_error';
+  error: unknown;
+}
+
 /**
  * Events emitted by the AgentRuntime during execution
  */
@@ -121,4 +131,7 @@ export type AgentEvent =
   | AgentEventHumanSelectRequired
   // Interruption and resumption
   | AgentEventInterrupted
-  | AgentEventResumed;
+  | AgentEventResumed
+  // Context compression
+  | AgentEventCompressionComplete
+  | AgentEventCompressionError;

@@ -239,12 +239,12 @@ describe('NpmInstallationChecker', () => {
       it('should handle npm not installed error', async () => {
         mockExecPromise.mockRejectedValueOnce(new Error('npm: command not found'));
 
-        const result = await checker.checkPackageInstalled({ packageName: 'lodash' });
+        const result = await checker.checkPackageInstalled({ packageName: 'es-toolkit' });
 
         expect(result).toEqual({
           error: 'npm: command not found',
           installed: false,
-          packageName: 'lodash',
+          packageName: 'es-toolkit',
         });
       });
 

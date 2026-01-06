@@ -1,5 +1,5 @@
-import { ToolStore } from '../../store';
-import { KlavisServer, KlavisServerStatus } from './types';
+import { type ToolStore } from '../../store';
+import { type KlavisServer, KlavisServerStatus } from './types';
 
 /**
  * Klavis Store Selectors
@@ -106,7 +106,7 @@ export const klavisStoreSelectors = {
             identifier: server.identifier,
             meta: {
               avatar: '☁️',
-              description: `Klavis MCP Server: ${server.serverName}`,
+              description: `LobeHub Mcp Server: ${server.serverName}`,
               tags: ['klavis', 'mcp'],
               title: server.serverName,
             },

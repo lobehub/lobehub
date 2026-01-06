@@ -1,12 +1,14 @@
-import { UserJSON } from '@clerk/backend';
+import { type UserJSON } from '@clerk/backend';
 import { enableClerk, isDesktop } from '@lobechat/const';
 import {
   NextAuthAccountSchame,
+  Plans,
   UserGuideSchema,
-  UserInitializationState,
-  UserPreference,
+  type UserInitializationState,
+  UserOnboardingSchema,
+  type UserPreference,
   UserPreferenceSchema,
-  UserSettings,
+  type UserSettings,
   UserSettingsSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -14,6 +16,7 @@ import { after } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
+import { getIsInWaitList, getReferralStatus, getSubscriptionPlan } from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel, UserNotFoundError } from '@/database/models/user';
@@ -22,7 +25,7 @@ import { pino } from '@/libs/logger';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { S3 } from '@/server/modules/S3';
+import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
 import { NextAuthUserService } from '@/server/services/nextAuthUser';
 import { UserService } from '@/server/services/user';
@@ -68,83 +71,105 @@ export const userRouter = router({
       // `after` may fail outside request scope (e.g., in tests), ignore silently
     }
 
-    let state: Awaited<ReturnType<UserModel['getUserState']>> | undefined;
+    // Helper function to get or create user state
+    const getOrCreateUserState = async () => {
+      let state: Awaited<ReturnType<UserModel['getUserState']>> | undefined;
 
-    // get or create first-time user
-    while (!state) {
-      try {
-        state = await ctx.userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults);
-      } catch (error) {
-        // user not create yet
-        if (error instanceof UserNotFoundError) {
-          // if in clerk auth mode
-          if (enableClerk) {
-            const user = await ctx.clerkAuth.getCurrentUser();
-            if (user) {
-              const userService = new UserService(ctx.serverDB);
+      // get or create first-time user
+      while (!state) {
+        try {
+          state = await ctx.userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults);
+        } catch (error) {
+          // user not create yet
+          if (error instanceof UserNotFoundError) {
+            // if in clerk auth mode
+            if (enableClerk) {
+              const user = await ctx.clerkAuth.getCurrentUser();
+              if (user) {
+                const userService = new UserService(ctx.serverDB);
 
-              await userService.createUser(user.id, {
-                created_at: user.createdAt,
-                email_addresses: user.emailAddresses.map((e) => ({
-                  email_address: e.emailAddress,
-                  id: e.id,
-                })),
-                first_name: user.firstName,
-                id: user.id,
-                image_url: user.imageUrl,
-                last_name: user.lastName,
-                phone_numbers: user.phoneNumbers.map((e) => ({
-                  id: e.id,
-                  phone_number: e.phoneNumber,
-                })),
-                primary_email_address_id: user.primaryEmailAddressId,
-                primary_phone_number_id: user.primaryPhoneNumberId,
-                username: user.username,
-              } as UserJSON);
+                await userService.createUser(user.id, {
+                  created_at: user.createdAt,
+                  email_addresses: user.emailAddresses.map((e) => ({
+                    email_address: e.emailAddress,
+                    id: e.id,
+                  })),
+                  first_name: user.firstName,
+                  id: user.id,
+                  image_url: user.imageUrl,
+                  last_name: user.lastName,
+                  phone_numbers: user.phoneNumbers.map((e) => ({
+                    id: e.id,
+                    phone_number: e.phoneNumber,
+                  })),
+                  primary_email_address_id: user.primaryEmailAddressId,
+                  primary_phone_number_id: user.primaryPhoneNumberId,
+                  username: user.username,
+                } as UserJSON);
 
+                continue;
+              }
+            }
+
+            // if in desktop mode, make sure desktop user exist
+            else if (isDesktop) {
+              await UserModel.makeSureUserExist(ctx.serverDB, ctx.userId);
+              pino.info('create desktop user');
               continue;
             }
           }
 
-          // if in desktop mode, make sure desktop user exist
-          else if (isDesktop) {
-            await UserModel.makeSureUserExist(ctx.serverDB, ctx.userId);
-            pino.info('create desktop user');
-            continue;
-          }
+          console.error('getUserState:', error);
+          throw error;
         }
-
-        console.error('getUserState:', error);
-        throw error;
       }
-    }
 
-    // Run all count queries in parallel
-    const [hasMoreThan4Messages, hasAnyMessages, hasExtraSession] = await Promise.all([
-      ctx.messageModel.hasMoreThanN(4),
-      ctx.messageModel.hasMoreThanN(0),
-      ctx.sessionModel.hasMoreThanN(1),
-    ]);
+      return state;
+    };
 
+    // Run user state fetch and count queries in parallel
+    const [state, messageCount, hasExtraSession, referralStatus, subscriptionPlan, isInWaitList] =
+      await Promise.all([
+        getOrCreateUserState(),
+        ctx.messageModel.countUpTo(5),
+        ctx.sessionModel.hasMoreThanN(1),
+        getReferralStatus(ctx.userId),
+        getSubscriptionPlan(ctx.userId),
+        getIsInWaitList(ctx.userId),
+      ]);
+
+    const hasMoreThan4Messages = messageCount > 4;
+    const hasAnyMessages = messageCount > 0;
+    /* eslint-disable sort-keys-fix/sort-keys-fix */
     return {
       avatar: state.avatar,
       canEnablePWAGuide: hasMoreThan4Messages,
       canEnableTrace: hasMoreThan4Messages,
       email: state.email,
       firstName: state.firstName,
-
       fullName: state.fullName,
 
-      // 有消息，或者创建过助手，则认为有 conversation
+      // 有消息，或者创建过助理，则认为有 conversation
       hasConversation: hasAnyMessages || hasExtraSession,
+
+      interests: state.interests,
+
       // always return true for community version
-      isOnboard: state.isOnboarded || true,
+      isOnboard: state.isOnboarded ?? true,
       lastName: state.lastName,
+      onboarding: state.onboarding,
       preference: state.preference as UserPreference,
       settings: state.settings,
       userId: ctx.userId,
       username: state.username,
+
+      // business features
+      referralStatus,
+      subscriptionPlan,
+      isInWaitList,
+      isFreePlan: !subscriptionPlan || subscriptionPlan === Plans.Free,
     } satisfies UserInitializationState;
+    /* eslint-enable sort-keys-fix/sort-keys-fix */
   }),
 
   makeUserOnboarded: userProcedure.mutation(async ({ ctx }) => {
@@ -163,7 +188,6 @@ export const userRouter = router({
     await ctx.nextAuthUserService.unlinkAccount({ provider, providerAccountId });
   }),
 
-  // 服务端上传头像
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {
     // 如果是 Base64 数据，需要上传到 S3
     if (input.startsWith('data:image')) {
@@ -183,7 +207,7 @@ export const userRouter = router({
         const base64Data = input.slice(commaIndex + 1);
 
         // 创建 S3 客户端
-        const s3 = new S3();
+        const s3 = new FileS3();
 
         // 使用 UUID 生成唯一文件名，防止缓存问题
         // 获取旧头像 URL, 后面删除该头像
@@ -224,6 +248,14 @@ export const userRouter = router({
 
   updateGuide: userProcedure.input(UserGuideSchema).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updateGuide(input);
+  }),
+
+  updateInterests: userProcedure.input(z.array(z.string())).mutation(async ({ ctx, input }) => {
+    return ctx.userModel.updateUser({ interests: input });
+  }),
+
+  updateOnboarding: userProcedure.input(UserOnboardingSchema).mutation(async ({ ctx, input }) => {
+    return ctx.userModel.updateUser({ onboarding: input });
   }),
 
   updatePreference: userProcedure.input(UserPreferenceSchema).mutation(async ({ ctx, input }) => {

@@ -25,7 +25,7 @@
 
 **All medium priority files now have tests! ✅**
 
-### 🎉 Achievement Unlocked: 100% Action File Coverage!
+### 🎉 Achievement Unlocked: 100% Action File Coverage
 
 All 40 action files in the store now have comprehensive test coverage!
 
@@ -146,7 +146,7 @@ Write comprehensive tests for src/store/discover/slices/plugin/action.ts followi
 Requirements:
 1. Write tests covering all actions in the file
 2. Follow SWR hooks testing pattern (if applicable)
-3. Run typecheck and lint to verify
+3. run type-check and lint to verify
 4. Run tests to ensure they pass
 5. Report back with:
    - Number of tests written
@@ -196,7 +196,7 @@ bunx vitest run --silent='passed-only' 'src/store/[domain]/slices/[slice]/action
 
 ```bash
 # Check TypeScript types (from project root)
-bun run typecheck
+bun run type-check
 
 # Fix any linting issues
 bunx eslint src/store/[domain]/ --fix
@@ -270,7 +270,7 @@ Based on your development summary, update the following sections:
 bunx vitest run 'src/store'
 
 # Verify type check still passes
-bun run typecheck
+bun run type-check
 ```
 
 ### Complete Workflow Example (Single File)
@@ -281,7 +281,7 @@ bun run typecheck
 bunx vitest run --silent='passed-only' 'src/store/tool/slices/mcpStore/action.test.ts'
 
 # 2. Type/Lint Phase (REQUIRED)
-bun run typecheck # Must pass!
+bun run type-check # Must pass!
 bunx eslint src/store/tool/ --fix
 
 # 3. Coverage Phase
@@ -295,7 +295,7 @@ bunx vitest run --coverage 'src/store'
 
 # 6. Final Verification
 bunx vitest run 'src/store'
-bun run typecheck
+bun run type-check
 
 # 7. Commit
 git add .
@@ -320,7 +320,7 @@ Task({
 Requirements:
 1. Write tests covering all actions (usePluginCategories, usePluginDetail, usePluginList, usePluginIdentifiers)
 2. Follow SWR hooks testing pattern
-3. Run typecheck and lint to verify
+3. run type-check and lint to verify
 4. Run tests to ensure they pass
 5. Report back with number of tests written and coverage areas
 
@@ -335,7 +335,7 @@ Task({
 Requirements:
 1. Write tests covering all actions (useFetchMcpDetail, useFetchMcpList, useMcpCategories)
 2. Follow SWR hooks testing pattern
-3. Run typecheck and lint to verify
+3. run type-check and lint to verify
 4. Run tests to ensure they pass
 5. Report back with number of tests written and coverage areas
 
@@ -350,7 +350,7 @@ DO NOT commit changes or update test-coverage.md.`,
 Each subagent will:
 
 - Write tests
-- Run typecheck and lint
+- run type-check and lint
 - Verify tests pass
 - Report results
 
@@ -365,8 +365,8 @@ After all subagents complete:
 **Step 4: Final Verification**
 
 ```bash
-# Run typecheck on entire project
-bun run typecheck
+# run type-check on entire project
+bun run type-check
 
 # Run lint on all new test files
 bunx eslint src/store/discover/ --fix
@@ -444,7 +444,7 @@ bunx vitest watch 'src/store/[domain]/slices/[slice]/action.test.ts'
 
 ```bash
 # Type check entire project (from project root)
-bun run typecheck
+bun run type-check
 
 # Watch mode
 bunx tsc --noEmit --watch

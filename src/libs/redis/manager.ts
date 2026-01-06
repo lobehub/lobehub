@@ -1,5 +1,5 @@
 import { IoRedisRedisProvider } from './redis';
-import { BaseRedisProvider, RedisConfig } from './types';
+import { type BaseRedisProvider, type RedisConfig } from './types';
 import { UpstashRedisProvider } from './upstash';
 
 class RedisManager {

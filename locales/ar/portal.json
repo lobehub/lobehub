@@ -1,30 +1,25 @@
 {
   "Artifacts": "القطع الأثرية",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "جزء",
-      "file": "ملف"
-    }
-  },
-  "Plugins": "ملحقات",
-  "artifacts": {
-    "display": {
-      "code": "رمز",
-      "preview": "معاينة"
-    },
-    "svg": {
-      "copyAsImage": "نسخ كصورة",
-      "copyFail": "فشل النسخ، سبب الخطأ: {{error}}",
-      "copySuccess": "تم نسخ الصورة بنجاح",
-      "download": {
-        "png": "تحميل كـ PNG",
-        "svg": "تحميل كـ SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "قائمة القطع الأثرية الحالية فارغة، يرجى استخدام الإضافات في الجلسة ومن ثم التحقق مرة أخرى",
-  "emptyKnowledgeList": "قائمة المعرفة الحالية فارغة، يرجى فتح قاعدة المعرفة حسب الحاجة في المحادثة قبل العرض",
-  "files": "ملفات",
+  "FilePreview.tabs.chunk": "جزء",
+  "FilePreview.tabs.file": "ملف",
+  "Plugins": "المهارات",
+  "artifacts.display.code": "الشفرة",
+  "artifacts.display.preview": "معاينة",
+  "artifacts.svg.copyAsImage": "نسخ كصورة",
+  "artifacts.svg.copyFail": "فشل النسخ: {{error}}. حاول مرة أخرى.",
+  "artifacts.svg.copySuccess": "تم نسخ الصورة بنجاح",
+  "artifacts.svg.download.png": "تنزيل كـ PNG",
+  "artifacts.svg.download.svg": "تنزيل كـ SVG",
+  "document.todos.allCompleted": "تم إنجاز جميع المهام",
+  "document.todos.title": "المهام",
+  "emptyArtifactList": "لا توجد قطع أثرية بعد. استخدم المهارات في المحادثة، ثم عد إلى هنا.",
+  "emptyKnowledgeList": "هذه القائمة فارغة.",
+  "files": "الملفات",
   "messageDetail": "تفاصيل الرسالة",
-  "title": "نافذة موسعة"
+  "notebook.confirmDelete": "هل تريد حذف هذه الصفحة؟",
+  "notebook.delete": "حذف",
+  "notebook.empty": "لا توجد صفحات بعد. ستظهر الصفحات المرتبطة بهذا الموضوع هنا.",
+  "notebook.title": "دفتر الملاحظات",
+  "openInPageEditor": "تحرير في الصفحة",
+  "title": "مساحة العمل"
 }

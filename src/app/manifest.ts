@@ -1,10 +1,34 @@
-import { kebabCase } from 'lodash-es';
 import type { MetadataRoute } from 'next';
 
-import { BRANDING_LOGO_URL, BRANDING_NAME } from '@/const/branding';
-import { manifestModule } from '@/server/manifest';
+const manifest = async (): Promise<MetadataRoute.Manifest> => {
+  // Skip heavy module compilation in development
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      background_color: '#000000',
+      description: 'LobeChat Development',
+      display: 'standalone',
+      icons: [
+        {
+          sizes: '192x192',
+          src: '/icons/icon-192x192.png',
+          type: 'image/png',
+        },
+      ],
+      name: 'LobeChat',
+      short_name: 'LobeChat',
+      start_url: '/agent',
+      theme_color: '#000000',
+    };
+  }
 
-const manifest = (): MetadataRoute.Manifest | any => {
+  const [{ BRANDING_LOGO_URL, BRANDING_NAME }, { kebabCase }, { manifestModule }] =
+    await Promise.all([
+      import('@lobechat/business-const'),
+      import('es-toolkit/compat'),
+      import('@/server/manifest'),
+    ]);
+
+  // @ts-expect-error - manifestModule.generate returns extended manifest with custom properties
   return manifestModule.generate({
     description: `${BRANDING_NAME} brings you the best UI experience for ChatGPT, Claude, Gemini, and OLLaMA.`,
     icons: [

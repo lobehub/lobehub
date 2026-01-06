@@ -19,7 +19,10 @@ describe('settingsSelectors', () => {
         animationMode: 'agile',
         fontSize: 12,
         highlighterTheme: 'lobe-theme',
+        isDevMode: false,
+        isLiteMode: false,
         mermaidTheme: 'lobe-theme',
+        telemetry: true,
         transitionMode: 'fadeIn',
       });
     });

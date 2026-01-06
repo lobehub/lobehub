@@ -1,11 +1,11 @@
 /**
  * ComfyUI framework constants configuration
- * Unified management of hardcoded values with environment variable overrides / 统一管理硬编码值，支持环境变量覆盖
+ * Unified management of hardcoded values with environment variable overrides
  */
 
 /**
- * Default configuration / 默认配置
- * 注意：BASE_URL不再处理环境变量，由构造函数统一处理优先级
+ * Default configuration
+ * Note: BASE_URL no longer handles environment variables, priority is uniformly handled by constructor
  */
 export const COMFYUI_DEFAULTS = {
   BASE_URL: 'http://localhost:8000',
@@ -14,8 +14,8 @@ export const COMFYUI_DEFAULTS = {
 } as const;
 
 /**
- * FLUX model configuration / FLUX 模型配置
- * Removed over-engineered dynamic T5 selection, maintain simple fixed configuration / 移除过度工程化的动态T5选择，保持简单固定配置
+ * FLUX model configuration
+ * Removed over-engineered dynamic T5 selection, maintain simple fixed configuration
  */
 export const FLUX_MODEL_CONFIG = {
   FILENAME_PREFIXES: {
@@ -40,8 +40,8 @@ export const SD_MODEL_CONFIG = {
 } as const;
 
 /**
- * Default workflow node parameters / 工作流节点默认参数
- * Based on 2024 community best practices configuration / 基于 2024 年社区最佳实践配置
+ * Default workflow node parameters
+ * Based on 2024 community best practices configuration
  */
 
 /**

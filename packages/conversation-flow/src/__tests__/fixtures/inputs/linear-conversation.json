@@ -5,8 +5,7 @@
     "content": "Can you help me write a Python function to check if a number is prime?",
     "parentId": null,
     "createdAt": 1704067200000,
-    "updatedAt": 1704067200000,
-    "meta": {}
+    "updatedAt": 1704067200000
   },
   {
     "id": "msg-002",
@@ -15,7 +14,6 @@
     "parentId": "msg-001",
     "createdAt": 1704067205000,
     "updatedAt": 1704067205000,
-    "meta": {},
     "usage": {
       "totalInputTokens": 24,
       "totalOutputTokens": 156,
@@ -23,7 +21,7 @@
       "cost": 0.00054
     },
     "performance": {
-      "tps": 52.0,
+      "tps": 52,
       "ttft": 234,
       "duration": 3000,
       "latency": 3234
@@ -35,8 +33,7 @@
     "content": "Thanks! Can you add some test cases?",
     "parentId": "msg-002",
     "createdAt": 1704067210000,
-    "updatedAt": 1704067210000,
-    "meta": {}
+    "updatedAt": 1704067210000
   },
   {
     "id": "msg-004",
@@ -45,7 +42,6 @@
     "parentId": "msg-003",
     "createdAt": 1704067213000,
     "updatedAt": 1704067213000,
-    "meta": {},
     "usage": {
       "totalInputTokens": 180,
       "totalOutputTokens": 89,

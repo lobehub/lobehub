@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "Fichier ajouté avec succès, <1>voir immédiatement</1>",
-    "confirm": "Ajouter",
-    "id": {
-      "placeholder": "Veuillez sélectionner la base de connaissances à ajouter",
-      "required": "Veuillez sélectionner une base de connaissances",
-      "title": "Base de connaissances cible"
-    },
-    "title": "Ajouter à la base de connaissances",
-    "totalFiles": "{{count}} fichier(s) sélectionné(s)"
-  },
-  "createNew": {
-    "confirm": "Créer",
-    "description": {
-      "placeholder": "Description de la base de connaissances (facultatif)"
-    },
-    "formTitle": "Informations de base",
-    "name": {
-      "placeholder": "Nom de la base de connaissances",
-      "required": "Veuillez remplir le nom de la base de connaissances"
-    },
-    "title": "Créer une nouvelle base de connaissances"
-  },
-  "tab": {
-    "evals": "Évaluations",
-    "files": "Documents",
-    "settings": "Paramètres",
-    "testing": "Test de rappel"
-  },
-  "title": "Base de connaissances"
+  "addToKnowledgeBase.addSuccess": "Fichier ajouté avec succès, <1>voir maintenant</1>",
+  "addToKnowledgeBase.confirm": "Ajouter",
+  "addToKnowledgeBase.error": "Échec de l'ajout du fichier à la bibliothèque",
+  "addToKnowledgeBase.id.placeholder": "Veuillez sélectionner une bibliothèque à laquelle ajouter",
+  "addToKnowledgeBase.id.required": "Veuillez sélectionner une bibliothèque",
+  "addToKnowledgeBase.id.title": "Bibliothèque cible",
+  "addToKnowledgeBase.title": "Ajouter à la bibliothèque",
+  "addToKnowledgeBase.totalFiles": "{{count}} fichiers sélectionnés",
+  "createNew.confirm": "Créer",
+  "createNew.description.placeholder": "Description de la bibliothèque (facultatif)",
+  "createNew.formTitle": "Informations de base",
+  "createNew.name.placeholder": "Nom de la bibliothèque",
+  "createNew.name.required": "Veuillez entrer un nom de bibliothèque",
+  "createNew.title": "Créer une nouvelle bibliothèque",
+  "tab.evals": "Évaluations",
+  "tab.files": "Fichiers",
+  "tab.settings": "Paramètres",
+  "tab.testing": "Test de rappel",
+  "title": "Bibliothèque"
 }

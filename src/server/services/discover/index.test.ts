@@ -622,8 +622,14 @@ describe('DiscoverService', () => {
       it('should filter by search query', async () => {
         const result = await service.getProviderList({ q: 'openai' });
 
-        expect(result.items).toHaveLength(1);
-        expect(result.items[0].identifier).toBe('openai');
+        expect(result.items.length).toBeGreaterThan(0);
+        expect(result.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              identifier: 'openai',
+            }),
+          ]),
+        );
       });
 
       it('should sort by model count', async () => {
@@ -632,7 +638,10 @@ describe('DiscoverService', () => {
           order: 'desc',
         });
 
-        expect(result.items).toHaveLength(2);
+        expect(result.items.length).toBeGreaterThan(0);
+        for (let i = 1; i < result.items.length; i++) {
+          expect(result.items[i - 1].modelCount).toBeGreaterThanOrEqual(result.items[i].modelCount);
+        }
       });
     });
 

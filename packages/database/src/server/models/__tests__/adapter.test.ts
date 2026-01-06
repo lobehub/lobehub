@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DrizzleAdapter } from '@/libs/oidc-provider/adapter';
 
-import { getTestDBInstance } from '../../../core/dbForTest';
+import { getTestDB } from '../../../core/getTestDB';
 import { users } from '../../../schemas';
 import {
   oidcAccessTokens,
@@ -14,7 +14,7 @@ import {
   oidcSessions,
 } from '../../../schemas/oidc';
 
-let serverDB = await getTestDBInstance();
+let serverDB = await getTestDB();
 
 // Test data
 const testModelName = 'Session';

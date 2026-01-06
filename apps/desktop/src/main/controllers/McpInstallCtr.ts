@@ -138,7 +138,7 @@ export default class McpInstallController extends ControllerModule {
 
       // 通过应用实例广播到前端
       if (this.app?.browserManager) {
-        this.app.browserManager.broadcastToWindow('chat', 'mcpInstallRequest', installRequest);
+        this.app.browserManager.broadcastToWindow('app', 'mcpInstallRequest', installRequest);
         logger.debug(`🔧 [McpInstall] Install request broadcasted successfully`);
         return true;
       } else {

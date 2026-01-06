@@ -1,16 +1,12 @@
 {
-  "actions": {
-    "followOnX": "X에서 저희를 팔로우하세요",
-    "subscribeToUpdates": "업데이트 구독하기",
-    "versions": "버전 상세 정보"
-  },
+  "actions.followOnX": "X에서 저희를 팔로우하세요",
+  "actions.subscribeToUpdates": "업데이트 구독하기",
+  "actions.versions": "버전 상세 정보",
   "addedWhileAway": "자리를 비운 동안 새로운 기능이 추가되었습니다.",
   "allChangelog": "모든 변경 로그 보기",
   "description": "{{appName}}의 새로운 기능과 개선 사항을 계속 확인하세요",
-  "pagination": {
-    "next": "다음 페이지",
-    "older": "이전 변경 사항 보기"
-  },
+  "pagination.next": "다음 페이지",
+  "pagination.older": "이전 변경 사항 보기",
   "readDetails": "자세히 보기",
   "title": "변경 로그",
   "versionDetails": "버전 상세 정보",

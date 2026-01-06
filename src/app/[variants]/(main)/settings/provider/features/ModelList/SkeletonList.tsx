@@ -1,59 +1,93 @@
 'use client';
 
-import { Skeleton } from 'antd';
-import { createStyles } from 'antd-style';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
-  avatar: css`
-    width: 32px !important;
-    height: 32px !important;
-  `,
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
+    gap: 24px;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
 
-    height: 56px;
     padding: 12px;
-
-    .${prefixCls}-skeleton-content {
-      display: flex;
-      flex-direction: column;
-    }
+    border-radius: ${cssVar.borderRadiusLG};
   `,
-  paragraph: css`
-    > li {
-      height: 22px !important;
-    }
+  leftContent: css`
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  rightContent: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  `,
+  textContent: css`
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+
+    min-width: 0;
   `,
 }));
 
 export const Placeholder = memo(() => {
-  const { styles } = useStyles();
-
   return (
-    <Flexbox align={'center'} horizontal justify={'space-between'}>
-      <Skeleton
-        active
-        avatar={{ className: styles.avatar }}
-        className={styles.container}
-        paragraph={{
-          className: styles.paragraph,
-          rows: 1,
-          style: { marginBottom: 0 },
-          width: '40%',
-        }}
-        title={false}
-      />
-      <Skeleton.Button active size={'small'} />
+    <Flexbox className={styles.container} horizontal>
+      <Flexbox className={styles.leftContent} horizontal>
+        <Skeleton.Avatar active shape="square" size={32} style={{ flex: 'none' }} />
+        <Flexbox className={styles.textContent}>
+          <Skeleton.Button
+            active
+            size={'small'}
+            style={{
+              height: 18,
+              width: 160,
+            }}
+          />
+          <Flexbox gap={4} horizontal>
+            <Skeleton.Button
+              active
+              size={'small'}
+              style={{
+                height: 16,
+                width: 60,
+              }}
+            />
+            <Skeleton.Button
+              active
+              size={'small'}
+              style={{
+                height: 16,
+                width: 40,
+              }}
+            />
+          </Flexbox>
+        </Flexbox>
+      </Flexbox>
+      <Flexbox className={styles.rightContent} horizontal>
+        <Skeleton.Button
+          active
+          size={'small'}
+          style={{
+            borderRadius: 12,
+            height: 22,
+            width: 44,
+          }}
+        />
+      </Flexbox>
     </Flexbox>
   );
 });
 
 export const SkeletonList = memo(() => (
-  <Flexbox gap={4} style={{ paddingTop: 26 }}>
+  <Flexbox gap={4} paddingBlock={12}>
     {Array.from({ length: 6 }).map((_, i) => (
       <Placeholder key={i} />
     ))}

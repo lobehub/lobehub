@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "현재 입력한 내용을 사용자 메시지로 추가하지만 생성은 트리거하지 않음",
-    "title": "사용자 메시지 추가"
-  },
-  "clearCurrentMessages": {
-    "desc": "현재 대화의 메시지와 업로드된 파일을 모두 삭제",
-    "title": "대화 메시지 지우기"
-  },
-  "commandPalette": {
-    "desc": "전역 명령 팔레트를 열어 기능에 빠르게 접근합니다",
-    "title": "명령 팔레트"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "마지막 메시지를 삭제하고 다시 생성합니다",
-    "title": "삭제 후 다시 생성"
-  },
-  "deleteLastMessage": {
-    "desc": "마지막 메시지를 삭제합니다",
-    "title": "마지막 메시지 삭제"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "앱 설정 페이지 열기",
-      "title": "앱 설정"
-    },
-    "showApp": {
-      "desc": "전역 단축키로 메인 창 표시 또는 숨기기",
-      "title": "메인 창 표시/숨기기"
-    }
-  },
-  "editMessage": {
-    "desc": "Alt 키를 누른 채 메시지를 더블 클릭하여 편집 모드로 진입",
-    "title": "메시지 편집"
-  },
-  "navigateToChat": {
-    "desc": "대화 탭으로 전환하고 자유 대화 시작",
-    "title": "기본 대화로 전환"
-  },
-  "openChatSettings": {
-    "desc": "현재 대화의 설정 보기 및 수정",
-    "title": "대화 설정 열기"
-  },
-  "openHotkeyHelper": {
-    "desc": "모든 단축키 사용법 보기",
-    "title": "단축키 도움말 열기"
-  },
-  "regenerateMessage": {
-    "desc": "마지막 메시지를 다시 생성",
-    "title": "메시지 다시 생성"
-  },
-  "saveTopic": {
-    "desc": "현재 주제를 저장하고 새 주제 시작",
-    "title": "새 주제 시작"
-  },
-  "search": {
-    "desc": "현재 페이지의 주요 검색창 열기",
-    "title": "검색"
-  },
-  "showApp": {
-    "desc": "앱 메인 창을 빠르게 열기",
-    "title": "메인 창 표시"
-  },
-  "switchAgent": {
-    "desc": "Ctrl 키와 숫자 0~9를 눌러 사이드바에 고정된 어시스턴트 전환",
-    "title": "어시스턴트 빠르게 전환"
-  },
-  "toggleLeftPanel": {
-    "desc": "왼쪽 어시스턴트 패널 표시 또는 숨기기",
-    "title": "어시스턴트 패널 표시/숨기기"
-  },
-  "toggleRightPanel": {
-    "desc": "오른쪽 주제 패널 표시 또는 숨기기",
-    "title": "주제 패널 표시/숨기기"
-  },
-  "toggleZenMode": {
-    "desc": "집중 모드에서는 현재 대화만 표시되고 다른 UI는 숨겨짐",
-    "title": "집중 모드 전환"
-  }
+  "addUserMessage.desc": "현재 입력한 내용을 사용자 메시지로 추가하지만 생성은 트리거하지 않음",
+  "addUserMessage.title": "사용자 메시지 추가",
+  "clearCurrentMessages.desc": "현재 대화의 메시지와 업로드된 파일을 모두 삭제",
+  "clearCurrentMessages.title": "대화 메시지 지우기",
+  "commandPalette.desc": "전역 명령 팔레트를 열어 기능에 빠르게 접근합니다",
+  "commandPalette.title": "명령 팔레트",
+  "deleteAndRegenerateMessage.desc": "마지막 메시지를 삭제하고 다시 생성합니다",
+  "deleteAndRegenerateMessage.title": "삭제 후 다시 생성",
+  "deleteLastMessage.desc": "마지막 메시지를 삭제합니다",
+  "deleteLastMessage.title": "마지막 메시지 삭제",
+  "desktop.openSettings.desc": "앱 설정 페이지 열기",
+  "desktop.openSettings.title": "앱 설정",
+  "desktop.showApp.desc": "전역 단축키로 메인 창 표시 또는 숨기기",
+  "desktop.showApp.title": "메인 창 표시/숨기기",
+  "editMessage.desc": "Alt 키를 누른 채 메시지를 더블 클릭하여 편집 모드로 진입",
+  "editMessage.title": "메시지 편집",
+  "navigateToChat.desc": "채팅 탭으로 전환하고 Lobe AI에 진입합니다",
+  "navigateToChat.title": "기본 대화로 전환",
+  "openChatSettings.desc": "현재 대화의 설정 보기 및 수정",
+  "openChatSettings.title": "대화 설정 열기",
+  "openHotkeyHelper.desc": "모든 단축키 사용법 보기",
+  "openHotkeyHelper.title": "단축키 도움말 열기",
+  "regenerateMessage.desc": "마지막 메시지를 다시 생성",
+  "regenerateMessage.title": "메시지 다시 생성",
+  "saveDocument.desc": "현재 문서의 모든 변경 사항을 즉시 저장합니다",
+  "saveDocument.title": "문서 저장",
+  "saveTopic.desc": "현재 주제를 저장하고 새 주제 시작",
+  "saveTopic.title": "새 주제 시작",
+  "search.desc": "현재 페이지의 주요 검색창 열기",
+  "search.title": "검색",
+  "showApp.desc": "앱 메인 창을 빠르게 열기",
+  "showApp.title": "메인 창 표시",
+  "switchAgent.desc": "Ctrl 키와 숫자 0~9를 눌러 사이드바에 고정된 도우미 전환",
+  "switchAgent.title": "도우미 빠르게 전환",
+  "toggleLeftPanel.desc": "왼쪽 패널 표시 또는 숨기기",
+  "toggleLeftPanel.title": "왼쪽 패널 표시/숨기기",
+  "toggleRightPanel.desc": "오른쪽 패널 표시 또는 숨기기",
+  "toggleRightPanel.title": "오른쪽 패널 표시/숨기기",
+  "toggleZenMode.desc": "집중 모드에서는 현재 대화만 표시되고 다른 UI는 숨겨짐",
+  "toggleZenMode.title": "집중 모드 전환"
 }

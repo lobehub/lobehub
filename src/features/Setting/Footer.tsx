@@ -1,24 +1,23 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { BRANDING_NAME } from '@lobechat/business-const';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { MessageSquareHeart } from 'lucide-react';
 import Link from 'next/link';
-import { PropsWithChildren, memo, useState } from 'react';
+import { type PropsWithChildren, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
-import { BRANDING_NAME } from '@/const/branding';
 import { GITHUB, GITHUB_ISSUES } from '@/const/url';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { isOnServerSide } from '@/utils/env';
 
-const useStyles = createStyles(
-  ({ css, token }) => css`
+const styles = createStaticStyles(
+  ({ css, cssVar }) => css`
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 );
 
@@ -28,7 +27,6 @@ const Footer = memo<PropsWithChildren>(() => {
   const { t } = useTranslation('common');
   const [openStar, setOpenStar] = useState(false);
   const [openFeedback, setOpenFeedback] = useState(false);
-  const { styles } = useStyles();
 
   const { hideGitHub } = useServerConfigStore(featureFlagsSelectors);
 
@@ -72,7 +70,13 @@ const Footer = memo<PropsWithChildren>(() => {
       </Flexbox>
       <GuideModal
         cancelText={t('footer.later')}
-        cover={<GuideVideo height={269} src={'/videos/star.mp4?v=1'} width={358} />}
+        cover={
+          <GuideVideo
+            height={269}
+            src={`https://hub-apac-1.lobeobjects.space/assets/star.mp4`}
+            width={358}
+          />
+        }
         desc={t('footer.star.desc')}
         okText={t('footer.star.action')}
         onCancel={() => setOpenStar(false)}
@@ -85,7 +89,13 @@ const Footer = memo<PropsWithChildren>(() => {
       />
       <GuideModal
         cancelText={t('footer.later')}
-        cover={<GuideVideo height={269} src={'/videos/feedback.mp4?v=1'} width={358} />}
+        cover={
+          <GuideVideo
+            height={269}
+            src={'<@985522149420855317> https://hub-apac-1.lobeobjects.space/assets/feedback.mp4'}
+            width={358}
+          />
+        }
         desc={t('footer.feedback.desc', { appName: BRANDING_NAME })}
         okText={t('footer.feedback.action')}
         onCancel={() => setOpenFeedback(false)}

@@ -43,7 +43,6 @@ export enum IdentityTypeEnum {
 }
 
 export enum LayersEnum {
-  Activity = 'activity',
   Context = 'context',
   Experience = 'experience',
   Identity = 'identity',
@@ -61,4 +60,13 @@ export enum TypesEnum {
   Preference = 'preference',
   Technology = 'technology',
   Topic = 'topic',
+}
+
+export enum ContextStatusEnum {
+  Aborted = 'aborted',
+  Cancelled = 'cancelled',
+  Completed = 'completed',
+  OnHold = 'on_hold',
+  Ongoing = 'ongoing',
+  Planned = 'planned'
 }

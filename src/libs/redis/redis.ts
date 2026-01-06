@@ -2,14 +2,14 @@ import debug from 'debug';
 import type { Redis } from 'ioredis';
 
 import {
-  BaseRedisProvider,
-  IoRedisConfig,
-  RedisKey,
-  RedisMSetArgument,
-  RedisProviderName,
-  RedisSetResult,
-  RedisValue,
-  SetOptions,
+  type BaseRedisProvider,
+  type IoRedisConfig,
+  type RedisKey,
+  type RedisMSetArgument,
+  type RedisProviderName,
+  type RedisSetResult,
+  type RedisValue,
+  type SetOptions,
 } from './types';
 import { buildIORedisSetArgs, normalizeMsetValues } from './utils';
 

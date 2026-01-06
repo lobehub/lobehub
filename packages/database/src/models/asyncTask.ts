@@ -1,16 +1,14 @@
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@lobechat/types';
-import { and, eq, inArray, lt } from 'drizzle-orm';
+import { and, eq, inArray, lt, or } from 'drizzle-orm';
 
 import { AsyncTaskSelectItem, NewAsyncTaskItem, asyncTasks } from '../schemas';
 import { LobeChatDatabase } from '../type';
-
-// set timeout to about 5 minutes, and give 2s padding time
-export const ASYNC_TASK_TIMEOUT = 298 * 1000;
 
 export class AsyncTaskModel {
   private userId: string;
@@ -70,7 +68,10 @@ export class AsyncTaskModel {
       .where(
         and(
           inArray(asyncTasks.id, ids),
-          eq(asyncTasks.status, AsyncTaskStatus.Processing),
+          or(
+            eq(asyncTasks.status, AsyncTaskStatus.Pending),
+            eq(asyncTasks.status, AsyncTaskStatus.Processing),
+          ),
           lt(asyncTasks.createdAt, new Date(Date.now() - ASYNC_TASK_TIMEOUT)),
         ),
       );

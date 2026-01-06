@@ -1,6 +1,6 @@
 import {
   RecursiveCharacterTextSplitter,
-  SupportedTextSplitterLanguage,
+  type SupportedTextSplitterLanguage,
 } from 'langchain/text_splitter';
 
 import { loaderConfig } from '@/libs/langchain/loaders/config';

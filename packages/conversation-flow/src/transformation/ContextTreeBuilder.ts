@@ -1,4 +1,5 @@
 import type {
+  AgentCouncilNode,
   AssistantGroupNode,
   BranchNode,
   CompareNode,
@@ -7,6 +8,7 @@ import type {
   Message,
   MessageGroupMetadata,
   MessageNode,
+  TasksNode,
 } from '../types';
 import type { BranchResolver } from './BranchResolver';
 import type { MessageCollector } from './MessageCollector';
@@ -16,7 +18,7 @@ import type { MessageCollector } from './MessageCollector';
  *
  * Handles:
  * 1. Tree traversal with priority-based node type detection
- * 2. Creating different types of ContextNodes (Message, Branch, Compare, AssistantGroup)
+ * 2. Creating different types of ContextNodes (Message, Branch, Compare, AssistantGroup, AgentCouncil, Tasks)
  * 3. Linear array output of the tree structure
  */
 export class ContextTreeBuilder {
@@ -93,7 +95,40 @@ export class ContextTreeBuilder {
       return;
     }
 
-    // Priority 3: AssistantGroup (assistant + tools)
+    // Priority 3: AgentCouncil mode (from message metadata, typically on tool messages)
+    if (this.isAgentCouncilMode(message) && idNode.children.length > 1) {
+      // Create agent council node with children
+      const agentCouncilNode = this.createAgentCouncilNodeFromChildren(message, idNode);
+      contextTree.push(agentCouncilNode);
+
+      // Continue processing children of the last member (for supervisor final reply)
+      // The supervisor's reply has parentId pointing to the last agent's message
+      const lastChild = idNode.children.at(-1);
+      if (lastChild && lastChild.children.length > 0) {
+        // Process the first child of the last agent (supervisor's reply)
+        this.transformToLinear(lastChild.children[0], contextTree);
+      }
+      return;
+    }
+
+    // Priority 3b: Tasks aggregation (multiple task children with same parent)
+    if (this.isTasksNode(idNode)) {
+      const tasksNode = this.createTasksNode(message, idNode);
+      contextTree.push(tasksNode);
+
+      // Continue with non-task children (e.g., final summary from assistant)
+      const nonTaskChildren = idNode.children.filter((child) => {
+        const childMsg = this.messageMap.get(child.id);
+        return childMsg?.role !== 'task';
+      });
+
+      for (const nonTaskChild of nonTaskChildren) {
+        this.transformToLinear(nonTaskChild, contextTree);
+      }
+      return;
+    }
+
+    // Priority 4: AssistantGroup (assistant + tools)
     if (this.isAssistantGroupNode(message, idNode)) {
       const assistantGroupNode = this.createAssistantGroupNode(message, idNode);
       contextTree.push(assistantGroupNode);
@@ -106,7 +141,7 @@ export class ContextTreeBuilder {
       return;
     }
 
-    // Priority 4: Branch (multiple children)
+    // Priority 6: Branch (multiple children)
     if (idNode.children.length > 1) {
       // Add current message node
       const messageNode = this.createMessageNode(message);
@@ -120,7 +155,7 @@ export class ContextTreeBuilder {
       return;
     }
 
-    // Priority 5: Regular message
+    // Priority 7: Regular message
     const messageNode = this.createMessageNode(message);
     contextTree.push(messageNode);
 
@@ -135,6 +170,14 @@ export class ContextTreeBuilder {
    */
   private isCompareMode(message: Message): boolean {
     return (message.metadata as any)?.compare === true;
+  }
+
+  /**
+   * Check if message has agentCouncil mode in metadata
+   * Used for multi-agent parallel responses (broadcast scenario)
+   */
+  private isAgentCouncilMode(message: Message): boolean {
+    return (message.metadata as any)?.agentCouncil === true;
   }
 
   /**
@@ -292,6 +335,75 @@ export class ContextTreeBuilder {
       id: this.generateNodeId('compare', group.id),
       messageId: group.parentMessageId || message.id,
       type: 'compare',
+    };
+  }
+
+  /**
+   * Create AgentCouncilNode from children messages
+   * Similar to CompareNode but without activeColumnId (all members enter context)
+   */
+  private createAgentCouncilNodeFromChildren(message: Message, idNode: IdNode): AgentCouncilNode {
+    // Each child is a member - process to handle potential AssistantGroup
+    const members = idNode.children.map((child) => {
+      const childMessage = this.messageMap.get(child.id);
+      if (!childMessage) {
+        return { id: child.id, type: 'message' } as MessageNode;
+      }
+
+      // Check if this member should be an AssistantGroup (agent with tool calls)
+      if (this.isAssistantGroupNode(childMessage, child)) {
+        return this.createAssistantGroupNode(childMessage, child);
+      }
+
+      // Otherwise, just a simple MessageNode
+      return { id: child.id, type: 'message' } as MessageNode;
+    });
+
+    // Generate ID by joining parent message id and all member message ids
+    const memberIds = idNode.children.map((child) => child.id).join('-');
+    const agentCouncilId = `agentCouncil-${message.id}-${memberIds}`;
+
+    return { id: agentCouncilId, members, messageId: message.id, type: 'agentCouncil' };
+  }
+
+  /**
+   * Check if this node has multiple task children (tasks aggregation pattern)
+   */
+  private isTasksNode(idNode: IdNode): boolean {
+    if (idNode.children.length < 2) return false;
+
+    const taskChildren = idNode.children.filter((child) => {
+      const childMsg = this.messageMap.get(child.id);
+      return childMsg?.role === 'task';
+    });
+
+    return taskChildren.length > 1;
+  }
+
+  /**
+   * Create TasksNode from multiple task children
+   */
+  private createTasksNode(message: Message, idNode: IdNode): TasksNode {
+    // Filter only task children and create message nodes for them
+    const taskChildren = idNode.children.filter((child) => {
+      const childMsg = this.messageMap.get(child.id);
+      return childMsg?.role === 'task';
+    });
+
+    const children: ContextNode[] = taskChildren.map((child) => ({
+      id: child.id,
+      type: 'message' as const,
+    }));
+
+    // Generate ID by joining parent message id and all task message ids
+    const taskIds = taskChildren.map((child) => child.id).join('-');
+    const tasksId = `tasks-${message.id}-${taskIds}`;
+
+    return {
+      children,
+      id: tasksId,
+      messageId: message.id,
+      type: 'tasks',
     };
   }
 }

@@ -269,6 +269,7 @@ table chat_groups_agents {
 
 table documents {
   id varchar(255) [pk, not null]
+  slug varchar(255)
   title text
   description text
   content text
@@ -286,7 +287,6 @@ table documents {
   user_id text [not null]
   client_id text
   editor_data jsonb
-  slug varchar(255)
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]

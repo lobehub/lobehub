@@ -5,7 +5,7 @@ import { createStoreUpdater } from 'zustand-utils';
 
 import { useSession } from '@/libs/better-auth/auth-client';
 import { useUserStore } from '@/store/user';
-import { LobeUser } from '@/types/user';
+import { type LobeUser } from '@/types/user';
 
 /**
  * Sync Better-Auth session state to Zustand store

@@ -10,11 +10,13 @@ describe('aiProviderSelectors', () => {
       { id: 'provider3', enabled: true, sort: 0, source: 'builtin' },
       { id: 'custom1', enabled: false, sort: 3, source: 'custom' },
     ],
-    aiProviderDetail: {
-      id: 'provider1',
-      keyVaults: {
-        baseURL: 'https://api.example.com',
-        apiKey: 'test-key',
+    aiProviderDetailMap: {
+      provider1: {
+        id: 'provider1',
+        keyVaults: {
+          baseURL: 'https://api.example.com',
+          apiKey: 'test-key',
+        },
       },
     },
     aiProviderLoadingIds: ['loading-provider'],
@@ -97,20 +99,37 @@ describe('aiProviderSelectors', () => {
     });
   });
 
-  describe('activeProviderConfig', () => {
-    it('should return active provider config', () => {
-      expect(aiProviderSelectors.activeProviderConfig(mockState)).toEqual(
-        mockState.aiProviderDetail,
+  describe('providerDetailById', () => {
+    it('should return provider detail by id', () => {
+      expect(aiProviderSelectors.providerDetailById('provider1')(mockState)).toEqual(
+        mockState.aiProviderDetailMap.provider1,
       );
+    });
+
+    it('should return undefined for non-existing provider', () => {
+      expect(aiProviderSelectors.providerDetailById('non-existing')(mockState)).toBeUndefined();
+    });
+  });
+
+  describe('activeProviderConfig', () => {
+    it('should return active provider config from map', () => {
+      expect(aiProviderSelectors.activeProviderConfig(mockState)).toEqual(
+        mockState.aiProviderDetailMap.provider1,
+      );
+    });
+
+    it('should return undefined when no active provider', () => {
+      const stateWithoutActive = { ...mockState, activeAiProvider: undefined };
+      expect(aiProviderSelectors.activeProviderConfig(stateWithoutActive)).toBeUndefined();
     });
   });
 
   describe('isAiProviderConfigLoading', () => {
-    it('should return true if provider id does not match active provider', () => {
+    it('should return true if provider is not in detail map (not loaded)', () => {
       expect(aiProviderSelectors.isAiProviderConfigLoading('provider2')(mockState)).toBe(true);
     });
 
-    it('should return false if provider id matches active provider', () => {
+    it('should return false if provider is in detail map (loaded)', () => {
       expect(aiProviderSelectors.isAiProviderConfigLoading('provider1')(mockState)).toBe(false);
     });
   });
@@ -123,7 +142,9 @@ describe('aiProviderSelectors', () => {
     it('should return false when no endpoint info exists', () => {
       const stateWithoutEndpoint = {
         ...mockState,
-        aiProviderDetail: { keyVaults: {} },
+        aiProviderDetailMap: {
+          provider1: { id: 'provider1', keyVaults: {} },
+        },
       };
       expect(aiProviderSelectors.isActiveProviderEndpointNotEmpty(stateWithoutEndpoint)).toBe(
         false,
@@ -139,7 +160,9 @@ describe('aiProviderSelectors', () => {
     it('should return false when no api key exists', () => {
       const stateWithoutApiKey = {
         ...mockState,
-        aiProviderDetail: { keyVaults: {} },
+        aiProviderDetailMap: {
+          provider1: { id: 'provider1', keyVaults: {} },
+        },
       };
       expect(aiProviderSelectors.isActiveProviderApiKeyNotEmpty(stateWithoutApiKey)).toBe(false);
     });

@@ -1,181 +1,134 @@
 {
   "addFolder": "폴더 만들기",
-  "addKnowledge": "지식 추가",
+  "addLibrary": "추가",
   "addPage": "문서 생성",
-  "desc": "작업, 학습 및 생활 지식을 관리하세요.",
-  "detail": {
-    "basic": {
-      "createdAt": "생성 시간",
-      "filename": "파일 이름",
-      "size": "파일 크기",
-      "title": "기본 정보",
-      "type": "형식",
-      "updatedAt": "업데이트 시간"
-    },
-    "data": {
-      "chunkCount": "청크 수",
-      "embedding": {
-        "default": "아직 벡터화되지 않음",
-        "error": "실패",
-        "pending": "대기 중",
-        "processing": "처리 중",
-        "success": "완료됨"
-      },
-      "embeddingStatus": "벡터화 상태"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "아이콘 추가",
-    "autoSaveMessage": "문서는 자동으로 저장되며, 수동 저장이 필요하지 않습니다",
-    "chooseIcon": "아이콘 선택",
-    "deleteConfirm": {
-      "content": "이 문서를 삭제하려고 합니다. 삭제 후에는 복구할 수 없으니 신중히 진행해 주세요.",
-      "title": "문서 삭제"
-    },
-    "deleteError": "문서 삭제에 실패했습니다",
-    "deleteSuccess": "문서가 성공적으로 삭제되었습니다",
-    "editedAt": "{{time}}에 마지막으로 편집됨",
-    "editedBy": "마지막 편집자: {{name}}",
-    "editorPlaceholder": "문서 내용을 입력하세요. / 키를 눌러 명령 메뉴를 엽니다",
-    "empty": {
-      "createNewDocument": "새 문서 만들기",
-      "title": "문서를 선택하여 시작하세요",
-      "uploadMarkdown": "Markdown 파일 업로드"
-    },
-    "linkCopied": "링크가 복사되었습니다",
-    "menu": {
-      "copyLink": "링크 복사",
-      "exportDocument": "문서 내보내기",
-      "importDocument": "문서 가져오기",
-      "pin": "문서 상단 고정"
-    },
-    "saving": "저장 중...",
-    "titlePlaceholder": "제목 없음",
-    "wordCount": "{{wordCount}}자"
-  },
-  "documentList": {
-    "copyContent": "전체 내용 복사",
-    "duplicate": "복사본 만들기",
-    "empty": "아직 문서가 없습니다. 위 버튼을 클릭하여 첫 번째 문서를 만들어보세요",
-    "noResults": "일치하는 문서를 찾을 수 없습니다",
-    "pageCount": "총 {{count}}개의 문서",
-    "selectNote": "편집을 시작할 문서를 선택하세요",
-    "untitled": "제목 없음"
-  },
+  "detail.basic.createdAt": "생성 시간",
+  "detail.basic.filename": "파일 이름",
+  "detail.basic.size": "파일 크기",
+  "detail.basic.title": "기본 정보",
+  "detail.basic.type": "형식",
+  "detail.basic.updatedAt": "업데이트 시간",
+  "detail.data.chunkCount": "청크 수",
+  "detail.data.embedding.default": "아직 벡터화되지 않음",
+  "detail.data.embedding.error": "실패",
+  "detail.data.embedding.pending": "대기 중",
+  "detail.data.embedding.processing": "처리 중",
+  "detail.data.embedding.success": "완료됨",
+  "detail.data.embeddingStatus": "벡터화 상태",
   "empty": "업로드된 파일/폴더가 없습니다",
-  "header": {
-    "actions": {
-      "newFolder": "새 폴더 만들기",
-      "newPage": "새 문서 만들기",
-      "uploadFile": "파일 업로드",
-      "uploadFolder": "폴더 업로드"
-    },
-    "newNoteDialog": {
-      "cancel": "취소",
-      "editTitle": "문서 편집",
-      "emptyContent": "문서 내용은 비워둘 수 없습니다",
-      "loadError": "문서 불러오기에 실패했습니다. 다시 시도해 주세요",
-      "loading": "불러오는 중...",
-      "save": "저장",
-      "saveError": "문서 저장에 실패했습니다. 다시 시도해 주세요",
-      "saveSuccess": "문서가 성공적으로 저장되었습니다",
-      "title": "새 문서 만들기",
-      "updateSuccess": "문서가 성공적으로 업데이트되었습니다"
-    },
-    "newPageButton": "새 문서 만들기",
-    "uploadButton": "업로드"
-  },
-  "home": {
-    "getStarted": "시작하기",
-    "greeting": "시작하기",
-    "quickActions": "빠른 작업",
-    "recentFiles": "최근 파일",
-    "recentPages": "최근 문서",
-    "subtitle": "지식 관리 시스템에 오신 것을 환영합니다. 여기서 문서를 관리해 보세요",
-    "uploadEntries": {
-      "files": {
-        "title": "파일 업로드"
-      },
-      "folder": {
-        "title": "폴더 업로드"
-      },
-      "knowledgeBase": {
-        "title": "새 지식베이스 만들기"
-      },
-      "newPage": {
-        "title": "새 문서 만들기"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "이 지식베이스를 삭제하려고 합니다. 포함된 파일은 삭제되지 않으며 전체 파일로 이동됩니다. 삭제된 지식베이스는 복구할 수 없으니 신중히 진행해 주세요.",
-      "empty": "<1>+</1>를 클릭하여 지식베이스를 생성하세요"
-    },
-    "new": "새 지식베이스",
-    "title": "지식베이스"
-  },
-  "menu": {
-    "allFiles": "모든 파일",
-    "allPages": "모든 문서"
-  },
-  "networkError": "지식베이스를 불러오지 못했습니다. 네트워크 연결을 확인한 후 다시 시도해 주세요",
-  "notSupportGuide": {
-    "desc": "현재 배포 인스턴스는 클라이언트 데이터베이스 모드로, 파일 관리 기능을 사용할 수 없습니다. <1>서버 데이터베이스 배포 모드</1>로 전환하거나 <3>LobeChat Cloud</3>를 이용해 주세요",
-    "features": {
-      "allKind": {
-        "desc": "Word, PPT, Excel, PDF, TXT 등 일반 문서 형식과 JS, Python 등 주요 코드 파일을 포함한 다양한 파일 형식을 지원합니다",
-        "title": "다양한 파일 형식 지원"
-      },
-      "embeddings": {
-        "desc": "고성능 벡터 모델을 사용하여 텍스트를 청크 단위로 벡터화하고, 파일 내용을 의미 기반으로 검색할 수 있습니다",
-        "title": "의미 기반 벡터화"
-      },
-      "repos": {
-        "desc": "지식베이스를 생성하고 다양한 형식의 파일을 추가하여 나만의 전문 지식을 구축할 수 있습니다",
-        "title": "지식베이스 구축"
-      }
-    },
-    "title": "현재 배포 모드에서는 파일 관리 기능을 지원하지 않습니다"
-  },
-  "preview": {
-    "downloadFile": "파일 다운로드",
-    "unsupportedFileAndContact": "이 파일 형식은 온라인 미리보기를 지원하지 않습니다. 미리보기 기능이 필요하시면 <1>의견을 보내주세요</1>"
-  },
+  "header.actions.builtInBlockList.filtered": "{{total}}개 파일 중 {{ignored}}개 파일이 필터링되었습니다",
+  "header.actions.connect": "연결 중...",
+  "header.actions.gitignore.apply": "규칙 적용",
+  "header.actions.gitignore.cancel": "규칙 무시",
+  "header.actions.gitignore.content": ".gitignore 파일이 감지되었습니다 (총 {{count}}개 파일). 무시 규칙을 적용하시겠습니까?",
+  "header.actions.gitignore.filtered": "{{total}}개 파일 중 {{ignored}}개가 필터링되었습니다",
+  "header.actions.gitignore.title": ".gitignore 파일 감지됨",
+  "header.actions.newFolder": "새 폴더 만들기",
+  "header.actions.newPage": "새 문서 만들기",
+  "header.actions.notion.error": "Notion 파일 가져오기 실패",
+  "header.actions.notion.foundFiles": "{{count}}개의 파일을 찾았습니다",
+  "header.actions.notion.importing": "Notion 콘텐츠 가져오는 중...",
+  "header.actions.notion.noMarkdownFiles": "ZIP 파일에서 Markdown 파일을 찾을 수 없습니다",
+  "header.actions.notion.partial": "{{success}}개의 파일을 성공적으로 가져왔고, {{failed}}개는 실패했습니다",
+  "header.actions.notion.success": "{{count}}개의 파일을 성공적으로 가져왔습니다",
+  "header.actions.notionGuide.cancel": "나중에 하기",
+  "header.actions.notionGuide.desc": "먼저 Notion에서 Markdown(ZIP) 형식으로 내보낸 후, 계속을 클릭하여 압축 파일을 선택하면 모든 페이지를 가져올 수 있습니다.",
+  "header.actions.notionGuide.ok": "Notion ZIP 선택",
+  "header.actions.notionGuide.title": "Notion 콘텐츠 가져오기",
+  "header.actions.uploadFile": "파일 업로드",
+  "header.actions.uploadFolder": "폴더 업로드",
+  "header.newPageButton": "새 문서 만들기",
+  "header.uploadButton": "업로드",
+  "home.getStarted": "시작하기",
+  "home.greeting": "시작하기",
+  "home.quickActions": "빠른 작업",
+  "home.recentFiles": "최근 파일",
+  "home.recentPages": "최근 문서",
+  "home.uploadEntries.files.title": "파일 업로드",
+  "home.uploadEntries.folder.title": "폴더 업로드",
+  "home.uploadEntries.library.title": "새 라이브러리 만들기",
+  "home.uploadEntries.newPage.title": "새 문서 만들기",
+  "library.list.confirmRemoveLibrary": "이 라이브러리를 삭제하려고 합니다. 라이브러리 내 파일은 삭제되지 않으며 전체 파일로 이동됩니다. 삭제된 라이브러리는 복구할 수 없으니 신중히 진행하세요.",
+  "library.list.empty": "<1>+</1>을 클릭하여 라이브러리를 생성하세요",
+  "library.new": "새 리소스 라이브러리 만들기",
+  "library.title": "라이브러리",
+  "loadMore": "더 보기",
+  "menu.allFiles": "모든 파일",
+  "menu.allPages": "모든 문서",
+  "networkError": "라이브러리를 불러오지 못했습니다. 네트워크 연결을 확인한 후 다시 시도하세요.",
+  "notSupportGuide.desc": "현재 배포 인스턴스는 클라이언트 데이터베이스 모드로, 파일 관리 기능을 사용할 수 없습니다. <1>서버 데이터베이스 배포 모드</1>로 전환하거나 <3>LobeChat Cloud</3>를 이용해 주세요",
+  "notSupportGuide.features.allKind.desc": "Word, PPT, Excel, PDF, TXT 등 일반 문서 형식과 JS, Python 등 주요 코드 파일을 포함한 다양한 파일 형식을 지원합니다",
+  "notSupportGuide.features.allKind.title": "다양한 파일 형식 지원",
+  "notSupportGuide.features.embeddings.desc": "고성능 벡터 모델을 사용하여 텍스트를 청크 단위로 벡터화하고, 파일 내용을 의미 기반으로 검색할 수 있습니다",
+  "notSupportGuide.features.embeddings.title": "의미 기반 벡터화",
+  "notSupportGuide.features.libraries.desc": "라이브러리를 생성하고 다양한 유형의 파일을 추가하여 나만의 전문 리소스를 구축할 수 있습니다.",
+  "notSupportGuide.features.libraries.title": "라이브러리",
+  "notSupportGuide.title": "현재 배포 모드에서는 파일 관리 기능을 지원하지 않습니다",
+  "pageEditor.addIcon": "아이콘 추가",
+  "pageEditor.autoSaveMessage": "문서는 자동으로 저장되며, 수동 저장이 필요하지 않습니다",
+  "pageEditor.chooseIcon": "아이콘 선택",
+  "pageEditor.deleteConfirm.content": "이 문서를 삭제하려고 합니다. 삭제 후에는 복구할 수 없으니 신중히 진행해 주세요.",
+  "pageEditor.deleteConfirm.title": "문서 삭제",
+  "pageEditor.deleteError": "문서 삭제에 실패했습니다",
+  "pageEditor.deleteSuccess": "문서가 성공적으로 삭제되었습니다",
+  "pageEditor.duplicateError": "페이지 복제에 실패했습니다",
+  "pageEditor.duplicateSuccess": "페이지가 성공적으로 복제되었습니다",
+  "pageEditor.editedAt": "마지막 편집: {{time}}",
+  "pageEditor.editedBy": "마지막 편집자: {{name}}",
+  "pageEditor.editorPlaceholder": "문서 내용을 입력하세요. / 키를 눌러 명령 메뉴를 엽니다",
+  "pageEditor.empty.createNewDocument": "새 문서 만들기",
+  "pageEditor.empty.importNotion": "Notion에서 가져오기",
+  "pageEditor.empty.title": "문서를 선택하여 시작하세요",
+  "pageEditor.empty.uploadFiles": "파일 업로드",
+  "pageEditor.exportError": "페이지 내보내기에 실패했습니다",
+  "pageEditor.exportSuccess": "페이지가 성공적으로 내보내졌습니다",
+  "pageEditor.linkCopied": "링크가 복사되었습니다",
+  "pageEditor.menu.copyLink": "링크 복사",
+  "pageEditor.menu.export": "내보내기",
+  "pageEditor.menu.export.markdown": "마크다운",
+  "pageEditor.menu.exportDocument": "문서 내보내기",
+  "pageEditor.menu.importDocument": "문서 가져오기",
+  "pageEditor.menu.pin": "문서 상단 고정",
+  "pageEditor.saving": "저장 중...",
+  "pageEditor.titlePlaceholder": "제목 없음",
+  "pageEditor.wordCount": "{{wordCount}}자",
+  "pageList.copyContent": "전체 내용 복사",
+  "pageList.duplicate": "복사본 만들기",
+  "pageList.empty": "아직 문서가 없습니다. 위 버튼을 클릭하여 첫 문서를 작성해 보세요",
+  "pageList.filter.all": "전체",
+  "pageList.filter.onlyInPages": "문서 내에서만",
+  "pageList.noResults": "일치하는 문서를 찾을 수 없습니다",
+  "pageList.pageCount": "총 {{count}}개의 문서",
+  "pageList.pageSizeItem": "{{count}}개 항목",
+  "pageList.title": "문서",
+  "pageList.untitled": "제목 없음",
+  "portal.openInPageEditor": "문서에서 편집",
+  "preview.downloadFile": "파일 다운로드",
+  "preview.unsupportedFileAndContact": "이 파일 형식은 온라인 미리보기를 지원하지 않습니다. 미리보기 기능이 필요하시면 <1>의견을 보내주세요</1>",
   "searchFilePlaceholder": "파일 검색",
   "searchPagePlaceholder": "문서 검색",
-  "tab": {
-    "all": "전체",
-    "audios": "오디오",
-    "documents": "문서",
-    "home": "홈",
-    "images": "이미지",
-    "moreTypes": "더 많은 유형",
-    "pages": "문서",
-    "videos": "비디오",
-    "websites": "웹사이트"
-  },
-  "title": "지식 베이스",
+  "tab.all": "전체",
+  "tab.audios": "오디오",
+  "tab.documents": "문서",
+  "tab.home": "홈",
+  "tab.images": "이미지",
+  "tab.moreTypes": "더 많은 유형",
+  "tab.pages": "문서",
+  "tab.videos": "비디오",
+  "tab.websites": "웹사이트",
+  "title": "리소스",
   "toggleLeftPanel": "왼쪽 패널 표시/숨기기",
-  "uploadDock": {
-    "body": {
-      "collapse": "접기",
-      "item": {
-        "done": "업로드 완료",
-        "error": "업로드 실패, 다시 시도해 주세요",
-        "pending": "업로드 준비 중...",
-        "processing": "파일 처리 중...",
-        "restTime": "남은 시간 {{time}}"
-      }
-    },
-    "fileQueueInfo": "{{count}}개 파일을 업로드 중이며, 나머지 {{remaining}}개 파일은 대기 중입니다",
-    "totalCount": "총 {{count}}개 항목",
-    "uploadStatus": {
-      "error": "업로드 오류",
-      "pending": "업로드 대기 중",
-      "processing": "업로드 중",
-      "success": "업로드 완료",
-      "uploading": "업로드 중"
-    }
-  }
+  "uploadDock.body.collapse": "접기",
+  "uploadDock.body.item.done": "업로드 완료",
+  "uploadDock.body.item.error": "업로드 실패, 다시 시도해 주세요",
+  "uploadDock.body.item.pending": "업로드 준비 중...",
+  "uploadDock.body.item.processing": "파일 처리 중...",
+  "uploadDock.body.item.restTime": "남은 시간 {{time}}",
+  "uploadDock.fileQueueInfo": "{{count}}개 파일을 업로드 중이며, 나머지 {{remaining}}개 파일은 대기 중입니다",
+  "uploadDock.totalCount": "총 {{count}}개 항목",
+  "uploadDock.uploadStatus.error": "업로드 오류",
+  "uploadDock.uploadStatus.pending": "업로드 대기 중",
+  "uploadDock.uploadStatus.processing": "업로드 중",
+  "uploadDock.uploadStatus.success": "업로드 완료",
+  "uploadDock.uploadStatus.uploading": "업로드 중"
 }

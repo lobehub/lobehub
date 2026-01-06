@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 import { SearchMode } from '../search';
+import { LocalSystemConfig } from './agentConfig';
 
 export interface WorkingModel {
   model: string;
@@ -9,8 +10,10 @@ export interface WorkingModel {
 }
 
 export interface LobeAgentChatConfig {
-  displayMode?: 'chat' | 'docs';
-
+  /**
+   * Local System 配置（桌面端专用）
+   */
+  localSystem?: LocalSystemConfig;
   enableAutoCreateTopic?: boolean;
   autoCreateTopicThreshold: number;
 
@@ -33,12 +36,14 @@ export interface LobeAgentChatConfig {
   reasoningEffort?: 'low' | 'medium' | 'high';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   /**
    * Output text verbosity control
    */
   textVerbosity?: 'low' | 'medium' | 'high';
   thinking?: 'disabled' | 'auto' | 'enabled';
-  thinkingLevel?: 'low' | 'high';
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   thinkingBudget?: number;
   /**
    * Image aspect ratio for image generation models
@@ -74,10 +79,16 @@ export interface LobeAgentChatConfig {
 }
 /* eslint-enable */
 
+/**
+ * Zod schema for LocalSystemConfig
+ */
+export const LocalSystemConfigSchema = z.object({
+  workingDirectory: z.string().optional(),
+});
+
 export const AgentChatConfigSchema = z.object({
   autoCreateTopicThreshold: z.number().default(2),
   disableContextCaching: z.boolean().optional(),
-  displayMode: z.enum(['chat', 'docs']).optional(),
   enableAutoCreateTopic: z.boolean().optional(),
   enableCompressHistory: z.boolean().optional(),
   enableHistoryCount: z.boolean().optional(),
@@ -87,9 +98,12 @@ export const AgentChatConfigSchema = z.object({
   enableStreaming: z.boolean().optional(),
   gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
+  gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
+  gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
   historyCount: z.number().optional(),
   imageAspectRatio: z.string().optional(),
   imageResolution: z.enum(['1K', '2K', '4K']).optional(),
+  localSystem: LocalSystemConfigSchema.optional(),
   reasoningBudgetToken: z.number().optional(),
   reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
   searchFCModel: z
@@ -102,7 +116,7 @@ export const AgentChatConfigSchema = z.object({
   textVerbosity: z.enum(['low', 'medium', 'high']).optional(),
   thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
   thinkingBudget: z.number().optional(),
-  thinkingLevel: z.enum(['low', 'high']).optional(),
+  thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   urlContext: z.boolean().optional(),
   useModelBuiltinSearch: z.boolean().optional(),
 });

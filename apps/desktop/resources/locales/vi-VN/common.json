@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "Thêm",
-    "back": "Quay lại",
-    "cancel": "Hủy",
-    "close": "Đóng",
-    "confirm": "Xác nhận",
-    "delete": "Xóa",
-    "edit": "Chỉnh sửa",
-    "more": "Thêm nữa",
-    "next": "Tiếp theo",
-    "ok": "Đồng ý",
-    "previous": "Quay lại",
-    "refresh": "Tải lại",
-    "remove": "Gỡ bỏ",
-    "retry": "Thử lại",
-    "save": "Lưu",
-    "search": "Tìm kiếm",
-    "submit": "Gửi"
-  },
-  "app": {
-    "description": "Nền tảng hợp tác trợ lý AI của bạn",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "Lỗi",
-    "info": "Thông tin",
-    "loading": "Đang tải",
-    "success": "Thành công",
-    "warning": "Cảnh báo"
-  }
+  "actions.add": "Thêm",
+  "actions.back": "Quay lại",
+  "actions.cancel": "Hủy",
+  "actions.close": "Đóng",
+  "actions.confirm": "Xác nhận",
+  "actions.delete": "Xóa",
+  "actions.edit": "Chỉnh sửa",
+  "actions.more": "Thêm nữa",
+  "actions.next": "Tiếp theo",
+  "actions.ok": "Đồng ý",
+  "actions.previous": "Quay lại",
+  "actions.refresh": "Tải lại",
+  "actions.remove": "Gỡ bỏ",
+  "actions.retry": "Thử lại",
+  "actions.save": "Lưu",
+  "actions.search": "Tìm kiếm",
+  "actions.submit": "Gửi",
+  "app.description": "Nền tảng hợp tác trợ lý AI của bạn",
+  "app.name": "LobeHub",
+  "status.error": "Lỗi",
+  "status.info": "Thông tin",
+  "status.loading": "Đang tải",
+  "status.success": "Thành công",
+  "status.warning": "Cảnh báo"
 }

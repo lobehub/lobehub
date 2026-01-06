@@ -8,7 +8,7 @@ import { TrayManager } from '../TrayManager';
 // Mock electron modules
 vi.mock('electron', () => ({
   nativeTheme: {
-    shouldUseDarkColors: false,
+    shouldUseDarkColorsForSystemIntegratedUI: false,
   },
 }));
 
@@ -90,7 +90,7 @@ describe('TrayManager', () => {
 
   describe('initializeMainTray', () => {
     it('should create main tray with dark icon on macOS when dark mode is enabled', () => {
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColors', {
+      Object.defineProperty(nativeTheme, 'shouldUseDarkColorsForSystemIntegratedUI', {
         value: true,
         writable: true,
         configurable: true,
@@ -110,7 +110,7 @@ describe('TrayManager', () => {
     });
 
     it('should create main tray with light icon on macOS when light mode is enabled', () => {
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColors', {
+      Object.defineProperty(nativeTheme, 'shouldUseDarkColorsForSystemIntegratedUI', {
         value: false,
         writable: true,
         configurable: true,

@@ -1,7 +1,7 @@
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
 
-import { ChatTopic, CreateTopicParams } from '@/types/topic';
+import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 
 interface AddChatTopicAction {
   type: 'addTopic';
@@ -14,21 +14,12 @@ interface UpdateChatTopicAction {
   value: Partial<ChatTopic>;
 }
 
-interface UpdateTopicsAction {
-  type: 'updateTopics';
-  value: ChatTopic[];
-}
-
 interface DeleteChatTopicAction {
   id: string;
   type: 'deleteTopic';
 }
 
-export type ChatTopicDispatch =
-  | AddChatTopicAction
-  | UpdateChatTopicAction
-  | DeleteChatTopicAction
-  | UpdateTopicsAction;
+export type ChatTopicDispatch = AddChatTopicAction | UpdateChatTopicAction | DeleteChatTopicAction;
 
 export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch): ChatTopic[] => {
   switch (payload.type) {
@@ -65,10 +56,6 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           }
         }
       });
-    }
-
-    case 'updateTopics': {
-      return payload.value;
     }
 
     case 'deleteTopic': {

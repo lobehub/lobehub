@@ -1,8 +1,7 @@
-import { Highlighter } from '@lobehub/ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ReactNode, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { type ReactNode, memo } from 'react';
 
 const TooltipContent = memo<{ children: ReactNode }>(({ children }) => {
   if (typeof children !== 'string') return children;

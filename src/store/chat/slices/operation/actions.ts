@@ -2,13 +2,14 @@
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 import { produce } from 'immer';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { ChatStore } from '@/store/chat/store';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { type ChatStore } from '@/store/chat/store';
+import { type MessageMapKeyInput, messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type {
+  AfterCompletionCallback,
   Operation,
   OperationCancelContext,
   OperationContext,
@@ -70,13 +71,16 @@ export interface OperationActions {
   getOperationAbortSignal: (operationId: string) => AbortSignal;
 
   /**
-   * Get sessionId and topicId from operation or fallback to global state
+   * Get conversation context from operation or fallback to global state
    * This is a helper method that can be used by other slices
+   *
+   * Returns full MessageMapKeyInput for consistent key generation
+   *
+   * Migration Note (LOBE-1086):
+   * - Only agentId is used for message association
+   * - Backend handles sessionId mapping internally based on agentId
    */
-  internal_getSessionContext: (context?: { operationId?: string }) => {
-    sessionId: string;
-    topicId: string | null | undefined;
-  };
+  internal_getConversationContext: (context?: { operationId?: string }) => MessageMapKeyInput;
 
   /**
    * Register cancel handler for an operation
@@ -88,6 +92,13 @@ export interface OperationActions {
   ) => void;
 
   /**
+   * Register an afterCompletion callback for an operation
+   * The callback will be executed after the AgentRuntime completes
+   * Used to avoid race conditions with message updates
+   */
+  registerAfterCompletionCallback: (operationId: string, callback: AfterCompletionCallback) => void;
+
+  /**
    * Start an operation (supports auto-inheriting context from parent operation)
    */
   startOperation: (params: {
@@ -95,6 +106,7 @@ export interface OperationActions {
     description?: string;
     label?: string;
     metadata?: Partial<OperationMetadata>;
+    operationId?: string;
     parentOperationId?: string;
     type: OperationType;
   }) => { abortController: AbortController; operationId: string };
@@ -125,33 +137,41 @@ export const operationActions: StateCreator<
   [],
   OperationActions
 > = (set, get) => ({
-  internal_getSessionContext: (context) => {
+  internal_getConversationContext: (context) => {
     if (context?.operationId) {
       const operation = get().operations[context.operationId];
       if (!operation) {
-        log('[internal_getSessionContext] ERROR: Operation not found: %s', context.operationId);
+        log(
+          '[internal_getConversationContext] ERROR: Operation not found: %s',
+          context.operationId,
+        );
         throw new Error(`Operation not found: ${context.operationId}`);
       }
-      const sessionId = operation.context.sessionId!;
-      const topicId = operation.context.topicId;
+      const { agentId, topicId, threadId, scope, isNew, groupId } = operation.context;
       log(
-        '[internal_getSessionContext] get from operation %s: sessionId=%s, topicId=%s',
+        '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s',
         context.operationId,
-        sessionId,
+        agentId,
         topicId,
+        threadId,
+        scope,
+        groupId,
       );
-      return { sessionId, topicId };
+      return { agentId: agentId!, topicId, threadId, scope, isNew, groupId };
     }
 
     // Fallback to global state
-    const sessionId = get().activeId;
+    const agentId = get().activeAgentId;
+    const groupId = get().activeGroupId;
     const topicId = get().activeTopicId;
-    log(
-      '[internal_getSessionContext] use global state: sessionId=%s, topicId=%s',
-      sessionId,
+    const threadId = get().activeThreadId;
+    log('[internal_getConversationContext] use global state: ', {
+      agentId,
       topicId,
-    );
-    return { sessionId, topicId };
+      threadId,
+      groupId,
+    });
+    return { agentId, topicId, threadId, groupId };
   },
 
   startOperation: (params) => {
@@ -162,9 +182,10 @@ export const operationActions: StateCreator<
       label,
       description,
       metadata,
+      operationId: customOperationId,
     } = params;
 
-    const operationId = `op_${nanoid()}`;
+    const operationId = customOperationId || `op_${nanoid()}`;
 
     // If parent operation exists and context is not fully provided, inherit from parent
     let context: OperationContext = partialContext || {};
@@ -222,12 +243,13 @@ export const operationActions: StateCreator<
           state.messageOperationMap[context.messageId] = operationId;
         }
 
-        // Update context index (if sessionId exists)
-        if (context.sessionId) {
-          const contextKey = messageMapKey(
-            context.sessionId,
-            context.topicId !== undefined ? context.topicId : null,
-          );
+        // Update context index (if agentId exists)
+        if (context.agentId) {
+          const contextKey = messageMapKey({
+            agentId: context.agentId,
+            groupId: context.groupId,
+            topicId: context.topicId !== undefined ? context.topicId : null,
+          });
           if (!state.operationsByContext[contextKey]) {
             state.operationsByContext[contextKey] = [];
           }
@@ -380,6 +402,40 @@ export const operationActions: StateCreator<
     );
   },
 
+  registerAfterCompletionCallback: (operationId, callback) => {
+    set(
+      produce((state: ChatStore) => {
+        const operation = state.operations[operationId];
+        if (!operation) {
+          log('[registerAfterCompletionCallback] WARNING: Operation not found: %s', operationId);
+          return;
+        }
+
+        // Initialize runtimeHooks if not exists
+        if (!operation.metadata.runtimeHooks) {
+          operation.metadata.runtimeHooks = {};
+        }
+
+        // Initialize afterCompletionCallbacks array if not exists
+        if (!operation.metadata.runtimeHooks.afterCompletionCallbacks) {
+          operation.metadata.runtimeHooks.afterCompletionCallbacks = [];
+        }
+
+        // Add callback to array
+        operation.metadata.runtimeHooks.afterCompletionCallbacks.push(callback);
+
+        log(
+          '[registerAfterCompletionCallback] registered callback for %s (type=%s), total callbacks: %d',
+          operationId,
+          operation.type,
+          operation.metadata.runtimeHooks.afterCompletionCallbacks.length,
+        );
+      }),
+      false,
+      n(`registerAfterCompletionCallback/${operationId}`),
+    );
+  },
+
   cancelOperation: (operationId, reason = 'User cancelled') => {
     const operation = get().operations[operationId];
     if (!operation) {
@@ -510,8 +566,8 @@ export const operationActions: StateCreator<
       }
 
       // Context filters
-      if (filter.sessionId !== undefined) {
-        matches = matches && op.context.sessionId === filter.sessionId;
+      if (filter.agentId !== undefined) {
+        matches = matches && op.context.agentId === filter.agentId;
       }
       if (filter.topicId !== undefined) {
         matches = matches && op.context.topicId === filter.topicId;
@@ -597,11 +653,12 @@ export const operationActions: StateCreator<
           }
 
           // Remove from context index
-          if (op.context.sessionId) {
-            const contextKey = messageMapKey(
-              op.context.sessionId,
-              op.context.topicId !== undefined ? op.context.topicId : null,
-            );
+          if (op.context.agentId) {
+            const contextKey = messageMapKey({
+              agentId: op.context.agentId,
+              groupId: op.context.groupId,
+              topicId: op.context.topicId !== undefined ? op.context.topicId : null,
+            });
             const contextIndex = state.operationsByContext[contextKey];
             if (contextIndex) {
               state.operationsByContext[contextKey] = contextIndex.filter(

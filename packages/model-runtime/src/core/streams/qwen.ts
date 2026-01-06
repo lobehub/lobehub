@@ -70,14 +70,34 @@ export const transformQwenStream = (
 
   if (item.delta?.tool_calls) {
     return {
-      data: item.delta.tool_calls.map(
-        (value, index): StreamToolCallChunkData => ({
-          function: value.function,
-          id: value.id || generateToolCallId(index, value.function?.name),
+      data: item.delta.tool_calls.map((value, index): StreamToolCallChunkData => {
+        // Store first tool call's info in streamContext for subsequent chunks
+        // (similar pattern to OpenAI stream handling)
+        if (streamContext && !streamContext.tool && value.id && value.function?.name) {
+          streamContext.tool = {
+            id: value.id,
+            index: typeof value.index !== 'undefined' ? value.index : index,
+            name: value.function.name,
+          };
+        }
+
+        return {
+          // Qwen models may send tool_calls in two separate chunks:
+          // 1. First chunk: {id, name} without arguments
+          // 2. Second chunk: {id, arguments} without name
+          // We need to provide default values to handle both cases
+          // Use null for missing name (same as OpenAI stream behavior)
+          function: {
+            arguments: value.function?.arguments ?? '',
+            name: value.function?.name ?? null,
+          },
+          // For incremental chunks without id, use the stored tool id from streamContext
+          id:
+            value.id || streamContext?.tool?.id || generateToolCallId(index, value.function?.name),
           index: typeof value.index !== 'undefined' ? value.index : index,
           type: value.type || 'function',
-        }),
-      ),
+        };
+      }),
       id: chunk.id,
       type: 'tool_calls',
     } as StreamProtocolToolCallChunk;

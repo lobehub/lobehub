@@ -6,37 +6,37 @@ import {
 } from '@/server/services/comfyui/config/promptToolConst';
 
 /**
- * FLUX 双CLIP提示词智能分割工具
- * 将单一prompt分离为T5-XXL和CLIP-L的不同输入
+ * FLUX dual-CLIP prompt intelligent splitter
+ * Separates a single prompt into different inputs for T5-XXL and CLIP-L
  */
 export function splitPromptForDualCLIP(prompt: string): {
-  // 风格关键词，给CLIP-L理解视觉概念
+  // Style keywords for CLIP-L to understand visual concepts
   clipLPrompt: string;
-  // 完整描述，给T5-XXL理解语义
+  // Full description for T5-XXL to understand semantics
   t5xxlPrompt: string;
 } {
   if (!prompt) {
     return { clipLPrompt: '', t5xxlPrompt: '' };
   }
 
-  // 获取所有风格配置
+  // Get all style configurations
   const styleKeywords = getAllStyleKeywords();
   const compoundStyles = getCompoundStyles();
 
-  // 分离风格关键词
+  // Separate style keywords
   const lowerPrompt = prompt.toLowerCase();
   const words = prompt.split(/[\s,]+/);
   const lowerWords = lowerPrompt.split(/[\s,]+/);
-  const stylePhrases: string[] = []; // 改为存储完整短语
+  const stylePhrases: string[] = []; // Changed to store complete phrases
   const contentWords: string[] = [];
   const processedIndices = new Set<number>();
 
-  // 1. 首先检查组合风格（优先级最高）
+  // 1. First check compound styles (highest priority)
   for (const compound of compoundStyles) {
     const compoundLower = compound.toLowerCase();
     const index = lowerPrompt.indexOf(compoundLower);
     if (index !== -1) {
-      // 找到组合风格，提取对应的原始短语
+      // Found compound style, extract corresponding original phrase
       const beforeWords = prompt
         .slice(0, Math.max(0, index))
         .split(/[\s,]+/)
@@ -56,23 +56,23 @@ export function splitPromptForDualCLIP(prompt: string): {
     }
   }
 
-  // 2. 检查单个风格关键词和同义词
+  // 2. Check individual style keywords and synonyms
   for (let i = 0; i < words.length; i++) {
-    if (processedIndices.has(i)) continue; // 跳过已处理的词
+    if (processedIndices.has(i)) continue; // Skip already processed words
 
     const word = words[i];
     const lowerWord = lowerWords[i];
     let isStyleWord = false;
 
-    // 2.1 先检查同义词并标准化
+    // 2.1 First check synonyms and normalize
     const normalizedWord = normalizeStyleTerm(lowerWord);
 
-    // 2.2 检查是否是风格关键词
+    // 2.2 Check if it's a style keyword
     for (const keyword of styleKeywords) {
       const keywordWords = keyword.toLowerCase().split(/\s+/);
 
       if (keywordWords.length === 1) {
-        // 单词匹配（包括标准化后的词）
+        // Single word matching (including normalized words)
         if (lowerWord === keywordWords[0] || normalizedWord === keywordWords[0]) {
           stylePhrases.push(word);
           processedIndices.add(i);
@@ -80,7 +80,7 @@ export function splitPromptForDualCLIP(prompt: string): {
           break;
         }
       } else if (keywordWords.length > 1 && i + keywordWords.length <= words.length) {
-        // 多词短语匹配
+        // Multi-word phrase matching
         const sequence = lowerWords.slice(i, i + keywordWords.length).join(' ');
         if (sequence === keyword.toLowerCase()) {
           const phraseWords: string[] = [];
@@ -89,14 +89,14 @@ export function splitPromptForDualCLIP(prompt: string): {
             processedIndices.add(i + j);
           }
           stylePhrases.push(phraseWords.join(' '));
-          i += keywordWords.length - 1; // 跳过已匹配的词
+          i += keywordWords.length - 1; // Skip matched words
           isStyleWord = true;
           break;
         }
       }
     }
 
-    // 2.3 如果不是关键词，检查是否是风格形容词
+    // 2.3 If not a keyword, check if it's a style adjective
     if (!isStyleWord && !processedIndices.has(i)) {
       const adjectives = extractStyleAdjectives([word]);
       if (adjectives.length > 0) {
@@ -106,25 +106,25 @@ export function splitPromptForDualCLIP(prompt: string): {
       }
     }
 
-    // 2.4 记录非风格词
+    // 2.4 Record non-style words
     if (!isStyleWord && !processedIndices.has(i)) {
       contentWords.push(word);
     }
   }
 
-  // 构建结果
+  // Build result
   if (stylePhrases.length > 0) {
-    // 短语级别去重，保持多词短语的完整性
+    // Phrase-level deduplication, maintaining integrity of multi-word phrases
     const uniquePhrases = [...new Set(stylePhrases)];
     return {
-      // CLIP-L专注风格和视觉概念
+      // CLIP-L focuses on style and visual concepts
       clipLPrompt: uniquePhrases.join(' '),
-      // T5-XXL接收完整context以理解语义关系
+      // T5-XXL receives complete context to understand semantic relationships
       t5xxlPrompt: prompt,
     };
   }
 
-  // 无风格词时的fallback：相同prompt（保证兼容性）
+  // Fallback when no style words: same prompt (ensures compatibility)
   return {
     clipLPrompt: prompt,
     t5xxlPrompt: prompt,

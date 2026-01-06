@@ -1,15 +1,15 @@
-import { CategoryItem, CategoryListQuery } from '@lobehub/market-sdk';
+import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
 import { type SWRResponse } from 'swr';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { discoverService } from '@/services/discover';
-import { DiscoverStore } from '@/store/discover';
+import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
 import {
-  DiscoverMcpDetail,
-  McpListResponse,
-  McpQueryParams,
+  type DiscoverMcpDetail,
+  type McpListResponse,
+  type McpQueryParams,
 } from '@/types/discover';
 
 export interface MCPAction {

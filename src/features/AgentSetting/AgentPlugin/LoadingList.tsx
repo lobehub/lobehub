@@ -1,44 +1,27 @@
-import { Skeleton } from 'antd';
-import { createStyles } from 'antd-style';
-
-const useStyles = createStyles(({ css, prefixCls }) => ({
-  avatar: css`
-    .${prefixCls}-skeleton-header {
-      padding-inline-end: 0;
-    }
-  `,
-  label: css`
-    li {
-      height: 14px !important;
-    }
-
-    li + li {
-      margin-block-start: 12px !important;
-    }
-  `,
-}));
+import { Flexbox, Skeleton } from '@lobehub/ui';
 
 const LoadingList = () => {
-  const { styles } = useStyles();
-
   const loadingItem = {
-    avatar: (
-      <Skeleton
-        active
-        avatar={{ size: 40 }}
-        className={styles.avatar}
-        paragraph={false}
-        title={false}
-      />
-    ),
+    avatar: <Skeleton.Avatar active shape="square" size={40} style={{ flex: 'none' }} />,
     label: (
-      <Skeleton
-        active
-        avatar={false}
-        paragraph={{ className: styles.label, style: { marginBottom: 0 } }}
-        style={{ width: 300 }}
-        title={false}
-      />
+      <Flexbox flex={1} gap={6} style={{ overflow: 'hidden' }}>
+        <Skeleton.Button
+          active
+          size={'small'}
+          style={{
+            height: 16,
+            width: '70%',
+          }}
+        />
+        <Skeleton.Button
+          active
+          size={'small'}
+          style={{
+            height: 12,
+            width: '50%',
+          }}
+        />
+      </Flexbox>
     ),
   };
 

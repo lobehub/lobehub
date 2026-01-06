@@ -1,93 +1,45 @@
 export default {
-  addDataset: {
-    confirm: '新建',
-    description: {
-      placeholder: '数据集简介（选填）',
-    },
-    name: {
-      placeholder: '数据集名称',
-      required: '请填写数据集名称',
-    },
-    title: '添加数据集',
-  },
-  dataset: {
-    addNewButton: '创建数据集',
-    emptyGuide: '当前数据集为空，请创建一个数据集。',
-    list: {
-      table: {
-        actions: {
-          importData: '导入数据',
-        },
-        columns: {
-          actions: '操作',
-          ideal: {
-            title: '期望回答',
-          },
-          question: {
-            title: '问题',
-          },
-          referenceFiles: {
-            title: '参考文件',
-          },
-        },
-        notSelected: '请在左侧选择数据集',
-        title: '数据集详情',
-      },
-      title: '数据集',
-    },
-  },
-  evaluation: {
-    addEvaluation: {
-      confirm: '新建',
-      datasetId: {
-        placeholder: '请选择你的评测数据集',
-        required: '请选择评测数据集',
-      },
-      description: {
-        placeholder: '评测任务简介（选填）',
-      },
-      name: {
-        placeholder: '评测任务名称',
-        required: '请填写评测任务名称',
-      },
-      title: '添加评测任务',
-    },
-    addNewButton: '创建评测',
-    emptyGuide: '当前评测任务为空，开始创建评测。',
-
-    table: {
-      columns: {
-        actions: {
-          checkStatus: '检查状态',
-          confirmDelete: '是否删除本条评测',
-          confirmRun:
-            '是否开始运行？开始运行后将在后台异步执行评测任务，关闭页面不影响异步任务的执行',
-          downloadRecords: '下载评测',
-          retry: '重试',
-          run: '运行',
-          title: '操作',
-        },
-        datasetId: {
-          title: '数据集',
-        },
-        name: {
-          title: '评测任务名称',
-        },
-        records: {
-          title: '评测记录数',
-        },
-        referenceFiles: {
-          title: '参考文件',
-        },
-        status: {
-          error: '执行出错',
-          pending: '待运行',
-          processing: '运行中',
-          success: '执行成功',
-          title: '状态',
-        },
-      },
-      title: '评测任务列表',
-    },
-  },
+  'addDataset.confirm': 'Create',
+  'addDataset.description.placeholder': 'Dataset description (optional)',
+  'addDataset.name.placeholder': 'Dataset name',
+  'addDataset.name.required': 'Please enter the dataset name',
+  'addDataset.title': 'Add Dataset',
+  'dataset.addNewButton': 'Create Dataset',
+  'dataset.emptyGuide': 'There are currently no datasets. Please create a dataset.',
+  'dataset.list.table.actions.importData': 'Import Data',
+  'dataset.list.table.columns.actions': 'Actions',
+  'dataset.list.table.columns.ideal.title': 'Expected Answer',
+  'dataset.list.table.columns.question.title': 'Question',
+  'dataset.list.table.columns.referenceFiles.title': 'Reference Files',
+  'dataset.list.table.notSelected': 'Please select a dataset on the left',
+  'dataset.list.table.title': 'Dataset Details',
+  'dataset.list.title': 'Dataset',
+  'evaluation.addEvaluation.confirm': 'Create',
+  'evaluation.addEvaluation.datasetId.placeholder': 'Please select your evaluation dataset',
+  'evaluation.addEvaluation.datasetId.required': 'Please select an evaluation dataset',
+  'evaluation.addEvaluation.description.placeholder': 'Evaluation task description (optional)',
+  'evaluation.addEvaluation.name.placeholder': 'Evaluation task name',
+  'evaluation.addEvaluation.name.required': 'Please enter the evaluation task name',
+  'evaluation.addEvaluation.title': 'Add Evaluation Task',
+  'evaluation.addNewButton': 'Create Evaluation',
+  'evaluation.emptyGuide': 'There are currently no evaluation tasks. Start creating an evaluation.',
+  'evaluation.table.columns.actions.checkStatus': 'Check Status',
+  'evaluation.table.columns.actions.confirmDelete':
+    'Are you sure you want to delete this evaluation?',
+  'evaluation.table.columns.actions.confirmRun':
+    'Are you sure you want to start running? The evaluation task will be executed asynchronously in the background, and closing the page will not affect the execution of the asynchronous task.',
+  'evaluation.table.columns.actions.downloadRecords': 'Download Evaluation',
+  'evaluation.table.columns.actions.retry': 'Retry',
+  'evaluation.table.columns.actions.run': 'Run',
+  'evaluation.table.columns.actions.title': 'Actions',
+  'evaluation.table.columns.datasetId.title': 'Dataset',
+  'evaluation.table.columns.name.title': 'Evaluation Task Name',
+  'evaluation.table.columns.records.title': 'Number of Evaluation Records',
+  'evaluation.table.columns.referenceFiles.title': 'Reference Files',
+  'evaluation.table.columns.status.error': 'Execution Error',
+  'evaluation.table.columns.status.pending': 'Pending',
+  'evaluation.table.columns.status.processing': 'In Progress',
+  'evaluation.table.columns.status.success': 'Execution Successful',
+  'evaluation.table.columns.status.title': 'Status',
+  'evaluation.table.title': 'Evaluation Task List',
 };

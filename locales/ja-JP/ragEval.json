@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "新規作成",
-    "description": {
-      "placeholder": "データセットの概要（任意）"
-    },
-    "name": {
-      "placeholder": "データセット名",
-      "required": "データセット名を入力してください"
-    },
-    "title": "データセットの追加"
-  },
-  "dataset": {
-    "addNewButton": "データセットを作成",
-    "emptyGuide": "現在、データセットは空です。データセットを作成してください。",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "データをインポート"
-        },
-        "columns": {
-          "actions": "操作",
-          "ideal": {
-            "title": "期待される回答"
-          },
-          "question": {
-            "title": "質問"
-          },
-          "referenceFiles": {
-            "title": "参考ファイル"
-          }
-        },
-        "notSelected": "左側からデータセットを選択してください",
-        "title": "データセットの詳細"
-      },
-      "title": "データセット"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "新規作成",
-      "datasetId": {
-        "placeholder": "評価データセットを選択してください",
-        "required": "評価データセットを選択してください"
-      },
-      "description": {
-        "placeholder": "評価タスクの概要（任意）"
-      },
-      "name": {
-        "placeholder": "評価タスク名",
-        "required": "評価タスク名を入力してください"
-      },
-      "title": "評価タスクの追加"
-    },
-    "addNewButton": "評価を作成",
-    "emptyGuide": "現在、評価タスクは空です。評価を作成を開始してください。",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "状態を確認",
-          "confirmDelete": "この評価を削除しますか？",
-          "confirmRun": "実行を開始しますか？実行を開始すると、バックグラウンドで非同期に評価タスクが実行されます。ページを閉じても非同期タスクの実行には影響しません。",
-          "downloadRecords": "評価をダウンロード",
-          "retry": "再試行",
-          "run": "実行",
-          "title": "操作"
-        },
-        "datasetId": {
-          "title": "データセット"
-        },
-        "name": {
-          "title": "評価タスク名"
-        },
-        "records": {
-          "title": "評価記録数"
-        },
-        "referenceFiles": {
-          "title": "参考ファイル"
-        },
-        "status": {
-          "error": "実行エラー",
-          "pending": "実行待ち",
-          "processing": "実行中",
-          "success": "実行成功",
-          "title": "状態"
-        }
-      },
-      "title": "評価タスク一覧"
-    }
-  }
+  "addDataset.confirm": "新規作成",
+  "addDataset.description.placeholder": "データセットの概要（任意）",
+  "addDataset.name.placeholder": "データセット名",
+  "addDataset.name.required": "データセット名を入力してください",
+  "addDataset.title": "データセットの追加",
+  "dataset.addNewButton": "データセットを作成",
+  "dataset.emptyGuide": "現在、データセットは空です。データセットを作成してください。",
+  "dataset.list.table.actions.importData": "データをインポート",
+  "dataset.list.table.columns.actions": "操作",
+  "dataset.list.table.columns.ideal.title": "期待される回答",
+  "dataset.list.table.columns.question.title": "質問",
+  "dataset.list.table.columns.referenceFiles.title": "参考ファイル",
+  "dataset.list.table.notSelected": "左側からデータセットを選択してください",
+  "dataset.list.table.title": "データセットの詳細",
+  "dataset.list.title": "データセット",
+  "evaluation.addEvaluation.confirm": "新規作成",
+  "evaluation.addEvaluation.datasetId.placeholder": "評価データセットを選択してください",
+  "evaluation.addEvaluation.datasetId.required": "評価データセットを選択してください",
+  "evaluation.addEvaluation.description.placeholder": "評価タスクの概要（任意）",
+  "evaluation.addEvaluation.name.placeholder": "評価タスク名",
+  "evaluation.addEvaluation.name.required": "評価タスク名を入力してください",
+  "evaluation.addEvaluation.title": "評価タスクの追加",
+  "evaluation.addNewButton": "評価を作成",
+  "evaluation.emptyGuide": "現在、評価タスクは空です。評価を作成を開始してください。",
+  "evaluation.table.columns.actions.checkStatus": "状態を確認",
+  "evaluation.table.columns.actions.confirmDelete": "この評価を削除しますか？",
+  "evaluation.table.columns.actions.confirmRun": "実行を開始しますか？実行を開始すると、バックグラウンドで非同期に評価タスクが実行されます。ページを閉じても非同期タスクの実行には影響しません。",
+  "evaluation.table.columns.actions.downloadRecords": "評価をダウンロード",
+  "evaluation.table.columns.actions.retry": "再試行",
+  "evaluation.table.columns.actions.run": "実行",
+  "evaluation.table.columns.actions.title": "操作",
+  "evaluation.table.columns.datasetId.title": "データセット",
+  "evaluation.table.columns.name.title": "評価タスク名",
+  "evaluation.table.columns.records.title": "評価記録数",
+  "evaluation.table.columns.referenceFiles.title": "参考ファイル",
+  "evaluation.table.columns.status.error": "実行エラー",
+  "evaluation.table.columns.status.pending": "実行待ち",
+  "evaluation.table.columns.status.processing": "実行中",
+  "evaluation.table.columns.status.success": "実行成功",
+  "evaluation.table.columns.status.title": "状態",
+  "evaluation.table.title": "評価タスク一覧"
 }

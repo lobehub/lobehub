@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "Confirmar",
-    "detail": "Um aplicativo de chat baseado em um grande modelo de linguagem",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "Sobre"
-  },
-  "confirm": {
-    "cancel": "Cancelar",
-    "no": "Não",
-    "title": "Confirmar",
-    "yes": "Sim"
-  },
-  "error": {
-    "button": "Confirmar",
-    "detail": "Ocorreu um erro durante a operação, por favor tente novamente mais tarde",
-    "message": "Ocorreu um erro",
-    "title": "Erro"
-  },
-  "update": {
-    "downloadAndInstall": "Baixar e instalar",
-    "downloadComplete": "Download completo",
-    "downloadCompleteMessage": "O pacote de atualização foi baixado com sucesso, deseja instalá-lo agora?",
-    "installLater": "Instalar depois",
-    "installNow": "Instalar agora",
-    "later": "Lembrar mais tarde",
-    "newVersion": "Nova versão disponível",
-    "newVersionAvailable": "Nova versão encontrada: {{version}}",
-    "skipThisVersion": "Ignorar esta versão"
-  }
+  "about.button": "Confirmar",
+  "about.detail": "Um aplicativo de chat baseado em um grande modelo de linguagem",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "Sobre",
+  "confirm.cancel": "Cancelar",
+  "confirm.no": "Não",
+  "confirm.title": "Confirmar",
+  "confirm.yes": "Sim",
+  "error.button": "Confirmar",
+  "error.detail": "Ocorreu um erro durante a operação, por favor tente novamente mais tarde",
+  "error.message": "Ocorreu um erro",
+  "error.title": "Erro",
+  "update.downloadAndInstall": "Baixar e instalar",
+  "update.downloadComplete": "Download completo",
+  "update.downloadCompleteMessage": "O pacote de atualização foi baixado com sucesso, deseja instalá-lo agora?",
+  "update.installLater": "Instalar depois",
+  "update.installNow": "Instalar agora",
+  "update.later": "Lembrar mais tarde",
+  "update.newVersion": "Nova versão disponível",
+  "update.newVersionAvailable": "Nova versão encontrada: {{version}}",
+  "update.skipThisVersion": "Ignorar esta versão"
 }

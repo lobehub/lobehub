@@ -1,6 +1,6 @@
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { PublicState, State, initialState } from './initialState';
+import { type PublicState, type State, initialState } from './initialState';
 
 export interface Action {
   getJSONState: () => any;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { GenerationTopicModel } from '@/database/models/generationTopic';
-import { GenerationTopicItem } from '@/database/schemas/generation';
+import { type GenerationTopicItem } from '@/database/schemas/generation';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';

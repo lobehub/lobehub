@@ -3,7 +3,7 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback, useState } from 'react';
 
-import { McpInstallRequest } from '@/features/ProtocolUrlHandler/InstallPlugin/types';
+import { type McpInstallRequest } from '@/features/ProtocolUrlHandler/InstallPlugin/types';
 
 import PluginInstallConfirmModal from './InstallPlugin';
 

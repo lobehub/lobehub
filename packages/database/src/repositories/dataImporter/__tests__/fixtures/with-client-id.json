@@ -80,7 +80,6 @@
         "clientId": null,
         "chatConfig": {
           "searchMode": "off",
-          "displayMode": "chat",
           "historyCount": 8,
           "searchFCModel": {
             "model": "gpt-4o-mini",
@@ -126,7 +125,6 @@
         "plugins": [],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -166,7 +164,6 @@
         "plugins": [],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": false,
           "enableAutoCreateTopic": true,
@@ -206,7 +203,6 @@
         "plugins": ["web_search"],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": false,
           "enableAutoCreateTopic": true,
@@ -246,7 +242,6 @@
         "plugins": [],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -286,7 +281,6 @@
         "plugins": [],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": false,
           "enableAutoCreateTopic": true,
@@ -326,7 +320,6 @@
         "plugins": [],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -366,7 +359,6 @@
         "plugins": [],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -406,7 +398,6 @@
         "plugins": [],
         "clientId": null,
         "chatConfig": {
-          "displayMode": "chat",
           "historyCount": 8,
           "enableHistoryCount": true,
           "enableAutoCreateTopic": true,
@@ -447,7 +438,6 @@
         "clientId": null,
         "chatConfig": {
           "searchMode": "off",
-          "displayMode": "chat",
           "historyCount": 8,
           "searchFCModel": {
             "model": "gpt-4o-mini",

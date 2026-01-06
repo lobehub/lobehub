@@ -23,11 +23,11 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "dotenv": "^17.2.3",
     "fake-indexeddb": "^6.2.5"
   },
   "peerDependencies": {
-    "@electric-sql/pglite": "^0.2.17",
     "dayjs": ">=1.11.19",
     "drizzle-orm": ">=0.44.7",
     "nanoid": ">=5.1.6",

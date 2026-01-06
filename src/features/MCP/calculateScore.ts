@@ -1,6 +1,6 @@
-import { DeploymentOption } from '@lobehub/market-types';
+import { type DeploymentOption } from '@lobehub/market-types';
 
-import { DiscoverMcpDetail } from '@/types/discover';
+import { type DiscoverMcpDetail } from '@/types/discover';
 
 export interface ScoreItem {
   check: boolean;

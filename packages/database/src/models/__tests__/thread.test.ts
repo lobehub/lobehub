@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sessions, threads, topics, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { ThreadModel } from '../thread';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const userId = 'thread-user-test';
 const otherUserId = 'other-user-test';
@@ -208,7 +208,7 @@ describe('ThreadModel', () => {
 
       await threadModel.update('thread-1', {
         title: 'Updated Title',
-        status: ThreadStatus.Archived,
+        status: ThreadStatus.Completed,
       });
 
       const updated = await serverDB.query.threads.findFirst({
@@ -216,7 +216,7 @@ describe('ThreadModel', () => {
       });
 
       expect(updated?.title).toBe('Updated Title');
-      expect(updated?.status).toBe(ThreadStatus.Archived);
+      expect(updated?.status).toBe(ThreadStatus.Completed);
     });
 
     it('should not update thread belonging to another user', async () => {

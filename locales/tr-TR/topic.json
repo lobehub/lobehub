@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "Akıllı Yeniden Adlandırma",
-    "confirmRemoveAll": "Tüm konular silinecek, silindikten sonra geri alınamaz, lütfen dikkatli olun.",
-    "confirmRemoveTopic": "Bu konu silinecek, silindikten sonra geri alınamaz, lütfen dikkatli olun.",
-    "confirmRemoveUnstarred": "Favori olmayan konular silinecek, silindikten sonra geri alınamaz, lütfen dikkatli olun.",
-    "duplicate": "Kopya Oluştur",
-    "export": "Konuları Dışa Aktar",
-    "openInNewWindow": "Sayfayı yeni pencerede aç",
-    "removeAll": "Tüm Konuları Sil",
-    "removeUnstarred": "Favori Olmayan Konuları Sil"
-  },
+  "actions.addNewTopic": "Yeni Konu Başlat",
+  "actions.autoRename": "Akıllı Yeniden Adlandır",
+  "actions.confirmRemoveAll": "Tüm konuları silmek üzeresiniz. Bu işlem geri alınamaz.",
+  "actions.confirmRemoveTopic": "Bu konuyu silmek üzeresiniz. Bu işlem geri alınamaz.",
+  "actions.confirmRemoveUnstarred": "Yıldızlanmamış konuları silmek üzeresiniz. Bu işlem geri alınamaz.",
+  "actions.duplicate": "Kopyala",
+  "actions.export": "Konuları Dışa Aktar",
+  "actions.import": "Konuşmayı İçe Aktar",
+  "actions.openInNewWindow": "Yeni pencerede aç",
+  "actions.removeAll": "Tüm Konuları Sil",
+  "actions.removeUnstarred": "Yıldızlanmamış Konuları Sil",
   "defaultTitle": "Varsayılan Konu",
+  "displayItems": "Öğeleri Göster",
   "duplicateLoading": "Konu Kopyalanıyor...",
   "duplicateSuccess": "Konu Başarıyla Kopyalandı",
   "favorite": "Favori",
-  "groupMode": {
-    "ascMessages": "Mesaj Sayısına Göre Artan Sıra",
-    "byTime": "Zamana Göre Grupla",
-    "descMessages": "Mesaj Sayısına Göre Azalan Sıra",
-    "flat": "Gruplandırma Yok"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "Bu Ay",
-      "today": "Bugün",
-      "week": "Bu Hafta",
-      "yesterday": "Dün"
-    }
-  },
-  "guide": {
-    "desc": "Mevcut sohbeti tarihsel konu olarak kaydetmek ve yeni bir sohbet başlatmak için sol taraftaki gönder butonuna tıklayın.",
-    "title": "Konu Listesi"
-  },
-  "searchPlaceholder": "Konuları Ara...",
-  "searchResultEmpty": "Hiçbir arama sonucu bulunamadı",
+  "groupMode.ascMessages": "Mesaj Sayısına Göre Artan Sırala",
+  "groupMode.byTime": "Zamana Göre Grupla",
+  "groupMode.descMessages": "Mesaj Sayısına Göre Azalan Sırala",
+  "groupMode.flat": "Gruplama Yok",
+  "groupTitle.byTime.month": "Bu Ay",
+  "groupTitle.byTime.today": "Bugün",
+  "groupTitle.byTime.week": "Bu Hafta",
+  "groupTitle.byTime.yesterday": "Dün",
+  "guide.desc": "Geçerli konuşmayı geçmiş bir konu olarak kaydetmek ve yeni bir konuşma başlatmak için soldaki düğmeye tıklayın.",
+  "guide.title": "Konu Listesi",
+  "importError": "İçe Aktarma Başarısız",
+  "importInvalidFormat": "Geçersiz dosya formatı. Lütfen geçerli bir JSON dosyası olduğundan emin olun.",
+  "importLoading": "Konuşma içe aktarılıyor...",
+  "importSuccess": "{{count}} mesaj başarıyla içe aktarıldı",
+  "loadMore": "Daha Fazla Yükle",
+  "searchPlaceholder": "Konularda Ara...",
+  "searchResultEmpty": "Arama sonucu bulunamadı.",
   "temp": "Geçici",
   "title": "Konu"
 }

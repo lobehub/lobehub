@@ -9,11 +9,18 @@ export interface BuiltinTypeProps {
   apiName?: string;
   arguments?: string;
   content: string;
-  id: string;
   identifier?: string;
   loading?: boolean;
+  /**
+   * The real message ID (tool message ID)
+   */
+  messageId?: string;
   pluginError?: any;
   pluginState?: any;
+  /**
+   * The tool call ID from the assistant message
+   */
+  toolCallId?: string;
 }
 
 const BuiltinType = memo<BuiltinTypeProps>(
@@ -21,7 +28,8 @@ const BuiltinType = memo<BuiltinTypeProps>(
     content,
     arguments: argumentsStr = '',
     pluginState,
-    id,
+    toolCallId,
+    messageId,
     identifier,
     pluginError,
     apiName,
@@ -40,9 +48,10 @@ const BuiltinType = memo<BuiltinTypeProps>(
         args={args || {}}
         content={data}
         identifier={identifier}
-        messageId={id}
+        messageId={messageId || toolCallId || ''}
         pluginError={pluginError}
         pluginState={pluginState}
+        toolCallId={toolCallId}
       />
     );
   },

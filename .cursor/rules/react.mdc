@@ -7,7 +7,7 @@ alwaysApply: false
 # React Component Writing Guide
 
 - Use antd-style for complex styles; for simple cases, use the `style` attribute for inline styles
-- Use `Flexbox` and `Center` components from react-layout-kit for flex and centered layouts
+- Use `Flexbox` and `Center` components from `@lobehub/ui` for flex and centered layouts
 - Component selection priority: src/components > installed component packages > lobe-ui > antd
 - Use selectors to access zustand store data instead of accessing the store directly
 
@@ -15,7 +15,7 @@ alwaysApply: false
 
 - If unsure how to use `@lobehub/ui` components or what props they accept, search for existing usage in this project instead of guessing. Most components extend antd components with additional props
 - For specific usage, search online. For example, for ActionIcon visit <https://ui.lobehub.com/components/action-icon>
-- Read `node_modules/@lobehub/ui/es/index.js` to see all available components and their props
+- Read `node_modules/@lobehub/ui/es/index.mjs` to see all available components and their props
 
 - General
   - ActionIcon
@@ -69,7 +69,9 @@ alwaysApply: false
   - Drawer
   - Modal
 - Layout
+  - Center
   - DraggablePanel
+  - Flexbox
   - Footer
   - Grid
   - Header

@@ -1,4 +1,4 @@
-import { SliderWithInput, SliderWithInputProps } from '@lobehub/ui';
+import { SliderWithInput, type SliderWithInputProps } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 
 interface FormSliderWithInputProps extends Omit<SliderWithInputProps, 'onChange' | 'value'> {

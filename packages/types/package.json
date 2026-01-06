@@ -2,22 +2,21 @@
   "name": "@lobechat/types",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/model-runtime": "workspace:*",
     "@lobechat/python-interpreter": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
     "@lobehub/chat-plugin-sdk": "^1.32.4",
     "@lobehub/market-sdk": "beta",
     "@lobehub/market-types": "^1.11.4",
-    "@lobehub/ui": "^2.13.8",
     "model-bank": "workspace:*",
-    "react": "19.2.0",
     "type-fest": "^4.41.0",
-    "zod": "^3.25.76",
     "zustand": "5.0.4"
   },
   "peerDependencies": {
+    "@lobehub/ui": "^4",
+    "react": "*",
     "zod": "^3.25.76"
   }
 }

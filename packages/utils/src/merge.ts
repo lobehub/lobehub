@@ -1,4 +1,4 @@
-import { merge as _merge, isEmpty, mergeWith } from 'lodash-es';
+import { merge as _merge, isEmpty, mergeWith } from 'es-toolkit/compat';
 
 /**
  * Merge objects, directly replace if it's an array

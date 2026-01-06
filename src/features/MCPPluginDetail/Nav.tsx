@@ -1,7 +1,8 @@
 'use client';
 
-import { Icon, Tabs, TabsProps, Tag } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { SOCIAL_URL } from '@lobechat/business-const';
+import { Flexbox, Icon, Tabs, type TabsProps, Tag } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import {
   BookOpenIcon,
   CodeIcon,
@@ -14,27 +15,35 @@ import {
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import urlJoin from 'url-join';
 
-import { SOCIAL_URL } from '@/const/branding';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { McpNavKey } from '@/types/discover';
 
 import { useDetailContext } from './DetailProvider';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     link: css`
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
 
       &:hover {
-        color: ${token.colorInfo};
+        color: ${cssVar.colorInfo};
       }
     `,
     nav: css`
-      border-block-end: 1px solid ${token.colorBorder};
+      border-block-end: 1px solid ${cssVar.colorBorder};
+    `,
+    tabs: css`
+      scrollbar-width: none;
+      overflow-x: auto;
+      flex: 1;
+      min-width: 0;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
     `,
   };
 });
@@ -58,7 +67,6 @@ const Nav = memo<NavProps>(
       github,
       identifier,
     } = useDetailContext();
-    const { styles } = useStyles();
 
     // 检查插件是否已安装
     const installedPlugin = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
@@ -70,6 +78,7 @@ const Nav = memo<NavProps>(
     const nav = (
       <Tabs
         activeKey={activeTab}
+        className={styles.tabs}
         compact={mobile}
         items={
           [

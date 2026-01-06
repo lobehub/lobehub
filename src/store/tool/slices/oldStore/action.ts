@@ -1,22 +1,23 @@
-import { LobeTool } from '@lobechat/types';
+import { type LobeTool } from '@lobechat/types';
+import { uniqBy } from 'es-toolkit/compat';
 import { t } from 'i18next';
 import { produce } from 'immer';
-import { uniqBy } from 'lodash-es';
-import useSWR, { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import useSWR, { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { notification } from '@/components/AntdStaticMethods';
+import { mutate } from '@/libs/swr';
 import { pluginService } from '@/services/plugin';
 import { toolService } from '@/services/tool';
 import { globalHelpers } from '@/store/global/helpers';
 import { pluginStoreSelectors } from '@/store/tool/selectors';
-import { DiscoverPluginItem, PluginListResponse, PluginQueryParams } from '@/types/discover';
-import { PluginInstallError } from '@/types/tool/plugin';
+import { type DiscoverPluginItem, type PluginListResponse, type PluginQueryParams } from '@/types/discover';
+import { type PluginInstallError } from '@/types/tool/plugin';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { ToolStore } from '../../store';
-import { PluginInstallProgress, PluginInstallStep, PluginStoreState } from './initialState';
+import { type ToolStore } from '../../store';
+import { type PluginInstallProgress, PluginInstallStep, type PluginStoreState } from './initialState';
 
 const n = setNamespace('pluginStore');
 

@@ -1,7 +1,7 @@
-import { FC, memo } from 'react';
+import { type FC, memo } from 'react';
 
 import { useFileStore } from '@/store/file';
-import { ChunkMetadata, Coordinates, FileChunk } from '@/types/chunk';
+import { type ChunkMetadata, type Coordinates, type FileChunk } from '@/types/chunk';
 
 interface HighlightRectProps {
   coordinates: Coordinates;

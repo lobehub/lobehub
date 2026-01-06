@@ -19,6 +19,11 @@ const showFilePreview = (s: ChatStoreState) => !!s.portalFile;
 const previewFileId = (s: ChatStoreState) => s.portalFile?.fileId;
 const chunkText = (s: ChatStoreState) => s.portalFile?.chunkText;
 
+const showNotebook = (s: ChatStoreState) => !!s.showNotebook;
+
+const showDocument = (s: ChatStoreState) => !!s.portalDocumentId;
+const portalDocumentId = (s: ChatStoreState) => s.portalDocumentId;
+
 const showArtifactUI = (s: ChatStoreState) => !!s.portalArtifact;
 const artifactTitle = (s: ChatStoreState) => s.portalArtifact?.title;
 const artifactIdentifier = (s: ChatStoreState) => s.portalArtifact?.identifier || '';
@@ -59,6 +64,11 @@ export const chatPortalSelectors = {
 
   messageDetailId,
   showMessageDetail,
+
+  showNotebook,
+
+  showDocument,
+  portalDocumentId,
 
   showPluginUI,
   showPortal,

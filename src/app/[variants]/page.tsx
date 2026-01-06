@@ -1,21 +1,24 @@
-import { DynamicLayoutProps } from '@/types/next';
+import dynamic from 'next/dynamic';
+
+import Loading from '@/components/Loading/BrandTextLoading';
+import { type DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
-import DesktopRouter from './DesktopRouter';
-import MobileRouter from './MobileRouter';
+import DesktopRouter from './router';
+
+const MobileRouter = dynamic(() => import('./(mobile)'), {
+  loading: () => <Loading debugId={'Root'} />,
+});
 
 export default async (props: DynamicLayoutProps) => {
   // Get isMobile from variants parameter on server side
   const isMobile = await RouteVariants.getIsMobile(props);
-  const { locale } = await RouteVariants.getVariantsFromProps(props);
 
   // Conditionally load and render based on device type
   // Using native dynamic import ensures complete code splitting
   // Mobile and Desktop bundles will be completely separate
 
-  if (isMobile) {
-    return <MobileRouter locale={locale} />;
-  }
+  if (isMobile) return <MobileRouter />;
 
-  return <DesktopRouter locale={locale} />;
+  return <DesktopRouter />;
 };

@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Thu gọn",
-      "on": "Mở rộng"
-    },
-    "typobar": {
-      "off": "Ẩn thanh công cụ định dạng",
-      "on": "Hiển thị thanh công cụ định dạng"
-    }
-  },
+  "actions.expand.off": "Thu gọn",
+  "actions.expand.on": "Mở rộng",
+  "actions.typobar.off": "Ẩn thanh công cụ định dạng",
+  "actions.typobar.on": "Hiện thanh công cụ định dạng",
+  "autoSave.latest": "Đã tải phiên bản mới nhất",
+  "autoSave.saved": "Đã lưu",
+  "autoSave.saving": "Đang tự động lưu...",
   "cancel": "Hủy",
+  "codemirror.copyFailed": "Sao chép thất bại",
+  "codemirror.copySuccess": "Đã sao chép mã vào bộ nhớ tạm",
+  "codemirror.selectLanguage": "Chọn ngôn ngữ",
+  "codemirror.selectTheme": "Chọn giao diện",
+  "codemirror.showLineNumbers": "Hiển thị số dòng",
+  "codemirror.tabSize": "Kích thước tab",
+  "codemirror.theme": "Giao diện",
+  "codemirror.useTabs": "Sử dụng tab",
   "confirm": "Xác nhận",
-  "file": {
-    "error": "Lỗi: {{message}}",
-    "uploading": "Đang tải tệp lên..."
-  },
-  "image": {
-    "broken": "Hình ảnh bị hỏng"
-  },
-  "link": {
-    "edit": "Chỉnh sửa liên kết",
-    "open": "Mở liên kết",
-    "placeholder": "Nhập URL liên kết",
-    "unlink": "Gỡ liên kết"
-  },
-  "math": {
-    "placeholder": "Vui lòng nhập công thức TeX"
-  },
-  "slash": {
-    "h1": "Tiêu đề cấp 1",
-    "h2": "Tiêu đề cấp 2",
-    "h3": "Tiêu đề cấp 3",
-    "hr": "Đường phân cách",
-    "table": "Bảng",
-    "tex": "Công thức TeX"
-  },
-  "table": {
-    "delete": "Xóa bảng",
-    "deleteColumn": "Xóa cột",
-    "deleteRow": "Xóa hàng",
-    "insertColumnLeft": "Chèn {{count}} cột vào bên trái",
-    "insertColumnRight": "Chèn {{count}} cột vào bên phải",
-    "insertRowAbove": "Chèn {{count}} hàng vào phía trên",
-    "insertRowBelow": "Chèn {{count}} hàng vào phía dưới"
-  },
-  "typobar": {
-    "blockquote": "Trích dẫn",
-    "bold": "Đậm",
-    "bulletList": "Danh sách gạch đầu dòng",
-    "code": "Mã nội tuyến",
-    "codeblock": "Khối mã",
-    "italic": "Nghiêng",
-    "link": "Liên kết",
-    "numberList": "Danh sách có thứ tự",
-    "strikethrough": "Gạch ngang",
-    "table": "bảng",
-    "taskList": "Danh sách công việc",
-    "tex": "Công thức TeX",
-    "underline": "Gạch chân"
-  }
+  "file.error": "Lỗi: {{message}}",
+  "file.uploading": "Đang tải tệp lên...",
+  "image.broken": "Hình ảnh bị hỏng",
+  "link.edit": "Chỉnh sửa liên kết",
+  "link.editLinkTitle": "Liên kết",
+  "link.editTextTitle": "Tiêu đề",
+  "link.open": "Mở liên kết",
+  "link.placeholder": "Nhập URL liên kết",
+  "link.unlink": "Gỡ liên kết",
+  "markdown.cancel": "Hủy",
+  "markdown.confirm": "Chuyển đổi",
+  "markdown.parseMessage": "Chuyển sang định dạng Markdown. Nội dung hiện tại sẽ bị ghi đè. Bạn có chắc không? (Tự động đóng sau 5 giây)",
+  "markdown.parseTitle": "Định dạng Markdown",
+  "math.placeholder": "Vui lòng nhập công thức TeX",
+  "modifier.accept": "Giữ lại",
+  "modifier.acceptAll": "Giữ tất cả",
+  "modifier.reject": "Hoàn tác",
+  "modifier.rejectAll": "Hoàn tác tất cả",
+  "slash.h1": "Tiêu đề 1",
+  "slash.h2": "Tiêu đề 2",
+  "slash.h3": "Tiêu đề 3",
+  "slash.hr": "Đường phân cách",
+  "slash.table": "Bảng",
+  "slash.tex": "Công thức TeX",
+  "table.delete": "Xóa bảng",
+  "table.deleteColumn": "Xóa cột",
+  "table.deleteRow": "Xóa hàng",
+  "table.insertColumnLeft": "Chèn {{count}} cột bên trái",
+  "table.insertColumnRight": "Chèn {{count}} cột bên phải",
+  "table.insertRowAbove": "Chèn {{count}} hàng phía trên",
+  "table.insertRowBelow": "Chèn {{count}} hàng phía dưới",
+  "typobar.blockquote": "Trích dẫn",
+  "typobar.bold": "In đậm",
+  "typobar.bulletList": "Danh sách chấm",
+  "typobar.code": "Mã nội tuyến",
+  "typobar.codeblock": "Khối mã",
+  "typobar.image": "Hình ảnh",
+  "typobar.italic": "In nghiêng",
+  "typobar.link": "Liên kết",
+  "typobar.numberList": "Danh sách số",
+  "typobar.redo": "Làm lại",
+  "typobar.strikethrough": "Gạch ngang",
+  "typobar.table": "Bảng",
+  "typobar.taskList": "Danh sách công việc",
+  "typobar.tex": "Công thức TeX",
+  "typobar.underline": "Gạch chân",
+  "typobar.undo": "Hoàn tác"
 }

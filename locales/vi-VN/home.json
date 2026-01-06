@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "Không có tác nhân nào khả dụng",
+  "agentSelection.noAvailable": "Hiện tại không thể thêm tác nhân nào",
+  "agentSelection.noSelected": "Chưa chọn tác nhân nào",
+  "agentSelection.search": "Không tìm thấy tác nhân phù hợp",
+  "project.create": "Dự án mới",
+  "project.deleteConfirm": "Dự án này sẽ bị xóa và không thể khôi phục. Xác nhận để tiếp tục.",
+  "starter.createAgent": "Tạo Tác Nhân",
+  "starter.createGroup": "Tạo Nhóm",
+  "starter.deepResearch": "Nghiên cứu chuyên sâu",
+  "starter.developing": "Sắp ra mắt",
+  "starter.image": "Hình ảnh",
+  "starter.write": "Viết"
+}

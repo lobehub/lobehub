@@ -1,22 +1,24 @@
 import { ModelIcon } from '@lobehub/icons';
-import { createStyles } from 'antd-style';
+import { Center, Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cx } from 'antd-style';
 import { Settings2Icon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
+import { useActionBarContext } from '../context';
 import ControlsForm from './ControlsForm';
 
-const useStyles = createStyles(({ css, token, cx }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    border-radius: 20px;
-    background: ${token.colorFillTertiary};
+    border-radius: 24px;
+    background: ${cssVar.colorFillTertiary};
   `,
   icon: cx(
     'model-switch',
@@ -26,10 +28,10 @@ const useStyles = createStyles(({ css, token, cx }) => ({
   ),
   model: css`
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 24px;
 
     :hover {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
 
     :active {
@@ -39,35 +41,49 @@ const useStyles = createStyles(({ css, token, cx }) => ({
     }
   `,
   modelWithControl: css`
-    border-radius: 20px;
+    border-radius: 24px;
 
     :hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 
   video: css`
     overflow: hidden;
-    border-radius: 8px;
+    border-radius: 24px;
   `,
 }));
 
 const ModelSwitch = memo(() => {
   const { t } = useTranslation('chat');
-  const { styles, cx } = useStyles();
+  const { dropdownPlacement } = useActionBarContext();
 
-  const [model, provider] = useAgentStore((s) => [
-    agentSelectors.currentAgentModel(s),
-    agentSelectors.currentAgentModelProvider(s),
+  const agentId = useAgentId();
+  const [model, provider, updateAgentConfigById] = useAgentStore((s) => [
+    agentByIdSelectors.getAgentModelById(agentId)(s),
+    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
+    s.updateAgentConfigById,
   ]);
 
   const isModelHasExtendParams = useAiInfraStore(
     aiModelSelectors.isModelHasExtendParams(model, provider),
   );
 
+  const handleModelChange = useCallback(
+    async (params: { model: string; provider: string }) => {
+      await updateAgentConfigById(agentId, params);
+    },
+    [agentId, updateAgentConfigById],
+  );
+
   return (
     <Flexbox align={'center'} className={isModelHasExtendParams ? styles.container : ''} horizontal>
-      <ModelSwitchPanel>
+      <ModelSwitchPanel
+        model={model}
+        onModelChange={handleModelChange}
+        placement={dropdownPlacement}
+        provider={provider}
+      >
         <Center
           className={cx(styles.model, isModelHasExtendParams && styles.modelWithControl)}
           height={36}
@@ -88,7 +104,7 @@ const ModelSwitch = memo(() => {
             placement: 'topLeft',
           }}
           showTooltip={false}
-          style={{ borderRadius: 20, marginInlineStart: -4 }}
+          style={{ borderRadius: 24, marginInlineStart: -4 }}
           title={t('extendParams.title')}
         />
       )}

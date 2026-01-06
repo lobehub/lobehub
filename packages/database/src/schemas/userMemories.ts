@@ -60,14 +60,8 @@ export const userMemoriesContexts = pgTable(
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     tags: text('tags').array(),
 
-    associatedObjects:
-      jsonb('associated_objects').$type<
-        { extra?: Record<string, unknown>; name?: string; type?: string }[]
-      >(),
-    associatedSubjects:
-      jsonb('associated_subjects').$type<
-        { extra?: Record<string, unknown>; name?: string; type?: string }[]
-      >(),
+    associatedObjects: jsonb('associated_objects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
+    associatedSubjects: jsonb('associated_subjects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
 
     title: text('title'),
     description: text('description'),

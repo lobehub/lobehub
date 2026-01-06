@@ -39,7 +39,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3 是一款全能强大的模型，在多个领域表现出色。它为数学、科学、编程和视觉推理任务树立了新标杆。它也擅长技术写作和指令遵循。用户可利用它分析文本、代码和图像，解决多步骤的复杂问题。',
+      'o3 is a versatile, powerful model that excels across domains, setting a new bar for math, science, coding, and visual reasoning. It is also strong in technical writing and instruction following, and can analyze text, code, and images to solve multi-step problems.',
     displayName: 'o3',
     id: 'o3',
     maxOutput: 100_000,
@@ -61,7 +61,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o4-mini 是我们最新的小型 o 系列模型。 它专为快速有效的推理而优化，在编码和视觉任务中表现出极高的效率和性能。',
+      'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini',
     id: 'o4-mini',
     maxOutput: 100_000,
@@ -81,7 +81,7 @@ const azureChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 是我们用于复杂任务的旗舰模型。它非常适合跨领域解决问题。',
+    description: 'GPT-4.1 is our flagship model for complex tasks, ideal for cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
     id: 'gpt-4.1',
@@ -102,8 +102,7 @@ const azureChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_047_576,
-    description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+    description: 'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
     displayName: 'GPT-4.1 mini',
     enabled: true,
     id: 'gpt-4.1-mini',
@@ -125,7 +124,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_047_576,
     description:
-      'GPT-4.1 mini 提供了智能、速度和成本之间的平衡，使其成为许多用例中有吸引力的模型。',
+      'GPT-4.1 mini balances intelligence, speed, and cost, making it an attractive model for many use cases.',
     displayName: 'GPT-4.1 nano',
     id: 'gpt-4.1-nano',
     maxOutput: 32_768,
@@ -145,7 +144,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4.5-preview 是最新的通用模型，具有深厚的世界知识和对用户意图的更好理解，擅长创意任务和代理规划。该模型的知识截止2023年10月。',
+      'GPT-4.5-preview is the latest general-purpose model with deep world knowledge and better intent understanding, strong at creative tasks and agent planning. Its knowledge cutoff is October 2023.',
     displayName: 'GPT 4.5 Preview',
     id: 'gpt-4.5-preview',
     pricing: {
@@ -165,7 +164,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o3-mini 是我们最新的小型推理模型，在与 o1-mini 相同的成本和延迟目标下提供高智能。',
+      'o3-mini is our latest small reasoning model, delivering high intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'o3-mini',
     pricing: {
@@ -184,7 +183,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'o1-mini是一款针对编程、数学和科学应用场景而设计的快速、经济高效的推理模型。该模型具有128K上下文和2023年10月的知识截止日期。',
+      'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-mini',
     id: 'o1-mini',
     pricing: {
@@ -203,7 +202,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'o1是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务。该模型具有200K上下文和2023年10月的知识截止日期。',
+      'o1 is OpenAI’s new reasoning model that supports text and image input and outputs text, suitable for complex tasks requiring broad general knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
     id: 'o1',
     pricing: {
@@ -223,7 +222,7 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
     displayName: 'GPT-4o',
     id: 'gpt-4o',
     maxOutput: 4096,
@@ -243,7 +242,7 @@ const azureChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o Mini，小型高效模型，具备与GPT-4o相似的卓越性能。',
+    description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
     displayName: 'GPT 4o Mini',
     id: 'gpt-4o-mini',
     maxOutput: 16_384,

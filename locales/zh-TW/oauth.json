@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "授權",
-      "deny": "拒絕"
-    },
-    "description": "應用 {{clientName}} 申請您的帳戶授權",
-    "error": {
-      "sessionInvalid": {
-        "message": "授權會話已過期或無效，請重新發起授權流程。",
-        "title": "授權會話無效"
-      },
-      "title": "發生錯誤",
-      "unsupportedInteraction": {
-        "message": "不支援的互動類型: {promptName}",
-        "title": "不支援的互動類型"
-      }
-    },
-    "permissionsTitle": "請求以下權限：",
-    "redirectUri": "授權成功後將重定向到",
-    "redirecting": "授權成功，正在跳轉...",
-    "scope": {
-      "email": "訪問您的電子郵件地址",
-      "offline_access": "允許客戶端訪問您的資料",
-      "openid": "使用您的 LobeChat 帳戶進行身份驗證",
-      "profile": "訪問您的基本資料信息（名稱、頭像等）",
-      "sync-read": "讀取您的同步資料",
-      "sync-write": "寫入並更新您的同步資料"
-    },
-    "title": "授權 {{clientName}}"
-  },
-  "error": {
-    "backToHome": "返回首頁",
-    "desc": "OAuth 授權失敗，失敗原因：{{reason}}",
-    "reason": {
-      "internal_error": "服務端錯誤",
-      "invalid_request": "無效的請求參數"
-    },
-    "title": "授權失敗"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "應用正在處理授權，即將跳轉到下一個頁面...",
-      "success": "已嘗試打開桌面應用。如果應用未自動打開，請手動切換。您可以稍後關閉此瀏覽器窗口。"
-    },
-    "title": {
-      "processing": "授權處理中...",
-      "success": "授權已完成"
-    }
-  },
-  "login": {
-    "button": "確認登入",
-    "description": "應用 {{clientName}} 申請使用您的帳戶進行登入",
-    "title": "登入 {{clientName}}",
-    "userWelcome": "歡迎回來，"
-  },
-  "success": {
-    "subTitle": "您已成功授權應用訪問您的帳戶，可以關閉該頁面了",
-    "title": "授權成功"
-  }
+  "consent.buttons.accept": "授權",
+  "consent.buttons.deny": "拒絕",
+  "consent.description": "應用 {{clientName}} 申請您的帳戶授權",
+  "consent.error.sessionInvalid.message": "授權會話已過期或無效，請重新發起授權流程。",
+  "consent.error.sessionInvalid.title": "授權會話無效",
+  "consent.error.title": "發生錯誤",
+  "consent.error.unknown.message": "取得授權詳情時發生未知錯誤",
+  "consent.error.unsupportedInteraction.message": "不支援的互動類型: {promptName}",
+  "consent.error.unsupportedInteraction.title": "不支援的互動類型",
+  "consent.permissionsTitle": "請求以下權限：",
+  "consent.redirectUri": "授權成功後將重定向到",
+  "consent.redirecting": "授權成功，正在跳轉...",
+  "consent.scope.email": "訪問您的電子郵件地址",
+  "consent.scope.offline_access": "允許客戶端訪問您的資料",
+  "consent.scope.openid": "使用您的 LobeChat 帳戶進行身份驗證",
+  "consent.scope.profile": "訪問您的基本資料信息（名稱、頭像等）",
+  "consent.scope.sync-read": "讀取您的同步資料",
+  "consent.scope.sync-write": "寫入並更新您的同步資料",
+  "consent.title": "授權 {{clientName}}",
+  "error.backToHome": "返回首頁",
+  "error.desc": "OAuth 授權失敗，失敗原因：{{reason}}",
+  "error.reason.internal_error": "服務端錯誤",
+  "error.reason.invalid_request": "無效的請求參數",
+  "error.title": "授權失敗",
+  "handoff.desc.processing": "應用正在處理授權，即將跳轉到下一個頁面...",
+  "handoff.desc.success": "已嘗試打開桌面應用。如果應用未自動打開，請手動切換。您可以稍後關閉此瀏覽器窗口。",
+  "handoff.title.processing": "授權處理中...",
+  "handoff.title.success": "授權已完成",
+  "login.button": "確認登入",
+  "login.description": "應用 {{clientName}} 申請使用您的帳戶進行登入",
+  "login.title": "登入 {{clientName}}",
+  "login.userWelcome": "歡迎回來，",
+  "success.subTitle": "您已成功授權應用訪問您的帳戶，可以關閉該頁面了",
+  "success.title": "授權成功"
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { ChunkModel } from '@/database/models/chunk';
+import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -13,6 +14,7 @@ const documentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
       documentService: new DocumentService(ctx.serverDB, ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
@@ -29,15 +31,27 @@ export const documentRouter = router({
         fileType: z.string().optional(),
         knowledgeBaseId: z.string().optional(),
         metadata: z.record(z.any()).optional(),
+        parentId: z.string().optional(),
+        slug: z.string().optional(),
         title: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Resolve parentId if it's a slug
+      let resolvedParentId = input.parentId;
+      if (input.parentId) {
+        const docBySlug = await ctx.documentModel.findBySlug(input.parentId);
+        if (docBySlug) {
+          resolvedParentId = docBySlug.id;
+        }
+      }
+
       // Parse editorData from JSON string to object
       const editorData = JSON.parse(input.editorData);
       return ctx.documentService.createDocument({
         ...input,
         editorData,
+        parentId: resolvedParentId,
       });
     }),
 
@@ -47,10 +61,53 @@ export const documentRouter = router({
       return ctx.documentService.deleteDocument(input.id);
     }),
 
+  deleteDocuments: documentProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.documentService.deleteDocuments(input.ids);
+    }),
+
   getDocumentById: documentProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       return ctx.documentService.getDocumentById(input.id);
+    }),
+
+  getFolderBreadcrumb: documentProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const chain = [];
+      let currentFolder = await ctx.documentModel.findBySlug(input.slug);
+
+      // Build chain from current folder to root
+      while (currentFolder) {
+        chain.unshift({
+          id: currentFolder.id,
+          name: currentFolder.title || currentFolder.filename || 'Untitled',
+          slug: currentFolder.slug || currentFolder.id,
+        });
+
+        // Find parent folder
+        if (currentFolder.parentId) {
+          currentFolder = await ctx.documentModel.findById(currentFolder.parentId);
+        } else {
+          break;
+        }
+      }
+
+      return chain;
+    }),
+
+  parseDocument: documentProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const lobeDocument = await ctx.documentService.parseDocument(input.id);
+
+      return lobeDocument;
     }),
 
   parseFileContent: documentProcedure
@@ -66,17 +123,30 @@ export const documentRouter = router({
       return lobeDocument;
     }),
 
-  queryDocuments: documentProcedure.query(async ({ ctx }) => {
-    return ctx.documentService.queryDocuments();
-  }),
+  queryDocuments: documentProcedure
+    .input(
+      z
+        .object({
+          current: z.number().optional(),
+          fileTypes: z.array(z.string()).optional(),
+          pageSize: z.number().optional(),
+          sourceTypes: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.documentService.queryDocuments(input);
+    }),
 
   updateDocument: documentProcedure
     .input(
       z.object({
         content: z.string().optional(),
         editorData: z.string().optional(),
+        fileType: z.string().optional(),
         id: z.string(),
         metadata: z.record(z.any()).optional(),
+        parentId: z.string().nullable().optional(),
         rawData: z.string().optional(),
         title: z.string().optional(),
       }),

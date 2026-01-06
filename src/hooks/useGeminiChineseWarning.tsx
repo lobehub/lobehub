@@ -1,5 +1,6 @@
 import { containsChinese } from '@lobechat/utils';
-import { App, Checkbox } from 'antd';
+import { Checkbox } from '@lobehub/ui';
+import { App } from 'antd';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -61,8 +62,8 @@ export const useGeminiChineseWarning = () => {
               <p>{t('geminiImageChineseWarning.content')}</p>
               <div style={{ marginTop: 16 }}>
                 <Checkbox
-                  onChange={(e) => {
-                    doNotShowAgain = e.target.checked;
+                  onChange={(v) => {
+                    doNotShowAgain = v;
                   }}
                 >
                   {t('geminiImageChineseWarning.doNotShowAgain')}

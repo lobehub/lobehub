@@ -16,7 +16,7 @@ import {
   MODEL_REGISTRY,
 } from '@/server/services/comfyui/config/modelRegistry';
 import { SYSTEM_COMPONENTS } from '@/server/services/comfyui/config/systemComponents';
-import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
+import { type ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
 import { ModelResolverError } from '@/server/services/comfyui/errors/modelResolverError';
 import { TTLCacheManager } from '@/server/services/comfyui/utils/cacheManager';
 import { getModelsByVariant } from '@/server/services/comfyui/utils/staticModelLookup';

@@ -1,0 +1,16 @@
+{
+  "name": "@lobechat/builtin-agents",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-group-management": "workspace:*",
+    "@lobechat/builtin-tool-gtd": "workspace:*",
+    "@lobechat/builtin-tool-notebook": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

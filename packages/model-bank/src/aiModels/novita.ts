@@ -88,7 +88,7 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'kimi-k2-0905-preview 模型上下文长度为 256k，具备更强的 Agentic Coding 能力、更突出的前端代码的美观度和实用性、以及更好的上下文理解能力。',
+      'kimi-k2-0905-preview offers a 256k context window, stronger agentic coding, better front-end code quality, and improved context understanding.',
     displayName: 'Kimi K2 0905',
     id: 'moonshotai/kimi-k2-0905',
     pricing: {
@@ -531,7 +531,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: 'Llama 3.1 8B Instruct  优化了高质量对话场景，表现优于许多领先的闭源模型。',
+    description:
+      'Llama 3.1 8B Instruct is optimized for high-quality dialogue, outperforming many leading closed models.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'meta-llama/llama-3.1-8b-instruct',
     pricing: {
@@ -544,7 +545,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 8B Instruct 优化了高质量对话场景，性能优于许多闭源模型。',
+    description:
+      'Llama 3 8B Instruct is optimized for high-quality dialogue, outperforming many closed models.',
     displayName: 'Llama 3 8B Instruct',
     id: 'meta-llama/llama-3-8b-instruct',
     pricing: {
@@ -557,7 +559,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Llama 3 70B Instruct 优化用于高质量对话场景，在各类人类评估中表现优异。',
+    description:
+      'Llama 3 70B Instruct is optimized for high-quality dialogue and performs strongly in human evaluations.',
     displayName: 'Llama 3 70B Instruct',
     id: 'meta-llama/llama-3-70b-instruct',
     pricing: {
@@ -570,7 +573,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Gemma 3 27B 是谷歌的一款开源语言模型，以其在效率和性能方面设立了新的标准。',
+    description:
+      'Gemma 3 27B is a Google open-source language model setting a new bar for efficiency and performance.',
     displayName: 'Gemma 3 27B',
     id: 'google/gemma-3-27b-it',
     pricing: {
@@ -583,7 +587,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Gemma 3 12B 是谷歌的一款开源语言模型，以其在效率和性能方面设立了新的标准。',
+    description:
+      'Gemma 3 12B is a Google open-source language model setting a new bar for efficiency and performance.',
     displayName: 'Gemma 3 12B',
     id: 'google/gemma-3-12b-it',
     maxOutput: 8192,
@@ -597,7 +602,7 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 60_288,
-    description: 'Mistral Nemo 是多语言支持和高性能编程的7.3B参数模型。',
+    description: 'Mistral Nemo is a 7.3B model with multilingual support and strong coding performance.',
     displayName: 'Mistral Nemo',
     id: 'mistralai/mistral-nemo',
     pricing: {
@@ -610,7 +615,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 65_535,
-    description: 'WizardLM-2 8x22B 是微软AI最先进的Wizard模型，显示出极其竞争力的表现。',
+    description:
+      'WizardLM-2 8x22B is Microsoft AI’s most advanced Wizard model with highly competitive performance.',
     displayName: 'WizardLM-2 8x22B',
     id: 'microsoft/wizardlm-2-8x22b',
     pricing: {
@@ -623,7 +629,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Hermes 2 Pro Llama 3 8B 是 Nous Hermes 2的升级版本，包含最新的内部开发的数据集。',
+    description:
+      'Hermes 2 Pro Llama 3 8B is an updated Nous Hermes 2 version with the latest internally developed datasets.',
     displayName: 'Hermes 2 Pro Llama 3 8B',
     id: 'nousresearch/hermes-2-pro-llama-3-8b',
     pricing: {
@@ -636,7 +643,8 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'MythoMax l2 13B 是一款合并了多个顶尖模型的创意与智能相结合的语言模型。',
+    description:
+      'MythoMax L2 13B is a creative, intelligent language model merged from multiple top models.',
     displayName: 'MythoMax l2 13B',
     id: 'gryphe/mythomax-l2-13b',
     pricing: {

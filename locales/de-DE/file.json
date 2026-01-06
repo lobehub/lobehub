@@ -1,181 +1,134 @@
 {
   "addFolder": "Ordner erstellen",
-  "addKnowledge": "Wissen hinzufügen",
-  "addPage": "Dokument erstellen",
-  "desc": "Verwalte dein Wissen für Arbeit, Studium und Alltag.",
-  "detail": {
-    "basic": {
-      "createdAt": "Erstellungszeit",
-      "filename": "Dateiname",
-      "size": "Dateigröße",
-      "title": "Grundinformationen",
-      "type": "Format",
-      "updatedAt": "Aktualisierungszeit"
-    },
-    "data": {
-      "chunkCount": "Anzahl der Teile",
-      "embedding": {
-        "default": "Noch nicht vektorisiert",
-        "error": "Fehler",
-        "pending": "Warten auf Start",
-        "processing": "Wird bearbeitet",
-        "success": "Abgeschlossen"
-      },
-      "embeddingStatus": "Vektorisierung"
-    }
-  },
-  "documentEditor": {
-    "addIcon": "Symbol hinzufügen",
-    "autoSaveMessage": "Das Dokument wird automatisch gespeichert, ein manuelles Speichern ist nicht erforderlich.",
-    "chooseIcon": "Symbol auswählen",
-    "deleteConfirm": {
-      "content": "Dieses Dokument wird gelöscht und kann danach nicht wiederhergestellt werden. Bitte seien Sie vorsichtig.",
-      "title": "Dokument löschen"
-    },
-    "deleteError": "Löschen des Dokuments fehlgeschlagen",
-    "deleteSuccess": "Dokument erfolgreich gelöscht",
-    "editedAt": "Zuletzt bearbeitet am {{time}}",
-    "editedBy": "Zuletzt bearbeitet von {{name}}",
-    "editorPlaceholder": "Geben Sie den Dokumentinhalt ein, drücken Sie / für das Befehlsmenü",
-    "empty": {
-      "createNewDocument": "Neues Dokument erstellen",
-      "title": "Wählen Sie ein Dokument, um zu beginnen",
-      "uploadMarkdown": "Markdown-Datei hochladen"
-    },
-    "linkCopied": "Link wurde kopiert",
-    "menu": {
-      "copyLink": "Link kopieren",
-      "exportDocument": "Dokument exportieren",
-      "importDocument": "Dokument importieren",
-      "pin": "Dokument anheften"
-    },
-    "saving": "Speichern...",
-    "titlePlaceholder": "Ohne Titel",
-    "wordCount": "{{wordCount}} Wörter"
-  },
-  "documentList": {
-    "copyContent": "Gesamten Inhalt kopieren",
-    "duplicate": "Kopie erstellen",
-    "empty": "Noch keine Dokumente vorhanden. Klicke auf die Schaltfläche oben, um dein erstes Dokument zu erstellen.",
-    "noResults": "Keine passenden Dokumente gefunden",
-    "pageCount": "Insgesamt {{count}} Dokumente",
-    "selectNote": "Wähle ein Dokument aus, um mit der Bearbeitung zu beginnen",
-    "untitled": "Ohne Titel"
-  },
-  "empty": "Keine hochgeladenen Dateien/Ordner vorhanden",
-  "header": {
-    "actions": {
-      "newFolder": "Neuen Ordner erstellen",
-      "newPage": "Neues Dokument",
-      "uploadFile": "Datei hochladen",
-      "uploadFolder": "Ordner hochladen"
-    },
-    "newNoteDialog": {
-      "cancel": "Abbrechen",
-      "editTitle": "Dokument bearbeiten",
-      "emptyContent": "Der Dokumentinhalt darf nicht leer sein",
-      "loadError": "Fehler beim Laden des Dokuments. Bitte versuchen Sie es erneut.",
-      "loading": "Wird geladen...",
-      "save": "Speichern",
-      "saveError": "Fehler beim Speichern des Dokuments. Bitte versuchen Sie es erneut.",
-      "saveSuccess": "Dokument erfolgreich gespeichert",
-      "title": "Neues Dokument",
-      "updateSuccess": "Dokument erfolgreich aktualisiert"
-    },
-    "newPageButton": "Neues Dokument erstellen",
-    "uploadButton": "Hochladen"
-  },
-  "home": {
-    "getStarted": "Loslegen",
-    "greeting": "Loslegen",
-    "quickActions": "Schnellaktionen",
-    "recentFiles": "Kürzlich verwendete Dateien",
-    "recentPages": "Kürzlich geöffnete Dokumente",
-    "subtitle": "Willkommen im Wissensspeicher. Beginnen Sie hier mit der Verwaltung Ihrer Dokumente.",
-    "uploadEntries": {
-      "files": {
-        "title": "Dateien hochladen"
-      },
-      "folder": {
-        "title": "Ordner hochladen"
-      },
-      "knowledgeBase": {
-        "title": "Neue Wissensdatenbank"
-      },
-      "newPage": {
-        "title": "Neues Dokument erstellen"
-      }
-    }
-  },
-  "knowledgeBase": {
-    "list": {
-      "confirmRemoveKnowledgeBase": "Die Wissensdatenbank wird gelöscht, die darin enthaltenen Dateien werden nicht gelöscht, sondern in den gesamten Dateien verschoben. Nach dem Löschen der Wissensdatenbank kann sie nicht wiederhergestellt werden, bitte vorsichtig vorgehen.",
-      "empty": "Klicken Sie auf <1>+</1>, um eine Wissensdatenbank zu erstellen"
-    },
-    "new": "Neue Wissensdatenbank",
-    "title": "Wissensdatenbank"
-  },
-  "menu": {
-    "allFiles": "Alle Dateien",
-    "allPages": "Alle Dokumente"
-  },
-  "networkError": "Fehler beim Abrufen der Wissensdatenbank. Bitte überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut.",
-  "notSupportGuide": {
-    "desc": "Die aktuelle Bereitstellung ist im Client-Datenbankmodus und unterstützt keine Dateiverwaltungsfunktionen. Bitte wechseln Sie zu <1>Server-Datenbank-Bereitstellungsmodus</1> oder verwenden Sie direkt <3>LobeChat Cloud</3>",
-    "features": {
-      "allKind": {
-        "desc": "Unterstützt gängige Dateitypen, einschließlich Word, PPT, Excel, PDF, TXT und andere gängige Dokumentformate sowie JS, Python und andere gängige Code-Dateien",
-        "title": "Verschiedene Dateitypen analysieren"
-      },
-      "embeddings": {
-        "desc": "Verwendet leistungsstarke Vektormodelle zur Vektorisierung von Textteilen, um eine semantische Suche nach Dateiinhalten zu ermöglichen",
-        "title": "Vektor-Semantisierung"
-      },
-      "repos": {
-        "desc": "Unterstützt die Erstellung von Wissensdatenbanken und ermöglicht das Hinzufügen verschiedener Dateitypen, um Ihr Fachwissen aufzubauen",
-        "title": "Wissensdatenbank"
-      }
-    },
-    "title": "Der aktuelle Bereitstellungsmodus unterstützt keine Dateiverwaltung"
-  },
-  "preview": {
-    "downloadFile": "Datei herunterladen",
-    "unsupportedFileAndContact": "Dieses Dateiformat wird derzeit nicht für die Online-Vorschau unterstützt. Wenn Sie eine Vorschau wünschen, können Sie uns gerne <1>Feedback geben</1>."
-  },
-  "searchFilePlaceholder": "Datei suchen",
-  "searchPagePlaceholder": "Dokumente durchsuchen",
-  "tab": {
-    "all": "Alle",
-    "audios": "Audio",
-    "documents": "Dokumente",
-    "home": "Startseite",
-    "images": "Bilder",
-    "moreTypes": "Weitere Typen",
-    "pages": "Dokumente",
-    "videos": "Videos",
-    "websites": "Webseiten"
-  },
-  "title": "Wissensdatenbank",
-  "toggleLeftPanel": "Seitenleiste ein-/ausblenden",
-  "uploadDock": {
-    "body": {
-      "collapse": "Einklappen",
-      "item": {
-        "done": "Hochgeladen",
-        "error": "Hochladen fehlgeschlagen, bitte erneut versuchen",
-        "pending": "Bereit zum Hochladen...",
-        "processing": "Datei wird bearbeitet...",
-        "restTime": "Verbleibende Zeit {{time}}"
-      }
-    },
-    "fileQueueInfo": "Die ersten {{count}} Dateien werden hochgeladen, die verbleibenden {{remaining}} Dateien werden in die Warteschlange gestellt",
-    "totalCount": "Insgesamt {{count}} Elemente",
-    "uploadStatus": {
-      "error": "Fehler beim Hochladen",
-      "pending": "Warten auf Upload",
-      "processing": "Wird hochgeladen",
-      "success": "Hochladen abgeschlossen",
-      "uploading": "Wird hochgeladen"
-    }
-  }
+  "addLibrary": "Hinzufügen",
+  "addPage": "Seite erstellen",
+  "detail.basic.createdAt": "Erstellungszeit",
+  "detail.basic.filename": "Dateiname",
+  "detail.basic.size": "Dateigröße",
+  "detail.basic.title": "Basisinformationen",
+  "detail.basic.type": "Format",
+  "detail.basic.updatedAt": "Aktualisierungszeit",
+  "detail.data.chunkCount": "Abschnitte",
+  "detail.data.embedding.default": "Nicht eingebettet",
+  "detail.data.embedding.error": "Fehlgeschlagen",
+  "detail.data.embedding.pending": "Warten auf Start",
+  "detail.data.embedding.processing": "In Bearbeitung",
+  "detail.data.embedding.success": "Abgeschlossen",
+  "detail.data.embeddingStatus": "Einbettung",
+  "empty": "Es wurden noch keine Dateien oder Ordner hochgeladen.",
+  "header.actions.builtInBlockList.filtered": "{{ignored}} Dateien gefiltert (von insgesamt {{total}})",
+  "header.actions.connect": "Verbinden...",
+  "header.actions.gitignore.apply": "Regeln anwenden",
+  "header.actions.gitignore.cancel": "Regeln ignorieren",
+  "header.actions.gitignore.content": ".gitignore-Datei erkannt (insgesamt {{count}} Dateien). Möchten Sie die Ignorierregeln anwenden?",
+  "header.actions.gitignore.filtered": "{{ignored}} Dateien herausgefiltert (insgesamt {{total}} Dateien)",
+  "header.actions.gitignore.title": ".gitignore erkannt",
+  "header.actions.newFolder": "Neuer Ordner",
+  "header.actions.newPage": "Neue Seite",
+  "header.actions.notion.error": "Fehler beim Importieren von Notion-Dateien",
+  "header.actions.notion.foundFiles": "{{count}} Dateien gefunden",
+  "header.actions.notion.importing": "Notion-Inhalte werden importiert...",
+  "header.actions.notion.noMarkdownFiles": "Keine Markdown-Dateien im ZIP-Archiv gefunden",
+  "header.actions.notion.partial": "{{success}} Dateien erfolgreich importiert, {{failed}} fehlgeschlagen",
+  "header.actions.notion.success": "{{count}} Dateien erfolgreich importiert",
+  "header.actions.notionGuide.cancel": "Nicht jetzt",
+  "header.actions.notionGuide.desc": "Exportieren Sie zunächst Ihre Inhalte aus Notion als Markdown (ZIP)-Datei. Klicken Sie dann auf Weiter, um die ZIP-Datei auszuwählen und alle Seiten zu importieren.",
+  "header.actions.notionGuide.ok": "Notion-ZIP auswählen",
+  "header.actions.notionGuide.title": "Aus Notion importieren",
+  "header.actions.uploadFile": "Datei hochladen",
+  "header.actions.uploadFolder": "Ordner hochladen",
+  "header.newPageButton": "Neue Seite",
+  "header.uploadButton": "Hochladen",
+  "home.getStarted": "Loslegen",
+  "home.greeting": "Loslegen",
+  "home.quickActions": "Schnellaktionen",
+  "home.recentFiles": "Kürzlich verwendete Dateien",
+  "home.recentPages": "Kürzlich verwendete Seiten",
+  "home.uploadEntries.files.title": "Dateien hochladen",
+  "home.uploadEntries.folder.title": "Ordner hochladen",
+  "home.uploadEntries.library.title": "Neue Bibliothek erstellen",
+  "home.uploadEntries.newPage.title": "Neue Seite",
+  "library.list.confirmRemoveLibrary": "Sie sind dabei, diese Bibliothek zu löschen. Die darin enthaltenen Dateien werden nicht gelöscht, sondern in 'Alle Dateien' verschoben. Diese Aktion kann nicht rückgängig gemacht werden. Bitte seien Sie vorsichtig.",
+  "library.list.empty": "Klicken Sie auf <1>+</1>, um eine neue Bibliothek zu erstellen",
+  "library.new": "Neue Bibliothek",
+  "library.title": "Bibliothek",
+  "loadMore": "Mehr laden",
+  "menu.allFiles": "Alle Dateien",
+  "menu.allPages": "Alle Seiten",
+  "networkError": "Bibliotheken konnten nicht abgerufen werden. Bitte überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut.",
+  "notSupportGuide.desc": "Der aktuelle Bereitstellungsmodus unterstützt keine Dateiverwaltung. Wechseln Sie zum <1>Server-Datenbank-Bereitstellungsmodus</1> oder nutzen Sie <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.allKind.desc": "Unterstützt gängige Dateitypen, einschließlich üblicher Seitenformate wie Word, PPT, Excel, PDF, TXT sowie beliebte Code-Dateien wie JS und Python.",
+  "notSupportGuide.features.allKind.title": "Vielfältige Dateitypen",
+  "notSupportGuide.features.embeddings.desc": "Verwendet leistungsstarke Vektormodelle zur Vektorisierung von Textabschnitten und ermöglicht semantische Suche im Dateiinhalte.",
+  "notSupportGuide.features.embeddings.title": "Vektorsemantik",
+  "notSupportGuide.features.libraries.desc": "Erstellen Sie Bibliotheken und fügen Sie Dateien hinzu, um Ihre eigene Sammlung aufzubauen.",
+  "notSupportGuide.features.libraries.title": "Bibliothek",
+  "notSupportGuide.title": "Der aktuelle Bereitstellungsmodus unterstützt keine Dateiverwaltung",
+  "pageEditor.addIcon": "Symbol hinzufügen",
+  "pageEditor.autoSaveMessage": "Ihre Seite wird automatisch gespeichert. Ein manuelles Speichern ist nicht erforderlich.",
+  "pageEditor.chooseIcon": "Symbol auswählen",
+  "pageEditor.deleteConfirm.content": "Diese Seite wird gelöscht und kann nicht wiederhergestellt werden. Bitte seien Sie vorsichtig.",
+  "pageEditor.deleteConfirm.title": "Seite löschen",
+  "pageEditor.deleteError": "Fehler beim Löschen der Seite",
+  "pageEditor.deleteSuccess": "Seite erfolgreich gelöscht",
+  "pageEditor.duplicateError": "Fehler beim Duplizieren der Seite",
+  "pageEditor.duplicateSuccess": "Seite erfolgreich dupliziert",
+  "pageEditor.editedAt": "Zuletzt bearbeitet am {{time}}",
+  "pageEditor.editedBy": "Zuletzt bearbeitet von {{name}}",
+  "pageEditor.editorPlaceholder": "Beginnen Sie mit dem Schreiben Ihrer Seite. Drücken Sie /, um das Befehlsmenü zu öffnen",
+  "pageEditor.empty.createNewDocument": "Neue Seite erstellen",
+  "pageEditor.empty.importNotion": "Aus Notion importieren",
+  "pageEditor.empty.title": "Wählen Sie eine Seite aus, um zu beginnen",
+  "pageEditor.empty.uploadFiles": "Dateien hochladen",
+  "pageEditor.exportError": "Fehler beim Exportieren der Seite",
+  "pageEditor.exportSuccess": "Seite erfolgreich exportiert",
+  "pageEditor.linkCopied": "Link kopiert",
+  "pageEditor.menu.copyLink": "Link kopieren",
+  "pageEditor.menu.export": "Exportieren",
+  "pageEditor.menu.export.markdown": "Markdown",
+  "pageEditor.menu.exportDocument": "Seite exportieren",
+  "pageEditor.menu.importDocument": "Seite importieren",
+  "pageEditor.menu.pin": "Seite anheften",
+  "pageEditor.saving": "Speichern...",
+  "pageEditor.titlePlaceholder": "Unbenannt",
+  "pageEditor.wordCount": "{{wordCount}} Wörter",
+  "pageList.copyContent": "Gesamten Text kopieren",
+  "pageList.duplicate": "Duplizieren",
+  "pageList.empty": "Noch keine Seiten vorhanden. Klicken Sie oben auf die Schaltfläche, um Ihre erste Seite zu erstellen.",
+  "pageList.filter.all": "Alle",
+  "pageList.filter.onlyInPages": "Nur in Seiten",
+  "pageList.noResults": "Keine passenden Seiten gefunden",
+  "pageList.pageCount": "Insgesamt {{count}} Seiten",
+  "pageList.pageSizeItem": "{{count}} Elemente",
+  "pageList.title": "Seiten",
+  "pageList.untitled": "Unbenannt",
+  "portal.openInPageEditor": "In Seite bearbeiten",
+  "preview.downloadFile": "Datei herunterladen",
+  "preview.unsupportedFileAndContact": "Dieses Dateiformat wird derzeit nicht für die Online-Vorschau unterstützt. Wenn Sie eine Vorschau wünschen, <1>kontaktieren Sie uns</1> gerne.",
+  "searchFilePlaceholder": "Dateien durchsuchen",
+  "searchPagePlaceholder": "Seiten durchsuchen",
+  "tab.all": "Alle",
+  "tab.audios": "Audio",
+  "tab.documents": "Dokumente",
+  "tab.home": "Startseite",
+  "tab.images": "Bilder",
+  "tab.moreTypes": "Weitere Typen",
+  "tab.pages": "Seiten",
+  "tab.videos": "Videos",
+  "tab.websites": "Webseiten",
+  "title": "Ressourcen",
+  "toggleLeftPanel": "Linkes Panel ein-/ausblenden",
+  "uploadDock.body.collapse": "Einklappen",
+  "uploadDock.body.item.done": "Hochgeladen",
+  "uploadDock.body.item.error": "Upload fehlgeschlagen, bitte erneut versuchen",
+  "uploadDock.body.item.pending": "Vorbereitung zum Hochladen...",
+  "uploadDock.body.item.processing": "Datei wird verarbeitet...",
+  "uploadDock.body.item.restTime": "Verbleibend {{time}}",
+  "uploadDock.fileQueueInfo": "Die ersten {{count}} Dateien werden hochgeladen, {{remaining}} verbleiben in der Warteschlange",
+  "uploadDock.totalCount": "Insgesamt {{count}} Elemente",
+  "uploadDock.uploadStatus.error": "Upload-Fehler",
+  "uploadDock.uploadStatus.pending": "Warten auf Upload",
+  "uploadDock.uploadStatus.processing": "Wird hochgeladen",
+  "uploadDock.uploadStatus.success": "Upload abgeschlossen",
+  "uploadDock.uploadStatus.uploading": "Wird hochgeladen"
 }

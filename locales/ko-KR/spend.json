@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS (초당 토큰 수): 초당 생성되는 토큰 수",
+  "duration.TTFT": "TTFT (첫 토큰까지의 시간): 첫 토큰 생성 지연 시간",
+  "duration.completion": "출력 완료 시간",
+  "duration.latency": "지연 시간",
+  "duration.stage.end": "종료",
+  "duration.stage.firstToken": "첫 토큰",
+  "duration.stage.start": "시작",
+  "table.columns.TTFT.tooltip": "첫 토큰까지의 시간, 단위: 초",
+  "table.columns.duration": "지속 시간",
+  "table.columns.model": "모델",
+  "table.columns.spend": "사용 크레딧",
+  "table.columns.startTime": "생성 시간",
+  "table.columns.totalTokens": "토큰 사용량",
+  "table.columns.type.enums.chat": "텍스트 생성",
+  "table.columns.type.enums.imageGeneration": "이미지 생성",
+  "table.columns.type.title": "유형",
+  "table.desc": "텍스트 생성, 임베딩, 이미지 생성 등에서의 컴퓨팅 크레딧 사용 내역",
+  "table.more": "자세히 보기",
+  "table.title": "컴퓨팅 크레딧 사용 내역",
+  "table.totalToken.input": "입력",
+  "table.totalToken.output": "출력"
+}

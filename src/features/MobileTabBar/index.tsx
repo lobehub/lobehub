@@ -1,19 +1,18 @@
 import { Icon } from '@lobehub/ui';
 import { TabBar, type TabBarProps } from '@lobehub/ui/mobile';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Bot, MessageSquare, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { rgba } from 'polished';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   active: css`
     svg {
-      fill: ${rgba(token.colorPrimary, 0.25)};
+      fill: color-mix(in srgb, ${cssVar.colorPrimary} 25%, transparent);
     }
   `,
 }));
@@ -25,10 +24,9 @@ interface Props {
 
 export default memo<Props>(({ className, tabBarKey }) => {
   const { t } = useTranslation('common');
-  const { styles } = useStyles();
   const router = useRouter();
   const openSettings = () => {
-    router.push('/settings?active=llm');
+    router.push('/settings/provider/all');
   };
   const { showMarket } = useServerConfigStore(featureFlagsSelectors);
 
@@ -41,7 +39,7 @@ export default memo<Props>(({ className, tabBarKey }) => {
           ),
           key: SidebarTabKey.Chat,
           onClick: () => {
-            router.push('/chat');
+            router.push('/agent');
           },
           title: t('tab.chat'),
         },
@@ -49,11 +47,11 @@ export default memo<Props>(({ className, tabBarKey }) => {
           icon: (active: boolean) => (
             <Icon className={active ? styles.active : undefined} icon={Bot} />
           ),
-          key: SidebarTabKey.Discover,
+          key: SidebarTabKey.Community,
           onClick: () => {
-            router.push('/discover');
+            router.push('/community');
           },
-          title: t('tab.discover'),
+          title: t('tab.community'),
         },
         {
           icon: (active: boolean) => (

@@ -1,6 +1,7 @@
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { QueryRewriteSystemAgent, SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
 
-import { DEFAULT_MODEL, DEFAULT_PROVIDER } from './llm';
+import { DEFAULT_MODEL } from './llm';
 
 export const DEFAULT_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   model: DEFAULT_MODEL,

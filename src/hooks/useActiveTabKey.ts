@@ -7,8 +7,7 @@ import { ProfileTabs, SettingsTabs, SidebarTabKey } from '@/store/global/initial
  */
 export const useActiveTabKey = () => {
   const pathname = usePathname();
-
-  return pathname.split('/').find(Boolean)! as SidebarTabKey;
+  return (pathname.split('/').find(Boolean)! as SidebarTabKey) || SidebarTabKey.Home;
 };
 
 /**

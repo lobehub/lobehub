@@ -1,7 +1,7 @@
 import { t } from 'i18next';
 
 import { notification } from '@/components/AntdStaticMethods';
-import { ImportPgDataStructure } from '@/types/export';
+import { type ImportPgDataStructure } from '@/types/export';
 
 export const parseConfigFile = async (file: File): Promise<ImportPgDataStructure | undefined> => {
   const text = await file.text();

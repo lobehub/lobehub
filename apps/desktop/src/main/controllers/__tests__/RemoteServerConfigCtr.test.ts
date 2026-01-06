@@ -43,7 +43,12 @@ const mockStoreManager = {
   set: vi.fn(),
 };
 
+const mockBrowserManager = {
+  broadcastToAllWindows: vi.fn(),
+};
+
 const mockApp = {
+  browserManager: mockBrowserManager,
   storeManager: mockStoreManager,
 } as unknown as App;
 
@@ -105,7 +110,10 @@ describe('RemoteServerConfigCtr', () => {
       const result = await controller.clearRemoteServerConfig();
 
       expect(result).toBe(true);
-      expect(mockStoreManager.set).toHaveBeenCalledWith('dataSyncConfig', { storageMode: 'local' });
+      expect(mockStoreManager.set).toHaveBeenCalledWith('dataSyncConfig', {
+        active: false,
+        storageMode: 'cloud',
+      });
       expect(mockStoreManager.delete).toHaveBeenCalledWith('encryptedTokens');
     });
   });

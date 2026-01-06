@@ -1,14 +1,14 @@
-import { Redis, RedisConfigNodejs } from '@upstash/redis';
+import { Redis, type RedisConfigNodejs } from '@upstash/redis';
 import { Buffer } from 'node:buffer';
 
 import {
-  BaseRedisProvider,
-  RedisKey,
-  RedisMSetArgument,
-  RedisSetResult,
-  RedisValue,
-  SetOptions,
-  UpstashConfig,
+  type BaseRedisProvider,
+  type RedisKey,
+  type RedisMSetArgument,
+  type RedisSetResult,
+  type RedisValue,
+  type SetOptions,
+  type UpstashConfig,
 } from './types';
 import {
   buildUpstashSetOptions,
@@ -25,7 +25,10 @@ export class UpstashRedisProvider implements BaseRedisProvider {
   constructor(options: UpstashConfig | RedisConfigNodejs) {
     const { prefix, ...clientOptions } = options as UpstashConfig & RedisConfigNodejs;
     this.prefix = prefix ? `${prefix}:` : '';
-    this.client = new Redis(clientOptions as RedisConfigNodejs);
+    this.client = new Redis({
+      ...clientOptions,
+      automaticDeserialization: false,
+    } as RedisConfigNodejs);
   }
 
   /**

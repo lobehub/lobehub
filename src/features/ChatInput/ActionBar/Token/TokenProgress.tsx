@@ -1,8 +1,8 @@
+import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import numeral from 'numeral';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 interface TokenProgressItem {
   color: string;
@@ -20,7 +20,6 @@ interface TokenProgressProps {
 const format = (number: number) => numeral(number).format('0,0');
 
 const TokenProgress = memo<TokenProgressProps>(({ data, showIcon, showTotal }) => {
-  const theme = useTheme();
   const total = data.reduce((acc, item) => acc + item.value, 0);
   return (
     <Flexbox gap={8} style={{ position: 'relative' }} width={'100%'}>
@@ -28,7 +27,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon, showTotal }) =
         height={6}
         horizontal
         style={{
-          background: total === 0 ? theme.colorFill : undefined,
+          background: total === 0 ? cssVar.colorFill : undefined,
           borderRadius: 3,
           overflow: 'hidden',
           position: 'relative',
@@ -58,7 +57,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon, showTotal }) =
                   }}
                 />
               )}
-              <div style={{ color: theme.colorTextSecondary }}>{item.title}</div>
+              <div style={{ color: cssVar.colorTextSecondary }}>{item.title}</div>
             </Flexbox>
             <div style={{ fontWeight: 500 }}>{format(item.value)}</div>
           </Flexbox>
@@ -67,7 +66,7 @@ const TokenProgress = memo<TokenProgressProps>(({ data, showIcon, showTotal }) =
           <>
             <Divider style={{ marginBlock: 8 }} />
             <Flexbox align={'center'} gap={4} horizontal justify={'space-between'}>
-              <div style={{ color: theme.colorTextSecondary }}>{showTotal}</div>
+              <div style={{ color: cssVar.colorTextSecondary }}>{showTotal}</div>
               <div style={{ fontWeight: 500 }}>{format(total)}</div>
             </Flexbox>
           </>

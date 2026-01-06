@@ -1,4 +1,4 @@
-import { OIDCConfig, OIDCUserConfig } from '@auth/core/providers';
+import { type OIDCConfig, type OIDCUserConfig } from '@auth/core/providers';
 
 import { CommonProviderConfig } from './sso.config';
 

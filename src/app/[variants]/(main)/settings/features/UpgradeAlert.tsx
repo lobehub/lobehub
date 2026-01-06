@@ -1,10 +1,9 @@
 'use client';
 
-import { Alert, Button } from '@lobehub/ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { MANUAL_UPGRADE_URL } from '@/const/url';
 import { useGlobalStore } from '@/store/global';
@@ -18,7 +17,7 @@ const UpgradeAlert = memo(() => {
   return (
     <Alert
       closable
-      message={
+      title={
         <Flexbox gap={8}>
           <p>{t('upgradeVersion.newVersion', { version: `v${latestVersion}` })}</p>
           <Link

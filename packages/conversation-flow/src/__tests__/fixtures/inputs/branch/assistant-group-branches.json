@@ -10,7 +10,6 @@
     "extra": {},
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "videoList": []
   },
   {
@@ -42,7 +41,6 @@
     },
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "model": "deepseek-chat",
     "provider": "deepseek",
     "videoList": []
@@ -62,7 +60,6 @@
     "extra": {},
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "videoList": []
   },
   {
@@ -94,7 +91,6 @@
     },
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "model": "deepseek-chat",
     "provider": "deepseek",
     "videoList": []
@@ -128,7 +124,6 @@
     },
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "model": "deepseek-chat",
     "provider": "deepseek",
     "videoList": []
@@ -162,7 +157,6 @@
     },
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "model": "deepseek-chat",
     "provider": "deepseek",
     "videoList": []
@@ -179,7 +173,6 @@
     "extra": {},
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "videoList": []
   },
   {
@@ -194,7 +187,6 @@
     "extra": {},
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "videoList": []
   },
   {
@@ -208,7 +200,6 @@
     "extra": {},
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "videoList": []
   },
   {
@@ -223,7 +214,6 @@
     "extra": {},
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "videoList": []
   },
   {
@@ -241,7 +231,6 @@
     },
     "fileList": [],
     "imageList": [],
-    "meta": {},
     "model": "deepseek-chat",
     "provider": "deepseek",
     "videoList": []

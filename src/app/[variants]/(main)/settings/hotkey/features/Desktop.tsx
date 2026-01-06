@@ -1,7 +1,8 @@
 'use client';
 
 import { Form, type FormGroupItemType, HotkeyInput, Icon } from '@lobehub/ui';
-import { App, Skeleton } from 'antd';
+import { Skeleton } from '@lobehub/ui';
+import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,7 +13,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useElectronStore } from '@/store/electron';
 import { desktopHotkeysSelectors } from '@/store/electron/selectors';
-import { DesktopHotkeyItem } from '@/types/hotkey';
+import { type DesktopHotkeyItem } from '@/types/hotkey';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
@@ -56,18 +57,14 @@ const HotkeySetting = memo(() => {
         }}
         placeholder={t('hotkey.record')}
         resetValue={item.keys}
-        texts={{
-          conflicts: t('hotkey.conflicts'),
-          invalidCombination: t('hotkey.invalidCombination'),
-          reset: t('hotkey.reset'),
-        }}
         value={hotkeys[item.id]}
       />
     ),
-    desc: hotkeyMeta.desktop[item.id]?.desc
-      ? t(`desktop.${item.id}.desc`, { ns: 'hotkey' })
+
+    desc: hotkeyMeta[`desktop.${item.id}.desc` as keyof typeof hotkeyMeta]
+      ? t(`desktop.${item.id}.desc` as keyof typeof hotkeyMeta, { ns: 'hotkey' })
       : undefined,
-    label: t(`desktop.${item.id}.title`, { ns: 'hotkey' }),
+    label: t(`desktop.${item.id}.title` as keyof typeof hotkeyMeta, { ns: 'hotkey' }),
     name: item.id,
   });
 
@@ -79,11 +76,12 @@ const HotkeySetting = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={hotkeys}
       items={[desktop]}
       itemsType={'group'}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

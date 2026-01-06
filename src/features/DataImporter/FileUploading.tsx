@@ -1,8 +1,8 @@
+import { Flexbox } from '@lobehub/ui';
 import { Progress } from 'antd';
-import { useTheme } from 'antd-style';
+import { cssVar } from 'antd-style';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { formatSpeed, formatTime } from '@/utils/format';
 
@@ -17,8 +17,6 @@ interface FileUploadingProps {
 export const FileUploading = memo<FileUploadingProps>(({ progress = 0, speed = 0, restTime }) => {
   const { t } = useTranslation('common');
 
-  const theme = useTheme();
-
   return (
     <>
       <DataLoading />
@@ -28,13 +26,13 @@ export const FileUploading = memo<FileUploadingProps>(({ progress = 0, speed = 0
           <Progress
             percent={progress}
             showInfo
-            strokeColor={theme.colorSuccess}
-            trailColor={theme.colorSuccessBg}
+            strokeColor={cssVar.colorSuccess}
+            trailColor={cssVar.colorSuccessBg}
           />
           <Flexbox
             distribution={'space-between'}
             horizontal
-            style={{ color: theme.colorTextDescription, fontSize: 12 }}
+            style={{ color: cssVar.colorTextDescription, fontSize: 12 }}
           >
             <span>
               {t('importModal.uploading.restTime')}: {restTime ? formatTime(restTime) : '-'}

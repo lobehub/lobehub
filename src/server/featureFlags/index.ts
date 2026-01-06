@@ -1,3 +1,4 @@
+import { EdgeConfig } from '@lobechat/edge-config';
 import createDebug from 'debug';
 
 import {
@@ -6,8 +7,6 @@ import {
   mapFeatureFlagsEnvToState,
 } from '@/config/featureFlags';
 import { merge } from '@/utils/merge';
-
-import { EdgeConfig } from '../modules/EdgeConfig';
 
 const debug = createDebug('lobe:featureFlags');
 

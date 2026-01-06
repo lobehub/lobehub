@@ -25,7 +25,7 @@ Feature: Core Routes Accessibility
 
   @ROUTES-002 @P0
   Scenario Outline: Access settings routes without errors
-    When I navigate to "/settings?active=<tab>"
+    When I navigate to "/settings/<tab>"
     Then the response status should be less than 400
     And the page should load without errors
     And I should see the page body
@@ -36,8 +36,7 @@ Feature: Core Routes Accessibility
       | about        |
       | agent        |
       | hotkey       |
-      | provider     |
+      | provider/all |
       | proxy        |
       | storage      |
-      | system-agent |
       | tts          |

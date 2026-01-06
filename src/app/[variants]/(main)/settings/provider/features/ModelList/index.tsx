@@ -1,7 +1,7 @@
 'use client';
 
-import { Icon, Tabs } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   AudioLines,
@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { Suspense, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -22,7 +21,10 @@ import DisabledModels from './DisabledModels';
 import EmptyModels from './EmptyModels';
 import EnabledModelList from './EnabledModelList';
 import ModelTitle from './ModelTitle';
-import { ProviderSettingsContext, ProviderSettingsContextValue } from './ProviderSettingsContext';
+import {
+  ProviderSettingsContext,
+  type ProviderSettingsContextValue,
+} from './ProviderSettingsContext';
 import SearchResult from './SearchResult';
 import SkeletonList from './SkeletonList';
 
@@ -31,7 +33,8 @@ interface ContentProps {
 }
 
 const Content = memo<ContentProps>(({ id }) => {
-  const { t } = useTranslation('modelProvider');
+  // preload common namespace to avoid Suspense remount when child components start using it (e.g. infinite scroll loading text)
+  const { t } = useTranslation(['modelProvider', 'common']);
   const [activeTab, setActiveTab] = useState('all');
 
   const [isSearching, isEmpty, useFetchAiProviderModels] = useAiInfraStore((s) => [
@@ -130,10 +133,10 @@ const Content = memo<ContentProps>(({ id }) => {
         items={tabs}
         onChange={setActiveTab}
         size="small"
-        style={{ marginBottom: 12 }}
+        style={{ marginBottom: 12, marginLeft: -6 }}
       />
       <EnabledModelList activeTab={currentActiveTab} />
-      <DisabledModels activeTab={currentActiveTab} />
+      <DisabledModels activeTab={currentActiveTab} providerId={id} />
     </Flexbox>
   );
 });
@@ -145,7 +148,6 @@ interface ModelListProps extends ProviderSettingsContextValue {
 const ModelList = memo<ModelListProps>(
   ({ id, showModelFetcher, sdkType, showAddNewModel, showDeployName, modelEditable = true }) => {
     const mobile = useIsMobile();
-    const theme = useTheme();
 
     return (
       <ProviderSettingsContext
@@ -155,7 +157,7 @@ const ModelList = memo<ModelListProps>(
           gap={16}
           paddingInline={mobile ? 12 : 0}
           style={{
-            background: mobile ? theme.colorBgContainer : undefined,
+            background: mobile ? cssVar.colorBgContainer : undefined,
             paddingBottom: 16,
             paddingTop: 8,
           }}

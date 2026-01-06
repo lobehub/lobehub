@@ -1,9 +1,12 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { enableBetterAuth, enableNextAuth } from '@lobechat/const';
+import { Flexbox } from '@lobehub/ui';
 import { useRouter } from 'next/navigation';
 import { memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
+import { clearDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
+import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
 import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
@@ -14,11 +17,11 @@ import DataStatistics from '../DataStatistics';
 import UserInfo from '../UserInfo';
 import UserLoginOrSignup from '../UserLoginOrSignup';
 import LangButton from './LangButton';
-import ThemeButton from './ThemeButton';
 import { useMenu } from './useMenu';
 
 const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
   const router = useRouter();
+  const navigate = useNavigate();
   const isLoginWithAuth = useUserStore(authSelectors.isLoginWithAuth);
   const [openSignIn, signOut] = useUserStore((s) => [s.openLogin, s.logout]);
   const { mainItems, logoutItems } = useMenu();
@@ -28,7 +31,24 @@ const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
     closePopover();
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    if (isDesktop) {
+      closePopover();
+
+      // Desktop: clear OIDC tokens (electron main) + re-enter desktop onboarding at Screen5.
+      try {
+        const { remoteServerService } = await import('@/services/electron/remoteServer');
+        await remoteServerService.clearRemoteServerConfig();
+      } catch {
+        // Ignore: even if IPC is unavailable, still proceed to onboarding.
+      }
+
+      clearDesktopOnboardingCompleted();
+      signOut();
+      navigate('/desktop-onboarding#5', { replace: true });
+      return;
+    }
+
     signOut();
     closePopover();
     // NextAuth and Better Auth handle redirect in their own signOut methods
@@ -42,31 +62,20 @@ const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
       {isDesktop || isLoginWithAuth ? (
         <>
           <UserInfo avatarProps={{ clickable: false }} />
-
-          <Link style={{ color: 'inherit' }} to={'/profile/stats'}>
+          <Link style={{ color: 'inherit' }} to={'/settings/stats'}>
             <DataStatistics />
           </Link>
+          {ENABLE_BUSINESS_FEATURES && <BusinessPanelContent />}
         </>
       ) : (
         <UserLoginOrSignup onClick={handleSignIn} />
       )}
 
       <Menu items={mainItems} onClick={closePopover} />
-      <Flexbox
-        align={'center'}
-        horizontal
-        justify={'space-between'}
-        style={isLoginWithAuth ? { paddingRight: 6 } : { padding: '6px 6px 6px 16px' }}
-      >
-        {isLoginWithAuth ? (
-          <Menu items={logoutItems} onClick={handleSignOut} />
-        ) : (
-          <BrandWatermark />
-        )}
-        <Flexbox align={'center'} flex={'none'} gap={2} horizontal>
-          <LangButton />
-          <ThemeButton />
-        </Flexbox>
+      <Menu items={logoutItems} onClick={handleSignOut} />
+      <Flexbox gap={4} horizontal justify={'space-between'} style={{ padding: '6px 8px 6px 16px' }}>
+        <BrandWatermark />
+        <LangButton placement={'right' as any} />
       </Flexbox>
     </Flexbox>
   );

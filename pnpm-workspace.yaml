@@ -1,5 +1,18 @@
 packages:
-  - 'packages/**'
-  - '.'
-  - 'e2e'
-  - 'apps/desktop/src/main'
+  - packages/**
+  - .
+  - e2e
+  - apps/desktop/src/main
+
+onlyBuiltDependencies:
+  - '@vercel/speed-insights'
+
+overrides:
+  '@lobehub/chat-plugin-sdk>swagger-client': 3.36.0
+  '@swagger-api/apidom-reference': 1.1.0
+  jose: ^6.1.3
+  stylelint-config-clean-order: 7.0.0
+
+patchedDependencies:
+  '@swagger-api/apidom-reference': patches/@swagger-api__apidom-reference.patch
+  '@upstash/qstash': patches/@upstash__qstash.patch

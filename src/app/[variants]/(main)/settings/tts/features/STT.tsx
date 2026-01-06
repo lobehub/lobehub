@@ -1,7 +1,8 @@
 'use client';
 
 import { Form, type FormGroupItemType, Icon, Select } from '@lobehub/ui';
-import { Skeleton, Switch } from 'antd';
+import { Skeleton } from '@lobehub/ui';
+import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -46,6 +47,7 @@ const STT = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       form={form}
       initialValues={tts}
       items={[stt]}
@@ -57,7 +59,7 @@ const STT = memo(() => {
         });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

@@ -1,28 +1,30 @@
 import {
   ChatErrorType,
-  ChatImageItem,
-  ChatMessageError,
-  ChatMessagePluginError,
-  ChatToolPayload,
-  CreateMessageParams,
-  GroundingSearch,
-  MessageMetadata,
-  MessagePluginItem,
-  ModelReasoning,
-  UIChatMessage,
-  UpdateMessageRAGParams,
+  type ChatImageItem,
+  type ChatMessageError,
+  type ChatMessagePluginError,
+  type ChatToolPayload,
+  type CreateMessageParams,
+  type GroundingSearch,
+  type MessageMetadata,
+  type MessagePluginItem,
+  type ModelReasoning,
+  type UIChatMessage,
+  type UpdateMessageRAGParams,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { messageService } from '@/services/message';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
 /**
  * Context for optimistic updates to specify session/topic isolation
  */
 export interface OptimisticUpdateContext {
   operationId?: string;
+  /** Pre-generated temp message ID (used when ID needs to be known before creation) */
+  tempMessageId?: string;
 }
 
 /**
@@ -47,7 +49,10 @@ export interface MessageOptimisticUpdateAction {
    * create a temp message for optimistic update
    * otherwise the message will be too slow to show
    */
-  optimisticCreateTmpMessage: (params: CreateMessageParams) => string;
+  optimisticCreateTmpMessage: (
+    params: CreateMessageParams,
+    context?: OptimisticUpdateContext,
+  ) => string;
 
   /**
    * delete the message content with optimistic update
@@ -145,8 +150,8 @@ export const messageOptimisticUpdate: StateCreator<
       const result = await messageService.createMessage(message);
 
       // Use the messages returned from createMessage (already grouped)
-      const { sessionId, topicId } = get().internal_getSessionContext(context);
-      replaceMessages(result.messages, { sessionId, topicId });
+      const ctx = get().internal_getConversationContext(context);
+      replaceMessages(result.messages, { context: ctx });
 
       internal_toggleMessageLoading(false, tempId);
       return result;
@@ -169,37 +174,32 @@ export const messageOptimisticUpdate: StateCreator<
     }
   },
 
-  optimisticCreateTmpMessage: (message) => {
+  optimisticCreateTmpMessage: (message, context) => {
     const { internal_dispatchMessage } = get();
 
     // use optimistic update to avoid the slow waiting
-    const tempId = 'tmp_' + nanoid();
-    internal_dispatchMessage({ id: tempId, type: 'createMessage', value: message });
+    // use pre-generated tempMessageId if provided, otherwise generate a new one
+    const tempId = context?.tempMessageId || 'tmp_' + nanoid();
+    internal_dispatchMessage({ id: tempId, type: 'createMessage', value: message }, context);
 
     return tempId;
   },
 
   optimisticDeleteMessage: async (id: string, context) => {
     get().internal_dispatchMessage({ id, type: 'deleteMessage' }, context);
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
-    const result = await messageService.removeMessage(id, {
-      sessionId,
-      topicId,
-    });
+    const ctx = get().internal_getConversationContext(context);
+    const result = await messageService.removeMessage(id, ctx);
     if (result?.success && result.messages) {
-      get().replaceMessages(result.messages, { sessionId, topicId });
+      get().replaceMessages(result.messages, { context: ctx });
     }
   },
 
   optimisticDeleteMessages: async (ids, context) => {
     get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, context);
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
-    const result = await messageService.removeMessages(ids, {
-      sessionId,
-      topicId,
-    });
+    const ctx = get().internal_getConversationContext(context);
+    const result = await messageService.removeMessages(ids, ctx);
     if (result?.success && result.messages) {
-      get().replaceMessages(result.messages, { sessionId, topicId });
+      get().replaceMessages(result.messages, { context: ctx });
     }
   },
 
@@ -229,7 +229,7 @@ export const messageOptimisticUpdate: StateCreator<
       );
     }
 
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
+    const ctx = get().internal_getConversationContext(context);
 
     const result = await messageService.updateMessage(
       id,
@@ -243,15 +243,11 @@ export const messageOptimisticUpdate: StateCreator<
         search: extra?.search,
         tools: extra?.tools,
       },
-      { sessionId, topicId },
+      ctx,
     );
 
     if (result && result.success && result.messages) {
-      replaceMessages(result.messages, {
-        action: 'optimisticUpdateMessageContent',
-        sessionId,
-        topicId,
-      });
+      replaceMessages(result.messages, { action: 'optimisticUpdateMessageContent', context: ctx });
     } else {
       await refreshMessages();
     }
@@ -259,10 +255,10 @@ export const messageOptimisticUpdate: StateCreator<
 
   optimisticUpdateMessageError: async (id, error, context) => {
     get().internal_dispatchMessage({ id, type: 'updateMessage', value: { error } }, context);
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
-    const result = await messageService.updateMessage(id, { error }, { sessionId, topicId });
+    const ctx = get().internal_getConversationContext(context);
+    const result = await messageService.updateMessage(id, { error }, ctx);
     if (result?.success && result.messages) {
-      get().replaceMessages(result.messages, { sessionId, topicId });
+      get().replaceMessages(result.messages, { context: ctx });
     } else {
       await get().refreshMessages();
     }
@@ -271,26 +267,13 @@ export const messageOptimisticUpdate: StateCreator<
   optimisticUpdateMessageMetadata: async (id, metadata, context) => {
     const { internal_dispatchMessage, refreshMessages, replaceMessages } = get();
 
-    // Optimistic update: update the frontend immediately
-    internal_dispatchMessage(
-      {
-        id,
-        type: 'updateMessageMetadata',
-        value: metadata,
-      },
-      context,
-    );
+    internal_dispatchMessage({ id, type: 'updateMessageMetadata', value: metadata }, context);
 
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
-
-    // Persist to database
-    const result = await messageService.updateMessageMetadata(id, metadata, {
-      sessionId,
-      topicId,
-    });
+    const ctx = get().internal_getConversationContext(context);
+    const result = await messageService.updateMessageMetadata(id, metadata, ctx);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages, { sessionId, topicId });
+      replaceMessages(result.messages, { context: ctx });
     } else {
       await refreshMessages();
     }
@@ -299,45 +282,29 @@ export const messageOptimisticUpdate: StateCreator<
   optimisticUpdateMessagePlugin: async (id, value, context) => {
     const { internal_dispatchMessage, replaceMessages } = get();
 
-    // Optimistic update: update the frontend immediately
-    internal_dispatchMessage(
-      {
-        id,
-        type: 'updateMessagePlugin',
-        value,
-      },
-      context,
-    );
+    internal_dispatchMessage({ id, type: 'updateMessagePlugin', value }, context);
 
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
-
-    // Persist to database
-    const result = await messageService.updateMessagePlugin(id, value, { sessionId, topicId });
+    const ctx = get().internal_getConversationContext(context);
+    const result = await messageService.updateMessagePlugin(id, value, ctx);
 
     if (result?.success && result.messages) {
-      replaceMessages(result.messages, { sessionId, topicId });
+      replaceMessages(result.messages, { context: ctx });
     }
   },
 
   optimisticUpdateMessagePluginError: async (id, error, context) => {
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
-    const result = await messageService.updateMessagePluginError(id, error, {
-      sessionId,
-      topicId,
-    });
+    const ctx = get().internal_getConversationContext(context);
+    const result = await messageService.updateMessagePluginError(id, error, ctx);
     if (result?.success && result.messages) {
-      get().replaceMessages(result.messages, { sessionId, topicId });
+      get().replaceMessages(result.messages, { context: ctx });
     }
   },
 
   optimisticUpdateMessageRAG: async (id, data, context) => {
-    const { sessionId, topicId } = get().internal_getSessionContext(context);
-    const result = await messageService.updateMessageRAG(id, data, {
-      sessionId,
-      topicId,
-    });
+    const ctx = get().internal_getConversationContext(context);
+    const result = await messageService.updateMessageRAG(id, data, ctx);
     if (result?.success && result.messages) {
-      get().replaceMessages(result.messages, { sessionId, topicId });
+      get().replaceMessages(result.messages, { context: ctx });
     }
   },
 });
