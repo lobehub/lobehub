@@ -1,3 +1,4 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { ChatErrorType, type ChatMessageError, type ErrorType } from '@lobechat/types';
 import { type IPluginErrorType } from '@lobehub/chat-plugin-sdk';
@@ -6,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import { useProviderName } from '@/hooks/useProviderName';
 
@@ -103,7 +105,11 @@ interface ErrorExtraProps {
 }
 
 const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) => {
-  const error = data.error as ChatMessageError;
+  const error = data.error;
+  const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
+  if (ENABLE_BUSINESS_FEATURES && businessChatErrorMessageExtra)
+    return businessChatErrorMessageExtra;
+
   if (!error?.type) return;
 
   switch (error.type) {
