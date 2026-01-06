@@ -10,7 +10,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'doubao-seed-1-8-251215',
+      deploymentName: 'doubao-seed-1-8-251228',
     },
     contextWindowTokens: 256_000,
     description:
