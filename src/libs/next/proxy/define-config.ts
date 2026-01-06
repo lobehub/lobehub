@@ -5,11 +5,10 @@ import { UAParser } from 'ua-parser-js';
 import urlJoin from 'url-join';
 
 import { auth } from '@/auth';
-import { OAUTH_AUTHORIZED } from '@/const/auth';
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
 import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
-import { authEnv } from '@/envs/auth';
+import { OAUTH_AUTHORIZED , authEnv } from '@/envs/auth';
 import NextAuth from '@/libs/next-auth';
 import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';

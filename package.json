@@ -32,7 +32,7 @@
     "apps/desktop/src/main"
   ],
   "scripts": {
-    "prebuild": "echo NEXT_PUBLIC_AUTH_URL && echo $NEXTAUTH_URL && echo $APP_URL && echo $VERCEL_URL && tsx scripts/prebuild.mts && npm run lint",
+    "prebuild": "tsx scripts/prebuild.mts && npm run lint",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build --webpack",
     "postbuild": "npm run build-sitemap && npm run build-migrate-db",
     "build-migrate-db": "bun run db:migrate",
@@ -333,7 +333,7 @@
     "semver": "^7.7.3",
     "sharp": "^0.34.5",
     "shiki": "^3.20.0",
-    "ssrf-safe-fetch": "workspace:*",
+    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "stripe": "^17.7.0",
     "superjson": "^2.2.6",
     "svix": "^1.82.0",

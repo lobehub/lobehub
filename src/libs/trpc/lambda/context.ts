@@ -1,17 +1,16 @@
-import {
-  LOBE_CHAT_AUTH_HEADER,
-  LOBE_CHAT_OIDC_AUTH_HEADER,
-  enableBetterAuth,
-  enableClerk,
-  enableNextAuth,
-} from '@lobechat/const';
 import { type ClientSecretPayload } from '@lobechat/types';
 import { parse } from 'cookie';
 import debug from 'debug';
 import { type User } from 'next-auth';
 import { type NextRequest } from 'next/server';
 
-import { authEnv } from '@/envs/auth';
+import {
+  LOBE_CHAT_AUTH_HEADER,
+  LOBE_CHAT_OIDC_AUTH_HEADER,
+  enableBetterAuth,
+  enableClerk,
+  enableNextAuth,
+ authEnv } from '@/envs/auth';
 import { ClerkAuth, type IClerkAuth } from '@/libs/clerk-auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 

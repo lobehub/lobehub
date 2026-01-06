@@ -3,11 +3,27 @@ name: Test CI
 on: [push, pull_request]
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
+  # Check for duplicate runs
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          concurrent_skipping: 'same_content_newer'
+          skip_after_successful_duplicate: 'true'
+          do_not_skip: '["workflow_dispatch", "schedule"]'
+
   # Package tests - using each package's own test script
   test-intenral-packages:
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,6 +38,8 @@ jobs:
           - context-engine
           - agent-runtime
           - conversation-flow
+          - ssrf-safe-fetch
+          - memory-user-memory
 
     name: Test package ${{ matrix.package }}
 
@@ -53,6 +71,8 @@ jobs:
           flags: packages/${{ matrix.package }}
 
   test-packages:
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -89,6 +109,8 @@ jobs:
 
   # App tests
   test-website:
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     name: Test Website
 
     runs-on: ubuntu-latest
@@ -121,6 +143,8 @@ jobs:
           flags: app
 
   test-desktop:
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     name: Test Desktop App
 
     runs-on: ubuntu-latest
@@ -161,6 +185,8 @@ jobs:
           flags: desktop
 
   test-databsae:
+    needs: pre_job
+    if: needs.pre_job.outputs.should_skip != 'true'
     name: Test Database
 
     runs-on: ubuntu-latest
