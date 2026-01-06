@@ -7,6 +7,8 @@ import dynamic from 'next/dynamic';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErrorAlertConfig';
+import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
 import { useProviderName } from '@/hooks/useProviderName';
@@ -85,18 +87,26 @@ const getErrorAlertConfig = (
 export const useErrorContent = (error: any) => {
   const { t } = useTranslation('error');
   const providerName = useProviderName(error?.body?.provider || '');
+  const businessAlertConfig = useBusinessErrorAlertConfig(error?.type);
+  const { errorType: businessErrorType, hideMessage } = useBusinessErrorContent(error?.type);
 
   return useMemo<AlertProps | undefined>(() => {
     if (!error) return;
     const messageError = error;
 
-    const alertConfig = getErrorAlertConfig(messageError.type);
+    // Use business alert config if provided, otherwise fall back to default
+    const alertConfig = businessAlertConfig ?? getErrorAlertConfig(messageError.type);
+
+    // Use business error type if provided, otherwise use original
+    const finalErrorType = businessErrorType ?? messageError.type;
 
     return {
-      message: t(`response.${messageError.type}` as any, { provider: providerName }),
+      message: hideMessage
+        ? undefined
+        : t(`response.${finalErrorType}` as any, { provider: providerName }),
       ...alertConfig,
     };
-  }, [error]);
+  }, [businessAlertConfig, businessErrorType, error, hideMessage, providerName, t]);
 };
 
 interface ErrorExtraProps {
