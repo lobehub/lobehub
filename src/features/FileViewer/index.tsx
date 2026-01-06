@@ -5,8 +5,8 @@ import { type CSSProperties, memo } from 'react';
 import { type FileListItem } from '@/types/files';
 
 import NotSupport from './NotSupport';
+import CodeViewer from './Renderer/Code';
 import ImageViewer from './Renderer/Image';
-import JavaScriptViewer from './Renderer/JavaScript';
 import MSDocViewer from './Renderer/MSDoc';
 import MarkdownViewer from './Renderer/Markdown';
 import PDFViewer from './Renderer/PDF';
@@ -119,7 +119,7 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
 
   // JavaScript/TypeScript files
   if (matchesFileType(fileType, name, JS_EXTENSIONS, JS_MIME_TYPES)) {
-    return <JavaScriptViewer fileId={id} fileName={name} url={url} />;
+    return <CodeViewer fileId={id} fileName={name} url={url} />;
   }
 
   // Markdown files

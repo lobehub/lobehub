@@ -12,10 +12,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     width: 100%;
     height: 100%;
-    padding-block: 4px;
+    padding-block: 0px;
     padding-inline: 24px 4px;
 
-    background: ${cssVar.colorBgContainer};
+    background: #0d1117;
   `,
 }));
 
@@ -38,20 +38,28 @@ const getLanguage = (fileName?: string): string => {
   }
 };
 
-interface JavaScriptViewerProps {
+interface CodeViewerProps {
   fileId: string;
   fileName?: string;
   url: string | null;
 }
 
-const JavaScriptViewer = memo<JavaScriptViewerProps>(({ url, fileName }) => {
+/**
+ * Render any code file.
+ */
+const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
   const { fileData, loading } = useTextFileLoader(url);
   const language = getLanguage(fileName);
 
   return (
     <Flexbox className={styles.page} id="javascript-renderer">
       {!loading && fileData ? (
-        <Highlighter language={language} showLanguage={false} variant={'borderless'}>
+        <Highlighter
+          language={language}
+          showLanguage={false}
+          theme="github-dark-default"
+          variant={'borderless'}
+        >
           {fileData}
         </Highlighter>
       ) : (
@@ -63,4 +71,4 @@ const JavaScriptViewer = memo<JavaScriptViewerProps>(({ url, fileName }) => {
   );
 });
 
-export default JavaScriptViewer;
+export default CodeViewer;
