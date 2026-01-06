@@ -12,7 +12,8 @@
   },
   "main": "index.ts",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
     "node-fetch": "^3.3.2",

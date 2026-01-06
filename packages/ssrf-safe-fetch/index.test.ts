@@ -117,7 +117,7 @@ describe('ssrfSafeFetch', () => {
     });
 
     it('should allow private IPs when SSRF_ALLOW_PRIVATE_IP_ADDRESS is true', async () => {
-      process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = 'true';
+      process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = '1';
 
       const mockResponse = createMockResponse();
       mockFetch.mockResolvedValue(mockResponse);
@@ -277,7 +277,7 @@ describe('ssrfSafeFetch', () => {
   describe('integration scenarios', () => {
     it('should work with complex request configurations', async () => {
       process.env.SSRF_ALLOW_IP_ADDRESS_LIST = '127.0.0.1';
-      process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = 'true';
+      process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = '1';
 
       const mockResponse = createMockResponse({
         // @ts-ignore

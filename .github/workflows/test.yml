@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [model-bank]
+        package: [model-bank, ssrf-safe-fetch]
 
     name: Test package ${{ matrix.package }}
 
