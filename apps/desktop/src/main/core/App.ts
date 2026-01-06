@@ -142,10 +142,17 @@ export class App {
    * This allows nativeTheme.shouldUseDarkColors to be used consistently everywhere
    */
   private initializeThemeMode() {
-    const themeMode = this.storeManager.get('themeMode');
+    let themeMode = this.storeManager.get('themeMode');
+
+    // Migrate legacy 'auto' value to 'system' (nativeTheme.themeSource doesn't accept 'auto')
+    if (Object.is(themeMode, 'auto')) {
+      themeMode = 'system';
+      this.storeManager.set('themeMode', themeMode);
+      logger.info(`Migrated legacy theme mode 'auto' to 'system'`);
+    }
 
     if (themeMode) {
-      nativeTheme.themeSource = themeMode === 'auto' ? 'system' : themeMode;
+      nativeTheme.themeSource = themeMode;
       logger.debug(
         `Theme mode initialized to: ${themeMode} (themeSource: ${nativeTheme.themeSource})`,
       );

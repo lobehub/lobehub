@@ -2,10 +2,8 @@ import { toolsClient } from '@/libs/trpc/client';
 import type {
   CallCodeInterpreterToolInput,
   CallToolResult,
-  GetExportFileUploadUrlInput,
-  GetExportFileUploadUrlResult,
-  SaveExportedFileContentInput,
-  SaveExportedFileContentResult,
+  ExportAndUploadFileInput,
+  ExportAndUploadFileResult,
 } from '@/server/routers/tools/market';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors/settings';
@@ -44,31 +42,25 @@ class CodeInterpreterService {
   }
 
   /**
-   * Get a pre-signed upload URL for exporting a file from the sandbox
+   * Export a file from sandbox and upload to S3, then create a persistent file record
+   * This is a single call that combines: getUploadUrl + callTool(exportFile) + createFileRecord
+   * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
+   * @param path - The file path in the sandbox
    * @param filename - The name of the file to export
    * @param topicId - The topic ID for organizing files
    */
-  async getExportFileUploadUrl(
+  async exportAndUploadFile(
+    path: string,
     filename: string,
     topicId: string,
-  ): Promise<GetExportFileUploadUrlResult> {
-    const input: GetExportFileUploadUrlInput = {
+  ): Promise<ExportAndUploadFileResult> {
+    const input: ExportAndUploadFileInput = {
       filename,
+      path,
       topicId,
     };
 
-    return toolsClient.market.getExportFileUploadUrl.mutate(input);
-  }
-
-  /**
-   * Save exported file content to documents table
-   * This creates a document record linked to the file for content retrieval
-   * @param params - File content and metadata
-   */
-  async saveExportedFileContent(
-    params: SaveExportedFileContentInput,
-  ): Promise<SaveExportedFileContentResult> {
-    return toolsClient.market.saveExportedFileContent.mutate(params);
+    return toolsClient.market.exportAndUploadFile.mutate(input);
   }
 }
 

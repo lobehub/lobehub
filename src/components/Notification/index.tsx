@@ -1,9 +1,11 @@
 'use client';
 
 import { ActionIcon, Flexbox, type FlexboxProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 const styles = createStaticStyles(({ css }) => ({
   cancelIcon: css`
@@ -70,7 +72,7 @@ const Notification = memo<NotificationProps>(
     className,
     ...rest
   }) => {
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
     const { className: wrapperClassName, ...restWrapper } = wrapper;
     return (
       show && (

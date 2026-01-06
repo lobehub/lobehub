@@ -1,6 +1,62 @@
 [
   {
     "children": {
+      "improvements": ["Convert glossary from JSON to Markdown table format."],
+      "fixes": ["Resolve desktop upload CORS issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.221"
+  },
+  {
+    "children": {
+      "fixes": ["Restore getBounds mock in Browser test beforeEach."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.220"
+  },
+  {
+    "children": {
+      "fixes": ["Resolve BaseUI dropdown compatibility issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.219"
+  },
+  {
+    "children": {
+      "features": ["Update the sandbox export files & save files way."],
+      "fixes": ["Fix editor modal when Markdown rendering off."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.218"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.217"
+  },
+  {
+    "children": {
+      "fixes": ["Restore window position safely."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.216"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Update CI bun version to v1.2.4, when the document filetype is agent/plan, not show the saveinto docs button."
+      ]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.215"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.214"
+  },
+  {
+    "children": {
       "improvements": ["Update i18n."]
     },
     "date": "2026-01-05",

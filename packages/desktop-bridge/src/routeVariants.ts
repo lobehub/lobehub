@@ -31,31 +31,26 @@ export interface IRouteVariants {
   locale: Locales;
   neutralColor?: string;
   primaryColor?: string;
-  theme: 'dark' | 'light';
 }
-
-const SUPPORTED_THEMES = ['dark', 'light'] as const;
 
 export const DEFAULT_VARIANTS: IRouteVariants = {
   isMobile: false,
   locale: DEFAULT_LANG,
-  theme: 'light',
 };
 
 const SPLITTER = '__';
 
 export class RouteVariants {
   static serializeVariants = (variants: IRouteVariants): string =>
-    [variants.locale, Number(variants.isMobile), variants.theme].join(SPLITTER);
+    [variants.locale, Number(variants.isMobile)].join(SPLITTER);
 
   static deserializeVariants = (serialized: string): IRouteVariants => {
     try {
-      const [locale, isMobile, theme] = serialized.split(SPLITTER);
+      const [locale, isMobile] = serialized.split(SPLITTER);
 
       return {
         isMobile: isMobile === '1',
         locale: RouteVariants.isValidLocale(locale) ? (locale as Locales) : DEFAULT_VARIANTS.locale,
-        theme: RouteVariants.isValidTheme(theme) ? (theme as any) : DEFAULT_VARIANTS.theme,
       };
     } catch {
       return { ...DEFAULT_VARIANTS };
@@ -68,6 +63,4 @@ export class RouteVariants {
   });
 
   private static isValidLocale = (locale: string): boolean => locales.includes(locale as any);
-
-  private static isValidTheme = (theme: string): boolean => SUPPORTED_THEMES.includes(theme as any);
 }

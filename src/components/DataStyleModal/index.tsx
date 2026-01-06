@@ -1,7 +1,9 @@
 import { Flexbox, Icon, Modal } from '@lobehub/ui';
-import { createStaticStyles, useThemeMode } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 const prefixCls = 'ant';
 
@@ -52,7 +54,7 @@ interface DataStyleModalProps {
 
 const DataStyleModal = memo<DataStyleModalProps>(
   ({ icon, onOpenChange, title, open, children, width = 550, height }) => {
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
 
     return (
       <Modal

@@ -2,7 +2,8 @@
 
 import { FileSearchResult } from '@lobechat/types';
 import { Center, Flexbox, MaterialFileTypeIcon, Text, Tooltip } from '@lobehub/ui';
-import { cx, useThemeMode } from 'antd-style';
+import { cx } from 'antd-style';
+import { useTheme } from 'next-themes';
 import { memo } from 'react';
 
 import { styles } from './style';
@@ -12,7 +13,8 @@ export interface FileItemProps extends FileSearchResult {
 }
 
 const FileItem = memo<FileItemProps>(({ fileId, fileName, relevanceScore }) => {
-  const { isDarkMode } = useThemeMode();
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === 'dark';
 
   return (
     <Flexbox

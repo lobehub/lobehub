@@ -1,11 +1,12 @@
 import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronRight, Globe } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import Image from 'next/image';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsDark } from '@/hooks/useIsDark';
 import { type GroundingSearch } from '@/types/search';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -46,7 +47,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const SearchGrounding = memo<GroundingSearch>(({ searchQueries, citations }) => {
   const { t } = useTranslation('chat');
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   const [showDetail, setShowDetail] = useState(false);
 
