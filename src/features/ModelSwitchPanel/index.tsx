@@ -1,5 +1,4 @@
-import { TooltipGroup } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Popover, TooltipGroup } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 import { PanelContent } from './components/PanelContent';
@@ -32,9 +31,8 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     return (
       <TooltipGroup>
         <Popover
-          arrow={false}
           classNames={{
-            container: styles.container,
+            content: styles.container,
           }}
           content={
             <PanelContent

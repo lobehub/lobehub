@@ -141,6 +141,7 @@ const AgentHeader = memo(() => {
         onChange={handleAvatarChange}
         onDelete={handleAvatarDelete}
         onUpload={handleAvatarUpload}
+        // @ts-expect-error - EmojiPicker popupProps type definition issue in @lobehub/ui
         popupProps={{
           placement: 'bottomLeft',
         }}

@@ -1,5 +1,5 @@
-import { Block, Center, Flexbox } from '@lobehub/ui';
-import { Popover, Progress } from 'antd';
+import { Block, Center, Flexbox, Popover } from '@lobehub/ui';
+import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -248,10 +248,15 @@ const TotalScore = memo<TotalScoreProps>(({ scoreResult, scoreItems = [], isVali
 
       <div className={styles.progressContainer}>
         <Popover
-          arrow={false}
-          content={renderTooltipContent()}
+          content={
+            <div>
+              <div style={{ fontWeight: 'bold', marginBottom: 8 }}>
+                {t('mcp.details.totalScore.popover.title')}
+              </div>
+              {renderTooltipContent()}
+            </div>
+          }
           placement="bottom"
-          title={t('mcp.details.totalScore.popover.title')}
           trigger={['hover', 'click']}
         >
           <Progress

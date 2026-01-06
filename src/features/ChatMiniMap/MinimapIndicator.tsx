@@ -1,5 +1,4 @@
-import { Block, Text } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Block, Popover, Text } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,13 +27,12 @@ export const MinimapIndicator = memo<MinimapIndicatorProps>(
 
     return (
       <Popover
-        arrow={false}
         content={popoverContent}
         key={id}
         mouseEnterDelay={0.1}
         placement={'left'}
         styles={{
-          container: {
+          content: {
             width: 320,
           },
         }}
