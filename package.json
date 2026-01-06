@@ -204,7 +204,7 @@
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^3.4.1",
     "@lobehub/icons": "^4.0.2",
-    "@lobehub/market-sdk": "^0.25.1",
+    "@lobehub/market-sdk": "^0.27.0",
     "@lobehub/tts": "^4.0.2",
     "@lobehub/ui": "^4.9.3",
     "@modelcontextprotocol/sdk": "^1.25.1",
