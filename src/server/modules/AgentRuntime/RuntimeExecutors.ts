@@ -12,6 +12,7 @@ import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
 import { serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
+import { AiProviderModel } from '@/database/models/aiProvider';
 import { type MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -124,8 +125,18 @@ export const createRuntimeExecutors = (
       // 初始化 ModelRuntime (从数据库读取用户的 keyVaults)
       const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
 
+      // Read user's provider config to determine apiMode
+      // When user explicitly disables Responses API, set apiMode to 'chatCompletion'
+      const aiProviderModel = new AiProviderModel(ctx.serverDB, ctx.userId!);
+      const providerConfig = await aiProviderModel.findById(provider);
+      const enableResponseApi = providerConfig?.config?.enableResponseApi;
+      // Default to false for non-OpenAI providers, true only for OpenAI with explicit enable
+      const apiMode: 'responses' | 'chatCompletion' =
+        enableResponseApi === true ? 'responses' : 'chatCompletion';
+
       // 构造 ChatStreamPayload
       const chatPayload = {
+        apiMode,
         messages: llmPayload.messages,
         model,
         tools: llmPayload.tools,
