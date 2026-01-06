@@ -39,6 +39,7 @@ export default {
   'header.actions.notionGuide.title': 'Import from Notion',
   'header.actions.uploadFile': 'Upload File',
   'header.actions.uploadFolder': 'Upload Folder',
+  'header.actions.uploadFolder.creatingFolders': 'Creating folder structure...',
   'header.newPageButton': 'New Page',
   'header.uploadButton': 'Upload',
   'home.getStarted': 'Get Started',

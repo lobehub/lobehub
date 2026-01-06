@@ -8,9 +8,9 @@ import { ArrowLeftIcon, BotMessageSquareIcon, DownloadIcon, InfoIcon } from 'luc
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Loading from '@/components/Loading/BrandTextLoading';
 import FileDetailComponent from '@/app/[variants]/(main)/resource/features/FileDetail';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import PageAgentProvider from '@/features/PageEditor/PageAgentProvider';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
@@ -68,11 +68,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
                     title={t('download', { ns: 'common' })}
                   />
                 )}
-                <ActionIcon
-                  icon={InfoIcon}
-                  onClick={() => setIsDetailModalOpen(true)}
-                  title={t('fileDetail', { ns: 'file' })}
-                />
+                <ActionIcon icon={InfoIcon} onClick={() => setIsDetailModalOpen(true)} />
               </Flexbox>
             }
             style={{
@@ -96,7 +92,9 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
         title={t('detail.basic.title', { ns: 'file' })}
         width={400}
       >
-        {fileDetail && <FileDetailComponent {...fileDetail} showDownloadButton={false} showTitle={false} />}
+        {fileDetail && (
+          <FileDetailComponent {...fileDetail} showDownloadButton={false} showTitle={false} />
+        )}
       </Modal>
     </>
   );

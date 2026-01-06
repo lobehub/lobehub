@@ -37,6 +37,7 @@
   "header.actions.notionGuide.title": "导入 Notion 内容",
   "header.actions.uploadFile": "上传文件",
   "header.actions.uploadFolder": "上传文件夹",
+  "header.actions.uploadFolder.creatingFolders": "正在创建文件夹结构...",
   "header.newPageButton": "新建文稿",
   "header.uploadButton": "上传",
   "home.getStarted": "开始使用",
