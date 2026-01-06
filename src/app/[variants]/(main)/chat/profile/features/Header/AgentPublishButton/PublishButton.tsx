@@ -1,127 +1,107 @@
 import { ActionIcon } from '@lobehub/ui';
 import { ShapesUploadIcon } from '@lobehub/ui/icons';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { HEADER_ICON_SIZE } from '@/const/layoutTokens';
-import { checkOwnership } from '@/hooks/useAgentOwnershipCheck';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useServerConfigStore } from '@/store/serverConfig';
 
+import ForkConfirmModal from './ForkConfirmModal';
 import type { MarketPublishAction } from './types';
-import { useMarketPublish } from './useMarketPublish';
+import { type OriginalAgentInfo, useMarketPublish } from './useMarketPublish';
 
 interface MarketPublishButtonProps {
   action: MarketPublishAction;
-  marketIdentifier?: string;
   onPublishSuccess?: (identifier: string) => void;
 }
 
-const PublishButton = memo<MarketPublishButtonProps>(
-  ({ action, marketIdentifier, onPublishSuccess }) => {
-    const { t } = useTranslation(['setting', 'marketAuth']);
+const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess }) => {
+  const { t } = useTranslation(['setting', 'marketAuth']);
 
-    const mobile = useServerConfigStore((s) => s.isMobile);
+  const mobile = useServerConfigStore((s) => s.isMobile);
 
-    const { isAuthenticated, isLoading, session, signIn } = useMarketAuth();
-    const { isPublishing, publish } = useMarketPublish({
-      action,
-      onSuccess: onPublishSuccess,
-    });
+  const { isAuthenticated, isLoading, signIn } = useMarketAuth();
+  const { checkOwnership, isCheckingOwnership, isPublishing, publish } = useMarketPublish({
+    action,
+    onSuccess: onPublishSuccess,
+  });
 
-    const buttonConfig = useMemo(() => {
-      if (action === 'upload') {
-        return {
-          authSuccessMessage: t('messages.success.upload', { ns: 'marketAuth' }),
-          authenticated: t('marketPublish.upload.tooltip'),
-          unauthenticated: t('marketPublish.upload.tooltip'),
-        } as const;
-      }
+  // Fork confirmation modal state
+  const [showForkModal, setShowForkModal] = useState(false);
+  const [originalAgentInfo, setOriginalAgentInfo] = useState<OriginalAgentInfo | null>(null);
 
-      const submitText = t('submitAgentModal.tooltips');
-
+  const buttonConfig = useMemo(() => {
+    if (action === 'upload') {
       return {
-        authSuccessMessage: t('messages.success.submit', { ns: 'marketAuth' }),
-        authenticated: submitText,
-        unauthenticated: t('marketPublish.submit.tooltip'),
+        authenticated: t('marketPublish.upload.tooltip'),
+        unauthenticated: t('marketPublish.upload.tooltip'),
       } as const;
-    }, [action, t]);
+    }
 
-    const handleButtonClick = useCallback(async () => {
-      if (!isAuthenticated) {
-        try {
-          const accountId = await signIn();
-          // Check ownership after authentication if marketIdentifier exists
-          if (marketIdentifier && accountId !== null) {
-            let accessToken = session?.accessToken;
+    const submitText = t('submitAgentModal.tooltips');
 
-            if (!accessToken && typeof window !== 'undefined') {
-              const storedSession = sessionStorage.getItem('market_auth_session');
-              if (storedSession) {
-                try {
-                  const parsed = JSON.parse(storedSession) as { accessToken?: string };
-                  accessToken = parsed.accessToken;
-                } catch (parseError) {
-                  console.error(
-                    '[MarketPublishButton] Failed to parse stored session:',
-                    parseError,
-                  );
-                }
-              }
-            }
+    return {
+      authenticated: submitText,
+      unauthenticated: t('marketPublish.submit.tooltip'),
+    } as const;
+  }, [action, t]);
 
-            if (accessToken) {
-              try {
-                const isOwner = await checkOwnership({
-                  accessToken,
-                  accountId,
-                  marketIdentifier,
-                  skipCache: true,
-                });
+  const doPublish = useCallback(async () => {
+    // Check ownership before publishing
+    const { needsForkConfirm, originalAgent } = await checkOwnership();
 
-                // If user is not the owner and trying to upload, just return
-                // The parent component should handle the action switch
-                if (!isOwner && action === 'upload') {
-                  return;
-                }
-              } catch (ownershipError) {
-                console.error('[MarketPublishButton] Failed to confirm ownership:', ownershipError);
-              }
-            }
-          }
+    if (needsForkConfirm && originalAgent) {
+      // Show fork confirmation modal
+      setOriginalAgentInfo(originalAgent);
+      setShowForkModal(true);
+      return;
+    }
 
-          // After authentication, proceed with publish
-          await publish();
-        } catch (error) {
-          console.error(`[MarketPublishButton][${action}] Authorization failed:`, error);
-          const normalizedError = resolveMarketAuthError(error);
-          message.error({
-            content: t(`errors.${normalizedError.code}`, { ns: 'marketAuth' }),
-            key: 'market-auth',
-          });
-        }
-        return;
+    // No confirmation needed, proceed with publish
+    await publish();
+  }, [checkOwnership, publish]);
+
+  const handleButtonClick = useCallback(async () => {
+    if (!isAuthenticated) {
+      try {
+        await signIn();
+        // After authentication, proceed with ownership check and publish
+        await doPublish();
+      } catch (error) {
+        console.error(`[MarketPublishButton][${action}] Authorization failed:`, error);
+        const normalizedError = resolveMarketAuthError(error);
+        message.error({
+          content: t(`errors.${normalizedError.code}`, { ns: 'marketAuth' }),
+          key: 'market-auth',
+        });
       }
+      return;
+    }
 
-      // User is authenticated, directly publish
-      await publish();
-    }, [
-      action,
-      buttonConfig.authSuccessMessage,
-      isAuthenticated,
-      marketIdentifier,
-      publish,
-      session?.accessToken,
-      signIn,
-      t,
-    ]);
+    // User is authenticated, check ownership and publish
+    await doPublish();
+  }, [action, doPublish, isAuthenticated, signIn, t]);
 
-    const buttonTitle = isAuthenticated ? buttonConfig.authenticated : buttonConfig.unauthenticated;
-    const loading = isLoading || isPublishing;
+  const handleForkConfirm = useCallback(async () => {
+    setShowForkModal(false);
+    setOriginalAgentInfo(null);
+    // User confirmed, proceed with publish
+    await publish();
+  }, [publish]);
 
-    return (
+  const handleForkCancel = useCallback(() => {
+    setShowForkModal(false);
+    setOriginalAgentInfo(null);
+  }, []);
+
+  const buttonTitle = isAuthenticated ? buttonConfig.authenticated : buttonConfig.unauthenticated;
+  const loading = isLoading || isCheckingOwnership || isPublishing;
+
+  return (
+    <>
       <ActionIcon
         icon={ShapesUploadIcon}
         loading={loading}
@@ -129,9 +109,16 @@ const PublishButton = memo<MarketPublishButtonProps>(
         size={HEADER_ICON_SIZE(mobile)}
         title={buttonTitle}
       />
-    );
-  },
-);
+      <ForkConfirmModal
+        loading={isPublishing}
+        onCancel={handleForkCancel}
+        onConfirm={handleForkConfirm}
+        open={showForkModal}
+        originalAgent={originalAgentInfo}
+      />
+    </>
+  );
+});
 
 PublishButton.displayName = 'MarketPublishButton';
 
