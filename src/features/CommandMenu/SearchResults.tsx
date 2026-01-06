@@ -214,8 +214,11 @@ const SearchResults = memo<SearchResultsProps>(
       const typeLabel = getTypeLabel(result.type);
       const subtitle = getSubtitle(result);
 
-      // Create title with type prefix
-      const titleWithPrefix: ReactNode = (
+      // Hide type prefix when filtering by specific type
+      const showTypePrefix = !typeFilter;
+
+      // Create title with or without type prefix
+      const titleWithPrefix: ReactNode = showTypePrefix ? (
         <>
           <span style={{ opacity: 0.5 }}>{typeLabel}</span>
           <ChevronRight
@@ -229,6 +232,8 @@ const SearchResults = memo<SearchResultsProps>(
           />
           {result.title}
         </>
+      ) : (
+        result.title
       );
 
       return (
@@ -253,21 +258,7 @@ const SearchResults = memo<SearchResultsProps>(
       if (count === 0) return null;
 
       const typeLabel = getTypeLabel(type);
-      const titleWithPrefix: ReactNode = (
-        <>
-          <span style={{ opacity: 0.5 }}>{typeLabel}</span>
-          <ChevronRight
-            size={14}
-            style={{
-              display: 'inline',
-              marginInline: '6px',
-              opacity: 0.5,
-              verticalAlign: 'middle',
-            }}
-          />
-          {t('cmdk.search.searchMore', { type: typeLabel })}
-        </>
-      );
+      const titleText = `${t('cmdk.search.searchMore', { type: typeLabel })} with "${searchQuery}"`;
 
       return (
         <CommandItem
@@ -275,7 +266,7 @@ const SearchResults = memo<SearchResultsProps>(
           icon={getIcon(type)}
           key={`search-more-${type}`}
           onSelect={() => handleSearchMore(type)}
-          title={titleWithPrefix}
+          title={titleText}
           value={`action-show-more-results-for-type-${type}`}
           variant="detailed"
         />
