@@ -4,18 +4,18 @@ import { Center, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import CircleLoading from '@/components/Loading/CircleLoading';
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     width: 100%;
-    padding: 24px;
-    border-radius: 4px;
+    height: 100%;
+    padding-block: 4px;
+    padding-inline: 24px 4px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
   `,
 }));
 
@@ -56,7 +56,7 @@ const JavaScriptViewer = memo<JavaScriptViewerProps>(({ url, fileName }) => {
         </Highlighter>
       ) : (
         <Center height={'100%'}>
-          <CircleLoading />
+          <NeuralNetworkLoading size={36} />
         </Center>
       )}
     </Flexbox>

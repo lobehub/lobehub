@@ -93,7 +93,6 @@ const ListView = memo(() => {
   // Get current folder ID - either from breadcrumb or null for root
   const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
 
-  // Fetch data with SWR
   const { data: rawData } = useResourceManagerFetchKnowledgeItems({
     category,
     knowledgeBaseId: libraryId,
@@ -326,9 +325,9 @@ const ListView = memo(() => {
             }}
             overscan={48 * 5}
             ref={virtuosoRef}
-            style={{ height: 'calc(100vh - 200px)' }}
+            style={{ height: 'calc(100vh - 100px)' }}
           />
-          {isLoadingMore && (
+          {/* {isLoadingMore && (
             <Center
               className={styles.loadingIndicator}
               style={{
@@ -337,7 +336,7 @@ const ListView = memo(() => {
             >
               {t('loading', { defaultValue: 'Loading...', ns: 'file' })}
             </Center>
-          )}
+          )} */}
         </div>
       </div>
     </Flexbox>
