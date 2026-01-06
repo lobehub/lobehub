@@ -2,7 +2,7 @@
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Modal } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, useTheme } from 'antd-style';
 import { ArrowLeftIcon, DownloadIcon, InfoIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,6 @@ import NavHeader from '@/features/NavHeader';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
 
-import Breadcrumb from '../Explorer/Header/Breadcrumb';
 import FileContent from './FileContent';
 
 interface FileEditorProps {
@@ -28,12 +27,10 @@ interface FileEditorProps {
  */
 const FileEditor = memo<FileEditorProps>(({ onBack }) => {
   const { t } = useTranslation(['common', 'file']);
+  const theme = useTheme();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  const [currentViewItemId, category] = useResourceManagerStore((s) => [
-    s.currentViewItemId,
-    s.category,
-  ]);
+  const currentViewItemId = useResourceManagerStore((s) => s.currentViewItemId);
 
   const fileDetail = useFileStore(fileManagerSelectors.getFileById(currentViewItemId));
 
@@ -42,11 +39,17 @@ const FileEditor = memo<FileEditorProps>(({ onBack }) => {
       <Flexbox height={'100%'}>
         <NavHeader
           left={
-            <Flexbox align={'center'} gap={4} horizontal style={{ minHeight: 32 }}>
+            <Flexbox align={'center'} gap={12} horizontal style={{ minHeight: 32 }}>
               <ActionIcon icon={ArrowLeftIcon} onClick={onBack} title={t('back')} />
-              <Flexbox align={'center'} style={{ marginLeft: 8 }}>
-                <Breadcrumb category={category} fileName={fileDetail?.name} />
-              </Flexbox>
+              <span
+                style={{
+                  color: theme.colorText,
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                {fileDetail?.name}
+              </span>
             </Flexbox>
           }
           right={
