@@ -2,13 +2,15 @@ import { TextArea } from '@lobehub/ui';
 import { FC } from 'react';
 
 interface EditorCanvasProps {
+  defaultValue?: string;
   onChange?: (value: string) => void;
   value?: string;
 }
 
-const EditorCanvas: FC<EditorCanvasProps> = ({ value, onChange }) => {
+const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, value, onChange }) => {
   return (
     <TextArea
+      defaultValue={defaultValue}
       onChange={(e) => {
         onChange?.(e.target.value);
       }}

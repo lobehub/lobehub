@@ -3,7 +3,7 @@ import type { ModelRuntime } from '@lobechat/model-runtime';
 import { readFile } from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MEMORY_CATEGORIES, memoryTypeValues } from '../schemas';
+import { memoryTypeValues } from '../schemas';
 import type { ExtractorTemplateProps } from '../types';
 import { ContextExtractor } from './context';
 
@@ -40,7 +40,8 @@ describe('ContextExtractor', () => {
 
     expect(memories.type).toBe('array');
     expect(memoryItem.properties.memoryLayer.const).toBe('context');
-    expect(memoryItem.properties.memoryCategory.enum).toEqual(MEMORY_CATEGORIES);
+    // memoryCategory is a plain string in schema, not an enum
+    expect(memoryItem.properties.memoryCategory.type).toBe('string');
     expect(memoryItem.properties.memoryType.enum).toEqual(memoryTypeValues);
     expect((schema?.schema as any).additionalProperties).toBe(false);
   });

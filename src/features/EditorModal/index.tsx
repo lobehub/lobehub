@@ -1,3 +1,4 @@
+import { useEditor } from '@lobehub/editor/react';
 import { Modal, ModalProps, createRawModal } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,8 +19,7 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
   const { t } = useTranslation('common');
   const [v, setV] = useState(value);
   const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
-
-  const Canvas = enableRichRender ? EditorCanvas : TextareCanvas;
+  const editor = useEditor();
 
   return (
     <Modal
@@ -30,7 +30,13 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
       okText={t('ok')}
       onOk={async () => {
         setConfirmLoading(true);
-        await onConfirm?.(v || '');
+        let finalValue;
+        if (enableRichRender) {
+          finalValue = editor?.getDocument('markdown') as unknown as string;
+        } else {
+          finalValue = v;
+        }
+        await onConfirm?.(finalValue || '');
         setConfirmLoading(false);
       }}
       styles={{
@@ -43,7 +49,11 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
       width={'min(90vw, 920px)'}
       {...rest}
     >
-      <Canvas onChange={(v) => setV(v)} value={v} />
+      {enableRichRender ? (
+        <EditorCanvas defaultValue={value} editor={editor} />
+      ) : (
+        <TextareCanvas defaultValue={value} onChange={(v) => setV(v)} value={v} />
+      )}
     </Modal>
   );
 });

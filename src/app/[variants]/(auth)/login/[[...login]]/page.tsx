@@ -2,7 +2,7 @@ import { SignIn } from '@clerk/nextjs';
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { notFound } from 'next/navigation';
 
-import { enableClerk } from '@/const/auth';
+import { enableClerk } from '@/envs/auth';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
