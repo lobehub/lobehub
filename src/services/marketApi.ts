@@ -1,4 +1,8 @@
-import { type AgentItemDetail, type AgentListResponse } from '@lobehub/market-sdk';
+import {
+  type AgentCreateResponse,
+  type AgentItemDetail,
+  type AgentListResponse,
+} from '@lobehub/market-sdk';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -26,8 +30,8 @@ export class MarketApiService {
     status?: 'published' | 'unpublished' | 'archived' | 'deprecated';
     tokenUsage?: number;
     visibility?: 'public' | 'private' | 'internal';
-  }): Promise<AgentItemDetail> {
-    return lambdaClient.market.agent.createAgent.mutate(agentData) as Promise<AgentItemDetail>;
+  }): Promise<AgentCreateResponse> {
+    return lambdaClient.market.agent.createAgent.mutate(agentData);
   }
 
   // Get agent detail by identifier
