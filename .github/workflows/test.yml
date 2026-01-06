@@ -62,14 +62,17 @@ jobs:
       - name: Upload coverage to Codecov
         if: always()
         run: |
+          curl -Os https://cli.codecov.io/latest/linux/codecov
+          chmod +x codecov
           for package in $PACKAGES; do
-            # Extract directory name: @lobechat/file-loaders -> file-loaders, model-bank -> model-bank
             dir="${package#@lobechat/}"
             if [ -f "./packages/$dir/coverage/lcov.info" ]; then
-              echo "Uploading coverage for $package..."
-              npx codecov --token=${{ secrets.CODECOV_TOKEN }} \
-                --file=./packages/$dir/coverage/lcov.info \
-                --flags=packages/$dir
+              echo "Uploading coverage for $dir..."
+              ./codecov upload-process \
+                -t ${{ secrets.CODECOV_TOKEN }} \
+                -f ./packages/$dir/coverage/lcov.info \
+                -F packages/$dir \
+                --disable-search
             fi
           done
 
