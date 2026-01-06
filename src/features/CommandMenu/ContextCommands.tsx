@@ -11,6 +11,7 @@ import { CONTEXT_COMMANDS, getContextCommands } from './utils/contextCommands';
 const ContextCommands = memo(() => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
+  const { t: tSubscription } = useTranslation('subscription');
   const { t: tCommon } = useTranslation('common');
   const { handleNavigate } = useCommandMenu();
   const { menuContext, pathname } = useCommandMenuContext();
@@ -49,6 +50,8 @@ const ContextCommands = memo(() => {
             if (cmd.labelKey) {
               if (cmd.labelNamespace === 'auth') {
                 label = tAuth(cmd.labelKey, { defaultValue: cmd.label });
+              } else if (cmd.labelNamespace === 'subscription') {
+                label = tSubscription(cmd.labelKey, { defaultValue: cmd.label });
               } else {
                 label = t(cmd.labelKey, { defaultValue: cmd.label });
               }
@@ -89,6 +92,8 @@ const ContextCommands = memo(() => {
             if (cmd.labelKey) {
               if (cmd.labelNamespace === 'auth') {
                 label = tAuth(cmd.labelKey, { defaultValue: cmd.label });
+              } else if (cmd.labelNamespace === 'subscription') {
+                label = tSubscription(cmd.labelKey, { defaultValue: cmd.label });
               } else {
                 label = t(cmd.labelKey, { defaultValue: cmd.label });
               }
