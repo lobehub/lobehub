@@ -74,8 +74,8 @@ export const fileRouter = router({
         // If metadata fetch fails, use original size from input
       }
 
-      if (actualSize < 1) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size must be at least 1 byte' });
+      if (actualSize < 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
       }
 
       const { id } = await ctx.fileModel.create(
