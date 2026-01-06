@@ -333,7 +333,7 @@
     "semver": "^7.7.3",
     "sharp": "^0.34.5",
     "shiki": "^3.20.0",
-    "ssrf-safe-fetch": "workspace:*",
+    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "stripe": "^17.7.0",
     "superjson": "^2.2.6",
     "svix": "^1.82.0",

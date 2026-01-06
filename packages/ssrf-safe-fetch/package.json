@@ -1,5 +1,5 @@
 {
-  "name": "ssrf-safe-fetch",
+  "name": "@lobechat/ssrf-safe-fetch",
   "version": "1.0.0",
   "private": true,
   "description": "SSRF-safe fetch implementation with browser/node conditional exports",
