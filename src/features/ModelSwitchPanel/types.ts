@@ -19,7 +19,11 @@ export interface ModelWithProviders {
 export type VirtualItem =
   | {
       data: ModelWithProviders;
-      type: 'model-item';
+      type: 'model-item-single';
+    }
+  | {
+      data: ModelWithProviders;
+      type: 'model-item-multiple';
     }
   | {
       provider: EnabledProviderWithModels;
