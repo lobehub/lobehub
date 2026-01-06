@@ -16,6 +16,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-1.8 有着更强的多模态理解能力和 Agent 能力，支持文本/图片/视频输入与上下文缓存，可在复杂任务中提供更出色的表现。',
     displayName: 'Doubao Seed 1.8',
+    enabled: true,
     id: 'doubao-seed-1.8',
     maxOutput: 64_000,
     pricing: {
