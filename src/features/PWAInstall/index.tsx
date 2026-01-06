@@ -1,8 +1,9 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 
+import { useMounted } from '@/hooks/useMounted';
 import { usePlatform } from '@/hooks/usePlatform';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -13,14 +14,10 @@ const Install: any = dynamic(() => import('./Install'), {
 });
 
 const PWAInstall = memo(() => {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const { isPWA, isSupportInstallPWA } = usePlatform();
   const isShowPWAGuide = useUserStore((s) => s.isShowPWAGuide);
   const hidePWAInstaller = useGlobalStore((s) => systemStatusSelectors.hidePWAInstaller(s));
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   if (!mounted || isPWA || !isShowPWAGuide || !isSupportInstallPWA || hidePWAInstaller) {
     return null;

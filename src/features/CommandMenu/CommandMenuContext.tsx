@@ -10,6 +10,8 @@ import {
   useState,
 } from 'react';
 
+import { useMounted } from '@/hooks/useMounted';
+
 import { type MenuContext, type PageType } from './types';
 import { detectContext } from './utils/context';
 import type { ValidSearchType } from './utils/queryParser';
@@ -44,15 +46,10 @@ export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderP
   const [pages, setPages] = useState<PageType[]>([]);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ValidSearchType | undefined>(undefined);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
 
   // Derived values
   const page = pages.at(-1);
-
-  // Ensure we're mounted on the client
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (search.trim().length > 0) {

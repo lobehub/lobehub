@@ -3,6 +3,8 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { useMounted } from '@/hooks/useMounted';
+
 /**
  * Hook to check if the current page is in single mode
  * Single mode is used for standalone windows in desktop app
@@ -10,11 +12,7 @@ import { useEffect, useState } from 'react';
  */
 export const useIsSingleMode = (): boolean => {
   const [isSingleMode, setIsSingleMode] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
 
   const searchParams = useSearchParams();
 

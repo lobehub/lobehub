@@ -1,11 +1,12 @@
 'use client';
 
-import { BRANDING_NAME } from '@lobechat/business-const';
 import type { PWAInstallElement } from '@khmyznikov/pwa-install';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PWA_INSTALL_ID } from '@/const/layoutTokens';
+import { useMounted } from '@/hooks/useMounted';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -14,8 +15,9 @@ import { useUserStore } from '@/store/user';
 const PWAInstall = memo(() => {
   const { t } = useTranslation('metadata');
 
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const pwaInstallRef = useRef<PWAInstallElement | null>(null);
+  const [libraryReady, setLibraryReady] = useState(false);
 
   const { install, canInstall } = usePWAInstall();
 
@@ -27,7 +29,7 @@ const PWAInstall = memo(() => {
 
   // Initialize component: load PWA install library
   useEffect(() => {
-    import('@khmyznikov/pwa-install').then(() => setMounted(true));
+    import('@khmyznikov/pwa-install').then(() => setLibraryReady(true));
   }, []);
 
   // Setup event listener for dismiss action and trigger PWA guide when needed
@@ -60,18 +62,19 @@ const PWAInstall = memo(() => {
     };
   }, [mounted, canInstall, hidePWAInstaller, install, isShowPWAGuide, updateSystemStatus]);
 
-  if (!mounted) return null;
+  if (!mounted || !libraryReady) return null;
 
   const description = t('chat.description', { appName: BRANDING_NAME });
 
   return (
+    // @ts-expect-error - pwa-install is a custom element
     <pwa-install
       description={description}
       id={PWA_INSTALL_ID}
       manifest-url="/manifest.webmanifest"
       manual-apple="true"
       manual-chrome="true"
-      ref={(el) => {
+      ref={(el: PWAInstallElement | null) => {
         pwaInstallRef.current = el;
       }}
     />

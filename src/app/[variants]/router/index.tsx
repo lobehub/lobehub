@@ -1,18 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMounted } from '@/hooks/useMounted';
 
 import DesktopClientRouter from './DesktopClientRouter';
 
-const useIsClient = () => {
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  return isClient;
-};
 const DesktopRouter = () => {
-  const isClient = useIsClient();
+  const isClient = useMounted();
   if (!isClient) return null;
   return <DesktopClientRouter />;
 };
