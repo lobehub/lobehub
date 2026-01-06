@@ -23,6 +23,7 @@ jobs:
           - agent-runtime
           - conversation-flow
           - ssrf-safe-fetch
+          - memory-user-memory
 
     name: Test package ${{ matrix.package }}
 
