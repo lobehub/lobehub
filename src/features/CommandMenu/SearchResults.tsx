@@ -11,13 +11,12 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { markdownToTxt } from 'markdown-to-txt';
-import { type ReactNode, memo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import type { SearchResult } from '@/database/repositories/search';
 
-import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
 import { styles } from './styles';
 import type { ValidSearchType } from './utils/queryParser';
@@ -218,7 +217,7 @@ const SearchResults = memo<SearchResultsProps>(
       const showTypePrefix = !typeFilter;
 
       // Create title with or without type prefix
-      const titleWithPrefix: ReactNode = showTypePrefix ? (
+      const titleWithPrefix = showTypePrefix ? (
         <>
           <span style={{ opacity: 0.5 }}>{typeLabel}</span>
           <ChevronRight
