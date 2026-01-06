@@ -1,9 +1,10 @@
 import { Button, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DefaultFooter from '@/features/Setting/Footer';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -27,7 +28,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Footer = memo(() => {
   const { t } = useTranslation('discover');
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const { isAuthenticated, signIn } = useMarketAuth();
   const [loading, setLoading] = useState(false);
   const handleSignIn = useCallback(async () => {

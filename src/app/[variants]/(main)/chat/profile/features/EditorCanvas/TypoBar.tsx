@@ -1,6 +1,6 @@
 import { HotkeyEnum, getHotkeyById } from '@lobehub/editor';
 import { FloatActions } from '@lobehub/editor/react';
-import { type ChatInputActionsProps, CodeLanguageSelect } from '@lobehub/editor/react';
+import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import {
   BoldIcon,
   CodeXmlIcon,
@@ -115,16 +115,6 @@ const TypoBar = memo(() => {
         key: 'codeblock',
         label: t('typobar.codeblock'),
         onClick: editorState.codeblock,
-      },
-      editorState.isCodeblock && {
-        children: (
-          <CodeLanguageSelect
-            onSelect={(value) => editorState.updateCodeblockLang(value)}
-            value={editorState.codeblockLang}
-          />
-        ),
-        disabled: !editorState.isCodeblock,
-        key: 'codeblockLang',
       },
     ].filter(Boolean) as ChatInputActionsProps['items'];
   }, [editorState, t]);

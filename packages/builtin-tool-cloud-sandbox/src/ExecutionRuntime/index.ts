@@ -425,51 +425,38 @@ export class CloudSandboxExecutionRuntime {
 
   /**
    * Export a file from the sandbox to cloud storage
-   * 1. Get a pre-signed upload URL from our server
-   * 2. Call the sandbox to upload the file to that URL
-   * 3. Return the download URL to the user
+   * Uses a single tRPC call that handles:
+   * 1. Generate pre-signed upload URL
+   * 2. Call sandbox to upload file
+   * 3. Create persistent file record
+   * 4. Return permanent /f/:id URL
    */
   async exportFile(args: ExportFileParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       // Extract filename from path
       const filename = args.path.split('/').pop() || 'exported_file';
 
-      // Step 1: Get pre-signed upload URL from our server
-      const uploadUrlResult = await codeInterpreterService.getExportFileUploadUrl(
+      // Single call that handles everything: upload URL generation, sandbox upload, and file record creation
+      const result = await codeInterpreterService.exportAndUploadFile(
+        args.path,
         filename,
         this.context.topicId,
       );
 
-      if (!uploadUrlResult.success) {
-        throw new Error(uploadUrlResult.error?.message || 'Failed to get upload URL');
-      }
-
-      // Step 2: Call the sandbox's exportFile tool with the upload URL
-      // The sandbox will read the file and upload it to the pre-signed URL
-      const result = await this.callTool('exportFile', {
-        path: args.path,
-        uploadUrl: uploadUrlResult.uploadUrl,
-      });
-
-      // Check if the sandbox upload was successful
-      const uploadSuccess = result.success && result.result?.success !== false;
-      const fileSize = result.result?.size;
-      const mimeType = result.result?.mimeType;
-      const fileContent = result.result?.content;
-
       const state: ExportFileState = {
-        content: fileContent,
-        downloadUrl: uploadSuccess ? uploadUrlResult.downloadUrl : '',
-        filename,
-        mimeType,
+        downloadUrl: result.success && result.url ? result.url : '',
+        fileId: result.fileId,
+        filename: result.filename,
+        mimeType: result.mimeType,
         path: args.path,
-        size: fileSize,
-        success: uploadSuccess,
+        size: result.size,
+        success: result.success,
       };
-      if (!uploadSuccess) {
+
+      if (!result.success) {
         return {
           content: JSON.stringify({
-            error: result.result?.error || 'Failed to upload file from sandbox',
+            error: result.error?.message || 'Failed to export file from sandbox',
             filename,
             success: false,
           }),
@@ -479,7 +466,7 @@ export class CloudSandboxExecutionRuntime {
       }
 
       return {
-        content: `File exported successfully.\n\nFilename: ${filename}\nDownload URL: ${uploadUrlResult.downloadUrl}`,
+        content: `File exported successfully.\n\nFilename: ${filename}\nDownload URL: ${result.url}`,
         state,
         success: true,
       };

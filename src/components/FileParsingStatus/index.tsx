@@ -1,10 +1,11 @@
 import { Button, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { Badge } from 'antd';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BoltIcon, Loader2Icon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsDark } from '@/hooks/useIsDark';
 import { AsyncTaskStatus, type FileParsingTask } from '@/types/asyncTask';
 
 import EmbeddingStatus from './EmbeddingStatus';
@@ -52,7 +53,7 @@ const FileParsingStatus = memo<FileParsingStatusProps>(
     hideEmbeddingButton,
   }) => {
     const { t } = useTranslation(['components', 'common']);
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
 
     switch (chunkingStatus) {
       case AsyncTaskStatus.Processing: {

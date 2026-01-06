@@ -4,7 +4,6 @@ import {
   ChatInputActionBar,
   ChatInputActions,
   type ChatInputActionsProps,
-  CodeLanguageSelect,
 } from '@lobehub/editor/react';
 import { cssVar } from 'antd-style';
 import {
@@ -118,16 +117,6 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'codeblock',
           label: t('typobar.codeblock'),
           onClick: editorState.codeblock,
-        },
-        editorState.isCodeblock && {
-          children: (
-            <CodeLanguageSelect
-              onSelect={(value) => editorState.updateCodeblockLang(value)}
-              value={editorState.codeblockLang}
-            />
-          ),
-          disabled: !editorState.isCodeblock,
-          key: 'codeblockLang',
         },
       ].filter(Boolean) as ChatInputActionsProps['items'],
     [editorState],

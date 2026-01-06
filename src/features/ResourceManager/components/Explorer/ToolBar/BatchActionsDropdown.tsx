@@ -11,6 +11,8 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import RepoIcon from '@/components/LibIcon';
+import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
 
@@ -30,10 +32,18 @@ interface BatchActionsDropdownProps {
 
 const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
   ({ selectCount, onActionClick, disabled }) => {
-    const { t } = useTranslation(['components', 'common', 'file']);
+    const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
     const { modal, message } = App.useApp();
 
-    const libraryId = useResourceManagerStore((s) => s.libraryId);
+    const [libraryId, selectedFileIds] = useResourceManagerStore((s) => [
+      s.libraryId,
+      s.selectedFileIds,
+    ]);
+    const [useFetchKnowledgeBaseList, addFilesToKnowledgeBase] = useKnowledgeBaseStore((s) => [
+      s.useFetchKnowledgeBaseList,
+      s.addFilesToKnowledgeBase,
+    ]);
+    const { data: knowledgeBases } = useFetchKnowledgeBaseList();
 
     const menuItems = useMemo<DropdownItem[]>(() => {
       const items: DropdownItem[] = [];
@@ -60,44 +70,64 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
         return items;
       }
 
+      // Filter out current knowledge base and create submenu items
+      const availableKnowledgeBases = (knowledgeBases || []).filter((kb) => kb.id !== libraryId);
+
+      const addToKnowledgeBaseSubmenu: DropdownItem[] = availableKnowledgeBases.map((kb) => ({
+        icon: <RepoIcon />,
+        key: `add-to-kb-${kb.id}`,
+        label: <span style={{ marginLeft: 8 }}>{kb.name}</span>,
+        onClick: async () => {
+          try {
+            await addFilesToKnowledgeBase(kb.id, selectedFileIds);
+            message.success(
+              t('addToKnowledgeBase.addSuccess', {
+                count: selectCount,
+                ns: 'knowledgeBase',
+              }),
+            );
+          } catch (e) {
+            console.error(e);
+            message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+          }
+        },
+      }));
+
       if (libraryId) {
-        items.push(
-          {
-            icon: <Icon icon={BookMinusIcon} />,
-            key: 'removeFromKnowledgeBase',
-            label: t('FileManager.actions.removeFromKnowledgeBase'),
-            onClick: () => {
-              modal.confirm({
-                okButtonProps: {
-                  danger: true,
-                },
-                onOk: async () => {
-                  await onActionClick('removeFromKnowledgeBase');
-                  message.success(t('FileManager.actions.removeFromKnowledgeBaseSuccess'));
-                },
-                title: t('FileManager.actions.confirmRemoveFromKnowledgeBase', {
-                  count: selectCount,
-                }),
-              });
-            },
+        items.push({
+          icon: <Icon icon={BookMinusIcon} />,
+          key: 'removeFromKnowledgeBase',
+          label: t('FileManager.actions.removeFromKnowledgeBase'),
+          onClick: () => {
+            modal.confirm({
+              okButtonProps: {
+                danger: true,
+              },
+              onOk: async () => {
+                await onActionClick('removeFromKnowledgeBase');
+                message.success(t('FileManager.actions.removeFromKnowledgeBaseSuccess'));
+              },
+              title: t('FileManager.actions.confirmRemoveFromKnowledgeBase', {
+                count: selectCount,
+              }),
+            });
           },
-          {
+        });
+
+        if (availableKnowledgeBases.length > 0) {
+          items.push({
+            children: addToKnowledgeBaseSubmenu as any,
             icon: <Icon icon={BookPlusIcon} />,
             key: 'addToOtherKnowledgeBase',
             label: t('FileManager.actions.addToOtherKnowledgeBase'),
-            onClick: () => {
-              onActionClick('addToOtherKnowledgeBase');
-            },
-          },
-        );
-      } else {
+          });
+        }
+      } else if (availableKnowledgeBases.length > 0) {
         items.push({
+          children: addToKnowledgeBaseSubmenu as any,
           icon: <Icon icon={BookPlusIcon} />,
           key: 'addToKnowledgeBase',
           label: t('FileManager.actions.addToKnowledgeBase'),
-          onClick: () => {
-            onActionClick('addToKnowledgeBase');
-          },
         });
       }
 
@@ -134,7 +164,17 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
       );
 
       return items;
-    }, [libraryId, selectCount, onActionClick, t, modal, message]);
+    }, [
+      libraryId,
+      selectCount,
+      selectedFileIds,
+      onActionClick,
+      addFilesToKnowledgeBase,
+      t,
+      modal,
+      message,
+      knowledgeBases,
+    ]);
 
     return (
       <DropdownMenu items={menuItems} placement="bottomLeft" triggerProps={{ disabled }}>

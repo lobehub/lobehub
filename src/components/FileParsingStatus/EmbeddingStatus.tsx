@@ -1,9 +1,10 @@
 import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { BoltIcon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsDark } from '@/hooks/useIsDark';
 import { AsyncTaskStatus, type FileParsingTask } from '@/types/asyncTask';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -36,7 +37,7 @@ interface EmbeddingStatusProps extends FileParsingTask {
 const EmbeddingStatus = memo<EmbeddingStatusProps>(
   ({ chunkCount, embeddingStatus, embeddingError, onClick, onErrorClick, className }) => {
     const { t } = useTranslation(['components', 'common']);
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
 
     switch (embeddingStatus) {
       case AsyncTaskStatus.Processing: {

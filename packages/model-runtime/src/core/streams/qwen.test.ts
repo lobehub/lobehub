@@ -479,6 +479,146 @@ describe('QwenAIStream', () => {
       `data: [{"function":{"arguments":"","name":"get_weather"},"id":"call_123","index":0,"type":"function"}]\n\n`,
     ]);
   });
+
+  it('should handle mixed text content followed by streaming tool calls (DeepSeek style)', async () => {
+    // This test simulates the stream pattern from DeepSeek models via Qwen API
+    // where text content is streamed first, followed by incremental tool call chunks
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        // Text content chunks with role in first chunk
+        controller.enqueue({
+          choices: [
+            {
+              delta: { content: '看来', role: 'assistant' },
+              finish_reason: null,
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
+          model: 'deepseek-v3',
+          object: 'chat.completion.chunk',
+          created: 1767574524,
+        });
+        controller.enqueue({
+          choices: [
+            {
+              delta: { content: '我的' },
+              finish_reason: null,
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
+          model: 'deepseek-v3',
+          object: 'chat.completion.chunk',
+          created: 1767574524,
+        });
+        controller.enqueue({
+          choices: [
+            {
+              delta: { content: '函数调用格式有误。' },
+              finish_reason: null,
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
+          model: 'deepseek-v3',
+          object: 'chat.completion.chunk',
+          created: 1767574524,
+        });
+
+        // First tool call chunk with id, name, and partial arguments
+        controller.enqueue({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    id: 'call_ff00c42325d74b979990cb',
+                    type: 'function',
+                    function: {
+                      name: 'modelscope-time____get_current_time____mcp',
+                      arguments: '{"',
+                    },
+                    index: 0,
+                  },
+                ],
+              },
+              finish_reason: null,
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
+          model: 'deepseek-v3',
+          object: 'chat.completion.chunk',
+          created: 1767574524,
+        });
+
+        // Subsequent tool call chunk with only incremental arguments (no id)
+        controller.enqueue({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    type: 'function',
+                    function: {
+                      arguments: 'timezone":"America/New_York"}',
+                    },
+                    index: 0,
+                  },
+                ],
+              },
+              finish_reason: null,
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
+          model: 'deepseek-v3',
+          object: 'chat.completion.chunk',
+          created: 1767574524,
+        });
+
+        controller.close();
+      },
+    });
+
+    const onTextMock = vi.fn();
+    const onToolCallMock = vi.fn();
+
+    const protocolStream = QwenAIStream(mockOpenAIStream, {
+      callbacks: {
+        onText: onTextMock,
+        onToolsCalling: onToolCallMock,
+      },
+    });
+
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    // Verify complete chunks array
+    expect(chunks).toEqual([
+      'id: chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075\n',
+      'event: text\n',
+      'data: "看来"\n\n',
+      'id: chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075\n',
+      'event: text\n',
+      'data: "我的"\n\n',
+      'id: chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075\n',
+      'event: text\n',
+      'data: "函数调用格式有误。"\n\n',
+      'id: chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075\n',
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"{\\"","name":"modelscope-time____get_current_time____mcp"},"id":"call_ff00c42325d74b979990cb","index":0,"type":"function"}]\n\n',
+      'id: chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075\n',
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"timezone\\":\\"America/New_York\\"}","name":null},"id":"call_ff00c42325d74b979990cb","index":0,"type":"function"}]\n\n',
+    ]);
+  });
 });
 
 describe('transformQwenStream', () => {

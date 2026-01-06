@@ -158,7 +158,7 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       // Follow queries
       case 'follow-status': {
         const targetUserId = Number(segments[1]);
-        if (!accessToken) {
+        if (!accessToken && !trustedClientToken) {
           return NextResponse.json({ isFollowing: false, isMutual: false });
         }
         const result = await market.follows.checkFollowStatus(targetUserId);
@@ -193,7 +193,7 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       case 'favorite-status': {
         const targetType = segments[1] as 'agent' | 'plugin';
         const targetIdOrIdentifier = segments[2];
-        if (!accessToken) {
+        if (!accessToken && !trustedClientToken) {
           return NextResponse.json({ isFavorited: false });
         }
         // SDK accepts both number (targetId) and string (identifier)
@@ -236,7 +236,7 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       case 'like-status': {
         const targetType = segments[1] as 'agent' | 'plugin';
         const targetIdOrIdentifier = segments[2];
-        if (!accessToken) {
+        if (!accessToken && !trustedClientToken) {
           return NextResponse.json({ isLiked: false });
         }
         const isNumeric = /^\d+$/.test(targetIdOrIdentifier);

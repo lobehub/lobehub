@@ -63,6 +63,7 @@
   "volcengine.description": "ByteDance의 모델 서비스 플랫폼은 안전하고 기능이 풍부하며 비용 경쟁력 있는 모델 접근성과 데이터, 파인튜닝, 추론, 평가를 위한 엔드투엔드 도구를 제공합니다.",
   "wenxin.description": "Wenxin은 생성형 AI 모델 및 애플리케이션 워크플로우를 위한 엔드투엔드 도구를 제공하는 기업용 기반 모델 및 AI 네이티브 앱 개발 통합 플랫폼입니다.",
   "xai.description": "xAI는 과학적 발견을 가속화하고 인류의 우주에 대한 이해를 심화시키는 것을 목표로 AI를 개발합니다.",
+  "xiaomimimo.description": "샤오미 MiMo는 OpenAI 호환 API를 통해 대화형 모델 서비스를 제공합니다. mimo-v2-flash 모델은 심층 추론, 스트리밍 출력, 함수 호출, 256K 컨텍스트 윈도우, 최대 128K 출력 기능을 지원합니다.",
   "xinference.description": "Xorbits Inference(Xinference)는 AI 모델 실행과 통합을 간소화하는 오픈소스 플랫폼으로, 오픈소스 LLM, 임베딩 모델, 멀티모달 모델을 로컬 또는 클라우드에서 실행하여 강력한 AI 앱을 구축할 수 있습니다.",
   "zenmux.description": "ZenMux는 OpenAI, Anthropic, Google VertexAI 등을 지원하는 통합 AI 집약 플랫폼으로, 유연한 라우팅을 통해 모델을 손쉽게 전환하고 관리할 수 있습니다.",
   "zeroone.description": "01.AI는 인간 중심의 AI 2.0 혁신을 주도하며, LLM을 통해 경제적·사회적 가치를 창출하고 새로운 AI 생태계와 비즈니스 모델을 구축합니다.",

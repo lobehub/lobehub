@@ -149,7 +149,7 @@ export class DiscoverService {
     apiParams: Record<string, any>;
     identifier: string;
     toolName: string;
-    userAccessToken: string;
+    userAccessToken?: string;
   }) {
     log('callCloudMcpEndpoint: params=%O', {
       apiParams: params.apiParams,
@@ -159,7 +159,14 @@ export class DiscoverService {
     });
 
     try {
-      // Call cloud gateway with user access token in Authorization header
+      // Build headers - only include Authorization if userAccessToken is provided
+      // When userAccessToken is not provided, MarketSDK will use trustedClientToken for authentication
+      const headers: Record<string, string> = {};
+      if (params.userAccessToken) {
+        headers.Authorization = `Bearer ${params.userAccessToken}`;
+      }
+
+      // Call cloud gateway with optional user access token in Authorization header
       const result = await this.market.plugins.callCloudGateway(
         {
           apiParams: params.apiParams,
@@ -167,9 +174,7 @@ export class DiscoverService {
           toolName: params.toolName,
         },
         {
-          headers: {
-            Authorization: `Bearer ${params.userAccessToken}`,
-          },
+          headers,
         },
       );
 

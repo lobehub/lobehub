@@ -16,7 +16,6 @@ const AgentBuilder = memo(() => {
   const setChatPanelExpanded = useProfileStore((s) => s.setChatPanelExpanded);
   const groupAgentBuilderId = useAgentStore(builtinAgentSelectors.groupAgentBuilderId);
 
-  console.log('groupAgentBuilderId', groupAgentBuilderId);
   const [width, setWidth] = useState<string | number>(360);
 
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);

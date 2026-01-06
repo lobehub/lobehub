@@ -1,14 +1,13 @@
 import { type CodeInterpreterToolName, MarketSDK } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import { sha256 } from 'js-sha256';
 import { z } from 'zod';
 
-import { DocumentModel } from '@/database/models/document';
-import { FileModel } from '@/database/models/file';
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
-import { generateTrustedClientToken } from '@/libs/trusted-client';
+import { generateTrustedClientToken, isTrustedClientEnabled } from '@/libs/trusted-client';
 import { FileS3 } from '@/server/modules/S3';
 import { DiscoverService } from '@/server/services/discover';
 import { FileService } from '@/server/services/file';
@@ -69,19 +68,11 @@ const callCodeInterpreterToolSchema = z.object({
   userId: z.string(),
 });
 
-// Schema for getting export file upload URL
-const getExportFileUploadUrlSchema = z.object({
+// Schema for export and upload file (combined operation)
+const exportAndUploadFileSchema = z.object({
   filename: z.string(),
+  path: z.string(),
   topicId: z.string(),
-});
-
-// Schema for saving exported file content to document
-const saveExportedFileContentSchema = z.object({
-  content: z.string(),
-  fileId: z.string(),
-  fileType: z.string(),
-  filename: z.string(),
-  url: z.string(),
 });
 
 // Schema for cloud MCP endpoint call
@@ -94,8 +85,7 @@ const callCloudMcpEndpointSchema = z.object({
 
 // ============================== Type Exports ==============================
 export type CallCodeInterpreterToolInput = z.infer<typeof callCodeInterpreterToolSchema>;
-export type GetExportFileUploadUrlInput = z.infer<typeof getExportFileUploadUrlSchema>;
-export type SaveExportedFileContentInput = z.infer<typeof saveExportedFileContentSchema>;
+export type ExportAndUploadFileInput = z.infer<typeof exportAndUploadFileSchema>;
 
 export interface CallToolResult {
   error?: {
@@ -107,22 +97,16 @@ export interface CallToolResult {
   success: boolean;
 }
 
-export interface GetExportFileUploadUrlResult {
-  downloadUrl: string;
+export interface ExportAndUploadFileResult {
   error?: {
     message: string;
   };
-  key: string;
+  fileId?: string;
+  filename: string;
+  mimeType?: string;
+  size?: number;
   success: boolean;
-  uploadUrl: string;
-}
-
-export interface SaveExportedFileContentResult {
-  documentId?: string;
-  error?: {
-    message: string;
-  };
-  success: boolean;
+  url?: string;
 }
 
 // ============================== Router ==============================
@@ -140,17 +124,26 @@ export const marketRouter = router({
       let result: { content: string; state: any; success: boolean } | undefined;
 
       try {
-        // Query user_settings to get market.accessToken
-        const userState = await ctx.userModel.getUserState(async () => ({}));
-        const userAccessToken = userState.settings?.market?.accessToken;
+        // Check if trusted client is enabled - if so, we don't need user's accessToken
+        const trustedClientEnabled = isTrustedClientEnabled();
 
-        log('callCloudMcpEndpoint: userAccessToken exists=%s', !!userAccessToken);
+        let userAccessToken: string | undefined;
 
-        if (!userAccessToken) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'User access token not found. Please sign in to Market first.',
-          });
+        if (!trustedClientEnabled) {
+          // Query user_settings to get market.accessToken only if trusted client is not enabled
+          const userState = await ctx.userModel.getUserState(async () => ({}));
+          userAccessToken = userState.settings?.market?.accessToken;
+
+          log('callCloudMcpEndpoint: userAccessToken exists=%s', !!userAccessToken);
+
+          if (!userAccessToken) {
+            throw new TRPCError({
+              code: 'UNAUTHORIZED',
+              message: 'User access token not found. Please sign in to Market first.',
+            });
+          }
+        } else {
+          log('callCloudMcpEndpoint: using trusted client authentication');
         }
 
         const cloudResult = await ctx.discoverService.callCloudMcpEndpoint({
@@ -277,99 +270,122 @@ export const marketRouter = router({
     }),
 
   /**
-   * Generate a pre-signed upload URL for exporting files from sandbox
+   * Export a file from sandbox and upload to S3, then create a persistent file record
+   * This combines the previous getExportFileUploadUrl + callCodeInterpreterTool + createFileRecord flow
+   * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
    */
-  getExportFileUploadUrl: marketToolProcedure
-    .input(getExportFileUploadUrlSchema)
-    .mutation(async ({ input }) => {
-      const { filename, topicId } = input;
+  exportAndUploadFile: marketToolProcedure
+    .input(exportAndUploadFileSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { path, filename, topicId } = input;
 
-      log('Generating export file upload URL for: %s in topic: %s', filename, topicId);
+      log('Exporting and uploading file: %s from path: %s in topic: %s', filename, path, topicId);
 
       try {
         const s3 = new FileS3();
 
+        // Use date-based sharding for privacy compliance (GDPR, CCPA)
+        const today = new Date().toISOString().split('T')[0];
+
         // Generate a unique key for the exported file
-        const key = `code-interpreter-exports/${topicId}/${filename}`;
+        const key = `code-interpreter-exports/${today}/${topicId}/${filename}`;
 
-        // Generate pre-signed upload URL
+        // Step 1: Generate pre-signed upload URL
         const uploadUrl = await s3.createPreSignedUrl(key);
-
-        // Generate download URL (pre-signed for preview)
-        const downloadUrl = await s3.createPreSignedUrlForPreview(key);
-
         log('Generated upload URL for key: %s', key);
 
-        return {
-          downloadUrl,
-          key,
-          success: true,
-          uploadUrl,
-        } as GetExportFileUploadUrlResult;
-      } catch (error) {
-        log('Error generating export file upload URL: %O', error);
+        // Step 2: Generate trusted client token if user info is available
+        const trustedClientToken = ctx.marketUserInfo
+          ? generateTrustedClientToken(ctx.marketUserInfo)
+          : undefined;
 
-        return {
-          downloadUrl: '',
-          error: {
-            message: (error as Error).message,
-          },
-          key: '',
-          success: false,
-          uploadUrl: '',
-        } as GetExportFileUploadUrlResult;
-      }
-    }),
+        // Only require user accessToken if trusted client is not available
+        let userAccessToken: string | undefined;
+        if (!trustedClientToken) {
+          const userState = await ctx.userModel.getUserState(async () => ({}));
+          userAccessToken = userState.settings?.market?.accessToken;
 
-  /**
-   * Save exported file content to documents table
-   */
-  saveExportedFileContent: marketToolProcedure
-    .input(saveExportedFileContentSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { content, fileId, fileType, filename, url } = input;
-
-      log('Saving exported file content: fileId=%s, filename=%s', fileId, filename);
-
-      try {
-        const documentModel = new DocumentModel(ctx.serverDB, ctx.userId);
-        const fileModel = new FileModel(ctx.serverDB, ctx.userId);
-
-        // Verify the file exists
-        const file = await fileModel.findById(fileId);
-        if (!file) {
-          return {
-            error: { message: 'File not found' },
-            success: false,
-          } as SaveExportedFileContentResult;
+          if (!userAccessToken) {
+            return {
+              error: { message: 'User access token not found. Please sign in to Market first.' },
+              filename,
+              success: false,
+            } as ExportAndUploadFileResult;
+          }
+        } else {
+          log('Using trusted client authentication for exportAndUploadFile');
         }
 
-        // Create document record with the file content
-        const document = await documentModel.create({
-          content,
-          fileId,
-          fileType,
-          filename,
-          source: url,
-          sourceType: 'file',
-          title: filename,
-          totalCharCount: content.length,
-          totalLineCount: content.split('\n').length,
+        // Initialize MarketSDK
+        const market = new MarketSDK({
+          accessToken: userAccessToken,
+          baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
+          trustedClientToken,
         });
 
-        log('Created document for exported file: documentId=%s, fileId=%s', document.id, fileId);
+        // Step 3: Call sandbox's exportFile tool with the upload URL
+        const response = await market.plugins.runBuildInTool(
+          'exportFile',
+          { path, uploadUrl },
+          { topicId, userId: ctx.userId },
+        );
+
+        log('Sandbox exportFile response: %O', response);
+
+        if (!response.success) {
+          return {
+            error: { message: response.error?.message || 'Failed to export file from sandbox' },
+            filename,
+            success: false,
+          } as ExportAndUploadFileResult;
+        }
+
+        const result = response.data?.result;
+        const uploadSuccess = result?.success !== false;
+
+        if (!uploadSuccess) {
+          return {
+            error: { message: result?.error || 'Failed to upload file from sandbox' },
+            filename,
+            success: false,
+          } as ExportAndUploadFileResult;
+        }
+
+        // Step 4: Get file metadata from S3 to verify upload and get actual size
+        const metadata = await s3.getFileMetadata(key);
+        const fileSize = metadata.contentLength;
+        const mimeType = metadata.contentType || result?.mimeType || 'application/octet-stream';
+
+        // Step 5: Create persistent file record using FileService
+        // Generate a simple hash from the key (since we don't have the actual file content)
+        const fileHash = sha256(key + Date.now().toString());
+
+        const { fileId, url } = await ctx.fileService.createFileRecord({
+          fileHash,
+          fileType: mimeType,
+          name: filename,
+          size: fileSize,
+          url: key, // Store S3 key
+        });
+
+        log('Created file record: fileId=%s, url=%s', fileId, url);
 
         return {
-          documentId: document.id,
+          fileId,
+          filename,
+          mimeType,
+          size: fileSize,
           success: true,
-        } as SaveExportedFileContentResult;
+          url, // This is the permanent /f/:id URL
+        } as ExportAndUploadFileResult;
       } catch (error) {
-        log('Error saving exported file content: %O', error);
+        log('Error in exportAndUploadFile: %O', error);
 
         return {
           error: { message: (error as Error).message },
+          filename,
           success: false,
-        } as SaveExportedFileContentResult;
+        } as ExportAndUploadFileResult;
       }
     }),
 });

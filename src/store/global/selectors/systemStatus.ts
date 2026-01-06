@@ -23,7 +23,6 @@ const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
 const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
-const themeMode = (s: GlobalState) => s.status.themeMode || 'auto';
 const language = (s: GlobalState) => s.status.language || 'auto';
 
 const showChatHeader = (s: GlobalState) => !s.status.zenMode;
@@ -80,7 +79,6 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   systemStatus,
-  themeMode,
   tokenDisplayFormatShort,
   topicGroupKeys,
   topicPageSize,

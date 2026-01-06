@@ -130,6 +130,8 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
                 const document = await notebookService.createDocument({
                   content: pageData.content,
                   description: pageData.description || `Crawled from ${pageData.url}`,
+                  source: pageData.url,
+                  sourceType: 'web',
                   title: pageData.title || pageData.url,
                   topicId: ctx.topicId!,
                   type: 'article',

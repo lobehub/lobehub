@@ -1,11 +1,12 @@
 'use client';
 
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import { type ReactNode, memo, useMemo } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
 
 import Loading from '@/app/[variants]/(main)/memory/features/Loading';
+import { useIsDark } from '@/hooks/useIsDark';
 
 import { useScrollParent } from './useScrollParent';
 
@@ -31,7 +32,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export type GroupBy = 'day' | 'month';
 
-interface TimelineViewProps<T extends { capturedAt?: Date | string; createdAt?: Date | string; id: string }> {
+interface TimelineViewProps<
+  T extends { capturedAt?: Date | string; createdAt?: Date | string; id: string },
+> {
   data: T[];
   /**
    * Custom date field extractor for grouping
@@ -68,7 +71,9 @@ const getDateValue = <T extends { capturedAt?: Date | string; createdAt?: Date |
   return item.capturedAt ?? item.createdAt ?? new Date();
 };
 
-function TimelineViewInner<T extends { capturedAt?: Date | string; createdAt?: Date | string; id: string }>({
+function TimelineViewInner<
+  T extends { capturedAt?: Date | string; createdAt?: Date | string; id: string },
+>({
   data,
   groupBy = 'day',
   getDateForGrouping,
@@ -78,7 +83,7 @@ function TimelineViewInner<T extends { capturedAt?: Date | string; createdAt?: D
   renderHeader,
   renderItem,
 }: TimelineViewProps<T>) {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const scrollParent = useScrollParent();
 
   const { groupCounts, sortedPeriods, groupedItems } = useMemo(() => {
