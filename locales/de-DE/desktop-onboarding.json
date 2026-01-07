@@ -45,7 +45,7 @@
   "screen4.description": "Wählen Sie, wie Sie Daten teilen möchten. Ihre Entscheidung hilft uns bei der Verbesserung, und Sie können dies jederzeit in den Einstellungen ändern.",
   "screen4.footerNote": "Sie können dies jederzeit in den Einstellungen ändern",
   "screen4.navigation.next": "Weiter",
-  "screen4.privacy.description": "Alles bleibt lokal. Es werden keine Daten gesammelt oder geteilt – vollständige Privatsphäre für Ihre Gespräche und Arbeitsabläufe.",
+  "screen4.privacy.description": "Deaktivieren Sie anonymisierte Nutzungsanalysen. Es werden keine Leistungsdaten, Modellnutzung oder Funktionsinteraktionen geteilt.",
   "screen4.privacy.items.1": "Keine Datenerfassung",
   "screen4.privacy.items.2": "Keine Nutzungsanalysen",
   "screen4.privacy.items.3": "Alle Verarbeitungen bleiben lokal",

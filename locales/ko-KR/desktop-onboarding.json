@@ -45,7 +45,7 @@
   "screen4.description": "데이터 공유 방식을 선택하세요. 선택은 개선에 도움이 되며, 설정에서 언제든지 변경할 수 있습니다.",
   "screen4.footerNote": "설정에서 언제든지 변경할 수 있습니다",
   "screen4.navigation.next": "계속",
-  "screen4.privacy.description": "모든 데이터를 로컬에 유지합니다. 데이터 수집이나 공유 없이 대화와 워크플로우의 완전한 프라이버시를 보장합니다.",
+  "screen4.privacy.description": "익명 사용 분석을 끕니다. 성능, 모델 사용량, 기능 상호작용 데이터는 공유되지 않습니다.",
   "screen4.privacy.items.1": "데이터 수집 없음",
   "screen4.privacy.items.2": "사용 분석 없음",
   "screen4.privacy.items.3": "모든 처리는 로컬에서 수행",
