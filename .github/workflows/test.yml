@@ -139,7 +139,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge reports
-        run: bunx vitest --merge-reports --coverage
+        run: bunx vitest --merge-reports --reporter=default --coverage
 
       - name: Upload App Coverage to Codecov
         uses: codecov/codecov-action@v5
