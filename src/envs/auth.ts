@@ -158,6 +158,15 @@ declare global {
        * Can be generated using `node scripts/generate-oidc-jwk.mjs`.
        */
       JWKS_KEY?: string;
+
+      /**
+       * Internal JWT expiration time for lambda → async calls.
+       * Format: number followed by unit (s=seconds, m=minutes, h=hours)
+       * Examples: '10s', '1m', '1h'
+       * Should be as short as possible for security, but long enough to account for network latency and server processing time.
+       * @default '30s'
+       */
+      INTERNAL_JWT_EXPIRATION?: string;
     }
   }
 }
@@ -285,6 +294,9 @@ export const getAuthConfig = () => {
       // Generic JWKS key for signing/verifying JWTs
       JWKS_KEY: z.string().optional(),
       ENABLE_OIDC: z.boolean(),
+
+      // Internal JWT expiration time (e.g., '10s', '1m', '1h')
+      INTERNAL_JWT_EXPIRATION: z.string().default('30s'),
     },
 
     runtimeEnv: {
@@ -415,6 +427,9 @@ export const getAuthConfig = () => {
       // Generic JWKS key (fallback to OIDC_JWKS_KEY for backward compatibility)
       JWKS_KEY: process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY,
       ENABLE_OIDC: !!(process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY),
+
+      // Internal JWT expiration time
+      INTERNAL_JWT_EXPIRATION: process.env.INTERNAL_JWT_EXPIRATION,
     },
   });
 };

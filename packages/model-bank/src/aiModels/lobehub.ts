@@ -1063,6 +1063,14 @@ export const nanoBananaProParameters: ModelParamsSchema = {
   },
 };
 
+const gptImage1Schema = {
+  imageUrls: { default: [], maxCount: 1, maxFileSize: 5 },
+  prompt: { default: '' },
+  size: {
+    default: 'auto',
+    enum: ['auto', '1024x1024', '1536x1024', '1024x1536'],
+  },
+};
 const lobehubImageModels: AIImageModelCard[] = [
   {
     description:
@@ -1104,7 +1112,7 @@ const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series',
     displayName: 'Imagen 4 Fast',
-    enabled: false,
+    enabled: true,
     id: 'imagen-4.0-fast-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -1117,7 +1125,7 @@ const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series',
     displayName: 'Imagen 4',
-    enabled: false,
+    enabled: true,
     id: 'imagen-4.0-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -1130,7 +1138,7 @@ const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series Ultra version',
     displayName: 'Imagen 4 Ultra',
-    enabled: false,
+    enabled: true,
     id: 'imagen-4.0-ultra-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -1141,18 +1149,31 @@ const lobehubImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
+    description:
+      'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
+    displayName: 'GPT Image 1.5',
+    enabled: true,
+    id: 'gpt-image-1.5',
+    parameters: gptImage1Schema,
+    pricing: {
+      approximatePricePerImage: 0.034,
+      units: [
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 32, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-16',
+    type: 'image',
+  },
+  {
     description: 'ChatGPT native multimodal image generation model.',
     displayName: 'GPT Image 1',
     enabled: true,
     id: 'gpt-image-1',
-    parameters: {
-      imageUrls: { default: [], maxCount: 1, maxFileSize: 5 },
-      prompt: { default: '' },
-      size: {
-        default: 'auto',
-        enum: ['auto', '1024x1024', '1536x1024', '1024x1536'],
-      },
-    },
+    parameters: gptImage1Schema,
     pricing: {
       approximatePricePerImage: 0.042,
       units: [
@@ -1169,7 +1190,7 @@ const lobehubImageModels: AIImageModelCard[] = [
     description:
       'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
     displayName: 'DALL·E 3',
-    enabled: false,
+    enabled: true,
     id: 'dall-e-3',
     parameters: {
       prompt: { default: '' },
@@ -1203,7 +1224,6 @@ const lobehubImageModels: AIImageModelCard[] = [
         },
       ],
     },
-    resolutions: ['1024x1024', '1024x1792', '1792x1024'],
     type: 'image',
   },
   {
