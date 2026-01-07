@@ -57,17 +57,21 @@ const resolveRuntimeProvider = (provider: string, sdkType?: string): string => {
  * It converts the keyVaults object from database to the ClientSecretPayload format
  * expected by initModelRuntimeWithUserPayload.
  *
- * @param provider - The model provider
+ * For custom providers, we use runtimeProvider (sdkType) to determine which fields
+ * to include in the payload. This ensures that provider-specific fields like
+ * cloudflareBaseURLOrAccountID or azureApiVersion are correctly forwarded.
+ *
  * @param keyVaults - The keyVaults object from database (already decrypted)
- * @param runtimeProvider - Optional runtime provider to include in payload
+ * @param runtimeProvider - The runtime provider (sdkType) to use for building payload
  * @returns ClientSecretPayload for the provider
  */
 export const buildPayloadFromKeyVaults = (
-  provider: string,
   keyVaults: ProviderKeyVaults,
-  runtimeProvider?: string,
+  runtimeProvider: string,
 ): ClientSecretPayload => {
-  switch (provider) {
+  // Use runtimeProvider to determine which fields to include
+  // This handles both builtin providers and custom providers with sdkType
+  switch (runtimeProvider) {
     case ModelProvider.Bedrock: {
       const { accessKeyId, region, secretAccessKey, sessionToken } = keyVaults;
       const apiKey = (secretAccessKey || '') + (accessKeyId || '');
@@ -78,6 +82,7 @@ export const buildPayloadFromKeyVaults = (
         awsRegion: region,
         awsSecretAccessKey: secretAccessKey,
         awsSessionToken: sessionToken,
+        runtimeProvider,
       };
     }
 
@@ -86,17 +91,19 @@ export const buildPayloadFromKeyVaults = (
         apiKey: keyVaults.apiKey,
         azureApiVersion: keyVaults.apiVersion,
         baseURL: keyVaults.baseURL || keyVaults.endpoint,
+        runtimeProvider,
       };
     }
 
     case ModelProvider.Ollama: {
-      return { baseURL: keyVaults.baseURL };
+      return { baseURL: keyVaults.baseURL, runtimeProvider };
     }
 
     case ModelProvider.Cloudflare: {
       return {
         apiKey: keyVaults.apiKey,
         cloudflareBaseURLOrAccountID: keyVaults.baseURLOrAccountID,
+        runtimeProvider,
       };
     }
 
@@ -107,6 +114,7 @@ export const buildPayloadFromKeyVaults = (
         baseURL: keyVaults.baseURL,
         customHeaders: keyVaults.customHeaders,
         password: keyVaults.password,
+        runtimeProvider,
         username: keyVaults.username,
       };
     }
@@ -115,6 +123,7 @@ export const buildPayloadFromKeyVaults = (
       return {
         apiKey: keyVaults.apiKey,
         baseURL: keyVaults.baseURL,
+        runtimeProvider,
         vertexAIRegion: keyVaults.region,
       };
     }
@@ -376,9 +385,10 @@ export const initModelRuntimeFromDB = async (
   const sdkType = providerConfig?.settings?.sdkType;
   const runtimeProvider = resolveRuntimeProvider(provider, sdkType);
 
-  // 3. Build ClientSecretPayload from keyVaults with runtimeProvider
+  // 3. Build ClientSecretPayload from keyVaults based on runtimeProvider
+  // This ensures provider-specific fields (e.g., cloudflareBaseURLOrAccountID) are included
   const keyVaults = (providerConfig?.keyVaults || {}) as ProviderKeyVaults;
-  const payload = buildPayloadFromKeyVaults(provider, keyVaults, runtimeProvider);
+  const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
 
   // 4. Initialize ModelRuntime with the payload
   return initModelRuntimeWithUserPayload(provider, payload);
