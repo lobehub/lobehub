@@ -4,11 +4,8 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { modal } from '@/components/AntdStaticMethods';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
-import { type ToolStore } from '@/store/tool/store';
+import { type KlavisServer } from '@/store/tool/slices/klavisStore';
 
 interface KlavisAuthItemProps {
   server: KlavisServer;
@@ -54,11 +51,6 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
     return <IconComponent size={14} />;
   };
 
-  // 只显示已连接的服务器
-  if (server.status !== KlavisServerStatus.CONNECTED) {
-    return null;
-  }
-
   return (
     <Tag closable onClose={handleRevoke}>
       <Flexbox align="center" gap={4} horizontal style={{ opacity: isRevoking ? 0.5 : 1 }}>
@@ -69,24 +61,14 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
   );
 });
 
-export const KlavisAuthorizationList = memo(() => {
-  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
-  const useFetchUserKlavisServers = useToolStore((s: ToolStore) => s.useFetchUserKlavisServers);
-  const servers = useToolStore((s: ToolStore) => s.servers);
+interface KlavisAuthorizationListProps {
+  servers: KlavisServer[];
+}
 
-  // 获取已授权的服务器列表
-  useFetchUserKlavisServers(enableKlavis);
-
-  // 只显示已连接的服务器
-  const connectedServers = servers.filter((s) => s.status === KlavisServerStatus.CONNECTED);
-
-  if (!enableKlavis || connectedServers.length === 0) {
-    return null;
-  }
-
+export const KlavisAuthorizationList = memo<KlavisAuthorizationListProps>(({ servers }) => {
   return (
     <Flexbox gap={8} horizontal wrap="wrap">
-      {connectedServers.map((server) => (
+      {servers.map((server) => (
         <KlavisAuthItem key={server.identifier} server={server} />
       ))}
     </Flexbox>
