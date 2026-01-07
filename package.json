@@ -360,7 +360,6 @@
     "@toon-format/toon": "latest"
   },
   "devDependencies": {
-  "devDependencies": {
     "@ast-grep/napi": "^0.40.3",
     "@commitlint/cli": "^19.8.1",
     "@edge-runtime/vm": "^5.0.0",
