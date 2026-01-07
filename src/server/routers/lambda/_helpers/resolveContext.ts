@@ -14,15 +14,15 @@ export interface ResolvedContext {
 }
 
 /**
- * 解析会话上下文
+ * Resolve conversation context
  *
- * 将 agentId 解析为 sessionId（如果提供了 agentId）
- * 优先级：agentId > sessionId
+ * Resolves agentId to sessionId (if agentId is provided)
+ * Priority: agentId > sessionId
  *
- * @param input - 输入的上下文参数
- * @param db - 数据库实例
- * @param userId - 用户 ID
- * @returns 解析后的上下文，sessionId 已从 agentId 解析
+ * @param input - Input context parameters
+ * @param db - Database instance
+ * @param userId - User ID
+ * @returns Resolved context with sessionId resolved from agentId
  */
 export const resolveContext = async (
   input: ConversationContextInput,
@@ -31,7 +31,7 @@ export const resolveContext = async (
 ): Promise<ResolvedContext> => {
   let resolvedSessionId: string | null = input.sessionId ?? null;
 
-  // 如果提供了 agentId，优先从 agentsToSessions 表查找对应的 sessionId
+  // If agentId is provided, prioritize looking up the corresponding sessionId from agentsToSessions table
   if (input.agentId) {
     const [relation] = await db
       .select({ sessionId: agentsToSessions.sessionId })
