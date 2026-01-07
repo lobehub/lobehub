@@ -15,8 +15,11 @@ import {
   useResourceManagerStore,
 } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
+import { useGlobalStore } from '@/store/global';
+import { INITIAL_STATUS } from '@/store/global/initialState';
 
-import FileListItem, { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './ListItem';
+import ColumnResizeHandle from './ColumnResizeHandle';
+import FileListItem from './ListItem';
 
 const log = debug('resource-manager:list-view');
 
@@ -37,8 +40,9 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextDescription};
   `,
   headerItem: css`
-    padding-block: 0;
+    padding-block: 6px;
     padding-inline: 0 24px;
+    height: 100%;
   `,
   loadingIndicator: css`
     padding: 16px;
@@ -76,6 +80,12 @@ const ListView = memo(() => {
     s.sorter,
     s.sortType,
   ]);
+
+  // Access column widths from Global store
+  const columnWidths = useGlobalStore(
+    (s) => s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths,
+  );
+  const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
 
   const { t } = useTranslation(['components', 'file']);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -280,15 +290,55 @@ const ListView = memo(() => {
           </Center>
           <Flexbox
             className={styles.headerItem}
-            style={{ flexShrink: 0, maxWidth: 1200, minWidth: 574, paddingInline: 8 }}
+            justify={'center'}
+            style={{
+              flexShrink: 0,
+              maxWidth: columnWidths.name,
+              minWidth: columnWidths.name,
+              paddingInline: 8,
+              paddingInlineEnd: 16,
+              position: 'relative',
+              width: columnWidths.name,
+            }}
           >
             {t('FileManager.title.title')}
+            <ColumnResizeHandle
+              column="name"
+              currentWidth={columnWidths.name}
+              maxWidth={1200}
+              minWidth={200}
+              onResize={(width) => updateColumnWidth('name', width)}
+            />
           </Flexbox>
-          <Flexbox className={styles.headerItem} style={{ flexShrink: 0 }} width={FILE_DATE_WIDTH}>
+          <Flexbox
+            className={styles.headerItem}
+            justify={'center'}
+            style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+            width={columnWidths.date}
+          >
             {t('FileManager.title.createdAt')}
+            <ColumnResizeHandle
+              column="date"
+              currentWidth={columnWidths.date}
+              maxWidth={300}
+              minWidth={120}
+              onResize={(width) => updateColumnWidth('date', width)}
+            />
           </Flexbox>
-          <Flexbox className={styles.headerItem} style={{ flexShrink: 0 }} width={FILE_SIZE_WIDTH}>
+          <Flexbox
+            className={styles.headerItem}
+            justify={'center'}
+            style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+            width={columnWidths.size}
+          >
             {t('FileManager.title.size')}
+            <ColumnResizeHandle
+              column="size"
+              currentWidth={columnWidths.size}
+              maxWidth={200}
+              minWidth={80}
+              onResize={(width) => updateColumnWidth('size', width)}
+            />
           </Flexbox>
         </Flexbox>
         <div
@@ -314,6 +364,7 @@ const ListView = memo(() => {
               if (!item) return null;
               return (
                 <FileListItem
+                  columnWidths={columnWidths}
                   index={index}
                   key={item.id}
                   onSelectedChange={handleSelectionChange}
@@ -327,7 +378,7 @@ const ListView = memo(() => {
             ref={virtuosoRef}
             style={{ height: 'calc(100vh - 100px)' }}
           />
-          {/* {isLoadingMore && (
+          {isLoadingMore && (
             <Center
               className={styles.loadingIndicator}
               style={{
@@ -336,7 +387,7 @@ const ListView = memo(() => {
             >
               {t('loading', { defaultValue: 'Loading...', ns: 'file' })}
             </Center>
-          )} */}
+          )}
         </div>
       </div>
     </Flexbox>

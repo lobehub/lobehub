@@ -14,8 +14,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 100%;
     padding-block: 0px;
     padding-inline: 24px 4px;
-
-    background: #0d1117;
   `,
 }));
 
@@ -54,12 +52,7 @@ const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
   return (
     <Flexbox className={styles.page} id="javascript-renderer">
       {!loading && fileData ? (
-        <Highlighter
-          language={language}
-          showLanguage={false}
-          theme="github-dark-default"
-          variant={'borderless'}
-        >
+        <Highlighter language={language} showLanguage={false} variant={'borderless'}>
           {fileData}
         </Highlighter>
       ) : (

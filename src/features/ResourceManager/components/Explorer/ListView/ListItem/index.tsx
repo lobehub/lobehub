@@ -97,6 +97,11 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface FileListItemProps extends FileListItemType {
+  columnWidths: {
+    date: number;
+    name: number;
+    size: number;
+  };
   index: number;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
   pendingRenameItemId?: string | null;
@@ -108,6 +113,7 @@ const FileListItem = memo<FileListItemProps>(
   ({
     size,
     chunkingError,
+    columnWidths,
     embeddingError,
     embeddingStatus,
     finishEmbedding,
@@ -360,27 +366,33 @@ const FileListItem = memo<FileListItemProps>(
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
           }}
         >
+          <Center
+            height={40}
+            onClick={(e) => {
+              e.stopPropagation();
+
+              onSelectedChange(id, !selected, e.shiftKey, index);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{ paddingInline: 4 }}
+          >
+            <Checkbox checked={selected} />
+          </Center>
           <Flexbox
             align={'center'}
             className={styles.item}
             distribution={'space-between'}
             horizontal
             onClick={handleItemClick}
-            style={{ flexShrink: 0, maxWidth: 600, minWidth: 240 }}
+            style={{
+              flexShrink: 0,
+              maxWidth: columnWidths.name,
+              minWidth: columnWidths.name,
+              paddingInline: 8,
+              width: columnWidths.name,
+            }}
           >
             <Flexbox align={'center'} className={styles.nameContainer} horizontal>
-              <Center
-                height={48}
-                onClick={(e) => {
-                  e.stopPropagation();
-
-                  onSelectedChange(id, !selected, e.shiftKey, index);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                style={{ paddingInline: 4 }}
-              >
-                <Checkbox checked={selected} />
-              </Center>
               <Flexbox
                 align={'center'}
                 justify={'center'}
@@ -480,10 +492,10 @@ const FileListItem = memo<FileListItemProps>(
           </Flexbox>
           {!isDragging && (
             <>
-              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={FILE_DATE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.date}>
                 {displayTime}
               </Flexbox>
-              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={FILE_SIZE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.size}>
                 {isFolder || isPage ? '-' : formatSize(size)}
               </Flexbox>
             </>
@@ -511,7 +523,10 @@ const FileListItem = memo<FileListItemProps>(
       prevProps.fileType === nextProps.fileType &&
       prevProps.sourceType === nextProps.sourceType &&
       prevProps.slug === nextProps.slug &&
-      prevProps.url === nextProps.url
+      prevProps.url === nextProps.url &&
+      prevProps.columnWidths.name === nextProps.columnWidths.name &&
+      prevProps.columnWidths.date === nextProps.columnWidths.date &&
+      prevProps.columnWidths.size === nextProps.columnWidths.size
     );
   },
 );

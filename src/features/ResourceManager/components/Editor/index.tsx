@@ -56,7 +56,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
             }
             right={
               <Flexbox gap={8} horizontal>
-                <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} />
+                <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} size={20} />
                 {fileDetail?.url && (
                   <ActionIcon
                     icon={DownloadIcon}
