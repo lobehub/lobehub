@@ -8,7 +8,6 @@ import NotSupport from './NotSupport';
 import CodeViewer from './Renderer/Code';
 import ImageViewer from './Renderer/Image';
 import MSDocViewer from './Renderer/MSDoc';
-import MarkdownViewer from './Renderer/Markdown';
 import PDFViewer from './Renderer/PDF';
 import VideoViewer from './Renderer/Video';
 
@@ -87,12 +86,16 @@ const CODE_EXTENSIONS = [
   '.clj',
   '.cljs',
   '.cljc',
+  // Markdown
+  '.md',
+  '.mdx',
   // Other
   '.vim',
   '.graphql',
   '.gql',
   '.txt',
 ];
+
 const CODE_MIME_TYPES = new Set([
   // JavaScript/TypeScript
   'js',
@@ -153,14 +156,16 @@ const CODE_MIME_TYPES = new Set([
   'toml',
   'sql',
   'text/x-sql',
+  // Markdown
+  'md',
+  'mdx',
+  'text/markdown',
+  'text/x-markdown',
   // Other
   'graphql',
   'txt',
   'text/plain',
 ]);
-
-const MARKDOWN_EXTENSIONS = ['.md', '.mdx'];
-const MARKDOWN_MIME_TYPES = new Set(['md', 'mdx', 'text/markdown', 'text/x-markdown']);
 
 const MSDOC_EXTENSIONS = ['.doc', '.docx', '.odt', '.ppt', '.pptx', '.xls', '.xlsx'];
 const MSDOC_MIME_TYPES = new Set([
@@ -233,14 +238,9 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
     return <VideoViewer fileId={id} url={url} />;
   }
 
-  // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, etc.)
+  // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, Markdown, etc.)
   if (matchesFileType(fileType, name, CODE_EXTENSIONS, CODE_MIME_TYPES)) {
     return <CodeViewer fileId={id} fileName={name} url={url} />;
-  }
-
-  // Markdown files
-  if (matchesFileType(fileType, name, MARKDOWN_EXTENSIONS, MARKDOWN_MIME_TYPES)) {
-    return <MarkdownViewer fileId={id} url={url} />;
   }
 
   // Microsoft Office documents
