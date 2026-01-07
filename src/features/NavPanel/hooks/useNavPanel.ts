@@ -4,6 +4,7 @@ import { type DraggablePanelProps } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { useCallback, useState } from 'react';
 
+import { useTypeScriptHappyCallback } from '@/hooks/useTypeScriptHappyCallback';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -19,9 +20,9 @@ export const useNavPanel = () => {
 
   if (tmpWidth !== leftPanelWidth) setWidth(leftPanelWidth);
 
-  const handleSizeChange: DraggablePanelProps['onSizeChange'] = useCallback(
-    (_: any, size: any) => {
-      const width = size?.width;
+  const handleSizeChange: DraggablePanelProps['onSizeChange'] = useTypeScriptHappyCallback(
+    (_, size) => {
+      const width = typeof size?.width === 'string' ? Number.parseInt(size.width) : size?.width;
       if (!width || width < 64) return;
       if (isEqual(width, leftPanelWidth)) return;
       setWidth(width);

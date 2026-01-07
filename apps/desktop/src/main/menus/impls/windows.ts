@@ -102,6 +102,27 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         ],
       },
       {
+        label: t('history.title'),
+        submenu: [
+          {
+            accelerator: 'Alt+Left',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoBack');
+            },
+            label: t('history.back'),
+          },
+          {
+            accelerator: 'Alt+Right',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoForward');
+            },
+            label: t('history.forward'),
+          },
+        ],
+      },
+      {
         label: t('window.title'),
         submenu: [
           { label: t('window.minimize'), role: 'minimize' },

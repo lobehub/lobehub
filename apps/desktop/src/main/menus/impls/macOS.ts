@@ -167,6 +167,27 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         ],
       },
       {
+        label: t('history.title'),
+        submenu: [
+          {
+            accelerator: 'Command+[',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoBack');
+            },
+            label: t('history.back'),
+          },
+          {
+            accelerator: 'Command+]',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoForward');
+            },
+            label: t('history.forward'),
+          },
+        ],
+      },
+      {
         label: t('window.title'),
         role: 'windowMenu',
       },
