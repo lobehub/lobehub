@@ -5,7 +5,10 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type FileListItem } from '@/types/files';
 
 export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
-  const [refreshFileList] = useFileStore((s) => [s.refreshFileList]);
+  const [fetchResources, queryParams] = useFileStore((s) => [
+    s.fetchResources,
+    s.queryParams,
+  ]);
   const hasProcessingChunkTask = data?.some(
     (item) => item.chunkingStatus === AsyncTaskStatus.Processing,
   );
@@ -15,13 +18,16 @@ export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
 
   const isProcessing = hasProcessingChunkTask || hasProcessingEmbeddingTask;
 
-  // every 3s to check if the chunking status is changed
+  // Poll every 5s to check if chunking/embedding status has changed
   useEffect(() => {
-    if (!isProcessing) return;
+    if (!isProcessing || !queryParams) return;
 
-    const interval = setInterval(refreshFileList, 5000);
+    const interval = setInterval(() => {
+      // Re-fetch with the same query params used for initial load
+      fetchResources(queryParams);
+    }, 5000);
     return () => {
       clearInterval(interval);
     };
-  }, [isProcessing]);
+  }, [isProcessing, fetchResources, queryParams]);
 };

@@ -6,7 +6,7 @@ import type {
   UpdateResourceParams,
 } from '@/types/resource';
 
-import { documentService, type CreateDocumentParams } from '../document';
+import { type CreateDocumentParams, documentService } from '../document';
 import { fileService } from '../file';
 
 /**
@@ -14,33 +14,46 @@ import { fileService } from '../file';
  */
 const mapToResourceItem = (item: FileListItem): ResourceItem => {
   return {
-    id: item.id,
-    name: item.name,
-    fileType: item.fileType,
-    size: item.size,
-    sourceType: item.sourceType as 'file' | 'document',
-    parentId: item.parentId,
+    chunkCount: item.chunkCount,
+    chunkTaskId: item.chunkingStatus ? 'placeholder' : null,
+    chunkingError: item.chunkingError,
+    chunkingStatus: item.chunkingStatus,
+    // Document-specific fields
+    content: item.content,
+
     createdAt: item.createdAt,
+
+    editorData: item.editorData,
+
+    embeddingError: item.embeddingError,
+
+    embeddingStatus: item.embeddingStatus,
+
+    embeddingTaskId: item.embeddingStatus ? 'placeholder' : null,
+
+    fileType: item.fileType,
+
+    finishEmbedding: item.finishEmbedding,
+
+    id: item.id,
+
+    // Metadata
+    metadata: item.metadata || undefined,
+
+    name: item.name,
+
+    parentId: item.parentId,
+
+    size: item.size,
+
+    slug: item.slug,
+
+    sourceType: item.sourceType as 'file' | 'document',
+
     updatedAt: item.updatedAt,
 
     // File-specific fields
     url: item.url,
-    chunkTaskId: item.chunkingStatus ? 'placeholder' : null,
-    embeddingTaskId: item.embeddingStatus ? 'placeholder' : null,
-    chunkCount: item.chunkCount,
-    chunkingStatus: item.chunkingStatus,
-    chunkingError: item.chunkingError,
-    embeddingStatus: item.embeddingStatus,
-    embeddingError: item.embeddingError,
-    finishEmbedding: item.finishEmbedding,
-
-    // Document-specific fields
-    content: item.content,
-    editorData: item.editorData,
-    slug: item.slug,
-
-    // Metadata
-    metadata: item.metadata || undefined,
   };
 };
 
@@ -59,11 +72,18 @@ export class ResourceService {
     items: ResourceItem[];
     total?: number;
   }> {
-    const response = await fileService.getKnowledgeItems(params);
+    // Map frontend parameter names to backend parameter names
+    const backendParams = {
+      ...params,
+      knowledgeBaseId: params.libraryId, // Map libraryId to knowledgeBaseId
+      libraryId: undefined, // Remove the frontend-specific parameter
+    };
+
+    const response = await fileService.getKnowledgeItems(backendParams);
 
     return {
-      items: response.items.map(mapToResourceItem),
       hasMore: response.hasMore,
+      items: response.items.map(mapToResourceItem),
       total: 'total' in response ? response.total : undefined,
     };
   }
@@ -115,22 +135,22 @@ export class ResourceService {
 
       // Map to ResourceItem
       return {
-        id: created.id,
-        name: created.title || 'Untitled',
-        fileType: created.fileType || 'custom/document',
-        size: created.totalCharCount || 0,
-        sourceType: 'document',
-        parentId: created.parentId,
-        createdAt: created.createdAt ? new Date(created.createdAt) : new Date(),
-        updatedAt: created.updatedAt ? new Date(created.updatedAt) : new Date(),
         content: created.content,
+        createdAt: created.createdAt ? new Date(created.createdAt) : new Date(),
         editorData:
           typeof created.editorData === 'string'
             ? JSON.parse(created.editorData)
             : created.editorData,
-        slug: created.slug || undefined,
-        title: created.title,
+        fileType: created.fileType || 'custom/document',
+        id: created.id,
         metadata: created.metadata || undefined,
+        name: created.title || 'Untitled',
+        parentId: created.parentId,
+        size: created.totalCharCount || 0,
+        slug: created.slug || undefined,
+        sourceType: 'document',
+        title: created.title,
+        updatedAt: created.updatedAt ? new Date(created.updatedAt) : new Date(),
         url: created.source || '',
       };
     }

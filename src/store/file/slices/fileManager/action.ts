@@ -45,6 +45,10 @@ export interface FileManageAction {
 
   reEmbeddingChunks: (id: string) => Promise<void>;
   reParseFile: (id: string) => Promise<void>;
+  /**
+   * @deprecated Use fetchResources(queryParams) from resource slice instead
+   * This method is kept for backward compatibility with non-ResourceManager code
+   */
   refreshFileList: () => Promise<void>;
   removeAllFiles: () => Promise<void>;
   removeFileItem: (id: string) => Promise<void>;
@@ -252,8 +256,11 @@ export const createFileManageSlice: StateCreator<
       { concurrency: MAX_UPLOAD_FILE_COUNT },
     );
 
-    // Refresh the file list once after all uploads are complete
-    await get().refreshFileList();
+    // Refetch resource list to show newly uploaded files
+    const queryParams = get().queryParams;
+    if (queryParams) {
+      await get().fetchResources(queryParams);
+    }
 
     // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults

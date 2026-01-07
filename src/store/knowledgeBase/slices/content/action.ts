@@ -17,11 +17,23 @@ export const createContentSlice: StateCreator<
 > = () => ({
   addFilesToKnowledgeBase: async (knowledgeBaseId, ids) => {
     await knowledgeBaseService.addFilesToKnowledgeBase(knowledgeBaseId, ids);
-    await useFileStore.getState().refreshFileList();
+
+    // Refetch resource list to show updated KB associations
+    const fileStore = useFileStore.getState();
+    const queryParams = fileStore.queryParams;
+    if (queryParams) {
+      await fileStore.fetchResources(queryParams);
+    }
   },
 
   removeFilesFromKnowledgeBase: async (knowledgeBaseId, ids) => {
     await knowledgeBaseService.removeFilesFromKnowledgeBase(knowledgeBaseId, ids);
-    await useFileStore.getState().refreshFileList();
+
+    // Refetch resource list to show updated KB associations
+    const fileStore = useFileStore.getState();
+    const queryParams = fileStore.queryParams;
+    if (queryParams) {
+      await fileStore.fetchResources(queryParams);
+    }
   },
 });

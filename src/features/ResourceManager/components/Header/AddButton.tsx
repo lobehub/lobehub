@@ -28,7 +28,7 @@ const AddButton = () => {
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
-  const refreshFileList = useFileStore((s) => s.refreshFileList);
+  const [queryParams, fetchResources] = useFileStore((s) => [s.queryParams, s.fetchResources]);
 
   const [libraryId, currentFolderId, setCurrentViewItemId, setMode, setPendingRenameItemId] =
     useResourceManagerStore((s) => [
@@ -108,7 +108,11 @@ const AddButton = () => {
     createDocument,
     currentFolderId,
     libraryId,
-    refreshFileList,
+    refetchResources: async () => {
+      if (queryParams) {
+        await fetchResources(queryParams);
+      }
+    },
     t,
   });
 

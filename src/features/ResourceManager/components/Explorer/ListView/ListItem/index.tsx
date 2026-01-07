@@ -143,7 +143,7 @@ const FileListItem = memo<FileListItemProps>(
       (s) => ({
         isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
         parseFiles: s.parseFilesToChunks,
-        renameFolder: s.renameFolder,
+        updateResource: s.updateResource,
       }),
       shallow,
     );
@@ -272,14 +272,15 @@ const FileListItem = memo<FileListItemProps>(
       }
 
       try {
-        await fileStoreState.renameFolder(id, renamingValue.trim());
+        // Use optimistic updateResource for instant UI update
+        await fileStoreState.updateResource(id, { name: renamingValue.trim() });
         message.success(t('FileManager.actions.renameSuccess'));
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
         message.error(t('FileManager.actions.renameError'));
       }
-    }, [renamingValue, name, fileStoreState.renameFolder, id, message, t]);
+    }, [renamingValue, name, fileStoreState.updateResource, id, message, t]);
 
     const handleRenameCancel = useCallback(() => {
       setIsRenaming(false);

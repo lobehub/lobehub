@@ -67,8 +67,10 @@ const ResourceExplorer = memo(() => {
   // Fetch resources on mount and when query params change
   useEffect(() => {
     fetchResources({
-      category,
-      knowledgeBaseId: libraryId,
+      // Only use category filter when NOT in a specific library
+      // When viewing a library, show all items regardless of category
+      category: libraryId ? undefined : category,
+      libraryId,
       parentId: currentFolderSlug || null,
       q: searchQuery ?? undefined,
       showFilesInKnowledgeBase: false,
@@ -113,7 +115,7 @@ const ResourceExplorer = memo(() => {
   // Only show skeleton on INITIAL load or view transitions, not during revalidation
   // This allows cached data to show instantly while revalidating in background
   const showSkeleton =
-    (isLoading && !data) || // Only show skeleton if truly loading with no cached data
+    (isLoading && (!data || data.length === 0)) || // Show skeleton if truly loading with no cached data
     (viewMode === 'list' && isTransitioning) ||
     (viewMode === 'masonry' && (isTransitioning || !isMasonryReady));
 
