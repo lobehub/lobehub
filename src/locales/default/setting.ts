@@ -603,6 +603,9 @@ export default {
   'tools.klavis.servers': 'servers',
   'tools.klavis.tools': 'tools',
   'tools.klavis.verifyAuth': 'I have completed authentication',
+  'tools.marketConnect.authorize': 'Authorize',
+  'tools.marketConnect.connect': 'Connect',
+  'tools.marketConnect.error': 'Error',
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',

@@ -52,6 +52,7 @@ export interface GlobalServerConfig {
   enableEmailVerification?: boolean;
   enableKlavis?: boolean;
   enableMagicLink?: boolean;
+  enableMarketConnect?: boolean;
   enableMarketTrustedClient?: boolean;
   enableUploadFileToServer?: boolean;
   enabledAccessCode?: boolean;

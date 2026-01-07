@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
+import { marketSDK, requireMarketAuth } from '@/libs/trpc/lambda/middleware/marketSDK';
 import { generateTrustedClientToken, isTrustedClientEnabled } from '@/libs/trusted-client';
 import { FileS3 } from '@/server/modules/S3';
 import { DiscoverService } from '@/server/services/discover';
@@ -40,6 +41,23 @@ const marketToolProcedure = authedProcedure
       },
     });
   });
+
+// ============================== Market Connect Procedures ==============================
+/**
+ * Market Connect procedure with SDK and optional auth
+ * Used for routes that may work without auth (like listing providers)
+ */
+const marketConnectBaseProcedure = authedProcedure
+  .use(serverDatabase)
+  .use(telemetry)
+  .use(marketUserInfo)
+  .use(marketSDK);
+
+/**
+ * Market Connect procedure with required auth
+ * Used for routes that require user authentication
+ */
+const marketConnectAuthProcedure = marketConnectBaseProcedure.use(requireMarketAuth);
 
 // ============================== Schema Definitions ==============================
 
@@ -269,12 +287,273 @@ export const marketRouter = router({
       }
     }),
 
+  
+  // ============================== Market Connect ==============================
+/**
+   * Call a Market Connect tool
+   */
+connectCallTool: marketConnectAuthProcedure
+    .input(
+      z.object({
+        args: z.record(z.any()).optional(),
+        provider: z.string(),
+        toolName: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { provider, toolName, args } = input;
+      log('connectCallTool: provider=%s, tool=%s', provider, toolName);
+
+      try {
+        const response = await ctx.marketSDK.skills.callTool(provider, {
+          args: args || {},
+          tool: toolName,
+        });
+
+        log('connectCallTool response: %O', response);
+
+        return {
+          data: response.data,
+          success: response.success,
+        };
+      } catch (error) {
+        const errorMessage = (error as Error).message;
+        log('connectCallTool error: %s', errorMessage);
+
+        if (errorMessage.includes('NOT_CONNECTED')) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Provider not connected. Please authorize first.',
+          });
+        }
+
+        if (errorMessage.includes('TOKEN_EXPIRED')) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Token expired. Please re-authorize.',
+          });
+        }
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to call tool: ${errorMessage}`,
+        });
+      }
+    }),
+
+  
+  
+  
+/**
+   * Get all connections health status
+   */
+connectGetAllHealth: marketConnectAuthProcedure.query(async ({ ctx }) => {
+    log('connectGetAllHealth');
+
+    try {
+      const response = await ctx.marketSDK.connect.getAllHealth();
+      return {
+        connections: response.connections || [],
+        summary: response.summary,
+      };
+    } catch (error) {
+      log('connectGetAllHealth error: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get connections health: ${(error as Error).message}`,
+      });
+    }
+  }),
+
+  
+  
+
+/**
+   * Get authorize URL for a provider
+   * This calls the SDK's authorize method which generates a secure authorization URL
+   */
+connectGetAuthorizeUrl: marketConnectAuthProcedure
+    .input(
+      z.object({
+        provider: z.string(),
+        redirectUri: z.string().optional(),
+        scopes: z.array(z.string()).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('connectGetAuthorizeUrl: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.connect.authorize(input.provider, {
+          redirect_uri: input.redirectUri,
+          scopes: input.scopes,
+        });
+
+        return {
+          authorizeUrl: response.authorize_url,
+          code: response.code,
+          expiresIn: response.expires_in,
+        };
+      } catch (error) {
+        log('connectGetAuthorizeUrl error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to get authorize URL: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  
+  
+
+/**
+   * Get connection status for a provider
+   */
+connectGetStatus: marketConnectAuthProcedure
+    .input(z.object({ provider: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('connectGetStatus: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.connect.getStatus(input.provider);
+        return {
+          connected: response.connected,
+          connection: response.connection,
+          icon: (response as any).icon,
+          providerName: (response as any).providerName,
+        };
+      } catch (error) {
+        log('connectGetStatus error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to get status: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  
+  
+/**
+   * List all user connections
+   */
+connectListConnections: marketConnectAuthProcedure.query(async ({ ctx }) => {
+    log('connectListConnections');
+
+    try {
+      const response = await ctx.marketSDK.connect.listConnections();
+      return {
+        connections: response.connections || [],
+      };
+    } catch (error) {
+      log('connectListConnections error: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to list connections: ${(error as Error).message}`,
+      });
+    }
+  }),
+
+  
+  
+/**
+   * List available providers (public, no auth required)
+   */
+connectListProviders: marketConnectBaseProcedure.query(async ({ ctx }) => {
+    log('connectListProviders');
+
+    try {
+      const response = await ctx.marketSDK.skills.listProviders();
+      return {
+        providers: response.providers || [],
+      };
+    } catch (error) {
+      log('connectListProviders error: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to list providers: ${(error as Error).message}`,
+      });
+    }
+  }),
+
+  
+  
+/**
+   * List tools for a provider
+   */
+connectListTools: marketConnectBaseProcedure
+    .input(z.object({ provider: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('connectListTools: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.skills.listTools(input.provider);
+        return {
+          provider: input.provider,
+          tools: response.tools || [],
+        };
+      } catch (error) {
+        log('connectListTools error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to list tools: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  
+  
+/**
+   * Refresh token for a provider
+   */
+connectRefresh: marketConnectAuthProcedure
+    .input(z.object({ provider: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      log('connectRefresh: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.connect.refresh(input.provider);
+        return {
+          connection: response.connection,
+          refreshed: response.refreshed,
+        };
+      } catch (error) {
+        log('connectRefresh error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to refresh token: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  
+  
+/**
+   * Revoke connection for a provider
+   */
+connectRevoke: marketConnectAuthProcedure
+    .input(z.object({ provider: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      log('connectRevoke: provider=%s', input.provider);
+
+      try {
+        await ctx.marketSDK.connect.revoke(input.provider);
+        return { success: true };
+      } catch (error) {
+        log('connectRevoke error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to revoke connection: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  
   /**
    * Export a file from sandbox and upload to S3, then create a persistent file record
    * This combines the previous getExportFileUploadUrl + callCodeInterpreterTool + createFileRecord flow
    * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
    */
-  exportAndUploadFile: marketToolProcedure
+exportAndUploadFile: marketToolProcedure
     .input(exportAndUploadFileSchema)
     .mutation(async ({ input, ctx }) => {
       const { path, filename, topicId } = input;

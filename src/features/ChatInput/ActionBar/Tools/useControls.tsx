@@ -1,4 +1,9 @@
-import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import {
+  KLAVIS_SERVER_TYPES,
+  type KlavisServerType,
+  MARKET_CONNECT_PROVIDERS,
+  type MarketConnectProviderType,
+} from '@lobechat/const';
 import { Avatar, Flexbox, Icon, Image, type ItemType } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -16,11 +21,13 @@ import { useToolStore } from '@/store/tool';
 import {
   builtinToolSelectors,
   klavisStoreSelectors,
+  marketConnectStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import KlavisServerItem from './KlavisServerItem';
+import MarketConnectServerItem from './MarketConnectServerItem';
 import ToolItem from './ToolItem';
 
 /**
@@ -38,6 +45,21 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
 });
 
 KlavisIcon.displayName = 'KlavisIcon';
+
+/**
+ * Market Connect Provider 图标组件
+ */
+const MarketConnectIcon = memo<Pick<MarketConnectProviderType, 'icon' | 'label'>>(
+  ({ icon, label }) => {
+    if (typeof icon === 'string') {
+      return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
+    }
+
+    return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+  },
+);
+
+MarketConnectIcon.displayName = 'MarketConnectIcon';
 
 export const useControls = ({
   setModalOpen,
@@ -66,10 +88,16 @@ export const useControls = ({
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
   const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
-  const [useFetchPluginStore, useFetchUserKlavisServers] = useToolStore((s) => [
-    s.useFetchPluginStore,
-    s.useFetchUserKlavisServers,
-  ]);
+  // Market Connect 相关状态
+  const allMarketConnectServers = useToolStore(marketConnectStoreSelectors.getServers, isEqual);
+  const isMarketConnectEnabled = useServerConfigStore(serverConfigSelectors.enableMarketConnect);
+
+  const [useFetchPluginStore, useFetchUserKlavisServers, useFetchMarketConnectConnections] =
+    useToolStore((s) => [
+      s.useFetchPluginStore,
+      s.useFetchUserKlavisServers,
+      s.useFetchMarketConnectConnections,
+    ]);
 
   useFetchPluginStore();
   useFetchInstalledPlugins();
@@ -77,6 +105,9 @@ export const useControls = ({
 
   // 使用 SWR 加载用户的 Klavis 集成（从数据库）
   useFetchUserKlavisServers(isKlavisEnabledInEnv);
+
+  // 使用 SWR 加载用户的 Market Connect 连接
+  useFetchMarketConnectConnections(isMarketConnectEnabled);
 
   // 根据 identifier 获取已连接的服务器
   const getServerByName = (identifier: string) => {
@@ -118,7 +149,20 @@ export const useControls = ({
     [isKlavisEnabledInEnv, allKlavisServers],
   );
 
-  // 合并 builtin 工具和 Klavis 服务器
+  // Market Connect Provider 列表项
+  const marketConnectItems = useMemo(
+    () =>
+      isMarketConnectEnabled
+        ? MARKET_CONNECT_PROVIDERS.map((provider) => ({
+            icon: <MarketConnectIcon icon={provider.icon} label={provider.label} />,
+            key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
+            label: <MarketConnectServerItem label={provider.label} provider={provider.id} />,
+          }))
+        : [],
+    [isMarketConnectEnabled, allMarketConnectServers],
+  );
+
+  // 合并 builtin 工具、Klavis 服务器和 Market Connect Provider
   const builtinItems = useMemo(
     () => [
       // 原有的 builtin 工具
@@ -140,10 +184,19 @@ export const useControls = ({
           />
         ),
       })),
+      // Market Connect Providers
+      ...marketConnectItems,
       // Klavis 服务器
       ...klavisServerItems,
     ],
-    [filteredBuiltinList, klavisServerItems, checked, togglePlugin, setUpdating],
+    [
+      filteredBuiltinList,
+      klavisServerItems,
+      marketConnectItems,
+      checked,
+      togglePlugin,
+      setUpdating,
+    ],
   );
 
   // 市场 tab 的 items
@@ -233,8 +286,17 @@ export const useControls = ({
       checked.includes(item.key as string),
     );
 
-    // 合并 builtin 和 Klavis
-    const allBuiltinItems = [...enabledBuiltinItems, ...connectedKlavisItems];
+    // 已连接的 Market Connect Providers
+    const connectedMarketConnectItems = marketConnectItems.filter((item) =>
+      checked.includes(item.key as string),
+    );
+
+    // 合并 builtin、Klavis 和 Market Connect
+    const allBuiltinItems = [
+      ...enabledBuiltinItems,
+      ...connectedKlavisItems,
+      ...connectedMarketConnectItems,
+    ];
 
     if (allBuiltinItems.length > 0) {
       installedItems.push({
@@ -279,7 +341,16 @@ export const useControls = ({
     }
 
     return installedItems;
-  }, [filteredBuiltinList, list, klavisServerItems, checked, togglePlugin, setUpdating, t]);
+  }, [
+    filteredBuiltinList,
+    list,
+    klavisServerItems,
+    marketConnectItems,
+    checked,
+    togglePlugin,
+    setUpdating,
+    t,
+  ]);
 
   return { installedPluginItems, marketItems };
 };

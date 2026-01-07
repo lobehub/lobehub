@@ -61,6 +61,14 @@ export interface PluginTypesAction {
   invokeKlavisTypePlugin: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
 
   /**
+   * Invoke Market Connect type plugin
+   */
+  invokeMarketConnectTypePlugin: (
+    id: string,
+    payload: ChatToolPayload,
+  ) => Promise<string | undefined>;
+
+  /**
    * Invoke markdown type plugin
    */
   invokeMarkdownTypePlugin: (id: string, payload: ChatToolPayload) => Promise<void>;
@@ -91,6 +99,11 @@ export const pluginTypes: StateCreator<
     // Check if this is a Klavis tool by source field
     if (payload.source === 'klavis') {
       return await get().invokeKlavisTypePlugin(id, payload);
+    }
+
+    // Check if this is a LobeHub Market tool by source field
+    if (payload.source === 'lobehubmarket') {
+      return await get().invokeMarketConnectTypePlugin(id, payload);
     }
 
     // Check if this is Cloud Code Interpreter - route to specific handler
@@ -423,6 +436,97 @@ export const pluginTypes: StateCreator<
     if (!data) return;
 
     // operationId already declared above, reuse it
+    const context = operationId ? { operationId } : undefined;
+
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
+
+    return data.content;
+  },
+
+  invokeMarketConnectTypePlugin: async (id, payload) => {
+    let data: MCPToolCallResult | undefined;
+
+    // Get message to extract sessionId/topicId
+    const message = dbMessageSelectors.getDbMessageById(id)(get());
+
+    // Get abort controller from operation
+    const operationId = get().messageOperationMap[id];
+    const operation = operationId ? get().operations[operationId] : undefined;
+    const abortController = operation?.abortController;
+
+    log(
+      '[invokeMarketConnectTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+      id,
+      payload.apiName,
+      operationId,
+      abortController?.signal.aborted,
+    );
+
+    try {
+      // payload.identifier is the provider id (e.g., 'linear', 'microsoft')
+      const provider = payload.identifier;
+
+      // Parse arguments
+      const args = safeParseJSON(payload.arguments) || {};
+
+      // Call Market Connect tool via store action
+      const result = await useToolStore.getState().callMarketConnectTool({
+        args,
+        provider,
+        toolName: payload.apiName,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Market Connect tool execution failed');
+      }
+
+      // Convert to MCPToolCallResult format
+      const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+      data = {
+        content,
+        error: undefined,
+        state: { content: [{ text: content, type: 'text' }] },
+        success: true,
+      };
+    } catch (error) {
+      console.error('[invokeMarketConnectTypePlugin] Error:', error);
+
+      // ignore the aborted request error
+      const err = error as Error;
+      if (err.message.includes('aborted')) {
+        log(
+          '[invokeMarketConnectTypePlugin] Request aborted: messageId=%s, tool=%s',
+          id,
+          payload.apiName,
+        );
+      } else {
+        const result = await messageService.updateMessageError(id, error as any, {
+          agentId: message?.agentId,
+          topicId: message?.topicId,
+        });
+        if (result?.success && result.messages) {
+          get().replaceMessages(result.messages, {
+            context: {
+              agentId: message?.agentId,
+              topicId: message?.topicId,
+            },
+          });
+        }
+      }
+    }
+
+    // If error occurred, exit
+    if (!data) return;
+
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call

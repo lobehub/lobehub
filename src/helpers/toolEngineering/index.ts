@@ -11,7 +11,11 @@ import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
-import { klavisStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
+import {
+  klavisStoreSelectors,
+  marketConnectStoreSelectors,
+  pluginSelectors,
+} from '@/store/tool/selectors';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
@@ -51,11 +55,18 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     .map((tool) => tool.manifest as LobeChatPluginManifest)
     .filter(Boolean);
 
+  // Get Market Connect tool manifests
+  const marketConnectTools = marketConnectStoreSelectors.marketConnectAsLobeTools(toolStoreState);
+  const marketConnectManifests = marketConnectTools
+    .map((tool) => tool.manifest as LobeChatPluginManifest)
+    .filter(Boolean);
+
   // Combine all manifests
   const allManifests = [
     ...pluginManifests,
     ...builtinManifests,
     ...klavisManifests,
+    ...marketConnectManifests,
     ...additionalManifests,
   ];
 
