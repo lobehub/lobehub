@@ -5,11 +5,9 @@ import { memo, useEffect } from 'react';
 
 import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerUrlSync } from '@/app/[variants]/(main)/resource/features/hooks/useResourceManagerUrlSync';
-import {
-  useResourceManagerFetchKnowledgeItems,
-  useResourceManagerStore,
-} from '@/app/[variants]/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
+import { useFileStore } from '@/store/file';
 
 import EmptyPlaceholder from './EmptyPlaceholder';
 import Header from './Header';
@@ -59,14 +57,38 @@ const ResourceExplorer = memo(() => {
   // Get folder path for empty state check
   const { currentFolderSlug } = useFolderPath();
 
-  // Fetch data with SWR - uses built-in cache for instant category switching
-  const { data: rawData, isLoading } = useResourceManagerFetchKnowledgeItems({
-    category,
-    knowledgeBaseId: libraryId,
-    parentId: currentFolderSlug || null,
-    q: searchQuery ?? undefined,
-    showFilesInKnowledgeBase: false,
-  });
+  // NEW: Use resource store for instant optimistic updates
+  const [resourceList, isInitialLoading, fetchResources] = useFileStore((s) => [
+    s.resourceList,
+    s.isInitialLoading,
+    s.fetchResources,
+  ]);
+
+  // Fetch resources on mount and when query params change
+  useEffect(() => {
+    fetchResources({
+      category,
+      knowledgeBaseId: libraryId,
+      parentId: currentFolderSlug || null,
+      q: searchQuery ?? undefined,
+      showFilesInKnowledgeBase: false,
+      sortType,
+      sorter,
+    });
+  }, [category, libraryId, currentFolderSlug, searchQuery, fetchResources, sortType, sorter]);
+
+  // Map ResourceItem[] to FileListItem[] for compatibility
+  // TODO: Eventually update all consumers to use ResourceItem directly
+  const rawData = resourceList?.map((item) => ({
+    ...item,
+    // Ensure all FileListItem fields are present
+    chunkCount: item.chunkCount ?? null,
+    chunkingError: item.chunkingError ?? null,
+    chunkingStatus: item.chunkingStatus ?? null,
+    embeddingError: item.embeddingError ?? null,
+    embeddingStatus: item.embeddingStatus ?? null,
+    finishEmbedding: item.finishEmbedding ?? false,
+  }));
 
   // Sort data using current sort settings
   const data = sortFileList(rawData, sorter, sortType);
@@ -83,6 +105,7 @@ const ResourceExplorer = memo(() => {
   }, [category, libraryId, searchQuery, setSelectedFileIds]);
 
   // Computed values
+  const isLoading = isInitialLoading;
   const showEmptyStatus = !isLoading && data?.length === 0 && !currentFolderSlug;
 
   const columnCount = useMasonryColumnCount();

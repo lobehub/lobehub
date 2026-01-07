@@ -11,10 +11,10 @@ import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndCont
 import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
 import {
   useResourceManagerFetchFolderBreadcrumb,
-  useResourceManagerFetchKnowledgeItems,
   useResourceManagerStore,
 } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
+import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { INITIAL_STATUS } from '@/store/global/initialState';
 
@@ -99,13 +99,19 @@ const ListView = memo(() => {
   // Get current folder ID - either from breadcrumb or null for root
   const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
 
-  const { data: rawData } = useResourceManagerFetchKnowledgeItems({
-    category,
-    knowledgeBaseId: libraryId,
-    parentId: currentFolderSlug || null,
-    q: searchQuery ?? undefined,
-    showFilesInKnowledgeBase: false,
-  });
+  // NEW: Read from resource store instead of fetching independently
+  const resourceList = useFileStore((s) => s.resourceList);
+
+  // Map ResourceItem[] to FileListItem[] for compatibility
+  const rawData = resourceList?.map((item) => ({
+    ...item,
+    chunkCount: item.chunkCount ?? null,
+    chunkingError: item.chunkingError ?? null,
+    chunkingStatus: item.chunkingStatus ?? null,
+    embeddingError: item.embeddingError ?? null,
+    embeddingStatus: item.embeddingStatus ?? null,
+    finishEmbedding: item.finishEmbedding ?? false,
+  }));
 
   // Sort data using current sort settings
   const data = sortFileList(rawData, sorter, sortType);

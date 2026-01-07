@@ -52,7 +52,7 @@ export const useFileItemDropdown = ({
   const { t } = useTranslation(['components', 'common', 'knowledgeBase']);
   const { message, modal } = App.useApp();
 
-  const [removeFile, refreshFileList] = useFileStore((s) => [s.removeFileItem, s.refreshFileList]);
+  const deleteResource = useFileStore((s) => s.deleteResource);
   const [removeFilesFromKnowledgeBase, addFilesToKnowledgeBase, useFetchKnowledgeBaseList] =
     useKnowledgeBaseStore((s) => [
       s.removeFilesFromKnowledgeBase,
@@ -251,12 +251,9 @@ export const useFileItemDropdown = ({
                 : t('FileManager.actions.confirmDelete'),
               okButtonProps: { danger: true },
               onOk: async () => {
-                if (isFolder || isPage) {
-                  await documentService.deleteDocument(id);
-                  await refreshFileList();
-                } else {
-                  await removeFile(id);
-                }
+                // Use optimistic delete - instant UI update, sync in background
+                await deleteResource(id);
+                message.success(t('FileManager.actions.deleteSuccess'));
               },
             });
           },

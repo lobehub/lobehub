@@ -23,7 +23,10 @@ const AddButton = () => {
   const { t } = useTranslation('file');
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
-  const createFolder = useFileStore((s) => s.createFolder);
+  const createResource = useFileStore((s) => s.createResource);
+
+  // TODO: Migrate Notion import to use createResource
+  // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
   const refreshFileList = useFileStore((s) => s.refreshFileList);
 
@@ -37,57 +40,30 @@ const AddButton = () => {
     ]);
 
   const handleOpenPageEditor = useCallback(async () => {
-    // Create a new page directly and switch to page view
+    // Create a new page with optimistic update - instant UI feedback
     const untitledTitle = t('pageList.untitled');
-    const newPage = await createDocument({
+    const tempId = await createResource({
       content: '',
+      fileType: 'custom/document',
       knowledgeBaseId: libraryId,
       parentId: currentFolderId ?? undefined,
+      sourceType: 'document',
       title: untitledTitle,
     });
 
-    // Add to local document map for immediate availability
-    const newDocumentMap = new Map(useFileStore.getState().localDocumentMap);
-    newDocumentMap.set(newPage.id, {
-      content: newPage.content || '',
-      createdAt: newPage.createdAt ? new Date(newPage.createdAt) : new Date(),
-      editorData:
-        typeof newPage.editorData === 'string'
-          ? JSON.parse(newPage.editorData)
-          : newPage.editorData || null,
-      fileType: 'custom/document',
-      filename: newPage.title || untitledTitle,
-      id: newPage.id,
-      metadata: newPage.metadata || {},
-      source: 'document',
-      sourceType: DocumentSourceType.EDITOR,
-      title: newPage.title || untitledTitle,
-      totalCharCount: newPage.content?.length || 0,
-      totalLineCount: 0,
-      updatedAt: newPage.updatedAt ? new Date(newPage.updatedAt) : new Date(),
-    });
-    useFileStore.setState({ localDocumentMap: newDocumentMap });
-
-    // Switch to page view mode
-    setCurrentViewItemId(newPage.id);
+    // Switch to page view mode immediately (temp ID works)
+    setCurrentViewItemId(tempId);
     setMode('page');
-  }, [createDocument, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
+  }, [createResource, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
-    // Show loading toast
-    const messageKey = 'createFolder.creating';
-    message.loading({
-      content: t('header.actions.creatingFolder'),
-      duration: 0, // Don't auto-dismiss
-      key: messageKey,
-    });
-
+    // Create folder with optimistic update - instant UI feedback
     try {
-      // Get current file list to check for duplicate folder names
-      const fileList = useFileStore.getState().fileList;
+      // Get current resource list to check for duplicate folder names
+      const resourceList = useFileStore.getState().resourceList || [];
 
       // Filter for folders at the same level
-      const foldersAtSameLevel = fileList.filter(
+      const foldersAtSameLevel = resourceList.filter(
         (item) =>
           item.fileType === 'custom/folder' &&
           (item.parentId ?? null) === (currentFolderId ?? null),
@@ -105,20 +81,21 @@ const AddButton = () => {
         counter++;
       }
 
-      const folderId = await createFolder(uniqueName, currentFolderId ?? undefined, libraryId);
+      const tempId = await createResource({
+        fileType: 'custom/folder',
+        knowledgeBaseId: libraryId,
+        parentId: currentFolderId ?? undefined,
+        sourceType: 'document',
+        title: uniqueName,
+      });
 
-      // Dismiss the loading toast after folder is created
-      message.destroy(messageKey);
-
-      // Trigger auto-rename
-      setPendingRenameItemId(folderId);
+      // Trigger auto-rename immediately (temp ID works)
+      setPendingRenameItemId(tempId);
     } catch (error) {
-      // Dismiss the loading toast on error
-      message.destroy(messageKey);
       message.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
-  }, [createFolder, currentFolderId, libraryId, setPendingRenameItemId, t]);
+  }, [createResource, currentFolderId, libraryId, setPendingRenameItemId, t]);
 
   const {
     handleCloseNotionGuide,
