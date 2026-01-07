@@ -20,6 +20,7 @@ import { INITIAL_STATUS } from '@/store/global/initialState';
 
 import ColumnResizeHandle from './ColumnResizeHandle';
 import FileListItem from './ListItem';
+import ListViewSkeleton from './Skeleton';
 
 const log = debug('resource-manager:list-view');
 
@@ -43,11 +44,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 6px;
     padding-inline: 0 24px;
     height: 100%;
-  `,
-  loadingIndicator: css`
-    padding: 16px;
-    font-size: 14px;
-    color: ${cssVar.colorTextDescription};
   `,
   scrollContainer: css`
     overflow: auto hidden;
@@ -268,6 +264,12 @@ const ListView = memo(() => {
     };
   }, [clearScrollTimers]);
 
+  // Memoize footer component to show skeleton loaders when loading more
+  const Footer = useCallback(() => {
+    if (!isLoadingMore || !fileListHasMore) return null;
+    return <ListViewSkeleton columnWidths={columnWidths} />;
+  }, [isLoadingMore, fileListHasMore, columnWidths]);
+
   return (
     <Flexbox height={'100%'}>
       <div className={styles.scrollContainer}>
@@ -355,6 +357,7 @@ const ListView = memo(() => {
           style={{ overflow: 'hidden', position: 'relative' }}
         >
           <Virtuoso
+            components={{ Footer }}
             data={data || []}
             defaultItemHeight={48}
             endReached={handleEndReached}
@@ -378,16 +381,6 @@ const ListView = memo(() => {
             ref={virtuosoRef}
             style={{ height: 'calc(100vh - 100px)' }}
           />
-          {isLoadingMore && (
-            <Center
-              className={styles.loadingIndicator}
-              style={{
-                borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
-              }}
-            >
-              {t('loading', { defaultValue: 'Loading...', ns: 'file' })}
-            </Center>
-          )}
         </div>
       </div>
     </Flexbox>
