@@ -8,11 +8,10 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   page: css`
     width: 100%;
     height: 100%;
-    padding-block: 0px;
     padding-inline: 24px 4px;
   `,
 }));
@@ -50,7 +49,7 @@ const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
   const language = getLanguage(fileName);
 
   return (
-    <Flexbox className={styles.page} id="javascript-renderer">
+    <Flexbox className={styles.page}>
       {!loading && fileData ? (
         <Highlighter language={language} showLanguage={false} variant={'borderless'}>
           {fileData}

@@ -22,6 +22,7 @@ const useStyles = createStyles(({ css, token }) => {
   return {
     container: css`
       position: relative;
+      overflow: hidden;
     `,
     editorOverlay: css`
       position: absolute;
