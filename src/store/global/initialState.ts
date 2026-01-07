@@ -106,6 +106,14 @@ export interface SystemStatus {
    */
   lastSelectedImageModel?: string;
   /**
+   * Resource Manager column widths
+   */
+  resourceManagerColumnWidths?: {
+    date: number;
+    name: number;
+    size: number;
+  };
+  /**
    * 记住用户最后选择的图像生成提供商
    */
   lastSelectedImageProvider?: string;
@@ -187,6 +195,11 @@ export const INITIAL_STATUS = {
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 320,
   mobileShowTopic: false,
+  resourceManagerColumnWidths: {
+    date: 160,
+    name: 574,
+    size: 140,
+  },
   modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 430,
   noWideScreen: true,
