@@ -25,6 +25,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
   const [selectedInterests, setSelectedInterests] = useState<string[]>(existingInterests);
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const areas = useMemo(
     () =>
@@ -49,7 +50,10 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
     }
   }, [customInput, selectedInterests]);
 
-  const handleNext = useCallback(async () => {
+  const handleNext = useCallback(() => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+
     // Include custom input value if "other" is active and has content
     const finalInterests = [...selectedInterests];
     const trimmedCustom = customInput.trim();
@@ -61,10 +65,17 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
     const uniqueInterests = [...new Set(finalInterests)];
 
     if (uniqueInterests.length > 0) {
-      await updateInterests(uniqueInterests);
+      updateInterests(uniqueInterests);
     }
+
     onNext();
-  }, [selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
+  }, [isNavigating, selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
+
+  const handleBack = useCallback(() => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+    onBack();
+  }, [isNavigating, onBack]);
 
   return (
     <Flexbox gap={16}>
@@ -138,14 +149,15 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       )}
       <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
         <Button
+          disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={onBack}
+          onClick={handleBack}
           style={{ color: cssVar.colorTextDescription }}
           type={'text'}
         >
           {t('back')}
         </Button>
-        <Button onClick={handleNext} type={'primary'}>
+        <Button disabled={isNavigating} onClick={handleNext} type={'primary'}>
           {t('next')}
         </Button>
       </Flexbox>

@@ -21,12 +21,18 @@ interface TelemetryStepProps {
 const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
   const { t } = useTranslation('onboarding');
   const [check, setCheck] = useState(true);
+  const [isNavigating, setIsNavigating] = useState(false);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
-  const handleChoice = (enabled: boolean) => {
-    updateGeneralConfig({ telemetry: enabled });
-    onNext();
-  };
+  const handleChoice = useCallback(
+    (enabled: boolean) => {
+      if (isNavigating) return;
+      setIsNavigating(true);
+      updateGeneralConfig({ telemetry: enabled });
+      onNext();
+    },
+    [isNavigating, updateGeneralConfig, onNext],
+  );
 
   const IconAvatar = useCallback(({ icon }: { icon: IconProps['icon'] }) => {
     return (
@@ -123,6 +129,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
         </Flexbox>
       </Flexbox>
       <Button
+        disabled={isNavigating}
         onClick={() => handleChoice(check)}
         size={'large'}
         style={{

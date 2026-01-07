@@ -24,11 +24,20 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
   const setSettings = useUserStore((s) => s.setSettings);
 
   const [value, setValue] = useState<Locales | ''>(normalizeLocale(navigator.language));
+  const [isNavigating, setIsNavigating] = useState(false);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
+    if (isNavigating) return;
+    setIsNavigating(true);
     setSettings({ general: { responseLanguage: value || '' } });
     onNext();
-  };
+  }, [isNavigating, value, setSettings, onNext]);
+
+  const handleBack = useCallback(() => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+    onBack();
+  }, [isNavigating, onBack]);
 
   const Message = useCallback(
     () => (
@@ -73,6 +82,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
           value={value}
         />
         <SendButton
+          disabled={isNavigating}
           onClick={handleNext}
           style={{
             zoom: 1.5,
@@ -85,8 +95,9 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
       </Text>
       <Flexbox horizontal justify={'flex-start'} style={{ marginTop: 32 }}>
         <Button
+          disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={onBack}
+          onClick={handleBack}
           style={{
             color: cssVar.colorTextDescription,
           }}
