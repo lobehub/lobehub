@@ -35,24 +35,6 @@
   color: inherit;
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--brand-muted-color);
-  border-top-color: transparent;
-  border-right-color: transparent;
-  border-radius: 50%;
-
-  animation: brand-text-loading-spin 1s linear infinite;
-}
-
-.brandText {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--brand-text-color);
-  letter-spacing: 0.08em;
-}
-
 .debug {
   display: flex;
   flex-direction: column;
@@ -71,7 +53,7 @@
   color: var(--brand-muted-color);
 }
 
-.debugLabel {
+.debugRow code {
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
@@ -88,24 +70,11 @@
   background: var(--brand-tag-bg);
 }
 
-.debugCode {
-  font-family: inherit;
+.debugTag code {
   color: var(--brand-text-color);
 }
 
 .debugHint {
   font-size: 12px;
   color: var(--brand-muted-color);
-}
-
-@keyframes brand-text-loading-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
 }
