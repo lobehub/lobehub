@@ -42,22 +42,22 @@ const marketToolProcedure = authedProcedure
     });
   });
 
-// ============================== Market Connect Procedures ==============================
+// ============================== LobeHub Skill Procedures ==============================
 /**
- * Market Connect procedure with SDK and optional auth
+ * LobeHub Skill procedure with SDK and optional auth
  * Used for routes that may work without auth (like listing providers)
  */
-const marketConnectBaseProcedure = authedProcedure
+const lobehubSkillBaseProcedure = authedProcedure
   .use(serverDatabase)
   .use(telemetry)
   .use(marketUserInfo)
   .use(marketSDK);
 
 /**
- * Market Connect procedure with required auth
+ * LobeHub Skill procedure with required auth
  * Used for routes that require user authentication
  */
-const marketConnectAuthProcedure = marketConnectBaseProcedure.use(requireMarketAuth);
+const lobehubSkillAuthProcedure = lobehubSkillBaseProcedure.use(requireMarketAuth);
 
 // ============================== Schema Definitions ==============================
 
@@ -287,12 +287,11 @@ export const marketRouter = router({
       }
     }),
 
-  
-  // ============================== Market Connect ==============================
-/**
-   * Call a Market Connect tool
+  // ============================== LobeHub Skill ==============================
+  /**
+   * Call a LobeHub Skill tool
    */
-connectCallTool: marketConnectAuthProcedure
+  connectCallTool: lobehubSkillAuthProcedure
     .input(
       z.object({
         args: z.record(z.any()).optional(),
@@ -341,13 +340,10 @@ connectCallTool: marketConnectAuthProcedure
       }
     }),
 
-  
-  
-  
-/**
+  /**
    * Get all connections health status
    */
-connectGetAllHealth: marketConnectAuthProcedure.query(async ({ ctx }) => {
+  connectGetAllHealth: lobehubSkillAuthProcedure.query(async ({ ctx }) => {
     log('connectGetAllHealth');
 
     try {
@@ -365,14 +361,11 @@ connectGetAllHealth: marketConnectAuthProcedure.query(async ({ ctx }) => {
     }
   }),
 
-  
-  
-
-/**
+  /**
    * Get authorize URL for a provider
    * This calls the SDK's authorize method which generates a secure authorization URL
    */
-connectGetAuthorizeUrl: marketConnectAuthProcedure
+  connectGetAuthorizeUrl: lobehubSkillAuthProcedure
     .input(
       z.object({
         provider: z.string(),
@@ -403,13 +396,10 @@ connectGetAuthorizeUrl: marketConnectAuthProcedure
       }
     }),
 
-  
-  
-
-/**
+  /**
    * Get connection status for a provider
    */
-connectGetStatus: marketConnectAuthProcedure
+  connectGetStatus: lobehubSkillAuthProcedure
     .input(z.object({ provider: z.string() }))
     .query(async ({ input, ctx }) => {
       log('connectGetStatus: provider=%s', input.provider);
@@ -431,16 +421,17 @@ connectGetStatus: marketConnectAuthProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * List all user connections
    */
-connectListConnections: marketConnectAuthProcedure.query(async ({ ctx }) => {
+  connectListConnections: lobehubSkillAuthProcedure.query(async ({ ctx }) => {
     log('connectListConnections');
 
     try {
       const response = await ctx.marketSDK.connect.listConnections();
+      // Debug logging
+      log('connectListConnections raw response: %O', response);
+      log('connectListConnections connections: %O', response.connections);
       return {
         connections: response.connections || [],
       };
@@ -453,12 +444,10 @@ connectListConnections: marketConnectAuthProcedure.query(async ({ ctx }) => {
     }
   }),
 
-  
-  
-/**
+  /**
    * List available providers (public, no auth required)
    */
-connectListProviders: marketConnectBaseProcedure.query(async ({ ctx }) => {
+  connectListProviders: lobehubSkillBaseProcedure.query(async ({ ctx }) => {
     log('connectListProviders');
 
     try {
@@ -475,12 +464,10 @@ connectListProviders: marketConnectBaseProcedure.query(async ({ ctx }) => {
     }
   }),
 
-  
-  
-/**
+  /**
    * List tools for a provider
    */
-connectListTools: marketConnectBaseProcedure
+  connectListTools: lobehubSkillBaseProcedure
     .input(z.object({ provider: z.string() }))
     .query(async ({ input, ctx }) => {
       log('connectListTools: provider=%s', input.provider);
@@ -500,12 +487,10 @@ connectListTools: marketConnectBaseProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Refresh token for a provider
    */
-connectRefresh: marketConnectAuthProcedure
+  connectRefresh: lobehubSkillAuthProcedure
     .input(z.object({ provider: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('connectRefresh: provider=%s', input.provider);
@@ -525,12 +510,10 @@ connectRefresh: marketConnectAuthProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Revoke connection for a provider
    */
-connectRevoke: marketConnectAuthProcedure
+  connectRevoke: lobehubSkillAuthProcedure
     .input(z.object({ provider: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('connectRevoke: provider=%s', input.provider);
@@ -547,13 +530,12 @@ connectRevoke: marketConnectAuthProcedure
       }
     }),
 
-  
   /**
    * Export a file from sandbox and upload to S3, then create a persistent file record
    * This combines the previous getExportFileUploadUrl + callCodeInterpreterTool + createFileRecord flow
    * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
    */
-exportAndUploadFile: marketToolProcedure
+  exportAndUploadFile: marketToolProcedure
     .input(exportAndUploadFileSchema)
     .mutation(async ({ input, ctx }) => {
       const { path, filename, topicId } = input;

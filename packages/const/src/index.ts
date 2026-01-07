@@ -4,7 +4,7 @@ export * from './discover';
 export * from './editor';
 export * from './klavis';
 export * from './layoutTokens';
-export * from './marketConnect';
+export * from './lobehubSkill';
 export * from './message';
 export * from './meta';
 export * from './plugin';

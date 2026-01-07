@@ -8,7 +8,7 @@ import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
 import {
   klavisStoreSelectors,
-  marketConnectStoreSelectors,
+  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { builtinTools } from '@/tools';
@@ -38,7 +38,7 @@ export const pluginInternals: StateCreator<
     const manifests: Record<string, LobeChatPluginManifest> = {};
 
     // Track source for each identifier
-    const sourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubmarket'> = {};
+    const sourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'> = {};
 
     // Get all installed plugins
     const installedPlugins = pluginSelectors.installedPlugins(toolStoreState);
@@ -67,12 +67,12 @@ export const pluginInternals: StateCreator<
       }
     }
 
-    // Get all Market Connect tools
-    const marketConnectTools = marketConnectStoreSelectors.marketConnectAsLobeTools(toolStoreState);
-    for (const tool of marketConnectTools) {
+    // Get all LobeHub Skill tools
+    const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
+    for (const tool of lobehubSkillTools) {
       if (tool.manifest) {
         manifests[tool.identifier] = tool.manifest as LobeChatPluginManifest;
-        sourceMap[tool.identifier] = 'lobehubmarket';
+        sourceMap[tool.identifier] = 'lobehubSkill';
       }
     }
 

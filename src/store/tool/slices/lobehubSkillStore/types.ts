@@ -1,7 +1,7 @@
 /**
- * Market Connect Server 连接状态
+ * LobeHub Skill Server 连接状态
  */
-export enum MarketConnectStatus {
+export enum LobehubSkillStatus {
   /** 已连接，可以使用 */
   CONNECTED = 'connected',
   /** 连接中 */
@@ -13,9 +13,9 @@ export enum MarketConnectStatus {
 }
 
 /**
- * Market Connect Tool 定义 (来自 Market API)
+ * LobeHub Skill Tool 定义 (来自 Market API)
  */
-export interface MarketConnectTool {
+export interface LobehubSkillTool {
   /** 工具描述 */
   description?: string;
   /** 工具输入的 JSON Schema */
@@ -30,9 +30,9 @@ export interface MarketConnectTool {
 }
 
 /**
- * Market Connect Provider 定义 (来自 Market API)
+ * LobeHub Skill Provider 定义 (来自 Market API)
  */
-export interface MarketConnectProvider {
+export interface LobehubSkillProvider {
   /** Provider 图标 URL */
   icon?: string;
   /** Provider ID (如 'linear', 'github') */
@@ -46,9 +46,9 @@ export interface MarketConnectProvider {
 }
 
 /**
- * Market Connect Server 实例 (用户已连接的 provider)
+ * LobeHub Skill Server 实例 (用户已连接的 provider)
  */
-export interface MarketConnectServer {
+export interface LobehubSkillServer {
   /** 缓存时间戳 */
   cachedAt?: number;
   /** 错误信息 */
@@ -66,17 +66,17 @@ export interface MarketConnectServer {
   /** 授权的 scopes */
   scopes?: string[];
   /** 连接状态 */
-  status: MarketConnectStatus;
+  status: LobehubSkillStatus;
   /** Token 过期时间 */
   tokenExpiresAt?: string;
   /** 工具列表 (已连接后可用) */
-  tools?: MarketConnectTool[];
+  tools?: LobehubSkillTool[];
 }
 
 /**
- * 调用 Market Connect 工具的参数
+ * 调用 LobeHub Skill 工具的参数
  */
-export interface CallMarketConnectToolParams {
+export interface CallLobehubSkillToolParams {
   /** 工具参数 */
   args?: Record<string, unknown>;
   /** Provider ID (如 'linear') */
@@ -86,9 +86,9 @@ export interface CallMarketConnectToolParams {
 }
 
 /**
- * 调用 Market Connect 工具的结果
+ * 调用 LobeHub Skill 工具的结果
  */
-export interface CallMarketConnectToolResult {
+export interface CallLobehubSkillToolResult {
   /** 返回数据 */
   data?: any;
   /** 错误信息 */

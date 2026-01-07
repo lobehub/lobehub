@@ -6,13 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import { marketConnectStoreSelectors } from '@/store/tool/selectors';
-import { MarketConnectStatus } from '@/store/tool/slices/marketConnectStore/types';
+import { lobehubSkillStoreSelectors } from '@/store/tool/selectors';
+import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
-interface MarketConnectServerItemProps {
+interface LobehubSkillServerItemProps {
   /**
    * Display label for the provider
    */
@@ -23,7 +23,7 @@ interface MarketConnectServerItemProps {
   provider: string;
 }
 
-const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, label }) => {
+const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, label }) => {
   const { t } = useTranslation('setting');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
@@ -34,10 +34,10 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const server = useToolStore(marketConnectStoreSelectors.getServerByIdentifier(provider));
-  const checkStatus = useToolStore((s) => s.checkMarketConnectStatus);
-  const revokeConnect = useToolStore((s) => s.revokeMarketConnect);
-  const getAuthorizeUrl = useToolStore((s) => s.getMarketConnectAuthorizeUrl);
+  const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(provider));
+  const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
+  const revokeConnect = useToolStore((s) => s.revokeLobehubSkill);
+  const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
@@ -63,7 +63,7 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
   }, [cleanup]);
 
   useEffect(() => {
-    if (server?.status === MarketConnectStatus.CONNECTED && isWaitingAuth) {
+    if (server?.status === LobehubSkillStatus.CONNECTED && isWaitingAuth) {
       cleanup();
     }
   }, [server?.status, isWaitingAuth, cleanup]);
@@ -75,7 +75,7 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
       try {
         await checkStatus(provider);
       } catch (error) {
-        console.error('[MarketConnect] Failed to check status:', error);
+        console.error('[LobehubSkill] Failed to check status:', error);
       }
     }, POLL_INTERVAL_MS);
 
@@ -101,7 +101,7 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
             checkStatus(provider);
           }
         } catch {
-          console.log('[MarketConnect] COOP blocked window.closed access, falling back to polling');
+          console.log('[LobehubSkill] COOP blocked window.closed access, falling back to polling');
           if (windowCheckIntervalRef.current) {
             clearInterval(windowCheckIntervalRef.current);
             windowCheckIntervalRef.current = null;
@@ -144,7 +144,7 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
       const { authorizeUrl } = await getAuthorizeUrl(provider);
       openOAuthWindow(authorizeUrl);
     } catch (error) {
-      console.error('[MarketConnect] Failed to get authorize URL:', error);
+      console.error('[LobehubSkill] Failed to get authorize URL:', error);
     } finally {
       setIsConnecting(false);
     }
@@ -188,14 +188,14 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
           }}
           style={{ cursor: 'pointer', opacity: 0.65 }}
         >
-          {t('tools.marketConnect.connect', { defaultValue: 'Connect' })}
+          {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
           <Icon icon={SquareArrowOutUpRight} size="small" />
         </Flexbox>
       );
     }
 
     switch (server.status) {
-      case MarketConnectStatus.CONNECTED: {
+      case LobehubSkillStatus.CONNECTED: {
         if (isToggling) {
           return <Icon icon={Loader2} spin />;
         }
@@ -220,7 +220,7 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
           </Flexbox>
         );
       }
-      case MarketConnectStatus.CONNECTING: {
+      case LobehubSkillStatus.CONNECTING: {
         if (isWaitingAuth) {
           return (
             <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
@@ -239,17 +239,17 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
                 const { authorizeUrl } = await getAuthorizeUrl(provider);
                 openOAuthWindow(authorizeUrl);
               } catch (error) {
-                console.error('[MarketConnect] Failed to get authorize URL:', error);
+                console.error('[LobehubSkill] Failed to get authorize URL:', error);
               }
             }}
             style={{ cursor: 'pointer', opacity: 0.65 }}
           >
-            {t('tools.marketConnect.authorize', { defaultValue: 'Authorize' })}
+            {t('tools.lobehubSkill.authorize', { defaultValue: 'Authorize' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
           </Flexbox>
         );
       }
-      case MarketConnectStatus.NOT_CONNECTED: {
+      case LobehubSkillStatus.NOT_CONNECTED: {
         return (
           <Flexbox
             align="center"
@@ -261,15 +261,15 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
             }}
             style={{ cursor: 'pointer', opacity: 0.65 }}
           >
-            {t('tools.marketConnect.connect', { defaultValue: 'Connect' })}
+            {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
           </Flexbox>
         );
       }
-      case MarketConnectStatus.ERROR: {
+      case LobehubSkillStatus.ERROR: {
         return (
           <span style={{ color: 'red', fontSize: 12 }}>
-            {t('tools.marketConnect.error', { defaultValue: 'Error' })}
+            {t('tools.lobehubSkill.error', { defaultValue: 'Error' })}
           </span>
         );
       }
@@ -287,7 +287,7 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
       justify={'space-between'}
       onClick={(e) => {
         e.stopPropagation();
-        if (server?.status === MarketConnectStatus.CONNECTED) {
+        if (server?.status === LobehubSkillStatus.CONNECTED) {
           handleToggle();
         }
       }}
@@ -301,4 +301,4 @@ const MarketConnectServerItem = memo<MarketConnectServerItemProps>(({ provider, 
   );
 });
 
-export default MarketConnectServerItem;
+export default LobehubSkillServerItem;

@@ -13,7 +13,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   klavisStoreSelectors,
-  marketConnectStoreSelectors,
+  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 
@@ -55,9 +55,9 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     .map((tool) => tool.manifest as LobeChatPluginManifest)
     .filter(Boolean);
 
-  // Get Market Connect tool manifests
-  const marketConnectTools = marketConnectStoreSelectors.marketConnectAsLobeTools(toolStoreState);
-  const marketConnectManifests = marketConnectTools
+  // Get LobeHub Skill tool manifests
+  const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
+  const lobehubSkillManifests = lobehubSkillTools
     .map((tool) => tool.manifest as LobeChatPluginManifest)
     .filter(Boolean);
 
@@ -66,7 +66,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     ...pluginManifests,
     ...builtinManifests,
     ...klavisManifests,
-    ...marketConnectManifests,
+    ...lobehubSkillManifests,
     ...additionalManifests,
   ];
 

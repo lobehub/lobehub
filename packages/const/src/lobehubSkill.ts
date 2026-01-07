@@ -1,6 +1,6 @@
 import { type IconType, SiLinear } from '@icons-pack/react-simple-icons';
 
-export interface MarketConnectProviderType {
+export interface LobehubSkillProviderType {
   /**
    * Whether this provider is visible by default in the UI
    */
@@ -20,14 +20,14 @@ export interface MarketConnectProviderType {
 }
 
 /**
- * Predefined Market Connect Provider list
+ * Predefined LobeHub Skill Provider list
  *
  * Note:
  * - This list is used for UI display (icons, labels)
  * - Actual availability depends on Market API response
  * - Add new providers here when Market adds support
  */
-export const MARKET_CONNECT_PROVIDERS: MarketConnectProviderType[] = [
+export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
   {
     defaultVisible: true,
     icon: SiLinear,
@@ -45,11 +45,11 @@ export const MARKET_CONNECT_PROVIDERS: MarketConnectProviderType[] = [
 /**
  * Get provider config by ID
  */
-export const getMarketConnectProviderById = (id: string) =>
-  MARKET_CONNECT_PROVIDERS.find((p) => p.id === id);
+export const getLobehubSkillProviderById = (id: string) =>
+  LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === id);
 
 /**
  * Get all visible providers (for default UI display)
  */
-export const getVisibleMarketConnectProviders = () =>
-  MARKET_CONNECT_PROVIDERS.filter((p) => p.defaultVisible !== false);
+export const getVisibleLobehubSkillProviders = () =>
+  LOBEHUB_SKILL_PROVIDERS.filter((p) => p.defaultVisible !== false);

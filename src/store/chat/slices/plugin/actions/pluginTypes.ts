@@ -61,9 +61,9 @@ export interface PluginTypesAction {
   invokeKlavisTypePlugin: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
 
   /**
-   * Invoke Market Connect type plugin
+   * Invoke LobeHub Skill type plugin
    */
-  invokeMarketConnectTypePlugin: (
+  invokeLobehubSkillTypePlugin: (
     id: string,
     payload: ChatToolPayload,
   ) => Promise<string | undefined>;
@@ -101,9 +101,9 @@ export const pluginTypes: StateCreator<
       return await get().invokeKlavisTypePlugin(id, payload);
     }
 
-    // Check if this is a LobeHub Market tool by source field
-    if (payload.source === 'lobehubmarket') {
-      return await get().invokeMarketConnectTypePlugin(id, payload);
+    // Check if this is a LobeHub Skill tool by source field
+    if (payload.source === 'lobehubSkill') {
+      return await get().invokeLobehubSkillTypePlugin(id, payload);
     }
 
     // Check if this is Cloud Code Interpreter - route to specific handler
@@ -452,7 +452,7 @@ export const pluginTypes: StateCreator<
     return data.content;
   },
 
-  invokeMarketConnectTypePlugin: async (id, payload) => {
+  invokeLobehubSkillTypePlugin: async (id, payload) => {
     let data: MCPToolCallResult | undefined;
 
     // Get message to extract sessionId/topicId
@@ -464,7 +464,7 @@ export const pluginTypes: StateCreator<
     const abortController = operation?.abortController;
 
     log(
-      '[invokeMarketConnectTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+      '[invokeLobehubSkillTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
       id,
       payload.apiName,
       operationId,
@@ -478,15 +478,15 @@ export const pluginTypes: StateCreator<
       // Parse arguments
       const args = safeParseJSON(payload.arguments) || {};
 
-      // Call Market Connect tool via store action
-      const result = await useToolStore.getState().callMarketConnectTool({
+      // Call LobeHub Skill tool via store action
+      const result = await useToolStore.getState().callLobehubSkillTool({
         args,
         provider,
         toolName: payload.apiName,
       });
 
       if (!result.success) {
-        throw new Error(result.error || 'Market Connect tool execution failed');
+        throw new Error(result.error || 'LobeHub Skill tool execution failed');
       }
 
       // Convert to MCPToolCallResult format
@@ -498,13 +498,13 @@ export const pluginTypes: StateCreator<
         success: true,
       };
     } catch (error) {
-      console.error('[invokeMarketConnectTypePlugin] Error:', error);
+      console.error('[invokeLobehubSkillTypePlugin] Error:', error);
 
       // ignore the aborted request error
       const err = error as Error;
       if (err.message.includes('aborted')) {
         log(
-          '[invokeMarketConnectTypePlugin] Request aborted: messageId=%s, tool=%s',
+          '[invokeLobehubSkillTypePlugin] Request aborted: messageId=%s, tool=%s',
           id,
           payload.apiName,
         );

@@ -8,9 +8,9 @@ import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin
 import { type CustomPluginAction, createCustomPluginSlice } from './slices/customPlugin';
 import { type KlavisStoreAction, createKlavisStoreSlice } from './slices/klavisStore';
 import {
-  type MarketConnectStoreAction,
-  createMarketConnectStoreSlice,
-} from './slices/marketConnectStore';
+  type LobehubSkillStoreAction,
+  createLobehubSkillStoreSlice,
+} from './slices/lobehubSkillStore';
 import { type PluginMCPStoreAction, createMCPPluginStoreSlice } from './slices/mcpStore';
 import { type PluginStoreAction, createPluginStoreSlice } from './slices/oldStore';
 import { type PluginAction, createPluginSlice } from './slices/plugin';
@@ -24,7 +24,7 @@ export type ToolStore = ToolStoreState &
   BuiltinToolAction &
   PluginMCPStoreAction &
   KlavisStoreAction &
-  MarketConnectStoreAction;
+  LobehubSkillStoreAction;
 
 const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (...parameters) => ({
   ...initialState,
@@ -34,7 +34,7 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (...
   ...createBuiltinToolSlice(...parameters),
   ...createMCPPluginStoreSlice(...parameters),
   ...createKlavisStoreSlice(...parameters),
-  ...createMarketConnectStoreSlice(...parameters),
+  ...createLobehubSkillStoreSlice(...parameters),
 });
 
 //  ===============  Implement useStore ============ //

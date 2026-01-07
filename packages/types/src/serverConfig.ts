@@ -51,8 +51,8 @@ export interface GlobalServerConfig {
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   enableEmailVerification?: boolean;
   enableKlavis?: boolean;
+  enableLobehubSkill?: boolean;
   enableMagicLink?: boolean;
-  enableMarketConnect?: boolean;
   enableMarketTrustedClient?: boolean;
   enableUploadFileToServer?: boolean;
   enabledAccessCode?: boolean;

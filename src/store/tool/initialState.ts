@@ -5,9 +5,9 @@ import {
 } from './slices/customPlugin/initialState';
 import { type KlavisStoreState, initialKlavisStoreState } from './slices/klavisStore/initialState';
 import {
-  type MarketConnectStoreState,
-  initialMarketConnectStoreState,
-} from './slices/marketConnectStore/initialState';
+  type LobehubSkillStoreState,
+  initialLobehubSkillStoreState,
+} from './slices/lobehubSkillStore/initialState';
 import { type MCPStoreState, initialMCPStoreState } from './slices/mcpStore/initialState';
 import { type PluginStoreState, initialPluginStoreState } from './slices/oldStore/initialState';
 import { type PluginState, initialPluginState } from './slices/plugin/initialState';
@@ -18,7 +18,7 @@ export type ToolStoreState = PluginState &
   BuiltinToolState &
   MCPStoreState &
   KlavisStoreState &
-  MarketConnectStoreState;
+  LobehubSkillStoreState;
 
 export const initialState: ToolStoreState = {
   ...initialPluginState,
@@ -27,5 +27,5 @@ export const initialState: ToolStoreState = {
   ...initialBuiltinToolState,
   ...initialMCPStoreState,
   ...initialKlavisStoreState,
-  ...initialMarketConnectStoreState,
+  ...initialLobehubSkillStoreState,
 };
