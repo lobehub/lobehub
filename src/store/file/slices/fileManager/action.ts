@@ -35,6 +35,7 @@ export interface FolderCrumb {
 }
 
 export interface FileManageAction {
+  cancelUpload: (id: string) => void;
   dispatchDockFileList: (payload: UploadFileListDispatch) => void;
   embeddingChunks: (fileIds: string[]) => Promise<void>;
   loadMoreKnowledgeItems: () => Promise<void>;
@@ -75,6 +76,21 @@ export const createFileManageSlice: StateCreator<
   [],
   FileManageAction
 > = (set, get) => ({
+  cancelUpload: (id) => {
+    const { dockUploadFileList, dispatchDockFileList } = get();
+    const uploadItem = dockUploadFileList.find((item) => item.id === id);
+
+    if (uploadItem?.abortController) {
+      uploadItem.abortController.abort();
+    }
+
+    // Update status to cancelled
+    dispatchDockFileList({
+      id,
+      status: 'cancelled',
+      type: 'updateFileStatus',
+    });
+  },
   dispatchDockFileList: (payload: UploadFileListDispatch) => {
     const nextValue = uploadFileListReducer(get().dockUploadFileList, payload);
     if (nextValue === get().dockUploadFileList) return;
@@ -194,19 +210,31 @@ export const createFileManageSlice: StateCreator<
     // 1. skip file in blacklist
     const files = filesToUpload.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
-    // 2. Add all files to dock
+    // 2. Create upload items with abort controllers
+    const uploadFiles = files.map((file) => {
+      const abortController = new AbortController();
+      return {
+        abortController,
+        file,
+        id: file.name,
+        status: 'pending' as const,
+      };
+    });
+
+    // 3. Add all files to dock
     dispatchDockFileList({
       atStart: true,
-      files: files.map((file) => ({ file, id: file.name, status: 'pending' })),
+      files: uploadFiles,
       type: 'addFiles',
     });
 
-    // 3. Upload files with concurrency limit using p-map
+    // 4. Upload files with concurrency limit using p-map
     const uploadResults = await pMap(
-      files,
-      async (file) => {
+      uploadFiles,
+      async (uploadFileItem) => {
         const result = await get().uploadWithProgress({
-          file,
+          abortController: uploadFileItem.abortController,
+          file: uploadFileItem.file,
           knowledgeBaseId,
           onStatusUpdate: dispatchDockFileList,
           parentId,
@@ -215,7 +243,11 @@ export const createFileManageSlice: StateCreator<
         // Note: Don't refresh after each file to avoid flickering
         // We'll refresh once at the end
 
-        return { file, fileId: result?.id, fileType: file.type };
+        return {
+          file: uploadFileItem.file,
+          fileId: result?.id,
+          fileType: uploadFileItem.file.type,
+        };
       },
       { concurrency: MAX_UPLOAD_FILE_COUNT },
     );
@@ -223,7 +255,7 @@ export const createFileManageSlice: StateCreator<
     // Refresh the file list once after all uploads are complete
     await get().refreshFileList();
 
-    // 4. auto-embed files that support chunking
+    // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults
       .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
       .map(({ fileId }) => fileId!);
