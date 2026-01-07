@@ -59,7 +59,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '模型底座从TurboS升级为混元2.0，模型能力全面提升。显著增强模型的复杂指令遵循、多轮及长文理解、代码、Agent、推理能力。',
+      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens complex instruction following, multi-turn and long-text understanding, code, Agent, and reasoning abilities.',
     displayName: 'Tencent HY 2.0 Think',
     enabled: true,
     id: 'hunyuan-2.0-thinking-20251109',
@@ -77,7 +77,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      '模型底座从TurboS升级为混元2.0，模型能力全面提升。显著增强模型的指令遵循、多轮及长文理解、文学创作、知识准确性、代码及推理能力。',
+      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens instruction following, multi-turn and long-text understanding, literary creation, knowledge accuracy, code, and reasoning abilities.',
     displayName: 'Tencent HY 2.0 Instruct',
     enabled: true,
     id: 'hunyuan-2.0-instruct-20251111',

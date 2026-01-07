@@ -13,7 +13,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'GLM-4.6V 是 GLM 系列在多模态方向上的一次重要迭代，它将训练时上下文窗口提升到128k tokens，在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。',
+      'GLM-4.6V is an important iteration of the GLM series in the multimodal direction. It increases the training context window to 128k tokens, achieves SOTA in visual understanding accuracy among models of similar parameter scale, and for the first time natively integrates Function Call (tool calling) capability into a vision model within the model architecture, bridging the path from "visual perception" to "executable actions". It provides a unified technical foundation for multimodal Agents in real business scenarios.',
     displayName: 'GLM-4.6V',
     enabled: true,
     id: 'glm-4.6v',
@@ -75,7 +75,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'GLM-4.6V-Flash 是 GLM-4.6V 的免费版本，是 GLM 系列在多模态方向上的一次重要迭代，支持开启或关闭思考模式。',
+      'GLM-4.6V-Flash is the free version of GLM-4.6V, an important iteration of the GLM series in the multimodal direction, supporting the toggle of thinking mode on or off.',
     displayName: 'GLM-4.6V-Flash',
     enabled: true,
     id: 'glm-4.6v-flash',

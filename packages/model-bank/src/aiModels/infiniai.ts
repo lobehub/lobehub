@@ -10,7 +10,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'GLM-4.6V（106B） 是专为云端和高性能集群场景设计的基座模型。GLM-4.6V 将上下文窗口扩展至 128k tokens，并在同等参数规模的模型中实现了 SOTA 的视觉理解性能。关键在于，GLM-4.6V 首次集成了原生 Function Calling 能力，有效弥合了视觉感知与可执行行动之间的差距，为现实业务场景中的多模态 Agent 提供了统一的技术基础。',
+      'GLM-4.6V (106B) is a foundational model designed for cloud and high-performance cluster scenarios. GLM-4.6V extends the context window to 128k tokens and achieves SOTA visual understanding performance among models of the same parameter scale. The key is that GLM-4.6V integrates native Function Calling capabilities for the first time, effectively bridging the gap between visual perception and executable actions, providing a unified technical foundation for multimodal Agents in real business scenarios.',
     displayName: 'GLM-4.6V',
     id: 'glm-4.6v',
     maxOutput: 4096,

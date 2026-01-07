@@ -110,7 +110,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-V3.2 是一款兼具高计算效率与卓越推理和 Agent 性能的模型。其方法建立在三大关键技术突破之上：DeepSeek 稀疏注意力（DSA），一种高效的注意力机制，在保持模型性能的同时显著降低了计算复杂性，并特别针对长上下文场景进行了优化；可扩展的强化学习框架，通过该框架，模型性能可与 GPT-5 相媲美，其高算力版本在推理能力上可与 Gemini-3.0-Pro 匹敌；以及大规模 Agent 任务合成管线，旨在将推理能力整合到工具使用场景中，从而提高在复杂交互环境中的指令遵循和泛化能力。该模型在 2025 年国际数学奥林匹克（IMO）和国际信息学奥林匹克（IOI）中取得了金牌表现。',
+      "DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is based on three major technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework, through which the model's performance can rival GPT-5, and its high-compute version can rival Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline, designed to integrate reasoning capabilities into tool-using scenarios, thereby improving instruction-following and generalization abilities in complex interactive environments. The model achieved gold medal results in the 2025 International Mathematical Olympiad (IMO) and International Informatics Olympiad (IOI).",
     displayName: 'DeepSeek V3.2',
     enabled: true,
     id: 'deepseek-ai/DeepSeek-V3.2',
@@ -134,7 +134,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-V3.2 是一款兼具高计算效率与卓越推理和 Agent 性能的模型。其方法建立在三大关键技术突破之上：DeepSeek 稀疏注意力（DSA），一种高效的注意力机制，在保持模型性能的同时显著降低了计算复杂性，并特别针对长上下文场景进行了优化；可扩展的强化学习框架，通过该框架，模型性能可与 GPT-5 相媲美，其高算力版本在推理能力上可与 Gemini-3.0-Pro 匹敌；以及大规模 Agent 任务合成管线，旨在将推理能力整合到工具使用场景中，从而提高在复杂交互环境中的指令遵循和泛化能力。该模型在 2025 年国际数学奥林匹克（IMO）和国际信息学奥林匹克（IOI）中取得了金牌表现。',
+      'DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is built on three key technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework through which model performance can rival GPT-5, with its high-compute version matching Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline aimed at integrating reasoning capabilities into tool use scenarios, thereby improving instruction following and generalization in complex interactive environments. The model achieved gold medal performance in the 2025 International Mathematical Olympiad (IMO) and International Olympiad in Informatics (IOI).',
     displayName: 'DeepSeek V3.2 (Pro)',
     id: 'Pro/deepseek-ai/DeepSeek-V3.2',
     pricing: {
@@ -282,7 +282,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      "Kimi K2 Thinking is the latest and most powerful open-source thinking model. It greatly extends multi-step reasoning depth and sustains stable tool use across 200–300 consecutive calls, setting new records on Humanity's Last Exam (HLE), BrowseComp, and other benchmarks. It excels in coding, math, logic, and agent scenarios. Built on an MoE architecture with ~1T total parameters, it supports a 256K context window and tool calling.",
+      "Kimi K2 Thinking is the latest and most powerful open-source thinking model. It greatly extends multi-step reasoning depth and sustains stable tool use across 200–300 consecutive calls, setting new records on Humanity's Last Exam (HLE), BrowseComp, and other benchmarks. 'It excels in coding, math, logic, and agent scenarios. Built on an MoE architecture with ~1T total parameters, it supports a 256K context window and tool calling.",
     displayName: 'Kimi K2 Thinking',
     id: 'moonshotai/Kimi-K2-Thinking',
     pricing: {
