@@ -1220,13 +1220,14 @@ export const openaiSTTModels: AISTTModelCard[] = [
 // Image generation models
 export const openaiImageModels: AIImageModelCard[] = [
   {
-    description: 'ChatGPT native multimodal image generation model.',
+    description:
+      'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
     displayName: 'GPT Image 1.5',
     enabled: true,
     id: 'gpt-image-1.5',
     parameters: gptImage1ParamsSchema,
     pricing: {
-      approximatePricePerImage: 0.042,
+      approximatePricePerImage: 0.034,
       units: [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -1235,6 +1236,7 @@ export const openaiImageModels: AIImageModelCard[] = [
         { name: 'imageOutput', rate: 32, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2025-12-16',
     resolutions: ['1024x1024', '1024x1536', '1536x1024'],
     type: 'image',
   },
