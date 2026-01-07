@@ -33,6 +33,24 @@ type ProviderKeyVaults = OpenAICompatibleKeyVault &
   VertexAIKeyVault;
 
 /**
+ * Resolve the runtime provider for a given provider.
+ *
+ * This is the server-side equivalent of the frontend's resolveRuntimeProvider function.
+ * For builtin providers, returns the provider as-is.
+ * For custom providers, returns the sdkType from settings (defaults to 'openai').
+ *
+ * @param provider - The provider id
+ * @param sdkType - The sdkType from provider settings
+ * @returns The resolved runtime provider
+ */
+const resolveRuntimeProvider = (provider: string, sdkType?: string): string => {
+  const isBuiltin = Object.values(ModelProvider).includes(provider as ModelProvider);
+  if (isBuiltin) return provider;
+
+  return sdkType || 'openai';
+};
+
+/**
  * Build ClientSecretPayload from keyVaults stored in database
  *
  * This is the server-side equivalent of the frontend's getProviderAuthPayload function.
@@ -41,11 +59,13 @@ type ProviderKeyVaults = OpenAICompatibleKeyVault &
  *
  * @param provider - The model provider
  * @param keyVaults - The keyVaults object from database (already decrypted)
+ * @param runtimeProvider - Optional runtime provider to include in payload
  * @returns ClientSecretPayload for the provider
  */
 export const buildPayloadFromKeyVaults = (
   provider: string,
   keyVaults: ProviderKeyVaults,
+  runtimeProvider?: string,
 ): ClientSecretPayload => {
   switch (provider) {
     case ModelProvider.Bedrock: {
@@ -103,6 +123,7 @@ export const buildPayloadFromKeyVaults = (
       return {
         apiKey: keyVaults.apiKey,
         baseURL: keyVaults.baseURL,
+        runtimeProvider,
       };
     }
   }
@@ -350,10 +371,15 @@ export const initModelRuntimeFromDB = async (
     KeyVaultsGateKeeper.getUserKeyVaults,
   );
 
-  // 2. Build ClientSecretPayload from keyVaults
-  const keyVaults = (providerConfig?.keyVaults || {}) as ProviderKeyVaults;
-  const payload = buildPayloadFromKeyVaults(provider, keyVaults);
+  // 2. Resolve the runtime provider for custom providers
+  // For custom providers, use sdkType from settings (defaults to 'openai')
+  const sdkType = providerConfig?.settings?.sdkType;
+  const runtimeProvider = resolveRuntimeProvider(provider, sdkType);
 
-  // 3. Initialize ModelRuntime with the payload
+  // 3. Build ClientSecretPayload from keyVaults with runtimeProvider
+  const keyVaults = (providerConfig?.keyVaults || {}) as ProviderKeyVaults;
+  const payload = buildPayloadFromKeyVaults(provider, keyVaults, runtimeProvider);
+
+  // 4. Initialize ModelRuntime with the payload
   return initModelRuntimeWithUserPayload(provider, payload);
 };
