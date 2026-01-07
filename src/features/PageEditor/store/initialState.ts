@@ -1,4 +1,5 @@
 import { type IEditor } from '@lobehub/editor';
+import { type EditorState } from '@lobehub/editor/react';
 
 export interface PublicState {
   autoSave?: boolean;
@@ -16,7 +17,7 @@ export interface State extends PublicState {
   currentEmoji: string | undefined;
   currentTitle: string;
   editor?: IEditor;
-  editorState?: any; // EditorState from useEditorState hook
+  editorState?: EditorState;
   isDirty: boolean; // Track if there are unsaved changes
   isLoadingContent: boolean; // Track if content is being loaded
   lastSavedContent: string; // Last saved content hash for comparison

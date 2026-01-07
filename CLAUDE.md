@@ -80,7 +80,7 @@ When creating new Linear issues using `mcp__linear-server__create_issue`, **MUST
 
 ### PR Linear Issue Association (REQUIRED)
 
-**When creating PRs for Linear issues, MUST include magic keywords in PR body:** `Fixes LOBE-123`, `Closes LOBE-123`, or `Resolves LOBE-123`
+**When creating PRs for Linear issues, MUST include magic keywords in PR body:** `Fixes LOBE-123`, `Closes LOBE-123`, or `Resolves LOBE-123`, and summarize the work done in the linear issue comment and update the issue status to "In Review".
 
 ### IMPORTANT: Per-Issue Completion Rule
 
