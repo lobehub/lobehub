@@ -1113,6 +1113,54 @@ describe('AgentModel', () => {
         ]);
       });
 
+      it('should backfill default plugins for existing agent with null plugins', async () => {
+        // Simulate an existing agent created before persist.plugins was added
+        const [existingAgent] = await serverDB
+          .insert(agents)
+          .values({
+            slug: INBOX_SESSION_ID,
+            userId,
+            plugins: null, // Old agents have null plugins
+          })
+          .returning();
+
+        // When getBuiltinAgent is called, it should backfill default plugins
+        const result = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+
+        expect(result).toBeDefined();
+        expect(result?.id).toBe(existingAgent.id);
+        // Should now have default plugins backfilled
+        expect(result?.plugins).toEqual([
+          'lobe-gtd', // GTDIdentifier
+          'lobe-notebook', // NotebookIdentifier
+        ]);
+
+        // Verify the plugins were updated in database
+        const updatedAgent = await serverDB.query.agents.findFirst({
+          where: eq(agents.id, existingAgent.id),
+        });
+        expect(updatedAgent?.plugins).toEqual(['lobe-gtd', 'lobe-notebook']);
+      });
+
+      it('should not overwrite existing plugins with default plugins', async () => {
+        // User has explicitly configured their plugins (including empty array = disabled all)
+        const [existingAgent] = await serverDB
+          .insert(agents)
+          .values({
+            slug: INBOX_SESSION_ID,
+            userId,
+            plugins: ['user-custom-plugin'], // User has custom plugins
+          })
+          .returning();
+
+        const result = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+
+        expect(result).toBeDefined();
+        expect(result?.id).toBe(existingAgent.id);
+        // Should keep user's custom plugins, not overwrite with defaults
+        expect(result?.plugins).toEqual(['user-custom-plugin']);
+      });
+
       it('should return the same agent on subsequent calls (idempotent)', async () => {
         // First call - creates the agent
         const result1 = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);

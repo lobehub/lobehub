@@ -39,9 +39,10 @@ export const GROUP_SUPERVISOR: BuiltinAgentDefinition = {
       return { systemRole: '' };
     }
 
-    // Ensure GroupManagementIdentifier is included without duplicates
-    // GroupManagement is required for supervisor functionality, always injected
+    // Get user plugins from database (backfill handled by database layer)
     const userPlugins = ctx.plugins || [];
+
+    // GroupManagement is required for supervisor - inject if not already present
     const plugins = userPlugins.includes(GroupManagementIdentifier)
       ? userPlugins
       : [GroupManagementIdentifier, ...userPlugins];

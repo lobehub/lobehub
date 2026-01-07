@@ -25,6 +25,7 @@ export const INBOX: BuiltinAgentDefinition = {
 
   runtime: (ctx) => ({
     // Use plugins from ctx (which comes from database, including user modifications)
+    // Database layer handles backfill of default plugins for existing users
     plugins: ctx.plugins || [],
     systemRole: systemRole,
   }),
