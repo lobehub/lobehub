@@ -4,13 +4,13 @@ import { type AntdToken } from 'antd-style/lib/types/theme';
 
 declare module 'antd-style' {
   // eslint-disable-next-line @typescript-eslint/no-empty-interface
-  export interface CustomToken extends LobeCustomToken { }
+  export interface CustomToken extends LobeCustomToken {}
   // eslint-disable-next-line @typescript-eslint/no-empty-interface
-  export interface CustomStylish extends LobeCustomStylish { }
+  export interface CustomStylish extends LobeCustomStylish {}
 }
 
 declare module 'styled-components' {
-  export interface DefaultTheme extends AntdToken, LobeCustomToken { }
+  export interface DefaultTheme extends AntdToken, LobeCustomToken {}
 }
 
 declare global {

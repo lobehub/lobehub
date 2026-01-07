@@ -32,7 +32,7 @@ const PWAInstall = memo(() => {
     import('@khmyznikov/pwa-install').then(() => setLibraryReady(true));
   }, []);
 
-  // Setup event listener for dismiss action and trigger PWA guide when needed
+  // Setup event listener for dismiss action
   useEffect(() => {
     if (!mounted) return;
 
@@ -49,25 +49,26 @@ const PWAInstall = memo(() => {
 
     element.addEventListener('pwa-user-choice-result-event', handler);
 
-    // trigger the PWA guide on demand
-    if (canInstall && !hidePWAInstaller && isShowPWAGuide) {
-      install();
-      if ('serviceWorker' in navigator && window.serwist !== undefined) {
-        window.serwist.register();
-      }
-    }
-
     return () => {
       element.removeEventListener('pwa-user-choice-result-event', handler);
     };
-  }, [mounted, canInstall, hidePWAInstaller, install, isShowPWAGuide, updateSystemStatus]);
+  }, [mounted, updateSystemStatus]);
+
+  // Trigger PWA guide when needed
+  useEffect(() => {
+    if (!mounted || !canInstall || hidePWAInstaller || !isShowPWAGuide) return;
+
+    install();
+    if ('serviceWorker' in navigator && window.serwist !== undefined) {
+      window.serwist.register();
+    }
+  }, [mounted, canInstall, hidePWAInstaller, isShowPWAGuide, install]);
 
   if (!mounted || !libraryReady) return null;
 
   const description = t('chat.description', { appName: BRANDING_NAME });
 
   return (
-    // @ts-expect-error - pwa-install is a custom element
     <pwa-install
       description={description}
       id={PWA_INSTALL_ID}

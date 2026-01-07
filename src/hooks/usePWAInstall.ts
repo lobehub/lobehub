@@ -1,3 +1,4 @@
+import { PWAInstallElement } from '@khmyznikov/pwa-install';
 import { useEffect, useState } from 'react';
 
 import { PWA_INSTALL_ID } from '@/const/layoutTokens';
@@ -12,7 +13,7 @@ export const usePWAInstall = () => {
   useEffect(() => {
     if (isOnServerSide) return;
 
-    const pwa: any = document.querySelector(`#${PWA_INSTALL_ID}`);
+    const pwa = document.querySelector(`#${PWA_INSTALL_ID}`) as PWAInstallElement;
     if (!pwa) return;
 
     // Pass the captured event if available
