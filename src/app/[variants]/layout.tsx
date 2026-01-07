@@ -148,7 +148,7 @@ export const generateViewport = async (props: DynamicLayoutProps): ResolvingView
 
 export const generateStaticParams = () => {
   const mobileOptions = isDesktop ? [false] : [true, false];
-  // only static for serveral page, other go to dynamtic
+  // only static for several page, other go to dynamic
   const staticLocales: Locales[] = [DEFAULT_LANG, 'zh-CN'];
 
   const variants: { variants: string }[] = [];
