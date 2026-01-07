@@ -11,9 +11,15 @@ import { useResourceManagerStore } from '../features/store';
 
 const ResourceHomePage = memo(() => {
   const [searchParams] = useSearchParams();
-  const [setMode, setCurrentViewItemId, setCategory, setLibraryId] = useResourceManagerStore(
-    (s) => [s.setMode, s.setCurrentViewItemId, s.setCategory, s.setLibraryId],
-  );
+  const [setMode, setCurrentViewItemId, setCategory, setLibraryId, currentLibraryId, currentCategory] =
+    useResourceManagerStore((s) => [
+      s.setMode,
+      s.setCurrentViewItemId,
+      s.setCategory,
+      s.setLibraryId,
+      s.libraryId,
+      s.category,
+    ]);
 
   const categoryParam = (searchParams.get('category') as FilesTabs) || FilesTabs.All;
   const fileId = searchParams.get('file');
@@ -23,15 +29,16 @@ const ResourceHomePage = memo(() => {
   const { data: fileData } = useFetchKnowledgeItem(fileId || undefined);
   const documentData = useFileStore(documentSelectors.getDocumentById(fileId || undefined));
 
-  // Clear libraryId when on home route (only once on mount)
-  useEffect(() => {
+  // Clear libraryId when on home route SYNCHRONOUSLY (during render, not in effect)
+  // This ensures libraryId is cleared before any child components' useEffects run
+  if (currentLibraryId !== undefined) {
     setLibraryId(undefined);
-  }, [setLibraryId]);
+  }
 
-  // Sync category from URL
-  useEffect(() => {
+  // Sync category from URL SYNCHRONOUSLY
+  if (currentCategory !== categoryParam) {
     setCategory(categoryParam);
-  }, [categoryParam, setCategory]);
+  }
 
   // Sync file view mode from URL
   useEffect(() => {

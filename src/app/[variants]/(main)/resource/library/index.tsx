@@ -14,11 +14,9 @@ import { useResourceManagerStore } from '../features/store';
 const MainContent = memo(() => {
   const { id: knowledgeBaseId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const [setMode, setCurrentViewItemId, setLibraryId] = useResourceManagerStore((s) => [
-    s.setMode,
-    s.setCurrentViewItemId,
-    s.setLibraryId,
-  ]);
+  const [setMode, setCurrentViewItemId, setLibraryId, currentLibraryId] = useResourceManagerStore(
+    (s) => [s.setMode, s.setCurrentViewItemId, s.setLibraryId, s.libraryId],
+  );
 
   const fileId = searchParams.get('file');
 
@@ -30,10 +28,11 @@ const MainContent = memo(() => {
   // Load knowledge base data
   useKnowledgeBaseItem(knowledgeBaseId || '');
 
-  // Set libraryId from URL params (only when knowledgeBaseId changes)
-  useEffect(() => {
+  // Set libraryId from URL params SYNCHRONOUSLY (during render, not in effect)
+  // This ensures libraryId is set before any child components' useEffects run
+  if (currentLibraryId !== knowledgeBaseId) {
     setLibraryId(knowledgeBaseId);
-  }, [knowledgeBaseId, setLibraryId]);
+  }
 
   // Sync file view mode from URL
   useEffect(() => {
