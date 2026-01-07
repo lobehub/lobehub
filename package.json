@@ -356,9 +356,10 @@
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.25.0",
     "zustand": "5.0.4",
-    "zustand-utils": "^2.1.1"，
+    "zustand-utils": "^2.1.1",
     "@toon-format/toon": "latest"
   },
+  "devDependencies": {
   "devDependencies": {
     "@ast-grep/napi": "^0.40.3",
     "@commitlint/cli": "^19.8.1",
