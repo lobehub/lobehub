@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "fixes": ["Update desktop onboarding privacy description."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.231"
+  },
+  {
+    "children": {
       "fixes": ["Fix edit rich render codeblock."]
     },
     "date": "2026-01-07",
