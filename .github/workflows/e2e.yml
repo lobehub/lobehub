@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload Cucumber HTML report (on failure)
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: cucumber-report
           path: e2e/reports
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload screenshots (on failure)
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-screenshots
           path: e2e/screenshots
