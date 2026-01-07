@@ -1,0 +1,81 @@
+.container {
+  --brand-text-color: var(--colorText, #1f1f1f);
+  --brand-muted-color: var(--colorTextSecondary, #8c8c8c);
+  --brand-border-color: var(--colorBorder, #d9d9d9);
+  --brand-tag-bg: var(--colorFillTertiary, rgba(0, 0, 0, 0.04));
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  gap: 12px;
+}
+
+[data-theme='dark'] .container {
+  --brand-text-color: var(--colorText, #f0f0f0);
+  --brand-muted-color: var(--colorTextSecondary, #a6a6a6);
+  --brand-border-color: var(--colorBorder, #424242);
+  --brand-tag-bg: var(--colorFillTertiary, rgba(255, 255, 255, 0.08));
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  opacity: 0.6;
+  color: var(--brand-text-color);
+}
+
+.brand :global(.lobe-brand-loading) {
+  display: block;
+  color: inherit;
+}
+
+.debug {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+
+  padding: 16px;
+}
+
+.debugRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  font-size: 12px;
+  color: var(--brand-muted-color);
+}
+
+.debugRow code {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
+.debugTag {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 2px 8px;
+  border: 1px solid var(--brand-border-color);
+  border-radius: 6px;
+
+  background: var(--brand-tag-bg);
+}
+
+.debugTag code {
+  color: var(--brand-text-color);
+}
+
+.debugHint {
+  font-size: 12px;
+  color: var(--brand-muted-color);
+}

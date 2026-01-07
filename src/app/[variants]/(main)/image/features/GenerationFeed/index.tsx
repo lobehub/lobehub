@@ -77,15 +77,8 @@ const GenerationFeed = memo(() => {
   }
 
   return (
-    <>
-      <Flexbox
-        gap={16}
-        ref={parent}
-        style={{
-          minHeight: 'calc(100vh - 180px)',
-        }}
-        width="100%"
-      >
+    <Flexbox flex={1}>
+      <Flexbox gap={16} ref={parent} width="100%">
         {currentGenerationBatches.map((batch, index) => (
           <Fragment key={batch.id}>
             {Boolean(index !== 0) && <Divider dashed style={{ margin: 0 }} />}
@@ -95,7 +88,7 @@ const GenerationFeed = memo(() => {
       </Flexbox>
       {/* Invisible element for scroll target */}
       <div ref={containerRef} style={{ height: 1 }} />
-    </>
+    </Flexbox>
   );
 });
 

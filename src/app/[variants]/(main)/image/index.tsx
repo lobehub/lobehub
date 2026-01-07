@@ -15,7 +15,7 @@ const DesktopImagePage = memo(() => {
     <>
       <NavHeader right={<WideScreenButton />} />
       <Flexbox height={'100%'} style={{ overflowY: 'auto', position: 'relative' }} width={'100%'}>
-        <WideScreenContainer>
+        <WideScreenContainer height={'100%'} wrapperStyle={{ height: '100%' }}>
           <Suspense fallback={<SkeletonList />}>
             <ImageWorkspace />
           </Suspense>

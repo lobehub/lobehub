@@ -1,14 +1,14 @@
 name: E2E CI
+
+on: [push, pull_request]
+
 permissions:
+  actions: write
   contents: read
 
-on:
-    pull_request:
-    push:
-
 concurrency:
-    group: e2e-${{ github.ref }}
-    cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
@@ -24,59 +24,74 @@ env:
   S3_ENDPOINT: https://e2e-mock-s3.localhost
 
 jobs:
-    e2e:
-        name: Test Web App
-        runs-on: ubuntu-latest
-        services:
-          postgres:
-            image: paradedb/paradedb:latest
-            env:
-              POSTGRES_PASSWORD: postgres
-            options: >-
-              --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+  # Check for duplicate runs
+  check-duplicate-run:
+    name: Check Duplicate Run
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          concurrent_skipping: 'same_content_newer'
+          skip_after_successful_duplicate: 'true'
+          do_not_skip: '["workflow_dispatch", "schedule"]'
 
-            ports:
-              - 5432:5432
+  e2e:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
+    name: Test Web App
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: paradedb/paradedb:latest
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+        ports:
+          - 5432:5432
 
-        timeout-minutes: 30
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v6
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-            - name: Setup Bun
-              uses: oven-sh/setup-bun@v2
-              with:
-                  bun-version: latest
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-            - name: Install dependencies (bun)
-              run: bun install
+      - name: Install dependencies (bun)
+        run: bun install
 
-            - name: Install Playwright browsers (with system deps)
-              run: bunx playwright install --with-deps chromium
+      - name: Install Playwright browsers (with system deps)
+        run: bunx playwright install --with-deps chromium
 
-            - name: Run database migrations
-              run: bun run db:migrate
+      - name: Run database migrations
+        run: bun run db:migrate
 
-            - name: Build application
-              run: bun run build
-              env:
-                SKIP_LINT: '1'
+      - name: Build application
+        run: bun run build
+        env:
+          SKIP_LINT: '1'
 
-            - name: Run E2E tests
-              run: bun run e2e
+      - name: Run E2E tests
+        run: bun run e2e
 
-            - name: Upload Cucumber HTML report (on failure)
-              if: failure()
-              uses: actions/upload-artifact@v5
-              with:
-                  name: cucumber-report
-                  path: e2e/reports
-                  if-no-files-found: ignore
+      - name: Upload Cucumber HTML report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cucumber-report
+          path: e2e/reports
+          if-no-files-found: ignore
 
-            - name: Upload screenshots (on failure)
-              if: failure()
-              uses: actions/upload-artifact@v5
-              with:
-                  name: test-screenshots
-                  path: e2e/screenshots
-                  if-no-files-found: ignore
+      - name: Upload screenshots (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-screenshots
+          path: e2e/screenshots
+          if-no-files-found: ignore

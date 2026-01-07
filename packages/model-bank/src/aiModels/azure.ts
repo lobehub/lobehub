@@ -218,7 +218,8 @@ const azureChatModels: AIChatModelCard[] = [
       deploymentName: 'gpt-4.1',
     },
     contextWindowTokens: 1_047_576,
-    description: 'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
+    description:
+      'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
     id: 'gpt-4.1',
@@ -467,7 +468,6 @@ const azureImageModels: AIImageModelCard[] = [
         enum: ['auto', '1024x1024', '1792x1024', '1024x1792'],
       },
     },
-    resolutions: ['1024x1024', '1024x1792', '1792x1024'],
     type: 'image',
   },
   {

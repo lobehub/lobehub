@@ -58,7 +58,7 @@ export default {
   'screen4.footerNote': 'You can change this anytime in settings',
   'screen4.navigation.next': 'Continue',
   'screen4.privacy.description':
-    'Keep everything local. No data is collected or shared—complete privacy for your conversations and workflows.',
+    'Disable anonymized usage analytics. No performance, model usage, or feature interaction data is shared.',
   'screen4.privacy.items.1': 'No data collection',
   'screen4.privacy.items.2': 'No usage analytics',
   'screen4.privacy.items.3': 'All processing stays local',
