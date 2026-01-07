@@ -1,41 +1,46 @@
 'use client';
 
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
   handle: css`
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 0;
-    width: 16px;
-    transform: translateX(-4px);
     cursor: col-resize;
     user-select: none;
+
+    position: absolute;
     z-index: 1;
+    inset-block: 0 0;
+    inset-inline-end: 0;
+    transform: translateX(-4px);
+
     display: flex;
     align-items: center;
     justify-content: center;
 
+    width: 16px;
+
     &::after {
       content: '';
+
       width: 1.5px;
       height: calc(100% - 16px);
-      background-color: ${cssVar.colorBorder};
-      transition: all 0.2s;
       border-radius: 1px;
+
+      background-color: ${cssVar.colorBorder};
+
+      transition: all 0.2s;
     }
 
     &:hover::after {
-      background-color: ${cssVar.colorPrimary};
       width: 3px;
+      background-color: ${cssVar.colorPrimary};
     }
   `,
   handleDragging: css`
     &::after {
-      background-color: ${cssVar.colorPrimary} !important;
       width: 3px !important;
+      background-color: ${cssVar.colorPrimary} !important;
     }
   `,
 }));
@@ -49,7 +54,7 @@ interface ColumnResizeHandleProps {
 }
 
 const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
-  ({ column, currentWidth, minWidth, maxWidth, onResize }) => {
+  ({ currentWidth, minWidth, maxWidth, onResize }) => {
     const [isDragging, setIsDragging] = useState(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
