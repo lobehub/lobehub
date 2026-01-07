@@ -364,6 +364,7 @@ const FileListItem = memo<FileListItemProps>(
           paddingInline={8}
           style={{
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            userSelect: 'none',
           }}
         >
           <Center
@@ -373,7 +374,13 @@ const FileListItem = memo<FileListItemProps>(
 
               onSelectedChange(id, !selected, e.shiftKey, index);
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              // Prevent text selection when shift-clicking for batch selection
+              if (e.shiftKey) {
+                e.preventDefault();
+              }
+            }}
             style={{ paddingInline: 4 }}
           >
             <Checkbox checked={selected} />

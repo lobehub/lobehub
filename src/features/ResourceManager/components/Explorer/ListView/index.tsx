@@ -113,7 +113,11 @@ const ListView = memo(() => {
   // Handle selection change with shift-click support for range selection
   const handleSelectionChange = useCallback(
     (id: string, checked: boolean, shiftKey: boolean, clickedIndex: number) => {
-      if (shiftKey && lastSelectedIndex !== null && selectFileIds.length > 0 && data) {
+      // Always get the latest state from the store to avoid stale closure issues
+      const currentSelected = useResourceManagerStore.getState().selectedFileIds;
+
+      if (shiftKey && lastSelectedIndex !== null && data) {
+        // Shift-click: select range from lastSelectedIndex to current index
         const start = Math.min(lastSelectedIndex, clickedIndex);
         const end = Math.max(lastSelectedIndex, clickedIndex);
         const rangeIds = data
@@ -121,19 +125,21 @@ const ListView = memo(() => {
           .filter(Boolean)
           .map((item) => item.id);
 
-        const prevSet = new Set(selectFileIds);
+        // Merge with existing selection
+        const prevSet = new Set(currentSelected);
         rangeIds.forEach((rangeId) => prevSet.add(rangeId));
         setSelectedFileIds(Array.from(prevSet));
       } else {
+        // Regular click: toggle single item
         if (checked) {
-          setSelectedFileIds([...selectFileIds, id]);
+          setSelectedFileIds([...currentSelected, id]);
         } else {
-          setSelectedFileIds(selectFileIds.filter((item) => item !== id));
+          setSelectedFileIds(currentSelected.filter((item) => item !== id));
         }
       }
       setLastSelectedIndex(clickedIndex);
     },
-    [lastSelectedIndex, selectFileIds, data, setSelectedFileIds],
+    [lastSelectedIndex, data, setSelectedFileIds],
   );
 
   // Clean up invalid selections when data changes
