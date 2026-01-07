@@ -3,6 +3,7 @@ import { INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
   agentsFiles,
@@ -16,7 +17,6 @@ import {
 } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -1099,6 +1099,18 @@ describe('AgentModel', () => {
         expect(result).toBeDefined();
         expect(result?.slug).toBe(INBOX_SESSION_ID);
         expect(result?.virtual).toBe(true);
+      });
+
+      it('should create new inbox agent with default plugins from persist config', async () => {
+        const result = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+
+        expect(result).toBeDefined();
+        // Inbox agent should have default plugins (GTD and Notebook) from persist config
+        // These defaults make the tools visible and controllable by users in UI
+        expect(result?.plugins).toEqual([
+          'lobe-gtd', // GTDIdentifier
+          'lobe-notebook', // NotebookIdentifier
+        ]);
       });
 
       it('should return the same agent on subsequent calls (idempotent)', async () => {
