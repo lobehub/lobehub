@@ -44,6 +44,7 @@ const generateFilePathMetadata = (
 };
 
 interface UploadFileToS3Options {
+  abortController?: AbortController;
   directory?: string;
   filename?: string;
   onNotSupported?: () => void;
@@ -58,13 +59,18 @@ class UploadService {
    */
   uploadFileToS3 = async (
     file: File,
-    { onProgress, directory, pathname }: UploadFileToS3Options,
+    { onProgress, directory, pathname, abortController }: UploadFileToS3Options,
   ): Promise<{ data: FileMetadata; success: boolean }> => {
     // Server-side upload logic
 
     // if is server mode, upload to server s3,
 
-    const data = await this.uploadToServerS3(file, { directory, onProgress, pathname });
+    const data = await this.uploadToServerS3(file, {
+      abortController,
+      directory,
+      onProgress,
+      pathname,
+    });
     return { data, success: true };
   };
 
@@ -129,7 +135,9 @@ class UploadService {
       onProgress,
       directory,
       pathname,
+      abortController,
     }: {
+      abortController?: AbortController;
       directory?: string;
       onProgress?: (status: FileUploadStatus, state: FileUploadState) => void;
       pathname?: string;
@@ -139,6 +147,14 @@ class UploadService {
 
     const { preSignUrl, ...result } = await this.getSignedUploadUrl(file, { directory, pathname });
     let startTime = Date.now();
+
+    // Setup abort listener
+    if (abortController) {
+      abortController.signal.addEventListener('abort', () => {
+        xhr.abort();
+      });
+    }
+
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
         const progress = Number(((event.loaded / event.total) * 100).toFixed(1));
@@ -176,6 +192,10 @@ class UploadService {
       xhr.addEventListener('error', () => {
         if (xhr.status === 0) reject(UPLOAD_NETWORK_ERROR);
         else reject(xhr.statusText);
+      });
+      xhr.addEventListener('abort', () => {
+        onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
+        reject(new Error('Upload cancelled by user'));
       });
       xhr.send(data);
     });

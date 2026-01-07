@@ -3,6 +3,7 @@ import { ActionIcon, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { UploadIcon, XIcon } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -132,49 +133,69 @@ const UploadDock = memo(() => {
         )}
       </Flexbox>
 
-      {expand ? (
-        <Flexbox
-          justify={'space-between'}
-          style={{
-            background: `color-mix(in srgb, ${cssVar.colorBgLayout} 95%, white)`,
-            borderBottomLeftRadius: 8,
-            borderBottomRightRadius: 8,
-            height: 400,
-          }}
-        >
-          <Flexbox gap={8} paddingBlock={16} style={{ overflowY: 'scroll' }}>
-            {fileList.map((item) => (
-              <Item key={item.id} {...item} />
-            ))}
-          </Flexbox>
-          <Center style={{ height: 40, minHeight: 40 }}>
-            <Text
-              onClick={() => {
-                setExpand(false);
+      <AnimatePresence mode="wait">
+        {expand ? (
+          <motion.div
+            animate={{ height: 400, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0, opacity: 0 }}
+            key="expanded"
+            style={{ overflow: 'hidden' }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+          >
+            <Flexbox
+              justify={'space-between'}
+              style={{
+                background: cssVar.colorBgContainer,
+                borderBottomLeftRadius: 8,
+                borderBottomRightRadius: 8,
+                height: 400,
               }}
-              style={{ cursor: 'pointer' }}
-              type={'secondary'}
             >
-              {t('uploadDock.body.collapse')}
-            </Text>
-          </Center>
-        </Flexbox>
-      ) : (
-        overviewUploadingStatus !== 'pending' && (
-          <div
-            className={styles.progress}
-            style={{
-              borderColor:
-                overviewUploadingStatus === 'success'
-                  ? cssVar.colorSuccess
-                  : overviewUploadingStatus === 'error'
-                    ? cssVar.colorError
-                    : undefined,
-              insetInlineEnd: `${100 - totalUploadingProgress}%`,
-            }}
-          />
-        )
-      )}
+              <Flexbox gap={8} paddingBlock={8} style={{ overflowY: 'scroll' }}>
+                {fileList.map((item) => (
+                  <Item key={item.id} {...item} />
+                ))}
+              </Flexbox>
+              <Center style={{ height: 40, minHeight: 40 }}>
+                <Text
+                  onClick={() => {
+                    setExpand(false);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                  type={'secondary'}
+                >
+                  {t('uploadDock.body.collapse')}
+                </Text>
+              </Center>
+            </Flexbox>
+          </motion.div>
+        ) : (
+          overviewUploadingStatus !== 'pending' && (
+            <motion.div
+              animate={{ opacity: 1, scaleY: 1 }}
+              exit={{ opacity: 0, scaleY: 0 }}
+              initial={{ opacity: 0, scaleY: 0 }}
+              key="collapsed"
+              style={{ originY: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            >
+              <div
+                className={styles.progress}
+                style={{
+                  borderColor:
+                    overviewUploadingStatus === 'success'
+                      ? cssVar.colorSuccess
+                      : overviewUploadingStatus === 'error'
+                        ? cssVar.colorError
+                        : undefined,
+                  insetInlineEnd: `${100 - totalUploadingProgress}%`,
+                }}
+              />
+            </motion.div>
+          )
+        )}
+      </AnimatePresence>
     </Flexbox>
   );
 });

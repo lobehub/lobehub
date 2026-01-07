@@ -5,8 +5,6 @@ import { ConfigProvider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode, useCallback, useState } from 'react';
 
-import { DETAIL_PANEL_WIDTH } from '../FileDetail';
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     height: 100%;
@@ -23,7 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-block: 0 0;
     inset-inline-end: 0;
 
-    width: ${DETAIL_PANEL_WIDTH}px;
+    width: 0;
     border-inline-start: 1px solid ${cssVar.colorSplit};
 
     background: ${cssVar.colorBgLayout};
@@ -46,7 +44,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   modal_withDetail: css`
-    width: calc(100vw - ${DETAIL_PANEL_WIDTH}px) !important;
+    width: calc(100vw) !important;
   `,
 }));
 

@@ -15,8 +15,12 @@ import {
   useResourceManagerStore,
 } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
+import { useGlobalStore } from '@/store/global';
+import { INITIAL_STATUS } from '@/store/global/initialState';
 
-import FileListItem, { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './ListItem';
+import ColumnResizeHandle from './ColumnResizeHandle';
+import FileListItem from './ListItem';
+import ListViewSkeleton from './Skeleton';
 
 const log = debug('resource-manager:list-view');
 
@@ -31,18 +35,19 @@ const styles = createStaticStyles(({ css }) => ({
     outline-offset: -4px;
   `,
   header: css`
+    min-width: 800px;
     height: 40px;
     min-height: 40px;
     color: ${cssVar.colorTextDescription};
   `,
   headerItem: css`
-    padding-block: 0;
+    padding-block: 6px;
     padding-inline: 0 24px;
+    height: 100%;
   `,
-  loadingIndicator: css`
-    padding: 16px;
-    font-size: 14px;
-    color: ${cssVar.colorTextDescription};
+  scrollContainer: css`
+    overflow: auto hidden;
+    flex: 1;
   `,
 }));
 
@@ -72,6 +77,12 @@ const ListView = memo(() => {
     s.sortType,
   ]);
 
+  // Access column widths from Global store
+  const columnWidths = useGlobalStore(
+    (s) => s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths,
+  );
+  const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
+
   const { t } = useTranslation(['components', 'file']);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -88,7 +99,6 @@ const ListView = memo(() => {
   // Get current folder ID - either from breadcrumb or null for root
   const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
 
-  // Fetch data with SWR
   const { data: rawData } = useResourceManagerFetchKnowledgeItems({
     category,
     knowledgeBaseId: libraryId,
@@ -103,7 +113,11 @@ const ListView = memo(() => {
   // Handle selection change with shift-click support for range selection
   const handleSelectionChange = useCallback(
     (id: string, checked: boolean, shiftKey: boolean, clickedIndex: number) => {
-      if (shiftKey && lastSelectedIndex !== null && selectFileIds.length > 0 && data) {
+      // Always get the latest state from the store to avoid stale closure issues
+      const currentSelected = useResourceManagerStore.getState().selectedFileIds;
+
+      if (shiftKey && lastSelectedIndex !== null && data) {
+        // Shift-click: select range from lastSelectedIndex to current index
         const start = Math.min(lastSelectedIndex, clickedIndex);
         const end = Math.max(lastSelectedIndex, clickedIndex);
         const rangeIds = data
@@ -111,19 +125,21 @@ const ListView = memo(() => {
           .filter(Boolean)
           .map((item) => item.id);
 
-        const prevSet = new Set(selectFileIds);
+        // Merge with existing selection
+        const prevSet = new Set(currentSelected);
         rangeIds.forEach((rangeId) => prevSet.add(rangeId));
         setSelectedFileIds(Array.from(prevSet));
       } else {
+        // Regular click: toggle single item
         if (checked) {
-          setSelectedFileIds([...selectFileIds, id]);
+          setSelectedFileIds([...currentSelected, id]);
         } else {
-          setSelectedFileIds(selectFileIds.filter((item) => item !== id));
+          setSelectedFileIds(currentSelected.filter((item) => item !== id));
         }
       }
       setLastSelectedIndex(clickedIndex);
     },
-    [lastSelectedIndex, selectFileIds, data, setSelectedFileIds],
+    [lastSelectedIndex, data, setSelectedFileIds],
   );
 
   // Clean up invalid selections when data changes
@@ -254,81 +270,124 @@ const ListView = memo(() => {
     };
   }, [clearScrollTimers]);
 
+  // Memoize footer component to show skeleton loaders when loading more
+  const Footer = useCallback(() => {
+    if (!isLoadingMore || !fileListHasMore) return null;
+    return <ListViewSkeleton columnWidths={columnWidths} />;
+  }, [isLoadingMore, fileListHasMore, columnWidths]);
+
   return (
     <Flexbox height={'100%'}>
-      <Flexbox
-        align={'center'}
-        className={styles.header}
-        horizontal
-        paddingInline={8}
-        style={{
-          borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-          fontSize: 12,
-        }}
-      >
-        <Center height={40} style={{ paddingInline: 4 }}>
-          <Checkbox
-            checked={allSelected}
-            indeterminate={indeterminate}
-            onChange={handleSelectAll}
-          />
-        </Center>
-        <Flexbox className={styles.headerItem} flex={1} style={{ paddingInline: 8 }}>
-          {t('FileManager.title.title')}
-        </Flexbox>
-        <Flexbox className={styles.headerItem} width={FILE_DATE_WIDTH}>
-          {t('FileManager.title.createdAt')}
-        </Flexbox>
-        <Flexbox className={styles.headerItem} width={FILE_SIZE_WIDTH}>
-          {t('FileManager.title.size')}
-        </Flexbox>
-      </Flexbox>
-      <div
-        className={cx(styles.dropZone, isDropZoneActive && styles.dropZoneActive)}
-        data-drop-target-id={currentFolderId || undefined}
-        data-is-folder="true"
-        onDragLeave={handleDropZoneDragLeave}
-        onDragOver={(e) => {
-          handleDropZoneDragOver(e);
-          handleDragMove(e);
-        }}
-        onDrop={handleDropZoneDrop}
-        ref={containerRef}
-        style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
-      >
-        <Virtuoso
-          data={data || []}
-          defaultItemHeight={48}
-          endReached={handleEndReached}
-          increaseViewportBy={{ bottom: 800, top: 1200 }}
-          initialItemCount={30}
-          itemContent={(index, item) => {
-            if (!item) return null;
-            return (
-              <FileListItem
-                index={index}
-                key={item.id}
-                onSelectedChange={handleSelectionChange}
-                pendingRenameItemId={pendingRenameItemId}
-                selected={selectFileIds.includes(item.id)}
-                {...item}
-              />
-            );
+      <div className={styles.scrollContainer}>
+        <Flexbox
+          align={'center'}
+          className={styles.header}
+          horizontal
+          paddingInline={8}
+          style={{
+            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            fontSize: 12,
           }}
-          overscan={48 * 5}
-          ref={virtuosoRef}
-          style={{ height: '100%' }}
-        />
-        {isLoadingMore && (
-          <Center
-            className={styles.loadingIndicator}
+        >
+          <Center height={40} style={{ paddingInline: 4 }}>
+            <Checkbox
+              checked={allSelected}
+              indeterminate={indeterminate}
+              onChange={handleSelectAll}
+            />
+          </Center>
+          <Flexbox
+            className={styles.headerItem}
+            justify={'center'}
             style={{
-              borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
+              flexShrink: 0,
+              maxWidth: columnWidths.name,
+              minWidth: columnWidths.name,
+              paddingInline: 8,
+              paddingInlineEnd: 16,
+              position: 'relative',
+              width: columnWidths.name,
             }}
           >
-            {t('loading', { defaultValue: 'Loading...', ns: 'file' })}
-          </Center>
-        )}
+            {t('FileManager.title.title')}
+            <ColumnResizeHandle
+              column="name"
+              currentWidth={columnWidths.name}
+              maxWidth={1200}
+              minWidth={200}
+              onResize={(width) => updateColumnWidth('name', width)}
+            />
+          </Flexbox>
+          <Flexbox
+            className={styles.headerItem}
+            justify={'center'}
+            style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+            width={columnWidths.date}
+          >
+            {t('FileManager.title.createdAt')}
+            <ColumnResizeHandle
+              column="date"
+              currentWidth={columnWidths.date}
+              maxWidth={300}
+              minWidth={120}
+              onResize={(width) => updateColumnWidth('date', width)}
+            />
+          </Flexbox>
+          <Flexbox
+            className={styles.headerItem}
+            justify={'center'}
+            style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+            width={columnWidths.size}
+          >
+            {t('FileManager.title.size')}
+            <ColumnResizeHandle
+              column="size"
+              currentWidth={columnWidths.size}
+              maxWidth={200}
+              minWidth={80}
+              onResize={(width) => updateColumnWidth('size', width)}
+            />
+          </Flexbox>
+        </Flexbox>
+        <div
+          className={cx(styles.dropZone, isDropZoneActive && styles.dropZoneActive)}
+          data-drop-target-id={currentFolderId || undefined}
+          data-is-folder="true"
+          onDragLeave={handleDropZoneDragLeave}
+          onDragOver={(e) => {
+            handleDropZoneDragOver(e);
+            handleDragMove(e);
+          }}
+          onDrop={handleDropZoneDrop}
+          ref={containerRef}
+          style={{ overflow: 'hidden', position: 'relative' }}
+        >
+          <Virtuoso
+            components={{ Footer }}
+            data={data || []}
+            defaultItemHeight={48}
+            endReached={handleEndReached}
+            increaseViewportBy={{ bottom: 800, top: 1200 }}
+            initialItemCount={30}
+            itemContent={(index, item) => {
+              if (!item) return null;
+              return (
+                <FileListItem
+                  columnWidths={columnWidths}
+                  index={index}
+                  key={item.id}
+                  onSelectedChange={handleSelectionChange}
+                  pendingRenameItemId={pendingRenameItemId}
+                  selected={selectFileIds.includes(item.id)}
+                  {...item}
+                />
+              );
+            }}
+            overscan={48 * 5}
+            ref={virtuosoRef}
+            style={{ height: 'calc(100vh - 100px)' }}
+          />
+        </div>
       </div>
     </Flexbox>
   );
