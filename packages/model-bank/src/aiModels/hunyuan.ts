@@ -8,7 +8,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '模型底座从TurboS升级为混元2.0，模型能力全面提升。显著增强模型的复杂指令遵循、多轮及长文理解、代码、Agent、推理能力。',
+      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens complex instruction following, multi-turn and long-text understanding, code, Agent, and reasoning abilities.',
     displayName: 'Tencent HY 2.0 Think',
     enabled: true,
     id: 'hunyuan-2.0-thinking-20251109',
@@ -26,7 +26,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      '模型底座从TurboS升级为混元2.0，模型能力全面提升。显著增强模型的指令遵循、多轮及长文理解、文学创作、知识准确性、代码及推理能力。',
+      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens instruction following, multi-turn and long-text understanding, literary creation, knowledge accuracy, code, and reasoning abilities.',
     displayName: 'Tencent HY 2.0 Instruct',
     enabled: true,
     id: 'hunyuan-2.0-instruct-20251111',
@@ -496,8 +496,8 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 24_000,
     description:
-      '基于文本 TurboS 基座生产的图生文快思考模型，相比上一版本在图像基础识别、图像分析推理等维度都有明显的效果提升。',
-    displayName: '混元图生文',
+      'An image-to-text fast thinking model based on the text TurboS foundation, with significant improvements in basic image recognition and image analysis reasoning compared to the previous version.',
+    displayName: 'Hunyuan Vision 1.5 Instruct',
     id: 'hunyuan-vision-1.5-instruct',
     maxOutput: 16_000,
     pricing: {
@@ -528,7 +528,8 @@ const hunyuanChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8000,
-    description: 'Latest multimodal model with multilingual responses and balanced Chinese/English ability.',
+    description:
+      'Latest multimodal model with multilingual responses and balanced Chinese/English ability.',
     displayName: 'Hunyuan Standard Vision',
     id: 'hunyuan-standard-vision',
     maxOutput: 2000,

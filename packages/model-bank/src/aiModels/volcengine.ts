@@ -14,7 +14,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
-      'Doubao-Seed-1.8 有着更强的多模态理解能力和 Agent 能力，支持文本/图片/视频输入与上下文缓存，可在复杂任务中提供更出色的表现。',
+      'Doubao-Seed-1.8 has stronger multimodal understanding and Agent capabilities, supporting text/image/video input and context caching, and can provide better performance in complex tasks.',
     displayName: 'Doubao Seed 1.8',
     id: 'doubao-seed-1.8',
     maxOutput: 64_000,
@@ -126,7 +126,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-V3.2 是深度求索推出的首个将思考融入工具使用的混合推理模型，用高效架构省算力、大规模强化学习提能力、大规模合成任务数据强泛化，三者结合性能媲美 GPT-5-High，输出长度大幅降低，显著减少了计算开销与用户等待时间。',
+      'DeepSeek-V3.2 is the first hybrid reasoning model launched by DeepSeek that integrates thinking into tool use, using efficient architecture to save compute, large-scale reinforcement learning to improve capabilities, and large-scale synthetic task data to strengthen generalization. The combination of the three achieves performance comparable to GPT-5-High, with significantly reduced output length, greatly reducing computational overhead and user waiting time.',
     displayName: 'DeepSeek V3.2',
     enabled: true,
     id: 'deepseek-v3.2',

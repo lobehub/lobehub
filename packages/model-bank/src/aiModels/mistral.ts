@@ -10,7 +10,7 @@ const mistralChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Devstral 2 是一款企业级文本模型，擅长使用工具探索代码库、编辑多个文件并为软件工程代理提供动力。',
+      'Devstral 2 is an enterprise-level text model that excels at using tools to explore codebases, edit multiple files, and power software engineering agents.',
     displayName: 'Devstral 2',
     id: 'devstral-2512',
     pricing: {
