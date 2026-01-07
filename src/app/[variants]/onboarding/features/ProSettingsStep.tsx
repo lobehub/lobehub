@@ -3,7 +3,7 @@
 import { Button, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -35,19 +35,22 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
   );
 
   const [isNavigating, setIsNavigating] = useState(false);
+  const isNavigatingRef = useRef(false);
 
   const handleFinish = useCallback(() => {
-    if (isNavigating) return;
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
     setIsNavigating(true);
     finishOnboarding();
     navigate('/');
-  }, [isNavigating, finishOnboarding, navigate]);
+  }, [finishOnboarding, navigate]);
 
   const handleBack = useCallback(() => {
-    if (isNavigating) return;
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
     setIsNavigating(true);
     onBack();
-  }, [isNavigating, onBack]);
+  }, [onBack]);
 
   const handleModelChange = useCallback(
     ({ model, provider }: { model: string; provider: string }) => {

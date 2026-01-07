@@ -4,7 +4,7 @@ import { SendButton } from '@lobehub/editor/react';
 import { Button, Flexbox, Icon, Input } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { SignatureIcon, Undo2Icon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
@@ -24,21 +24,24 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
 
   const [value, setValue] = useState(existingFullName || '');
   const [isNavigating, setIsNavigating] = useState(false);
+  const isNavigatingRef = useRef(false);
 
   const handleNext = useCallback(() => {
-    if (isNavigating) return;
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
     setIsNavigating(true);
     if (value.trim()) {
       updateFullName(value.trim());
     }
     onNext();
-  }, [isNavigating, value, updateFullName, onNext]);
+  }, [value, updateFullName, onNext]);
 
   const handleBack = useCallback(() => {
-    if (isNavigating) return;
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
     setIsNavigating(true);
     onBack();
-  }, [isNavigating, onBack]);
+  }, [onBack]);
 
   return (
     <Flexbox gap={16}>

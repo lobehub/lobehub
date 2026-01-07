@@ -3,7 +3,7 @@
 import { Block, Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon, Undo2Icon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
@@ -26,6 +26,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const isNavigatingRef = useRef(false);
 
   const areas = useMemo(
     () =>
@@ -51,7 +52,8 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
   }, [customInput, selectedInterests]);
 
   const handleNext = useCallback(() => {
-    if (isNavigating) return;
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
     setIsNavigating(true);
 
     // Include custom input value if "other" is active and has content
@@ -69,13 +71,14 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
     }
 
     onNext();
-  }, [isNavigating, selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
+  }, [selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
 
   const handleBack = useCallback(() => {
-    if (isNavigating) return;
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
     setIsNavigating(true);
     onBack();
-  }, [isNavigating, onBack]);
+  }, [onBack]);
 
   return (
     <Flexbox gap={16}>
