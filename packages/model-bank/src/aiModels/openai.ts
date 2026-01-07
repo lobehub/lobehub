@@ -1237,7 +1237,6 @@ export const openaiImageModels: AIImageModelCard[] = [
       ],
     },
     releasedAt: '2025-12-16',
-    resolutions: ['1024x1024', '1024x1536', '1536x1024'],
     type: 'image',
   },
   // https://platform.openai.com/docs/models/gpt-image-1
@@ -1257,7 +1256,6 @@ export const openaiImageModels: AIImageModelCard[] = [
         { name: 'imageOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    resolutions: ['1024x1024', '1024x1536', '1536x1024'],
     type: 'image',
   },
   {
@@ -1278,7 +1276,6 @@ export const openaiImageModels: AIImageModelCard[] = [
       ],
     },
     releasedAt: '2025-10-06',
-    resolutions: ['1024x1024', '1024x1536', '1536x1024'],
     type: 'image',
   },
   {
@@ -1317,7 +1314,6 @@ export const openaiImageModels: AIImageModelCard[] = [
         },
       ],
     },
-    resolutions: ['1024x1024', '1024x1792', '1792x1024'],
     type: 'image',
   },
   {
@@ -1350,7 +1346,6 @@ export const openaiImageModels: AIImageModelCard[] = [
         },
       ],
     },
-    resolutions: ['256x256', '512x512', '1024x1024'],
     type: 'image',
   },
 ];
