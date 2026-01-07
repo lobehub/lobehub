@@ -20,7 +20,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     &::after {
       content: '';
-      width: 2px;
+      width: 1.5px;
       height: calc(100% - 16px);
       background-color: ${cssVar.colorBorder};
       transition: all 0.2s;
