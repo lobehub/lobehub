@@ -610,12 +610,12 @@ describe('buildPayloadFromKeyVaults', () => {
     it('ComfyUI: returns all auth fields and runtimeProvider', () => {
       const keyVaults = {
         apiKey: 'comfyui-api-key',
-        baseURL: 'http://localhost:8188',
         authType: 'bearer',
-        username: 'user',
-        password: 'pass',
+        baseURL: 'http://localhost:8188',
         customHeaders: { 'X-Custom': 'header' },
-      };
+        password: 'pass',
+        username: 'user',
+      } as const;
       const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.ComfyUI);
 
       expect(payload).toEqual({
