@@ -20,8 +20,18 @@ const resolveSystemRole = (ctx: GroupSupervisorContext): string => {
  * - Strategically coordinating agent participation
  * - Ensuring natural conversation flow
  * - Matching user queries to appropriate agent expertise
+ *
+ * Plugin Strategy:
+ * - GroupManagementIdentifier is always required for group orchestration (injected in runtime)
+ * - GTD is a default plugin stored in database, visible and controllable by user
+ * - Deduplication is applied to avoid redundant tool registrations
  */
 export const GROUP_SUPERVISOR: BuiltinAgentDefinition = {
+  // Persist config - default plugins stored in database, visible and controllable by user
+  persist: {
+    plugins: [GTDIdentifier],
+  },
+
   runtime: (ctx) => {
     const { groupSupervisorContext } = ctx;
 
@@ -29,11 +39,18 @@ export const GROUP_SUPERVISOR: BuiltinAgentDefinition = {
       return { systemRole: '' };
     }
 
+    // Ensure GroupManagementIdentifier is included without duplicates
+    // GroupManagement is required for supervisor functionality, always injected
+    const userPlugins = ctx.plugins || [];
+    const plugins = userPlugins.includes(GroupManagementIdentifier)
+      ? userPlugins
+      : [GroupManagementIdentifier, ...userPlugins];
+
     return {
       chatConfig: {
         enableHistoryCount: false,
       },
-      plugins: [GroupManagementIdentifier, GTDIdentifier, ...(ctx.plugins || [])],
+      plugins,
       systemRole: resolveSystemRole(groupSupervisorContext),
     };
   },

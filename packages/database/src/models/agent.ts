@@ -488,10 +488,12 @@ export class AgentModel {
     if (!persistConfig) return null;
 
     // 4. Create the builtin agent with persist config
+    // Include default plugins so they are visible and controllable by user in UI
     const result = await this.db
       .insert(agents)
       .values({
         model: persistConfig.model,
+        plugins: persistConfig.plugins,
         provider: persistConfig.provider,
         slug: persistConfig.slug,
         userId: this.userId,

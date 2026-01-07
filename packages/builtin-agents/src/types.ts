@@ -23,6 +23,8 @@ export interface BuiltinAgentPersistConfig {
   chatConfig?: Partial<LobeAgentChatConfig>;
   /** Default model */
   model?: string;
+  /** Default plugins - will be stored in database and visible to user */
+  plugins?: string[];
   /** Default provider */
   provider?: string;
 }
