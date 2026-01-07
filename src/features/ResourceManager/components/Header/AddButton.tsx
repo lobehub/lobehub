@@ -73,7 +73,29 @@ const AddButton = () => {
   }, [createDocument, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
-    const folderId = await createFolder('Untitled', currentFolderId ?? undefined, libraryId);
+    // Get current file list to check for duplicate folder names
+    const fileList = useFileStore.getState().fileList;
+
+    // Filter for folders at the same level
+    const foldersAtSameLevel = fileList.filter(
+      (item) =>
+        item.fileType === 'custom/folder' &&
+        (item.parentId ?? null) === (currentFolderId ?? null),
+    );
+
+    // Generate unique folder name
+    const baseName = 'Untitled';
+    const existingNames = new Set(foldersAtSameLevel.map((folder) => folder.name));
+
+    let uniqueName = baseName;
+    let counter = 1;
+
+    while (existingNames.has(uniqueName)) {
+      uniqueName = `${baseName} (${counter})`;
+      counter++;
+    }
+
+    const folderId = await createFolder(uniqueName, currentFolderId ?? undefined, libraryId);
     // Trigger auto-rename
     setPendingRenameItemId(folderId);
   }, [createFolder, currentFolderId, libraryId, setPendingRenameItemId]);

@@ -218,7 +218,7 @@ const FileTreeRow = memo<{
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
-      knowledgeBaseId: libraryId,
+      libraryId,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
       sourceType: item.sourceType,
       url: item.url,

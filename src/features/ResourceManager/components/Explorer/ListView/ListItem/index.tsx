@@ -17,6 +17,7 @@ import {
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import FileIcon from '@/components/FileIcon';
+import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
@@ -170,10 +171,10 @@ const FileListItem = memo<FileListItemProps>(
     const computedValues = useMemo(() => {
       const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
       return {
-        emoji: sourceType === 'document' || fileType === 'custom/document' ? metadata?.emoji : null,
+        emoji: sourceType === 'document' || fileType === PAGE_FILE_TYPE ? metadata?.emoji : null,
         isFolder: fileType === 'custom/folder',
         // PDF files should not be treated as pages, even if they have sourceType='document'
-        isPage: !isPDF && (sourceType === 'document' || fileType === 'custom/document'),
+        isPage: !isPDF && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
         isSupportedForChunking: !isChunkingUnsupported(fileType),
       };
     }, [fileType, sourceType, metadata?.emoji, name]);
@@ -334,7 +335,7 @@ const FileListItem = memo<FileListItemProps>(
       fileType,
       filename: name,
       id,
-      knowledgeBaseId: resourceManagerState.libraryId,
+      libraryId: resourceManagerState.libraryId,
       onRenameStart: isFolder ? handleRenameStart : undefined,
       sourceType,
       url,
