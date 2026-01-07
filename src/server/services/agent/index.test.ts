@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
-import { RedisKeys, createRedisWithPrefix } from '@/libs/redis';
+import { RedisKeys, initializeRedisWithPrefix, isRedisEnabled } from '@/libs/redis';
 import { parseAgentConfig } from '@/server/globalConfig/parseDefaultAgent';
 
 import { AgentService } from './index';
@@ -43,7 +43,8 @@ vi.mock('@/libs/redis', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/libs/redis')>();
   return {
     ...original,
-    createRedisWithPrefix: vi.fn(),
+    initializeRedisWithPrefix: vi.fn(),
+    isRedisEnabled: vi.fn(),
   };
 });
 
@@ -290,7 +291,8 @@ describe('AgentService', () => {
       const mockRedisClient = { get: mockRedisGet };
 
       beforeEach(() => {
-        vi.mocked(createRedisWithPrefix).mockReset();
+        vi.mocked(initializeRedisWithPrefix).mockReset();
+        vi.mocked(isRedisEnabled).mockReset();
         mockRedisGet.mockReset();
       });
 
@@ -310,7 +312,8 @@ describe('AgentService', () => {
 
         (AgentModel as any).mockImplementation(() => mockAgentModel);
         (parseAgentConfig as any).mockReturnValue({});
-        vi.mocked(createRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
+        vi.mocked(isRedisEnabled).mockReturnValue(true);
+        vi.mocked(initializeRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
         mockRedisGet.mockResolvedValue(JSON.stringify(welcomeData));
 
         const newService = new AgentService(mockDb, mockUserId);
@@ -334,7 +337,7 @@ describe('AgentService', () => {
 
         (AgentModel as any).mockImplementation(() => mockAgentModel);
         (parseAgentConfig as any).mockReturnValue({});
-        vi.mocked(createRedisWithPrefix).mockResolvedValue(null);
+        vi.mocked(isRedisEnabled).mockReturnValue(false);
 
         const newService = new AgentService(mockDb, mockUserId);
         const result = await newService.getAgentConfigById('agent-1');
@@ -343,6 +346,7 @@ describe('AgentService', () => {
         expect(result?.openingMessage).toBe('Default message');
         // openingQuestions comes from DEFAULT_AGENT_CONFIG (empty array)
         expect(result?.openingQuestions).toEqual([]);
+        expect(initializeRedisWithPrefix).not.toHaveBeenCalled();
       });
 
       it('should return normal config when Redis key does not exist', async () => {
@@ -357,7 +361,8 @@ describe('AgentService', () => {
 
         (AgentModel as any).mockImplementation(() => mockAgentModel);
         (parseAgentConfig as any).mockReturnValue({});
-        vi.mocked(createRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
+        vi.mocked(isRedisEnabled).mockReturnValue(true);
+        vi.mocked(initializeRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
         mockRedisGet.mockResolvedValue(null);
 
         const newService = new AgentService(mockDb, mockUserId);
@@ -381,7 +386,8 @@ describe('AgentService', () => {
 
         (AgentModel as any).mockImplementation(() => mockAgentModel);
         (parseAgentConfig as any).mockReturnValue({});
-        vi.mocked(createRedisWithPrefix).mockRejectedValue(new Error('Redis connection failed'));
+        vi.mocked(isRedisEnabled).mockReturnValue(true);
+        vi.mocked(initializeRedisWithPrefix).mockRejectedValue(new Error('Redis connection failed'));
 
         const newService = new AgentService(mockDb, mockUserId);
         const result = await newService.getAgentConfigById('agent-1');
@@ -403,7 +409,8 @@ describe('AgentService', () => {
 
         (AgentModel as any).mockImplementation(() => mockAgentModel);
         (parseAgentConfig as any).mockReturnValue({});
-        vi.mocked(createRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
+        vi.mocked(isRedisEnabled).mockReturnValue(true);
+        vi.mocked(initializeRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
         mockRedisGet.mockResolvedValue('invalid json {');
 
         const newService = new AgentService(mockDb, mockUserId);

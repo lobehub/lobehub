@@ -3,16 +3,19 @@ import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
+import debug from 'debug';
 import type { PartialDeep } from 'type-fest';
 
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { getRedisConfig } from '@/envs/redis';
-import { RedisKeyNamespace, RedisKeys, createRedisWithPrefix } from '@/libs/redis';
+import { RedisKeyNamespace, RedisKeys, initializeRedisWithPrefix, isRedisEnabled } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 
 import { type UpdateAgentResult } from './type';
+
+const log = debug('lobe-agent:service');
 
 interface AgentWelcomeData {
   openQuestions: string[];
@@ -113,7 +116,10 @@ export class AgentService {
    */
   private async getAgentWelcomeFromRedis(agentId: string): Promise<AgentWelcomeData | null> {
     try {
-      const redis = await createRedisWithPrefix(getRedisConfig(), RedisKeyNamespace.AI_GENERATION);
+      const redisConfig = getRedisConfig();
+      if (!isRedisEnabled(redisConfig)) return null;
+
+      const redis = await initializeRedisWithPrefix(redisConfig, RedisKeyNamespace.AI_GENERATION);
       if (!redis) return null;
 
       const key = RedisKeys.aiGeneration.agentWelcome(agentId);
@@ -121,8 +127,9 @@ export class AgentService {
       if (!value) return null;
 
       return JSON.parse(value) as AgentWelcomeData;
-    } catch {
-      // Silently fail - Redis errors shouldn't break agent retrieval
+    } catch (error) {
+      // Log error for observability but don't break agent retrieval
+      log('Failed to get agent welcome from Redis for agent %s: %O', agentId, error);
       return null;
     }
   }
