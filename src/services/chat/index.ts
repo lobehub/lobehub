@@ -1,4 +1,3 @@
-import { maersyToonTransform } from '@/utils/maersytoon';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import type { OfficialToolItem } from '@lobechat/context-engine';
@@ -117,11 +116,6 @@ class ChatService {
     }: GetChatCompletionPayload,
     options?: FetchOptions,
   ) => {
-
-// 我们直接对解构出来的 messages 变量进行重新赋值
-    const optimizedMessages = maersyToonTransform(messages);
-    // --- [MAERSY-MOD] END ---
-
     const payload = merge(
       {
         model: DEFAULT_AGENT_CONFIG.model,
@@ -129,7 +123,6 @@ class ChatService {
         ...DEFAULT_AGENT_CONFIG.params,
       },
       params,
-      { messages: optimizedMessages } // <--- 关键：在这里显式传入压缩后的消息，覆盖原有的
     );
 
     // =================== 1. resolve agent config =================== //
