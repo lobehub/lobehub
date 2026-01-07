@@ -1,6 +1,275 @@
 [
   {
     "children": {
+      "fixes": ["Fix edit rich render codeblock."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.230"
+  },
+  {
+    "children": {
+      "fixes": ["Update mobile topicRouter import path to lambda directory."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.229"
+  },
+  {
+    "children": {
+      "fixes": ["Add separate border-radius for bottom-right corner on macOS 26 Chrome."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.228"
+  },
+  {
+    "children": {
+      "fixes": ["Allow zero-byte files and add business hooks for error handling."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.227"
+  },
+  {
+    "children": {
+      "improvements": ["Change all market routes & api call into lambda trpc client call."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.226"
+  },
+  {
+    "children": {},
+    "date": "2026-01-06",
+    "version": "2.0.0-next.225"
+  },
+  {
+    "children": {},
+    "date": "2026-01-06",
+    "version": "2.0.0-next.224"
+  },
+  {
+    "children": {
+      "fixes": ["Fix callback url error during signin period."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.223"
+  },
+  {
+    "children": {
+      "fixes": ["Fix editor modal and refactor ModelSwitchPanel."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.222"
+  },
+  {
+    "children": {
+      "improvements": ["Convert glossary from JSON to Markdown table format."],
+      "fixes": ["Resolve desktop upload CORS issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.221"
+  },
+  {
+    "children": {
+      "fixes": ["Restore getBounds mock in Browser test beforeEach."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.220"
+  },
+  {
+    "children": {
+      "fixes": ["Resolve BaseUI dropdown compatibility issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.219"
+  },
+  {
+    "children": {
+      "features": ["Update the sandbox export files & save files way."],
+      "fixes": ["Fix editor modal when Markdown rendering off."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.218"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.217"
+  },
+  {
+    "children": {
+      "fixes": ["Restore window position safely."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.216"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Update CI bun version to v1.2.4, when the document filetype is agent/plan, not show the saveinto docs button."
+      ]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.215"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.214"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.213"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.212"
+  },
+  {
+    "children": {
+      "fixes": ["Add lost like button in discover detail page."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.211"
+  },
+  {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.210"
+  },
+  {
+    "children": {
+      "fixes": ["Use configured embedding provider instead of hardcoded OpenAI."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.209"
+  },
+  {
+    "children": {
+      "fixes": ["Auto jump to group."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.208"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the old agents open profiles error problem."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.207"
+  },
+  {
+    "children": {
+      "fixes": ["Fix data inconsistency in ai provider config."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.206"
+  },
+  {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.205"
+  },
+  {
+    "children": {
+      "features": ["Add new provider Xiaomi MiMo."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.204"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.203"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor and fix model runtime initialize."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.202"
+  },
+  {
+    "children": {
+      "fixes": ["Restore window resizable before hard reload in desktop onboarding."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.201"
+  },
+  {
+    "children": {
+      "features": ["Add work path for local system."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.200"
+  },
+  {
+    "children": {
+      "fixes": ["Filter empty assistant messages for Anthropic API."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.199"
+  },
+  {
+    "children": {
+      "fixes": ["Support thoughtSignature for openrouter."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.198"
+  },
+  {
+    "children": {
+      "improvements": ["Remove client db and refactor test."],
+      "fixes": ["Fix file upload issue."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.197"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove access code."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.196"
+  },
+  {
+    "children": {
+      "fixes": ["Fix tool call message content missing."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.195"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.194"
+  },
+  {
+    "children": {},
+    "date": "2026-01-02",
+    "version": "2.0.0-next.193"
+  },
+  {
+    "children": {
+      "fixes": ["Fix model edit icon missing."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.192"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove meta in message."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.191"
+  },
+  {
+    "children": {
       "improvements": ["Update i18n."]
     },
     "date": "2026-01-02",

@@ -1,4 +1,5 @@
 import { isProviderDisableBrowserRequest } from 'model-bank/modelProviders';
+
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { type AiProviderRuntimeConfig, AiProviderSourceEnum } from '@/types/aiProvider';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
@@ -21,12 +22,24 @@ const isProviderEnabled = (id: string) => (s: AIProviderStoreState) =>
 const isProviderLoading = (id: string) => (s: AIProviderStoreState) =>
   s.aiProviderLoadingIds.includes(id);
 
-const activeProviderConfig = (s: AIProviderStoreState) => s.aiProviderDetail;
-
 // Detail
 
+/**
+ * Get provider detail by id from the cache map
+ */
+const providerDetailById = (id: string) => (s: AIProviderStoreState) => s.aiProviderDetailMap[id];
+
+/**
+ * Get active provider config from the cache map
+ */
+const activeProviderConfig = (s: AIProviderStoreState) =>
+  s.activeAiProvider ? s.aiProviderDetailMap[s.activeAiProvider] : undefined;
+
+/**
+ * Check if provider config is loading (data not yet in cache)
+ */
 const isAiProviderConfigLoading = (id: string) => (s: AIProviderStoreState) =>
-  s.activeAiProvider !== id;
+  !s.aiProviderDetailMap[id];
 
 const providerWhitelist = new Set(['ollama', 'lmstudio']);
 
@@ -134,5 +147,6 @@ export const aiProviderSelectors = {
   isProviderHasBuiltinSearchConfig,
   isProviderLoading,
   providerConfigById,
+  providerDetailById,
   providerKeyVaults,
 };

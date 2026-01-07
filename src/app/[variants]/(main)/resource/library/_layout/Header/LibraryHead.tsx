@@ -1,10 +1,9 @@
 'use client';
 
-import { useDroppable } from '@dnd-kit/core';
 import { Center, type DropdownItem, DropdownMenu, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDown } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { type DragEvent, memo, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
@@ -48,23 +47,10 @@ const Head = memo<{ id: string }>(({ id }) => {
   const name = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseNameById(id));
   const setMode = useResourceManagerStore((s) => s.setMode);
   const isDragActive = useDragActive();
+  const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
   const { data: libraries } = useFetchKnowledgeBaseList();
-
-  // Special droppable ID for root folder - matches the pattern expected by DndContextWrapper
-  const ROOT_DROP_ID = `__root__:${id}`;
-
-  const { setNodeRef, isOver } = useDroppable({
-    data: {
-      fileType: 'custom/folder',
-      isFolder: true,
-      name: 'Root',
-      targetId: null,
-    },
-    disabled: !isDragActive,
-    id: ROOT_DROP_ID,
-  });
 
   const handleClick = useCallback(() => {
     navigate(`/resource/library/${id}`);
@@ -78,6 +64,25 @@ const Head = memo<{ id: string }>(({ id }) => {
     },
     [navigate, setMode],
   );
+
+  // Native HTML5 drag-and-drop handlers for root directory drop
+  const handleDragOver = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      if (!isDragActive) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDropZoneActive(true);
+    },
+    [isDragActive],
+  );
+
+  const handleDragLeave = useCallback(() => {
+    setIsDropZoneActive(false);
+  }, []);
+
+  const handleDrop = useCallback(() => {
+    setIsDropZoneActive(false);
+  }, []);
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!libraries) return [];
@@ -98,12 +103,17 @@ const Head = memo<{ id: string }>(({ id }) => {
   return (
     <Flexbox
       align={'center'}
-      className={cx(styles.clickableHeader, isOver && styles.dropZoneActive)}
+      className={cx(styles.clickableHeader, isDropZoneActive && styles.dropZoneActive)}
+      data-drop-target-id="root"
+      data-is-folder="true"
+      data-root-drop="true"
       gap={8}
       horizontal
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       paddingBlock={6}
       paddingInline={'12px 14px'}
-      ref={setNodeRef}
     >
       <Center style={{ minWidth: 24 }} width={24}>
         <RepoIcon />

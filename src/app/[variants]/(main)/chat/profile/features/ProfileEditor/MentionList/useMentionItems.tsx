@@ -9,10 +9,10 @@ import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { useAgentStore } from '@/store/agent';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
-import { globalAgentContextManager } from '@/utils/client/GlobalAgentContextManager';
 import { hydrationPrompt } from '@/utils/promptTemplate';
 
 import MentionDropdown from './MentionDropdown';

@@ -1,4 +1,3 @@
-import { MetaData } from '../../meta';
 import { GroundingSearch } from '../../search';
 import { ThreadStatus } from '../../topic/thread';
 import {
@@ -70,7 +69,7 @@ export interface TaskDetail {
   /** Execution duration in milliseconds */
   duration?: number;
   /** Error message if task failed */
-  error?: string;
+  error?: Record<string, any>;
   /** Task start time (ISO string) */
   startedAt?: string;
   /** Task status */
@@ -121,7 +120,6 @@ export interface UIChatMessage {
   id: string;
   imageList?: ChatImageItem[];
   members?: UIChatMessage[];
-  meta: MetaData;
   metadata?: MessageMetadata | null;
   model?: string | null;
   /**

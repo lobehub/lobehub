@@ -187,7 +187,6 @@ describe('DataSlice', () => {
           role: 'user',
           createdAt: 1000,
           updatedAt: 1000,
-          meta: {},
         },
         {
           id: 'new-msg-2',
@@ -195,7 +194,6 @@ describe('DataSlice', () => {
           role: 'assistant',
           createdAt: 2000,
           updatedAt: 2000,
-          meta: {},
         },
       ];
 
@@ -329,7 +327,6 @@ describe('DataSlice', () => {
           role: 'assistantGroup' as const,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
           children: [
             { id: 'child-1', content: 'First response', role: 'assistant' as const },
             { id: 'child-2', content: 'Second response', role: 'assistant' as const },
@@ -352,7 +349,6 @@ describe('DataSlice', () => {
           role: 'assistantGroup' as const,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
           children: [
             { id: 'child-1', content: 'First response', role: 'assistant' as const },
             {
@@ -387,7 +383,6 @@ describe('DataSlice', () => {
           role: 'assistantGroup' as const,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
           children: [
             { id: 'child-1', content: 'First response', role: 'assistant' as const },
             { id: 'child-2', content: '', role: 'assistant' as const },
@@ -409,7 +404,6 @@ describe('DataSlice', () => {
           role: 'assistantGroup' as const,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          meta: {},
           children: [],
         };
 
@@ -434,7 +428,6 @@ describe('DataSlice', () => {
           role: 'user',
           createdAt: 1000,
           updatedAt: 1000,
-          meta: {},
         },
       ];
 
@@ -468,7 +461,6 @@ describe('DataSlice', () => {
           role: 'user',
           createdAt: 1000,
           updatedAt: 1000,
-          meta: {},
         },
       ];
 
@@ -575,7 +567,6 @@ describe('DataSlice', () => {
           role: 'assistant',
           createdAt: 1000,
           updatedAt: 1000,
-          meta: {},
           groupId: 'group-123',
           agentId: 'worker-agent-1',
         },
@@ -585,7 +576,6 @@ describe('DataSlice', () => {
           role: 'assistant',
           createdAt: 2000,
           updatedAt: 2000,
-          meta: {},
           groupId: 'group-123',
           agentId: 'worker-agent-2',
         },
@@ -629,7 +619,6 @@ describe('DataSlice', () => {
           role: 'user',
           createdAt: 1000,
           updatedAt: 1000,
-          meta: {},
         },
       ];
 
@@ -670,7 +659,6 @@ describe('DataSlice', () => {
             content: 'test',
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            meta: {},
           },
         ],
       } as any);
@@ -700,7 +688,6 @@ describe('DataSlice', () => {
             content: 'test',
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            meta: {},
           },
         ],
       } as any);
@@ -730,7 +717,6 @@ describe('DataSlice', () => {
             content: 'test',
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            meta: {},
           },
         ],
       } as any);

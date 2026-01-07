@@ -2,8 +2,8 @@ import { type EditLocalFileState } from '@lobechat/builtin-tool-local-system';
 import { type EditLocalFileParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Alert, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { useThemeMode } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import path from 'path-browserify-esm';
 import React, { memo, useMemo } from 'react';
 import { Diff, Hunk, parseDiff } from 'react-diff-view';
@@ -28,7 +28,8 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
         return [];
       }
     }, [pluginState?.diffText]);
-    const { isDarkMode } = useThemeMode();
+    const { resolvedTheme } = useTheme();
+    const isDarkMode = resolvedTheme === 'dark';
 
     if (!args) return <Skeleton active />;
 

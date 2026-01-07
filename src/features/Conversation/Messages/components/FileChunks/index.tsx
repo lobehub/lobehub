@@ -1,9 +1,11 @@
 import { type ChatFileChunk } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BookOpenTextIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 import ChunkItem from './ChunkItem';
 
@@ -47,7 +49,7 @@ interface FileChunksProps {
 
 const FileChunks = memo<FileChunksProps>(({ data }) => {
   const { t } = useTranslation('chat');
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   const [showDetail, setShowDetail] = useState(false);
 

@@ -33,7 +33,9 @@ const EditorCanvas = memo(() => {
   const editorData = config?.editorData;
   const systemRole = config?.systemRole;
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
-  const [initialLoad] = useState(editorData || EMPTY_EDITOR_STATE);
+  const [initialLoad] = useState(
+    editorData === undefined || editorData?.root === undefined ? EMPTY_EDITOR_STATE : editorData,
+  );
   const mentionOptions = useMentionOptions();
   const editor = useProfileStore((s) => s.editor);
   const handleContentChange = useProfileStore((s) => s.handleContentChange);
@@ -89,7 +91,7 @@ const EditorCanvas = memo(() => {
     // Don't init if streaming is in progress
     if (streamingInProgress) return;
     try {
-      if (editorData) {
+      if (editorData && editorData?.root !== undefined) {
         editor.setDocument('json', editorData);
       } else if (systemRole) {
         editor.setDocument('markdown', systemRole);

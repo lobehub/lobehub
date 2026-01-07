@@ -7,10 +7,12 @@ import {
   DEFAUTT_AGENT_TTS_CONFIG,
 } from '@lobechat/const';
 import {
+  type AgentMode,
   type KnowledgeItem,
   KnowledgeType,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
+  type LocalSystemConfig,
   type MetaData,
 } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
@@ -223,6 +225,41 @@ const openingQuestions = (s: AgentStoreState) =>
   currentAgentConfig(s)?.openingQuestions || DEFAULT_OPENING_QUESTIONS;
 const openingMessage = (s: AgentStoreState) => currentAgentConfig(s)?.openingMessage || '';
 
+// ==========   Agent Mode Config   ============== //
+
+/**
+ * Get current agent's mode
+ * Now reads from chatConfig.agentMode and chatConfig.enableAgentMode
+ */
+const currentAgentMode = (s: AgentStoreState): AgentMode | undefined => {
+  const config = currentAgentConfig(s);
+
+  // Fallback: convert enableAgentMode to mode
+  if (config?.enableAgentMode) {
+    return 'auto';
+  }
+
+  return undefined;
+};
+
+/**
+ * Check if current agent mode is enabled
+ */
+const isAgentModeEnabled = (s: AgentStoreState): boolean => currentAgentMode(s) !== undefined;
+
+/**
+ * Get current agent's local system config
+ * Now reads from chatConfig.localSystem
+ */
+const currentAgentLocalSystemConfig = (s: AgentStoreState): LocalSystemConfig | undefined =>
+  currentAgentConfig(s)?.chatConfig?.localSystem;
+
+/**
+ * Get current agent's working directory
+ */
+const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
+  currentAgentLocalSystemConfig(s)?.workingDirectory;
+
 export const agentSelectors = {
   currentAgentAvatar,
   currentAgentBackgroundColor,
@@ -230,7 +267,9 @@ export const agentSelectors = {
   currentAgentDescription,
   currentAgentFiles,
   currentAgentKnowledgeBases,
+  currentAgentLocalSystemConfig,
   currentAgentMeta,
+  currentAgentMode,
   currentAgentModel,
   currentAgentModelProvider,
   currentAgentPlugins,
@@ -239,6 +278,7 @@ export const agentSelectors = {
   currentAgentTTSVoice,
   currentAgentTags,
   currentAgentTitle,
+  currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,
   displayableAgentPlugins,
@@ -252,6 +292,7 @@ export const agentSelectors = {
   inboxAgentConfig,
   inboxAgentModel,
   isAgentConfigLoading,
+  isAgentModeEnabled,
   openingMessage,
   openingQuestions,
 };

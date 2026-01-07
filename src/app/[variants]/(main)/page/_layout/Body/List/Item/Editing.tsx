@@ -1,10 +1,9 @@
-import { Block, Flexbox, Input } from '@lobehub/ui';
-import { Popover } from 'antd';
-import { useThemeMode } from 'antd-style';
+import { Block, Flexbox, Input, Popover } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -18,7 +17,7 @@ interface EditingProps {
 
 const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEditing }) => {
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const { t } = useTranslation('file');
 
   const editing = useFileStore((s) => s.renamingPageId === documentId);
@@ -46,7 +45,6 @@ const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEdi
 
   return (
     <Popover
-      arrow={false}
       content={
         <Flexbox gap={4} horizontal onClick={(e) => e.stopPropagation()} style={{ width: 320 }}>
           <EmojiPicker
@@ -71,6 +69,7 @@ const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEdi
             defaultAvatar={'📄'}
             locale={locale}
             onChange={setNewEmoji}
+            onClick={(e) => e?.stopPropagation()}
             onDelete={() => setNewEmoji(undefined)}
             value={newEmoji}
           />
@@ -87,19 +86,18 @@ const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEdi
           />
         </Flexbox>
       }
-      destroyOnHidden
       onOpenChange={(open) => {
         if (!open) handleUpdate();
         toggleEditing(open);
       }}
       open={editing}
-      placement={'bottomLeft'}
+      placement="bottomLeft"
       styles={{
-        container: {
+        content: {
           padding: 4,
         },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       <div />
     </Popover>

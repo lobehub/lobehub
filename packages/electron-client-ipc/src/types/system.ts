@@ -3,6 +3,7 @@ export interface ElectronAppState {
   isLinux?: boolean;
   isMac?: boolean;
   isWindows?: boolean;
+  locale?: string;
   platform?: 'darwin' | 'win32' | 'linux';
   systemAppearance?: string;
   userPath?: UserPathData;
@@ -24,5 +25,5 @@ export interface UserPathData {
   videos?: string; // User's home directory
 }
 
-export type ThemeMode = 'auto' | 'dark' | 'light';
+export type ThemeMode = 'system' | 'dark' | 'light';
 export type ThemeAppearance = 'dark' | 'light' | string;

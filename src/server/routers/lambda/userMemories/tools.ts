@@ -1,13 +1,18 @@
-import { type IdentityEntryBasePayload, type IdentityEntryPayload, UserMemoryModel } from '@/database/models/userMemory';
-import { searchMemorySchema } from '@/types/userMemory';
 import {
+  AddIdentityActionSchema,
   ContextMemoryItemSchema,
   ExperienceMemoryItemSchema,
   PreferenceMemoryItemSchema,
-  AddIdentityActionSchema,
-  UpdateIdentityActionSchema,
   RemoveIdentityActionSchema,
-} from '@lobechat/memory-user-memory'
+  UpdateIdentityActionSchema,
+} from '@lobechat/memory-user-memory';
+
+import {
+  type IdentityEntryBasePayload,
+  type IdentityEntryPayload,
+  UserMemoryModel,
+} from '@/database/models/userMemory';
+import { searchMemorySchema } from '@/types/userMemory';
 
 import { searchUserMemories } from './search';
 import { createEmbedder, getEmbeddingRuntime, memoryProcedure, router } from './shared';
@@ -17,7 +22,10 @@ export const toolsRouter = router({
     .input(ContextMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -26,8 +34,10 @@ export const toolsRouter = router({
 
         const { context, memory } = await ctx.memoryModel.createContextMemory({
           context: {
-            associatedObjects: UserMemoryModel.parseAssociatedObjects(input.withContext.associatedObjects) ?? null,
-            associatedSubjects: UserMemoryModel.parseAssociatedSubjects(input.withContext.associatedSubjects) ?? null,
+            associatedObjects:
+              UserMemoryModel.parseAssociatedObjects(input.withContext.associatedObjects) ?? null,
+            associatedSubjects:
+              UserMemoryModel.parseAssociatedSubjects(input.withContext.associatedSubjects) ?? null,
             currentStatus: input.withContext.currentStatus ?? null,
             description: input.withContext.description ?? null,
             descriptionVector: contextDescriptionEmbedding ?? null,
@@ -67,7 +77,10 @@ export const toolsRouter = router({
     .input(ExperienceMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -120,7 +133,10 @@ export const toolsRouter = router({
     .input(AddIdentityActionSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -185,7 +201,10 @@ export const toolsRouter = router({
     .input(PreferenceMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -277,111 +296,114 @@ export const toolsRouter = router({
 
   updateIdentityMemory: memoryProcedure
     .input(UpdateIdentityActionSchema)
-        .mutation(async ({ input, ctx }) => {
-          try {
-            const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
-            const embed = createEmbedder(agentRuntime, embeddingModel);
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
+        const embed = createEmbedder(agentRuntime, embeddingModel);
 
-            let summaryVector1024: number[] | null | undefined;
-            if (input.set.summary !== undefined) {
-              const vector = await embed(input.set.summary);
-              summaryVector1024 = vector ?? null;
-            }
+        let summaryVector1024: number[] | null | undefined;
+        if (input.set.summary !== undefined) {
+          const vector = await embed(input.set.summary);
+          summaryVector1024 = vector ?? null;
+        }
 
-            let detailsVector1024: number[] | null | undefined;
-            if (input.set.details !== undefined) {
-              const vector = await embed(input.set.details);
-              detailsVector1024 = vector ?? null;
-            }
+        let detailsVector1024: number[] | null | undefined;
+        if (input.set.details !== undefined) {
+          const vector = await embed(input.set.details);
+          detailsVector1024 = vector ?? null;
+        }
 
-            let descriptionVector: number[] | null | undefined;
-            if (input.set.withIdentity.description !== undefined) {
-              const vector = await embed(input.set.withIdentity.description);
-              descriptionVector = vector ?? null;
-            }
+        let descriptionVector: number[] | null | undefined;
+        if (input.set.withIdentity.description !== undefined) {
+          const vector = await embed(input.set.withIdentity.description);
+          descriptionVector = vector ?? null;
+        }
 
-            const metadataUpdates: Record<string, unknown> = {};
-            if (Object.hasOwn(input.set.withIdentity, 'scoreConfidence')) {
-              metadataUpdates.scoreConfidence = input.set.withIdentity.scoreConfidence ?? null;
-            }
-            if (Object.hasOwn(input.set.withIdentity, 'sourceEvidence')) {
-              metadataUpdates.sourceEvidence = input.set.withIdentity.sourceEvidence ?? null;
-            }
+        const metadataUpdates: Record<string, unknown> = {};
+        if (Object.hasOwn(input.set.withIdentity, 'scoreConfidence')) {
+          metadataUpdates.scoreConfidence = input.set.withIdentity.scoreConfidence ?? null;
+        }
+        if (Object.hasOwn(input.set.withIdentity, 'sourceEvidence')) {
+          metadataUpdates.sourceEvidence = input.set.withIdentity.sourceEvidence ?? null;
+        }
 
-            const identityPayload: Partial<IdentityEntryPayload> = {};
-            if (input.set.withIdentity.description !== undefined) {
-              identityPayload.description = input.set.withIdentity.description;
-              identityPayload.descriptionVector = descriptionVector;
-            }
-            if (input.set.withIdentity.episodicDate !== undefined) {
-              identityPayload.episodicDate = input.set.withIdentity.episodicDate;
-            }
-            if (input.set.withIdentity.relationship !== undefined) {
-              identityPayload.relationship = input.set.withIdentity.relationship;
-            }
-            if (input.set.withIdentity.role !== undefined) {
-              identityPayload.role = input.set.withIdentity.role;
-            }
-            if (input.set.tags !== undefined) {
-              identityPayload.tags = input.set.tags;
-            }
-            if (input.set.withIdentity.type !== undefined) {
-              identityPayload.type = input.set.withIdentity.type;
-            }
-            if (Object.keys(metadataUpdates).length > 0) {
-              identityPayload.metadata = metadataUpdates;
-            }
+        const identityPayload: Partial<IdentityEntryPayload> = {};
+        if (input.set.withIdentity.description !== undefined) {
+          identityPayload.description = input.set.withIdentity.description;
+          identityPayload.descriptionVector = descriptionVector;
+        }
+        if (input.set.withIdentity.episodicDate !== undefined) {
+          identityPayload.episodicDate = input.set.withIdentity.episodicDate;
+        }
+        if (input.set.withIdentity.relationship !== undefined) {
+          identityPayload.relationship = input.set.withIdentity.relationship;
+        }
+        if (input.set.withIdentity.role !== undefined) {
+          identityPayload.role = input.set.withIdentity.role;
+        }
+        if (input.set.tags !== undefined) {
+          identityPayload.tags = input.set.tags;
+        }
+        if (input.set.withIdentity.type !== undefined) {
+          identityPayload.type = input.set.withIdentity.type;
+        }
+        if (Object.keys(metadataUpdates).length > 0) {
+          identityPayload.metadata = metadataUpdates;
+        }
 
-            const basePayload: Partial<IdentityEntryBasePayload> = {};
-            if (input.set.details !== undefined) {
-              basePayload.details = input.set.details;
-              basePayload.detailsVector1024 = detailsVector1024;
-            }
-            if (input.set.memoryCategory !== undefined) {
-              basePayload.memoryCategory = input.set.memoryCategory;
-            }
-            if (input.set.memoryType !== undefined) {
-              basePayload.memoryType = input.set.memoryType;
-            }
-            if (input.set.summary !== undefined) {
-              basePayload.summary = input.set.summary;
-              basePayload.summaryVector1024 = summaryVector1024;
-            }
-            if (input.set.tags !== undefined) {
-              basePayload.tags = input.set.tags;
-            }
-            if (input.set.title !== undefined) {
-              basePayload.title = input.set.title;
-            }
-            if (Object.keys(metadataUpdates).length > 0) {
-              basePayload.metadata = metadataUpdates;
-            }
+        const basePayload: Partial<IdentityEntryBasePayload> = {};
+        if (input.set.details !== undefined) {
+          basePayload.details = input.set.details;
+          basePayload.detailsVector1024 = detailsVector1024;
+        }
+        if (input.set.memoryCategory !== undefined) {
+          basePayload.memoryCategory = input.set.memoryCategory;
+        }
+        if (input.set.memoryType !== undefined) {
+          basePayload.memoryType = input.set.memoryType;
+        }
+        if (input.set.summary !== undefined) {
+          basePayload.summary = input.set.summary;
+          basePayload.summaryVector1024 = summaryVector1024;
+        }
+        if (input.set.tags !== undefined) {
+          basePayload.tags = input.set.tags;
+        }
+        if (input.set.title !== undefined) {
+          basePayload.title = input.set.title;
+        }
+        if (Object.keys(metadataUpdates).length > 0) {
+          basePayload.metadata = metadataUpdates;
+        }
 
-            const updated = await ctx.memoryModel.updateIdentityEntry({
-              base: Object.keys(basePayload).length > 0 ? basePayload : undefined,
-              identity: Object.keys(identityPayload).length > 0 ? identityPayload : undefined,
-              identityId: input.id,
-              mergeStrategy: input.mergeStrategy,
-            });
+        const updated = await ctx.memoryModel.updateIdentityEntry({
+          base: Object.keys(basePayload).length > 0 ? basePayload : undefined,
+          identity: Object.keys(identityPayload).length > 0 ? identityPayload : undefined,
+          identityId: input.id,
+          mergeStrategy: input.mergeStrategy,
+        });
 
-            if (!updated) {
-              return {
-                message: 'Identity memory not found',
-                success: false,
-              };
-            }
+        if (!updated) {
+          return {
+            message: 'Identity memory not found',
+            success: false,
+          };
+        }
 
-            return {
-              identityId: input.id,
-              message: 'Identity memory updated successfully',
-              success: true,
-            };
-          } catch (error) {
-            console.error('Failed to update identity memory:', error);
-            return {
-              message: `Failed to update identity memory: ${(error as Error).message}`,
-              success: false,
-            };
-          }
-        }),
+        return {
+          identityId: input.id,
+          message: 'Identity memory updated successfully',
+          success: true,
+        };
+      } catch (error) {
+        console.error('Failed to update identity memory:', error);
+        return {
+          message: `Failed to update identity memory: ${(error as Error).message}`,
+          success: false,
+        };
+      }
+    }),
 });

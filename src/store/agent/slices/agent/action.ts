@@ -10,7 +10,11 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { type CreateAgentParams, type CreateAgentResult, agentService } from '@/services/agent';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { type LobeAgentChatConfig, type LobeAgentConfig } from '@/types/agent';
+import {
+  type LobeAgentChatConfig,
+  type LobeAgentConfig,
+  type LocalSystemConfig,
+} from '@/types/agent';
 import { type MetaData } from '@/types/meta';
 import { merge } from '@/utils/merge';
 
@@ -79,6 +83,10 @@ export interface AgentSliceAction {
   ) => Promise<void>;
   updateAgentConfig: (config: PartialDeep<LobeAgentConfig>) => Promise<void>;
   updateAgentConfigById: (agentId: string, config: PartialDeep<LobeAgentConfig>) => Promise<void>;
+  updateAgentLocalSystemConfigById: (
+    agentId: string,
+    config: Partial<LocalSystemConfig>,
+  ) => Promise<void>;
   updateAgentMeta: (meta: Partial<MetaData>) => Promise<void>;
   /**
    * Update loading state for meta fields (used during autocomplete)
@@ -236,6 +244,12 @@ export const createAgentSlice: StateCreator<
     const controller = get().internal_createAbortController('updateAgentConfigSignal');
 
     await get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
+  },
+
+  updateAgentLocalSystemConfigById: async (agentId, config) => {
+    if (!agentId) return;
+
+    await get().updateAgentChatConfigById(agentId, { localSystem: config });
   },
 
   updateAgentMeta: async (meta) => {

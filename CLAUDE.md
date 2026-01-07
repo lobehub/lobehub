@@ -78,6 +78,10 @@ When creating new Linear issues using `mcp__linear-server__create_issue`, **MUST
 - Code review context
 - Future reference and debugging
 
+### PR Linear Issue Association (REQUIRED)
+
+**When creating PRs for Linear issues, MUST include magic keywords in PR body:** `Fixes LOBE-123`, `Closes LOBE-123`, or `Resolves LOBE-123`
+
 ### IMPORTANT: Per-Issue Completion Rule
 
 **When working on multiple issues (e.g., parent issue with sub-issues), you MUST update status and add comment for EACH issue IMMEDIATELY after completing it.** Do NOT wait until all issues are done to update them in batch.

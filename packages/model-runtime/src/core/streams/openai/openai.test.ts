@@ -1048,6 +1048,328 @@ describe('OpenAIStream', () => {
         ].map((i) => `${i}\n`),
       );
     });
+
+    it('should handle OpenRouter tool calls with thoughtSignature (for Gemini models)', async () => {
+      // OpenRouter returns thoughtSignature in tool_calls for Gemini models
+      // This is required for preserving reasoning blocks across turns
+      // Ref: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      function: { name: 'github__get_me', arguments: '{}' },
+                      id: 'call_123',
+                      index: 0,
+                      type: 'function',
+                      // OpenRouter adds thoughtSignature for Gemini 3 models
+                      thoughtSignature: 'ErEDCq4DAdHtim...',
+                    },
+                  ],
+                },
+                index: 0,
+              },
+            ],
+            id: 'or-123',
+          });
+
+          controller.close();
+        },
+      });
+
+      const onToolCallMock = vi.fn();
+
+      const protocolStream = OpenAIStream(mockOpenAIStream, {
+        callbacks: {
+          onToolsCalling: onToolCallMock,
+        },
+      });
+
+      const decoder = new TextDecoder();
+      const chunks = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      expect(chunks).toEqual([
+        'id: or-123\n',
+        'event: tool_calls\n',
+        // thoughtSignature should be preserved in the output
+        `data: [{"function":{"arguments":"{}","name":"github__get_me"},"id":"call_123","index":0,"type":"function","thoughtSignature":"ErEDCq4DAdHtim..."}]\n\n`,
+      ]);
+
+      // Verify the callback receives thoughtSignature
+      expect(onToolCallMock).toHaveBeenCalledWith({
+        chunk: [
+          {
+            function: { arguments: '{}', name: 'github__get_me' },
+            id: 'call_123',
+            index: 0,
+            thoughtSignature: 'ErEDCq4DAdHtim...',
+            type: 'function',
+          },
+        ],
+        toolsCalling: [
+          {
+            function: { arguments: '{}', name: 'github__get_me' },
+            id: 'call_123',
+            thoughtSignature: 'ErEDCq4DAdHtim...',
+            type: 'function',
+          },
+        ],
+      });
+    });
+
+    it('should NOT include thoughtSignature in output when not present in tool call', async () => {
+      // Standard tool calls without thoughtSignature should not include the field
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      function: { name: 'search', arguments: '{"query":"test"}' },
+                      id: 'call_456',
+                      index: 0,
+                      type: 'function',
+                      // No thoughtSignature field
+                    },
+                  ],
+                },
+                index: 0,
+              },
+            ],
+            id: 'standard-123',
+          });
+
+          controller.close();
+        },
+      });
+
+      const onToolCallMock = vi.fn();
+
+      const protocolStream = OpenAIStream(mockOpenAIStream, {
+        callbacks: {
+          onToolsCalling: onToolCallMock,
+        },
+      });
+
+      const decoder = new TextDecoder();
+      const chunks = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      expect(chunks).toEqual([
+        'id: standard-123\n',
+        'event: tool_calls\n',
+        // thoughtSignature should NOT be in the output
+        `data: [{"function":{"arguments":"{\\"query\\":\\"test\\"}","name":"search"},"id":"call_456","index":0,"type":"function"}]\n\n`,
+      ]);
+
+      // Verify the callback does NOT receive thoughtSignature
+      expect(onToolCallMock).toHaveBeenCalledWith({
+        chunk: [
+          {
+            function: { arguments: '{"query":"test"}', name: 'search' },
+            id: 'call_456',
+            index: 0,
+            // thoughtSignature should not be present
+            type: 'function',
+          },
+        ],
+        toolsCalling: [
+          {
+            function: { arguments: '{"query":"test"}', name: 'search' },
+            id: 'call_456',
+            // thoughtSignature should not be present
+            type: 'function',
+          },
+        ],
+      });
+
+      // Verify thoughtSignature is not in the chunk
+      expect(onToolCallMock.mock.calls[0][0].chunk[0]).not.toHaveProperty('thoughtSignature');
+      expect(onToolCallMock.mock.calls[0][0].toolsCalling[0]).not.toHaveProperty(
+        'thoughtSignature',
+      );
+    });
+
+    it('should handle GPT-5.2 parallel tool calls with correct id mapping', async () => {
+      // GPT-5.2 returns multiple tool calls in parallel with different indices
+      // Each tool call starts with id+name, followed by arguments-only chunks
+      // The key issue is that subsequent chunks without id should use the correct id
+      // based on their index, not the first tool's id
+      const streamData = [
+        // Tool 0: first chunk with id
+        {
+          id: 'chatcmpl-test',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    id: 'call_tool0',
+                    type: 'function',
+                    function: { name: 'search', arguments: '' },
+                    index: 0,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        // Tool 0: arguments chunk
+        {
+          id: 'chatcmpl-test',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [{ function: { arguments: '{"query":' }, index: 0 }],
+              },
+            },
+          ],
+        },
+        // Tool 1: first chunk with id (parallel tool call starts)
+        {
+          id: 'chatcmpl-test',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    id: 'call_tool1',
+                    type: 'function',
+                    function: { name: 'search', arguments: '' },
+                    index: 1,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        // Tool 0: more arguments (continuing tool 0)
+        {
+          id: 'chatcmpl-test',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [{ function: { arguments: ' "test0"}' }, index: 0 }],
+              },
+            },
+          ],
+        },
+        // Tool 1: arguments chunk
+        {
+          id: 'chatcmpl-test',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [{ function: { arguments: '{"query": "test1"}' }, index: 1 }],
+              },
+            },
+          ],
+        },
+        // Tool 2: first chunk with id
+        {
+          id: 'chatcmpl-test',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    id: 'call_tool2',
+                    type: 'function',
+                    function: { name: 'search', arguments: '' },
+                    index: 2,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        // Tool 2: arguments chunk
+        {
+          id: 'chatcmpl-test',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [{ function: { arguments: '{"query": "test2"}' }, index: 2 }],
+              },
+            },
+          ],
+        },
+        // Finish
+        {
+          id: 'chatcmpl-test',
+          choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+        },
+      ];
+
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          streamData.forEach((data) => {
+            controller.enqueue(data);
+          });
+          controller.close();
+        },
+      });
+
+      const protocolStream = OpenAIStream(mockOpenAIStream);
+      const decoder = new TextDecoder();
+      const chunks: string[] = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      // Verify the exact output - each tool call chunk should have the correct id based on index
+      expect(chunks).toEqual(
+        [
+          'id: chatcmpl-test',
+          'event: tool_calls',
+          `data: [{"function":{"arguments":"","name":"search"},"id":"call_tool0","index":0,"type":"function"}]\n`,
+          'id: chatcmpl-test',
+          'event: tool_calls',
+          `data: [{"function":{"arguments":"{\\"query\\":","name":null},"id":"call_tool0","index":0,"type":"function"}]\n`,
+          'id: chatcmpl-test',
+          'event: tool_calls',
+          `data: [{"function":{"arguments":"","name":"search"},"id":"call_tool1","index":1,"type":"function"}]\n`,
+          'id: chatcmpl-test',
+          'event: tool_calls',
+          `data: [{"function":{"arguments":" \\"test0\\"}","name":null},"id":"call_tool0","index":0,"type":"function"}]\n`,
+          'id: chatcmpl-test',
+          'event: tool_calls',
+          `data: [{"function":{"arguments":"{\\"query\\": \\"test1\\"}","name":null},"id":"call_tool1","index":1,"type":"function"}]\n`,
+          'id: chatcmpl-test',
+          'event: tool_calls',
+          `data: [{"function":{"arguments":"","name":"search"},"id":"call_tool2","index":2,"type":"function"}]\n`,
+          'id: chatcmpl-test',
+          'event: tool_calls',
+          `data: [{"function":{"arguments":"{\\"query\\": \\"test2\\"}","name":null},"id":"call_tool2","index":2,"type":"function"}]\n`,
+          'id: chatcmpl-test',
+          'event: stop',
+          `data: "tool_calls"\n`,
+        ].map((i) => `${i}\n`),
+      );
+    });
   });
 
   describe('Reasoning', () => {

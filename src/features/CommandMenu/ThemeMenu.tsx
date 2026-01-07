@@ -24,7 +24,7 @@ const ThemeMenu = memo(() => {
           <div className={styles.itemLabel}>{t('cmdk.themeDark')}</div>
         </div>
       </Command.Item>
-      <Command.Item onSelect={() => handleThemeChange('auto')} value="theme-auto">
+      <Command.Item onSelect={() => handleThemeChange('system')} value="theme-system">
         <Monitor className={styles.icon} />
         <div className={styles.itemContent}>
           <div className={styles.itemLabel}>{t('cmdk.themeAuto')}</div>

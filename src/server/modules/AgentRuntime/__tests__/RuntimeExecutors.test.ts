@@ -5,13 +5,13 @@ import { RuntimeExecutorContext, createRuntimeExecutors } from '../RuntimeExecut
 
 // Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', () => ({
-  initModelRuntimeWithUserPayload: vi.fn(() => ({
+  initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     chat: vi.fn().mockResolvedValue({
       [Symbol.asyncIterator]: async function* () {
         yield { type: 'text', text: 'Hello' };
       },
     }),
-  })),
+  }),
 }));
 
 vi.mock('@lobechat/model-runtime', () => ({
@@ -50,11 +50,11 @@ describe('RuntimeExecutors', () => {
     ctx = {
       messageModel: mockMessageModel,
       operationId: 'op-123',
+      serverDB: {} as any, // Mock serverDB
       stepIndex: 0,
       streamManager: mockStreamManager,
       toolExecutionService: mockToolExecutionService,
       userId: 'user-123',
-      userPayload: {},
     };
   });
 

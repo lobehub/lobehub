@@ -4,6 +4,7 @@ import {
   DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
 } from '@lobechat/const';
+import { type LobeChatDatabase } from '@lobechat/database';
 import {
   AddIdentityActionSchema,
   ContextMemoryItemSchema,
@@ -14,7 +15,6 @@ import {
 } from '@lobechat/memory-user-memory';
 import { LayersEnum, type SearchMemoryResult, searchMemorySchema } from '@lobechat/types';
 import { type SQL, and, asc, eq, gte, lte } from 'drizzle-orm';
-import { ModelProvider } from 'model-bank';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -33,10 +33,9 @@ import {
   userMemoriesPreferences,
 } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
-import { type ClientSecretPayload } from '@/types/auth';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
   contexts: [],
@@ -45,8 +44,9 @@ const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
 };
 
 type MemorySearchContext = {
-  jwtPayload: ClientSecretPayload;
   memoryModel: UserMemoryModel;
+  serverDB: LobeChatDatabase;
+  userId: string;
 };
 
 type MemorySearchResult = Awaited<ReturnType<UserMemoryModel['searchWithEmbedding']>>;
@@ -108,12 +108,12 @@ const searchUserMemories = async (
   ctx: MemorySearchContext,
   input: z.infer<typeof searchMemorySchema>,
 ): Promise<SearchMemoryResult> => {
-  const agentRuntime = await initModelRuntimeWithUserPayload(ModelProvider.OpenAI, ctx.jwtPayload);
-
-  const { model: embeddingModel } =
+  const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+  // Read user's provider config from database
+  const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
-  const queryEmbeddings = await agentRuntime.embeddings({
+  const queryEmbeddings = await modelRuntime.embeddings({
     dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
     input: input.query,
     model: embeddingModel,
@@ -133,13 +133,15 @@ const searchUserMemories = async (
   return mapMemorySearchResult(layeredResults);
 };
 
-const getEmbeddingRuntime = async (jwtPayload: ClientSecretPayload) => {
-  const agentRuntime = await initModelRuntimeWithUserPayload(
-    ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : ModelProvider.OpenAI,
-    jwtPayload,
-  );
-  const { model: embeddingModel } =
+const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
+  const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+  // Read user's provider config from database
+  const agentRuntime = await initModelRuntimeFromDB(
+    serverDB,
+    userId,
+    ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
+  );
 
   return { agentRuntime, embeddingModel };
 };
@@ -197,17 +199,14 @@ const normalizeEmbeddable = (value?: string | null): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-const memoryProcedure = authedProcedure
-  .use(serverDatabase)
-  .use(keyVaults)
-  .use(async (opts) => {
-    const { ctx } = opts;
-    return opts.next({
-      ctx: {
-        memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
-      },
-    });
+const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+  return opts.next({
+    ctx: {
+      memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
+    },
   });
+});
 
 export const userMemoriesRouter = router({
   getMemoryDetail: memoryProcedure
@@ -316,7 +315,10 @@ export const userMemoriesRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         const options = input ?? {};
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const concurrency = options.concurrency ?? 10;
         const shouldProcess = (key: ReEmbedTableKey) =>
           !options.only || options.only.length === 0 || options.only.includes(key);
@@ -743,7 +745,10 @@ export const userMemoriesRouter = router({
     .input(ContextMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -795,7 +800,10 @@ export const userMemoriesRouter = router({
     .input(ExperienceMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -848,7 +856,10 @@ export const userMemoriesRouter = router({
     .input(AddIdentityActionSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -913,7 +924,10 @@ export const userMemoriesRouter = router({
     .input(PreferenceMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         const summaryEmbedding = await embed(input.summary);
@@ -1003,7 +1017,10 @@ export const userMemoriesRouter = router({
     .input(UpdateIdentityActionSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(ctx.jwtPayload);
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
         const embed = createEmbedder(agentRuntime, embeddingModel);
 
         let summaryVector1024: number[] | null | undefined;

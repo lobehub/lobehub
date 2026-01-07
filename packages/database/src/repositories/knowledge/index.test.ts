@@ -2,7 +2,7 @@
 import { FilesTabs } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../models/__tests__/_util';
+import { getTestDB } from '../../core/getTestDB';
 import { NewDocument, documents } from '../../schemas/file';
 import { NewFile, files } from '../../schemas/file';
 import { users } from '../../schemas/user';

@@ -1,5 +1,5 @@
 import { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
-import { app, nativeTheme, shell, systemPreferences } from 'electron';
+import { app, dialog, nativeTheme, shell, systemPreferences } from 'electron';
 import { macOS } from 'electron-is';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -38,8 +38,9 @@ export default class SystemController extends ControllerModule {
       isLinux: platform === 'linux',
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',
+      locale: this.app.storeManager.get('locale', 'auto'),
+
       platform: platform as 'darwin' | 'win32' | 'linux',
-      systemAppearance: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
       userPath: {
         // User Paths (ensure keys match UserPathData / DesktopAppState interface)
         desktop: app.getPath('desktop'),
@@ -195,6 +196,37 @@ export default class SystemController extends ControllerModule {
   }
 
   /**
+   * Open native folder picker dialog
+   */
+  @IpcMethod()
+  async selectFolder(payload?: {
+    defaultPath?: string;
+    title?: string;
+  }): Promise<string | undefined> {
+    const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
+
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      defaultPath: payload?.defaultPath,
+      properties: ['openDirectory', 'createDirectory'],
+      title: payload?.title || 'Select Folder',
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return undefined;
+    }
+
+    return result.filePaths[0];
+  }
+
+  /**
+   * Get the OS system locale
+   */
+  @IpcMethod()
+  getSystemLocale(): string {
+    return app.getLocale();
+  }
+
+  /**
    * 更新应用语言设置
    */
   @IpcMethod()
@@ -226,9 +258,8 @@ export default class SystemController extends ControllerModule {
     return nativeTheme.themeSource;
   }
 
-  @IpcMethod()
-  async setSystemThemeMode(themeMode: ThemeMode) {
-    nativeTheme.themeSource = themeMode === 'auto' ? 'system' : themeMode;
+  private async setSystemThemeMode(themeMode: ThemeMode) {
+    nativeTheme.themeSource = themeMode;
   }
 
   /**
@@ -241,11 +272,6 @@ export default class SystemController extends ControllerModule {
     }
 
     logger.info('Initializing system theme listener');
-
-    // Get initial system theme
-    const initialDarkMode = nativeTheme.shouldUseDarkColors;
-    const initialSystemTheme: ThemeMode = initialDarkMode ? 'dark' : 'light';
-    logger.info(`Initial system theme: ${initialSystemTheme}`);
 
     // Listen for system theme changes
     nativeTheme.on('updated', () => {

@@ -58,7 +58,6 @@
       "parentId": null,
       "createdAt": 1704067200000,
       "updatedAt": 1704067200000,
-      "meta": {},
       "metadata": {
         "compare": true
       }
@@ -76,7 +75,6 @@
             "provider": "openai",
             "createdAt": 1704067205000,
             "updatedAt": 1704067205000,
-            "meta": {},
             "metadata": {
               "totalInputTokens": 24,
               "totalOutputTokens": 198,
@@ -99,7 +97,6 @@
             "provider": "anthropic",
             "createdAt": 1704067205100,
             "updatedAt": 1704067205100,
-            "meta": {},
             "metadata": {
               "totalInputTokens": 24,
               "totalOutputTokens": 215,
@@ -123,7 +120,6 @@
             "provider": "openai",
             "createdAt": 1704067205200,
             "updatedAt": 1704067205200,
-            "meta": {},
             "children": [
               {
                 "content": "Let me run a benchmark test to compare these two sorting algorithms with real data.",
@@ -213,7 +209,6 @@
         "parentMessageId": "msg-301"
       },
       "id": "compare-msg-301-msg-302-msg-303-msg-304",
-      "meta": {},
       "role": "compare",
       "updatedAt": 1704067205200
     },
@@ -223,8 +218,7 @@
       "content": "Great analysis! Can you explain why QuickSort has better cache locality?",
       "parentId": "msg-303",
       "createdAt": 1704067220000,
-      "updatedAt": 1704067220000,
-      "meta": {}
+      "updatedAt": 1704067220000
     },
     {
       "id": "msg-309",
@@ -233,7 +227,6 @@
       "parentId": "msg-308",
       "createdAt": 1704067222000,
       "updatedAt": 1704067222000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 268,
         "totalOutputTokens": 176,
@@ -254,7 +247,6 @@
       "parentId": null,
       "createdAt": 1704067200000,
       "updatedAt": 1704067200000,
-      "meta": {},
       "metadata": {
         "compare": true
       }
@@ -268,7 +260,6 @@
       "provider": "openai",
       "createdAt": 1704067205000,
       "updatedAt": 1704067205000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 24,
         "totalOutputTokens": 198,
@@ -289,7 +280,6 @@
       "provider": "anthropic",
       "createdAt": 1704067205100,
       "updatedAt": 1704067205100,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 24,
         "totalOutputTokens": 215,
@@ -327,7 +317,6 @@
       ],
       "createdAt": 1704067205200,
       "updatedAt": 1704067205200,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 24,
         "totalOutputTokens": 38,
@@ -350,8 +339,7 @@
       },
       "parentId": "msg-304",
       "createdAt": 1704067207540,
-      "updatedAt": 1704067207540,
-      "meta": {}
+      "updatedAt": 1704067207540
     },
     "msg-306": {
       "id": "msg-306",
@@ -364,8 +352,7 @@
       },
       "parentId": "msg-304",
       "createdAt": 1704067207552,
-      "updatedAt": 1704067207552,
-      "meta": {}
+      "updatedAt": 1704067207552
     },
     "msg-307": {
       "id": "msg-307",
@@ -374,7 +361,6 @@
       "parentId": "msg-306",
       "createdAt": 1704067208000,
       "updatedAt": 1704067208000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 156,
         "totalOutputTokens": 134,
@@ -392,8 +378,7 @@
       "content": "Great analysis! Can you explain why QuickSort has better cache locality?",
       "parentId": "msg-303",
       "createdAt": 1704067220000,
-      "updatedAt": 1704067220000,
-      "meta": {}
+      "updatedAt": 1704067220000
     },
     "msg-309": {
       "id": "msg-309",
@@ -402,7 +387,6 @@
       "parentId": "msg-308",
       "createdAt": 1704067222000,
       "updatedAt": 1704067222000,
-      "meta": {},
       "metadata": {
         "totalInputTokens": 268,
         "totalOutputTokens": 176,

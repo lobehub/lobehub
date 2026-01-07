@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextauthAccounts, userSettings, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { ListUsersForMemoryExtractorCursor, UserModel, UserNotFoundError } from '../user';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 const userId = 'user-model-test';
 const otherUserId = 'other-user-test';

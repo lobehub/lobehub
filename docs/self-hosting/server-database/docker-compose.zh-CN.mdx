@@ -421,6 +421,17 @@ lobe-chat      | [auth][error] TypeError: fetch failed
 
 - 一个直接的排查方式，你可以在 LobeChat 容器的终端中，使用 `curl` 命令访问你的鉴权服务 `https://auth.example.com/.well-known/openid-configuration`，如果返回了 JSON 格式的数据，则说明你的鉴权服务正常运行。
 
+#### 反向代理下 OAuth 令牌交换失败
+
+如果在反向代理后使用 Docker 时 OAuth 认证在令牌交换阶段失败，这通常是由默认的 `MIDDLEWARE_REWRITE_THROUGH_LOCAL=1` 设置引起的，该设置会将 URL 重写为 `127.0.0.1:3210`。
+
+**解决方案**: 在 `.env` 文件中设置 `MIDDLEWARE_REWRITE_THROUGH_LOCAL=0` 并重启 Docker 容器：
+
+```bash
+docker compose down
+docker compose up -d
+```
+
 ## 拓展配置
 
 为了完善你的 LobeChat 服务，你可以根据你的需求进行以下拓展配置。

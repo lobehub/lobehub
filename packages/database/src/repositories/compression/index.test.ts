@@ -2,7 +2,7 @@
 import { MessageGroupType } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../models/__tests__/_util';
+import { getTestDB } from '../../core/getTestDB';
 import { messageGroups, messages } from '../../schemas/message';
 import { topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';

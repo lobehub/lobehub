@@ -1,9 +1,10 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsDark } from '@/hooks/useIsDark';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
 
@@ -32,7 +33,7 @@ interface ThreadProps {
 
 const Thread = memo<ThreadProps>(({ id, placement, style }) => {
   const { t } = useTranslation('chat');
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   const threads = useChatStore(threadSelectors.getThreadsBySourceMsgId(id), isEqual);
 

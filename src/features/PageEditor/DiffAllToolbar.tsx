@@ -3,10 +3,12 @@
 import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
 import { Block, Icon } from '@lobehub/ui';
 import { Button, Space } from 'antd';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 import { usePageEditorStore } from './store';
 
@@ -36,7 +38,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const DiffAllToolbar = memo(() => {
   const { t } = useTranslation('editor');
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const [editor, performSave] = usePageEditorStore((s) => [s.editor, s.performSave]);
   const [hasPendingDiffs, setHasPendingDiffs] = useState(false);
 

@@ -2,12 +2,13 @@
 
 import { Avatar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { Switch } from 'antd';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Bot, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_SUPERVISOR_AVATAR } from '@/const/meta';
+import { useIsDark } from '@/hooks/useIsDark';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -53,7 +54,7 @@ interface HostMemberCardProps {
 }
 
 const HostMemberCard = memo<HostMemberCardProps>(({ checked, loading, onToggle }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const { t } = useTranslation('setting');
 
   const title = t('settingGroupMembers.host.title');

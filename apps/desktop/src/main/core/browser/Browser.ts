@@ -42,6 +42,13 @@ export interface BrowserWindowOpts extends BrowserWindowConstructorOptions {
   width?: number;
 }
 
+interface WindowState {
+  height?: number;
+  width?: number;
+  x?: number;
+  y?: number;
+}
+
 export default class Browser {
   private app: App;
   private _browserWindow?: BrowserWindow;
@@ -78,11 +85,9 @@ export default class Browser {
   /**
    * Get platform-specific theme configuration for window creation
    */
-  private getPlatformThemeConfig(isDarkMode?: boolean): Record<string, any> {
-    const darkMode = isDarkMode ?? nativeTheme.shouldUseDarkColors;
-
+  private getPlatformThemeConfig(): Record<string, any> {
     if (isWindows) {
-      return this.getWindowsThemeConfig(darkMode);
+      return this.getWindowsThemeConfig(this.isDarkMode);
     }
 
     return {};
@@ -154,6 +159,46 @@ export default class Browser {
     this._browserWindow.setTitleBarOverlay(config.titleBarOverlay);
   }
 
+  private clampNumber(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  private resolveWindowState(
+    savedState: WindowState | undefined,
+    fallbackState: { height?: number; width?: number },
+  ): WindowState {
+    const width = savedState?.width ?? fallbackState.width;
+    const height = savedState?.height ?? fallbackState.height;
+    const resolvedState: WindowState = { height, width };
+
+    const hasPosition = Number.isFinite(savedState?.x) && Number.isFinite(savedState?.y);
+    if (!hasPosition) return resolvedState;
+
+    const x = savedState?.x as number;
+    const y = savedState?.y as number;
+
+    const targetDisplay = screen.getDisplayMatching({
+      height: height ?? 0,
+      width: width ?? 0,
+      x,
+      y,
+    });
+
+    const workArea = targetDisplay?.workArea ?? screen.getPrimaryDisplay().workArea;
+    const resolvedWidth = typeof width === 'number' ? Math.min(width, workArea.width) : width;
+    const resolvedHeight = typeof height === 'number' ? Math.min(height, workArea.height) : height;
+
+    const maxX = workArea.x + Math.max(0, workArea.width - (resolvedWidth ?? 0));
+    const maxY = workArea.y + Math.max(0, workArea.height - (resolvedHeight ?? 0));
+
+    return {
+      height: resolvedHeight,
+      width: resolvedWidth,
+      x: this.clampNumber(x, workArea.x, maxX),
+      y: this.clampNumber(y, workArea.y, maxY),
+    };
+  }
+
   private cleanupThemeListener(): void {
     if (this.themeListenerSetup) {
       // Note: nativeTheme listeners are global, consider using a centralized theme manager
@@ -164,24 +209,29 @@ export default class Browser {
   }
 
   private get isDarkMode() {
-    const themeMode = this.app.storeManager.get('themeMode');
-    if (themeMode === 'auto') return nativeTheme.shouldUseDarkColors;
-
-    return themeMode === 'dark';
+    return nativeTheme.shouldUseDarkColors;
   }
 
   loadUrl = async (path: string) => {
     const initUrl = await this.app.buildRendererUrl(path);
 
-    console.log('[Browser] initUrl', initUrl);
+    // Inject locale from store to help renderer boot with the correct language.
+    // Skip when set to auto to let the renderer detect locale normally.
+    const storedLocale = this.app.storeManager.get('locale', 'auto');
+    const urlWithLocale =
+      storedLocale && storedLocale !== 'auto'
+        ? `${initUrl}${initUrl.includes('?') ? '&' : '?'}lng=${storedLocale}`
+        : initUrl;
+
+    console.log('[Browser] initUrl', urlWithLocale);
 
     try {
-      logger.debug(`[${this.identifier}] Attempting to load URL: ${initUrl}`);
-      await this._browserWindow.loadURL(initUrl);
+      logger.debug(`[${this.identifier}] Attempting to load URL: ${urlWithLocale}`);
+      await this._browserWindow.loadURL(urlWithLocale);
 
-      logger.debug(`[${this.identifier}] Successfully loaded URL: ${initUrl}`);
+      logger.debug(`[${this.identifier}] Successfully loaded URL: ${urlWithLocale}`);
     } catch (error) {
-      logger.error(`[${this.identifier}] Failed to load URL (${initUrl}):`, error);
+      logger.error(`[${this.identifier}] Failed to load URL (${urlWithLocale}):`, error);
 
       // Try to load local error page
       try {
@@ -195,13 +245,13 @@ export default class Browser {
 
         // Set retry logic
         ipcMain.handle('retry-connection', async () => {
-          logger.info(`[${this.identifier}] Retry connection requested for: ${initUrl}`);
+          logger.info(`[${this.identifier}] Retry connection requested for: ${urlWithLocale}`);
           try {
-            await this._browserWindow?.loadURL(initUrl);
-            logger.info(`[${this.identifier}] Reconnection successful to ${initUrl}`);
+            await this._browserWindow?.loadURL(urlWithLocale);
+            logger.info(`[${this.identifier}] Reconnection successful to ${urlWithLocale}`);
             return { success: true };
           } catch (err) {
-            logger.error(`[${this.identifier}] Retry connection failed for ${initUrl}:`, err);
+            logger.error(`[${this.identifier}] Retry connection failed for ${urlWithLocale}:`, err);
             // Reload error page
             try {
               logger.info(`[${this.identifier}] Reloading error page after failed retry...`);
@@ -320,23 +370,22 @@ export default class Browser {
 
     // Load window state
     const savedState = this.app.storeManager.get(this.windowStateKey as any) as
-      | { height?: number; width?: number }
-      | undefined; // Keep type for now, but only use w/h
+      | WindowState
+      | undefined;
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Options for new window: ${JSON.stringify(this.options)}`);
-    logger.debug(
-      `[${this.identifier}] Saved window state (only size used): ${JSON.stringify(savedState)}`,
-    );
+    logger.debug(`[${this.identifier}] Saved window state: ${JSON.stringify(savedState)}`);
 
-    const isDarkMode = nativeTheme.shouldUseDarkColors;
+    const resolvedState = this.resolveWindowState(savedState, { height, width });
+    logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
 
     const browserWindow = new BrowserWindow({
       ...res,
       autoHideMenuBar: true,
       backgroundColor: '#00000000',
-      darkTheme: isDarkMode,
+      darkTheme: this.isDarkMode,
       frame: false,
-      height: savedState?.height || height,
+      height: resolvedState.height,
       show: false,
       title,
       vibrancy: 'sidebar',
@@ -347,8 +396,10 @@ export default class Browser {
         preload: join(preloadDir, 'index.js'),
         sandbox: false,
       },
-      width: savedState?.width || width,
-      ...this.getPlatformThemeConfig(isDarkMode),
+      width: resolvedState.width,
+      x: resolvedState.x,
+      y: resolvedState.y,
+      ...this.getPlatformThemeConfig(),
     });
 
     this._browserWindow = browserWindow;
@@ -404,12 +455,17 @@ export default class Browser {
         logger.debug(`[${this.identifier}] App is quitting, allowing window to close naturally.`);
         // Save state before quitting
         try {
-          const { width, height } = browserWindow.getBounds(); // Get only width and height
-          const sizeState = { height, width };
+          const bounds = browserWindow.getBounds();
+          const sizeState = {
+            height: bounds.height,
+            width: bounds.width,
+            x: bounds.x,
+            y: bounds.y,
+          };
           logger.debug(
-            `[${this.identifier}] Saving window size on quit: ${JSON.stringify(sizeState)}`,
+            `[${this.identifier}] Saving window state on quit: ${JSON.stringify(sizeState)}`,
           );
-          this.app.storeManager.set(this.windowStateKey as any, sizeState); // Save only size
+          this.app.storeManager.set(this.windowStateKey as any, sizeState);
         } catch (error) {
           logger.error(`[${this.identifier}] Failed to save window state on quit:`, error);
         }
@@ -436,15 +492,20 @@ export default class Browser {
       } else {
         // Window is actually closing (not keepAlive)
         logger.debug(
-          `[${this.identifier}] keepAlive is false, allowing window to close. Saving size...`, // Updated log message
+          `[${this.identifier}] keepAlive is false, allowing window to close. Saving state...`,
         );
         try {
-          const { width, height } = browserWindow.getBounds(); // Get only width and height
-          const sizeState = { height, width };
+          const bounds = browserWindow.getBounds();
+          const sizeState = {
+            height: bounds.height,
+            width: bounds.width,
+            x: bounds.x,
+            y: bounds.y,
+          };
           logger.debug(
-            `[${this.identifier}] Saving window size on close: ${JSON.stringify(sizeState)}`,
+            `[${this.identifier}] Saving window state on close: ${JSON.stringify(sizeState)}`,
           );
-          this.app.storeManager.set(this.windowStateKey as any, sizeState); // Save only size
+          this.app.storeManager.set(this.windowStateKey as any, sizeState);
         } catch (error) {
           logger.error(`[${this.identifier}] Failed to save window state on close:`, error);
         }
@@ -504,33 +565,65 @@ export default class Browser {
   }
 
   /**
-   * Setup CORS bypass for local file server (127.0.0.1:*)
-   * This is needed for Electron to access files from the local static file server
+   * Setup CORS bypass for ALL requests
+   * In production, the renderer uses app://next protocol which triggers CORS for all external requests
+   * This completely bypasses CORS by:
+   * 1. Removing Origin header from requests (prevents OPTIONS preflight)
+   * 2. Adding proper CORS response headers using the stored origin value
    */
   private setupCORSBypass(browserWindow: BrowserWindow): void {
-    logger.debug(`[${this.identifier}] Setting up CORS bypass for local file server`);
+    logger.debug(`[${this.identifier}] Setting up CORS bypass for all requests`);
 
     const session = browserWindow.webContents.session;
 
-    // Intercept response headers to add CORS headers
+    // Store origin values for each request ID
+    const originMap = new Map<number, string>();
+
+    // Remove Origin header and store it for later use
+    session.webRequest.onBeforeSendHeaders((details, callback) => {
+      const requestHeaders = { ...details.requestHeaders };
+
+      // Store and remove Origin header to prevent CORS preflight
+      if (requestHeaders['Origin']) {
+        originMap.set(details.id, requestHeaders['Origin']);
+        delete requestHeaders['Origin'];
+        logger.debug(
+          `[${this.identifier}] Removed Origin header for: ${details.url} (stored: ${requestHeaders['Origin']})`,
+        );
+      }
+
+      callback({ requestHeaders });
+    });
+
+    // Add CORS headers to ALL responses using stored origin
     session.webRequest.onHeadersReceived((details, callback) => {
-      const url = details.url;
+      const responseHeaders = details.responseHeaders || {};
 
-      // Only modify headers for local file server requests (127.0.0.1)
-      if (url.includes('127.0.0.1') || url.includes('lobe-desktop-file')) {
-        const responseHeaders = details.responseHeaders || {};
+      // Get the original origin from our map, fallback to default
+      const origin = originMap.get(details.id) || '*';
 
-        // Add CORS headers
-        responseHeaders['Access-Control-Allow-Origin'] = ['*'];
-        responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS'];
-        responseHeaders['Access-Control-Allow-Headers'] = ['*'];
+      // Cannot use '*' when Access-Control-Allow-Credentials is true
+      responseHeaders['Access-Control-Allow-Origin'] = [origin];
+      responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS, PATCH'];
+      responseHeaders['Access-Control-Allow-Headers'] = ['*'];
+      responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
+
+      // Clean up the stored origin after response
+      originMap.delete(details.id);
+
+      // For OPTIONS requests, add preflight cache and override status
+      if (details.method === 'OPTIONS') {
+        responseHeaders['Access-Control-Max-Age'] = ['86400']; // 24 hours
+        logger.debug(`[${this.identifier}] Adding CORS headers to OPTIONS response`);
 
         callback({
           responseHeaders,
+          statusLine: 'HTTP/1.1 200 OK',
         });
-      } else {
-        callback({ responseHeaders: details.responseHeaders });
+        return;
       }
+
+      callback({ responseHeaders });
     });
 
     logger.debug(`[${this.identifier}] CORS bypass setup completed`);

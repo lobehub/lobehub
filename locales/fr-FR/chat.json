@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} sous-tâches groupées",
   "task.metrics.stepsShort": "étapes",
   "task.metrics.toolCallsShort": "utilisations d'outil",
+  "task.status.cancelled": "Tâche annulée",
+  "task.status.failed": "Échec de la tâche",
   "task.status.initializing": "Initialisation de la tâche...",
   "task.subtask": "Sous-tâche",
   "thread.divider": "Sous-sujet",

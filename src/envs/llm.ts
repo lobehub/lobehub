@@ -216,6 +216,9 @@ export const getLLMConfig = () => {
       ZENMUX_API_KEY: z.string().optional(),
 
       ENABLED_LOBEHUB: z.boolean(),
+
+      ENABLED_XIAOMIMIMO: z.boolean(),
+      XIAOMIMIMO_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -430,6 +433,9 @@ export const getLLMConfig = () => {
       ZENMUX_API_KEY: process.env.ZENMUX_API_KEY,
 
       ENABLED_LOBEHUB: !!process.env.ENABLED_LOBEHUB,
+
+      ENABLED_XIAOMIMIMO: !!process.env.XIAOMIMIMO_API_KEY,
+      XIAOMIMIMO_API_KEY: process.env.XIAOMIMIMO_API_KEY,
     },
   });
 };

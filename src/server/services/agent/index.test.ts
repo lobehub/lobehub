@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
+import { RedisKeys, createRedisWithPrefix } from '@/libs/redis';
 import { parseAgentConfig } from '@/server/globalConfig/parseDefaultAgent';
 
 import { AgentService } from './index';
@@ -33,6 +34,18 @@ vi.mock('@/database/models/agent', () => ({
 vi.mock('@/database/models/user', () => ({
   UserModel: vi.fn(),
 }));
+
+vi.mock('@/envs/redis', () => ({
+  getRedisConfig: vi.fn().mockReturnValue({ enabled: true }),
+}));
+
+vi.mock('@/libs/redis', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/libs/redis')>();
+  return {
+    ...original,
+    createRedisWithPrefix: vi.fn(),
+  };
+});
 
 describe('AgentService', () => {
   let service: AgentService;
@@ -270,6 +283,136 @@ describe('AgentService', () => {
       // Agent config should override server default
       expect(result?.model).toBe('claude-3');
       expect(result?.provider).toBe('anthropic');
+    });
+
+    describe('Redis welcome data integration', () => {
+      const mockRedisGet = vi.fn();
+      const mockRedisClient = { get: mockRedisGet };
+
+      beforeEach(() => {
+        vi.mocked(createRedisWithPrefix).mockReset();
+        mockRedisGet.mockReset();
+      });
+
+      it('should merge Redis welcome data when available', async () => {
+        const mockAgent = {
+          id: 'agent-1',
+          model: 'gpt-4',
+        };
+        const welcomeData = {
+          openQuestions: ['Question 1?', 'Question 2?'],
+          welcomeMessage: 'Hello from Redis!',
+        };
+
+        const mockAgentModel = {
+          getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+        };
+
+        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (parseAgentConfig as any).mockReturnValue({});
+        vi.mocked(createRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
+        mockRedisGet.mockResolvedValue(JSON.stringify(welcomeData));
+
+        const newService = new AgentService(mockDb, mockUserId);
+        const result = await newService.getAgentConfigById('agent-1');
+
+        expect(result?.openingMessage).toBe('Hello from Redis!');
+        expect(result?.openingQuestions).toEqual(['Question 1?', 'Question 2?']);
+        expect(mockRedisGet).toHaveBeenCalledWith(RedisKeys.aiGeneration.agentWelcome('agent-1'));
+      });
+
+      it('should return normal config when Redis is disabled', async () => {
+        const mockAgent = {
+          id: 'agent-1',
+          model: 'gpt-4',
+          openingMessage: 'Default message',
+        };
+
+        const mockAgentModel = {
+          getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+        };
+
+        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (parseAgentConfig as any).mockReturnValue({});
+        vi.mocked(createRedisWithPrefix).mockResolvedValue(null);
+
+        const newService = new AgentService(mockDb, mockUserId);
+        const result = await newService.getAgentConfigById('agent-1');
+
+        // Should keep original config, not override with Redis data
+        expect(result?.openingMessage).toBe('Default message');
+        // openingQuestions comes from DEFAULT_AGENT_CONFIG (empty array)
+        expect(result?.openingQuestions).toEqual([]);
+      });
+
+      it('should return normal config when Redis key does not exist', async () => {
+        const mockAgent = {
+          id: 'agent-1',
+          model: 'gpt-4',
+        };
+
+        const mockAgentModel = {
+          getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+        };
+
+        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (parseAgentConfig as any).mockReturnValue({});
+        vi.mocked(createRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
+        mockRedisGet.mockResolvedValue(null);
+
+        const newService = new AgentService(mockDb, mockUserId);
+        const result = await newService.getAgentConfigById('agent-1');
+
+        // No Redis welcome data, so openingMessage remains from DEFAULT_AGENT_CONFIG
+        expect(result?.openingMessage).toBeUndefined();
+        // openingQuestions comes from DEFAULT_AGENT_CONFIG (empty array)
+        expect(result?.openingQuestions).toEqual([]);
+      });
+
+      it('should gracefully fallback when Redis throws error', async () => {
+        const mockAgent = {
+          id: 'agent-1',
+          model: 'gpt-4',
+        };
+
+        const mockAgentModel = {
+          getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+        };
+
+        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (parseAgentConfig as any).mockReturnValue({});
+        vi.mocked(createRedisWithPrefix).mockRejectedValue(new Error('Redis connection failed'));
+
+        const newService = new AgentService(mockDb, mockUserId);
+        const result = await newService.getAgentConfigById('agent-1');
+
+        // Should return normal config without error
+        expect(result?.id).toBe('agent-1');
+        expect(result?.model).toBe('gpt-4');
+      });
+
+      it('should gracefully handle invalid JSON in Redis', async () => {
+        const mockAgent = {
+          id: 'agent-1',
+          model: 'gpt-4',
+        };
+
+        const mockAgentModel = {
+          getAgentConfigById: vi.fn().mockResolvedValue(mockAgent),
+        };
+
+        (AgentModel as any).mockImplementation(() => mockAgentModel);
+        (parseAgentConfig as any).mockReturnValue({});
+        vi.mocked(createRedisWithPrefix).mockResolvedValue(mockRedisClient as any);
+        mockRedisGet.mockResolvedValue('invalid json {');
+
+        const newService = new AgentService(mockDb, mockUserId);
+        const result = await newService.getAgentConfigById('agent-1');
+
+        // Should return normal config without error
+        expect(result?.id).toBe('agent-1');
+        expect(result?.openingMessage).toBeUndefined();
+      });
     });
   });
 });

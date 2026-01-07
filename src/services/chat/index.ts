@@ -24,8 +24,8 @@ import {
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
-import { enableAuth } from '@/const/auth';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import { enableAuth } from '@/envs/auth';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
 import { createAgentToolsEngine, createToolsEngine } from '@/helpers/toolEngineering';
 import { getAgentStoreState } from '@/store/agent';
@@ -128,8 +128,6 @@ class ChatService {
     // =================== 1. resolve agent config =================== //
 
     const targetAgentId = getTargetAgentId(agentId);
-
-    console.log('[chatService.createAssistantMessage] Resolving with scope:', scope);
 
     // Resolve agent config with builtin agent runtime config merged
     // plugins is already merged (runtime plugins > agent config plugins)

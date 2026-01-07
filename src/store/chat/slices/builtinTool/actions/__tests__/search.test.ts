@@ -62,7 +62,6 @@ describe('search actions', () => {
         content: '',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
       };
 
       vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(
@@ -116,7 +115,6 @@ describe('search actions', () => {
         content: '',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
       };
 
       vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(
@@ -195,7 +193,6 @@ describe('search actions', () => {
         role: 'assistant',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
       };
 
       vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(
@@ -284,7 +281,6 @@ describe('search actions', () => {
         role: 'tool',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        meta: {},
       };
 
       vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(

@@ -1,9 +1,9 @@
 import { type EditLocalFileParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { useThemeMode } from 'antd-style';
 import { createPatch } from 'diff';
 import { ChevronRight } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import path from 'path-browserify-esm';
 import React, { memo, useMemo } from 'react';
 import { Diff, Hunk, parseDiff } from 'react-diff-view';
@@ -29,7 +29,8 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
     },
   );
 
-  const { isDarkMode } = useThemeMode();
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === 'dark';
   // Generate diff from full file content
   const files = useMemo(() => {
     if (!fileData?.content) return [];

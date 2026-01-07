@@ -8,9 +8,16 @@ import type { PartialDeep } from 'type-fest';
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
+import { getRedisConfig } from '@/envs/redis';
+import { RedisKeyNamespace, RedisKeys, createRedisWithPrefix } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 
 import { type UpdateAgentResult } from './type';
+
+interface AgentWelcomeData {
+  openQuestions: string[];
+  welcomeMessage: string;
+}
 
 /**
  * Agent Service
@@ -76,13 +83,48 @@ export class AgentService {
    * 2. Server's globalDefaultAgentConfig (from environment variable DEFAULT_AGENT_CONFIG)
    * 3. User's defaultAgentConfig (from user settings)
    * 4. The actual agent config from database
+   * 5. AI-generated welcome data from Redis (if available)
    */
   async getAgentConfigById(agentId: string) {
-    const [agent, defaultAgentConfig] = await Promise.all([
+    const [agent, defaultAgentConfig, welcomeData] = await Promise.all([
       this.agentModel.getAgentConfigById(agentId),
       this.userModel.getUserSettingsDefaultAgentConfig(),
+      this.getAgentWelcomeFromRedis(agentId),
     ]);
-    return this.mergeDefaultConfig(agent, defaultAgentConfig);
+
+    const config = this.mergeDefaultConfig(agent, defaultAgentConfig);
+    if (!config) return null;
+
+    // Merge AI-generated welcome data if available
+    if (welcomeData) {
+      return {
+        ...config,
+        openingMessage: welcomeData.welcomeMessage,
+        openingQuestions: welcomeData.openQuestions,
+      };
+    }
+
+    return config;
+  }
+
+  /**
+   * Get AI-generated welcome data from Redis
+   * Returns null if Redis is disabled or data doesn't exist
+   */
+  private async getAgentWelcomeFromRedis(agentId: string): Promise<AgentWelcomeData | null> {
+    try {
+      const redis = await createRedisWithPrefix(getRedisConfig(), RedisKeyNamespace.AI_GENERATION);
+      if (!redis) return null;
+
+      const key = RedisKeys.aiGeneration.agentWelcome(agentId);
+      const value = await redis.get(key);
+      if (!value) return null;
+
+      return JSON.parse(value) as AgentWelcomeData;
+    } catch {
+      // Silently fail - Redis errors shouldn't break agent retrieval
+      return null;
+    }
   }
 
   /**

@@ -5,8 +5,7 @@
     "content": "Can you ask the backend developer about the API design?",
     "parentId": null,
     "createdAt": 1704067200000,
-    "updatedAt": 1704067200000,
-    "meta": {}
+    "updatedAt": 1704067200000
   },
   {
     "id": "msg-supervisor-1",
@@ -28,10 +27,6 @@
     ],
     "createdAt": 1704067201000,
     "updatedAt": 1704067201000,
-    "meta": {
-      "avatar": "supervisor",
-      "title": "Supervisor"
-    },
     "metadata": {
       "isSupervisor": true
     }
@@ -43,8 +38,7 @@
     "parentId": "msg-supervisor-1",
     "tool_call_id": "call_speak_1",
     "createdAt": 1704067202000,
-    "updatedAt": 1704067202000,
-    "meta": {}
+    "updatedAt": 1704067202000
   },
   {
     "id": "msg-agent-backend-1",
@@ -55,10 +49,6 @@
     "model": "gpt-4",
     "provider": "openai",
     "createdAt": 1704067205000,
-    "updatedAt": 1704067205000,
-    "meta": {
-      "avatar": "backend-dev",
-      "title": "Backend Developer"
-    }
+    "updatedAt": 1704067205000
   }
 ]

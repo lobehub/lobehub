@@ -228,15 +228,9 @@ export const imageRouter = router({
 
     try {
       log('Creating unified async caller for userId: %s', userId);
-      log(
-        'Lambda context - userId: %s, jwtPayload keys: %O',
-        ctx.userId,
-        Object.keys(ctx.jwtPayload || {}),
-      );
 
-      // 使用统一的 caller 工厂创建 caller
+      // Async router will read keyVaults from DB, no need to pass jwtPayload
       const asyncCaller = await createAsyncCaller({
-        jwtPayload: ctx.jwtPayload,
         userId: ctx.userId,
       });
 

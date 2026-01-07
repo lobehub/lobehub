@@ -73,28 +73,16 @@ const mockedChats = [
     id: 'msg1',
     content: 'Hello World',
     role: 'user',
-    meta: {
-      avatar: '😀',
-    },
   },
   {
     id: 'msg2',
     content: 'Goodbye World',
     role: 'user',
-    meta: {
-      avatar: '😀',
-    },
   },
   {
     id: 'msg3',
     content: 'Function Message',
     role: 'tool',
-    meta: {
-      avatar: DEFAULT_INBOX_AVATAR,
-      backgroundColor: 'rgba(0,0,0,0)',
-      description: 'inbox.desc',
-      title: 'inbox.title',
-    },
     tools: [
       {
         arguments: ['arg1', 'arg2'],
@@ -359,7 +347,6 @@ describe('displayMessageSelectors', () => {
       const chats = displayMessageSelectors.activeDisplayMessages(state);
       expect(chats).toHaveLength(1);
       expect(chats[0].id).toBe('msg1');
-      expect(chats[0].meta).toBeDefined();
     });
   });
 

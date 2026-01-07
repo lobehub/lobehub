@@ -9,7 +9,7 @@ import { idGenerator } from '@/database/utils/idGenerator';
 import { userMemoriesIdentities, users } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { UserMemoryIdentityModel } from '../userMemory/identity';
-import { getTestDB } from './_util';
+import { getTestDB } from '../../core/getTestDB';
 
 // Helper to generate unique identity IDs
 const genIdentityId = () => `mem_${nanoid(12)}`;

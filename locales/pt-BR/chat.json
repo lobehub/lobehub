@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} Subtarefas em Lote",
   "task.metrics.stepsShort": "etapas",
   "task.metrics.toolCallsShort": "usos de ferramenta",
+  "task.status.cancelled": "Tarefa Cancelada",
+  "task.status.failed": "Falha na Tarefa",
   "task.status.initializing": "Inicializando tarefa...",
   "task.subtask": "Subtarefa",
   "thread.divider": "Subtópico",

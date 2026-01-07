@@ -1,6 +1,6 @@
 export interface ExportDatabaseData {
   data: Record<string, object[]>;
-  schemaHash?: string;
+  schemaHash: string;
   url?: string;
 }
 

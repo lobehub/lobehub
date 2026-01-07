@@ -23,8 +23,10 @@ const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
 const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
-const themeMode = (s: GlobalState) => s.status.themeMode || 'auto';
 const language = (s: GlobalState) => s.status.language || 'auto';
+const modelSwitchPanelGroupMode = (s: GlobalState) =>
+  s.status.modelSwitchPanelGroupMode || 'byProvider';
+const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 430;
 
 const showChatHeader = (s: GlobalState) => !s.status.zenMode;
 const inZenMode = (s: GlobalState) => s.status.zenMode;
@@ -69,6 +71,8 @@ export const systemStatusSelectors = {
   leftPanelWidth,
   mobileShowPortal,
   mobileShowTopic,
+  modelSwitchPanelGroupMode,
+  modelSwitchPanelWidth,
   pagePageSize,
   portalWidth,
   sessionGroupKeys,
@@ -80,7 +84,6 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   systemStatus,
-  themeMode,
   tokenDisplayFormatShort,
   topicGroupKeys,
   topicPageSize,

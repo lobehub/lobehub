@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Flexbox } from '@lobehub/ui';
+import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -49,23 +49,28 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
   const formattedDuration = useMemo(() => formatDuration(duration), [duration]);
   const formattedCost = useMemo(() => formatCost(totalCost), [totalCost]);
 
-  const hasMetrics = formattedDuration || totalToolCalls || totalMessages || formattedCost;
+  const hasMetrics = !!(formattedDuration || totalToolCalls || totalMessages || formattedCost);
 
   return (
     <Flexbox gap={12}>
       {/* Error Content */}
       <Alert
-        description={error}
-        title={
-          isCancelled
-            ? t('task.status.cancelled', { defaultValue: 'Cancelled' })
-            : t('task.status.failed', { defaultValue: 'Failed' })
+        extra={
+          error?.error?.body && (
+            <Highlighter
+              actionIconSize={'small'}
+              language={'json'}
+              padding={8}
+              variant={'borderless'}
+            >
+              {JSON.stringify(error?.error?.body, null, 2)}
+            </Highlighter>
+          )
         }
+        title={isCancelled ? t('task.status.cancelled') : t('task.status.failed')}
         type={'secondary'}
       />
-
-      {/* Footer with metrics */}
-      {hasMetrics && (
+      {hasMetrics ? (
         <Flexbox align="center" gap={12} horizontal wrap="wrap">
           {/* Duration */}
           {formattedDuration && <MetricItem icon={Timer} value={formattedDuration} />}
@@ -102,7 +107,7 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
             </>
           )}
         </Flexbox>
-      )}
+      ) : null}
     </Flexbox>
   );
 });

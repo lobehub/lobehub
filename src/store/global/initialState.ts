@@ -1,4 +1,3 @@
-import type { ThemeMode } from 'antd-style';
 import type { NavigateFunction } from 'react-router-dom';
 
 import { DatabaseLoadingState, type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
@@ -114,6 +113,14 @@ export interface SystemStatus {
   leftPanelWidth: number;
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
+  /**
+   * ModelSwitchPanel 的分组模式
+   */
+  modelSwitchPanelGroupMode?: 'byModel' | 'byProvider';
+  /**
+   * ModelSwitchPanel 的宽度
+   */
+  modelSwitchPanelWidth?: number;
   noWideScreen?: boolean;
   /**
    * number of pages (documents) to display per page
@@ -129,10 +136,6 @@ export interface SystemStatus {
   showRightPanel?: boolean;
   showSystemRole?: boolean;
   systemRoleExpandedMap: Record<string, boolean>;
-  /**
-   * theme mode
-   */
-  themeMode?: ThemeMode;
   /**
    * 是否使用短格式显示 token
    */
@@ -184,6 +187,8 @@ export const INITIAL_STATUS = {
   knowledgeBaseModalViewMode: 'list' as const,
   leftPanelWidth: 320,
   mobileShowTopic: false,
+  modelSwitchPanelGroupMode: 'byProvider',
+  modelSwitchPanelWidth: 430,
   noWideScreen: true,
   pagePageSize: 20,
   portalWidth: 400,
@@ -196,7 +201,6 @@ export const INITIAL_STATUS = {
   showRightPanel: true,
   showSystemRole: false,
   systemRoleExpandedMap: {},
-  themeMode: 'auto',
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   zenMode: false,

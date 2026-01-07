@@ -24,6 +24,7 @@ vi.mock('@/server/modules/S3', () => ({
       .mockResolvedValue('https://presigned.example.com/test.jpg'),
     getFileContent: vi.fn().mockResolvedValue('file content'),
     getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 1024, contentType: 'image/png' }),
     deleteFile: vi.fn().mockResolvedValue({}),
     deleteFiles: vi.fn().mockResolvedValue({}),
     createPreSignedUrl: vi.fn().mockResolvedValue('https://upload.example.com/test.jpg'),
@@ -149,6 +150,24 @@ describe('S3StaticFileImpl', () => {
     it('应该调用S3的createPreSignedUrl方法', async () => {
       const result = await fileService.createPreSignedUrl('test.jpg');
       expect(result).toBe('https://upload.example.com/test.jpg');
+    });
+  });
+
+  describe('getFileMetadata', () => {
+    it('should call S3 getFileMetadata and return metadata', async () => {
+      const result = await fileService.getFileMetadata('test.png');
+
+      expect(fileService['s3'].getFileMetadata).toHaveBeenCalledWith('test.png');
+      expect(result).toEqual({ contentLength: 1024, contentType: 'image/png' });
+    });
+
+    it('should handle S3 errors', async () => {
+      const error = new Error('File not found');
+      fileService['s3'].getFileMetadata = vi.fn().mockRejectedValue(error);
+
+      await expect(fileService.getFileMetadata('non-existent.txt')).rejects.toThrow(
+        'File not found',
+      );
     });
   });
 

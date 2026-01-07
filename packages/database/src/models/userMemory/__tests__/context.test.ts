@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { NewUserMemoryContext, userMemories, userMemoriesContexts, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
-import { getTestDB } from '../../__tests__/_util';
+import { getTestDB } from '../../../core/getTestDB';
 import { UserMemoryContextModel } from '../context';
 
 const userId = 'context-test-user';

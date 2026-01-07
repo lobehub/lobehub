@@ -1,5 +1,6 @@
 import {
   SSOProvider,
+  UserGeneralConfig,
   UserGuide,
   UserKeyVaults,
   UserPreference,
@@ -44,6 +45,11 @@ export type ListUsersForMemoryExtractorOptions = {
   limit?: number;
   whitelist?: string[];
 };
+
+export interface UserInfoForAIGeneration {
+  responseLanguage: string;
+  userName: string;
+}
 
 export class UserModel {
   private userId: string;
@@ -163,6 +169,14 @@ export class UserModel {
 
   getUserSettings = async () => {
     return this.db.query.userSettings.findFirst({ where: eq(userSettings.id, this.userId) });
+  };
+
+  getUserPreference = async (): Promise<UserPreference | undefined> => {
+    const user = await this.db.query.users.findFirst({
+      columns: { preference: true },
+      where: eq(users.id, this.userId),
+    });
+    return user?.preference as UserPreference | undefined;
   };
 
   getUserSettingsDefaultAgentConfig = async () => {
@@ -330,5 +344,32 @@ export class UserModel {
       orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
       where,
     });
+  };
+
+  /**
+   * Get user info for AI generation (name and language preference)
+   */
+  static getInfoForAIGeneration = async (
+    db: LobeChatDatabase,
+    userId: string,
+  ): Promise<UserInfoForAIGeneration> => {
+    const result = await db
+      .select({
+        firstName: users.firstName,
+        fullName: users.fullName,
+        general: userSettings.general,
+      })
+      .from(users)
+      .leftJoin(userSettings, eq(users.id, userSettings.id))
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const user = result[0];
+    const general = user?.general as UserGeneralConfig | undefined;
+
+    return {
+      responseLanguage: general?.responseLanguage || 'en-US',
+      userName: user?.fullName || user?.firstName || 'User',
+    };
   };
 }

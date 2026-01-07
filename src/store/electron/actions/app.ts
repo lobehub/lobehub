@@ -2,10 +2,12 @@ import { type ElectronAppState } from '@lobechat/electron-client-ipc';
 import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 // Import for type usage
 import { electronSystemService } from '@/services/electron/system';
-import { globalAgentContextManager } from '@/utils/client/GlobalAgentContextManager';
+import { type LocaleMode } from '@/types/locale';
+import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 
 import type { ElectronStore } from '../store';
@@ -55,6 +57,10 @@ export const createElectronAppSlice: StateCreator<
             userDataPath: result.userPath!.userData,
             videosPath: result.userPath!.videos,
           });
+
+          // Initialize i18n with the stored locale, falling back to auto detection.
+          const locale = (result.locale ?? 'auto') as LocaleMode;
+          switchLang(locale);
         },
       },
     ),

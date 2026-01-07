@@ -1,4 +1,8 @@
-import { type RecentTopic, type RecentTopicGroup, type RecentTopicGroupMember } from '@lobechat/types';
+import {
+  type RecentTopic,
+  type RecentTopicGroup,
+  type RecentTopicGroupMember,
+} from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
@@ -434,6 +438,21 @@ export const topicRouter = router({
       }
 
       return ctx.topicModel.update(input.id, { ...restValue, sessionId: resolvedSessionId });
+    }),
+
+  updateTopicMetadata: topicProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        metadata: z.object({
+          model: z.string().optional(),
+          provider: z.string().optional(),
+          workingDirectory: z.string().optional(),
+        }),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),
 });
 

@@ -155,7 +155,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       isProviderEndpointNotEmpty,
       isProviderApiKeyNotEmpty,
     ] = useAiInfraStore((s) => [
-      aiProviderSelectors.activeProviderConfig(s),
+      aiProviderSelectors.providerDetailById(id)(s),
       s.updateAiProviderConfig,
       aiProviderSelectors.isProviderEnabled(id)(s),
       aiProviderSelectors.isAiProviderConfigLoading(id)(s),

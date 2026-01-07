@@ -5,8 +5,7 @@
     "content": "Help me create two tasks to research the weather in Hangzhou and Beijing tomorrow.",
     "parentId": null,
     "createdAt": 1735526559382,
-    "updatedAt": 1735526559382,
-    "meta": {}
+    "updatedAt": 1735526559382
   },
   {
     "id": "msg-assistant-1",
@@ -15,7 +14,6 @@
     "parentId": "msg-user-1",
     "createdAt": 1735526560163,
     "updatedAt": 1735526585550,
-    "meta": {},
     "model": "deepseek-chat",
     "provider": "deepseek",
     "tools": [
@@ -46,7 +44,6 @@
     "tool_call_id": "call_exec_tasks_1",
     "createdAt": 1735526588116,
     "updatedAt": 1735526591337,
-    "meta": {},
     "plugin": {
       "apiName": "execTasks",
       "arguments": "{\"tasks\": [{\"description\": \"Research Hangzhou weather\", \"instruction\": \"Search for Hangzhou weather tomorrow.\"}, {\"description\": \"Research Beijing weather\", \"instruction\": \"Search for Beijing weather tomorrow.\"}]}",
@@ -75,7 +72,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1735526594643,
     "updatedAt": 1735526756262,
-    "meta": {},
     "metadata": {
       "instruction": "Search for Hangzhou weather tomorrow."
     },
@@ -97,7 +93,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1735526595647,
     "updatedAt": 1735526792430,
-    "meta": {},
     "metadata": {
       "instruction": "Search for Beijing weather tomorrow."
     },
@@ -119,7 +114,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1735526795651,
     "updatedAt": 1735526813171,
-    "meta": {},
     "model": "deepseek-chat",
     "provider": "deepseek",
     "metadata": {

@@ -1,13 +1,13 @@
 'use client';
 
-import { Flexbox, type FlexboxProps, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, type FlexboxProps, Tooltip } from '@lobehub/ui';
 import { Badge } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { isUndefined } from 'es-toolkit/compat';
-import { LoaderCircle } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useClientDataSWR } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import { sessionService } from '@/services/session';
@@ -65,7 +65,7 @@ const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
 
   const { t } = useTranslation('common');
 
-  const loading = useMemo(() => <Icon icon={LoaderCircle} spin />, []);
+  const loading = <NeuralNetworkLoading size={20} />;
 
   const items = [
     {

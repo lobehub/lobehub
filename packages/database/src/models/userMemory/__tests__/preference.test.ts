@@ -8,7 +8,7 @@ import {
   users,
 } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
-import { getTestDB } from '../../__tests__/_util';
+import { getTestDB } from '../../../core/getTestDB';
 import { UserMemoryPreferenceModel } from '../preference';
 
 const userId = 'preference-test-user';

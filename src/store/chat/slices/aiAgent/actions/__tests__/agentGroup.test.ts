@@ -89,7 +89,6 @@ const createMockExecGroupAgentResponse = (overrides = {}) => ({
       content: TEST_CONTENT.GROUP_MESSAGE,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      meta: {},
     },
     {
       id: TEST_IDS.ASSISTANT_MESSAGE_ID,
@@ -97,7 +96,6 @@ const createMockExecGroupAgentResponse = (overrides = {}) => ({
       content: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      meta: {},
     },
   ],
   topics: {

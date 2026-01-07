@@ -1,7 +1,17 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { Microsoft } from '@lobehub/icons';
-import { ActionIcon, Block, Collapse, Empty, Flexbox, Icon, Snippet, Tag } from '@lobehub/ui';
-import { Divider, Popover, Steps } from 'antd';
+import {
+  ActionIcon,
+  Block,
+  Collapse,
+  Empty,
+  Flexbox,
+  Icon,
+  Popover,
+  Snippet,
+  Tag,
+} from '@lobehub/ui';
+import { Divider, Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import {
@@ -220,7 +230,6 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                               </span>
                               {dep.installInstructions && (
                                 <Popover
-                                  arrow={false}
                                   content={
                                     <Flexbox gap={8}>
                                       <Descriptions
@@ -265,7 +274,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                                       )}
                                     </Flexbox>
                                   }
-                                  trigger={['hover']}
+                                  trigger="hover"
                                 >
                                   <ActionIcon
                                     color={cssVar.colorTextDescription}

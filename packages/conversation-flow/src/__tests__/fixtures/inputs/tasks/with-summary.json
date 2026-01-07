@@ -5,8 +5,7 @@
     "content": "Create three parallel tasks to research AI topics.",
     "parentId": null,
     "createdAt": 1735526559382,
-    "updatedAt": 1735526559382,
-    "meta": {}
+    "updatedAt": 1735526559382
   },
   {
     "id": "msg-assistant-1",
@@ -15,7 +14,6 @@
     "parentId": "msg-user-1",
     "createdAt": 1735526560163,
     "updatedAt": 1735526585550,
-    "meta": {},
     "model": "gpt-4",
     "provider": "openai",
     "tools": [
@@ -36,13 +34,18 @@
     "tool_call_id": "call_exec_tasks_1",
     "createdAt": 1735526588116,
     "updatedAt": 1735526591337,
-    "meta": {},
     "pluginState": {
       "type": "execTasks",
       "tasks": [
-        { "description": "Research LLM architectures" },
-        { "description": "Research AI agents" },
-        { "description": "Research RAG systems" }
+        {
+          "description": "Research LLM architectures"
+        },
+        {
+          "description": "Research AI agents"
+        },
+        {
+          "description": "Research RAG systems"
+        }
       ],
       "parentMessageId": "msg-tool-1"
     }
@@ -54,7 +57,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1735526594643,
     "updatedAt": 1735526756262,
-    "meta": {},
     "taskDetail": {
       "duration": 120000,
       "status": "completed",
@@ -72,7 +74,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1735526595647,
     "updatedAt": 1735526792430,
-    "meta": {},
     "taskDetail": {
       "duration": 150000,
       "status": "completed",
@@ -90,7 +91,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1735526596000,
     "updatedAt": 1735526800000,
-    "meta": {},
     "taskDetail": {
       "duration": 130000,
       "status": "completed",
@@ -108,7 +108,6 @@
     "parentId": "msg-tool-1",
     "createdAt": 1735526810000,
     "updatedAt": 1735526820000,
-    "meta": {},
     "model": "gpt-4",
     "provider": "openai"
   }

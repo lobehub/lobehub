@@ -5,8 +5,7 @@
     "content": "Please have everyone discuss the pros and cons of microservices architecture.",
     "parentId": null,
     "createdAt": 1704067200000,
-    "updatedAt": 1704067200000,
-    "meta": {}
+    "updatedAt": 1704067200000
   },
   {
     "id": "msg-supervisor-1",
@@ -16,7 +15,6 @@
     "parentId": "msg-user-1",
     "createdAt": 1704067201000,
     "updatedAt": 1704067201000,
-    "meta": {},
     "tools": [
       {
         "id": "call_broadcast_1",
@@ -38,7 +36,6 @@
     "tool_call_id": "call_broadcast_1",
     "createdAt": 1704067202000,
     "updatedAt": 1704067202000,
-    "meta": {},
     "metadata": {
       "agentCouncil": true
     }
@@ -53,15 +50,11 @@
     "provider": "openai",
     "createdAt": 1704067205000,
     "updatedAt": 1704067205000,
-    "meta": {
-      "avatar": "backend-dev",
-      "title": "Backend Developer"
-    },
     "metadata": {
       "totalInputTokens": 50,
       "totalOutputTokens": 120,
       "totalTokens": 170,
-      "tps": 45.0,
+      "tps": 45,
       "ttft": 350,
       "duration": 2667,
       "latency": 3017
@@ -77,15 +70,11 @@
     "provider": "anthropic",
     "createdAt": 1704067205500,
     "updatedAt": 1704067205500,
-    "meta": {
-      "avatar": "devops",
-      "title": "DevOps Engineer"
-    },
     "metadata": {
       "totalInputTokens": 50,
       "totalOutputTokens": 130,
       "totalTokens": 180,
-      "tps": 52.0,
+      "tps": 52,
       "ttft": 280,
       "duration": 2500,
       "latency": 2780
@@ -101,15 +90,11 @@
     "provider": "openai",
     "createdAt": 1704067206000,
     "updatedAt": 1704067206000,
-    "meta": {
-      "avatar": "architect",
-      "title": "Software Architect"
-    },
     "metadata": {
       "totalInputTokens": 50,
       "totalOutputTokens": 125,
       "totalTokens": 175,
-      "tps": 48.0,
+      "tps": 48,
       "ttft": 320,
       "duration": 2604,
       "latency": 2924

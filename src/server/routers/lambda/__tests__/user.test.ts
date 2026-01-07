@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { enableClerk } from '@/const/auth';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel, UserNotFoundError } from '@/database/models/user';
 import { serverDB } from '@/database/server';
+import { enableClerk } from '@/envs/auth';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { NextAuthUserService } from '@/server/services/nextAuthUser';
 import { UserService } from '@/server/services/user';
@@ -28,7 +28,7 @@ vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/server/modules/S3');
 vi.mock('@/server/services/user');
 vi.mock('@/server/services/nextAuthUser');
-vi.mock('@/const/auth', () => ({
+vi.mock('@/envs/auth', () => ({
   enableBetterAuth: false,
   enableClerk: true,
   enableNextAuth: false,

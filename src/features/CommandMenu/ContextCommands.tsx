@@ -6,11 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
 import { useCommandMenu } from './useCommandMenu';
-import { getContextCommands } from './utils/contextCommands';
+import { CONTEXT_COMMANDS, getContextCommands } from './utils/contextCommands';
 
 const ContextCommands = memo(() => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
+  const { t: tSubscription } = useTranslation('subscription');
   const { t: tCommon } = useTranslation('common');
   const { handleNavigate } = useCommandMenu();
   const { menuContext, pathname } = useCommandMenuContext();
@@ -23,48 +24,107 @@ const ContextCommands = memo(() => {
 
   const commands = getContextCommands(menuContext, subPath);
 
-  if (commands.length === 0) return null;
+  // Get settings commands to show globally (when not in settings context)
+  const globalSettingsCommands = useMemo(() => {
+    if (menuContext === 'settings') return [];
+    return CONTEXT_COMMANDS.settings;
+  }, [menuContext]);
+
+  const hasCommands = commands.length > 0 || globalSettingsCommands.length > 0;
+
+  if (!hasCommands) return null;
 
   // Get localized context name
   const contextName = tCommon(`cmdk.context.${menuContext}`, { defaultValue: menuContext });
+  const settingsContextName = tCommon('cmdk.context.settings', { defaultValue: 'settings' });
 
   return (
-    <Command.Group>
-      {commands.map((cmd) => {
-        const Icon = cmd.icon;
-        // Get localized label using the correct namespace
-        let label = cmd.label;
-        if (cmd.labelKey) {
-          if (cmd.labelNamespace === 'auth') {
-            label = tAuth(cmd.labelKey, { defaultValue: cmd.label });
-          } else {
-            label = t(cmd.labelKey, { defaultValue: cmd.label });
-          }
-        }
-        const searchValue = `${contextName} ${label} ${cmd.keywords.join(' ')}`;
+    <>
+      {/* Current context commands */}
+      {commands.length > 0 && (
+        <Command.Group>
+          {commands.map((cmd) => {
+            const Icon = cmd.icon;
+            // Get localized label using the correct namespace
+            let label = cmd.label;
+            if (cmd.labelKey) {
+              if (cmd.labelNamespace === 'auth') {
+                label = tAuth(cmd.labelKey, { defaultValue: cmd.label });
+              } else if (cmd.labelNamespace === 'subscription') {
+                label = tSubscription(cmd.labelKey, { defaultValue: cmd.label });
+              } else {
+                label = t(cmd.labelKey, { defaultValue: cmd.label });
+              }
+            }
+            const searchValue = `${contextName} ${label} ${cmd.keywords.join(' ')}`;
 
-        return (
-          <CommandItem
-            icon={<Icon />}
-            key={cmd.path}
-            onSelect={() => handleNavigate(cmd.path)}
-            value={searchValue}
-          >
-            <span style={{ opacity: 0.5 }}>{contextName}</span>
-            <ChevronRight
-              size={14}
-              style={{
-                display: 'inline',
-                marginInline: '6px',
-                opacity: 0.5,
-                verticalAlign: 'middle',
-              }}
-            />
-            {label}
-          </CommandItem>
-        );
-      })}
-    </Command.Group>
+            return (
+              <CommandItem
+                icon={<Icon />}
+                key={cmd.path}
+                onSelect={() => handleNavigate(cmd.path)}
+                value={searchValue}
+              >
+                <span style={{ opacity: 0.5 }}>{contextName}</span>
+                <ChevronRight
+                  size={14}
+                  style={{
+                    display: 'inline',
+                    marginInline: '6px',
+                    opacity: 0.5,
+                    verticalAlign: 'middle',
+                  }}
+                />
+                {label}
+              </CommandItem>
+            );
+          })}
+        </Command.Group>
+      )}
+
+      {/* Global settings commands (searchable from any page) */}
+      {globalSettingsCommands.length > 0 && (
+        <Command.Group>
+          {globalSettingsCommands.map((cmd) => {
+            const Icon = cmd.icon;
+            // Get localized label using the correct namespace
+            let label = cmd.label;
+            if (cmd.labelKey) {
+              if (cmd.labelNamespace === 'auth') {
+                label = tAuth(cmd.labelKey, { defaultValue: cmd.label });
+              } else if (cmd.labelNamespace === 'subscription') {
+                label = tSubscription(cmd.labelKey, { defaultValue: cmd.label });
+              } else {
+                label = t(cmd.labelKey, { defaultValue: cmd.label });
+              }
+            }
+            const searchValue = `${settingsContextName} ${label} ${cmd.keywords.join(' ')}`;
+
+            return (
+              <CommandItem
+                icon={<Icon />}
+                key={cmd.path}
+                onSelect={() => handleNavigate(cmd.path)}
+                unpinned={true}
+                value={searchValue}
+              >
+                <span style={{ opacity: 0.5 }}>{settingsContextName}</span>
+                <ChevronRight
+                  size={14}
+                  style={{
+                    display: 'inline',
+                    marginInline: '6px',
+                    opacity: 0.5,
+                    verticalAlign: 'middle',
+                  }}
+                />
+                {label}
+              </CommandItem>
+            );
+          })}
+        </Command.Group>
+      )}
+    </>
   );
 });
 

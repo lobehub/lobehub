@@ -21,6 +21,7 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
 
   console.log(`  Processing ${path.relative(TEMP_DIR, nextConfigPath)}...`);
   await updateFile({
+    assertAfter: (code) => /output\s*:\s*["']export["']/.test(code) && !/withPWA\s*\(/.test(code),
     filePath: nextConfigPath,
     name: 'modifyNextConfig',
     transformer: (code) => {
@@ -39,13 +40,19 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
       }
 
       // 1. Remove redirects
-      const redirectsPair = nextConfigDecl.find({
-        rule: {
-          pattern: 'redirects: $A',
-        },
-      });
-      if (redirectsPair) {
-        const range = redirectsPair.range();
+      const redirectsPair = nextConfigDecl
+        .findAll({
+          rule: {
+            kind: 'pair',
+          },
+        })
+        .find((node) => {
+          const text = node.text();
+          return text.startsWith('redirects:') || text.startsWith('redirects :');
+        });
+      invariant(redirectsPair, '[modifyNextConfig] redirects pair not found');
+      {
+        const range = redirectsPair!.range();
         edits.push({ end: range.end.index, start: range.start.index, text: '' });
       }
 
@@ -60,18 +67,39 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
           const text = node.text();
           return text.startsWith('async headers') || text.startsWith('headers');
         });
-      if (headersMethod) {
-        const range = headersMethod.range();
+      invariant(headersMethod, '[modifyNextConfig] headers method not found');
+      {
+        const range = headersMethod!.range();
         edits.push({ end: range.end.index, start: range.start.index, text: '' });
       }
 
-      // 3. Remove spread element
+      // 3. Remove webVitalsAttribution
+      const webVitalsPair = nextConfigDecl
+        .findAll({
+          rule: {
+            kind: 'pair',
+          },
+        })
+        .find((node) => {
+          const text = node.text();
+          return (
+            text.startsWith('webVitalsAttribution:') || text.startsWith('webVitalsAttribution :')
+          );
+        });
+      invariant(webVitalsPair, '[modifyNextConfig] webVitalsAttribution pair not found');
+      {
+        const range = webVitalsPair!.range();
+        edits.push({ end: range.end.index, start: range.start.index, text: '' });
+      }
+
+      // 4. Remove spread element
       const spreads = nextConfigDecl.findAll({
         rule: {
           kind: 'spread_element',
         },
       });
 
+      // eslint-disable-next-line unicorn/consistent-function-scoping
       const isObjectLevelSpread = (node: any) => node.parent()?.kind() === 'object';
 
       const standaloneSpread = spreads.find((node) => {
@@ -83,12 +111,13 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
       const objectLevelSpread = standaloneSpread ? null : spreads.find(isObjectLevelSpread);
 
       const spreadToRemove = standaloneSpread || objectLevelSpread;
-      if (spreadToRemove) {
-        const range = spreadToRemove.range();
+      invariant(spreadToRemove, '[modifyNextConfig] spread element not found');
+      {
+        const range = spreadToRemove!.range();
         edits.push({ end: range.end.index, start: range.start.index, text: '' });
       }
 
-      // 4. Inject/force output: 'export'
+      // 5. Inject/force output: 'export'
       const outputPair = nextConfigDecl.find({
         rule: {
           pattern: 'output: $A',
@@ -147,7 +176,6 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
 
       return newCode;
     },
-    assertAfter: (code) => /output\s*:\s*['"]export['"]/.test(code) && !/withPWA\s*\(/.test(code),
   });
 };
 

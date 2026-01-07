@@ -23,7 +23,7 @@ const { enableClerk, enableNextAuth, enableBetterAuth, enableAuth } = vi.hoisted
   enableAuth: { value: true },
 }));
 
-vi.mock('@/const/auth', () => ({
+vi.mock('@/envs/auth', () => ({
   get enableClerk() {
     return enableClerk.value;
   },

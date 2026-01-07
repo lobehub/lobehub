@@ -1,7 +1,9 @@
 'use client';
 
-import { createStaticStyles, useThemeMode } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   dividerDark: css`
@@ -19,7 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const Divider = memo(() => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   return <div className={isDarkMode ? styles.dividerDark : styles.dividerLight} />;
 });

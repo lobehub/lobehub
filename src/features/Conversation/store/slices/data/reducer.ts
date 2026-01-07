@@ -238,7 +238,7 @@ export const messagesReducer = (
       const now = Date.now();
 
       return produce(state, (draft) => {
-        draft.push({ ...value, createdAt: now, id, meta: {}, updatedAt: now } as UIChatMessage);
+        draft.push({ ...value, createdAt: now, id, updatedAt: now } as UIChatMessage);
       });
     }
 

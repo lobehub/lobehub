@@ -53,29 +53,6 @@ const Render = memo<RenderProps>(
     toolMessageId,
     isArgumentsStreaming,
   }) => {
-    // Handle arguments streaming state
-    if (isArgumentsStreaming) {
-      // Check if there's a custom streaming renderer for this tool
-      const StreamingRenderer = getBuiltinStreaming(identifier, apiName);
-
-      if (StreamingRenderer) {
-        const args = safeParsePartialJSON(requestArgs);
-
-        return (
-          <StreamingRenderer
-            apiName={apiName}
-            args={args}
-            identifier={identifier}
-            messageId={messageId}
-            toolCallId={toolCallId}
-          />
-        );
-      }
-
-      // No custom streaming renderer, return null
-      return null;
-    }
-
     if (toolMessageId && intervention?.status === 'pending') {
       return (
         <Intervention
@@ -96,7 +73,28 @@ const Render = memo<RenderProps>(
       return <AbortResponse />;
     }
 
-    if (!result) return null;
+    // Handle arguments streaming state
+    if (isArgumentsStreaming || !result) {
+      // Check if there's a custom streaming renderer for this tool
+      const StreamingRenderer = getBuiltinStreaming(identifier, apiName);
+
+      if (StreamingRenderer) {
+        const args = safeParsePartialJSON(requestArgs);
+
+        return (
+          <StreamingRenderer
+            apiName={apiName}
+            args={args}
+            identifier={identifier}
+            messageId={messageId}
+            toolCallId={toolCallId}
+          />
+        );
+      }
+
+      // No custom streaming renderer, return null
+      return null;
+    }
 
     // Handle error state
     if (result.error) {

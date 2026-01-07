@@ -14,7 +14,7 @@ export const GTDManifest: BuiltinToolManifest = {
         'Create a high-level plan document. Plans define the strategic direction (the "what" and "why"), while todos handle the actionable steps.',
       name: GTDApiName.createPlan,
       humanIntervention: 'required',
-      renderDisplayControl: 'alwaysExpand',
+      renderDisplayControl: 'expand',
       parameters: {
         properties: {
           goal: {

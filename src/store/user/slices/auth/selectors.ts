@@ -3,7 +3,7 @@ import { isDesktop } from '@lobechat/const';
 import { type LobeUser, type SSOProvider } from '@lobechat/types';
 import { t } from 'i18next';
 
-import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
+import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
 import type { UserStore } from '@/store/user';
 
 const DEFAULT_USERNAME = BRANDING_NAME;

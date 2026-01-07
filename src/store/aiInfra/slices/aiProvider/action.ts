@@ -29,6 +29,7 @@ import {
   type UpdateAiProviderParams,
 } from '@/types/aiProvider';
 
+
 export type ProviderModelListItem = {
   abilities: ModelAbilities;
   approximatePricePerImage?: number;
@@ -293,7 +294,14 @@ export const createAiProviderSlice: StateCreator<
         onSuccess: (data) => {
           if (!data) return;
 
-          set({ activeAiProvider: id, aiProviderDetail: data }, false, 'useFetchAiProviderItem');
+          set(
+            (state) => ({
+              activeAiProvider: id,
+              aiProviderDetailMap: { ...state.aiProviderDetailMap, [id]: data },
+            }),
+            false,
+            'useFetchAiProviderItem',
+          );
         },
       },
     ),

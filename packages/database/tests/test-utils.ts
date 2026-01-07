@@ -1,1 +1,1 @@
-export * from '../src/models/__tests__/_util';
+export * from '../src/core/getTestDB';

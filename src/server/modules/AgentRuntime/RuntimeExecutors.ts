@@ -8,12 +8,13 @@ import {
 } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
-import { type ChatToolPayload, type ClientSecretPayload, type MessageToolCall } from '@lobechat/types';
+import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
 import { serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
 import { type MessageModel } from '@/database/models/message';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { type LobeChatDatabase } from '@/database/type';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type ToolExecutionService } from '@/server/services/toolExecution';
 
 import type { IStreamEventManager } from './types';
@@ -31,11 +32,11 @@ export interface RuntimeExecutorContext {
   fileService?: any;
   messageModel: MessageModel;
   operationId: string;
+  serverDB: LobeChatDatabase;
   stepIndex: number;
   streamManager: IStreamEventManager;
   toolExecutionService: ToolExecutionService;
   userId?: string;
-  userPayload?: ClientSecretPayload;
 }
 
 export const createRuntimeExecutors = (
@@ -120,8 +121,8 @@ export const createRuntimeExecutors = (
       let hasContentImages = false;
       let hasReasoningImages = false;
 
-      // 初始化 ModelRuntime
-      const modelRuntime = initModelRuntimeWithUserPayload(provider, ctx.userPayload || {});
+      // 初始化 ModelRuntime (从数据库读取用户的 keyVaults)
+      const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
 
       // 构造 ChatStreamPayload
       const chatPayload = {
@@ -467,7 +468,6 @@ export const createRuntimeExecutors = (
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
         toolManifestMap: state.toolManifestMap,
         userId: ctx.userId,
-        userPayload: ctx.userPayload,
       });
 
       const executionTime = executionResult.executionTime;

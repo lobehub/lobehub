@@ -40,14 +40,31 @@ describe('IdentityExtractor', () => {
 
   it('uses structuredCall to invoke the runtime and parse structured results', async () => {
     const extractor = new IdentityExtractor(extractorConfig);
+    // Mock data matching IdentityActionsSchema structure
     const structuredResult = {
-      withIdentities: {
-        actions: {
-          add: [{ description: 'New identity', extractedLabels: ['tag'], type: 'personal' }],
-          remove: null,
-          update: null,
+      add: [
+        {
+          details: null,
+          memoryCategory: 'personal',
+          memoryLayer: 'identity',
+          memoryType: 'fact',
+          summary: 'New identity summary',
+          tags: ['tag'],
+          title: 'New identity',
+          withIdentity: {
+            description: 'New identity description',
+            episodicDate: null,
+            extractedLabels: ['tag'],
+            relationship: 'self',
+            role: 'developer',
+            scoreConfidence: 0.8,
+            sourceEvidence: null,
+            type: 'personal',
+          },
         },
-      },
+      ],
+      remove: null,
+      update: null,
     };
     (runtimeMock.generateObject as any) = vi.fn().mockResolvedValue(structuredResult);
 

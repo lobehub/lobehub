@@ -64,6 +64,7 @@ export enum ModelProvider {
   Volcengine = 'volcengine',
   Wenxin = 'wenxin',
   XAI = 'xai',
+  XiaomiMiMo = 'xiaomimimo',
   Xinference = 'xinference',
   ZenMux = 'zenmux',
   ZeroOne = 'zeroone',

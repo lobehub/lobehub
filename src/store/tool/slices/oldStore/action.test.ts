@@ -306,7 +306,6 @@ describe('useToolStore:pluginStore', () => {
               type: 'plugin',
               manifest: {
                 identifier: pluginIdentifier,
-                meta: {},
               } as LobeChatPluginManifest,
             },
           ],

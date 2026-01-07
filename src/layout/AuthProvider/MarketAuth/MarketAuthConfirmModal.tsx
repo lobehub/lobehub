@@ -2,12 +2,13 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Block, Modal, Text } from '@lobehub/ui';
-import { createStaticStyles, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import AuthCard from '@/features/AuthCard';
+import { useIsDark } from '@/hooks/useIsDark';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -34,7 +35,7 @@ interface MarketAuthConfirmModalProps {
 const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
   ({ open, onConfirm, onCancel }) => {
     const { t } = useTranslation('marketAuth');
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
 
     const footer = (
       <Text align={'center'} as={'div'} fontSize={13} type={'secondary'}>

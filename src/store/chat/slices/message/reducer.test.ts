@@ -14,7 +14,6 @@ describe('messagesReducer', () => {
         createdAt: 1629264000000,
         updatedAt: 1629264000000,
         role: 'user',
-        meta: {},
       },
       {
         id: 'message2',
@@ -22,7 +21,6 @@ describe('messagesReducer', () => {
         createdAt: 1629264000000,
         updatedAt: 1629264000000,
         role: 'assistant',
-        meta: {},
         tools: [
           { identifier: 'tool1', apiName: 'calculator', id: 'abc', type: 'default', arguments: '' },
         ],
@@ -102,7 +100,6 @@ describe('messagesReducer', () => {
             createdAt: 1629264000000,
             updatedAt: 1629264000000,
             role: 'user',
-            meta: {},
             extra: { abc: '1' },
           } as UIChatMessage,
           ...initialState,
@@ -232,7 +229,6 @@ describe('messagesReducer', () => {
         content: 'Tool content',
         createdAt: 1629264000000,
         updatedAt: 1629264000000,
-        meta: {},
         plugin: {
           identifier: 'tool1',
           apiName: 'calculator',
@@ -487,7 +483,6 @@ describe('messagesReducer', () => {
       expect(newMessage?.role).toBe('user');
       expect(newMessage?.createdAt).toBeDefined();
       expect(newMessage?.updatedAt).toBeDefined();
-      expect(newMessage?.meta).toEqual({});
     });
   });
 

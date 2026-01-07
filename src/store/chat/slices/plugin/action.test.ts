@@ -1429,4 +1429,195 @@ describe('ChatPluginAction', () => {
       });
     });
   });
+
+  describe('Plugin invoke functions use optimisticUpdateToolMessage', () => {
+    const messageId = 'message-id';
+    const payload: ChatToolPayload = {
+      apiName: 'test-api',
+      arguments: '{}',
+      id: 'tool-call-id',
+      identifier: 'test-plugin',
+      type: 'default',
+    };
+
+    describe('invokeMCPTypePlugin', () => {
+      it('should use optimisticUpdateToolMessage for successful result', async () => {
+        const mockResult = {
+          content: 'mcp result content',
+          state: { content: [], isError: false },
+          success: true,
+        };
+
+        // Mock the mcpService
+        const mcpService = await import('@/services/mcp');
+        vi.spyOn(mcpService.mcpService, 'invokeMcpToolCall').mockResolvedValue(mockResult);
+
+        const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: 'session-id',
+            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
+            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
+            replaceMessages: vi.fn(),
+            messageOperationMap: {},
+            operations: {},
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.invokeMCPTypePlugin(messageId, payload);
+        });
+
+        expect(optimisticUpdateToolMessageMock).toHaveBeenCalledWith(
+          messageId,
+          {
+            content: mockResult.content,
+            pluginError: undefined,
+            pluginState: mockResult.state,
+          },
+          undefined,
+        );
+      });
+
+      it('should use optimisticUpdateToolMessage for error result', async () => {
+        const mockResult = {
+          content: 'error content',
+          error: { message: 'test error' },
+          state: { content: [], isError: true },
+          success: false,
+        };
+
+        const mcpService = await import('@/services/mcp');
+        vi.spyOn(mcpService.mcpService, 'invokeMcpToolCall').mockResolvedValue(mockResult);
+
+        const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: 'session-id',
+            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
+            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
+            replaceMessages: vi.fn(),
+            messageOperationMap: {},
+            operations: {},
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.invokeMCPTypePlugin(messageId, payload);
+        });
+
+        expect(optimisticUpdateToolMessageMock).toHaveBeenCalledWith(
+          messageId,
+          {
+            content: mockResult.content,
+            pluginError: mockResult.error,
+            pluginState: undefined,
+          },
+          undefined,
+        );
+      });
+    });
+
+    describe('invokeKlavisTypePlugin', () => {
+      it('should use optimisticUpdateToolMessage for successful result', async () => {
+        const mockResult = {
+          content: 'klavis result content',
+          state: { data: 'test-data' },
+          success: true,
+        };
+
+        // Mock useToolStore to return a server
+        vi.spyOn(useToolStore, 'getState').mockReturnValue({
+          servers: [{ identifier: 'test-plugin', serverUrl: 'http://test.com' }],
+          callKlavisTool: vi.fn().mockResolvedValue({
+            success: true,
+            data: mockResult,
+          }),
+        } as any);
+
+        const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: 'session-id',
+            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
+            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
+            replaceMessages: vi.fn(),
+            messageOperationMap: {},
+            operations: {},
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.invokeKlavisTypePlugin(messageId, payload);
+        });
+
+        expect(optimisticUpdateToolMessageMock).toHaveBeenCalledWith(
+          messageId,
+          {
+            content: mockResult.content,
+            pluginError: undefined,
+            pluginState: mockResult.state,
+          },
+          undefined,
+        );
+      });
+    });
+
+    describe('invokeCloudCodeInterpreterTool', () => {
+      it('should use optimisticUpdateToolMessage for successful result', async () => {
+        const mockResult = {
+          content: 'code interpreter result',
+          state: { output: 'test output' },
+          success: true,
+        };
+
+        // Mock CloudSandboxExecutionRuntime using doMock for dynamic mocking
+        vi.doMock('@lobechat/builtin-tool-cloud-sandbox/executionRuntime', () => ({
+          CloudSandboxExecutionRuntime: class {
+            'test-api' = vi.fn().mockResolvedValue(mockResult);
+          },
+        }));
+
+        const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: 'session-id',
+            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
+            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
+            replaceMessages: vi.fn(),
+            messageOperationMap: {},
+            operations: {},
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.invokeCloudCodeInterpreterTool(messageId, payload);
+        });
+
+        expect(optimisticUpdateToolMessageMock).toHaveBeenCalledWith(
+          messageId,
+          {
+            content: mockResult.content,
+            pluginError: undefined,
+            pluginState: mockResult.state,
+          },
+          undefined,
+        );
+
+        vi.doUnmock('@lobechat/builtin-tool-cloud-sandbox/executionRuntime');
+      });
+    });
+  });
 });

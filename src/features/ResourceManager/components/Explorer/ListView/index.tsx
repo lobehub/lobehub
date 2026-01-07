@@ -78,6 +78,9 @@ const ListView = memo(() => {
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const isDragActive = useDragActive();
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoScrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { currentFolderSlug } = useFolderPath();
   const { data: folderBreadcrumb } = useResourceManagerFetchFolderBreadcrumb(currentFolderSlug);
@@ -174,6 +177,18 @@ const ListView = memo(() => {
     }
   }, [fileListHasMore, loadMoreKnowledgeItems, isLoadingMore]);
 
+  // Clear auto-scroll timers
+  const clearScrollTimers = useCallback(() => {
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = null;
+    }
+    if (autoScrollIntervalRef.current) {
+      clearInterval(autoScrollIntervalRef.current);
+      autoScrollIntervalRef.current = null;
+    }
+  }, []);
+
   // Drop zone handlers for dragging to blank space
   const handleDropZoneDragOver = useCallback(
     (e: DragEvent) => {
@@ -187,11 +202,57 @@ const ListView = memo(() => {
 
   const handleDropZoneDragLeave = useCallback(() => {
     setIsDropZoneActive(false);
-  }, []);
+    clearScrollTimers();
+  }, [clearScrollTimers]);
 
   const handleDropZoneDrop = useCallback(() => {
     setIsDropZoneActive(false);
-  }, []);
+    clearScrollTimers();
+  }, [clearScrollTimers]);
+
+  // Handle auto-scroll during drag
+  const handleDragMove = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      if (!isDragActive || !containerRef.current) return;
+
+      const container = containerRef.current;
+      const rect = container.getBoundingClientRect();
+      const mouseY = e.clientY;
+      const bottomThreshold = 200; // pixels from bottom edge
+      const distanceFromBottom = rect.bottom - mouseY;
+
+      // Check if mouse is near the bottom edge
+      if (distanceFromBottom > 0 && distanceFromBottom <= bottomThreshold) {
+        // If not already started, start the 2-second timer
+        if (!scrollTimerRef.current && !autoScrollIntervalRef.current) {
+          scrollTimerRef.current = setTimeout(() => {
+            // After 2 seconds, start auto-scrolling
+            autoScrollIntervalRef.current = setInterval(() => {
+              virtuosoRef.current?.scrollBy({ top: 50 });
+            }, 100); // Scroll every 100ms for smooth scrolling
+            scrollTimerRef.current = null;
+          }, 2000);
+        }
+      } else {
+        // Mouse moved away from bottom edge, clear timers
+        clearScrollTimers();
+      }
+    },
+    [isDragActive, clearScrollTimers],
+  );
+
+  // Clean up timers when drag ends or component unmounts
+  useEffect(() => {
+    if (!isDragActive) {
+      clearScrollTimers();
+    }
+  }, [isDragActive, clearScrollTimers]);
+
+  useEffect(() => {
+    return () => {
+      clearScrollTimers();
+    };
+  }, [clearScrollTimers]);
 
   return (
     <Flexbox height={'100%'}>
@@ -227,8 +288,12 @@ const ListView = memo(() => {
         data-drop-target-id={currentFolderId || undefined}
         data-is-folder="true"
         onDragLeave={handleDropZoneDragLeave}
-        onDragOver={handleDropZoneDragOver}
+        onDragOver={(e) => {
+          handleDropZoneDragOver(e);
+          handleDragMove(e);
+        }}
         onDrop={handleDropZoneDrop}
+        ref={containerRef}
         style={{ flex: 1, overflow: 'hidden', position: 'relative' }}
       >
         <Virtuoso

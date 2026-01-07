@@ -375,7 +375,6 @@ export const conversationLifecycle: StateCreator<
           content: `Context ${index + 1}:\n${title}${item.content}`,
           createdAt: now,
           id: `ctx_${tempId}_${index}`,
-          meta: {},
           role: 'system' as const,
           updatedAt: now,
         };

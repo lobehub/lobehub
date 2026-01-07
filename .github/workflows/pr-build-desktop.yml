@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest # 只在 ubuntu 上运行一次检查
     steps:
       - name: Checkout base
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -33,7 +33,7 @@ jobs:
         uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          bun-version: 1.2.23
+          bun-version: latest
           package-manager-cache: 'false'
 
       - name: Install deps
@@ -55,7 +55,7 @@ jobs:
       # 输出版本信息，供后续 job 使用
       version: ${{ steps.set_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -95,7 +95,7 @@ jobs:
       matrix:
         os: [macos-latest, macos-15-intel, windows-2025, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -218,13 +218,13 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Node & Bun
         uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          bun-version: 1.2.23
+          bun-version: latest
           package-manager-cache: 'false'
 
       # 下载所有平台的构建产物
@@ -274,7 +274,7 @@ jobs:
     outputs:
       artifact_path: ${{ steps.set_path.outputs.path }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 

@@ -295,6 +295,8 @@
   "task.batchTasks": "{{count}} batch-subtaken",
   "task.metrics.stepsShort": "stappen",
   "task.metrics.toolCallsShort": "toolgebruik",
+  "task.status.cancelled": "Taak geannuleerd",
+  "task.status.failed": "Taak mislukt",
   "task.status.initializing": "Taak initialiseren...",
   "task.subtask": "Subtaak",
   "thread.divider": "Subonderwerp",

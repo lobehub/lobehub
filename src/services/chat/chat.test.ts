@@ -425,7 +425,6 @@ describe('ChatService', () => {
             ],
             createdAt: Date.now(),
             id: 'test-id',
-            meta: {},
             updatedAt: Date.now(),
           },
         ] as UIChatMessage[];
@@ -517,7 +516,6 @@ describe('ChatService', () => {
             ],
             createdAt: Date.now(),
             id: 'test-id-2',
-            meta: {},
             updatedAt: Date.now(),
           },
         ] as UIChatMessage[];
@@ -624,7 +622,6 @@ describe('ChatService', () => {
             ],
             createdAt: Date.now(),
             id: 'test-id-3',
-            meta: {},
             updatedAt: Date.now(),
           },
         ] as UIChatMessage[];
@@ -678,9 +675,6 @@ describe('ChatService', () => {
             id: 'vyQvEw6V',
             updatedAt: 1702723964330,
             extra: {},
-            meta: {
-              avatar: DEFAULT_USER_AVATAR,
-            },
           },
         ] as UIChatMessage[];
 
