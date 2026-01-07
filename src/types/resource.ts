@@ -60,6 +60,9 @@ export interface ResourceItem {
 export interface SyncOperation {
   id: string;
   payload: any;
+  // Promise resolver for async operations
+  resolve?: (value?: any) => void;
+  reject?: (reason?: any) => void;
   // Operation ID (sync-{resourceId}-{timestamp})
   resourceId: string;
   retryCount: number;

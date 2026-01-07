@@ -9,8 +9,8 @@ import type { ResourceItem, SyncOperation } from '@/types/resource';
  * Sync configuration
  */
 const SYNC_CONFIG = {
-  BATCH_SIZE: 10,
   BACKOFF_MULTIPLIER: 2,
+  BATCH_SIZE: 10,
   CONCURRENCY: 3,
   DEBOUNCE_MS: 300, // Wait after last operation
   MAX_RETRIES: 3,
@@ -53,19 +53,15 @@ export class ResourceSyncEngine {
   constructor(getState: StateManager['getState'], setState: StateManager['setState']) {
     this.stateManager = { getState, setState };
 
-    this.debouncedSync = debounce(
-      () => this.processQueue(),
-      SYNC_CONFIG.DEBOUNCE_MS,
-      {
-        edges: ['trailing'],
-      },
-    ) as DebouncedFunc<() => Promise<void>>;
+    this.debouncedSync = debounce(() => this.processQueue(), SYNC_CONFIG.DEBOUNCE_MS, {
+      edges: ['trailing'],
+    }) as DebouncedFunc<() => Promise<void>>;
 
     // Add maxWait behavior manually since es-toolkit debounce doesn't support it
     let lastExecution = 0;
     const originalSync = this.debouncedSync;
 
-    this.debouncedSync = ((() => {
+    this.debouncedSync = (() => {
       const now = Date.now();
       if (now - lastExecution >= SYNC_CONFIG.MAX_WAIT_MS) {
         lastExecution = now;
@@ -74,23 +70,31 @@ export class ResourceSyncEngine {
       } else {
         return originalSync();
       }
-    }) as unknown) as DebouncedFunc<() => Promise<void>>;
+    }) as unknown as DebouncedFunc<() => Promise<void>>;
 
     this.debouncedSync.flush = originalSync.flush;
     this.debouncedSync.cancel = originalSync.cancel;
   }
 
   /**
-   * Enqueue a sync operation
+   * Enqueue a sync operation and return a Promise that resolves when it completes
    */
-  enqueue(operation: SyncOperation): void {
-    const { syncQueue } = this.stateManager.getState();
-    this.stateManager.setState({
-      syncQueue: [...syncQueue, operation],
-    });
+  enqueue(operation: Omit<SyncOperation, 'resolve' | 'reject'>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const { syncQueue } = this.stateManager.getState();
+      const operationWithPromise: SyncOperation = {
+        ...operation,
+        reject,
+        resolve,
+      };
 
-    // Trigger debounced sync
-    this.debouncedSync();
+      this.stateManager.setState({
+        syncQueue: [...syncQueue, operationWithPromise],
+      });
+
+      // Trigger debounced sync
+      this.debouncedSync();
+    });
   }
 
   /**
@@ -167,14 +171,18 @@ export class ResourceSyncEngine {
         }
 
         case 'move': {
-          const moved = await resourceService.moveResource(resourceId, payload.parentId);
-          this.updateResourceInStore(moved);
+          await resourceService.moveResource(resourceId, payload.parentId);
+          // Don't update store - resource has already been removed optimistically
+          // and should stay removed since it moved to a different location
           break;
         }
       }
 
       // Clear optimistic state on success
       this.clearOptimisticState(resourceId);
+
+      // Resolve promise for this operation
+      operation.resolve?.();
     } finally {
       // Unmark as syncing
       const { syncingIds: currentSyncingIds } = this.stateManager.getState();
@@ -207,8 +215,9 @@ export class ResourceSyncEngine {
         this.debouncedSync();
       }, delay);
     } else {
-      // Max retries reached: mark resource with error state
+      // Max retries reached: mark resource with error state and reject promise
       this.markResourceError(resourceId, error);
+      operation.reject?.(error);
     }
   }
 

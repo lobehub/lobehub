@@ -1,3 +1,4 @@
+import debug from 'debug';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { resourceService } from '@/services/resource';
@@ -11,6 +12,8 @@ import type {
 import type { FileStore } from '../../store';
 import { type ResourceState, initialResourceState } from './initialState';
 import { ResourceSyncEngine } from './syncEngine';
+
+const log = debug('resource-manager:action');
 
 /**
  * Resource slice actions
@@ -173,6 +176,8 @@ export const createResourceSlice: StateCreator<
       const newMap = new Map(resourceMap);
       newMap.delete(id);
 
+      log('deleteResource', id, newMap, resourceList);
+
       set(
         {
           resourceList: resourceList.filter((r) => r.id !== id),
@@ -192,6 +197,8 @@ export const createResourceSlice: StateCreator<
         timestamp: new Date(),
         type: 'delete',
       });
+
+      log('enqueue deleteResource', id, syncEngine);
     },
 
     fetchResources: async (params) => {
@@ -277,7 +284,38 @@ export const createResourceSlice: StateCreator<
     },
 
     moveResource: async (id, parentId) => {
-      await get().updateResource(id, { parentId });
+      // 1. Optimistically remove from current view (it's moving away)
+      const { resourceMap, resourceList } = get();
+      const existing = resourceMap.get(id);
+
+      if (!existing) {
+        console.warn(`Resource ${id} not found for move`);
+        return;
+      }
+
+      // Remove from list and map immediately
+      const newMap = new Map(resourceMap);
+      newMap.delete(id);
+
+      set(
+        {
+          resourceList: resourceList.filter((r) => r.id !== id),
+          resourceMap: newMap,
+        },
+        false,
+        'moveResource/optimistic',
+      );
+
+      // 2. Enqueue move operation (background sync) and wait for it to complete
+      const syncEngine = getSyncEngine();
+      return syncEngine.enqueue({
+        id: `sync-move-${id}-${Date.now()}`,
+        payload: { parentId },
+        resourceId: id,
+        retryCount: 0,
+        timestamp: new Date(),
+        type: 'move',
+      });
     },
 
     retrySync: async (resourceId) => {
@@ -339,6 +377,8 @@ export const createResourceSlice: StateCreator<
         return;
       }
 
+      log('updateResource', id, existing, updates);
+
       const updated: ResourceItem = {
         ...existing,
         ...updates,
@@ -375,6 +415,8 @@ export const createResourceSlice: StateCreator<
         timestamp: new Date(),
         type: 'update',
       });
+
+      log('enqueue updateResource', id, syncEngine);
     },
   };
 };

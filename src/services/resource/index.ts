@@ -84,7 +84,7 @@ export class ResourceService {
     return {
       hasMore: response.hasMore,
       items: response.items.map(mapToResourceItem),
-      total: 'total' in response ? response.total : undefined,
+      total: 'total' in response ? (response.total as number) : undefined,
     };
   }
 
@@ -149,7 +149,7 @@ export class ResourceService {
         size: created.totalCharCount || 0,
         slug: created.slug || undefined,
         sourceType: 'document',
-        title: created.title,
+        title: created.title || undefined,
         updatedAt: created.updatedAt ? new Date(created.updatedAt) : new Date(),
         url: created.source || '',
       };
@@ -182,7 +182,8 @@ export class ResourceService {
         editorData: updates.editorData ? JSON.stringify(updates.editorData) : undefined,
         id,
         metadata: updates.metadata,
-        parentId: updates.parentId ?? undefined,
+        // Keep null as null (for moving to root), don't convert to undefined
+        parentId: updates.parentId !== undefined ? updates.parentId : undefined,
         title: updates.title || updates.name,
       });
 
