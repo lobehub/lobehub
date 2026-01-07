@@ -10,41 +10,15 @@ const log = debug('lobe-oidc:callback:desktop');
 const errorPathname = '/oauth/callback/error';
 
 /**
- * 安全地构建重定向URL
+ * 安全地构建重定向URL，使用经过验证的 correctOIDCUrl 防止开放重定向攻击
  */
 const buildRedirectUrl = (req: NextRequest, pathname: string): URL => {
-  const forwardedHost = req.headers.get('x-forwarded-host');
-  const requestHost = req.headers.get('host');
-  const forwardedProto =
-    req.headers.get('x-forwarded-proto') || req.headers.get('x-forwarded-protocol');
+  // 使用 req.nextUrl 作为基础URL，然后通过 correctOIDCUrl 进行验证和修正
+  const baseUrl = req.nextUrl.clone();
+  baseUrl.pathname = pathname;
 
-  // 确定实际的主机名，提供后备值
-  const actualHost = forwardedHost || requestHost;
-  const actualProto = forwardedProto || 'https';
-
-  log(
-    'Building redirect URL - host: %s, proto: %s, pathname: %s',
-    actualHost,
-    actualProto,
-    pathname,
-  );
-
-  // 如果主机名仍然无效，使用req.nextUrl作为后备
-  if (!actualHost) {
-    log('Warning: Invalid host detected, using req.nextUrl as fallback');
-    const fallbackUrl = req.nextUrl.clone();
-    fallbackUrl.pathname = pathname;
-    return fallbackUrl;
-  }
-
-  try {
-    return new URL(`${actualProto}://${actualHost}${pathname}`);
-  } catch (error) {
-    log('Error constructing URL, using req.nextUrl as fallback: %O', error);
-    const fallbackUrl = req.nextUrl.clone();
-    fallbackUrl.pathname = pathname;
-    return fallbackUrl;
-  }
+  // correctOIDCUrl 会验证 X-Forwarded-* 头部并防止开放重定向攻击
+  return correctOIDCUrl(req, baseUrl);
 };
 
 export const GET = async (req: NextRequest) => {
@@ -82,9 +56,6 @@ export const GET = async (req: NextRequest) => {
     log('Request x-forwarded-proto: %s', req.headers.get('x-forwarded-proto'));
     log('Constructed success URL: %s', successUrl.toString());
 
-    const correctedUrl = correctOIDCUrl(req, successUrl);
-    log('Final redirect URL: %s', correctedUrl.toString());
-
     // cleanup expired
     after(async () => {
       const cleanedCount = await authHandoffModel.cleanupExpired();
@@ -92,7 +63,7 @@ export const GET = async (req: NextRequest) => {
       log('Cleaned up %d expired handoff records', cleanedCount);
     });
 
-    return NextResponse.redirect(correctedUrl);
+    return NextResponse.redirect(successUrl);
   } catch (error) {
     log('Error in OIDC callback: %O', error);
 

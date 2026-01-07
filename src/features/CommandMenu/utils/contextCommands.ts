@@ -1,13 +1,19 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import type { LucideIcon } from 'lucide-react';
 import {
   Brain,
   ChartColumnBigIcon,
+  Coins,
+  CreditCard,
   EthernetPort,
+  Gift,
   Image as ImageIcon,
   Info,
   KeyIcon,
   KeyboardIcon,
+  Map,
   Palette as PaletteIcon,
+  PieChart,
   UserCircle,
 } from 'lucide-react';
 
@@ -18,7 +24,7 @@ export interface ContextCommand {
   keywords: string[];
   label: string;
   labelKey?: string; // i18n key for the label
-  labelNamespace?: 'setting' | 'auth'; // i18n namespace for the label
+  labelNamespace?: 'setting' | 'auth' | 'subscription'; // i18n namespace for the label
   path: string;
   subPath: string;
 }
@@ -114,6 +120,55 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
       path: '/settings/about',
       subPath: 'about',
     },
+    ...(ENABLE_BUSINESS_FEATURES
+      ? [
+          {
+            icon: Map,
+            keywords: ['subscription', 'plan', 'upgrade', 'pricing'],
+            label: 'Subscription Plans',
+            labelKey: 'tab.plans',
+            labelNamespace: 'subscription' as const,
+            path: '/settings/plans',
+            subPath: 'plans',
+          },
+          {
+            icon: Coins,
+            keywords: ['funds', 'balance', 'credit', 'money'],
+            label: 'Funds',
+            labelKey: 'tab.funds',
+            labelNamespace: 'subscription' as const,
+            path: '/settings/funds',
+            subPath: 'funds',
+          },
+          {
+            icon: PieChart,
+            keywords: ['usage', 'statistics', 'consumption', 'quota'],
+            label: 'Usage',
+            labelKey: 'tab.usage',
+            labelNamespace: 'subscription' as const,
+            path: '/settings/usage',
+            subPath: 'usage',
+          },
+          {
+            icon: CreditCard,
+            keywords: ['billing', 'payment', 'invoice', 'transaction'],
+            label: 'Billing',
+            labelKey: 'tab.billing',
+            labelNamespace: 'subscription' as const,
+            path: '/settings/billing',
+            subPath: 'billing',
+          },
+          {
+            icon: Gift,
+            keywords: ['referral', 'rewards', 'invite', 'bonus'],
+            label: 'Referral Rewards',
+            labelKey: 'tab.referral',
+            labelNamespace: 'subscription' as const,
+            path: '/settings/referral',
+            subPath: 'referral',
+          },
+        ]
+      : []),
   ],
 };
 

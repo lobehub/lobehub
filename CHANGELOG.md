@@ -2,6 +2,189 @@
 
 # Changelog
 
+## [Version 2.0.0-next.228](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.227...v2.0.0-next.228)
+
+<sup>Released on **2026-01-06**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Add separate border-radius for bottom-right corner on macOS 26 Chrome.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Add separate border-radius for bottom-right corner on macOS 26 Chrome, closes [#11287](https://github.com/lobehub/lobe-chat/issues/11287) ([544931a](https://github.com/lobehub/lobe-chat/commit/544931a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.227](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.226...v2.0.0-next.227)
+
+<sup>Released on **2026-01-06**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Allow zero-byte files and add business hooks for error handling.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Allow zero-byte files and add business hooks for error handling, closes [#11283](https://github.com/lobehub/lobe-chat/issues/11283) ([38f5b78](https://github.com/lobehub/lobe-chat/commit/38f5b78))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.226](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.225...v2.0.0-next.226)
+
+<sup>Released on **2026-01-06**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Change all market routes & api call into lambda trpc client call.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Change all market routes & api call into lambda trpc client call, closes [#11256](https://github.com/lobehub/lobe-chat/issues/11256) ([8f7e378](https://github.com/lobehub/lobe-chat/commit/8f7e378))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.225](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.224...v2.0.0-next.225)
+
+<sup>Released on **2026-01-06**</sup>
+
+#### ✨ Features
+
+- **ModelSwitchPanel**: Add provider preference storage in By Model view.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **ModelSwitchPanel**: Add provider preference storage in By Model view, closes [#11246](https://github.com/lobehub/lobe-chat/issues/11246) ([d778093](https://github.com/lobehub/lobe-chat/commit/d778093))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.224](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.223...v2.0.0-next.224)
+
+<sup>Released on **2026-01-06**</sup>
+
+#### ♻ Code Refactoring
+
+- **router**: Replace client-side rendering with dynamic import for DesktopClientRouter.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **router**: Replace client-side rendering with dynamic import for DesktopClientRouter, closes [#11276](https://github.com/lobehub/lobe-chat/issues/11276) ([f50305b](https://github.com/lobehub/lobe-chat/commit/f50305b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.223](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.222...v2.0.0-next.223)
+
+<sup>Released on **2026-01-06**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix callback url error during signin period.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix callback url error during signin period, closes [#11139](https://github.com/lobehub/lobe-chat/issues/11139) ([3fc69c5](https://github.com/lobehub/lobe-chat/commit/3fc69c5))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.222](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.221...v2.0.0-next.222)
+
+<sup>Released on **2026-01-06**</sup>
+
+#### ♻ Code Refactoring
+
+- **auth**: Improve auth configuration for better Docker runtime support.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix editor modal and refactor ModelSwitchPanel.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **auth**: Improve auth configuration for better Docker runtime support, closes [#11253](https://github.com/lobehub/lobe-chat/issues/11253) ([5277650](https://github.com/lobehub/lobe-chat/commit/5277650))
+
+#### What's fixed
+
+- **misc**: Fix editor modal and refactor ModelSwitchPanel, closes [#11273](https://github.com/lobehub/lobe-chat/issues/11273) ([0c57ec4](https://github.com/lobehub/lobe-chat/commit/0c57ec4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.221](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.220...v2.0.0-next.221)
 
 <sup>Released on **2026-01-05**</sup>

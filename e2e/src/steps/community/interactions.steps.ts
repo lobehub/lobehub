@@ -327,7 +327,7 @@ Then('I should be navigated to the assistant detail page', async function (this:
 
   const currentUrl = this.page.url();
   // Verify that URL changed and contains /assistant/ followed by an identifier
-  const hasAssistantDetail = /\/discover\/assistant\/[^#?]+/.test(currentUrl);
+  const hasAssistantDetail = /\/community\/assistant\/[^#?]+/.test(currentUrl);
   const urlChanged = currentUrl !== this.testContext.previousUrl;
 
   expect(
@@ -362,7 +362,7 @@ Then('I should be navigated to the model detail page', async function (this: Cus
 
   const currentUrl = this.page.url();
   // Verify that URL changed and contains /model/ followed by an identifier
-  const hasModelDetail = /\/discover\/model\/[^#?]+/.test(currentUrl);
+  const hasModelDetail = /\/community\/model\/[^#?]+/.test(currentUrl);
   const urlChanged = currentUrl !== this.testContext.previousUrl;
 
   expect(
@@ -384,7 +384,7 @@ Then('I should be navigated to the provider detail page', async function (this: 
 
   const currentUrl = this.page.url();
   // Verify that URL changed and contains /provider/ followed by an identifier
-  const hasProviderDetail = /\/discover\/provider\/[^#?]+/.test(currentUrl);
+  const hasProviderDetail = /\/community\/provider\/[^#?]+/.test(currentUrl);
   const urlChanged = currentUrl !== this.testContext.previousUrl;
 
   expect(
@@ -422,7 +422,7 @@ Then('I should be navigated to the MCP detail page', async function (this: Custo
 
   const currentUrl = this.page.url();
   // Verify that URL changed and contains /mcp/ followed by an identifier
-  const hasMcpDetail = /\/discover\/mcp\/[^#?]+/.test(currentUrl);
+  const hasMcpDetail = /\/community\/mcp\/[^#?]+/.test(currentUrl);
   const urlChanged = currentUrl !== this.testContext.previousUrl;
 
   expect(

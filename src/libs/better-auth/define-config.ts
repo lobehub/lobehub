@@ -58,7 +58,7 @@ const getPasskeyOrigins = (): string[] | undefined => {
 const MAGIC_LINK_EXPIRES_IN = 900;
 // OTP expiration time (in seconds) - 5 minutes for mobile OTP verification
 const OTP_EXPIRES_IN = 300;
-const enableMagicLink = authEnv.NEXT_PUBLIC_ENABLE_MAGIC_LINK;
+const enableMagicLink = authEnv.ENABLE_MAGIC_LINK;
 const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
@@ -91,7 +91,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       enabled: true,
       maxPasswordLength: 64,
       minPasswordLength: 8,
-      requireEmailVerification: authEnv.NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION,
+      requireEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
 
       // Compatible with bcrypt password hashes migrated from Clerk; after login, you can re-hash in the backend using BetterAuth's default scrypt.
       password: {

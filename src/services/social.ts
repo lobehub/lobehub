@@ -1,4 +1,4 @@
-import { MARKET_ENDPOINTS } from '@/services/_url';
+import { lambdaClient } from '@/libs/trpc/client';
 
 export type SocialTargetType = 'agent' | 'plugin';
 
@@ -74,108 +74,57 @@ export interface FavoritePluginItem {
 }
 
 class SocialService {
-  private accessToken?: string;
-
-  // eslint-disable-next-line no-undef
-  private async request<T>(endpoint: string, init?: RequestInit): Promise<T> {
-    const headers = new Headers(init?.headers);
-
-    if (init?.body && !headers.has('content-type')) {
-      headers.set('content-type', 'application/json');
-    }
-
-    if (this.accessToken && !headers.has('authorization')) {
-      headers.set('authorization', `Bearer ${this.accessToken}`);
-    }
-
-    const response = await fetch(endpoint, {
-      ...init,
-      credentials: init?.credentials ?? 'same-origin',
-      headers,
-    });
-
-    if (!response.ok) {
-      let message = 'Unknown error';
-
-      try {
-        const errorBody = await response.json();
-        message = errorBody?.message ?? message;
-      } catch {
-        message = await response.text();
-      }
-
-      throw new Error(message || 'Social request failed');
-    }
-
-    if (response.status === 204) {
-      return undefined as T;
-    }
-
-    return (await response.json()) as T;
-  }
-
-  setAccessToken(token: string | undefined) {
-    this.accessToken = token;
+  /**
+   * @deprecated This method is no longer needed as authentication is now handled
+   * automatically through tRPC middleware. Keeping for backward compatibility.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  setAccessToken(_token: string | undefined) {
+    // No-op: Authentication is now handled through tRPC authedProcedure middleware
   }
 
   // ==================== Follow ====================
 
   async follow(followingId: number): Promise<void> {
-    await this.request(MARKET_ENDPOINTS.follow, {
-      body: JSON.stringify({ followingId }),
-      method: 'POST',
-    });
+    await lambdaClient.market.social.follow.mutate({ followingId });
   }
 
   async unfollow(followingId: number): Promise<void> {
-    await this.request(MARKET_ENDPOINTS.unfollow, {
-      body: JSON.stringify({ followingId }),
-      method: 'POST',
-    });
+    await lambdaClient.market.social.unfollow.mutate({ followingId });
   }
 
   async checkFollowStatus(userId: number): Promise<FollowStatus> {
-    return this.request(MARKET_ENDPOINTS.followStatus(userId), {
-      method: 'GET',
-    });
+    return lambdaClient.market.social.checkFollowStatus.query({
+      targetUserId: userId,
+    }) as Promise<FollowStatus>;
   }
 
   async getFollowCounts(userId: number): Promise<FollowCounts> {
-    return this.request(MARKET_ENDPOINTS.followCounts(userId), {
-      method: 'GET',
-    });
+    return lambdaClient.market.social.getFollowCounts.query({
+      userId,
+    }) as Promise<FollowCounts>;
   }
 
   async getFollowing(
     userId: number,
     params?: PaginationParams,
   ): Promise<PaginatedResponse<FollowUserItem>> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.following(userId)}?${queryString}`
-      : MARKET_ENDPOINTS.following(userId);
-
-    return this.request(url, { method: 'GET' });
+    return lambdaClient.market.social.getFollowing.query({
+      limit: params?.pageSize,
+      offset: params?.page ? (params.page - 1) * (params.pageSize || 10) : undefined,
+      userId,
+    }) as unknown as Promise<PaginatedResponse<FollowUserItem>>;
   }
 
   async getFollowers(
     userId: number,
     params?: PaginationParams,
   ): Promise<PaginatedResponse<FollowUserItem>> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.followers(userId)}?${queryString}`
-      : MARKET_ENDPOINTS.followers(userId);
-
-    return this.request(url, { method: 'GET' });
+    return lambdaClient.market.social.getFollowers.query({
+      limit: params?.pageSize,
+      offset: params?.page ? (params.page - 1) * (params.pageSize || 10) : undefined,
+      userId,
+    }) as unknown as Promise<PaginatedResponse<FollowUserItem>>;
   }
 
   // ==================== Favorite ====================
@@ -184,172 +133,127 @@ class SocialService {
     targetType: SocialTargetType,
     targetIdOrIdentifier: number | string,
   ): Promise<void> {
-    const body =
+    const input =
       typeof targetIdOrIdentifier === 'string'
         ? { identifier: targetIdOrIdentifier, targetType }
         : { targetId: targetIdOrIdentifier, targetType };
 
-    await this.request(MARKET_ENDPOINTS.favorite, {
-      body: JSON.stringify(body),
-      method: 'POST',
-    });
+    await lambdaClient.market.social.addFavorite.mutate(input);
   }
 
   async removeFavorite(
     targetType: SocialTargetType,
     targetIdOrIdentifier: number | string,
   ): Promise<void> {
-    const body =
+    const input =
       typeof targetIdOrIdentifier === 'string'
         ? { identifier: targetIdOrIdentifier, targetType }
         : { targetId: targetIdOrIdentifier, targetType };
 
-    await this.request(MARKET_ENDPOINTS.unfavorite, {
-      body: JSON.stringify(body),
-      method: 'POST',
-    });
+    await lambdaClient.market.social.removeFavorite.mutate(input);
   }
 
   async checkFavoriteStatus(
     targetType: SocialTargetType,
     targetIdOrIdentifier: number | string,
   ): Promise<FavoriteStatus> {
-    return this.request(MARKET_ENDPOINTS.favoriteStatus(targetType, targetIdOrIdentifier), {
-      method: 'GET',
-    });
+    return lambdaClient.market.social.checkFavorite.query({
+      targetIdOrIdentifier,
+      targetType,
+    }) as Promise<FavoriteStatus>;
   }
 
   async getMyFavorites(params?: PaginationParams): Promise<PaginatedResponse<FavoriteItem>> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.myFavorites}?${queryString}`
-      : MARKET_ENDPOINTS.myFavorites;
-
-    return this.request(url, { method: 'GET' });
+    return lambdaClient.market.social.getMyFavorites.query({
+      limit: params?.pageSize,
+      offset: params?.page ? (params.page - 1) * (params.pageSize || 10) : undefined,
+    }) as unknown as Promise<PaginatedResponse<FavoriteItem>>;
   }
 
   async getUserFavoriteAgents(
     userId: number,
     params?: PaginationParams,
   ): Promise<PaginatedResponse<FavoriteAgentItem>> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.favoriteAgents(userId)}?${queryString}`
-      : MARKET_ENDPOINTS.favoriteAgents(userId);
-
-    return this.request(url, { method: 'GET' });
+    return lambdaClient.market.social.getUserFavoriteAgents.query({
+      limit: params?.pageSize,
+      offset: params?.page ? (params.page - 1) * (params.pageSize || 10) : undefined,
+      userId,
+    }) as unknown as Promise<PaginatedResponse<FavoriteAgentItem>>;
   }
 
   async getUserFavoritePlugins(
     userId: number,
     params?: PaginationParams,
   ): Promise<PaginatedResponse<FavoritePluginItem>> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.favoritePlugins(userId)}?${queryString}`
-      : MARKET_ENDPOINTS.favoritePlugins(userId);
-
-    return this.request(url, { method: 'GET' });
+    return lambdaClient.market.social.getUserFavoritePlugins.query({
+      limit: params?.pageSize,
+      offset: params?.page ? (params.page - 1) * (params.pageSize || 10) : undefined,
+      userId,
+    }) as unknown as Promise<PaginatedResponse<FavoritePluginItem>>;
   }
 
   // ==================== Like ====================
 
-  async like(
-    targetType: SocialTargetType,
-    targetIdOrIdentifier: number | string,
-  ): Promise<void> {
-    const body =
+  async like(targetType: SocialTargetType, targetIdOrIdentifier: number | string): Promise<void> {
+    const input =
       typeof targetIdOrIdentifier === 'string'
         ? { identifier: targetIdOrIdentifier, targetType }
         : { targetId: targetIdOrIdentifier, targetType };
 
-    await this.request(MARKET_ENDPOINTS.like, {
-      body: JSON.stringify(body),
-      method: 'POST',
-    });
+    await lambdaClient.market.social.like.mutate(input);
   }
 
-  async unlike(
-    targetType: SocialTargetType,
-    targetIdOrIdentifier: number | string,
-  ): Promise<void> {
-    const body =
+  async unlike(targetType: SocialTargetType, targetIdOrIdentifier: number | string): Promise<void> {
+    const input =
       typeof targetIdOrIdentifier === 'string'
         ? { identifier: targetIdOrIdentifier, targetType }
         : { targetId: targetIdOrIdentifier, targetType };
 
-    await this.request(MARKET_ENDPOINTS.unlike, {
-      body: JSON.stringify(body),
-      method: 'POST',
-    });
+    await lambdaClient.market.social.unlike.mutate(input);
   }
 
   async checkLikeStatus(
     targetType: SocialTargetType,
     targetIdOrIdentifier: number | string,
   ): Promise<LikeStatus> {
-    return this.request(MARKET_ENDPOINTS.likeStatus(targetType, targetIdOrIdentifier), {
-      method: 'GET',
-    });
+    return lambdaClient.market.social.checkLike.query({
+      targetIdOrIdentifier,
+      targetType,
+    }) as Promise<LikeStatus>;
   }
 
   async toggleLike(
     targetType: SocialTargetType,
     targetIdOrIdentifier: number | string,
   ): Promise<ToggleLikeResult> {
-    const body =
+    const input =
       typeof targetIdOrIdentifier === 'string'
         ? { identifier: targetIdOrIdentifier, targetType }
         : { targetId: targetIdOrIdentifier, targetType };
 
-    return this.request(MARKET_ENDPOINTS.toggleLike, {
-      body: JSON.stringify(body),
-      method: 'POST',
-    });
+    return lambdaClient.market.social.toggleLike.mutate(input) as Promise<ToggleLikeResult>;
   }
 
   async getUserLikedAgents(
     userId: number,
     params?: PaginationParams,
   ): Promise<PaginatedResponse<FavoriteAgentItem>> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.likedAgents(userId)}?${queryString}`
-      : MARKET_ENDPOINTS.likedAgents(userId);
-
-    return this.request(url, { method: 'GET' });
+    return lambdaClient.market.social.getUserLikedAgents.query({
+      limit: params?.pageSize,
+      offset: params?.page ? (params.page - 1) * (params.pageSize || 10) : undefined,
+      userId,
+    }) as unknown as Promise<PaginatedResponse<FavoriteAgentItem>>;
   }
 
   async getUserLikedPlugins(
     userId: number,
     params?: PaginationParams,
   ): Promise<PaginatedResponse<FavoritePluginItem>> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.likedPlugins(userId)}?${queryString}`
-      : MARKET_ENDPOINTS.likedPlugins(userId);
-
-    return this.request(url, { method: 'GET' });
+    return lambdaClient.market.social.getUserLikedPlugins.query({
+      limit: params?.pageSize,
+      offset: params?.page ? (params.page - 1) * (params.pageSize || 10) : undefined,
+      userId,
+    }) as unknown as Promise<PaginatedResponse<FavoritePluginItem>>;
   }
 }
 

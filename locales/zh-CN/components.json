@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "前往设置",
   "ModelSwitchPanel.manageProvider": "管理提供商",
   "ModelSwitchPanel.provider": "提供方",
+  "ModelSwitchPanel.searchPlaceholder": "搜索模型...",
   "ModelSwitchPanel.title": "模型",
   "ModelSwitchPanel.useModelFrom": "使用此模型来自：",
   "MultiImagesUpload.actions.uploadMore": "点击或拖拽上传更多",

@@ -47,7 +47,7 @@ Then('I should be on an assistant detail page', async function (this: CustomWorl
 
   const currentUrl = this.page.url();
   // Check if URL matches assistant detail page pattern
-  const hasAssistantDetail = /\/discover\/assistant\/[^#?]+/.test(currentUrl);
+  const hasAssistantDetail = /\/community\/assistant\/[^#?]+/.test(currentUrl);
   expect(
     hasAssistantDetail,
     `Expected URL to match assistant detail page pattern, but got: ${currentUrl}`,
@@ -116,7 +116,7 @@ Then('I should be on the assistant list page', async function (this: CustomWorld
   // Check if URL is assistant list (not detail page)
   const isListPage =
     currentUrl.includes('/community/assistant') &&
-    !/\/discover\/assistant\/[^#?]+/.test(currentUrl);
+    !/\/community\/assistant\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be assistant list page, but got: ${currentUrl}`).toBeTruthy();
 });
 
@@ -126,7 +126,7 @@ Then('I should be on a model detail page', async function (this: CustomWorld) {
 
   const currentUrl = this.page.url();
   // Check if URL matches model detail page pattern
-  const hasModelDetail = /\/discover\/model\/[^#?]+/.test(currentUrl);
+  const hasModelDetail = /\/community\/model\/[^#?]+/.test(currentUrl);
   expect(
     hasModelDetail,
     `Expected URL to match model detail page pattern, but got: ${currentUrl}`,
@@ -175,7 +175,7 @@ Then('I should be on the model list page', async function (this: CustomWorld) {
   const currentUrl = this.page.url();
   // Check if URL is model list (not detail page)
   const isListPage =
-    currentUrl.includes('/community/model') && !/\/discover\/model\/[^#?]+/.test(currentUrl);
+    currentUrl.includes('/community/model') && !/\/community\/model\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be model list page, but got: ${currentUrl}`).toBeTruthy();
 });
 
@@ -185,7 +185,7 @@ Then('I should be on a provider detail page', async function (this: CustomWorld)
 
   const currentUrl = this.page.url();
   // Check if URL matches provider detail page pattern
-  const hasProviderDetail = /\/discover\/provider\/[^#?]+/.test(currentUrl);
+  const hasProviderDetail = /\/community\/provider\/[^#?]+/.test(currentUrl);
   expect(
     hasProviderDetail,
     `Expected URL to match provider detail page pattern, but got: ${currentUrl}`,
@@ -234,7 +234,7 @@ Then('I should be on the provider list page', async function (this: CustomWorld)
   const currentUrl = this.page.url();
   // Check if URL is provider list (not detail page)
   const isListPage =
-    currentUrl.includes('/community/provider') && !/\/discover\/provider\/[^#?]+/.test(currentUrl);
+    currentUrl.includes('/community/provider') && !/\/community\/provider\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be provider list page, but got: ${currentUrl}`).toBeTruthy();
 });
 
@@ -244,7 +244,7 @@ Then('I should be on an MCP detail page', async function (this: CustomWorld) {
 
   const currentUrl = this.page.url();
   // Check if URL matches MCP detail page pattern
-  const hasMcpDetail = /\/discover\/mcp\/[^#?]+/.test(currentUrl);
+  const hasMcpDetail = /\/community\/mcp\/[^#?]+/.test(currentUrl);
   expect(
     hasMcpDetail,
     `Expected URL to match MCP detail page pattern, but got: ${currentUrl}`,
@@ -291,6 +291,6 @@ Then('I should be on the MCP list page', async function (this: CustomWorld) {
   const currentUrl = this.page.url();
   // Check if URL is MCP list (not detail page)
   const isListPage =
-    currentUrl.includes('/community/mcp') && !/\/discover\/mcp\/[^#?]+/.test(currentUrl);
+    currentUrl.includes('/community/mcp') && !/\/community\/mcp\/[^#?]+/.test(currentUrl);
   expect(isListPage, `Expected URL to be MCP list page, but got: ${currentUrl}`).toBeTruthy();
 });

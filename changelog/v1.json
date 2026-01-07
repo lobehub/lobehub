@@ -1,6 +1,51 @@
 [
   {
     "children": {
+      "fixes": ["Add separate border-radius for bottom-right corner on macOS 26 Chrome."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.228"
+  },
+  {
+    "children": {
+      "fixes": ["Allow zero-byte files and add business hooks for error handling."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.227"
+  },
+  {
+    "children": {
+      "improvements": ["Change all market routes & api call into lambda trpc client call."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.226"
+  },
+  {
+    "children": {},
+    "date": "2026-01-06",
+    "version": "2.0.0-next.225"
+  },
+  {
+    "children": {},
+    "date": "2026-01-06",
+    "version": "2.0.0-next.224"
+  },
+  {
+    "children": {
+      "fixes": ["Fix callback url error during signin period."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.223"
+  },
+  {
+    "children": {
+      "fixes": ["Fix editor modal and refactor ModelSwitchPanel."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.222"
+  },
+  {
+    "children": {
       "improvements": ["Convert glossary from JSON to Markdown table format."],
       "fixes": ["Resolve desktop upload CORS issue."]
     },
