@@ -96,14 +96,14 @@ const UploadItem = memo<UploadItemProps>(({ file, status, uploadState }) => {
   return (
     <Flexbox
       align={'center'}
-      gap={4}
+      gap={12}
       horizontal
       key={name}
       paddingBlock={8}
       paddingInline={12}
       style={{ position: 'relative' }}
     >
-      <FileIcon fileName={name} fileType={type} />
+      <FileIcon fileName={name} fileType={type} size={36} />
       <Flexbox style={{ overflow: 'hidden' }}>
         <div className={styles.title}>{name}</div>
         {desc}
