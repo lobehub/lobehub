@@ -103,7 +103,7 @@ jobs:
         run: bun i
 
       - name: Run tests with blob reporter
-        run: bunx vitest --coverage --pool=threads --reporter=blob --shard=${{ matrix.shard }}/2
+        run: bunx vitest --coverage --reporter=blob --silent='passed-only' --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
