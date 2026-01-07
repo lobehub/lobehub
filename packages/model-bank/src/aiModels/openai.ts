@@ -1243,7 +1243,7 @@ export const openaiImageModels: AIImageModelCard[] = [
   {
     description: 'ChatGPT native multimodal image generation model.',
     displayName: 'GPT Image 1',
-    enabled: false,
+    enabled: true,
     id: 'gpt-image-1',
     parameters: gptImage1ParamsSchema,
     pricing: {
@@ -1282,6 +1282,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     description:
       'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
     displayName: 'DALL·E 3',
+    enabled: true,
     id: 'dall-e-3',
     parameters: {
       prompt: { default: '' },

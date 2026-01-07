@@ -1094,7 +1094,7 @@ const lobehubImageModels: AIImageModelCard[] = [
     description:
       'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     displayName: 'Nano Banana',
-    enabled: false,
+    enabled: true,
     id: 'gemini-2.5-flash-image-preview:image',
     parameters: nanoBananaParameters,
     pricing: {
@@ -1112,7 +1112,7 @@ const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series',
     displayName: 'Imagen 4 Fast',
-    enabled: false,
+    enabled: true,
     id: 'imagen-4.0-fast-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -1125,7 +1125,7 @@ const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series',
     displayName: 'Imagen 4',
-    enabled: false,
+    enabled: true,
     id: 'imagen-4.0-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -1138,7 +1138,7 @@ const lobehubImageModels: AIImageModelCard[] = [
   {
     description: 'Imagen 4th generation text-to-image model series Ultra version',
     displayName: 'Imagen 4 Ultra',
-    enabled: false,
+    enabled: true,
     id: 'imagen-4.0-ultra-generate-001',
     organization: 'Deepmind',
     parameters: imagenBaseParameters,
@@ -1190,7 +1190,7 @@ const lobehubImageModels: AIImageModelCard[] = [
     description:
       'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
     displayName: 'DALL·E 3',
-    enabled: false,
+    enabled: true,
     id: 'dall-e-3',
     parameters: {
       prompt: { default: '' },
