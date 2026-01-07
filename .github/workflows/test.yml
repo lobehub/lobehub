@@ -117,7 +117,7 @@ jobs:
   # Merge sharded test reports and upload coverage
   merge-app-coverage:
     needs: test-app
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.test-app.result == 'success' }}
     name: Merge and Upload App Coverage
     runs-on: ubuntu-latest
     steps:
