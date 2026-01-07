@@ -26,9 +26,7 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
       onOk={async () => {
         setConfirmLoading(true);
         try {
-          let finalValue;
-          finalValue = editor?.getDocument('markdown') as unknown as string;
-          await onConfirm?.(finalValue || '');
+          await onConfirm?.((editor?.getDocument('markdown') as unknown as string) || '');
         } catch (e) {
           console.error('EditorModal onOk error:', e);
           onConfirm?.(value || '');
