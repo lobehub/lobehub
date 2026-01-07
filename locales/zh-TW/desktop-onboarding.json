@@ -45,7 +45,7 @@
   "screen4.description": "選擇你希望如何分享資料。你的選擇將幫助我們改進，你可隨時在設定中變更。",
   "screen4.footerNote": "你可隨時在設定中變更",
   "screen4.navigation.next": "繼續",
-  "screen4.privacy.description": "不分享匿名使用資料（僅用於使用行為分析），也不會上傳效能、模型使用或功能互動等統計資訊。",
+  "screen4.privacy.description": "不分享匿名使用資料，也不會上傳效能、模型使用或功能互動等統計資訊。",
   "screen4.privacy.items.1": "不收集資料",
   "screen4.privacy.items.2": "不進行使用分析",
   "screen4.privacy.items.3": "所有處理皆在本地完成",
