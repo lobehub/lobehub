@@ -2,12 +2,7 @@ import debug from 'debug';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { resourceService } from '@/services/resource';
-import type {
-  CreateResourceParams,
-  ResourceItem,
-  ResourceQueryParams,
-  UpdateResourceParams,
-} from '@/types/resource';
+import type { CreateResourceParams, ResourceItem, UpdateResourceParams } from '@/types/resource';
 
 import type { FileStore } from '../../store';
 import { type ResourceState, initialResourceState } from './initialState';
@@ -34,11 +29,6 @@ export interface ResourceAction {
    * Delete a resource with optimistic update
    */
   deleteResource: (id: string) => Promise<void>;
-
-  /**
-   * Fetch resources from server (initial load)
-   */
-  fetchResources: (params: ResourceQueryParams) => Promise<void>;
 
   /**
    * Flush pending sync operations immediately
@@ -199,48 +189,6 @@ export const createResourceSlice: StateCreator<
       });
 
       log('enqueue deleteResource', id, syncEngine);
-    },
-
-    fetchResources: async (params) => {
-      // Clear previous data immediately to prevent showing stale data
-      set(
-        {
-          isInitialLoading: true,
-          resourceList: [],
-          resourceMap: new Map(),
-        },
-        false,
-        'fetchResources/start',
-      );
-
-      try {
-        const { items, total, hasMore } = await resourceService.queryResources({
-          ...params,
-          limit: params.limit || 50, // Virtual pagination
-          offset: 0,
-        });
-
-        const resourceMap = new Map(items.map((item) => [item.id, item]));
-        const resourceList = items;
-
-        set(
-          {
-            hasMore,
-            isInitialLoading: false,
-            offset: items.length,
-            queryParams: params,
-            resourceList,
-            resourceMap,
-            total,
-          },
-          false,
-          'fetchResources/success',
-        );
-      } catch (error) {
-        console.error('fetchResources error:', error);
-        set({ isInitialLoading: false }, false, 'fetchResources/error');
-        throw error;
-      }
     },
 
     flushSync: async () => {

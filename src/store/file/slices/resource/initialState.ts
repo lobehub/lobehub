@@ -41,7 +41,6 @@ export interface ResourceState {
   /**
    * Loading states
    */
-  isInitialLoading: boolean;
   isLoadingMore: boolean;
   isSyncing: boolean;
 
@@ -57,7 +56,6 @@ export interface ResourceState {
  */
 export const initialResourceState: ResourceState = {
   hasMore: false,
-  isInitialLoading: false,
   isLoadingMore: false,
   isSyncing: false,
   offset: 0,
