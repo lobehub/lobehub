@@ -105,7 +105,7 @@ export const params = {
     let pricingMap: Map<string, NewAPIPricing> = new Map();
 
     const pricingList = await fetchPricing(`${baseURL}/api/pricing`, openAIClient.apiKey || '');
-    if (pricingList) {
+    if (Array.isArray(pricingList)) {
       pricingList.forEach((pricing) => {
         pricingMap.set(pricing.model_name, pricing);
       });

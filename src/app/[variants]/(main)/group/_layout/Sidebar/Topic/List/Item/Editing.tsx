@@ -1,6 +1,5 @@
 import { Input, Popover } from '@lobehub/ui';
-import { InputRef } from 'antd/es/input';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';
 
@@ -12,7 +11,6 @@ interface EditingProps {
 
 const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
   const [newTitle, setNewTitle] = useState(title);
-  const inputRef = useRef<InputRef>(null);
   const [editing, updateTopicTitle] = useChatStore((s) => [
     s.topicRenamingId === id,
     s.updateTopicTitle,
@@ -48,17 +46,9 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
 
   return (
     <Popover
-      afterOpenChange={(open) => {
-        if (open) {
-          // Focus the input after the Popover animation completes
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 0);
-        }
-      }}
-      arrow={false}
       content={
         <Input
+          autoFocus
           defaultValue={title}
           onBlur={() => {
             handleUpdate();
@@ -70,7 +60,6 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
             handleUpdate();
             toggleEditing(false);
           }}
-          ref={inputRef}
         />
       }
       onOpenChange={(open) => {
