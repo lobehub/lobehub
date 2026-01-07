@@ -2,6 +2,81 @@
 
 # Changelog
 
+## [Version 2.0.0-next.233](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.232...v2.0.0-next.233)
+
+<sup>Released on **2026-01-07**</sup>
+
+#### ✨ Features
+
+- **image**: Improve image generation with new models and bug fixes.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **image**: Improve image generation with new models and bug fixes, closes [#11311](https://github.com/lobehub/lobe-chat/issues/11311) ([4fc03bb](https://github.com/lobehub/lobe-chat/commit/4fc03bb))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.232](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.231...v2.0.0-next.232)
+
+<sup>Released on **2026-01-07**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Correct BrandTextLoading position after removing SSG CSS-in-JS injection.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Correct BrandTextLoading position after removing SSG CSS-in-JS injection, closes [#11312](https://github.com/lobehub/lobe-chat/issues/11312) ([0de4eb8](https://github.com/lobehub/lobe-chat/commit/0de4eb8))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.231](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.230...v2.0.0-next.231)
+
+<sup>Released on **2026-01-07**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Update desktop onboarding privacy description.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Update desktop onboarding privacy description, closes [#11307](https://github.com/lobehub/lobe-chat/issues/11307) [#11308](https://github.com/lobehub/lobe-chat/issues/11308) ([58b10a2](https://github.com/lobehub/lobe-chat/commit/58b10a2))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.230](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.229...v2.0.0-next.230)
 
 <sup>Released on **2026-01-07**</sup>

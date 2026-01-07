@@ -98,7 +98,7 @@ jobs:
           echo "- \`pnpm-lock.yaml\` - pnpm lockfile (for reproducible builds)" >> bundle-report/README.md
 
       - name: Upload bundle analyzer reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bundle-report-${{ github.run_id }}
           path: bundle-report/

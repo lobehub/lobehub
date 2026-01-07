@@ -1,5 +1,24 @@
 [
   {
+    "children": {},
+    "date": "2026-01-07",
+    "version": "2.0.0-next.233"
+  },
+  {
+    "children": {
+      "fixes": ["Correct BrandTextLoading position after removing SSG CSS-in-JS injection."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.232"
+  },
+  {
+    "children": {
+      "fixes": ["Update desktop onboarding privacy description."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.231"
+  },
+  {
     "children": {
       "fixes": ["Fix edit rich render codeblock."]
     },
