@@ -18,6 +18,8 @@
   "empty": "这里还没有文件或文件夹。先上传一个文件，或创建文稿开始整理",
   "header.actions.builtInBlockList.filtered": "已过滤 {{ignored}} 个文件（共 {{total}} 个文件）",
   "header.actions.connect": "连接…",
+  "header.actions.createFolderError": "创建文件夹失败",
+  "header.actions.creatingFolder": "正在创建文件夹...",
   "header.actions.gitignore.apply": "应用规则",
   "header.actions.gitignore.cancel": "忽略规则",
   "header.actions.gitignore.content": "检测到 .gitignore 文件（共 {{count}} 个文件），是否应用忽略规则？",

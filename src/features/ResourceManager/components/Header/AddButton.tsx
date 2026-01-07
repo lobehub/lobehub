@@ -9,6 +9,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { message } from '@/components/AntdStaticMethods';
 import DragUpload from '@/components/DragUpload';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
@@ -73,32 +74,51 @@ const AddButton = () => {
   }, [createDocument, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
-    // Get current file list to check for duplicate folder names
-    const fileList = useFileStore.getState().fileList;
+    // Show loading toast
+    const messageKey = 'createFolder.creating';
+    message.loading({
+      content: t('header.actions.creatingFolder'),
+      duration: 0, // Don't auto-dismiss
+      key: messageKey,
+    });
 
-    // Filter for folders at the same level
-    const foldersAtSameLevel = fileList.filter(
-      (item) =>
-        item.fileType === 'custom/folder' &&
-        (item.parentId ?? null) === (currentFolderId ?? null),
-    );
+    try {
+      // Get current file list to check for duplicate folder names
+      const fileList = useFileStore.getState().fileList;
 
-    // Generate unique folder name
-    const baseName = 'Untitled';
-    const existingNames = new Set(foldersAtSameLevel.map((folder) => folder.name));
+      // Filter for folders at the same level
+      const foldersAtSameLevel = fileList.filter(
+        (item) =>
+          item.fileType === 'custom/folder' &&
+          (item.parentId ?? null) === (currentFolderId ?? null),
+      );
 
-    let uniqueName = baseName;
-    let counter = 1;
+      // Generate unique folder name
+      const baseName = 'Untitled';
+      const existingNames = new Set(foldersAtSameLevel.map((folder) => folder.name));
 
-    while (existingNames.has(uniqueName)) {
-      uniqueName = `${baseName} (${counter})`;
-      counter++;
+      let uniqueName = baseName;
+      let counter = 1;
+
+      while (existingNames.has(uniqueName)) {
+        uniqueName = `${baseName} (${counter})`;
+        counter++;
+      }
+
+      const folderId = await createFolder(uniqueName, currentFolderId ?? undefined, libraryId);
+
+      // Dismiss the loading toast after folder is created
+      message.destroy(messageKey);
+
+      // Trigger auto-rename
+      setPendingRenameItemId(folderId);
+    } catch (error) {
+      // Dismiss the loading toast on error
+      message.destroy(messageKey);
+      message.error(t('header.actions.createFolderError'));
+      console.error('Failed to create folder:', error);
     }
-
-    const folderId = await createFolder(uniqueName, currentFolderId ?? undefined, libraryId);
-    // Trigger auto-rename
-    setPendingRenameItemId(folderId);
-  }, [createFolder, currentFolderId, libraryId, setPendingRenameItemId]);
+  }, [createFolder, currentFolderId, libraryId, setPendingRenameItemId, t]);
 
   const {
     handleCloseNotionGuide,
