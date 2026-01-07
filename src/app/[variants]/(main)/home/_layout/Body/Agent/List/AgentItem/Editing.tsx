@@ -1,5 +1,4 @@
-import { Avatar, Block, Flexbox, Input } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Avatar, Block, Flexbox, Input, Popover } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 import EmojiPicker from '@/components/EmojiPicker';
@@ -55,7 +54,6 @@ const Editing = memo<EditingProps>(({ id, title, avatar, toggleEditing }) => {
 
   return (
     <Popover
-      arrow={false}
       content={
         <Flexbox gap={4} horizontal onClick={(e) => e.stopPropagation()} style={{ width: 320 }}>
           <EmojiPicker
@@ -89,19 +87,18 @@ const Editing = memo<EditingProps>(({ id, title, avatar, toggleEditing }) => {
           />
         </Flexbox>
       }
-      destroyOnHidden
       onOpenChange={(open) => {
         if (!open) handleUpdate();
         toggleEditing(open);
       }}
       open={editing}
-      placement={'bottomLeft'}
+      placement="bottomLeft"
       styles={{
-        container: {
+        content: {
           padding: 4,
         },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       <div />
     </Popover>

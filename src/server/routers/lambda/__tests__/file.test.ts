@@ -273,7 +273,7 @@ describe('fileRouter', () => {
       );
     });
 
-    it('should throw error when getFileMetadata fails and input size is less than 1', async () => {
+    it('should throw error when getFileMetadata fails and input size is negative', async () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileServiceGetFileMetadata.mockRejectedValue(new Error('File not found in S3'));
 
@@ -282,11 +282,11 @@ describe('fileRouter', () => {
           hash: 'test-hash',
           fileType: 'text',
           name: 'test.txt',
-          size: 0,
+          size: -1,
           url: 'files/non-existent.txt',
           metadata: {},
         }),
-      ).rejects.toThrow('File size must be at least 1 byte');
+      ).rejects.toThrow('File size cannot be negative');
     });
 
     it('should use input size when getFileMetadata returns contentLength less than 1', async () => {
@@ -315,10 +315,10 @@ describe('fileRouter', () => {
       );
     });
 
-    it('should throw error when both getFileMetadata contentLength and input size are less than 1', async () => {
+    it('should throw error when both getFileMetadata contentLength and input size are negative', async () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileServiceGetFileMetadata.mockResolvedValue({
-        contentLength: 0,
+        contentLength: -1,
         contentType: 'text/plain',
       });
 
@@ -327,11 +327,11 @@ describe('fileRouter', () => {
           hash: 'test-hash',
           fileType: 'text',
           name: 'test.txt',
-          size: 0,
+          size: -1,
           url: 'files/test.txt',
           metadata: {},
         }),
-      ).rejects.toThrow('File size must be at least 1 byte');
+      ).rejects.toThrow('File size cannot be negative');
     });
   });
 

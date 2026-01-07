@@ -1,6 +1,5 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Flexbox, Text } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Flexbox, Popover, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
@@ -109,10 +108,6 @@ const ImageModelItem = memo<ImageModelItemProps>(
 
     return (
       <Popover
-        align={{
-          offset: [24, -10],
-        }}
-        arrow={false}
         classNames={{ root: cx(styles.popover, isDarkMode && styles.popover_dark) }}
         content={popoverContent}
         placement="rightTop"

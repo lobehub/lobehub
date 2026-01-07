@@ -2,7 +2,7 @@ import { type AuthObject } from '@clerk/backend';
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
+import { enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
 
 interface CheckAuthParams {
   apiKey?: string;

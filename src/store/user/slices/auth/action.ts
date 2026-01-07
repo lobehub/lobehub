@@ -1,7 +1,7 @@
 import { type SSOProvider } from '@lobechat/types';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
+import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
 import { userService } from '@/services/user';
 
 import type { UserStore } from '../../store';

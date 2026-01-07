@@ -13,7 +13,7 @@
     "happy-dom": "^20.0.11",
     "node-html-markdown": "^1.3.0",
     "query-string": "^9.3.1",
-    "ssrf-safe-fetch": "workspace:*",
+    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "url-join": "^5"
   }
 }

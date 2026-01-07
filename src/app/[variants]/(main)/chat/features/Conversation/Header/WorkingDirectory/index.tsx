@@ -1,6 +1,5 @@
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { LaptopIcon, SquircleDashed } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -90,12 +89,11 @@ const WorkingDirectory = memo(() => {
   );
   return (
     <Popover
-      arrow={false}
       content={<WorkingDirectoryContent agentId={agentId} onClose={() => setOpen(false)} />}
       onOpenChange={setOpen}
       open={open}
       placement="bottomRight"
-      trigger={['click']}
+      trigger="click"
     >
       <div>
         {open ? (

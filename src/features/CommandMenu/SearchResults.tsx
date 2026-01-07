@@ -1,6 +1,15 @@
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
-import { Bot, FileText, MessageCircle, MessageSquare, Plug, Puzzle, Sparkles } from 'lucide-react';
+import {
+  Bot,
+  ChevronRight,
+  FileText,
+  MessageCircle,
+  MessageSquare,
+  Plug,
+  Puzzle,
+  Sparkles,
+} from 'lucide-react';
 import { markdownToTxt } from 'markdown-to-txt';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +17,6 @@ import { useNavigate } from 'react-router-dom';
 
 import type { SearchResult } from '@/database/repositories/search';
 
-import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
 import { styles } from './styles';
 import type { ValidSearchType } from './utils/queryParser';
@@ -29,7 +37,6 @@ const SearchResults = memo<SearchResultsProps>(
   ({ isLoading, onClose, onSetTypeFilter, results, searchQuery, typeFilter }) => {
     const { t } = useTranslation('common');
     const navigate = useNavigate();
-    const { menuContext } = useCommandMenuContext();
 
     const handleNavigate = (result: SearchResult) => {
       switch (result.type) {
@@ -146,15 +153,6 @@ const SearchResults = memo<SearchResultsProps>(
       }
     };
 
-    // Get trailing label for search results (shows "Market" for marketplace items)
-    const getTrailingLabel = (type: SearchResult['type']) => {
-      // Marketplace items: MCP, plugins, assistants
-      if (type === 'mcp' || type === 'plugin' || type === 'communityAgent') {
-        return t('cmdk.search.market');
-      }
-      return getTypeLabel(type);
-    };
-
     // eslint-disable-next-line unicorn/consistent-function-scoping
     const getItemValue = (result: SearchResult) => {
       const meta = [result.title, result.description].filter(Boolean).join(' ');
@@ -193,26 +191,6 @@ const SearchResults = memo<SearchResultsProps>(
       onSetTypeFilter(type);
     };
 
-    // Helper to render "Search More" button
-    const renderSearchMore = (type: ValidSearchType, count: number) => {
-      // Don't show if already filtering by this type
-      if (typeFilter) return null;
-
-      // Show if there are results (might have more)
-      if (count === 0) return null;
-
-      return (
-        <CommandItem
-          forceMount
-          icon={getIcon(type)}
-          onSelect={() => handleSearchMore(type)}
-          title={t('cmdk.search.searchMore', { type: getTypeLabel(type) })}
-          value={`action-show-more-results-for-type-${type}`}
-          variant="detailed"
-        />
-      );
-    };
-
     const hasResults = results.length > 0;
 
     // Group results by type
@@ -225,289 +203,135 @@ const SearchResults = memo<SearchResultsProps>(
     const pluginResults = results.filter((r) => r.type === 'plugin');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
 
-    // Detect context types
-    const isResourceContext = menuContext === 'resource';
-    const isPageContext = menuContext === 'page';
-
     // Don't render anything if no results and not loading
     if (!hasResults && !isLoading) {
       return null;
     }
 
+    // Render a single result item with type prefix (like "Message > content")
+    const renderResultItem = (result: SearchResult) => {
+      const typeLabel = getTypeLabel(result.type);
+      const subtitle = getSubtitle(result);
+
+      // Hide type prefix when filtering by specific type
+      const showTypePrefix = !typeFilter;
+
+      // Create title with or without type prefix
+      const titleWithPrefix = showTypePrefix ? (
+        <>
+          <span style={{ opacity: 0.5 }}>{typeLabel}</span>
+          <ChevronRight
+            size={14}
+            style={{
+              display: 'inline',
+              marginInline: '6px',
+              opacity: 0.5,
+              verticalAlign: 'middle',
+            }}
+          />
+          {result.title}
+        </>
+      ) : (
+        result.title
+      );
+
+      return (
+        <CommandItem
+          description={subtitle}
+          icon={getIcon(result.type)}
+          key={result.id}
+          onSelect={() => handleNavigate(result)}
+          title={titleWithPrefix}
+          value={getItemValue(result)}
+          variant="detailed"
+        />
+      );
+    };
+
+    // Helper to render "Search More" button
+    const renderSearchMore = (type: ValidSearchType, count: number) => {
+      // Don't show if already filtering by this type
+      if (typeFilter) return null;
+
+      // Show if there are results (might have more)
+      if (count === 0) return null;
+
+      const typeLabel = getTypeLabel(type);
+      const titleText = `${t('cmdk.search.searchMore', { type: typeLabel })} with "${searchQuery}"`;
+
+      return (
+        <Command.Item
+          forceMount
+          key={`search-more-${type}`}
+          keywords={[`zzz-action-${type}`]}
+          onSelect={() => handleSearchMore(type)}
+          value={`zzz-action-${type}-search-more`}
+        >
+          <div className={styles.itemContent}>
+            <div className={styles.itemIcon}>{getIcon(type)}</div>
+            <div className={styles.itemDetails}>
+              <div className={styles.itemTitle}>{titleText}</div>
+            </div>
+          </div>
+        </Command.Item>
+      );
+    };
+
     return (
       <>
-        {/* Show pages first in page context */}
-        {hasResults && isPageContext && pageResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.pages')} key="pages-page-context">
-            {pageResults.map((result) => (
-              <CommandItem
-                description={result.description}
-                icon={getIcon(result.type)}
-                key={`page-page-context-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
-            {renderSearchMore('page', pageResults.length)}
-          </Command.Group>
-        )}
-
-        {/* Show other results in page context */}
-        {hasResults && isPageContext && fileResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.files')}>
-            {fileResults.map((result) => (
-              <CommandItem
-                description={result.type === 'file' ? result.fileType : undefined}
-                icon={getIcon(result.type)}
-                key={`file-page-context-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
-            {renderSearchMore('file', fileResults.length)}
-          </Command.Group>
-        )}
-
-        {hasResults && isPageContext && agentResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.agents')}>
-            {agentResults.map((result) => (
-              <CommandItem
-                description={getDescription(result)}
-                icon={getIcon(result.type)}
-                key={`agent-page-context-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
-            {renderSearchMore('agent', agentResults.length)}
-          </Command.Group>
-        )}
-
-        {hasResults && isPageContext && topicResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.topics')}>
-            {topicResults.map((result) => (
-              <CommandItem
-                description={getSubtitle(result)}
-                icon={getIcon(result.type)}
-                key={`topic-page-context-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
-            {renderSearchMore('topic', topicResults.length)}
-          </Command.Group>
-        )}
-
-        {hasResults && isPageContext && messageResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.messages')}>
-            {messageResults.map((result) => (
-              <CommandItem
-                description={getSubtitle(result)}
-                icon={getIcon(result.type)}
-                key={`message-page-context-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {/* Render search results grouped by type without headers */}
+        {messageResults.length > 0 && (
+          <Command.Group>
+            {messageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('message', messageResults.length)}
           </Command.Group>
         )}
 
-        {/* Show pages first in resource context */}
-        {hasResults && isResourceContext && pageResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.pages')} key="pages-resource">
-            {pageResults.map((result) => (
-              <CommandItem
-                description={result.description}
-                icon={getIcon(result.type)}
-                key={`page-resource-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
-            {renderSearchMore('page', pageResults.length)}
-          </Command.Group>
-        )}
-
-        {/* Show files in resource context */}
-        {hasResults && isResourceContext && fileResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.files')}>
-            {fileResults.map((result) => (
-              <CommandItem
-                description={result.type === 'file' ? result.fileType : undefined}
-                icon={getIcon(result.type)}
-                key={`file-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
-            {renderSearchMore('file', fileResults.length)}
-          </Command.Group>
-        )}
-
-        {hasResults && !isPageContext && !isResourceContext && messageResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.messages')}>
-            {messageResults.map((result) => (
-              <CommandItem
-                description={getSubtitle(result)}
-                icon={getIcon(result.type)}
-                key={`message-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
-            {renderSearchMore('message', messageResults.length)}
-          </Command.Group>
-        )}
-
-        {hasResults && !isPageContext && agentResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.agents')}>
-            {agentResults.map((result) => (
-              <CommandItem
-                description={getDescription(result)}
-                icon={getIcon(result.type)}
-                key={`agent-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {agentResults.length > 0 && (
+          <Command.Group>
+            {agentResults.map((result) => renderResultItem(result))}
             {renderSearchMore('agent', agentResults.length)}
           </Command.Group>
         )}
 
-        {hasResults && !isPageContext && topicResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.topics')}>
-            {topicResults.map((result) => (
-              <CommandItem
-                description={getSubtitle(result)}
-                icon={getIcon(result.type)}
-                key={`topic-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {topicResults.length > 0 && (
+          <Command.Group>
+            {topicResults.map((result) => renderResultItem(result))}
             {renderSearchMore('topic', topicResults.length)}
           </Command.Group>
         )}
 
-        {/* Show document pages in normal context (not in resource or page context) */}
-        {hasResults && !isResourceContext && !isPageContext && pageResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.pages')} key="pages-normal">
-            {pageResults.map((result) => (
-              <CommandItem
-                description={result.description}
-                icon={getIcon(result.type)}
-                key={`page-normal-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {pageResults.length > 0 && (
+          <Command.Group>
+            {pageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('page', pageResults.length)}
           </Command.Group>
         )}
 
-        {/* Show files in original position when NOT in resource or page context */}
-        {hasResults && !isResourceContext && !isPageContext && fileResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.files')}>
-            {fileResults.map((result) => (
-              <CommandItem
-                description={result.type === 'file' ? result.fileType : undefined}
-                icon={getIcon(result.type)}
-                key={`file-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {fileResults.length > 0 && (
+          <Command.Group>
+            {fileResults.map((result) => renderResultItem(result))}
             {renderSearchMore('file', fileResults.length)}
           </Command.Group>
         )}
 
-        {hasResults && mcpResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.mcps')}>
-            {mcpResults.map((result) => (
-              <CommandItem
-                description={getDescription(result)}
-                icon={getIcon(result.type)}
-                key={`mcp-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {mcpResults.length > 0 && (
+          <Command.Group>
+            {mcpResults.map((result) => renderResultItem(result))}
             {renderSearchMore('mcp', mcpResults.length)}
           </Command.Group>
         )}
 
-        {hasResults && pluginResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.plugins')}>
-            {pluginResults.map((result) => (
-              <CommandItem
-                description={getDescription(result)}
-                icon={getIcon(result.type)}
-                key={`plugin-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {pluginResults.length > 0 && (
+          <Command.Group>
+            {pluginResults.map((result) => renderResultItem(result))}
             {renderSearchMore('plugin', pluginResults.length)}
           </Command.Group>
         )}
 
-        {hasResults && assistantResults.length > 0 && (
-          <Command.Group heading={t('cmdk.search.assistants')}>
-            {assistantResults.map((result) => (
-              <CommandItem
-                description={getDescription(result)}
-                icon={getIcon(result.type)}
-                key={`assistant-${result.id}`}
-                onSelect={() => handleNavigate(result)}
-                title={result.title}
-                trailingLabel={getTrailingLabel(result.type)}
-                value={getItemValue(result)}
-                variant="detailed"
-              />
-            ))}
+        {assistantResults.length > 0 && (
+          <Command.Group>
+            {assistantResults.map((result) => renderResultItem(result))}
             {renderSearchMore('communityAgent', assistantResults.length)}
           </Command.Group>
         )}

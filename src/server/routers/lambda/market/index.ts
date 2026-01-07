@@ -16,6 +16,11 @@ import {
   ProviderSorts,
 } from '@/types/discover';
 
+import { agentRouter } from './agent';
+import { oidcRouter } from './oidc';
+import { socialRouter } from './social';
+import { userRouter } from './user';
+
 const log = debug('lambda-router:market');
 
 const marketSourceSchema = z.enum(['legacy', 'new']);
@@ -36,6 +41,9 @@ const marketProcedure = publicProcedure
   });
 
 export const marketRouter = router({
+  // ============================== Agent Management (authenticated) ==============================
+  agent: agentRouter,
+
   // ============================== Assistant Market ==============================
   getAssistantCategories: marketProcedure
     .input(
@@ -516,6 +524,9 @@ export const marketRouter = router({
       }
     }),
 
+  // ============================== OIDC Authentication ==============================
+  oidc: oidcRouter,
+
   registerClientInMarketplace: marketProcedure.input(z.object({})).mutation(async ({ ctx }) => {
     return ctx.discoverService.registerClient({
       userAgent: ctx.userAgent,
@@ -671,4 +682,10 @@ export const marketRouter = router({
         return { success: false };
       }
     }),
+
+  // ============================== Social Features ==============================
+  social: socialRouter,
+
+  // ============================== User Profile ==============================
+  user: userRouter,
 });

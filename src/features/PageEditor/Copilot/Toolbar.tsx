@@ -1,5 +1,4 @@
-import { ActionIcon, Block, Flexbox } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { ActionIcon, Block, Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon, Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { Suspense, memo, useMemo, useState } from 'react';
@@ -108,7 +107,6 @@ const AgentSelector = memo<AgentSelectorProps>(({ agentId, onAgentChange }) => {
 
   return (
     <Popover
-      arrow={false}
       content={
         <Suspense fallback={<SkeletonList rows={6} />}>
           <AgentModalProvider>
@@ -120,12 +118,12 @@ const AgentSelector = memo<AgentSelectorProps>(({ agentId, onAgentChange }) => {
       open={open}
       placement="bottomLeft"
       styles={{
-        container: {
+        content: {
           padding: 0,
           width: 240,
         },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       <Block
         align={'center'}
@@ -197,7 +195,6 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
             />
             {!hideHistory && (
               <Popover
-                arrow={false}
                 content={
                   <Flexbox
                     gap={4}
@@ -224,12 +221,12 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
                 open={topicPopoverOpen}
                 placement="bottomRight"
                 styles={{
-                  container: {
+                  content: {
                     padding: 0,
                     width: 240,
                   },
                 }}
-                trigger={['click']}
+                trigger="click"
               >
                 <ActionIcon icon={Clock3Icon} size={DESKTOP_HEADER_ICON_SIZE} />
               </Popover>

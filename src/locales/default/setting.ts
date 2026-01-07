@@ -140,6 +140,11 @@ export default {
   'llm.proxyUrl.title': 'API proxy URL',
   'llm.waitingForMore': 'More models are <1>planned to be added</1>, stay tuned',
   'llm.waitingForMoreLinkAriaLabel': 'Open the Provider request form',
+  'marketPublish.forkConfirm.by': 'by {{author}}',
+  'marketPublish.forkConfirm.confirm': 'Confirm Publish',
+  'marketPublish.forkConfirm.description':
+    'You are about to publish a derivative version based on an existing agent from the community. Your new agent will be created as a separate entry in the marketplace.',
+  'marketPublish.forkConfirm.title': 'Publish Derivative Agent',
   'marketPublish.modal.changelog.extra':
     'Describe the key changes and improvements in this version',
   'marketPublish.modal.changelog.label': 'Changelog',

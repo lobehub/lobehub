@@ -1,4 +1,5 @@
 import {
+  IEditor,
   ReactCodePlugin,
   ReactCodemirrorPlugin,
   ReactHRPlugin,
@@ -7,57 +8,32 @@ import {
   ReactMathPlugin,
   ReactTablePlugin,
 } from '@lobehub/editor';
-import { Editor, useEditor } from '@lobehub/editor/react';
+import { Editor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
-import { FC } from 'react';
+import { FC, useMemo } from 'react';
+
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import TypoBar from './Typobar';
 
 interface EditorCanvasProps {
-  onChange?: (value: string) => void;
-  value?: string;
+  defaultValue?: string;
+  editor?: IEditor;
 }
 
-const EditorCanvas: FC<EditorCanvasProps> = ({ value, onChange }) => {
-  const editor = useEditor();
-  return (
-    <>
-      <TypoBar editor={editor} />
-      <Flexbox
-        onClick={() => {
-          editor?.focus();
-        }}
-        padding={16}
-        style={{ cursor: 'text', maxHeight: '80vh', minHeight: '50vh', overflowY: 'auto' }}
-      >
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-          }}
-        >
-          <Editor
-            autoFocus
-            content={''}
-            editor={editor}
-            onInit={(editor) => {
-              if (!editor || !value) return;
-              try {
-                editor?.setDocument('markdown', value);
-              } catch (e) {
-                console.error('setDocument error:', e);
-              }
-            }}
-            onTextChange={(editor) => {
-              try {
-                const newValue = editor.getDocument('markdown') as unknown as string;
-                onChange?.(newValue);
-              } catch (e) {
-                console.error('getDocument error:', e);
-                onChange?.('');
-              }
-            }}
-            plugins={[
+const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor }) => {
+  const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
+
+  const richRenderProps = useMemo(
+    () =>
+      !enableRichRender
+        ? {
+            enablePasteMarkdown: false,
+            markdownOption: false,
+          }
+        : {
+            plugins: [
               ReactListPlugin,
               ReactCodePlugin,
               ReactCodemirrorPlugin,
@@ -65,14 +41,41 @@ const EditorCanvas: FC<EditorCanvasProps> = ({ value, onChange }) => {
               ReactLinkPlugin,
               ReactTablePlugin,
               ReactMathPlugin,
-            ]}
-            style={{
-              paddingBottom: 120,
-            }}
-            type={'text'}
-            variant={'chat'}
-          />
-        </div>
+            ],
+          },
+    [enableRichRender],
+  );
+
+  return (
+    <>
+      {enableRichRender && <TypoBar editor={editor} />}
+      <Flexbox
+        padding={16}
+        style={{ cursor: 'text', maxHeight: '80vh', minHeight: '50vh', overflowY: 'auto' }}
+      >
+        <Editor
+          autoFocus
+          content={''}
+          editor={editor}
+          onInit={(editor) => {
+            if (!editor || !defaultValue) return;
+            try {
+              if (enableRichRender) {
+                editor?.setDocument('markdown', defaultValue);
+              } else {
+                editor?.setDocument('text', defaultValue);
+              }
+            } catch (e) {
+              console.error('setDocument error:', e);
+            }
+          }}
+          style={{
+            paddingBottom: 120,
+          }}
+          type={'text'}
+          variant={'chat'}
+          {...richRenderProps}
+        />
       </Flexbox>
     </>
   );

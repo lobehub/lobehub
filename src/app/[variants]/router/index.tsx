@@ -1,13 +1,16 @@
 'use client';
 
-import { useMounted } from '@/hooks/useMounted';
+import dynamic from 'next/dynamic';
 
-import DesktopClientRouter from './DesktopClientRouter';
+import Loading from '@/components/Loading/BrandTextLoading';
+
+const DesktopRouterClient = dynamic(() => import('./DesktopClientRouter'), {
+  loading: () => <Loading debugId="DesktopRouter" />,
+  ssr: false,
+});
 
 const DesktopRouter = () => {
-  const isClient = useMounted();
-  if (!isClient) return null;
-  return <DesktopClientRouter />;
+  return <DesktopRouterClient />;
 };
 
 export default DesktopRouter;

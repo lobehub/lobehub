@@ -3,9 +3,9 @@ import { ChatErrorType, TraceNameMap } from '@lobechat/types';
 import type { PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
 import { createGatewayOnEdgeRuntime } from '@lobehub/chat-plugins-gateway';
 
-import { LOBE_CHAT_AUTH_HEADER } from '@/const/auth';
 import { LOBE_CHAT_TRACE_ID } from '@/const/trace';
 import { getAppConfig } from '@/envs/app';
+import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
 import { TraceClient } from '@/libs/traces';
 import { parserPluginSettings } from '@/server/services/pluginGateway/settings';
 import { getTracePayload } from '@/utils/trace';
