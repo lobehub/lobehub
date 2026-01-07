@@ -66,10 +66,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
     // Deduplicate
     const uniqueInterests = [...new Set(finalInterests)];
 
-    if (uniqueInterests.length > 0) {
-      updateInterests(uniqueInterests);
-    }
-
+    updateInterests(uniqueInterests);
     onNext();
   }, [selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
 
