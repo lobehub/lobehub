@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-08",
+    "version": "2.0.0-next.235"
+  },
+  {
+    "children": {
       "features": [
         "Add browser compatibility detection and fallback page, add the lobehub market tools servers."
       ]
