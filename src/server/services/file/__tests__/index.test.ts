@@ -231,12 +231,12 @@ describe('FileService', () => {
     expect(result).toBe(expectedUrl);
   });
 
-  it('should delegate getKeyFromFullUrl to implementation', () => {
+  it('should delegate getKeyFromFullUrl to implementation', async () => {
     const testUrl = 'https://example.com/path/to/file.jpg';
     const expectedKey = 'path/to/file.jpg';
-    vi.mocked(service['impl'].getKeyFromFullUrl).mockReturnValue(expectedKey);
+    vi.mocked(service['impl'].getKeyFromFullUrl).mockResolvedValue(expectedKey);
 
-    const result = service.getKeyFromFullUrl(testUrl);
+    const result = await service.getKeyFromFullUrl(testUrl);
 
     expect(service['impl'].getKeyFromFullUrl).toHaveBeenCalledWith(testUrl);
     expect(result).toBe(expectedKey);

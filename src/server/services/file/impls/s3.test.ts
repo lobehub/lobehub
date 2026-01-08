@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FileModel } from '@/database/models/file';
+
 import { S3StaticFileImpl } from './s3';
 
 const config = {
@@ -33,11 +35,14 @@ vi.mock('@/server/modules/S3', () => ({
   })),
 }));
 
+// Mock db
+const mockDb = {} as any;
+
 describe('S3StaticFileImpl', () => {
   let fileService: S3StaticFileImpl;
 
   beforeEach(() => {
-    fileService = new S3StaticFileImpl();
+    fileService = new S3StaticFileImpl(mockDb);
   });
 
   describe('getFullFileUrl', () => {
@@ -74,7 +79,7 @@ describe('S3StaticFileImpl', () => {
         const fullUrl = 'https://s3.example.com/bucket/path/to/file.jpg?X-Amz-Signature=expired';
 
         // Mock getKeyFromFullUrl to return the extracted key
-        vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValue('path/to/file.jpg');
+        vi.spyOn(fileService, 'getKeyFromFullUrl').mockResolvedValue('path/to/file.jpg');
 
         const result = await fileService.getFullFileUrl(fullUrl);
 
@@ -86,7 +91,7 @@ describe('S3StaticFileImpl', () => {
       it('should handle full URL input by extracting key (S3_SET_ACL=true)', async () => {
         const fullUrl = 'https://s3.example.com/bucket/path/to/file.jpg';
 
-        vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValue('path/to/file.jpg');
+        vi.spyOn(fileService, 'getKeyFromFullUrl').mockResolvedValue('path/to/file.jpg');
 
         const result = await fileService.getFullFileUrl(fullUrl);
 
@@ -108,7 +113,7 @@ describe('S3StaticFileImpl', () => {
       it('should handle http:// URLs for legacy compatibility', async () => {
         const httpUrl = 'http://s3.example.com/bucket/path/to/file.jpg';
 
-        vi.spyOn(fileService, 'getKeyFromFullUrl').mockReturnValue('path/to/file.jpg');
+        vi.spyOn(fileService, 'getKeyFromFullUrl').mockResolvedValue('path/to/file.jpg');
 
         const result = await fileService.getFullFileUrl(httpUrl);
 
@@ -179,63 +184,50 @@ describe('S3StaticFileImpl', () => {
   });
 
   describe('getKeyFromFullUrl', () => {
-    it('当S3_ENABLE_PATH_STYLE为false时应该正确提取key', () => {
-      config.S3_ENABLE_PATH_STYLE = false;
-      const url = 'https://example.com/path/to/file.jpg';
+    it('should extract fileId from proxy URL and return S3 key from database', async () => {
+      const proxyUrl = 'http://localhost:3010/f/abc123';
+      const expectedKey = 'ppp/491067/image.jpg';
 
-      const result = fileService.getKeyFromFullUrl(url);
+      vi.spyOn(FileModel, 'getFileById').mockResolvedValue({ url: expectedKey } as any);
 
-      expect(result).toBe('path/to/file.jpg');
-      config.S3_ENABLE_PATH_STYLE = false; // reset
+      const result = await fileService.getKeyFromFullUrl(proxyUrl);
+
+      expect(FileModel.getFileById).toHaveBeenCalledWith(mockDb, 'abc123');
+      expect(result).toBe(expectedKey);
     });
 
-    it('当S3_ENABLE_PATH_STYLE为true时应该正确提取key', () => {
-      config.S3_ENABLE_PATH_STYLE = true;
-      const url = 'https://example.com/my-bucket/path/to/file.jpg';
+    it('should return null when file is not found in database', async () => {
+      const proxyUrl = 'http://localhost:3010/f/nonexistent';
 
-      const result = fileService.getKeyFromFullUrl(url);
+      vi.spyOn(FileModel, 'getFileById').mockResolvedValue(undefined);
 
-      expect(result).toBe('path/to/file.jpg');
-      config.S3_ENABLE_PATH_STYLE = false; // reset
+      const result = await fileService.getKeyFromFullUrl(proxyUrl);
+
+      expect(FileModel.getFileById).toHaveBeenCalledWith(mockDb, 'nonexistent');
+      expect(result).toBeNull();
     });
 
-    it('当S3_ENABLE_PATH_STYLE为true但缺少bucket名称时应该返回pathname', () => {
-      config.S3_ENABLE_PATH_STYLE = true;
-      config.S3_BUCKET = '';
-      const url = 'https://example.com/path/to/file.jpg';
+    it('should handle URL with different domain', async () => {
+      const proxyUrl = 'https://example.com/f/file456';
+      const expectedKey = 'uploads/file.png';
 
-      const result = fileService.getKeyFromFullUrl(url);
+      vi.spyOn(FileModel, 'getFileById').mockResolvedValue({ url: expectedKey } as any);
 
-      expect(result).toBe('path/to/file.jpg');
-      config.S3_ENABLE_PATH_STYLE = false; // reset
-      config.S3_BUCKET = 'my-bucket'; // reset
+      const result = await fileService.getKeyFromFullUrl(proxyUrl);
+
+      expect(FileModel.getFileById).toHaveBeenCalledWith(mockDb, 'file456');
+      expect(result).toBe(expectedKey);
     });
 
-    it('当URL格式不正确时应该返回原始字符串', () => {
-      const invalidUrl = 'not-a-valid-url';
+    it('should return null when URL does not contain /f/ path', async () => {
+      const invalidUrl = 'https://example.com/path/to/file.jpg';
 
-      const result = fileService.getKeyFromFullUrl(invalidUrl);
+      vi.spyOn(FileModel, 'getFileById').mockResolvedValue(undefined);
 
-      expect(result).toBe('not-a-valid-url');
-    });
+      const result = await fileService.getKeyFromFullUrl(invalidUrl);
 
-    it('应该处理根路径文件', () => {
-      config.S3_ENABLE_PATH_STYLE = false;
-      const url = 'https://example.com/file.jpg';
-
-      const result = fileService.getKeyFromFullUrl(url);
-
-      expect(result).toBe('file.jpg');
-    });
-
-    it('当path-style URL路径格式不符合预期时应该使用fallback', () => {
-      config.S3_ENABLE_PATH_STYLE = true;
-      const url = 'https://example.com/unexpected/path/file.jpg';
-
-      const result = fileService.getKeyFromFullUrl(url);
-
-      expect(result).toBe('unexpected/path/file.jpg');
-      config.S3_ENABLE_PATH_STYLE = false; // reset
+      // When /f/ is not found, fIndex is -1, so fileId will be urlParts[0] = 'https:'
+      expect(result).toBeNull();
     });
   });
 

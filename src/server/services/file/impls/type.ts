@@ -1,5 +1,3 @@
-import { LobeChatDatabase } from '@lobechat/database';
-
 /**
  * File service implementation interface
  */
@@ -12,7 +10,6 @@ export interface FileServiceImpl {
    * Create pre-signed preview URL
    */
   createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string>;
-  db: LobeChatDatabase;
 
   /**
    * Delete file

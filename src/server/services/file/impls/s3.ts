@@ -13,7 +13,7 @@ import { extractKeyFromUrlOrReturnOriginal } from './utils';
  */
 export class S3StaticFileImpl implements FileServiceImpl {
   private readonly s3: FileS3;
-  readonly db: LobeChatDatabase;
+  private readonly db: LobeChatDatabase;
 
   constructor(db: LobeChatDatabase) {
     this.db = db;
