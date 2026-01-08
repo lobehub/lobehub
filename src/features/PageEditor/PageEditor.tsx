@@ -57,6 +57,7 @@ const PageEditorCanvas = memo(() => {
     };
   }, [isDirty]);
 
+  console.log('ageEditorCanvas rerender');
   return (
     <>
       <PageTitle />
