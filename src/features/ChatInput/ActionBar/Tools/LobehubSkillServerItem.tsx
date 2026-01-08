@@ -1,0 +1,304 @@
+import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
+import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { useToolStore } from '@/store/tool';
+import { lobehubSkillStoreSelectors } from '@/store/tool/selectors';
+import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+
+const POLL_INTERVAL_MS = 1000;
+const POLL_TIMEOUT_MS = 15_000;
+
+interface LobehubSkillServerItemProps {
+  /**
+   * Display label for the provider
+   */
+  label: string;
+  /**
+   * Provider ID (e.g., 'linear', 'github')
+   */
+  provider: string;
+}
+
+const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, label }) => {
+  const { t } = useTranslation('setting');
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
+  const [isWaitingAuth, setIsWaitingAuth] = useState(false);
+
+  const oauthWindowRef = useRef<Window | null>(null);
+  const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(provider));
+  const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
+  const revokeConnect = useToolStore((s) => s.revokeLobehubSkill);
+  const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
+
+  const cleanup = useCallback(() => {
+    if (windowCheckIntervalRef.current) {
+      clearInterval(windowCheckIntervalRef.current);
+      windowCheckIntervalRef.current = null;
+    }
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+    oauthWindowRef.current = null;
+    setIsWaitingAuth(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
+
+  useEffect(() => {
+    if (server?.status === LobehubSkillStatus.CONNECTED && isWaitingAuth) {
+      cleanup();
+    }
+  }, [server?.status, isWaitingAuth, cleanup]);
+
+  const startFallbackPolling = useCallback(() => {
+    if (pollIntervalRef.current) return;
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        await checkStatus(provider);
+      } catch (error) {
+        console.error('[LobehubSkill] Failed to check status:', error);
+      }
+    }, POLL_INTERVAL_MS);
+
+    pollTimeoutRef.current = setTimeout(() => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      setIsWaitingAuth(false);
+    }, POLL_TIMEOUT_MS);
+  }, [checkStatus, provider]);
+
+  const startWindowMonitor = useCallback(
+    (oauthWindow: Window) => {
+      windowCheckIntervalRef.current = setInterval(() => {
+        try {
+          if (oauthWindow.closed) {
+            if (windowCheckIntervalRef.current) {
+              clearInterval(windowCheckIntervalRef.current);
+              windowCheckIntervalRef.current = null;
+            }
+            oauthWindowRef.current = null;
+            checkStatus(provider);
+          }
+        } catch {
+          console.log('[LobehubSkill] COOP blocked window.closed access, falling back to polling');
+          if (windowCheckIntervalRef.current) {
+            clearInterval(windowCheckIntervalRef.current);
+            windowCheckIntervalRef.current = null;
+          }
+          startFallbackPolling();
+        }
+      }, 500);
+    },
+    [checkStatus, provider, startFallbackPolling],
+  );
+
+  const openOAuthWindow = useCallback(
+    (authorizeUrl: string) => {
+      cleanup();
+      setIsWaitingAuth(true);
+
+      const oauthWindow = window.open(authorizeUrl, '_blank', 'width=600,height=700');
+      if (oauthWindow) {
+        oauthWindowRef.current = oauthWindow;
+        startWindowMonitor(oauthWindow);
+      } else {
+        startFallbackPolling();
+      }
+    },
+    [cleanup, startWindowMonitor, startFallbackPolling],
+  );
+
+  const pluginId = server ? server.identifier : '';
+  const [checked, togglePlugin] = useAgentStore((s) => [
+    agentSelectors.currentAgentPlugins(s).includes(pluginId),
+    s.togglePlugin,
+  ]);
+
+  const handleConnect = async () => {
+    // 只有已连接状态才阻止重新连接
+    if (server?.isConnected) return;
+
+    setIsConnecting(true);
+    try {
+      const { authorizeUrl } = await getAuthorizeUrl(provider);
+      openOAuthWindow(authorizeUrl);
+    } catch (error) {
+      console.error('[LobehubSkill] Failed to get authorize URL:', error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleToggle = async () => {
+    if (!server) return;
+    setIsToggling(true);
+    await togglePlugin(pluginId);
+    setIsToggling(false);
+  };
+
+  const handleDisconnect = async () => {
+    if (!server) return;
+    setIsToggling(true);
+    if (checked) {
+      await togglePlugin(pluginId);
+    }
+    await revokeConnect(server.identifier);
+    setIsToggling(false);
+  };
+
+  const renderRightControl = () => {
+    if (isConnecting) {
+      return (
+        <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
+          <Icon icon={Loader2} spin />
+        </Flexbox>
+      );
+    }
+
+    if (!server) {
+      return (
+        <Flexbox
+          align="center"
+          gap={4}
+          horizontal
+          onClick={(e) => {
+            e.stopPropagation();
+            handleConnect();
+          }}
+          style={{ cursor: 'pointer', opacity: 0.65 }}
+        >
+          {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
+          <Icon icon={SquareArrowOutUpRight} size="small" />
+        </Flexbox>
+      );
+    }
+
+    switch (server.status) {
+      case LobehubSkillStatus.CONNECTED: {
+        if (isToggling) {
+          return <Icon icon={Loader2} spin />;
+        }
+        return (
+          <Flexbox align="center" gap={8} horizontal>
+            <Icon
+              icon={Unplug}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDisconnect();
+              }}
+              size="small"
+              style={{ cursor: 'pointer', opacity: 0.5 }}
+            />
+            <Checkbox
+              checked={checked}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggle();
+              }}
+            />
+          </Flexbox>
+        );
+      }
+      case LobehubSkillStatus.CONNECTING: {
+        if (isWaitingAuth) {
+          return (
+            <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
+              <Icon icon={Loader2} spin />
+            </Flexbox>
+          );
+        }
+        return (
+          <Flexbox
+            align="center"
+            gap={4}
+            horizontal
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                const { authorizeUrl } = await getAuthorizeUrl(provider);
+                openOAuthWindow(authorizeUrl);
+              } catch (error) {
+                console.error('[LobehubSkill] Failed to get authorize URL:', error);
+              }
+            }}
+            style={{ cursor: 'pointer', opacity: 0.65 }}
+          >
+            {t('tools.lobehubSkill.authorize', { defaultValue: 'Authorize' })}
+            <Icon icon={SquareArrowOutUpRight} size="small" />
+          </Flexbox>
+        );
+      }
+      case LobehubSkillStatus.NOT_CONNECTED: {
+        return (
+          <Flexbox
+            align="center"
+            gap={4}
+            horizontal
+            onClick={(e) => {
+              e.stopPropagation();
+              handleConnect();
+            }}
+            style={{ cursor: 'pointer', opacity: 0.65 }}
+          >
+            {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
+            <Icon icon={SquareArrowOutUpRight} size="small" />
+          </Flexbox>
+        );
+      }
+      case LobehubSkillStatus.ERROR: {
+        return (
+          <span style={{ color: 'red', fontSize: 12 }}>
+            {t('tools.lobehubSkill.error', { defaultValue: 'Error' })}
+          </span>
+        );
+      }
+      default: {
+        return null;
+      }
+    }
+  };
+
+  return (
+    <Flexbox
+      align={'center'}
+      gap={24}
+      horizontal
+      justify={'space-between'}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (server?.status === LobehubSkillStatus.CONNECTED) {
+          handleToggle();
+        }
+      }}
+      style={{ paddingLeft: 8 }}
+    >
+      <Flexbox align={'center'} gap={8} horizontal>
+        {label}
+      </Flexbox>
+      {renderRightControl()}
+    </Flexbox>
+  );
+});
+
+export default LobehubSkillServerItem;

@@ -45,7 +45,7 @@
   "screen4.description": "Scegli come desideri condividere i dati. La tua scelta ci aiuta a migliorare e puoi modificarla in qualsiasi momento nelle impostazioni.",
   "screen4.footerNote": "Puoi modificarla in qualsiasi momento nelle impostazioni",
   "screen4.navigation.next": "Continua",
-  "screen4.privacy.description": "Mantieni tutto in locale. Nessun dato viene raccolto o condiviso—privacy totale per le tue conversazioni e flussi di lavoro.",
+  "screen4.privacy.description": "Disattiva l’analisi d’uso anonima. Non vengono condivisi dati su prestazioni, utilizzo dei modelli o interazioni con le funzionalità.",
   "screen4.privacy.items.1": "Nessuna raccolta dati",
   "screen4.privacy.items.2": "Nessuna analisi d'uso",
   "screen4.privacy.items.3": "Tutto l'elaborazione resta in locale",

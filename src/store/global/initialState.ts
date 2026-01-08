@@ -127,6 +127,14 @@ export interface SystemStatus {
    */
   pagePageSize?: number;
   portalWidth: number;
+  /**
+   * Resource Manager column widths
+   */
+  resourceManagerColumnWidths?: {
+    date: number;
+    name: number;
+    size: number;
+  };
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
   showHotkeyHelper?: boolean;
@@ -192,6 +200,11 @@ export const INITIAL_STATUS = {
   noWideScreen: true,
   pagePageSize: 20,
   portalWidth: 400,
+  resourceManagerColumnWidths: {
+    date: 160,
+    name: 574,
+    size: 140,
+  },
   showCommandMenu: false,
   showFilePanel: true,
   showHotkeyHelper: false,
