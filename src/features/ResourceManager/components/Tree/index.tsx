@@ -20,6 +20,7 @@ import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/featur
 import FileIcon from '@/components/FileIcon';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
+import type { ResourceItem } from '@/types/resource';
 
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import TreeSkeleton from './TreeSkeleton';
@@ -67,6 +68,47 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
   const state = treeState.get(knowledgeBaseId);
   if (!state) return;
 
+  const { resourceList } = useFileStore.getState();
+
+  const resolveParentId = (key: string | null | undefined) => {
+    if (!key) return null;
+    // Prefer id match
+    const byId = resourceList.find(
+      (item) => item.knowledgeBaseId === knowledgeBaseId && item.id === key,
+    );
+    if (byId) return byId.id;
+    // Fallback to slug match
+    const bySlug = resourceList.find(
+      (item) => item.knowledgeBaseId === knowledgeBaseId && item.slug === key,
+    );
+    return bySlug?.id ?? key;
+  };
+
+  const buildChildrenFromStore = (parentKey: string | null) => {
+    const parentId = resolveParentId(parentKey);
+    return resourceList
+      .filter(
+        (item) =>
+          item.knowledgeBaseId === knowledgeBaseId &&
+          (item.parentId ?? null) === (parentId ?? null),
+      )
+      .map<ResourceItem>((item) => item)
+      .map((item) => ({
+        fileType: item.fileType,
+        id: item.id,
+        isFolder: item.fileType === 'custom/folder',
+        name: item.name,
+        slug: item.slug,
+        sourceType: item.sourceType,
+        url: item.url || '',
+      }))
+      .sort((a, b) => {
+        if (a.isFolder && !b.isFolder) return -1;
+        if (!a.isFolder && b.isFolder) return 1;
+        return a.name.localeCompare(b.name);
+      });
+  };
+
   // Get list of all currently expanded folders before clearing
   const expandedFoldersList = Array.from(state.expandedFolders);
 
@@ -76,9 +118,16 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
 
   // Reload each expanded folder
   for (const folderKey of expandedFoldersList) {
+    // Prefer local store (explorer data) to avoid stale remote state
+    const localChildren = buildChildrenFromStore(folderKey);
+    if (localChildren.length > 0) {
+      state.folderChildrenCache.set(folderKey, localChildren);
+      state.loadedFolders.add(folderKey);
+      continue;
+    }
+
+    // Fallback to remote fetch if store has no data (e.g., initial load)
     try {
-      // The API expects document ID, but folderKey could be slug or ID
-      // We'll use it as is and let the API handle it
       const response = await fileService.getKnowledgeItems({
         knowledgeBaseId,
         parentId: folderKey,
@@ -103,7 +152,6 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
           return a.name.localeCompare(b.name);
         });
 
-        // Update cache using the same key that was used before
         state.folderChildrenCache.set(folderKey, sortedChildren);
         state.loadedFolders.add(folderKey);
       }
