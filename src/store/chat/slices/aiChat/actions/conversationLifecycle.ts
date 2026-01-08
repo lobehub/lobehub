@@ -297,10 +297,26 @@ export const conversationLifecycle: StateCreator<
       });
 
       if (e instanceof TRPCClientError) {
-        const isAbort = e.message.includes('aborted') || e.name === 'AbortError';
+        // Safely coerce e.message to string before calling includes()
+        // e.message could be an object in some error scenarios
+        const messageStr = typeof e.message === 'string' ? e.message : String(e.message);
+        const isAbort = messageStr.includes('aborted') || e.name === 'AbortError';
         // Check if error is due to cancellation
         if (!isAbort) {
-          get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
+          // Ensure error message is always a string (not an object) to avoid React Error #31
+          // Use try/catch for JSON.stringify to handle circular structures and undefined
+          let errorMsg: string;
+          if (typeof e.message === 'string') {
+            errorMsg = e.message;
+          } else {
+            try {
+              const json = JSON.stringify(e.message, null, 2);
+              errorMsg = typeof json === 'string' ? json : String(e.message);
+            } catch {
+              errorMsg = String(e.message);
+            }
+          }
+          get().updateOperationMetadata(operationId, { inputSendErrorMsg: errorMsg });
           get().mainInputEditor?.setJSONState(jsonState);
         }
       }
