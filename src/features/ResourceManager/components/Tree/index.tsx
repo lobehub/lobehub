@@ -35,6 +35,17 @@ const treeState = new Map<
   }
 >();
 
+const TREE_REFRESH_EVENT = 'resource-tree-refresh';
+
+const emitTreeRefresh = (knowledgeBaseId: string) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(TREE_REFRESH_EVENT, {
+      detail: { knowledgeBaseId },
+    }),
+  );
+};
+
 const getTreeState = (knowledgeBaseId: string) => {
   if (!treeState.has(knowledgeBaseId)) {
     treeState.set(knowledgeBaseId, {
@@ -100,6 +111,33 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
       console.error(`Failed to reload folder ${folderKey}:`, error);
     }
   }
+
+  // Revalidate SWR caches for root and expanded folders to keep list and tree in sync
+  try {
+    const { mutate } = await import('swr');
+    const revalidateFolder = (parentId: string | null) =>
+      mutate(
+        [
+          'useFetchKnowledgeItems',
+          {
+            knowledgeBaseId,
+            parentId,
+            showFilesInKnowledgeBase: false,
+          },
+        ],
+        undefined,
+        { revalidate: true },
+      );
+
+    await Promise.all([
+      revalidateFolder(null),
+      ...expandedFoldersList.map((folderKey) => revalidateFolder(folderKey)),
+    ]);
+  } catch (error) {
+    console.error('Failed to revalidate tree SWR cache:', error);
+  }
+
+  emitTreeRefresh(knowledgeBaseId);
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -201,13 +239,16 @@ const FileTreeRow = memo<{
 
       try {
         await renameFolder(item.id, renamingValue.trim());
+        if (libraryId) {
+          await clearTreeFolderCache(libraryId);
+        }
         message.success('Renamed successfully');
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
         message.error('Rename failed');
       }
-    }, [item.id, item.name, renamingValue, renameFolder, message]);
+    }, [item.id, item.name, libraryId, renamingValue, renameFolder, message]);
 
     const handleRenameCancel = useCallback(() => {
       setIsRenaming(false);
@@ -658,6 +699,22 @@ const FileTree = memo(() => {
   React.useEffect(() => {
     parentFolderKeyRef.current = null;
   }, [libraryId]);
+
+  // Listen for external tree refresh events (triggered when cache is cleared)
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleTreeRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ knowledgeBaseId?: string }>).detail;
+      if (detail?.knowledgeBaseId && libraryId && detail.knowledgeBaseId !== libraryId) return;
+      forceUpdate();
+    };
+
+    window.addEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+    return () => {
+      window.removeEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+    };
+  }, [libraryId, forceUpdate]);
 
   // Auto-expand folders when navigating to a folder in Explorer
   React.useEffect(() => {

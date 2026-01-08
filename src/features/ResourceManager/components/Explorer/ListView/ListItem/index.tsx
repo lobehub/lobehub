@@ -17,6 +17,7 @@ import {
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import FileIcon from '@/components/FileIcon';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/Tree';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type FileListItem as FileListItemType } from '@/types/files';
@@ -143,6 +144,7 @@ const FileListItem = memo<FileListItemProps>(
       (s) => ({
         isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
         parseFiles: s.parseFilesToChunks,
+        refreshFileList: s.refreshFileList,
         updateResource: s.updateResource,
       }),
       shallow,
@@ -281,6 +283,11 @@ const FileListItem = memo<FileListItemProps>(
       try {
         // Use optimistic updateResource for instant UI update
         await fileStoreState.updateResource(id, { name: renamingValue.trim() });
+        if (resourceManagerState.libraryId) {
+          await clearTreeFolderCache(resourceManagerState.libraryId);
+        }
+        await fileStoreState.refreshFileList();
+
         message.success(t('FileManager.actions.renameSuccess'));
         setIsRenaming(false);
       } catch (error) {
@@ -289,7 +296,16 @@ const FileListItem = memo<FileListItemProps>(
       } finally {
         isConfirmingRef.current = false;
       }
-    }, [renamingValue, name, fileStoreState.updateResource, id, message, t]);
+    }, [
+      fileStoreState.refreshFileList,
+      fileStoreState.updateResource,
+      id,
+      message,
+      name,
+      renamingValue,
+      resourceManagerState.libraryId,
+      t,
+    ]);
 
     const handleRenameCancel = useCallback(() => {
       // Don't cancel if we're in the middle of confirming

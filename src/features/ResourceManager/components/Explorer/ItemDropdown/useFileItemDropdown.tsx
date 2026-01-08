@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { shallow } from 'zustand/shallow';
 
 import RepoIcon from '@/components/LibIcon';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/Tree';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
@@ -52,7 +54,13 @@ export const useFileItemDropdown = ({
   const { t } = useTranslation(['components', 'common', 'knowledgeBase']);
   const { message, modal } = App.useApp();
 
-  const deleteResource = useFileStore((s) => s.deleteResource);
+  const { deleteResource, refreshFileList } = useFileStore(
+    (s) => ({
+      deleteResource: s.deleteResource,
+      refreshFileList: s.refreshFileList,
+    }),
+    shallow,
+  );
   const [removeFilesFromKnowledgeBase, addFilesToKnowledgeBase, useFetchKnowledgeBaseList] =
     useKnowledgeBaseStore((s) => [
       s.removeFilesFromKnowledgeBase,
@@ -253,6 +261,13 @@ export const useFileItemDropdown = ({
               onOk: async () => {
                 // Use optimistic delete - instant UI update, sync in background
                 await deleteResource(id);
+
+                // Ensure tree caches stay in sync with explorer
+                if (libraryId) {
+                  await clearTreeFolderCache(libraryId);
+                }
+                await refreshFileList();
+
                 message.success(t('FileManager.actions.deleteSuccess'));
               },
             });
@@ -260,7 +275,25 @@ export const useFileItemDropdown = ({
         },
       ] as ItemType[]
     ).filter(Boolean);
-  }, [isInLibrary, isFolder, libraries, libraryId, id]);
+  }, [
+    addFilesToKnowledgeBase,
+    clearTreeFolderCache,
+    deleteResource,
+    filename,
+    id,
+    isFolder,
+    isInLibrary,
+    isPage,
+    libraries,
+    libraryId,
+    message,
+    modal,
+    onRenameStart,
+    refreshFileList,
+    removeFilesFromKnowledgeBase,
+    t,
+    url,
+  ]);
 
   return { menuItems };
 };
