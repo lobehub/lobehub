@@ -32,6 +32,5 @@
   "login.title": "Login to {{clientName}}",
   "login.userWelcome": "Welcome back, ",
   "success.subTitle": "You have successfully authorized the application to access your account. You may now close this page.",
-  "success.subTitleWithCountdown": "Authorization successful. Auto-closing in {{countdown}}s...",
   "success.title": "Authorization Successful"
 }
