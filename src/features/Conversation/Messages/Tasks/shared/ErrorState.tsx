@@ -56,14 +56,14 @@ const ErrorState = memo<ErrorStateProps>(({ taskDetail }) => {
       {/* Error Content */}
       <Alert
         extra={
-          error?.error?.body && (
+          error?.body && (
             <Highlighter
               actionIconSize={'small'}
               language={'json'}
               padding={8}
               variant={'borderless'}
             >
-              {JSON.stringify(error?.error?.body, null, 2)}
+              {JSON.stringify(error?.body, null, 2)}
             </Highlighter>
           )
         }

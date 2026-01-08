@@ -741,7 +741,13 @@ export const streamingExecutor: StateCreator<
             const currentMessages = get().messagesMap[messageKey] || [];
             const assistantMessage = currentMessages.findLast((m) => m.role === 'assistant');
             if (assistantMessage) {
-              await messageService.updateMessageError(assistantMessage.id, event.error, {
+              // Convert AgentStateError to ChatMessageError format
+              const chatError = {
+                body: event.error.body,
+                message: event.error.message,
+                type: event.error.type || 'AgentRuntimeError',
+              };
+              await messageService.updateMessageError(assistantMessage.id, chatError as any, {
                 agentId,
                 groupId,
                 topicId,
