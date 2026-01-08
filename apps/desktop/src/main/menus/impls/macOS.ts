@@ -170,7 +170,8 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: t('history.title'),
         submenu: [
           {
-            accelerator: 'Ctrl+[',
+            accelerator: 'Command+[',
+            acceleratorWorksWhenHidden: true,
             click: () => {
               const mainWindow = this.app.browserManager.getMainWindow();
               mainWindow.broadcast('historyGoBack');
@@ -178,7 +179,8 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('history.back'),
           },
           {
-            accelerator: 'Ctrl+]',
+            accelerator: 'Command+]',
+            acceleratorWorksWhenHidden: true,
             click: () => {
               const mainWindow = this.app.browserManager.getMainWindow();
               mainWindow.broadcast('historyGoForward');
@@ -187,7 +189,8 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           },
           { type: 'separator' },
           {
-            accelerator: 'Command+Shift+H',
+            accelerator: 'Shift+Command+H',
+            acceleratorWorksWhenHidden: true,
             click: () => {
               const mainWindow = this.app.browserManager.getMainWindow();
               mainWindow.broadcast('navigate', { path: '/' });
