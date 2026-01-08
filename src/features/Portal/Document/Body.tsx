@@ -12,7 +12,7 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     overflow: auto;
     flex: 1;
-    padding-inline: 12px;
+    padding-inline: 16px;
   `,
   todoContainer: css`
     flex-shrink: 0;

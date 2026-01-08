@@ -1,17 +1,51 @@
 'use client';
 
+import { useEditor } from '@lobehub/editor/react';
 import { Flexbox, TextArea } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDocumentEditorStore } from './store';
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useDocumentStore } from '@/store/document';
+import { useNotebookStore } from '@/store/notebook';
+import { notebookSelectors } from '@/store/notebook/selectors';
 
 const Title = memo(() => {
   const { t } = useTranslation('file');
+  const editor = useEditor();
 
-  const currentTitle = useDocumentEditorStore((s) => s.currentTitle);
-  const setCurrentTitle = useDocumentEditorStore((s) => s.setCurrentTitle);
-  const handleTitleSubmit = useDocumentEditorStore((s) => s.handleTitleSubmit);
+  const [topicId, documentId] = useChatStore((s) => [
+    s.activeTopicId,
+    chatPortalSelectors.portalDocumentId(s),
+  ]);
+
+  const document = useNotebookStore(notebookSelectors.getDocumentById(topicId, documentId));
+  const [performSave, markDirty] = useDocumentStore((s) => [s.performSave, s.markDirty]);
+
+  // Local state for title
+  const [currentTitle, setCurrentTitle] = useState('');
+
+  // Initialize title from document
+  useEffect(() => {
+    if (document?.title) {
+      setCurrentTitle(document.title);
+    }
+  }, [document?.title]);
+
+  const handleTitleChange = (value: string) => {
+    setCurrentTitle(value);
+    if (documentId) {
+      markDirty(documentId);
+    }
+  };
+
+  const handleTitleSubmit = async () => {
+    if (documentId) {
+      await performSave(documentId, { title: currentTitle || undefined });
+    }
+    editor?.focus();
+  };
 
   return (
     <Flexbox
@@ -28,7 +62,7 @@ const Title = memo(() => {
       <TextArea
         autoSize={{ minRows: 1 }}
         onChange={(e) => {
-          setCurrentTitle(e.target.value);
+          handleTitleChange(e.target.value);
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
