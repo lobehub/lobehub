@@ -126,11 +126,10 @@ export const createRuntimeExecutors = (
       const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
 
       // Read user's provider config to determine apiMode
-      // When user explicitly disables Responses API, set apiMode to 'chatCompletion'
+      // Default to 'chatCompletion' unless user explicitly enables Responses API
       const aiProviderModel = new AiProviderModel(ctx.serverDB, ctx.userId!);
       const providerConfig = await aiProviderModel.findById(provider);
       const enableResponseApi = providerConfig?.config?.enableResponseApi;
-      // Default to false for non-OpenAI providers, true only for OpenAI with explicit enable
       const apiMode: 'responses' | 'chatCompletion' =
         enableResponseApi === true ? 'responses' : 'chatCompletion';
 
