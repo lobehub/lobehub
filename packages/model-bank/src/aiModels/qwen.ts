@@ -1268,7 +1268,7 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3-omni-flash-2025-09-15',
+      deploymentName: 'qwen3-omni-flash-2025-12-01',
     },
     contextWindowTokens: 65_536,
     description:
