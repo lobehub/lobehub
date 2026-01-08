@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
 
 import { getRouteMetadata } from '../helpers/routeMetadata';
@@ -150,38 +149,4 @@ export const useNavigationHistory = () => {
     historyEntries,
     historyIndex: historyCurrentIndex,
   };
-};
-
-/**
- * Hook to initialize navigation history tracking
- * Should be called once in the app root to start tracking
- */
-export const useInitNavigationHistory = () => {
-  const { t } = useTranslation('electron');
-  const location = useLocation();
-  const pushHistory = useElectronStore((s) => s.pushHistory);
-  const historyEntries = useElectronStore((s) => s.historyEntries);
-  const isInitializedRef = useRef(false);
-
-  // Initialize with current location on first mount
-  useEffect(() => {
-    if (!isDesktop) return;
-    if (isInitializedRef.current) return;
-    if (historyEntries.length > 0) return;
-
-    const currentUrl = location.pathname + location.search;
-    const metadata = getRouteMetadata(location.pathname);
-    const presetTitle = t(metadata.titleKey as any) as string;
-
-    // Push history with preset title (will be updated by PageTitle if useDynamicTitle)
-    pushHistory({
-      metadata: {
-        timestamp: Date.now(),
-      },
-      title: presetTitle,
-      url: currentUrl,
-    });
-
-    isInitializedRef.current = true;
-  }, [location.pathname, location.search, pushHistory, historyEntries.length, t]);
 };

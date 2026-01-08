@@ -12,7 +12,6 @@ import { UpdateModal } from './UpdateModal';
 import { UpdateNotification } from './UpdateNotification';
 import WinControl from './WinControl';
 import { TITLE_BAR_HEIGHT } from './const';
-import { useInitNavigationHistory } from './hooks/useNavigationHistory';
 import { useWatchThemeUpdate } from './hooks/useWatchThemeUpdate';
 
 const isMac = isMacOS();
@@ -25,7 +24,7 @@ const TitleBar = memo(() => {
 
   initElectronAppState();
   useWatchThemeUpdate();
-  useInitNavigationHistory();
+
   const showWinControl = isAppStateInit && !isMac;
 
   const padding = useMemo(() => {
