@@ -824,10 +824,12 @@ export class AgentRuntime {
 
       default: {
         // Continue execution but emit warning event
+        const warningError = {
+          message: `Warning: Cost limit exceeded: ${newState.cost.total} ${newState.cost.currency}`,
+          type: 'CostLimitWarning',
+        };
         const warningEvent = {
-          error: new Error(
-            `Warning: Cost limit exceeded: ${newState.cost.total} ${newState.cost.currency}`,
-          ),
+          error: warningError,
           type: 'error' as const,
         };
         return {
@@ -835,7 +837,7 @@ export class AgentRuntime {
           newState,
           nextContext: {
             operationId: this.operationId,
-            payload: { error: warningEvent.error, isCostWarning: true },
+            payload: { error: warningError, isCostWarning: true },
             phase: 'error' as const,
             session: this.createSessionContext(newState),
           },
@@ -890,10 +892,29 @@ export class AgentRuntime {
   ): { events: AgentEvent[]; newState: AgentState } {
     const errorState = structuredClone(state);
     errorState.status = 'error';
-    errorState.error = error;
+
+    // Convert error to structured AgentStateError format
+    if (typeof error === 'string') {
+      errorState.error = { message: error };
+    } else if (error instanceof Error) {
+      errorState.error = {
+        message: error.message,
+        type: error.name,
+      };
+    } else if (error && typeof error === 'object') {
+      // Handle structured error objects (e.g., from LLM APIs)
+      errorState.error = {
+        body: error.body ?? error.error ?? error,
+        message: error.message || String(error),
+        type: error.type || error.errorType || 'UnknownError',
+      };
+    } else {
+      errorState.error = { message: String(error) };
+    }
+
     errorState.lastModified = new Date().toISOString();
 
-    const errorEvent = { error, type: 'error' } as const;
+    const errorEvent = { error: errorState.error, type: 'error' } as const;
 
     return {
       events: [errorEvent],

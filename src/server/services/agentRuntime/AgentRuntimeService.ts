@@ -2,6 +2,7 @@ import {
   AgentRuntime,
   type AgentRuntimeContext,
   type AgentState,
+  type AgentStateError,
   GeneralChatAgent,
 } from '@lobechat/agent-runtime';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
@@ -43,16 +44,16 @@ import type {
 const log = debug('lobe-server:agent-runtime-service');
 
 /**
- * Formats an error into ChatMessageError structure
+ * Formats an error into AgentStateError structure
  * Handles various error formats from LLM execution and other sources
  */
-function formatErrorForState(error: unknown): ChatMessageError {
+function formatErrorForState(error: unknown): AgentStateError {
   // Handle ChatCompletionErrorPayload format from LLM errors
   // e.g., { errorType: 'InvalidProviderAPIKey', error: { ... }, provider: 'openai' }
   if (error && typeof error === 'object' && 'errorType' in error) {
     const payload = error as {
       error?: unknown;
-      errorType: ChatMessageError['type'];
+      errorType: string;
       message?: string;
     };
     return {
@@ -67,7 +68,7 @@ function formatErrorForState(error: unknown): ChatMessageError {
     return {
       body: { name: error.name },
       message: error.message,
-      type: ChatErrorType.InternalServerError,
+      type: error.name,
     };
   }
 
@@ -75,7 +76,7 @@ function formatErrorForState(error: unknown): ChatMessageError {
   return {
     body: error,
     message: String(error),
-    type: AgentRuntimeErrorType.AgentRuntimeError,
+    type: 'UnknownError',
   };
 }
 
