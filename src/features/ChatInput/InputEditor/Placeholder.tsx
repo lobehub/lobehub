@@ -12,7 +12,7 @@ const Placeholder = memo(() => {
     ? KeyEnum.Enter
     : combineKeys([KeyEnum.Mod, KeyEnum.Enter]);
 
-  // Don't remove this line for i18n reactity
+  // Don't remove this line for i18n reactivity
   void useTranslation('chat');
 
   return (
