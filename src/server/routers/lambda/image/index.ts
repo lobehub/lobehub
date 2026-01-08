@@ -23,32 +23,9 @@ import {
 } from '@/types/asyncTask';
 import { generateUniqueSeeds } from '@/utils/number';
 
-const log = debug('lobe-image:lambda');
+import { validateNoUrlsInConfig } from './utils';
 
-/**
- * Recursively validate that no full URLs are present in the config
- * This is a defensive check to ensure only keys are stored in database
- */
-function validateNoUrlsInConfig(obj: any, path: string = ''): void {
-  if (typeof obj === 'string') {
-    if (obj.startsWith('http://') || obj.startsWith('https://')) {
-      throw new Error(
-        `Invalid configuration: Found full URL instead of key at ${path || 'root'}. ` +
-          `URL: "${obj.slice(0, 100)}${obj.length > 100 ? '...' : ''}". ` +
-          `All URLs must be converted to storage keys before database insertion.`,
-      );
-    }
-  } else if (Array.isArray(obj)) {
-    obj.forEach((item, index) => {
-      validateNoUrlsInConfig(item, `${path}[${index}]`);
-    });
-  } else if (obj && typeof obj === 'object') {
-    Object.entries(obj).forEach(([key, value]) => {
-      const currentPath = path ? `${path}.${key}` : key;
-      validateNoUrlsInConfig(value, currentPath);
-    });
-  }
-}
+const log = debug('lobe-image:lambda');
 
 const imageProcedure = authedProcedure
   .use(keyVaults)
@@ -122,8 +99,8 @@ export const imageRouter = router({
         };
         log('Successfully converted imageUrls to keys for database: %O', imageKeys);
       } catch (error) {
-        log('Error converting imageUrls to keys: %O', error);
-        log('Keeping original imageUrls due to conversion error');
+        console.error('Error converting imageUrls to keys: %O', error);
+        console.error('Keeping original imageUrls due to conversion error');
       }
     }
     // 2) Process single image in imageUrl
@@ -137,7 +114,7 @@ export const imageRouter = router({
           log('Failed to extract key from single imageUrl: %s', params.imageUrl);
         }
       } catch (error) {
-        log('Error converting imageUrl to key: %O', error);
+        console.error('Error converting imageUrl to key: %O', error);
         // Keep original value if conversion fails
       }
     }
@@ -295,8 +272,8 @@ export const imageRouter = router({
 
       log('All %d background async image generation tasks started', generationsWithTasks.length);
     } catch (e) {
-      console.error('[createImage] Failed to process async tasks:', e);
-      log('Failed to process async tasks: %O', e);
+      console.error('Failed to process async tasks:', e);
+      console.error('Failed to process async tasks: %O', e);
 
       // If overall failure occurs, update all task statuses to failed
       try {
