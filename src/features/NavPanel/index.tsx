@@ -139,7 +139,7 @@ const NavPanel = memo(() => {
         maxWidth={400}
         minWidth={240}
         onExpandChange={(expand) => togglePanel(expand)}
-        onSizeChange={handleSizeChange}
+        onSizeDragging={handleSizeChange}
         placement="left"
         showBorder={false}
         style={{

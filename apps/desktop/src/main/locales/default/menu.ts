@@ -37,7 +37,7 @@ const menu = {
   'help.visitWebsite': 'Open Website',
   'history.back': 'Back',
   'history.forward': 'Forward',
-  'history.title': 'History',
+  'history.title': 'Go',
   'macOS.about': 'About {{appName}}',
   'macOS.devTools': 'LobeHub Developer Tools',
   'macOS.hide': 'Hide {{appName}}',

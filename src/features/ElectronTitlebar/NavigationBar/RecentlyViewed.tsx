@@ -1,12 +1,15 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useElectronStore } from '@/store/electron';
 import type { HistoryEntry } from '@/store/electron/actions/navigationHistory';
+
+import { getRouteIcon } from '../helpers/routeMetadata';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -22,6 +25,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
+  `,
+  icon: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextSecondary};
   `,
   item: css`
     cursor: pointer;
@@ -43,17 +50,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   itemTitle: css`
     overflow: hidden;
+    flex: 1;
 
     font-size: 12px;
     color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  itemUrl: css`
-    overflow: hidden;
-
-    font-size: 10px;
-    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -74,6 +74,7 @@ interface RecentlyViewedProps {
 }
 
 const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
+  const { t } = useTranslation('electron');
   const navigate = useNavigate();
   const historyEntries = useElectronStore((s) => s.historyEntries);
   const historyCurrentIndex = useElectronStore((s) => s.historyCurrentIndex);
@@ -101,26 +102,30 @@ const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
   if (recentEntries.length === 0) {
     return (
       <div className={styles.container}>
-        <div className={styles.empty}>No recent pages</div>
+        <div className={styles.empty}>{t('navigation.recentView')}</div>
       </div>
     );
   }
 
   return (
     <Flexbox className={styles.container}>
-      <div className={styles.title}>Recent pages</div>
+      <div className={styles.title}>{t('navigation.recentView')}</div>
       {recentEntries.map(({ entry, originalIndex }) => {
         const isActive = originalIndex === historyCurrentIndex;
+        const RouteIcon = getRouteIcon(entry.url);
 
         return (
-          <div
+          <Flexbox
+            align="center"
             className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
+            gap={8}
+            horizontal
             key={`${entry.url}-${originalIndex}`}
             onClick={() => handleClick(entry, originalIndex)}
           >
-            <div className={styles.itemTitle}>{entry.title}</div>
-            <div className={styles.itemUrl}>{entry.url}</div>
-          </div>
+            {RouteIcon && <Icon className={styles.icon} icon={RouteIcon} size="small" />}
+            <span className={styles.itemTitle}>{entry.title}</span>
+          </Flexbox>
         );
       })}
     </Flexbox>

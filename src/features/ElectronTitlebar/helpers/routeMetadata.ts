@@ -2,16 +2,36 @@
  * Route metadata mapping for navigation history
  * Provides title and icon information based on route path
  */
+import {
+  Brain,
+  Circle,
+  Compass,
+  Database,
+  FileText,
+  Home,
+  Image,
+  type LucideIcon,
+  MessageSquare,
+  Rocket,
+  Settings,
+  Users,
+} from 'lucide-react';
 
 export interface RouteMetadata {
-  icon?: string;
-  title: string;
+  icon?: LucideIcon;
+  /** i18n key for the title (namespace: electron) */
+  titleKey: string;
+  /** Whether this route should use document.title for more specific title */
+  useDynamicTitle?: boolean;
 }
 
 interface RoutePattern {
-  icon?: string;
+  icon?: LucideIcon;
   test: (pathname: string) => boolean;
-  title: string | ((pathname: string) => string);
+  /** i18n key for the title (namespace: electron) */
+  titleKey: string;
+  /** Whether this route should use document.title for more specific title */
+  useDynamicTitle?: boolean;
 }
 
 /**
@@ -20,160 +40,175 @@ interface RoutePattern {
 const routePatterns: RoutePattern[] = [
   // Settings routes
   {
-    icon: 'Settings',
+    icon: Settings,
     test: (p) => p.startsWith('/settings/provider'),
-    title: 'Provider',
+    titleKey: 'navigation.provider',
   },
   {
-    icon: 'Settings',
+    icon: Settings,
     test: (p) => p.startsWith('/settings'),
-    title: 'Settings',
+    titleKey: 'navigation.settings',
   },
 
-  // Agent/Chat routes
+  // Agent/Chat routes - use dynamic title for specific chat names
   {
-    icon: 'MessageSquare',
+    icon: MessageSquare,
     test: (p) => p.startsWith('/agent/'),
-    title: 'Chat',
+    titleKey: 'navigation.chat',
+    useDynamicTitle: true,
   },
   {
-    icon: 'MessageSquare',
+    icon: MessageSquare,
     test: (p) => p === '/agent',
-    title: 'Agent',
+    titleKey: 'navigation.chat',
   },
 
-  // Group routes
+  // Group routes - use dynamic title for specific group names
   {
-    icon: 'Users',
+    icon: Users,
     test: (p) => p.startsWith('/group/'),
-    title: 'Group Chat',
+    titleKey: 'navigation.groupChat',
+    useDynamicTitle: true,
   },
   {
-    icon: 'Users',
+    icon: Users,
     test: (p) => p === '/group',
-    title: 'Group',
+    titleKey: 'navigation.group',
   },
 
   // Community/Discover routes
   {
-    icon: 'Compass',
+    icon: Compass,
     test: (p) => p.startsWith('/community/assistant'),
-    title: 'Discover Assistants',
+    titleKey: 'navigation.discoverAssistants',
   },
   {
-    icon: 'Compass',
+    icon: Compass,
     test: (p) => p.startsWith('/community/model'),
-    title: 'Discover Models',
+    titleKey: 'navigation.discoverModels',
   },
   {
-    icon: 'Compass',
+    icon: Compass,
     test: (p) => p.startsWith('/community/provider'),
-    title: 'Discover Providers',
+    titleKey: 'navigation.discoverProviders',
   },
   {
-    icon: 'Compass',
+    icon: Compass,
     test: (p) => p.startsWith('/community/mcp'),
-    title: 'Discover MCP',
+    titleKey: 'navigation.discoverMcp',
   },
   {
-    icon: 'Compass',
+    icon: Compass,
     test: (p) => p.startsWith('/community'),
-    title: 'Discover',
+    titleKey: 'navigation.discover',
   },
 
   // Resource/Knowledge routes
   {
-    icon: 'Database',
+    icon: Database,
     test: (p) => p.startsWith('/resource/library'),
-    title: 'Knowledge Base',
+    titleKey: 'navigation.knowledgeBase',
   },
   {
-    icon: 'Database',
+    icon: Database,
     test: (p) => p.startsWith('/resource'),
-    title: 'Resources',
+    titleKey: 'navigation.resources',
   },
 
   // Memory routes
   {
-    icon: 'Brain',
+    icon: Brain,
     test: (p) => p.startsWith('/memory/identities'),
-    title: 'Memory - Identities',
+    titleKey: 'navigation.memoryIdentities',
   },
   {
-    icon: 'Brain',
+    icon: Brain,
     test: (p) => p.startsWith('/memory/contexts'),
-    title: 'Memory - Contexts',
+    titleKey: 'navigation.memoryContexts',
   },
   {
-    icon: 'Brain',
+    icon: Brain,
     test: (p) => p.startsWith('/memory/preferences'),
-    title: 'Memory - Preferences',
+    titleKey: 'navigation.memoryPreferences',
   },
   {
-    icon: 'Brain',
+    icon: Brain,
     test: (p) => p.startsWith('/memory/experiences'),
-    title: 'Memory - Experiences',
+    titleKey: 'navigation.memoryExperiences',
   },
   {
-    icon: 'Brain',
+    icon: Brain,
     test: (p) => p.startsWith('/memory'),
-    title: 'Memory',
+    titleKey: 'navigation.memory',
   },
 
   // Image routes
   {
-    icon: 'Image',
+    icon: Image,
     test: (p) => p.startsWith('/image'),
-    title: 'Image',
+    titleKey: 'navigation.image',
   },
 
-  // Page routes
+  // Page routes - use dynamic title for specific page names
   {
-    icon: 'FileText',
+    icon: FileText,
     test: (p) => p.startsWith('/page/'),
-    title: 'Page',
+    titleKey: 'navigation.page',
+    useDynamicTitle: true,
   },
   {
-    icon: 'FileText',
+    icon: FileText,
     test: (p) => p === '/page',
-    title: 'Pages',
+    titleKey: 'navigation.pages',
   },
 
   // Onboarding
   {
-    icon: 'Rocket',
+    icon: Rocket,
     test: (p) => p.startsWith('/desktop-onboarding') || p.startsWith('/onboarding'),
-    title: 'Onboarding',
+    titleKey: 'navigation.onboarding',
   },
 
   // Home (default)
   {
-    icon: 'Home',
+    icon: Home,
     test: (p) => p === '/' || p === '',
-    title: 'Home',
+    titleKey: 'navigation.home',
   },
 ];
 
 /**
  * Get route metadata based on pathname
  * @param pathname - The current route pathname
- * @returns Route metadata with title and optional icon
+ * @returns Route metadata with titleKey, icon, and useDynamicTitle flag
  */
 export const getRouteMetadata = (pathname: string): RouteMetadata => {
   // Find the first matching pattern
   for (const pattern of routePatterns) {
     if (pattern.test(pathname)) {
-      const title = typeof pattern.title === 'function' ? pattern.title(pathname) : pattern.title;
       return {
         icon: pattern.icon,
-        title,
+        titleKey: pattern.titleKey,
+        useDynamicTitle: pattern.useDynamicTitle,
       };
     }
   }
 
   // Default fallback
   return {
-    icon: 'Circle',
-    title: 'LobeHub',
+    icon: Circle,
+    titleKey: 'navigation.lobehub',
   };
+};
+
+/**
+ * Get route icon based on pathname or URL
+ * @param url - The route URL (may include query string)
+ * @returns LucideIcon component or undefined
+ */
+export const getRouteIcon = (url: string): LucideIcon | undefined => {
+  // Extract pathname from URL
+  const pathname = url.split('?')[0];
+  const metadata = getRouteMetadata(pathname);
+  return metadata.icon;
 };

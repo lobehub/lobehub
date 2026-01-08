@@ -17,6 +17,11 @@ export interface HistoryEntry {
 
 export interface NavigationHistoryState {
   /**
+   * Current page title from PageTitle component
+   * Used to get dynamic titles without setTimeout hack
+   */
+  currentPageTitle: string;
+  /**
    * Current position in history (-1 means empty)
    */
   historyCurrentIndex: number;
@@ -77,6 +82,11 @@ export interface NavigationHistoryAction {
   ) => void;
 
   /**
+   * Set current page title (called by PageTitle component)
+   */
+  setCurrentPageTitle: (title: string) => void;
+
+  /**
    * Set the navigating history flag
    */
   setIsNavigatingHistory: (value: boolean) => void;
@@ -85,6 +95,7 @@ export interface NavigationHistoryAction {
 // ======== Initial State ======== //
 
 export const navigationHistoryInitialState: NavigationHistoryState = {
+  currentPageTitle: '',
   historyCurrentIndex: -1,
   historyEntries: [],
   isNavigatingHistory: false,
@@ -224,6 +235,10 @@ export const createNavigationHistorySlice: StateCreator<
       false,
       'replaceHistory',
     );
+  },
+
+  setCurrentPageTitle: (title) => {
+    set({ currentPageTitle: title }, false, 'setCurrentPageTitle');
   },
 
   setIsNavigatingHistory: (value) => {

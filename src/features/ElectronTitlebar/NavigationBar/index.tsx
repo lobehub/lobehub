@@ -1,8 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Tooltip } from '@lobehub/ui';
-import { Popover } from 'antd';
-import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { ActionIcon, Flexbox, Popover, Tooltip } from '@lobehub/ui';
+import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import { useGlobalStore } from '@/store/global';
@@ -15,48 +14,8 @@ import RecentlyViewed from './RecentlyViewed';
 
 const isMac = isMacOS();
 
-/**
- * Hook to observe NavPanel width in real-time using ResizeObserver
- */
 const useNavPanelWidth = () => {
-  // Get stored width as initial value
-  const storedWidth = useGlobalStore(systemStatusSelectors.leftPanelWidth);
-  const [liveWidth, setLiveWidth] = useState(storedWidth);
-
-  useEffect(() => {
-    // Find the NavPanel element (DraggablePanel renders with data-panel-id)
-    const navPanelElement = document.querySelector('[class*="draggable-panel"]') as HTMLElement;
-
-    if (!navPanelElement) {
-      // Fallback to stored width if element not found
-      setLiveWidth(storedWidth);
-      return;
-    }
-
-    // Create ResizeObserver to track live width changes
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const width = entry.contentRect.width;
-        if (width > 0) {
-          setLiveWidth(width);
-        }
-      }
-    });
-
-    resizeObserver.observe(navPanelElement);
-
-    // Set initial width
-    const initialWidth = navPanelElement.getBoundingClientRect().width;
-    if (initialWidth > 0) {
-      setLiveWidth(initialWidth);
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [storedWidth]);
-
-  return liveWidth;
+  return useGlobalStore(systemStatusSelectors.leftPanelWidth);
 };
 
 const NavigationBar = memo(() => {
@@ -107,15 +66,14 @@ const NavigationBar = memo(() => {
       style={{ width: `${leftPanelWidth - 12}px` }}
     >
       <Flexbox align="center" gap={2} horizontal>
-        <ActionIcon disabled={!canGoBack} icon={ChevronLeft} onClick={goBack} size="small" />
-        <ActionIcon disabled={!canGoForward} icon={ChevronRight} onClick={goForward} size="small" />
+        <ActionIcon disabled={!canGoBack} icon={ArrowLeft} onClick={goBack} size="small" />
+        <ActionIcon disabled={!canGoForward} icon={ArrowRight} onClick={goForward} size="small" />
         <Popover
-          arrow={false}
           content={<RecentlyViewed onClose={() => setHistoryOpen(false)} />}
           onOpenChange={setHistoryOpen}
           open={historyOpen}
           placement="bottomLeft"
-          styles={{ container: { padding: 0 } }}
+          styles={{ content: { padding: 0 } }}
           trigger="click"
         >
           <div>
