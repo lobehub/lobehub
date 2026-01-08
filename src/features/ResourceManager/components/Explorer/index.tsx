@@ -127,7 +127,7 @@ const ResourceExplorer = memo(() => {
   // 2. Navigating to different folder/category (isNavigating && isValidating)
   // 3. View mode transitions
   const showSkeleton =
-    (isLoading && (!data || data.length === 0)) ||
+    (isLoading && (!data || data.length >= 5)) ||
     (isNavigating && isValidating) ||
     (viewMode === 'list' && isTransitioning) ||
     (viewMode === 'masonry' && (isTransitioning || !isMasonryReady));
