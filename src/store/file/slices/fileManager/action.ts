@@ -257,10 +257,8 @@ export const createFileManageSlice: StateCreator<
     );
 
     // Refetch resource list to show newly uploaded files
-    const queryParams = get().queryParams;
-    if (queryParams) {
-      await get().fetchResources(queryParams);
-    }
+    const { revalidateResources } = await import('../resource/hooks');
+    await revalidateResources();
 
     // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults

@@ -1,13 +1,24 @@
 import { isEqual } from 'es-toolkit';
 import { shallow } from 'zustand/shallow';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { resourceService } from '@/services/resource';
 import type { ResourceQueryParams } from '@/types/resource';
 
 import { useFileStore } from '../../store';
 
 const SWR_KEY_RESOURCES = 'SWR_RESOURCES';
+
+/**
+ * Revalidate resources with current or specific query params
+ * This can be called from outside React components (e.g., store actions)
+ */
+export const revalidateResources = async (params?: ResourceQueryParams) => {
+  const queryParams = params || useFileStore.getState().queryParams;
+  if (queryParams) {
+    await mutate([SWR_KEY_RESOURCES, queryParams]);
+  }
+};
 
 /**
  * Custom SWR hook for fetching resources with caching and revalidation

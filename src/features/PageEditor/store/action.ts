@@ -181,7 +181,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
             return;
           }
 
-          const { updateDocumentOptimistically, replaceTempDocumentWithReal, fetchResources, queryParams } =
+          const { updateDocumentOptimistically, replaceTempDocumentWithReal } =
             useFileStore.getState();
 
           if (currentDocId && !currentDocId.startsWith('temp-document-')) {
@@ -243,9 +243,8 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
             onDocumentIdChange?.(newPage.id);
 
             // Refetch resource list to show newly created page
-            if (queryParams) {
-              await fetchResources(queryParams);
-            }
+            const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+            await revalidateResources();
           }
 
           if (hadFocus) {

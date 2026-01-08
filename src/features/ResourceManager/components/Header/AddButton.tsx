@@ -14,7 +14,6 @@ import DragUpload from '@/components/DragUpload';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
 import { useFileStore } from '@/store/file';
-import { DocumentSourceType } from '@/types/document';
 
 import useNotionImport from './hooks/useNotionImport';
 import useUploadFolder from './hooks/useUploadFolder';
@@ -28,7 +27,6 @@ const AddButton = () => {
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
-  const [queryParams, fetchResources] = useFileStore((s) => [s.queryParams, s.fetchResources]);
 
   const [libraryId, currentFolderId, setCurrentViewItemId, setMode, setPendingRenameItemId] =
     useResourceManagerStore((s) => [
@@ -109,9 +107,8 @@ const AddButton = () => {
     currentFolderId,
     libraryId,
     refetchResources: async () => {
-      if (queryParams) {
-        await fetchResources(queryParams);
-      }
+      const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+      await revalidateResources();
     },
     t,
   });

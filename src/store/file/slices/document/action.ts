@@ -195,10 +195,8 @@ export const createDocumentSlice: StateCreator<
     });
 
     // Refetch resource list to show the new folder
-    const queryParams = get().queryParams;
-    if (queryParams) {
-      await get().fetchResources(queryParams);
-    }
+    const { revalidateResources } = await import('../resource/hooks');
+    await revalidateResources();
 
     return folder.id;
   },
@@ -645,10 +643,8 @@ export const createDocumentSlice: StateCreator<
     });
 
     // Refetch resource list to show updated document
-    const queryParams = get().queryParams;
-    if (queryParams) {
-      await get().fetchResources(queryParams);
-    }
+    const { revalidateResources } = await import('../resource/hooks');
+    await revalidateResources();
   },
 
   updateDocumentOptimistically: async (documentId, updates) => {
@@ -705,10 +701,8 @@ export const createDocumentSlice: StateCreator<
       });
 
       // After successful sync, refetch resources to get server state
-      const queryParams = get().queryParams;
-      if (queryParams) {
-        await get().fetchResources(queryParams);
-      }
+      const { revalidateResources } = await import('../resource/hooks');
+      await revalidateResources();
     } catch (error) {
       console.error('[updateDocumentOptimistically] Failed to sync to DB:', error);
       // On error, revert the optimistic update

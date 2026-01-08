@@ -1,7 +1,7 @@
 import { type StateCreator } from 'zustand/vanilla';
 
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import { useFileStore } from '@/store/file';
+import { revalidateResources } from '@/store/file/slices/resource/hooks';
 import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
 
 export interface KnowledgeBaseContentAction {
@@ -18,22 +18,14 @@ export const createContentSlice: StateCreator<
   addFilesToKnowledgeBase: async (knowledgeBaseId, ids) => {
     await knowledgeBaseService.addFilesToKnowledgeBase(knowledgeBaseId, ids);
 
-    // Refetch resource list to show updated KB associations
-    const fileStore = useFileStore.getState();
-    const queryParams = fileStore.queryParams;
-    if (queryParams) {
-      await fileStore.fetchResources(queryParams);
-    }
+    // Revalidate resource list to show updated KB associations
+    await revalidateResources();
   },
 
   removeFilesFromKnowledgeBase: async (knowledgeBaseId, ids) => {
     await knowledgeBaseService.removeFilesFromKnowledgeBase(knowledgeBaseId, ids);
 
-    // Refetch resource list to show updated KB associations
-    const fileStore = useFileStore.getState();
-    const queryParams = fileStore.queryParams;
-    if (queryParams) {
-      await fileStore.fetchResources(queryParams);
-    }
+    // Revalidate resource list to show updated KB associations
+    await revalidateResources();
   },
 });

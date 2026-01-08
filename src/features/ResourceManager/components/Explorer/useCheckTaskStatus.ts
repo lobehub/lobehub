@@ -2,13 +2,10 @@ import { useEffect } from 'react';
 
 import { useFileStore } from '@/store/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
+import { revalidateResources } from '@/store/file/slices/resource/hooks';
 import { type FileListItem } from '@/types/files';
 
 export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
-  const [fetchResources, queryParams] = useFileStore((s) => [
-    s.fetchResources,
-    s.queryParams,
-  ]);
   const hasProcessingChunkTask = data?.some(
     (item) => item.chunkingStatus === AsyncTaskStatus.Processing,
   );
@@ -24,10 +21,10 @@ export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
 
     const interval = setInterval(() => {
       // Re-fetch with the same query params used for initial load
-      fetchResources(queryParams);
+      revalidateResources();
     }, 5000);
     return () => {
       clearInterval(interval);
     };
-  }, [isProcessing, fetchResources, queryParams]);
+  }, [isProcessing]);
 };

@@ -92,19 +92,13 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       s.fetchDocuments,
     ]);
 
-    const [queryParams, fetchResources] = useFileStore((s) => [
-      s.queryParams,
-      s.fetchResources,
-    ]);
-
     const notionImport = useNotionImport({
       createDocument,
       currentFolderId: null,
       libraryId: knowledgeBaseId ?? null,
       refetchResources: async () => {
-        if (queryParams) {
-          await fetchResources(queryParams);
-        }
+        const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+        await revalidateResources();
         await fetchDocuments({ pageOnly: true });
       },
       t,

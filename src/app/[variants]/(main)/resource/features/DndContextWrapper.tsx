@@ -79,7 +79,6 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const moveResource = useFileStore((s) => s.moveResource);
   const resourceList = useFileStore((s) => s.resourceList);
-  const [queryParams, fetchResources] = useFileStore((s) => [s.queryParams, s.fetchResources]);
   const selectedFileIds = useResourceManagerStore((s) => s.selectedFileIds);
   const setSelectedFileIds = useResourceManagerStore((s) => s.setSelectedFileIds);
   const libraryId = useResourceManagerStore((s) => s.libraryId);
@@ -158,9 +157,8 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
         await Promise.all(pools);
 
         // Refetch resources to update the view (items should disappear from current folder)
-        if (queryParams) {
-          await fetchResources(queryParams);
-        }
+        const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+        await revalidateResources();
 
         // Clear and reload all expanded folders in Tree's module-level cache
         if (libraryId) {
@@ -210,8 +208,6 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
     selectedFileIds,
     resourceList,
     moveResource,
-    queryParams,
-    fetchResources,
     setSelectedFileIds,
     message,
     t,
