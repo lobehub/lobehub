@@ -418,7 +418,7 @@
     "eslint-plugin-mdx": "^3.6.2",
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.3.3",
-    "glob": "^11.1.0",
+    "glob": "^13.0.0",
     "happy-dom": "^20.0.11",
     "husky": "^9.1.7",
     "import-in-the-middle": "^2.0.1",
