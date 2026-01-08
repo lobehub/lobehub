@@ -1,7 +1,7 @@
 'use client';
 
 import { Accordion, AccordionItem, Dropdown, Flexbox, Text } from '@lobehub/ui';
-import React, { Suspense, memo } from 'react';
+import React, { Suspense, memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -27,10 +27,16 @@ const Body = memo(() => {
   const filteredPages = useFileStore(documentSelectors.getFilteredPagesLimited);
   const searchKeywords = useFileStore((s) => s.searchKeywords);
   const dropdownMenu = useDropdownMenu();
-  const [allPagesDrawerOpen, closeAllPagesDrawer] = useFileStore((s) => [
+  const [allPagesDrawerOpen, closeAllPagesDrawer, fetchDocuments] = useFileStore((s) => [
     s.allPagesDrawerOpen,
     s.closeAllPagesDrawer,
+    s.fetchDocuments,
   ]);
+
+  // Fetch documents on mount
+  useEffect(() => {
+    fetchDocuments({ pageOnly: true });
+  }, [fetchDocuments]);
 
   return (
     <Flexbox gap={1} paddingInline={4}>
