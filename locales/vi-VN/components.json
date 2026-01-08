@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "Đi tới cài đặt",
   "ModelSwitchPanel.manageProvider": "Quản Lý Nhà Cung Cấp",
   "ModelSwitchPanel.provider": "Nhà cung cấp",
+  "ModelSwitchPanel.searchPlaceholder": "Tìm kiếm mô hình...",
   "ModelSwitchPanel.title": "Mô hình",
   "ModelSwitchPanel.useModelFrom": "Sử dụng mô hình này từ:",
   "MultiImagesUpload.actions.uploadMore": "Nhấn hoặc kéo để tải thêm",

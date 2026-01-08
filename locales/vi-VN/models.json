@@ -335,6 +335,7 @@
   "computer-use-preview.description": "computer-use-preview là mô hình chuyên biệt cho công cụ \"sử dụng máy tính\", được huấn luyện để hiểu và thực hiện các tác vụ liên quan đến máy tính.",
   "dall-e-2.description": "DALL·E thế hệ thứ hai với khả năng tạo hình ảnh thực tế, chính xác hơn và độ phân giải gấp 4 lần thế hệ đầu.",
   "dall-e-3.description": "Mô hình DALL·E mới nhất, phát hành vào tháng 11 năm 2023, hỗ trợ tạo hình ảnh thực tế, chính xác hơn với chi tiết mạnh mẽ hơn.",
+  "databricks/dbrx-instruct.description": "DBRX Instruct cung cấp khả năng xử lý hướng dẫn đáng tin cậy cao trong nhiều ngành công nghiệp.",
   "meta.llama3-8b-instruct-v1:0.description": "Meta Llama 3 là một mô hình ngôn ngữ mở dành cho nhà phát triển, nhà nghiên cứu và doanh nghiệp, được thiết kế để hỗ trợ xây dựng, thử nghiệm và mở rộng các ý tưởng AI sinh ngữ một cách có trách nhiệm. Là một phần trong nền tảng đổi mới cộng đồng toàn cầu, mô hình này phù hợp với môi trường có tài nguyên hạn chế, thiết bị biên và yêu cầu thời gian huấn luyện nhanh hơn.",
   "meta/Llama-3.2-11B-Vision-Instruct.description": "Khả năng suy luận hình ảnh mạnh mẽ trên ảnh độ phân giải cao, phù hợp cho các ứng dụng hiểu thị giác.",
   "meta/Llama-3.2-90B-Vision-Instruct.description": "Khả năng suy luận hình ảnh tiên tiến dành cho các ứng dụng tác tử hiểu thị giác.",

@@ -658,6 +658,7 @@
   "gpt-5.description": "The best model for cross-domain coding and agent tasks. GPT-5 leaps in accuracy, speed, reasoning, context awareness, structured thinking, and problem solving.",
   "gpt-audio.description": "GPT Audio is a general chat model for audio input/output, supported in the Chat Completions API.",
   "gpt-image-1-mini.description": "A lower-cost GPT Image 1 variant with native text and image input and image output.",
+  "gpt-image-1.5.description": "An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.",
   "gpt-image-1.description": "ChatGPT native multimodal image generation model.",
   "gpt-oss-120b.description": "Access requires an application. GPT-OSS-120B is an open-source large language model from OpenAI with strong text generation capability.",
   "gpt-oss-20b.description": "Access requires an application. GPT-OSS-20B is an open-source mid-size language model from OpenAI with efficient text generation.",

@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "Отиди в настройките",
   "ModelSwitchPanel.manageProvider": "Управление на доставчик",
   "ModelSwitchPanel.provider": "Доставчик",
+  "ModelSwitchPanel.searchPlaceholder": "Търсене на модели...",
   "ModelSwitchPanel.title": "Модел",
   "ModelSwitchPanel.useModelFrom": "Използвай този модел от:",
   "MultiImagesUpload.actions.uploadMore": "Кликнете или плъзнете за качване на още",
