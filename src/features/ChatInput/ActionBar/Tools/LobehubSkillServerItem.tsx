@@ -135,13 +135,52 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     s.togglePlugin,
   ]);
 
+  // Listen for OAuth success message from popup window
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' && event.data?.provider === provider) {
+        console.log('[LobehubSkill] OAuth success message received for provider:', provider);
+
+        // Cleanup polling/window monitoring
+        cleanup();
+
+        // Refresh status to get the connected state
+        await checkStatus(provider);
+
+        // Auto-enable the plugin after successful OAuth
+        // Need to get the latest server state after checkStatus
+        const latestServer = useToolStore
+          .getState()
+          .lobehubSkillServers?.find((s) => s.identifier === provider);
+        if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
+          const newPluginId = latestServer.identifier;
+          const isAlreadyEnabled = agentSelectors
+            .currentAgentPlugins(useAgentStore.getState())
+            .includes(newPluginId);
+          if (!isAlreadyEnabled) {
+            console.log('[LobehubSkill] Auto-enabling plugin:', newPluginId);
+            togglePlugin(newPluginId);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [provider, cleanup, checkStatus, togglePlugin]);
+
   const handleConnect = async () => {
     // 只有已连接状态才阻止重新连接
     if (server?.isConnected) return;
 
     setIsConnecting(true);
     try {
-      const { authorizeUrl } = await getAuthorizeUrl(provider);
+      // Use /oauth/callback/success as redirect URI with provider param for auto-enable
+      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+      const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
       openOAuthWindow(authorizeUrl);
     } catch (error) {
       console.error('[LobehubSkill] Failed to get authorize URL:', error);
@@ -236,7 +275,8 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
             onClick={async (e) => {
               e.stopPropagation();
               try {
-                const { authorizeUrl } = await getAuthorizeUrl(provider);
+                const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+                const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
                 openOAuthWindow(authorizeUrl);
               } catch (error) {
                 console.error('[LobehubSkill] Failed to get authorize URL:', error);
