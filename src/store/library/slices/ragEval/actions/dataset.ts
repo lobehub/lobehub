@@ -11,7 +11,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { notification } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { ragEvalService } from '@/services/ragEval';
-import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
+import { type KnowledgeBaseStore } from '@/store/library/store';
 
 const FETCH_DATASET_LIST_KEY = 'FETCH_DATASET_LIST';
 const FETCH_DATASET_RECORD_KEY = 'FETCH_DATASET_RECORD_KEY';

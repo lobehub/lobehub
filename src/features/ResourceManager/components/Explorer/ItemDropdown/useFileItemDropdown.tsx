@@ -19,7 +19,7 @@ import { clearTreeFolderCache } from '@/features/ResourceManager/components/Tree
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import MoveToFolderModal from '../MoveToFolderModal';

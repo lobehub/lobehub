@@ -1,7 +1,7 @@
 import { Input, Popover } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useState } from 'react';
 
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 
 interface EditingProps {
   id: string;

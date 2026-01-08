@@ -130,7 +130,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   onActionClick: async (type) => {
     const { selectedFileIds, libraryId } = get();
     const { useFileStore } = await import('@/store/file');
-    const { useKnowledgeBaseStore } = await import('@/store/knowledgeBase');
+    const { useKnowledgeBaseStore } = await import('@/store/library');
     const { isChunkingUnsupported } = await import('@/utils/isChunkingUnsupported');
 
     const fileStore = useFileStore.getState();

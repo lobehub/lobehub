@@ -1,6 +1,6 @@
 import { type StateCreator } from 'zustand/vanilla';
 
-import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
+import { type KnowledgeBaseStore } from '@/store/library/store';
 
 import { type RAGEvalDatasetAction, createRagEvalDatasetSlice } from './dataset';
 import { type RAGEvalEvaluationAction, createRagEvalEvaluationSlice } from './evaluation';

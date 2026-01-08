@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import RepoIcon from '@/components/LibIcon';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 
 import Actions from './Actions';
 import Editing from './Editing';

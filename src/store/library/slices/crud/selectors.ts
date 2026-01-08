@@ -1,4 +1,4 @@
-import { type KnowledgeBaseStoreState } from '@/store/knowledgeBase/initialState';
+import { type KnowledgeBaseStoreState } from '@/store/library/initialState';
 
 const activeKnowledgeBaseId = (s: KnowledgeBaseStoreState) => s.activeKnowledgeBaseId;
 

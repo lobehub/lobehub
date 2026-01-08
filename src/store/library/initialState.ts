@@ -1,5 +1,5 @@
-import { type KnowledgeBaseState, initialKnowledgeBaseState } from '../knowledgeBase/slices/crud';
-import { type RAGEvalState, initialDatasetState } from '../knowledgeBase/slices/ragEval';
+import { type KnowledgeBaseState, initialKnowledgeBaseState } from '../library/slices/crud';
+import { type RAGEvalState, initialDatasetState } from '../library/slices/ragEval';
 
 export type KnowledgeBaseStoreState = KnowledgeBaseState & RAGEvalState;
 

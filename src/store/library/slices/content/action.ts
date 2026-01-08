@@ -2,7 +2,7 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { revalidateResources } from '@/store/file/slices/resource/hooks';
-import { type KnowledgeBaseStore } from '@/store/knowledgeBase/store';
+import { type KnowledgeBaseStore } from '@/store/library/store';
 
 export interface KnowledgeBaseContentAction {
   addFilesToKnowledgeBase: (knowledgeBaseId: string, ids: string[]) => Promise<void>;
