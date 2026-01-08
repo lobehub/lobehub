@@ -97,9 +97,9 @@ export const imageRouter = router({
 
     log('Starting image creation process, input: %O', input);
 
-    // 规范化参考图地址，统一存储 S3 key（避免把会过期的预签名 URL 存进数据库）
+    // Normalize reference image addresses, store S3 keys uniformly (avoid storing expiring presigned URLs in database)
     let configForDatabase = { ...params };
-    // 1) 处理多图 imageUrls
+    // 1) Process multiple images in imageUrls
     if (Array.isArray(params.imageUrls) && params.imageUrls.length > 0) {
       log('Converting imageUrls to S3 keys for database storage: %O', params.imageUrls);
       try {
@@ -119,7 +119,7 @@ export const imageRouter = router({
         log('Keeping original imageUrls due to conversion error');
       }
     }
-    // 2) 处理单图 imageUrl
+    // 2) Process single image in imageUrl
     if (typeof params.imageUrl === 'string' && params.imageUrl) {
       try {
         const key = fileService.getKeyFromFullUrl(params.imageUrl);
@@ -127,11 +127,11 @@ export const imageRouter = router({
         configForDatabase = { ...configForDatabase, imageUrl: key };
       } catch (error) {
         log('Error converting imageUrl to key: %O', error);
-        // 转换失败则保留原始值
+        // Keep original value if conversion fails
       }
     }
 
-    // 防御性检测：确保没有完整URL进入数据库
+    // Defensive check: ensure no full URLs enter the database
     validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
 
     const chargeResult = await chargeBeforeGenerate({
@@ -148,11 +148,11 @@ export const imageRouter = router({
       return chargeResult;
     }
 
-    // 步骤 1: 在事务中原子性地创建所有数据库记录
+    // Step 1: Atomically create all database records in a transaction
     const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(async (tx) => {
       log('Starting database transaction for image generation');
 
-      // 1. 创建 generationBatch
+      // 1. Create generationBatch
       const newBatch: NewGenerationBatch = {
         config: configForDatabase,
         generationTopicId,
@@ -161,13 +161,13 @@ export const imageRouter = router({
         prompt: params.prompt,
         provider,
         userId,
-        width: params.width, // 使用转换后的配置存储到数据库
+        width: params.width, // Use converted config for database storage
       };
       log('Creating generation batch: %O', newBatch);
       const [batch] = await tx.insert(generationBatches).values(newBatch).returning();
       log('Generation batch created successfully: %s', batch.id);
 
-      // 2. 创建 4 个 generation（一期固定生成 4 张）
+      // 2. Create 4 generations (fixed at 4 images for phase one)
       const seeds =
         'seed' in params
           ? generateUniqueSeeds(imageNum)
@@ -187,11 +187,11 @@ export const imageRouter = router({
         createdGenerations.map((g) => g.id),
       );
 
-      // 3. 并发为每个 generation 创建 asyncTask（在事务中）
+      // 3. Concurrently create asyncTask for each generation (within transaction)
       log('Creating async tasks for generations');
       const generationsWithTasks = await Promise.all(
         createdGenerations.map(async (generation) => {
-          // 在事务中直接创建 asyncTask
+          // Create asyncTask directly in transaction
           const [createdAsyncTask] = await tx
             .insert(asyncTasks)
             .values({
@@ -204,7 +204,7 @@ export const imageRouter = router({
           const asyncTaskId = createdAsyncTask.id;
           log('Created async task %s for generation %s', asyncTaskId, generation.id);
 
-          // 更新 generation 的 asyncTaskId
+          // Update generation's asyncTaskId
           await tx
             .update(generations)
             .set({ asyncTaskId })
@@ -259,7 +259,7 @@ export const imageRouter = router({
       console.error('[createImage] Failed to process async tasks:', e);
       log('Failed to process async tasks: %O', e);
 
-      // 如果整体失败，更新所有任务状态为失败
+      // If overall failure occurs, update all task statuses to failed
       try {
         await Promise.allSettled(
           generationsWithTasks.map(({ asyncTaskId }) =>

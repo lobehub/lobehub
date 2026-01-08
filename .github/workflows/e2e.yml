@@ -80,18 +80,12 @@ jobs:
       - name: Run E2E tests
         run: bun run e2e
 
-      - name: Upload Cucumber HTML report (on failure)
+      - name: Upload E2E test artifacts (on failure)
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: cucumber-report
-          path: e2e/reports
-          if-no-files-found: ignore
-
-      - name: Upload screenshots (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: test-screenshots
-          path: e2e/screenshots
-          if-no-files-found: ignore
+            name: e2e-artifacts
+            path: |
+              e2e/reports
+              e2e/screenshots
+            if-no-files-found: ignore

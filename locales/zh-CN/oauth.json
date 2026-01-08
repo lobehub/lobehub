@@ -32,5 +32,6 @@
   "login.title": "登录 {{clientName}}",
   "login.userWelcome": "欢迎回来，",
   "success.subTitle": "应用已获得授权。你可以关闭此页面了",
+  "success.subTitleWithCountdown": "应用已获得授权。{{countdown}}秒后自动关闭…",
   "success.title": "授权完成"
 }

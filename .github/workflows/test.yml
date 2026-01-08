@@ -102,8 +102,8 @@ jobs:
       - name: Install deps
         run: bun i
 
-      - name: Run tests with blob reporter
-        run: bunx vitest --coverage --reporter=blob --silent='passed-only' --shard=${{ matrix.shard }}/2
+      - name: Run tests
+        run: bunx vitest --coverage --silent='passed-only' --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
@@ -139,7 +139,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge reports
-        run: bunx vitest --merge-reports --coverage
+        run: bunx vitest --merge-reports --reporter=default --coverage
 
       - name: Upload App Coverage to Codecov
         uses: codecov/codecov-action@v5

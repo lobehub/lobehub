@@ -41,6 +41,7 @@ const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
       accounts
         .filter((account) => account.providerId !== 'credential')
         .map(async (account) => {
+          // In theory, the id_token could be decrypted from the accounts table, but I found that better-auth on GitHub does not save the id_token
           const info = await accountInfo({
             query: { accountId: account.accountId },
           });
