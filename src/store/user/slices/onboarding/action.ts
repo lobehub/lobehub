@@ -1,4 +1,5 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
+import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { userService } from '@/services/user';
@@ -51,25 +52,19 @@ export const createOnboardingSlice: StateCreator<
 
   goToNextStep: () => {
     const currentStep = onboardingSelectors.currentStep(get());
+    if (currentStep === MAX_ONBOARDING_STEPS) return;
+
     const nextStep = currentStep + 1;
-
-    // Optimistic update: immediately update local state
     set({ localOnboardingStep: nextStep }, false, 'goToNextStep/optimistic');
-
-    // Queue the server update
     get().internal_queueStepUpdate(nextStep);
   },
 
   goToPreviousStep: () => {
     const currentStep = onboardingSelectors.currentStep(get());
-    if (currentStep <= 1) return;
+    if (currentStep === 1) return;
 
     const prevStep = currentStep - 1;
-
-    // Optimistic update: immediately update local state
     set({ localOnboardingStep: prevStep }, false, 'goToPreviousStep/optimistic');
-
-    // Queue the server update
     get().internal_queueStepUpdate(prevStep);
   },
 

@@ -1,4 +1,4 @@
-import { type IconType, SiLinear } from '@icons-pack/react-simple-icons';
+import { type IconType, SiLinear, SiX } from '@icons-pack/react-simple-icons';
 
 export interface LobehubSkillProviderType {
   /**
@@ -39,6 +39,12 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     icon: 'https://hub-apac-1.lobeobjects.space/assets/logos/outlook.svg',
     id: 'microsoft',
     label: 'Outlook Calendar',
+  },
+  {
+    defaultVisible: true,
+    icon: SiX,
+    id: 'twitter',
+    label: 'X (Twitter)',
   },
 ];
 

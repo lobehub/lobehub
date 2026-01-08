@@ -1,6 +1,6 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { Fragment, memo, useCallback, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';

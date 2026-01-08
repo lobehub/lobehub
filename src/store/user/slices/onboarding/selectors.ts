@@ -1,12 +1,17 @@
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
+import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 
 import type { UserStore } from '../../store';
 
 /**
  * Returns the current step for UI display.
  * Prioritizes local optimistic state over server state for immediate feedback.
+ * Clamps the value to valid range [1, MAX_ONBOARDING_STEPS].
  */
-const currentStep = (s: UserStore) => s.localOnboardingStep ?? s.onboarding?.currentStep ?? 1;
+const currentStep = (s: UserStore) => {
+  const step = s.localOnboardingStep ?? s.onboarding?.currentStep ?? 1;
+  return Math.max(1, Math.min(step, MAX_ONBOARDING_STEPS));
+};
 
 const version = (s: UserStore) => s.onboarding?.version ?? CURRENT_ONBOARDING_VERSION;
 

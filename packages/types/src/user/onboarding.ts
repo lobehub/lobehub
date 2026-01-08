@@ -9,8 +9,10 @@ export interface UserOnboarding {
   version: number;
 }
 
+export const MAX_ONBOARDING_STEPS = 5;
+
 export const UserOnboardingSchema = z.object({
-  currentStep: z.number().optional(),
+  currentStep: z.number().min(1).max(MAX_ONBOARDING_STEPS).optional(),
   finishedAt: z.string().optional(),
   version: z.number(),
 });

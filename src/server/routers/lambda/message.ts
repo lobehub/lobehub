@@ -75,13 +75,13 @@ export const messageRouter = router({
   createMessage: messageProcedure
     .input(CreateNewMessageParamsSchema)
     .mutation(async ({ input, ctx }) => {
-      // 如果没有 agentId 但有 sessionId，从 sessionId 解析出 agentId
+      // If there's no agentId but has sessionId, resolve agentId from sessionId
       let agentId = input.agentId;
       if (!agentId && input.sessionId) {
         agentId = (await resolveAgentIdFromSession(input.sessionId, ctx.serverDB, ctx.userId))!;
       }
 
-      // 使用解析后的 agentId 创建消息
+      // Create message with the resolved agentId
       return ctx.messageService.createMessage({ ...input, agentId } as any);
     }),
 

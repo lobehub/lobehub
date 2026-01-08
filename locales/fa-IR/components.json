@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "رفتن به تنظیمات",
   "ModelSwitchPanel.manageProvider": "مدیریت ارائه‌دهنده",
   "ModelSwitchPanel.provider": "ارائه‌دهنده",
+  "ModelSwitchPanel.searchPlaceholder": "جستجوی مدل‌ها...",
   "ModelSwitchPanel.title": "مدل",
   "ModelSwitchPanel.useModelFrom": "استفاده از این مدل از:",
   "MultiImagesUpload.actions.uploadMore": "برای بارگذاری بیشتر کلیک یا بکشید",

@@ -77,8 +77,8 @@ const GenerationFeed = memo(() => {
   }
 
   return (
-    <Flexbox flex={1}>
-      <Flexbox gap={16} ref={parent} width="100%">
+    <Flexbox flex={1} style={{ overflowY: 'auto' }}>
+      <Flexbox gap={16} ref={parent} style={{ paddingBottom: 48 }} width="100%">
         {currentGenerationBatches.map((batch, index) => (
           <Fragment key={batch.id}>
             {Boolean(index !== 0) && <Divider dashed style={{ margin: 0 }} />}

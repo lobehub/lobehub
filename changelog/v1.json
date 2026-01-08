@@ -1,6 +1,52 @@
 [
   {
     "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.240"
+  },
+  {
+    "children": {
+      "features": ["Add the twitter lobehub skill."]
+    },
+    "date": "2026-01-08",
+    "version": "2.0.0-next.239"
+  },
+  {
+    "children": {
+      "features": ["Change the klavis Linear to LobeHub oauth Linear."],
+      "fixes": ["Topic renaming input focus issue in context menu."]
+    },
+    "date": "2026-01-08",
+    "version": "2.0.0-next.238"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.237"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.236"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-08",
+    "version": "2.0.0-next.235"
+  },
+  {
+    "children": {
+      "features": [
+        "Add browser compatibility detection and fallback page, add the lobehub market tools servers."
+      ]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.234"
+  },
+  {
+    "children": {},
     "date": "2026-01-07",
     "version": "2.0.0-next.233"
   },
