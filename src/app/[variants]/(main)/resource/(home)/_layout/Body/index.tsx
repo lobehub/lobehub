@@ -8,7 +8,7 @@ import { useCreateNewModal } from '@/features/LibraryModal';
 
 import LibraryList from './LibraryList';
 
-const Collection = memo<{ itemKey: string }>(({ itemKey }) => {
+const SidebarBody = memo<{ itemKey: string }>(({ itemKey }) => {
   const { t } = useTranslation('file');
   const navigate = useNavigate();
 
@@ -29,7 +29,6 @@ const Collection = memo<{ itemKey: string }>(({ itemKey }) => {
           icon={PlusIcon}
           onClick={handleCreate}
           size={'small'}
-          style={{ flex: 'none' }}
           title={t('library.new')}
         />
       }
@@ -47,4 +46,4 @@ const Collection = memo<{ itemKey: string }>(({ itemKey }) => {
   );
 });
 
-export default Collection;
+export default SidebarBody;
