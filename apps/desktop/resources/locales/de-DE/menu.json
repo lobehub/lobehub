@@ -28,6 +28,7 @@
   "help.visitWebsite": "Besuche die Website",
   "history.back": "Zurück",
   "history.forward": "Vorwärts",
+  "history.home": "Start",
   "history.title": "Gehen",
   "macOS.about": "Über {{appName}}",
   "macOS.devTools": "LobeHub Entwicklerwerkzeuge",

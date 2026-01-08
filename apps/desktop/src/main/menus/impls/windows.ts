@@ -120,6 +120,15 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('history.forward'),
           },
+          { type: 'separator' },
+          {
+            accelerator: 'Ctrl+Shift+H',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('navigate', { path: '/' });
+            },
+            label: t('history.home'),
+          },
         ],
       },
       {

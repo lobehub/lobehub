@@ -46,15 +46,7 @@ const NavigationBar = memo(() => {
   }, [toggleHistoryOpen]);
 
   // Tooltip content for the clock button
-  const tooltipContent = (
-    <Flexbox align="center" gap={8} horizontal>
-      <span>Recently viewed</span>
-      <Flexbox gap={2} horizontal style={{ opacity: 0.6 }}>
-        <kbd>{isMac ? '⌘' : 'Ctrl'}</kbd>
-        <kbd>Y</kbd>
-      </Flexbox>
-    </Flexbox>
-  );
+  const tooltipContent = 'Recently viewed';
 
   return (
     <Flexbox

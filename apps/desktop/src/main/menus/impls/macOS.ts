@@ -185,6 +185,15 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('history.forward'),
           },
+          { type: 'separator' },
+          {
+            accelerator: 'Command+Shift+H',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('navigate', { path: '/' });
+            },
+            label: t('history.home'),
+          },
         ],
       },
       {
