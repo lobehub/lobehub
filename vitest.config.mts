@@ -92,6 +92,7 @@ export default defineConfig({
       '**/e2e/**',
     ],
     globals: true,
+    reporters: ['default', 'blob'],
     server: {
       deps: {
         inline: ['vitest-canvas-mock', '@lobehub/ui', '@lobehub/fluent-emoji'],

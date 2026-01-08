@@ -603,6 +603,9 @@ export default {
   'tools.klavis.servers': 'servers',
   'tools.klavis.tools': 'tools',
   'tools.klavis.verifyAuth': 'I have completed authentication',
+  'tools.lobehubSkill.authorize': 'Authorize',
+  'tools.lobehubSkill.connect': 'Connect',
+  'tools.lobehubSkill.error': 'Error',
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',

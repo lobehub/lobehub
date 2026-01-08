@@ -330,7 +330,7 @@
   "switchToYearly.desc": "切换后，支付差价后立即生效年付计费，起始日期继承原计划。",
   "switchToYearly.title": "切换为年付",
   "tab.billing": "账单管理",
-  "tab.funds": "点数管理",
+  "tab.funds": "积分管理",
   "tab.plans": "订阅计划",
   "tab.referral": "推荐奖励",
   "tab.spend": "点数明细",
