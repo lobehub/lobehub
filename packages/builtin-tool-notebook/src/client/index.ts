@@ -4,6 +4,9 @@ export { NotebookInspectors } from './Inspector';
 // Intervention components (approval dialogs)
 export { NotebookInterventions } from './Intervention';
 
+// Placeholder components (loading states)
+export { CreateDocumentPlaceholder, NotebookPlaceholders } from './Placeholder';
+
 // Render components (read-only snapshots)
 export { CreateDocument, NotebookRenders } from './Render';
 

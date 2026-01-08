@@ -1,36 +1,46 @@
 'use client';
 
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, CopyButton, Flexbox, Markdown, ScrollShadow } from '@lobehub/ui';
+import { Button } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { FileText, NotebookText } from 'lucide-react';
+import { Maximize2, NotebookText, PencilLine } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 
 import { NotebookDocument } from '../../../types';
 
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    cursor: pointer;
+    position: relative;
 
     overflow: hidden;
 
     width: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
+    border-radius: 16px;
 
     background: ${cssVar.colorBgElevated};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
   `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
+  content: css`
+    padding-inline: 16px;
+
+    font-size: 14px;
+  `,
+  expandButton: css`
+    position: absolute;
+    inset-block-end: 16px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+
+    box-shadow: ${cssVar.boxShadow};
+  `,
+  header: css`
+    padding-block: 10px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   icon: css`
     color: ${cssVar.colorPrimary};
@@ -44,9 +54,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     color: ${cssVar.colorText};
   `,
-  typeTag: css`
-    font-size: 11px;
-  `,
 }));
 
 interface DocumentCardProps {
@@ -54,30 +61,53 @@ interface DocumentCardProps {
 }
 
 const DocumentCard = memo<DocumentCardProps>(({ document }) => {
+  const { t } = useTranslation('plugin');
   const openDocument = useChatStore((s) => s.openDocument);
 
-  const handleClick = () => {
+  const handleExpand = () => {
     openDocument(document.id);
   };
 
   return (
-    <Flexbox className={styles.container} gap={8} onClick={handleClick}>
-      <Flexbox align={'center'} gap={8} horizontal>
-        {document.type === 'note' ? (
-          <NotebookText className={styles.icon} size={16} />
-        ) : (
-          <FileText className={styles.icon} size={16} />
-        )}
-        <div className={styles.title}>{document.title}</div>
-        <Tag className={styles.typeTag} size={'small'}>
-          {document.type}
-        </Tag>
+    <Flexbox className={styles.container}>
+      {/* Header */}
+      <Flexbox align={'center'} className={styles.header} gap={8} horizontal>
+        <NotebookText className={styles.icon} size={16} />
+        <Flexbox flex={1}>
+          <div className={styles.title}>{document.title}</div>
+        </Flexbox>
+        <Flexbox gap={4} horizontal>
+          <CopyButton
+            content={document.content}
+            size={'small'}
+            title={t('builtins.lobe-notebook.actions.copy')}
+          />
+          <ActionIcon
+            icon={PencilLine}
+            onClick={handleExpand}
+            size={'small'}
+            title={t('builtins.lobe-notebook.actions.edit')}
+          />
+        </Flexbox>
       </Flexbox>
-      {document.description && (
-        <Text className={styles.description} ellipsis={{ rows: 2 }}>
-          {document.description}
-        </Text>
-      )}
+      {/* Content */}
+      <ScrollShadow className={styles.content} offset={12} size={12} style={{ maxHeight: 400 }}>
+        <Markdown style={{ overflow: 'unset', paddingBottom: 40 }} variant={'chat'}>
+          {document.content}
+        </Markdown>
+      </ScrollShadow>
+
+      {/* Floating expand button */}
+      <Button
+        className={styles.expandButton}
+        color={'default'}
+        icon={<Maximize2 size={14} />}
+        onClick={handleExpand}
+        shape={'round'}
+        variant={'outlined'}
+      >
+        {t('builtins.lobe-notebook.actions.expand')}
+      </Button>
     </Flexbox>
   );
 });
