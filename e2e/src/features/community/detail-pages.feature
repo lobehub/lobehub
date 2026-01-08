@@ -1,4 +1,4 @@
-@discover @detail
+@community @detail
 Feature: Discover Detail Pages
   Tests for detail pages in the discover module
 
@@ -9,7 +9,7 @@ Feature: Discover Detail Pages
   # Assistant Detail Page
   # ============================================
 
-  @DISCOVER-DETAIL-001 @P1
+  @COMMUNITY-DETAIL-001 @P1
   Scenario: Load assistant detail page and verify content
     Given I navigate to "/community/assistant"
     And I wait for the page to fully load
@@ -20,7 +20,7 @@ Feature: Discover Detail Pages
     And I should see the assistant author information
     And I should see the add to workspace button
 
-  @DISCOVER-DETAIL-002 @P1
+  @COMMUNITY-DETAIL-002 @P1
   Scenario: Navigate back from assistant detail page
     Given I navigate to "/community/assistant"
     And I wait for the page to fully load
@@ -32,7 +32,7 @@ Feature: Discover Detail Pages
   # Model Detail Page
   # ============================================
 
-  @DISCOVER-DETAIL-003 @P1
+  @COMMUNITY-DETAIL-003 @P1
   Scenario: Load model detail page and verify content
     Given I navigate to "/community/model"
     And I wait for the page to fully load
@@ -42,7 +42,7 @@ Feature: Discover Detail Pages
     And I should see the model description
     And I should see the model parameters information
 
-  @DISCOVER-DETAIL-004 @P1
+  @COMMUNITY-DETAIL-004 @P1
   Scenario: Navigate back from model detail page
     Given I navigate to "/community/model"
     And I wait for the page to fully load
@@ -54,7 +54,7 @@ Feature: Discover Detail Pages
   # Provider Detail Page
   # ============================================
 
-  @DISCOVER-DETAIL-005 @P1
+  @COMMUNITY-DETAIL-005 @P1
   Scenario: Load provider detail page and verify content
     Given I navigate to "/community/provider"
     And I wait for the page to fully load
@@ -64,7 +64,7 @@ Feature: Discover Detail Pages
     And I should see the provider description
     And I should see the provider website link
 
-  @DISCOVER-DETAIL-006 @P1
+  @COMMUNITY-DETAIL-006 @P1
   Scenario: Navigate back from provider detail page
     Given I navigate to "/community/provider"
     And I wait for the page to fully load
@@ -76,7 +76,7 @@ Feature: Discover Detail Pages
   # MCP Detail Page
   # ============================================
 
-  @DISCOVER-DETAIL-007 @P1
+  @COMMUNITY-DETAIL-007 @P1
   Scenario: Load MCP detail page and verify content
     Given I navigate to "/community/mcp"
     And I wait for the page to fully load
@@ -86,7 +86,7 @@ Feature: Discover Detail Pages
     And I should see the MCP description
     And I should see the install button
 
-  @DISCOVER-DETAIL-008 @P1
+  @COMMUNITY-DETAIL-008 @P1
   Scenario: Navigate back from MCP detail page
     Given I navigate to "/community/mcp"
     And I wait for the page to fully load

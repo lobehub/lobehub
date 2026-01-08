@@ -1,6 +1,7 @@
 import {
   type IEditor,
   INSERT_CHECK_LIST_COMMAND,
+  INSERT_CODEMIRROR_COMMAND,
   INSERT_HEADING_COMMAND,
   INSERT_HORIZONTAL_RULE_COMMAND,
   INSERT_IMAGE_COMMAND,
@@ -28,12 +29,11 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openFileSelector } from '@/features/PageEditor/EditorCanvas/actions';
-import { usePageEditorStore } from '@/features/PageEditor/store';
 import { useFileStore } from '@/store/file';
 
 export const useSlashItems = (editor: IEditor | undefined): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
-  const editorState = usePageEditorStore((s) => s.editorState);
+
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
 
   const handleImageUpload = async (file: File) => {
@@ -179,8 +179,11 @@ export const useSlashItems = (editor: IEditor | undefined): SlashOptions['items'
         icon: SquareDashedBottomCodeIcon,
         key: 'codeblock',
         label: t('typobar.codeblock'),
-        onSelect: () => {
-          editorState.codeblock();
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_CODEMIRROR_COMMAND, undefined);
+          queueMicrotask(() => {
+            editor.focus();
+          });
         },
       },
       {

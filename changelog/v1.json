@@ -1,6 +1,48 @@
 [
   {
     "children": {
+      "features": [
+        "Add browser compatibility detection and fallback page, add the lobehub market tools servers."
+      ]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.234"
+  },
+  {
+    "children": {},
+    "date": "2026-01-07",
+    "version": "2.0.0-next.233"
+  },
+  {
+    "children": {
+      "fixes": ["Correct BrandTextLoading position after removing SSG CSS-in-JS injection."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.232"
+  },
+  {
+    "children": {
+      "fixes": ["Update desktop onboarding privacy description."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.231"
+  },
+  {
+    "children": {
+      "fixes": ["Fix edit rich render codeblock."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.230"
+  },
+  {
+    "children": {
+      "fixes": ["Update mobile topicRouter import path to lambda directory."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.229"
+  },
+  {
+    "children": {
       "fixes": ["Add separate border-radius for bottom-right corner on macOS 26 Chrome."]
     },
     "date": "2026-01-06",
