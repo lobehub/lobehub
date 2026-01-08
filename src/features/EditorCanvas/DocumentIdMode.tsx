@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { useSaveDocumentHotkey } from '@/hooks/useHotkeys';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
@@ -64,11 +65,11 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     storeUpdater('editor', editor);
 
     // Get document store actions
-    const [onEditorInit, handleContentChangeStore, useFetchDocument] = useDocumentStore((s) => [
-      s.onEditorInit,
-      s.handleContentChange,
-      s.useFetchDocument,
-    ]);
+    const [onEditorInit, handleContentChangeStore, useFetchDocument, flushSave] = useDocumentStore(
+      (s) => [s.onEditorInit, s.handleContentChange, s.useFetchDocument, s.flushSave],
+    );
+
+    useSaveDocumentHotkey(flushSave);
 
     // Use SWR hook for document fetching (auto-initializes via onSuccess in DocumentStore)
     const { error } = useFetchDocument(documentId, { autoSave, editor, sourceType });
@@ -87,22 +88,20 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       return <EditorSkeleton />;
     }
 
-    // Show error state
-    if (error) {
-      return <EditorError error={error as Error} />;
-    }
-
     if (!editor) return null;
 
     return (
-      <InternalEditor
-        editor={editor}
-        onContentChange={handleChange}
-        onInit={onEditorInit}
-        placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
-        style={style}
-        {...editorProps}
-      />
+      <>
+        {error && <EditorError error={error as Error} />}
+        <InternalEditor
+          editor={editor}
+          onContentChange={handleChange}
+          onInit={onEditorInit}
+          placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
+          style={style}
+          {...editorProps}
+        />
+      </>
     );
   },
 );

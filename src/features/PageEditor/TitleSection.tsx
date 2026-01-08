@@ -11,9 +11,9 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { truncateByWeightedLength } from '@/utils/textLength';
 
-import { usePageEditorStore } from '../store';
+import { usePageEditorStore } from './store';
 
-const Title = memo(() => {
+const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
@@ -112,4 +112,4 @@ const Title = memo(() => {
   );
 });
 
-export default Title;
+export default TitleSection;

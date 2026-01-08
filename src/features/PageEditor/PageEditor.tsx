@@ -7,18 +7,19 @@ import { type FC, memo, useEffect } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useRegisterFilesHotkeys, useSaveDocumentHotkey } from '@/hooks/useHotkeys';
+import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
 
-import Body from './Body';
 import Copilot from './Copilot';
 import DiffAllToolbar from './DiffAllToolbar';
+import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import PageAgentProvider from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import PageTitle from './PageTitle';
+import TitleSection from './TitleSection';
 import { usePageEditorStore } from './store';
 
 interface PageEditorProps {
@@ -32,12 +33,10 @@ interface PageEditorProps {
 
 const PageEditorCanvas = memo(() => {
   const editor = usePageEditorStore((s) => s.editor);
-  const flushSave = usePageEditorStore((s) => s.flushSave);
   const isDirty = usePageEditorStore((s) => s.isDirty);
 
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
-  useSaveDocumentHotkey(flushSave);
 
   // Warn user before leaving page with unsaved changes
   useEffect(() => {
@@ -76,7 +75,10 @@ const PageEditorCanvas = memo(() => {
             width={'100%'}
           >
             <WideScreenContainer onClick={() => editor?.focus()} wrapperStyle={{ cursor: 'text' }}>
-              <Body />
+              <Flexbox flex={1} style={{ overflowY: 'auto', position: 'relative' }}>
+                <TitleSection />
+                <EditorCanvas />
+              </Flexbox>
             </WideScreenContainer>
           </Flexbox>
           <DiffAllToolbar />
