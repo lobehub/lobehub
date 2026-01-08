@@ -267,20 +267,6 @@ const ipc = ensureElectronIpc();
 await ipc.windows.openSettingsWindow({ tab: 'provider' });
 ```
 
-##### 🖥️ Server IPC 助手
-
-Next.js 服务端模块可通过 `ensureElectronServerIpc`（位于 `src/server/modules/ElectronIPCClient`）获得同样的类型安全代理，并复用 socket IPC 通道：
-
-```ts
-import { ensureElectronServerIpc } from '@/server/modules/ElectronIPCClient';
-
-const ipc = ensureElectronServerIpc();
-const path = await ipc.system.getDatabasePath();
-await ipc.upload.deleteFiles(['foo.txt']);
-```
-
-所有 `@IpcServerMethod` 方法都放在独立的控制器中，这样渲染端的类型推导不会包含这些仅供服务器调用的通道。
-
 #### 🛡️ 安全功能
 
 - **OAuth 2.0 + PKCE** - 具有状态参数验证的安全认证
