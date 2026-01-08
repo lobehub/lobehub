@@ -1,9 +1,24 @@
 import { Flexbox, Icon, type ItemType, Segmented, usePopoverContext } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, Store } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ToolsList, { toolsListStyles } from './ToolsList';
+
+const styles = createStaticStyles(({ css }) => ({
+  footer: css`
+    padding: 4px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  header: css`
+    padding: 8px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  trailingIcon: css`
+    opacity: 0.5;
+  `,
+}));
 
 type TabType = 'all' | 'installed';
 
@@ -23,7 +38,7 @@ const PopoverContent = memo<PopoverContentProps>(
 
     return (
       <Flexbox gap={0}>
-        <div style={{ borderBottom: '1px solid var(--ant-color-border-secondary)', padding: 8 }}>
+        <div className={styles.header}>
           <Segmented
             block
             onChange={(v) => onTabChange(v as TabType)}
@@ -50,7 +65,7 @@ const PopoverContent = memo<PopoverContentProps>(
         >
           <ToolsList items={currentItems} />
         </div>
-        <div style={{ borderTop: '1px solid var(--ant-color-border-secondary)', padding: 4 }}>
+        <div className={styles.footer}>
           <div
             className={toolsListStyles.item}
             onClick={() => {
@@ -60,9 +75,11 @@ const PopoverContent = memo<PopoverContentProps>(
             role="button"
             tabIndex={0}
           >
-            <Icon icon={Store} size={20} />
+            <div className={toolsListStyles.itemIcon}>
+              <Icon icon={Store} size={20} />
+            </div>
             <div className={toolsListStyles.itemContent}>{t('tools.plugins.store')}</div>
-            <Icon icon={ChevronRight} size={16} style={{ opacity: 0.5 }} />
+            <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
           </div>
         </div>
       </Flexbox>

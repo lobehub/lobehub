@@ -13,6 +13,7 @@ const ToolItem = memo<CheckboxItemProps>(({ id, onUpdate, label, checked }) => {
   return (
     <CheckboxItem
       checked={checked}
+      hasPadding={false}
       id={id}
       label={
         <Flexbox align={'center'} gap={8} horizontal>

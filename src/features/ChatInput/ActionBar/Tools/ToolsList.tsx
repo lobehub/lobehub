@@ -18,7 +18,7 @@ export const toolsListStyles = createStaticStyles(({ css }) => ({
 
     padding-block: 8px;
     padding-inline: 12px;
-    border-radius: 8px;
+    border-radius: 6px;
 
     transition: background-color 0.2s;
 
@@ -29,6 +29,15 @@ export const toolsListStyles = createStaticStyles(({ css }) => ({
   itemContent: css`
     flex: 1;
     min-width: 0;
+  `,
+  itemIcon: css`
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
   `,
 }));
 
@@ -81,7 +90,7 @@ const ToolsList = memo<ToolsListProps>(({ items }) => {
         role="button"
         tabIndex={0}
       >
-        {iconNode}
+        {iconNode && <div className={toolsListStyles.itemIcon}>{iconNode}</div>}
         <div className={toolsListStyles.itemContent}>{item.label}</div>
         {item.extra}
       </div>
