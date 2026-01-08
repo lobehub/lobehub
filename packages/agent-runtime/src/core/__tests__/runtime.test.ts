@@ -167,10 +167,10 @@ describe('AgentRuntime', () => {
       expect(result.events).toHaveLength(1);
       expect(result.events[0]).toMatchObject({
         type: 'error',
-        error: expect.any(Error),
+        error: { message: 'Agent error', type: 'Error' },
       });
       expect(result.newState.status).toBe('error');
-      expect(result.newState.error).toBeInstanceOf(Error);
+      expect(result.newState.error).toMatchObject({ message: 'Agent error', type: 'Error' });
     });
   });
 
