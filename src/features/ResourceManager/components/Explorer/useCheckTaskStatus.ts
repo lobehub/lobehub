@@ -17,7 +17,7 @@ export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
 
   // Poll every 5s to check if chunking/embedding status has changed
   useEffect(() => {
-    if (!isProcessing || !queryParams) return;
+    if (!isProcessing) return;
 
     const interval = setInterval(() => {
       // Re-fetch with the same query params used for initial load

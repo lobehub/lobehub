@@ -88,7 +88,8 @@ export const createFileSlice: StateCreator<
       let fileItem: FileListItem | undefined = undefined;
 
       try {
-        fileItem = await fileService.getKnowledgeItem(id);
+        const result = await fileService.getKnowledgeItem(id);
+        fileItem = result ?? undefined;
       } catch (e) {
         console.error('getFileItem Error:', e);
         continue;

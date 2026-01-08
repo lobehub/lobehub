@@ -10,6 +10,7 @@ import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/u
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
+import { type FileListItem } from '@/types/files';
 
 import { useMasonryColumnCount } from '../useMasonryColumnCount';
 import MasonryItemWrapper from './MasonryFileItem/MasonryItemWrapper';
@@ -50,15 +51,29 @@ const MasonryView = memo(() => {
   const resourceList = useFileStore((s) => s.resourceList);
 
   // Map ResourceItem[] to FileListItem[] for compatibility
-  const rawData = resourceList?.map((item) => ({
-    ...item,
-    chunkCount: item.chunkCount ?? null,
-    chunkingError: item.chunkingError ?? null,
-    chunkingStatus: item.chunkingStatus ?? null,
-    embeddingError: item.embeddingError ?? null,
-    embeddingStatus: item.embeddingStatus ?? null,
-    finishEmbedding: item.finishEmbedding ?? false,
-  }));
+  const rawData = resourceList?.map(
+    (item): FileListItem => ({
+      chunkCount: item.chunkCount ?? null,
+      chunkingError: item.chunkingError ?? null,
+      chunkingStatus: (item.chunkingStatus as any) ?? null,
+      content: item.content,
+      createdAt: item.createdAt,
+      editorData: item.editorData,
+      embeddingError: item.embeddingError ?? null,
+      embeddingStatus: (item.embeddingStatus as any) ?? null,
+      fileType: item.fileType,
+      finishEmbedding: item.finishEmbedding ?? false,
+      id: item.id,
+      metadata: item.metadata,
+      name: item.name,
+      parentId: item.parentId,
+      size: item.size,
+      slug: item.slug,
+      sourceType: item.sourceType,
+      updatedAt: item.updatedAt,
+      url: item.url ?? '',
+    }),
+  );
 
   // Sort data using current sort settings
   const data = sortFileList(rawData, sorter, sortType);
