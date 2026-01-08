@@ -245,7 +245,7 @@
   "qa.list.embeddings.q": "向量存储是如何计算的？",
   "qa.list.free.a": "{{name}} 始终坚持开源原则。专业开发者可通过部署社区版使用全部开源功能。在 {{cloud}} 中，我们为所有注册用户每月提供 {{credit}} 点免费算力，无需复杂配置即可使用。如需更多使用量，可订阅 {{starter}}、{{premium}} 或 {{ultimate}}。",
   "qa.list.free.q": "{{name}} 可以免费使用吗？",
-  "qa.list.limit.a": "{{cloud}} 的订阅计划分为 {{starter}}、{{premium}} 和 {{ultimate}}，每个计划提供不同的算力点数。如当前计划点数不足，建议升级计划。您也可以配置自定义模型 API 密钥，使用其他来源购买的 API 点数。",
+  "qa.list.limit.a": "{{cloud}} 的订阅计划分为 {{starter}}、{{premium}} 和 {{ultimate}}，每个计划提供不同的算力点数。如当前计划点数不足，建议升级计划。您也可以在<fundsLink>「{{funds}}」</fundsLink>页面购买积分包进行按量付费充值。此外，您也可以配置自定义模型 API 密钥，使用其他来源购买的 API 点数。",
   "qa.list.limit.q": "算力点数用完怎么办？",
   "qa.list.management.a": "在 {{subscribe}} 页面，您可以“升级 / 降级”当前订阅计划，或切换年付与月付。在“{{usage}}-{{management}}”中可跳转至 Stripe 进行订阅管理，您可随时取消订阅。取消后，当前计划到期时将自动降级为免费版。",
   "qa.list.management.q": "如何更改或取消订阅？",
