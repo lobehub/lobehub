@@ -183,7 +183,7 @@ The `App.ts` class orchestrates the entire application lifecycle through key pha
 #### 🔌 Dependency Injection & Event System
 
 - **IoC Container** - WeakMap-based container for decorated controller methods
-- **Typed IPC Decorators** - `@IpcMethod` and `@IpcServerMethod` wire controller methods into type-safe channels
+- **Typed IPC Decorators** - `@IpcMethod` wires controller methods into type-safe channels
 - **Automatic Event Mapping** - Events registered during controller loading
 - **Service Locator** - Type-safe service and controller retrieval
 
