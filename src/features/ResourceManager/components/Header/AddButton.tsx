@@ -76,7 +76,7 @@ const AddButton = () => {
       let counter = 1;
 
       while (existingNames.has(uniqueName)) {
-        uniqueName = `${baseName} (${counter})`;
+        uniqueName = `${baseName} ${counter}`;
         counter++;
       }
 

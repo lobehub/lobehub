@@ -52,11 +52,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const ListView = memo(() => {
-  // Access all state from Resource Manager store
   const [
-    libraryId,
-    category,
-    searchQuery,
     selectFileIds,
     setSelectedFileIds,
     pendingRenameItemId,
@@ -65,9 +61,6 @@ const ListView = memo(() => {
     sorter,
     sortType,
   ] = useResourceManagerStore((s) => [
-    s.libraryId,
-    s.category,
-    s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.pendingRenameItemId,
