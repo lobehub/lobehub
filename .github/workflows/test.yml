@@ -64,15 +64,23 @@ jobs:
         run: |
           curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
+          TOKEN="${{ secrets.CODECOV_TOKEN }}"
           for package in $PACKAGES; do
             dir="${package#@lobechat/}"
             if [ -f "./packages/$dir/coverage/lcov.info" ]; then
               echo "Uploading coverage for $dir..."
-              ./codecov upload-process \
-                -t ${{ secrets.CODECOV_TOKEN }} \
-                -f ./packages/$dir/coverage/lcov.info \
-                -F packages/$dir \
-                --disable-search
+              if [ -n "$TOKEN" ]; then
+                ./codecov upload-process \
+                  -t "$TOKEN" \
+                  -f ./packages/$dir/coverage/lcov.info \
+                  -F packages/$dir \
+                  --disable-search
+              else
+                ./codecov upload-process \
+                  -f ./packages/$dir/coverage/lcov.info \
+                  -F packages/$dir \
+                  --disable-search
+              fi
             fi
           done
 
