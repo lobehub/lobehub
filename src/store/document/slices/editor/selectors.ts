@@ -1,3 +1,4 @@
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 import type { DocumentStore } from '../../store';
 import type { EditorContentState } from './initialState';
 
@@ -24,7 +25,8 @@ const editorData = (id: string) => (s: DocumentStore) => s.documents[id]?.editor
 
 const sourceType = (id: string) => (s: DocumentStore) => s.documents[id]?.sourceType;
 
-const lastUpdatedTime = (id: string) => (s: DocumentStore) => s.documents[id]?.lastUpdatedTime;
+const lastUpdatedTime = (id: string) => (s: DocumentStore) =>
+  s.documents[id]?.lastUpdatedTime?.toISOString();
 
 // ===== Active Document Convenience Selectors =====
 
@@ -80,8 +82,7 @@ const hasDocument = (id: string) => (s: DocumentStore) => id in s.documents;
 /**
  * Check if a document is still loading (not yet in the store)
  */
-const isDocumentLoading = (id: string | undefined) => (s: DocumentStore) =>
-  id ? !(id in s.documents) : false;
+const isDocumentLoading = (id: string | undefined) => (s: DocumentStore) => !id || !s.documents[id];
 
 export const editorSelectors = {
   // Active document

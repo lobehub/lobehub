@@ -24,7 +24,7 @@ export interface AutoSaveHintProps {
 const AutoSaveHint = memo<AutoSaveHintProps>(({ documentId, style }) => {
   const saveStatus = useDocumentStore((s) => editorSelectors.saveStatus(documentId)(s));
   const lastUpdatedTime = useDocumentStore(
-    (s) => s.documents[documentId]?.lastUpdatedTime ?? null,
+    (s) => editorSelectors.lastUpdatedTime(documentId)(s) ?? null,
   );
 
   return (

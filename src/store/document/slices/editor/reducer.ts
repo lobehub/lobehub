@@ -1,5 +1,3 @@
-
-import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
 
 import { type EditorContentState, createInitialEditorContentState } from './initialState';
@@ -50,12 +48,8 @@ export const documentReducer = (
         const currentDoc = draft[id];
 
         if (currentDoc) {
-          const mergedDoc = { ...currentDoc, ...value };
-
-          // Only update if values actually changed
-          if (!isEqual(currentDoc, mergedDoc)) {
-            draft[id] = mergedDoc;
-          }
+          // Directly assign to let immer handle change detection
+          Object.assign(draft[id], value);
         }
       });
     }

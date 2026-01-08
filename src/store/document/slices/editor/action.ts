@@ -5,12 +5,9 @@ import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { documentService } from '@/services/document';
-import { notebookService } from '@/services/notebook';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
-import { getOrCreateDebouncedSave } from '../document';
-import { type EditorContentState } from './initialState';
 import { type DocumentDispatch, documentReducer } from './reducer';
 
 const n = setNamespace('document/editor');
@@ -101,8 +98,7 @@ export const createEditorSlice: StateCreator<
 
       // Only trigger auto-save if content actually changed AND autoSave is enabled
       if (contentChanged && doc.autoSave !== false) {
-        const save = getOrCreateDebouncedSave(activeDocumentId, get);
-        save();
+        get().triggerDebouncedSave(activeDocumentId);
       }
     } catch (error) {
       console.error('[DocumentStore] Failed to update content:', error);
@@ -165,6 +161,7 @@ export const createEditorSlice: StateCreator<
 
   performSave: async (documentId, metadata) => {
     const id = documentId || get().activeDocumentId;
+
     if (!id) return;
 
     const { editor, documents, internal_dispatchDocument } = get();
@@ -181,25 +178,16 @@ export const createEditorSlice: StateCreator<
       const currentContent = (editor.getDocument('markdown') as unknown as string) || '';
       const currentEditorData = editor.getDocument('json');
 
-      // Save based on source type
-      if (doc.sourceType === 'notebook' && doc.topicId) {
-        await notebookService.updateDocument({
-          content: currentContent,
-          id,
-          title: metadata?.title || undefined,
-        });
-      } else if (doc.sourceType === 'page') {
-        await documentService.updateDocument({
-          content: currentContent,
-          editorData: JSON.stringify(currentEditorData),
-          id,
-          metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
-          title: metadata?.title,
-        });
-      }
+      // Save document
+      await documentService.updateDocument({
+        content: currentContent,
+        editorData: JSON.stringify(currentEditorData),
+        id,
+        metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
+        title: metadata?.title,
+      });
 
       // Mark as clean and update save status
-      const now = new Date();
       internal_dispatchDocument({
         id,
         type: 'updateDocument',
@@ -207,7 +195,7 @@ export const createEditorSlice: StateCreator<
           editorData: structuredClone(currentEditorData),
           isDirty: false,
           lastSavedContent: currentContent,
-          lastUpdatedTime: now,
+          lastUpdatedTime: new Date(),
           saveStatus: 'saved',
         },
       });

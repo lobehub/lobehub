@@ -7,7 +7,7 @@ import { debounce } from 'es-toolkit/compat';
 import type { SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -66,6 +66,10 @@ export interface DocumentAction {
    */
   initDocumentWithEditor: (params: InitDocumentParams) => void;
   /**
+   * Trigger a debounced save for the specified document
+   */
+  triggerDebouncedSave: (documentId: string) => void;
+  /**
    * SWR hook to fetch document and initialize in DocumentStore
    */
   useFetchDocument: (
@@ -74,127 +78,132 @@ export interface DocumentAction {
   ) => SWRResponse<DocumentItem | null>;
 }
 
-// Store debounced save functions per document
-const debouncedSaves = new Map<string, ReturnType<typeof debounce>>();
-
-const getOrCreateDebouncedSave = (documentId: string, get: () => DocumentStore) => {
-  if (!debouncedSaves.has(documentId)) {
-    const debouncedFn = debounce(
-      async () => {
-        try {
-          await get().performSave(documentId);
-        } catch (error) {
-          console.error('[DocumentStore] Failed to auto-save:', error);
-        }
-      },
-      EDITOR_DEBOUNCE_TIME,
-      { leading: false, maxWait: EDITOR_MAX_WAIT, trailing: true },
-    );
-    debouncedSaves.set(documentId, debouncedFn);
-  }
-  return debouncedSaves.get(documentId)!;
-};
-
-const cleanupDebouncedSave = (documentId: string) => {
-  const fn = debouncedSaves.get(documentId);
-  if (fn) {
-    fn.cancel();
-    debouncedSaves.delete(documentId);
-  }
-};
-
-export { debouncedSaves, getOrCreateDebouncedSave };
-
 export const createDocumentSlice: StateCreator<
   DocumentStore,
   [['zustand/devtools', never]],
   [],
   DocumentAction
-> = (set, get) => ({
-  closeDocument: (documentId) => {
-    // Flush any pending saves before closing
-    const save = debouncedSaves.get(documentId);
-    if (save) {
-      save.flush();
-      cleanupDebouncedSave(documentId);
-    }
+> = (set, get) => {
+  // Store debounced save functions per document - inside store closure so `get` is always correct
+  const debouncedSaves = new Map<string, ReturnType<typeof debounce>>();
 
-    const { activeDocumentId, internal_dispatchDocument } = get();
-
-    // Delete document via reducer
-    internal_dispatchDocument({ id: documentId, type: 'deleteDocument' });
-
-    // Update activeDocumentId if needed
-    if (activeDocumentId === documentId) {
-      set({ activeDocumentId: undefined }, false, n('closeDocument:clearActive'));
-    }
-  },
-
-  flushSave: (documentId) => {
-    const id = documentId || get().activeDocumentId;
-    if (id) {
-      const save = debouncedSaves.get(id);
-      save?.flush();
-    }
-  },
-
-  initDocumentWithEditor: (params) => {
-    const { documentId, sourceType, content, editorData, topicId, autoSave, editor } = params;
-
-    const { internal_dispatchDocument } = get();
-
-    // Add or update document via reducer
-    internal_dispatchDocument({
-      id: documentId,
-      type: 'addDocument',
-      value: {
-        autoSave,
-        content: content ?? undefined,
-        editorData,
-        lastSavedContent: content ?? undefined,
-        sourceType,
-        topicId,
-      },
-    });
-
-    // Update activeDocumentId and editor
-    set({ activeDocumentId: documentId, editor }, false, n('initDocumentWithEditor:setActive'));
-  },
-
-  useFetchDocument: (documentId, options = {}) => {
-    const { autoSave = true, editor, sourceType = 'page' } = options;
-    const swrKey = documentId && editor ? ['document/editor', documentId] : null;
-
-    return useClientDataSWR<DocumentItem | null>(
-      swrKey,
-      async () => {
-        // documentId is guaranteed to be defined when swrKey is not null
-        const document = await documentService.getDocumentById(documentId!);
-        if (!document) {
-          console.warn(`[useFetchDocument] Document not found: ${documentId}`);
-          return null;
-        }
-
-        return document;
-      },
-      {
-        focusThrottleInterval: 20_000,
-        onSuccess: (document) => {
-          // Both documentId and editor are guaranteed to be defined when this callback is called
-          if (!document || !documentId || !editor) return;
-
-          // Initialize document with editor
-          get().initDocumentWithEditor({
-            autoSave,
-            content: document.content,
-            documentId,
-            editor,
-            editorData: document.editorData,
-            sourceType,
-          });
+  const getOrCreateDebouncedSave = (documentId: string) => {
+    if (!debouncedSaves.has(documentId)) {
+      const debouncedFn = debounce(
+        async () => {
+          try {
+            await get().performSave(documentId);
+          } catch (error) {
+            console.error('[DocumentStore] Failed to auto-save:', error);
+          }
         },
-        revalidateOnFocus: true,
-      },
-    );
-  },
-});
+        EDITOR_DEBOUNCE_TIME,
+        { leading: false, maxWait: EDITOR_MAX_WAIT, trailing: true },
+      );
+      debouncedSaves.set(documentId, debouncedFn);
+    }
+    return debouncedSaves.get(documentId)!;
+  };
+
+  const cleanupDebouncedSave = (documentId: string) => {
+    const fn = debouncedSaves.get(documentId);
+    if (fn) {
+      fn.cancel();
+      debouncedSaves.delete(documentId);
+    }
+  };
+
+  return {
+    closeDocument: (documentId) => {
+      // Flush any pending saves before closing
+      const save = debouncedSaves.get(documentId);
+      if (save) {
+        save.flush();
+        cleanupDebouncedSave(documentId);
+      }
+
+      const { activeDocumentId, internal_dispatchDocument } = get();
+
+      // Delete document via reducer
+      internal_dispatchDocument({ id: documentId, type: 'deleteDocument' });
+
+      // Update activeDocumentId if needed
+      if (activeDocumentId === documentId) {
+        set({ activeDocumentId: undefined }, false, n('closeDocument:clearActive'));
+      }
+    },
+
+    flushSave: (documentId) => {
+      const id = documentId || get().activeDocumentId;
+      if (id) {
+        const save = debouncedSaves.get(id);
+        save?.flush();
+      }
+    },
+
+    initDocumentWithEditor: (params) => {
+      const { documentId, sourceType, content, editorData, topicId, autoSave, editor } = params;
+
+      const { internal_dispatchDocument } = get();
+
+      // Add or update document via reducer
+      internal_dispatchDocument({
+        id: documentId,
+        type: 'addDocument',
+        value: {
+          autoSave,
+          content: content ?? undefined,
+          editorData,
+          lastSavedContent: content ?? undefined,
+          sourceType,
+          topicId,
+        },
+      });
+
+      // Update activeDocumentId and editor
+      set({ activeDocumentId: documentId, editor }, false, n('initDocumentWithEditor:setActive'));
+    },
+
+    triggerDebouncedSave: (documentId) => {
+      const save = getOrCreateDebouncedSave(documentId);
+      save();
+    },
+
+    useFetchDocument: (documentId, options = {}) => {
+      const { autoSave = true, editor, sourceType = 'page' } = options;
+      const swrKey = documentId && editor ? ['document/editor', documentId] : null;
+
+      return useClientDataSWRWithSync<DocumentItem | null>(
+        swrKey,
+        async () => {
+          // documentId is guaranteed to be defined when swrKey is not null
+          const document = await documentService.getDocumentById(documentId!);
+          if (!document) {
+            console.warn(`[useFetchDocument] Document not found: ${documentId}`);
+            return null;
+          }
+
+          return document;
+        },
+        {
+          focusThrottleInterval: 20_000,
+          onData: (document) => {
+            // Both documentId and editor are guaranteed to be defined when this callback is called
+            if (!document || !documentId || !editor) return;
+
+            // Initialize document with editor
+            get().initDocumentWithEditor({
+              autoSave,
+              content: document.content,
+              documentId,
+              editor,
+              editorData: document.editorData,
+              sourceType,
+            });
+          },
+          revalidateOnFocus: true,
+        },
+      );
+    },
+  };
+};
