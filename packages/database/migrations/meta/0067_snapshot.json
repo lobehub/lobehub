@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "01abc119-13a9-41ed-876f-910af5f3c852",
+  "id": "1456640a-740f-46b9-a16a-d5a3fe633656",
   "policies": {},
   "prevId": "9f9f6218-5ec3-4de9-b966-8a0f8b5dc1d6",
   "roles": {},
@@ -587,11 +587,17 @@
           "notNull": false,
           "default": "'UTC'"
         },
-        "prompt": {
-          "name": "prompt",
+        "content": {
+          "name": "content",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "edit_data": {
+          "name": "edit_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "max_executions": {
           "name": "max_executions",

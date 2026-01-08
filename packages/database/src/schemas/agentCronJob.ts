@@ -43,7 +43,10 @@ export const agentCronJobs = pgTable(
     enabled: boolean('enabled').default(true),
     cronPattern: text('cron_pattern').notNull(), // e.g., "0 */30 * * *"
     timezone: text('timezone').default('UTC'),
-    prompt: text('prompt').notNull(), // The prompt to execute
+
+    // Content fields
+    content: text('content').notNull(), // Simple text content
+    editData: jsonb('edit_data'), // Rich content data (markdown, files, images, etc.)
 
     // Execution count management
     maxExecutions: integer('max_executions'), // null = unlimited
@@ -114,7 +117,8 @@ export const executionConditionsSchema = z
 
 export const insertAgentCronJobSchema = createInsertSchema(agentCronJobs, {
   cronPattern: minimumIntervalSchema,
-  prompt: z.string().min(1).max(2000),
+  content: z.string().min(1).max(2000),
+  editData: z.record(z.any()).optional(), // Allow any JSON structure for rich content
   name: z.string().max(100).optional(),
   description: z.string().max(500).optional(),
   maxExecutions: z.number().min(1).max(10_000).optional(),
