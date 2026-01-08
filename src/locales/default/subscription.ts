@@ -132,10 +132,9 @@ export default {
     'Your {{plan}} computing credits have been exhausted. Upgrade now to get more credits.',
   'limitation.limited.descUltimate':
     'Your {{plan}} computing credits have been exhausted. Please top up credits to continue.',
-  'limitation.limited.referralTip':
-    'Invite new users to register, and you and your friend will each receive {{reward}}M credits',
+  'limitation.limited.referralTip': 'Invite friends, both get {{reward}}M',
   'limitation.limited.title': 'Computing Credits Exhausted',
-  'limitation.limited.topup': 'Top Up Credits',
+  'limitation.limited.topup': 'Top-Up Credits',
   'limitation.limited.upgrade': 'Upgrade to Higher Plan',
   'limitation.providers.lock.addNew': 'Subscribe now to create custom AI providers',
   'limitation.providers.lock.enableProvider': 'Subscribe now to enable this AI provider',

@@ -115,7 +115,7 @@
   "limitation.limited.advanceFeature": "升级以解锁高级功能：",
   "limitation.limited.desc": "您的 {{plan}} 计算积分已用尽。请立即升级以获取更多积分。",
   "limitation.limited.descUltimate": "您的 {{plan}} 计算积分已用尽，请充值积分以继续使用。",
-  "limitation.limited.referralTip": "邀请新用户注册，您和好友将各获得 {{reward}}M 积分",
+  "limitation.limited.referralTip": "邀好友，各得 {{reward}}M 积分",
   "limitation.limited.title": "计算积分已用尽",
   "limitation.limited.topup": "充值积分",
   "limitation.limited.upgrade": "升级至更高套餐",
