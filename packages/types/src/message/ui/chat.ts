@@ -60,6 +60,19 @@ interface UIMessageBranch {
 }
 
 /**
+ * Structured error type for task execution failures.
+ * Compatible with AgentStateError for consistent error handling.
+ */
+export interface TaskDetailError {
+  /** Detailed error body (e.g., API response) */
+  body?: any;
+  /** Human-readable error message */
+  message: string;
+  /** Error type/category for classification */
+  type?: string;
+}
+
+/**
  * Task execution details for role='task' messages
  * Retrieved from the associated Thread via sourceMessageId
  */
@@ -68,8 +81,8 @@ export interface TaskDetail {
   completedAt?: string;
   /** Execution duration in milliseconds */
   duration?: number;
-  /** Error message if task failed */
-  error?: Record<string, any>;
+  /** Error information if task failed */
+  error?: TaskDetailError;
   /** Task start time (ISO string) */
   startedAt?: string;
   /** Task status */

@@ -78,7 +78,12 @@ export interface AgentEventDone {
 
 export interface AgentEventError {
   type: 'error';
-  error: any;
+  /** Structured error compatible with AgentStateError */
+  error: {
+    body?: any;
+    message: string;
+    type?: string;
+  };
 }
 
 export interface AgentEventInterrupted {
