@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useLayoutEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import ResourceManager from '@/features/ResourceManager';
@@ -29,16 +29,21 @@ const ResourceHomePage = memo(() => {
   const { data: fileData } = useFetchKnowledgeItem(fileId || undefined);
   const documentData = useFileStore(documentSelectors.getDocumentById(fileId || undefined));
 
-  // Clear libraryId when on home route SYNCHRONOUSLY (during render, not in effect)
-  // This ensures libraryId is cleared before any child components' useEffects run
-  if (currentLibraryId !== undefined) {
-    setLibraryId(undefined);
-  }
+  // Clear libraryId when on home route using useLayoutEffect
+  // useLayoutEffect runs synchronously before browser paint, ensuring state is cleared
+  // before child components' useEffects run, while avoiding React's setState-in-render error
+  useLayoutEffect(() => {
+    if (currentLibraryId !== undefined) {
+      setLibraryId(undefined);
+    }
+  }, [currentLibraryId, setLibraryId]);
 
-  // Sync category from URL SYNCHRONOUSLY
-  if (currentCategory !== categoryParam) {
-    setCategory(categoryParam);
-  }
+  // Sync category from URL using useLayoutEffect
+  useLayoutEffect(() => {
+    if (currentCategory !== categoryParam) {
+      setCategory(categoryParam);
+    }
+  }, [currentCategory, categoryParam, setCategory]);
 
   // Sync file view mode from URL
   useEffect(() => {
