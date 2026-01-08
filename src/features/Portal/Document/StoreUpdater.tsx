@@ -24,6 +24,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(({ documentId, topicId }) => {
 
   const document = useNotebookStore(notebookSelectors.getDocumentById(topicId, documentId));
 
+  console.log('document:', documentId, topicId, document);
   const [editorInit, setEditorInit] = useState(false);
   const [contentInit, setContentInit] = useState(false);
   const lastLoadedDocIdRef = useRef<string | undefined>(undefined);
