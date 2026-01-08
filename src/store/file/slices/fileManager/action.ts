@@ -57,6 +57,7 @@ export interface FileManageAction {
 
   setCurrentFolderId: (folderId: string | null | undefined) => void;
   setPendingRenameItemId: (id: string | null) => void;
+  setUploadDockExpanded: (expanded: boolean) => void;
 
   toggleEmbeddingIds: (ids: string[], loading?: boolean) => void;
   toggleParsingIds: (ids: string[], loading?: boolean) => void;
@@ -352,6 +353,10 @@ export const createFileManageSlice: StateCreator<
 
   setPendingRenameItemId: (id) => {
     set({ pendingRenameItemId: id }, false, 'setPendingRenameItemId');
+  },
+
+  setUploadDockExpanded: (expanded) => {
+    set({ uploadDockExpanded: expanded }, false, 'setUploadDockExpanded');
   },
 
   toggleEmbeddingIds: (ids, loading) => {
