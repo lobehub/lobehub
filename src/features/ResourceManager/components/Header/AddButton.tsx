@@ -23,6 +23,7 @@ const AddButton = () => {
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createResource = useFileStore((s) => s.createResource);
+  const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
 
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
@@ -55,7 +56,7 @@ const AddButton = () => {
   }, [createResource, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
-    // Create folder with optimistic update - instant UI feedback
+    // Create folder and wait for sync to complete before triggering rename
     try {
       // Get current resource list to check for duplicate folder names
       const resourceList = useFileStore.getState().resourceList || [];
@@ -79,7 +80,9 @@ const AddButton = () => {
         counter++;
       }
 
-      const tempId = await createResource({
+      // Wait for sync to complete to get the real ID
+      const realId = await createResourceAndSync({
+        content: '',
         fileType: 'custom/folder',
         knowledgeBaseId: libraryId,
         parentId: currentFolderId ?? undefined,
@@ -87,13 +90,13 @@ const AddButton = () => {
         title: uniqueName,
       });
 
-      // Trigger auto-rename immediately (temp ID works)
-      setPendingRenameItemId(tempId);
+      // Trigger auto-rename with the real ID (after sync completes)
+      setPendingRenameItemId(realId);
     } catch (error) {
       message.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
-  }, [createResource, currentFolderId, libraryId, setPendingRenameItemId, t]);
+  }, [createResourceAndSync, currentFolderId, libraryId, setPendingRenameItemId, t]);
 
   const {
     handleCloseNotionGuide,

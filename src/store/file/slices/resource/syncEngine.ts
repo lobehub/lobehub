@@ -78,8 +78,10 @@ export class ResourceSyncEngine {
 
   /**
    * Enqueue a sync operation and return a Promise that resolves when it completes
+   * For 'create' operations, resolves with the real resource ID
+   * For other operations, resolves with void
    */
-  enqueue(operation: Omit<SyncOperation, 'resolve' | 'reject'>): Promise<void> {
+  enqueue(operation: Omit<SyncOperation, 'resolve' | 'reject'>): Promise<any> {
     return new Promise((resolve, reject) => {
       const { syncQueue } = this.stateManager.getState();
       const operationWithPromise: SyncOperation = {
@@ -151,10 +153,13 @@ export class ResourceSyncEngine {
     this.stateManager.setState({ syncingIds: new Set(syncingIds) });
 
     try {
+      let realId: string | undefined;
+
       switch (type) {
         case 'create': {
           const created = await resourceService.createResource(payload);
           this.replaceTempResource(resourceId, created);
+          realId = created.id;
           break;
         }
 
@@ -181,8 +186,8 @@ export class ResourceSyncEngine {
       // Clear optimistic state on success
       this.clearOptimisticState(resourceId);
 
-      // Resolve promise for this operation
-      operation.resolve?.();
+      // Resolve promise for this operation (return real ID for create)
+      operation.resolve?.(realId);
     } finally {
       // Unmark as syncing
       const { syncingIds: currentSyncingIds } = this.stateManager.getState();

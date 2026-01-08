@@ -162,6 +162,7 @@ const FileListItem = memo<FileListItemProps>(
     const [isRenaming, setIsRenaming] = useState(false);
     const [renamingValue, setRenamingValue] = useState(name);
     const inputRef = useRef<any>(null);
+    const isConfirmingRef = useRef(false);
     const isDragActive = useDragActive();
     const { setCurrentDrag } = useDragState();
     const [isDragging, setIsDragging] = useState(false);
@@ -261,13 +262,19 @@ const FileListItem = memo<FileListItemProps>(
     }, [name]);
 
     const handleRenameConfirm = useCallback(async () => {
+      // Prevent duplicate calls (e.g., from both Enter key and onBlur)
+      if (isConfirmingRef.current) return;
+      isConfirmingRef.current = true;
+
       if (!renamingValue.trim()) {
         message.error(t('FileManager.actions.renameError'));
+        isConfirmingRef.current = false;
         return;
       }
 
       if (renamingValue.trim() === name) {
         setIsRenaming(false);
+        isConfirmingRef.current = false;
         return;
       }
 
@@ -279,10 +286,14 @@ const FileListItem = memo<FileListItemProps>(
       } catch (error) {
         console.error('Rename error:', error);
         message.error(t('FileManager.actions.renameError'));
+      } finally {
+        isConfirmingRef.current = false;
       }
     }, [renamingValue, name, fileStoreState.updateResource, id, message, t]);
 
     const handleRenameCancel = useCallback(() => {
+      // Don't cancel if we're in the middle of confirming
+      if (isConfirmingRef.current) return;
       setIsRenaming(false);
       setRenamingValue(name);
     }, [name]);

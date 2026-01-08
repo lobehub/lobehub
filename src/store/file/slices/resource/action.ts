@@ -26,6 +26,12 @@ export interface ResourceAction {
   createResource: (params: CreateResourceParams) => Promise<string>;
 
   /**
+   * Create a new resource and wait for sync to complete
+   * Returns real ID from server (useful for auto-rename after creation)
+   */
+  createResourceAndSync: (params: CreateResourceParams) => Promise<string>;
+
+  /**
    * Delete a resource with optimistic update
    */
   deleteResource: (id: string) => Promise<void>;
@@ -158,6 +164,62 @@ export const createResourceSlice: StateCreator<
       });
 
       return tempId;
+    },
+
+    createResourceAndSync: async (params) => {
+      const tempId = `temp-resource-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+      // 1. Create optimistic resource
+      const optimisticResource: ResourceItem = {
+        _optimistic: { isPending: true, retryCount: 0 },
+        createdAt: new Date(),
+        fileType: params.fileType,
+        id: tempId,
+        knowledgeBaseId: params.knowledgeBaseId,
+        name: 'title' in params ? params.title : params.name,
+        parentId: params.parentId,
+        size: 'size' in params ? params.size : 0,
+        sourceType: params.sourceType,
+        updatedAt: new Date(),
+        ...(params.sourceType === 'file'
+          ? {
+              url: 'url' in params ? params.url : '',
+            }
+          : {
+              content: 'content' in params ? params.content : '',
+              editorData: 'editorData' in params ? params.editorData : {},
+              slug: 'slug' in params ? params.slug : undefined,
+              title: 'title' in params ? params.title : 'Untitled',
+            }),
+        metadata: params.metadata,
+      };
+
+      // 2. Update store immediately (UI instant feedback)
+      const { resourceMap, resourceList } = get();
+      const newMap = new Map(resourceMap);
+      newMap.set(tempId, optimisticResource);
+
+      set(
+        {
+          resourceList: [optimisticResource, ...resourceList],
+          resourceMap: newMap,
+        },
+        false,
+        'createResourceAndSync/optimistic',
+      );
+
+      // 3. Enqueue sync and wait for completion
+      const syncEngine = getSyncEngine();
+      const realId = await syncEngine.enqueue({
+        id: `sync-${tempId}`,
+        payload: params,
+        resourceId: tempId,
+        retryCount: 0,
+        timestamp: new Date(),
+        type: 'create',
+      });
+
+      return (realId as string) || tempId;
     },
 
     deleteResource: async (id) => {
