@@ -1,5 +1,4 @@
-import { Flexbox, Icon, Segmented } from '@lobehub/ui';
-import { Blocks, ChevronRight, Store } from 'lucide-react';
+import { Blocks } from 'lucide-react';
 import { Suspense, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +10,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
-import ToolsList, { toolsListStyles } from './ToolsList';
+import PopoverContent from './PopoverContent';
 import { useControls } from './useControls';
 
 type TabType = 'all' | 'installed';
@@ -49,57 +48,21 @@ const Tools = memo(() => {
   const effectiveTab = activeTab ?? 'all';
   const currentItems = effectiveTab === 'all' ? marketItems : installedPluginItems;
 
-  const popoverContent = (
-    <Flexbox gap={0}>
-      <div style={{ borderBottom: '1px solid var(--ant-color-border-secondary)', padding: 8 }}>
-        <Segmented
-          block
-          onChange={(v) => setActiveTab(v as TabType)}
-          options={[
-            {
-              label: t('tools.tabs.all', { defaultValue: 'all' }),
-              value: 'all',
-            },
-            {
-              label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
-              value: 'installed',
-            },
-          ]}
-          size="small"
-          value={effectiveTab}
-        />
-      </div>
-      <div
-        style={{
-          maxHeight: 500,
-          minHeight: enableKlavis ? 500 : undefined,
-          overflowY: 'auto',
-        }}
-      >
-        <ToolsList items={currentItems} />
-      </div>
-      <div style={{ borderTop: '1px solid var(--ant-color-border-secondary)', padding: 4 }}>
-        <div
-          className={toolsListStyles.item}
-          onClick={() => setModalOpen(true)}
-          role="button"
-          tabIndex={0}
-        >
-          <Icon icon={Store} size={20} />
-          <div className={toolsListStyles.itemContent}>{t('tools.plugins.store')}</div>
-          <Icon icon={ChevronRight} size={16} style={{ opacity: 0.5 }} />
-        </div>
-      </div>
-    </Flexbox>
-  );
-
   return (
     <Suspense fallback={<Action disabled icon={Blocks} title={t('tools.title')} />}>
       <Action
         icon={Blocks}
         loading={updating}
         popover={{
-          content: popoverContent,
+          content: (
+            <PopoverContent
+              activeTab={effectiveTab}
+              currentItems={currentItems}
+              enableKlavis={enableKlavis}
+              onOpenStore={() => setModalOpen(true)}
+              onTabChange={setActiveTab}
+            />
+          ),
           maxWidth: 320,
           minWidth: 320,
           styles: {
