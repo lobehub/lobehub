@@ -3,19 +3,18 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { type EditorAction, type EditorState, createEditorSlice, initialEditorState } from './slices/editor';
 import {
-  type NotebookAction,
-  type NotebookState,
-  createNotebookSlice,
-  initialNotebookState,
-} from './slices/notebook';
+  type EditorAction,
+  type EditorState,
+  createEditorSlice,
+  initialEditorState,
+} from './slices/editor';
 
-// Combined state type
-export type DocumentState = EditorState & NotebookState;
+// State type
+export type DocumentState = EditorState;
 
-// Combined action type
-export type DocumentAction = EditorAction & NotebookAction;
+// Action type
+export type DocumentAction = EditorAction;
 
 // Full store type
 export type DocumentStore = DocumentState & DocumentAction;
@@ -23,7 +22,6 @@ export type DocumentStore = DocumentState & DocumentAction;
 // Initial state
 const initialState: DocumentState = {
   ...initialEditorState,
-  ...initialNotebookState,
 };
 
 const createStore: StateCreator<DocumentStore, [['zustand/devtools', never]]> = (
@@ -31,7 +29,6 @@ const createStore: StateCreator<DocumentStore, [['zustand/devtools', never]]> = 
 ) => ({
   ...initialState,
   ...createEditorSlice(...parameters),
-  ...createNotebookSlice(...parameters),
 });
 
 const devtools = createDevtools('document');

@@ -3,6 +3,7 @@ import { type IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { useNotebookStore } from '@/store/notebook';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
@@ -171,7 +172,7 @@ export const createEditorSlice: StateCreator<
   },
 
   performSave: async () => {
-    const { editor, activeDocumentId, title, activeTopicId, isDirty, updateDocument } = get();
+    const { editor, activeDocumentId, title, activeTopicId, isDirty } = get();
 
     if (!editor || !activeDocumentId || !activeTopicId) return;
 
@@ -183,8 +184,8 @@ export const createEditorSlice: StateCreator<
     try {
       const currentContent = (editor.getDocument('markdown') as unknown as string) || '';
 
-      // Update document via notebook slice
-      await updateDocument(
+      // Update document via notebook store
+      await useNotebookStore.getState().updateDocument(
         {
           content: currentContent,
           id: activeDocumentId,
