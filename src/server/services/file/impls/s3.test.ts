@@ -120,6 +120,16 @@ describe('S3StaticFileImpl', () => {
         expect(fileService.getKeyFromFullUrl).toHaveBeenCalledWith(httpUrl);
         expect(result).toBe('https://example.com/path/to/file.jpg');
       });
+
+      it('should throw error when key extraction returns null', async () => {
+        const fullUrl = 'https://s3.example.com/f/nonexistent';
+
+        vi.spyOn(fileService, 'getKeyFromFullUrl').mockResolvedValue(null);
+
+        await expect(fileService.getFullFileUrl(fullUrl)).rejects.toThrow(
+          'Key not found from url: ' + fullUrl,
+        );
+      });
     });
   });
 
@@ -219,14 +229,30 @@ describe('S3StaticFileImpl', () => {
       expect(result).toBe(expectedKey);
     });
 
-    it('should return null when URL does not contain /f/ path', async () => {
-      const invalidUrl = 'https://example.com/path/to/file.jpg';
+    it('should extract key from legacy S3 URL (non /f/ path)', async () => {
+      const s3Url = 'https://example.com/path/to/file.jpg';
 
-      vi.spyOn(FileModel, 'getFileById').mockResolvedValue(undefined);
+      const result = await fileService.getKeyFromFullUrl(s3Url);
+
+      // Legacy S3 URL: extract key from pathname
+      expect(result).toBe('path/to/file.jpg');
+    });
+
+    it('should extract key with path-style S3 URL', async () => {
+      config.S3_ENABLE_PATH_STYLE = true;
+      const s3Url = 'https://example.com/my-bucket/path/to/file.jpg';
+
+      const result = await fileService.getKeyFromFullUrl(s3Url);
+
+      expect(result).toBe('path/to/file.jpg');
+      config.S3_ENABLE_PATH_STYLE = false;
+    });
+
+    it('should return null for invalid URL', async () => {
+      const invalidUrl = 'not-a-valid-url';
 
       const result = await fileService.getKeyFromFullUrl(invalidUrl);
 
-      // When /f/ is not found, fIndex is -1, so fileId will be urlParts[0] = 'https:'
       expect(result).toBeNull();
     });
   });
