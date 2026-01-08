@@ -6,7 +6,6 @@ import { cssVar } from 'antd-style';
 import { type UIEvent, memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
@@ -19,8 +18,6 @@ const MasonryView = memo(() => {
   // Access all state from Resource Manager store
   const [
     libraryId,
-    category,
-    searchQuery,
     selectedFileIds,
     setSelectedFileIds,
     loadMoreKnowledgeItems,
@@ -30,8 +27,6 @@ const MasonryView = memo(() => {
     sortType,
   ] = useResourceManagerStore((s) => [
     s.libraryId,
-    s.category,
-    s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.loadMoreKnowledgeItems,
@@ -44,8 +39,6 @@ const MasonryView = memo(() => {
   const { t } = useTranslation('file');
   const columnCount = useMasonryColumnCount();
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-
-  const { currentFolderSlug } = useFolderPath();
 
   // NEW: Read from resource store instead of fetching independently
   const resourceList = useFileStore((s) => s.resourceList);

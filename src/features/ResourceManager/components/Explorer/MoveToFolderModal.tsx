@@ -11,14 +11,13 @@ import { useFileStore } from '@/store/file';
 
 interface MoveToFolderModalProps {
   fileId: string;
-  fileType?: string;
   knowledgeBaseId?: string;
   onClose: () => void;
   open: boolean;
 }
 
 const MoveToFolderModal = memo<MoveToFolderModalProps>(
-  ({ open, onClose, fileId, fileType, knowledgeBaseId }) => {
+  ({ open, onClose, fileId, knowledgeBaseId }) => {
     const { t } = useTranslation('components');
     const { message } = App.useApp();
 
