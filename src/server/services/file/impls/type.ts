@@ -1,3 +1,5 @@
+import { LobeChatDatabase } from '@lobechat/database';
+
 /**
  * File service implementation interface
  */
@@ -6,11 +8,11 @@ export interface FileServiceImpl {
    * Create pre-signed upload URL
    */
   createPreSignedUrl(key: string): Promise<string>;
-
   /**
    * Create pre-signed preview URL
    */
   createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string>;
+  db: LobeChatDatabase;
 
   /**
    * Delete file
@@ -46,7 +48,7 @@ export interface FileServiceImpl {
   /**
    * Extract key from full URL
    */
-  getKeyFromFullUrl(url: string): string;
+  getKeyFromFullUrl(url: string): Promise<string | null>;
 
   /**
    * Upload content
