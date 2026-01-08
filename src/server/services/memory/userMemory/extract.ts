@@ -66,6 +66,7 @@ import type { GlobalMemoryLayer } from '@/types/serverConfig';
 import type { UserKeyVaults } from '@/types/user/settings';
 import { LayersEnum, type MergeStrategyEnum, TypesEnum, MemorySourceType } from '@/types/userMemory';
 import { encodeAsync } from '@/utils/tokenizer';
+import debug from 'debug';
 
 const SOURCE_ALIAS_MAP: Record<string, MemorySourceType> = {
   benchmark_locomo: MemorySourceType.BenchmarkLocomo,
@@ -262,19 +263,58 @@ const resolveLayerModels = (
   preference: layers?.preference ?? fallback.preference,
 });
 
-const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
+const maskSecret = (value?: string) => {
+  if (!value) return 'undefined';
+  if (value.length <= 8) return `${value[0]}***${value.at(-1)}`;
+
+  return `${value.slice(0, 6)}***${value.slice(-4)}`;
+};
+
+const resolveRuntimeAgentConfig = (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
   const provider = agent.provider || 'openai';
   const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
     provider,
     keyVaults,
   );
 
-  const apiKey = userApiKey || agent.apiKey;
-  if (!apiKey) throw new Error(`Missing API key for ${provider} memory extraction runtime`);
+  // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
+  // to system config to avoid mixing credentials.
+  const useUserCredential = !!userApiKey;
+  const apiKey = useUserCredential ? userApiKey : agent.apiKey;
+  const baseURL = useUserCredential ? userBaseURL || agent.baseURL : agent.baseURL;
+  const source = useUserCredential ? 'user-keyvault' : 'system-config';
 
-  return ModelRuntime.initializeWithProvider(provider, {
-    apiKey,
-    baseURL: userBaseURL || agent.baseURL,
+  return { apiKey, baseURL, provider, source };
+};
+
+const logRuntime = debug('lobe-server:memory:user-memory:runtime');
+
+const debugRuntimeInit = (
+  agent: MemoryAgentConfig,
+  resolved: ReturnType<typeof resolveRuntimeAgentConfig>,
+) => {
+  if (!logRuntime.enabled) return;
+  logRuntime('init runtime', {
+    agentModel: agent.model,
+    agentProvider: agent.provider || 'openai',
+    apiKey: maskSecret(resolved.apiKey),
+    baseURL: resolved.baseURL,
+    provider: resolved.provider,
+    source: resolved.source,
+  });
+};
+
+const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
+  const resolved = resolveRuntimeAgentConfig(agent, keyVaults);
+  debugRuntimeInit(agent, resolved);
+
+  if (!resolved.apiKey) {
+    throw new Error(`Missing API key for ${resolved.provider} memory extraction runtime`);
+  }
+
+  return ModelRuntime.initializeWithProvider(resolved.provider, {
+    apiKey: resolved.apiKey,
+    baseURL: resolved.baseURL,
   });
 };
 
