@@ -426,15 +426,32 @@ export default class Browser {
       const responseHeaders = details.responseHeaders || {};
       const origin = originMap.get(details.id) || '*';
 
-      responseHeaders['Access-Control-Allow-Origin'] = [origin];
-      responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS, PATCH'];
-      responseHeaders['Access-Control-Allow-Headers'] = ['*'];
-      responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
+      // Helper to check if header already exists (case-insensitive)
+      const hasHeader = (name: string) =>
+        Object.keys(responseHeaders).some((key) => key.toLowerCase() === name.toLowerCase());
+
+      // Only add CORS headers if not already present (avoid duplicates)
+      if (!hasHeader('Access-Control-Allow-Origin')) {
+        responseHeaders['Access-Control-Allow-Origin'] = [origin];
+      }
+      if (!hasHeader('Access-Control-Allow-Methods')) {
+        responseHeaders['Access-Control-Allow-Methods'] = [
+          'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+        ];
+      }
+      if (!hasHeader('Access-Control-Allow-Headers')) {
+        responseHeaders['Access-Control-Allow-Headers'] = ['*'];
+      }
+      if (!hasHeader('Access-Control-Allow-Credentials')) {
+        responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
+      }
 
       originMap.delete(details.id);
 
       if (details.method === 'OPTIONS') {
-        responseHeaders['Access-Control-Max-Age'] = ['86400'];
+        if (!hasHeader('Access-Control-Max-Age')) {
+          responseHeaders['Access-Control-Max-Age'] = ['86400'];
+        }
         callback({ responseHeaders, statusLine: 'HTTP/1.1 200 OK' });
         return;
       }
