@@ -41,9 +41,9 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextDescription};
   `,
   headerItem: css`
+    height: 100%;
     padding-block: 6px;
     padding-inline: 0 24px;
-    height: 100%;
   `,
   scrollContainer: css`
     overflow: auto hidden;

@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "설정으로 이동",
   "ModelSwitchPanel.manageProvider": "제공자 관리",
   "ModelSwitchPanel.provider": "서비스 제공자",
+  "ModelSwitchPanel.searchPlaceholder": "모델 검색...",
   "ModelSwitchPanel.title": "모델",
   "ModelSwitchPanel.useModelFrom": "다음에서 이 모델 사용:",
   "MultiImagesUpload.actions.uploadMore": "클릭하거나 끌어다 놓아 더 많은 이미지 업로드",

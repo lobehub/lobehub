@@ -1,4 +1,4 @@
-import { Dropdown, type DropdownProps, Icon } from '@lobehub/ui';
+import { Dropdown, Icon } from '@lobehub/ui';
 import { Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

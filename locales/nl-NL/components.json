@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "Ga naar instellingen",
   "ModelSwitchPanel.manageProvider": "Beheer aanbieder",
   "ModelSwitchPanel.provider": "Provider",
+  "ModelSwitchPanel.searchPlaceholder": "Modellen zoeken...",
   "ModelSwitchPanel.title": "Model",
   "ModelSwitchPanel.useModelFrom": "Gebruik dit model van:",
   "MultiImagesUpload.actions.uploadMore": "Klik of sleep om meer te uploaden",

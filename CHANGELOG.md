@@ -2,6 +2,90 @@
 
 # Changelog
 
+## [Version 2.0.0-next.236](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.235...v2.0.0-next.236)
+
+<sup>Released on **2026-01-08**</sup>
+
+#### 🐛 Bug Fixes
+
+- **provider-config**: Update isFetchOnClient Switch component.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **provider-config**: Update isFetchOnClient Switch component, closes [#11215](https://github.com/lobehub/lobe-chat/issues/11215) ([5bb038b](https://github.com/lobehub/lobe-chat/commit/5bb038b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.235](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.234...v2.0.0-next.235)
+
+<sup>Released on **2026-01-08**</sup>
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Update i18n, closes [#11297](https://github.com/lobehub/lobe-chat/issues/11297) ([4705abf](https://github.com/lobehub/lobe-chat/commit/4705abf))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.234](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.233...v2.0.0-next.234)
+
+<sup>Released on **2026-01-07**</sup>
+
+#### ✨ Features
+
+- **misc**: Add browser compatibility detection and fallback page, add the lobehub market tools servers.
+
+#### 🐛 Bug Fixes
+
+- **editor**: Fix slash command codeblock not working.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Add browser compatibility detection and fallback page, closes [#11309](https://github.com/lobehub/lobe-chat/issues/11309) ([8be32c2](https://github.com/lobehub/lobe-chat/commit/8be32c2))
+- **misc**: Add the lobehub market tools servers, closes [#11315](https://github.com/lobehub/lobe-chat/issues/11315) ([a4003a3](https://github.com/lobehub/lobe-chat/commit/a4003a3))
+
+#### What's fixed
+
+- **editor**: Fix slash command codeblock not working, closes [#11321](https://github.com/lobehub/lobe-chat/issues/11321) ([f9a35eb](https://github.com/lobehub/lobe-chat/commit/f9a35eb))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.233](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.232...v2.0.0-next.233)
 
 <sup>Released on **2026-01-07**</sup>
