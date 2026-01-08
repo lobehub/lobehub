@@ -170,7 +170,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: t('history.title'),
         submenu: [
           {
-            accelerator: 'Command+[',
+            accelerator: 'Ctrl+[',
             click: () => {
               const mainWindow = this.app.browserManager.getMainWindow();
               mainWindow.broadcast('historyGoBack');
@@ -178,7 +178,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('history.back'),
           },
           {
-            accelerator: 'Command+]',
+            accelerator: 'Ctrl+]',
             click: () => {
               const mainWindow = this.app.browserManager.getMainWindow();
               mainWindow.broadcast('historyGoForward');

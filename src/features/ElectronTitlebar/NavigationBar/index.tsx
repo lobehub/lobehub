@@ -3,6 +3,7 @@
 import { ActionIcon, Flexbox, Popover, Tooltip } from '@lobehub/ui';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -19,6 +20,7 @@ const useNavPanelWidth = () => {
 };
 
 const NavigationBar = memo(() => {
+  const { t } = useTranslation('electron');
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
   // Use ResizeObserver for real-time width updates during resize
@@ -46,7 +48,7 @@ const NavigationBar = memo(() => {
   }, [toggleHistoryOpen]);
 
   // Tooltip content for the clock button
-  const tooltipContent = 'Recently viewed';
+  const tooltipContent = t('navigation.recentView');
 
   return (
     <Flexbox
