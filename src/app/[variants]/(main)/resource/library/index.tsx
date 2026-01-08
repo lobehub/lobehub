@@ -28,11 +28,12 @@ const MainContent = memo(() => {
   // Load knowledge base data
   useKnowledgeBaseItem(knowledgeBaseId || '');
 
-  // Set libraryId from URL params SYNCHRONOUSLY (during render, not in effect)
-  // This ensures libraryId is set before any child components' useEffects run
-  if (currentLibraryId !== knowledgeBaseId) {
-    setLibraryId(knowledgeBaseId);
-  }
+  // Sync libraryId from URL params
+  useEffect(() => {
+    if (currentLibraryId !== knowledgeBaseId) {
+      setLibraryId(knowledgeBaseId);
+    }
+  }, [knowledgeBaseId, currentLibraryId, setLibraryId]);
 
   // Sync file view mode from URL
   useEffect(() => {
