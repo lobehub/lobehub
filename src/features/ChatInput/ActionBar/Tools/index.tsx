@@ -1,6 +1,5 @@
-import { Segmented } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Blocks } from 'lucide-react';
+import { Flexbox, Icon, Segmented } from '@lobehub/ui';
+import { Blocks, ChevronRight, Store } from 'lucide-react';
 import { Suspense, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,38 +11,10 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
+import ToolsList, { toolsListStyles } from './ToolsList';
 import { useControls } from './useControls';
 
 type TabType = 'all' | 'installed';
-
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
-  dropdown: css`
-    overflow: hidden;
-
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-
-    .${prefixCls}-dropdown-menu {
-      border-radius: 0 !important;
-      background: transparent !important;
-      box-shadow: none !important;
-    }
-  `,
-  header: css`
-    padding: ${cssVar.paddingXS};
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: transparent;
-  `,
-  scroller: css`
-    overflow: hidden auto;
-  `,
-}));
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
@@ -51,7 +22,6 @@ const Tools = memo(() => {
   const [updating, setUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType | null>(null);
   const { marketItems, installedPluginItems } = useControls({
-    setModalOpen,
     setUpdating,
   });
 
@@ -79,55 +49,65 @@ const Tools = memo(() => {
   const effectiveTab = activeTab ?? 'all';
   const currentItems = effectiveTab === 'all' ? marketItems : installedPluginItems;
 
+  const popoverContent = (
+    <Flexbox gap={0}>
+      <div style={{ borderBottom: '1px solid var(--ant-color-border-secondary)', padding: 8 }}>
+        <Segmented
+          block
+          onChange={(v) => setActiveTab(v as TabType)}
+          options={[
+            {
+              label: t('tools.tabs.all', { defaultValue: 'all' }),
+              value: 'all',
+            },
+            {
+              label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
+              value: 'installed',
+            },
+          ]}
+          size="small"
+          value={effectiveTab}
+        />
+      </div>
+      <div
+        style={{
+          maxHeight: 500,
+          minHeight: enableKlavis ? 500 : undefined,
+          overflowY: 'auto',
+        }}
+      >
+        <ToolsList items={currentItems} />
+      </div>
+      <div style={{ borderTop: '1px solid var(--ant-color-border-secondary)', padding: 4 }}>
+        <div
+          className={toolsListStyles.item}
+          onClick={() => setModalOpen(true)}
+          role="button"
+          tabIndex={0}
+        >
+          <Icon icon={Store} size={20} />
+          <div className={toolsListStyles.itemContent}>{t('tools.plugins.store')}</div>
+          <Icon icon={ChevronRight} size={16} style={{ opacity: 0.5 }} />
+        </div>
+      </div>
+    </Flexbox>
+  );
+
   return (
     <Suspense fallback={<Action disabled icon={Blocks} title={t('tools.title')} />}>
       <Action
-        dropdown={{
-          maxWidth: 320,
-          menu: {
-            items: [...currentItems],
-            style: {
-              // let only the custom scroller scroll
-              maxHeight: 'unset',
-              overflowY: 'visible',
-            },
-          },
-          minHeight: enableKlavis ? 500 : undefined,
-          minWidth: 320,
-          popupRender: (menu) => (
-            <div className={styles.dropdown}>
-              <div className={styles.header}>
-                <Segmented
-                  block
-                  onChange={(v) => setActiveTab(v as TabType)}
-                  options={[
-                    {
-                      label: t('tools.tabs.all', { defaultValue: 'all' }),
-                      value: 'all',
-                    },
-                    {
-                      label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
-                      value: 'installed',
-                    },
-                  ]}
-                  size="small"
-                  value={effectiveTab}
-                />
-              </div>
-              <div
-                className={styles.scroller}
-                style={{
-                  maxHeight: 500,
-                  minHeight: enableKlavis ? 500 : undefined,
-                }}
-              >
-                {menu}
-              </div>
-            </div>
-          ),
-        }}
         icon={Blocks}
         loading={updating}
+        popover={{
+          content: popoverContent,
+          maxWidth: 320,
+          minWidth: 320,
+          styles: {
+            content: {
+              padding: 0,
+            },
+          },
+        }}
         showTooltip={false}
         title={t('tools.title')}
       />
