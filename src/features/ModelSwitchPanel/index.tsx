@@ -43,6 +43,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
               provider={providerProp}
             />
           }
+          nativeButton={false}
           onOpenChange={handleOpenChange}
           open={isOpen}
           placement={placement}

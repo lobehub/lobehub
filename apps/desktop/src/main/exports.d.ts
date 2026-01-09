@@ -5,4 +5,4 @@ declare module '@lobechat/electron-client-ipc' {
   interface DesktopIpcServicesMap extends DesktopIpcServices {}
 }
 
-export { type DesktopIpcServices, type DesktopServerIpcServices } from './controllers/registry';
+export { type DesktopIpcServices } from './controllers/registry';

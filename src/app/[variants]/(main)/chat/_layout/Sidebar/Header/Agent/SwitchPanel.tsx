@@ -42,6 +42,7 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
     <Popover
       classNames={{ trigger: styles.trigger }}
       content={content}
+      nativeButton={false}
       placement="bottomLeft"
       styles={{
         content: {

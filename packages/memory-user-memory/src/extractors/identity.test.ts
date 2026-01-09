@@ -1,8 +1,8 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 import type { ModelRuntime } from '@lobechat/model-runtime';
-import { readFile } from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { identityPrompt } from '../prompts';
 import { IdentityExtractor, IdentityExtractorTemplateProps } from './identity';
 
 const runtimeMock = { generateObject: vi.fn() } as unknown as ModelRuntime;
@@ -111,11 +111,6 @@ describe('IdentityExtractor', () => {
     const expectedProps = (extractor as any).getTemplateProps(templateOptions);
 
     expect(result).not.toBe('');
-    expect(result).toBe(
-      renderPlaceholderTemplate(
-        await readFile(new URL('../prompts/layers/identity.md', import.meta.url).pathname, 'utf8'),
-        expectedProps,
-      ),
-    );
+    expect(result).toBe(renderPlaceholderTemplate(identityPrompt, expectedProps));
   });
 });

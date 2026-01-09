@@ -23,32 +23,9 @@ import {
 } from '@/types/asyncTask';
 import { generateUniqueSeeds } from '@/utils/number';
 
-const log = debug('lobe-image:lambda');
+import { validateNoUrlsInConfig } from './utils';
 
-/**
- * Recursively validate that no full URLs are present in the config
- * This is a defensive check to ensure only keys are stored in database
- */
-function validateNoUrlsInConfig(obj: any, path: string = ''): void {
-  if (typeof obj === 'string') {
-    if (obj.startsWith('http://') || obj.startsWith('https://')) {
-      throw new Error(
-        `Invalid configuration: Found full URL instead of key at ${path || 'root'}. ` +
-          `URL: "${obj.slice(0, 100)}${obj.length > 100 ? '...' : ''}". ` +
-          `All URLs must be converted to storage keys before database insertion.`,
-      );
-    }
-  } else if (Array.isArray(obj)) {
-    obj.forEach((item, index) => {
-      validateNoUrlsInConfig(item, `${path}[${index}]`);
-    });
-  } else if (obj && typeof obj === 'object') {
-    Object.entries(obj).forEach(([key, value]) => {
-      const currentPath = path ? `${path}.${key}` : key;
-      validateNoUrlsInConfig(value, currentPath);
-    });
-  }
-}
+const log = debug('lobe-image:lambda');
 
 const imageProcedure = authedProcedure
   .use(keyVaults)
@@ -103,11 +80,18 @@ export const imageRouter = router({
     if (Array.isArray(params.imageUrls) && params.imageUrls.length > 0) {
       log('Converting imageUrls to S3 keys for database storage: %O', params.imageUrls);
       try {
-        const imageKeys = params.imageUrls.map((url) => {
-          const key = fileService.getKeyFromFullUrl(url);
-          log('Converted URL %s to key %s', url, key);
-          return key;
-        });
+        const imageKeysWithNull = await Promise.all(
+          params.imageUrls.map(async (url) => {
+            const key = await fileService.getKeyFromFullUrl(url);
+            if (key) {
+              log('Converted URL %s to key %s', url, key);
+            } else {
+              log('Failed to extract key from URL: %s', url);
+            }
+            return key;
+          }),
+        );
+        const imageKeys = imageKeysWithNull.filter((key): key is string => key !== null);
 
         configForDatabase = {
           ...configForDatabase,
@@ -115,19 +99,51 @@ export const imageRouter = router({
         };
         log('Successfully converted imageUrls to keys for database: %O', imageKeys);
       } catch (error) {
-        log('Error converting imageUrls to keys: %O', error);
-        log('Keeping original imageUrls due to conversion error');
+        console.error('Error converting imageUrls to keys: %O', error);
+        console.error('Keeping original imageUrls due to conversion error');
       }
     }
     // 2) Process single image in imageUrl
     if (typeof params.imageUrl === 'string' && params.imageUrl) {
       try {
-        const key = fileService.getKeyFromFullUrl(params.imageUrl);
-        log('Converted single imageUrl to key: %s -> %s', params.imageUrl, key);
-        configForDatabase = { ...configForDatabase, imageUrl: key };
+        const key = await fileService.getKeyFromFullUrl(params.imageUrl);
+        if (key) {
+          log('Converted single imageUrl to key: %s -> %s', params.imageUrl, key);
+          configForDatabase = { ...configForDatabase, imageUrl: key };
+        } else {
+          log('Failed to extract key from single imageUrl: %s', params.imageUrl);
+        }
       } catch (error) {
-        log('Error converting imageUrl to key: %O', error);
+        console.error('Error converting imageUrl to key: %O', error);
         // Keep original value if conversion fails
+      }
+    }
+
+    // In development, convert localhost proxy URLs to S3 URLs for async task access
+    let generationParams = params;
+    if (process.env.NODE_ENV === 'development') {
+      const updates: Record<string, unknown> = {};
+
+      // Handle single imageUrl: localhost/f/{id} -> S3 URL
+      if (typeof params.imageUrl === 'string' && params.imageUrl) {
+        const s3Url = await fileService.getFullFileUrl(configForDatabase.imageUrl as string);
+        if (s3Url) {
+          log('Dev: converted proxy URL to S3 URL: %s -> %s', params.imageUrl, s3Url);
+          updates.imageUrl = s3Url;
+        }
+      }
+
+      // Handle multiple imageUrls
+      if (Array.isArray(params.imageUrls) && params.imageUrls.length > 0) {
+        const s3Urls = await Promise.all(
+          (configForDatabase.imageUrls as string[]).map((key) => fileService.getFullFileUrl(key)),
+        );
+        log('Dev: converted proxy URLs to S3 URLs: %O', s3Urls);
+        updates.imageUrls = s3Urls;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        generationParams = { ...params, ...updates };
       }
     }
 
@@ -137,7 +153,7 @@ export const imageRouter = router({
     const chargeResult = await chargeBeforeGenerate({
       clientIp: ctx.clientIp,
       configForDatabase,
-      generationParams: params,
+      generationParams,
       generationTopicId,
       imageNum,
       model,
@@ -167,7 +183,7 @@ export const imageRouter = router({
       const [batch] = await tx.insert(generationBatches).values(newBatch).returning();
       log('Generation batch created successfully: %s', batch.id);
 
-      // 2. Create 4 generations (fixed at 4 images for phase one)
+      // 2. Create generations
       const seeds =
         'seed' in params
           ? generateUniqueSeeds(imageNum)
@@ -248,7 +264,7 @@ export const imageRouter = router({
           generationId: generation.id,
           generationTopicId,
           model,
-          params,
+          params: generationParams,
           provider,
           taskId: asyncTaskId,
         });
@@ -256,8 +272,8 @@ export const imageRouter = router({
 
       log('All %d background async image generation tasks started', generationsWithTasks.length);
     } catch (e) {
-      console.error('[createImage] Failed to process async tasks:', e);
-      log('Failed to process async tasks: %O', e);
+      console.error('Failed to process async tasks:', e);
+      console.error('Failed to process async tasks: %O', e);
 
       // If overall failure occurs, update all task statuses to failed
       try {
