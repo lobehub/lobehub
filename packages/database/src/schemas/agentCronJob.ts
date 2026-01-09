@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { agents } from './agent';
+import { chatGroups } from './chatGroup';
 import { users } from './user';
 
 // Execution conditions type for JSONB field
@@ -31,6 +32,8 @@ export const agentCronJobs = pgTable(
     agentId: text('agent_id')
       .references(() => agents.id, { onDelete: 'cascade' })
       .notNull(),
+    groupId: text('group_id')
+      .references(() => chatGroups.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -64,6 +67,7 @@ export const agentCronJobs = pgTable(
   (t) => [
     // Indexes for performance
     index('agent_cron_jobs_agent_id_idx').on(t.agentId),
+    index('agent_cron_jobs_group_id_idx').on(t.groupId),
     index('agent_cron_jobs_user_id_idx').on(t.userId),
     index('agent_cron_jobs_enabled_idx').on(t.enabled),
     index('agent_cron_jobs_remaining_executions_idx').on(t.remainingExecutions),

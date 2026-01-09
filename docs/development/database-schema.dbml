@@ -70,6 +70,7 @@ table agents_knowledge_bases {
 table agent_cron_jobs {
   id text [pk, not null]
   agent_id text [not null]
+  group_id text
   user_id text [not null]
   name text
   description text
@@ -89,6 +90,7 @@ table agent_cron_jobs {
 
   indexes {
     agent_id [name: 'agent_cron_jobs_agent_id_idx']
+    group_id [name: 'agent_cron_jobs_group_id_idx']
     user_id [name: 'agent_cron_jobs_user_id_idx']
     enabled [name: 'agent_cron_jobs_enabled_idx']
     remaining_executions [name: 'agent_cron_jobs_remaining_executions_idx']
@@ -1100,6 +1102,8 @@ table topics {
   client_id text
   history_summary text
   metadata jsonb
+  trigger text
+  mode text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
