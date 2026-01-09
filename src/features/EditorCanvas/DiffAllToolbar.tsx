@@ -1,6 +1,6 @@
 'use client';
 
-import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
+import { DiffAction, IEditor, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
 import { Block, Icon } from '@lobehub/ui';
 import { Button, Space } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -35,11 +35,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const DiffAllToolbar = memo(() => {
+const DiffAllToolbar = memo<{ editor: IEditor }>(({ editor }) => {
   const { t } = useTranslation('editor');
   const isDarkMode = useIsDark();
   const performSave = useDocumentStore((s) => s.performSave);
-  const editor = useDocumentStore((s) => s.editor);
   const [hasPendingDiffs, setHasPendingDiffs] = useState(false);
 
   // Listen to editor state changes to detect diff nodes
@@ -68,11 +67,9 @@ const DiffAllToolbar = memo(() => {
     checkForDiffNodes();
 
     // Register update listener
-    const unregister = lexicalEditor.registerUpdateListener(() => {
+    return lexicalEditor.registerUpdateListener(() => {
       checkForDiffNodes();
     });
-
-    return unregister;
   }, [editor]);
 
   if (!hasPendingDiffs) return null;

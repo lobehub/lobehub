@@ -90,7 +90,7 @@ const PageEditorCanvas = memo(() => {
               </Flexbox>
             </WideScreenContainer>
           </Flexbox>
-          <DiffAllToolbar />
+          <DiffAllToolbar editor={editor!} />
         </Flexbox>
         <Copilot />
       </Flexbox>

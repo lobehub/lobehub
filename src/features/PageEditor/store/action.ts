@@ -1,4 +1,6 @@
+import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import debug from 'debug';
+import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
 import { useDocumentStore } from '@/store/document';
@@ -9,6 +11,7 @@ import { type State, initialState } from './initialState';
 const log = debug('page:editor');
 
 export interface Action {
+  flushMetaSave: () => void;
   handleCopyLink: (t: (key: string) => string, message: any) => void;
   handleDelete: (
     t: (key: string) => string,
@@ -17,17 +20,44 @@ export interface Action {
     onDeleteCallback?: () => void,
   ) => Promise<void>;
   handleTitleSubmit: () => Promise<void>;
+  initMeta: (title?: string, emoji?: string) => void;
+  performMetaSave: () => Promise<void>;
   setEmoji: (emoji: string | undefined) => void;
   setTitle: (title: string) => void;
+  triggerDebouncedMetaSave: () => void;
 }
 
 export type Store = State & Action;
 
 export const store: (initState?: Partial<State>) => StateCreator<Store> =
   (initState) => (set, get) => {
+    // Debounced save function for meta (title/emoji)
+    let debouncedMetaSave: ReturnType<typeof debounce> | null = null;
+
+    const getOrCreateDebouncedMetaSave = () => {
+      if (!debouncedMetaSave) {
+        debouncedMetaSave = debounce(
+          async () => {
+            try {
+              await get().performMetaSave();
+            } catch (error) {
+              console.error('[PageEditor] Failed to auto-save meta:', error);
+            }
+          },
+          EDITOR_DEBOUNCE_TIME,
+          { leading: false, maxWait: EDITOR_MAX_WAIT, trailing: true },
+        );
+      }
+      return debouncedMetaSave;
+    };
+
     return {
       ...initialState,
       ...initState,
+
+      flushMetaSave: () => {
+        debouncedMetaSave?.flush();
+      },
 
       handleCopyLink: (t, message) => {
         const { documentId } = get();
@@ -67,42 +97,92 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       },
 
       handleTitleSubmit: async () => {
-        const { documentId, title, emoji, editor } = get();
-        if (!documentId) return;
+        const { editor, flushMetaSave } = get();
 
-        // Trigger save via DocumentStore with metadata
-        await useDocumentStore.getState().performSave(documentId, {
-          emoji,
-          title,
-        });
-
+        // Flush pending save and focus editor
+        flushMetaSave();
         editor?.focus();
       },
 
-      setEmoji: (emoji: string | undefined) => {
-        const { documentId, onEmojiChange } = get();
-        set({ emoji });
+      initMeta: (title, emoji) => {
+        set({
+          emoji,
+          isMetaDirty: false,
+          lastSavedEmoji: emoji,
+          lastSavedTitle: title,
+          metaSaveStatus: 'idle',
+          title,
+        });
+      },
 
-        // Mark document as dirty in DocumentStore
-        if (documentId) {
-          useDocumentStore.getState().markDirty(documentId);
+      performMetaSave: async () => {
+        const {
+          documentId,
+          title,
+          emoji,
+          lastSavedTitle,
+          lastSavedEmoji,
+          isMetaDirty,
+          onTitleChange,
+          onEmojiChange,
+        } = get();
+
+        if (!documentId || !isMetaDirty) return;
+
+        set({ metaSaveStatus: 'saving' });
+
+        try {
+          // Trigger save via DocumentStore with metadata
+          await useDocumentStore.getState().performSave(documentId, {
+            emoji,
+            title,
+          });
+
+          // Notify parent after successful save
+          if (title !== lastSavedTitle) {
+            onTitleChange?.(title || '');
+          }
+          if (emoji !== lastSavedEmoji) {
+            onEmojiChange?.(emoji);
+          }
+
+          set({
+            isMetaDirty: false,
+            lastSavedEmoji: emoji,
+            lastSavedTitle: title,
+            metaSaveStatus: 'saved',
+          });
+        } catch (error) {
+          console.error('[PageEditor] Failed to save meta:', error);
+          set({ metaSaveStatus: 'idle' });
         }
+      },
 
-        // Notify parent for optimistic update
-        onEmojiChange?.(emoji);
+      setEmoji: (emoji: string | undefined) => {
+        const { lastSavedEmoji, triggerDebouncedMetaSave } = get();
+
+        const isDirty = emoji !== lastSavedEmoji;
+        set({ emoji, isMetaDirty: isDirty });
+
+        if (isDirty) {
+          triggerDebouncedMetaSave();
+        }
       },
 
       setTitle: (title: string) => {
-        const { documentId, onTitleChange } = get();
-        set({ title });
+        const { lastSavedTitle, triggerDebouncedMetaSave } = get();
 
-        // Mark document as dirty in DocumentStore
-        if (documentId) {
-          useDocumentStore.getState().markDirty(documentId);
+        const isDirty = title !== lastSavedTitle;
+        set({ isMetaDirty: isDirty, title });
+
+        if (isDirty) {
+          triggerDebouncedMetaSave();
         }
+      },
 
-        // Notify parent for optimistic update
-        onTitleChange?.(title);
+      triggerDebouncedMetaSave: () => {
+        const save = getOrCreateDebouncedMetaSave();
+        save();
       },
     };
   };

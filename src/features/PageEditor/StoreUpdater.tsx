@@ -35,6 +35,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const useStoreUpdater = createStoreUpdater(storeApi);
 
     const editor = usePageEditorStore((s) => s.editor);
+    const initMeta = usePageEditorStore((s) => s.initMeta);
 
     // Update store with props
     useStoreUpdater('documentId', pageId);
@@ -46,8 +47,11 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('onDelete', onDelete);
     useStoreUpdater('onBack', onBack);
     useStoreUpdater('parentId', parentId);
-    useStoreUpdater('title', title);
-    useStoreUpdater('emoji', emoji);
+
+    // Initialize meta (title/emoji) with dirty tracking
+    useEffect(() => {
+      initMeta(title, emoji);
+    }, [pageId, title, emoji]);
 
     // Connect editor to page agent runtime
     useEffect(() => {
@@ -61,16 +65,12 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     // Connect title handlers and document ID to page agent runtime
     useEffect(() => {
-      const titleSetter = (t: string) => {
-        storeApi.setState({ title: t });
-      };
-
       const titleGetter = () => {
         return storeApi.getState().title || '';
       };
 
       pageAgentRuntime.setCurrentDocId(pageId);
-      pageAgentRuntime.setTitleHandlers(titleSetter, titleGetter);
+      pageAgentRuntime.setTitleHandlers(storeApi.getState().setTitle, titleGetter);
 
       return () => {
         pageAgentRuntime.setCurrentDocId(undefined);
