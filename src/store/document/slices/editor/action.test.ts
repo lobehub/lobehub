@@ -153,7 +153,7 @@ describe('DocumentStore - Editor Actions', () => {
 
       // Then call onEditorInit
       act(() => {
-        result.current.onEditorInit();
+        result.current.onEditorInit(mockEditor);
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', '# Hello World');
@@ -174,7 +174,7 @@ describe('DocumentStore - Editor Actions', () => {
       });
 
       act(() => {
-        result.current.onEditorInit();
+        result.current.onEditorInit(mockEditor);
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData));
@@ -193,7 +193,7 @@ describe('DocumentStore - Editor Actions', () => {
       });
 
       act(() => {
-        result.current.onEditorInit();
+        result.current.onEditorInit(mockEditor);
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', ' ');

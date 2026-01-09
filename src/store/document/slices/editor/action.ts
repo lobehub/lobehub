@@ -1,5 +1,6 @@
 'use client';
 
+import type { IEditor } from '@lobehub/editor/es/types';
 import { type EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand/vanilla';
@@ -40,7 +41,7 @@ export interface EditorAction {
   /**
    * Called when editor is initialized
    */
-  onEditorInit: () => Promise<void>;
+  onEditorInit: (editor: IEditor) => Promise<void>;
   /**
    * Perform save operation for a document
    * @param documentId - Document ID (defaults to active document)
@@ -125,8 +126,8 @@ export const createEditorSlice: StateCreator<
     internal_dispatchDocument({ id: documentId, type: 'updateDocument', value: { isDirty: true } });
   },
 
-  onEditorInit: async () => {
-    const { editor, activeDocumentId, documents } = get();
+  onEditorInit: async (editor) => {
+    const { activeDocumentId, documents } = get();
     if (!editor || !activeDocumentId) return;
 
     const doc = documents[activeDocumentId];
@@ -157,6 +158,8 @@ export const createEditorSlice: StateCreator<
     } catch (err) {
       console.error('[DocumentStore] Failed to load markdown content:', err);
     }
+
+    set({ editor });
   },
 
   performSave: async (documentId, metadata) => {

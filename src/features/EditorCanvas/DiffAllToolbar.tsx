@@ -35,18 +35,36 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const DiffAllToolbar = memo<{ editor: IEditor }>(({ editor }) => {
-  const { t } = useTranslation('editor');
-  const isDarkMode = useIsDark();
-  const performSave = useDocumentStore((s) => s.performSave);
+const useIsEditorInit = (editor: IEditor) => {
+  const [isEditInit, setEditInit] = useState(false);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const onInit = () => {
+      console.log('init: id', editor.getLexicalEditor()?._key);
+      setEditInit(true);
+    };
+    editor.on('initialized', onInit);
+    return () => {
+      editor.off('initialized', onInit);
+    };
+  }, [editor]);
+
+  return isEditInit;
+};
+
+const useEditorHasPendingDiffs = (editor: IEditor) => {
   const [hasPendingDiffs, setHasPendingDiffs] = useState(false);
+  const isEditInit = useIsEditorInit(editor);
 
   // Listen to editor state changes to detect diff nodes
   useEffect(() => {
     if (!editor) return;
 
     const lexicalEditor = editor.getLexicalEditor();
-    if (!lexicalEditor) return;
+
+    if (!lexicalEditor || !isEditInit) return;
 
     const checkForDiffNodes = () => {
       const editorState = lexicalEditor.getEditorState();
@@ -66,15 +84,37 @@ const DiffAllToolbar = memo<{ editor: IEditor }>(({ editor }) => {
     // Check initially
     checkForDiffNodes();
 
-    // Register update listener
-    return lexicalEditor.registerUpdateListener(() => {
+    const unregister = lexicalEditor.registerUpdateListener(() => {
       checkForDiffNodes();
     });
-  }, [editor]);
+    // Register update listener
+    return () => {
+      unregister();
+    };
+  }, [editor, isEditInit]);
+
+  return hasPendingDiffs;
+};
+
+interface DiffAllToolbarProps {
+  documentId: string;
+  editor: IEditor;
+}
+const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
+  const { t } = useTranslation('editor');
+  const isDarkMode = useIsDark();
+  const [editor, performSave, markDirty] = useDocumentStore((s) => [
+    s.editor!,
+    s.performSave,
+    s.markDirty,
+  ]);
+
+  const hasPendingDiffs = useEditorHasPendingDiffs(editor);
 
   if (!hasPendingDiffs) return null;
 
   const handleSave = async () => {
+    markDirty(documentId);
     await performSave();
   };
 

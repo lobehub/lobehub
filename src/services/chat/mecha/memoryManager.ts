@@ -69,19 +69,19 @@ export const resolveTopicMemories = async (
 
   // Fetch memories for this topic
   try {
-    const result = await userMemoryService.retrieveMemoryForTopic(topicId);
-    const memories = result ?? EMPTY_MEMORIES;
-
-    // Cache the fetched memories by topic ID
-    useUserMemoryStore.setState((state) => ({
-      topicMemoriesMap: {
-        ...state.topicMemoriesMap,
-        [topicId]: memories,
-      },
-    }));
-
-    // Also trigger SWR mutate to keep in sync
-    await mutate(['useFetchMemoriesForTopic', topicId]);
+    let memories = EMPTY_MEMORIES;
+    userMemoryService.retrieveMemoryForTopic(topicId).then(async (result) => {
+      const memories = result;
+      // Cache the fetched memories by topic ID
+      useUserMemoryStore.setState((state) => ({
+        topicMemoriesMap: {
+          ...state.topicMemoriesMap,
+          [topicId]: memories,
+        },
+      }));
+      // Also trigger SWR mutate to keep in sync
+      await mutate(['useFetchMemoriesForTopic', topicId]);
+    });
 
     return memories;
   } catch (error) {

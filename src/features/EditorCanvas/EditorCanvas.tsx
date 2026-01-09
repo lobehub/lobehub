@@ -56,7 +56,7 @@ export interface EditorCanvasProps {
   /**
    * Editor initialization handler
    */
-  onInit?: () => void;
+  onInit?: (editor: IEditor) => void;
 
   /**
    * Placeholder text for empty editor

@@ -4,7 +4,6 @@ import { Suspense, memo } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import PageExplorerPlaceholder from '@/features/PageExplorer/PageExplorerPlaceholder';
-import { pageSelectors, usePageStore } from '@/store/page';
 
 import PageTitle from './PageTitle';
 
@@ -13,14 +12,11 @@ import PageTitle from './PageTitle';
  * This is extracted from the /resource route to have its own dedicated space
  */
 const PagesPage = memo(() => {
-  const documents = usePageStore(pageSelectors.getFilteredDocuments);
-  const hasPages = documents.length > 0;
-
   return (
     <>
       <PageTitle />
       <Suspense fallback={<Loading debugId="PagesPage" />}>
-        <PageExplorerPlaceholder hasPages={hasPages} />
+        <PageExplorerPlaceholder />
       </Suspense>
     </>
   );

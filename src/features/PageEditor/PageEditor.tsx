@@ -1,6 +1,7 @@
 'use client';
 
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { type FC, memo, useEffect } from 'react';
@@ -66,6 +67,7 @@ const PageEditorCanvas = memo(() => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [isDirty]);
+
   return (
     <>
       <PageTitle />
@@ -90,7 +92,7 @@ const PageEditorCanvas = memo(() => {
               </Flexbox>
             </WideScreenContainer>
           </Flexbox>
-          <DiffAllToolbar editor={editor!} />
+          {documentId && <DiffAllToolbar documentId={documentId} editor={editor!} />}
         </Flexbox>
         <Copilot />
       </Flexbox>
@@ -125,21 +127,23 @@ export const PageEditor: FC<PageEditorProps> = ({
 
   return (
     <PageAgentProvider pageAgentId={pageAgentId}>
-      <PageEditorProvider
-        emoji={emoji}
-        key={pageId}
-        knowledgeBaseId={knowledgeBaseId}
-        onBack={onBack}
-        onDelete={() => deletePage(pageId || '')}
-        onDocumentIdChange={onDocumentIdChange}
-        onEmojiChange={onEmojiChange}
-        onSave={onSave}
-        onTitleChange={onTitleChange}
-        pageId={pageId}
-        title={title}
-      >
-        <PageEditorCanvas />
-      </PageEditorProvider>
+      <EditorProvider>
+        <PageEditorProvider
+          emoji={emoji}
+          key={pageId}
+          knowledgeBaseId={knowledgeBaseId}
+          onBack={onBack}
+          onDelete={() => deletePage(pageId || '')}
+          onDocumentIdChange={onDocumentIdChange}
+          onEmojiChange={onEmojiChange}
+          onSave={onSave}
+          onTitleChange={onTitleChange}
+          pageId={pageId}
+          title={title}
+        >
+          <PageEditorCanvas />
+        </PageEditorProvider>
+      </EditorProvider>
     </PageAgentProvider>
   );
 };

@@ -1,3 +1,5 @@
+import { NavigateFunction } from 'react-router-dom';
+
 import { type LobeDocument } from '@/types/document';
 
 export interface PageQueryFilter {
@@ -7,12 +9,12 @@ export interface PageQueryFilter {
 
 export interface PageState {
   // ===== Selection & Navigation =====
-/**
+  /**
    * Whether all pages drawer is open
    */
   allPagesDrawerOpen: boolean;
   // ===== List Management =====
-/**
+  /**
    * Current page number (0-based) for pagination
    */
   currentPage: number;
@@ -30,15 +32,16 @@ export interface PageState {
    */
   hasMoreDocuments: boolean;
   // ===== UI State =====
-/**
+  /**
    * Whether currently creating a new page
    */
   isCreatingNew: boolean;
-
   /**
    * Loading state for pagination (load more)
    */
   isLoadingMoreDocuments: boolean;
+
+  navigate?: NavigateFunction;
   /**
    * Filters used in the last query
    */
@@ -63,29 +66,25 @@ export interface PageState {
 }
 
 export const initialState: PageState = {
-  
   // Selection & Navigation
-allPagesDrawerOpen: false,
-  
-// List Management
-currentPage: 0,
-  
-documents: undefined,
-  
-documentsTotal: 0,
-  
-hasMoreDocuments: false,
-  
-// UI State
-isCreatingNew: false,
+  allPagesDrawerOpen: false,
 
-  
-  
-isLoadingMoreDocuments: false,
-  
-queryFilter: undefined,
+  // List Management
+  currentPage: 0,
 
-  
+  documents: undefined,
+
+  documentsTotal: 0,
+
+  hasMoreDocuments: false,
+
+  // UI State
+  isCreatingNew: false,
+
+  isLoadingMoreDocuments: false,
+
+  queryFilter: undefined,
+
   renamingPageId: null,
   searchKeywords: '',
   selectedPageId: null,

@@ -3,7 +3,6 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
-import { useGlobalStore } from '@/store/global';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 import { standardizeIdentifier } from '@/utils/identifier';
 import { setNamespace } from '@/utils/storeDebug';
@@ -21,12 +20,6 @@ export interface PageUpdateParams {
   emoji?: string;
   title?: string;
 }
-
-const navigateToPage = (pageId: string | null) => {
-  const dryPageId = standardizeIdentifier(pageId ?? '') ?? '';
-  const newPath = dryPageId ? `/page/${dryPageId}` : '/page';
-  useGlobalStore.getState().navigate?.(newPath);
-};
 
 export interface CrudAction {
   /**
@@ -58,6 +51,7 @@ export interface CrudAction {
    * Fetch full page detail by ID and update documents array
    */
   fetchPageDetail: (pageId: string) => Promise<void>;
+  navigateToPage: (pageId: string | null) => void;
   /**
    * Remove a page (deletes from documents table)
    */
@@ -130,18 +124,18 @@ export const createCrudSlice: StateCreator<
       set({ isCreatingNew: false, selectedPageId: newPage.id }, false, n('createNewPage/success'));
 
       // Navigate to the new page
-      navigateToPage(newPage.id);
+      get().navigateToPage(newPage.id);
 
       return newPage.id;
     } catch (error) {
       console.error('Failed to create page:', error);
       get().removeTempPage(tempPageId);
       set({ isCreatingNew: false, selectedPageId: null }, false, n('createNewPage/error'));
-      navigateToPage(null);
+      get().navigate?.('/page');
+
       throw error;
     }
   },
-
   createOptimisticPage: (title = 'Untitled') => {
     // Generate temporary ID with prefix to identify optimistic pages
     const tempId = `temp-page-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -192,7 +186,7 @@ export const createCrudSlice: StateCreator<
 
     if (selectedPageId === pageId) {
       set({ isCreatingNew: false, selectedPageId: null }, false, n('deletePage'));
-      navigateToPage(null);
+      get().navigateToPage(null);
     }
   },
 
@@ -290,6 +284,14 @@ export const createCrudSlice: StateCreator<
     }
   },
 
+  navigateToPage: (pageId) => {
+    if (!pageId) {
+      get().navigate?.('/page');
+    } else {
+      get().navigate?.(`/page/${standardizeIdentifier(pageId)}`);
+    }
+  },
+
   removePage: async (pageId) => {
     const { documents, selectedPageId } = get();
 
@@ -302,7 +304,7 @@ export const createCrudSlice: StateCreator<
     // Clear selected page ID if the deleted page is currently selected
     if (selectedPageId === pageId) {
       set({ selectedPageId: null }, false, n('removePage/clearSelection'));
-      navigateToPage(null);
+      get().navigateToPage(null);
     }
 
     try {
@@ -316,7 +318,7 @@ export const createCrudSlice: StateCreator<
       }
       if (selectedPageId === pageId) {
         set({ selectedPageId: pageId }, false, n('removePage/restoreSelection'));
-        navigateToPage(pageId);
+        get().navigateToPage(pageId);
       }
       throw error;
     }
