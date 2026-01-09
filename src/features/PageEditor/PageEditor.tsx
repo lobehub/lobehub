@@ -13,7 +13,7 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
-import { useFileStore } from '@/store/file';
+import { usePageStore } from '@/store/page';
 
 import Copilot from './Copilot';
 import EditorCanvas from './EditorCanvas';
@@ -30,7 +30,9 @@ interface PageEditorProps {
   onBack?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;
+  onEmojiChange?: (emoji: string | undefined) => void;
   onSave?: () => void;
+  onTitleChange?: (title: string) => void;
   pageId?: string;
   title?: string;
 }
@@ -105,7 +107,9 @@ export const PageEditor: FC<PageEditorProps> = ({
   pageId,
   knowledgeBaseId,
   onDocumentIdChange,
+  onEmojiChange,
   onSave,
+  onTitleChange,
   onBack,
   title,
   emoji,
@@ -115,7 +119,7 @@ export const PageEditor: FC<PageEditorProps> = ({
 
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
-  const [deletePage] = useFileStore((s) => [s.deletePage]);
+  const deletePage = usePageStore((s) => s.deletePage);
 
   if (!pageAgentId) return <Loading debugId="PageEditor > PageAgent Init" />;
 
@@ -128,7 +132,9 @@ export const PageEditor: FC<PageEditorProps> = ({
         onBack={onBack}
         onDelete={() => deletePage(pageId || '')}
         onDocumentIdChange={onDocumentIdChange}
+        onEmojiChange={onEmojiChange}
         onSave={onSave}
+        onTitleChange={onTitleChange}
         pageId={pageId}
         title={title}
       >

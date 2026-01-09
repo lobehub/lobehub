@@ -80,23 +80,29 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       },
 
       setEmoji: (emoji: string | undefined) => {
-        const { documentId } = get();
+        const { documentId, onEmojiChange } = get();
         set({ emoji });
 
         // Mark document as dirty in DocumentStore
         if (documentId) {
           useDocumentStore.getState().markDirty(documentId);
         }
+
+        // Notify parent for optimistic update
+        onEmojiChange?.(emoji);
       },
 
       setTitle: (title: string) => {
-        const { documentId } = get();
+        const { documentId, onTitleChange } = get();
         set({ title });
 
         // Mark document as dirty in DocumentStore
         if (documentId) {
           useDocumentStore.getState().markDirty(documentId);
         }
+
+        // Notify parent for optimistic update
+        onTitleChange?.(title);
       },
     };
   };

@@ -22,7 +22,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     pageId,
     knowledgeBaseId,
     onDocumentIdChange,
+    onEmojiChange,
     onSave,
+    onTitleChange,
     onDelete,
     onBack,
     parentId,
@@ -38,7 +40,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('documentId', pageId);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);
     useStoreUpdater('onDocumentIdChange', onDocumentIdChange);
+    useStoreUpdater('onEmojiChange', onEmojiChange);
     useStoreUpdater('onSave', onSave);
+    useStoreUpdater('onTitleChange', onTitleChange);
     useStoreUpdater('onDelete', onDelete);
     useStoreUpdater('onBack', onBack);
     useStoreUpdater('parentId', parentId);

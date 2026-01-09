@@ -13,8 +13,8 @@ import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import { type GroupMemberConfig, chatGroupService } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
+import { usePageStore } from '@/store/page';
 
 interface HostConfig {
   model?: string;
@@ -45,7 +45,7 @@ export const useCreateMenuItems = () => {
     s.switchToGroup,
   ]);
   const [createGroup, loadGroups] = useAgentGroupStore((s) => [s.createGroup, s.loadGroups]);
-  const createNewPage = useFileStore((s) => s.createNewPage);
+  const createNewPage = usePageStore((s) => s.createNewPage);
 
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isCreatingSessionGroup, setIsCreatingSessionGroup] = useState(false);

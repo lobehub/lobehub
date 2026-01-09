@@ -6,7 +6,6 @@ import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { useGlobalStore } from '@/store/global';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
-import { standardizeIdentifier } from '@/utils/identifier';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type FileStore } from '../../store';
@@ -17,13 +16,6 @@ const n = setNamespace('document');
 const ALLOWED_DOCUMENT_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
 const ALLOWED_DOCUMENT_FILE_TYPES = new Set(['custom/document', 'application/pdf']);
 const EDITOR_DOCUMENT_FILE_TYPE = 'custom/document';
-
-const updateUrl = (docId: string | null) => {
-  const dryPageId = standardizeIdentifier(docId ?? '') ?? '';
-
-  const newPath = dryPageId ? `/page/${dryPageId}` : '/page';
-  window.history.replaceState({}, '', newPath);
-};
 
 /**
  * Check if a page should be displayed in the page list
@@ -36,7 +28,6 @@ const isAllowedDocument = (page: { fileType: string; sourceType: string }) => {
 };
 
 export interface DocumentAction {
-  closeAllPagesDrawer: () => void;
   /**
    * Create a new document with markdown content (not optimistic, waits for server response)
    * Returns the created document
@@ -53,19 +44,10 @@ export interface DocumentAction {
    */
   createFolder: (name: string, parentId?: string, knowledgeBaseId?: string) => Promise<string>;
   /**
-   * Create a new page with optimistic update (for page explorer)
-   * Returns the ID of the created page
-   */
-  createNewPage: (title: string) => Promise<string>;
-  /**
    * Create a new optimistic document immediately in local map
    * Returns the temporary ID for the new document
    */
   createOptimisticDocument: (title?: string) => string;
-  /**
-   * Delete a page and update selection if needed
-   */
-  deletePage: (documentId: string) => Promise<void>;
   /**
    * Duplicate an existing document
    * Returns the created document
@@ -87,7 +69,6 @@ export interface DocumentAction {
    * Load more documents (next page)
    */
   loadMoreDocuments: () => Promise<void>;
-  openAllPagesDrawer: () => void;
   /**
    * Remove a document (deletes from documents table)
    */
@@ -97,33 +78,9 @@ export interface DocumentAction {
    */
   removeTempDocument: (tempId: string) => void;
   /**
-   * Rename a page
-   */
-  renamePage: (documentId: string, title: string, emoji?: string) => Promise<void>;
-  /**
    * Replace a temp document with real document data (for smooth UX when creating documents)
    */
   replaceTempDocumentWithReal: (tempId: string, realDocument: LobeDocument) => void;
-  /**
-   * Select or deselect a page
-   */
-  selectPage: (documentId: string) => void;
-  /**
-   * Set the ID of the page being renamed
-   */
-  setRenamingPageId: (pageId: string | null) => void;
-  /**
-   * Set search keywords
-   */
-  setSearchKeywords: (keywords: string) => void;
-  /**
-   * Set selected page ID (used for external navigation)
-   */
-  setSelectedPageId: (pageId: string | null, updateHistory?: boolean) => void;
-  /**
-   * Toggle filter to show only pages not in any library
-   */
-  setShowOnlyPagesNotInLibrary: (show: boolean) => void;
   /**
    * Update document directly (no optimistic update)
    */
@@ -147,10 +104,6 @@ export const createDocumentSlice: StateCreator<
   [],
   DocumentAction
 > = (set, get) => ({
-  closeAllPagesDrawer: () => {
-    set({ allPagesDrawerOpen: false }, false, n('closeAllPagesDrawer'));
-  },
-
   createDocument: async ({ title, content, knowledgeBaseId, parentId }) => {
     const now = Date.now();
 
@@ -201,58 +154,6 @@ export const createDocumentSlice: StateCreator<
     return folder.id;
   },
 
-  // Page explorer actions
-  createNewPage: async (title: string) => {
-    const { createOptimisticDocument, createDocument, replaceTempDocumentWithReal } = get();
-
-    // Create optimistic page immediately
-    const tempPageId = createOptimisticDocument(title);
-    set({ isCreatingNew: true, selectedPageId: tempPageId }, false, n('createNewPage/start'));
-
-    try {
-      // Create real page
-      const newPage = await createDocument({
-        content: '',
-        title,
-      });
-
-      // Convert to LobeDocument
-      const realPage: LobeDocument = {
-        content: newPage.content || '',
-        createdAt: newPage.createdAt ? new Date(newPage.createdAt) : new Date(),
-        editorData:
-          typeof newPage.editorData === 'string'
-            ? JSON.parse(newPage.editorData)
-            : newPage.editorData || null,
-        fileType: 'custom/document',
-        filename: newPage.title || title,
-        id: newPage.id,
-        metadata: newPage.metadata || {},
-        source: 'document',
-        sourceType: DocumentSourceType.EDITOR,
-        title: newPage.title || title,
-        totalCharCount: newPage.content?.length || 0,
-        totalLineCount: 0,
-        updatedAt: newPage.updatedAt ? new Date(newPage.updatedAt) : new Date(),
-      };
-
-      // Replace optimistic with real
-      replaceTempDocumentWithReal(tempPageId, realPage);
-      set({ isCreatingNew: false, selectedPageId: newPage.id }, false, n('createNewPage/success'));
-
-      // Update URL to navigate to the new page
-      updateUrl(newPage.id);
-
-      return newPage.id;
-    } catch (error) {
-      console.error('Failed to create page:', error);
-      get().removeTempDocument(tempPageId);
-      set({ isCreatingNew: false, selectedPageId: null }, false, n('createNewPage/error'));
-      updateUrl(null);
-      throw error;
-    }
-  },
-
   createOptimisticDocument: (title = 'Untitled') => {
     const { localDocumentMap } = get();
 
@@ -282,15 +183,6 @@ export const createDocumentSlice: StateCreator<
     set({ localDocumentMap: newMap }, false, n('createOptimisticDocument'));
 
     return tempId;
-  },
-
-  deletePage: async (documentId: string) => {
-    const { selectedPageId } = get();
-
-    if (selectedPageId === documentId) {
-      set({ isCreatingNew: false, selectedPageId: null }, false, n('deletePage'));
-      window.history.replaceState({}, '', '/page');
-    }
   },
 
   duplicateDocument: async (documentId) => {
@@ -512,48 +404,37 @@ export const createDocumentSlice: StateCreator<
     }
   },
 
-  openAllPagesDrawer: () => {
-    set({ allPagesDrawerOpen: true }, false, n('openAllPagesDrawer'));
-  },
-
   removeDocument: async (documentId) => {
     // Remove from local optimistic map first (optimistic update)
-    const { localDocumentMap, documents, selectedPageId } = get();
+    const { localDocumentMap, documents } = get();
     const newMap = new Map(localDocumentMap);
     newMap.delete(documentId);
 
-    // Also remove from pages array to update the list immediately
-    const newPages = documents.filter((doc) => doc.id !== documentId);
+    // Also remove from documents array to update the list immediately
+    const newDocuments = documents.filter((doc) => doc.id !== documentId);
 
-    // Clear selected page ID if the deleted page is currently selected
-    const updates: Partial<FileStore> = {
-      documents: newPages,
-      localDocumentMap: newMap,
-    };
-    if (selectedPageId === documentId) {
-      updates.selectedPageId = null;
-      updateUrl(null);
-    }
-
-    set(updates, false, n('removeDocument/optimistic'));
+    set(
+      { documents: newDocuments, localDocumentMap: newMap },
+      false,
+      n('removeDocument/optimistic'),
+    );
 
     try {
-      // Delete from pages table
+      // Delete from documents table
       await documentService.deleteDocument(documentId);
       // No need to call fetchDocuments() - optimistic update is enough
     } catch (error) {
-      console.error('Failed to delete page:', error);
-      // Restore the page in local map and pages array on error
+      console.error('Failed to delete document:', error);
+      // Restore the document in local map and documents array on error
       const restoredMap = new Map(localDocumentMap);
-      const restoreUpdates: Partial<FileStore> = {
-        documents,
-        localDocumentMap: restoredMap,
-      };
-      if (selectedPageId === documentId) {
-        restoreUpdates.selectedPageId = documentId;
-        updateUrl(documentId);
-      }
-      set(restoreUpdates, false, n('removeDocument/restore'));
+      set(
+        {
+          documents,
+          localDocumentMap: restoredMap,
+        },
+        false,
+        n('removeDocument/restore'),
+      );
       throw error;
     }
   },
@@ -563,21 +444,6 @@ export const createDocumentSlice: StateCreator<
     const newMap = new Map(localDocumentMap);
     newMap.delete(tempId);
     set({ localDocumentMap: newMap }, false, n('removeTempDocument'));
-  },
-
-  renamePage: async (documentId: string, title: string, emoji?: string) => {
-    const { updateDocumentOptimistically } = get();
-
-    try {
-      await updateDocumentOptimistically(documentId, {
-        metadata: { emoji },
-        title,
-      });
-    } catch (error) {
-      console.error('Failed to rename page:', error);
-    } finally {
-      set({ renamingPageId: null }, false, n('renamePage'));
-    }
   },
 
   replaceTempDocumentWithReal: (tempId, realPage) => {
@@ -591,41 +457,6 @@ export const createDocumentSlice: StateCreator<
     newMap.set(realPage.id, realPage);
 
     set({ localDocumentMap: newMap }, false, n('replaceTempDocumentWithReal'));
-  },
-
-  selectPage: (documentId: string) => {
-    const { selectedPageId } = get();
-
-    if (selectedPageId === documentId) {
-      // Don't allow deselecting the current page, required from @canisminor
-      //
-      // set({ isCreatingNew: false, selectedPageId: null }, false, n('selectPage/deselect'));
-      // updateUrl(null);
-    } else {
-      // Select
-      set({ isCreatingNew: false, selectedPageId: documentId }, false, n('selectPage/select'));
-      updateUrl(documentId);
-    }
-  },
-
-  setRenamingPageId: (pageId: string | null) => {
-    set({ renamingPageId: pageId }, false, n('setRenamingPageId'));
-  },
-
-  setSearchKeywords: (keywords: string) => {
-    set({ searchKeywords: keywords }, false, n('setSearchKeywords'));
-  },
-
-  setSelectedPageId: (pageId: string | null, updateHistory = true) => {
-    set({ selectedPageId: pageId }, false, n('setSelectedPageId'));
-    if (updateHistory) {
-      const newPath = pageId ? `/page/${pageId}` : '/page';
-      window.history.replaceState({}, '', newPath);
-    }
-  },
-
-  setShowOnlyPagesNotInLibrary: (show: boolean) => {
-    set({ showOnlyPagesNotInLibrary: show }, false, n('setShowOnlyPagesNotInLibrary'));
   },
 
   updateDocument: async (id, updates) => {

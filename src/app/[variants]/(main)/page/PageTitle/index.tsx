@@ -11,4 +11,3 @@ const Title = memo(() => {
 Title.displayName = 'PageTitle';
 
 export default Title;
-

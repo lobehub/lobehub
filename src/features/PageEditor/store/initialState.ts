@@ -7,7 +7,9 @@ export interface PublicState {
   onBack?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;
+  onEmojiChange?: (emoji: string | undefined) => void;
   onSave?: () => void;
+  onTitleChange?: (title: string) => void;
   parentId?: string;
   title?: string;
 }
