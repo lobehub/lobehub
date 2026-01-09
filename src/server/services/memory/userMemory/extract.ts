@@ -1841,30 +1841,30 @@ export class MemoryExtractionWorkflowService {
     return this.client;
   }
 
-  static triggerProcessUsers(payload: MemoryExtractionPayloadInput) {
+  static triggerProcessUsers(payload: MemoryExtractionPayloadInput, options?: { extraHeaders?: Record<string, string> }) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.users, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, url });
+    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 
-  static triggerProcessUserTopics(payload: UserTopicWorkflowPayload) {
+  static triggerProcessUserTopics(payload: UserTopicWorkflowPayload, options?: { extraHeaders?: Record<string, string> }) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.userTopics, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, url });
+    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 
-  static triggerProcessTopics(payload: MemoryExtractionPayloadInput) {
+  static triggerProcessTopics(payload: MemoryExtractionPayloadInput, options?: { extraHeaders?: Record<string, string> }) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.topicBatch, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, url });
+    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 }

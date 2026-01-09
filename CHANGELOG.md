@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.0.0-next.247](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.246...v2.0.0-next.247)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ♻ Code Refactoring
+
+- **database**: Renamed to userMemories/index.ts.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **database**: Renamed to userMemories/index.ts, closes [#11359](https://github.com/lobehub/lobe-chat/issues/11359) ([9dae5ff](https://github.com/lobehub/lobe-chat/commit/9dae5ff))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.246](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.245...v2.0.0-next.246)
 
 <sup>Released on **2026-01-09**</sup>
