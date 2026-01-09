@@ -2,21 +2,19 @@
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { Suspense, memo, useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { electronSystemService } from '@/services/electron/system';
-import { isDev } from '@/utils/env';
 
 import OnboardingContainer from './_layout';
 import DataModeStep from './features/DataModeStep';
 import LoginStep from './features/LoginStep';
 import PermissionsStep from './features/PermissionsStep';
 import WelcomeStep from './features/WelcomeStep';
-import { getDesktopOnboardingCompleted, setDesktopOnboardingCompleted } from './storage';
+import { setDesktopOnboardingCompleted } from './storage';
 
 const DesktopOnboardingPage = memo(() => {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isMac, setIsMac] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,12 +30,6 @@ const DesktopOnboardingPage = memo(() => {
   }, [searchParams]);
 
   const [currentStep, setCurrentStep] = useState(getInitialStep);
-
-  // 检查是否已完成 onboarding
-  useEffect(() => {
-    if (isDev) return;
-    if (getDesktopOnboardingCompleted()) navigate('/', { replace: true });
-  }, [navigate]);
 
   // 设置窗口大小和可调整性
   useEffect(() => {

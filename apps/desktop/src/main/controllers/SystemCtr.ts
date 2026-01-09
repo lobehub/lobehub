@@ -1,14 +1,12 @@
 import { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
-import { app, dialog, nativeTheme, shell, systemPreferences } from 'electron';
+import { app, desktopCapturer, dialog, nativeTheme, shell, systemPreferences } from 'electron';
 import { macOS } from 'electron-is';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
 import process from 'node:process';
 
+import { checkFullDiskAccess, openFullDiskAccessSettings } from '@/utils/fullDiskAccess';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
-import fullDiskAccessAutoAddScript from './scripts/full-disk-access.applescript?raw';
 
 const logger = createLogger('controllers:SystemCtr');
 
@@ -57,14 +55,98 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   requestAccessibilityAccess() {
-    if (!macOS()) return true;
-    return systemPreferences.isTrustedAccessibilityClient(true);
+    if (!macOS()) {
+      logger.info('[Accessibility] Not macOS, returning true');
+      return true;
+    }
+    logger.info('[Accessibility] Requesting accessibility access (will prompt if not granted)...');
+    // Pass true to prompt user if not already trusted
+    const result = systemPreferences.isTrustedAccessibilityClient(true);
+    logger.info(`[Accessibility] isTrustedAccessibilityClient(true) returned: ${result}`);
+    return result;
   }
 
   @IpcMethod()
   getAccessibilityStatus() {
-    if (!macOS()) return true;
-    return systemPreferences.isTrustedAccessibilityClient(false);
+    if (!macOS()) {
+      logger.info('[Accessibility] Not macOS, returning true');
+      return true;
+    }
+    // Pass false to just check without prompting
+    const status = systemPreferences.isTrustedAccessibilityClient(false);
+    logger.info(`[Accessibility] Current status: ${status}`);
+    return status;
+  }
+
+  /**
+   * Check if Full Disk Access is granted.
+   * This works by attempting to read a protected system directory.
+   * Calling this also registers the app in the TCC database, making it appear
+   * in System Settings > Privacy & Security > Full Disk Access.
+   */
+  @IpcMethod()
+  getFullDiskAccessStatus(): boolean {
+    return checkFullDiskAccess();
+  }
+
+  /**
+   * Prompt the user with a native dialog if Full Disk Access is not granted.
+   * Based on https://github.com/inket/FullDiskAccess
+   *
+   * @param options - Dialog options
+   * @returns 'granted' if already granted, 'opened_settings' if user chose to open settings,
+   *          'skipped' if user chose to skip, 'cancelled' if dialog was cancelled
+   */
+  @IpcMethod()
+  async promptFullDiskAccessIfNotGranted(options?: {
+    message?: string;
+    openSettingsButtonText?: string;
+    skipButtonText?: string;
+    title?: string;
+  }): Promise<'cancelled' | 'granted' | 'opened_settings' | 'skipped'> {
+    // Check if already granted
+    if (checkFullDiskAccess()) {
+      logger.info('[FullDiskAccess] Already granted, skipping prompt');
+
+      return 'granted';
+    }
+
+    if (!macOS()) {
+      logger.info('[FullDiskAccess] Not macOS, returning granted');
+      return 'granted';
+    }
+
+    const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
+
+    // Get localized strings
+    const t = this.app.i18n.ns('dialog');
+    const title = options?.title || t('fullDiskAccess.title');
+    const message = options?.message || t('fullDiskAccess.message');
+    const openSettingsButtonText =
+      options?.openSettingsButtonText || t('fullDiskAccess.openSettings');
+    const skipButtonText = options?.skipButtonText || t('fullDiskAccess.skip');
+
+    logger.info('[FullDiskAccess] Showing native prompt dialog');
+
+    const result = await dialog.showMessageBox(mainWindow!, {
+      buttons: [openSettingsButtonText, skipButtonText],
+      cancelId: 1,
+      defaultId: 0,
+      message: message,
+      title: title,
+      type: 'info',
+    });
+
+    if (result.response === 0) {
+      // User chose to open settings
+      logger.info('[FullDiskAccess] User chose to open settings');
+      await this.openFullDiskAccessSettings();
+      return 'opened_settings';
+    } else {
+      // User chose to skip or cancelled
+      logger.info('[FullDiskAccess] User chose to skip');
+      return 'skipped';
+    }
   }
 
   @IpcMethod()
@@ -75,119 +157,129 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   async requestMicrophoneAccess(): Promise<boolean> {
-    if (!macOS()) return true;
-    return systemPreferences.askForMediaAccess('microphone');
+    if (!macOS()) {
+      logger.info('[Microphone] Not macOS, returning true');
+      return true;
+    }
+
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    logger.info(`[Microphone] Current status: ${status}`);
+
+    // Only ask for access if status is 'not-determined'
+    // If already denied/restricted, the system won't show a prompt
+    if (status === 'not-determined') {
+      logger.info('[Microphone] Status is not-determined, calling askForMediaAccess...');
+      try {
+        const result = await systemPreferences.askForMediaAccess('microphone');
+        logger.info(`[Microphone] askForMediaAccess result: ${result}`);
+        return result;
+      } catch (error) {
+        logger.error('[Microphone] askForMediaAccess failed:', error);
+        return false;
+      }
+    }
+
+    if (status === 'granted') {
+      logger.info('[Microphone] Already granted');
+      return true;
+    }
+
+    // If denied or restricted, open System Settings for manual enable
+    logger.info(`[Microphone] Status is ${status}, opening System Settings...`);
+    await shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+    );
+
+    return false;
   }
 
   @IpcMethod()
   async requestScreenAccess(): Promise<boolean> {
-    if (!macOS()) return true;
+    if (!macOS()) {
+      logger.info('[Screen] Not macOS, returning true');
+      return true;
+    }
+
+    const status = systemPreferences.getMediaAccessStatus('screen');
+    logger.info(`[Screen] Current status: ${status}`);
+
+    // If already granted, no need to do anything
+    if (status === 'granted') {
+      logger.info('[Screen] Already granted');
+      return true;
+    }
 
     // IMPORTANT:
     // On macOS, the app may NOT appear in "Screen Recording" list until it actually
     // requests the permission once (TCC needs to register this app).
-    // So we try to proactively request it first, then open System Settings for manual toggle.
-    // 1) Best-effort: try Electron runtime API if available (not typed in Electron 38).
+    // We use multiple approaches to ensure TCC registration:
+    // 1. desktopCapturer.getSources() in main process
+    // 2. getDisplayMedia() in renderer as fallback
+
+    // Approach 1: Use desktopCapturer in main process
+    logger.info('[Screen] Attempting TCC registration via desktopCapturer.getSources...');
     try {
-      const status = systemPreferences.getMediaAccessStatus('screen');
-      if (status !== 'granted') {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        await (systemPreferences as any).askForMediaAccess?.('screen');
-      }
+      // Using a reasonable thumbnail size and both types to ensure TCC registration
+      const sources = await desktopCapturer.getSources({
+        fetchWindowIcons: true,
+        thumbnailSize: { height: 144, width: 256 },
+        types: ['screen', 'window'],
+      });
+      // Access the sources to ensure the capture actually happens
+      logger.info(`[Screen] desktopCapturer.getSources returned ${sources.length} sources`);
     } catch (error) {
-      logger.warn('Failed to request screen recording access via systemPreferences', error);
+      logger.warn('[Screen] desktopCapturer.getSources failed:', error);
     }
 
-    // 2) Reliable trigger: run a one-shot getDisplayMedia in renderer to register TCC entry.
-    // This will show the OS capture picker; once the user selects/cancels, we stop tracks immediately.
+    // Approach 2: Trigger getDisplayMedia in renderer as additional attempt
+    // This shows the OS capture picker which definitely registers with TCC
+    logger.info('[Screen] Attempting TCC registration via getDisplayMedia in renderer...');
     try {
-      const status = systemPreferences.getMediaAccessStatus('screen');
-      if (status !== 'granted') {
-        const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          const script = `
-(() => {
-  const stop = (stream) => {
-    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-  };
-  return navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
-    .then((stream) => { stop(stream); return true; })
-    .catch(() => false);
+      const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const script = `
+(async () => {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch (e) {
+    console.error('[Screen] getDisplayMedia error:', e);
+    return false;
+  }
 })()
-          `.trim();
+        `.trim();
 
-          await mainWindow.webContents.executeJavaScript(script, true);
-        }
+        const result = await mainWindow.webContents.executeJavaScript(script, true);
+        logger.info(`[Screen] getDisplayMedia result: ${result}`);
+      } else {
+        logger.warn('[Screen] Main window not available for getDisplayMedia');
       }
     } catch (error) {
-      logger.warn('Failed to request screen recording access via getDisplayMedia', error);
+      logger.warn('[Screen] getDisplayMedia failed:', error);
     }
 
+    // Check status after attempts
+    const newStatus = systemPreferences.getMediaAccessStatus('screen');
+    logger.info(`[Screen] Status after TCC attempts: ${newStatus}`);
+
+    // Open System Settings for user to manually enable screen recording
+    logger.info('[Screen] Opening System Settings for Screen Recording...');
     await shell.openExternal(
       'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
     );
 
-    return systemPreferences.getMediaAccessStatus('screen') === 'granted';
-  }
-
-  @IpcMethod()
-  openFullDiskAccessSettings(payload?: { autoAdd?: boolean }) {
-    if (!macOS()) return;
-    const { autoAdd = false } = payload || {};
-
-    // NOTE:
-    // - Full Disk Access cannot be requested programmatically like microphone/screen.
-    // - On macOS 13+ (Ventura), System Preferences is replaced by System Settings,
-    //   and deep links may differ. We try multiple known schemes for compatibility.
-    const candidates = [
-      // macOS 13+ (System Settings)
-      'com.apple.settings:Privacy&path=FullDiskAccess',
-      // Older macOS (System Preferences)
-      'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
-    ];
-    if (autoAdd) this.tryAutoAddFullDiskAccess();
-
-    (async () => {
-      for (const url of candidates) {
-        try {
-          await shell.openExternal(url);
-          return;
-        } catch (error) {
-          logger.warn(`Failed to open Full Disk Access settings via ${url}`, error);
-        }
-      }
-    })();
+    const finalStatus = systemPreferences.getMediaAccessStatus('screen');
+    logger.info(`[Screen] Final status: ${finalStatus}`);
+    return finalStatus === 'granted';
   }
 
   /**
-   * Best-effort UI automation to add this app into Full Disk Access list.
-   *
-   * Limitations:
-   * - This uses AppleScript UI scripting (System Events) and may require the user to grant
-   *   additional "Automation" permission (to control System Settings).
-   * - UI structure differs across macOS versions/languages; we fall back silently.
+   * Open Full Disk Access settings page
    */
-  private tryAutoAddFullDiskAccess() {
-    if (!macOS()) return;
-
-    const exePath = app.getPath('exe');
-    // /Applications/App.app/Contents/MacOS/App -> /Applications/App.app
-    const appBundlePath = path.resolve(path.dirname(exePath), '..', '..');
-
-    // Keep the script minimal and resilient; failure should not break onboarding flow.
-    const script = fullDiskAccessAutoAddScript.trim();
-
-    try {
-      const child = spawn('osascript', ['-e', script, appBundlePath], { env: process.env });
-      child.on('error', (error) => {
-        logger.warn('Full Disk Access auto-add (osascript) failed to start', error);
-      });
-      child.on('exit', (code) => {
-        logger.debug('Full Disk Access auto-add (osascript) exited', { code });
-      });
-    } catch (error) {
-      logger.warn('Full Disk Access auto-add failed', error);
-    }
+  @IpcMethod()
+  async openFullDiskAccessSettings() {
+    return openFullDiskAccessSettings();
   }
 
   @IpcMethod()

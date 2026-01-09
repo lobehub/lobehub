@@ -183,6 +183,7 @@ export default class Browser {
   private setupEventListeners(browserWindow: BrowserWindow): void {
     this.setupReadyToShowListener(browserWindow);
     this.setupCloseListener(browserWindow);
+    this.setupFocusListener(browserWindow);
   }
 
   private setupReadyToShowListener(browserWindow: BrowserWindow): void {
@@ -205,6 +206,14 @@ export default class Browser {
       onHide: () => this.hide(),
     });
     browserWindow.on('close', closeHandler);
+  }
+
+  private setupFocusListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'focus' event listener.`);
+    browserWindow.on('focus', () => {
+      logger.debug(`[${this.identifier}] Window 'focus' event fired.`);
+      this.broadcast('windowFocused');
+    });
   }
 
   // ==================== Window Actions ====================
