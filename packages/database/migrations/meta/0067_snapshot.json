@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "1456640a-740f-46b9-a16a-d5a3fe633656",
+  "id": "2c23eaa0-69ad-40cb-a100-a1fa16141fdf",
   "policies": {},
   "prevId": "9f9f6218-5ec3-4de9-b966-8a0f8b5dc1d6",
   "roles": {},
@@ -549,6 +549,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "group_id": {
+          "name": "group_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "user_id": {
           "name": "user_id",
           "type": "text",
@@ -668,6 +674,21 @@
           "method": "btree",
           "with": {}
         },
+        "agent_cron_jobs_group_id_idx": {
+          "name": "agent_cron_jobs_group_id_idx",
+          "columns": [
+            {
+              "expression": "group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "agent_cron_jobs_user_id_idx": {
           "name": "agent_cron_jobs_user_id_idx",
           "columns": [
@@ -735,6 +756,15 @@
           "tableFrom": "agent_cron_jobs",
           "tableTo": "agents",
           "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_cron_jobs_group_id_chat_groups_id_fk": {
+          "name": "agent_cron_jobs_group_id_chat_groups_id_fk",
+          "tableFrom": "agent_cron_jobs",
+          "tableTo": "chat_groups",
+          "columnsFrom": ["group_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -7907,6 +7937,18 @@
         "metadata": {
           "name": "metadata",
           "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trigger": {
+          "name": "trigger",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

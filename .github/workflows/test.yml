@@ -61,17 +61,40 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: always()
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
           curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
+
+          # Build common args
+          COMMON_ARGS="--git-service github"
+
+          # PR args setup
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            COMMON_ARGS="$COMMON_ARGS --pr ${{ github.event.pull_request.number }}"
+            COMMON_ARGS="$COMMON_ARGS --sha ${{ github.event.pull_request.head.sha }}"
+            # Fork PR needs username:branch format for tokenless upload
+            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+              COMMON_ARGS="$COMMON_ARGS --branch ${{ github.event.pull_request.head.label }}"
+            else
+              COMMON_ARGS="$COMMON_ARGS --branch ${{ github.event.pull_request.head.ref }}"
+            fi
+          fi
+
+          # Token (if available)
+          if [ -n "$CODECOV_TOKEN" ]; then
+            COMMON_ARGS="$COMMON_ARGS -t $CODECOV_TOKEN"
+          fi
+
           for package in $PACKAGES; do
             dir="${package#@lobechat/}"
             if [ -f "./packages/$dir/coverage/lcov.info" ]; then
               echo "Uploading coverage for $dir..."
-              ./codecov upload-process \
-                -t ${{ secrets.CODECOV_TOKEN }} \
-                -f ./packages/$dir/coverage/lcov.info \
-                -F packages/$dir \
+              ./codecov upload-coverage \
+                $COMMON_ARGS \
+                --file ./packages/$dir/coverage/lcov.info \
+                --flag packages/$dir \
                 --disable-search
             fi
           done
@@ -103,7 +126,7 @@ jobs:
         run: bun i
 
       - name: Run tests
-        run: bunx vitest --coverage --silent='passed-only' --shard=${{ matrix.shard }}/2
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}

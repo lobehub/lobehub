@@ -120,13 +120,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   };
 
   return (
-    <Flexbox
-      gap={32}
-      style={{
-        marginTop: 48,
-      }}
-      width={'100%'}
-    >
+    <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
       <ChatInput
         className={cx(styles.container, isDarkMode && styles.container_dark)}

@@ -82,7 +82,8 @@ describe('ModelsService', () => {
       await modelsService.getModels('custom-provider');
 
       expect(mockedResolveRuntimeProvider).toHaveBeenCalledWith('custom-provider');
-      expect(fetch).toHaveBeenCalledWith('/webapi/models/openai', { headers: {} });
+      // API endpoint uses original provider, allowing server to query correct config
+      expect(fetch).toHaveBeenCalledWith('/webapi/models/custom-provider', { headers: {} });
       expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
     });
 

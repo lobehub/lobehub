@@ -1,8 +1,8 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 import type { ModelRuntime } from '@lobechat/model-runtime';
-import { readFile } from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { experiencePrompt } from '../prompts';
 import { memoryTypeValues } from '../schemas';
 import type { ExtractorTemplateProps } from '../types';
 import { ExperienceExtractor } from './experience';
@@ -76,14 +76,6 @@ describe('ExperienceExtractor', () => {
     const expectedProps = (extractor as any).getTemplateProps(templateOptions);
 
     expect(result).not.toBe('');
-    expect(result).toBe(
-      renderPlaceholderTemplate(
-        await readFile(
-          new URL('../prompts/layers/experience.md', import.meta.url).pathname,
-          'utf8',
-        ),
-        expectedProps,
-      ),
-    );
+    expect(result).toBe(renderPlaceholderTemplate(experiencePrompt, expectedProps));
   });
 });

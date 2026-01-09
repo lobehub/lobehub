@@ -30,12 +30,14 @@ export interface ExtractorOptions extends ExtractorTemplateProps {
   additionalMessages?: OpenAIChatMessage[];
   callbacks?: {
     onExtractError?: (agent: MemoryExtractionAgent, error: unknown) => Promise<void> | void;
-    onExtractRequest?: (agent: MemoryExtractionAgent, request: GenerateObjectPayload) =>
-      | Promise<void>
-      | void;
-    onExtractResponse?: <TOutput>(agent: MemoryExtractionAgent, response: TOutput) =>
-      | Promise<void>
-      | void;
+    onExtractRequest?: (
+      agent: MemoryExtractionAgent,
+      request: GenerateObjectPayload,
+    ) => Promise<void> | void;
+    onExtractResponse?: <TOutput>(
+      agent: MemoryExtractionAgent,
+      response: TOutput,
+    ) => Promise<void> | void;
   };
   messageIds?: string[];
   sourceId?: string;
@@ -67,7 +69,6 @@ export interface BaseExtractorDependencies {
   agent: MemoryExtractionAgent;
   model: string;
   modelRuntime: ModelRuntime;
-  promptRoot: string;
 }
 
 export interface MemoryExtractionLLMConfig {
@@ -134,11 +135,11 @@ export type MemoryExtractionLayerOutputs = Partial<{
   identity: {
     data?: Awaited<ReturnType<IdentityExtractor['structuredCall']>>;
     error?: unknown;
-  }
+  };
   preference: {
     data?: Awaited<ReturnType<PreferenceExtractor['structuredCall']>>;
     error?: unknown;
-  }
+  };
 }>;
 
 export interface GatekeeperDecision {
