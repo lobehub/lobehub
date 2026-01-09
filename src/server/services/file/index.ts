@@ -9,7 +9,8 @@ import { type FileItem } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { TempFileManager } from '@/server/utils/tempFileManager';
 
-import { type FileServiceImpl, createFileServiceModule } from './impls';
+import { createFileServiceModule } from './impls';
+import { type FileServiceImpl } from './impls/type';
 
 /**
  * File service class
@@ -19,11 +20,12 @@ export class FileService {
   private userId: string;
   private fileModel: FileModel;
 
-  private impl: FileServiceImpl = createFileServiceModule();
+  private impl: FileServiceImpl;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.fileModel = new FileModel(db, userId);
+    this.impl = createFileServiceModule(db);
   }
 
   /**
@@ -95,7 +97,7 @@ export class FileService {
   /**
    * Extract key from full URL
    */
-  public getKeyFromFullUrl(url: string): string {
+  public async getKeyFromFullUrl(url: string): Promise<string | null> {
     return this.impl.getKeyFromFullUrl(url);
   }
 

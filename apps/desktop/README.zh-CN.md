@@ -183,7 +183,7 @@ src/main/core/
 #### 🔌 依赖注入和事件系统
 
 - **IoC 容器** - 基于 WeakMap 的装饰控制器方法容器
-- **装饰器注册** - `@IpcMethod` 和 `@IpcServerMethod` 装饰器
+- **装饰器注册** - `@IpcMethod` 装饰器
 - **自动事件映射** - 控制器加载期间注册的事件
 - **服务定位器** - 类型安全的服务和控制器检索
 
@@ -266,20 +266,6 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 const ipc = ensureElectronIpc();
 await ipc.windows.openSettingsWindow({ tab: 'provider' });
 ```
-
-##### 🖥️ Server IPC 助手
-
-Next.js 服务端模块可通过 `ensureElectronServerIpc`（位于 `src/server/modules/ElectronIPCClient`）获得同样的类型安全代理，并复用 socket IPC 通道：
-
-```ts
-import { ensureElectronServerIpc } from '@/server/modules/ElectronIPCClient';
-
-const ipc = ensureElectronServerIpc();
-const path = await ipc.system.getDatabasePath();
-await ipc.upload.deleteFiles(['foo.txt']);
-```
-
-所有 `@IpcServerMethod` 方法都放在独立的控制器中，这样渲染端的类型推导不会包含这些仅供服务器调用的通道。
 
 #### 🛡️ 安全功能
 

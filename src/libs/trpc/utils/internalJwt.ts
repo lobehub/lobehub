@@ -66,7 +66,7 @@ const getVerificationKey = async () => {
 
 /**
  * Sign JWT for internal lambda → async calls
- * Uses JWKS private key with short expiration (3s)
+ * Uses JWKS private key with configurable expiration (default: 30s)
  * The JWT only proves the request is from lambda, payload is sent via LOBE_CHAT_AUTH_HEADER
  */
 export const signInternalJWT = async (): Promise<string> => {
@@ -75,7 +75,7 @@ export const signInternalJWT = async (): Promise<string> => {
   return new SignJWT({ purpose: INTERNAL_JWT_PURPOSE })
     .setProtectedHeader({ alg: 'RS256', kid })
     .setIssuedAt()
-    .setExpirationTime('3s')
+    .setExpirationTime(authEnv.INTERNAL_JWT_EXPIRATION)
     .sign(key);
 };
 

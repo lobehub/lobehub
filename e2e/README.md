@@ -84,13 +84,13 @@ HEADLESS=false BASE_URL=http://localhost:3000 npm run test:smoke
 Feature files are written in Gherkin syntax and placed in the `src/features/` directory:
 
 ```gherkin
-@discover @smoke
-Feature: Discover Smoke Tests
-  Critical path tests to ensure the discover module is functional
+@community @smoke
+Feature: Community Smoke Tests
+  Critical path tests to ensure the community module is functional
 
-  @DISCOVER-SMOKE-001 @P0
-  Scenario: Load discover assistant list page
-    Given I navigate to "/discover/assistant"
+  @COMMUNITY-SMOKE-001 @P0
+  Scenario: Load community assistant list page
+    Given I navigate to "/community/assistant"
     Then the page should load without errors
     And I should see the page body
     And I should see the search bar

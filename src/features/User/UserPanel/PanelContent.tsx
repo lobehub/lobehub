@@ -1,5 +1,4 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { enableBetterAuth, enableNextAuth } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { useRouter } from 'next/navigation';
 import { memo } from 'react';
@@ -10,6 +9,7 @@ import BusinessPanelContent from '@/business/client/features/User/BusinessPanelC
 import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
+import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 

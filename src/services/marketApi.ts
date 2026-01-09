@@ -1,6 +1,10 @@
-import { type AgentItemDetail, type AgentListResponse } from '@lobehub/market-sdk';
+import {
+  type AgentCreateResponse,
+  type AgentItemDetail,
+  type AgentListResponse,
+} from '@lobehub/market-sdk';
 
-import { MARKET_ENDPOINTS } from '@/services/_url';
+import { lambdaClient } from '@/libs/trpc/client';
 
 interface GetOwnAgentsParams {
   page?: number;
@@ -8,49 +12,15 @@ interface GetOwnAgentsParams {
 }
 
 export class MarketApiService {
-  private accessToken?: string;
-
-  // eslint-disable-next-line no-undef
-  private async request<T>(endpoint: string, init?: RequestInit): Promise<T> {
-    const headers = new Headers(init?.headers);
-
-    if (init?.body && !headers.has('content-type')) {
-      headers.set('content-type', 'application/json');
-    }
-
-    if (this.accessToken && !headers.has('authorization')) {
-      headers.set('authorization', `Bearer ${this.accessToken}`);
-    }
-
-    const response = await fetch(endpoint, {
-      ...init,
-      credentials: init?.credentials ?? 'same-origin',
-      headers,
-    });
-
-    if (!response.ok) {
-      let message = 'Unknown error';
-
-      try {
-        const errorBody = await response.json();
-        message = errorBody?.message ?? message;
-      } catch {
-        message = await response.text();
-      }
-
-      throw new Error(message || 'Market request failed');
-    }
-
-    if (response.status === 204) {
-      return undefined as T;
-    }
-
-    return (await response.json()) as T;
+  /**
+   * @deprecated This method is no longer needed as authentication is now handled
+   * automatically through tRPC middleware. Keeping for backward compatibility.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  setAccessToken(_token: string) {
+    // No-op: Authentication is now handled through tRPC authedProcedure middleware
   }
 
-  setAccessToken(token: string) {
-    this.accessToken = token;
-  }
   // Create new agent
   async createAgent(agentData: {
     homepage?: string;
@@ -60,18 +30,15 @@ export class MarketApiService {
     status?: 'published' | 'unpublished' | 'archived' | 'deprecated';
     tokenUsage?: number;
     visibility?: 'public' | 'private' | 'internal';
-  }): Promise<AgentItemDetail> {
-    return this.request(MARKET_ENDPOINTS.createAgent, {
-      body: JSON.stringify(agentData),
-      method: 'POST',
-    });
+  }): Promise<AgentCreateResponse> {
+    return lambdaClient.market.agent.createAgent.mutate(agentData);
   }
 
   // Get agent detail by identifier
   async getAgentDetail(identifier: string): Promise<AgentItemDetail> {
-    return this.request(MARKET_ENDPOINTS.getAgentDetail(identifier), {
-      method: 'GET',
-    });
+    return lambdaClient.market.agent.getAgentDetail.query({
+      identifier,
+    }) as Promise<AgentItemDetail>;
   }
 
   // Check if agent exists (returns true if exists, false if not)
@@ -111,55 +78,28 @@ export class MarketApiService {
     supportsAuthenticatedExtendedCard?: boolean;
     tokenUsage?: number;
     url?: string;
-  }): Promise<AgentItemDetail> {
-    const { identifier, ...rest } = versionData;
-    const targetIdentifier = identifier;
-    if (!targetIdentifier) throw new Error('Identifier is required');
-
-    return this.request(MARKET_ENDPOINTS.createAgentVersion, {
-      body: JSON.stringify({
-        identifier: targetIdentifier,
-        ...rest,
-      }),
-      method: 'POST',
-    });
+  }) {
+    return lambdaClient.market.agent.createAgentVersion.mutate(versionData);
   }
 
   // Publish agent (make it visible in marketplace)
   async publishAgent(identifier: string): Promise<void> {
-    return this.request(MARKET_ENDPOINTS.publishAgent(identifier), {
-      method: 'POST',
-    });
+    await lambdaClient.market.agent.publishAgent.mutate({ identifier });
   }
 
   // Unpublish agent (hide from marketplace, can be republished)
   async unpublishAgent(identifier: string): Promise<void> {
-    return this.request(MARKET_ENDPOINTS.unpublishAgent(identifier), {
-      method: 'POST',
-    });
+    await lambdaClient.market.agent.unpublishAgent.mutate({ identifier });
   }
 
   // Deprecate agent (permanently hide, cannot be republished)
   async deprecateAgent(identifier: string): Promise<void> {
-    return this.request(MARKET_ENDPOINTS.deprecateAgent(identifier), {
-      method: 'POST',
-    });
+    await lambdaClient.market.agent.deprecateAgent.mutate({ identifier });
   }
 
   // Get own agents (requires authentication)
   async getOwnAgents(params?: GetOwnAgentsParams): Promise<AgentListResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', String(params.page));
-    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-
-    const queryString = searchParams.toString();
-    const url = queryString
-      ? `${MARKET_ENDPOINTS.getOwnAgents}?${queryString}`
-      : MARKET_ENDPOINTS.getOwnAgents;
-
-    return this.request(url, {
-      method: 'GET',
-    });
+    return lambdaClient.market.agent.getOwnAgents.query(params) as Promise<AgentListResponse>;
   }
 }
 

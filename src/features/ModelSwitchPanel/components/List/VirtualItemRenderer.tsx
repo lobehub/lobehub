@@ -1,0 +1,180 @@
+import { ActionIcon, Block, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { LucideArrowRight, LucideBolt } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import urlJoin from 'url-join';
+
+import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+
+import { styles } from '../../styles';
+import type { VirtualItem } from '../../types';
+import { menuKey } from '../../utils';
+import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
+import { SingleProviderModelItem } from './SingleProviderModelItem';
+
+interface VirtualItemRendererProps {
+  activeKey: string;
+  item: VirtualItem;
+  newLabel: string;
+  onClose: () => void;
+  onModelChange: (modelId: string, providerId: string) => Promise<void>;
+}
+
+export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
+  ({ activeKey, item, newLabel, onModelChange, onClose }) => {
+    const { t } = useTranslation('components');
+    const navigate = useNavigate();
+
+    switch (item.type) {
+      case 'no-provider': {
+        return (
+          <Block
+            className={styles.menuItem}
+            clickable
+            gap={8}
+            horizontal
+            key="no-provider"
+            onClick={() => navigate('/settings/provider/all')}
+            style={{ color: cssVar.colorTextTertiary }}
+            variant={'borderless'}
+          >
+            {t('ModelSwitchPanel.emptyProvider')}
+            <Icon icon={LucideArrowRight} />
+          </Block>
+        );
+      }
+
+      case 'group-header': {
+        return (
+          <Flexbox
+            className={styles.groupHeader}
+            horizontal
+            justify="space-between"
+            key={`header-${item.provider.id}`}
+            paddingBlock={'12px 4px'}
+            paddingInline={'12px 8px'}
+          >
+            <ProviderItemRender
+              logo={item.provider.logo}
+              name={item.provider.name}
+              provider={item.provider.id}
+              source={item.provider.source}
+            />
+            <ActionIcon
+              className="settings-icon"
+              icon={LucideBolt}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const url = urlJoin('/settings/provider', item.provider.id || 'all');
+                if (e.ctrlKey || e.metaKey) {
+                  window.open(url, '_blank');
+                } else {
+                  navigate(url);
+                }
+              }}
+              size={'small'}
+              title={t('ModelSwitchPanel.goToSettings')}
+            />
+          </Flexbox>
+        );
+      }
+
+      case 'empty-model': {
+        return (
+          <Flexbox
+            className={styles.menuItem}
+            gap={8}
+            horizontal
+            key={`empty-${item.provider.id}`}
+            onClick={() => navigate(`/settings/provider/${item.provider.id}`)}
+            style={{ color: cssVar.colorTextTertiary }}
+          >
+            {t('ModelSwitchPanel.emptyModel')}
+            <Icon icon={LucideArrowRight} />
+          </Flexbox>
+        );
+      }
+
+      case 'provider-model-item': {
+        const key = menuKey(item.provider.id, item.model.id);
+        const isActive = key === activeKey;
+
+        return (
+          <Block
+            className={styles.menuItem}
+            clickable
+            key={key}
+            onClick={async () => {
+              onModelChange(item.model.id, item.provider.id);
+              onClose();
+            }}
+            variant={isActive ? 'filled' : 'borderless'}
+          >
+            <ModelItemRender
+              {...item.model}
+              {...item.model.abilities}
+              infoTagTooltip={false}
+              newBadgeLabel={newLabel}
+              showInfoTag
+            />
+          </Block>
+        );
+      }
+
+      case 'model-item-single': {
+        const singleProvider = item.data.providers[0];
+        const key = menuKey(singleProvider.id, item.data.model.id);
+        const isActive = key === activeKey;
+
+        return (
+          <Block
+            className={styles.menuItem}
+            clickable
+            key={key}
+            onClick={async () => {
+              onModelChange(item.data.model.id, singleProvider.id);
+              onClose();
+            }}
+            variant={isActive ? 'filled' : 'borderless'}
+          >
+            <SingleProviderModelItem data={item.data} newLabel={newLabel} />
+          </Block>
+        );
+      }
+
+      case 'model-item-multiple': {
+        // Check if any provider of this model is active
+        const activeProvider = item.data.providers.find(
+          (p) => menuKey(p.id, item.data.model.id) === activeKey,
+        );
+        const isActive = !!activeProvider;
+
+        return (
+          <Block
+            className={styles.menuItem}
+            clickable
+            key={item.data.displayName}
+            variant={isActive ? 'filled' : 'borderless'}
+          >
+            <MultipleProvidersModelItem
+              activeKey={activeKey}
+              data={item.data}
+              newLabel={newLabel}
+              onClose={onClose}
+              onModelChange={onModelChange}
+            />
+          </Block>
+        );
+      }
+
+      default: {
+        return null;
+      }
+    }
+  },
+);
+
+VirtualItemRenderer.displayName = 'VirtualItemRenderer';

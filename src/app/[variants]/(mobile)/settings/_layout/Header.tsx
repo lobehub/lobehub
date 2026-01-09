@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { enableAuth } from '@/const/auth';
+import { enableAuth } from '@/envs/auth';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
 import { type SettingsTabs } from '@/store/global/initialState';

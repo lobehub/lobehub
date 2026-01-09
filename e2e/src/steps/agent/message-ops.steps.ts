@@ -259,15 +259,19 @@ When('用户点击消息的更多操作按钮', async function (this: CustomWorl
     for (let i = 0; i < svgButtonCount; i++) {
       const btn = allSvgButtons.nth(i);
       const box = await btn.boundingBox();
-      if (box && box.width > 0 && box.height > 0 && box.width < 50 && // Only consider small buttons (action icons are small)
-        
-          box.x > 320 &&
-          box.y >= messageBox.y &&
-          box.y <= messageBox.y + messageBox.height + 50
-         && box.x > maxX) {
-            maxX = box.x;
-            rightmostBtn = btn;
-          }
+      if (
+        box &&
+        box.width > 0 &&
+        box.height > 0 &&
+        box.width < 50 && // Only consider small buttons (action icons are small)
+        box.x > 320 &&
+        box.y >= messageBox.y &&
+        box.y <= messageBox.y + messageBox.height + 50 &&
+        box.x > maxX
+      ) {
+        maxX = box.x;
+        rightmostBtn = btn;
+      }
     }
 
     if (rightmostBtn) {
@@ -284,8 +288,9 @@ When('用户点击消息的更多操作按钮', async function (this: CustomWorl
 When('用户选择删除消息选项', async function (this: CustomWorld) {
   console.log('   📍 Step: 选择删除消息选项...');
 
-  // Find and click delete option (exact match to avoid "删除并重新生成")
-  const deleteOption = this.page.getByRole('menuitem', { exact: true, name: '删除' });
+  // Find and click delete option (exact match to avoid "Delete and Regenerate")
+  // Support both English and Chinese
+  const deleteOption = this.page.getByRole('menuitem', { exact: true, name: /^(Delete|删除)$/ });
   await expect(deleteOption).toBeVisible({ timeout: 5000 });
   await deleteOption.click();
 
@@ -313,8 +318,8 @@ When('用户确认删除消息', async function (this: CustomWorld) {
 When('用户选择折叠消息选项', async function (this: CustomWorld) {
   console.log('   📍 Step: 选择折叠消息选项...');
 
-  // The collapse option is "收起消息" in the menu
-  const collapseOption = this.page.getByRole('menuitem', { name: /收起消息/ });
+  // The collapse option is "Collapse Message" or "收起消息" in the menu
+  const collapseOption = this.page.getByRole('menuitem', { name: /Collapse Message|收起消息/ });
   await expect(collapseOption).toBeVisible({ timeout: 5000 });
   await collapseOption.click();
 
@@ -325,8 +330,8 @@ When('用户选择折叠消息选项', async function (this: CustomWorld) {
 When('用户选择展开消息选项', async function (this: CustomWorld) {
   console.log('   📍 Step: 选择展开消息选项...');
 
-  // The expand option is "展开消息" in the menu
-  const expandOption = this.page.getByRole('menuitem', { name: /展开消息/ });
+  // The expand option is "Expand Message" or "展开消息" in the menu
+  const expandOption = this.page.getByRole('menuitem', { name: /Expand Message|展开消息/ });
   await expect(expandOption).toBeVisible({ timeout: 5000 });
   await expandOption.click();
 

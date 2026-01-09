@@ -1,6 +1,6 @@
 import { ClientSecretPayload } from '@lobechat/types';
 
-import { SECRET_XOR_KEY } from '@/const/auth';
+import { SECRET_XOR_KEY } from '@/envs/auth';
 
 /**
  * Convert Base64 string to Uint8Array

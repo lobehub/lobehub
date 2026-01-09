@@ -251,7 +251,7 @@ export const ragEvalRouter = router({
       const isSuccess = records.every((record) => record.status === EvalEvaluationStatus.Success);
 
       if (isSuccess) {
-        // 将结果上传到 S3
+        // Upload results to S3
 
         const evalRecords = records.map((record) => ({
           question: record.question,
@@ -265,7 +265,7 @@ export const ragEvalRouter = router({
 
         await ctx.fileService.uploadContent(path, JSONL.stringify(evalRecords));
 
-        // 保存数据
+        // Save data
         await ctx.evaluationModel.update(input.id, {
           status: EvalEvaluationStatus.Success,
           evalRecordsUrl: await ctx.fileService.getFullFileUrl(path),

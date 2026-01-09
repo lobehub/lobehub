@@ -74,7 +74,7 @@ interface ContextEngineeringContext {
   topicId?: string;
 }
 
-// REVIEW：可能这里可以约束一下 identity，preference，exp 的 重新排序或者裁切过的上下文进来而不是全部丢进来
+// REVIEW: Maybe we can constrain identity, preference, exp to reorder or trim the context instead of passing everything in
 export const contextEngineering = async ({
   messages = [],
   manifests,

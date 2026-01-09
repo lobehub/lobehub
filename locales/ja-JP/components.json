@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "設定に移動",
   "ModelSwitchPanel.manageProvider": "プロバイダーを管理",
   "ModelSwitchPanel.provider": "プロバイダー",
+  "ModelSwitchPanel.searchPlaceholder": "モデルを検索...",
   "ModelSwitchPanel.title": "モデル",
   "ModelSwitchPanel.useModelFrom": "このモデルの提供元：",
   "MultiImagesUpload.actions.uploadMore": "クリックまたはドラッグしてさらにアップロード",

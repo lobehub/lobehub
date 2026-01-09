@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Flexbox, Popover } from '@lobehub/ui';
 import React, { type PropsWithChildren, Suspense, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,7 +10,6 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
   const navigate = useNavigate();
   return (
     <Popover
-      arrow={false}
       content={
         <Suspense fallback={<SkeletonList rows={6} />}>
           <AgentModalProvider>
@@ -28,14 +26,14 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
           </AgentModalProvider>
         </Suspense>
       }
-      placement={'bottomLeft'}
+      placement="bottomLeft"
       styles={{
-        container: {
+        content: {
           padding: 0,
           width: 240,
         },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       {children}
     </Popover>

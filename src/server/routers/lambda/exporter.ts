@@ -156,7 +156,7 @@ const generatePdfFromMarkdown = async (
           });
       }
 
-      // 完成文档
+      // Finalize document
       doc.end();
     } catch (error) {
       reject(

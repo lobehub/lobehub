@@ -6,7 +6,6 @@ export interface FileServiceImpl {
    * Create pre-signed upload URL
    */
   createPreSignedUrl(key: string): Promise<string>;
-
   /**
    * Create pre-signed preview URL
    */
@@ -46,7 +45,7 @@ export interface FileServiceImpl {
   /**
    * Extract key from full URL
    */
-  getKeyFromFullUrl(url: string): string;
+  getKeyFromFullUrl(url: string): Promise<string | null>;
 
   /**
    * Upload content

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { SECRET_XOR_KEY } from '@/envs/auth';
+
 import { obfuscatePayloadWithXOR } from '../client/xor-obfuscation';
 import { getXorPayload } from './xor';
 
@@ -12,7 +14,7 @@ describe('getXorPayload', () => {
     };
 
     // 使用客户端的混淆函数生成token
-    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload);
+    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
 
     // 使用服务端的解码函数解码
     const decodedPayload = getXorPayload(obfuscatedToken);
@@ -25,7 +27,7 @@ describe('getXorPayload', () => {
       userId: '12345',
     };
 
-    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload);
+    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
     const decodedPayload = getXorPayload(obfuscatedToken);
 
     expect(decodedPayload).toEqual(originalPayload);
@@ -40,7 +42,7 @@ describe('getXorPayload', () => {
       awsSessionToken: 'session-token-example',
     };
 
-    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload);
+    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
     const decodedPayload = getXorPayload(obfuscatedToken);
 
     expect(decodedPayload).toEqual(originalPayload);
@@ -54,7 +56,7 @@ describe('getXorPayload', () => {
       azureApiVersion: '2024-02-15-preview',
     };
 
-    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload);
+    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
     const decodedPayload = getXorPayload(obfuscatedToken);
 
     expect(decodedPayload).toEqual(originalPayload);
@@ -67,7 +69,7 @@ describe('getXorPayload', () => {
       cloudflareBaseURLOrAccountID: 'account-id-example',
     };
 
-    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload);
+    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
     const decodedPayload = getXorPayload(obfuscatedToken);
 
     expect(decodedPayload).toEqual(originalPayload);
@@ -76,7 +78,7 @@ describe('getXorPayload', () => {
   it('should handle empty payload correctly', () => {
     const originalPayload = {};
 
-    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload);
+    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
     const decodedPayload = getXorPayload(obfuscatedToken);
 
     expect(decodedPayload).toEqual(originalPayload);
@@ -89,7 +91,7 @@ describe('getXorPayload', () => {
       apiKey: 'test-key',
     };
 
-    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload);
+    const obfuscatedToken = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
     const decodedPayload = getXorPayload(obfuscatedToken);
 
     expect(decodedPayload).toEqual(originalPayload);

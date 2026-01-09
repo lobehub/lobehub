@@ -1,7 +1,6 @@
 'use client';
 
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Avatar, Flexbox, Popover, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
@@ -75,7 +74,6 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
 
   return (
     <Popover
-      arrow={false}
       content={
         <Flexbox gap={12} style={{ overflow: 'hidden' }} width={320}>
           <Flexbox align="center" gap={8} horizontal>
@@ -93,7 +91,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
           </Flexbox>
         </Flexbox>
       }
-      trigger={['click']}
+      trigger="click"
     >
       <span className={styles.mention}>
         {'@'}

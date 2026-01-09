@@ -356,18 +356,19 @@ export const createKlavisStoreSlice: StateCreator<
       {
         fallbackData: [],
         onSuccess: (data) => {
-          if (data.length > 0) {
-            set(
-              produce((draft: KlavisStoreState) => {
+          set(
+            produce((draft: KlavisStoreState) => {
+              if (data.length > 0) {
                 // 使用 identifier 检查是否已存在
                 const existingIdentifiers = new Set(draft.servers.map((s) => s.identifier));
                 const newServers = data.filter((s) => !existingIdentifiers.has(s.identifier));
                 draft.servers = [...draft.servers, ...newServers];
-              }),
-              false,
-              n('useFetchUserKlavisServers'),
-            );
-          }
+              }
+              draft.isServersInit = true;
+            }),
+            false,
+            n('useFetchUserKlavisServers'),
+          );
         },
         revalidateOnFocus: false,
       },

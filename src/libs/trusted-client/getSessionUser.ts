@@ -1,4 +1,4 @@
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
+import { enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
 
 import type { TrustedClientUserInfo } from './index';
 

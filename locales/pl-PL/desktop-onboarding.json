@@ -45,7 +45,7 @@
   "screen4.description": "Wybierz, jak chcesz udostępniać dane. Twój wybór pomaga nam się rozwijać i możesz go zmienić w każdej chwili w ustawieniach.",
   "screen4.footerNote": "Możesz to zmienić w każdej chwili w ustawieniach",
   "screen4.navigation.next": "Kontynuuj",
-  "screen4.privacy.description": "Zachowaj wszystko lokalnie. Żadne dane nie są zbierane ani udostępniane — pełna prywatność Twoich rozmów i procesów.",
+  "screen4.privacy.description": "Wyłącz anonimową analitykę użycia. Nie udostępniamy danych o wydajności, użyciu modeli ani interakcjach z funkcjami.",
   "screen4.privacy.items.1": "Brak zbierania danych",
   "screen4.privacy.items.2": "Brak analityki użytkowania",
   "screen4.privacy.items.3": "Całe przetwarzanie lokalne",

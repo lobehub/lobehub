@@ -15,7 +15,7 @@ let enableAuth = true;
 let isDesktop = false;
 
 // 模拟 @/const/auth 模块
-vi.mock('@/const/auth', () => ({
+vi.mock('@/envs/auth', () => ({
   get enableAuth() {
     return enableAuth;
   },

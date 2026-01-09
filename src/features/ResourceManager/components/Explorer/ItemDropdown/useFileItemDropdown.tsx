@@ -56,8 +56,9 @@ export const useFileItemDropdown = ({
       s.useFetchKnowledgeBaseList,
     ]);
 
-  // Only fetch knowledge bases when dropdown is enabled (open)
-  // This prevents the expensive SWR call for all 20-25 visible items
+  // Fetch knowledge bases - SWR caches this across all dropdown instances
+  // Only the first call fetches from server, subsequent calls use cache
+  // The expensive menu computation is deferred until dropdown opens (menuItems is a function)
   const { data: knowledgeBases } = useFetchKnowledgeBaseList();
 
   const inKnowledgeBase = !!knowledgeBaseId;

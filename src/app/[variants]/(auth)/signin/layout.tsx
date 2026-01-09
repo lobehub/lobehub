@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { type PropsWithChildren } from 'react';
 
-import { enableBetterAuth } from '@/const/auth';
+import { enableBetterAuth } from '@/envs/auth';
 
 const Layout = ({ children }: PropsWithChildren) => {
   if (!enableBetterAuth) return notFound();

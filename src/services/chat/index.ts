@@ -24,8 +24,8 @@ import {
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
-import { enableAuth } from '@/const/auth';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import { enableAuth } from '@/envs/auth';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
 import { createAgentToolsEngine, createToolsEngine } from '@/helpers/toolEngineering';
 import { getAgentStoreState } from '@/store/agent';
@@ -402,7 +402,7 @@ class ChatService {
       responseAnimation,
     ].reduce((acc, cur) => merge(acc, standardizeAnimationStyle(cur)), {});
 
-    return fetchSSE(API_ENDPOINTS.chat(sdkType), {
+    return fetchSSE(API_ENDPOINTS.chat(provider), {
       body: JSON.stringify(payload),
       fetcher: fetcher,
       headers,

@@ -16,6 +16,11 @@ import {
   ProviderSorts,
 } from '@/types/discover';
 
+import { agentRouter } from './agent';
+import { oidcRouter } from './oidc';
+import { socialRouter } from './social';
+import { userRouter } from './user';
+
 const log = debug('lambda-router:market');
 
 const marketSourceSchema = z.enum(['legacy', 'new']);
@@ -36,6 +41,9 @@ const marketProcedure = publicProcedure
   });
 
 export const marketRouter = router({
+  // ============================== Agent Management (authenticated) ==============================
+  agent: agentRouter,
+
   // ============================== Assistant Market ==============================
   getAssistantCategories: marketProcedure
     .input(
@@ -516,6 +524,9 @@ export const marketRouter = router({
       }
     }),
 
+  // ============================== OIDC Authentication ==============================
+  oidc: oidcRouter,
+
   registerClientInMarketplace: marketProcedure.input(z.object({})).mutation(async ({ ctx }) => {
     return ctx.discoverService.registerClient({
       userAgent: ctx.userAgent,
@@ -548,11 +559,11 @@ export const marketRouter = router({
         log('get access token, expiresIn value:', expiresIn);
         log('expiresIn type:', typeof expiresIn);
 
-        const expirationTime = new Date(Date.now() + (expiresIn - 60) * 1000); // 提前 60 秒过期
+        const expirationTime = new Date(Date.now() + (expiresIn - 60) * 1000); // Expire 60 seconds early
 
         log('expirationTime:', expirationTime.toISOString());
 
-        // 设置 HTTP-Only Cookie 存储实际的 access token
+        // Set HTTP-Only Cookie to store the actual access token
         const tokenCookie = serialize('mp_token', accessToken, {
           expires: expirationTime,
           httpOnly: true,
@@ -561,7 +572,7 @@ export const marketRouter = router({
           secure: process.env.NODE_ENV === 'production',
         });
 
-        // 设置客户端可读的状态标记 cookie（不包含实际 token）
+        // Set client-readable status marker cookie (without actual token)
         const statusCookie = serialize('mp_token_status', 'active', {
           expires: expirationTime,
           httpOnly: false,
@@ -570,7 +581,7 @@ export const marketRouter = router({
           secure: process.env.NODE_ENV === 'production',
         });
 
-        // 通过 context 的 resHeaders 设置 Set-Cookie 头
+        // Set Set-Cookie header via context's resHeaders
         ctx.resHeaders?.append('Set-Cookie', tokenCookie);
         ctx.resHeaders?.append('Set-Cookie', statusCookie);
 
@@ -639,7 +650,7 @@ export const marketRouter = router({
         return { success: true };
       } catch (error) {
         console.error('Error reporting call: %O', error);
-        // 不抛出错误，因为上报失败不应影响主流程
+        // Don't throw error, as reporting failure should not affect main flow
         return { success: false };
       }
     }),
@@ -667,8 +678,14 @@ export const marketRouter = router({
         return { success: true };
       } catch (error) {
         log('Error reporting MCP installation result: %O', error);
-        // 不抛出错误，因为上报失败不应影响主流程
+        // Don't throw error, as reporting failure should not affect main flow
         return { success: false };
       }
     }),
+
+  // ============================== Social Features ==============================
+  social: socialRouter,
+
+  // ============================== User Profile ==============================
+  user: userRouter,
 });

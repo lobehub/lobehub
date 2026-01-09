@@ -80,7 +80,12 @@ BeforeAll({ timeout: 600_000 }, async function () {
 Before(async function (this: CustomWorld, { pickle }) {
   await this.init();
 
-  const testId = pickle.tags.find((tag) => tag.name.startsWith('@DISCOVER-'));
+  const testId = pickle.tags.find(
+    (tag) =>
+      tag.name.startsWith('@COMMUNITY-') ||
+      tag.name.startsWith('@AGENT-') ||
+      tag.name.startsWith('@ROUTES-'),
+  );
   console.log(`\n📝 Running: ${pickle.name}${testId ? ` (${testId.name.replace('@', '')})` : ''}`);
 
   // Setup API mocks before any page navigation
@@ -95,7 +100,12 @@ Before(async function (this: CustomWorld, { pickle }) {
 
 After(async function (this: CustomWorld, { pickle, result }) {
   const testId = pickle.tags
-    .find((tag) => tag.name.startsWith('@DISCOVER-'))
+    .find(
+      (tag) =>
+        tag.name.startsWith('@COMMUNITY-') ||
+        tag.name.startsWith('@AGENT-') ||
+        tag.name.startsWith('@ROUTES-'),
+    )
     ?.name.replace('@', '');
 
   if (result?.status === Status.FAILED) {

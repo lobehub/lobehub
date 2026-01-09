@@ -292,6 +292,23 @@ describe('MacOSMenu', () => {
 
       expect(copyItem.accelerator).toBe('Command+C');
     });
+
+    it('should set correct accelerators for history navigation', () => {
+      macOSMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const historyMenu = template.find(
+        (item: any) => item.label === menuTranslations['history.title'],
+      );
+
+      const backItem = historyMenu.submenu.find((item: any) => item.label === 'Back');
+      const forwardItem = historyMenu.submenu.find((item: any) => item.label === 'Forward');
+      const homeItem = historyMenu.submenu.find((item: any) => item.label === 'Home');
+
+      expect(backItem.accelerator).toBe('Command+[');
+      expect(forwardItem.accelerator).toBe('Command+]');
+      expect(homeItem.accelerator).toBe('Shift+Command+H');
+    });
   });
 
   describe('developer menu items', () => {

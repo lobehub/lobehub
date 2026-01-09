@@ -278,11 +278,14 @@ describe('FileManagerActions', () => {
       // Should only dispatch for the valid file
       expect(dispatchSpy).toHaveBeenCalledWith({
         atStart: true,
-        files: [{ file: validFile, id: validFile.name, status: 'pending' }],
+        files: [
+          expect.objectContaining({ file: validFile, id: validFile.name, status: 'pending' }),
+        ],
         type: 'addFiles',
       });
       expect(uploadSpy).toHaveBeenCalledTimes(1);
       expect(uploadSpy).toHaveBeenCalledWith({
+        abortController: expect.any(AbortController),
         file: validFile,
         knowledgeBaseId: undefined,
         onStatusUpdate: expect.any(Function),
@@ -308,6 +311,7 @@ describe('FileManagerActions', () => {
       });
 
       expect(uploadSpy).toHaveBeenCalledWith({
+        abortController: expect.any(AbortController),
         file,
         knowledgeBaseId: 'kb-123',
         onStatusUpdate: expect.any(Function),
@@ -502,7 +506,9 @@ describe('FileManagerActions', () => {
       // Should upload extracted files
       expect(dispatchSpy).toHaveBeenCalledWith({
         atStart: true,
-        files: extractedFiles.map((file) => ({ file, id: file.name, status: 'pending' })),
+        files: extractedFiles.map((file) =>
+          expect.objectContaining({ file, id: file.name, status: 'pending' }),
+        ),
         type: 'addFiles',
       });
     });
@@ -532,7 +538,7 @@ describe('FileManagerActions', () => {
       // Should fallback to uploading the ZIP file itself
       expect(dispatchSpy).toHaveBeenCalledWith({
         atStart: true,
-        files: [{ file: zipFile, id: zipFile.name, status: 'pending' }],
+        files: [expect.objectContaining({ file: zipFile, id: zipFile.name, status: 'pending' })],
         type: 'addFiles',
       });
     });

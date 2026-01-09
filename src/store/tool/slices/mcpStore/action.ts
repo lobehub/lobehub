@@ -67,7 +67,6 @@ const toNonEmptyStringRecord = (input?: Record<string, any>) => {
 
 /**
  * Build manifest for cloud MCP connection from market data
- * 从市场数据构建 Cloud MCP 的 manifest
  */
 const buildCloudMcpManifest = (params: {
   data: any;
@@ -77,21 +76,21 @@ const buildCloudMcpManifest = (params: {
 
   log('Using cloud connection, building manifest from market data');
 
-  // 从 data 中获取 tools（MCP 格式）或 api（LobeChat 格式）
+  // Get tools (MCP format) or api (LobeChat format) from data
   const mcpTools = data.tools;
   const lobeChatApi = data.api;
 
-  // 如果是 MCP 格式的 tools，需要转换为 LobeChat 的 api 格式
+  // If MCP format tools, need to convert to LobeChat api format
   // MCP: { name, description, inputSchema }
   // LobeChat: { name, description, parameters }
   let apiArray: any[] = [];
 
   if (lobeChatApi) {
-    // 已经是 LobeChat 格式，直接使用
+    // Already in LobeChat format, use directly
     apiArray = lobeChatApi;
     log('[Cloud MCP] Using existing LobeChat API format');
   } else if (mcpTools && Array.isArray(mcpTools)) {
-    // 转换 MCP tools 格式到 LobeChat api 格式
+    // Convert MCP tools format to LobeChat api format
     apiArray = mcpTools.map((tool: any) => ({
       description: tool.description || '',
       name: tool.name,
@@ -102,7 +101,7 @@ const buildCloudMcpManifest = (params: {
     console.warn('[Cloud MCP] No tools or api found in manifest data');
   }
 
-  // 构建完整的 manifest
+  // Build complete manifest
   const manifest: LobeChatPluginManifest = {
     api: apiArray,
     author: data.author?.name || data.author || '',
@@ -130,7 +129,7 @@ const buildCloudMcpManifest = (params: {
   return manifest;
 };
 
-// 测试连接结果类型
+// Test connection result type
 export interface TestMcpConnectionResult {
   error?: string;
   manifest?: LobeChatPluginManifest;
@@ -146,7 +145,7 @@ export interface PluginMCPStoreAction {
   ) => Promise<boolean | undefined>;
   loadMoreMCPPlugins: () => void;
   resetMCPPluginList: (keywords?: string) => void;
-  // 测试连接相关方法
+  // Test connection related methods
   testMcpConnection: (params: McpConnectionParams) => Promise<TestMcpConnectionResult>;
   uninstallMCPPlugin: (identifier: string) => Promise<void>;
   updateMCPInstallProgress: (identifier: string, progress: MCPInstallProgress | undefined) => void;
@@ -160,12 +159,12 @@ export const createMCPPluginStoreSlice: StateCreator<
   PluginMCPStoreAction
 > = (set, get) => ({
   cancelInstallMCPPlugin: async (identifier) => {
-    // 获取并取消AbortController
+    // Get and cancel AbortController
     const abortController = get().mcpInstallAbortControllers[identifier];
     if (abortController) {
       abortController.abort();
 
-      // 清理AbortController存储
+      // Clean up AbortController storage
       set(
         produce((draft: MCPStoreState) => {
           delete draft.mcpInstallAbortControllers[identifier];
@@ -175,18 +174,18 @@ export const createMCPPluginStoreSlice: StateCreator<
       );
     }
 
-    // 清理安装进度和加载状态
+    // Clean up installation progress and loading state
     get().updateMCPInstallProgress(identifier, undefined);
     get().updateInstallLoadingState(identifier, undefined);
   },
 
-  // 取消 MCP 连接测试
+  // Cancel MCP connection test
   cancelMcpConnectionTest: (identifier) => {
     const abortController = get().mcpTestAbortControllers[identifier];
     if (abortController) {
       abortController.abort();
 
-      // 清理状态
+      // Clean up state
       set(
         produce((draft: MCPStoreState) => {
           draft.mcpTestLoading[identifier] = false;
@@ -218,10 +217,10 @@ export const createMCPPluginStoreSlice: StateCreator<
 
     const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = get();
 
-    // 创建AbortController用于取消安装
+    // Create AbortController for canceling installation
     const abortController = new AbortController();
 
-    // 存储AbortController
+    // Store AbortController
     set(
       produce((draft: MCPStoreState) => {
         draft.mcpInstallAbortControllers[identifier] = abortController;
@@ -230,7 +229,7 @@ export const createMCPPluginStoreSlice: StateCreator<
       n('installMCPPlugin/setController'),
     );
 
-    // 记录安装开始时间
+    // Record installation start time
     const installStartTime = Date.now();
 
     let data: any;
@@ -239,13 +238,13 @@ export const createMCPPluginStoreSlice: StateCreator<
     const userAgent = `LobeHub Desktop/${CURRENT_VERSION}`;
 
     try {
-      // 检查是否已被取消
+      // Check if already cancelled
       if (abortController.signal.aborted) {
         return;
       }
 
       if (resume) {
-        // 恢复模式：从存储中获取之前的信息
+        // Resume mode: get previous info from storage
         const configInfo = get().mcpInstallProgress[identifier];
         if (!configInfo) {
           console.error('No config info found for resume');
@@ -256,9 +255,9 @@ export const createMCPPluginStoreSlice: StateCreator<
         connection = configInfo.connection ? { ...configInfo.connection } : undefined;
         result = configInfo.checkResult;
       } else {
-        // 正常模式：从头开始安装
+        // Normal mode: start installation from scratch
 
-        // 步骤 1: 获取插件清单
+        // Step 1: Fetch plugin manifest
         updateMCPInstallProgress(identifier, {
           progress: 15,
           step: MCPInstallStep.FETCHING_MANIFEST,
@@ -266,7 +265,7 @@ export const createMCPPluginStoreSlice: StateCreator<
 
         updateInstallLoadingState(identifier, true);
 
-        // 检查是否已被取消
+        // Check if already cancelled
         if (abortController.signal.aborted) {
           return;
         }
@@ -285,7 +284,7 @@ export const createMCPPluginStoreSlice: StateCreator<
           ) ||
           deploymentOptions.find((option) => option?.connection?.url && !option?.connection?.type);
 
-        // 查找 stdio 类型的部署选项
+        // Find stdio type deployment option
         const stdioOption = deploymentOptions.find(
           (option) =>
             option?.connection?.type === 'stdio' ||
@@ -299,7 +298,7 @@ export const createMCPPluginStoreSlice: StateCreator<
           return type && type !== 'http';
         });
 
-        // 🌐 检查是否有 cloudEndPoint：网页端 + stdio 类型 + 存在 haveCloudEndpoint
+        // Check if cloudEndPoint is available: web + stdio type + haveCloudEndpoint exists
         const hasCloudEndpoint = !isDesktop && stdioOption && haveCloudEndpoint;
 
         console.log('hasCloudEndpoint', hasCloudEndpoint);
@@ -307,7 +306,7 @@ export const createMCPPluginStoreSlice: StateCreator<
         let shouldUseHttpDeployment = !!httpOption && (!hasNonHttpDeployment || !isDesktop);
 
         if (hasCloudEndpoint) {
-          // 🌐 使用 cloudEndPoint，创建 cloud 类型的 connection
+          // Use cloudEndPoint, create cloud type connection
           log('Using cloudEndPoint for stdio plugin: %s', haveCloudEndpoint);
 
           connection = {
@@ -339,7 +338,7 @@ export const createMCPPluginStoreSlice: StateCreator<
             return false;
           }
         } else if (shouldUseHttpDeployment && httpOption) {
-          // ✅ HTTP 类型：跳过系统依赖检查，直接使用 URL
+          // HTTP type: skip system dependency check, use URL directly
           log('HTTP MCP detected, skipping system dependency check');
 
           connection = {
@@ -368,15 +367,15 @@ export const createMCPPluginStoreSlice: StateCreator<
             return false;
           }
         } else {
-          // ❌ stdio 类型：需要完整的系统依赖检查流程
+          // stdio type: requires complete system dependency check process
 
-          // 步骤 2: 检查安装环境
+          // Step 2: Check installation environment
           updateMCPInstallProgress(identifier, {
             progress: 30,
             step: MCPInstallStep.CHECKING_INSTALLATION,
           });
 
-          // 检查是否已被取消
+          // Check if already cancelled
           if (abortController.signal.aborted) {
             return;
           }
@@ -388,9 +387,9 @@ export const createMCPPluginStoreSlice: StateCreator<
             return;
           }
 
-          // 步骤 3: 检查系统依赖是否满足
+          // Step 3: Check if system dependencies are met
           if (!skipDepsCheck && !result.allDependenciesMet) {
-            // 依赖不满足，暂停安装流程并显示依赖安装引导
+            // Dependencies not met, pause installation and show dependency installation guide
             updateMCPInstallProgress(identifier, {
               connection: result.connection,
               manifest: data,
@@ -399,14 +398,14 @@ export const createMCPPluginStoreSlice: StateCreator<
               systemDependencies: result.systemDependencies,
             });
 
-            // 暂停安装流程，等待用户安装依赖
+            // Pause installation, wait for user to install dependencies
             updateInstallLoadingState(identifier, undefined);
-            return false; // 返回 false 表示需要安装依赖
+            return false; // Return false to indicate dependencies need to be installed
           }
 
-          // 步骤 4: 检查是否需要配置
+          // Step 4: Check if configuration is needed
           if (result.needsConfig) {
-            // 需要配置，暂停安装流程
+            // Configuration needed, pause installation
             updateMCPInstallProgress(identifier, {
               checkResult: result,
               configSchema: result.configSchema,
@@ -417,9 +416,9 @@ export const createMCPPluginStoreSlice: StateCreator<
               step: MCPInstallStep.CONFIGURATION_REQUIRED,
             });
 
-            // 暂停安装流程，等待用户配置
+            // Pause installation, wait for user configuration
             updateInstallLoadingState(identifier, undefined);
-            return false; // 返回 false 表示需要配置
+            return false; // Return false to indicate configuration is needed
           }
 
           connection = result.connection;
@@ -463,16 +462,16 @@ export const createMCPPluginStoreSlice: StateCreator<
         }
       }
 
-      // 获取服务器清单逻辑
+      // Get server manifest logic
       updateInstallLoadingState(identifier, true);
 
-      // 步骤 5: 获取服务器清单
+      // Step 5: Get server manifest
       updateMCPInstallProgress(identifier, {
         progress: 70,
         step: MCPInstallStep.GETTING_SERVER_MANIFEST,
       });
 
-      // 检查是否已被取消
+      // Check if already cancelled
       if (abortController.signal.aborted) {
         return;
       }
@@ -485,7 +484,7 @@ export const createMCPPluginStoreSlice: StateCreator<
             args: connection.args,
             command: connection.command!,
             env: mergedStdioEnv,
-            name: identifier, // 将配置作为环境变量传递（resume 模式下）
+            name: identifier, // Pass config as environment variables (in resume mode)
           },
           { avatar: plugin.icon, description: plugin.description, name: data.name },
           abortController.signal,
@@ -507,31 +506,31 @@ export const createMCPPluginStoreSlice: StateCreator<
         );
       }
       if (connection?.type === 'cloud') {
-        // 🌐 Cloud 类型：直接从市场数据构建 manifest
+        // Cloud type: build manifest directly from market data
         manifest = buildCloudMcpManifest({ data, plugin });
       }
 
       // set version
       if (manifest) {
-        // set Version - 使用 semver 比较版本号并取更大的值
+        // set Version - use semver to compare versions and take the larger value
         const dataVersion = data?.version;
         const manifestVersion = manifest.version;
 
         if (dataVersion && manifestVersion) {
-          // 如果两个版本都存在，比较并取更大的值
+          // If both versions exist, compare and take the larger value
           if (valid(dataVersion) && valid(manifestVersion)) {
             manifest.version = gt(dataVersion, manifestVersion) ? dataVersion : manifestVersion;
           } else {
-            // 如果版本号格式不正确，优先使用 dataVersion
+            // If version format is incorrect, prioritize dataVersion
             manifest.version = dataVersion;
           }
         } else {
-          // 如果只有一个版本存在，使用存在的版本
+          // If only one version exists, use the existing version
           manifest.version = dataVersion || manifestVersion;
         }
       }
 
-      // 检查是否已被取消
+      // Check if already cancelled
       if (abortController.signal.aborted) {
         return;
       }
@@ -541,18 +540,18 @@ export const createMCPPluginStoreSlice: StateCreator<
         return;
       }
 
-      // 步骤 6: 安装插件
+      // Step 6: Install plugin
       updateMCPInstallProgress(identifier, {
         progress: 90,
         step: MCPInstallStep.INSTALLING_PLUGIN,
       });
 
-      // 检查是否已被取消
+      // Check if already cancelled
       if (abortController.signal.aborted) {
         return;
       }
 
-      // 更新 connection 对象，将合并后的配置写入
+      // Update connection object, write merged configuration
       const finalConnection = { ...connection };
       if (finalConnection.type === 'http' && mergedHttpHeaders) {
         finalConnection.headers = mergedHttpHeaders;
@@ -565,7 +564,7 @@ export const createMCPPluginStoreSlice: StateCreator<
       }
 
       await pluginService.installPlugin({
-        // 针对 mcp 先将 connection 信息存到 customParams 字段里
+        // For mcp, store connection info in customParams field first
         customParams: { mcp: finalConnection },
         identifier: plugin.identifier,
         manifest: manifest,
@@ -573,20 +572,20 @@ export const createMCPPluginStoreSlice: StateCreator<
         type: 'plugin',
       });
 
-      // 检查是否已被取消
+      // Check if already cancelled
       if (abortController.signal.aborted) {
         return;
       }
 
       await refreshPlugins();
 
-      // 步骤 7: 完成安装
+      // Step 7: Complete installation
       updateMCPInstallProgress(identifier, {
         progress: 100,
         step: MCPInstallStep.COMPLETED,
       });
 
-      // 计算安装持续时间
+      // Calculate installation duration
       const installDurationMs = Date.now() - installStartTime;
 
       discoverService.reportMcpInstallResult({
@@ -604,13 +603,13 @@ export const createMCPPluginStoreSlice: StateCreator<
         version: manifest.version || data.version,
       });
 
-      // 短暂显示完成状态后清除进度
+      // Show completed status briefly then clear progress
       await sleep(1000);
 
       updateMCPInstallProgress(identifier, undefined);
       updateInstallLoadingState(identifier, undefined);
 
-      // 清理AbortController
+      // Clean up AbortController
       set(
         produce((draft: MCPStoreState) => {
           delete draft.mcpInstallAbortControllers[identifier];
@@ -621,7 +620,7 @@ export const createMCPPluginStoreSlice: StateCreator<
 
       return true;
     } catch (e) {
-      // 如果是因为取消导致的错误，静默处理
+      // Silently handle errors caused by cancellation
       if (abortController.signal.aborted) {
         console.log('MCP plugin installation cancelled for:', identifier);
         return;
@@ -631,13 +630,13 @@ export const createMCPPluginStoreSlice: StateCreator<
 
       console.error('MCP plugin installation failed:', error);
 
-      // 计算安装持续时间（失败情况）
+      // Calculate installation duration (failure case)
       const installDurationMs = Date.now() - installStartTime;
 
-      // 处理结构化错误信息
+      // Handle structured error info
       let errorInfo: MCPErrorInfo;
 
-      // 如果是结构化的 MCPError
+      // If it's a structured MCPError
       if (!!error.data && 'errorData' in error.data) {
         const mcpError = error.data.errorData as MCPErrorData;
 
@@ -647,7 +646,7 @@ export const createMCPPluginStoreSlice: StateCreator<
           type: mcpError.type,
         };
       } else {
-        // 兜底处理普通错误
+        // Fallback handling for normal errors
         const errorMessage = error instanceof Error ? error.message : String(error);
         errorInfo = {
           message: errorMessage,
@@ -659,14 +658,14 @@ export const createMCPPluginStoreSlice: StateCreator<
         };
       }
 
-      // 设置错误状态，显示结构化错误信息
+      // Set error status, display structured error info
       updateMCPInstallProgress(identifier, {
         errorInfo,
         progress: 0,
         step: MCPInstallStep.ERROR,
       });
 
-      // 上报安装失败结果
+      // Report installation failure result
       discoverService.reportMcpInstallResult({
         errorCode: errorInfo.type,
         errorMessage: errorInfo.message,
@@ -682,7 +681,7 @@ export const createMCPPluginStoreSlice: StateCreator<
 
       updateInstallLoadingState(identifier, undefined);
 
-      // 清理AbortController
+      // Clean up AbortController
       set(
         produce((draft: MCPStoreState) => {
           delete draft.mcpInstallAbortControllers[identifier];
@@ -696,7 +695,7 @@ export const createMCPPluginStoreSlice: StateCreator<
   loadMoreMCPPlugins: () => {
     const { mcpPluginItems, totalCount, currentPage } = get();
 
-    // 检查是否还有更多数据可以加载
+    // Check if there's more data to load
     if (mcpPluginItems.length < (totalCount || 0)) {
       set(
         produce((draft: MCPStoreState) => {
@@ -720,14 +719,14 @@ export const createMCPPluginStoreSlice: StateCreator<
     );
   },
 
-  // 测试 MCP 连接
+  // Test MCP connection
   testMcpConnection: async (params) => {
     const { identifier, connection, metadata } = params;
 
-    // 创建 AbortController 用于取消测试
+    // Create AbortController for canceling test
     const abortController = new AbortController();
 
-    // 存储 AbortController 并设置加载状态
+    // Store AbortController and set loading state
     set(
       produce((draft: MCPStoreState) => {
         draft.mcpTestAbortControllers[identifier] = abortController;
@@ -775,12 +774,12 @@ export const createMCPPluginStoreSlice: StateCreator<
         throw new Error('Invalid MCP connection type');
       }
 
-      // 检查是否已被取消
+      // Check if already cancelled
       if (abortController.signal.aborted) {
         return { error: 'Test cancelled', success: false };
       }
 
-      // 清理状态
+      // Clean up state
       set(
         produce((draft: MCPStoreState) => {
           draft.mcpTestLoading[identifier] = false;
@@ -793,14 +792,14 @@ export const createMCPPluginStoreSlice: StateCreator<
 
       return { manifest, success: true };
     } catch (error) {
-      // 如果是因为取消导致的错误，静默处理
+      // Silently handle errors caused by cancellation
       if (abortController.signal.aborted) {
         return { error: 'Test cancelled', success: false };
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      // 设置错误状态
+      // Set error state
       set(
         produce((draft: MCPStoreState) => {
           draft.mcpTestLoading[identifier] = false;
@@ -857,7 +856,7 @@ export const createMCPPluginStoreSlice: StateCreator<
             produce((draft: MCPStoreState) => {
               draft.searchLoading = false;
 
-              // 设置基础信息
+              // Set basic information
               if (!draft.isMcpListInit) {
                 draft.activeMCPIdentifier = data.items?.[0]?.identifier;
 
@@ -867,12 +866,12 @@ export const createMCPPluginStoreSlice: StateCreator<
                 draft.totalPages = data.totalPages;
               }
 
-              // 累积数据逻辑
+              // Accumulate data logic
               if (page === 1) {
-                // 第一页，直接设置
+                // First page, set directly
                 draft.mcpPluginItems = uniqBy(data.items, 'identifier');
               } else {
-                // 后续页面，累积数据
+                // Subsequent pages, accumulate data
                 draft.mcpPluginItems = uniqBy(
                   [...draft.mcpPluginItems, ...data.items],
                   'identifier',

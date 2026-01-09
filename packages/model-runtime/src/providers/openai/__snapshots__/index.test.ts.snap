@@ -311,7 +311,7 @@ exports[`LobeOpenAI > models > should get models 1`] = `
     "contextWindowTokens": undefined,
     "description": "The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.",
     "displayName": "DALL·E 3",
-    "enabled": false,
+    "enabled": true,
     "functionCall": false,
     "id": "dall-e-3",
     "imageOutput": false,

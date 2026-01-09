@@ -25,6 +25,7 @@ type OnStatusUpdate = (
 ) => void;
 
 interface UploadWithProgressParams {
+  abortController?: AbortController;
   file: File;
   knowledgeBaseId?: string;
   onStatusUpdate?: OnStatusUpdate;
@@ -93,6 +94,7 @@ export const createFileUploadSlice: StateCreator<
     skipCheckFileType,
     parentId,
     source,
+    abortController,
   }) => {
     const fileArrayBuffer = await file.arrayBuffer();
 
@@ -117,6 +119,7 @@ export const createFileUploadSlice: StateCreator<
     // 3. if file don't exist, need upload files
     else {
       const { data, success } = await uploadService.uploadFileToS3(file, {
+        abortController,
         onNotSupported: () => {
           onStatusUpdate?.({ id: file.name, type: 'removeFile' });
           message.info({

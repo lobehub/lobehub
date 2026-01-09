@@ -26,7 +26,7 @@ import { ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import { initModelRuntimeWithUserPayload } from './index';
+import { buildPayloadFromKeyVaults, initModelRuntimeWithUserPayload } from './index';
 
 // 模拟依赖项
 vi.mock('@/envs/llm', () => ({
@@ -493,6 +493,219 @@ describe('initModelRuntimeWithUserPayload method', () => {
       // 根据实际实现，你可能需要检查是否返回了默认的 runtime 实例，或者是否抛出了异常
       // 例如，如果默认使用 OpenAI:
       expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
+    });
+  });
+});
+
+/**
+ * Test cases for buildPayloadFromKeyVaults function
+ * This function builds ClientSecretPayload based on runtimeProvider (sdkType)
+ * to ensure provider-specific fields are correctly forwarded
+ */
+describe('buildPayloadFromKeyVaults', () => {
+  describe('should build payload with correct fields based on runtimeProvider', () => {
+    it('OpenAI compatible: returns apiKey, baseURL and runtimeProvider', () => {
+      const keyVaults = {
+        apiKey: 'test-api-key',
+        baseURL: 'https://custom-endpoint.com/v1',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.OpenAI);
+
+      expect(payload).toEqual({
+        apiKey: 'test-api-key',
+        baseURL: 'https://custom-endpoint.com/v1',
+        runtimeProvider: ModelProvider.OpenAI,
+      });
+    });
+
+    it('Azure: returns apiKey, baseURL, azureApiVersion and runtimeProvider', () => {
+      const keyVaults = {
+        apiKey: 'azure-api-key',
+        baseURL: 'https://my-azure.openai.azure.com',
+        apiVersion: '2024-06-01',
+        endpoint: 'https://fallback-endpoint.com',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Azure);
+
+      expect(payload).toEqual({
+        apiKey: 'azure-api-key',
+        azureApiVersion: '2024-06-01',
+        baseURL: 'https://my-azure.openai.azure.com',
+        runtimeProvider: ModelProvider.Azure,
+      });
+    });
+
+    it('Azure: uses endpoint as fallback when baseURL is not provided', () => {
+      const keyVaults = {
+        apiKey: 'azure-api-key',
+        endpoint: 'https://fallback-endpoint.com',
+        apiVersion: '2024-06-01',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Azure);
+
+      expect(payload.baseURL).toBe('https://fallback-endpoint.com');
+    });
+
+    it('Cloudflare: returns apiKey, cloudflareBaseURLOrAccountID and runtimeProvider', () => {
+      const keyVaults = {
+        apiKey: 'cloudflare-api-key',
+        baseURLOrAccountID: 'my-account-id',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Cloudflare);
+
+      expect(payload).toEqual({
+        apiKey: 'cloudflare-api-key',
+        cloudflareBaseURLOrAccountID: 'my-account-id',
+        runtimeProvider: ModelProvider.Cloudflare,
+      });
+    });
+
+    it('Bedrock: returns AWS credentials and runtimeProvider', () => {
+      const keyVaults = {
+        accessKeyId: 'aws-access-key',
+        secretAccessKey: 'aws-secret-key',
+        region: 'us-east-1',
+        sessionToken: 'session-token',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Bedrock);
+
+      expect(payload).toEqual({
+        apiKey: 'aws-secret-keyaws-access-key',
+        awsAccessKeyId: 'aws-access-key',
+        awsRegion: 'us-east-1',
+        awsSecretAccessKey: 'aws-secret-key',
+        awsSessionToken: 'session-token',
+        runtimeProvider: ModelProvider.Bedrock,
+      });
+    });
+
+    it('Ollama: returns baseURL and runtimeProvider', () => {
+      const keyVaults = {
+        baseURL: 'http://localhost:11434',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Ollama);
+
+      expect(payload).toEqual({
+        baseURL: 'http://localhost:11434',
+        runtimeProvider: ModelProvider.Ollama,
+      });
+    });
+
+    it('VertexAI: returns apiKey, baseURL, vertexAIRegion and runtimeProvider', () => {
+      const keyVaults = {
+        apiKey: 'vertex-credentials-json',
+        baseURL: 'https://vertex-endpoint.com',
+        region: 'us-central1',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.VertexAI);
+
+      expect(payload).toEqual({
+        apiKey: 'vertex-credentials-json',
+        baseURL: 'https://vertex-endpoint.com',
+        runtimeProvider: ModelProvider.VertexAI,
+        vertexAIRegion: 'us-central1',
+      });
+    });
+
+    it('ComfyUI: returns all auth fields and runtimeProvider', () => {
+      const keyVaults = {
+        apiKey: 'comfyui-api-key',
+        authType: 'bearer',
+        baseURL: 'http://localhost:8188',
+        customHeaders: { 'X-Custom': 'header' },
+        password: 'pass',
+        username: 'user',
+      } as const;
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.ComfyUI);
+
+      expect(payload).toEqual({
+        apiKey: 'comfyui-api-key',
+        authType: 'bearer',
+        baseURL: 'http://localhost:8188',
+        customHeaders: { 'X-Custom': 'header' },
+        password: 'pass',
+        runtimeProvider: ModelProvider.ComfyUI,
+        username: 'user',
+      });
+    });
+
+    it('Unknown provider: falls back to default with apiKey, baseURL and runtimeProvider', () => {
+      const keyVaults = {
+        apiKey: 'unknown-api-key',
+        baseURL: 'https://unknown-endpoint.com',
+      };
+      const payload = buildPayloadFromKeyVaults(keyVaults, 'unknown-provider');
+
+      expect(payload).toEqual({
+        apiKey: 'unknown-api-key',
+        baseURL: 'https://unknown-endpoint.com',
+        runtimeProvider: 'unknown-provider',
+      });
+    });
+  });
+
+  describe('custom provider with sdkType should include provider-specific fields', () => {
+    it('custom provider with Azure sdkType includes azureApiVersion', () => {
+      const keyVaults = {
+        apiKey: 'custom-azure-key',
+        baseURL: 'https://custom-azure.openai.azure.com',
+        apiVersion: '2024-06-01',
+      };
+      // Simulates a custom provider where runtimeProvider is resolved to 'azure'
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Azure);
+
+      expect(payload.azureApiVersion).toBe('2024-06-01');
+      expect(payload.runtimeProvider).toBe(ModelProvider.Azure);
+    });
+
+    it('custom provider with Cloudflare sdkType includes cloudflareBaseURLOrAccountID', () => {
+      const keyVaults = {
+        apiKey: 'custom-cloudflare-key',
+        baseURLOrAccountID: 'custom-account-id',
+      };
+      // Simulates a custom provider where runtimeProvider is resolved to 'cloudflare'
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Cloudflare);
+
+      expect(payload.cloudflareBaseURLOrAccountID).toBe('custom-account-id');
+      expect(payload.runtimeProvider).toBe(ModelProvider.Cloudflare);
+    });
+
+    it('custom provider with Bedrock sdkType includes AWS credentials', () => {
+      const keyVaults = {
+        accessKeyId: 'custom-aws-id',
+        secretAccessKey: 'custom-aws-secret',
+        region: 'eu-west-1',
+      };
+      // Simulates a custom provider where runtimeProvider is resolved to 'bedrock'
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Bedrock);
+
+      expect(payload.awsAccessKeyId).toBe('custom-aws-id');
+      expect(payload.awsSecretAccessKey).toBe('custom-aws-secret');
+      expect(payload.awsRegion).toBe('eu-west-1');
+      expect(payload.runtimeProvider).toBe(ModelProvider.Bedrock);
+    });
+
+    it('custom provider with Ollama sdkType includes baseURL', () => {
+      const keyVaults = {
+        baseURL: 'http://custom-ollama:11434',
+      };
+      // Simulates a custom provider where runtimeProvider is resolved to 'ollama'
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Ollama);
+
+      expect(payload.baseURL).toBe('http://custom-ollama:11434');
+      expect(payload.runtimeProvider).toBe(ModelProvider.Ollama);
+    });
+
+    it('custom provider with VertexAI sdkType includes vertexAIRegion', () => {
+      const keyVaults = {
+        apiKey: 'custom-vertex-creds',
+        region: 'asia-northeast1',
+      };
+      // Simulates a custom provider where runtimeProvider is resolved to 'vertexai'
+      const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.VertexAI);
+
+      expect(payload.vertexAIRegion).toBe('asia-northeast1');
+      expect(payload.runtimeProvider).toBe(ModelProvider.VertexAI);
     });
   });
 });

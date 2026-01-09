@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "Ayarlar'a git",
   "ModelSwitchPanel.manageProvider": "Sağlayıcıyı Yönet",
   "ModelSwitchPanel.provider": "Sağlayıcı",
+  "ModelSwitchPanel.searchPlaceholder": "Modelleri ara...",
   "ModelSwitchPanel.title": "Model",
   "ModelSwitchPanel.useModelFrom": "Bu modelin kullanıldığı yer:",
   "MultiImagesUpload.actions.uploadMore": "Daha fazla yüklemek için tıklayın veya sürükleyin",

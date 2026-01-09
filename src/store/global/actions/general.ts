@@ -20,6 +20,7 @@ export interface GlobalGeneralAction {
   openAgentInNewWindow: (agentId: string) => Promise<void>;
   openTopicInNewWindow: (agentId: string, topicId: string) => Promise<void>;
   switchLocale: (locale: LocaleMode, params?: { skipBroadcast?: boolean }) => void;
+  updateResourceManagerColumnWidth: (column: 'name' | 'date' | 'size', width: number) => void;
   updateSystemStatus: (status: Partial<SystemStatus>, action?: any) => void;
   useCheckLatestVersion: (enabledCheck?: boolean) => SWRResponse<string>;
   useInitSystemStatus: () => SWRResponse;
@@ -109,6 +110,20 @@ export const generalActionSlice: StateCreator<
         }
       })();
     }
+  },
+  updateResourceManagerColumnWidth: (column, width) => {
+    const currentWidths = get().status.resourceManagerColumnWidths || {
+      date: 160,
+      name: 574,
+      size: 140,
+    };
+
+    get().updateSystemStatus({
+      resourceManagerColumnWidths: {
+        ...currentWidths,
+        [column]: width,
+      },
+    });
   },
   updateSystemStatus: (status, action) => {
     if (!get().isStatusInit) return;

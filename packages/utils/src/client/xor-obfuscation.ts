@@ -1,5 +1,3 @@
-import { SECRET_XOR_KEY } from '@/const/auth';
-
 /**
  * Convert string to Uint8Array (UTF-8 encoding)
  */
@@ -24,12 +22,13 @@ const xorProcess = (data: Uint8Array, key: Uint8Array): Uint8Array => {
 /**
  * Obfuscate payload with XOR and encode to Base64
  * @param payload The JSON object to obfuscate
+ * @param secretKey The key used for XOR obfuscation
  * @returns The obfuscated string encoded in Base64
  */
-export const obfuscatePayloadWithXOR = <T>(payload: T): string => {
+export const obfuscatePayloadWithXOR = <T>(payload: T, secretKey: string): string => {
   const jsonString = JSON.stringify(payload);
   const dataBytes = stringToUint8Array(jsonString);
-  const keyBytes = stringToUint8Array(SECRET_XOR_KEY);
+  const keyBytes = stringToUint8Array(secretKey);
 
   const xoredBytes = xorProcess(dataBytes, keyBytes);
 

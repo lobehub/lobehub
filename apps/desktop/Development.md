@@ -269,7 +269,7 @@ export class ShortcutManager {
    - 注入 App 实例
 
 ```typescript
-import { ControllerModule, IpcMethod, IpcServerMethod } from '@/controllers'
+import { ControllerModule, IpcMethod } from '@/controllers'
 
 export class ControllerModule implements IControllerModule {
   constructor(public app: App) {
@@ -282,11 +282,6 @@ export class BrowserWindowsCtr extends ControllerModule {
 
   @IpcMethod()
   openSettingsWindow(params?: OpenSettingsWindowOptions) {
-    // ...
-  }
-
-  @IpcServerMethod()
-  handleServerCommand(payload: any) {
     // ...
   }
 }

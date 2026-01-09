@@ -1,5 +1,9 @@
 import fetch from 'node-fetch';
-import { RequestFilteringAgentOptions, useAgent as ssrfAgent } from 'request-filtering-agent';
+import {
+  RequestFilteringAgentOptions,
+  RequestFilteringHttpAgent,
+  RequestFilteringHttpsAgent,
+} from 'request-filtering-agent';
 
 /**
  * Options for per-call SSRF configuration overrides
@@ -42,10 +46,16 @@ export const ssrfSafeFetch = async (
       denyIPAddressList: [],
     };
 
+    // Create agents for both protocols
+    const httpAgent = new RequestFilteringHttpAgent(agentOptions);
+    const httpsAgent = new RequestFilteringHttpsAgent(agentOptions);
+
     // Use node-fetch with SSRF protection agent
+    // Pass a function to dynamically select agent based on URL protocol
+    // This handles redirects from HTTP to HTTPS correctly
     const response = await fetch(url, {
       ...options,
-      agent: ssrfAgent(url, agentOptions),
+      agent: (parsedURL: URL) => (parsedURL.protocol === 'https:' ? httpsAgent : httpAgent),
     } as any);
 
     // Convert node-fetch Response to standard Response

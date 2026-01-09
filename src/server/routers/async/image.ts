@@ -185,7 +185,7 @@ const categorizeError = (
   }
 
   return {
-    errorMessage: error.message || AsyncTaskErrorType.ServerError,
+    errorMessage: error.message || error.error?.message || AsyncTaskErrorType.ServerError,
     errorType: AsyncTaskErrorType.ServerError,
   };
 };

@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
 import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { serverDBEnv } from '@/config/db';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -74,8 +75,16 @@ export const fileRouter = router({
         // If metadata fetch fails, use original size from input
       }
 
-      if (actualSize < 1) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size must be at least 1 byte' });
+      await businessFileUploadCheck({
+        actualSize,
+        clientIp: ctx.clientIp ?? undefined,
+        inputSize: input.size,
+        url: input.url,
+        userId: ctx.userId,
+      });
+
+      if (actualSize < 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
       }
 
       const { id } = await ctx.fileModel.create(
@@ -367,7 +376,7 @@ export const fileRouter = router({
 
     if (!file) return;
 
-    // delele the file from remove from S3 if it is not used by other files
+    // delete the file from S3 if it is not used by other files
     await ctx.fileService.deleteFile(file.url!);
   }),
 

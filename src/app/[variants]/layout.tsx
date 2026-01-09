@@ -50,6 +50,9 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
   return (
     <html dir={direction} lang={locale} suppressHydrationWarning>
       <head>
+        {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
+        <script dangerouslySetInnerHTML={{ __html: `(${outdateBrowserScript.toString()})();` }} />
+
         {/* <script dangerouslySetInnerHTML={{ __html: 'setTimeout(() => {debugger}, 16)' }} /> */}
         {process.env.DEBUG_REACT_SCAN === '1' && (
           <Script
@@ -73,6 +76,52 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
     </html>
   );
 };
+
+function outdateBrowserScript() {
+  // eslint-disable-next-line unicorn/consistent-function-scoping
+  function supportsImportMaps(): boolean {
+    return (
+      typeof HTMLScriptElement !== 'undefined' &&
+      typeof (HTMLScriptElement as any).supports === 'function' &&
+      (HTMLScriptElement as any).supports('importmap')
+    );
+  }
+
+  // eslint-disable-next-line unicorn/consistent-function-scoping
+  function supportsCascadeLayers(): boolean {
+    if (typeof document === 'undefined') return false;
+
+    const el = document.createElement('div');
+    el.className = '__layer_test__';
+    el.style.position = 'absolute';
+    el.style.left = '-99999px';
+    el.style.top = '-99999px';
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @layer a, b;
+      @layer a { .__layer_test__ { color: rgb(1, 2, 3); } }
+      @layer b { .__layer_test__ { color: rgb(4, 5, 6); } }
+    `;
+
+    document.documentElement.append(style);
+    document.documentElement.append(el);
+
+    const color = getComputedStyle(el).color;
+
+    el.remove();
+    style.remove();
+
+    return color === 'rgb(4, 5, 6)';
+  }
+
+  const isOutdateBrowser = !(supportsImportMaps() && supportsCascadeLayers());
+  if (isOutdateBrowser) {
+    window.location.href = '/not-compatible.html';
+    return true;
+  }
+  return false;
+}
 
 export default RootLayout;
 
@@ -99,7 +148,7 @@ export const generateViewport = async (props: DynamicLayoutProps): ResolvingView
 
 export const generateStaticParams = () => {
   const mobileOptions = isDesktop ? [false] : [true, false];
-  // only static for serveral page, other go to dynamtic
+  // only static for several page, other go to dynamic
   const staticLocales: Locales[] = [DEFAULT_LANG, 'zh-CN'];
 
   const variants: { variants: string }[] = [];

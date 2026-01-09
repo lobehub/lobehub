@@ -1,5 +1,4 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@lobechat/const';
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
@@ -52,7 +51,8 @@ declare global {
       // ===== Auth (shared by Better Auth / Next Auth) ===== //
       AUTH_SECRET?: string;
       NEXT_PUBLIC_AUTH_URL?: string;
-      NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION?: string;
+      AUTH_EMAIL_VERIFICATION?: string;
+      ENABLE_MAGIC_LINK?: string;
       AUTH_SSO_PROVIDERS?: string;
       AUTH_TRUSTED_ORIGINS?: string;
 
@@ -158,6 +158,15 @@ declare global {
        * Can be generated using `node scripts/generate-oidc-jwk.mjs`.
        */
       JWKS_KEY?: string;
+
+      /**
+       * Internal JWT expiration time for lambda → async calls.
+       * Format: number followed by unit (s=seconds, m=minutes, h=hours)
+       * Examples: '10s', '1m', '1h'
+       * Should be as short as possible for security, but long enough to account for network latency and server processing time.
+       * @default '30s'
+       */
+      INTERNAL_JWT_EXPIRATION?: string;
     }
   }
 }
@@ -172,8 +181,6 @@ export const getAuthConfig = () => {
       // ---------------------------------- better auth ----------------------------------
       NEXT_PUBLIC_ENABLE_BETTER_AUTH: z.boolean().optional(),
       NEXT_PUBLIC_AUTH_URL: z.string().optional(),
-      NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
-      NEXT_PUBLIC_ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
 
       // ---------------------------------- next auth ----------------------------------
       NEXT_PUBLIC_ENABLE_NEXT_AUTH: z.boolean().optional(),
@@ -187,6 +194,8 @@ export const getAuthConfig = () => {
       AUTH_SECRET: z.string().optional(),
       AUTH_SSO_PROVIDERS: z.string().optional().default(''),
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
+      AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
+      ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
 
       // ---------------------------------- next auth ----------------------------------
       NEXT_AUTH_SECRET: z.string().optional(),
@@ -285,21 +294,30 @@ export const getAuthConfig = () => {
       // Generic JWKS key for signing/verifying JWTs
       JWKS_KEY: z.string().optional(),
       ENABLE_OIDC: z.boolean(),
+
+      // Internal JWT expiration time (e.g., '10s', '1m', '1h')
+      INTERNAL_JWT_EXPIRATION: z.string().default('30s'),
     },
 
     runtimeEnv: {
       // Clerk
-      NEXT_PUBLIC_ENABLE_CLERK_AUTH: enableClerk,
+      NEXT_PUBLIC_ENABLE_CLERK_AUTH:
+        process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === '1' ||
+        !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
       CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
       CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET,
 
       // ---------------------------------- better auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_BETTER_AUTH: enableBetterAuth,
+      NEXT_PUBLIC_ENABLE_BETTER_AUTH: process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1',
       // Fallback to NEXTAUTH_URL origin or Vercel deployment domain for seamless migration from next-auth
       NEXT_PUBLIC_AUTH_URL: resolvePublicAuthUrl(),
-      NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: process.env.NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION === '1',
-      NEXT_PUBLIC_ENABLE_MAGIC_LINK: process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === '1',
+      // Fallback to NEXT_PUBLIC_* for seamless migration
+      AUTH_EMAIL_VERIFICATION:
+        process.env.AUTH_EMAIL_VERIFICATION === '1' ||
+        process.env.NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION === '1',
+      ENABLE_MAGIC_LINK:
+        process.env.ENABLE_MAGIC_LINK === '1' || process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === '1',
       // Fallback to NEXT_AUTH_SECRET for seamless migration from next-auth
       AUTH_SECRET: process.env.AUTH_SECRET || process.env.NEXT_AUTH_SECRET,
       // Fallback to NEXT_AUTH_SSO_PROVIDERS for seamless migration from next-auth
@@ -312,7 +330,7 @@ export const getAuthConfig = () => {
       AUTH_COGNITO_USERPOOL_ID: process.env.AUTH_COGNITO_USERPOOL_ID,
 
       // ---------------------------------- next auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_NEXT_AUTH: enableNextAuth,
+      NEXT_PUBLIC_ENABLE_NEXT_AUTH: process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1',
       NEXT_AUTH_SSO_PROVIDERS: process.env.NEXT_AUTH_SSO_PROVIDERS,
       NEXT_AUTH_SECRET: process.env.NEXT_AUTH_SECRET,
       NEXT_AUTH_DEBUG: !!process.env.NEXT_AUTH_DEBUG,
@@ -409,8 +427,26 @@ export const getAuthConfig = () => {
       // Generic JWKS key (fallback to OIDC_JWKS_KEY for backward compatibility)
       JWKS_KEY: process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY,
       ENABLE_OIDC: !!(process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY),
+
+      // Internal JWT expiration time
+      INTERNAL_JWT_EXPIRATION: process.env.INTERNAL_JWT_EXPIRATION,
     },
   });
 };
 
 export const authEnv = getAuthConfig();
+
+// Auth flags - use process.env directly for build-time dead code elimination
+export const enableClerk =
+  process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === '1'
+    ? true
+    : !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+export const enableBetterAuth = process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1';
+export const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
+export const enableAuth = enableClerk || enableBetterAuth || enableNextAuth || false;
+
+// Auth headers and constants
+export const LOBE_CHAT_AUTH_HEADER = 'X-lobe-chat-auth';
+export const LOBE_CHAT_OIDC_AUTH_HEADER = 'Oidc-Auth';
+export const OAUTH_AUTHORIZED = 'X-oauth-authorized';
+export const SECRET_XOR_KEY = 'LobeHub · LobeHub';

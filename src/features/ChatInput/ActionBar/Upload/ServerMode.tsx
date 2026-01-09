@@ -21,7 +21,7 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
-import CheckboxItem from '../components/CheckbokWithLoading';
+import CheckboxItem from '../components/CheckboxWithLoading';
 
 const hotArea = css`
   &::before {

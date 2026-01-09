@@ -25,6 +25,28 @@ export const browserInfo = {
 
 export const isMacOS = () => getPlatform() === 'Mac OS';
 
+/**
+ *
+ * We can't use it to detect the macOS real version, and we also don't know if it's macOS 26, only an estimated value.
+ * @returns true if the current browser is macOS and the version is 10.15 or later
+ */
+export const isMacOSWithLargeWindowBorders = () => {
+  if (isOnServerSide || typeof navigator === 'undefined') return false;
+
+  // keep consistent with the original logic: only for macOS on web (exclude Electron)
+  const isElectron =
+    /Electron\//.test(navigator.userAgent) || Boolean((window as any)?.process?.type);
+  if (isElectron || !isMacOS()) return false;
+
+  const match = navigator.userAgent.match(/Mac OS X (\d+)[._](\d+)/);
+  if (!match) return false;
+
+  const majorVersion = parseInt(match[1], 10);
+  const minorVersion = parseInt(match[2], 10);
+
+  return majorVersion >= 10 && minorVersion >= 15;
+};
+
 export const isArc = () => {
   if (isOnServerSide) return false;
   return (

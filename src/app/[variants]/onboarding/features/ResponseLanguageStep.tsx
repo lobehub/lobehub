@@ -4,7 +4,7 @@ import { SendButton } from '@lobehub/editor/react';
 import { Button, Flexbox, Select, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type Locales, localeOptions, normalizeLocale } from '@/locales/resources';
@@ -24,11 +24,23 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
   const setSettings = useUserStore((s) => s.setSettings);
 
   const [value, setValue] = useState<Locales | ''>(normalizeLocale(navigator.language));
+  const [isNavigating, setIsNavigating] = useState(false);
+  const isNavigatingRef = useRef(false);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    setIsNavigating(true);
     setSettings({ general: { responseLanguage: value || '' } });
     onNext();
-  };
+  }, [value, setSettings, onNext]);
+
+  const handleBack = useCallback(() => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    setIsNavigating(true);
+    onBack();
+  }, [onBack]);
 
   const Message = useCallback(
     () => (
@@ -73,6 +85,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
           value={value}
         />
         <SendButton
+          disabled={isNavigating}
           onClick={handleNext}
           style={{
             zoom: 1.5,
@@ -85,8 +98,9 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
       </Text>
       <Flexbox horizontal justify={'flex-start'} style={{ marginTop: 32 }}>
         <Button
+          disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={onBack}
+          onClick={handleBack}
           style={{
             color: cssVar.colorTextDescription,
           }}

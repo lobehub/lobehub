@@ -28,6 +28,10 @@ export class DocumentService {
     return lambdaClient.document.createDocument.mutate(params);
   }
 
+  async createDocuments(documents: CreateDocumentParams[]): Promise<DocumentItem[]> {
+    return lambdaClient.document.createDocuments.mutate({ documents });
+  }
+
   async queryDocuments(params?: {
     current?: number;
     fileTypes?: string[];

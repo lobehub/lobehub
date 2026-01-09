@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox, PopoverGroup } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -36,19 +36,21 @@ const ChatMinimap = memo(() => {
           size={14}
         />
         <Flexbox className={styles.railContent}>
-          {indicators.map(({ id, width, preview, role, virtuosoIndex }, position) => (
-            <MinimapIndicator
-              activePosition={activeIndicatorPosition}
-              id={id}
-              key={id}
-              onJump={handleJump}
-              position={position}
-              preview={preview}
-              role={role}
-              virtuosoIndex={virtuosoIndex}
-              width={width}
-            />
-          ))}
+          <PopoverGroup contentLayoutAnimation>
+            {indicators.map(({ id, width, preview, role, virtuosoIndex }, position) => (
+              <MinimapIndicator
+                activePosition={activeIndicatorPosition}
+                id={id}
+                key={id}
+                onJump={handleJump}
+                position={position}
+                preview={preview}
+                role={role}
+                virtuosoIndex={virtuosoIndex}
+                width={width}
+              />
+            ))}
+          </PopoverGroup>
         </Flexbox>
         <ActionIcon
           aria-label={t('minimap.nextMessage')}

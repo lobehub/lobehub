@@ -1,4 +1,4 @@
-import { IconType, SiCaldotcom, SiGithub, SiLinear } from '@icons-pack/react-simple-icons';
+import { IconType, SiCaldotcom, SiGithub } from '@icons-pack/react-simple-icons';
 import { Klavis } from 'klavis';
 
 export interface KlavisServerType {
@@ -39,12 +39,6 @@ export const KLAVIS_SERVER_TYPES: KlavisServerType[] = [
     identifier: 'airtable',
     label: 'Airtable',
     serverName: Klavis.McpServerName.Airtable,
-  },
-  {
-    icon: SiLinear,
-    identifier: 'linear',
-    label: 'Linear',
-    serverName: Klavis.McpServerName.Linear,
   },
   {
     icon: 'https://hub-apac-1.lobeobjects.space/assets/logos/googlesheets.svg',

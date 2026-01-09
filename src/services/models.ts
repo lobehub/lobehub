@@ -49,7 +49,7 @@ export class ModelsService {
         return agentRuntime.models();
       }
 
-      const res = await fetch(API_ENDPOINTS.models(runtimeProvider), { headers });
+      const res = await fetch(API_ENDPOINTS.models(provider), { headers });
       if (!res.ok) return;
 
       return res.json();
@@ -87,7 +87,7 @@ export class ModelsService {
         });
         res = (await agentRuntime.pullModel({ model }, { signal }))!;
       } else {
-        res = await fetch(API_ENDPOINTS.modelPull(runtimeProvider), {
+        res = await fetch(API_ENDPOINTS.modelPull(provider), {
           body: JSON.stringify({ model }),
           headers,
           method: 'POST',

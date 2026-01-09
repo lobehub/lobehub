@@ -5,7 +5,7 @@ import { cloneElement, isValidElement, memo } from 'react';
 import { useCommandMenuContext } from '../CommandMenuContext';
 import { styles } from '../styles';
 
-type BaseCommandItemProps = Omit<ComponentProps<typeof Command.Item>, 'children'> & {
+type BaseCommandItemProps = Omit<ComponentProps<typeof Command.Item>, 'children' | 'title'> & {
   /**
    * Hide the item from default view but keep it searchable
    * When true, the item won't show in the default list but will appear in search results

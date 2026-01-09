@@ -9,7 +9,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
-import CheckboxItem from '../components/CheckbokWithLoading';
+import CheckboxItem from '../components/CheckboxWithLoading';
 
 export const useControls = ({
   setModalOpen,

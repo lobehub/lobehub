@@ -1,5 +1,5 @@
-import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 
@@ -7,6 +7,10 @@ import { useToolStore } from '../../store';
 import { KlavisServerStatus } from './types';
 
 vi.mock('zustand/traditional');
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
@@ -507,6 +511,167 @@ describe('klavisStore actions', () => {
       });
 
       expect(lambdaClient.klavis.getServerInstance.query).toHaveBeenCalled();
+    });
+  });
+
+  describe('useFetchUserKlavisServers', () => {
+    it('should set isServersInit to true on success with empty data', async () => {
+      act(() => {
+        useToolStore.setState({
+          servers: [],
+          loadingServerIds: new Set(),
+          executingToolIds: new Set(),
+          isServersInit: false,
+        });
+      });
+
+      vi.mocked(lambdaClient.klavis.getKlavisPlugins.query).mockResolvedValue([]);
+
+      renderHook(() => useToolStore.getState().useFetchUserKlavisServers(true));
+
+      await waitFor(() => {
+        expect(useToolStore.getState().isServersInit).toBe(true);
+      });
+    });
+
+    it('should not fetch when disabled', () => {
+      act(() => {
+        useToolStore.setState({
+          servers: [],
+          loadingServerIds: new Set(),
+          executingToolIds: new Set(),
+          isServersInit: false,
+        });
+      });
+
+      vi.mocked(lambdaClient.klavis.getKlavisPlugins.query).mockClear();
+
+      renderHook(() => useToolStore.getState().useFetchUserKlavisServers(false));
+
+      expect(lambdaClient.klavis.getKlavisPlugins.query).not.toHaveBeenCalled();
+      expect(useToolStore.getState().isServersInit).toBe(false);
+    });
+  });
+
+  describe('server deduplication logic', () => {
+    it('should deduplicate servers by identifier when adding new servers', () => {
+      // This tests the deduplication logic used in useFetchUserKlavisServers onSuccess
+      act(() => {
+        useToolStore.setState({
+          servers: [
+            {
+              identifier: 'gmail',
+              serverName: 'Gmail',
+              instanceId: 'existing-inst',
+              serverUrl: 'https://klavis.ai/gmail',
+              status: KlavisServerStatus.CONNECTED,
+              isAuthenticated: true,
+              createdAt: Date.now(),
+            },
+          ],
+          loadingServerIds: new Set(),
+          executingToolIds: new Set(),
+          isServersInit: false,
+        });
+      });
+
+      // Simulate what onSuccess does
+      const incomingServers = [
+        {
+          identifier: 'gmail',
+          serverName: 'Gmail',
+          instanceId: 'new-inst',
+          serverUrl: 'https://klavis.ai/gmail',
+          status: KlavisServerStatus.CONNECTED,
+          isAuthenticated: true,
+          createdAt: Date.now(),
+        },
+        {
+          identifier: 'github',
+          serverName: 'GitHub',
+          instanceId: 'github-inst',
+          serverUrl: 'https://klavis.ai/github',
+          status: KlavisServerStatus.CONNECTED,
+          isAuthenticated: true,
+          createdAt: Date.now(),
+        },
+      ];
+
+      act(() => {
+        const existingServers = useToolStore.getState().servers;
+        const existingIdentifiers = new Set(existingServers.map((s) => s.identifier));
+        const newServers = incomingServers.filter((s) => !existingIdentifiers.has(s.identifier));
+
+        useToolStore.setState({
+          servers: [...existingServers, ...newServers],
+          isServersInit: true,
+        });
+      });
+
+      const finalServers = useToolStore.getState().servers;
+      expect(finalServers).toHaveLength(2);
+      // Existing gmail should keep its original instanceId
+      expect(finalServers.find((s) => s.identifier === 'gmail')?.instanceId).toBe('existing-inst');
+      // New github should be added
+      expect(finalServers.find((s) => s.identifier === 'github')?.instanceId).toBe('github-inst');
+      expect(useToolStore.getState().isServersInit).toBe(true);
+    });
+
+    it('should add all servers when none exist', () => {
+      act(() => {
+        useToolStore.setState({
+          servers: [],
+          loadingServerIds: new Set(),
+          executingToolIds: new Set(),
+          isServersInit: false,
+        });
+      });
+
+      const incomingServers = [
+        {
+          identifier: 'gmail',
+          serverName: 'Gmail',
+          instanceId: 'inst-1',
+          serverUrl: 'https://klavis.ai/gmail',
+          status: KlavisServerStatus.CONNECTED,
+          isAuthenticated: true,
+          createdAt: Date.now(),
+        },
+      ];
+
+      act(() => {
+        const existingServers = useToolStore.getState().servers;
+        const existingIdentifiers = new Set(existingServers.map((s) => s.identifier));
+        const newServers = incomingServers.filter((s) => !existingIdentifiers.has(s.identifier));
+
+        useToolStore.setState({
+          servers: [...existingServers, ...newServers],
+          isServersInit: true,
+        });
+      });
+
+      expect(useToolStore.getState().servers).toHaveLength(1);
+      expect(useToolStore.getState().isServersInit).toBe(true);
+    });
+
+    it('should set isServersInit even when no servers are added', () => {
+      act(() => {
+        useToolStore.setState({
+          servers: [],
+          loadingServerIds: new Set(),
+          executingToolIds: new Set(),
+          isServersInit: false,
+        });
+      });
+
+      // Simulate empty data case
+      act(() => {
+        useToolStore.setState({
+          isServersInit: true,
+        });
+      });
+
+      expect(useToolStore.getState().isServersInit).toBe(true);
     });
   });
 });

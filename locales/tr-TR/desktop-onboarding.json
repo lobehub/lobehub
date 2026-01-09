@@ -45,7 +45,7 @@
   "screen4.description": "Verilerinizi nasıl paylaşmak istediğinizi seçin. Seçiminiz bize gelişmemizde yardımcı olur ve bunu istediğiniz zaman ayarlardan değiştirebilirsiniz.",
   "screen4.footerNote": "Bunu istediğiniz zaman ayarlardan değiştirebilirsiniz",
   "screen4.navigation.next": "Devam Et",
-  "screen4.privacy.description": "Her şey yerel kalır. Hiçbir veri toplanmaz veya paylaşılmaz—konuşmalarınız ve iş akışlarınız tamamen gizli kalır.",
+  "screen4.privacy.description": "Anonim kullanım analizini kapatın. Performans, model kullanımı veya özellik etkileşim verileri paylaşılmaz.",
   "screen4.privacy.items.1": "Veri toplanmaz",
   "screen4.privacy.items.2": "Kullanım analitiği yok",
   "screen4.privacy.items.3": "Tüm işlemler yerel olarak gerçekleştirilir",

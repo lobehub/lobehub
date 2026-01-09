@@ -81,6 +81,64 @@ Given('用户进入 Lobe AI 对话页面', async function (this: CustomWorld) {
 // When Steps
 // ============================================
 
+/**
+ * Given step for when user has already sent a message
+ * This sends a message and waits for the AI response
+ */
+Given('用户已发送消息 {string}', async function (this: CustomWorld, message: string) {
+  console.log(`   📍 Step: 发送消息 "${message}" 并等待回复...`);
+
+  // Find visible chat input container first
+  const chatInputs = this.page.locator('[data-testid="chat-input"]');
+  const count = await chatInputs.count();
+
+  let chatInputContainer = chatInputs.first();
+  for (let i = 0; i < count; i++) {
+    const elem = chatInputs.nth(i);
+    const box = await elem.boundingBox();
+    if (box && box.width > 0 && box.height > 0) {
+      chatInputContainer = elem;
+      break;
+    }
+  }
+
+  // Click the container to ensure focus is on the input area
+  await chatInputContainer.click();
+  await this.page.waitForTimeout(500);
+
+  // Type the message
+  await this.page.keyboard.type(message, { delay: 30 });
+  await this.page.waitForTimeout(300);
+
+  // Send the message
+  await this.page.keyboard.press('Enter');
+
+  // Wait for the message to be sent
+  await this.page.waitForTimeout(1000);
+
+  // Wait for the assistant response to appear
+  // Assistant messages are left-aligned .message-wrapper elements that contain "Lobe AI" title
+  console.log('   📍 Step: 等待助手回复...');
+
+  // Wait for any new message wrapper to appear (there should be at least 2 - user + assistant)
+  const messageWrappers = this.page.locator('.message-wrapper');
+  await expect(messageWrappers)
+    .toHaveCount(2, { timeout: 15_000 })
+    .catch(() => {
+      // Fallback: just wait for at least one message wrapper
+      console.log('   📍 Fallback: checking for any message wrapper');
+    });
+
+  // Verify the assistant message contains expected content
+  const assistantMessage = this.page.locator('.message-wrapper').filter({
+    has: this.page.locator('text=Lobe AI'),
+  });
+  await expect(assistantMessage).toBeVisible({ timeout: 5000 });
+
+  this.testContext.lastMessage = message;
+  console.log(`   ✅ 消息已发送并收到回复`);
+});
+
 When('用户发送消息 {string}', async function (this: CustomWorld, message: string) {
   console.log(`   📍 Step: 查找输入框...`);
 

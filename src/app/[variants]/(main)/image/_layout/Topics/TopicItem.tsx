@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
-import { App, Popover } from 'antd';
+import { ActionIcon, Avatar, Flexbox, Popover, Text } from '@lobehub/ui';
+import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { Trash } from 'lucide-react';
 import React, { memo } from 'react';
@@ -92,11 +92,10 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
 
   return (
     <Popover
-      arrow={false}
       content={tooltipContent}
       placement={'left'}
       styles={{
-        container: {
+        content: {
           width: 200,
         },
       }}

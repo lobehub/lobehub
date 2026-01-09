@@ -132,10 +132,9 @@ export default {
     'Your {{plan}} computing credits have been exhausted. Upgrade now to get more credits.',
   'limitation.limited.descUltimate':
     'Your {{plan}} computing credits have been exhausted. Please top up credits to continue.',
-  'limitation.limited.referralTip':
-    'Invite new users to register, and you and your friend will each receive {{reward}}M credits',
+  'limitation.limited.referralTip': 'Invite friends, both get {{reward}}M',
   'limitation.limited.title': 'Computing Credits Exhausted',
-  'limitation.limited.topup': 'Top Up Credits',
+  'limitation.limited.topup': 'Top-Up Credits',
   'limitation.limited.upgrade': 'Upgrade to Higher Plan',
   'limitation.providers.lock.addNew': 'Subscribe now to create custom AI providers',
   'limitation.providers.lock.enableProvider': 'Subscribe now to enable this AI provider',
@@ -279,7 +278,7 @@ export default {
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, we provide all registered users with {{credit}} free computing credits per month, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.a':
-    '{{cloud}} subscription plans are divided into {{starter}}, {{premium}} and {{ultimate}}, each providing different computing credits. If your current plan credits are insufficient, we recommend upgrading. Alternatively, you can set up a custom model API key to use API credits purchased from other sources.',
+    '{{cloud}} subscription plans are divided into {{starter}}, {{premium}} and {{ultimate}}, each providing different computing credits. If your current plan credits are insufficient, we recommend upgrading. You can also purchase credit packages on the <fundsLink>"{{funds}}"</fundsLink> page for pay-as-you-go usage. Alternatively, you can set up a custom model API key to use API credits purchased from other sources.',
   'qa.list.limit.q': 'What if I run out of computing credits?',
   'qa.list.management.a':
     'On the {{subscribe}} page, you can "Upgrade / Downgrade" your current subscription plan, or switch between yearly and monthly billing. Through "{{usage}}-{{management}}" you can go to Stripe for subscription management, and you can cancel your subscription at any time. After cancellation, you will be automatically downgraded to the free version when your current plan expires.',

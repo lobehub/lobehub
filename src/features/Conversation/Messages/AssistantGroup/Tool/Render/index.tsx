@@ -1,4 +1,3 @@
-import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
@@ -20,6 +19,7 @@ interface RenderProps {
   identifier: string;
   intervention?: ToolIntervention;
   isArgumentsStreaming?: boolean;
+  isToolCalling?: boolean;
   /**
    * ContentBlock ID (not the group message ID)
    */
@@ -52,6 +52,7 @@ const Render = memo<RenderProps>(
     intervention,
     toolMessageId,
     isArgumentsStreaming,
+    isToolCalling,
   }) => {
     if (toolMessageId && intervention?.status === 'pending') {
       return (
@@ -125,10 +126,7 @@ const Render = memo<RenderProps>(
       />
     );
 
-    // Standalone plugins always have LOADING_FLAT as content
-    const inPlaceholder = result.content === LOADING_FLAT && type !== 'standalone';
-
-    if (inPlaceholder) return placeholder;
+    if (isToolCalling) return placeholder;
 
     return (
       <Suspense fallback={placeholder}>

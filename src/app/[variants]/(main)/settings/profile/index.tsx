@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
+import { useToolStore } from '@/store/tool';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -37,9 +39,21 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
   const isLoadedAuthProviders = useUserStore(authSelectors.isLoadedAuthProviders);
   const fetchAuthProviders = useUserStore((s) => s.fetchAuthProviders);
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const [servers, isServersInit, useFetchUserKlavisServers] = useToolStore((s) => [
+    s.servers,
+    s.isServersInit,
+    s.useFetchUserKlavisServers,
+  ]);
+  const connectedServers = servers.filter((s) => s.status === KlavisServerStatus.CONNECTED);
+
+  // Fetch Klavis servers
+  useFetchUserKlavisServers(enableKlavis);
 
   const isLoginWithAuth = isLoginWithNextAuth || isLoginWithBetterAuth;
-  const isLoading = !isUserLoaded || (isLoginWithAuth && !isLoadedAuthProviders);
+  const isLoading =
+    !isUserLoaded ||
+    (isLoginWithAuth && !isLoadedAuthProviders) ||
+    (enableKlavis && !isServersInit);
 
   useEffect(() => {
     if (isLoginWithAuth) {
@@ -110,11 +124,11 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
         )}
 
         {/* Klavis Authorizations Row */}
-        {enableKlavis && (
+        {enableKlavis && connectedServers.length > 0 && (
           <>
             <Divider style={{ margin: 0 }} />
             <ProfileRow label={t('profile.authorizations.title')} mobile={mobile}>
-              <KlavisAuthorizationList />
+              <KlavisAuthorizationList servers={connectedServers} />
             </ProfileRow>
           </>
         )}

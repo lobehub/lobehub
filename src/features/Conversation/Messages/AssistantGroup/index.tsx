@@ -2,7 +2,8 @@
 
 import type { AssistantContentBlock } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler, memo, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
+import { type MouseEventHandler, Suspense, memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -21,8 +22,11 @@ import {
 import FileListViewer from '../User/components/FileListViewer';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
-import EditState from './components/EditState';
 import Group from './components/Group';
+
+const EditState = dynamic(() => import('./components/EditState'), {
+  ssr: false,
+});
 
 const actionBarHolder = (
   <div
@@ -92,11 +96,6 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
     }
   }, [isInbox]);
 
-  // If editing, show edit state
-  if (editing && contentId) {
-    return <EditState content={lastAssistantMsg?.content} id={contentId} />;
-  }
-
   return (
     <ChatItem
       actions={
@@ -139,6 +138,9 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
       {model && (
         <Usage model={model} performance={performance} provider={provider!} usage={usage} />
       )}
+      <Suspense fallback={null}>
+        {editing && contentId && <EditState content={lastAssistantMsg?.content} id={contentId} />}
+      </Suspense>
     </ChatItem>
   );
 }, isEqual);

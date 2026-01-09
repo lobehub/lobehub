@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
-import { enableClerk } from '@/const/auth';
+import { enableClerk } from '@/envs/auth';
 
 const ClerkProfile = dynamic(() => import('./features/ClerkProfile'), {
   loading: () => (

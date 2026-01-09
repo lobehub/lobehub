@@ -29,7 +29,6 @@ import {
   GatekeeperOptions,
   ExtractorRunOptions,
 } from '../types';
-import { resolvePromptRoot } from '../utils/path';
 import { attributesCommon } from '@lobechat/observability-otel/node';
 
 const LAYER_ORDER: LayersEnum[] = [
@@ -57,7 +56,6 @@ export interface MemoryExtractionServiceOptions {
   config: MemoryExtractionLLMConfig;
   db: LobeChatDatabase;
   language?: string;
-  promptRoot?: string;
   runtimes: MemoryExtractionRuntimeOptions;
 }
 
@@ -85,19 +83,15 @@ export class MemoryExtractionService<RO> {
   private readonly gatekeeperRuntime: ModelRuntime;
   private readonly layerRuntime: ModelRuntime;
 
-  private readonly promptRoot: string;
-
   constructor(options: MemoryExtractionServiceOptions) {
     this.config = options.config;
     this.gatekeeperRuntime = options.runtimes.gatekeeper;
     this.layerRuntime = options.runtimes.layerExtractor;
-    this.promptRoot = options.promptRoot ?? resolvePromptRoot();
 
     const gatekeeperConfig: BaseExtractorDependencies = {
       agent: 'gatekeeper',
       model: this.config.gateModel,
       modelRuntime: this.gatekeeperRuntime,
-      promptRoot: this.promptRoot,
     };
 
     this.gatekeeper = new UserMemoryGateKeeper(gatekeeperConfig);
@@ -115,7 +109,6 @@ export class MemoryExtractionService<RO> {
         agent,
         model,
         modelRuntime: this.layerRuntime,
-        promptRoot: this.promptRoot,
       } satisfies BaseExtractorDependencies;
     };
 

@@ -67,7 +67,10 @@ async function generateByImageMode(
   const defaultInput = {
     n: 1,
     ...(model.includes('dall-e') ? { response_format: 'b64_json' } : {}),
-    ...(isImageEdit && model === 'gpt-image-1' ? { input_fidelity: 'high' } : {}),
+    // https://platform.openai.com/docs/api-reference/images/createEdit#images_createedit-input_fidelity
+    ...(isImageEdit && model.includes('gpt-image-') && !model.includes('mini')
+      ? { input_fidelity: 'high' }
+      : {}),
   };
 
   const options = cleanObject({

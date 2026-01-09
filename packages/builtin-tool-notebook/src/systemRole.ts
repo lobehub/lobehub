@@ -34,11 +34,12 @@ Note: The list of existing documents is automatically provided in the context, s
 </workflow>
 
 <best_practices>
-- Use descriptive titles that summarize the content
+- Use clean, concise titles without decorations or suffixes (e.g., use "The Last Letter" instead of "《The Last Letter》 - Short Story")
 - Choose appropriate document types based on content nature
 - For long content, consider breaking into multiple documents
 - Use append mode when adding to existing documents
 - Always confirm before deleting documents
+- Do NOT include h1 headings in document content (the title field already serves as the document title)
 </best_practices>
 
 <response_format>

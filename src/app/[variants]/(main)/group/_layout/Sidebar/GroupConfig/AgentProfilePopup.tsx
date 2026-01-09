@@ -1,8 +1,7 @@
 'use client';
 
 import type { AgentItem } from '@lobechat/types';
-import { Avatar, Center, Flexbox, Text, Tooltip } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Avatar, Center, Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type PropsWithChildren, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -167,15 +166,14 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
 
   return (
     <Popover
-      arrow={false}
       content={content}
       onOpenChange={setOpen}
       open={open}
       placement="right"
       styles={{
-        container: { overflow: 'hidden', padding: 0 },
+        content: { overflow: 'hidden', padding: 0 },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       {children}
     </Popover>

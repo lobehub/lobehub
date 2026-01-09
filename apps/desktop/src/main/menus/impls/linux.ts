@@ -103,6 +103,36 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         ],
       },
       {
+        label: t('history.title'),
+        submenu: [
+          {
+            accelerator: 'Alt+Left',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoBack');
+            },
+            label: t('history.back'),
+          },
+          {
+            accelerator: 'Alt+Right',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoForward');
+            },
+            label: t('history.forward'),
+          },
+          { type: 'separator' },
+          {
+            accelerator: 'Ctrl+Shift+H',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('navigate', { path: '/' });
+            },
+            label: t('history.home'),
+          },
+        ],
+      },
+      {
         label: t('window.title'),
         submenu: [
           { label: t('window.minimize'), role: 'minimize' },

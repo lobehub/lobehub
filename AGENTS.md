@@ -74,6 +74,10 @@ The project follows a well-organized monorepo structure:
 - **Dev**: Translate `locales/zh-CN/namespace.json` locale file only for preview
 - DON'T run `pnpm i18n`, let CI auto handle it
 
+## Linear Issue Management
+
+Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-not-installed-linear-mcp) when working with Linear issues.
+
 ## Project Rules Index
 
 All following rules are saved under `.cursor/rules/` directory:

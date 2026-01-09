@@ -2,8 +2,8 @@ import { createTRPCClient, httpLink } from '@trpc/client';
 import superjson from 'superjson';
 import urlJoin from 'url-join';
 
-import { LOBE_CHAT_AUTH_HEADER } from '@/const/auth';
 import { appEnv } from '@/envs/app';
+import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
 import { createAsyncCallerFactory } from '@/libs/trpc/async';
 import { signInternalJWT } from '@/libs/trpc/utils/internalJwt';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';

@@ -6,7 +6,7 @@ import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { checkAuthMethod } from '@/app/(backend)/middleware/auth/utils';
-import { LOBE_CHAT_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/const/auth';
+import { LOBE_CHAT_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { POST } from './route';
@@ -32,7 +32,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 const mockState = vi.hoisted(() => ({ enableClerk: false }));
 
 // 模拟 @/const/auth 模块
-vi.mock('@/const/auth', async (importOriginal) => {
+vi.mock('@/envs/auth', async (importOriginal) => {
   const modules = await importOriginal();
   return {
     ...(modules as any),

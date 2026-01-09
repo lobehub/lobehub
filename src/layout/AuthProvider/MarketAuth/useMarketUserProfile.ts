@@ -1,20 +1,15 @@
 import useSWR from 'swr';
 
-import { MARKET_ENDPOINTS } from '@/services/_url';
+import { lambdaClient } from '@/libs/trpc/client';
 
 import { type MarketUserProfile } from './types';
 
 /**
- * Fetcher function for user profile
+ * Fetcher function for user profile using tRPC
  */
 const fetchUserProfile = async (username: string): Promise<MarketUserProfile | null> => {
-  const response = await fetch(MARKET_ENDPOINTS.getUserProfile(username));
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch user profile: ${response.status}`);
-  }
-
-  return response.json();
+  const result = await lambdaClient.market.user.getUserByUsername.query({ username });
+  return result as MarketUserProfile;
 };
 
 /**

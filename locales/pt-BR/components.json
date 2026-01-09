@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "Ir para configurações",
   "ModelSwitchPanel.manageProvider": "Gerenciar Provedor",
   "ModelSwitchPanel.provider": "Provedor",
+  "ModelSwitchPanel.searchPlaceholder": "Buscar modelos...",
   "ModelSwitchPanel.title": "Modelo",
   "ModelSwitchPanel.useModelFrom": "Usar este modelo de:",
   "MultiImagesUpload.actions.uploadMore": "Clique ou arraste para enviar mais",

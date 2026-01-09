@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SECRET_XOR_KEY } from '@/const/auth';
+import { SECRET_XOR_KEY } from '@/envs/auth';
 
 import { obfuscatePayloadWithXOR } from './xor-obfuscation';
 
@@ -8,7 +8,7 @@ describe('xor-obfuscation', () => {
   describe('obfuscatePayloadWithXOR', () => {
     it('应该对简单字符串进行混淆并返回Base64字符串', () => {
       const payload = 'hello world';
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -22,7 +22,7 @@ describe('xor-obfuscation', () => {
 
     it('应该对JSON对象进行混淆', () => {
       const payload = { name: 'test', value: 123, active: true };
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -33,7 +33,7 @@ describe('xor-obfuscation', () => {
 
     it('应该对数组进行混淆', () => {
       const payload = [1, 2, 3, 'test', { nested: true }];
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -58,7 +58,7 @@ describe('xor-obfuscation', () => {
         tokens: ['abc123', 'def456'],
         metadata: null,
       };
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -69,8 +69,8 @@ describe('xor-obfuscation', () => {
 
     it('相同的输入应该产生相同的输出', () => {
       const payload = { test: 'consistent' };
-      const result1 = obfuscatePayloadWithXOR(payload);
-      const result2 = obfuscatePayloadWithXOR(payload);
+      const result1 = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
+      const result2 = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       expect(result1).toBe(result2);
     });
@@ -79,15 +79,15 @@ describe('xor-obfuscation', () => {
       const payload1 = { test: 'value1' };
       const payload2 = { test: 'value2' };
 
-      const result1 = obfuscatePayloadWithXOR(payload1);
-      const result2 = obfuscatePayloadWithXOR(payload2);
+      const result1 = obfuscatePayloadWithXOR(payload1, SECRET_XOR_KEY);
+      const result2 = obfuscatePayloadWithXOR(payload2, SECRET_XOR_KEY);
 
       expect(result1).not.toBe(result2);
     });
 
     it('应该处理包含特殊字符的字符串', () => {
       const payload = 'Hello! @#$%^&*()_+-=[]{}|;:,.<>?/~`"\'\\';
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -98,7 +98,7 @@ describe('xor-obfuscation', () => {
 
     it('应该处理包含Unicode字符的字符串', () => {
       const payload = '你好世界 🌍 émojis 日本語 한국어';
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -109,7 +109,7 @@ describe('xor-obfuscation', () => {
 
     it('应该处理空字符串', () => {
       const payload = '';
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -120,7 +120,7 @@ describe('xor-obfuscation', () => {
 
     it('应该处理空对象', () => {
       const payload = {};
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -130,7 +130,7 @@ describe('xor-obfuscation', () => {
     });
 
     it('应该处理空数组', () => {
-      const result = obfuscatePayloadWithXOR([]);
+      const result = obfuscatePayloadWithXOR([], SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -141,7 +141,7 @@ describe('xor-obfuscation', () => {
 
     it('应该处理null值', () => {
       const payload = null;
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -152,7 +152,7 @@ describe('xor-obfuscation', () => {
 
     it('应该处理数字', () => {
       const payload = 42;
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -165,8 +165,8 @@ describe('xor-obfuscation', () => {
       const payloadTrue = true;
       const payloadFalse = false;
 
-      const resultTrue = obfuscatePayloadWithXOR(payloadTrue);
-      const resultFalse = obfuscatePayloadWithXOR(payloadFalse);
+      const resultTrue = obfuscatePayloadWithXOR(payloadTrue, SECRET_XOR_KEY);
+      const resultFalse = obfuscatePayloadWithXOR(payloadFalse, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof resultTrue).toBe('string');
@@ -189,7 +189,7 @@ describe('xor-obfuscation', () => {
         tab: 'col1\tcol2',
         unicode: '\u0041\u0042\u0043',
       };
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -200,7 +200,7 @@ describe('xor-obfuscation', () => {
 
     it('应该处理很长的字符串', () => {
       const payload = 'a'.repeat(10000);
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -216,8 +216,8 @@ describe('xor-obfuscation', () => {
       const shortPayload = 'short';
       const longPayload = 'this is a much longer string that should produce different output';
 
-      const shortResult = obfuscatePayloadWithXOR(shortPayload);
-      const longResult = obfuscatePayloadWithXOR(longPayload);
+      const shortResult = obfuscatePayloadWithXOR(shortPayload, SECRET_XOR_KEY);
+      const longResult = obfuscatePayloadWithXOR(longPayload, SECRET_XOR_KEY);
 
       // 较长的输入应该产生较长的输出
       expect(longResult.length).toBeGreaterThan(shortResult.length);
@@ -225,7 +225,7 @@ describe('xor-obfuscation', () => {
 
     it('应该验证输出是有效的Base64格式', () => {
       const payload = { test: 'base64 validation' };
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证Base64格式的正则表达式
       const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -242,14 +242,14 @@ describe('xor-obfuscation', () => {
         },
       };
 
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
       expect(typeof result).toBe('string');
       expect(() => atob(result)).not.toThrow();
     });
 
     it('应该对undefined值进行处理', () => {
       const payload = undefined;
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
       expect(typeof result).toBe('string');
@@ -268,7 +268,7 @@ describe('xor-obfuscation', () => {
         value: 123,
       };
 
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
       expect(typeof result).toBe('string');
       expect(() => atob(result)).not.toThrow();
     });
@@ -279,7 +279,7 @@ describe('xor-obfuscation', () => {
 
       // 多次运行相同输入
       for (let i = 0; i < 10; i++) {
-        results.push(obfuscatePayloadWithXOR(payload));
+        results.push(obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY));
       }
 
       // 所有结果应该相同
@@ -293,7 +293,7 @@ describe('xor-obfuscation', () => {
         name: 'date test',
       };
 
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
       expect(typeof result).toBe('string');
       expect(() => atob(result)).not.toThrow();
     });
@@ -306,7 +306,7 @@ describe('xor-obfuscation', () => {
         normalKey: 'normal value',
       };
 
-      const result = obfuscatePayloadWithXOR(payload);
+      const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
       expect(typeof result).toBe('string');
       expect(() => atob(result)).not.toThrow();
     });
@@ -314,7 +314,7 @@ describe('xor-obfuscation', () => {
     it('应该验证混淆后的数据长度合理性', () => {
       const originalPayload = { test: 'length check' };
       const originalJSON = JSON.stringify(originalPayload);
-      const result = obfuscatePayloadWithXOR(originalPayload);
+      const result = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
 
       // Base64 编码后的长度通常是原始长度的 4/3 倍（向上取整到4的倍数）
       const expectedMinLength = Math.ceil((originalJSON.length * 4) / 3 / 4) * 4;
@@ -323,7 +323,7 @@ describe('xor-obfuscation', () => {
 
     it('应该验证XOR操作的正确性（通过逆向操作）', () => {
       const originalPayload = { message: 'XOR test', value: 42 };
-      const obfuscatedResult = obfuscatePayloadWithXOR(originalPayload);
+      const obfuscatedResult = obfuscatePayloadWithXOR(originalPayload, SECRET_XOR_KEY);
 
       // 手动实现逆向操作来验证 XOR 操作的正确性
       const base64Decoded = atob(obfuscatedResult);
@@ -357,7 +357,7 @@ describe('xor-obfuscation', () => {
         [4, 5, 6],
       ];
 
-      const results = payloads.map((payload) => obfuscatePayloadWithXOR(payload));
+      const results = payloads.map((payload) => obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY));
 
       // 验证所有结果都不相同
       for (let i = 0; i < results.length; i++) {

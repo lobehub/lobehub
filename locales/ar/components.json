@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "الذهاب إلى الإعدادات",
   "ModelSwitchPanel.manageProvider": "إدارة المزوّد",
   "ModelSwitchPanel.provider": "المزود",
+  "ModelSwitchPanel.searchPlaceholder": "ابحث عن النماذج...",
   "ModelSwitchPanel.title": "النموذج",
   "ModelSwitchPanel.useModelFrom": "استخدم هذا النموذج من:",
   "MultiImagesUpload.actions.uploadMore": "انقر أو اسحب لتحميل المزيد",

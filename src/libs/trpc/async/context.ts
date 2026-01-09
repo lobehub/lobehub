@@ -2,7 +2,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
-import { LOBE_CHAT_AUTH_HEADER } from '@/const/auth';
+import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 const log = debug('lobe-async:context');

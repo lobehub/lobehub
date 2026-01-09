@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
+import { enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
 
 import { trpc } from '../lambda/init';
 

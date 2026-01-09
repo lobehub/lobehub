@@ -1,9 +1,12 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import dynamic from 'next/dynamic';
 import { memo, useEffect, useState } from 'react';
 
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { getBuiltinRender } from '@/tools/renders';
@@ -70,6 +73,16 @@ const Tool = memo<GroupToolProps>(
 
     const hasStreamingRenderer = !!getBuiltinStreaming(identifier, apiName);
     const forceShowStreamingRender = isArgumentsStreaming && hasStreamingRenderer;
+
+    // Get precise tool calling state from operation
+    const isToolCallingFromOperation = useChatStore(
+      operationSelectors.isMessageInToolCalling(assistantMessageId),
+    );
+
+    // Fallback: arguments completed but no final result yet
+    const isToolCallingFallback =
+      !isArgumentsStreaming && (!result || result.content === LOADING_FLAT || !result.content);
+    const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
 
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);
 
@@ -138,6 +151,7 @@ const Tool = memo<GroupToolProps>(
             identifier={identifier}
             intervention={intervention}
             isArgumentsStreaming={isArgumentsStreaming}
+            isToolCalling={isToolCalling}
             messageId={assistantMessageId}
             result={result}
             setShowPluginRender={setShowPluginRender}

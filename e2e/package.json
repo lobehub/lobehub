@@ -7,7 +7,7 @@
     "build": "cd .. && bun run build",
     "test": "cucumber-js --config cucumber.config.js",
     "test:ci": "bun run build && bun run test",
-    "test:discover": "cucumber-js --config cucumber.config.js src/features/discover/",
+    "test:community": "cucumber-js --config cucumber.config.js src/features/community/",
     "test:headed": "HEADLESS=false cucumber-js --config cucumber.config.js",
     "test:routes": "cucumber-js --config cucumber.config.js --tags '@routes'",
     "test:routes:ci": "cucumber-js --config cucumber.config.js --tags '@routes and not @ci-skip'",

@@ -99,6 +99,7 @@
   "ModelSwitchPanel.goToSettings": "Перейти в настройки",
   "ModelSwitchPanel.manageProvider": "Управление провайдером",
   "ModelSwitchPanel.provider": "Провайдер",
+  "ModelSwitchPanel.searchPlaceholder": "Поиск моделей...",
   "ModelSwitchPanel.title": "Модель",
   "ModelSwitchPanel.useModelFrom": "Использовать эту модель от:",
   "MultiImagesUpload.actions.uploadMore": "Нажмите или перетащите для загрузки дополнительных изображений",

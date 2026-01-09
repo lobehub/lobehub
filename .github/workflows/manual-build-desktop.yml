@@ -171,7 +171,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-${{ matrix.os }}
           path: |
@@ -224,7 +224,7 @@ jobs:
           TMP: C:\temp
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-windows-2025
           path: |
@@ -275,7 +275,7 @@ jobs:
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-ubuntu-latest
           path: |
@@ -309,7 +309,7 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: release
           pattern: release-*
@@ -330,7 +330,7 @@ jobs:
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: merged-release-manual
           path: release/

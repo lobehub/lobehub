@@ -84,7 +84,11 @@ const Action = memo<ActionProps>(
         <ActionPopover
           onOpenChange={setShow}
           open={show}
-          trigger={trigger}
+          trigger={
+            Array.isArray(trigger)
+              ? (trigger.filter((t) => t !== 'contextMenu') as ('click' | 'hover')[])
+              : trigger
+          }
           {...popover}
           minWidth={mobile ? '100%' : popover.minWidth}
           placement={mobile ? 'top' : (dropdownPlacement ?? popover.placement)}

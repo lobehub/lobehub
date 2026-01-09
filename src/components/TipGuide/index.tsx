@@ -1,5 +1,5 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { ConfigProvider, Popover, type TooltipProps } from 'antd';
+import { ActionIcon, Flexbox, Popover } from '@lobehub/ui';
+import { ConfigProvider, type TooltipProps } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { type CSSProperties, type FC, type ReactNode } from 'react';
@@ -111,11 +111,10 @@ const TipGuide: FC<TipGuideProps> = ({
             }}
           >
             <Popover
-              arrow={{ pointAtCenter: true }}
+              arrow={true}
               classNames={{
                 root: cx(className, styles.overlay),
               }}
-              color={'blue'}
               content={
                 <Flexbox gap={24} horizontal style={{ userSelect: 'none' }}>
                   <div>{title}</div>

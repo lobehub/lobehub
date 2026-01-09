@@ -45,7 +45,7 @@
   "screen4.description": "データの共有方法を選択してください。ご選択は改善に役立ち、設定からいつでも変更できます。",
   "screen4.footerNote": "設定からいつでも変更できます",
   "screen4.navigation.next": "続行",
-  "screen4.privacy.description": "すべてをローカルに保持。データは収集・共有されず、会話やワークフローは完全にプライベートです。",
+  "screen4.privacy.description": "匿名の利用分析を無効にします。パフォーマンス、モデル利用状況、機能の操作データは共有されません。",
   "screen4.privacy.items.1": "データ収集なし",
   "screen4.privacy.items.2": "使用状況分析なし",
   "screen4.privacy.items.3": "すべての処理はローカルで実行",

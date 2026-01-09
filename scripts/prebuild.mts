@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 import { existsSync } from 'node:fs';
@@ -14,6 +15,61 @@ if (isDesktop) {
 } else {
   dotenvExpand.expand(dotenv.config());
 }
+
+// Auth flags - use process.env directly for build-time dead code elimination
+const enableClerk =
+  process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === '1'
+    ? true
+    : !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const enableBetterAuth = process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1';
+const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
+const enableAuth = enableClerk || enableBetterAuth || enableNextAuth || false;
+
+const getCommandVersion = (command: string): string | null => {
+  try {
+    return execSync(`${command} --version`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+      .trim()
+      .split('\n')[0];
+  } catch {
+    return null;
+  }
+};
+
+const printEnvInfo = () => {
+  console.log('\n📋 Build Environment Info:');
+  console.log('─'.repeat(50));
+
+  // Runtime versions
+  console.log(`  Node.js: ${process.version}`);
+  console.log(`  npm: ${getCommandVersion('npm') ?? 'not installed'}`);
+
+  const bunVersion = getCommandVersion('bun');
+  if (bunVersion) console.log(`  bun: ${bunVersion}`);
+
+  const pnpmVersion = getCommandVersion('pnpm');
+  if (pnpmVersion) console.log(`  pnpm: ${pnpmVersion}`);
+
+  // Auth-related env vars
+  console.log('\n  Auth Environment Variables:');
+  console.log(`    NEXT_PUBLIC_AUTH_URL: ${process.env.NEXT_PUBLIC_AUTH_URL ?? '(not set)'}`);
+  console.log(`    NEXTAUTH_URL: ${process.env.NEXTAUTH_URL ?? '(not set)'}`);
+  console.log(`    APP_URL: ${process.env.APP_URL ?? '(not set)'}`);
+  console.log(`    VERCEL_URL: ${process.env.VERCEL_URL ?? '(not set)'}`);
+  console.log(`    AUTH_EMAIL_VERIFICATION: ${process.env.AUTH_EMAIL_VERIFICATION ?? '(not set)'}`);
+  console.log(`    ENABLE_MAGIC_LINK: ${process.env.ENABLE_MAGIC_LINK ?? '(not set)'}`);
+  console.log(`    AUTH_SECRET: ${process.env.AUTH_SECRET ? '✓ set' : '✗ not set'}`);
+  console.log(`    KEY_VAULTS_SECRET: ${process.env.KEY_VAULTS_SECRET ? '✓ set' : '✗ not set'}`);
+
+  // Auth flags
+  console.log('\n  Auth Flags:');
+  console.log(`    enableClerk: ${enableClerk}`);
+  console.log(`    enableBetterAuth: ${enableBetterAuth}`);
+  console.log(`    enableNextAuth: ${enableNextAuth}`);
+  console.log(`    enableAuth: ${enableAuth}`);
+
+  console.log('─'.repeat(50));
+};
+
 // 创建需要排除的特性映射
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 const partialBuildPages = [
@@ -105,8 +161,9 @@ export const runPrebuild = async (targetDir: string = 'src') => {
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
+  printEnvInfo();
   // 执行删除操作
-  console.log('Starting prebuild cleanup...');
+  console.log('\nStarting prebuild cleanup...');
   await runPrebuild();
   console.log('Prebuild cleanup completed.');
 }

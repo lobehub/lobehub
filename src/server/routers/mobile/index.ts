@@ -19,7 +19,7 @@ import { sessionRouter } from '../lambda/session';
 import { sessionGroupRouter } from '../lambda/sessionGroup';
 import { uploadRouter } from '../lambda/upload';
 import { userRouter } from '../lambda/user';
-import { topicRouter } from './topic';
+import { topicRouter } from '../lambda/topic';
 
 export const mobileRouter = router({
   agent: agentRouter,

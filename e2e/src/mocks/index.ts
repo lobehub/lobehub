@@ -6,7 +6,7 @@
  */
 import type { Page, Route } from 'playwright';
 
-import { discoverMocks } from './discover';
+import { discoverMocks } from './community';
 
 // ============================================
 // Types
@@ -35,7 +35,7 @@ export interface MockConfig {
 const defaultConfig: MockConfig = {
   enabled: true,
   handlers: {
-    discover: discoverMocks,
+    community: discoverMocks,
     // Add more domains here as needed:
     // user: userMocks,
     // chat: chatMocks,

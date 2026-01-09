@@ -36,18 +36,21 @@ jobs:
           git config --global user.name "claude-bot[bot]"
           git config --global user.email "claude-bot[bot]@users.noreply.github.com"
 
-      - name: Copy translation prompt
+      - name: Copy prompts
         run: |
           mkdir -p /tmp/claude-prompts
           cp .claude/prompts/translate-comments.md /tmp/claude-prompts/
+          cp .claude/prompts/security-rules.md /tmp/claude-prompts/
 
       - name: Run Claude Code for Comment Translation
-        uses: anthropics/claude-code-action@main
+        uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GH_TOKEN }}
           allowed_non_write_users: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--allowed-tools Bash,Read,Edit,Glob,Grep"
+          claude_args: |
+            --allowedTools "Bash,Read,Edit,Glob,Grep"
+            --append-system-prompt "$(cat /tmp/claude-prompts/security-rules.md)"
           prompt: |
             Follow the translation guide located at:
             ```bash

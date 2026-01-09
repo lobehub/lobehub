@@ -5,7 +5,8 @@ import { type ReactNode, createContext, useCallback, useContext, useEffect, useS
 import { useTranslation } from 'react-i18next';
 import { mutate as globalMutate } from 'swr';
 
-import { MARKET_ENDPOINTS, MARKET_OIDC_ENDPOINTS } from '@/services/_url';
+import { lambdaClient } from '@/libs/trpc/client';
+import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -32,31 +33,16 @@ interface MarketAuthProviderProps {
 }
 
 /**
- * 获取用户信息（从 OIDC userinfo endpoint）
+ * 获取用户信息（通过 tRPC OIDC endpoint）
  * @param accessToken - 可选的 access token，如果不传则后端会尝试使用 trustedClientToken
  */
 const fetchUserInfo = async (accessToken?: string): Promise<MarketUserInfo | null> => {
   try {
-    const response = await fetch(MARKET_OIDC_ENDPOINTS.userinfo, {
-      body: JSON.stringify({ token: accessToken }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
+    const userInfo = await lambdaClient.market.oidc.getUserInfo.mutate({
+      token: accessToken,
     });
 
-    if (!response.ok) {
-      console.error(
-        '[MarketAuth] Failed to fetch user info:',
-        response.status,
-        response.statusText,
-      );
-      return null;
-    }
-
-    const userInfo = (await response.json()) as MarketUserInfo;
-
-    return userInfo;
+    return userInfo as MarketUserInfo;
   } catch (error) {
     console.error('[MarketAuth] Error fetching user info:', error);
     return null;
@@ -136,16 +122,11 @@ const refreshToken = async (): Promise<boolean> => {
  */
 const checkNeedsProfileSetup = async (username: string): Promise<boolean> => {
   try {
-    const response = await fetch(MARKET_ENDPOINTS.getUserProfile(username));
-    if (!response.ok) {
-      // User profile not found, needs setup
-      return true;
-    }
-    const profile = (await response.json()) as MarketUserProfile;
+    const profile = await lambdaClient.market.user.getUserByUsername.query({ username });
     // If userName is not set, user needs to complete profile setup
     return !profile.userName;
   } catch {
-    // Error fetching profile, assume needs setup
+    // Error fetching profile (e.g., NOT_FOUND), assume needs setup
     return true;
   }
 };
@@ -177,7 +158,9 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
 
   // 检查是否启用了 Market Trusted Client 认证
-  const enableMarketTrustedClient = useServerConfigStore(serverConfigSelectors.enableMarketTrustedClient);
+  const enableMarketTrustedClient = useServerConfigStore(
+    serverConfigSelectors.enableMarketTrustedClient,
+  );
 
   // 初始化 OIDC 客户端（仅在客户端）
   useEffect(() => {

@@ -70,6 +70,9 @@ vi.mock('@/store/tool/selectors', () => ({
   klavisStoreSelectors: {
     klavisAsLobeTools: () => [],
   },
+  lobehubSkillStoreSelectors: {
+    lobehubSkillAsLobeTools: () => [],
+  },
 }));
 
 vi.mock('../isCanUseFC', () => ({

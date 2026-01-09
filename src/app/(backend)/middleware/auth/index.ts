@@ -8,15 +8,15 @@ import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 import { type NextRequest } from 'next/server';
 
+import { getServerDB } from '@/database/core/db-adaptor';
+import { type LobeChatDatabase } from '@/database/type';
 import {
   LOBE_CHAT_AUTH_HEADER,
   LOBE_CHAT_OIDC_AUTH_HEADER,
   OAUTH_AUTHORIZED,
   enableBetterAuth,
   enableClerk,
-} from '@/const/auth';
-import { getServerDB } from '@/database/core/db-adaptor';
-import { type LobeChatDatabase } from '@/database/type';
+} from '@/envs/auth';
 import { ClerkAuth } from '@/libs/clerk-auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';

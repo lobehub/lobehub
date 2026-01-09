@@ -1,5 +1,5 @@
-import { Button, Flexbox } from '@lobehub/ui';
-import { Popover, Space } from 'antd';
+import { Button, Flexbox, Popover } from '@lobehub/ui';
+import { Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, FolderOpen } from 'lucide-react';
 import React from 'react';
@@ -98,12 +98,11 @@ export const LocalFile = ({ name, path, isDirectory = false }: LocalFileProps) =
 
   return (
     <Popover
-      arrow={false}
       content={popoverContent}
       styles={{
-        container: { padding: 0 },
+        content: { padding: 0 },
       }}
-      trigger={['hover']}
+      trigger="hover"
     >
       {fileContent}
     </Popover>

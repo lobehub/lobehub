@@ -1,5 +1,4 @@
-import { Input } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Input, Popover } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
@@ -34,7 +33,6 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
 
   return (
     <Popover
-      arrow={false}
       content={
         <Input
           autoFocus
@@ -52,20 +50,19 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
           }}
         />
       }
-      destroyOnHidden
       onOpenChange={(open) => {
         if (!open) handleUpdate();
         toggleEditing(open);
       }}
       open={editing}
-      placement={'bottomLeft'}
+      placement="bottomLeft"
       styles={{
-        container: {
+        content: {
           padding: 4,
           width: 320,
         },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       <div />
     </Popover>

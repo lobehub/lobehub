@@ -34,7 +34,7 @@
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1",
-    "ssrf-safe-fetch": "workspace:*",
+    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "tokenx": "^1.2.1",
     "ua-parser-js": "^1.0.41",
     "uuid": "^11.1.0",

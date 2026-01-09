@@ -1,10 +1,18 @@
-import { buildFolderTree, sanitizeFolderName, topologicalSortFolders } from '@lobechat/utils';
+import {
+  buildFolderTree,
+  createNanoId,
+  sanitizeFolderName,
+  topologicalSortFolders,
+} from '@lobechat/utils';
+import { t } from 'i18next';
 import pMap from 'p-map';
 import type { SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { message } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { documentService } from '@/services/document';
 import { FileService, fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import {
@@ -27,6 +35,7 @@ export interface FolderCrumb {
 }
 
 export interface FileManageAction {
+  cancelUpload: (id: string) => void;
   dispatchDockFileList: (payload: UploadFileListDispatch) => void;
   embeddingChunks: (fileIds: string[]) => Promise<void>;
   loadMoreKnowledgeItems: () => Promise<void>;
@@ -67,6 +76,21 @@ export const createFileManageSlice: StateCreator<
   [],
   FileManageAction
 > = (set, get) => ({
+  cancelUpload: (id) => {
+    const { dockUploadFileList, dispatchDockFileList } = get();
+    const uploadItem = dockUploadFileList.find((item) => item.id === id);
+
+    if (uploadItem?.abortController) {
+      uploadItem.abortController.abort();
+    }
+
+    // Update status to cancelled
+    dispatchDockFileList({
+      id,
+      status: 'cancelled',
+      type: 'updateFileStatus',
+    });
+  },
   dispatchDockFileList: (payload: UploadFileListDispatch) => {
     const nextValue = uploadFileListReducer(get().dockUploadFileList, payload);
     if (nextValue === get().dockUploadFileList) return;
@@ -186,19 +210,31 @@ export const createFileManageSlice: StateCreator<
     // 1. skip file in blacklist
     const files = filesToUpload.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
-    // 2. Add all files to dock
+    // 2. Create upload items with abort controllers
+    const uploadFiles = files.map((file) => {
+      const abortController = new AbortController();
+      return {
+        abortController,
+        file,
+        id: file.name,
+        status: 'pending' as const,
+      };
+    });
+
+    // 3. Add all files to dock
     dispatchDockFileList({
       atStart: true,
-      files: files.map((file) => ({ file, id: file.name, status: 'pending' })),
+      files: uploadFiles,
       type: 'addFiles',
     });
 
-    // 3. Upload files with concurrency limit using p-map
+    // 4. Upload files with concurrency limit using p-map
     const uploadResults = await pMap(
-      files,
-      async (file) => {
+      uploadFiles,
+      async (uploadFileItem) => {
         const result = await get().uploadWithProgress({
-          file,
+          abortController: uploadFileItem.abortController,
+          file: uploadFileItem.file,
           knowledgeBaseId,
           onStatusUpdate: dispatchDockFileList,
           parentId,
@@ -207,7 +243,11 @@ export const createFileManageSlice: StateCreator<
         // Note: Don't refresh after each file to avoid flickering
         // We'll refresh once at the end
 
-        return { file, fileId: result?.id, fileType: file.type };
+        return {
+          file: uploadFileItem.file,
+          fileId: result?.id,
+          fileType: uploadFileItem.file.type,
+        };
       },
       { concurrency: MAX_UPLOAD_FILE_COUNT },
     );
@@ -215,7 +255,7 @@ export const createFileManageSlice: StateCreator<
     // Refresh the file list once after all uploads are complete
     await get().refreshFileList();
 
-    // 4. auto-embed files that support chunking
+    // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults
       .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
       .map(({ fileId }) => fileId!);
@@ -353,82 +393,137 @@ export const createFileManageSlice: StateCreator<
     // 2. Sort folders by depth to ensure parents are created before children
     const sortedFolderPaths = topologicalSortFolders(folders);
 
-    // Map to store created folder IDs: relative path -> folder ID
-    const folderIdMap = new Map<string, string>();
-
-    // 3. Create all folders sequentially (maintaining hierarchy)
-    for (const folderPath of sortedFolderPaths) {
-      const folder = folders[folderPath];
-
-      // Determine parent ID: either from previously created folder or current folder
-      const parentId = folder.parent ? folderIdMap.get(folder.parent) : currentFolderId;
-
-      // Sanitize folder name to remove invalid characters
-      const sanitizedName = sanitizeFolderName(folder.name);
-
-      // Create folder
-      const folderId = await get().createFolder(sanitizedName, parentId, knowledgeBaseId);
-
-      // Store mapping for child folders
-      folderIdMap.set(folderPath, folderId);
+    // Show toast notification if there are folders to create
+    const messageKey = 'uploadFolder.creatingFolders';
+    if (sortedFolderPaths.length > 0) {
+      message.loading({
+        content: t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }),
+        duration: 0, // Don't auto-dismiss
+        key: messageKey,
+      });
     }
 
-    // 4. Prepare all file uploads with their target folder IDs
-    const allUploads: Array<{ file: File; parentId: string | undefined }> = [];
+    try {
+      // Map to store created folder IDs: relative path -> folder ID
+      const folderIdMap = new Map<string, string>();
 
-    for (const [folderPath, folderFiles] of Object.entries(filesByFolder)) {
-      // Root-level files (no folder path) go to currentFolderId
-      const targetFolderId = folderPath ? folderIdMap.get(folderPath) : currentFolderId;
+      // 3. Group folders by depth level for batch creation
+      const foldersByLevel = new Map<number, string[]>();
+      for (const folderPath of sortedFolderPaths) {
+        const depth = (folderPath.match(/\//g) || []).length;
+        if (!foldersByLevel.has(depth)) {
+          foldersByLevel.set(depth, []);
+        }
+        foldersByLevel.get(depth)!.push(folderPath);
+      }
 
-      allUploads.push(
-        ...folderFiles.map((file) => ({
-          file,
-          parentId: targetFolderId,
-        })),
-      );
-    }
+      // 4. Create folders level by level using batch API
+      const generateSlug = createNanoId(8);
+      const levels = Array.from(foldersByLevel.keys()).sort((a, b) => a - b);
+      for (const level of levels) {
+        const foldersAtThisLevel = foldersByLevel.get(level)!;
 
-    // 5. Filter out blacklisted files
-    const validUploads = allUploads.filter(
-      ({ file }) => !FILE_UPLOAD_BLACKLIST.includes(file.name),
-    );
+        // Prepare batch creation data for this level
+        const batchCreateData = foldersAtThisLevel.map((folderPath) => {
+          const folder = folders[folderPath];
+          const parentId = folder.parent ? folderIdMap.get(folder.parent) : currentFolderId;
+          const sanitizedName = sanitizeFolderName(folder.name);
 
-    // 6. Add all files to dock
-    dispatchDockFileList({
-      atStart: true,
-      files: validUploads.map(({ file }) => ({ file, id: file.name, status: 'pending' })),
-      type: 'addFiles',
-    });
+          // Generate unique slug for the folder
+          const slug = generateSlug();
 
-    // 7. Upload files with concurrency limit
-    const uploadResults = await pMap(
-      validUploads,
-      async ({ file, parentId }) => {
-        const result = await get().uploadWithProgress({
-          file,
-          knowledgeBaseId,
-          onStatusUpdate: dispatchDockFileList,
-          parentId,
+          return {
+            content: '',
+            editorData: '{}',
+            fileType: 'custom/folder',
+            knowledgeBaseId,
+            metadata: { createdAt: Date.now() },
+            parentId,
+            slug,
+            title: sanitizedName,
+          };
         });
 
-        // Note: Don't refresh after each file to avoid flickering
-        // We'll refresh once at the end
+        // Create all folders at this level in a single batch request
+        const createdFolders = await documentService.createDocuments(batchCreateData);
 
-        return { file, fileId: result?.id, fileType: file.type };
-      },
-      { concurrency: MAX_UPLOAD_FILE_COUNT },
-    );
+        // Store folder ID mappings for the next level
+        for (const [i, element] of foldersAtThisLevel.entries()) {
+          folderIdMap.set(element, createdFolders[i].id);
+        }
+      }
 
-    // Refresh the file list once after all uploads are complete
-    await get().refreshFileList();
+      // Dismiss the toast after folders are created
+      if (sortedFolderPaths.length > 0) {
+        message.destroy(messageKey);
+      }
 
-    // 8. Auto-embed files that support chunking
-    const fileIdsToEmbed = uploadResults
-      .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
-      .map(({ fileId }) => fileId!);
+      // Refresh file list to show the new folders
+      await get().refreshFileList();
 
-    if (fileIdsToEmbed.length > 0) {
-      await get().parseFilesToChunks(fileIdsToEmbed, { skipExist: false });
+      // 5. Prepare all file uploads with their target folder IDs
+      const allUploads: Array<{ file: File; parentId: string | undefined }> = [];
+
+      for (const [folderPath, folderFiles] of Object.entries(filesByFolder)) {
+        // Root-level files (no folder path) go to currentFolderId
+        const targetFolderId = folderPath ? folderIdMap.get(folderPath) : currentFolderId;
+
+        allUploads.push(
+          ...folderFiles.map((file) => ({
+            file,
+            parentId: targetFolderId,
+          })),
+        );
+      }
+
+      // 6. Filter out blacklisted files
+      const validUploads = allUploads.filter(
+        ({ file }) => !FILE_UPLOAD_BLACKLIST.includes(file.name),
+      );
+
+      // 7. Add all files to dock
+      dispatchDockFileList({
+        atStart: true,
+        files: validUploads.map(({ file }) => ({ file, id: file.name, status: 'pending' })),
+        type: 'addFiles',
+      });
+
+      // 8. Upload files with concurrency limit
+      const uploadResults = await pMap(
+        validUploads,
+        async ({ file, parentId }) => {
+          const result = await get().uploadWithProgress({
+            file,
+            knowledgeBaseId,
+            onStatusUpdate: dispatchDockFileList,
+            parentId,
+          });
+
+          // Note: Don't refresh after each file to avoid flickering
+          // We'll refresh once at the end
+
+          return { file, fileId: result?.id, fileType: file.type };
+        },
+        { concurrency: MAX_UPLOAD_FILE_COUNT },
+      );
+
+      // Refresh the file list once after all uploads are complete
+      await get().refreshFileList();
+
+      // 9. Auto-embed files that support chunking
+      const fileIdsToEmbed = uploadResults
+        .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
+        .map(({ fileId }) => fileId!);
+
+      if (fileIdsToEmbed.length > 0) {
+        await get().parseFilesToChunks(fileIdsToEmbed, { skipExist: false });
+      }
+    } catch (error) {
+      // Dismiss toast on error
+      if (sortedFolderPaths.length > 0) {
+        message.destroy(messageKey);
+      }
+      throw error;
     }
   },
 

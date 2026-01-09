@@ -24,12 +24,19 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Copy security prompt
+        run: |
+          mkdir -p /tmp/claude-prompts
+          cp .claude/prompts/security-rules.md /tmp/claude-prompts/
+
       - name: Run Claude Code slash command
-        uses: anthropics/claude-code-action@main
+        uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           allowed_non_write_users: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Security: Using slash command which has built-in restrictions
           # The /dedupe command only performs read operations and label additions
+          claude_args: |
+            --append-system-prompt "$(cat /tmp/claude-prompts/security-rules.md)"
           prompt: '/dedupe ${{ github.repository }}/issues/${{ github.event.issue.number || inputs.issue_number }}'

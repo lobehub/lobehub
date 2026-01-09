@@ -26,6 +26,7 @@ import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import ChunksBadge from './ChunkTag';
 
+// Initialize dayjs plugin once at module level
 dayjs.extend(relativeTime);
 
 export const FILE_DATE_WIDTH = 160;
@@ -35,6 +36,7 @@ const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       cursor: pointer;
+      min-width: 800px;
 
       &:hover {
         background: ${cssVar.colorFillTertiary};
@@ -83,7 +85,6 @@ const styles = createStaticStyles(({ css }) => {
       overflow: hidden;
       flex: 1;
       min-width: 0;
-      max-width: 600px;
     `,
     selected: css`
       background: ${cssVar.colorFillTertiary};
@@ -96,6 +97,11 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface FileListItemProps extends FileListItemType {
+  columnWidths: {
+    date: number;
+    name: number;
+    size: number;
+  };
   index: number;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
   pendingRenameItemId?: string | null;
@@ -107,6 +113,7 @@ const FileListItem = memo<FileListItemProps>(
   ({
     size,
     chunkingError,
+    columnWidths,
     embeddingError,
     embeddingStatus,
     finishEmbedding,
@@ -242,7 +249,7 @@ const FileListItem = memo<FileListItemProps>(
       [createdAt],
     );
 
-    const handleRenameStart = () => {
+    const handleRenameStart = useCallback(() => {
       setIsRenaming(true);
       setRenamingValue(name);
       // Focus input after render
@@ -250,9 +257,9 @@ const FileListItem = memo<FileListItemProps>(
         inputRef.current?.focus();
         inputRef.current?.select();
       }, 0);
-    };
+    }, [name]);
 
-    const handleRenameConfirm = async () => {
+    const handleRenameConfirm = useCallback(async () => {
       if (!renamingValue.trim()) {
         message.error(t('FileManager.actions.renameError'));
         return;
@@ -271,12 +278,12 @@ const FileListItem = memo<FileListItemProps>(
         console.error('Rename error:', error);
         message.error(t('FileManager.actions.renameError'));
       }
-    };
+    }, [renamingValue, name, fileStoreState.renameFolder, id, message, t]);
 
-    const handleRenameCancel = () => {
+    const handleRenameCancel = useCallback(() => {
       setIsRenaming(false);
       setRenamingValue(name);
-    };
+    }, [name]);
 
     // Memoize click handler to prevent recreation on every render
     const handleItemClick = useCallback(() => {
@@ -357,29 +364,42 @@ const FileListItem = memo<FileListItemProps>(
           paddingInline={8}
           style={{
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            userSelect: 'none',
           }}
         >
+          <Center
+            height={40}
+            onClick={(e) => {
+              e.stopPropagation();
+
+              onSelectedChange(id, !selected, e.shiftKey, index);
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              // Prevent text selection when shift-clicking for batch selection
+              if (e.shiftKey) {
+                e.preventDefault();
+              }
+            }}
+            style={{ paddingInline: 4 }}
+          >
+            <Checkbox checked={selected} />
+          </Center>
           <Flexbox
             align={'center'}
             className={styles.item}
             distribution={'space-between'}
-            flex={1}
             horizontal
             onClick={handleItemClick}
+            style={{
+              flexShrink: 0,
+              maxWidth: columnWidths.name,
+              minWidth: columnWidths.name,
+              paddingInline: 8,
+              width: columnWidths.name,
+            }}
           >
             <Flexbox align={'center'} className={styles.nameContainer} horizontal>
-              <Center
-                height={48}
-                onClick={(e) => {
-                  e.stopPropagation();
-
-                  onSelectedChange(id, !selected, e.shiftKey, index);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                style={{ paddingInline: 4 }}
-              >
-                <Checkbox checked={selected} />
-              </Center>
               <Flexbox
                 align={'center'}
                 justify={'center'}
@@ -479,16 +499,41 @@ const FileListItem = memo<FileListItemProps>(
           </Flexbox>
           {!isDragging && (
             <>
-              <Flexbox className={styles.item} width={FILE_DATE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.date}>
                 {displayTime}
               </Flexbox>
-              <Flexbox className={styles.item} width={FILE_SIZE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.size}>
                 {isFolder || isPage ? '-' : formatSize(size)}
               </Flexbox>
             </>
           )}
         </Flexbox>
       </ContextMenuTrigger>
+    );
+  },
+  // Custom comparison function to prevent unnecessary re-renders
+  (prevProps, nextProps) => {
+    // Only re-render if these critical props change
+    return (
+      prevProps.id === nextProps.id &&
+      prevProps.name === nextProps.name &&
+      prevProps.selected === nextProps.selected &&
+      prevProps.chunkingStatus === nextProps.chunkingStatus &&
+      prevProps.embeddingStatus === nextProps.embeddingStatus &&
+      prevProps.chunkCount === nextProps.chunkCount &&
+      prevProps.chunkingError === nextProps.chunkingError &&
+      prevProps.embeddingError === nextProps.embeddingError &&
+      prevProps.finishEmbedding === nextProps.finishEmbedding &&
+      prevProps.pendingRenameItemId === nextProps.pendingRenameItemId &&
+      prevProps.size === nextProps.size &&
+      prevProps.createdAt === nextProps.createdAt &&
+      prevProps.fileType === nextProps.fileType &&
+      prevProps.sourceType === nextProps.sourceType &&
+      prevProps.slug === nextProps.slug &&
+      prevProps.url === nextProps.url &&
+      prevProps.columnWidths.name === nextProps.columnWidths.name &&
+      prevProps.columnWidths.date === nextProps.columnWidths.date &&
+      prevProps.columnWidths.size === nextProps.columnWidths.size
     );
   },
 );

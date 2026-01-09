@@ -1,6 +1,6 @@
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Divider, Popover } from 'antd';
+import { Center, Flexbox, Icon, Popover } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { BadgeCent, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -132,7 +132,6 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
 
   return (
     <Popover
-      arrow={false}
       content={
         <Flexbox gap={8} style={{ minWidth: 200 }}>
           {modelCard && <ModelCard {...modelCard} provider={provider} />}
@@ -214,7 +213,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
         </Flexbox>
       }
       placement={'top'}
-      trigger={['hover']}
+      trigger="hover"
     >
       <Center
         gap={2}

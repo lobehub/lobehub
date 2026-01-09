@@ -11,7 +11,6 @@ import { isDev } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import { IControlModule } from '@/controllers';
 import { IServiceModule } from '@/services';
-import { getServerMethodMetadata } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
 
 import { BrowserManager } from './browser/BrowserManager';
@@ -329,15 +328,6 @@ export class App {
   private addController = (ControllerClass: IControlModule) => {
     const controller = new ControllerClass(this);
     this.controllers.set(ControllerClass, controller);
-
-    const serverMethods = getServerMethodMetadata(ControllerClass);
-    serverMethods?.forEach((methodName, propertyKey) => {
-      const channel = `${ControllerClass.groupName}.${methodName}`;
-      this.ipcServerEventMap.set(channel, {
-        controller,
-        methodName: propertyKey,
-      });
-    });
 
     IoCContainer.shortcuts.get(ControllerClass)?.forEach((shortcut) => {
       this.shortcutMethodMap.set(shortcut.name, async () => {

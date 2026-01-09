@@ -2,12 +2,13 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    min-height: 100%;
+    height: 100%;
   `,
   document: css`
     position: relative;
   `,
   documentContainer: css`
+    flex: 1;
     padding-block: 10px;
     background-color: ${cssVar.colorBgLayout};
   `,

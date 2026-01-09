@@ -1,20 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 
-import DesktopClientRouter from './DesktopClientRouter';
+import Loading from '@/components/Loading/BrandTextLoading';
 
-const useIsClient = () => {
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  return isClient;
-};
+const DesktopRouterClient = dynamic(() => import('./DesktopClientRouter'), {
+  loading: () => <Loading debugId="DesktopRouter" />,
+  ssr: false,
+});
+
 const DesktopRouter = () => {
-  const isClient = useIsClient();
-  if (!isClient) return null;
-  return <DesktopClientRouter />;
+  return <DesktopRouterClient />;
 };
 
 export default DesktopRouter;

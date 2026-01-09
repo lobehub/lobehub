@@ -1,5 +1,5 @@
-import { Button, Dropdown, Flexbox } from '@lobehub/ui';
-import { Input, Popover, Space } from 'antd';
+import { Button, Dropdown, Flexbox, Popover } from '@lobehub/ui';
+import { Input, Space } from 'antd';
 import { ChevronDown } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -80,7 +80,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     return (
       <Flexbox gap={8} horizontal>
         <Popover
-          arrow={false}
           content={
             <Flexbox gap={12} style={{ width: 400 }}>
               <Flexbox align={'center'} horizontal justify={'space-between'}>

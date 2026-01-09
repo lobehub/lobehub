@@ -1,18 +1,21 @@
+import { LobeChatDatabase } from '@lobechat/database';
 import urlJoin from 'url-join';
 
+import { FileModel } from '@/database/models/file';
 import { fileEnv } from '@/envs/file';
 import { FileS3 } from '@/server/modules/S3';
 
 import { type FileServiceImpl } from './type';
-import { extractKeyFromUrlOrReturnOriginal } from './utils';
 
 /**
  * S3-based file service implementation
  */
 export class S3StaticFileImpl implements FileServiceImpl {
   private readonly s3: FileS3;
+  private readonly db: LobeChatDatabase;
 
-  constructor() {
+  constructor(db: LobeChatDatabase) {
+    this.db = db;
     this.s3 = new FileS3();
   }
 
@@ -51,8 +54,16 @@ export class S3StaticFileImpl implements FileServiceImpl {
   async getFullFileUrl(url?: string | null, expiresIn?: number): Promise<string> {
     if (!url) return '';
 
-    // Handle legacy data compatibility using shared utility
-    const key = extractKeyFromUrlOrReturnOriginal(url, this.getKeyFromFullUrl.bind(this));
+    // Handle legacy data compatibility - extract key from full URL if needed
+    // Related issue: https://github.com/lobehub/lobe-chat/issues/8994
+    let key = url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const extractedKey = await this.getKeyFromFullUrl(url);
+      if (!extractedKey) {
+        throw new Error('Key not found from url: ' + url);
+      }
+      key = extractedKey;
+    }
 
     // If bucket is not set public read, the preview address needs to be regenerated each time
     if (!fileEnv.S3_SET_ACL) {
@@ -66,38 +77,35 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return urlJoin(fileEnv.S3_PUBLIC_DOMAIN!, key);
   }
 
-  getKeyFromFullUrl(url: string): string {
+  async getKeyFromFullUrl(url: string): Promise<string | null> {
     try {
       const urlObject = new URL(url);
       const { pathname } = urlObject;
 
-      let key: string;
-
-      if (fileEnv.S3_ENABLE_PATH_STYLE) {
-        if (!fileEnv.S3_BUCKET) {
-          // In path-style, we need bucket name to extract key
-          // but if not provided, we can only guess the key is the pathname
-          return pathname.startsWith('/') ? pathname.slice(1) : pathname;
-        }
-        // For path-style URLs, the path is /<bucket>/<key>
-        // We need to remove the leading slash and the bucket name.
-        const bucketPrefix = `/${fileEnv.S3_BUCKET}/`;
-        if (pathname.startsWith(bucketPrefix)) {
-          key = pathname.slice(bucketPrefix.length);
-        } else {
-          // Fallback for unexpected path format
-          key = pathname.startsWith('/') ? pathname.slice(1) : pathname;
-        }
-      } else {
-        // For virtual-hosted-style URLs, the path is /<key>
-        // We just need to remove the leading slash.
-        key = pathname.slice(1);
+      // Case 1: File proxy URL pattern /f/{fileId} - query database for S3 key
+      if (pathname.startsWith('/f/')) {
+        const fileId = pathname.slice(3); // Remove '/f/' prefix
+        const file = await FileModel.getFileById(this.db, fileId);
+        return file?.url ?? null;
       }
 
-      return key;
+      // Case 2: Legacy S3 URL - extract key from pathname
+      if (fileEnv.S3_ENABLE_PATH_STYLE) {
+        if (!fileEnv.S3_BUCKET) {
+          return pathname.startsWith('/') ? pathname.slice(1) : pathname;
+        }
+        const bucketPrefix = `/${fileEnv.S3_BUCKET}/`;
+        if (pathname.startsWith(bucketPrefix)) {
+          return pathname.slice(bucketPrefix.length);
+        }
+        return pathname.startsWith('/') ? pathname.slice(1) : pathname;
+      }
+
+      // Virtual-hosted-style: path is /<key>
+      return pathname.slice(1);
     } catch {
-      // if url is not a valid URL, it may be a key itself
-      return url;
+      // If url is not a valid URL, return null
+      return null;
     }
   }
 

@@ -93,8 +93,8 @@ const styles = createStaticStyles(({ css }) => {
 
       overflow: hidden;
 
-      width: ${thumbnailSize};
-      height: ${thumbnailSize};
+      width: ${thumbnailSize}px;
+      height: ${thumbnailSize}px;
       border-radius: ${cssVar.borderRadius};
 
       background: ${cssVar.colorBgContainer};
@@ -112,7 +112,7 @@ const styles = createStaticStyles(({ css }) => {
       gap: 8px;
 
       width: 100%;
-      height: ${thumbnailSize};
+      height: ${thumbnailSize}px;
       padding: 0;
       border-radius: ${cssVar.borderRadiusLG};
 

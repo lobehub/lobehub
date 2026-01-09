@@ -29,7 +29,7 @@ export interface KnowledgeItem {
 }
 
 /**
- * Knowledge Repository - combines files and documents into a unified interface
+ * Resources Repository - combines files and documents into a unified interface
  */
 export class KnowledgeRepo {
   private userId: string;

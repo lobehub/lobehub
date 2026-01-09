@@ -1,5 +1,6 @@
-import { enableBetterAuth, enableNextAuth } from '@lobechat/const';
 import type { NextRequest } from 'next/server';
+
+import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
 
 const createHandler = async () => {
   if (enableBetterAuth) {

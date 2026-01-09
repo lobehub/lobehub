@@ -67,7 +67,6 @@ export interface BaseExtractorDependencies {
   agent: MemoryExtractionAgent;
   model: string;
   modelRuntime: ModelRuntime;
-  promptRoot: string;
 }
 
 export interface MemoryExtractionLLMConfig {

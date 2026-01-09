@@ -1,8 +1,7 @@
 'use client';
 
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Block, Flexbox, Icon, Popover, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { ClockIcon } from 'lucide-react';
@@ -155,7 +154,6 @@ const ModelItem = memo<DiscoverModelItem>(
               />
             </Flexbox>
             <Popover
-              arrow={false}
               content={
                 <Flexbox
                   gap={6}

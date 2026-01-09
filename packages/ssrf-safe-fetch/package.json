@@ -1,5 +1,5 @@
 {
-  "name": "ssrf-safe-fetch",
+  "name": "@lobechat/ssrf-safe-fetch",
   "version": "1.0.0",
   "private": true,
   "description": "SSRF-safe fetch implementation with browser/node conditional exports",
@@ -12,7 +12,8 @@
   },
   "main": "index.ts",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
     "node-fetch": "^3.3.2",

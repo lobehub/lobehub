@@ -48,7 +48,7 @@ export const imageUrlToBase64 = async (
 
     // Use SSRF-safe fetch on server-side to prevent SSRF attacks
     const res = isServer
-      ? await import('ssrf-safe-fetch').then((m) => m.ssrfSafeFetch(imageUrl))
+      ? await import('@lobechat/ssrf-safe-fetch').then((m) => m.ssrfSafeFetch(imageUrl))
       : await fetch(imageUrl);
 
     const blob = await res.blob();

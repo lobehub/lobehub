@@ -91,29 +91,29 @@ export const createContextSlice: StateCreator<
             produce((draft) => {
               draft.contextsSearchLoading = false;
 
-              // 设置基础信息
+              // Set basic information
               if (!draft.contextsInit) {
                 draft.contextsInit = true;
                 draft.contextsTotal = data.total;
               }
 
-              // 转换数据结构
+              // Transform data structure
               const transformedItems = data.items.map((item: any) => ({
                 ...item.memory,
                 ...item.context,
                 source: null,
               }));
 
-              // 累积数据逻辑
+              // Accumulate data logic
               if (page === 1) {
-                // 第一页，直接设置
+                // First page, set directly
                 draft.contexts = uniqBy(transformedItems, 'id');
               } else {
-                // 后续页面，累积数据
+                // Subsequent pages, accumulate data
                 draft.contexts = uniqBy([...draft.contexts, ...transformedItems], 'id');
               }
 
-              // 更新 hasMore
+              // Update hasMore
               draft.contextsHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,

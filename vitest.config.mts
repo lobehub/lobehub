@@ -2,6 +2,10 @@ import { dirname, join, resolve } from 'node:path';
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  optimizeDeps: {
+    exclude: ['crypto', 'util', 'tty'],
+    include: ['@lobehub/tts'],
+  },
   plugins: [
     /**
      * @lobehub/fluent-emoji@4.0.0 ships `es/FluentEmoji/style.js` but its `es/FluentEmoji/index.js`
@@ -27,16 +31,13 @@ export default defineConfig({
           id.endsWith('/FluentEmoji/style/index.js') ||
           id.endsWith('/FluentEmoji/style/index.js?');
 
-        if (isFluentEmojiEntry && isMissingStyleIndex) return resolve(dirname(importer), 'style.js');
+        if (isFluentEmojiEntry && isMissingStyleIndex)
+          return resolve(dirname(importer), 'style.js');
 
         return null;
       },
     },
   ],
-  optimizeDeps: {
-    exclude: ['crypto', 'util', 'tty'],
-    include: ['@lobehub/tts'],
-  },
   test: {
     alias: {
       /* eslint-disable sort-keys-fix/sort-keys-fix */
@@ -77,11 +78,14 @@ export default defineConfig({
     environment: 'happy-dom',
     exclude: [
       '**/node_modules/**',
+      '**/.*/**',
       '**/dist/**',
       '**/build/**',
       '**/tmp/**',
       '**/temp/**',
-      '**/.temp/**',
+      '**/docs/**',
+      '**/locales/**',
+      '**/public/**',
       '**/apps/desktop/**',
       '**/apps/mobile/**',
       '**/packages/**',

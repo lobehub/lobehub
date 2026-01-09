@@ -1,10 +1,11 @@
 'use client';
 
-import { INBOX_SESSION_ID, enableNextAuth } from '@lobechat/const';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { enableNextAuth } from '@/envs/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';

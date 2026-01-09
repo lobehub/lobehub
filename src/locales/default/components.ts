@@ -114,6 +114,7 @@ export default {
   'ModelSwitchPanel.goToSettings': 'Go to settings',
   'ModelSwitchPanel.manageProvider': 'Manage Provider',
   'ModelSwitchPanel.provider': 'Provider',
+  'ModelSwitchPanel.searchPlaceholder': 'Search models...',
   'ModelSwitchPanel.title': 'Model',
   'ModelSwitchPanel.useModelFrom': 'Use this model from:',
   'MultiImagesUpload.actions.uploadMore': 'Click or drag to upload more',

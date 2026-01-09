@@ -6,8 +6,6 @@ import { memo } from 'react';
 import FileViewer from '@/features/FileViewer';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 
-import FileDetail from './FileDetail';
-
 interface FilePreviewerProps {
   fileId?: string;
 }
@@ -22,11 +20,10 @@ const FilePreviewer = memo<FilePreviewerProps>(({ fileId }) => {
   if (!fileId || !displayFile) return null;
 
   return (
-    <Flexbox height={'100%'} horizontal width={'100%'}>
+    <Flexbox height={'100%'} width={'100%'}>
       <Flexbox flex={1} height={'100%'} style={{ overflow: 'auto' }}>
         <FileViewer {...displayFile} />
       </Flexbox>
-      <FileDetail id={fileId} />
     </Flexbox>
   );
 });

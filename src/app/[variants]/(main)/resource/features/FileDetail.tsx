@@ -2,7 +2,6 @@
 
 import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { Descriptions, Divider } from 'antd';
-import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { BoltIcon, DownloadIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -12,10 +11,23 @@ import { type FileListItem } from '@/types/files';
 import { downloadFile } from '@/utils/client/downloadFile';
 import { formatSize } from '@/utils/format';
 
-export const DETAIL_PANEL_WIDTH = 300;
+interface FileDetailProps extends FileListItem {
+  showDownloadButton?: boolean;
+  showTitle?: boolean;
+}
 
-const FileDetail = memo<FileListItem>((props) => {
-  const { name, embeddingStatus, size, createdAt, updatedAt, chunkCount, url } = props || {};
+const FileDetail = memo<FileDetailProps>((props) => {
+  const {
+    name,
+    embeddingStatus,
+    size,
+    createdAt,
+    updatedAt,
+    chunkCount,
+    url,
+    showDownloadButton = true,
+    showTitle = true,
+  } = props || {};
   const { t } = useTranslation('file');
 
   if (!props) return null;
@@ -64,16 +76,12 @@ const FileDetail = memo<FileListItem>((props) => {
   ];
 
   return (
-    <Flexbox
-      padding={16}
-      style={{ borderInlineStart: `1px solid ${cssVar.colorSplit}` }}
-      width={DETAIL_PANEL_WIDTH}
-    >
+    <Flexbox>
       <Descriptions
         colon={false}
         column={1}
         extra={
-          url && (
+          showDownloadButton && url ? (
             <ActionIcon
               icon={DownloadIcon}
               onClick={() => {
@@ -81,12 +89,12 @@ const FileDetail = memo<FileListItem>((props) => {
               }}
               title={t('download', { ns: 'common' })}
             />
-          )
+          ) : undefined
         }
         items={items}
         labelStyle={{ width: 120 }}
         size={'small'}
-        title={t('detail.basic.title')}
+        title={showTitle ? t('detail.basic.title') : undefined}
       />
       <Divider />
       <Descriptions

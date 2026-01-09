@@ -9,7 +9,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
-import { MARKET_ENDPOINTS } from '@/services/_url';
+import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -211,37 +211,42 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         if (bannerUrl) meta.bannerUrl = bannerUrl;
         if (Object.keys(socialLinks).length > 0) meta.socialLinks = socialLinks;
 
-        const response = await fetch(MARKET_ENDPOINTS.updateUserProfile, {
-          body: JSON.stringify({
-            avatarUrl: avatarUrl || undefined,
-            displayName: values.displayName,
-            meta: Object.keys(meta).length > 0 ? meta : undefined,
-            userName: values.userName,
-          }),
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          method: 'PUT',
+        const result = await lambdaClient.market.user.updateUserProfile.mutate({
+          avatarUrl: avatarUrl || undefined,
+          displayName: values.displayName,
+          meta: Object.keys(meta).length > 0 ? meta : undefined,
+          userName: values.userName,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          if (errorData.error === 'username_taken') {
-            message.error(t('profileSetup.errors.usernameTaken'));
-            return;
-          }
-          throw new Error(errorData.message || 'Update failed');
-        }
-
-        const data = await response.json();
         message.success(t('profileSetup.success'));
-        onSuccess?.(data.user);
+        // Cast result.user to MarketUserProfile with required fields
+        const userProfile: MarketUserProfile = {
+          avatarUrl: result.user?.avatarUrl || avatarUrl || null,
+          bannerUrl: bannerUrl || null,
+          createdAt: result.user?.createdAt || new Date().toISOString(),
+          description: values.description || null,
+          displayName: values.displayName || null,
+          id: result.user?.id || 0,
+          namespace: result.user?.namespace || '',
+          socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : null,
+          type: result.user?.type || null,
+          userName: values.userName || null,
+        };
+        onSuccess?.(userProfile);
         onClose();
       } catch (error) {
         console.error('[ProfileSetupModal] Update failed:', error);
         if (error instanceof Error && error.message !== 'Validation failed') {
-          message.error(t('profileSetup.errors.updateFailed'));
+          // Check for username taken error (tRPC CONFLICT code)
+          const errorMessage = error.message || '';
+          if (
+            errorMessage.toLowerCase().includes('already taken') ||
+            errorMessage.includes('CONFLICT')
+          ) {
+            message.error(t('profileSetup.errors.usernameTaken'));
+          } else {
+            message.error(t('profileSetup.errors.updateFailed'));
+          }
         }
       } finally {
         setLoading(false);

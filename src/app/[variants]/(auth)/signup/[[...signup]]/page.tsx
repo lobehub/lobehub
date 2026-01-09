@@ -1,7 +1,7 @@
 import { SignUp } from '@clerk/nextjs';
 import { notFound } from 'next/navigation';
 
-import { enableBetterAuth, enableClerk } from '@/const/auth';
+import { enableBetterAuth, enableClerk } from '@/envs/auth';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
