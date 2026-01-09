@@ -8,11 +8,14 @@ import {
   buildWorkflowPayloadInput,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
 const USER_PAGE_SIZE = 50;
 const USER_BATCH_SIZE = 10;
 
 export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
+  const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
   if (params.sources.length === 0) {
     return { message: 'No sources provided, skip memory extraction.' };
@@ -49,7 +52,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
           topicCursor: undefined,
           userId: userIds[0],
           userIds,
-        }),
+        }, { extraHeaders: upstashWorkflowExtraHeaders},),
       ),
     ),
   );
@@ -61,7 +64,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
           ...params,
           userCursor: { createdAt: cursor.createdAt.toISOString(), id: cursor.id },
         }),
-      }),
+      }, { extraHeaders: upstashWorkflowExtraHeaders }),
     );
   }
 
