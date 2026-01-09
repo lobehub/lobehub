@@ -94,7 +94,6 @@ const ListView = memo(() => {
   // Get current folder ID - either from breadcrumb or null for root
   const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
 
-  // NEW: Read from resource store instead of fetching independently
   const resourceList = useFileStore((s) => s.resourceList);
 
   // Map ResourceItem[] to FileListItem[] for compatibility

@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import debug from 'debug';
 import { memo, useEffect, useMemo } from 'react';
 
 import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
@@ -18,6 +19,8 @@ import MasonryViewSkeleton from './MasonryView/Skeleton';
 import { useCheckTaskStatus } from './useCheckTaskStatus';
 import { useMasonryColumnCount } from './useMasonryColumnCount';
 import { useResourceExplorer } from './useResourceExplorer';
+
+const log = debug('lobe-client:resource:explorer');
 
 /**
  * Explore resource items in a library
@@ -54,22 +57,28 @@ const ResourceExplorer = memo(() => {
     s.sortType,
   ]);
 
+  log('Explorer render - libraryId: %s, category: %s', libraryId, category);
+
   // Get folder path for empty state check
   const { currentFolderSlug } = useFolderPath();
 
   // Build query params for SWR
   const queryParams = useMemo(
-    () => ({
-      // Only use category filter when NOT in a specific library
-      // When viewing a library, show all items regardless of category
-      category: libraryId ? undefined : category,
-      libraryId,
-      parentId: currentFolderSlug || null,
-      q: searchQuery ?? undefined,
-      showFilesInKnowledgeBase: false,
-      sortType,
-      sorter,
-    }),
+    () => {
+      const params = {
+        // Only use category filter when NOT in a specific library
+        // When viewing a library, show all items regardless of category
+        category: libraryId ? undefined : category,
+        libraryId,
+        parentId: currentFolderSlug || null,
+        q: searchQuery ?? undefined,
+        showFilesInKnowledgeBase: false,
+        sortType,
+        sorter,
+      };
+      log('Computing queryParams: %O', params);
+      return params;
+    },
     [category, libraryId, currentFolderSlug, searchQuery, sortType, sorter],
   );
 

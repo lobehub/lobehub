@@ -1,7 +1,8 @@
 'use client';
 
-import { memo, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import debug from 'debug';
+import { memo, useEffect, useLayoutEffect } from 'react';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 
 import Container from '@/app/[variants]/(main)/resource/library/features/Container';
 import NProgress from '@/components/NProgress';
@@ -11,9 +12,12 @@ import { documentSelectors, useFileStore } from '@/store/file';
 import { useKnowledgeBaseItem } from '../features/hooks/useKnowledgeItem';
 import { useResourceManagerStore } from '../features/store';
 
+const log = debug('lobe-client:resource:library-page');
+
 const MainContent = memo(() => {
   const { id: knowledgeBaseId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [setMode, setCurrentViewItemId, setLibraryId, currentLibraryId] = useResourceManagerStore(
     (s) => [s.setMode, s.setCurrentViewItemId, s.setLibraryId, s.libraryId],
   );
@@ -28,12 +32,21 @@ const MainContent = memo(() => {
   // Load knowledge base data
   useKnowledgeBaseItem(knowledgeBaseId || '');
 
-  // Sync libraryId from URL params
-  useEffect(() => {
-    if (currentLibraryId !== knowledgeBaseId) {
+  // Sync libraryId from URL params using useLayoutEffect
+  // useLayoutEffect runs synchronously before browser paint, ensuring state is set
+  // before Explorer component renders and computes query parameters
+  // IMPORTANT: Only depend on knowledgeBaseId and location.pathname, NOT currentLibraryId to avoid feedback loop
+  useLayoutEffect(() => {
+    const isOnLibraryRoute = location.pathname.includes('/library/');
+    log('useLayoutEffect triggered - knowledgeBaseId: %s (type: %s), pathname: %s, isOnLibraryRoute: %s',
+      knowledgeBaseId, typeof knowledgeBaseId, location.pathname, isOnLibraryRoute);
+    if (isOnLibraryRoute) {
+      log('On library route - setting libraryId to: %s', knowledgeBaseId);
       setLibraryId(knowledgeBaseId);
+    } else {
+      log('Not on library route - skipping setLibraryId');
     }
-  }, [knowledgeBaseId, currentLibraryId, setLibraryId]);
+  }, [knowledgeBaseId, setLibraryId, location.pathname]);
 
   // Sync file view mode from URL
   useEffect(() => {
