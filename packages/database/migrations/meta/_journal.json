@@ -469,6 +469,13 @@
       "when": 1766474494249,
       "tag": "0066_add_document_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1767929492232,
+      "tag": "0067_add_agent_cron_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"

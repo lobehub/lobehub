@@ -84,6 +84,7 @@ const ActionPopover = memo<ActionPopoverProps>(
           content: contentClassName,
         }}
         content={popoverContent}
+        nativeButton={false}
         placement={isMobile ? 'top' : placement}
         styles={{
           ...(typeof resolvedStyles === 'object' ? resolvedStyles : {}),

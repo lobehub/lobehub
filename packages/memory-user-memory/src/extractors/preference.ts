@@ -4,13 +4,18 @@ import {
   PreferenceMemory,
   PreferenceMemorySchema,
 } from '../schemas';
+import { preferencePrompt } from '../prompts';
 import { ExtractorTemplateProps } from '../types';
 import { buildGenerateObjectSchema } from '../utils/zod';
 import { BaseMemoryExtractor } from './base';
 
 export class PreferenceExtractor extends BaseMemoryExtractor<PreferenceMemory> {
-  getPromptFileName(): string {
-    return 'layers/preference.md';
+  getPrompt(): string {
+    return preferencePrompt;
+  }
+
+  protected getPromptName(): string {
+    return 'layer-preference';
   }
 
   getSchema() {

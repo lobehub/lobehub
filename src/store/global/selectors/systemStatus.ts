@@ -30,7 +30,10 @@ const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth
 
 const showChatHeader = (s: GlobalState) => !s.status.zenMode;
 const inZenMode = (s: GlobalState) => s.status.zenMode;
-const leftPanelWidth = (s: GlobalState) => s.status.leftPanelWidth;
+const leftPanelWidth = (s: GlobalState): number => {
+  const width = s.status.leftPanelWidth;
+  return typeof width === 'string' ? Number.parseInt(width) : width;
+};
 const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;

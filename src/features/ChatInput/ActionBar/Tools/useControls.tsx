@@ -7,7 +7,7 @@ import {
 import { Avatar, Flexbox, Icon, Image, type ItemType } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { ArrowRight, Store, ToyBrick } from 'lucide-react';
+import { ToyBrick } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -61,13 +61,7 @@ const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
 
 LobehubSkillIcon.displayName = 'LobehubSkillIcon';
 
-export const useControls = ({
-  setModalOpen,
-  setUpdating,
-}: {
-  setModalOpen: (open: boolean) => void;
-  setUpdating: (updating: boolean) => void;
-}) => {
+export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) => void }) => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
@@ -233,18 +227,6 @@ export const useControls = ({
         </Flexbox>
       ),
       type: 'group',
-    },
-    {
-      type: 'divider',
-    },
-    {
-      extra: <Icon icon={ArrowRight} />,
-      icon: Store,
-      key: 'plugin-store',
-      label: t('tools.plugins.store'),
-      onClick: () => {
-        setModalOpen(true);
-      },
     },
   ];
 

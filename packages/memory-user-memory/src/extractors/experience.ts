@@ -1,5 +1,6 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 
+import { experiencePrompt } from '../prompts';
 import {
   ExperienceMemory,
   ExperienceMemorySchema
@@ -9,8 +10,12 @@ import { buildGenerateObjectSchema } from '../utils/zod';
 import { BaseMemoryExtractor } from './base';
 
 export class ExperienceExtractor extends BaseMemoryExtractor<ExperienceMemory> {
-  getPromptFileName(): string {
-    return 'layers/experience.md';
+  getPrompt(): string {
+    return experiencePrompt;
+  }
+
+  protected getPromptName(): string {
+    return 'layer-experience';
   }
 
   getSchema() {
