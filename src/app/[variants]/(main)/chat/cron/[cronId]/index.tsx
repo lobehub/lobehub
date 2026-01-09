@@ -1,5 +1,6 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import {
   ReactCodePlugin,
@@ -148,6 +149,11 @@ const CronJobDetailPage = memo(() => {
   const initializedIdRef = useRef<string | null>(null);
   const readyRef = useRef(false);
   const lastSavedNameRef = useRef<string | null>(null);
+  const lastSavedPayloadRef = useRef<UpdateAgentCronJobData | null>(null);
+  const lastSavedAtRef = useRef<Date | null>(null);
+  const previousCronIdRef = useRef<string | null>(null);
+  const hydratedAtRef = useRef<string | null>(null);
+  const isDirtyRef = useRef(false);
 
   const [activeTopicId, refreshTopic, switchTopic] = useChatStore((s) => [
     s.activeTopicId,
@@ -159,14 +165,17 @@ const CronJobDetailPage = memo(() => {
   const cronListAgentId = activeAgentId || aid;
 
   const { data: cronJob, isLoading } = useSWR(
-    cronId ? ['cronJob', cronId] : null,
+    ENABLE_BUSINESS_FEATURES && cronId ? ['cronJob', cronId] : null,
     async () => {
       if (!cronId) return null;
       const result = await agentCronJobService.getById(cronId);
       return result.success ? result.data : null;
     },
     {
+      dedupingInterval: 0,
+      revalidateIfStale: true,
       revalidateOnFocus: false,
+      revalidateOnMount: true,
     },
   );
 
@@ -248,15 +257,47 @@ const CronJobDetailPage = memo(() => {
     void mutate(['cronTopicsWithJobInfo', cronListAgentId]);
   }, [cronListAgentId]);
 
+  useEffect(() => {
+    const prevCronId = previousCronIdRef.current;
+    if (prevCronId && prevCronId !== cronId && lastSavedPayloadRef.current) {
+      const payload = lastSavedPayloadRef.current;
+      const updatedAt = lastSavedAtRef.current;
+      mutate(
+        ['cronJob', prevCronId],
+        (current) =>
+          current
+            ? {
+                ...current,
+                ...payload,
+                executionConditions: payload.executionConditions ?? null,
+                ...(updatedAt ? { updatedAt } : null),
+              }
+            : current,
+        false,
+      );
+    }
+
+    previousCronIdRef.current = cronId ?? null;
+    lastSavedPayloadRef.current = null;
+    lastSavedAtRef.current = null;
+    hydratedAtRef.current = null;
+    isDirtyRef.current = false;
+  }, [cronId]);
+
   const { run: debouncedSave, cancel: cancelDebouncedSave } = useDebounceFn(
     async () => {
       if (!cronId || initializedIdRef.current !== cronId) return;
       const payload = buildUpdateData(draftRef.current, contentRef.current);
       if (!payload) return;
+      if (!payload.content || !payload.name) return;
 
       try {
         await agentCronJobService.update(cronId, payload);
-        setAutoSaveState({ lastUpdatedTime: new Date(), status: 'saved' });
+        const savedAt = new Date();
+        lastSavedPayloadRef.current = payload;
+        lastSavedAtRef.current = savedAt;
+        isDirtyRef.current = false;
+        setAutoSaveState({ lastUpdatedTime: savedAt, status: 'saved' });
         const nextName = payload.name ?? null;
         if (nextName !== lastSavedNameRef.current) {
           lastSavedNameRef.current = nextName;
@@ -281,6 +322,7 @@ const CronJobDetailPage = memo(() => {
       pendingSaveRef.current = true;
       return;
     }
+    isDirtyRef.current = true;
     setAutoSaveState({ status: 'saving' });
     debouncedSave();
   }, [debouncedSave]);
@@ -288,6 +330,7 @@ const CronJobDetailPage = memo(() => {
   const flushPendingSave = useCallback(() => {
     if (!pendingSaveRef.current || !draftRef.current) return;
     pendingSaveRef.current = false;
+    isDirtyRef.current = true;
     setAutoSaveState({ status: 'saving' });
     debouncedSave();
   }, [debouncedSave]);
@@ -373,8 +416,16 @@ const CronJobDetailPage = memo(() => {
   }, [activeTopicId, cronId, cronListAgentId, modal, refreshTopic, router, switchTopic, t]);
 
   useEffect(() => {
-    if (!cronJob || initializedIdRef.current === cronJob.id) return;
+    if (!cronJob) return;
+    const cronUpdatedAt = cronJob.updatedAt ? new Date(cronJob.updatedAt).toISOString() : null;
+    const shouldHydrate =
+      initializedIdRef.current !== cronJob.id ||
+      (cronUpdatedAt !== hydratedAtRef.current && !isDirtyRef.current);
+
+    if (!shouldHydrate) return;
     initializedIdRef.current = cronJob.id;
+    hydratedAtRef.current = cronUpdatedAt;
+    isDirtyRef.current = false;
     readyRef.current = false;
     lastSavedNameRef.current = cronJob.name ?? null;
 
@@ -407,12 +458,17 @@ const CronJobDetailPage = memo(() => {
 
     if (editorReady && editor) {
       try {
-        editor.setDocument(enableRichRender ? 'markdown' : 'text', nextDraft.content);
+        setTimeout(() => {
+          editor.setDocument(enableRichRender ? 'markdown' : 'text', nextDraft.content);
+        }, 100);
         pendingContentRef.current = null;
         readyRef.current = true;
         flushPendingSave();
       } catch (error) {
         console.error('[CronJobDetailPage] Failed to init editor content:', error);
+        setTimeout(() => {
+          editor.setDocument(enableRichRender ? 'markdown' : 'text', nextDraft.content);
+        }, 100);
       }
     }
   }, [cronJob, editor, editorReady, enableRichRender]);
@@ -420,14 +476,24 @@ const CronJobDetailPage = memo(() => {
   useEffect(() => {
     if (!editorReady || !editor || pendingContentRef.current === null) return;
     try {
-      editor.setDocument(enableRichRender ? 'markdown' : 'text', pendingContentRef.current);
+      setTimeout(() => {
+        editor.setDocument(enableRichRender ? 'markdown' : 'text', pendingContentRef.current);
+      }, 100);
       pendingContentRef.current = null;
       readyRef.current = true;
       flushPendingSave();
     } catch (error) {
       console.error('[CronJobDetailPage] Failed to init editor content:', error);
+      setTimeout(() => {
+        console.log('setDocument timeout', pendingContentRef.current);
+        editor.setDocument(enableRichRender ? 'markdown' : 'text', pendingContentRef.current);
+      }, 100);
     }
   }, [editor, editorReady, enableRichRender]);
+
+  if (!ENABLE_BUSINESS_FEATURES) {
+    return null;
+  }
 
   return (
     <Flexbox flex={1} height={'100%'}>

@@ -1,5 +1,6 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AccordionItem, ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { message } from 'antd';
 import { Calendar, Plus } from 'lucide-react';
@@ -51,6 +52,8 @@ const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
       message.error('Failed to create scheduled task');
     }
   }, [agentId, mutate, router, t]);
+
+  if (!ENABLE_BUSINESS_FEATURES) return null;
 
   const addAction = (
     <ActionIcon

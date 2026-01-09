@@ -1,5 +1,6 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { Modal, Typography } from 'antd';
 import { Clock } from 'lucide-react';
@@ -33,6 +34,8 @@ const AgentCronJobs = memo<AgentCronJobsProps>(({ showFormModal, onFormModalChan
 
   const { cronJobs, loading, createCronJob, updateCronJob, deleteCronJob } =
     useAgentCronJobs(agentId);
+
+  if (!ENABLE_BUSINESS_FEATURES) return null;
 
   if (!agentId) {
     return null;

@@ -1,3 +1,4 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import useSWR from 'swr';
 
 import { lambdaClient } from '@/libs/trpc/client/lambda';
@@ -10,7 +11,7 @@ export const useFetchCronTopicsWithJobInfo = () => {
   const agentId = useAgentStore((s) => s.activeAgentId);
 
   const { data, isLoading, error, mutate } = useSWR(
-    agentId ? ['cronTopicsWithJobInfo', agentId] : null,
+    ENABLE_BUSINESS_FEATURES && agentId ? ['cronTopicsWithJobInfo', agentId] : null,
     async () => {
       if (!agentId) return [];
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Button, Flexbox } from '@lobehub/ui';
 import { Divider, message } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -94,16 +95,18 @@ const ProfileEditor = memo(() => {
           >
             {t('startConversation')}
           </Button>
-          <Button icon={Clock} onClick={handleCreateCronJob}>
-            {t('agentCronJobs.addJob')}
-          </Button>
+          {ENABLE_BUSINESS_FEATURES && (
+            <Button icon={Clock} onClick={handleCreateCronJob}>
+              {t('agentCronJobs.addJob')}
+            </Button>
+          )}
         </Flexbox>
       </Flexbox>
       <Divider />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas />
       {/* Agent Cron Jobs Display (only show if jobs exist) */}
-      <AgentCronJobs />
+      {ENABLE_BUSINESS_FEATURES && <AgentCronJobs />}
     </>
   );
 });
