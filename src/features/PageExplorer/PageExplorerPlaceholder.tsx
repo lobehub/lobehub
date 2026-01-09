@@ -94,10 +94,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
     ]);
 
     // File operations from FileStore (for uploads and notion import)
-    const [createDocument, refreshFileList] = useFileStore((s) => [
-      s.createDocument,
-      s.refreshFileList,
-    ]);
+    const [createDocument] = useFileStore((s) => [s.createDocument]);
 
     const notionImport = useNotionImport({
       createDocument,
@@ -106,7 +103,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       refetchResources: async () => {
         const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
         await revalidateResources();
-        await fetchDocuments({ pageOnly: true });
+        await fetchDocuments();
       },
       t,
     });

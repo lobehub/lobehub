@@ -42,11 +42,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transform: translateX(-50%);
 
     display: inline-flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 
-    padding-block: 4px;
-    padding-inline: 12px;
+    height: 32px;
+    padding-inline: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
 
@@ -90,8 +90,8 @@ export const CreateDocumentPlaceholder = memo<BuiltinPlaceholderProps<CreateDocu
           )}
         </ScrollShadow>
         <div className={styles.statusTag}>
-          <NeuralNetworkLoading size={14} />
-          <span style={{ fontSize: 12 }}>{t('builtins.lobe-notebook.actions.creating')}</span>
+          <NeuralNetworkLoading size={16} />
+          <span>{t('builtins.lobe-notebook.actions.creating')}</span>
         </div>
       </Flexbox>
     );
