@@ -60,6 +60,7 @@ interface DragState {
 
 const DragStateContext = createContext<{
   currentDrag: DragState | null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setCurrentDrag: (state: DragState | null) => void;
 }>({
   currentDrag: null,
@@ -141,8 +142,8 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
       }
 
       // Save current drag data before clearing state
-      const draggedItemId = currentDrag.id;
-      const draggedItemData = currentDrag.data;
+      // const draggedItemId = currentDrag.id;
+      // const draggedItemData = currentDrag.data;
 
       // Clear drag state immediately for better UX
       setCurrentDrag(null);
