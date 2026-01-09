@@ -1,13 +1,13 @@
-import { AgentCronJobModel } from '@/database/models/agentCronJob';
-import {
-  type CreateAgentCronJobData,
-  insertAgentCronJobSchema,
-  type UpdateAgentCronJobData,
-  updateAgentCronJobSchema,
-} from '@/database/schemas/agentCronJob';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AgentCronJobModel } from '@/database/models/agentCronJob';
+import {
+  type CreateAgentCronJobData,
+  type UpdateAgentCronJobData,
+  insertAgentCronJobSchema,
+  updateAgentCronJobSchema,
+} from '@/database/schemas/agentCronJob';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -30,13 +30,17 @@ const batchUpdateStatusSchema = z.object({
   ids: z.array(z.string()),
 });
 
+// Create input schema for tRPC that omits server-managed fields
+const createAgentCronJobInputSchema = insertAgentCronJobSchema.omit({
+  userId: true, // Provided by authentication context
+});
+
 /**
  * Agent Cron Job tRPC Router
- * 
+ *
  * Provides type-safe API for managing agent scheduled tasks
  */
 export const agentCronJobRouter = router({
-
   /**
    * Batch update status (enable/disable) for multiple jobs
    */
@@ -65,15 +69,11 @@ export const agentCronJobRouter = router({
       }
     }),
 
-
-
-
-
   /**
-     * Create a new cron job
-     */
+   * Create a new cron job
+   */
   create: agentCronJobProcedure
-    .input(insertAgentCronJobSchema)
+    .input(createAgentCronJobInputSchema)
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB: db } = ctx;
 
@@ -98,15 +98,9 @@ export const agentCronJobRouter = router({
       }
     }),
 
-
-
-
-
-
-
   /**
-     * Delete a cron job
-     */
+   * Delete a cron job
+   */
   delete: agentCronJobProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
@@ -140,14 +134,9 @@ export const agentCronJobRouter = router({
       }
     }),
 
-
-
-
-
-
   /**
-     * List cron jobs by agent ID
-     */
+   * List cron jobs by agent ID
+   */
   findByAgent: agentCronJobProcedure
     .input(z.object({ agentId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -172,14 +161,9 @@ export const agentCronJobRouter = router({
       }
     }),
 
-
-
-
-
-
   /**
-     * Get a single cron job by ID
-     */
+   * Get a single cron job by ID
+   */
   findById: agentCronJobProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -213,15 +197,9 @@ export const agentCronJobRouter = router({
       }
     }),
 
-
-
-
-
-
-
   /**
-     * Get jobs that are near depletion (for warnings)
-     */
+   * Get jobs that are near depletion (for warnings)
+   */
   getNearDepletion: agentCronJobProcedure
     .input(z.object({ threshold: z.number().min(1).max(20).default(5) }))
     .query(async ({ input, ctx }) => {
@@ -246,88 +224,69 @@ export const agentCronJobRouter = router({
       }
     }),
 
+  /**
+   * Get execution statistics for user's cron jobs
+   */
+  getStats: agentCronJobProcedure.query(async ({ ctx }) => {
+    const { userId, serverDB: db } = ctx;
 
+    try {
+      const cronJobModel = new AgentCronJobModel(db, userId);
+      const stats = await cronJobModel.getExecutionStats();
 
-
-
-
+      return {
+        data: stats,
+        success: true,
+      };
+    } catch (error) {
+      console.error('[agentCronJob:getStats]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch execution statistics',
+      });
+    }
+  }),
 
   /**
-     * Get execution statistics for user's cron jobs
-     */
-  getStats: agentCronJobProcedure
-    .query(async ({ ctx }) => {
-      const { userId, serverDB: db } = ctx;
+   * List cron jobs with filtering and pagination
+   */
+  list: agentCronJobProcedure.input(listQuerySchema).query(async ({ input, ctx }) => {
+    const { userId, serverDB: db } = ctx;
+    const { agentId, enabled, limit, offset } = input;
 
-      try {
-        const cronJobModel = new AgentCronJobModel(db, userId);
-        const stats = await cronJobModel.getExecutionStats();
+    try {
+      const cronJobModel = new AgentCronJobModel(db, userId);
+      const result = await cronJobModel.findWithPagination({
+        agentId,
+        enabled,
+        limit,
+        offset,
+      });
 
-        return {
-          data: stats,
-          success: true,
-        };
-      } catch (error) {
-        console.error('[agentCronJob:getStats]', error);
-        throw new TRPCError({
-          cause: error,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch execution statistics',
-        });
-      }
-    }),
-
-
-
-
-
-
-  /**
-     * List cron jobs with filtering and pagination
-     */
-  list: agentCronJobProcedure
-    .input(listQuerySchema)
-    .query(async ({ input, ctx }) => {
-      const { userId, serverDB: db } = ctx;
-      const { agentId, enabled, limit, offset } = input;
-
-      try {
-        const cronJobModel = new AgentCronJobModel(db, userId);
-        const result = await cronJobModel.findWithPagination({
-          agentId,
-          enabled,
+      return {
+        data: result.jobs,
+        pagination: {
+          hasMore: offset + limit < result.total,
           limit,
           offset,
-        });
-
-        return {
-          data: result.jobs,
-          pagination: {
-            hasMore: offset + limit < result.total,
-            limit,
-            offset,
-            total: result.total,
-          },
-          success: true,
-        };
-      } catch (error) {
-        console.error('[agentCronJob:list]', error);
-        throw new TRPCError({
-          cause: error,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch cron jobs',
-        });
-      }
-    }),
-
-
-
-
-
+          total: result.total,
+        },
+        success: true,
+      };
+    } catch (error) {
+      console.error('[agentCronJob:list]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch cron jobs',
+      });
+    }
+  }),
 
   /**
-     * Reset execution counts for a cron job
-     */
+   * Reset execution counts for a cron job
+   */
   resetExecutions: agentCronJobProcedure
     .input(resetExecutionsSchema)
     .mutation(async ({ input, ctx }) => {
@@ -362,18 +321,15 @@ export const agentCronJobRouter = router({
       }
     }),
 
-
-
-
   /**
-     * Update a cron job
-     */
+   * Update a cron job
+   */
   update: agentCronJobProcedure
     .input(
       z.object({
         data: updateAgentCronJobSchema,
         id: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB: db } = ctx;

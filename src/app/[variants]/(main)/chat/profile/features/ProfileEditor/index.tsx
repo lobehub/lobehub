@@ -1,15 +1,16 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider, message } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Clock, PlayIcon } from 'lucide-react';
-import React, { memo, useState } from 'react';
+import React, { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import ModelSelect from '@/features/ModelSelect';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { agentCronJobService } from '@/services/agentCronJob';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -26,7 +27,26 @@ const ProfileEditor = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   const switchTopic = useChatStore((s) => s.switchTopic);
   const router = useQueryRoute();
-  const [showCronJobForm, setShowCronJobForm] = useState(false);
+
+  const handleCreateCronJob = useCallback(async () => {
+    if (!agentId) return;
+    try {
+      const result = await agentCronJobService.create({
+        agentId,
+        content: t('agentCronJobs.form.content.placeholder') || 'This is a cron job',
+        cronPattern: '0 */30 * * *',
+        enabled: true,
+        name: t('agentCronJobs.addJob') || 'Cron Job Task',
+      });
+
+      if (result.success) {
+        router.push(urlJoin('/agent', agentId, 'cron', result.data.id));
+      }
+    } catch (error) {
+      console.error('Failed to create cron job:', error);
+      message.error('Failed to create scheduled task');
+    }
+  }, [agentId, router, t]);
 
   return (
     <>
@@ -74,17 +94,16 @@ const ProfileEditor = memo(() => {
           >
             {t('startConversation')}
           </Button>
-          <Button icon={Clock} onClick={() => setShowCronJobForm(true)}>
+          <Button icon={Clock} onClick={handleCreateCronJob}>
             {t('agentCronJobs.addJob')}
           </Button>
         </Flexbox>
-
-        {/* Agent Cron Jobs Display (only show if jobs exist) */}
-        <AgentCronJobs onFormModalChange={setShowCronJobForm} showFormModal={showCronJobForm} />
       </Flexbox>
       <Divider />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas />
+      {/* Agent Cron Jobs Display (only show if jobs exist) */}
+      <AgentCronJobs />
     </>
   );
 });

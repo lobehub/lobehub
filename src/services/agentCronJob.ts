@@ -2,12 +2,11 @@ import type {
   CreateAgentCronJobData,
   UpdateAgentCronJobData,
 } from '@/database/schemas/agentCronJob';
-
 import { lambdaClient } from '@/libs/trpc/client/lambda';
 
 /**
  * Client-side service for Agent Cron Job operations
- * 
+ *
  * This service provides a clean interface for frontend components
  * to interact with agent cron job data using tRPC client.
  */
@@ -15,7 +14,7 @@ class AgentCronJobService {
   /**
    * Create a new cron job
    */
-  async create(data: CreateAgentCronJobData) {
+  async create(data: Omit<CreateAgentCronJobData, 'userId'>) {
     return await lambdaClient.agentCronJob.create.mutate(data);
   }
 
@@ -36,12 +35,14 @@ class AgentCronJobService {
   /**
    * List cron jobs with pagination and filtering
    */
-  async list(options: {
-    agentId?: string;
-    enabled?: boolean;
-    limit?: number;
-    offset?: number;
-  } = {}) {
+  async list(
+    options: {
+      agentId?: string;
+      enabled?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) {
     return await lambdaClient.agentCronJob.list.query(options);
   }
 
@@ -65,7 +66,7 @@ class AgentCronJobService {
   async resetExecutions(id: string, newMaxExecutions?: number) {
     return await lambdaClient.agentCronJob.resetExecutions.mutate({
       id,
-      newMaxExecutions
+      newMaxExecutions,
     });
   }
 

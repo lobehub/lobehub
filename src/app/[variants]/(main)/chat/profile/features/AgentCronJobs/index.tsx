@@ -86,7 +86,7 @@ const AgentCronJobs = memo<AgentCronJobsProps>(({ showFormModal, onFormModalChan
     <>
       {/* Show cards section only if there are jobs */}
       {hasCronJobs && (
-        <Flexbox gap={12} style={{ marginTop: 16 }}>
+        <Flexbox gap={12} style={{ marginBottom: 16, marginTop: 16 }}>
           <Title level={5} style={{ margin: 0 }}>
             <Flexbox align="center" gap={8} horizontal>
               <Clock size={16} />

@@ -18,27 +18,34 @@ const currentTopicData = (s: ChatStoreState): TopicData | undefined => {
 
 const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopicData(s)?.items;
 
+// Get topics without cron-triggered ones
+const currentTopicsWithoutCron = (s: ChatStoreState): ChatTopic[] | undefined => {
+  const topics = currentTopics(s);
+  if (!topics) return undefined;
+  return topics.filter((topic) => topic.trigger !== 'cron');
+};
+
 const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
   return currentTopics(s)?.find((topic) => topic.id === s.activeTopicId);
 };
 const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
 
-const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopics(s);
+const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTopicsWithoutCron(s);
 
 const currentFavTopics = (s: ChatStoreState): ChatTopic[] =>
-  currentTopics(s)?.filter((s) => s.favorite) || [];
+  currentTopicsWithoutCron(s)?.filter((s) => s.favorite) || [];
 
 const currentUnFavTopics = (s: ChatStoreState): ChatTopic[] =>
-  currentTopics(s)?.filter((s) => !s.favorite) || [];
+  currentTopicsWithoutCron(s)?.filter((s) => !s.favorite) || [];
 
-const currentTopicLength = (s: ChatStoreState): number => currentTopicData(s)?.items?.length || 0;
+const currentTopicLength = (s: ChatStoreState): number => currentTopicsWithoutCron(s)?.length || 0;
 
 const currentTopicCount = (s: ChatStoreState): number => currentTopicData(s)?.total || 0;
 
 const getTopicById =
   (id: string) =>
   (s: ChatStoreState): ChatTopic | undefined =>
-    currentTopics(s)?.find((topic) => topic.id === id);
+    currentTopics(s)?.find((topic) => topic.id === id); // Don't filter here, need to access all topics by ID
 
 /**
  * Get topics by specific agentId (for AgentBuilder scenarios where agentId differs from activeAgentId)
@@ -79,7 +86,7 @@ const isSearchingTopic = (s: ChatStoreState) => s.isSearchingTopic;
 const displayTopicsForSidebar =
   (pageSize: number) =>
   (s: ChatStoreState): ChatTopic[] | undefined => {
-    const topics = currentTopics(s);
+    const topics = currentTopicsWithoutCron(s);
     if (!topics) return undefined;
 
     // Return only the first page worth of topics for sidebar
@@ -143,6 +150,7 @@ export const topicSelectors = {
   currentTopicLength,
   currentTopicWorkingDirectory,
   currentTopics,
+  currentTopicsWithoutCron,
   currentUnFavTopics,
   displayTopics,
   displayTopicsForSidebar,

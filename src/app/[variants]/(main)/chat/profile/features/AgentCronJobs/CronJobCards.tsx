@@ -54,7 +54,7 @@ const CronJobCards = memo<CronJobCardsProps>(({ cronJobs, loading, onDelete, onE
   };
 
   return (
-    <Row gutter={[12, 12]} style={{ marginTop: 16 }}>
+    <Row gutter={[12, 12]}>
       {cronJobs.map((job) => {
         const statusInfo = getStatusInfo(job);
         const intervalText = getIntervalText(job.cronPattern);
@@ -84,7 +84,7 @@ const CronJobCards = memo<CronJobCardsProps>(({ cronJobs, loading, onDelete, onE
               styles={{
                 actions: { marginTop: 0 },
                 body: { paddingBottom: 12, paddingTop: 8 },
-                header: { borderBottom: 'none', minHeight: 0, paddingBottom: 0 },
+                header: { borderBottom: 'none', marginTop: '8px', minHeight: 0, paddingBottom: 0 },
               }}
               title={
                 <Flexbox align="center" horizontal justify="space-between">
