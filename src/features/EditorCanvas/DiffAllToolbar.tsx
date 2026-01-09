@@ -9,8 +9,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
-
-import { usePageEditorStore } from './store';
+import { useDocumentStore } from '@/store/document';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -39,7 +38,8 @@ const styles = createStaticStyles(({ css }) => ({
 const DiffAllToolbar = memo(() => {
   const { t } = useTranslation('editor');
   const isDarkMode = useIsDark();
-  const [editor, performSave] = usePageEditorStore((s) => [s.editor, s.performSave]);
+  const performSave = useDocumentStore((s) => s.performSave);
+  const editor = useDocumentStore((s) => s.editor);
   const [hasPendingDiffs, setHasPendingDiffs] = useState(false);
 
   // Listen to editor state changes to detect diff nodes
@@ -75,7 +75,11 @@ const DiffAllToolbar = memo(() => {
     return unregister;
   }, [editor]);
 
-  if (!editor || !hasPendingDiffs) return null;
+  if (!hasPendingDiffs) return null;
+
+  const handleSave = async () => {
+    await performSave();
+  };
 
   return (
     <div className={styles.container}>
@@ -90,10 +94,10 @@ const DiffAllToolbar = memo(() => {
         <Space>
           <Button
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
+              editor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Reject,
               });
-              await performSave({ force: true });
+              await handleSave();
             }}
             size={'small'}
             type="text"
@@ -104,10 +108,10 @@ const DiffAllToolbar = memo(() => {
           <Button
             color={'default'}
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
+              editor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Accept,
               });
-              await performSave({ force: true });
+              await handleSave();
             }}
             size={'small'}
             variant="filled"

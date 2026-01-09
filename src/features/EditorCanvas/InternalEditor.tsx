@@ -14,7 +14,7 @@ import {
   ReactToolbarPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EditorCanvasProps } from './EditorCanvas';
@@ -92,6 +92,15 @@ const InternalEditor = memo<InternalEditorProps>(
 
       return basePlugins;
     }, [customPlugins, editor, editorState, extraPlugins, floatingToolbar, toolbarExtraItems]);
+
+    useEffect(() => {
+      // for easier debug, mount editor instance to window
+      if (editor) window.__editor = editor;
+
+      return () => {
+        window.__editor = undefined;
+      };
+    }, [editor]);
 
     return (
       <div

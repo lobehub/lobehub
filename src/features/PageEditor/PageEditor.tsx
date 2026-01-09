@@ -6,14 +6,16 @@ import { cssVar } from 'antd-style';
 import { type FC, memo, useEffect } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useDocumentStore } from '@/store/document';
+import { editorSelectors } from '@/store/document/slices/editor';
 import { useFileStore } from '@/store/file';
 
 import Copilot from './Copilot';
-import DiffAllToolbar from './DiffAllToolbar';
 import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import PageAgentProvider from './PageAgentProvider';
@@ -33,7 +35,12 @@ interface PageEditorProps {
 
 const PageEditorCanvas = memo(() => {
   const editor = usePageEditorStore((s) => s.editor);
-  const isDirty = usePageEditorStore((s) => s.isDirty);
+  const documentId = usePageEditorStore((s) => s.documentId);
+
+  // Get isDirty from DocumentStore
+  const isDirty = useDocumentStore((s) =>
+    documentId ? editorSelectors.isDirty(documentId)(s) : false,
+  );
 
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
@@ -55,8 +62,6 @@ const PageEditorCanvas = memo(() => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [isDirty]);
-
-  console.log('ageEditorCanvas rerender');
   return (
     <>
       <PageTitle />

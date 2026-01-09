@@ -1,24 +1,28 @@
 'use client';
 
-import { ActionIcon, Avatar, Dropdown, Skeleton, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Dropdown, Text } from '@lobehub/ui';
 import { ArrowLeftIcon, BotMessageSquareIcon, MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 
 import { usePageEditorStore } from '../store';
-import AutoSaveHint from './AutoSaveHint';
 import Breadcrumb from './Breadcrumb';
 import { useMenu } from './useMenu';
 
 const Header = memo(() => {
   const { t } = useTranslation('file');
-  const [currentEmoji, currentTitle, isLoadingContent, parentId, onBack] = usePageEditorStore(
-    (s) => [s.currentEmoji, s.currentTitle, s.isLoadingContent, s.parentId, s.onBack],
-  );
+  const [documentId, emoji, title, parentId, onBack] = usePageEditorStore((s) => [
+    s.documentId,
+    s.emoji,
+    s.title,
+    s.parentId,
+    s.onBack,
+  ]);
   const { menuItems } = useMenu();
 
   return (
@@ -32,22 +36,15 @@ const Header = memo(() => {
           {!parentId && (
             <>
               {/* Icon */}
-              {currentEmoji && <Avatar avatar={currentEmoji} shape={'square'} size={28} />}
+              {emoji && <Avatar avatar={emoji} shape={'square'} size={28} />}
               {/* Title */}
-              {isLoadingContent ? (
-                <Skeleton.Button
-                  active
-                  style={{ height: 20, marginLeft: 4, maxWidth: 200, width: 200 }}
-                />
-              ) : (
-                <Text ellipsis style={{ marginLeft: 4 }} weight={500}>
-                  {currentTitle || t('pageEditor.titlePlaceholder')}
-                </Text>
-              )}
+              <Text ellipsis style={{ marginLeft: 4 }} weight={500}>
+                {title || t('pageEditor.titlePlaceholder')}
+              </Text>
             </>
           )}
-          {/* Auto Save Status - hide while loading */}
-          {!isLoadingContent && <AutoSaveHint />}
+          {/* Auto Save Status */}
+          {documentId && <AutoSaveHint documentId={documentId} style={{ marginLeft: 6 }} />}
         </>
       }
       right={

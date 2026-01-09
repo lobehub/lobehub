@@ -30,13 +30,13 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
       <Provider
         createStore={() =>
           createStore({
+            documentId: pageId,
             editor,
             knowledgeBaseId,
             onBack,
             onDelete,
             onDocumentIdChange,
             onSave,
-            pageId,
             parentId,
           })
         }

@@ -17,10 +17,10 @@ const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
-  const currentEmoji = usePageEditorStore((s) => s.currentEmoji);
-  const currentTitle = usePageEditorStore((s) => s.currentTitle);
-  const setCurrentEmoji = usePageEditorStore((s) => s.setCurrentEmoji);
-  const setCurrentTitle = usePageEditorStore((s) => s.setCurrentTitle);
+  const emoji = usePageEditorStore((s) => s.emoji);
+  const title = usePageEditorStore((s) => s.title);
+  const setEmoji = usePageEditorStore((s) => s.setEmoji);
+  const setTitle = usePageEditorStore((s) => s.setTitle);
   const handleTitleSubmit = usePageEditorStore((s) => s.handleTitleSubmit);
 
   const [isHoveringTitle, setIsHoveringTitle] = useState(false);
@@ -41,16 +41,16 @@ const TitleSection = memo(() => {
       }}
     >
       {/* Emoji picker above Choose Icon button */}
-      {(currentEmoji || showEmojiPicker) && (
+      {(emoji || showEmojiPicker) && (
         <EmojiPicker
           allowDelete
           locale={locale}
-          onChange={(emoji) => {
-            setCurrentEmoji(emoji);
+          onChange={(e) => {
+            setEmoji(e);
             setShowEmojiPicker(false);
           }}
           onDelete={() => {
-            setCurrentEmoji(undefined);
+            setEmoji(undefined);
             setShowEmojiPicker(false);
           }}
           onOpenChange={(open) => {
@@ -60,16 +60,16 @@ const TitleSection = memo(() => {
           shape={'square'}
           size={72}
           title={t('pageEditor.chooseIcon')}
-          value={currentEmoji}
+          value={emoji}
         />
       )}
 
       {/* Choose Icon button - only shown when no emoji */}
-      {!currentEmoji && !showEmojiPicker && (
+      {!emoji && !showEmojiPicker && (
         <Button
           icon={<Icon icon={SmilePlus} />}
           onClick={() => {
-            setCurrentEmoji('📄');
+            setEmoji('📄');
             setShowEmojiPicker(true);
           }}
           size="small"
@@ -89,7 +89,7 @@ const TitleSection = memo(() => {
         autoSize={{ minRows: 1 }}
         onChange={(e) => {
           const truncated = truncateByWeightedLength(e.target.value, 100);
-          setCurrentTitle(truncated);
+          setTitle(truncated);
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -105,7 +105,7 @@ const TitleSection = memo(() => {
           resize: 'none',
           width: '100%',
         }}
-        value={currentTitle}
+        value={title}
         variant={'borderless'}
       />
     </Flexbox>

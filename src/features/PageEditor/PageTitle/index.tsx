@@ -6,7 +6,7 @@ import PageTitle from '@/components/PageTitle';
 import { selectors, usePageEditorStore } from '@/features/PageEditor/store';
 
 const Title = memo(() => {
-  const pageTitle = usePageEditorStore(selectors.currentTitle);
+  const pageTitle = usePageEditorStore(selectors.title);
   return <PageTitle title={pageTitle} />;
 });
 
