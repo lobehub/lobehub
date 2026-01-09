@@ -6,7 +6,7 @@ import { ModelIcon } from '@lobehub/icons';
 import { Alert, Button, Flexbox, Highlighter, Icon, Select } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
-import { type ReactNode, memo, useState } from 'react';
+import { type ReactNode, memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useProviderName } from '@/hooks/useProviderName';
@@ -58,9 +58,10 @@ const Checker = memo<ConnectionCheckerProps>(
   ({ model, provider, checkErrorRender: CheckErrorRender, onBeforeCheck, onAfterCheck }) => {
     const { t } = useTranslation('setting');
 
-    const isProviderConfigUpdating = useAiInfraStore(
-      aiProviderSelectors.isProviderConfigUpdating(provider),
-    );
+    const [isProviderConfigUpdating, updateAiProviderConfig] = useAiInfraStore((s) => [
+      aiProviderSelectors.isProviderConfigUpdating(provider)(s),
+      s.updateAiProviderConfig,
+    ]);
     const totalModels = useAiInfraStore(aiModelSelectors.aiProviderChatModelListIds);
 
     const [loading, setLoading] = useState(false);
@@ -68,6 +69,11 @@ const Checker = memo<ConnectionCheckerProps>(
     const [checkModel, setCheckModel] = useState(model);
 
     const [error, setError] = useState<ChatMessageError | undefined>();
+
+    // Sync checkModel state when model prop changes
+    useEffect(() => {
+      setCheckModel(model);
+    }, [model]);
 
     const checkConnection = async () => {
       // Clear previous check results immediately
@@ -131,11 +137,14 @@ const Checker = memo<ConnectionCheckerProps>(
           <Select
             listItemHeight={36}
             onSelect={async (value) => {
-              // Changing the check model should be a local UI concern only.
-              // Persisting it to provider config would trigger global refresh/revalidation.
+              // Update local state
               setCheckModel(value);
               setPass(false);
               setError(undefined);
+
+              // Persist the selected model to provider config
+              // This allows the model to be retained after page refresh
+              await updateAiProviderConfig(provider, { checkModel: value });
             }}
             optionRender={({ value }) => {
               return (
@@ -177,9 +186,9 @@ const Checker = memo<ConnectionCheckerProps>(
             style={
               pass
                 ? {
-                    borderColor: cssVar.colorSuccess,
-                    color: cssVar.colorSuccess,
-                  }
+                  borderColor: cssVar.colorSuccess,
+                  color: cssVar.colorSuccess,
+                }
                 : undefined
             }
           >
