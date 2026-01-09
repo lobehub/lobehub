@@ -123,6 +123,15 @@ export const insertAgentCronJobSchema = createInsertSchema(agentCronJobs, {
   description: z.string().max(500).optional(),
   maxExecutions: z.number().min(1).max(10_000).optional(),
   executionConditions: executionConditionsSchema,
+}).omit({
+  userId: true, // Provided by authentication context
+  id: true, // Auto-generated
+  accessedAt: true, // Auto-managed
+  createdAt: true, // Auto-managed
+  updatedAt: true, // Auto-managed
+  lastExecutedAt: true, // Auto-managed
+  remainingExecutions: true, // Calculated from maxExecutions
+  totalExecutions: true, // Auto-managed
 });
 
 export const updateAgentCronJobSchema = insertAgentCronJobSchema.partial();

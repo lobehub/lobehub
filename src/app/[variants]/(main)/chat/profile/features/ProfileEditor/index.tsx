@@ -3,8 +3,8 @@
 import { Button, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { PlayIcon } from 'lucide-react';
-import React, { memo } from 'react';
+import { Clock, PlayIcon } from 'lucide-react';
+import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -14,6 +14,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
+import AgentCronJobs from '../AgentCronJobs';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
@@ -25,6 +26,7 @@ const ProfileEditor = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   const switchTopic = useChatStore((s) => s.switchTopic);
   const router = useQueryRoute();
+  const [showCronJobForm, setShowCronJobForm] = useState(false);
 
   return (
     <>
@@ -72,7 +74,13 @@ const ProfileEditor = memo(() => {
           >
             {t('startConversation')}
           </Button>
+          <Button icon={Clock} onClick={() => setShowCronJobForm(true)}>
+            {t('agentCronJobs.addJob')}
+          </Button>
         </Flexbox>
+
+        {/* Agent Cron Jobs Display (only show if jobs exist) */}
+        <AgentCronJobs onFormModalChange={setShowCronJobForm} showFormModal={showCronJobForm} />
       </Flexbox>
       <Divider />
       {/* Main Content: Prompt Editor */}
