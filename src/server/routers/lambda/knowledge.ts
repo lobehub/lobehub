@@ -9,6 +9,9 @@ import { FileService } from '@/server/services/file';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { type FileListItem, QueryFileListSchema } from '@/types/files';
 
+const resolveFileId = (item: { fileId?: string | null; id: string }): string =>
+  item.fileId ?? item.id;
+
 const knowledgeProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -30,7 +33,7 @@ export const knowledgeRouter = router({
 
     // Process files (add chunk info and async task status)
     const fileItems = knowledgeItems.filter((item) => item.sourceType === 'file');
-    const fileIds = fileItems.map((item) => item.id);
+    const fileIds = fileItems.map((item) => resolveFileId(item));
     const chunks = await ctx.chunkModel.countByFileIds(fileIds);
 
     const chunkTaskIds = fileItems.map((item) => item.chunkTaskId).filter(Boolean) as string[];
@@ -54,15 +57,17 @@ export const knowledgeRouter = router({
         const embeddingTask = item.embeddingTaskId
           ? embeddingTasks.find((task) => task.id === item.embeddingTaskId)
           : null;
+        const fileId = resolveFileId(item);
 
         resultItems.push({
           ...item,
-          chunkCount: chunks.find((chunk) => chunk.id === item.id)?.count ?? null,
+          chunkCount: chunks.find((chunk) => chunk.id === fileId)?.count ?? null,
           chunkingError: chunkTask?.error ?? null,
           chunkingStatus: chunkTask?.status as AsyncTaskStatus,
           editorData: null,
           embeddingError: embeddingTask?.error ?? null,
           embeddingStatus: embeddingTask?.status as AsyncTaskStatus,
+          fileId,
           finishEmbedding: embeddingTask?.status === AsyncTaskStatus.Success,
           url: await ctx.fileService.getFullFileUrl(item.url!),
         } as FileListItem);
@@ -75,6 +80,7 @@ export const knowledgeRouter = router({
           chunkingStatus: null,
           embeddingError: null,
           embeddingStatus: null,
+          fileId: item.fileId ?? null,
           finishEmbedding: false,
         } as FileListItem;
         console.log('[API getKnowledgeItems] Processing document:', {

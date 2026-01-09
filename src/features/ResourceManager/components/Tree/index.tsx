@@ -122,6 +122,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface TreeItem {
   children?: TreeItem[];
+  fileId?: string | null;
   fileType: string;
   id: string;
   isFolder: boolean;
@@ -151,7 +152,6 @@ const FileTreeRow = memo<{
     onToggleFolder,
     onLoadFolder,
     selectedKey,
-
     folderChildrenCache,
   }) => {
     const navigate = useNavigate();
@@ -215,6 +215,7 @@ const FileTreeRow = memo<{
     }, [item.name]);
 
     const { menuItems } = useFileItemDropdown({
+      fileId: item.fileId || item.id,
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
@@ -291,7 +292,8 @@ const FileTreeRow = memo<{
         : `/resource/library/${libraryId}`;
 
       setCurrentViewItemId(itemKey);
-      navigate(`${currentPath}?file=${itemKey}`);
+      // Use fileId if available to preview the file, otherwise fallback to item.id,ref: 
+      navigate(`${currentPath}?file=${item.fileId || item.id}`);
 
       if (itemKey.startsWith('doc')) {
         setMode('page');
@@ -536,6 +538,7 @@ const FileTree = memo(() => {
     if (!rootData) return [];
 
     const mappedItems: TreeItem[] = rootData.map((item) => ({
+      fileId: item.fileId || item.id,
       fileType: item.fileType,
       id: item.id,
       isFolder: item.fileType === 'custom/folder',

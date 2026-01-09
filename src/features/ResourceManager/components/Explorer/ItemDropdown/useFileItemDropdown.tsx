@@ -23,6 +23,7 @@ import MoveToFolderModal from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
+  fileId?: string | null;
   fileType: string;
   filename: string;
   id: string;
@@ -42,6 +43,7 @@ export const useFileItemDropdown = ({
   url,
   filename,
   fileType,
+  fileId,
   sourceType,
   onRenameStart,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
@@ -78,7 +80,8 @@ export const useFileItemDropdown = ({
       onClick: async ({ domEvent }) => {
         domEvent.stopPropagation();
         try {
-          await addFilesToKnowledgeBase(kb.id, [id]);
+          // Use fileId if available, otherwise fallback to id, ref: https://github.com/lobehub/lobe-chat/pull/11180
+          await addFilesToKnowledgeBase(kb.id, [fileId || id]);
           message.success(
             t('addToKnowledgeBase.addSuccess', {
               count: 1,
@@ -113,7 +116,8 @@ export const useFileItemDropdown = ({
                     danger: true,
                   },
                   onOk: async () => {
-                    await removeFilesFromKnowledgeBase(knowledgeBaseId, [id]);
+                    // Use fileId if available, otherwise fallback to id, ref: https://github.com/lobehub/lobe-chat/pull/11180
+                    await removeFilesFromKnowledgeBase(knowledgeBaseId, [fileId || id]);
 
                     message.success(t('FileManager.actions.removeFromKnowledgeBaseSuccess'));
                   },
@@ -150,7 +154,7 @@ export const useFileItemDropdown = ({
             domEvent.stopPropagation();
 
             createRawModal(MoveToFolderModal, {
-              fileId: id,
+              fileId: fileId || id,
               fileType,
               knowledgeBaseId,
             });
@@ -253,7 +257,7 @@ export const useFileItemDropdown = ({
                   await documentService.deleteDocument(id);
                   await refreshFileList();
                 } else {
-                  await removeFile(id);
+                  await removeFile(fileId || id);
                 }
               },
             });

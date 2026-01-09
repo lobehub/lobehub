@@ -14,6 +14,10 @@ export interface FileListItem {
   editorData?: Record<string, any> | null;
   embeddingError: any | null;
   embeddingStatus?: AsyncTaskStatus | null;
+  /**
+   * The underlying files table id when the item represents a file.
+   */
+  fileId?: string | null;
   fileType: string;
   finishEmbedding: boolean;
   id: string;

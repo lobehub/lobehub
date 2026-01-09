@@ -310,6 +310,78 @@ describe('KnowledgeRepo', () => {
     });
   });
 
+  describe('fileId resolution', () => {
+    beforeEach(async () => {
+      await serverDB.insert(files).values([
+        {
+          id: 'file-with-doc',
+          fileType: 'application/pdf',
+          name: 'with-doc.pdf',
+          size: 1024,
+          url: 'with-doc-url',
+          userId,
+        },
+        {
+          id: 'file-standalone',
+          fileType: 'application/pdf',
+          name: 'standalone-file.pdf',
+          size: 2048,
+          url: 'standalone-url',
+          userId,
+        },
+      ]);
+
+      await serverDB.insert(documents).values([
+        {
+          id: 'doc-from-file',
+          content: 'Doc generated from file',
+          fileId: 'file-with-doc',
+          fileType: 'application/pdf',
+          filename: 'with-doc.pdf',
+          source: 'upload-source',
+          sourceType: 'file',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+        },
+        {
+          id: 'doc-standalone',
+          content: 'Standalone knowledge note',
+          fileType: 'custom/other',
+          filename: 'note.md',
+          source: 'editor',
+          sourceType: 'api',
+          title: 'Standalone Doc',
+          totalCharCount: 200,
+          totalLineCount: 20,
+          userId,
+        },
+      ]);
+    });
+
+    it('should expose original fileId for file items joined with documents', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.All });
+
+      const withDoc = results.find((item) => item.name === 'with-doc.pdf');
+      expect(withDoc).toBeDefined();
+      expect(withDoc?.sourceType).toBe('file');
+      expect(withDoc?.id).toBe('doc-from-file');
+      expect(withDoc?.fileId).toBe('file-with-doc');
+
+      const standaloneFile = results.find((item) => item.name === 'standalone-file.pdf');
+      expect(standaloneFile?.fileId).toBe('file-standalone');
+    });
+
+    it('should keep fileId null for standalone documents', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.All });
+
+      const standaloneDoc = results.find((item) => item.name === 'Standalone Doc');
+      expect(standaloneDoc).toBeDefined();
+      expect(standaloneDoc?.sourceType).toBe('document');
+      expect(standaloneDoc?.fileId ?? null).toBeNull();
+    });
+  });
+
   describe('query - category filters', () => {
     beforeEach(async () => {
       // Create files of different types
