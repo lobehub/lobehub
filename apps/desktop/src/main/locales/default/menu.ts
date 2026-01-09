@@ -8,7 +8,6 @@ const menu = {
   'dev.openUpdaterCacheDir': 'Open Updater Cache',
   'dev.openUserDataDir': 'Open User Data',
   'dev.permissions.accessibility.request': 'Request Accessibility Permission',
-  'dev.permissions.fullDisk.autoAdd': 'Open Full Disk Access Settings (Auto Add)',
   'dev.permissions.fullDisk.open': 'Open Full Disk Access Settings',
   'dev.permissions.fullDisk.request': 'Request Full Disk Access Permission',
   'dev.permissions.microphone.request': 'Request Microphone Permission',
