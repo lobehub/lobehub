@@ -257,9 +257,8 @@ export const createFileManageSlice: StateCreator<
       { concurrency: MAX_UPLOAD_FILE_COUNT },
     );
 
-    // Refetch resource list to show newly uploaded files
-    const { revalidateResources } = await import('../resource/hooks');
-    await revalidateResources();
+    // Refresh file list to show newly uploaded files
+    await get().refreshFileList();
 
     // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults
