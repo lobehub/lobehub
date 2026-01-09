@@ -23,6 +23,8 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
     onDelete,
     onBack,
     parentId,
+    title,
+    emoji,
   }) => {
     const editor = useEditor();
 
@@ -32,16 +34,19 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
           createStore({
             documentId: pageId,
             editor,
+            emoji,
             knowledgeBaseId,
             onBack,
             onDelete,
             onDocumentIdChange,
             onSave,
             parentId,
+            title,
           })
         }
       >
         <StoreUpdater
+          emoji={emoji}
           knowledgeBaseId={knowledgeBaseId}
           onBack={onBack}
           onDelete={onDelete}
@@ -49,6 +54,7 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
           onSave={onSave}
           pageId={pageId}
           parentId={parentId}
+          title={title}
         />
         {children}
       </Provider>

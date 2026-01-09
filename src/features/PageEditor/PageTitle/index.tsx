@@ -7,7 +7,7 @@ import { selectors, usePageEditorStore } from '@/features/PageEditor/store';
 
 const Title = memo(() => {
   const pageTitle = usePageEditorStore(selectors.title);
-  return <PageTitle title={pageTitle} />;
+  return pageTitle && <PageTitle title={pageTitle} />;
 });
 
 export default Title;

@@ -3,7 +3,7 @@
 import { memo, useEffect, useRef } from 'react';
 
 import { PageEditor } from '@/features/PageEditor';
-import { useFileStore } from '@/store/file';
+import { documentSelectors, useFileStore } from '@/store/file';
 
 import PageExplorerPlaceholder from './PageExplorerPlaceholder';
 
@@ -74,11 +74,16 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId }) => {
   const shouldShowEditor =
     currentPageId && (currentPageExists || (isValidPageId && isWaitingForDocuments));
 
+  // Get document title and emoji from FileStore
+  const document = useFileStore(documentSelectors.getDocumentById(currentPageId));
+  const title = document?.title;
+  const emoji = document?.metadata?.emoji as string | undefined;
+
   if (!shouldShowEditor) {
     return <PageExplorerPlaceholder hasPages={pages?.length > 0} />;
   }
 
-  return <PageEditor pageId={currentPageId} />;
+  return <PageEditor emoji={emoji} pageId={currentPageId} title={title} />;
 });
 
 export default PageExplorer;

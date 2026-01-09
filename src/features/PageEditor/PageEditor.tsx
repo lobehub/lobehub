@@ -25,12 +25,14 @@ import TitleSection from './TitleSection';
 import { usePageEditorStore } from './store';
 
 interface PageEditorProps {
+  emoji?: string;
   knowledgeBaseId?: string;
   onBack?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;
   onSave?: () => void;
   pageId?: string;
+  title?: string;
 }
 
 const PageEditorCanvas = memo(() => {
@@ -105,6 +107,8 @@ export const PageEditor: FC<PageEditorProps> = ({
   onDocumentIdChange,
   onSave,
   onBack,
+  title,
+  emoji,
 }) => {
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
   const pageAgentId = useAgentStore(builtinAgentSelectors.pageAgentId);
@@ -118,6 +122,7 @@ export const PageEditor: FC<PageEditorProps> = ({
   return (
     <PageAgentProvider pageAgentId={pageAgentId}>
       <PageEditorProvider
+        emoji={emoji}
         key={pageId}
         knowledgeBaseId={knowledgeBaseId}
         onBack={onBack}
@@ -125,6 +130,7 @@ export const PageEditor: FC<PageEditorProps> = ({
         onDocumentIdChange={onDocumentIdChange}
         onSave={onSave}
         pageId={pageId}
+        title={title}
       >
         <PageEditorCanvas />
       </PageEditorProvider>

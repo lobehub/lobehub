@@ -18,7 +18,17 @@ export interface StoreUpdaterProps extends Partial<PublicState> {
  * Title/emoji are consumed from PageEditorStore (set via setCurrentTitle/setCurrentEmoji).
  */
 const StoreUpdater = memo<StoreUpdaterProps>(
-  ({ pageId, knowledgeBaseId, onDocumentIdChange, onSave, onDelete, onBack, parentId }) => {
+  ({
+    pageId,
+    knowledgeBaseId,
+    onDocumentIdChange,
+    onSave,
+    onDelete,
+    onBack,
+    parentId,
+    title,
+    emoji,
+  }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
 
@@ -32,6 +42,8 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('onDelete', onDelete);
     useStoreUpdater('onBack', onBack);
     useStoreUpdater('parentId', parentId);
+    useStoreUpdater('title', title);
+    useStoreUpdater('emoji', emoji);
 
     // Connect editor to page agent runtime
     useEffect(() => {
@@ -50,7 +62,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
       };
 
       const titleGetter = () => {
-        return storeApi.getState().title;
+        return storeApi.getState().title || '';
       };
 
       pageAgentRuntime.setCurrentDocId(pageId);
