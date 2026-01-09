@@ -544,9 +544,10 @@ export const createFileManageSlice: StateCreator<
     }),
 
   useFetchKnowledgeItem: (id) =>
-    useClientDataSWR<FileListItem | undefined>(!id ? null : ['useFetchKnowledgeItem', id], () =>
-      serverFileService.getKnowledgeItem(id!),
-    ),
+    useClientDataSWR<FileListItem | undefined>(!id ? null : ['useFetchKnowledgeItem', id], async () => {
+      const response = await serverFileService.getKnowledgeItem(id!);
+      return response;
+    }),
 
   useFetchKnowledgeItems: (params) =>
     useClientDataSWR<FileListItem[]>([FETCH_ALL_KNOWLEDGE_KEY, params], async () => {
