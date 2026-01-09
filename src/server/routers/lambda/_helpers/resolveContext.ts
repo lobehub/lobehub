@@ -54,14 +54,14 @@ export const resolveContext = async (
 };
 
 /**
- * 反向解析：从 sessionId 获取 agentId
+ * Reverse resolution: Get agentId from sessionId
  *
- * 用于 Topic Router 等需要 agentId 进行查询的场景
+ * Used in scenarios like Topic Router where agentId is needed for queries
  *
  * @param sessionId - session ID
- * @param db - 数据库实例
- * @param userId - 用户 ID
- * @returns agentId 或 undefined
+ * @param db - Database instance
+ * @param userId - User ID
+ * @returns agentId or undefined
  */
 export const resolveAgentIdFromSession = async (
   sessionId: string,
@@ -78,14 +78,14 @@ export const resolveAgentIdFromSession = async (
 };
 
 /**
- * 批量反向解析：从多个 sessionId 获取 agentId 映射
+ * Batch reverse resolution: Get agentId mapping from multiple sessionIds
  *
- * 用于需要批量解析 sessionId -> agentId 的场景（如 recentTopics）
+ * Used in scenarios requiring batch sessionId -> agentId resolution (e.g., recentTopics)
  *
- * @param sessionIds - session ID 数组
- * @param db - 数据库实例
- * @param userId - 用户 ID
- * @returns sessionId -> agentId 的映射 Map
+ * @param sessionIds - Array of session IDs
+ * @param db - Database instance
+ * @param userId - User ID
+ * @returns Map of sessionId -> agentId
  */
 export const batchResolveAgentIdFromSessions = async (
   sessionIds: string[],

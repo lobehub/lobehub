@@ -48,6 +48,7 @@ export interface MemoryExtractionPrivateConfig {
     region?: string;
     secretAccessKey?: string;
   };
+  upstashWorkflowExtraHeaders?: Record<string, string>;
   webhookHeaders?: Record<string, string>;
   whitelistUsers?: string[];
 }
@@ -190,6 +191,16 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
       return acc;
     }, {});
 
+  const upstashWorkflowExtraHeaders = process.env.MEMORY_USER_MEMORY_WORKFLOW_EXTRA_HEADERS?.split(',')
+    .filter(Boolean)
+    .reduce<Record<string, string>>((acc, pair) => {
+      const [key, value] = pair.split('=').map((s) => s.trim());
+      if (key && value) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+
   return {
     agentGateKeeper,
     agentLayerExtractor,
@@ -197,6 +208,7 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     embedding,
     featureFlags,
     observabilityS3: extractorObservabilityS3,
+    upstashWorkflowExtraHeaders,
     webhookHeaders,
     whitelistUsers,
   };

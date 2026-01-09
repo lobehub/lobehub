@@ -1,5 +1,10 @@
 [
   {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.247"
+  },
+  {
     "children": {
       "features": ["Generate agent_cron_jobs in agents."]
     },
