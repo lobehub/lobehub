@@ -49,7 +49,7 @@ export const topicRouter = router({
       ),
     )
     .mutation(async ({ input, ctx }): Promise<BatchTaskResult> => {
-      // 解析每个 topic 的 sessionId
+      // Resolve sessionId for each topic
       const resolvedTopics = await Promise.all(
         input.map(async (item) => {
           const { agentId, ...rest } = item;
@@ -162,7 +162,7 @@ export const topicRouter = router({
         return { items: result.items, total: result.total };
       }
 
-      // 如果提供了 sessionId 但没有 agentId，需要反向查找 agentId
+      // If sessionId is provided but no agentId, need to reverse lookup agentId
       let effectiveAgentId = rest.agentId;
       if (!effectiveAgentId && sessionId) {
         effectiveAgentId = await resolveAgentIdFromSession(sessionId, ctx.serverDB, ctx.userId);
@@ -430,7 +430,7 @@ export const topicRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { agentId, ...restValue } = input.value;
 
-      // 如果提供了 agentId，解析为 sessionId
+      // If agentId is provided, resolve to sessionId
       let resolvedSessionId = restValue.sessionId;
       if (agentId && !resolvedSessionId) {
         const resolved = await resolveContext({ agentId }, ctx.serverDB, ctx.userId);

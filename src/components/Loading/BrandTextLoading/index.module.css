@@ -65,7 +65,6 @@
   align-items: center;
 
   padding: 2px 8px;
-  border: 1px solid var(--brand-border-color);
   border-radius: 6px;
 
   background: var(--brand-tag-bg);

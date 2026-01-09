@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IpcContext } from '../base';
-import {
-  IpcMethod,
-  IpcServerMethod,
-  IpcService,
-  getIpcContext,
-  getServerMethodMetadata,
-} from '../base';
+import { IpcMethod, IpcService, getIpcContext } from '../base';
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
@@ -72,20 +66,5 @@ describe('ipc service base', () => {
     expect(result).toBe('TEST');
     expect(service.invokedWith).toBe('test');
     expect(ipcMainHandleMock).toHaveBeenCalledWith('direct.run', expect.any(Function));
-  });
-
-  it('collects server method metadata for decorators', () => {
-    class ServerService extends IpcService {
-      static readonly groupName = 'server';
-
-      @IpcServerMethod()
-      fetch(_: string) {
-        return 'ok';
-      }
-    }
-
-    const metadata = getServerMethodMetadata(ServerService);
-    expect(metadata).toBeDefined();
-    expect(metadata?.get('fetch')).toBe('fetch');
   });
 });

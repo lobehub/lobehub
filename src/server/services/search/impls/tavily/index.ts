@@ -42,7 +42,7 @@ export class TavilyImpl implements SearchServiceImpl {
         params?.searchTimeRange && params.searchTimeRange !== 'anytime'
           ? params.searchTimeRange
           : undefined,
-      topic: // Tavily 只支持 news 和 general 两种类型
+      topic: // Tavily only supports news and general types
       params?.searchCategories?.filter((cat) => ['news', 'general'].includes(cat))?.[0],
     };
 
