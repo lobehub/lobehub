@@ -1,6 +1,5 @@
 'use client';
 
-import debug from 'debug';
 import { memo, useEffect, useLayoutEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
@@ -10,20 +9,12 @@ import { FilesTabs } from '@/types/files';
 
 import { useResourceManagerStore } from '../features/store';
 
-const log = debug('lobe-client:resource:home-page');
-
 const ResourceHomePage = memo(() => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const [setMode, setCurrentViewItemId, setCategory, setLibraryId, currentLibraryId, currentCategory] =
-    useResourceManagerStore((s) => [
-      s.setMode,
-      s.setCurrentViewItemId,
-      s.setCategory,
-      s.setLibraryId,
-      s.libraryId,
-      s.category,
-    ]);
+  const [setMode, setCurrentViewItemId, setCategory, setLibraryId] = useResourceManagerStore(
+    (s) => [s.setMode, s.setCurrentViewItemId, s.setCategory, s.setLibraryId],
+  );
 
   const categoryParam = (searchParams.get('category') as FilesTabs) || FilesTabs.All;
   const fileId = searchParams.get('file');
@@ -41,13 +32,8 @@ const ResourceHomePage = memo(() => {
   // Don't clear when location is /library/* (even if this component is still mounted)
   useLayoutEffect(() => {
     const isOnHomeRoute = location.pathname === '/resource' || !location.pathname.includes('/library/');
-    log('useLayoutEffect (libraryId) - pathname: %s, isOnHomeRoute: %s',
-      location.pathname, isOnHomeRoute);
     if (isOnHomeRoute) {
-      log('On home route - clearing libraryId to undefined');
       setLibraryId(undefined);
-    } else {
-      log('Not on home route - skipping clear');
     }
   }, [setLibraryId, location.pathname]);
 
@@ -55,13 +41,8 @@ const ResourceHomePage = memo(() => {
   // IMPORTANT: Only sync if we're actually on the home route (not transitioning to library)
   useLayoutEffect(() => {
     const isOnHomeRoute = location.pathname === '/resource' || !location.pathname.includes('/library/');
-    log('useLayoutEffect (category) - categoryParam: %s, pathname: %s, isOnHomeRoute: %s',
-      categoryParam, location.pathname, isOnHomeRoute);
     if (isOnHomeRoute) {
-      log('On home route - setting category to: %s', categoryParam);
       setCategory(categoryParam);
-    } else {
-      log('Not on home route - skipping category sync');
     }
   }, [categoryParam, setCategory, location.pathname]);
 

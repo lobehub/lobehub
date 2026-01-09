@@ -1,12 +1,9 @@
-import debug from 'debug';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { type ResouceManagerMode } from '@/features/ResourceManager';
 import { type FilesTabs, SortType } from '@/types/files';
 
 import { type State, type ViewMode, initialState } from './initialState';
-
-const log = debug('lobe-client:resource:store');
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
@@ -194,7 +191,6 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   setCategory: (category) => {
-    log('setCategory called with: %s', category);
     set({ category });
   },
 
@@ -223,7 +219,6 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   setLibraryId: (libraryId) => {
-    log('setLibraryId called with: %s', libraryId);
     set({ libraryId });
 
     // Reset pagination state when switching libraries to prevent showing stale data
