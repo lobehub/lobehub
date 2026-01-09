@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import { useFileStore } from '@/store/file';
+import * as resourceHooks from '@/store/file/slices/resource/hooks';
 
 import { useKnowledgeBaseStore as useStore } from '../../store';
 
@@ -47,10 +47,9 @@ describe('KnowledgeBaseContentActions', () => {
           },
         ]);
 
-      const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-      vi.spyOn(useFileStore, 'getState').mockReturnValue({
-        refreshFileList: refreshFileListSpy,
-      } as any);
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.addFilesToKnowledgeBase(knowledgeBaseId, fileIds);
@@ -58,8 +57,8 @@ describe('KnowledgeBaseContentActions', () => {
 
       expect(addFilesSpy).toHaveBeenCalledWith(knowledgeBaseId, fileIds);
       expect(addFilesSpy).toHaveBeenCalledTimes(1);
-      expect(refreshFileListSpy).toHaveBeenCalled();
-      expect(refreshFileListSpy).toHaveBeenCalledTimes(1);
+      expect(revalidateResourcesSpy).toHaveBeenCalled();
+      expect(revalidateResourcesSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should handle single file addition', async () => {
@@ -79,17 +78,16 @@ describe('KnowledgeBaseContentActions', () => {
           },
         ]);
 
-      const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-      vi.spyOn(useFileStore, 'getState').mockReturnValue({
-        refreshFileList: refreshFileListSpy,
-      } as any);
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.addFilesToKnowledgeBase(knowledgeBaseId, fileIds);
       });
 
       expect(addFilesSpy).toHaveBeenCalledWith(knowledgeBaseId, fileIds);
-      expect(refreshFileListSpy).toHaveBeenCalled();
+      expect(revalidateResourcesSpy).toHaveBeenCalled();
     });
 
     it('should handle empty file array', async () => {
@@ -102,17 +100,16 @@ describe('KnowledgeBaseContentActions', () => {
         .spyOn(knowledgeBaseService, 'addFilesToKnowledgeBase')
         .mockResolvedValue([]);
 
-      const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-      vi.spyOn(useFileStore, 'getState').mockReturnValue({
-        refreshFileList: refreshFileListSpy,
-      } as any);
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.addFilesToKnowledgeBase(knowledgeBaseId, fileIds);
       });
 
       expect(addFilesSpy).toHaveBeenCalledWith(knowledgeBaseId, fileIds);
-      expect(refreshFileListSpy).toHaveBeenCalled();
+      expect(revalidateResourcesSpy).toHaveBeenCalled();
     });
 
     describe('error handling', () => {
@@ -125,10 +122,9 @@ describe('KnowledgeBaseContentActions', () => {
 
         vi.spyOn(knowledgeBaseService, 'addFilesToKnowledgeBase').mockRejectedValue(serviceError);
 
-        const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-        vi.spyOn(useFileStore, 'getState').mockReturnValue({
-          refreshFileList: refreshFileListSpy,
-        } as any);
+        const revalidateResourcesSpy = vi
+          .spyOn(resourceHooks, 'revalidateResources')
+          .mockResolvedValue(undefined);
 
         await expect(async () => {
           await act(async () => {
@@ -136,7 +132,7 @@ describe('KnowledgeBaseContentActions', () => {
           });
         }).rejects.toThrow('Failed to add files to knowledge base');
 
-        expect(refreshFileListSpy).not.toHaveBeenCalled();
+        expect(revalidateResourcesSpy).not.toHaveBeenCalled();
       });
 
       it('should handle refresh file list errors', async () => {
@@ -155,10 +151,7 @@ describe('KnowledgeBaseContentActions', () => {
           },
         ]);
 
-        const refreshFileListSpy = vi.fn().mockRejectedValue(refreshError);
-        vi.spyOn(useFileStore, 'getState').mockReturnValue({
-          refreshFileList: refreshFileListSpy,
-        } as any);
+        vi.spyOn(resourceHooks, 'revalidateResources').mockRejectedValue(refreshError);
 
         await expect(async () => {
           await act(async () => {
@@ -180,10 +173,9 @@ describe('KnowledgeBaseContentActions', () => {
         .spyOn(knowledgeBaseService, 'removeFilesFromKnowledgeBase')
         .mockResolvedValue({} as any);
 
-      const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-      vi.spyOn(useFileStore, 'getState').mockReturnValue({
-        refreshFileList: refreshFileListSpy,
-      } as any);
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.removeFilesFromKnowledgeBase(knowledgeBaseId, fileIds);
@@ -191,8 +183,8 @@ describe('KnowledgeBaseContentActions', () => {
 
       expect(removeFilesSpy).toHaveBeenCalledWith(knowledgeBaseId, fileIds);
       expect(removeFilesSpy).toHaveBeenCalledTimes(1);
-      expect(refreshFileListSpy).toHaveBeenCalled();
-      expect(refreshFileListSpy).toHaveBeenCalledTimes(1);
+      expect(revalidateResourcesSpy).toHaveBeenCalled();
+      expect(revalidateResourcesSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should handle single file removal', async () => {
@@ -205,17 +197,16 @@ describe('KnowledgeBaseContentActions', () => {
         .spyOn(knowledgeBaseService, 'removeFilesFromKnowledgeBase')
         .mockResolvedValue({} as any);
 
-      const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-      vi.spyOn(useFileStore, 'getState').mockReturnValue({
-        refreshFileList: refreshFileListSpy,
-      } as any);
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.removeFilesFromKnowledgeBase(knowledgeBaseId, fileIds);
       });
 
       expect(removeFilesSpy).toHaveBeenCalledWith(knowledgeBaseId, fileIds);
-      expect(refreshFileListSpy).toHaveBeenCalled();
+      expect(revalidateResourcesSpy).toHaveBeenCalled();
     });
 
     it('should handle empty file array', async () => {
@@ -228,17 +219,16 @@ describe('KnowledgeBaseContentActions', () => {
         .spyOn(knowledgeBaseService, 'removeFilesFromKnowledgeBase')
         .mockResolvedValue({} as any);
 
-      const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-      vi.spyOn(useFileStore, 'getState').mockReturnValue({
-        refreshFileList: refreshFileListSpy,
-      } as any);
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.removeFilesFromKnowledgeBase(knowledgeBaseId, fileIds);
       });
 
       expect(removeFilesSpy).toHaveBeenCalledWith(knowledgeBaseId, fileIds);
-      expect(refreshFileListSpy).toHaveBeenCalled();
+      expect(revalidateResourcesSpy).toHaveBeenCalled();
     });
 
     describe('error handling', () => {
@@ -253,10 +243,9 @@ describe('KnowledgeBaseContentActions', () => {
           serviceError,
         );
 
-        const refreshFileListSpy = vi.fn().mockResolvedValue(undefined);
-        vi.spyOn(useFileStore, 'getState').mockReturnValue({
-          refreshFileList: refreshFileListSpy,
-        } as any);
+        const revalidateResourcesSpy = vi
+          .spyOn(resourceHooks, 'revalidateResources')
+          .mockResolvedValue(undefined);
 
         await expect(async () => {
           await act(async () => {
@@ -264,7 +253,7 @@ describe('KnowledgeBaseContentActions', () => {
           });
         }).rejects.toThrow('Failed to remove files from knowledge base');
 
-        expect(refreshFileListSpy).not.toHaveBeenCalled();
+        expect(revalidateResourcesSpy).not.toHaveBeenCalled();
       });
 
       it('should handle refresh file list errors', async () => {
@@ -276,10 +265,7 @@ describe('KnowledgeBaseContentActions', () => {
 
         vi.spyOn(knowledgeBaseService, 'removeFilesFromKnowledgeBase').mockResolvedValue({} as any);
 
-        const refreshFileListSpy = vi.fn().mockRejectedValue(refreshError);
-        vi.spyOn(useFileStore, 'getState').mockReturnValue({
-          refreshFileList: refreshFileListSpy,
-        } as any);
+        vi.spyOn(resourceHooks, 'revalidateResources').mockRejectedValue(refreshError);
 
         await expect(async () => {
           await act(async () => {
