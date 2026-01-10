@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { createStyles, cssVar } from 'antd-style';
 import dynamic from 'next/dynamic';
@@ -91,6 +92,8 @@ const ResourceManager = memo(() => {
       prev.delete('file');
       return prev;
     });
+    // Reset document title to default
+    document.title = BRANDING_NAME;
   };
 
   return (
