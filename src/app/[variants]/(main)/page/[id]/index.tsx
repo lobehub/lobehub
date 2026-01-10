@@ -8,7 +8,7 @@ import { createStoreUpdater } from 'zustand-utils';
 import Loading from '@/components/Loading/BrandTextLoading';
 import PageExplorer from '@/features/PageExplorer';
 import { usePageStore } from '@/store/page';
-import { standardizeIdentifier } from '@/utils/identifier';
+import { getIdFromIdentifier } from '@/utils/identifier';
 
 import PageTitle from '../PageTitle';
 
@@ -19,7 +19,8 @@ import PageTitle from '../PageTitle';
 const PagesPage = memo(() => {
   const storeUpdater = createStoreUpdater(usePageStore);
   const params = useParams<{ id: string }>();
-  const pageId = standardizeIdentifier(params.id ?? '', 'docs');
+
+  const pageId = getIdFromIdentifier(params.id ?? '', 'docs');
   storeUpdater('selectedPageId', pageId);
 
   // Clear activeAgentId when unmounting (leaving chat page)

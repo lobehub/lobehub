@@ -1,18 +1,10 @@
 import { type StateCreator } from 'zustand/vanilla';
 
-import { useGlobalStore } from '@/store/global';
-import { standardizeIdentifier } from '@/utils/identifier';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type PageStore } from '../../store';
 
 const n = setNamespace('page/selection');
-
-const navigateToPage = (pageId: string | null) => {
-  const dryPageId = standardizeIdentifier(pageId ?? '') ?? '';
-  console.log(useGlobalStore.getState().navigate);
-  useGlobalStore.getState().navigate?.(`/page/${dryPageId}`);
-};
 
 export interface SelectionAction {
   /**
@@ -59,6 +51,7 @@ export const createSelectionSlice: StateCreator<
 
     // Select and navigate
     set({ isCreatingNew: false, selectedPageId: pageId }, false, n('selectPage'));
+    get().navigateToPage(pageId);
   },
 
   setRenamingPageId: (pageId: string | null) => {
@@ -68,7 +61,7 @@ export const createSelectionSlice: StateCreator<
   setSelectedPageId: (pageId: string | null, shouldNavigate = true) => {
     set({ selectedPageId: pageId }, false, n('setSelectedPageId'));
     if (shouldNavigate) {
-      navigateToPage(pageId);
+      get().navigateToPage(pageId);
     }
   },
 });

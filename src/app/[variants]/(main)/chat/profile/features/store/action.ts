@@ -62,7 +62,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         const { editor } = get();
         if (editor) {
           try {
-            editor.setDocument('markdown', newContent, { keepId: true });
+            editor.setDocument('markdown', newContent);
           } catch {
             // Ignore errors during streaming updates
           }

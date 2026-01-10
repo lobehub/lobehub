@@ -2,11 +2,9 @@ import { Avatar } from '@lobehub/ui';
 import { FileTextIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { pageSelectors, usePageStore } from '@/store/page';
-import { standardizeIdentifier } from '@/utils/identifier';
 
 import Actions from './Actions';
 import Editing from './Editing';
@@ -19,16 +17,10 @@ interface DocumentItemProps {
 
 const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
   const { t } = useTranslation('file');
-  const [editing, selectedPageId, document] = usePageStore(
-    useCallback(
-      (s) => {
-        const doc = pageSelectors.getDocumentById(pageId)(s);
-        return [s.renamingPageId === pageId, s.selectedPageId, doc] as const;
-      },
-      [pageId],
-    ),
-  );
-  const navigate = useNavigate();
+  const [editing, selectedPageId, document] = usePageStore((s) => {
+    const doc = pageSelectors.getDocumentById(pageId)(s);
+    return [s.renamingPageId === pageId, s.selectedPageId, doc] as const;
+  });
 
   const selectPage = usePageStore((s) => s.selectPage);
   const setRenamingPageId = usePageStore((s) => s.setRenamingPageId);
@@ -47,7 +39,6 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
   const handleClick = useCallback(() => {
     if (!editing) {
       selectPage(pageId);
-      navigate(`/page/${standardizeIdentifier(pageId)}`);
     }
   }, [editing, selectPage, pageId]);
 
