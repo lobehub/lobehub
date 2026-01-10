@@ -33,6 +33,19 @@ if (typeof window === 'undefined') {
     value: new Crypto(),
     writable: true,
   });
+
+  // Mock localStorage for node environment
+  Object.defineProperty(global, 'localStorage', {
+    value: {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+      length: 0,
+      key: vi.fn(),
+    },
+    writable: true,
+  });
 }
 
 // remove antd hash on test

@@ -86,12 +86,21 @@ export interface MessageCRUDAction {
    */
   deleteToolMessage: (id: string) => Promise<void>;
 
+  // ===== Update Content ===== //
+  /**
+   * Edit a message and create it as a new branch
+   * Preserves the original message and creates a new one with edited content
+   * @param messageId - The message to edit
+   * @param newContent - New content
+   * @returns New message ID
+   */
+  editMessageAndCreateBranch: (messageId: string, newContent: string) => Promise<string | undefined>;
+
   /**
    * Remove a tool from an assistant message
    */
   removeToolFromMessage: (messageId: string, toolCallId: string) => Promise<void>;
 
-  // ===== Update Content ===== //
   /**
    * Update message content with optimistic update
    */
@@ -369,6 +378,94 @@ export const messageCRUDSlice: StateCreator<
     }
   },
 
+  // ===== Update Content ===== //
+  editMessageAndCreateBranch: async (messageId, newContent) => {
+    const { dbMessages, context } = get();
+    const { useChatStore } = await import('@/store/chat');
+    const chatStore = useChatStore.getState();
+
+    // 1. Find original message
+    const originalMessage = dbMessages.find((m) => m.id === messageId);
+    if (!originalMessage) {
+      return undefined;
+    }
+
+    // 2. Get parent message ID
+    const parentId = originalMessage.parentId;
+    if (!parentId) {
+      // Root message cannot create branch, fall back to update
+      await get().updateMessageContent(messageId, newContent);
+      return messageId;
+    }
+
+    // 3. Calculate branch index BEFORE creating the new message
+    const siblings = dbMessages.filter((m) => m.parentId === parentId);
+    const branchIndex = siblings.length;
+
+    // 4. Map UIMessageRoleType to CreateMessageRoleType
+    let role: CreateMessageParams['role'];
+    switch (originalMessage.role) {
+      case 'agentCouncil': {
+        role = 'assistant';
+        break;
+      }
+      case 'tasks': {
+        role = 'task';
+        break;
+      }
+      default: {
+        role = originalMessage.role as CreateMessageParams['role'];
+      }
+    }
+
+    // 5. Prepare new message parameters
+    // Since all messages in database have session_id = NULL, we only set sessionId if explicitly provided
+    // The original message's sessionId (if any) will be used, otherwise leave it undefined
+    const sessionId = originalMessage.sessionId || undefined;
+
+    const newMessage: CreateMessageParams = {
+      content: newContent,
+      parentId,
+      role,
+      ...(sessionId && { sessionId }),
+      threadId: context.threadId,
+      topicId: context.topicId || undefined,
+    };
+
+    // 6. Start operation for branch switching
+    const operationId = chatStore.startOperation({
+      context: { ...context, messageId: parentId },
+      type: 'regenerate',
+    }).operationId;
+
+    try {
+      // 7. Create the new message (this handles optimistic update internally)
+      const createdMessageId = await get().createMessage(newMessage);
+
+      // 8. Switch to the new branch only if creation succeeded
+      if (createdMessageId) {
+        await chatStore.switchMessageBranch(parentId, branchIndex, { operationId });
+
+        // 9. Auto-trigger regeneration based on message type
+        if (role === 'user') {
+          // If edited message is user, regenerate assistant response
+          await get().regenerateUserMessage(createdMessageId);
+        }
+        // Note: For assistant messages, we don't auto-regenerate
+        // The user can manually trigger regeneration if needed
+      }
+
+      chatStore.completeOperation(operationId);
+      return createdMessageId;
+    } catch (error) {
+      chatStore.failOperation(operationId, {
+        message: error instanceof Error ? error.message : String(error),
+        type: 'CreateBranchError',
+      });
+      throw error;
+    }
+  },
+
   removeToolFromMessage: async (messageId, toolCallId) => {
     const { internal_dispatchMessage, replaceMessages, context } = get();
 
@@ -394,7 +491,6 @@ export const messageCRUDSlice: StateCreator<
     }
   },
 
-  // ===== Update Content ===== //
   updateMessageContent: async (id, content, extra) => {
     const { internal_dispatchMessage, replaceMessages, context } = get();
 
