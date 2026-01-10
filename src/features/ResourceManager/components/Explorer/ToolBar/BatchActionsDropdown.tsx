@@ -54,7 +54,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
           danger: true,
           icon: <Icon icon={Trash2Icon} />,
           key: 'deleteLibrary',
-          label: t('delete', { ns: 'common' }),
+          label: t('header.actions.deleteLibrary', { ns: 'file' }),
           onClick: async () => {
             modal.confirm({
               okButtonProps: {

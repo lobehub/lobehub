@@ -20,6 +20,7 @@ export default {
   'header.actions.connect': 'Connect...',
   'header.actions.createFolderError': 'Failed to create folder',
   'header.actions.creatingFolder': 'Creating folder...',
+  'header.actions.deleteLibrary': 'Delete Library',
   'header.actions.gitignore.apply': 'Apply Rules',
   'header.actions.gitignore.cancel': 'Ignore Rules',
   'header.actions.gitignore.content':
