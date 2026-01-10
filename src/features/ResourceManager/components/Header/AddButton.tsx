@@ -39,9 +39,9 @@ const AddButton = () => {
     ]);
 
   const handleOpenPageEditor = useCallback(async () => {
-    // Create a new page with optimistic update - instant UI feedback
+    // Create a new page and wait for server sync - ensures page editor can load the document
     const untitledTitle = t('pageList.untitled');
-    const tempId = await createResource({
+    const realId = await createResourceAndSync({
       content: '',
       fileType: 'custom/document',
       knowledgeBaseId: libraryId,
@@ -50,10 +50,10 @@ const AddButton = () => {
       title: untitledTitle,
     });
 
-    // Switch to page view mode immediately (temp ID works)
-    setCurrentViewItemId(tempId);
+    // Switch to page view mode with real ID
+    setCurrentViewItemId(realId);
     setMode('page');
-  }, [createResource, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
+  }, [createResourceAndSync, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
     // Create folder and wait for sync to complete before triggering rename
