@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { defineConfig } from 'electron-vite';
 import { resolve } from 'node:path';
 
 dotenv.config();
@@ -21,7 +21,7 @@ export default defineConfig({
       'process.env.OFFICIAL_CLOUD_SERVER': JSON.stringify(process.env.OFFICIAL_CLOUD_SERVER),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
     },
-    plugins: [externalizeDepsPlugin({})],
+
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/main'),
@@ -35,11 +35,11 @@ export default defineConfig({
       outDir: 'dist/preload',
       sourcemap: isDev ? 'inline' : false,
     },
-    plugins: [externalizeDepsPlugin({})],
+
     resolve: {
       alias: {
-        '~common': resolve(__dirname, 'src/common'),
         '@': resolve(__dirname, 'src/main'),
+        '~common': resolve(__dirname, 'src/common'),
       },
     },
   },

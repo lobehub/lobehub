@@ -121,11 +121,6 @@ const config = {
     artifactName: '${productName}-${version}.${ext}',
   },
   asar: true,
-  asarUnpack: [
-    // https://github.com/electron-userland/electron-builder/issues/9001#issuecomment-2778802044
-    '**/node_modules/sharp/**/*',
-    '**/node_modules/@img/**/*',
-  ],
   detectUpdateChannel: true,
   directories: {
     buildResources: 'build',
@@ -147,6 +142,8 @@ const config = {
     '!dist/next/packages',
     '!dist/next/.next/server/app/sitemap',
     '!dist/next/.next/static/media',
+    // Exclude node_modules from packaging
+    '!node_modules',
   ],
   generateUpdatesFilesForAllChannels: true,
   linux: {
