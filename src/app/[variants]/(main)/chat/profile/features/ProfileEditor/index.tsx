@@ -35,7 +35,7 @@ const ProfileEditor = memo(() => {
       const result = await agentCronJobService.create({
         agentId,
         content: t('agentCronJobs.form.content.placeholder') || 'This is a cron job',
-        cronPattern: '0 */30 * * *',
+        cronPattern: '*/30 * * * *',
         enabled: true,
         name: t('agentCronJobs.addJob') || 'Cron Job Task',
       });
