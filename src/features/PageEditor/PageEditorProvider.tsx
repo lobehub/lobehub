@@ -29,8 +29,6 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
     emoji,
   }) => {
     const editor = useEditor();
-    console.info('isSame', window.__editor === editor);
-    window.__editor = editor;
 
     return (
       <Provider
