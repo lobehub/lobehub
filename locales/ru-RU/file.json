@@ -18,6 +18,8 @@
   "empty": "Файлы или папки ещё не загружены.",
   "header.actions.builtInBlockList.filtered": "Отфильтровано {{ignored}} файлов (из {{total}} всего)",
   "header.actions.connect": "Подключиться...",
+  "header.actions.createFolderError": "Не удалось создать папку",
+  "header.actions.creatingFolder": "Создание папки...",
   "header.actions.gitignore.apply": "Применить правила",
   "header.actions.gitignore.cancel": "Игнорировать правила",
   "header.actions.gitignore.content": "Обнаружен файл .gitignore (всего {{count}} файлов). Применить правила игнорирования?",

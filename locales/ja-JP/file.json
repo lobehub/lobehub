@@ -18,6 +18,8 @@
   "empty": "アップロードされたファイル/フォルダーはありません",
   "header.actions.builtInBlockList.filtered": "{{total}} 件のファイルのうち {{ignored}} 件がフィルターされました",
   "header.actions.connect": "接続中...",
+  "header.actions.createFolderError": "フォルダーの作成に失敗しました",
+  "header.actions.creatingFolder": "フォルダーを作成しています...",
   "header.actions.gitignore.apply": "ルールを適用",
   "header.actions.gitignore.cancel": "ルールを無視",
   "header.actions.gitignore.content": ".gitignore ファイルが検出されました（合計 {{count}} 件のファイル）。無視ルールを適用しますか？",

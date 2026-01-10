@@ -18,6 +18,8 @@
   "empty": "Es wurden noch keine Dateien oder Ordner hochgeladen.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} Dateien gefiltert (von insgesamt {{total}})",
   "header.actions.connect": "Verbinden...",
+  "header.actions.createFolderError": "Ordner konnte nicht erstellt werden",
+  "header.actions.creatingFolder": "Ordner wird erstellt...",
   "header.actions.gitignore.apply": "Regeln anwenden",
   "header.actions.gitignore.cancel": "Regeln ignorieren",
   "header.actions.gitignore.content": ".gitignore-Datei erkannt (insgesamt {{count}} Dateien). Möchten Sie die Ignorierregeln anwenden?",

@@ -18,6 +18,8 @@
   "empty": "Aún no se han subido archivos ni carpetas.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} archivos filtrados (de un total de {{total}})",
   "header.actions.connect": "Conectar...",
+  "header.actions.createFolderError": "No se pudo crear la carpeta",
+  "header.actions.creatingFolder": "Creando carpeta...",
   "header.actions.gitignore.apply": "Aplicar reglas",
   "header.actions.gitignore.cancel": "Ignorar reglas",
   "header.actions.gitignore.content": "Se detectó un archivo .gitignore ({{count}} archivos en total). ¿Deseas aplicar las reglas de exclusión?",
