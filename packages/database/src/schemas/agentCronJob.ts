@@ -43,7 +43,7 @@ export const agentCronJobs = pgTable(
 
     // Core configuration
     enabled: boolean('enabled').default(true),
-    cronPattern: text('cron_pattern').notNull(), // e.g., "0 */30 * * *"
+    cronPattern: text('cron_pattern').notNull(), // e.g., "*/30 * * * *" (every 30 minutes)
     timezone: text('timezone').default('UTC'),
 
     // Content fields
@@ -82,27 +82,61 @@ export const cronPatternSchema = z
     'Invalid cron pattern',
   );
 
-// Minimum 30 minutes validation
+// Minimum 30 minutes validation (using standard cron format)
 export const minimumIntervalSchema = z.string().refine((pattern) => {
-  // For simplicity, we'll validate common patterns
-  // More complex validation can be added later
-  const thirtyMinPatterns = [
-    '0 */30 * * *', // Every 30 minutes
-    '0 0 * * *', // Every hour
-    '0 0 */2 * *', // Every 2 hours
-    '0 0 */6 * *', // Every 6 hours
-    '0 0 0 * *', // Daily
-    '0 0 0 * * 1', // Weekly
-    '0 0 0 1 *', // Monthly
+  // Standard cron format: minute hour day month weekday
+  const allowedPatterns = [
+    '*/30 * * * *', // Every 30 minutes
+    '0 * * * *', // Every hour
+    '0 */2 * * *', // Every 2 hours
+    '0 */3 * * *', // Every 3 hours
+    '0 */4 * * *', // Every 4 hours
+    '0 */6 * * *', // Every 6 hours
+    '0 */8 * * *', // Every 8 hours
+    '0 */12 * * *', // Every 12 hours
+    '0 0 * * *', // Daily at midnight
+    '0 0 * * 0', // Weekly on Sunday
+    '0 0 1 * *', // Monthly on 1st
   ];
 
-  // Check if it matches allowed patterns or follows 30+ minute intervals
-  return (
-    thirtyMinPatterns.includes(pattern) ||
-    pattern.includes('*/30') ||
-    pattern.includes('*/60') ||
-    /0 \d+ \* \* \*/.test(pattern)
-  ); // Hours pattern
+  // Check if it matches allowed patterns
+  if (allowedPatterns.includes(pattern)) {
+    return true;
+  }
+
+  // Parse pattern to validate minimum 30-minute interval
+  const parts = pattern.split(' ');
+  if (parts.length !== 5) {
+    return false;
+  }
+
+  const [minute, hour] = parts;
+
+  // Allow minute intervals >= 30 (e.g., */30, */45, */60)
+  if (minute.startsWith('*/')) {
+    const interval = parseInt(minute.slice(2));
+    if (!isNaN(interval) && interval >= 30) {
+      return true;
+    }
+  }
+
+  // Allow hourly patterns: 0 */N * * * where N >= 1
+  if (minute === '0' && hour.startsWith('*/')) {
+    const interval = parseInt(hour.slice(2));
+    if (!isNaN(interval) && interval >= 1) {
+      return true;
+    }
+  }
+
+  // Allow specific hour patterns: 0 N * * * (runs once per day)
+  if (minute === '0' && /^\d+$/.test(hour)) {
+    const h = parseInt(hour);
+    if (!isNaN(h) && h >= 0 && h <= 23) {
+      return true;
+    }
+  }
+
+  return false;
 }, 'Minimum execution interval is 30 minutes');
 
 export const executionConditionsSchema = z

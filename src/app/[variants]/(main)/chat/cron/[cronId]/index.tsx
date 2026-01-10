@@ -85,13 +85,15 @@ const AutoSaveHintSlot = memo(() => {
   return <AutoSaveHint lastUpdatedTime={lastUpdatedTime} saveStatus={status} />;
 });
 
+// Standard cron format: minute hour day month weekday
 const CRON_PATTERNS = [
-  { label: 'agentCronJobs.interval.30min', value: '0 */30 * * *' },
-  { label: 'agentCronJobs.interval.1hour', value: '0 0 * * *' },
+  { label: 'agentCronJobs.interval.30min', value: '*/30 * * * *' },
+  { label: 'agentCronJobs.interval.1hour', value: '0 * * * *' },
+  { label: 'agentCronJobs.interval.2hours', value: '0 */2 * * *' },
   { label: 'agentCronJobs.interval.6hours', value: '0 */6 * * *' },
   { label: 'agentCronJobs.interval.12hours', value: '0 */12 * * *' },
-  { label: 'agentCronJobs.interval.daily', value: '0 0 0 * *' },
-  { label: 'agentCronJobs.interval.weekly', value: '0 0 0 * 0' },
+  { label: 'agentCronJobs.interval.daily', value: '0 0 * * *' },
+  { label: 'agentCronJobs.interval.weekly', value: '0 0 * * 0' },
 ];
 
 const WEEKDAY_OPTIONS = [
@@ -115,13 +117,15 @@ const WEEKDAY_LABELS: Record<number, string> = {
 };
 
 const getIntervalText = (cronPattern: string) => {
+  // Standard cron format mapping
   const intervalMap: Record<string, string> = {
+    '*/30 * * * *': 'agentCronJobs.interval.30min',
+    '0 * * * *': 'agentCronJobs.interval.1hour',
     '0 */12 * * *': 'agentCronJobs.interval.12hours',
-    '0 */30 * * *': 'agentCronJobs.interval.30min',
+    '0 */2 * * *': 'agentCronJobs.interval.2hours',
     '0 */6 * * *': 'agentCronJobs.interval.6hours',
-    '0 0 * * *': 'agentCronJobs.interval.1hour',
-    '0 0 0 * *': 'agentCronJobs.interval.daily',
-    '0 0 0 * 0': 'agentCronJobs.interval.weekly',
+    '0 0 * * *': 'agentCronJobs.interval.daily',
+    '0 0 * * 0': 'agentCronJobs.interval.weekly',
   };
 
   return intervalMap[cronPattern] || cronPattern;

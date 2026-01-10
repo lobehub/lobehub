@@ -25,6 +25,7 @@
   "agentCronJobs.form.validation.nameRequired": "任务名称不能为空",
   "agentCronJobs.interval.12hours": "每12小时",
   "agentCronJobs.interval.1hour": "每小时",
+  "agentCronJobs.interval.2hours": "每2小时",
   "agentCronJobs.interval.30min": "每30分钟",
   "agentCronJobs.interval.6hours": "每6小时",
   "agentCronJobs.interval.daily": "每日",

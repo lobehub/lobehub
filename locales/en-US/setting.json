@@ -25,6 +25,7 @@
   "agentCronJobs.form.validation.nameRequired": "Task name is required",
   "agentCronJobs.interval.12hours": "Every 12 hours",
   "agentCronJobs.interval.1hour": "Every hour",
+  "agentCronJobs.interval.2hours": "Every 2 hours",
   "agentCronJobs.interval.30min": "Every 30 minutes",
   "agentCronJobs.interval.6hours": "Every 6 hours",
   "agentCronJobs.interval.daily": "Daily",
