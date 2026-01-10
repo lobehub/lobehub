@@ -16,10 +16,7 @@ export class ContextExtractor extends BaseMemoryExtractor<ContextMemory> {
   }
 
   getSchema() {
-    return buildGenerateObjectSchema(
-      ContextMemorySchema,
-      { name: 'context_extraction' },
-    );
+    return buildGenerateObjectSchema(ContextMemorySchema, { name: 'context_extraction' });
   }
 
   getResultSchema() {

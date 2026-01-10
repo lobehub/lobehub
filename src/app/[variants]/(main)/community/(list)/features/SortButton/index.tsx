@@ -126,6 +126,10 @@ const SortButton = memo(() => {
       case DiscoverTab.Mcp: {
         return [
           {
+            key: McpSorts.Recommended,
+            label: t('mcp.sorts.recommended'),
+          },
+          {
             key: McpSorts.IsFeatured,
             label: t('mcp.sorts.isFeatured'),
           },

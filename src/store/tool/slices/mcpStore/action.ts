@@ -588,6 +588,12 @@ export const createMCPPluginStoreSlice: StateCreator<
       // Calculate installation duration
       const installDurationMs = Date.now() - installStartTime;
 
+      discoverService.reportMcpEvent({
+        event: 'install',
+        identifier: plugin.identifier,
+        source: 'self',
+      })
+
       discoverService.reportMcpInstallResult({
         identifier: plugin.identifier,
         installDurationMs,
@@ -790,6 +796,12 @@ export const createMCPPluginStoreSlice: StateCreator<
         n('testMcpConnection/success'),
       );
 
+      discoverService.reportMcpEvent({
+        event: 'activate',
+        identifier: identifier,
+        source: 'self',
+      })
+
       return { manifest, success: true };
     } catch (error) {
       // Silently handle errors caused by cancellation
@@ -817,6 +829,12 @@ export const createMCPPluginStoreSlice: StateCreator<
   uninstallMCPPlugin: async (identifier) => {
     await pluginService.uninstallPlugin(identifier);
     await get().refreshPlugins();
+
+    discoverService.reportMcpEvent({
+      event: 'uninstall',
+      identifier: identifier,
+      source: 'self',
+    })
   },
 
   updateMCPInstallProgress: (identifier, progress) => {

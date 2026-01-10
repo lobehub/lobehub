@@ -194,9 +194,9 @@ export const createDocumentSlice: StateCreator<
       title: name,
     });
 
-    // Refresh file list to show the new folder
-    // Note: refreshFileList now keeps cache to avoid skeleton flash
-    await get().refreshFileList();
+    // Refetch resource list to show the new folder
+    const { revalidateResources } = await import('../resource/hooks');
+    await revalidateResources();
 
     return folder.id;
   },
@@ -641,7 +641,10 @@ export const createDocumentSlice: StateCreator<
       parentId: updates.parentId !== undefined ? updates.parentId : undefined,
       title: updates.title,
     });
-    await get().refreshFileList();
+
+    // Refetch resource list to show updated document
+    const { revalidateResources } = await import('../resource/hooks');
+    await revalidateResources();
   },
 
   updateDocumentOptimistically: async (documentId, updates) => {
@@ -697,9 +700,9 @@ export const createDocumentSlice: StateCreator<
         title: updatedPage.title || updatedPage.filename,
       });
 
-      // After successful sync, refresh file list to get server state
-      // This will eventually sync back to the map via syncDocumentMapWithServer
-      await get().refreshFileList();
+      // After successful sync, refetch resources to get server state
+      const { revalidateResources } = await import('../resource/hooks');
+      await revalidateResources();
     } catch (error) {
       console.error('[updateDocumentOptimistically] Failed to sync to DB:', error);
       // On error, revert the optimistic update

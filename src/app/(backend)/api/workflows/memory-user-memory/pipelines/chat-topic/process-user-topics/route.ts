@@ -9,11 +9,14 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 import { forEachBatchSequential } from '@/server/services/memory/userMemory/topicBatching';
 import { MemorySourceType } from '@lobechat/types';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
 const TOPIC_PAGE_SIZE = 50;
 const TOPIC_BATCH_SIZE = 4;
 
 export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
+  const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
   if (!params.userIds.length) {
     return { message: 'No user ids provided for topic processing.' };
@@ -37,7 +40,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
         userId,
         userIds: [userId],
       }),
-    });
+    }, { extraHeaders: upstashWorkflowExtraHeaders });
   };
 
   for (const userId of params.userIds) {
@@ -99,7 +102,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
             topicIds,
             userId,
             userIds: [userId],
-          }),
+          }, { extraHeaders: upstashWorkflowExtraHeaders }),
       );
     });
 

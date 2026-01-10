@@ -32,7 +32,7 @@ const TopicList = memo(() => {
 
   const [topicDisplayMode] = useUserStore((s) => [preferenceSelectors.topicDisplayMode(s)]);
 
-  useFetchTopics();
+  useFetchTopics({ excludeTriggers: ['cron'] });
 
   // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;

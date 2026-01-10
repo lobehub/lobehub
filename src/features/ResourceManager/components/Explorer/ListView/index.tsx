@@ -11,12 +11,14 @@ import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndCont
 import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
 import {
   useResourceManagerFetchFolderBreadcrumb,
-  useResourceManagerFetchKnowledgeItems,
   useResourceManagerStore,
 } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
+import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { INITIAL_STATUS } from '@/store/global/initialState';
+import { type AsyncTaskStatus } from '@/types/asyncTask';
+import { type FileListItem as FileListItemType } from '@/types/files';
 
 import ColumnResizeHandle from './ColumnResizeHandle';
 import FileListItem from './ListItem';
@@ -52,11 +54,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const ListView = memo(() => {
-  // Access all state from Resource Manager store
   const [
-    libraryId,
-    category,
-    searchQuery,
     selectFileIds,
     setSelectedFileIds,
     pendingRenameItemId,
@@ -65,9 +63,6 @@ const ListView = memo(() => {
     sorter,
     sortType,
   ] = useResourceManagerStore((s) => [
-    s.libraryId,
-    s.category,
-    s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.pendingRenameItemId,
@@ -86,12 +81,12 @@ const ListView = memo(() => {
   const { t } = useTranslation(['components', 'file']);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const isDragActive = useDragActive();
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastSelectedIndexRef = useRef<number | null>(null);
 
   const { currentFolderSlug } = useFolderPath();
   const { data: folderBreadcrumb } = useResourceManagerFetchFolderBreadcrumb(currentFolderSlug);
@@ -99,28 +94,43 @@ const ListView = memo(() => {
   // Get current folder ID - either from breadcrumb or null for root
   const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
 
-  const { data: rawData } = useResourceManagerFetchKnowledgeItems({
-    category,
-    knowledgeBaseId: libraryId,
-    parentId: currentFolderSlug || null,
-    q: searchQuery ?? undefined,
-    showFilesInKnowledgeBase: false,
-  });
+  const resourceList = useFileStore((s) => s.resourceList);
+
+  // Map ResourceItem[] to FileListItem[] for compatibility
+  const rawData =
+    resourceList?.map<FileListItemType>((item) => ({
+      ...item,
+      chunkCount: item.chunkCount ?? null,
+      chunkingError: item.chunkingError ?? null,
+      chunkingStatus: (item.chunkingStatus ?? null) as AsyncTaskStatus | null,
+      embeddingError: item.embeddingError ?? null,
+      embeddingStatus: (item.embeddingStatus ?? null) as AsyncTaskStatus | null,
+      finishEmbedding: item.finishEmbedding ?? false,
+      url: item.url ?? '',
+    })) ?? [];
 
   // Sort data using current sort settings
-  const data = sortFileList(rawData, sorter, sortType);
+  const data = sortFileList(rawData, sorter, sortType) || [];
+
+  const dataRef = useRef<FileListItemType[]>(data);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   // Handle selection change with shift-click support for range selection
   const handleSelectionChange = useCallback(
     (id: string, checked: boolean, shiftKey: boolean, clickedIndex: number) => {
       // Always get the latest state from the store to avoid stale closure issues
       const currentSelected = useResourceManagerStore.getState().selectedFileIds;
+      const lastIndex = lastSelectedIndexRef.current;
+      const list = dataRef.current;
 
-      if (shiftKey && lastSelectedIndex !== null && data) {
-        // Shift-click: select range from lastSelectedIndex to current index
-        const start = Math.min(lastSelectedIndex, clickedIndex);
-        const end = Math.max(lastSelectedIndex, clickedIndex);
-        const rangeIds = data
+      if (shiftKey && lastIndex !== null && list.length > 0) {
+        // Shift-click: select range from lastIndex to current index
+        const start = Math.min(lastIndex, clickedIndex);
+        const end = Math.max(lastIndex, clickedIndex);
+        const rangeIds = list
           .slice(start, end + 1)
           .filter(Boolean)
           .map((item) => item.id);
@@ -137,14 +147,14 @@ const ListView = memo(() => {
           setSelectedFileIds(currentSelected.filter((item) => item !== id));
         }
       }
-      setLastSelectedIndex(clickedIndex);
+      lastSelectedIndexRef.current = clickedIndex;
     },
-    [lastSelectedIndex, data, setSelectedFileIds],
+    [setSelectedFileIds],
   );
 
   // Clean up invalid selections when data changes
   useEffect(() => {
-    if (data && selectFileIds.length > 0) {
+    if (selectFileIds.length > 0) {
       const validFileIds = new Set(data.map((item) => item?.id).filter(Boolean));
       const filteredSelection = selectFileIds.filter((id) => validFileIds.has(id));
       if (filteredSelection.length !== selectFileIds.length) {
@@ -156,13 +166,13 @@ const ListView = memo(() => {
   // Reset last selected index when all selections are cleared
   useEffect(() => {
     if (selectFileIds.length === 0) {
-      setLastSelectedIndex(null);
+      lastSelectedIndexRef.current = null;
     }
   }, [selectFileIds.length]);
 
   // Calculate select all checkbox state
   const { allSelected, indeterminate } = useMemo(() => {
-    const fileCount = data?.length || 0;
+    const fileCount = data.length;
     const selectedCount = selectFileIds.length;
     return {
       allSelected: fileCount > 0 && selectedCount === fileCount,
@@ -175,7 +185,7 @@ const ListView = memo(() => {
     if (allSelected) {
       setSelectedFileIds([]);
     } else {
-      setSelectedFileIds(data?.filter((item) => item).map((item) => item.id) || []);
+      setSelectedFileIds(data.map((item) => item.id));
     }
   };
 
@@ -303,7 +313,7 @@ const ListView = memo(() => {
               flexShrink: 0,
               maxWidth: columnWidths.name,
               minWidth: columnWidths.name,
-              paddingInline: 8,
+              paddingInline: 20,
               paddingInlineEnd: 16,
               position: 'relative',
               width: columnWidths.name,
@@ -364,7 +374,7 @@ const ListView = memo(() => {
         >
           <Virtuoso
             components={{ Footer }}
-            data={data || []}
+            data={data}
             defaultItemHeight={48}
             endReached={handleEndReached}
             increaseViewportBy={{ bottom: 800, top: 1200 }}

@@ -12,7 +12,7 @@ const HeaderActions = memo(() => {
   const { menuItems } = useMenu();
 
   return (
-    <DropdownMenu items={menuItems}>
+    <DropdownMenu items={menuItems} nativeButton={false}>
       <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SIZE} />
     </DropdownMenu>
   );

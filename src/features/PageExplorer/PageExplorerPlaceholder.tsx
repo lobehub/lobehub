@@ -82,7 +82,6 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       createOptimisticDocument,
       replaceTempDocumentWithReal,
       setSelectedPageId,
-      refreshFileList,
       fetchDocuments,
     ] = useFileStore((s) => [
       s.createNewPage,
@@ -90,7 +89,6 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       s.createOptimisticDocument,
       s.replaceTempDocumentWithReal,
       s.setSelectedPageId,
-      s.refreshFileList,
       s.fetchDocuments,
     ]);
 
@@ -98,7 +96,11 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       createDocument,
       currentFolderId: null,
       libraryId: knowledgeBaseId ?? null,
-      refreshFileList,
+      refetchResources: async () => {
+        const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+        await revalidateResources();
+        await fetchDocuments({ pageOnly: true });
+      },
       t,
     });
 
@@ -107,10 +109,6 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       event: React.ChangeEvent<HTMLInputElement>,
     ) => {
       await notionImport.handleNotionImport(event);
-      // Fetch documents to update the UI immediately
-      // The hook calls refreshFileList which invalidates SWR cache,
-      // but we need to explicitly fetch to update the zustand store
-      await fetchDocuments({ pageOnly: true });
     };
 
     const handleCreateDocument = async (content: string, title: string) => {

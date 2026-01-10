@@ -22,7 +22,7 @@ const Topic = memo<TopicProps>(({ itemKey }) => {
   const { t } = useTranslation(['topic', 'common']);
   const [topicCount] = useChatStore((s) => [topicSelectors.currentTopicCount(s)]);
   const dropdownMenu = useTopicActionsDropdownMenu();
-  const { isRevalidating } = useFetchTopics();
+  const { isRevalidating } = useFetchTopics({ excludeTriggers: ['cron'] });
 
   return (
     <AccordionItem

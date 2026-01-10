@@ -1,6 +1,59 @@
 [
   {
     "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.253"
+  },
+  {
+    "children": {
+      "features": ["Add the agent cron job."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.252"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.251"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.250"
+  },
+  {
+    "children": {
+      "improvements": ["Force gpt-5.2 use response api."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.249"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.248"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.247"
+  },
+  {
+    "children": {
+      "features": ["Generate agent_cron_jobs in agents."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.246"
+  },
+  {
+    "children": {
+      "improvements": ["Improve Tools popover component structure and fix UI consistency."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.245"
+  },
+  {
+    "children": {},
     "date": "2026-01-08",
     "version": "2.0.0-next.244"
   },

@@ -50,10 +50,11 @@ const styles = createStaticStyles(({ css }) => {
 
 const UploadDock = memo(() => {
   const { t } = useTranslation('file');
-  const [expand, setExpand] = useState(true);
   const [show, setShow] = useState(true);
 
   const dispatchDockFileList = useFileStore((s) => s.dispatchDockFileList);
+  const expand = useFileStore((s) => s.uploadDockExpanded);
+  const setExpand = useFileStore((s) => s.setUploadDockExpanded);
   const totalUploadingProgress = useFileStore(fileManagerSelectors.overviewUploadingProgress);
   const fileList = useFileStore(fileManagerSelectors.dockFileList, isEqual);
   const overviewUploadingStatus = useFileStore(

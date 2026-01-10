@@ -2,6 +2,247 @@
 
 # Changelog
 
+## [Version 2.0.0-next.253](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.252...v2.0.0-next.253)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ✨ Features
+
+- **desktop**: Improve macOS permission requests and Full Disk Access detection.
+
+#### 🐛 Bug Fixes
+
+- **controls**: Update checkbox toggle behavior and pass value to ParamControlWrapper.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **desktop**: Improve macOS permission requests and Full Disk Access detection, closes [#11380](https://github.com/lobehub/lobe-chat/issues/11380) ([2d5868f](https://github.com/lobehub/lobe-chat/commit/2d5868f))
+
+#### What's fixed
+
+- **controls**: Update checkbox toggle behavior and pass value to ParamControlWrapper, closes [#11363](https://github.com/lobehub/lobe-chat/issues/11363) ([1f1ef94](https://github.com/lobehub/lobe-chat/commit/1f1ef94))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.252](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.251...v2.0.0-next.252)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ✨ Features
+
+- **misc**: Add the agent cron job.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Add the agent cron job, closes [#11370](https://github.com/lobehub/lobe-chat/issues/11370) ([10e47d9](https://github.com/lobehub/lobe-chat/commit/10e47d9))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.251](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.250...v2.0.0-next.251)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ✨ Features
+
+- **community**: Support to report for agent & mcp plugin interaction for recommendation.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **community**: Support to report for agent & mcp plugin interaction for recommendation, closes [#11289](https://github.com/lobehub/lobe-chat/issues/11289) ([6f98792](https://github.com/lobehub/lobe-chat/commit/6f98792))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.250](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.249...v2.0.0-next.250)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ✨ Features
+
+- **community**: Recommended for home & added discover tab.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **community**: Recommended for home & added discover tab, closes [#11290](https://github.com/lobehub/lobe-chat/issues/11290) ([8db248c](https://github.com/lobehub/lobe-chat/commit/8db248c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.249](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.248...v2.0.0-next.249)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### 💄 Styles
+
+- **misc**: Force gpt-5.2 use response api.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Force gpt-5.2 use response api, closes [#11373](https://github.com/lobehub/lobe-chat/issues/11373) ([f7f3631](https://github.com/lobehub/lobe-chat/commit/f7f3631))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.248](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.247...v2.0.0-next.248)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ✨ Features
+
+- **userMemories**: Support to assign for extra headers when invoking upstash workflows.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **userMemories**: Support to assign for extra headers when invoking upstash workflows, closes [#11374](https://github.com/lobehub/lobe-chat/issues/11374) ([895e15e](https://github.com/lobehub/lobe-chat/commit/895e15e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.247](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.246...v2.0.0-next.247)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ♻ Code Refactoring
+
+- **database**: Renamed to userMemories/index.ts.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **database**: Renamed to userMemories/index.ts, closes [#11359](https://github.com/lobehub/lobe-chat/issues/11359) ([9dae5ff](https://github.com/lobehub/lobe-chat/commit/9dae5ff))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.246](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.245...v2.0.0-next.246)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ✨ Features
+
+- **misc**: Generate `agent_cron_jobs` in agents.
+
+#### 💄 Styles
+
+- **desktop**: Update macOS beta icon assets.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Generate `agent_cron_jobs` in agents, closes [#11349](https://github.com/lobehub/lobe-chat/issues/11349) ([eefb6cb](https://github.com/lobehub/lobe-chat/commit/eefb6cb))
+
+#### Styles
+
+- **desktop**: Update macOS beta icon assets, closes [#11368](https://github.com/lobehub/lobe-chat/issues/11368) ([3623e58](https://github.com/lobehub/lobe-chat/commit/3623e58))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.245](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.244...v2.0.0-next.245)
+
+<sup>Released on **2026-01-09**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Improve Tools popover component structure and fix UI consistency.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Improve Tools popover component structure and fix UI consistency, closes [#11356](https://github.com/lobehub/lobe-chat/issues/11356) ([f46837a](https://github.com/lobehub/lobe-chat/commit/f46837a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.244](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.243...v2.0.0-next.244)
 
 <sup>Released on **2026-01-08**</sup>

@@ -14,20 +14,25 @@ interface ListViewSkeletonProps {
 
 const ListViewSkeleton = ({
   columnWidths = { date: FILE_DATE_WIDTH, name: 400, size: FILE_SIZE_WIDTH },
-  count = 3,
-}: ListViewSkeletonProps) => (
-  <Flexbox>
-    {Array.from({ length: count }).map((_, index) => (
-      <Flexbox
-        align={'center'}
-        height={48}
-        horizontal
-        key={index}
-        paddingInline={8}
-        style={{
-          borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-        }}
-      >
+  count = 6,
+}: ListViewSkeletonProps) => {
+  // Calculate opacity gradient from 100% to 20%
+  const getOpacity = (index: number) => 1 - (index / (count - 1)) * 0.8;
+
+  return (
+    <Flexbox>
+      {Array.from({ length: count }).map((_, index) => (
+        <Flexbox
+          align={'center'}
+          height={48}
+          horizontal
+          key={index}
+          paddingInline={8}
+          style={{
+            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            opacity: getOpacity(index),
+          }}
+        >
         <Center height={40} style={{ paddingInline: 4 }}>
           <Checkbox disabled />
         </Center>
@@ -55,5 +60,6 @@ const ListViewSkeleton = ({
     ))}
   </Flexbox>
 );
+};
 
 export default ListViewSkeleton;

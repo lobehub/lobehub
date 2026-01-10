@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
-import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
 import { usePageEditorStore } from '../store';
 

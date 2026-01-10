@@ -11,7 +11,6 @@ import { useChatStore } from '@/store/chat';
 
 import { NotebookDocument } from '../../../types';
 
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     position: relative;
@@ -26,7 +25,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   content: css`
     padding-inline: 16px;
-
     font-size: 14px;
   `,
   expandButton: css`
