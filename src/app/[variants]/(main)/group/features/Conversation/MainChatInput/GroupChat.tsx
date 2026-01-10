@@ -22,7 +22,7 @@ const leftActions: ActionKeys[] = [
   'typo',
   'fileUpload',
   '---',
-  ['tools', 'params', 'clear'],
+  ['tools', 'history', 'params', 'clear'],
   'mainToken',
 ];
 
