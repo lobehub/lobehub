@@ -39,21 +39,21 @@ const ListViewSkeleton = ({
         <Flexbox
           align={'center'}
           horizontal
-          paddingInline={8}
           style={{
             flexShrink: 0,
             maxWidth: columnWidths.name,
             minWidth: columnWidths.name,
+            paddingInline: 8,
             width: columnWidths.name,
           }}
         >
           <Skeleton.Avatar active shape={'square'} size={24} style={{ marginInline: 8 }} />
           <Skeleton.Button active style={{ height: 16, width: '60%' }} />
         </Flexbox>
-        <Flexbox paddingInline={24} style={{ flexShrink: 0 }} width={columnWidths.date}>
+        <Flexbox style={{ flexShrink: 0, paddingInline: '0 24px' }} width={columnWidths.date}>
           <Skeleton.Button active style={{ height: 16, width: '80%' }} />
         </Flexbox>
-        <Flexbox paddingInline={24} style={{ flexShrink: 0 }} width={columnWidths.size}>
+        <Flexbox style={{ flexShrink: 0, paddingInline: '0 24px' }} width={columnWidths.size}>
           <Skeleton.Button active style={{ height: 16, width: '60%' }} />
         </Flexbox>
       </Flexbox>

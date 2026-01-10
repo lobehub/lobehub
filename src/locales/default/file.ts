@@ -118,6 +118,7 @@ export default {
   'preview.downloadFile': 'Download File',
   'preview.unsupportedFileAndContact':
     'This file format is not currently supported for online preview. If you have a request for previewing, feel free to <1>contact us</1>.',
+  'resource': 'Resource',
   'searchFilePlaceholder': 'Search Files',
   'searchPagePlaceholder': 'Search Pages',
   'tab.all': 'All',

@@ -155,7 +155,7 @@ const ListView = memo(function ListView() {
   const effectiveIsValidating = isValidating ?? false;
 
   const showSkeleton =
-    (effectiveIsLoading && dataLength >= 5) ||
+    (effectiveIsLoading && dataLength === 0) ||
     (effectiveIsNavigating && effectiveIsValidating) ||
     effectiveIsTransitioning;
 

@@ -32,15 +32,18 @@ const Header = memo(() => {
   // Disable batch actions dropdown when no items selected and not in any library
   const isBatchActionsDisabled = selectFileIds.length === 0 && !libraryId;
 
-  // If no libraryId, show just the category name
-  const leftContent =
-    !libraryId && category && category !== FilesTabs.All ? (
-      <Flexbox style={{ marginLeft: 8 }}>{t(`tab.${category as FilesTabs}` as any)}</Flexbox>
-    ) : (
-      <Flexbox style={{ marginLeft: 8 }}>
-        <Breadcrumb category={category} knowledgeBaseId={libraryId} />
-      </Flexbox>
-    );
+  // If no libraryId, show category name or "Resource" for All
+  const leftContent = !libraryId ? (
+    <Flexbox style={{ marginLeft: 8 }}>
+      {category === FilesTabs.All
+        ? t('resource', { defaultValue: 'Resource' })
+        : t(`tab.${category as FilesTabs}` as any)}
+    </Flexbox>
+  ) : (
+    <Flexbox style={{ marginLeft: 8 }}>
+      <Breadcrumb category={category} knowledgeBaseId={libraryId} />
+    </Flexbox>
+  );
 
   return (
     <NavHeader

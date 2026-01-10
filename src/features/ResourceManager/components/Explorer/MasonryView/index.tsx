@@ -114,7 +114,7 @@ const MasonryView = memo(function MasonryView() {
   const effectiveIsMasonryReady = storeIsMasonryReady;
 
   const showSkeleton =
-    (effectiveIsLoading && dataLength >= 5) ||
+    (effectiveIsLoading && dataLength === 0) ||
     (effectiveIsNavigating && effectiveIsValidating) ||
     effectiveIsTransitioning ||
     !effectiveIsMasonryReady;
