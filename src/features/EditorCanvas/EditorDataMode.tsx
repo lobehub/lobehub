@@ -33,10 +33,11 @@ const EditorDataMode = memo<EditorDataModeProps>(
         if (hasValidEditorData) {
           editor.setDocument('json', JSON.stringify(editorData.editorData));
         } else if (editorData.content?.trim()) {
-          editor.setDocument('markdown', editorData.content);
+          editor.setDocument('markdown', editorData.content, { keepId: true });
         } else {
-          editor.setDocument('markdown', ' ');
+          console.error('[EditorCanvas] load content error:', editorData);
         }
+
         setIsInitialized(true);
       } catch (err) {
         console.error('[EditorCanvas] Failed to load content:', err);
