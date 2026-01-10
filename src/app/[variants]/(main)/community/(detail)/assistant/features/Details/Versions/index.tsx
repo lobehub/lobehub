@@ -5,9 +5,9 @@ import qs from 'query-string';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Link from '@/app/[variants]/(main)/components/Link';
-import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';
-import { useQuery } from '@/app/[variants]/(main)/hooks/useQuery';
+import Link from '@/libs/router/Link';
+import { usePathname } from '@/libs/router/navigation';
+import { useQuery } from '@/libs/router/navigation';
 import InlineTable from '@/components/InlineTable';
 import PublishedTime from '@/components/PublishedTime';
 import { type AssistantMarketSource, AssistantNavKey } from '@/types/discover';

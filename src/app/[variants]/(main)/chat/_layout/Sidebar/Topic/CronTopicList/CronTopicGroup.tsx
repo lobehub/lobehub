@@ -6,7 +6,7 @@ import { Clock } from 'lucide-react';
 import { type MouseEvent, memo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { useRouter } from '@/app/[variants]/(main)/hooks/useRouter';
+import { useRouter } from '@/libs/router/navigation';
 import type { AgentCronJob } from '@/database/schemas/agentCronJob';
 
 import CronTopicItem from './CronTopicItem';

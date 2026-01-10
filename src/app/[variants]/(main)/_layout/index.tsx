@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { type FC, Suspense, lazy } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router-dom';

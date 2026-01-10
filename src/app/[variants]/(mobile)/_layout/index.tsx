@@ -1,6 +1,6 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { type FC, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 

@@ -2,7 +2,7 @@
 
 import { ActionIcon } from '@lobehub/ui';
 import { AlignJustify } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,7 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Block, Button, Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,7 +30,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
       width={'100%'}
     >
       <Flexbox align={'center'} flex={'none'} gap={16} horizontal>
-        <Link href={OFFICIAL_SITE} target={'_blank'}>
+        <a href={OFFICIAL_SITE} rel="noreferrer" target="_blank">
           <Block
             align={'center'}
             className={styles.logo}
@@ -42,7 +41,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           >
             <ProductLogo size={52} />
           </Block>
-        </Link>
+        </a>
         <Flexbox align={'flex-start'} gap={6}>
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
@@ -56,15 +55,15 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         </Flexbox>
       </Flexbox>
       <Flexbox flex={mobile ? 1 : undefined} gap={8} horizontal>
-        <Link href={CHANGELOG_URL} style={{ flex: 1 }} target={'_blank'}>
+        <a href={CHANGELOG_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
           <Button block={mobile}>{t('changelog')}</Button>
-        </Link>
+        </a>
         {hasNewVersion && (
-          <Link href={MANUAL_UPGRADE_URL} style={{ flex: 1 }} target={'_blank'}>
+          <a href={MANUAL_UPGRADE_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
             <Button block={mobile} type={'primary'}>
               {t('upgradeVersion.action')}
             </Button>
-          </Link>
+          </a>
         )}
       </Flexbox>
     </Flexbox>

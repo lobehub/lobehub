@@ -1,7 +1,6 @@
 'use client';
 
 import { Button, Flexbox, FluentEmoji } from '@lobehub/ui';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -39,9 +38,9 @@ const ErrorCapture = memo<ErrorCaptureProps>(({ reset }) => {
       <p style={{ marginBottom: '2em' }}>{t('error.desc')}</p>
       <Flexbox gap={12} horizontal style={{ marginBottom: '1em' }}>
         <Button onClick={() => reset()}>{t('error.retry')}</Button>
-        <Link href="/">
-          <Button type={'primary'}>{t('error.backHome')}</Button>
-        </Link>
+        <Button onClick={() => (window.location.href = '/')} type={'primary'}>
+          {t('error.backHome')}
+        </Button>
       </Flexbox>
     </Flexbox>
   );

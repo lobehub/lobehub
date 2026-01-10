@@ -1,8 +1,8 @@
 import { Block, Button, Flexbox, Form, MaterialFileTypeIcon, Select } from '@lobehub/ui';
 import { App } from 'antd';
-import Link from 'next/link';
 import { memo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -34,7 +34,7 @@ const SelectForm = memo<CreateFormProps>(({ onClose, knowledgeBaseId, fileIds })
           <Trans
             components={[
               <span key="0" />,
-              <Link href={`/knowledge/library/${values.id}`} key="1" />,
+              <Link key="1" to={`/knowledge/library/${values.id}`} />,
             ]}
             i18nKey={'addToKnowledgeBase.addSuccess'}
             ns={'knowledgeBase'}

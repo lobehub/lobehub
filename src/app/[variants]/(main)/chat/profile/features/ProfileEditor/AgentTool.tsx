@@ -5,7 +5,7 @@ import { Avatar, Button, Flexbox, Icon, type ItemType, Segmented } from '@lobehu
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, PlusIcon, Store, ToyBrick } from 'lucide-react';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import React, { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

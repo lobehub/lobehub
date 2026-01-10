@@ -5,7 +5,7 @@ import { Avatar, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, X } from 'lucide-react';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

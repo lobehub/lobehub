@@ -1,23 +1,18 @@
 import { renderHook } from '@testing-library/react';
-import { ReadonlyURLSearchParams } from 'next/navigation';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useIsSingleMode } from './useIsSingleMode';
 
-// Mock next/navigation
+// Mock react-router-dom useSearchParams (via the wrapper hook)
 const mockUseSearchParams = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({
+vi.mock('@/libs/router/navigation', () => ({
   useSearchParams: mockUseSearchParams,
 }));
 
 describe('useIsSingleMode', () => {
-
   it('should return false initially (during SSR)', () => {
-    const mockSearchParams = {
-      get: vi.fn(() => 'single'),
-    } as unknown as ReadonlyURLSearchParams;
-
-    mockUseSearchParams.mockReturnValue(mockSearchParams);
+    const mockSearchParams = new URLSearchParams('mode=single');
+    mockUseSearchParams.mockReturnValue([mockSearchParams, vi.fn()]);
 
     const { result } = renderHook(() => useIsSingleMode());
 
@@ -26,11 +21,8 @@ describe('useIsSingleMode', () => {
   });
 
   it('should return true when mode=single', () => {
-    const mockSearchParams = {
-      get: vi.fn((key: string) => (key === 'mode' ? 'single' : null)),
-    } as unknown as ReadonlyURLSearchParams;
-
-    mockUseSearchParams.mockReturnValue(mockSearchParams);
+    const mockSearchParams = new URLSearchParams('mode=single');
+    mockUseSearchParams.mockReturnValue([mockSearchParams, vi.fn()]);
 
     const { result } = renderHook(() => useIsSingleMode());
 
@@ -39,11 +31,8 @@ describe('useIsSingleMode', () => {
   });
 
   it('should return false when mode is not single', () => {
-    const mockSearchParams = {
-      get: vi.fn((key: string) => (key === 'mode' ? 'normal' : null)),
-    } as unknown as ReadonlyURLSearchParams;
-
-    mockUseSearchParams.mockReturnValue(mockSearchParams);
+    const mockSearchParams = new URLSearchParams('mode=normal');
+    mockUseSearchParams.mockReturnValue([mockSearchParams, vi.fn()]);
 
     const { result } = renderHook(() => useIsSingleMode());
 
@@ -52,11 +41,8 @@ describe('useIsSingleMode', () => {
   });
 
   it('should return false when no mode parameter exists', () => {
-    const mockSearchParams = {
-      get: vi.fn(() => null),
-    } as unknown as ReadonlyURLSearchParams;
-
-    mockUseSearchParams.mockReturnValue(mockSearchParams);
+    const mockSearchParams = new URLSearchParams();
+    mockUseSearchParams.mockReturnValue([mockSearchParams, vi.fn()]);
 
     const { result } = renderHook(() => useIsSingleMode());
 

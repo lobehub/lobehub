@@ -2,7 +2,7 @@
 
 import { ActionIcon } from '@lobehub/ui';
 import { MessageSquarePlusIcon } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname } from '@/libs/router/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';

@@ -1,6 +1,6 @@
 import { SignIn } from '@clerk/nextjs';
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { notFound } from 'next/navigation';
+import { notFound } from '@/libs/next/navigation';
 
 import { enableClerk } from '@/envs/auth';
 import { metadataModule } from '@/server/metadata';

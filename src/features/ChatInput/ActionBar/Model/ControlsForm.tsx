@@ -2,7 +2,6 @@ import { Form } from '@lobehub/ui';
 import type { FormItemProps } from '@lobehub/ui';
 import { Form as AntdForm, Grid, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
-import Link from 'next/link';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -62,12 +61,13 @@ const ControlsForm = memo(() => {
         <span style={isNarrow ? descNarrow : descWide}>
           <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
             单条对话生成成本最高可降低 90%，响应速度提升 4 倍（
-            <Link
+            <a
               href={'https://www.anthropic.com/news/prompt-caching?utm_source=lobechat'}
-              rel={'nofollow'}
+              rel="noreferrer nofollow"
+              target="_blank"
             >
               了解更多
-            </Link>
+            </a>
             ）。开启后将自动禁用历史记录限制
           </Trans>
         </span>
@@ -83,14 +83,15 @@ const ControlsForm = memo(() => {
         <span style={isNarrow ? descNarrow : descWide}>
           <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
             基于 Claude Thinking 机制限制（
-            <Link
+            <a
               href={
                 'https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?utm_source=lobechat#why-thinking-blocks-must-be-preserved'
               }
-              rel={'nofollow'}
+              rel="noreferrer nofollow"
+              target="_blank"
             >
               了解更多
-            </Link>
+            </a>
             ），开启后将自动禁用历史消息数限制
           </Trans>
         </span>

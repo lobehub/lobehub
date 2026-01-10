@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
 import { MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname } from '@/libs/router/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';

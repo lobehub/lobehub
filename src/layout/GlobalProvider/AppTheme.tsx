@@ -12,8 +12,8 @@ import { createStaticStyles, cx, useTheme } from 'antd-style';
 import 'antd/dist/reset.css';
 import { AppConfigContext } from 'antd/es/app/context';
 import * as motion from 'motion/react-m';
-import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/components/Link';
+import Image from '@/libs/next/Image';
 import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
 
 import AntdStaticMethods from '@/components/AntdStaticMethods';

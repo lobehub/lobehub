@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStyles, cssVar } from 'antd-style';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 

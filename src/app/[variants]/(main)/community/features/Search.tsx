@@ -6,8 +6,8 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';
-import { useQuery } from '@/app/[variants]/(main)/hooks/useQuery';
+import { usePathname } from '@/libs/router/navigation';
+import { useQuery } from '@/libs/router/navigation';
 import { withSuspense } from '@/components/withSuspense';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 

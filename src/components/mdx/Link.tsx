@@ -1,20 +1,37 @@
 'use client';
 
-import Link, { type LinkProps } from 'next/link';
-import { type FC } from 'react';
+import { type AnchorHTMLAttributes, type FC } from 'react';
+import { Link } from 'react-router-dom';
 
 const EXTERNAL_HREF_REGEX = /https?:\/\//;
 
-const A: FC<LinkProps> = ({ href = '', ...props }) => {
+interface LinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
+  href?: string;
+}
+
+const A: FC<LinkProps> = ({ href = '', children, ...props }) => {
   const isOutbound = EXTERNAL_HREF_REGEX.test(href as string);
   const isOfficial = String(href).includes('lobechat') || String(href).includes('lobehub');
+
+  // External links use native <a> tag
+  if (isOutbound) {
+    return (
+      <a
+        href={href}
+        rel={isOfficial ? 'noreferrer' : 'nofollow noreferrer'}
+        target="_blank"
+        {...props}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  // Internal links use React Router
   return (
-    <Link
-      href={href}
-      rel={isOutbound && !isOfficial ? 'nofollow' : undefined}
-      target={isOutbound ? '_blank' : undefined}
-      {...props}
-    />
+    <Link to={href} {...props}>
+      {children}
+    </Link>
   );
 };
 

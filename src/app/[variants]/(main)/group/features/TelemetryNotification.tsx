@@ -4,7 +4,6 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 import { Avatar, Button, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LucideArrowUpRightFromSquare, TelescopeIcon } from 'lucide-react';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -56,10 +55,10 @@ const TelemetryNotification = memo<{ mobile?: boolean }>(({ mobile }) => {
           <div className={styles.desc}>
             {t('telemetry.desc', { appName: BRANDING_NAME })}
             <span>
-              <Link href={PRIVACY_URL} target={'_blank'}>
+              <a href={PRIVACY_URL} rel="noreferrer" target="_blank">
                 {t('telemetry.learnMore')}
                 <Icon icon={LucideArrowUpRightFromSquare} style={{ marginInlineStart: 4 }} />
-              </Link>
+              </a>
             </span>
           </div>
         </Flexbox>

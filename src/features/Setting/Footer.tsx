@@ -4,7 +4,6 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { MessageSquareHeart } from 'lucide-react';
-import Link from 'next/link';
 import { type PropsWithChildren, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,7 +42,7 @@ const Footer = memo<PropsWithChildren>(() => {
         >
           <div style={{ textAlign: 'center' }}>
             <Icon icon={MessageSquareHeart} /> {`${t('footer.title')} `}
-            <Link
+            <a
               aria-label={'star'}
               href={GITHUB}
               onClick={(e) => {
@@ -52,9 +51,9 @@ const Footer = memo<PropsWithChildren>(() => {
               }}
             >
               {t('footer.action.star')}
-            </Link>
+            </a>
             {` ${t('footer.and')} `}
-            <Link
+            <a
               aria-label={'feedback'}
               href={GITHUB_ISSUES}
               onClick={(e) => {
@@ -63,7 +62,7 @@ const Footer = memo<PropsWithChildren>(() => {
               }}
             >
               {t('footer.action.feedback')}
-            </Link>
+            </a>
             {' !'}
           </div>
         </Center>

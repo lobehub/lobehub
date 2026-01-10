@@ -1,4 +1,4 @@
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { type PropsWithChildren, memo } from 'react';
 
 import { useModelHasContextWindowToken } from '@/hooks/useModelHasContextWindowToken';

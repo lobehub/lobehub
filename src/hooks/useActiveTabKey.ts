@@ -1,9 +1,11 @@
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from '@/libs/router/navigation';
+import { useSearchParams } from '@/libs/router/navigation';
 
 import { ProfileTabs, SettingsTabs, SidebarTabKey } from '@/store/global/initialState';
 
 /**
  * Returns the active tab key (chat/market/settings/...)
+ * React Router version for SPA
  */
 export const useActiveTabKey = () => {
   const pathname = usePathname();
@@ -12,16 +14,18 @@ export const useActiveTabKey = () => {
 
 /**
  * Returns the active setting page key (?active=common/sync/agent/...)
+ * React Router version for SPA
  */
 export const useActiveSettingsKey = () => {
-  const search = useSearchParams();
-  const tabs = search.get('active');
+  const [searchParams] = useSearchParams();
+  const tabs = searchParams.get('active');
   if (!tabs) return SettingsTabs.Common;
   return tabs as SettingsTabs;
 };
 
 /**
  * Returns the active profile page key (profile/security/stats/...)
+ * React Router version for SPA
  */
 export const useActiveProfileKey = () => {
   const pathname = usePathname();
