@@ -15,6 +15,7 @@ import {
 } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
+import { useFetchResources } from '@/store/file/slices/resource/hooks';
 import { useGlobalStore } from '@/store/global';
 import { INITIAL_STATUS } from '@/store/global/initialState';
 import { type AsyncTaskStatus } from '@/types/asyncTask';
@@ -53,8 +54,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ListView = memo(() => {
+const ListView = memo(function ListView() {
   const [
+    libraryId,
+    category,
+    searchQuery,
     selectFileIds,
     setSelectedFileIds,
     pendingRenameItemId,
@@ -62,7 +66,11 @@ const ListView = memo(() => {
     loadMoreKnowledgeItems,
     sorter,
     sortType,
+    storeIsTransitioning,
   ] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.pendingRenameItemId,
@@ -70,6 +78,7 @@ const ListView = memo(() => {
     s.loadMoreKnowledgeItems,
     s.sorter,
     s.sortType,
+    s.isTransitioning,
   ]);
 
   // Access column widths from Global store
@@ -94,6 +103,33 @@ const ListView = memo(() => {
   // Get current folder ID - either from breadcrumb or null for root
   const currentFolderId = folderBreadcrumb?.at(-1)?.id || null;
 
+  const queryParams = useMemo(
+    () => ({
+      category: libraryId ? undefined : category,
+      libraryId,
+      parentId: currentFolderSlug || null,
+      q: searchQuery ?? undefined,
+      showFilesInKnowledgeBase: false,
+      sortType,
+      sorter,
+    }),
+    [category, currentFolderSlug, libraryId, searchQuery, sorter, sortType],
+  );
+
+  const { isLoading, isValidating } = useFetchResources(queryParams);
+  const { queryParams: currentQueryParams } = useFileStore();
+
+  const isNavigating = useMemo(() => {
+    if (!currentQueryParams || !queryParams) return false;
+
+    return (
+      currentQueryParams.libraryId !== queryParams.libraryId ||
+      currentQueryParams.parentId !== queryParams.parentId ||
+      currentQueryParams.category !== queryParams.category ||
+      currentQueryParams.q !== queryParams.q
+    );
+  }, [currentQueryParams, queryParams]);
+
   const resourceList = useFileStore((s) => s.resourceList);
 
   // Map ResourceItem[] to FileListItem[] for compatibility
@@ -111,6 +147,17 @@ const ListView = memo(() => {
 
   // Sort data using current sort settings
   const data = sortFileList(rawData, sorter, sortType) || [];
+
+  const dataLength = data.length;
+  const effectiveIsLoading = isLoading ?? false;
+  const effectiveIsNavigating = isNavigating ?? false;
+  const effectiveIsTransitioning = storeIsTransitioning ?? false;
+  const effectiveIsValidating = isValidating ?? false;
+
+  const showSkeleton =
+    (effectiveIsLoading && dataLength >= 5) ||
+    (effectiveIsNavigating && effectiveIsValidating) ||
+    effectiveIsTransitioning;
 
   const dataRef = useRef<FileListItemType[]>(data);
 
@@ -285,6 +332,8 @@ const ListView = memo(() => {
     if (!isLoadingMore || !fileListHasMore) return null;
     return <ListViewSkeleton columnWidths={columnWidths} />;
   }, [isLoadingMore, fileListHasMore, columnWidths]);
+
+  if (showSkeleton) return <ListViewSkeleton columnWidths={columnWidths} />;
 
   return (
     <Flexbox height={'100%'}>
