@@ -1,11 +1,18 @@
-const dotenv = require('dotenv');
-const fs = require('node:fs/promises');
-const os = require('node:os');
-const path = require('node:path');
+import dotenv from 'dotenv';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { getAsarUnpackPatterns, getFilesPatterns } from './native-deps.config.mjs';
 
 dotenv.config();
 
-const packageJSON = require('./package.json');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const packageJSON = JSON.parse(
+  await fs.readFile(path.join(__dirname, 'package.json'), 'utf8')
+);
 
 const channel = process.env.UPDATE_CHANNEL;
 const arch = os.arch();
@@ -121,17 +128,24 @@ const config = {
     artifactName: '${productName}-${version}.${ext}',
   },
   asar: true,
+  // Native modules must be unpacked from asar to work correctly
+  asarUnpack: getAsarUnpackPatterns(),
+
   detectUpdateChannel: true,
+
   directories: {
     buildResources: 'build',
     output: 'release',
   },
+
   dmg: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
   },
+
   electronDownload: {
     mirror: 'https://npmmirror.com/mirrors/electron/',
   },
+
   files: [
     'dist',
     'resources',
@@ -142,8 +156,10 @@ const config = {
     '!dist/next/packages',
     '!dist/next/.next/server/app/sitemap',
     '!dist/next/.next/static/media',
-    // Exclude node_modules from packaging
+    // Exclude node_modules from packaging (except native modules)
     '!node_modules',
+    // Include native modules (defined in native-deps.config.mjs)
+    ...getFilesPatterns(),
   ],
   generateUpdatesFilesForAllChannels: true,
   linux: {
@@ -217,4 +233,4 @@ const config = {
   },
 };
 
-module.exports = config;
+export default config;

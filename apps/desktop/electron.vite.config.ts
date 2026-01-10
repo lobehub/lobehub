@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 import { defineConfig } from 'electron-vite';
 import { resolve } from 'node:path';
 
+import { getExternalDependencies } from './native-deps.config.mjs';
+
 dotenv.config();
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -13,6 +15,10 @@ export default defineConfig({
     build: {
       minify: !isDev,
       outDir: 'dist/main',
+      rollupOptions: {
+        // Native modules must be externalized to work correctly
+        external: getExternalDependencies(),
+      },
       sourcemap: isDev ? 'inline' : false,
     },
     // 这里是关键：在构建时进行文本替换
