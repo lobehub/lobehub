@@ -40,6 +40,16 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
       min-width: 800px;
 
+      /* Hover effect for individual rows */
+      &:hover {
+        background: ${cssVar.colorFillTertiary};
+      }
+    `,
+
+    evenRow: css`
+      background: ${cssVar.colorFillQuaternary};
+
+      /* Hover effect overrides zebra striping on the hovered row only */
       &:hover {
         background: ${cssVar.colorFillTertiary};
       }
@@ -376,12 +386,14 @@ const FileListItem = memo<FileListItemProps>(
           className={cx(
             styles.container,
             'file-list-item-group',
+            index % 2 === 0 && styles.evenRow,
             selected && styles.selected,
             isDragging && styles.dragging,
             isOver && styles.dragOver,
           )}
           data-drop-target-id={id}
           data-is-folder={String(isFolder)}
+          data-row-index={index}
           draggable={!!resourceManagerState.libraryId}
           height={48}
           horizontal

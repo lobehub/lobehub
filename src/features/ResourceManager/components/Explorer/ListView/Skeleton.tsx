@@ -29,6 +29,7 @@ const ListViewSkeleton = ({
           key={index}
           paddingInline={8}
           style={{
+            background: index % 2 === 0 ? cssVar.colorFillQuaternary : 'transparent',
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
             opacity: getOpacity(index),
           }}
