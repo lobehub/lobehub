@@ -210,8 +210,42 @@ export class FlatListBuilder {
         lastAssistantNonToolChildren.length > 0 &&
         lastAssistant
       ) {
-        // Follow-up messages exist after the last assistant (not tools)
-        this.visitChildren(lastAssistant.id, flatList, emittedIds, consumedIds, allMessages);
+        // Check if there are branches (multiple user children)
+        if (lastAssistantNonToolChildren.length > 1) {
+          const activeBranchId = this.branchResolver.getActiveBranchIdFromMetadata(
+            lastAssistant,
+            lastAssistantNonToolChildren,
+            this.childrenMap,
+          );
+
+          if (!activeBranchId) {
+            // Optimistic update or no active branch selected
+            return;
+          }
+
+          const activeBranchIndex = lastAssistantNonToolChildren.indexOf(activeBranchId);
+          const activeBranchMsg = this.messageMap.get(activeBranchId);
+
+          if (activeBranchMsg) {
+            // Create message with branch info
+            const activeBranchWithBranches = this.createMessageWithBranches(
+              activeBranchMsg,
+              lastAssistantNonToolChildren.length,
+              activeBranchIndex,
+            );
+
+            this.emitMessage(flatList, emittedIds, activeBranchWithBranches);
+            this.consumeBranchSiblings(lastAssistantNonToolChildren, activeBranchId, consumedIds);
+
+            // Continue visiting the active branch
+            // visitMessage will handle children and marking as consumed
+            // emitMessage inside visitMessage will skip because we already emitted it
+            this.visitMessage(activeBranchId, flatList, emittedIds, consumedIds, allMessages);
+          }
+        } else {
+          // Follow-up messages exist after the last assistant (not tools)
+          this.visitChildren(lastAssistant.id, flatList, emittedIds, consumedIds, allMessages);
+        }
       } else {
         // No non-tool children of last assistant, check tools for children
         for (const toolMsg of allToolMessages) {
