@@ -122,6 +122,7 @@ export interface SystemStatus {
    */
   modelSwitchPanelWidth?: number;
   noWideScreen?: boolean;
+  pageAgentPanelWidth?: number;
   /**
    * number of pages (documents) to display per page
    */
@@ -198,6 +199,7 @@ export const INITIAL_STATUS = {
   modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 430,
   noWideScreen: true,
+  pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
   resourceManagerColumnWidths: {
