@@ -4,7 +4,7 @@ import { memo } from 'react';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 
-import { useProfileStore } from '../store';
+import { useProfileStore } from '../../store';
 
 const AgentBuilderToggle = memo(() => {
   const chatPanelExpanded = useProfileStore((s) => s.chatPanelExpanded);

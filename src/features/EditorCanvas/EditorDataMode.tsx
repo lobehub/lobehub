@@ -1,7 +1,7 @@
 'use client';
 
 import { type IEditor } from '@lobehub/editor';
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EditorCanvasProps } from './EditorCanvas';
@@ -12,37 +12,66 @@ export interface EditorDataModeProps extends EditorCanvasProps {
   editorData: NonNullable<EditorCanvasProps['editorData']>;
 }
 
+const loadEditorContent = (
+  editorInstance: IEditor,
+  editorData: EditorDataModeProps['editorData'],
+): boolean => {
+  const hasValidEditorData =
+    editorData.editorData &&
+    typeof editorData.editorData === 'object' &&
+    Object.keys(editorData.editorData as object).length > 0;
+
+  if (hasValidEditorData) {
+    editorInstance.setDocument('json', JSON.stringify(editorData.editorData));
+    return true;
+  } else if (editorData.content?.trim()) {
+    editorInstance.setDocument('markdown', editorData.content, { keepId: true });
+    return true;
+  }
+  return false;
+};
+
 /**
  * EditorCanvas with editorData mode - uses provided data directly
  */
 const EditorDataMode = memo<EditorDataModeProps>(
-  ({ editor, editorData, onContentChange, style, ...editorProps }) => {
+  ({ editor, editorData, onContentChange, onInit, style, ...editorProps }) => {
     const { t } = useTranslation('file');
-    const [isInitialized, setIsInitialized] = useState(false);
+    const isEditorReadyRef = useRef(false);
+    const isContentLoadedRef = useRef(false);
 
-    // Load content into editor on mount
-    useEffect(() => {
-      if (!editor || isInitialized) return;
+    const handleInit = useCallback(
+      (editorInstance: IEditor) => {
+        isEditorReadyRef.current = true;
 
-      const hasValidEditorData =
-        editorData.editorData &&
-        typeof editorData.editorData === 'object' &&
-        Object.keys(editorData.editorData as object).length > 0;
-
-      try {
-        if (hasValidEditorData) {
-          editor.setDocument('json', JSON.stringify(editorData.editorData));
-        } else if (editorData.content?.trim()) {
-          editor.setDocument('markdown', editorData.content, { keepId: true });
-        } else {
-          console.error('[EditorCanvas] load content error:', editorData);
+        // Try to load content if editorData is already available
+        if (!isContentLoadedRef.current) {
+          try {
+            if (loadEditorContent(editorInstance, editorData)) {
+              isContentLoadedRef.current = true;
+            }
+          } catch (err) {
+            console.error('[EditorCanvas] Failed to load content:', err);
+          }
         }
 
-        setIsInitialized(true);
+        onInit?.(editorInstance);
+      },
+      [editorData, onInit],
+    );
+
+    // Load content when editorData becomes available after editor is ready
+    useEffect(() => {
+      if (!editor || !isEditorReadyRef.current || isContentLoadedRef.current) return;
+
+      try {
+        if (loadEditorContent(editor, editorData)) {
+          isContentLoadedRef.current = true;
+        }
       } catch (err) {
         console.error('[EditorCanvas] Failed to load content:', err);
       }
-    }, [editorData, editor, isInitialized]);
+    }, [editor, editorData]);
 
     if (!editor) return null;
 
@@ -51,6 +80,7 @@ const EditorDataMode = memo<EditorDataModeProps>(
         <InternalEditor
           editor={editor}
           onContentChange={onContentChange}
+          onInit={handleInit}
           placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
           {...editorProps}
         />

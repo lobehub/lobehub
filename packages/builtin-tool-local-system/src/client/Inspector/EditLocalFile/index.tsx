@@ -8,20 +8,12 @@ import { Minus, Plus } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStyles } from '@/styles';
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import { type EditLocalFileState } from '../../../types';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
   separator: css`
     margin-inline: 2px;
     color: ${cssVar.colorTextQuaternary};
@@ -39,13 +31,13 @@ export const EditLocalFileInspector = memo<
   if (isArgumentsStreaming) {
     if (!filePath)
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}</span>
         </div>
       );
 
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}: </span>
         <FilePathDisplay filePath={filePath} />
       </div>
@@ -75,7 +67,7 @@ export const EditLocalFileInspector = memo<
   }
 
   return (
-    <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
+    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
       <span>{t('builtins.lobe-local-system.apiName.editLocalFile')}: </span>
       <FilePathDisplay filePath={filePath} />
       {!isLoading && statsParts.length > 0 && (

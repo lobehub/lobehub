@@ -43,7 +43,7 @@ describe('search actions', () => {
       invokeBuiltinTool: vi.fn(),
     });
 
-    // Default mock for dbMessageSelectors - returns undefined to use activeId/activeTopicId
+    // Default mock for dbMessageSelectors - returns undefined to use activeAgentId/activeTopicId
     vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(() => () => undefined);
   });
 

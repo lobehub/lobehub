@@ -1,0 +1,92 @@
+'use client';
+
+import { Button, Flexbox } from '@lobehub/ui';
+import { Divider } from 'antd';
+import { PlayIcon } from 'lucide-react';
+import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
+
+import { EditorCanvas } from '@/features/EditorCanvas';
+import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+
+import { useProfileStore } from '../../store';
+import GroupHeader from './GroupHeader';
+
+const GroupProfile = memo(() => {
+  const { t } = useTranslation(['setting', 'chat']);
+  const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
+  const updateGroup = useAgentGroupStore((s) => s.updateGroup);
+  const router = useQueryRoute();
+
+  const editor = useProfileStore((s) => s.editor);
+  const handleContentChange = useProfileStore((s) => s.handleContentChange);
+
+  // Wrap updateGroup for saving editor content
+  const updateContent = useCallback(
+    async (payload: { content: string; editorData: Record<string, any> }) => {
+      if (!groupId) return;
+      await updateGroup(groupId, {
+        content: payload.content,
+        editorData: payload.editorData,
+      });
+    },
+    [updateGroup, groupId],
+  );
+
+  // Handle editor content change
+  const onContentChange = useCallback(() => {
+    handleContentChange(updateContent);
+  }, [handleContentChange, updateContent]);
+
+  return (
+    <>
+      <Flexbox
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+        style={{ cursor: 'default', marginBottom: 12 }}
+      >
+        <Flexbox height={66} width={'100%'} />
+        {/* Header: Group Avatar + Title */}
+        <GroupHeader />
+        {/* Start Conversation Button */}
+        <Flexbox
+          align={'center'}
+          gap={8}
+          horizontal
+          justify={'flex-start'}
+          style={{ marginTop: 16 }}
+        >
+          <Button
+            icon={PlayIcon}
+            onClick={() => {
+              if (!groupId) return;
+              router.push(urlJoin('/group', groupId));
+            }}
+            type={'primary'}
+          >
+            {t('startConversation')}
+          </Button>
+        </Flexbox>
+      </Flexbox>
+      <Divider />
+      {/* Group Content Editor */}
+      <EditorCanvas
+        editor={editor}
+        editorData={{
+          content: currentGroup?.content ?? undefined,
+          editorData: currentGroup?.editorData,
+        }}
+        key={groupId}
+        onContentChange={onContentChange}
+        placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
+      />
+    </>
+  );
+});
+
+export default GroupProfile;

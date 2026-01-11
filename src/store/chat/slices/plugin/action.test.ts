@@ -1147,7 +1147,7 @@ describe('ChatPluginAction', () => {
         });
       });
 
-      it('should fallback to activeId/activeTopicId when context not provided', async () => {
+      it('should fallback to activeAgentId/activeTopicId when context not provided', async () => {
         const { result } = renderHook(() => useChatStore());
         const messageId = 'message-id';
         const pluginState = { key: 'value' };

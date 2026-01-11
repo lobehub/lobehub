@@ -3,7 +3,7 @@ import { Modal, ModalProps, createRawModal } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import EditorCanvas from './EditorCanvas';
+import { EditorCanvas } from '@/features/EditorCanvas';
 
 interface EditorModalProps extends ModalProps {
   onConfirm?: (value: string) => Promise<void>;
@@ -43,7 +43,7 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
       width={'min(90vw, 920px)'}
       {...rest}
     >
-      <EditorCanvas defaultValue={value} editor={editor} />
+      <EditorCanvas editor={editor} editorData={{ content: value }} />
     </Modal>
   );
 });

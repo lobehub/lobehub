@@ -1,18 +1,27 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
+import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
+import { useAgentStore } from '@/store/agent';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type {
+  BatchCreateAgentsParams,
+  BatchCreateAgentsState,
+  CreateAgentParams,
+  CreateAgentState,
   InviteAgentParams,
   InviteAgentState,
   RemoveAgentParams,
   RemoveAgentState,
-  UpdateGroupConfigParams,
-  UpdateGroupConfigState,
+  SearchAgentParams,
+  SearchAgentState,
+  UpdateAgentPromptParams,
+  UpdateGroupParams,
   UpdateGroupPromptParams,
   UpdateGroupPromptState,
+  UpdateGroupState,
 } from '../types';
 
 /**
@@ -21,7 +30,211 @@ import type {
  * Extends AgentBuilder functionality with group-specific operations
  */
 export class GroupAgentBuilderExecutionRuntime {
-  // ==================== Group-specific Operations ====================
+  // ==================== Group Member Management ====================
+
+  /**
+   * Search for agents that can be invited to the group
+   */
+  async searchAgent(args: SearchAgentParams): Promise<BuiltinServerRuntimeOutput> {
+    const { query, limit = 10 } = args;
+
+    try {
+      const results = await agentService.queryAgents({ keyword: query, limit });
+
+      const agents = results.map((agent) => ({
+        avatar: agent.avatar,
+        description: agent.description,
+        id: agent.id,
+        title: agent.title,
+      }));
+
+      const total = agents.length;
+
+      if (total === 0) {
+        return {
+          content: query
+            ? `No agents found matching "${query}".`
+            : 'No agents found. You can create a new agent or search with different keywords.',
+          state: { agents: [], query, total: 0 } as SearchAgentState,
+          success: true,
+        };
+      }
+
+      // Format agents list for LLM consumption
+      const agentList = agents
+        .map(
+          (a, i) =>
+            `${i + 1}. ${a.title || 'Untitled'} (ID: ${a.id})${a.description ? ` - ${a.description}` : ''}`,
+        )
+        .join('\n');
+
+      return {
+        content: query
+          ? `Found ${total} agent${total > 1 ? 's' : ''} matching "${query}":\n${agentList}`
+          : `Found ${total} agent${total > 1 ? 's' : ''}:\n${agentList}`,
+        state: { agents, query, total } as SearchAgentState,
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Failed to search agents: ${err.message}`,
+        error,
+        success: false,
+      };
+    }
+  }
+
+  /**
+   * Create a new agent and add it to the group
+   */
+  async createAgent(groupId: string, args: CreateAgentParams): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      const state = getChatGroupStoreState();
+      const group = agentGroupSelectors.getGroupById(groupId)(state);
+
+      if (!group) {
+        return {
+          content: 'Group not found',
+          error: 'Group not found',
+          success: false,
+        };
+      }
+
+      // Create a virtual agent only (no session needed for group agents)
+      const result = await agentService.createAgentOnly({
+        config: {
+          avatar: args.avatar,
+          description: args.description,
+          systemRole: args.systemRole,
+          title: args.title,
+          virtual: true,
+        },
+        groupId,
+      });
+
+      if (!result.agentId) {
+        return {
+          content: 'Failed to create agent: No agent ID returned',
+          success: false,
+        };
+      }
+
+      // Refresh the group detail in the store
+      await state.refreshGroupDetail(groupId);
+
+      return {
+        content: `Successfully created agent "${args.title}" and added it to the group.`,
+        state: {
+          agentId: result.agentId,
+          success: true,
+          title: args.title,
+        } as CreateAgentState,
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Failed to create agent: ${err.message}`,
+        error,
+        success: false,
+      };
+    }
+  }
+
+  /**
+   * Create multiple agents at once and add them to the group
+   */
+  async batchCreateAgents(
+    groupId: string,
+    args: BatchCreateAgentsParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      const state = getChatGroupStoreState();
+      const group = agentGroupSelectors.getGroupById(groupId)(state);
+
+      if (!group) {
+        return {
+          content: 'Group not found',
+          error: 'Group not found',
+          success: false,
+        };
+      }
+
+      const results: Array<{ agentId: string; success: boolean; title: string }> = [];
+      let successCount = 0;
+      let failedCount = 0;
+
+      // Create each agent sequentially
+      for (const agentDef of args.agents) {
+        try {
+          const result = await agentService.createAgentOnly({
+            config: {
+              avatar: agentDef.avatar,
+              description: agentDef.description,
+              systemRole: agentDef.systemRole,
+              title: agentDef.title,
+              virtual: true,
+            },
+            groupId,
+          });
+
+          if (result.agentId) {
+            results.push({
+              agentId: result.agentId,
+              success: true,
+              title: agentDef.title,
+            });
+            successCount++;
+          } else {
+            results.push({
+              agentId: '',
+              success: false,
+              title: agentDef.title,
+            });
+            failedCount++;
+          }
+        } catch {
+          results.push({
+            agentId: '',
+            success: false,
+            title: agentDef.title,
+          });
+          failedCount++;
+        }
+      }
+
+      // Refresh the group detail in the store
+      await state.refreshGroupDetail(groupId);
+
+      const createdList = results
+        .filter((r) => r.success)
+        .map((r) => `- ${r.title} (ID: ${r.agentId})`)
+        .join('\n');
+
+      const content =
+        failedCount === 0
+          ? `Successfully created ${successCount} agent${successCount > 1 ? 's' : ''}:\n${createdList}`
+          : `Created ${successCount} agent${successCount > 1 ? 's' : ''}, ${failedCount} failed:\n${createdList}`;
+
+      return {
+        content,
+        state: {
+          agents: results,
+          failedCount,
+          successCount,
+        } as BatchCreateAgentsState,
+        success: failedCount === 0,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Failed to create agents: ${err.message}`,
+        error,
+        success: false,
+      };
+    }
+  }
 
   /**
    * Invite an agent to the group
@@ -149,11 +362,58 @@ export class GroupAgentBuilderExecutionRuntime {
     }
   }
 
+  // ==================== Group Configuration ====================
+
   /**
-   * Update group system prompt
-   * Unlike regular AgentBuilder, this updates the group's systemPrompt in groupConfig
+   * Update a specific agent's system prompt (systemRole)
    */
-  async updatePrompt(args: UpdateGroupPromptParams): Promise<BuiltinServerRuntimeOutput> {
+  async updateAgentPrompt(
+    groupId: string,
+    args: UpdateAgentPromptParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      const { agentId, prompt } = args;
+
+      // Get previous prompt for state
+      const state = getChatGroupStoreState();
+      const group = agentGroupSelectors.getGroupById(groupId)(state);
+      const agent = group?.agents?.find((a) => a.id === agentId);
+      const previousPrompt = agent?.systemRole ?? undefined;
+
+      // Update the agent's systemRole via agent store
+      await useAgentStore.getState().updateAgentConfigById(agentId, { systemRole: prompt });
+
+      // Refresh the group detail in the store to sync agent data
+      await state.refreshGroupDetail(groupId);
+
+      const content = prompt
+        ? `Successfully updated agent ${agentId} system prompt (${prompt.length} characters)`
+        : `Successfully cleared agent ${agentId} system prompt`;
+
+      return {
+        content,
+        state: {
+          agentId,
+          newPrompt: prompt,
+          previousPrompt,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Failed to update agent prompt: ${err.message}`,
+        error,
+        success: false,
+      };
+    }
+  }
+
+  /**
+   * Update group configuration and metadata (unified method)
+   */
+  async updateGroup(args: UpdateGroupParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const state = getChatGroupStoreState();
       const group = agentGroupSelectors.currentGroup(state);
@@ -166,19 +426,120 @@ export class GroupAgentBuilderExecutionRuntime {
         };
       }
 
-      const previousPrompt = group.config?.systemPrompt;
+      const { config, meta } = args;
+
+      if (!config && !meta) {
+        return {
+          content: 'No configuration or metadata provided',
+          error: 'No configuration or metadata provided',
+          success: false,
+        };
+      }
+
+      const updatedFields: string[] = [];
+      const resultState: UpdateGroupState = { success: true };
+
+      // Update config if provided
+      if (config) {
+        const configUpdate: { openingMessage?: string; openingQuestions?: string[] } = {};
+
+        if (config.openingMessage !== undefined) {
+          configUpdate.openingMessage = config.openingMessage;
+          updatedFields.push(
+            config.openingMessage
+              ? `openingMessage (${config.openingMessage.length} chars)`
+              : 'openingMessage (cleared)',
+          );
+        }
+
+        if (config.openingQuestions !== undefined) {
+          configUpdate.openingQuestions = config.openingQuestions;
+          updatedFields.push(
+            config.openingQuestions.length > 0
+              ? `openingQuestions (${config.openingQuestions.length} questions)`
+              : 'openingQuestions (cleared)',
+          );
+        }
+
+        if (Object.keys(configUpdate).length > 0) {
+          await state.updateGroupConfig(configUpdate);
+          resultState.updatedConfig = configUpdate;
+        }
+      }
+
+      // Update meta if provided
+      if (meta && Object.keys(meta).length > 0) {
+        await state.updateGroupMeta(meta);
+        resultState.updatedMeta = meta;
+
+        if (meta.avatar !== undefined) {
+          updatedFields.push(`avatar (${meta.avatar || 'cleared'})`);
+        }
+        if (meta.title !== undefined) {
+          updatedFields.push(`title (${meta.title || 'cleared'})`);
+        }
+        if (meta.description !== undefined) {
+          updatedFields.push(
+            meta.description ? `description (${meta.description.length} chars)` : 'description (cleared)',
+          );
+        }
+        if (meta.backgroundColor !== undefined) {
+          updatedFields.push(`backgroundColor (${meta.backgroundColor || 'cleared'})`);
+        }
+      }
+
+      // Refresh the group detail in the store to ensure data sync
+      await state.refreshGroupDetail(group.id);
+
+      const content = `Successfully updated group: ${updatedFields.join(', ')}`;
+
+      return {
+        content,
+        state: resultState,
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Failed to update group: ${err.message}`,
+        error,
+        success: false,
+      };
+    }
+  }
+
+  /**
+   * Update group shared prompt/content
+   */
+  async updateGroupPrompt(args: UpdateGroupPromptParams): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      const state = getChatGroupStoreState();
+      const group = agentGroupSelectors.currentGroup(state);
+
+      if (!group) {
+        return {
+          content: 'No active group found',
+          error: 'No active group found',
+          success: false,
+        };
+      }
+
+      const previousPrompt = group.content ?? undefined;
 
       if (args.streaming) {
         // Use streaming mode for typewriter effect
-        await this.streamUpdatePrompt(args.prompt);
+        await this.streamUpdateGroupPrompt(args.prompt);
       } else {
-        // Update the system prompt directly
-        await state.updateGroupConfig({ systemPrompt: args.prompt });
+        // Update the content directly
+        await state.updateGroup(group.id, { content: args.prompt });
       }
 
+      // Refresh the group detail in the store to ensure data sync
+      await state.refreshGroupDetail(group.id);
+
       const content = args.prompt
-        ? `Successfully updated group system prompt (${args.prompt.length} characters)`
-        : 'Successfully cleared group system prompt';
+        ? `Successfully updated group shared prompt (${args.prompt.length} characters)`
+        : 'Successfully cleared group shared prompt';
 
       return {
         content,
@@ -204,106 +565,18 @@ export class GroupAgentBuilderExecutionRuntime {
   }
 
   /**
-   * Update group configuration (openingMessage, openingQuestions)
+   * Stream update group prompt with typewriter effect
+   * Note: Currently content doesn't have store-level streaming support,
+   * so this directly updates the content.
    */
-  async updateGroupConfig(args: UpdateGroupConfigParams): Promise<BuiltinServerRuntimeOutput> {
-    try {
-      const state = getChatGroupStoreState();
-      const group = agentGroupSelectors.currentGroup(state);
-
-      if (!group) {
-        return {
-          content: 'No active group found',
-          error: 'No active group found',
-          success: false,
-        };
-      }
-
-      const { config } = args;
-
-      if (!config) {
-        return {
-          content: 'No configuration provided',
-          error: 'No configuration provided',
-          success: false,
-        };
-      }
-
-      // Build the config update object
-      const configUpdate: { openingMessage?: string; openingQuestions?: string[] } = {};
-
-      if (config.openingMessage !== undefined) {
-        configUpdate.openingMessage = config.openingMessage;
-      }
-
-      if (config.openingQuestions !== undefined) {
-        configUpdate.openingQuestions = config.openingQuestions;
-      }
-
-      // Update the group config
-      await state.updateGroupConfig(configUpdate);
-
-      const updatedFields: string[] = [];
-      if (config.openingMessage !== undefined) {
-        updatedFields.push(
-          config.openingMessage
-            ? `openingMessage (${config.openingMessage.length} chars)`
-            : 'openingMessage (cleared)',
-        );
-      }
-      if (config.openingQuestions !== undefined) {
-        updatedFields.push(
-          config.openingQuestions.length > 0
-            ? `openingQuestions (${config.openingQuestions.length} questions)`
-            : 'openingQuestions (cleared)',
-        );
-      }
-
-      const content = `Successfully updated group configuration: ${updatedFields.join(', ')}`;
-
-      return {
-        content,
-        state: {
-          success: true,
-          updatedConfig: configUpdate,
-        } as UpdateGroupConfigState,
-        success: true,
-      };
-    } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to update group configuration: ${err.message}`,
-        error,
-        success: false,
-      };
-    }
-  }
-
-  /**
-   * Stream update prompt with typewriter effect for group
-   */
-  private async streamUpdatePrompt(prompt: string): Promise<void> {
+  private async streamUpdateGroupPrompt(prompt: string): Promise<void> {
     const state = getChatGroupStoreState();
+    const group = agentGroupSelectors.currentGroup(state);
 
-    // Start streaming
-    state.startStreamingSystemPrompt();
+    if (!group) return;
 
-    // Simulate streaming by chunking the content
-    const chunkSize = 5; // Characters per chunk
-    const delay = 10; // Milliseconds between chunks
-
-    for (let i = 0; i < prompt.length; i += chunkSize) {
-      const chunk = prompt.slice(i, i + chunkSize);
-      getChatGroupStoreState().appendStreamingSystemPrompt(chunk);
-
-      // Small delay for typewriter effect
-      if (i + chunkSize < prompt.length) {
-        // eslint-disable-next-line no-promise-executor-return
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-
-    // Finish streaming - EditorCanvas will handle save when streaming ends
-    await getChatGroupStoreState().finishStreamingSystemPrompt();
+    // For now, directly update the content since there's no streaming infrastructure
+    // TODO: Add streaming support for content similar to systemPrompt if needed
+    await state.updateGroup(group.id, { content: prompt });
   }
 }

@@ -109,6 +109,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
                   }
                   avatar={item.avatar || DEFAULT_AVATAR}
                   background={item.backgroundColor ?? undefined}
+                  isExternal={!item.virtual}
                   title={item.title || t('defaultSession', { ns: 'common' })}
                 />
               </div>
