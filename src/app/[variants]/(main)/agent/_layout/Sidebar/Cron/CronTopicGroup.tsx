@@ -2,7 +2,7 @@
 
 import { Block, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Clock } from 'lucide-react';
+import { TimerIcon, TimerOffIcon } from 'lucide-react';
 import { type MouseEvent, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -57,9 +57,13 @@ const CronTopicGroup = memo<CronTopicGroupProps>(({ cronJob, cronJobId, topics }
         variant="borderless"
       >
         <Center flex="none" height={24} width={24}>
-          <Icon color={cssVar.colorTextDescription} icon={Clock} size={16} />
+          <Icon
+            color={cssVar.colorTextDescription}
+            icon={isEnabled ? TimerIcon : TimerOffIcon}
+            size={16}
+          />
         </Center>
-        <Text ellipsis fontSize={12} style={{ flex: 1 }} type="secondary" weight={500}>
+        <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
           {cronJobName}
         </Text>
         {topics.length > 0 && (
