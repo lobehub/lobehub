@@ -34,14 +34,14 @@ export const desktopRoutes: RouteConfig[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/app/[variants]/(main)/agent/profile'),
+                  () => import('../(main)/agent/profile'),
                   'Desktop > Chat > Profile',
                 ),
                 path: 'profile',
               },
               {
                 element: dynamicElement(
-                  () => import('@/app/[variants]/(main)/agent/cron/[cronId]'),
+                  () => import('../(main)/agent/cron/[cronId]'),
                   'Desktop > Chat > Cron Detail',
                 ),
                 path: 'cron/:cronId',
