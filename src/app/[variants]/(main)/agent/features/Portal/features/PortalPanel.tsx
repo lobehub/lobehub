@@ -1,8 +1,9 @@
 import { Suspense, memo } from 'react';
 
-import DesktopLayout from '@/app/[variants]/(main)/agent/features/Portal/_layout/Desktop';
-import MobileLayout from '@/app/[variants]/(main)/agent/features/Portal/_layout/Mobile';
 import Loading from '@/components/Loading/BrandTextLoading';
+
+import DesktopLayout from '../_layout/Desktop';
+import MobileLayout from '../_layout/Mobile';
 
 interface PortalPanelProps {
   mobile?: boolean;

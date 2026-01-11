@@ -8,13 +8,12 @@ import PluginTag from '@/features/PluginTag';
 import { useAgentEnableSearch } from '@/hooks/useAgentEnableSearch';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import HistoryLimitTags from './HistoryLimitTags';
 import KnowledgeTag from './KnowledgeTag';
 import MemberCountTag from './MemberCountTag';
 import SearchTags from './SearchTags';
@@ -29,7 +28,6 @@ const TitleTags = memo(() => {
 
   const plugins = useAgentStore(agentSelectors.displayableAgentPlugins, isEqual);
   const enabledKnowledge = useAgentStore(agentSelectors.currentEnabledKnowledge, isEqual);
-  const enableHistoryCount = useAgentStore(agentChatConfigSelectors.enableHistoryCount);
 
   const showPlugin = useModelSupportToolUse(model, provider);
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -55,7 +53,6 @@ const TitleTags = memo(() => {
       {isAgentEnableSearch && <SearchTags />}
       {showPlugin && plugins?.length > 0 && <PluginTag plugins={plugins} />}
       {hasKnowledge && <KnowledgeTag data={enabledKnowledge} />}
-      {enableHistoryCount && <HistoryLimitTags />}
     </Flexbox>
   );
 });
