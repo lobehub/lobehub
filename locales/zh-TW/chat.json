@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "推理強度",
   "extendParams.textVerbosity.title": "輸出文本詳細程度",
   "extendParams.thinking.title": "深度思考開關",
+  "extendParams.thinkingBudget.title": "思考預算",
   "extendParams.thinkingLevel.title": "思考層級",
   "extendParams.title": "模型擴展功能",
   "extendParams.urlContext.desc": "開啟後將自動解析網頁連結，以取得實際網頁上下文內容",

@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Intensywność rozumowania",
   "extendParams.textVerbosity.title": "Poziom szczegółowości tekstu",
   "extendParams.thinking.title": "Przełącznik głębokiego myślenia",
+  "extendParams.thinkingBudget.title": "Budżet na przemyślenia",
   "extendParams.thinkingLevel.title": "Poziom myślenia",
   "extendParams.title": "Funkcje rozszerzenia modelu",
   "extendParams.urlContext.desc": "Po włączeniu, linki internetowe będą automatycznie analizowane w celu pobrania treści strony",

@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Cường độ suy nghĩ",
   "extendParams.textVerbosity.title": "Mức độ chi tiết văn bản đầu ra",
   "extendParams.thinking.title": "Công tắc Suy nghĩ sâu",
+  "extendParams.thinkingBudget.title": "Ngân sách Dự tính",
   "extendParams.thinkingLevel.title": "Mức độ suy nghĩ",
   "extendParams.title": "Tính năng mở rộng mô hình",
   "extendParams.urlContext.desc": "Khi bật, các liên kết web sẽ được tự động phân tích để lấy nội dung thực tế của trang",

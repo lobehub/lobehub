@@ -33,6 +33,7 @@ export default {
   'agentCronJobs.maxExecutions': 'Max Executions',
   'agentCronJobs.name': 'Task Name',
   'agentCronJobs.never': 'Never',
+  'agentCronJobs.noExecutionResults': 'No execution results',
   'agentCronJobs.remainingExecutions': 'Remaining: {{count}}',
   'agentCronJobs.save': 'Save',
   'agentCronJobs.schedule': 'Schedule',

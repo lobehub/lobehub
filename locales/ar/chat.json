@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "شدة التفكير",
   "extendParams.textVerbosity.title": "مستوى تفصيل النص الناتج",
   "extendParams.thinking.title": "مفتاح التفكير العميق",
+  "extendParams.thinkingBudget.title": "ميزانية التفكير",
   "extendParams.thinkingLevel.title": "مستوى التفكير",
   "extendParams.title": "ميزات توسيع النموذج",
   "extendParams.urlContext.desc": "عند التفعيل، سيتم تحليل الروابط تلقائيًا لاستخراج محتوى صفحة الويب الفعلي",

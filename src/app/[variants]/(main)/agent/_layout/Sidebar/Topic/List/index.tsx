@@ -18,6 +18,8 @@ import AllTopicsDrawer from '../AllTopicsDrawer';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 
+const fetchParams = { excludeTriggers: ['cron'] };
+
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');
   const router = useQueryRoute();
@@ -32,7 +34,7 @@ const TopicList = memo(() => {
 
   const [topicDisplayMode] = useUserStore((s) => [preferenceSelectors.topicDisplayMode(s)]);
 
-  useFetchTopics({ excludeTriggers: ['cron'] });
+  useFetchTopics(fetchParams);
 
   // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;

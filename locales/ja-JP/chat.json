@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "推論強度",
   "extendParams.textVerbosity.title": "出力詳細度",
   "extendParams.thinking.title": "深い思考スイッチ",
+  "extendParams.thinkingBudget.title": "思考予算",
   "extendParams.thinkingLevel.title": "思考レベル",
   "extendParams.title": "モデル拡張機能",
   "extendParams.urlContext.desc": "有効にすると、ウェブリンクを自動解析し、ウェブページのコンテキストをコンテキストとして抽出します",

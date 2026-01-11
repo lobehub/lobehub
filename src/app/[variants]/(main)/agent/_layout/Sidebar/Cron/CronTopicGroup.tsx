@@ -1,9 +1,8 @@
 'use client';
 
-import { Block, Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
-import { TimerIcon, TimerOffIcon } from 'lucide-react';
-import { type MouseEvent, memo, useCallback } from 'react';
+import { AccordionItem, ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Settings2Icon, TimerIcon, TimerOffIcon } from 'lucide-react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 
@@ -29,55 +28,56 @@ interface CronTopicGroupProps {
 
 const CronTopicGroup = memo<CronTopicGroupProps>(({ cronJob, cronJobId, topics }) => {
   const { t } = useTranslation('setting');
-  const { aid } = useParams<{ aid?: string }>();
+  const { aid, cronId } = useParams<{ aid?: string; cronId?: string }>();
   const router = useRouter();
-  const handleOpenCronJob = useCallback(
-    (event: MouseEvent) => {
-      event.stopPropagation();
-      if (!aid) return;
-      router.push(`/agent/${aid}/cron/${cronJobId}`);
-    },
-    [aid, cronJobId, router],
-  );
+
+  const handleOpenCronJob = useCallback(() => {
+    if (!aid) return;
+    router.push(`/agent/${aid}/cron/${cronJobId}`);
+  }, [aid, cronJobId, router]);
 
   const cronJobName = cronJob?.name || t('agentCronJobs.unnamedTask');
   const isEnabled = cronJob?.enabled ?? false;
+  const isActive = cronId === cronJobId;
 
   return (
-    <Flexbox gap={2}>
-      <Block
-        align="center"
-        clickable
-        gap={8}
-        height={32}
-        horizontal
-        onClick={handleOpenCronJob}
-        paddingInline={4}
-        style={{ opacity: isEnabled ? 1 : 0.5, overflow: 'hidden' }}
-        variant="borderless"
-      >
-        <Center flex="none" height={24} width={24}>
-          <Icon
-            color={cssVar.colorTextDescription}
-            icon={isEnabled ? TimerIcon : TimerOffIcon}
-            size={16}
-          />
-        </Center>
-        <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
-          {cronJobName}
-        </Text>
-        {topics.length > 0 && (
-          <Text style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>{topics.length}</Text>
-        )}
-      </Block>
-      {topics.length > 0 && (
-        <Flexbox gap={2} paddingBlock={2}>
-          {topics.map((topic) => (
-            <CronTopicItem key={topic.id} topic={topic} />
-          ))}
+    <AccordionItem
+      action={
+        <ActionIcon
+          icon={Settings2Icon}
+          onClick={handleOpenCronJob}
+          size="small"
+          title={t('agentCronJobs.editJob')}
+        />
+      }
+      itemKey={cronJobId}
+      paddingBlock={4}
+      paddingInline={'8px 4px'}
+      title={
+        <Flexbox align="center" gap={6} height={24} horizontal style={{ overflow: 'hidden' }}>
+          <Icon icon={isEnabled ? TimerIcon : TimerOffIcon} style={{ opacity: 0.5 }} />
+          <Text ellipsis style={{ flex: 1 }} type={isActive ? undefined : 'secondary'}>
+            {cronJobName}
+          </Text>
+          {topics.length > 0 && (
+            <Text fontSize={11} type="secondary">
+              {topics.length}
+            </Text>
+          )}
         </Flexbox>
-      )}
-    </Flexbox>
+      }
+      variant={isActive ? 'filled' : 'borderless'}
+    >
+      <Flexbox gap={1} paddingBlock={1}>
+        {topics.length > 0 ? (
+          topics.map((topic) => <CronTopicItem key={topic.id} topic={topic} />)
+        ) : (
+          <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
+            {t('agentCronJobs.noExecutionResults')}
+          </Text>
+        )}
+      </Flexbox>
+    </AccordionItem>
   );
 });
 
