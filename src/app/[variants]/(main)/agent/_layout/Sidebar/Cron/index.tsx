@@ -1,6 +1,6 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { ENABLE_BUSINESS_FEATURES } from '@cloud/business-const';
 import { AccordionItem, ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { message } from 'antd';
 import { Calendar, Plus } from 'lucide-react';

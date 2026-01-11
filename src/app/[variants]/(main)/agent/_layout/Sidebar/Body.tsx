@@ -1,8 +1,8 @@
 import { Accordion, Flexbox } from '@lobehub/ui';
 import React, { memo } from 'react';
 
+import CronTopicList from './Cron';
 import Topic from './Topic';
-import CronTopicList from './Topic/CronTopicList';
 
 export enum ChatSidebarKey {
   CronTopics = 'cronTopics',

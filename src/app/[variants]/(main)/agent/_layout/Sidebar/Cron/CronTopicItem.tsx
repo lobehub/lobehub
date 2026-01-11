@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 
-import TopicItem from '../List/Item';
+import TopicItem from '../Topic/List/Item';
 
 interface CronTopicItemProps {
   topic: {

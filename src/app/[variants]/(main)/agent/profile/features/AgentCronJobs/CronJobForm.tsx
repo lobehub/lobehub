@@ -96,7 +96,7 @@ const CronJobForm = memo<CronJobFormProps>(({ editingJob, formRef, onSubmit }) =
     const data: CronJobFormData = {
       content: values.content,
       cronPattern: values.cronPattern,
-      enabled: true,
+      enabled: false,
       executionConditions: Object.keys(executionConditions).length > 0 ? executionConditions : null,
       maxExecutions: values.maxExecutions || null,
       name: values.name,

@@ -99,7 +99,7 @@ const CronJobCards = memo<CronJobCardsProps>(({ cronJobs, loading, onDelete, onE
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {job.name || 'Unnamed Task'}
+                      {job.name || t('agentCronJobs.unnamedTask')}
                     </span>
                     <Badge status={statusInfo.status} />
                   </Flexbox>

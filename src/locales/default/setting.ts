@@ -42,6 +42,7 @@ export default {
   'agentCronJobs.timeRange': 'Time Range',
   'agentCronJobs.title': 'Scheduled Tasks',
   'agentCronJobs.unlimited': 'Unlimited',
+  'agentCronJobs.unnamedTask': 'Unnamed Task',
   'agentCronJobs.updateSuccess': 'Scheduled task updated successfully',
   'agentCronJobs.weekdays': 'Weekdays',
   'agentInfoDescription.basic.avatar': 'Avatar',
