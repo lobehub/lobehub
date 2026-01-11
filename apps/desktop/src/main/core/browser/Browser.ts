@@ -184,6 +184,20 @@ export default class Browser {
     this.setupReadyToShowListener(browserWindow);
     this.setupCloseListener(browserWindow);
     this.setupFocusListener(browserWindow);
+    this.setupWillPreventUnloadListener(browserWindow);
+  }
+
+  private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'will-prevent-unload' event listener.`);
+    browserWindow.webContents.on('will-prevent-unload', (event) => {
+      logger.debug(
+        `[${this.identifier}] 'will-prevent-unload' fired. isQuiting: ${this.app.isQuiting}`,
+      );
+      if (this.app.isQuiting) {
+        logger.info(`[${this.identifier}] App is quitting, ignoring beforeunload cancellation.`);
+        event.preventDefault();
+      }
+    });
   }
 
   private setupReadyToShowListener(browserWindow: BrowserWindow): void {
