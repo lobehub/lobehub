@@ -2,7 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { Outlet } from 'react-router-dom';
 
-import AgentIdSync from '@/app/[variants]/(main)/chat/_layout/AgentIdSync';
+import AgentIdSync from '@/app/[variants]/(main)/agent/_layout/AgentIdSync';
 import { isDesktop } from '@/const/version';
 import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';

@@ -6,7 +6,7 @@ import CronTopicList from './Topic/CronTopicList';
 
 export enum ChatSidebarKey {
   CronTopics = 'cronTopics',
-  Topic = 'topic'
+  Topic = 'topic',
 }
 
 const Body = memo(() => {
