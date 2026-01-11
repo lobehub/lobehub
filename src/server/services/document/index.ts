@@ -101,6 +101,28 @@ export class DocumentService {
   }
 
   /**
+   * Create multiple documents in batch (optimized for folder creation)
+   * Returns array of created documents with same order as input
+   */
+  async createDocuments(
+    documents: Array<{
+      content?: string;
+      editorData: Record<string, any>;
+      fileType?: string;
+      knowledgeBaseId?: string;
+      metadata?: Record<string, any>;
+      parentId?: string;
+      slug?: string;
+      title: string;
+    }>,
+  ): Promise<DocumentItem[]> {
+    // Create all documents in parallel for better performance
+    const results = await Promise.all(documents.map((params) => this.createDocument(params)));
+
+    return results;
+  }
+
+  /**
    * Query documents with pagination
    */
   async queryDocuments(params?: {

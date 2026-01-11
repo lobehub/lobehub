@@ -9,62 +9,19 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { chatService } from '@/services/chat';
-import { codeInterpreterService } from '@/services/codeInterpreter';
-import { fileService } from '@/services/file';
 import { mcpService } from '@/services/mcp';
 import { messageService } from '@/services/message';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
 import { hasExecutor } from '@/store/tool/slices/builtin/executors';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import { dbMessageSelectors } from '../../message/selectors';
 
 const log = debug('lobe-store:plugin-types');
-
-/**
- * Get MIME type from filename extension
- */
-const getMimeTypeFromFilename = (filename: string): string => {
-  const ext = filename.split('.').pop()?.toLowerCase() || '';
-  const mimeTypes: Record<string, string> = {
-    // Images
-    bmp: 'image/bmp',
-    gif: 'image/gif',
-    jpeg: 'image/jpeg',
-    jpg: 'image/jpeg',
-    png: 'image/png',
-    svg: 'image/svg+xml',
-    webp: 'image/webp',
-    // Videos
-    mp4: 'video/mp4',
-    webm: 'video/webm',
-    mov: 'video/quicktime',
-    avi: 'video/x-msvideo',
-    // Documents
-    csv: 'text/csv',
-    doc: 'application/msword',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    html: 'text/html',
-    json: 'application/json',
-    md: 'text/markdown',
-    pdf: 'application/pdf',
-    ppt: 'application/vnd.ms-powerpoint',
-    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    rtf: 'application/rtf',
-    txt: 'text/plain',
-    xls: 'application/vnd.ms-excel',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    xml: 'application/xml',
-    // Code
-    css: 'text/css',
-    js: 'text/javascript',
-    py: 'text/x-python',
-    ts: 'text/typescript',
-  };
-  return mimeTypes[ext] || 'application/octet-stream';
-};
 
 /**
  * Plugin type-specific implementations
@@ -104,6 +61,14 @@ export interface PluginTypesAction {
   invokeKlavisTypePlugin: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
 
   /**
+   * Invoke LobeHub Skill type plugin
+   */
+  invokeLobehubSkillTypePlugin: (
+    id: string,
+    payload: ChatToolPayload,
+  ) => Promise<string | undefined>;
+
+  /**
    * Invoke markdown type plugin
    */
   invokeMarkdownTypePlugin: (id: string, payload: ChatToolPayload) => Promise<void>;
@@ -134,6 +99,11 @@ export const pluginTypes: StateCreator<
     // Check if this is a Klavis tool by source field
     if (payload.source === 'klavis') {
       return await get().invokeKlavisTypePlugin(id, payload);
+    }
+
+    // Check if this is a LobeHub Skill tool by source field
+    if (payload.source === 'lobehubSkill') {
+      return await get().invokeLobehubSkillTypePlugin(id, payload);
     }
 
     // Check if this is Cloud Code Interpreter - route to specific handler
@@ -284,10 +254,13 @@ export const pluginTypes: StateCreator<
       const { CloudSandboxExecutionRuntime } =
         await import('@lobechat/builtin-tool-cloud-sandbox/executionRuntime');
 
+      // Get userId from user store
+      const userId = userProfileSelectors.userId(useUserStore.getState()) || 'anonymous';
+
       // Create runtime with context
       const runtime = new CloudSandboxExecutionRuntime({
         topicId: message?.topicId || 'default',
-        userId: 'current-user', // TODO: Get actual userId from auth context
+        userId,
       });
 
       // Parse arguments
@@ -341,58 +314,25 @@ export const pluginTypes: StateCreator<
       context,
     );
 
-    // Handle exportFile: save exported file and associate with assistant message (parent)
+    // Handle exportFile: associate the file (already created by server) with assistant message (parent)
     if (payload.apiName === 'exportFile' && data.success && data.state) {
       const exportState = data.state as ExportFileState;
-      if (exportState.downloadUrl && exportState.filename) {
+      // Server now creates the file record and returns fileId in the response
+      if (exportState.fileId && exportState.filename) {
         try {
-          // Generate a hash from the URL path (without query params) for deduplication
-          // Extract the path before query params: .../code-interpreter-exports/tpc_xxx/filename.ext
-          const urlPath = exportState.downloadUrl.split('?')[0];
-          const hash = `ci-export-${btoa(urlPath).slice(0, 32)}`;
-
-          // Use mimeType from state if available, otherwise infer from filename
-          const mimeType = exportState.mimeType || getMimeTypeFromFilename(exportState.filename);
-
-          // 1. Create file record in database
-          const fileResult = await fileService.createFile({
-            fileType: mimeType,
-            hash,
-            name: exportState.filename,
-            size: exportState.size || 0,
-            source: 'code-interpreter',
-            url: exportState.downloadUrl,
-          });
-
-          // 2. If there's text content, save it to documents table for retrieval
-          if (exportState.content) {
-            await codeInterpreterService.saveExportedFileContent({
-              content: exportState.content,
-              fileId: fileResult.id,
-              fileType: mimeType,
-              filename: exportState.filename,
-              url: exportState.downloadUrl,
-            });
-
-            log(
-              '[invokeCloudCodeInterpreterTool] Saved file content to document: fileId=%s',
-              fileResult.id,
-            );
-          }
-
-          // 3. Associate file with the assistant message (parent of tool message)
+          // Associate file with the assistant message (parent of tool message)
           // The current message (id) is the tool message, we need to attach to its parent
           const targetMessageId = message?.parentId || id;
 
-          await messageService.addFilesToMessage(targetMessageId, [fileResult.id], {
+          await messageService.addFilesToMessage(targetMessageId, [exportState.fileId], {
             agentId: message?.agentId,
             topicId: message?.topicId,
           });
 
           log(
-            '[invokeCloudCodeInterpreterTool] Saved exported file: targetMessageId=%s, fileId=%s, filename=%s',
+            '[invokeCloudCodeInterpreterTool] Associated exported file with message: targetMessageId=%s, fileId=%s, filename=%s',
             targetMessageId,
-            fileResult.id,
+            exportState.fileId,
             exportState.filename,
           );
         } catch (error) {
@@ -496,6 +436,97 @@ export const pluginTypes: StateCreator<
     if (!data) return;
 
     // operationId already declared above, reuse it
+    const context = operationId ? { operationId } : undefined;
+
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
+
+    return data.content;
+  },
+
+  invokeLobehubSkillTypePlugin: async (id, payload) => {
+    let data: MCPToolCallResult | undefined;
+
+    // Get message to extract sessionId/topicId
+    const message = dbMessageSelectors.getDbMessageById(id)(get());
+
+    // Get abort controller from operation
+    const operationId = get().messageOperationMap[id];
+    const operation = operationId ? get().operations[operationId] : undefined;
+    const abortController = operation?.abortController;
+
+    log(
+      '[invokeLobehubSkillTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+      id,
+      payload.apiName,
+      operationId,
+      abortController?.signal.aborted,
+    );
+
+    try {
+      // payload.identifier is the provider id (e.g., 'linear', 'microsoft')
+      const provider = payload.identifier;
+
+      // Parse arguments
+      const args = safeParseJSON(payload.arguments) || {};
+
+      // Call LobeHub Skill tool via store action
+      const result = await useToolStore.getState().callLobehubSkillTool({
+        args,
+        provider,
+        toolName: payload.apiName,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'LobeHub Skill tool execution failed');
+      }
+
+      // Convert to MCPToolCallResult format
+      const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+      data = {
+        content,
+        error: undefined,
+        state: { content: [{ text: content, type: 'text' }] },
+        success: true,
+      };
+    } catch (error) {
+      console.error('[invokeLobehubSkillTypePlugin] Error:', error);
+
+      // ignore the aborted request error
+      const err = error as Error;
+      if (err.message.includes('aborted')) {
+        log(
+          '[invokeLobehubSkillTypePlugin] Request aborted: messageId=%s, tool=%s',
+          id,
+          payload.apiName,
+        );
+      } else {
+        const result = await messageService.updateMessageError(id, error as any, {
+          agentId: message?.agentId,
+          topicId: message?.topicId,
+        });
+        if (result?.success && result.messages) {
+          get().replaceMessages(result.messages, {
+            context: {
+              agentId: message?.agentId,
+              topicId: message?.topicId,
+            },
+          });
+        }
+      }
+    }
+
+    // If error occurred, exit
+    if (!data) return;
+
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call

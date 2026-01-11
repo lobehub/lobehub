@@ -3,7 +3,7 @@
 import { Button, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,14 +34,30 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
     (s) => settingsSelectors.currentSettings(s).defaultAgent?.config,
   );
 
-  const handleFinish = () => {
+  const [isNavigating, setIsNavigating] = useState(false);
+  const isNavigatingRef = useRef(false);
+
+  const handleFinish = useCallback(() => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    setIsNavigating(true);
     finishOnboarding();
     navigate('/');
-  };
+  }, [finishOnboarding, navigate]);
 
-  const handleModelChange = ({ model, provider }: { model: string; provider: string }) => {
-    updateDefaultModel(model, provider);
-  };
+  const handleBack = useCallback(() => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    setIsNavigating(true);
+    onBack();
+  }, [onBack]);
+
+  const handleModelChange = useCallback(
+    ({ model, provider }: { model: string; provider: string }) => {
+      updateDefaultModel(model, provider);
+    },
+    [updateDefaultModel],
+  );
 
   return (
     <Flexbox gap={16}>
@@ -70,8 +86,9 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
 
       <Flexbox align={'center'} horizontal justify={'space-between'} style={{ marginTop: 16 }}>
         <Button
+          disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={onBack}
+          onClick={handleBack}
           style={{
             color: cssVar.colorTextDescription,
           }}
@@ -79,7 +96,12 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
         >
           {t('back')}
         </Button>
-        <Button onClick={handleFinish} style={{ minWidth: 120 }} type="primary">
+        <Button
+          disabled={isNavigating}
+          onClick={handleFinish}
+          style={{ minWidth: 120 }}
+          type="primary"
+        >
           {t('finish')}
         </Button>
       </Flexbox>

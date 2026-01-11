@@ -2,7 +2,7 @@ import { Button, Form, Input, TextArea } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 import { type CreateKnowledgeBaseParams } from '@/types/knowledgeBase';
 
 interface CreateFormProps {

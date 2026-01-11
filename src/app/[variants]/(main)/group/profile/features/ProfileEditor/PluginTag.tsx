@@ -2,7 +2,7 @@
 
 import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
 import { Avatar, Icon, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, X } from 'lucide-react';
 import Image from 'next/image';
@@ -10,6 +10,7 @@ import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useDiscoverStore } from '@/store/discover';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -53,7 +54,7 @@ interface PluginTagProps {
 }
 
 const PluginTag = memo<PluginTagProps>(({ pluginId, onRemove }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const { t } = useTranslation('setting');
 
   // Extract identifier

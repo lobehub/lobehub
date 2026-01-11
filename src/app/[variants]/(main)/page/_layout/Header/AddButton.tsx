@@ -5,12 +5,12 @@ import { SquarePenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFileStore } from '@/store/file';
+import { usePageStore } from '@/store/page';
 
 const AddButton = memo(() => {
   const { t } = useTranslation('file');
 
-  const createNewPage = useFileStore((s) => s.createNewPage);
+  const createNewPage = usePageStore((s) => s.createNewPage);
 
   const handleNewDocument = () => {
     const untitledTitle = t('pageList.untitled');

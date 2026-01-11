@@ -1,15 +1,17 @@
 import { Flexbox } from '@lobehub/ui';
-import { cssVar, useThemeMode } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { type FC, type PropsWithChildren, useMemo } from 'react';
 
 import { isDesktop } from '@/const/version';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { isMacOSWithLargeWindowBorders } from '@/utils/platform';
 
 import { styles } from './DesktopLayoutContainer/style';
 
 const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
 
   // CSS 变量用于动态样式
@@ -22,12 +24,15 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
   );
 
   const innerCssVariables = useMemo<Record<string, string>>(() => {
-    const borderRadius =
-      typeof window !== 'undefined' && (window.lobeEnv?.darwinMajorVersion ?? 0) >= 25
-        ? '12px'
-        : cssVar.borderRadius;
+    const darwinMajorVersion =
+      typeof window !== 'undefined' ? (window.lobeEnv?.darwinMajorVersion ?? 0) : 0;
+
+    const borderRadius = darwinMajorVersion >= 25 ? '12px' : cssVar.borderRadius;
+    const borderBottomRightRadius =
+      darwinMajorVersion >= 26 || isMacOSWithLargeWindowBorders() ? '12px' : borderRadius;
 
     return {
+      '--container-border-bottom-right-radius': borderBottomRightRadius,
       '--container-border-color': isDarkMode ? cssVar.colorBorderSecondary : cssVar.colorBorder,
       '--container-border-radius': borderRadius,
     };

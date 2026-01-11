@@ -55,6 +55,50 @@ export const documentRouter = router({
       });
     }),
 
+  createDocuments: documentProcedure
+    .input(
+      z.object({
+        documents: z.array(
+          z.object({
+            content: z.string().optional(),
+            editorData: z.string(),
+            fileType: z.string().optional(),
+            knowledgeBaseId: z.string().optional(),
+            metadata: z.record(z.any()).optional(),
+            parentId: z.string().optional(),
+            slug: z.string().optional(),
+            title: z.string(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Process each document: resolve parentId and parse editorData
+      const processedDocuments = await Promise.all(
+        input.documents.map(async (doc) => {
+          // Resolve parentId if it's a slug
+          let resolvedParentId = doc.parentId;
+          if (doc.parentId) {
+            const docBySlug = await ctx.documentModel.findBySlug(doc.parentId);
+            if (docBySlug) {
+              resolvedParentId = docBySlug.id;
+            }
+          }
+
+          // Parse editorData from JSON string to object
+          const editorData = JSON.parse(doc.editorData);
+
+          return {
+            ...doc,
+            editorData,
+            parentId: resolvedParentId,
+          };
+        }),
+      );
+
+      return ctx.documentService.createDocuments(processedDocuments);
+    }),
+
   deleteDocument: documentProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {

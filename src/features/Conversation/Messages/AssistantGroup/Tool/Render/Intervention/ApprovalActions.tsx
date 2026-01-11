@@ -1,5 +1,5 @@
-import { Button, Dropdown, Flexbox } from '@lobehub/ui';
-import { Input, Popover, Space } from 'antd';
+import { Button, Dropdown, Flexbox, Popover } from '@lobehub/ui';
+import { Input, Space } from 'antd';
 import { ChevronDown } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useUserStore } from '@/store/user';
 
 import { useConversationStore } from '../../../../../store';
-import { useGroupMessage } from '../../../components/GroupContext';
+import { useMessageAggregationContext } from '../../../../Contexts/MessageAggregationContext';
 import { type ApprovalMode } from './index';
 
 interface ApprovalActionsProps {
@@ -34,7 +34,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     // Disable actions while message is still being created (temp ID)
     const isMessageCreating = messageId.startsWith('tmp_');
 
-    const { assistantGroupId } = useGroupMessage();
+    const { assistantGroupId } = useMessageAggregationContext();
     const [approveToolCall, rejectToolCall, rejectAndContinueToolCall] = useConversationStore(
       (s) => [s.approveToolCall, s.rejectToolCall, s.rejectAndContinueToolCall],
     );
@@ -80,7 +80,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     return (
       <Flexbox gap={8} horizontal>
         <Popover
-          arrow={false}
           content={
             <Flexbox gap={12} style={{ width: 400 }}>
               <Flexbox align={'center'} horizontal justify={'space-between'}>

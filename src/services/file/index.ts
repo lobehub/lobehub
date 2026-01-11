@@ -2,6 +2,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 import {
   type CheckFileHashResult,
   type FileItem,
+  type FileListItem,
   type QueryFileListParams,
   type QueryFileListSchemaType,
   type UploadFileParams,
@@ -58,8 +59,40 @@ export class FileService {
   };
 
   // V2.0 Migrate from getFileItem to getKnowledgeItem
+  // This method handles both files (file_ prefix) and documents (docs_ prefix)
   getKnowledgeItem = async (id: string) => {
-    return lambdaClient.file.getFileItemById.query({ id });
+    // Detect type based on ID prefix
+    if (id.startsWith('docs_')) {
+      // Document (including folders) - use document endpoint
+      const doc = await lambdaClient.document.getDocumentById.query({ id });
+      if (!doc) return null;
+      
+      // Convert document to FileListItem format
+      return {
+        chunkCount: null,
+        chunkingError: null,
+        chunkingStatus: null,
+        content: doc.content,
+        createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
+        editorData: doc.editorData,
+        embeddingError: null,
+        embeddingStatus: null,
+        fileType: doc.fileType || 'custom/document',
+        finishEmbedding: false,
+        id: doc.id,
+        metadata: doc.metadata,
+        name: doc.title || doc.filename || 'Untitled',
+        parentId: doc.parentId,
+        size: doc.totalCharCount || 0,
+        slug: doc.slug,
+        sourceType: 'document',
+        updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
+        url: doc.source || '',
+      } as FileListItem;
+    } else {
+      // File - use dedicated file endpoint
+      return lambdaClient.file.getFileItemById.query({ id });
+    }
   };
 
   getFolderBreadcrumb = async (slug: string) => {

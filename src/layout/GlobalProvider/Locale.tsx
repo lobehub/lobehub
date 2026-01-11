@@ -34,7 +34,7 @@ interface LocaleLayoutProps extends PropsWithChildren {
 }
 
 const Locale = memo<LocaleLayoutProps>(({ children, defaultLang, antdLocale }) => {
-  const [i18n] = useState(createI18nNext(defaultLang));
+  const [i18n] = useState(() => createI18nNext(defaultLang));
   const [lang, setLang] = useState(defaultLang);
   const [locale, setLocale] = useState(antdLocale);
 

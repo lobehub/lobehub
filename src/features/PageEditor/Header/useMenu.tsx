@@ -6,6 +6,8 @@ import { CopyPlus, Download, Link2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDocumentStore } from '@/store/document';
+import { editorSelectors } from '@/store/document/slices/editor';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -21,9 +23,12 @@ export const useMenu = (): { menuItems: any[] } => {
   const storeApi = useStoreApi();
   const { lg = true } = useResponsive();
 
-  const lastUpdatedTime = usePageEditorStore((s) => s.lastUpdatedTime);
-  const wordCount = usePageEditorStore((s) => s.wordCount);
-  const currentDocId = usePageEditorStore((s) => s.currentDocId);
+  const documentId = usePageEditorStore((s) => s.documentId);
+
+  // Get lastUpdatedTime from DocumentStore
+  const lastUpdatedTime = useDocumentStore((s) =>
+    documentId ? editorSelectors.lastUpdatedTime(documentId)(s) : null,
+  );
 
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
 
@@ -36,9 +41,9 @@ export const useMenu = (): { menuItems: any[] } => {
   const showViewModeSwitch = lg;
 
   const handleDuplicate = async () => {
-    if (!currentDocId) return;
+    if (!documentId) return;
     try {
-      await duplicateDocument(currentDocId);
+      await duplicateDocument(documentId);
       message.success(t('pageEditor.duplicateSuccess'));
     } catch (error) {
       console.error('Failed to duplicate page:', error);
@@ -48,7 +53,7 @@ export const useMenu = (): { menuItems: any[] } => {
 
   const handleExportMarkdown = () => {
     const state = storeApi.getState();
-    const { editor, currentTitle } = state;
+    const { editor, title } = state;
 
     if (!editor) return;
 
@@ -58,7 +63,7 @@ export const useMenu = (): { menuItems: any[] } => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${currentTitle || 'Untitled'}.md`;
+      a.download = `${title || 'Untitled'}.md`;
       document.body.append(a);
       a.click();
       a.remove();
@@ -143,7 +148,6 @@ export const useMenu = (): { menuItems: any[] } => {
         key: 'page-info',
         label: (
           <div style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
-            <div>{t('pageEditor.wordCount', { wordCount })}</div>
             <div>
               {lastUpdatedTime
                 ? t('pageEditor.editedAt', {
@@ -156,7 +160,6 @@ export const useMenu = (): { menuItems: any[] } => {
       },
     ],
     [
-      wordCount,
       lastUpdatedTime,
       storeApi,
       t,

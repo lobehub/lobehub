@@ -27,8 +27,10 @@ export interface CreateTopicParams {
   favorite?: boolean;
   groupId?: string | null;
   messages?: string[];
+  metadata?: ChatTopicMetadata;
   sessionId?: string | null;
   title?: string;
+  trigger?: string | null;
 }
 
 interface QueryTopicParams {
@@ -39,6 +41,10 @@ interface QueryTopicParams {
    */
   containerId?: string | null;
   current?: number;
+  /**
+   * Exclude topics by trigger types (e.g. ['cron'])
+   */
+  excludeTriggers?: string[];
   /**
    * Group ID to filter topics by
    */
@@ -70,15 +76,24 @@ export class TopicModel {
     agentId,
     containerId,
     current = 0,
+    excludeTriggers,
     pageSize = 9999,
     groupId,
     isInbox,
   }: QueryTopicParams = {}) => {
     const offset = current * pageSize;
+    const excludeTriggerCondition =
+      excludeTriggers && excludeTriggers.length > 0
+        ? or(isNull(topics.trigger), not(inArray(topics.trigger, excludeTriggers)))
+        : undefined;
 
     // If groupId is provided, query topics by groupId directly
     if (groupId) {
-      const whereCondition = and(eq(topics.userId, this.userId), eq(topics.groupId, groupId));
+      const whereCondition = and(
+        eq(topics.userId, this.userId),
+        eq(topics.groupId, groupId),
+        excludeTriggerCondition,
+      );
 
       const [items, totalResult] = await Promise.all([
         this.db
@@ -155,21 +170,25 @@ export class TopicModel {
             updatedAt: topics.updatedAt,
           })
           .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition))
+          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition))
           .orderBy(desc(topics.favorite), desc(topics.updatedAt))
           .limit(pageSize)
           .offset(offset),
         this.db
           .select({ count: count(topics.id) })
           .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition)),
+          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition)),
       ]);
 
       return { items, total: totalResult[0].count };
     }
 
     // Fallback to containerId-based query (backward compatibility)
-    const whereCondition = and(eq(topics.userId, this.userId), this.matchContainer(containerId));
+    const whereCondition = and(
+      eq(topics.userId, this.userId),
+      this.matchContainer(containerId),
+      excludeTriggerCondition,
+    );
 
     const [items, totalResult] = await Promise.all([
       this.db
@@ -663,5 +682,53 @@ export class TopicModel {
         cursorCondition,
       ),
     });
+  };
+
+  /**
+   * Get cron topics grouped by cronJob for a specific agent
+   * Returns topics where trigger='cron' and metadata contains cronJobId
+   */
+  getCronTopicsGroupedByCronJob = async (agentId: string) => {
+    const cronTopics = await this.db
+      .select({
+        createdAt: topics.createdAt,
+        favorite: topics.favorite,
+        historySummary: topics.historySummary,
+        id: topics.id,
+        metadata: topics.metadata,
+        title: topics.title,
+        trigger: topics.trigger,
+        updatedAt: topics.updatedAt,
+      })
+      .from(topics)
+      .where(
+        and(
+          eq(topics.userId, this.userId),
+          eq(topics.agentId, agentId),
+          eq(topics.trigger, 'cron'),
+          // Check if metadata contains cronJobId
+          sql`${topics.metadata}->>'cronJobId' IS NOT NULL`,
+        ),
+      )
+      .orderBy(desc(topics.updatedAt));
+
+    // Group topics by cronJobId
+    const groupedTopics = new Map<string, typeof cronTopics>();
+
+    cronTopics.forEach((topic) => {
+      const cronJobId = topic.metadata?.cronJobId;
+      if (cronJobId) {
+        if (!groupedTopics.has(cronJobId)) {
+          groupedTopics.set(cronJobId, []);
+        }
+        groupedTopics.get(cronJobId)!.push(topic);
+      }
+    });
+
+    // Convert Map to array of grouped objects
+    return Array.from(groupedTopics.entries()).map(([cronJobId, topicList]) => ({
+      cronJobId,
+      topics: topicList,
+    }));
   };
 }

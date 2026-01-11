@@ -1,17 +1,21 @@
 'use client';
 
-import React, { memo } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useCreateNewModal } from '@/features/LibraryModal';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 
-import List from './List';
+import Item from './Item';
 
-const KnowledgeBaseList = memo(() => {
+/**
+ * Show library list in the sidebar
+ */
+const LibraryList = memo(() => {
   const { t } = useTranslation('file');
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
   const { data, isLoading } = useFetchKnowledgeBaseList();
@@ -32,7 +36,13 @@ const KnowledgeBaseList = memo(() => {
 
   if (data?.length === 0) return <EmptyNavItem onClick={handleCreate} title={t('library.new')} />;
 
-  return <List />;
+  return (
+    <Flexbox gap={1} paddingInline={4}>
+      {data?.map((item) => (
+        <Item id={item.id} key={item.id} name={item.name} />
+      ))}
+    </Flexbox>
+  );
 });
 
-export default KnowledgeBaseList;
+export default LibraryList;

@@ -5,6 +5,7 @@ import { Select, Skeleton } from '@lobehub/ui';
 import { Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
+import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,15 +23,14 @@ const Common = memo(() => {
   const { t } = useTranslation('setting');
 
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
-  const themeMode = useGlobalStore(systemStatusSelectors.themeMode);
+  const { theme, setTheme } = useNextThemesTheme();
   const language = useGlobalStore(systemStatusSelectors.language);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
-  const [setThemeMode, switchLocale, isStatusInit] = useGlobalStore((s) => [
-    s.switchThemeMode,
-    s.switchLocale,
-    s.isStatusInit,
-  ]);
+  const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
   const [loading, setLoading] = useState(false);
+
+  // Use the theme value from next-themes, default to 'system'
+  const currentTheme = theme || 'system';
 
   const handleLangChange = (value: LocaleMode) => {
     switchLocale(value);
@@ -39,13 +39,13 @@ const Common = memo(() => {
   if (!(isStatusInit && isUserStateInit))
     return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
-  const theme: FormGroupItemType = {
+  const themeFormGroup: FormGroupItemType = {
     children: [
       {
         children: (
           <ImageSelect
             height={60}
-            onChange={setThemeMode}
+            onChange={(value) => setTheme(value === 'auto' ? 'system' : value)}
             options={[
               {
                 icon: Sun,
@@ -63,11 +63,11 @@ const Common = memo(() => {
                 icon: Monitor,
                 img: imageUrl('theme_auto.webp'),
                 label: t('settingCommon.themeMode.auto'),
-                value: 'auto',
+                value: 'system',
               },
             ]}
             unoptimized={isDesktop}
-            value={themeMode}
+            value={currentTheme}
             width={100}
           />
         ),
@@ -173,7 +173,7 @@ const Common = memo(() => {
     <Form
       collapsible={false}
       initialValues={general}
-      items={[theme]}
+      items={[themeFormGroup]}
       itemsType={'group'}
       onValuesChange={async (v) => {
         setLoading(true);

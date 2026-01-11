@@ -2,12 +2,13 @@
 
 import { Avatar, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { Switch } from 'antd';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Bot, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
+import { useIsDark } from '@/hooks/useIsDark';
 import { type LobeAgentSession } from '@/types/session';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -59,7 +60,7 @@ interface AgentCardProps {
 const AgentCard = memo<AgentCardProps>(
   ({ agent, inGroup, isHost, loading, onAction, operationLoading }) => {
     const { t } = useTranslation('setting');
-    const { isDarkMode } = useThemeMode();
+    const isDarkMode = useIsDark();
 
     if (loading) {
       return (

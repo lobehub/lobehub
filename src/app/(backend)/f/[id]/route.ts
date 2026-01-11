@@ -43,8 +43,8 @@ export const GET = async (_req: Request, segmentData: { params: Params }) => {
 
     const cacheKey = buildCacheKey(id);
     if (redisClient) {
-      // Upstash Redis auto-deserializes JSON, so cached is already an object
-      const cached = (await redisClient.get(cacheKey)) as CachedFileData | null;
+      const cachedStr = await redisClient.get(cacheKey);
+      const cached = cachedStr ? (JSON.parse(cachedStr) as CachedFileData) : null;
       if (cached?.redirectUrl) {
         log('Cache hit for file: %s', id);
         return Response.redirect(cached.redirectUrl, 302);

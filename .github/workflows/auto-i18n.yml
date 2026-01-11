@@ -21,7 +21,7 @@ jobs:
           git config --global user.name "lobehubbot"
           git config --global user.email "i@lobehub.com"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 

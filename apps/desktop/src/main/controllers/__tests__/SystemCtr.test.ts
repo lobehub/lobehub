@@ -7,12 +7,20 @@ import { IpcHandler } from '@/utils/ipc/base';
 
 import SystemController from '../SystemCtr';
 
-const { ipcHandlers, ipcMainHandleMock } = vi.hoisted(() => {
+const { ipcHandlers, ipcMainHandleMock, permissionsMock } = vi.hoisted(() => {
   const handlers = new Map<string, (event: any, ...args: any[]) => any>();
   const handle = vi.fn((channel: string, handler: any) => {
     handlers.set(channel, handler);
   });
-  return { ipcHandlers: handlers, ipcMainHandleMock: handle };
+  const permissions = {
+    askForAccessibilityAccess: vi.fn(() => undefined),
+    askForCameraAccess: vi.fn(() => Promise.resolve('authorized')),
+    askForFullDiskAccess: vi.fn(() => undefined),
+    askForMicrophoneAccess: vi.fn(() => Promise.resolve('authorized')),
+    askForScreenCaptureAccess: vi.fn(() => undefined),
+    getAuthStatus: vi.fn(() => 'authorized'),
+  };
+  return { ipcHandlers: handlers, ipcMainHandleMock: handle, permissionsMock: permissions };
 });
 
 const invokeIpc = async <T = any>(
@@ -44,27 +52,17 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(() => {
-    const handlers = new Map<string, (...args: any[]) => void>();
-    return {
-      on: vi.fn((event: string, cb: (...args: any[]) => void) => {
-        handlers.set(event, cb);
-        return undefined;
-      }),
-    } as any;
-  }),
-}));
-
-vi.mock('node:child_process', () => ({
-  spawn: (...args: any[]) => spawnMock.call(null, ...args),
-}));
-
 // Mock electron
 vi.mock('electron', () => ({
   app: {
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
+  },
+  desktopCapturer: {
+    getSources: vi.fn(async () => []),
+  },
+  dialog: {
+    showMessageBox: vi.fn(async () => ({ response: 0 })),
   },
   ipcMain: {
     handle: ipcMainHandleMock,
@@ -72,6 +70,7 @@ vi.mock('electron', () => ({
   nativeTheme: {
     on: vi.fn(),
     shouldUseDarkColors: false,
+    themeSource: 'system',
   },
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +86,9 @@ vi.mock('electron', () => ({
 vi.mock('electron-is', () => ({
   macOS: vi.fn(() => true),
 }));
+
+// Mock node-mac-permissions
+vi.mock('node-mac-permissions', () => permissionsMock);
 
 // Mock browserManager
 const mockBrowserManager = {
@@ -111,6 +113,7 @@ const mockStoreManager = {
 // Mock i18n
 const mockI18n = {
   changeLanguage: vi.fn().mockResolvedValue(undefined),
+  ns: vi.fn((namespace: string) => (key: string) => `${namespace}.${key}`),
 };
 
 const mockApp = {
@@ -138,7 +141,6 @@ describe('SystemController', () => {
       expect(result).toMatchObject({
         arch: expect.any(String),
         platform: expect.any(String),
-        systemAppearance: 'light',
         userPath: {
           desktop: '/mock/path/desktop',
           documents: '/mock/path/documents',
@@ -151,68 +153,84 @@ describe('SystemController', () => {
         },
       });
     });
-
-    it('should return dark appearance when nativeTheme is dark', async () => {
-      const { nativeTheme } = await import('electron');
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColors', { value: true });
-
-      const result = await invokeIpc('system.getAppState');
-
-      expect(result.systemAppearance).toBe('dark');
-
-      // Reset
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColors', { value: false });
-    });
   });
 
   describe('accessibility', () => {
     it('should request accessibility access on macOS', async () => {
-      const { systemPreferences } = await import('electron');
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
 
-      await invokeIpc('system.requestAccessibilityAccess');
+      const result = await invokeIpc('system.requestAccessibilityAccess');
 
-      expect(systemPreferences.isTrustedAccessibilityClient).toHaveBeenCalledWith(true);
+      expect(permissionsMock.askForAccessibilityAccess).toHaveBeenCalled();
+      expect(permissionsMock.getAuthStatus).toHaveBeenCalledWith('accessibility');
+      expect(result).toBe(true);
     });
 
     it('should return true on non-macOS when requesting accessibility access', async () => {
       const { macOS } = await import('electron-is');
-      const { systemPreferences } = await import('electron');
       vi.mocked(macOS).mockReturnValue(false);
 
       const result = await invokeIpc('system.requestAccessibilityAccess');
 
       expect(result).toBe(true);
-      expect(systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
+      expect(permissionsMock.askForAccessibilityAccess).not.toHaveBeenCalled();
 
       // Reset
       vi.mocked(macOS).mockReturnValue(true);
     });
   });
 
-  describe('screen recording', () => {
-    it('should request screen recording access and open System Settings on macOS', async () => {
-      const { shell, systemPreferences } = await import('electron');
+  describe('microphone access', () => {
+    it('should ask for microphone access when status is not-determined', async () => {
+      permissionsMock.getAuthStatus.mockReturnValue('not determined');
+      permissionsMock.askForMicrophoneAccess.mockResolvedValue('authorized');
 
-      const result = await invokeIpc('system.requestScreenAccess');
+      const result = await invokeIpc('system.requestMicrophoneAccess');
 
-      expect(systemPreferences.getMediaAccessStatus).toHaveBeenCalledWith('screen');
-      expect(systemPreferences.askForMediaAccess).toHaveBeenCalledWith('screen');
-      expect(mockBrowserManager.getMainWindow).toHaveBeenCalled();
-      expect(shell.openExternal).toHaveBeenCalledWith(
-        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
-      );
-      expect(typeof result).toBe('boolean');
+      expect(permissionsMock.getAuthStatus).toHaveBeenCalledWith('microphone');
+      expect(permissionsMock.askForMicrophoneAccess).toHaveBeenCalled();
+      expect(result).toBe(true);
+
+      // Reset
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
     });
 
-    it('should return true on non-macOS and not open settings', async () => {
-      const { macOS } = await import('electron-is');
-      const { shell, systemPreferences } = await import('electron');
-      vi.mocked(macOS).mockReturnValue(false);
+    it('should return true immediately if microphone access is already granted', async () => {
+      const { shell } = await import('electron');
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
 
-      const result = await invokeIpc('system.requestScreenAccess');
+      const result = await invokeIpc('system.requestMicrophoneAccess');
 
       expect(result).toBe(true);
-      expect(systemPreferences.askForMediaAccess).not.toHaveBeenCalled();
+      expect(permissionsMock.askForMicrophoneAccess).not.toHaveBeenCalled();
+      expect(shell.openExternal).not.toHaveBeenCalled();
+    });
+
+    it('should open System Settings if microphone access is denied', async () => {
+      const { shell } = await import('electron');
+      permissionsMock.getAuthStatus.mockReturnValue('denied');
+
+      const result = await invokeIpc('system.requestMicrophoneAccess');
+
+      expect(result).toBe(false);
+      expect(permissionsMock.askForMicrophoneAccess).not.toHaveBeenCalled();
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+      );
+
+      // Reset
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+    });
+
+    it('should return true on non-macOS', async () => {
+      const { macOS } = await import('electron-is');
+      const { shell } = await import('electron');
+      vi.mocked(macOS).mockReturnValue(false);
+
+      const result = await invokeIpc('system.requestMicrophoneAccess');
+
+      expect(result).toBe(true);
+      expect(permissionsMock.getAuthStatus).not.toHaveBeenCalled();
       expect(shell.openExternal).not.toHaveBeenCalled();
 
       // Reset
@@ -220,7 +238,73 @@ describe('SystemController', () => {
     });
   });
 
+  describe('screen recording', () => {
+    it('should request screen capture access on macOS', async () => {
+      permissionsMock.getAuthStatus.mockReturnValue('not determined');
+
+      const result = await invokeIpc('system.requestScreenAccess');
+
+      expect(permissionsMock.getAuthStatus).toHaveBeenCalledWith('screen');
+      expect(permissionsMock.askForScreenCaptureAccess).toHaveBeenCalled();
+      expect(typeof result).toBe('boolean');
+    });
+
+    it('should return true immediately if screen access is already granted', async () => {
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+
+      const result = await invokeIpc('system.requestScreenAccess');
+
+      expect(result).toBe(true);
+      expect(permissionsMock.askForScreenCaptureAccess).not.toHaveBeenCalled();
+    });
+
+    it('should return true on non-macOS and not open settings', async () => {
+      const { macOS } = await import('electron-is');
+      vi.mocked(macOS).mockReturnValue(false);
+
+      const result = await invokeIpc('system.requestScreenAccess');
+
+      expect(result).toBe(true);
+      expect(permissionsMock.askForScreenCaptureAccess).not.toHaveBeenCalled();
+
+      // Reset
+      vi.mocked(macOS).mockReturnValue(true);
+    });
+  });
+
   describe('full disk access', () => {
+    it('should return true when Full Disk Access is granted', async () => {
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+
+      const result = await invokeIpc('system.getFullDiskAccessStatus');
+
+      expect(result).toBe(true);
+      expect(permissionsMock.getAuthStatus).toHaveBeenCalledWith('full-disk-access');
+    });
+
+    it('should return false when Full Disk Access is not granted', async () => {
+      permissionsMock.getAuthStatus.mockReturnValue('denied');
+
+      const result = await invokeIpc('system.getFullDiskAccessStatus');
+
+      expect(result).toBe(false);
+
+      // Reset
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+    });
+
+    it('should return true on non-macOS', async () => {
+      const { macOS } = await import('electron-is');
+      vi.mocked(macOS).mockReturnValue(false);
+
+      const result = await invokeIpc('system.getFullDiskAccessStatus');
+
+      expect(result).toBe(true);
+
+      // Reset
+      vi.mocked(macOS).mockReturnValue(true);
+    });
+
     it('should try to open Full Disk Access settings with fallbacks', async () => {
       const { shell } = await import('electron');
       vi.mocked(shell.openExternal)
@@ -230,24 +314,65 @@ describe('SystemController', () => {
       await invokeIpc('system.openFullDiskAccessSettings');
 
       expect(shell.openExternal).toHaveBeenCalledWith(
-        'com.apple.settings:Privacy&path=FullDiskAccess',
+        'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles',
       );
       expect(shell.openExternal).toHaveBeenCalledWith(
         'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
       );
     });
 
-    it('should spawn osascript when autoAdd is enabled', async () => {
+    it('should open fallback Privacy settings if all candidates fail', async () => {
       const { shell } = await import('electron');
-      vi.mocked(shell.openExternal).mockResolvedValueOnce(undefined);
+      vi.mocked(shell.openExternal)
+        .mockRejectedValueOnce(new Error('fail first'))
+        .mockRejectedValueOnce(new Error('fail second'))
+        .mockResolvedValueOnce(undefined);
 
-      await invokeIpc('system.openFullDiskAccessSettings', { autoAdd: true });
+      await invokeIpc('system.openFullDiskAccessSettings');
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        'osascript',
-        expect.arrayContaining(['-e', expect.any(String), expect.any(String)]),
-        expect.objectContaining({ env: expect.any(Object) }),
+      expect(shell.openExternal).toHaveBeenCalledWith(
+        'x-apple.systempreferences:com.apple.preference.security?Privacy',
       );
+    });
+
+    it('should return granted if Full Disk Access is already granted', async () => {
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+
+      const result = await invokeIpc('system.promptFullDiskAccessIfNotGranted');
+
+      expect(result).toBe('granted');
+    });
+
+    it('should show dialog and open settings when user clicks Open Settings', async () => {
+      const { dialog, shell } = await import('electron');
+      permissionsMock.getAuthStatus.mockReturnValue('denied');
+      vi.mocked(dialog.showMessageBox).mockResolvedValue({ response: 0 } as any);
+
+      const result = await invokeIpc('system.promptFullDiskAccessIfNotGranted');
+
+      expect(result).toBe('opened_settings');
+      expect(dialog.showMessageBox).toHaveBeenCalled();
+      expect(shell.openExternal).toHaveBeenCalled();
+
+      // Reset
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+    });
+
+    it('should return skipped when user clicks Later', async () => {
+      const { dialog, shell } = await import('electron');
+      permissionsMock.getAuthStatus.mockReturnValue('denied');
+      vi.mocked(dialog.showMessageBox).mockResolvedValue({ response: 1 } as any);
+      vi.mocked(shell.openExternal).mockClear();
+
+      const result = await invokeIpc('system.promptFullDiskAccessIfNotGranted');
+
+      expect(result).toBe('skipped');
+      expect(dialog.showMessageBox).toHaveBeenCalled();
+      // Should not open settings when user skips
+      expect(shell.openExternal).not.toHaveBeenCalled();
+
+      // Reset
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
     });
   });
 

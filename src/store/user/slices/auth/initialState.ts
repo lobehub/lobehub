@@ -8,7 +8,7 @@ import {
 } from '@clerk/types';
 import { type SSOProvider } from '@lobechat/types';
 
-import { enableClerk } from '@/const/auth';
+import { enableClerk } from '@/envs/auth';
 import { type LobeUser } from '@/types/user';
 
 export interface UserAuthState {

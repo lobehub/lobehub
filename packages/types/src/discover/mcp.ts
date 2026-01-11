@@ -5,6 +5,7 @@ export enum McpCategory {
   All = 'all',
   Business = 'business',
   Developer = 'developer',
+  Discover = 'discover',
   GamingEntertainment = 'gaming-entertainment',
   HealthWellness = 'health-wellness',
   Lifestyle = 'lifestyle',
@@ -17,7 +18,7 @@ export enum McpCategory {
   Tools = 'tools',
   TravelTransport = 'travel-transport',
   Weather = 'weather',
-  WebSearch = 'web-search',
+  WebSearch = 'web-search'
 }
 
 export enum McpSorts {
@@ -26,7 +27,8 @@ export enum McpSorts {
   IsFeatured = 'isFeatured',
   IsValidated = 'isValidated',
   RatingCount = 'ratingCount',
-  UpdatedAt = 'updatedAt',
+  Recommended = 'recommended',
+  UpdatedAt = 'updatedAt'
 }
 
 export enum McpNavKey {

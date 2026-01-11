@@ -1,8 +1,8 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 import type { ModelRuntime } from '@lobechat/model-runtime';
-import { readFile } from 'node:fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { identityPrompt } from '../prompts';
 import { IdentityExtractor, IdentityExtractorTemplateProps } from './identity';
 
 const runtimeMock = { generateObject: vi.fn() } as unknown as ModelRuntime;
@@ -40,14 +40,31 @@ describe('IdentityExtractor', () => {
 
   it('uses structuredCall to invoke the runtime and parse structured results', async () => {
     const extractor = new IdentityExtractor(extractorConfig);
+    // Mock data matching IdentityActionsSchema structure
     const structuredResult = {
-      withIdentities: {
-        actions: {
-          add: [{ description: 'New identity', extractedLabels: ['tag'], type: 'personal' }],
-          remove: null,
-          update: null,
+      add: [
+        {
+          details: null,
+          memoryCategory: 'personal',
+          memoryLayer: 'identity',
+          memoryType: 'fact',
+          summary: 'New identity summary',
+          tags: ['tag'],
+          title: 'New identity',
+          withIdentity: {
+            description: 'New identity description',
+            episodicDate: null,
+            extractedLabels: ['tag'],
+            relationship: 'self',
+            role: 'developer',
+            scoreConfidence: 0.8,
+            sourceEvidence: null,
+            type: 'personal',
+          },
         },
-      },
+      ],
+      remove: null,
+      update: null,
     };
     (runtimeMock.generateObject as any) = vi.fn().mockResolvedValue(structuredResult);
 
@@ -94,11 +111,6 @@ describe('IdentityExtractor', () => {
     const expectedProps = (extractor as any).getTemplateProps(templateOptions);
 
     expect(result).not.toBe('');
-    expect(result).toBe(
-      renderPlaceholderTemplate(
-        await readFile(new URL('../prompts/layers/identity.md', import.meta.url).pathname, 'utf8'),
-        expectedProps,
-      ),
-    );
+    expect(result).toBe(renderPlaceholderTemplate(identityPrompt, expectedProps));
   });
 });

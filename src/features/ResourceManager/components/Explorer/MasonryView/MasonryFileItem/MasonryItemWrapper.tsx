@@ -7,7 +7,6 @@ import MasonryFileItem from '.';
 interface MasonryItemWrapperProps {
   context: {
     knowledgeBaseId?: string;
-    openFile?: (id: string) => void;
     selectFileIds: string[];
     setSelectedFileIds: (ids: string[]) => void;
   };
@@ -25,7 +24,6 @@ const MasonryItemWrapper = memo<MasonryItemWrapperProps>(({ data: item, context 
     <div style={{ padding: '8px 4px' }}>
       <MasonryFileItem
         knowledgeBaseId={context.knowledgeBaseId}
-        onOpen={context.openFile}
         onSelectedChange={(id, checked) => {
           if (checked) {
             context.setSelectedFileIds([...context.selectFileIds, id]);

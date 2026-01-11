@@ -408,19 +408,4 @@ describe('createPreferenceSlice', () => {
       expect(result.current.status.noWideScreen).toEqual(false);
     });
   });
-
-  describe('switchThemeMode', () => {
-    it('should switch theme mode', async () => {
-      const { result } = renderHook(() => useGlobalStore());
-
-      // Perform the action
-      act(() => {
-        useGlobalStore.setState({ isStatusInit: true });
-        result.current.switchThemeMode('light');
-      });
-
-      // Assert that updateUserSettings was called with the correct theme mode
-      expect(result.current.status.themeMode).toEqual('light');
-    });
-  });
 });

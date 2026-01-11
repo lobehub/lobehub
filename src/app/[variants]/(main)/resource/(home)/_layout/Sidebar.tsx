@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { NavPanelPortal } from '@/features/NavPanel';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
-import Collection from './Body/KnowledgeBase';
+import SidebarBody from './Body';
 import Header from './Header';
 
 export enum GroupKey {
@@ -20,7 +20,7 @@ const Sidebar = memo(() => {
         body={
           <Flexbox paddingBlock={8} paddingInline={4}>
             <Accordion defaultExpandedKeys={[GroupKey.Library]} gap={8}>
-              <Collection itemKey={GroupKey.Library} />
+              <SidebarBody itemKey={GroupKey.Library} />
             </Accordion>
           </Flexbox>
         }

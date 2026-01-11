@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PortalContent } from '@/features/Portal/router';
 import { useChatStore } from '@/store/chat';
+import { portalThreadSelectors } from '@/store/chat/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -17,7 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const Layout = () => {
   const [showMobilePortal, isPortalThread, togglePortal] = useChatStore((s) => [
     s.showPortal,
-    !!s.portalThreadId,
+    portalThreadSelectors.showThread(s),
     s.togglePortal,
   ]);
   const { t } = useTranslation('portal');

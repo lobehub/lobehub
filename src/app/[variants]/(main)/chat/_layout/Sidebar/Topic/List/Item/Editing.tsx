@@ -1,6 +1,6 @@
-import { Input } from '@lobehub/ui';
-import { Popover } from 'antd';
-import { memo, useCallback, useState } from 'react';
+import { Input, type InputProps, Popover } from '@lobehub/ui';
+import type { InputRef } from 'antd';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';
 
@@ -8,6 +8,18 @@ interface EditingProps {
   id: string;
   title: string;
   toggleEditing: (visible?: boolean) => void;
+}
+
+function FocusableInput({ ...props }: InputProps) {
+  const ref = useRef<InputRef>(null);
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (ref.current) {
+        ref.current.input?.focus();
+      }
+    });
+  }, []);
+  return <Input {...props} ref={ref} />;
 }
 
 const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
@@ -42,20 +54,14 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
         );
       }
     }
-    toggleEditing(false);
   }, [newTitle, title, id, updateTopicTitle, toggleEditing]);
 
   return (
     <Popover
-      arrow={false}
       content={
-        <Input
-          autoFocus
+        <FocusableInput
           defaultValue={title}
-          onBlur={() => {
-            handleUpdate();
-            toggleEditing(false);
-          }}
+          onBlur={handleUpdate}
           onChange={(e) => setNewTitle(e.target.value)}
           onClick={(e) => e.stopPropagation()}
           onPressEnter={() => {
@@ -64,20 +70,20 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
           }}
         />
       }
-      destroyOnHidden
       onOpenChange={(open) => {
         if (!open) handleUpdate();
+
         toggleEditing(open);
       }}
       open={editing}
-      placement={'bottomLeft'}
+      placement="bottomLeft"
       styles={{
-        container: {
+        content: {
           padding: 4,
           width: 320,
         },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       <div />
     </Popover>

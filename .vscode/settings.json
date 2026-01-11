@@ -26,9 +26,9 @@
   ],
   "npm.packageManager": "pnpm",
   "search.exclude": {
-    "**/node_modules": true,
+    "**/node_modules": true
     // useless to search this big folder
-    "locales": true
+    // "locales": true
   },
   "stylelint.validate": [
     "css",
@@ -41,58 +41,43 @@
     "**/app/**/[[]*[]]/[[]*[]]/page.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • page component",
     "**/app/**/[[]*[]]/page.tsx": "${dirname(1)}/${dirname} • page component",
     "**/app/**/page.tsx": "${dirname} • page component",
-
     "**/app/**/[[]*[]]/[[]*[]]/layout.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • page layout",
     "**/app/**/[[]*[]]/layout.tsx": "${dirname(1)}/${dirname} • page layout",
     "**/app/**/layout.tsx": "${dirname} • page layout",
-
     "**/app/**/[[]*[]]/[[]*[]]/default.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • slot default",
     "**/app/**/[[]*[]]/default.tsx": "${dirname(1)}/${dirname} • slot default",
     "**/app/**/default.tsx": "${dirname} • slot default",
-
     "**/app/**/[[]*[]]/[[]*[]]/error.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • error component",
     "**/app/**/[[]*[]]/error.tsx": "${dirname(1)}/${dirname} • error component",
     "**/app/**/error.tsx": "${dirname} • error component",
-
     "**/app/**/[[]*[]]/[[]*[]]/loading.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • loading component",
     "**/app/**/[[]*[]]/loading.tsx": "${dirname(1)}/${dirname} • loading component",
     "**/app/**/loading.tsx": "${dirname} • loading component",
-
     "**/src/**/route.ts": "${dirname(1)}/${dirname} • route",
     "**/src/**/index.tsx": "${dirname} • component",
-
     "**/packages/database/src/repositories/*/index.ts": "${dirname} • db repository",
     "**/packages/database/src/models/*.ts": "${filename} • db model",
     "**/packages/database/src/schemas/*.ts": "${filename} • db schema",
-
     "**/src/services/*.ts": "${filename} • service",
     "**/src/services/*/client.ts": "${dirname} • client service",
     "**/src/services/*/server.ts": "${dirname} • server service",
-
     "**/src/store/*/action.ts": "${dirname} • action",
     "**/src/store/*/slices/*/action.ts": "${dirname(2)}/${dirname} • action",
     "**/src/store/*/slices/*/actions/*.ts": "${dirname(1)}/${dirname}/${filename} • action",
-
     "**/src/store/*/initialState.ts": "${dirname} • state",
     "**/src/store/*/slices/*/initialState.ts": "${dirname(2)}/${dirname} • state",
-
     "**/src/store/*/selectors.ts": "${dirname} • selectors",
     "**/src/store/*/slices/*/selectors.ts": "${dirname(2)}/${dirname} • selectors",
-
     "**/src/store/*/reducer.ts": "${dirname} • reducer",
     "**/src/store/*/slices/*/reducer.ts": "${dirname(2)}/${dirname} • reducer",
-
     "**/src/config/modelProviders/*.ts": "${filename} • provider",
     "**/packages/model-bank/src/aiModels/*.ts": "${filename} • model",
     "**/packages/model-runtime/src/providers/*/index.ts": "${dirname} • runtime",
-
     "**/src/server/services/*/index.ts": "${dirname} • server/service",
     "**/src/server/routers/lambda/*.ts": "${filename} • lambda",
     "**/src/server/routers/async/*.ts": "${filename} • async",
     "**/src/server/routers/edge/*.ts": "${filename} • edge",
-
     "**/src/locales/default/*.ts": "${filename} • locale",
-
     "**/index.*": "${dirname}/${filename}.${extname}"
   }
 }

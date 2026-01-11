@@ -5,7 +5,7 @@ import { memo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import RepoIcon from '@/components/LibIcon';
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 
 interface CreateFormProps {
   fileIds: string[];

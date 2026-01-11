@@ -150,17 +150,15 @@ const ProviderConfig = memo<ProviderConfigProps>(
       enabled,
       isLoading,
       configUpdating,
-      isFetchOnClient,
       enableResponseApi,
       isProviderEndpointNotEmpty,
       isProviderApiKeyNotEmpty,
     ] = useAiInfraStore((s) => [
-      aiProviderSelectors.activeProviderConfig(s),
+      aiProviderSelectors.providerDetailById(id)(s),
       s.updateAiProviderConfig,
       aiProviderSelectors.isProviderEnabled(id)(s),
       aiProviderSelectors.isAiProviderConfigLoading(id)(s),
       aiProviderSelectors.isProviderConfigUpdating(id)(s),
-      aiProviderSelectors.isProviderFetchOnClient(id)(s),
       aiProviderSelectors.isProviderEnableResponseApi(id)(s),
       aiProviderSelectors.isActiveProviderEndpointNotEmpty(s),
       aiProviderSelectors.isActiveProviderApiKeyNotEmpty(s),
@@ -301,11 +299,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
         (showEndpoint && isProviderEndpointNotEmpty) ||
         (showApiKey && isProviderApiKeyNotEmpty));
     const clientFetchItem = showClientFetch && {
-      children: isLoading ? (
-        <SkeletonSwitch />
-      ) : (
-        <Switch checked={isFetchOnClient} disabled={configUpdating} />
-      ),
+      children: isLoading ? <SkeletonSwitch /> : <Switch loading={configUpdating} />,
       desc: t('providerModels.config.fetchOnClient.desc'),
       label: t('providerModels.config.fetchOnClient.title'),
       minWidth: undefined,

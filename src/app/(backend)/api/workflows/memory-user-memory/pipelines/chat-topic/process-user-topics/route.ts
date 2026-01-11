@@ -9,9 +9,13 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 import { forEachBatchSequential } from '@/server/services/memory/userMemory/topicBatching';
 import { MemorySourceType } from '@lobechat/types';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { Client } from '@upstash/qstash'
 
 const TOPIC_PAGE_SIZE = 50;
 const TOPIC_BATCH_SIZE = 4;
+
+const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
 export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
@@ -37,7 +41,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
         userId,
         userIds: [userId],
       }),
-    });
+    }, { extraHeaders: upstashWorkflowExtraHeaders });
   };
 
   for (const userId of params.userIds) {
@@ -99,7 +103,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
             topicIds,
             userId,
             userIds: [userId],
-          }),
+          }, { extraHeaders: upstashWorkflowExtraHeaders }),
       );
     });
 
@@ -122,4 +126,17 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
   }
 
   return { processedUsers: params.userIds.length };
+}, {
+  // NOTICE(@nekomeowww): Here as scenarios like Vercel Deployment Protection,
+  // intermediate context.run(...) won't offer customizable headers like context.trigger(...) / client.trigger(...)
+  // for passing additional headers, we have to provide a custom QStash client with the required headers here.
+  //
+  // Refer to the doc for more details:
+  // https://upstash.com/docs/workflow/troubleshooting/vercel#step-2-pass-header-when-triggering
+  qstashClient: new Client({
+    headers: {
+      ...upstashWorkflowExtraHeaders,
+    },
+    token: process.env.QSTASH_TOKEN!
+  })
 });

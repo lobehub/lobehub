@@ -1,13 +1,14 @@
 'use client';
 
 import { Block, Button, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import LobeMessage from '@/app/[variants]/onboarding/components/LobeMessage';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useUserStore } from '@/store/user';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -76,7 +77,7 @@ interface ModeSelectionStepProps {
 const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('onboarding');
   const navigate = useNavigate();
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
 
   const imageStyles = useMemo<React.CSSProperties>(
     () =>

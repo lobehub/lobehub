@@ -1,0 +1,65 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`formatMemorySearchResults > should format context memories with full content 1`] = `
+"<memories query="project" total="1">
+<contexts count="1">
+  <context id="ctx-1" title="Web App Project" urgency=7 impact=8 type="project" status="in-progress">
+    Building a new web application
+    <subjects>John (person)</subjects>
+    <objects>React (application)</objects>
+  </context>
+</contexts>
+</memories>"
+`;
+
+exports[`formatMemorySearchResults > should format experience memories with full content 1`] = `
+"<memories query="debugging" total="1">
+<experiences count="1">
+  <experience id="exp-1" type="lesson" confidence=9>
+    <situation>Debugging complex state issues</situation>
+    <keyLearning>Breakpoints save time in complex debugging</keyLearning>
+  </experience>
+</experiences>
+</memories>"
+`;
+
+exports[`formatMemorySearchResults > should format mixed results with all memory types 1`] = `
+"<memories query="work" total="3">
+<contexts count="1">
+  <context id="ctx-1" title="Context Title">
+    Context description
+  </context>
+</contexts>
+<experiences count="1">
+  <experience id="exp-1">
+    <situation>Situation</situation>
+    <keyLearning>Key learning</keyLearning>
+  </experience>
+</experiences>
+<preferences count="1">
+  <preference id="pref-1">Directive</preference>
+</preferences>
+</memories>"
+`;
+
+exports[`formatMemorySearchResults > should format preference memories with full content 1`] = `
+"<memories query="code style" total="1">
+<preferences count="1">
+  <preference id="pref-1" type="coding-standard" priority=10>Always use TypeScript strict mode</preference>
+</preferences>
+</memories>"
+`;
+
+exports[`formatMemorySearchResults > should handle null and undefined values gracefully 1`] = `
+"<memories query="test" total="1">
+<contexts count="1">
+  <context id="ctx-1"></context>
+</contexts>
+</memories>"
+`;
+
+exports[`formatMemorySearchResults > should return empty results message when no memories found 1`] = `
+"<memories query="test query">
+  <status>No memories found matching the query.</status>
+</memories>"
+`;

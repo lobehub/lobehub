@@ -1,24 +1,36 @@
 'use client';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui';
-import { PanelRightCloseIcon } from 'lucide-react';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ArrowLeft, PanelRightCloseIcon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 
 const Header = memo<{ title: ReactNode }>(({ title }) => {
-  const [toggleInspector] = useChatStore((s) => [s.togglePortal]);
+  const [canGoBack, goBack, togglePortal] = useChatStore((s) => [
+    chatPortalSelectors.canGoBack(s),
+    s.goBack,
+    s.togglePortal,
+  ]);
 
   return (
     <NavHeader
-      left={title}
+      left={
+        <Flexbox align="center" gap={4} horizontal>
+          {canGoBack && (
+            <ActionIcon icon={ArrowLeft} onClick={goBack} size={DESKTOP_HEADER_ICON_SIZE} />
+          )}
+          {title}
+        </Flexbox>
+      }
       right={
         <ActionIcon
           icon={PanelRightCloseIcon}
           onClick={() => {
-            toggleInspector(false);
+            togglePortal(false);
           }}
           size={DESKTOP_HEADER_ICON_SIZE}
         />
@@ -27,7 +39,7 @@ const Header = memo<{ title: ReactNode }>(({ title }) => {
       style={{ paddingBlock: 8, paddingInline: 8 }}
       styles={{
         left: {
-          marginLeft: 6,
+          marginLeft: canGoBack ? 0 : 6,
         },
       }}
     />

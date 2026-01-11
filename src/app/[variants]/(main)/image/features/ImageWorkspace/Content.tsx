@@ -1,7 +1,5 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
-
 import { useImageStore } from '@/store/image';
 import { generationBatchSelectors, generationTopicSelectors } from '@/store/image/selectors';
 
@@ -32,15 +30,7 @@ const ImageWorkspaceContent = () => {
       <GenerationFeed key={activeTopicId} />
 
       {/* 底部输入框 */}
-      <Center
-        style={{
-          bottom: 24,
-          position: 'sticky',
-          width: '100%',
-        }}
-      >
-        <PromptInput disableAnimation={true} showTitle={false} />
-      </Center>
+      <PromptInput disableAnimation={true} showTitle={false} />
     </>
   );
 };

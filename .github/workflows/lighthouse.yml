@@ -42,12 +42,12 @@ jobs:
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
         env:
           REPO_BRANCH: ${{ matrix.REPO_BRANCH || env.REPO_BRANCH }}
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           repository: ${{ env.REPOSITORY }}
           token: ${{ secrets[matrix.TOKEN_NAME] || secrets[env.TOKEN_NAME] }}
           ref: ${{ env.BRANCH }}
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           repository: 'myactionway/lighthouse-badges'
           path: temp_lighthouse_badges_nested

@@ -80,10 +80,10 @@ const ParamControlWrapper = memo<ParamControlWrapperProps>(
         <Checkbox
           checked={checked}
           className={styles.checkbox}
-          onChange={(v) => {
-            onToggle(v);
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(!checked);
           }}
-          onClick={(e) => e.stopPropagation()}
         />
         <div style={{ flex: 1 }}>
           <Component disabled={disabled} onChange={onChange} value={value} />
@@ -275,6 +275,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
           disabled={!enabled}
           onToggle={(checked) => handleToggle(key, checked)}
           styles={styles}
+          value={form.getFieldValue(PARAM_NAME_MAP[key])}
         />
       ),
       label: (
@@ -297,9 +298,9 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
         mobile
           ? baseItems
           : baseItems.map(({ tag, ...item }) => ({
-              ...item,
-              desc: <Tag size={'small'}>{tag}</Tag>,
-            }))
+            ...item,
+            desc: <Tag size={'small'}>{tag}</Tag>,
+          }))
       }
       itemsType={'flat'}
       onValuesChange={handleValuesChange}

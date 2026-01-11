@@ -12,7 +12,11 @@ export interface AIProviderState {
   activeAiProvider?: string;
   activeProviderModelList: any[];
   aiProviderConfigUpdatingIds: string[];
-  aiProviderDetail?: AiProviderDetailItem | null;
+  /**
+   * Map of provider id to provider detail, used for caching provider details
+   * to avoid data inconsistency when switching providers
+   */
+  aiProviderDetailMap: Record<string, AiProviderDetailItem>;
   aiProviderList: AiProviderListItem[];
   aiProviderLoadingIds: string[];
   aiProviderRuntimeConfig: Record<string, AiProviderRuntimeConfig>;
@@ -29,6 +33,7 @@ export interface AIProviderState {
 export const initialAIProviderState: AIProviderState = {
   activeProviderModelList: [],
   aiProviderConfigUpdatingIds: [],
+  aiProviderDetailMap: {},
   aiProviderList: [],
   aiProviderLoadingIds: [],
   aiProviderRuntimeConfig: {},

@@ -1,14 +1,18 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import dynamic from 'next/dynamic';
 import { memo, useEffect, useState } from 'react';
 
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { getBuiltinRender } from '@/tools/renders';
 import { getBuiltinStreaming } from '@/tools/streamings';
 
+import { ToolErrorBoundary } from '../../Tool/ErrorBoundary';
 import Actions from './Actions';
 import Inspectors from './Inspector';
 
@@ -71,6 +75,16 @@ const Tool = memo<GroupToolProps>(
     const hasStreamingRenderer = !!getBuiltinStreaming(identifier, apiName);
     const forceShowStreamingRender = isArgumentsStreaming && hasStreamingRenderer;
 
+    // Get precise tool calling state from operation
+    const isToolCallingFromOperation = useChatStore(
+      operationSelectors.isMessageInToolCalling(assistantMessageId),
+    );
+
+    // Fallback: arguments completed but no final result yet
+    const isToolCallingFallback =
+      !isArgumentsStreaming && (!result || result.content === LOADING_FLAT || !result.content);
+    const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
+
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);
 
     // Handle expand state changes with showPluginRender
@@ -132,20 +146,23 @@ const Tool = memo<GroupToolProps>(
               type={type}
             />
           )}
-          <Render
-            apiName={apiName}
-            arguments={requestArgs}
-            identifier={identifier}
-            intervention={intervention}
-            isArgumentsStreaming={isArgumentsStreaming}
-            messageId={assistantMessageId}
-            result={result}
-            setShowPluginRender={setShowPluginRender}
-            showPluginRender={showPluginRender}
-            toolCallId={id}
-            toolMessageId={toolMessageId}
-            type={type}
-          />
+          <ToolErrorBoundary apiName={apiName} identifier={identifier}>
+            <Render
+              apiName={apiName}
+              arguments={requestArgs}
+              identifier={identifier}
+              intervention={intervention}
+              isArgumentsStreaming={isArgumentsStreaming}
+              isToolCalling={isToolCalling}
+              messageId={assistantMessageId}
+              result={result}
+              setShowPluginRender={setShowPluginRender}
+              showPluginRender={showPluginRender}
+              toolCallId={id}
+              toolMessageId={toolMessageId}
+              type={type}
+            />
+          </ToolErrorBoundary>
           <Divider dashed style={{ marginBottom: 0, marginTop: 8 }} />
         </Flexbox>
       </AccordionItem>

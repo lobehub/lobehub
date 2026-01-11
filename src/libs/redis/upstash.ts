@@ -25,7 +25,10 @@ export class UpstashRedisProvider implements BaseRedisProvider {
   constructor(options: UpstashConfig | RedisConfigNodejs) {
     const { prefix, ...clientOptions } = options as UpstashConfig & RedisConfigNodejs;
     this.prefix = prefix ? `${prefix}:` : '';
-    this.client = new Redis(clientOptions as RedisConfigNodejs);
+    this.client = new Redis({
+      ...clientOptions,
+      automaticDeserialization: false,
+    } as RedisConfigNodejs);
   }
 
   /**

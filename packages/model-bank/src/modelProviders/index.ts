@@ -67,6 +67,7 @@ import VLLMProvider from './vllm';
 import VolcengineProvider from './volcengine';
 import WenxinProvider from './wenxin';
 import XAIProvider from './xai';
+import XiaomiMiMoProvider from './xiaomimimo';
 import XinferenceProvider from './xinference';
 import ZenMuxProvider from './zenmux';
 import ZeroOneProvider from './zeroone';
@@ -198,6 +199,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
+  XiaomiMiMoProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -274,6 +276,7 @@ export { default as VLLMProviderCard } from './vllm';
 export { default as VolcengineProviderCard } from './volcengine';
 export { default as WenxinProviderCard } from './wenxin';
 export { default as XAIProviderCard } from './xai';
+export { default as XiaomiMiMoProviderCard } from './xiaomimimo';
 export { default as XinferenceProviderCard } from './xinference';
 export { default as ZenMuxProviderCard } from './zenmux';
 export { default as ZeroOneProviderCard } from './zeroone';

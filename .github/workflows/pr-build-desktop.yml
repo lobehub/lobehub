@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest # 只在 ubuntu 上运行一次检查
     steps:
       - name: Checkout base
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -33,7 +33,7 @@ jobs:
         uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          bun-version: 1.2.23
+          bun-version: latest
           package-manager-cache: 'false'
 
       - name: Install deps
@@ -55,7 +55,7 @@ jobs:
       # 输出版本信息，供后续 job 使用
       version: ${{ steps.set_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -95,7 +95,7 @@ jobs:
       matrix:
         os: [macos-latest, macos-15-intel, windows-2025, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -194,7 +194,7 @@ jobs:
 
       # 上传构建产物
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-${{ matrix.os }}
           path: |
@@ -218,18 +218,18 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Node & Bun
         uses: ./.github/actions/setup-node-bun
         with:
           node-version: 24.11.1
-          bun-version: 1.2.23
+          bun-version: latest
           package-manager-cache: 'false'
 
       # 下载所有平台的构建产物
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: release
           pattern: release-*
@@ -255,7 +255,7 @@ jobs:
 
       # 上传合并后的构建产物
       - name: Upload artifacts with merged macOS files
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: merged-release-pr
           path: release/
@@ -274,13 +274,13 @@ jobs:
     outputs:
       artifact_path: ${{ steps.set_path.outputs.path }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       # 下载合并后的构建产物
       - name: Download merged artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: merged-release-pr
           path: release

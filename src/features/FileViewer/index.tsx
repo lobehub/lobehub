@@ -5,12 +5,10 @@ import { type CSSProperties, memo } from 'react';
 import { type FileListItem } from '@/types/files';
 
 import NotSupport from './NotSupport';
+import CodeViewer from './Renderer/Code';
 import ImageViewer from './Renderer/Image';
-import JavaScriptViewer from './Renderer/JavaScript';
 import MSDocViewer from './Renderer/MSDoc';
-import MarkdownViewer from './Renderer/Markdown';
 import PDFViewer from './Renderer/PDF';
-import TXTViewer from './Renderer/TXT';
 import VideoViewer from './Renderer/Video';
 
 // File type definitions
@@ -27,8 +25,79 @@ const IMAGE_MIME_TYPES = new Set([
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogg'];
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/ogg', 'mp4', 'webm', 'ogg']);
 
-const JS_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
-const JS_MIME_TYPES = new Set([
+const CODE_EXTENSIONS = [
+  // JavaScript/TypeScript
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.mjs',
+  '.cjs',
+  // Python
+  '.py',
+  '.pyw',
+  // Java/JVM
+  '.java',
+  '.kt',
+  '.kts',
+  '.scala',
+  '.groovy',
+  // C/C++
+  '.c',
+  '.h',
+  '.cpp',
+  '.cxx',
+  '.cc',
+  '.hpp',
+  '.hxx',
+  // Other compiled languages
+  '.cs',
+  '.go',
+  '.rs',
+  '.rb',
+  '.php',
+  '.swift',
+  '.lua',
+  '.r',
+  '.dart',
+  // Shell
+  '.sh',
+  '.bash',
+  '.zsh',
+  // Web
+  '.html',
+  '.htm',
+  '.css',
+  '.scss',
+  '.sass',
+  '.less',
+  // Data formats
+  '.json',
+  '.xml',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.sql',
+  // Functional languages
+  '.ex',
+  '.exs',
+  '.erl',
+  '.hrl',
+  '.clj',
+  '.cljs',
+  '.cljc',
+  // Markdown
+  '.md',
+  '.mdx',
+  // Other
+  '.vim',
+  '.graphql',
+  '.gql',
+  '.txt',
+];
+
+const CODE_MIME_TYPES = new Set([
+  // JavaScript/TypeScript
   'js',
   'jsx',
   'ts',
@@ -38,13 +107,65 @@ const JS_MIME_TYPES = new Set([
   'text/javascript',
   'application/typescript',
   'text/typescript',
+  // Python
+  'python',
+  'text/x-python',
+  'application/x-python-code',
+  // Java/JVM
+  'java',
+  'text/x-java-source',
+  'kotlin',
+  'scala',
+  // C/C++
+  'c',
+  'text/x-c',
+  'cpp',
+  'text/x-c++',
+  // Other languages
+  'csharp',
+  'go',
+  'rust',
+  'ruby',
+  'php',
+  'text/x-php',
+  'swift',
+  'lua',
+  'r',
+  'dart',
+  // Shell
+  'bash',
+  'shell',
+  'text/x-shellscript',
+  // Web
+  'html',
+  'text/html',
+  'css',
+  'text/css',
+  'scss',
+  'sass',
+  'less',
+  // Data
+  'json',
+  'application/json',
+  'xml',
+  'text/xml',
+  'application/xml',
+  'yaml',
+  'text/yaml',
+  'application/x-yaml',
+  'toml',
+  'sql',
+  'text/x-sql',
+  // Markdown
+  'md',
+  'mdx',
+  'text/markdown',
+  'text/x-markdown',
+  // Other
+  'graphql',
+  'txt',
+  'text/plain',
 ]);
-
-const MARKDOWN_EXTENSIONS = ['.md', '.mdx'];
-const MARKDOWN_MIME_TYPES = new Set(['md', 'mdx', 'text/markdown', 'text/x-markdown']);
-
-const TXT_EXTENSIONS = ['.txt'];
-const TXT_MIME_TYPES = new Set(['txt', 'text/plain']);
 
 const MSDOC_EXTENSIONS = ['.doc', '.docx', '.odt', '.ppt', '.pptx', '.xls', '.xlsx'];
 const MSDOC_MIME_TYPES = new Set([
@@ -117,19 +238,9 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
     return <VideoViewer fileId={id} url={url} />;
   }
 
-  // JavaScript/TypeScript files
-  if (matchesFileType(fileType, name, JS_EXTENSIONS, JS_MIME_TYPES)) {
-    return <JavaScriptViewer fileId={id} fileName={name} url={url} />;
-  }
-
-  // Markdown files
-  if (matchesFileType(fileType, name, MARKDOWN_EXTENSIONS, MARKDOWN_MIME_TYPES)) {
-    return <MarkdownViewer fileId={id} url={url} />;
-  }
-
-  // Text files
-  if (matchesFileType(fileType, name, TXT_EXTENSIONS, TXT_MIME_TYPES)) {
-    return <TXTViewer fileId={id} url={url} />;
+  // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, Markdown, etc.)
+  if (matchesFileType(fileType, name, CODE_EXTENSIONS, CODE_MIME_TYPES)) {
+    return <CodeViewer fileId={id} fileName={name} url={url} />;
   }
 
   // Microsoft Office documents

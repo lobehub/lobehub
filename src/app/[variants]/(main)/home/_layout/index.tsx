@@ -1,8 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
-import { useTheme, useThemeMode } from 'antd-style';
+import { useTheme } from 'antd-style';
 import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { useIsDark } from '@/hooks/useIsDark';
 import { useHomeStore } from '@/store/home';
 
 import RecentHydration from './RecentHydration';
@@ -14,7 +15,7 @@ interface LayoutProps {
 }
 
 const Layout: FC<LayoutProps> = ({ children }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
   const navigate = useNavigate();
   const { pathname } = useLocation();

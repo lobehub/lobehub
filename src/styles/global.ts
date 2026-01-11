@@ -16,8 +16,6 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     min-height: 100dvh;
     max-height: 100dvh;
 
-    background: ${token.colorBgLayout};
-
     @media (min-device-width: 576px) {
       overflow: hidden;
     }

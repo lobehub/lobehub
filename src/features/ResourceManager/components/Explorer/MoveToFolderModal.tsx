@@ -11,14 +11,13 @@ import { useFileStore } from '@/store/file';
 
 interface MoveToFolderModalProps {
   fileId: string;
-  fileType?: string;
   knowledgeBaseId?: string;
   onClose: () => void;
   open: boolean;
 }
 
 const MoveToFolderModal = memo<MoveToFolderModalProps>(
-  ({ open, onClose, fileId, fileType, knowledgeBaseId }) => {
+  ({ open, onClose, fileId, knowledgeBaseId }) => {
     const { t } = useTranslation('components');
     const { message } = App.useApp();
 
@@ -29,11 +28,9 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
     const [loadedFolders, setLoadedFolders] = useState<Set<string>>(new Set());
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
-    const [moveFileToFolder, refreshFileList, createFolder, updateDocument] = useFileStore((s) => [
-      s.moveFileToFolder,
-      s.refreshFileList,
+    const [moveResource, createFolder] = useFileStore((s) => [
+      s.moveResource,
       s.createFolder,
-      s.updateDocument,
     ]);
 
     // Sort items: folders only
@@ -226,20 +223,8 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
     const handleMove = async () => {
       try {
-        // Detect if item is a document/folder (vs regular file)
-        const isDocument =
-          fileType === 'custom/document' || fileType === 'custom/folder';
-
-        if (isDocument) {
-          // Use updateDocument for Pages and folders
-          await updateDocument(fileId, { parentId: selectedFolderId });
-        } else {
-          // Use moveFileToFolder for regular files
-          await moveFileToFolder(fileId, selectedFolderId);
-        }
-
-        // Refresh file list to invalidate SWR cache for both Explorer and Tree
-        await refreshFileList();
+        // Use optimistic moveResource for instant UI update
+        await moveResource(fileId, selectedFolderId);
 
         // Clear and reload all expanded folders in Tree's module-level cache
         if (knowledgeBaseId) {
@@ -256,20 +241,8 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
     const handleMoveToRoot = async () => {
       try {
-        // Detect if item is a document/folder (vs regular file)
-        const isDocument =
-          fileType === 'custom/document' || fileType === 'custom/folder';
-
-        if (isDocument) {
-          // Use updateDocument for Pages and folders
-          await updateDocument(fileId, { parentId: null });
-        } else {
-          // Use moveFileToFolder for regular files
-          await moveFileToFolder(fileId, null);
-        }
-
-        // Refresh file list to invalidate SWR cache for both Explorer and Tree
-        await refreshFileList();
+        // Use optimistic moveResource for instant UI update
+        await moveResource(fileId, null);
 
         // Clear and reload all expanded folders in Tree's module-level cache
         if (knowledgeBaseId) {

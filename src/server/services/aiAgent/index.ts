@@ -33,8 +33,12 @@ const log = debug('lobe-server:ai-agent-service');
  * This extends the public ExecAgentParams with server-side only options
  */
 interface InternalExecAgentParams extends ExecAgentParams {
+  /** Cron job ID that triggered this execution (if trigger is 'cron') */
+  cronJobId?: string;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
   stepCallbacks?: StepLifecycleCallbacks;
+  /** Topic creation trigger source ('cron' | 'chat' | 'api') */
+  trigger?: string;
 }
 
 /**
@@ -88,6 +92,8 @@ export class AiAgentService {
       autoStart = true,
       existingMessageIds = [],
       stepCallbacks,
+      trigger,
+      cronJobId,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -114,12 +120,22 @@ export class AiAgentService {
     // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     if (!topicId) {
+      // Prepare metadata with cronJobId if provided
+      const metadata = cronJobId ? { cronJobId } : undefined;
+
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
+        metadata,
         title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+        trigger,
       });
       topicId = newTopic.id;
-      log('execAgent: created new topic %s', topicId);
+      log(
+        'execAgent: created new topic %s with trigger %s, cronJobId %s',
+        topicId,
+        trigger || 'default',
+        cronJobId || 'none',
+      );
     } else {
       log('execAgent: reusing existing topic %s', topicId);
     }
@@ -397,6 +413,7 @@ export class AiAgentService {
         groupId,
         messages: newTopic?.topicMessageIds,
         title: topicTitle,
+        // Note: execGroupAgent doesn't have trigger param yet, defaults to null
       });
       topicId = topicItem.id;
       isCreateNewTopic = true;

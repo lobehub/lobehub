@@ -15,7 +15,6 @@ import {
 } from '@lobechat/memory-user-memory';
 import { LayersEnum, type SearchMemoryResult, searchMemorySchema } from '@lobechat/types';
 import { type SQL, and, asc, eq, gte, lte } from 'drizzle-orm';
-import { ModelProvider } from 'model-bank';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -135,11 +134,14 @@ const searchUserMemories = async (
 };
 
 const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
-  const provider = ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : ModelProvider.OpenAI;
-  // Read user's provider config from database
-  const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider);
-  const { model: embeddingModel } =
+  const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+  // Read user's provider config from database
+  const agentRuntime = await initModelRuntimeFromDB(
+    serverDB,
+    userId,
+    ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
+  );
 
   return { agentRuntime, embeddingModel };
 };
@@ -303,11 +305,11 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  // REVIEW：根据当前 topic 直接提取记忆
-  // REVIEW： 我们需要一个既可以 cron 也可以主动用户触发进行「每日/每周/每隔一段时间的」记忆提取/生成的函数实现
-  // REVIEW： 定时任务
-  // 不用 tRPC，直接 server/service
-  // 可以参考 https://github.com/lobehub/lobe-chat-cloud/blob/886ff2fcd44b7b00a3aa8906f84914a6dcaa1815/src/app/(backend)/cron/reset-budgets/route.ts#L214
+  // REVIEW: Extract memories directly from current topic
+  // REVIEW: We need a function implementation that can be triggered both by cron and manually by users for "daily/weekly/periodic" memory extraction/generation
+  // REVIEW: Scheduled task
+  // Don't use tRPC, use server/service directly
+  // Reference: https://github.com/lobehub/lobe-chat-cloud/blob/886ff2fcd44b7b00a3aa8906f84914a6dcaa1815/src/app/(backend)/cron/reset-budgets/route.ts#L214
   reEmbedMemories: memoryProcedure
     .input(reEmbedInputSchema.optional())
     .mutation(async ({ ctx, input }) => {
@@ -738,7 +740,7 @@ export const userMemoriesRouter = router({
     }
   }),
 
-  // REVIEW: 需要实现 tool memory api
+  // REVIEW: Need to implement tool memory api
   toolAddContextMemory: memoryProcedure
     .input(ContextMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {

@@ -17,6 +17,8 @@ import {
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import FileIcon from '@/components/FileIcon';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/Tree';
+import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
@@ -26,6 +28,7 @@ import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import ChunksBadge from './ChunkTag';
 
+// Initialize dayjs plugin once at module level
 dayjs.extend(relativeTime);
 
 export const FILE_DATE_WIDTH = 160;
@@ -35,6 +38,7 @@ const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       cursor: pointer;
+      min-width: 800px;
 
       &:hover {
         background: ${cssVar.colorFillTertiary};
@@ -83,7 +87,6 @@ const styles = createStaticStyles(({ css }) => {
       overflow: hidden;
       flex: 1;
       min-width: 0;
-      max-width: 600px;
     `,
     selected: css`
       background: ${cssVar.colorFillTertiary};
@@ -96,6 +99,11 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface FileListItemProps extends FileListItemType {
+  columnWidths: {
+    date: number;
+    name: number;
+    size: number;
+  };
   index: number;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
   pendingRenameItemId?: string | null;
@@ -107,6 +115,7 @@ const FileListItem = memo<FileListItemProps>(
   ({
     size,
     chunkingError,
+    columnWidths,
     embeddingError,
     embeddingStatus,
     finishEmbedding,
@@ -135,7 +144,8 @@ const FileListItem = memo<FileListItemProps>(
       (s) => ({
         isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
         parseFiles: s.parseFilesToChunks,
-        renameFolder: s.renameFolder,
+        refreshFileList: s.refreshFileList,
+        updateResource: s.updateResource,
       }),
       shallow,
     );
@@ -154,6 +164,7 @@ const FileListItem = memo<FileListItemProps>(
     const [isRenaming, setIsRenaming] = useState(false);
     const [renamingValue, setRenamingValue] = useState(name);
     const inputRef = useRef<any>(null);
+    const isConfirmingRef = useRef(false);
     const isDragActive = useDragActive();
     const { setCurrentDrag } = useDragState();
     const [isDragging, setIsDragging] = useState(false);
@@ -163,10 +174,10 @@ const FileListItem = memo<FileListItemProps>(
     const computedValues = useMemo(() => {
       const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
       return {
-        emoji: sourceType === 'document' || fileType === 'custom/document' ? metadata?.emoji : null,
+        emoji: sourceType === 'document' || fileType === PAGE_FILE_TYPE ? metadata?.emoji : null,
         isFolder: fileType === 'custom/folder',
         // PDF files should not be treated as pages, even if they have sourceType='document'
-        isPage: !isPDF && (sourceType === 'document' || fileType === 'custom/document'),
+        isPage: !isPDF && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
         isSupportedForChunking: !isChunkingUnsupported(fileType),
       };
     }, [fileType, sourceType, metadata?.emoji, name]);
@@ -242,7 +253,7 @@ const FileListItem = memo<FileListItemProps>(
       [createdAt],
     );
 
-    const handleRenameStart = () => {
+    const handleRenameStart = useCallback(() => {
       setIsRenaming(true);
       setRenamingValue(name);
       // Focus input after render
@@ -250,33 +261,58 @@ const FileListItem = memo<FileListItemProps>(
         inputRef.current?.focus();
         inputRef.current?.select();
       }, 0);
-    };
+    }, [name]);
 
-    const handleRenameConfirm = async () => {
+    const handleRenameConfirm = useCallback(async () => {
+      // Prevent duplicate calls (e.g., from both Enter key and onBlur)
+      if (isConfirmingRef.current) return;
+      isConfirmingRef.current = true;
+
       if (!renamingValue.trim()) {
         message.error(t('FileManager.actions.renameError'));
+        isConfirmingRef.current = false;
         return;
       }
 
       if (renamingValue.trim() === name) {
         setIsRenaming(false);
+        isConfirmingRef.current = false;
         return;
       }
 
       try {
-        await fileStoreState.renameFolder(id, renamingValue.trim());
+        // Use optimistic updateResource for instant UI update
+        await fileStoreState.updateResource(id, { name: renamingValue.trim() });
+        if (resourceManagerState.libraryId) {
+          await clearTreeFolderCache(resourceManagerState.libraryId);
+        }
+        await fileStoreState.refreshFileList();
+
         message.success(t('FileManager.actions.renameSuccess'));
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
         message.error(t('FileManager.actions.renameError'));
+      } finally {
+        isConfirmingRef.current = false;
       }
-    };
+    }, [
+      fileStoreState.refreshFileList,
+      fileStoreState.updateResource,
+      id,
+      message,
+      name,
+      renamingValue,
+      resourceManagerState.libraryId,
+      t,
+    ]);
 
-    const handleRenameCancel = () => {
+    const handleRenameCancel = useCallback(() => {
+      // Don't cancel if we're in the middle of confirming
+      if (isConfirmingRef.current) return;
       setIsRenaming(false);
       setRenamingValue(name);
-    };
+    }, [name]);
 
     // Memoize click handler to prevent recreation on every render
     const handleItemClick = useCallback(() => {
@@ -327,7 +363,7 @@ const FileListItem = memo<FileListItemProps>(
       fileType,
       filename: name,
       id,
-      knowledgeBaseId: resourceManagerState.libraryId,
+      libraryId: resourceManagerState.libraryId,
       onRenameStart: isFolder ? handleRenameStart : undefined,
       sourceType,
       url,
@@ -357,29 +393,42 @@ const FileListItem = memo<FileListItemProps>(
           paddingInline={8}
           style={{
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            userSelect: 'none',
           }}
         >
+          <Center
+            height={40}
+            onClick={(e) => {
+              e.stopPropagation();
+
+              onSelectedChange(id, !selected, e.shiftKey, index);
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              // Prevent text selection when shift-clicking for batch selection
+              if (e.shiftKey) {
+                e.preventDefault();
+              }
+            }}
+            style={{ paddingInline: 4 }}
+          >
+            <Checkbox checked={selected} />
+          </Center>
           <Flexbox
             align={'center'}
             className={styles.item}
             distribution={'space-between'}
-            flex={1}
             horizontal
             onClick={handleItemClick}
+            style={{
+              flexShrink: 0,
+              maxWidth: columnWidths.name,
+              minWidth: columnWidths.name,
+              paddingInline: 8,
+              width: columnWidths.name,
+            }}
           >
             <Flexbox align={'center'} className={styles.nameContainer} horizontal>
-              <Center
-                height={48}
-                onClick={(e) => {
-                  e.stopPropagation();
-
-                  onSelectedChange(id, !selected, e.shiftKey, index);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                style={{ paddingInline: 4 }}
-              >
-                <Checkbox checked={selected} />
-              </Center>
               <Flexbox
                 align={'center'}
                 justify={'center'}
@@ -479,16 +528,41 @@ const FileListItem = memo<FileListItemProps>(
           </Flexbox>
           {!isDragging && (
             <>
-              <Flexbox className={styles.item} width={FILE_DATE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.date}>
                 {displayTime}
               </Flexbox>
-              <Flexbox className={styles.item} width={FILE_SIZE_WIDTH}>
+              <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.size}>
                 {isFolder || isPage ? '-' : formatSize(size)}
               </Flexbox>
             </>
           )}
         </Flexbox>
       </ContextMenuTrigger>
+    );
+  },
+  // Custom comparison function to prevent unnecessary re-renders
+  (prevProps, nextProps) => {
+    // Only re-render if these critical props change
+    return (
+      prevProps.id === nextProps.id &&
+      prevProps.name === nextProps.name &&
+      prevProps.selected === nextProps.selected &&
+      prevProps.chunkingStatus === nextProps.chunkingStatus &&
+      prevProps.embeddingStatus === nextProps.embeddingStatus &&
+      prevProps.chunkCount === nextProps.chunkCount &&
+      prevProps.chunkingError === nextProps.chunkingError &&
+      prevProps.embeddingError === nextProps.embeddingError &&
+      prevProps.finishEmbedding === nextProps.finishEmbedding &&
+      prevProps.pendingRenameItemId === nextProps.pendingRenameItemId &&
+      prevProps.size === nextProps.size &&
+      prevProps.createdAt === nextProps.createdAt &&
+      prevProps.fileType === nextProps.fileType &&
+      prevProps.sourceType === nextProps.sourceType &&
+      prevProps.slug === nextProps.slug &&
+      prevProps.url === nextProps.url &&
+      prevProps.columnWidths.name === nextProps.columnWidths.name &&
+      prevProps.columnWidths.date === nextProps.columnWidths.date &&
+      prevProps.columnWidths.size === nextProps.columnWidths.size
     );
   },
 );

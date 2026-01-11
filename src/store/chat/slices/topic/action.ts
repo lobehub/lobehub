@@ -38,6 +38,11 @@ const n = setNamespace('t');
 
 const SWR_USE_FETCH_TOPIC = 'SWR_USE_FETCH_TOPIC';
 const SWR_USE_SEARCH_TOPIC = 'SWR_USE_SEARCH_TOPIC';
+type CronTopicsGroupWithJobInfo = {
+  cronJob: unknown;
+  cronJobId: string;
+  topics: ChatTopic[];
+};
 
 /**
  * Options for switchTopic action
@@ -91,6 +96,7 @@ export interface ChatTopicAction {
     enable: boolean,
     params: {
       agentId?: string;
+      excludeTriggers?: string[];
       groupId?: string;
       isInbox?: boolean;
       pageSize?: number;
@@ -282,7 +288,34 @@ export const chatTopic: StateCreator<
     });
   },
   favoriteTopic: async (id, favorite) => {
+    const { activeAgentId } = get();
     await get().internal_updateTopic(id, { favorite });
+
+    if (!activeAgentId) return;
+
+    await mutate(
+      ['cronTopicsWithJobInfo', activeAgentId],
+      (groups?: CronTopicsGroupWithJobInfo[]) => {
+        if (!groups) return groups;
+
+        let updated = false;
+        const next = groups.map((group) => {
+          let groupUpdated = false;
+          const topics = group.topics.map((topic) => {
+            if (topic.id !== id) return topic;
+            if (topic.favorite === favorite) return topic;
+            groupUpdated = true;
+            updated = true;
+            return { ...topic, favorite };
+          });
+
+          return groupUpdated ? { ...group, topics } : group;
+        });
+
+        return updated ? next : groups;
+      },
+      { revalidate: false },
+    );
   },
 
   updateTopicMetadata: async (id, metadata) => {
@@ -314,15 +347,28 @@ export const chatTopic: StateCreator<
   },
 
   // query
-  useFetchTopics: (enable, { agentId, groupId, pageSize: customPageSize, isInbox }) => {
+  useFetchTopics: (
+    enable,
+    { agentId, excludeTriggers, groupId, pageSize: customPageSize, isInbox },
+  ) => {
     const pageSize = customPageSize || 20;
+    const effectiveExcludeTriggers =
+      excludeTriggers && excludeTriggers.length > 0 ? excludeTriggers : undefined;
     // Use topicMapKey to generate the container key for topic data map
     const containerKey = topicMapKey({ agentId, groupId });
     const hasValidContainer = !!(groupId || agentId);
 
     return useClientDataSWRWithSync<{ items: ChatTopic[]; total: number }>(
       enable && hasValidContainer
-        ? [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
+        ? [
+            SWR_USE_FETCH_TOPIC,
+            containerKey,
+            {
+              isInbox,
+              pageSize,
+              ...(effectiveExcludeTriggers ? { excludeTriggers: effectiveExcludeTriggers } : {}),
+            },
+          ]
         : null,
       async () => {
         // agentId, groupId, isInbox, pageSize come from the outer scope closure
@@ -343,6 +389,7 @@ export const chatTopic: StateCreator<
         const result = await topicService.getTopics({
           agentId,
           current: 0,
+          excludeTriggers: effectiveExcludeTriggers,
           groupId,
           isInbox,
           pageSize,
@@ -374,6 +421,7 @@ export const chatTopic: StateCreator<
                 ...get().topicDataMap,
                 [containerKey]: {
                   currentPage: 0,
+                  excludeTriggers: effectiveExcludeTriggers,
                   hasMore,
                   isExpandingPageSize: false,
                   items: topics,
@@ -413,9 +461,11 @@ export const chatTopic: StateCreator<
 
     try {
       const pageSize = useGlobalStore.getState().status.topicPageSize || 20;
+      const excludeTriggers = currentData?.excludeTriggers;
       const result = await topicService.getTopics({
         agentId: activeAgentId,
         current: nextPage,
+        excludeTriggers,
         groupId: activeGroupId,
         pageSize,
       });
@@ -429,6 +479,7 @@ export const chatTopic: StateCreator<
             ...get().topicDataMap,
             [key]: {
               currentPage: nextPage,
+              excludeTriggers,
               hasMore,
               isLoadingMore: false,
               items: [...currentTopics, ...result.items],

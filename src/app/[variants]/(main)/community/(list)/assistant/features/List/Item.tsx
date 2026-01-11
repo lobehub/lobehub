@@ -10,6 +10,7 @@ import urlJoin from 'url-join';
 import PublishedTime from '@/components/PublishedTime';
 import { useQuery } from '@/hooks/useQuery';
 import { type AssistantMarketSource, type DiscoverAssistantItem } from '@/types/discover';
+import { discoverService } from '@/services/discover';
 
 import TokenTag from './TokenTag';
 
@@ -91,14 +92,22 @@ const AssistantItem = memo<DiscoverAssistantItem>(
       [userName, navigate],
     );
 
+    const handleClick = useCallback(() => {
+      discoverService.reportAgentEvent({
+        event: 'click',
+        identifier,
+        source: location.pathname,
+      }).catch(() => {});
+
+      navigate(link);
+    }, [identifier, link, navigate]);
+
     return (
       <Block
         clickable
         data-testid="assistant-item"
         height={'100%'}
-        onClick={() => {
-          navigate(link);
-        }}
+        onClick={handleClick}
         style={{
           overflow: 'hidden',
           position: 'relative',

@@ -1,6 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
-import { cssVar, useThemeMode } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 interface TotalCardProps {
   count: string | number;
@@ -8,7 +10,7 @@ interface TotalCardProps {
 }
 
 const TotalCard = memo<TotalCardProps>(({ title, count }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   return (
     <Flexbox
       padding={12}

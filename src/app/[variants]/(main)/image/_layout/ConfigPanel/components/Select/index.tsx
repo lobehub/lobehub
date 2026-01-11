@@ -1,9 +1,11 @@
 'use client';
 
 import { Block, Center, Grid, type GridProps, Select, Text } from '@lobehub/ui';
-import { cssVar, useThemeMode } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { type ReactNode, memo } from 'react';
 import useMergeState from 'use-merge-value';
+
+import { useIsDark } from '@/hooks/useIsDark';
 
 export interface SizeSelectProps extends Omit<GridProps, 'children' | 'onChange'> {
   defaultValue?: 'auto' | string;
@@ -26,7 +28,7 @@ const canParseAsRatio = (value: string): boolean => {
 };
 
 const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultValue, ...rest }) => {
-  const { isDarkMode } = useThemeMode();
+  const isDarkMode = useIsDark();
   const [active, setActive] = useMergeState('auto', {
     defaultValue,
     onChange,
