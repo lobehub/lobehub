@@ -32,7 +32,11 @@ export const useTopicNavigation = () => {
     (topicId?: string) => {
       // If in agent sub-route, navigate back to agent chat first
       if (isInAgentSubRoute() && activeAgentId) {
-        router.push(urlJoin('/agent', activeAgentId as string));
+        const basePath = urlJoin('/agent', activeAgentId as string);
+        // Include topicId in URL when navigating from sub-route
+        router.push(topicId ? `${basePath}?topic=${topicId}` : basePath);
+        toggleConfig(false);
+        return;
       }
 
       switchTopic(topicId);
