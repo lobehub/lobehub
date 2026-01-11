@@ -92,6 +92,7 @@ const ListView = memo(function ListView() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isDragActive = useDragActive();
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
+  const [isAnyRowHovered, setIsAnyRowHovered] = useState(false);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -409,7 +410,11 @@ const ListView = memo(function ListView() {
           </Flexbox>
         </Flexbox>
         <div
-          className={cx(styles.dropZone, isDropZoneActive && styles.dropZoneActive)}
+          className={cx(
+            styles.dropZone,
+            isDropZoneActive && styles.dropZoneActive,
+            isAnyRowHovered && 'any-row-hovered',
+          )}
           data-drop-target-id={currentFolderId || undefined}
           data-is-folder="true"
           onDragLeave={handleDropZoneDragLeave}
@@ -434,7 +439,9 @@ const ListView = memo(function ListView() {
                 <FileListItem
                   columnWidths={columnWidths}
                   index={index}
+                  isAnyRowHovered={isAnyRowHovered}
                   key={item.id}
+                  onHoverChange={setIsAnyRowHovered}
                   onSelectedChange={handleSelectionChange}
                   pendingRenameItemId={pendingRenameItemId}
                   selected={selectFileIds.includes(item.id)}

@@ -53,6 +53,16 @@ const styles = createStaticStyles(({ css }) => {
       &:hover {
         background: ${cssVar.colorFillTertiary};
       }
+
+      /* Hide zebra striping when any row is hovered */
+      .any-row-hovered & {
+        background: transparent;
+      }
+
+      /* But keep hover effect on the actual hovered row */
+      .any-row-hovered &:hover {
+        background: ${cssVar.colorFillTertiary};
+      }
     `,
 
     dragOver: css`
@@ -115,6 +125,8 @@ interface FileListItemProps extends FileListItemType {
     size: number;
   };
   index: number;
+  isAnyRowHovered: boolean;
+  onHoverChange: (isHovered: boolean) => void;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
   pendingRenameItemId?: string | null;
   selected?: boolean;
@@ -143,6 +155,8 @@ const FileListItem = memo<FileListItemProps>(
     sourceType,
     slug,
     pendingRenameItemId,
+    isAnyRowHovered,
+    onHoverChange,
   }) => {
     const { t } = useTranslation(['components', 'file']);
     const { message } = App.useApp();
@@ -402,6 +416,8 @@ const FileListItem = memo<FileListItemProps>(
           onDragOver={handleDragOver}
           onDragStart={handleDragStart}
           onDrop={handleDrop}
+          onMouseEnter={() => onHoverChange(true)}
+          onMouseLeave={() => onHoverChange(false)}
           paddingInline={8}
           style={{
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
@@ -574,7 +590,8 @@ const FileListItem = memo<FileListItemProps>(
       prevProps.url === nextProps.url &&
       prevProps.columnWidths.name === nextProps.columnWidths.name &&
       prevProps.columnWidths.date === nextProps.columnWidths.date &&
-      prevProps.columnWidths.size === nextProps.columnWidths.size
+      prevProps.columnWidths.size === nextProps.columnWidths.size &&
+      prevProps.isAnyRowHovered === nextProps.isAnyRowHovered
     );
   },
 );
