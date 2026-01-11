@@ -1,8 +1,8 @@
 'use client';
 
 import { ENABLE_BUSINESS_FEATURES } from '@cloud/business-const';
-import { Accordion, AccordionItem, ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Calendar, Plus } from 'lucide-react';
+import { Accordion, AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Plus } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -81,7 +81,6 @@ const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
         paddingInline={'8px 4px'}
         title={
           <Flexbox align="center" gap={4} horizontal>
-            <Icon icon={Calendar} size={12} />
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {t('agentCronJobs.title')}
             </Text>
