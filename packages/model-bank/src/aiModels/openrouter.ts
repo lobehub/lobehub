@@ -33,11 +33,61 @@ const openrouterChatModels: AIChatModelCard[] = [
   {
     abilities: {
       imageOutput: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      'Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。',
+    displayName: 'Nano Banana Pro',
+    id: 'google/gemini-3-pro-image-preview',
+    maxOutput: 32_768,
+    pricing: {
+      approximatePricePerImage: 0.134,
+      units: [
+        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-20',
+    settings: {
+      extendParams: ['imageAspectRatio'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
       vision: true,
     },
     contextWindowTokens: 32_768 + 8192,
-    description: 'Gemini 2.5 Flash experimental model with image generation support.',
+    description: 'Gemini 2.5 Flash 模型，支持图像生成',
     displayName: 'Nano Banana',
+    id: 'google/gemini-2.5-flash-image',
+    maxOutput: 8192,
+    pricing: {
+      approximatePricePerImage: 0.039,
+      units: [
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-10-07',
+    settings: {
+      extendParams: ['imageAspectRatio'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 32_768 + 8192,
+    description: 'Gemini 2.5 Flash 实验模型，支持图像生成',
+    displayName: 'Nano Banana (Preview)',
     id: 'google/gemini-2.5-flash-image-preview',
     maxOutput: 8192,
     pricing: {
@@ -49,6 +99,9 @@ const openrouterChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-08-26',
+    settings: {
+      extendParams: ['imageAspectRatio'],
+    },
     type: 'chat',
   },
   {

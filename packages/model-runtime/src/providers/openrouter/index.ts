@@ -16,7 +16,7 @@ export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { thinking, model, max_tokens } = payload;
+      const { thinking, model, max_tokens, imageAspectRatio } = payload;
 
       let reasoning: OpenRouterReasoning = {};
 
@@ -40,8 +40,18 @@ export const params = {
         };
       }
 
+      // Add modalities and image_config for image generation models
+      const isImageModel = model.includes('-image') || model.includes('flux');
+      const modalities =
+        (payload as any).modalities ?? (isImageModel ? ['image', 'text'] : undefined);
+      const image_config =
+        (payload as any).image_config ??
+        (isImageModel && imageAspectRatio ? { aspect_ratio: imageAspectRatio } : undefined);
+
       return {
         ...payload,
+        ...(image_config && { image_config }),
+        ...(modalities && { modalities }),
         model: payload.enabledSearch ? `${payload.model}:online` : payload.model,
         reasoning,
         stream: payload.stream ?? true,

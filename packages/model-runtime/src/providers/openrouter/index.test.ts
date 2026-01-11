@@ -380,6 +380,66 @@ describe('LobeOpenRouterAI - custom features', () => {
         expect.anything(),
       );
     });
+
+    describe('image model handling', () => {
+      it('should add modalities for model with -image suffix', async () => {
+        await instance.chat({
+          messages: [{ content: 'Generate an image', role: 'user' }],
+          model: 'openai/dall-e-3-image',
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should add modalities for model with flux in name', async () => {
+        await instance.chat({
+          messages: [{ content: 'Generate an image', role: 'user' }],
+          model: 'black-forest-labs/flux-pro',
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should not add modalities for non-image model', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'openai/gpt-4',
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.not.objectContaining({
+            modalities: expect.anything(),
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should add image_config with aspect_ratio for image model', async () => {
+        await instance.chat({
+          messages: [{ content: 'Generate an image', role: 'user' }],
+          model: 'openai/dall-e-3-image',
+          imageAspectRatio: '16:9',
+        });
+
+        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            modalities: ['image', 'text'],
+            image_config: { aspect_ratio: '16:9' },
+          }),
+          expect.anything(),
+        );
+      });
+    });
   });
 
   describe('models', () => {
