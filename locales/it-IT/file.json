@@ -18,6 +18,8 @@
   "empty": "Nessun file o cartella è stato ancora caricato.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} file filtrati (su un totale di {{total}})",
   "header.actions.connect": "Connetti...",
+  "header.actions.createFolderError": "Impossibile creare la cartella",
+  "header.actions.creatingFolder": "Creazione della cartella in corso...",
   "header.actions.gitignore.apply": "Applica regole",
   "header.actions.gitignore.cancel": "Ignora regole",
   "header.actions.gitignore.content": "File .gitignore rilevato ({{count}} file in totale). Vuoi applicare le regole di esclusione?",

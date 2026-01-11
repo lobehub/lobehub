@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useUserStore } from '@/store/user';
 
 import { useConversationStore } from '../../../../../store';
-import { useGroupMessage } from '../../../components/GroupContext';
+import { useMessageAggregationContext } from '../../../../Contexts/MessageAggregationContext';
 import { type ApprovalMode } from './index';
 
 interface ApprovalActionsProps {
@@ -34,7 +34,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     // Disable actions while message is still being created (temp ID)
     const isMessageCreating = messageId.startsWith('tmp_');
 
-    const { assistantGroupId } = useGroupMessage();
+    const { assistantGroupId } = useMessageAggregationContext();
     const [approveToolCall, rejectToolCall, rejectAndContinueToolCall] = useConversationStore(
       (s) => [s.approveToolCall, s.rejectToolCall, s.rejectAndContinueToolCall],
     );

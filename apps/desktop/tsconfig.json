@@ -30,6 +30,7 @@
     "src/main/**/*",
     "src/preload/**/*",
     "src/common/**/*",
-    "electron-builder.js"
+    "electron-builder.js",
+    "native-deps.config.js"
   ]
 }

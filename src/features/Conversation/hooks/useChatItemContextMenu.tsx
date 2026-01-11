@@ -348,13 +348,22 @@ export const useChatItemContextMenu = ({
         return;
       }
 
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim() || '';
+      selectedTextRef.current = selectedText;
+
+      // If there's selected text outside of current ChatItem, use native context menu
+      if (selectedText && selection?.anchorNode) {
+        const isSelectionInCurrentItem = target.contains(selection.anchorNode);
+
+        if (isSelectionInCurrentItem) {
+          return;
+        }
+      }
+
       event.preventDefault();
       event.stopPropagation();
 
-      const selection = window.getSelection();
-      selectedTextRef.current = selection?.toString().trim() || '';
-
-      console.log(contextMenuItems);
       showContextMenu(contextMenuItems);
     },
     [contextMenuItems, contextMenuMode, editing],

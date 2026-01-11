@@ -3,11 +3,12 @@
 import { ActionIcon, CopyButton, Flexbox, Markdown, ScrollShadow } from '@lobehub/ui';
 import { Button } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Maximize2, NotebookText, PencilLine } from 'lucide-react';
+import { Maximize2, Minimize2, NotebookText, PencilLine } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 
 import { NotebookDocument } from '../../../types';
 
@@ -21,7 +22,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
 
-    background: ${cssVar.colorBgElevated};
+    background: ${cssVar.colorBgContainer};
   `,
   content: css`
     padding-inline: 16px;
@@ -60,10 +61,20 @@ interface DocumentCardProps {
 
 const DocumentCard = memo<DocumentCardProps>(({ document }) => {
   const { t } = useTranslation('plugin');
-  const openDocument = useChatStore((s) => s.openDocument);
+  const [portalDocumentId, openDocument, closeDocument] = useChatStore((s) => [
+    chatPortalSelectors.portalDocumentId(s),
+    s.openDocument,
+    s.closeDocument,
+  ]);
 
-  const handleExpand = () => {
-    openDocument(document.id);
+  const isExpanded = portalDocumentId === document.id;
+
+  const handleToggle = () => {
+    if (isExpanded) {
+      closeDocument();
+    } else {
+      openDocument(document.id);
+    }
   };
 
   return (
@@ -82,7 +93,7 @@ const DocumentCard = memo<DocumentCardProps>(({ document }) => {
           />
           <ActionIcon
             icon={PencilLine}
-            onClick={handleExpand}
+            onClick={handleToggle}
             size={'small'}
             title={t('builtins.lobe-notebook.actions.edit')}
           />
@@ -95,16 +106,18 @@ const DocumentCard = memo<DocumentCardProps>(({ document }) => {
         </Markdown>
       </ScrollShadow>
 
-      {/* Floating expand button */}
+      {/* Floating expand/collapse button */}
       <Button
         className={styles.expandButton}
         color={'default'}
-        icon={<Maximize2 size={14} />}
-        onClick={handleExpand}
+        icon={isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        onClick={handleToggle}
         shape={'round'}
         variant={'outlined'}
       >
-        {t('builtins.lobe-notebook.actions.expand')}
+        {isExpanded
+          ? t('builtins.lobe-notebook.actions.collapse')
+          : t('builtins.lobe-notebook.actions.expand')}
       </Button>
     </Flexbox>
   );

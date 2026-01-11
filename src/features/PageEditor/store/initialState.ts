@@ -1,40 +1,35 @@
 import { type IEditor } from '@lobehub/editor';
-import { type EditorState } from '@lobehub/editor/react';
+
+export type MetaSaveStatus = 'idle' | 'saving' | 'saved';
 
 export interface PublicState {
   autoSave?: boolean;
+  emoji?: string;
   knowledgeBaseId?: string;
   onBack?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;
+  onEmojiChange?: (emoji: string | undefined) => void;
   onSave?: () => void;
-  pageId?: string;
+  onTitleChange?: (title: string) => void;
   parentId?: string;
+  title?: string;
 }
 
 export interface State extends PublicState {
-  currentDocId: string | undefined;
-  currentEmoji: string | undefined;
-  currentTitle: string;
+  documentId: string | undefined;
   editor?: IEditor;
-  editorState?: EditorState;
-  isDirty: boolean; // Track if there are unsaved changes
-  isLoadingContent: boolean; // Track if content is being loaded
-  lastSavedContent: string; // Last saved content hash for comparison
-  lastUpdatedTime: Date | null;
-  saveStatus: 'idle' | 'saving' | 'saved';
-  wordCount: number;
+  isMetaDirty?: boolean;
+  lastSavedEmoji?: string;
+  lastSavedTitle?: string;
+  metaSaveStatus?: MetaSaveStatus;
 }
 
 export const initialState: State = {
   autoSave: true,
-  currentDocId: undefined,
-  currentEmoji: undefined,
-  currentTitle: '',
-  isDirty: false,
-  isLoadingContent: false,
-  lastSavedContent: '',
-  lastUpdatedTime: null,
-  saveStatus: 'idle',
-  wordCount: 0,
+  documentId: undefined,
+  emoji: undefined,
+  isMetaDirty: false,
+  metaSaveStatus: 'idle',
+  title: undefined,
 };

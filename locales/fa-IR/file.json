@@ -18,6 +18,8 @@
   "empty": "هنوز هیچ فایل یا پوشه‌ای بارگذاری نشده است.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} فایل فیلتر شد (از مجموع {{total}})",
   "header.actions.connect": "اتصال...",
+  "header.actions.createFolderError": "ایجاد پوشه با خطا مواجه شد",
+  "header.actions.creatingFolder": "در حال ایجاد پوشه...",
   "header.actions.gitignore.apply": "اعمال قوانین",
   "header.actions.gitignore.cancel": "نادیده گرفتن قوانین",
   "header.actions.gitignore.content": "فایل .gitignore شناسایی شد (مجموعاً {{count}} فایل). آیا می‌خواهید قوانین نادیده‌گیری را اعمال کنید؟",

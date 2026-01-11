@@ -155,6 +155,33 @@ describe('AgentModel', () => {
       expect(result).not.toBeNull();
       expect(result!.files).toHaveLength(0);
     });
+
+    it('should not return agent belonging to another user', async () => {
+      const agentId = 'test-agent-other-user';
+      // Create agent for user2
+      await serverDB.insert(agents).values({ id: agentId, userId: userId2 });
+
+      // Try to access with user1's model
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      expect(result).toBeNull();
+    });
+
+    it('should not return knowledge from another user agent', async () => {
+      const agentId = 'test-agent-cross-user-knowledge';
+      // Create agent for user2 with knowledge
+      await serverDB.insert(agents).values({ id: agentId, userId: userId2 });
+      await serverDB
+        .insert(agentsKnowledgeBases)
+        .values({ agentId, knowledgeBaseId: 'kb2', userId: userId2 });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '3', userId: userId2 });
+
+      // Try to access with user1's model
+      const result = await agentModel.getAgentConfigById(agentId);
+
+      // Should return null since user1 cannot access user2's agent
+      expect(result).toBeNull();
+    });
   });
 
   describe('getAgentConfig', () => {
@@ -197,15 +224,14 @@ describe('AgentModel', () => {
       expect(result).toBeNull();
     });
 
-    it('should find agent by ID even if it belongs to another user', async () => {
+    it('should not find agent by ID if it belongs to another user', async () => {
       const agentId = 'test-agent-cross-user';
       await serverDB.insert(agents).values({ id: agentId, userId: userId2 });
 
-      // ID lookup should work across users (ID is globally unique)
+      // ID lookup should not work across users for security
       const result = await agentModel.getAgentConfig(agentId);
 
-      expect(result).toBeDefined();
-      expect(result?.id).toBe(agentId);
+      expect(result).toBeNull();
     });
 
     it('should prefer ID match over slug match', async () => {
@@ -256,6 +282,67 @@ describe('AgentModel', () => {
       const result = await agentModel.findBySessionId('non-existent-session');
 
       expect(result).toBeUndefined();
+    });
+
+    it('should not return agent from another user session', async () => {
+      const agentId = 'test-agent-other-user-session';
+      const sessionId = 'test-session-other-user';
+      // Create agent and session for user2
+      await serverDB.insert(agents).values({ id: agentId, userId: userId2 });
+      await serverDB.insert(sessions).values({ id: sessionId, userId: userId2 });
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId, sessionId, userId: userId2 });
+
+      // Try to access with user1's model
+      const result = await agentModel.findBySessionId(sessionId);
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('getAgentAssignedKnowledge', () => {
+    it('should return knowledge bases and files for the agent', async () => {
+      const agentId = 'test-agent-knowledge';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB
+        .insert(agentsKnowledgeBases)
+        .values({ agentId, knowledgeBaseId: 'kb1', userId, enabled: true });
+      await serverDB.insert(agentsFiles).values({ agentId, fileId: '1', userId, enabled: true });
+
+      const result = await agentModel.getAgentAssignedKnowledge(agentId);
+
+      expect(result.knowledgeBases).toHaveLength(1);
+      expect(result.files).toHaveLength(1);
+    });
+
+    it('should not return knowledge from another user', async () => {
+      const agentId = 'test-agent-knowledge-other-user';
+      // Create agent with knowledge for user2
+      await serverDB.insert(agents).values({ id: agentId, userId: userId2 });
+      await serverDB
+        .insert(agentsKnowledgeBases)
+        .values({ agentId, knowledgeBaseId: 'kb2', userId: userId2, enabled: true });
+      await serverDB
+        .insert(agentsFiles)
+        .values({ agentId, fileId: '3', userId: userId2, enabled: true });
+
+      // Try to access with user1's model
+      const result = await agentModel.getAgentAssignedKnowledge(agentId);
+
+      // Should return empty arrays since user1 cannot access user2's knowledge
+      expect(result.knowledgeBases).toHaveLength(0);
+      expect(result.files).toHaveLength(0);
+    });
+
+    it('should handle empty knowledge bases and files', async () => {
+      const agentId = 'test-agent-no-knowledge';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+
+      const result = await agentModel.getAgentAssignedKnowledge(agentId);
+
+      expect(result.knowledgeBases).toHaveLength(0);
+      expect(result.files).toHaveLength(0);
     });
   });
 

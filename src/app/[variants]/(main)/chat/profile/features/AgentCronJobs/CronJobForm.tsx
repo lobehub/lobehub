@@ -26,13 +26,15 @@ interface CronJobFormProps {
   onSubmit: (data: CronJobFormData) => void;
 }
 
+// Standard cron format: minute hour day month weekday
 const CRON_PATTERNS = [
-  { label: 'agentCronJobs.interval.30min', value: '0 */30 * * *' },
-  { label: 'agentCronJobs.interval.1hour', value: '0 0 * * *' },
-  { label: 'agentCronJobs.interval.6hours', value: '0 */6 * * *' },
-  { label: 'agentCronJobs.interval.12hours', value: '0 */12 * * *' },
-  { label: 'agentCronJobs.interval.daily', value: '0 0 0 * *' },
-  { label: 'agentCronJobs.interval.weekly', value: '0 0 0 * 0' },
+  { label: 'agentCronJobs.interval.30min', value: '*/30 * * * *' }, // Every 30 minutes
+  { label: 'agentCronJobs.interval.1hour', value: '0 * * * *' }, // Every hour
+  { label: 'agentCronJobs.interval.2hours', value: '0 */2 * * *' }, // Every 2 hours
+  { label: 'agentCronJobs.interval.6hours', value: '0 */6 * * *' }, // Every 6 hours
+  { label: 'agentCronJobs.interval.12hours', value: '0 */12 * * *' }, // Every 12 hours
+  { label: 'agentCronJobs.interval.daily', value: '0 0 * * *' }, // Daily at midnight
+  { label: 'agentCronJobs.interval.weekly', value: '0 0 * * 0' }, // Weekly on Sunday
 ];
 
 const WEEKDAY_OPTIONS = [
@@ -120,7 +122,7 @@ const CronJobForm = memo<CronJobFormProps>(({ editingJob, formRef, onSubmit }) =
     <Form
       form={form}
       initialValues={{
-        cronPattern: '0 */30 * * *', // Default to 30 minutes
+        cronPattern: '*/30 * * * *', // Default to every 30 minutes
         weekdays: [],
       }}
       layout="vertical"

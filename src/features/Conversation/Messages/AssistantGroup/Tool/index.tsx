@@ -12,6 +12,7 @@ import { toolSelectors } from '@/store/tool/selectors';
 import { getBuiltinRender } from '@/tools/renders';
 import { getBuiltinStreaming } from '@/tools/streamings';
 
+import { ToolErrorBoundary } from '../../Tool/ErrorBoundary';
 import Actions from './Actions';
 import Inspectors from './Inspector';
 
@@ -145,21 +146,23 @@ const Tool = memo<GroupToolProps>(
               type={type}
             />
           )}
-          <Render
-            apiName={apiName}
-            arguments={requestArgs}
-            identifier={identifier}
-            intervention={intervention}
-            isArgumentsStreaming={isArgumentsStreaming}
-            isToolCalling={isToolCalling}
-            messageId={assistantMessageId}
-            result={result}
-            setShowPluginRender={setShowPluginRender}
-            showPluginRender={showPluginRender}
-            toolCallId={id}
-            toolMessageId={toolMessageId}
-            type={type}
-          />
+          <ToolErrorBoundary apiName={apiName} identifier={identifier}>
+            <Render
+              apiName={apiName}
+              arguments={requestArgs}
+              identifier={identifier}
+              intervention={intervention}
+              isArgumentsStreaming={isArgumentsStreaming}
+              isToolCalling={isToolCalling}
+              messageId={assistantMessageId}
+              result={result}
+              setShowPluginRender={setShowPluginRender}
+              showPluginRender={showPluginRender}
+              toolCallId={id}
+              toolMessageId={toolMessageId}
+              type={type}
+            />
+          </ToolErrorBoundary>
           <Divider dashed style={{ marginBottom: 0, marginTop: 8 }} />
         </Flexbox>
       </AccordionItem>

@@ -1,6 +1,58 @@
 [
   {
     "children": {},
+    "date": "2026-01-10",
+    "version": "2.0.0-next.261"
+  },
+  {
+    "children": {},
+    "date": "2026-01-10",
+    "version": "2.0.0-next.260"
+  },
+  {
+    "children": {
+      "features": ["Update the cron patterns fields values."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.259"
+  },
+  {
+    "children": {
+      "fixes": ["Fix memory search context."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.258"
+  },
+  {
+    "children": {
+      "improvements": ["Remember page agent panel width."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.257"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor page and notebook document usage."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.256"
+  },
+  {
+    "children": {
+      "fixes": ["Fix auto add group member crash."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.255"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.254"
+  },
+  {
+    "children": {},
     "date": "2026-01-09",
     "version": "2.0.0-next.253"
   },
