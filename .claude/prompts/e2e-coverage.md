@@ -13,16 +13,16 @@ Before starting, read the following documents:
 
 Based on the product architecture, prioritize modules by coverage status:
 
-| Module           | Sub-features                              | Priority | Status |
-| ---------------- | ----------------------------------------- | -------- | ------ |
-| **Agent**        | Builder, Conversation, Task               | P0       | 🚧     |
-| **Agent Group**  | Builder, Group Chat                       | P0       | ⏳      |
-| **Page (Docs)**  | Sidebar CRUD ✅, Document Editing, Copilot | P0       | 🚧     |
-| **Knowledge**    | Create, Upload, RAG Conversation          | P1       | ⏳      |
-| **Memory**       | View, Edit, Associate                     | P2       | ⏳      |
-| **Home Sidebar** | Agent Mgmt, Group Mgmt                    | P1       | ✅      |
-| **Community**    | Browse, Interactions, Detail Pages        | P1       | ✅      |
-| **Settings**     | User Settings, Model Provider             | P2       | ⏳      |
+| Module           | Sub-features                                        | Priority | Status |
+| ---------------- | --------------------------------------------------- | -------- | ------ |
+| **Agent**        | Builder, Conversation, Task                         | P0       | 🚧     |
+| **Agent Group**  | Builder, Group Chat                                 | P0       | ⏳      |
+| **Page (Docs)**  | Sidebar CRUD ✅, Title/Emoji ✅, Rich Text ✅, Copilot | P0       | 🚧     |
+| **Knowledge**    | Create, Upload, RAG Conversation                    | P1       | ⏳      |
+| **Memory**       | View, Edit, Associate                               | P2       | ⏳      |
+| **Home Sidebar** | Agent Mgmt, Group Mgmt                              | P1       | ✅      |
+| **Community**    | Browse, Interactions, Detail Pages                  | P1       | ✅      |
+| **Settings**     | User Settings, Model Provider                       | P2       | ⏳      |
 
 ## Workflow
 
@@ -53,28 +53,80 @@ find e2e/src/features -name "*.feature" -type f
 - Settings configuration flow
 - Page document CRUD operations
 
-### 3. Design Test Scenarios
+### 3. Create Module Directory and README
 
-**Step 3.1**: Identify user journeys for the selected module
+**Step 3.1**: Create dedicated feature directory
 
-- What are the core user interactions?
-- What are the expected outcomes?
-- What edge cases should be covered?
+```bash
+mkdir -p e2e/src/features/{module-name}
+```
 
-**Step 3.2**: Create feature file with BDD scenarios
+**Step 3.2**: Create README.md with feature inventory
 
-Feature file location: `e2e/src/features/{category}/{feature-name}.feature`
+Create `e2e/src/features/{module-name}/README.md` with:
+
+- Module overview and routes
+- Feature inventory table (功能点、描述、优先级、状态、测试文件)
+- Test file structure
+- Execution commands
+- Known issues
+
+**Example structure** (see `e2e/src/features/page/README.md`):
+
+```markdown
+# {Module} 模块 E2E 测试覆盖
+
+## 模块概述
+**路由**: `/module`, `/module/[id]`
+
+## 功能清单与测试覆盖
+
+### 1. 功能分组名称
+
+| 功能点 | 描述 | 优先级 | 状态 | 测试文件 |
+| ------ | ---- | ------ | ---- | -------- |
+| 功能A  | xxx  | P0     | ✅   | `xxx.feature` |
+| 功能B  | xxx  | P1     | ⏳   |          |
+
+## 测试文件结构
+## 测试执行
+## 已知问题
+## 更新记录
+```
+
+### 4. Explore Module Features
+
+**Step 4.1**: Use Task tool to explore the module
+
+```
+Use the Task tool with subagent_type=Explore to thoroughly explore:
+- Route structure in src/app/[variants]/(main)/{module}/
+- Feature components in src/features/
+- Store actions in src/store/{module}/
+- All user interactions (buttons, menus, forms)
+```
+
+**Step 4.2**: Document all features in README.md
+
+Group features by user journey area (e.g., Sidebar, Editor Header, Editor Content, etc.)
+
+### 5. Design Test Scenarios
+
+**Step 5.1**: Create feature files by functional area
+
+Feature file location: `e2e/src/features/{module}/{area}.feature`
 
 **Naming conventions**:
 
-- `journeys/` - User journey tests (experience baseline)
-- `smoke/` - Smoke tests (quick validation)
-- `regression/` - Regression tests
+- `crud.feature` - Basic CRUD operations
+- `editor-meta.feature` - Editor metadata (title, icon)
+- `editor-content.feature` - Rich text editing
+- `copilot.feature` - AI copilot interactions
 
 **Feature file template**:
 
 ```gherkin
-@journey @P1 @{module-tag}
+@journey @P0 @{module-tag}
 Feature: {Feature Name in Chinese}
 
   作为用户，我希望能够 {user goal}，
@@ -83,7 +135,11 @@ Feature: {Feature Name in Chinese}
   Background:
     Given 用户已登录系统
 
-  @{TEST-ID-001}
+  # ============================================
+  # 功能分组注释
+  # ============================================
+
+  @{MODULE-AREA-001}
   Scenario: {Scenario description in Chinese}
     Given {precondition}
     When {user action}
@@ -97,6 +153,7 @@ Feature: {Feature Name in Chinese}
 @journey      # User journey test (experience baseline)
 @smoke        # Smoke test (quick validation)
 @regression   # Regression test
+@skip         # Skip this test (known issue)
 
 @P0           # Highest priority (CI must run)
 @P1           # High priority (Nightly)
@@ -111,49 +168,72 @@ Feature: {Feature Name in Chinese}
 @home         # Home sidebar module
 ```
 
-### 4. Implement Step Definitions
+### 6. Implement Step Definitions
 
-**Step 4.1**: Create step definition file
+**Step 6.1**: Create step definition file
 
-Location: `e2e/src/steps/{category}/{step-name}.steps.ts`
+Location: `e2e/src/steps/{module}/{area}.steps.ts`
 
 **Step definition template**:
 
 ```typescript
+/**
+ * {Module} {Area} Steps
+ *
+ * Step definitions for {description}
+ */
 import { Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { CustomWorld } from '../../support/world';
 
-Given('用户已登录系统', async function (this: CustomWorld) {
-  console.log('   📍 Step: Logging in...');
+// ============================================
+// Given Steps
+// ============================================
+
+Given('用户打开一个文稿编辑器', async function (this: CustomWorld) {
+  console.log('   📍 Step: 创建并打开一个文稿...');
   // Implementation
-  console.log('   ✅ Login completed');
+  console.log('   ✅ 已打开文稿编辑器');
 });
 
-When('用户执行某操作', async function (this: CustomWorld) {
-  console.log('   📍 Step: Performing action...');
+// ============================================
+// When Steps
+// ============================================
+
+When('用户点击标题输入框', async function (this: CustomWorld) {
+  console.log('   📍 Step: 点击标题输入框...');
   // Implementation
-  console.log('   ✅ Action completed');
+  console.log('   ✅ 已点击标题输入框');
 });
 
-Then('应该看到预期结果', async function (this: CustomWorld) {
-  console.log('   📍 Step: Verifying result...');
+// ============================================
+// Then Steps
+// ============================================
+
+Then('文稿标题应该更新为 {string}', async function (this: CustomWorld, title: string) {
+  console.log(`   📍 Step: 验证标题为 "${title}"...`);
   // Assertions
-  console.log('   ✅ Verification passed');
+  console.log(`   ✅ 标题已更新为 "${title}"`);
 });
 ```
 
-**Step 4.2**: Add hooks if needed
+**Step 6.2**: Add hooks if needed
 
 Update `e2e/src/steps/hooks.ts` for new tag prefixes:
 
 ```typescript
-// Add new tag prefix handling
-const tagPrefix = getTagPrefix(pickle); // e.g., 'AGENT-', 'PAGE-', etc.
+const testId = pickle.tags.find(
+  (tag) =>
+    tag.name.startsWith('@COMMUNITY-') ||
+    tag.name.startsWith('@AGENT-') ||
+    tag.name.startsWith('@HOME-') ||
+    tag.name.startsWith('@PAGE-') ||    // Add new prefix
+    tag.name.startsWith('@ROUTES-'),
+);
 ```
 
-### 5. Setup Mocks (If Needed)
+### 7. Setup Mocks (If Needed)
 
 For LLM-related tests, use the mock framework:
 
@@ -165,45 +245,59 @@ llmMockManager.setResponse('user message', 'Expected AI response');
 await llmMockManager.setup(this.page);
 ```
 
-### 6. Run and Verify Tests
+### 8. Run and Verify Tests
 
-**Step 6.1**: Start local environment
+**Step 8.1**: Start local environment
 
 ```bash
 # From project root
 bun e2e/scripts/setup.ts --start
 ```
 
-**Step 6.2**: Run the new tests
+**Step 8.2**: Run dry-run first to verify step definitions
 
 ```bash
 cd e2e
+BASE_URL=http://localhost:3006 \
+  DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
+  pnpm exec cucumber-js --config cucumber.config.js --tags "@{module-tag}" --dry-run
+```
 
+**Step 8.3**: Run the new tests
+
+```bash
 # Run specific test by tag
 HEADLESS=false BASE_URL=http://localhost:3006 \
   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
   pnpm exec cucumber-js --config cucumber.config.js --tags "@{TEST-ID}"
 
-# Debug mode (show browser)
-HEADLESS=false BASE_URL=http://localhost:3006 \
+# Run all module tests (excluding skipped)
+HEADLESS=true BASE_URL=http://localhost:3006 \
   DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
-  pnpm exec cucumber-js --config cucumber.config.js --tags "@{module-tag}"
+  pnpm exec cucumber-js --config cucumber.config.js --tags "@{module-tag} and not @skip"
 ```
 
-**Step 6.3**: Fix any failures
+**Step 8.4**: Fix any failures
 
 - Check screenshots in `e2e/screenshots/`
 - Adjust selectors and waits as needed
+- For flaky tests, add `@skip` tag and document in README known issues
 - Ensure tests pass consistently
 
-### 7. Update Documentation
+### 9. Update Documentation
 
-Update `e2e/CLAUDE.md` coverage matrix if needed:
+**Step 9.1**: Update module README.md
 
-- Mark module status as 🚧 (in progress) or ✅ (completed)
-- Add new test file paths to directory structure
+- Mark completed features with ✅
+- Update test statistics
+- Add any known issues
 
-### 8. Create Pull Request
+**Step 9.2**: Update this prompt file
+
+- Update module status in Target Modules table
+- Add any new best practices learned
+
+### 10. Create Pull Request
 
 - Branch name: `test/e2e-{module-name}`
 - Commit message format:
@@ -222,23 +316,21 @@ Update `e2e/CLAUDE.md` coverage matrix if needed:
 
   ## Test Coverage
 
-  - [ ] User journey: {journey description}
-  - [ ] Smoke tests: {if applicable}
-  - [ ] Edge cases: {if applicable}
+  - [x] Feature area 1: {description}
+  - [x] Feature area 2: {description}
+  - [ ] Feature area 3: {pending}
 
   ## Test Execution
 
   ```bash
   # Run these tests
-  cd e2e && pnpm exec cucumber-js --config cucumber.config.js --tags "@{module-tag}"
-  ````
+  cd e2e && pnpm exec cucumber-js --config cucumber.config.js --tags "@{module-tag} and not @skip"
+  ```
 
   ---
 
   🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-  ```
-  ```
+  ````
 
 ## Important Rules
 
@@ -248,6 +340,8 @@ Update `e2e/CLAUDE.md` coverage matrix if needed:
 - **DO** add console logs in step definitions for debugging
 - **DO** handle element visibility issues (desktop/mobile dual components)
 - **DO** use `page.waitForTimeout()` for animation/transition waits
+- **DO** support both Chinese and English text (e.g., `/^(无标题|Untitled)$/`)
+- **DO** create unique test data with timestamps to avoid conflicts
 - **DO NOT** depend on actual LLM API calls
 - **DO NOT** create flaky tests (ensure stability before PR)
 - **DO NOT** modify production code unless adding data-testid attributes
@@ -259,10 +353,40 @@ Update `e2e/CLAUDE.md` coverage matrix if needed:
 
 ```typescript
 // Correct way to input in contenteditable
-await container.click();
+const editor = this.page.locator('[contenteditable="true"]').first();
+await editor.click();
 await this.page.waitForTimeout(500);
 await this.page.keyboard.type(message, { delay: 30 });
+```
+
+### Slash Commands
+
+```typescript
+// Type slash and wait for menu to appear
+await this.page.keyboard.type('/', { delay: 100 });
+await this.page.waitForTimeout(800); // Wait for slash menu
+
+// Type command shortcut
+await this.page.keyboard.type('h1', { delay: 80 });
 await this.page.keyboard.press('Enter');
+```
+
+### Handling i18n (Chinese/English)
+
+```typescript
+// Support both languages for default values
+const defaultTitleRegex = /^(无标题|Untitled)$/;
+const pageItem = this.page.getByText(defaultTitleRegex).first();
+
+// Or for buttons
+const button = this.page.getByRole('button', { name: /choose.*icon|选择图标/i });
+```
+
+### Creating Unique Test Data
+
+```typescript
+// Use timestamps to avoid conflicts between test runs
+const uniqueTitle = `E2E Page ${Date.now()}`;
 ```
 
 ### Handling Multiple Matches
@@ -325,6 +449,29 @@ Scenario: 删除项目
   Then 项目列表中不应包含 "{name}"
 ```
 
+### Editor Title/Meta Test
+
+```gherkin
+Scenario: 编辑文稿标题
+  Given 用户打开一个文稿编辑器
+  When 用户点击标题输入框
+  And 用户输入标题 "我的测试文稿"
+  And 用户按下 Enter 键
+  Then 文稿标题应该更新为 "我的测试文稿"
+```
+
+### Rich Text Editor Test
+
+```gherkin
+Scenario: 通过斜杠命令插入一级标题
+  Given 用户打开一个文稿编辑器
+  When 用户点击编辑器内容区域
+  And 用户输入斜杠命令 "/h1"
+  And 用户按下 Enter 键
+  And 用户输入文本 "一级标题内容"
+  Then 编辑器应该包含一级标题
+```
+
 ### LLM Interaction Test
 
 ```gherkin
@@ -343,3 +490,13 @@ Scenario: AI 对话基本流程
 3. **Add console.log** in step definitions
 4. **Increase timeouts** for slow operations
 5. **Use `page.pause()`** for interactive debugging
+6. **Run dry-run first** to verify all step definitions exist
+7. **Use @skip tag** for known flaky tests, document in README
+
+## Reference Implementations
+
+See these completed modules for reference:
+
+- **Page module**: `e2e/src/features/page/` - Full implementation with README, multiple feature files
+- **Community module**: `e2e/src/features/community/` - Smoke and interaction tests
+- **Home sidebar**: `e2e/src/features/home/` - Agent and Group management tests
