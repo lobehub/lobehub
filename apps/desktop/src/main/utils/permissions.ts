@@ -1,21 +1,79 @@
 /**
  * Unified macOS Permission Management using node-mac-permissions
  * @see https://github.com/codebytere/node-mac-permissions
+ *
+ * IMPORTANT: node-mac-permissions is a macOS-only native module.
+ * It must be dynamically imported to prevent loading errors on Windows/Linux.
  */
 import { shell } from 'electron';
 import { macOS } from 'electron-is';
-import {
-  askForAccessibilityAccess,
-  askForCameraAccess,
-  askForFullDiskAccess,
-  askForMicrophoneAccess,
-  askForScreenCaptureAccess,
-  getAuthStatus,
-  type AuthType,
-  type PermissionType,
-} from 'node-mac-permissions';
 
 import { createLogger } from './logger';
+
+// Type definitions - use module types when available, fallback to local definition
+// Note: We don't import the module statically, so we need local type definitions
+type AuthType =
+  | 'accessibility'
+  | 'calendar'
+  | 'camera'
+  | 'contacts'
+  | 'full-disk-access'
+  | 'input-monitoring'
+  | 'location'
+  | 'microphone'
+  | 'reminders'
+  | 'screen'
+  | 'speech-recognition';
+
+type PermissionType = 'authorized' | 'denied' | 'not determined' | 'restricted';
+
+// Lazy-loaded module cache
+let macPermissionsModule: typeof import('node-mac-permissions') | null = null;
+
+// Test injection override (set via __setMacPermissionsModule for testing)
+let testModuleOverride: typeof import('node-mac-permissions') | null = null;
+
+/**
+ * Lazily load the node-mac-permissions module (macOS only)
+ * Returns null on non-macOS platforms
+ */
+function getMacPermissionsModule(): typeof import('node-mac-permissions') | null {
+  // Allow test injection to override the module
+  if (testModuleOverride) {
+    return testModuleOverride;
+  }
+
+  if (!macOS()) {
+    return null;
+  }
+
+  if (!macPermissionsModule) {
+    // Dynamic require to prevent module loading on non-macOS platforms
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    macPermissionsModule = require('node-mac-permissions');
+  }
+
+  return macPermissionsModule;
+}
+
+/**
+ * Reset the module cache (for testing purposes)
+ * @internal
+ */
+export function __resetMacPermissionsModuleCache(): void {
+  macPermissionsModule = null;
+  testModuleOverride = null;
+}
+
+/**
+ * Set the mac permissions module (for testing purposes)
+ * @internal
+ */
+export function __setMacPermissionsModule(
+  module: typeof import('node-mac-permissions') | null,
+): void {
+  testModuleOverride = module;
+}
 
 const logger = createLogger('utils:permissions');
 
@@ -42,12 +100,13 @@ function normalizeStatus(status: PermissionType | 'not determined'): PermissionS
  * Get the authorization status for a specific permission type
  */
 export function getPermissionStatus(type: AuthType): PermissionStatus {
-  if (!macOS()) {
+  const macPermissions = getMacPermissionsModule();
+  if (!macPermissions) {
     logger.debug(`[Permission] Not macOS, returning granted for ${type}`);
     return 'granted';
   }
 
-  const status = getAuthStatus(type);
+  const status = macPermissions.getAuthStatus(type);
   const normalized = normalizeStatus(status);
   logger.info(`[Permission] ${type} status: ${normalized}`);
   return normalized;
@@ -65,13 +124,14 @@ export function getAccessibilityStatus(): PermissionStatus {
  * Opens System Preferences to the Accessibility pane
  */
 export function requestAccessibilityAccess(): boolean {
-  if (!macOS()) {
+  const macPermissions = getMacPermissionsModule();
+  if (!macPermissions) {
     logger.info('[Accessibility] Not macOS, returning true');
     return true;
   }
 
   logger.info('[Accessibility] Requesting accessibility access...');
-  askForAccessibilityAccess();
+  macPermissions.askForAccessibilityAccess();
 
   // Check the status after requesting
   const status = getPermissionStatus('accessibility');
@@ -90,7 +150,8 @@ export function getMicrophoneStatus(): PermissionStatus {
  * Shows the system permission dialog if not determined
  */
 export async function requestMicrophoneAccess(): Promise<boolean> {
-  if (!macOS()) {
+  const macPermissions = getMacPermissionsModule();
+  if (!macPermissions) {
     logger.info('[Microphone] Not macOS, returning true');
     return true;
   }
@@ -106,7 +167,7 @@ export async function requestMicrophoneAccess(): Promise<boolean> {
   if (currentStatus === 'not-determined') {
     logger.info('[Microphone] Status is not-determined, requesting access...');
     try {
-      const result = await askForMicrophoneAccess();
+      const result = await macPermissions.askForMicrophoneAccess();
       logger.info(`[Microphone] askForMicrophoneAccess result: ${result}`);
       return result === 'authorized';
     } catch (error) {
@@ -135,7 +196,8 @@ export function getCameraStatus(): PermissionStatus {
  * Shows the system permission dialog if not determined
  */
 export async function requestCameraAccess(): Promise<boolean> {
-  if (!macOS()) {
+  const macPermissions = getMacPermissionsModule();
+  if (!macPermissions) {
     logger.info('[Camera] Not macOS, returning true');
     return true;
   }
@@ -151,7 +213,7 @@ export async function requestCameraAccess(): Promise<boolean> {
   if (currentStatus === 'not-determined') {
     logger.info('[Camera] Status is not-determined, requesting access...');
     try {
-      const result = await askForCameraAccess();
+      const result = await macPermissions.askForCameraAccess();
       logger.info(`[Camera] askForCameraAccess result: ${result}`);
       return result === 'authorized';
     } catch (error) {
@@ -181,7 +243,8 @@ export function getScreenCaptureStatus(): PermissionStatus {
  * @param openPreferences - Whether to open System Preferences (default: true)
  */
 export async function requestScreenCaptureAccess(openPreferences = true): Promise<boolean> {
-  if (!macOS()) {
+  const macPermissions = getMacPermissionsModule();
+  if (!macPermissions) {
     logger.info('[Screen] Not macOS, returning true');
     return true;
   }
@@ -196,7 +259,7 @@ export async function requestScreenCaptureAccess(openPreferences = true): Promis
 
   // Request screen capture access - this will prompt the user or open settings
   logger.info('[Screen] Requesting screen capture access...');
-  askForScreenCaptureAccess(openPreferences);
+  macPermissions.askForScreenCaptureAccess(openPreferences);
 
   // Check the status after requesting
   const newStatus = getPermissionStatus('screen');
@@ -218,13 +281,14 @@ export function getFullDiskAccessStatus(): PermissionStatus {
  * user must manually add the app in System Settings
  */
 export function requestFullDiskAccess(): void {
-  if (!macOS()) {
+  const macPermissions = getMacPermissionsModule();
+  if (!macPermissions) {
     logger.info('[FullDiskAccess] Not macOS, skipping');
     return;
   }
 
   logger.info('[FullDiskAccess] Opening Full Disk Access settings...');
-  askForFullDiskAccess();
+  macPermissions.askForFullDiskAccess();
 }
 
 /**
