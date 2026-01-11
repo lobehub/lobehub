@@ -18,6 +18,8 @@
   "empty": "Er zijn nog geen bestanden of mappen geüpload.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} bestanden gefilterd (van {{total}} totaal)",
   "header.actions.connect": "Verbinden...",
+  "header.actions.createFolderError": "Map aanmaken mislukt",
+  "header.actions.creatingFolder": "Map wordt aangemaakt...",
   "header.actions.gitignore.apply": "Regels toepassen",
   "header.actions.gitignore.cancel": "Regels negeren",
   "header.actions.gitignore.content": ".gitignore-bestand gedetecteerd ({{count}} bestanden in totaal). Wil je de negeerregels toepassen?",

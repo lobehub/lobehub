@@ -78,6 +78,7 @@ export default {
   'extendParams.reasoningEffort.title': 'Reasoning Intensity',
   'extendParams.textVerbosity.title': 'Output Text Detail Level',
   'extendParams.thinking.title': 'Deep Thinking Switch',
+  'extendParams.thinkingBudget.title': 'Thinking Budget',
   'extendParams.thinkingLevel.title': 'Level of Thinking',
   'extendParams.title': 'Model Extension Features',
   'extendParams.urlContext.desc':

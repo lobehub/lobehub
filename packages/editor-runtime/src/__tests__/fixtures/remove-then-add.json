@@ -1,0 +1,636 @@
+{
+  "keepId": true,
+  "root": {
+    "children": [
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "杭州是中国著名的旅游城市，素有\"人间天堂\"的美誉。这里既有美丽的自然风光，又有深厚的历史文化底蕴。",
+            "type": "text",
+            "version": 1,
+            "id": "17542"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "17541"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "必游景点",
+            "type": "text",
+            "version": 1,
+            "id": "17544"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "tag": "h2",
+        "id": "17543"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "西湖风景区",
+            "type": "text",
+            "version": 1,
+            "id": "17546"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "tag": "h3",
+        "id": "17545"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "西湖是杭州的灵魂，被联合国教科文组织列为世界文化遗产。主要景点包括：",
+            "type": "text",
+            "version": 1,
+            "id": "17548"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "17547"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "苏堤春晓",
+                "type": "text",
+                "version": 1,
+                "id": "17551"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "：春季赏花的最佳地点",
+                "type": "text",
+                "version": 1,
+                "id": "17552"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 1,
+            "id": "17550"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "断桥残雪",
+                "type": "text",
+                "version": 1,
+                "id": "17554"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "：冬季雪景格外迷人",
+                "type": "text",
+                "version": 1,
+                "id": "17555"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 2,
+            "id": "17553"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "雷峰夕照",
+                "type": "text",
+                "version": 1,
+                "id": "17557"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "：傍晚时分观赏日落",
+                "type": "text",
+                "version": 1,
+                "id": "17558"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 3,
+            "id": "17556"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "三潭印月",
+                "type": "text",
+                "version": 1,
+                "id": "17560"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "：湖中三座石塔，夜晚灯光璀璨",
+                "type": "text",
+                "version": 1,
+                "id": "17561"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 4,
+            "id": "17559"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "listType": "bullet",
+        "start": 1,
+        "tag": "ul",
+        "id": "17549"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "阿斯达",
+            "type": "text",
+            "version": 1,
+            "id": "17563"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "17562"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "灵隐寺",
+            "type": "text",
+            "version": 1,
+            "id": "17565"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "tag": "h3",
+        "id": "17564"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "杭州最著名的佛教寺庙，始建于东晋年间。寺内有：",
+            "type": "text",
+            "version": 1,
+            "id": "17567"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "17566"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "大雄宝殿",
+                "type": "text",
+                "version": 1,
+                "id": "17570"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 1,
+            "id": "17569"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "飞来峰石窟造像",
+                "type": "text",
+                "version": 1,
+                "id": "17572"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 2,
+            "id": "17571"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "五百罗汉堂",
+                "type": "text",
+                "version": 1,
+                "id": "17574"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 3,
+            "id": "17573"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "listType": "bullet",
+        "start": 1,
+        "tag": "ul",
+        "id": "17568"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "西溪国家湿地公园",
+            "type": "text",
+            "version": 1,
+            "id": "17576"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "tag": "h3",
+        "id": "17575"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "中国第一个国家湿地公园，被誉为\"城市之肾\"：",
+            "type": "text",
+            "version": 1,
+            "id": "17578"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "17577"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "乘船游览湿地风光",
+                "type": "text",
+                "version": 1,
+                "id": "17581"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 1,
+            "id": "17580"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "观鸟和摄影的好去处",
+                "type": "text",
+                "version": 1,
+                "id": "17583"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 2,
+            "id": "17582"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "体验江南水乡风情",
+                "type": "text",
+                "version": 1,
+                "id": "17585"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 3,
+            "id": "17584"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "listType": "bullet",
+        "start": 1,
+        "tag": "ul",
+        "id": "17579"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "宋城",
+            "type": "text",
+            "version": 1,
+            "id": "17587"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "tag": "h3",
+        "id": "17586"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "以宋代文化为主题的大型主题公园：",
+            "type": "text",
+            "version": 1,
+            "id": "17589"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": "",
+        "id": "17588"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "《宋城千古情》大型实景演出",
+                "type": "text",
+                "version": 1,
+                "id": "17592"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 1,
+            "id": "17591"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "宋代街市体验",
+                "type": "text",
+                "version": 1,
+                "id": "17594"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 2,
+            "id": "17593"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "传统手工艺展示",
+                "type": "text",
+                "version": 1,
+                "id": "17596"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "value": 3,
+            "id": "17595"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "listType": "bullet",
+        "start": 1,
+        "tag": "ul",
+        "id": "17590"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "美食推荐",
+            "type": "text",
+            "version": 1,
+            "id": "17598"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "tag": "h2",
+        "id": "17597"
+      }
+    ],
+    "direction": "ltr",
+    "format": "",
+    "indent": 0,
+    "type": "root",
+    "version": 1,
+    "id": "root"
+  }
+}

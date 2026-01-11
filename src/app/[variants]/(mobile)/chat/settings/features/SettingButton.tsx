@@ -15,7 +15,7 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { HotkeyEnum } from '@/types/hotkey';
 
-const AgentSettingsEditor = dynamic(() => import('../../../../(main)/chat/profile'), {
+const AgentSettingsEditor = dynamic(() => import('@/app/[variants]/(main)/agent/profile'), {
   ssr: false,
 });
 

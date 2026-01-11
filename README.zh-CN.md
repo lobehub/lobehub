@@ -338,14 +338,14 @@ LobeChat 的插件生态系统是其核心功能的重要扩展，它极大地�
 
 <!-- PLUGIN LIST -->
 
-| 最近新增                                                                                                             | 描述                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [购物工具](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2025-12-17**</sup> | 在 eBay 和 AliExpress 上搜索产品，查找 eBay 活动和优惠券。获取快速示例。<br/>`购物` `e-bay` `ali-express` `优惠券` |
-| [SEO 助手](https://lobechat.com/discover/plugin/seo_assistant)<br/><sup>By **webfx** on **2025-12-17**</sup>         | SEO 助手可以生成搜索引擎关键词信息，以帮助创建内容。<br/>`seo` `关键词`                                            |
-| [视频字幕](https://lobechat.com/discover/plugin/VideoCaptions)<br/><sup>By **maila** on **2025-12-13**</sup>         | 将 Youtube 链接转换为转录文本，使其能够提问，创建章节，并总结其内容。<br/>`视频转文字` `you-tube`                  |
-| [天气 GPT](https://lobechat.com/discover/plugin/WeatherGPT)<br/><sup>By **steven-tey** on **2025-12-13**</sup>       | 获取特定位置的当前天气信息。<br/>`天气`                                                                            |
+| 最近新增                                                                                                                | 描述                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [视频字幕](https://lobechat.com/discover/plugin/VideoCaptions)<br/><sup>By **maila** on **2025-12-13**</sup>            | 将 Youtube 链接转换为转录文本，使其能够提问，创建章节，并总结其内容。<br/>`视频转文字` `you-tube` |
+| [天气 GPT](https://lobechat.com/discover/plugin/WeatherGPT)<br/><sup>By **steven-tey** on **2025-12-13**</sup>          | 获取特定位置的当前天气信息。<br/>`天气`                                                           |
+| [Git OSS Stats](https://lobechat.com/discover/plugin/gitUserRepoStats)<br/><sup>By **yunwei37** on **2025-12-13**</sup> | 动态生成和分析开源软件仓库和开发者的统计数据和历史记录。<br/>`github` `oss`                       |
+| [Questmate Forms](https://lobechat.com/discover/plugin/questmate)<br/><sup>By **questmate** on **2025-12-13**</sup>     | 创建表单、清单和工作流程（我们称之为任务！），您可以分配、安排或公开。<br/>`表单` `清单` `生产力` |
 
-> 📊 Total plugins: [<kbd>**40**</kbd>](https://lobechat.com/discover/plugins)
+> 📊 Total plugins: [<kbd>**38**</kbd>](https://lobechat.com/discover/plugins)
 
  <!-- PLUGIN LIST -->
 

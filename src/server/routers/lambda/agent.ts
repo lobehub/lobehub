@@ -131,6 +131,21 @@ export const agentRouter = router({
     }),
 
   /**
+   * Duplicate an agent and its associated session.
+   * Returns the new agent ID and session ID.
+   */
+  duplicateAgent: agentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        newTitle: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.agentModel.duplicate(input.agentId, input.newTitle);
+    }),
+
+  /**
    * Get an agent by marketIdentifier
    * @returns agent id if exists, null otherwise
    */

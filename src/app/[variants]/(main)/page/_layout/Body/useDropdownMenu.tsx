@@ -6,14 +6,14 @@ import { Hash, LucideCheck } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { usePageStore } from '@/store/page';
 
 export const useDropdownMenu = (): MenuProps['items'] => {
   const { t } = useTranslation();
-  const showOnlyPagesNotInLibrary = useFileStore((s) => s.showOnlyPagesNotInLibrary);
-  const setShowOnlyPagesNotInLibrary = useFileStore((s) => s.setShowOnlyPagesNotInLibrary);
+  const showOnlyPagesNotInLibrary = usePageStore((s) => s.showOnlyPagesNotInLibrary);
+  const setShowOnlyPagesNotInLibrary = usePageStore((s) => s.setShowOnlyPagesNotInLibrary);
 
   const [pagePageSize, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pagePageSize(s),

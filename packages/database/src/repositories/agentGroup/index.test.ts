@@ -766,4 +766,502 @@ describe('AgentGroupRepository', () => {
       expect(virtualAgents).toHaveLength(0);
     });
   });
+
+  describe('duplicate', () => {
+    it('should duplicate a group with all config fields', async () => {
+      // Create source group with full config
+      await serverDB.insert(chatGroups).values({
+        config: {
+          maxResponseInRow: 5,
+          orchestratorModel: 'gpt-4o',
+          orchestratorProvider: 'openai',
+          responseOrder: 'sequential',
+          scene: 'productive',
+        },
+        id: 'source-group',
+        pinned: true,
+        title: 'Source Group',
+        userId,
+      });
+
+      // Create supervisor agent
+      await serverDB.insert(agents).values({
+        id: 'source-supervisor',
+        model: 'gpt-4o',
+        provider: 'openai',
+        title: 'Supervisor',
+        userId,
+        virtual: true,
+      });
+
+      // Link supervisor to group
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'source-supervisor',
+        chatGroupId: 'source-group',
+        order: -1,
+        role: 'supervisor',
+        userId,
+      });
+
+      const result = await agentGroupRepo.duplicate('source-group');
+
+      expect(result).not.toBeNull();
+      expect(result!.groupId).toBeDefined();
+      expect(result!.supervisorAgentId).toBeDefined();
+      expect(result!.groupId).not.toBe('source-group');
+      expect(result!.supervisorAgentId).not.toBe('source-supervisor');
+
+      // Verify duplicated group has correct config
+      const duplicatedGroup = await serverDB.query.chatGroups.findFirst({
+        where: (cg, { eq }) => eq(cg.id, result!.groupId),
+      });
+
+      expect(duplicatedGroup).toEqual(
+        expect.objectContaining({
+          config: {
+            maxResponseInRow: 5,
+            orchestratorModel: 'gpt-4o',
+            orchestratorProvider: 'openai',
+            responseOrder: 'sequential',
+            scene: 'productive',
+          },
+          pinned: true,
+          title: 'Source Group (Copy)',
+          userId,
+        }),
+      );
+    });
+
+    it('should duplicate group with custom title', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'title-group',
+        title: 'Original Title',
+        userId,
+      });
+
+      await serverDB.insert(agents).values({
+        id: 'title-supervisor',
+        title: 'Supervisor',
+        userId,
+        virtual: true,
+      });
+
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'title-supervisor',
+        chatGroupId: 'title-group',
+        order: -1,
+        role: 'supervisor',
+        userId,
+      });
+
+      const result = await agentGroupRepo.duplicate('title-group', 'Custom New Title');
+
+      expect(result).not.toBeNull();
+
+      const duplicatedGroup = await serverDB.query.chatGroups.findFirst({
+        where: (cg, { eq }) => eq(cg.id, result!.groupId),
+      });
+
+      expect(duplicatedGroup!.title).toBe('Custom New Title');
+    });
+
+    it('should copy virtual member agents (create new agents)', async () => {
+      // Create source group
+      await serverDB.insert(chatGroups).values({
+        id: 'virtual-member-group',
+        title: 'Virtual Member Group',
+        userId,
+      });
+
+      // Create supervisor and virtual member agents
+      await serverDB.insert(agents).values([
+        {
+          id: 'vm-supervisor',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+        },
+        {
+          avatar: 'virtual-avatar.png',
+          backgroundColor: '#ff0000',
+          description: 'Virtual member description',
+          id: 'vm-virtual-member',
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: 'You are a virtual assistant',
+          tags: ['tag1', 'tag2'],
+          title: 'Virtual Member',
+          userId,
+          virtual: true,
+        },
+      ]);
+
+      // Link agents to group
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'vm-supervisor',
+          chatGroupId: 'virtual-member-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+        },
+        {
+          agentId: 'vm-virtual-member',
+          chatGroupId: 'virtual-member-group',
+          enabled: true,
+          order: 0,
+          role: 'participant',
+          userId,
+        },
+      ]);
+
+      const result = await agentGroupRepo.duplicate('virtual-member-group');
+
+      expect(result).not.toBeNull();
+
+      // Verify new group has agents
+      const groupAgents = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, result!.groupId),
+      });
+
+      // 1 supervisor + 1 virtual member
+      expect(groupAgents).toHaveLength(2);
+
+      // Verify virtual member agent was copied (new agent created)
+      const virtualMemberRelation = groupAgents.find(
+        (ga) => ga.role === 'participant' && ga.agentId !== 'vm-virtual-member',
+      );
+      expect(virtualMemberRelation).toBeDefined();
+
+      // Verify copied agent has all fields
+      const copiedAgent = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, virtualMemberRelation!.agentId),
+      });
+
+      expect(copiedAgent).toEqual(
+        expect.objectContaining({
+          avatar: 'virtual-avatar.png',
+          backgroundColor: '#ff0000',
+          description: 'Virtual member description',
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: 'You are a virtual assistant',
+          tags: ['tag1', 'tag2'],
+          title: 'Virtual Member',
+          userId,
+          virtual: true,
+        }),
+      );
+
+      // Verify original virtual member still exists
+      const originalAgent = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, 'vm-virtual-member'),
+      });
+      expect(originalAgent).toBeDefined();
+    });
+
+    it('should reference non-virtual member agents (only add relationship)', async () => {
+      // Create source group
+      await serverDB.insert(chatGroups).values({
+        id: 'nonvirtual-member-group',
+        title: 'Non-Virtual Member Group',
+        userId,
+      });
+
+      // Create supervisor and non-virtual member agents
+      await serverDB.insert(agents).values([
+        {
+          id: 'nvm-supervisor',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+        },
+        {
+          description: 'Regular agent description',
+          id: 'nvm-regular-member',
+          model: 'claude-3-opus',
+          provider: 'anthropic',
+          title: 'Regular Member',
+          userId,
+          virtual: false,
+        },
+      ]);
+
+      // Link agents to group
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'nvm-supervisor',
+          chatGroupId: 'nonvirtual-member-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+        },
+        {
+          agentId: 'nvm-regular-member',
+          chatGroupId: 'nonvirtual-member-group',
+          enabled: true,
+          order: 0,
+          role: 'participant',
+          userId,
+        },
+      ]);
+
+      const result = await agentGroupRepo.duplicate('nonvirtual-member-group');
+
+      expect(result).not.toBeNull();
+
+      // Verify new group has agents
+      const groupAgents = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, result!.groupId),
+      });
+
+      // 1 supervisor + 1 non-virtual member
+      expect(groupAgents).toHaveLength(2);
+
+      // Verify non-virtual member uses the SAME agent ID (just added relationship)
+      const regularMemberRelation = groupAgents.find((ga) => ga.agentId === 'nvm-regular-member');
+      expect(regularMemberRelation).toBeDefined();
+      expect(regularMemberRelation!.role).toBe('participant');
+      expect(regularMemberRelation!.enabled).toBe(true);
+
+      // Verify no new agent was created for the regular member
+      const allAgentsWithTitle = await serverDB.query.agents.findMany({
+        where: (a, { and, eq }) => and(eq(a.userId, userId), eq(a.title, 'Regular Member')),
+      });
+      // Should only have the original one
+      expect(allAgentsWithTitle).toHaveLength(1);
+      expect(allAgentsWithTitle[0].id).toBe('nvm-regular-member');
+    });
+
+    it('should handle mixed virtual and non-virtual members', async () => {
+      // Create source group
+      await serverDB.insert(chatGroups).values({
+        id: 'mixed-member-group',
+        title: 'Mixed Member Group',
+        userId,
+      });
+
+      // Create supervisor, virtual member, and non-virtual member agents
+      await serverDB.insert(agents).values([
+        { id: 'mixed-supervisor', title: 'Supervisor', userId, virtual: true },
+        { id: 'mixed-virtual', title: 'Virtual Agent', userId, virtual: true },
+        { id: 'mixed-regular', title: 'Regular Agent', userId, virtual: false },
+      ]);
+
+      // Link agents to group
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'mixed-supervisor',
+          chatGroupId: 'mixed-member-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+        },
+        {
+          agentId: 'mixed-virtual',
+          chatGroupId: 'mixed-member-group',
+          order: 0,
+          role: 'participant',
+          userId,
+        },
+        {
+          agentId: 'mixed-regular',
+          chatGroupId: 'mixed-member-group',
+          order: 1,
+          role: 'participant',
+          userId,
+        },
+      ]);
+
+      const result = await agentGroupRepo.duplicate('mixed-member-group');
+
+      expect(result).not.toBeNull();
+
+      const groupAgents = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, result!.groupId),
+      });
+
+      // 1 supervisor + 1 virtual (copied) + 1 non-virtual (referenced)
+      expect(groupAgents).toHaveLength(3);
+
+      // Verify non-virtual member references original agent
+      const regularRelation = groupAgents.find((ga) => ga.agentId === 'mixed-regular');
+      expect(regularRelation).toBeDefined();
+
+      // Verify virtual member was copied (new agent ID)
+      const virtualRelation = groupAgents.find(
+        (ga) => ga.role === 'participant' && ga.agentId !== 'mixed-regular',
+      );
+      expect(virtualRelation).toBeDefined();
+      expect(virtualRelation!.agentId).not.toBe('mixed-virtual');
+    });
+
+    it('should return null for non-existent group', async () => {
+      const result = await agentGroupRepo.duplicate('non-existent-group');
+
+      expect(result).toBeNull();
+    });
+
+    it('should not duplicate group belonging to another user', async () => {
+      // Create group for other user
+      await serverDB.insert(chatGroups).values({
+        id: 'other-user-dup-group',
+        title: 'Other User Group',
+        userId: otherUserId,
+      });
+
+      const result = await agentGroupRepo.duplicate('other-user-dup-group');
+
+      expect(result).toBeNull();
+    });
+
+    it('should preserve member order in duplicated group', async () => {
+      // Create source group
+      await serverDB.insert(chatGroups).values({
+        id: 'order-group',
+        title: 'Order Group',
+        userId,
+      });
+
+      // Create agents
+      await serverDB.insert(agents).values([
+        { id: 'order-supervisor', title: 'Supervisor', userId, virtual: true },
+        { id: 'order-agent-1', title: 'Agent 1', userId, virtual: false },
+        { id: 'order-agent-2', title: 'Agent 2', userId, virtual: false },
+        { id: 'order-agent-3', title: 'Agent 3', userId, virtual: false },
+      ]);
+
+      // Link agents with specific order
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'order-supervisor',
+          chatGroupId: 'order-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+        },
+        {
+          agentId: 'order-agent-1',
+          chatGroupId: 'order-group',
+          order: 2,
+          role: 'participant',
+          userId,
+        },
+        {
+          agentId: 'order-agent-2',
+          chatGroupId: 'order-group',
+          order: 0,
+          role: 'participant',
+          userId,
+        },
+        {
+          agentId: 'order-agent-3',
+          chatGroupId: 'order-group',
+          order: 1,
+          role: 'participant',
+          userId,
+        },
+      ]);
+
+      const result = await agentGroupRepo.duplicate('order-group');
+
+      expect(result).not.toBeNull();
+
+      const groupAgents = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, result!.groupId),
+      });
+
+      // Verify order is preserved
+      const supervisorRelation = groupAgents.find((ga) => ga.role === 'supervisor');
+      expect(supervisorRelation!.order).toBe(-1);
+
+      const agent1Relation = groupAgents.find((ga) => ga.agentId === 'order-agent-1');
+      expect(agent1Relation!.order).toBe(2);
+
+      const agent2Relation = groupAgents.find((ga) => ga.agentId === 'order-agent-2');
+      expect(agent2Relation!.order).toBe(0);
+
+      const agent3Relation = groupAgents.find((ga) => ga.agentId === 'order-agent-3');
+      expect(agent3Relation!.order).toBe(1);
+    });
+
+    it('should duplicate group with default title when source has no title', async () => {
+      // Create source group without title
+      await serverDB.insert(chatGroups).values({
+        id: 'no-title-group',
+        title: null,
+        userId,
+      });
+
+      await serverDB.insert(agents).values({
+        id: 'no-title-supervisor',
+        title: 'Supervisor',
+        userId,
+        virtual: true,
+      });
+
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'no-title-supervisor',
+        chatGroupId: 'no-title-group',
+        order: -1,
+        role: 'supervisor',
+        userId,
+      });
+
+      const result = await agentGroupRepo.duplicate('no-title-group');
+
+      expect(result).not.toBeNull();
+
+      const duplicatedGroup = await serverDB.query.chatGroups.findFirst({
+        where: (cg, { eq }) => eq(cg.id, result!.groupId),
+      });
+
+      expect(duplicatedGroup!.title).toBe('Copy');
+    });
+
+    it('should create new supervisor agent with source supervisor config', async () => {
+      // Create source group
+      await serverDB.insert(chatGroups).values({
+        id: 'supervisor-config-group',
+        title: 'Supervisor Config Group',
+        userId,
+      });
+
+      // Create supervisor with specific config
+      await serverDB.insert(agents).values({
+        id: 'source-supervisor-with-config',
+        model: 'claude-3-opus',
+        provider: 'anthropic',
+        title: 'Custom Supervisor',
+        userId,
+        virtual: true,
+      });
+
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'source-supervisor-with-config',
+        chatGroupId: 'supervisor-config-group',
+        order: -1,
+        role: 'supervisor',
+        userId,
+      });
+
+      const result = await agentGroupRepo.duplicate('supervisor-config-group');
+
+      expect(result).not.toBeNull();
+
+      // Verify new supervisor has same config
+      const newSupervisor = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, result!.supervisorAgentId),
+      });
+
+      expect(newSupervisor).toEqual(
+        expect.objectContaining({
+          model: 'claude-3-opus',
+          provider: 'anthropic',
+          title: 'Custom Supervisor',
+          virtual: true,
+        }),
+      );
+    });
+  });
 });

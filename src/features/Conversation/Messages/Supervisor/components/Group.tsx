@@ -6,9 +6,9 @@ import { memo, useMemo } from 'react';
 import { type AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
+import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
 import { CollapsedMessage } from './CollapsedMessage';
 import ContentBlock from './ContentBlock';
-import { GroupMessageContext } from './GroupContext';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -43,13 +43,13 @@ const Group = memo<GroupChildrenProps>(({ blocks, id, content }) => {
     );
   }
   return (
-    <GroupMessageContext value={contextValue}>
+    <MessageAggregationContext value={contextValue}>
       <Flexbox className={styles.container} gap={8}>
         {blocks.map((item) => {
           return <ContentBlock {...item} key={id + '.' + item.id} />;
         })}
       </Flexbox>
-    </GroupMessageContext>
+    </MessageAggregationContext>
   );
 }, isEqual);
 

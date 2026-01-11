@@ -20,6 +20,7 @@ import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/featur
 import FileIcon from '@/components/FileIcon';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
+import type { ResourceItem } from '@/types/resource';
 
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import TreeSkeleton from './TreeSkeleton';
@@ -34,6 +35,17 @@ const treeState = new Map<
     loadingFolders: Set<string>;
   }
 >();
+
+const TREE_REFRESH_EVENT = 'resource-tree-refresh';
+
+const emitTreeRefresh = (knowledgeBaseId: string) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(TREE_REFRESH_EVENT, {
+      detail: { knowledgeBaseId },
+    }),
+  );
+};
 
 const getTreeState = (knowledgeBaseId: string) => {
   if (!treeState.has(knowledgeBaseId)) {
@@ -56,6 +68,47 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
   const state = treeState.get(knowledgeBaseId);
   if (!state) return;
 
+  const { resourceList } = useFileStore.getState();
+
+  const resolveParentId = (key: string | null | undefined) => {
+    if (!key) return null;
+    // Prefer id match
+    const byId = resourceList.find(
+      (item) => item.knowledgeBaseId === knowledgeBaseId && item.id === key,
+    );
+    if (byId) return byId.id;
+    // Fallback to slug match
+    const bySlug = resourceList.find(
+      (item) => item.knowledgeBaseId === knowledgeBaseId && item.slug === key,
+    );
+    return bySlug?.id ?? key;
+  };
+
+  const buildChildrenFromStore = (parentKey: string | null) => {
+    const parentId = resolveParentId(parentKey);
+    return resourceList
+      .filter(
+        (item) =>
+          item.knowledgeBaseId === knowledgeBaseId &&
+          (item.parentId ?? null) === (parentId ?? null),
+      )
+      .map<ResourceItem>((item) => item)
+      .map((item) => ({
+        fileType: item.fileType,
+        id: item.id,
+        isFolder: item.fileType === 'custom/folder',
+        name: item.name,
+        slug: item.slug,
+        sourceType: item.sourceType,
+        url: item.url || '',
+      }))
+      .sort((a, b) => {
+        if (a.isFolder && !b.isFolder) return -1;
+        if (!a.isFolder && b.isFolder) return 1;
+        return a.name.localeCompare(b.name);
+      });
+  };
+
   // Get list of all currently expanded folders before clearing
   const expandedFoldersList = Array.from(state.expandedFolders);
 
@@ -65,9 +118,16 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
 
   // Reload each expanded folder
   for (const folderKey of expandedFoldersList) {
+    // Prefer local store (explorer data) to avoid stale remote state
+    const localChildren = buildChildrenFromStore(folderKey);
+    if (localChildren.length > 0) {
+      state.folderChildrenCache.set(folderKey, localChildren);
+      state.loadedFolders.add(folderKey);
+      continue;
+    }
+
+    // Fallback to remote fetch if store has no data (e.g., initial load)
     try {
-      // The API expects document ID, but folderKey could be slug or ID
-      // We'll use it as is and let the API handle it
       const response = await fileService.getKnowledgeItems({
         knowledgeBaseId,
         parentId: folderKey,
@@ -92,7 +152,6 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
           return a.name.localeCompare(b.name);
         });
 
-        // Update cache using the same key that was used before
         state.folderChildrenCache.set(folderKey, sortedChildren);
         state.loadedFolders.add(folderKey);
       }
@@ -100,6 +159,33 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
       console.error(`Failed to reload folder ${folderKey}:`, error);
     }
   }
+
+  // Revalidate SWR caches for root and expanded folders to keep list and tree in sync
+  try {
+    const { mutate } = await import('swr');
+    const revalidateFolder = (parentId: string | null) =>
+      mutate(
+        [
+          'useFetchKnowledgeItems',
+          {
+            knowledgeBaseId,
+            parentId,
+            showFilesInKnowledgeBase: false,
+          },
+        ],
+        undefined,
+        { revalidate: true },
+      );
+
+    await Promise.all([
+      revalidateFolder(null),
+      ...expandedFoldersList.map((folderKey) => revalidateFolder(folderKey)),
+    ]);
+  } catch (error) {
+    console.error('Failed to revalidate tree SWR cache:', error);
+  }
+
+  emitTreeRefresh(knowledgeBaseId);
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -201,13 +287,16 @@ const FileTreeRow = memo<{
 
       try {
         await renameFolder(item.id, renamingValue.trim());
+        if (libraryId) {
+          await clearTreeFolderCache(libraryId);
+        }
         message.success('Renamed successfully');
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
         message.error('Rename failed');
       }
-    }, [item.id, item.name, renamingValue, renameFolder, message]);
+    }, [item.id, item.name, libraryId, renamingValue, renameFolder, message]);
 
     const handleRenameCancel = useCallback(() => {
       setIsRenaming(false);
@@ -218,7 +307,7 @@ const FileTreeRow = memo<{
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
-      knowledgeBaseId: libraryId,
+      libraryId,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
       sourceType: item.sourceType,
       url: item.url,
@@ -658,6 +747,22 @@ const FileTree = memo(() => {
   React.useEffect(() => {
     parentFolderKeyRef.current = null;
   }, [libraryId]);
+
+  // Listen for external tree refresh events (triggered when cache is cleared)
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleTreeRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ knowledgeBaseId?: string }>).detail;
+      if (detail?.knowledgeBaseId && libraryId && detail.knowledgeBaseId !== libraryId) return;
+      forceUpdate();
+    };
+
+    window.addEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+    return () => {
+      window.removeEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+    };
+  }, [libraryId, forceUpdate]);
 
   // Auto-expand folders when navigating to a folder in Explorer
   React.useEffect(() => {

@@ -107,6 +107,17 @@ class ChatGroupService {
   getGroupAgents = (groupId: string): Promise<ChatGroupAgentItem[]> => {
     return lambdaClient.group.getGroupAgents.query({ groupId });
   };
+
+  /**
+   * Duplicate a chat group with all its members.
+   * Returns the new group ID and supervisor agent ID.
+   */
+  duplicateGroup = (
+    groupId: string,
+    newTitle?: string,
+  ): Promise<{ groupId: string; supervisorAgentId: string } | null> => {
+    return lambdaClient.group.duplicateGroup.mutate({ groupId, newTitle });
+  };
 }
 
 export const chatGroupService = new ChatGroupService();

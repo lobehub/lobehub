@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Intensità del Ragionamento",
   "extendParams.textVerbosity.title": "Livello di Dettaglio del Testo",
   "extendParams.thinking.title": "Interruttore Pensiero Profondo",
+  "extendParams.thinkingBudget.title": "Budget di Riflessione",
   "extendParams.thinkingLevel.title": "Livello di Pensiero",
   "extendParams.title": "Funzionalità Estese del Modello",
   "extendParams.urlContext.desc": "Se abilitato, i link web verranno automaticamente analizzati per recuperare il contenuto della pagina",

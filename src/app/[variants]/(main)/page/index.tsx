@@ -1,26 +1,22 @@
 'use client';
 
 import { Suspense, memo } from 'react';
-import { useParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
-import PageExplorer from '@/features/PageExplorer';
-import { standardizeIdentifier } from '@/utils/identifier';
+import PageExplorerPlaceholder from '@/features/PageExplorer/PageExplorerPlaceholder';
 
-import PageTitle from './features/PageTitle';
+import PageTitle from './PageTitle';
 
 /**
  * Pages route - dedicated page for managing documents/pages
  * This is extracted from the /resource route to have its own dedicated space
  */
 const PagesPage = memo(() => {
-  const { id } = useParams<{ id: string }>();
-
   return (
     <>
       <PageTitle />
       <Suspense fallback={<Loading debugId="PagesPage" />}>
-        <PageExplorer pageId={standardizeIdentifier(id ?? '', 'docs')} />
+        <PageExplorerPlaceholder />
       </Suspense>
     </>
   );

@@ -93,6 +93,7 @@ export default {
   'builtins.lobe-local-system.inspector.rename.result':
     '<old>{{oldName}}</old> → <new>{{newName}}</new>',
   'builtins.lobe-local-system.title': 'Local System',
+  'builtins.lobe-notebook.actions.collapse': 'Collapse',
   'builtins.lobe-notebook.actions.copy': 'Copy',
   'builtins.lobe-notebook.actions.creating': 'Creating document...',
   'builtins.lobe-notebook.actions.edit': 'Edit',

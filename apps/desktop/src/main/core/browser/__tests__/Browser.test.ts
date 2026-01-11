@@ -40,6 +40,7 @@ const { mockBrowserWindow, mockNativeTheme, mockIpcMain, mockScreen, MockBrowser
             onHeadersReceived: vi.fn(),
           },
         },
+        on: vi.fn(),
       },
     };
 
@@ -644,6 +645,37 @@ describe('Browser', () => {
       browser.reapplyVisualEffects();
 
       expect(mockBrowserWindow.setBackgroundColor).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('will-prevent-unload event handling', () => {
+    let willPreventUnloadHandler: (e: any) => void;
+
+    beforeEach(() => {
+      // Get the will-prevent-unload handler registered during initialization
+      willPreventUnloadHandler = mockBrowserWindow.webContents.on.mock.calls.find(
+        (call) => call[0] === 'will-prevent-unload',
+      )?.[1];
+    });
+
+    it('should call preventDefault when app is quitting', () => {
+      (mockApp as any).isQuiting = true;
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willPreventUnloadHandler).toBeDefined();
+      willPreventUnloadHandler(mockEvent);
+
+      expect(mockEvent.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should not call preventDefault when app is not quitting', () => {
+      (mockApp as any).isQuiting = false;
+      const mockEvent = { preventDefault: vi.fn() };
+
+      expect(willPreventUnloadHandler).toBeDefined();
+      willPreventUnloadHandler(mockEvent);
+
+      expect(mockEvent.preventDefault).not.toHaveBeenCalled();
     });
   });
 });

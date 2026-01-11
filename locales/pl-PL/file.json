@@ -18,6 +18,8 @@
   "empty": "Nie przesłano jeszcze żadnych plików ani folderów.",
   "header.actions.builtInBlockList.filtered": "Przefiltrowano {{ignored}} plików (z {{total}} ogółem)",
   "header.actions.connect": "Połącz...",
+  "header.actions.createFolderError": "Nie udało się utworzyć folderu",
+  "header.actions.creatingFolder": "Tworzenie folderu...",
   "header.actions.gitignore.apply": "Zastosuj reguły",
   "header.actions.gitignore.cancel": "Ignoruj reguły",
   "header.actions.gitignore.content": "Wykryto plik .gitignore (łącznie {{count}} plików). Czy chcesz zastosować reguły ignorowania?",

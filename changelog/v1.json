@@ -1,5 +1,149 @@
 [
   {
+    "children": {
+      "improvements": ["Improve cron jobs style."]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.266"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fix duplicate agent and group, Fix Windows desktop build error with macOS native module, force plain text paste in ChatInput editor."
+      ]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.265"
+  },
+  {
+    "children": {
+      "fixes": ["Handle will-prevent-unload event to allow app quit."]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.264"
+  },
+  {
+    "children": {
+      "improvements": [
+        "ModelParse support to get model settings params & Customize extendParams UI."
+      ]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.263"
+  },
+  {
+    "children": {
+      "improvements": ["Rename chat folder to agent."]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.262"
+  },
+  {
+    "children": {},
+    "date": "2026-01-10",
+    "version": "2.0.0-next.261"
+  },
+  {
+    "children": {},
+    "date": "2026-01-10",
+    "version": "2.0.0-next.260"
+  },
+  {
+    "children": {
+      "features": ["Update the cron patterns fields values."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.259"
+  },
+  {
+    "children": {
+      "fixes": ["Fix memory search context."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.258"
+  },
+  {
+    "children": {
+      "improvements": ["Remember page agent panel width."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.257"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor page and notebook document usage."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.256"
+  },
+  {
+    "children": {
+      "fixes": ["Fix auto add group member crash."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.255"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.254"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.253"
+  },
+  {
+    "children": {
+      "features": ["Add the agent cron job."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.252"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.251"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.250"
+  },
+  {
+    "children": {
+      "improvements": ["Force gpt-5.2 use response api."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.249"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.248"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.247"
+  },
+  {
+    "children": {
+      "features": ["Generate agent_cron_jobs in agents."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.246"
+  },
+  {
+    "children": {
+      "improvements": ["Improve Tools popover component structure and fix UI consistency."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.245"
+  },
+  {
     "children": {},
     "date": "2026-01-08",
     "version": "2.0.0-next.244"

@@ -6,6 +6,7 @@ packages:
 
 onlyBuiltDependencies:
   - '@vercel/speed-insights'
+  - '@lobehub/editor'
 
 overrides:
   '@lobehub/chat-plugin-sdk>swagger-client': 3.36.0

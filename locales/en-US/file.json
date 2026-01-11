@@ -18,6 +18,8 @@
   "empty": "No files or folders have been uploaded yet.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} files filtered (out of {{total}} total)",
   "header.actions.connect": "Connect...",
+  "header.actions.createFolderError": "Failed to create folder",
+  "header.actions.creatingFolder": "Creating folder...",
   "header.actions.gitignore.apply": "Apply Rules",
   "header.actions.gitignore.cancel": "Ignore Rules",
   "header.actions.gitignore.content": ".gitignore file detected ({{count}} files in total). Would you like to apply the ignore rules?",

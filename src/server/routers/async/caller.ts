@@ -38,7 +38,7 @@ export const createAsyncServerClient = async (userId: string) => {
 };
 
 /**
- * 用来推断 caller 类型辅助方法，但不实际调用 createAsyncCallerFactory，调用会报错：asyncRouter 没有初始化
+ * Helper method for inferring caller type, but does not actually call createAsyncCallerFactory. Calling it will throw an error: asyncRouter is not initialized
  */
 const helperFunc = () => {
   const dummyCreateCaller = createAsyncCallerFactory(asyncRouter);
@@ -52,8 +52,8 @@ interface CreateCallerOptions {
 }
 
 /**
- * 创建 caller 的工厂方法，使用 HTTP Client 调用
- * 使用方式统一成 caller.a.b() 的调用方式
+ * Factory method for creating caller, using HTTP Client to make calls
+ * Unified usage pattern: caller.a.b()
  */
 export const createAsyncCaller = async (
   options: CreateCallerOptions,

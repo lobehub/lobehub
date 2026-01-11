@@ -130,7 +130,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   onActionClick: async (type) => {
     const { selectedFileIds, libraryId } = get();
     const { useFileStore } = await import('@/store/file');
-    const { useKnowledgeBaseStore } = await import('@/store/knowledgeBase');
+    const { useKnowledgeBaseStore } = await import('@/store/library');
     const { isChunkingUnsupported } = await import('@/utils/isChunkingUnsupported');
 
     const fileStore = useFileStore.getState();
@@ -138,37 +138,9 @@ export const store: CreateStore = (publicState) => (set, get) => ({
 
     switch (type) {
       case 'delete': {
-        // Separate documents/pages from regular files
-        const documentsToDelete: string[] = [];
-        const filesToDelete: string[] = [];
-
-        selectedFileIds.forEach((id) => {
-          const item = fileStore.fileList.find((f) => f.id === id);
-          if (!item) return;
-
-          const isPage = item.sourceType === 'document' || item.fileType === 'custom/document';
-          const isFolder = item.fileType === 'custom/folder';
-
-          if (isPage || isFolder) {
-            documentsToDelete.push(id);
-          } else {
-            filesToDelete.push(id);
-          }
-        });
-
-        // Delete documents using batch delete endpoint
-        if (documentsToDelete.length > 0) {
-          const { documentService } = await import('@/services/document');
-          await documentService.deleteDocuments(documentsToDelete);
-        }
-
-        // Delete regular files using file service
-        if (filesToDelete.length > 0) {
-          await fileStore.removeFiles(filesToDelete);
-        } else {
-          // If only documents were deleted, still refresh the file list
-          await fileStore.refreshFileList();
-        }
+        // Use optimistic deleteResource for instant batch delete
+        // All items disappear immediately, sync happens in background
+        await Promise.all(selectedFileIds.map((id) => fileStore.deleteResource(id)));
 
         set({ selectedFileIds: [] });
         return;
@@ -197,8 +169,8 @@ export const store: CreateStore = (publicState) => (set, get) => ({
 
       case 'batchChunking': {
         const chunkableFileIds = selectedFileIds.filter((id) => {
-          const file = fileStore.fileList.find((f) => f.id === id);
-          return file && !isChunkingUnsupported(file.fileType);
+          const resource = fileStore.resourceMap?.get(id);
+          return resource && !isChunkingUnsupported(resource.fileType);
         });
         await fileStore.parseFilesToChunks(chunkableFileIds, { skipExist: true });
         set({ selectedFileIds: [] });
@@ -246,7 +218,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     set({ isTransitioning });
   },
 
-  setLibraryId: async (libraryId) => {
+  setLibraryId: (libraryId) => {
     set({ libraryId });
 
     // Reset pagination state when switching libraries to prevent showing stale data
@@ -255,10 +227,8 @@ export const store: CreateStore = (publicState) => (set, get) => ({
       fileListOffset: 0,
     });
 
-    // Invalidate SWR cache to prevent showing stale data from previous library
-    const { useFileStore } = await import('@/store/file');
-    const fileStore = useFileStore.getState();
-    await fileStore.refreshFileList();
+    // Note: No need to manually refresh - Explorer's useEffect will automatically
+    // call fetchResources when libraryId changes
   },
 
   setMode: (mode) => {

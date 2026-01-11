@@ -4,10 +4,7 @@ import {
   LocalSystemListFilesPlaceholder,
   LocalSystemSearchFilesPlaceholder,
 } from '@lobechat/builtin-tool-local-system/client';
-import {
-  NotebookIdentifier,
-  NotebookPlaceholders,
-} from '@lobechat/builtin-tool-notebook/client';
+import { NotebookIdentifier, NotebookPlaceholders } from '@lobechat/builtin-tool-notebook/client';
 import {
   WebBrowsingManifest,
   WebBrowsingPlaceholders,

@@ -31,6 +31,8 @@ export const topics = pgTable(
     clientId: text('client_id'),
     historySummary: text('history_summary'),
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
+    trigger: text('trigger'), // 'cron' | 'chat' | 'api' - topic creation trigger source
+    mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
     ...timestamps,
   },
   (t) => [

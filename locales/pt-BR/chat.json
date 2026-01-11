@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Intensidade do Raciocínio",
   "extendParams.textVerbosity.title": "Nível de Detalhamento do Texto",
   "extendParams.thinking.title": "Chave de Pensamento Profundo",
+  "extendParams.thinkingBudget.title": "Orçamento de Ideias",
   "extendParams.thinkingLevel.title": "Nível de Pensamento",
   "extendParams.title": "Recursos Estendidos do Modelo",
   "extendParams.urlContext.desc": "Quando ativado, links da web serão automaticamente analisados para recuperar o conteúdo real da página",

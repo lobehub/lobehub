@@ -18,6 +18,8 @@
   "empty": "Aucun fichier ou dossier n’a encore été importé.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} fichiers filtrés (sur {{total}} au total)",
   "header.actions.connect": "Se connecter...",
+  "header.actions.createFolderError": "Échec de la création du dossier",
+  "header.actions.creatingFolder": "Création du dossier...",
   "header.actions.gitignore.apply": "Appliquer les règles",
   "header.actions.gitignore.cancel": "Ignorer les règles",
   "header.actions.gitignore.content": "Fichier .gitignore détecté ({{count}} fichiers au total). Souhaitez-vous appliquer les règles d’exclusion ?",

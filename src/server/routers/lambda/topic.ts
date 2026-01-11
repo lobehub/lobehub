@@ -142,11 +142,18 @@ export const topicRouter = router({
     return ctx.topicModel.queryAll();
   }),
 
+  getCronTopicsGroupedByCronJob: topicProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return ctx.topicModel.getCronTopicsGroupedByCronJob(input.agentId);
+    }),
+
   getTopics: topicProcedure
     .input(
       z.object({
         agentId: z.string().nullable().optional(),
         current: z.number().optional(),
+        excludeTriggers: z.array(z.string()).optional(),
         groupId: z.string().nullable().optional(),
         isInbox: z.boolean().optional(),
         pageSize: z.number().optional(),
@@ -154,11 +161,11 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { sessionId, isInbox, groupId, ...rest } = input;
+      const { sessionId, isInbox, groupId, excludeTriggers, ...rest } = input;
 
       // If groupId is provided, query by groupId directly
       if (groupId) {
-        const result = await ctx.topicModel.query({ groupId, ...rest });
+        const result = await ctx.topicModel.query({ excludeTriggers, groupId, ...rest });
         return { items: result.items, total: result.total };
       }
 
@@ -168,7 +175,12 @@ export const topicRouter = router({
         effectiveAgentId = await resolveAgentIdFromSession(sessionId, ctx.serverDB, ctx.userId);
       }
 
-      const result = await ctx.topicModel.query({ ...rest, agentId: effectiveAgentId, isInbox });
+      const result = await ctx.topicModel.query({
+        ...rest,
+        agentId: effectiveAgentId,
+        excludeTriggers,
+        isInbox,
+      });
 
       // Runtime migration: backfill agentId for ALL legacy topics and messages under this agent
       const runMigration = async () => {

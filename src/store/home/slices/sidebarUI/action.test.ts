@@ -6,6 +6,7 @@ import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
+import { getAgentStoreState } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 import { getSessionStoreState } from '@/store/session';
 
@@ -23,6 +24,12 @@ vi.mock('@/store/session', () => ({
   getSessionStoreState: vi.fn(() => ({
     activeId: 'test-session',
     switchSession: vi.fn(),
+  })),
+}));
+
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: vi.fn(() => ({
+    setActiveAgentId: vi.fn(),
   })),
 }));
 
@@ -136,17 +143,16 @@ describe('createSidebarUISlice', () => {
   });
 
   describe('duplicateAgent', () => {
-    it('should duplicate an agent and switch to the new session', async () => {
+    it('should duplicate an agent and switch to the new agent', async () => {
       const mockAgentId = 'agent-123';
-      const mockNewId = 'new-agent-456';
-      const mockSwitchSession = vi.fn();
+      const mockNewAgentId = 'new-agent-456';
+      const mockSetActiveAgentId = vi.fn();
 
-      vi.mocked(getSessionStoreState).mockReturnValue({
-        activeId: 'other-agent',
-        switchSession: mockSwitchSession,
+      vi.mocked(getAgentStoreState).mockReturnValue({
+        setActiveAgentId: mockSetActiveAgentId,
       } as any);
 
-      vi.spyOn(sessionService, 'cloneSession').mockResolvedValueOnce(mockNewId);
+      vi.spyOn(agentService, 'duplicateAgent').mockResolvedValueOnce({ agentId: mockNewAgentId });
       const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
 
       const { result } = renderHook(() => useHomeStore());
@@ -155,16 +161,16 @@ describe('createSidebarUISlice', () => {
         await result.current.duplicateAgent(mockAgentId, 'Copied Agent');
       });
 
-      expect(sessionService.cloneSession).toHaveBeenCalledWith(mockAgentId, 'Copied Agent');
+      expect(agentService.duplicateAgent).toHaveBeenCalledWith(mockAgentId, 'Copied Agent');
       expect(spyOnRefresh).toHaveBeenCalled();
-      expect(mockSwitchSession).toHaveBeenCalledWith(mockNewId);
+      expect(mockSetActiveAgentId).toHaveBeenCalledWith(mockNewAgentId);
     });
 
     it('should show error message when duplication fails', async () => {
       const mockAgentId = 'agent-123';
       const { message } = await import('@/components/AntdStaticMethods');
 
-      vi.spyOn(sessionService, 'cloneSession').mockResolvedValueOnce(undefined);
+      vi.spyOn(agentService, 'duplicateAgent').mockResolvedValueOnce(null);
       vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
 
       const { result } = renderHook(() => useHomeStore());
@@ -176,29 +182,24 @@ describe('createSidebarUISlice', () => {
       expect(message.error).toHaveBeenCalled();
     });
 
-    it('should use default title when not provided', async () => {
+    it('should use provided title when duplicating', async () => {
       const mockAgentId = 'agent-123';
-      const mockNewId = 'new-agent-456';
+      const mockNewAgentId = 'new-agent-456';
 
-      vi.mocked(getSessionStoreState).mockReturnValue({
-        activeId: 'other-agent',
-        switchSession: vi.fn(),
+      vi.mocked(getAgentStoreState).mockReturnValue({
+        setActiveAgentId: vi.fn(),
       } as any);
 
-      vi.spyOn(sessionService, 'cloneSession').mockResolvedValueOnce(mockNewId);
+      vi.spyOn(agentService, 'duplicateAgent').mockResolvedValueOnce({ agentId: mockNewAgentId });
       vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
 
       const { result } = renderHook(() => useHomeStore());
 
       await act(async () => {
-        await result.current.duplicateAgent(mockAgentId);
+        await result.current.duplicateAgent(mockAgentId, 'Custom Title');
       });
 
-      // default title is i18n based
-      expect(sessionService.cloneSession).toHaveBeenCalledWith(
-        mockAgentId,
-        expect.stringContaining('Copy'),
-      );
+      expect(agentService.duplicateAgent).toHaveBeenCalledWith(mockAgentId, 'Custom Title');
     });
   });
 

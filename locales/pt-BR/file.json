@@ -18,6 +18,8 @@
   "empty": "Nenhum arquivo ou pasta foi enviado ainda.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} arquivos filtrados (de {{total}} no total)",
   "header.actions.connect": "Conectar...",
+  "header.actions.createFolderError": "Falha ao criar a pasta",
+  "header.actions.creatingFolder": "Criando pasta...",
   "header.actions.gitignore.apply": "Aplicar Regras",
   "header.actions.gitignore.cancel": "Ignorar Regras",
   "header.actions.gitignore.content": "Arquivo .gitignore detectado ({{count}} arquivos no total). Deseja aplicar as regras de exclusão?",

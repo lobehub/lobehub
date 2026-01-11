@@ -18,6 +18,8 @@
   "empty": "Все още няма качени файлове или папки.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} файла филтрирани (от общо {{total}})",
   "header.actions.connect": "Свържи се...",
+  "header.actions.createFolderError": "Неуспешно създаване на папка",
+  "header.actions.creatingFolder": "Създаване на папка...",
   "header.actions.gitignore.apply": "Приложи правилата",
   "header.actions.gitignore.cancel": "Игнорирай правилата",
   "header.actions.gitignore.content": "Открит е файл .gitignore (общо {{count}} файла). Искате ли да приложите правилата за игнориране?",

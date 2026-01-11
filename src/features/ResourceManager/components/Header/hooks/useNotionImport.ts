@@ -11,7 +11,7 @@ interface UseNotionImportOptions {
   createDocument: DocumentAction['createDocument'];
   currentFolderId?: string | null;
   libraryId?: string | null;
-  refreshFileList: () => Promise<void>;
+  refetchResources: () => Promise<void>;
   t: TFunction<'file'>;
 }
 
@@ -19,7 +19,7 @@ const useNotionImport = ({
   createDocument,
   currentFolderId,
   libraryId,
-  refreshFileList,
+  refetchResources,
   t,
 }: UseNotionImportOptions) => {
   const notionInputRef = useRef<HTMLInputElement>(null);
@@ -171,8 +171,8 @@ const useNotionImport = ({
           );
         }
 
-        // Refresh file list to show imported documents
-        await refreshFileList();
+        // Refetch resources to show imported documents
+        await refetchResources();
       } catch (error) {
         console.error('Failed to import Notion export:', error);
         const { message } = await import('antd');
@@ -182,7 +182,7 @@ const useNotionImport = ({
       // Reset input to allow re-uploading
       event.target.value = '';
     },
-    [createDocument, currentFolderId, libraryId, refreshFileList, t],
+    [createDocument, currentFolderId, libraryId, refetchResources, t],
   );
 
   return {

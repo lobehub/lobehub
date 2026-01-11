@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 
-import Portal from '@/app/[variants]/(main)/chat/features/Portal/features/Portal';
-import PortalPanel from '@/app/[variants]/(main)/chat/features/Portal/features/PortalPanel';
+import Portal from '@/app/[variants]/(main)/agent/features/Portal/features/Portal';
+import PortalPanel from '@/app/[variants]/(main)/agent/features/Portal/features/PortalPanel';
 import Loading from '@/components/Loading/BrandTextLoading';
 
 const ChatPortal = () => {

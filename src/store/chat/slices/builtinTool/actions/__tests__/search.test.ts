@@ -32,7 +32,6 @@ describe('search actions', () => {
     useChatStore.setState({
       activeAgentId: 'session-id',
       activeTopicId: 'topic-id',
-      searchLoading: {},
       messageOperationMap: {},
       optimisticUpdateMessageContent: vi.fn(),
       optimisticUpdateMessagePluginError: vi.fn(),

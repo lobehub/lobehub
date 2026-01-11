@@ -144,6 +144,32 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
         }
       }
 
+      // 6. Inject outputFileTracingRoot to fix symlink resolution for Turbopack
+      // When building in shadow workspace (TEMP_DIR), symlinks (e.g., node_modules) point to PROJECT_ROOT
+      // Turbopack's root defaults to TEMP_DIR, causing strip_prefix to fail for paths outside TEMP_DIR
+      // Setting outputFileTracingRoot to PROJECT_ROOT allows Turbopack to correctly resolve these symlinks
+      // We use ELECTRON_BUILD_PROJECT_ROOT env var which is set by buildNextApp.mts
+      const outputFileTracingRootPair = nextConfigDecl.find({
+        rule: {
+          pattern: 'outputFileTracingRoot: $A',
+        },
+      });
+      if (!outputFileTracingRootPair) {
+        const objectNode = nextConfigDecl.find({
+          rule: { kind: 'object' },
+        });
+        if (objectNode) {
+          const range = objectNode.range();
+          // Insert outputFileTracingRoot that reads from env var at build time
+          // Falls back to current directory if not in electron build context
+          edits.push({
+            end: range.start.index + 1,
+            start: range.start.index + 1,
+            text: "\n  outputFileTracingRoot: process.env.ELECTRON_BUILD_PROJECT_ROOT || process.cwd(),",
+          });
+        }
+      }
+
       // Remove withPWA wrapper
       const withPWA = root.find({
         rule: {

@@ -18,6 +18,8 @@
   "empty": "업로드된 파일/폴더가 없습니다",
   "header.actions.builtInBlockList.filtered": "{{total}}개 파일 중 {{ignored}}개 파일이 필터링되었습니다",
   "header.actions.connect": "연결 중...",
+  "header.actions.createFolderError": "폴더를 생성하지 못했습니다",
+  "header.actions.creatingFolder": "폴더를 생성하는 중...",
   "header.actions.gitignore.apply": "규칙 적용",
   "header.actions.gitignore.cancel": "규칙 무시",
   "header.actions.gitignore.content": ".gitignore 파일이 감지되었습니다 (총 {{count}}개 파일). 무시 규칙을 적용하시겠습니까?",

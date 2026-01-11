@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Denkintensität",
   "extendParams.textVerbosity.title": "Detailgrad des Textausgabe",
   "extendParams.thinking.title": "Schalter für tiefes Denken",
+  "extendParams.thinkingBudget.title": "Denkbudget",
   "extendParams.thinkingLevel.title": "Denkebene",
   "extendParams.title": "Modellerweiterungsfunktionen",
   "extendParams.urlContext.desc": "Wenn aktiviert, werden Weblinks automatisch analysiert, um den tatsächlichen Seiteninhalt abzurufen",

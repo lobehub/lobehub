@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 
+import { imageRouter } from './index';
+
 // Use vi.hoisted for variables used in vi.mock factory
 const {
   mockServerDB,
@@ -78,8 +80,6 @@ vi.mock('@/database/schemas', () => ({
 vi.mock('@/utils/number', () => ({
   generateUniqueSeeds: vi.fn((count: number) => Array.from({ length: count }, (_, i) => 1000 + i)),
 }));
-
-import { imageRouter } from './index';
 
 describe('imageRouter', () => {
   const mockUserId = 'test-user-id';

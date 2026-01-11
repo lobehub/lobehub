@@ -18,6 +18,8 @@
   "empty": "لم يتم تحميل أي ملفات أو مجلدات بعد.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} ملف تم تصفيته (من أصل {{total}})",
   "header.actions.connect": "اتصال...",
+  "header.actions.createFolderError": "فشل في إنشاء المجلد",
+  "header.actions.creatingFolder": "جارٍ إنشاء المجلد...",
   "header.actions.gitignore.apply": "تطبيق القواعد",
   "header.actions.gitignore.cancel": "تجاهل القواعد",
   "header.actions.gitignore.content": "تم اكتشاف ملف .gitignore ({{count}} ملفًا إجمالاً). هل ترغب في تطبيق قواعد التجاهل؟",

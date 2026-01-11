@@ -1,5 +1,6 @@
 import { serve } from '@upstash/workflow/nextjs';
 import { chunk } from 'es-toolkit/compat';
+import { Client } from '@upstash/qstash'
 
 import {
   MemoryExtractionExecutor,
@@ -8,9 +9,12 @@ import {
   buildWorkflowPayloadInput,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
 const USER_PAGE_SIZE = 50;
 const USER_BATCH_SIZE = 10;
+
+const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
 export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
   const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
@@ -49,7 +53,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
           topicCursor: undefined,
           userId: userIds[0],
           userIds,
-        }),
+        }, { extraHeaders: upstashWorkflowExtraHeaders},),
       ),
     ),
   );
@@ -61,7 +65,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
           ...params,
           userCursor: { createdAt: cursor.createdAt.toISOString(), id: cursor.id },
         }),
-      }),
+      }, { extraHeaders: upstashWorkflowExtraHeaders }),
     );
   }
 
@@ -70,4 +74,17 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(async (context) => {
     nextCursor: cursor ? cursor.id : null,
     processedUsers: ids.length,
   };
+}, {
+  // NOTICE(@nekomeowww): Here as scenarios like Vercel Deployment Protection,
+  // intermediate context.run(...) won't offer customizable headers like context.trigger(...) / client.trigger(...)
+  // for passing additional headers, we have to provide a custom QStash client with the required headers here.
+  //
+  // Refer to the doc for more details:
+  // https://upstash.com/docs/workflow/troubleshooting/vercel#step-2-pass-header-when-triggering
+  qstashClient: new Client({
+    headers: {
+      ...upstashWorkflowExtraHeaders,
+    },
+    token: process.env.QSTASH_TOKEN!
+  })
 });

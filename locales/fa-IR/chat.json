@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "شدت تفکر",
   "extendParams.textVerbosity.title": "سطح جزئیات متن خروجی",
   "extendParams.thinking.title": "کلید تفکر عمیق",
+  "extendParams.thinkingBudget.title": "بودجه تفکری",
   "extendParams.thinkingLevel.title": "سطح تفکر",
   "extendParams.title": "ویژگی‌های توسعه مدل",
   "extendParams.urlContext.desc": "در صورت فعال بودن، پیوندهای وب به‌طور خودکار تجزیه شده و محتوای صفحه بازیابی می‌شود",

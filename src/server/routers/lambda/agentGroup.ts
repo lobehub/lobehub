@@ -126,6 +126,22 @@ export const agentGroupRouter = router({
       return ctx.agentGroupService.deleteGroup(input.id);
     }),
 
+  /**
+   * Duplicate a chat group with all its members.
+   * Creates a new group with the same config, a new supervisor, and copies of virtual members.
+   * Non-virtual members are referenced (not copied).
+   */
+  duplicateGroup: agentGroupProcedure
+    .input(
+      z.object({
+        groupId: z.string(),
+        newTitle: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.agentGroupRepo.duplicate(input.groupId, input.newTitle);
+    }),
+
   getGroup: agentGroupProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {

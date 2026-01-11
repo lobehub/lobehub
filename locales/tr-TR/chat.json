@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Düşünme Yoğunluğu",
   "extendParams.textVerbosity.title": "Çıktı Metni Ayrıntı Düzeyi",
   "extendParams.thinking.title": "Derin Düşünme Anahtarı",
+  "extendParams.thinkingBudget.title": "Düşünme Bütçesi",
   "extendParams.thinkingLevel.title": "Düşünme Seviyesi",
   "extendParams.title": "Model Genişletme Özellikleri",
   "extendParams.urlContext.desc": "Etkinleştirildiğinde, web bağlantıları otomatik olarak çözülerek gerçek sayfa içeriği alınır",

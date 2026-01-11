@@ -18,6 +18,8 @@
   "empty": "Chưa có tệp hoặc thư mục nào được tải lên.",
   "header.actions.builtInBlockList.filtered": "{{ignored}} tệp đã bị lọc (trong tổng số {{total}})",
   "header.actions.connect": "Kết nối...",
+  "header.actions.createFolderError": "Không thể tạo thư mục",
+  "header.actions.creatingFolder": "Đang tạo thư mục...",
   "header.actions.gitignore.apply": "Áp dụng Quy tắc",
   "header.actions.gitignore.cancel": "Bỏ qua Quy tắc",
   "header.actions.gitignore.content": "Phát hiện tệp .gitignore (tổng cộng {{count}} tệp). Bạn có muốn áp dụng các quy tắc bỏ qua không?",

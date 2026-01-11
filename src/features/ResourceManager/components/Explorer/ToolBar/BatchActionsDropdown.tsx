@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import RepoIcon from '@/components/LibIcon';
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
 

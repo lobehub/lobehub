@@ -17,9 +17,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const TreeSkeletonItem = memo(() => {
+interface TreeSkeletonItemProps {
+  opacity?: number;
+}
+
+const TreeSkeletonItem = memo<TreeSkeletonItemProps>(({ opacity = 1 }) => {
   return (
-    <Flexbox className={styles.container} horizontal>
+    <Flexbox className={styles.container} horizontal style={{ opacity }}>
       <Skeleton.Button
         active
         size={'small'}
@@ -43,13 +47,19 @@ const TreeSkeletonItem = memo(() => {
 
 TreeSkeletonItem.displayName = 'TreeSkeletonItem';
 
-const TreeSkeleton = memo(() => (
-  <Flexbox gap={2}>
-    {Array.from({ length: 8 }).map((_, i) => (
-      <TreeSkeletonItem key={i} />
-    ))}
-  </Flexbox>
-));
+const TreeSkeleton = memo(() => {
+  const count = 6;
+  // Calculate opacity gradient from 100% to 20%
+  const getOpacity = (index: number) => 1 - (index / (count - 1)) * 0.8;
+
+  return (
+    <Flexbox gap={2}>
+      {Array.from({ length: count }).map((_, i) => (
+        <TreeSkeletonItem key={i} opacity={getOpacity(i)} />
+      ))}
+    </Flexbox>
+  );
+});
 
 TreeSkeleton.displayName = 'TreeSkeleton';
 

@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "추론 강도",
   "extendParams.textVerbosity.title": "출력 상세도",
   "extendParams.thinking.title": "심층 사고 스위치",
+  "extendParams.thinkingBudget.title": "생각 예산",
   "extendParams.thinkingLevel.title": "사고 수준",
   "extendParams.title": "모델 확장 기능",
   "extendParams.urlContext.desc": "활성화하면 웹 링크를 자동 분석하여 웹페이지 컨텍스트를 추출합니다",

@@ -9,11 +9,11 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { message } from '@/components/AntdStaticMethods';
 import DragUpload from '@/components/DragUpload';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
 import { useFileStore } from '@/store/file';
-import { DocumentSourceType } from '@/types/document';
 
 import useNotionImport from './hooks/useNotionImport';
 import useUploadFolder from './hooks/useUploadFolder';
@@ -22,9 +22,12 @@ const AddButton = () => {
   const { t } = useTranslation('file');
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
-  const createFolder = useFileStore((s) => s.createFolder);
+  const createResource = useFileStore((s) => s.createResource);
+  const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
+
+  // TODO: Migrate Notion import to use createResource
+  // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
-  const refreshFileList = useFileStore((s) => s.refreshFileList);
 
   const [libraryId, currentFolderId, setCurrentViewItemId, setMode, setPendingRenameItemId] =
     useResourceManagerStore((s) => [
@@ -36,47 +39,64 @@ const AddButton = () => {
     ]);
 
   const handleOpenPageEditor = useCallback(async () => {
-    // Create a new page directly and switch to page view
+    // Create a new page with optimistic update - instant UI feedback
     const untitledTitle = t('pageList.untitled');
-    const newPage = await createDocument({
+    const tempId = await createResource({
       content: '',
+      fileType: 'custom/document',
       knowledgeBaseId: libraryId,
       parentId: currentFolderId ?? undefined,
+      sourceType: 'document',
       title: untitledTitle,
     });
 
-    // Add to local document map for immediate availability
-    const newDocumentMap = new Map(useFileStore.getState().localDocumentMap);
-    newDocumentMap.set(newPage.id, {
-      content: newPage.content || '',
-      createdAt: newPage.createdAt ? new Date(newPage.createdAt) : new Date(),
-      editorData:
-        typeof newPage.editorData === 'string'
-          ? JSON.parse(newPage.editorData)
-          : newPage.editorData || null,
-      fileType: 'custom/document',
-      filename: newPage.title || untitledTitle,
-      id: newPage.id,
-      metadata: newPage.metadata || {},
-      source: 'document',
-      sourceType: DocumentSourceType.EDITOR,
-      title: newPage.title || untitledTitle,
-      totalCharCount: newPage.content?.length || 0,
-      totalLineCount: 0,
-      updatedAt: newPage.updatedAt ? new Date(newPage.updatedAt) : new Date(),
-    });
-    useFileStore.setState({ localDocumentMap: newDocumentMap });
-
-    // Switch to page view mode
-    setCurrentViewItemId(newPage.id);
+    // Switch to page view mode immediately (temp ID works)
+    setCurrentViewItemId(tempId);
     setMode('page');
-  }, [createDocument, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
+  }, [createResource, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
-    const folderId = await createFolder('Untitled', currentFolderId ?? undefined, libraryId);
-    // Trigger auto-rename
-    setPendingRenameItemId(folderId);
-  }, [createFolder, currentFolderId, libraryId, setPendingRenameItemId]);
+    // Create folder and wait for sync to complete before triggering rename
+    try {
+      // Get current resource list to check for duplicate folder names
+      const resourceList = useFileStore.getState().resourceList || [];
+
+      // Filter for folders at the same level
+      const foldersAtSameLevel = resourceList.filter(
+        (item) =>
+          item.fileType === 'custom/folder' &&
+          (item.parentId ?? null) === (currentFolderId ?? null),
+      );
+
+      // Generate unique folder name
+      const baseName = 'Untitled';
+      const existingNames = new Set(foldersAtSameLevel.map((folder) => folder.name));
+
+      let uniqueName = baseName;
+      let counter = 1;
+
+      while (existingNames.has(uniqueName)) {
+        uniqueName = `${baseName} ${counter}`;
+        counter++;
+      }
+
+      // Wait for sync to complete to get the real ID
+      const realId = await createResourceAndSync({
+        content: '',
+        fileType: 'custom/folder',
+        knowledgeBaseId: libraryId,
+        parentId: currentFolderId ?? undefined,
+        sourceType: 'document',
+        title: uniqueName,
+      });
+
+      // Trigger auto-rename with the real ID (after sync completes)
+      setPendingRenameItemId(realId);
+    } catch (error) {
+      message.error(t('header.actions.createFolderError'));
+      console.error('Failed to create folder:', error);
+    }
+  }, [createResourceAndSync, currentFolderId, libraryId, setPendingRenameItemId, t]);
 
   const {
     handleCloseNotionGuide,
@@ -89,7 +109,10 @@ const AddButton = () => {
     createDocument,
     currentFolderId,
     libraryId,
-    refreshFileList,
+    refetchResources: async () => {
+      const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+      await revalidateResources();
+    },
     t,
   });
 
