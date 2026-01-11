@@ -41,6 +41,10 @@ export interface SidebarUIAction {
    */
   removeAgentGroup: (groupId: string) => Promise<void>;
   /**
+   * Rename an agent group (group chat)
+   */
+  renameAgentGroup: (groupId: string, title: string) => Promise<void>;
+  /**
    * Update agent's group
    */
   updateAgentGroup: (agentId: string, groupId: string | null) => Promise<void>;
@@ -159,6 +163,11 @@ export const createSidebarUISlice: StateCreator<
   removeAgentGroup: async (groupId) => {
     // Delete the group
     await chatGroupService.deleteGroup(groupId);
+    await get().refreshAgentList();
+  },
+
+  renameAgentGroup: async (groupId, title) => {
+    await chatGroupService.updateGroup(groupId, { title });
     await get().refreshAgentList();
   },
 

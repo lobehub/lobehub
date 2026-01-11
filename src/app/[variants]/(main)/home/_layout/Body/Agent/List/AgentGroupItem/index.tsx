@@ -30,8 +30,8 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
 
   // Get UI state from homeStore (editing, updating)
   const [editing, isUpdating] = useHomeStore((s) => [
-    s.agentRenamingId === id,
-    s.agentUpdatingId === id,
+    s.groupRenamingId === id,
+    s.groupUpdatingId === id,
   ]);
 
   // Get display title with fallback
@@ -63,7 +63,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
-      useHomeStore.getState().setAgentRenamingId(visible ? id : null);
+      useHomeStore.getState().setGroupRenamingId(visible ? id : null);
     },
     [id],
   );
