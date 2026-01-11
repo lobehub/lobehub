@@ -84,6 +84,7 @@ Before(async function (this: CustomWorld, { pickle }) {
     (tag) =>
       tag.name.startsWith('@COMMUNITY-') ||
       tag.name.startsWith('@AGENT-') ||
+      tag.name.startsWith('@HOME-') ||
       tag.name.startsWith('@ROUTES-'),
   );
   console.log(`\n📝 Running: ${pickle.name}${testId ? ` (${testId.name.replace('@', '')})` : ''}`);
@@ -104,6 +105,7 @@ After(async function (this: CustomWorld, { pickle, result }) {
       (tag) =>
         tag.name.startsWith('@COMMUNITY-') ||
         tag.name.startsWith('@AGENT-') ||
+        tag.name.startsWith('@HOME-') ||
         tag.name.startsWith('@ROUTES-'),
     )
     ?.name.replace('@', '');
