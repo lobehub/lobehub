@@ -122,11 +122,11 @@ Given('用户在 Page 页面有一个文稿', async function (this: CustomWorld)
 
   // Create a unique title for this test page
   const uniqueTitle = `E2E Page ${Date.now()}`;
-  const defaultTitle = '无标题';
+  const defaultTitleRegex = /^(无标题|Untitled)$/;
 
   console.log(`   📍 Step: 重命名为唯一标题 "${uniqueTitle}"...`);
   // Find the new page and rename it to ensure uniqueness
-  const pageItem = this.page.getByText(defaultTitle).first();
+  const pageItem = this.page.getByText(defaultTitleRegex).first();
   await expect(pageItem).toBeVisible({ timeout: 5000 });
 
   // Right-click to open context menu and rename
@@ -170,12 +170,12 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
   // Wait for the new page to be created
   await this.page.waitForURL(/\/page\/.+/, { timeout: 10_000 });
 
-  // Default title is "无标题" (Untitled)
-  const defaultTitle = '无标题';
+  // Default title is "无标题" (Untitled) - support both languages
+  const defaultTitleRegex = /^(无标题|Untitled)$/;
 
   console.log(`   📍 Step: 通过右键菜单重命名文稿为 "${title}"...`);
   // Find the new page in the sidebar and rename via context menu
-  const pageItem = this.page.getByText(defaultTitle).first();
+  const pageItem = this.page.getByText(defaultTitleRegex).first();
   await expect(pageItem).toBeVisible({ timeout: 5000 });
 
   // Right-click to open context menu
