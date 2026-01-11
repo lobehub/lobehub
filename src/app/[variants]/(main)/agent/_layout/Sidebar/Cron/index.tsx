@@ -1,6 +1,6 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@cloud/business-const';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Accordion, AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback } from 'react';
