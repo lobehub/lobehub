@@ -515,15 +515,19 @@ describe('HomeRepository', () => {
     it('should return multiple matching agents with correct pinned status', async () => {
       const result = await homeRepo.searchAgents('Searchable');
 
-      expect(result).toHaveLength(2);
+      // 3 agents: search-pinned, search-unpinned, search-standalone
+      expect(result).toHaveLength(3);
 
       const pinnedAgent = result.find((a) => a.id === 'search-pinned');
       const unpinnedAgent = result.find((a) => a.id === 'search-unpinned');
+      const standaloneAgent = result.find((a) => a.id === 'search-standalone');
 
       expect(pinnedAgent).toBeDefined();
       expect(pinnedAgent!.pinned).toBe(true);
       expect(unpinnedAgent).toBeDefined();
       expect(unpinnedAgent!.pinned).toBe(false);
+      expect(standaloneAgent).toBeDefined();
+      expect(standaloneAgent!.pinned).toBe(false);
     });
 
     it('should not return virtual agents in search', async () => {

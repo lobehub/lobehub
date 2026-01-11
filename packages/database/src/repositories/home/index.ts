@@ -96,7 +96,7 @@ export class HomeRepository {
       id: string;
       pinned: boolean | null;
       sessionGroupId: string | null;
-      sessionId: string;
+      sessionId: string | null;
       sessionPinned: boolean | null;
       title: string | null;
       updatedAt: Date;
@@ -230,7 +230,9 @@ export class HomeRepository {
       .orderBy(desc(chatGroups.updatedAt));
 
     // 2.1 Query member avatars for matching chat groups
-    const memberAvatarsMap = await this.getChatGroupMemberAvatars(chatGroupResults.map((g) => g.id));
+    const memberAvatarsMap = await this.getChatGroupMemberAvatars(
+      chatGroupResults.map((g) => g.id),
+    );
 
     // 3. Combine and format results
     const results: SidebarAgentItem[] = [

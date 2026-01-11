@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  NewAgent,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -1411,7 +1412,7 @@ describe('AgentModel', () => {
           fewShots: [{ role: 'user', content: 'test' }],
           params: { temperature: 0.7 },
           tts: { showAllLocaleVoice: true },
-        })
+        } as NewAgent)
         .returning();
 
       const result = await agentModel.duplicate(sourceAgent.id);
