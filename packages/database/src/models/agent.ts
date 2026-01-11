@@ -477,6 +477,7 @@ export class AgentModel {
         openingMessage: sourceAgent.openingMessage,
         openingQuestions: sourceAgent.openingQuestions,
         params: sourceAgent.params,
+        pinned: sourceAgent.pinned,
         // Config
         plugins: sourceAgent.plugins,
         provider: sourceAgent.provider,

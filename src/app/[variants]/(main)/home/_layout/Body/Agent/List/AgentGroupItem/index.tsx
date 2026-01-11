@@ -13,8 +13,8 @@ import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 import Actions from '../Item/Actions';
-import { useDropdownMenu } from '../Item/useDropdownMenu';
 import Editing from './Editing';
+import { useGroupDropdownMenu } from './useDropdownMenu';
 
 interface GroupItemProps {
   className?: string;
@@ -85,13 +85,9 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
     return <GroupAvatar avatars={(avatar as any) || []} size={22} />;
   }, [isUpdating, avatar]);
 
-  const dropdownMenu = useDropdownMenu({
-    group: undefined,
+  const dropdownMenu = useGroupDropdownMenu({
     id,
-    openCreateGroupModal: () => {}, // Groups don't need this
-    parentType: 'group',
     pinned: pinned ?? false,
-    sessionType: 'group',
     toggleEditing,
   });
 
