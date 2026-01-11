@@ -185,6 +185,17 @@ class AgentService {
   updateAgentPinned = async (agentId: string, pinned: boolean) => {
     return lambdaClient.agent.updateAgentPinned.mutate({ id: agentId, pinned });
   };
+
+  /**
+   * Duplicate an agent.
+   * Returns the new agent ID.
+   */
+  duplicateAgent = async (
+    agentId: string,
+    newTitle?: string,
+  ): Promise<{ agentId: string } | null> => {
+    return lambdaClient.agent.duplicateAgent.mutate({ agentId, newTitle });
+  };
 }
 
 export const agentService = new AgentService();
