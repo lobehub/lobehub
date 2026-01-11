@@ -104,10 +104,10 @@ jobs:
 
       # node-linker=hoisted 模式将可以确保 asar 压缩可用
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        run: |
+          pnpm install --node-linker=hoisted &
+          npm run install-isolated --prefix=./apps/desktop &
+          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -181,10 +181,11 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        shell: pwsh
+        run: |
+          $job1 = Start-Job -ScriptBlock { pnpm install --node-linker=hoisted }
+          $job2 = Start-Job -ScriptBlock { npm run install-isolated --prefix=./apps/desktop }
+          $job1, $job2 | Wait-Job | Receive-Job
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -234,10 +235,10 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        run: |
+          pnpm install --node-linker=hoisted &
+          npm run install-isolated --prefix=./apps/desktop &
+          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
