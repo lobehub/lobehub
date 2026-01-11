@@ -27,6 +27,7 @@ import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import ChunksBadge from './ChunkTag';
+import TruncatedFileName from './TruncatedFileName';
 
 // Initialize dayjs plugin once at module level
 dayjs.extend(relativeTime);
@@ -100,7 +101,6 @@ const styles = createStaticStyles(({ css }) => {
       margin-inline-start: 12px;
 
       color: ${cssVar.colorText};
-      text-overflow: ellipsis;
       white-space: nowrap;
     `,
     nameContainer: css`
@@ -497,7 +497,7 @@ const FileListItem = memo<FileListItemProps>(
                   value={renamingValue}
                 />
               ) : (
-                <span className={styles.name}>{name || t('file:pageList.untitled')}</span>
+                <TruncatedFileName className={styles.name} name={name || t('file:pageList.untitled')} />
               )}
             </Flexbox>
             <Flexbox
