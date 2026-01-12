@@ -94,7 +94,10 @@ export interface MessageCRUDAction {
    * @param newContent - New content
    * @returns New message ID
    */
-  editMessageAndCreateBranch: (messageId: string, newContent: string) => Promise<string | undefined>;
+  editMessageAndCreateBranch: (
+    messageId: string,
+    newContent: string,
+  ) => Promise<string | undefined>;
 
   /**
    * Remove a tool from an assistant message
@@ -442,18 +445,24 @@ export const messageCRUDSlice: StateCreator<
       // 7. Create the new message (this handles optimistic update internally)
       const createdMessageId = await get().createMessage(newMessage);
 
-      // 8. Switch to the new branch only if creation succeeded
-      if (createdMessageId) {
-        await chatStore.switchMessageBranch(parentId, branchIndex, { operationId });
-
-        // 9. Auto-trigger regeneration based on message type
-        if (role === 'user') {
-          // If edited message is user, regenerate assistant response
-          await get().regenerateUserMessage(createdMessageId);
-        }
-        // Note: For assistant messages, we don't auto-regenerate
-        // The user can manually trigger regeneration if needed
+      if (!createdMessageId) {
+        chatStore.failOperation(operationId, {
+          message: 'Failed to create branch message',
+          type: 'CreateBranchError',
+        });
+        return undefined;
       }
+
+      // 8. Switch to the new branch only if creation succeeded
+      await chatStore.switchMessageBranch(parentId, branchIndex, { operationId });
+
+      // 9. Auto-trigger regeneration based on message type
+      if (role === 'user') {
+        // If edited message is user, regenerate assistant response
+        await get().regenerateUserMessage(createdMessageId);
+      }
+      // Note: For assistant messages, we don't auto-regenerate
+      // The user can manually trigger regeneration if needed
 
       chatStore.completeOperation(operationId);
       return createdMessageId;

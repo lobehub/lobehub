@@ -2,22 +2,22 @@ import type { UIChatMessage } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock localStorage BEFORE any other imports using vi.hoisted
-vi.hoisted(() => {
-  globalThis.localStorage = {
-    getItem: () => null,
-    setItem: () => { },
-    removeItem: () => { },
-    clear: () => { },
-    length: 0,
-    key: () => null,
-  } as Storage;
-});
-
 import * as messageServiceModule from '@/services/message';
 
 import type { ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
+
+// Mock localStorage BEFORE any other imports using vi.hoisted
+vi.hoisted(() => {
+  globalThis.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+    length: 0,
+    key: () => null,
+  } as Storage;
+});
 
 // Mock conversation-flow parse function (必须 mock，因为这是外部库)
 vi.mock('@lobechat/conversation-flow', () => ({
@@ -33,6 +33,8 @@ vi.mock('@lobechat/conversation-flow', () => ({
 
 // Mock useChatStore for branch switching tests
 const mockChatStore = {
+  internal_execAgentRuntime: vi.fn().mockResolvedValue(undefined),
+  messageLoadingIds: [] as string[],
   startOperation: vi.fn(() => ({ operationId: 'test-op-id' })),
   switchMessageBranch: vi.fn().mockResolvedValue(undefined),
   completeOperation: vi.fn(),
@@ -60,6 +62,8 @@ describe('Message CRUD Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset chat store mocks - recreate them completely
+    mockChatStore.internal_execAgentRuntime = vi.fn().mockResolvedValue(undefined);
+    mockChatStore.messageLoadingIds = [];
     mockChatStore.startOperation = vi.fn(() => ({ operationId: 'test-op-id' }));
     mockChatStore.switchMessageBranch = vi.fn().mockResolvedValue(undefined);
     mockChatStore.completeOperation = vi.fn();
@@ -1124,7 +1128,11 @@ describe('Message CRUD Actions', () => {
         );
 
         // Should switch branch on assistant message (msg-2)
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('msg-2', 1, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'msg-2',
+          1,
+          expect.any(Object),
+        );
         expect(result).toBeDefined();
       });
 
@@ -1259,7 +1267,11 @@ describe('Message CRUD Actions', () => {
         );
 
         // Should switch branch on ass-1 to index 1
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('ass-1', 1, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'ass-1',
+          1,
+          expect.any(Object),
+        );
       });
 
       it('should support complex tree: Multiple Assistants → Multiple Users → Multiple Assistants', async () => {
@@ -1378,9 +1390,7 @@ describe('Message CRUD Actions', () => {
 
         // Test 1: Edit deep assistant message to create third assistant branch under user-1-1
         await act(async () => {
-          await store
-            .getState()
-            .editMessageAndCreateBranch('ass-reply-1-1', 'Assistant reply 1-3');
+          await store.getState().editMessageAndCreateBranch('ass-reply-1-1', 'Assistant reply 1-3');
         });
 
         expect(createMessageSpy).toHaveBeenCalledWith(
@@ -1392,7 +1402,11 @@ describe('Message CRUD Actions', () => {
         );
 
         // Should switch to branch index 2 (0, 1 exist → 2 is new)
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('user-1-1', 2, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'user-1-1',
+          2,
+          expect.any(Object),
+        );
 
         createMessageSpy.mockClear();
         mockChatStore.switchMessageBranch.mockClear();
@@ -1411,7 +1425,11 @@ describe('Message CRUD Actions', () => {
         );
 
         // Should switch to branch index 2 under ass-1
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('ass-1', 2, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'ass-1',
+          2,
+          expect.any(Object),
+        );
       });
 
       it('should maintain correct branch indices in deep trees with multiple edits', async () => {
@@ -1480,7 +1498,11 @@ describe('Message CRUD Actions', () => {
         await act(async () => {
           await store.getState().editMessageAndCreateBranch('level-4', 'Level 4 branch 2');
         });
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('level-3', 1, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'level-3',
+          1,
+          expect.any(Object),
+        );
 
         mockChatStore.switchMessageBranch.mockClear();
 
@@ -1488,7 +1510,11 @@ describe('Message CRUD Actions', () => {
         await act(async () => {
           await store.getState().editMessageAndCreateBranch('level-3', 'Level 3 branch 2');
         });
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('level-2', 1, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'level-2',
+          1,
+          expect.any(Object),
+        );
 
         mockChatStore.switchMessageBranch.mockClear();
 
@@ -1496,7 +1522,11 @@ describe('Message CRUD Actions', () => {
         await act(async () => {
           await store.getState().editMessageAndCreateBranch('level-2', 'Level 2 branch 2');
         });
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('level-1', 1, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'level-1',
+          1,
+          expect.any(Object),
+        );
       });
     });
 
@@ -1776,17 +1806,19 @@ describe('Message CRUD Actions', () => {
           createError,
         );
 
-        // The method should still complete (createMessage catches errors internally)
-        // and return the optimistic message ID
+        // The method should fail when createMessage returns undefined
         let result: string | undefined;
         await act(async () => {
           result = await store.getState().editMessageAndCreateBranch('msg-2', 'Edited');
         });
 
-        // Should return the optimistic message ID even when createMessage fails
-        // because createMessage catches errors and returns undefined
-        expect(result).toBeDefined();
-        expect(result).toMatch(/^msg_/);
+        expect(result).toBeUndefined();
+        expect(mockChatStore.failOperation).toHaveBeenCalledWith('test-op-id', {
+          message: 'Failed to create branch message',
+          type: 'CreateBranchError',
+        });
+        expect(mockChatStore.switchMessageBranch).not.toHaveBeenCalled();
+        expect(mockChatStore.completeOperation).not.toHaveBeenCalled();
       });
 
       it('should return undefined if original message not found', async () => {
@@ -1916,7 +1948,11 @@ describe('Message CRUD Actions', () => {
         );
 
         // Should switch branch on msg-3
-        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith('msg-3', 1, expect.any(Object));
+        expect(mockChatStore.switchMessageBranch).toHaveBeenCalledWith(
+          'msg-3',
+          1,
+          expect.any(Object),
+        );
       });
 
       it('should preserve message metadata in new branch', async () => {
