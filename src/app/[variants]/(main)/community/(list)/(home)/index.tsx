@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDiscoverStore } from '@/store/discover';
-import { McpSorts } from '@/types/discover';
+import { McpSorts, AssistantSorts } from '@/types/discover';
 
 import Title from '../../components/Title';
 import AssistantList from '../assistant/features/List';
@@ -19,6 +19,7 @@ const HomePage = memo(() => {
   const { data: assistantList, isLoading: assistantLoading } = useAssistantList({
     page: 1,
     pageSize: 12,
+    sort: AssistantSorts.Recommended,
   });
 
   const { data: mcpList, isLoading: pluginLoading } = useMcpList({

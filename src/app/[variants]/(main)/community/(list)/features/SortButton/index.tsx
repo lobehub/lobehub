@@ -28,6 +28,10 @@ const SortButton = memo(() => {
       case DiscoverTab.Assistants: {
         const baseItems = [
           {
+            key: AssistantSorts.Recommended,
+            label: t('assistants.sorts.recommended'),
+          },
+          {
             key: AssistantSorts.CreatedAt,
             label: t('assistants.sorts.createdAt'),
           },
