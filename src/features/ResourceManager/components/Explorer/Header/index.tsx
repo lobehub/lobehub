@@ -29,9 +29,6 @@ const Header = memo(() => {
   ]);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
 
-  // Disable batch actions dropdown when no items selected and not in any library
-  const isBatchActionsDisabled = selectFileIds.length === 0 && !libraryId;
-
   // If no libraryId, show category name or "Resource" for All
   const leftContent = !libraryId ? (
     <Flexbox style={{ marginLeft: 8 }}>
@@ -52,11 +49,7 @@ const Header = memo(() => {
         <>
           <ActionIcon icon={SearchIcon} onClick={() => toggleCommandMenu(true)} />
           <SortDropdown />
-          <BatchActionsDropdown
-            disabled={isBatchActionsDisabled}
-            onActionClick={onActionClick}
-            selectCount={selectFileIds.length}
-          />
+          <BatchActionsDropdown onActionClick={onActionClick} selectCount={selectFileIds.length} />
           <ViewSwitcher />
           <Flexbox style={{ marginLeft: 8 }}>
             <AddButton />
