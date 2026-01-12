@@ -42,7 +42,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 保存 Agent 状态
+   * Save Agent state
    */
   async saveAgentState(operationId: string, state: AgentState): Promise<void> {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
@@ -51,7 +51,7 @@ export class AgentStateManager {
       const serializedState = JSON.stringify(state);
       await this.redis.setex(stateKey, this.DEFAULT_TTL, serializedState);
 
-      // 更新元数据
+      // Update metadata
       await this.updateOperationMetadata(operationId, {
         lastActiveAt: new Date().toISOString(),
         status: state.status,
@@ -59,7 +59,7 @@ export class AgentStateManager {
         totalSteps: state.stepCount,
       });
 
-      // 状态变更事件通过 saveStepResult 中的 events 数组记录
+      // State change events are recorded through the events array in saveStepResult
 
       log('[%s] Saved state for step %d', operationId, state.stepCount);
     } catch (error) {
@@ -69,7 +69,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 加载 Agent 状态
+   * Load Agent state
    */
   async loadAgentState(operationId: string): Promise<AgentState | null> {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
@@ -92,17 +92,17 @@ export class AgentStateManager {
   }
 
   /**
-   * 保存步骤执行结果
+   * Save step execution result
    */
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
     const pipeline = this.redis.multi();
 
     try {
-      // 保存最新状态
+      // Save latest state
       const stateKey = `${this.STATE_PREFIX}:${operationId}`;
       pipeline.setex(stateKey, this.DEFAULT_TTL, JSON.stringify(stepResult.newState));
 
-      // 保存步骤历史
+      // Save step history
       const stepsKey = `${this.STEPS_PREFIX}:${operationId}`;
       const stepData = {
         context: stepResult.nextContext,
@@ -114,19 +114,19 @@ export class AgentStateManager {
       };
 
       pipeline.lpush(stepsKey, JSON.stringify(stepData));
-      pipeline.ltrim(stepsKey, 0, 199); // 保留最近 200 步
+      pipeline.ltrim(stepsKey, 0, 199); // Keep most recent 200 steps
       pipeline.expire(stepsKey, this.DEFAULT_TTL);
 
-      // 保存步骤的事件序列到 agent_runtime_events
+      // Save step event sequence to agent_runtime_events
       if (stepResult.events && stepResult.events.length > 0) {
         const eventsKey = `${this.EVENTS_PREFIX}:${operationId}`;
 
         pipeline.lpush(eventsKey, JSON.stringify(stepResult.events));
-        pipeline.ltrim(eventsKey, 0, 199); // 保留最近 200 步的事件
+        pipeline.ltrim(eventsKey, 0, 199); // Keep events from most recent 200 steps
         pipeline.expire(eventsKey, this.DEFAULT_TTL);
       }
 
-      // 更新操作元数据
+      // Update operation metadata
       const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
       const metadata: Partial<AgentOperationMetadata> = {
         lastActiveAt: new Date().toISOString(),
@@ -152,14 +152,14 @@ export class AgentStateManager {
   }
 
   /**
-   * 获取执行历史
+   * Get execution history
    */
   async getExecutionHistory(operationId: string, limit: number = 50): Promise<any[]> {
     const stepsKey = `${this.STEPS_PREFIX}:${operationId}`;
 
     try {
       const history = await this.redis.lrange(stepsKey, 0, limit - 1);
-      return history.map((item) => JSON.parse(item)).reverse(); // 最早的在前面
+      return history.map((item) => JSON.parse(item)).reverse(); // Earliest first
     } catch (error) {
       console.error('Failed to get execution history:', error);
       return [];
@@ -167,7 +167,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 获取操作元数据
+   * Get operation metadata
    */
   async getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null> {
     const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
@@ -198,7 +198,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 创建新的操作元数据
+   * Create new operation metadata
    */
   async createOperationMetadata(
     operationId: string,
@@ -222,7 +222,7 @@ export class AgentStateManager {
         userId: data.userId,
       };
 
-      // 序列化复杂对象
+      // Serialize complex objects
       const redisData: Record<string, string> = {
         createdAt: metadata.createdAt,
         lastActiveAt: metadata.lastActiveAt,
@@ -247,7 +247,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 更新操作元数据
+   * Update operation metadata
    */
   private async updateOperationMetadata(
     operationId: string,
@@ -278,7 +278,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 删除 Agent 操作的所有数据
+   * Delete all data for Agent operation
    */
   async deleteAgentOperation(operationId: string): Promise<void> {
     const keys = [
@@ -298,7 +298,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 获取所有活跃操作
+   * Get all active operations
    */
   async getActiveOperations(): Promise<string[]> {
     try {
@@ -312,7 +312,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 清理过期的操作数据
+   * Clean up expired operation data
    */
   async cleanupExpiredOperations(): Promise<number> {
     try {
@@ -327,7 +327,7 @@ export class AgentStateManager {
           const now = Date.now();
           const hoursSinceActive = (now - lastActiveTime) / (1000 * 60 * 60);
 
-          // 清理超过 2 小时未活跃的操作
+          // Clean up operations inactive for more than 2 hours
           if (hoursSinceActive > 2) {
             await this.deleteAgentOperation(operationId);
             cleanedCount++;
@@ -344,7 +344,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 获取统计信息
+   * Get statistics
    */
   async getStats(): Promise<{
     activeOperations: number;
@@ -397,7 +397,7 @@ export class AgentStateManager {
   }
 
   /**
-   * 关闭 Redis 连接
+   * Close Redis connection
    */
   async disconnect(): Promise<void> {
     await this.redis.quit();

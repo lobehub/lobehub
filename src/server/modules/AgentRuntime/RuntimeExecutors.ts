@@ -43,8 +43,8 @@ export const createRuntimeExecutors = (
   ctx: RuntimeExecutorContext,
 ): Partial<Record<AgentInstruction['type'], InstructionExecutor>> => ({
   /**
-   * 创建流式 LLM 执行器
-   * 集成 Agent Runtime 和流式事件发布
+   * Create streaming LLM executor
+   * Integrates Agent Runtime and stream event publishing
    */
   call_llm: async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_llm' }>;
