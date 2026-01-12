@@ -9,6 +9,7 @@ import { Link, Outlet, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
+import UserAvatar from '@/features/User/UserAvatar';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
@@ -30,7 +31,6 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 16px;
     padding-inline: 24px;
     border-block-end: 1px solid ${token.colorBorderSecondary};
-    background: ${token.colorBgContainer};
   `,
 }));
 
@@ -61,21 +61,23 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   return (
     <Flexbox className={styles.container}>
       <Flexbox align="center" className={styles.header} gap={12} horizontal justify="space-between">
-        {isLogin ? (
-          <Link to="/">
-            <ProductLogo size={36} />
-          </Link>
-        ) : (
-          <NextLink href="/login">
-            <ProductLogo size={36} />
-          </NextLink>
-        )}
-        {data?.title && (
-          <Typography.Text ellipsis strong style={{ flex: 1, textAlign: 'center' }}>
-            {data.title}
-          </Typography.Text>
-        )}
-        <div style={{ width: 36 }} />
+        <Flexbox align="center" gap={12} horizontal>
+          {isLogin ? (
+            <Link to="/">
+              <ProductLogo size={36} />
+            </Link>
+          ) : (
+            <NextLink href="/login">
+              <ProductLogo size={36} />
+            </NextLink>
+          )}
+          {data?.agentMeta?.title && (
+            <Typography.Text ellipsis strong>
+              {data.agentMeta.title}
+            </Typography.Text>
+          )}
+        </Flexbox>
+        {isLogin && <UserAvatar size={32} />}
       </Flexbox>
       <Flexbox className={styles.content}>{children ?? <Outlet />}</Flexbox>
     </Flexbox>
