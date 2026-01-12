@@ -1,5 +1,6 @@
 import { MCP } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
+import { MenuItemType } from 'antd/es/menu/interface';
 import { Bot, Brain, BrainCircuit, House } from 'lucide-react';
 import { ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -76,11 +77,11 @@ export const useNav = () => {
     [t],
   );
 
-  const activeItem = items.find((item: any) => item.key === activeKey) as {
+  const activeItem = items?.find((item: MenuItemType) => item.key === activeKey) as {
     icon: ReactNode;
     key: string;
     label: string;
-  };
+  } | undefined;
 
   return {
     activeItem,
