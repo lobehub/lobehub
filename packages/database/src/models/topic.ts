@@ -17,6 +17,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { VIRTUAL_ROOT_MESSAGE_CONTENT } from '../constants/message';
 import { TopicItem, agents, agentsToSessions, messages, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -699,7 +700,7 @@ export class TopicModel {
 
   private buildVirtualRootMessage = (topic: TopicItem, activeBranchIndex: number = 0) => ({
     agentId: topic.agentId,
-    content: '',
+    content: VIRTUAL_ROOT_MESSAGE_CONTENT,
     groupId: topic.groupId,
     id: topic.id,
     metadata: { activeBranchIndex, isVirtualRoot: true },

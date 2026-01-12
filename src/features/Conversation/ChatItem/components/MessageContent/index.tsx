@@ -89,8 +89,10 @@ const MessageContent = memo<MessageContentProps>(
             <EditorModal
               onCancel={() => onEditingChange(false)}
               onConfirm={async (value) => {
-                await editMessageAndCreateBranch(id, value);
                 onEditingChange(false);
+                void editMessageAndCreateBranch(id, value).catch((error) => {
+                  console.error('Failed to edit message and create branch:', error);
+                });
               }}
               open={editing}
               value={message ? String(message) : ''}

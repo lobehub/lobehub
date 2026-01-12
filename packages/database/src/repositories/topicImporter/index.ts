@@ -1,5 +1,6 @@
 import type { ExportedTopic, ImportedMessage } from '@lobechat/types';
 
+import { VIRTUAL_ROOT_MESSAGE_CONTENT } from '../../constants/message';
 import { messagePlugins, messages, topics } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
@@ -108,7 +109,7 @@ export class TopicImporterRepo {
       // Insert virtual root message for the topic
       await tx.insert(messages).values({
         agentId,
-        content: '',
+        content: VIRTUAL_ROOT_MESSAGE_CONTENT,
         groupId: groupId || null,
         id: topicId,
         metadata: { activeBranchIndex: 0, isVirtualRoot: true },
