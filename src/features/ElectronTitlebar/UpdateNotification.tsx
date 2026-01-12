@@ -28,37 +28,33 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
+type UpdateViewStatus = 'hidden' | 'prompt' | 'deferred' | 'installing';
+
 export const UpdateNotification: React.FC = () => {
   const { t } = useTranslation('electron');
   const { styles } = useStyles();
   const { token } = theme.useToken();
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [updateDownloaded, setUpdateDownloaded] = useState(false);
+
+  const [viewStatus, setViewStatus] = useState<UpdateViewStatus>('hidden');
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [installConfirmMode, setInstallConfirmMode] = useState<
-    'unconfirm' | 'installLater' | 'installNow' | null
-  >('unconfirm');
   const [detailVisible, setDetailVisible] = useState(false);
-  const [isInstalling, setIsInstalling] = useState(false);
 
   useWatchBroadcast('updateDownloaded', (info: UpdateInfo) => {
     setUpdateInfo(info);
-    setUpdateDownloaded(true);
-    setUpdateAvailable(false);
-    setInstallConfirmMode('unconfirm');
+    setViewStatus('prompt');
     setDetailVisible(false);
   });
 
   useWatchBroadcast('updateWillInstallLater', () => {
-    setInstallConfirmMode('installLater');
-
-    setTimeout(() => setInstallConfirmMode(null), 5000); // 5秒后自动隐藏提示
+    setViewStatus('deferred');
+    setTimeout(() => setViewStatus('hidden'), 5000); // 5秒后自动隐藏提示
   });
 
-  // 没有更新或正在下载时不显示任何内容
-  if (!updateDownloaded && !updateAvailable) return null;
+  const isInstalling = viewStatus === 'installing';
 
-  if (installConfirmMode === 'installLater') {
+  if (viewStatus === 'hidden') return null;
+
+  if (viewStatus === 'deferred') {
     return (
       <div
         style={{
@@ -78,90 +74,86 @@ export const UpdateNotification: React.FC = () => {
     );
   }
 
-  if (installConfirmMode === 'unconfirm')
-    return (
-      <>
-        <div className={styles.container}>
-          <div
-            style={{
-              alignItems: 'center',
-              background: token.colorBgElevated,
-              border: `1px solid ${token.colorBorderSecondary}`,
-              borderRadius: 12,
-              boxShadow: token.boxShadow,
-              color: token.colorText,
-              display: 'flex',
-              gap: 8,
-              padding: '8px 10px',
+  // prompt or installing
+  return (
+    <>
+      <div className={styles.container}>
+        <div
+          style={{
+            alignItems: 'center',
+            background: token.colorBgElevated,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: 12,
+            boxShadow: token.boxShadow,
+            color: token.colorText,
+            display: 'flex',
+            gap: 8,
+            padding: '8px 10px',
+          }}
+        >
+          <Icon icon={CircleFadingArrowUp} style={{ fontSize: 16 }} />
+          <div onClick={() => setDetailVisible(true)} style={{ cursor: 'pointer', fontSize: 12 }}>
+            {t('updater.updateReady')}
+            {updateInfo?.version ? ` · ${updateInfo.version}` : ''}
+          </div>
+          <div style={{ flex: 1 }} />
+          <Button
+            onClick={() => {
+              autoUpdateService.installLater();
             }}
+            size="small"
+            type="text"
           >
-            <Icon icon={CircleFadingArrowUp} style={{ fontSize: 16 }} />
-            <div onClick={() => setDetailVisible(true)} style={{ cursor: 'pointer', fontSize: 12 }}>
-              {t('updater.updateReady')}
-              {updateInfo?.version ? ` · ${updateInfo.version}` : ''}
-            </div>
-            <div style={{ flex: 1 }} />
-            <Button
-              onClick={() => {
-                autoUpdateService.installLater();
-              }}
-              size="small"
-              type="text"
-            >
-              {t('updater.later')}
-            </Button>
+            {t('updater.later')}
+          </Button>
 
+          <Button
+            loading={isInstalling}
+            onClick={() => {
+              setViewStatus('installing');
+              autoUpdateService.installNow();
+            }}
+            size="small"
+            type="primary"
+          >
+            {t('updater.upgradeNow')}
+          </Button>
+        </div>
+      </div>
+
+      <Modal
+        footer={null}
+        onCancel={() => setDetailVisible(false)}
+        open={detailVisible}
+        title={t('updater.updateReady')}
+        width={520}
+      >
+        <Flexbox gap={12} style={{ maxWidth: 480 }}>
+          <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>{updateInfo?.version}</div>
+          {updateInfo?.releaseNotes && (
+            <div
+              className={styles.releaseNote}
+              dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
+            />
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <Button onClick={() => autoUpdateService.installLater()} size="small">
+              {t('updater.installLater')}
+            </Button>
             <Button
               loading={isInstalling}
               onClick={() => {
-                setIsInstalling(true);
+                setViewStatus('installing');
                 autoUpdateService.installNow();
               }}
               size="small"
               type="primary"
             >
-              {t('updater.upgradeNow')}
+              {t('updater.restartAndInstall', '立即安装')}
             </Button>
           </div>
-        </div>
-
-        <Modal
-          footer={null}
-          onCancel={() => setDetailVisible(false)}
-          open={detailVisible}
-          title={t('updater.updateReady')}
-          width={520}
-        >
-          <Flexbox gap={12} style={{ maxWidth: 480 }}>
-            <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
-              {updateInfo?.version}
-            </div>
-            {updateInfo?.releaseNotes && (
-              <div
-                className={styles.releaseNote}
-                dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
-              />
-            )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <Button onClick={() => autoUpdateService.installLater()} size="small">
-                {t('updater.installLater')}
-              </Button>
-              <Button
-                loading={isInstalling}
-                onClick={() => {
-                  setIsInstalling(true);
-                  autoUpdateService.installNow();
-                }}
-                size="small"
-                type="primary"
-              >
-                {t('updater.restartAndInstall', '立即安装')}
-              </Button>
-            </div>
-          </Flexbox>
-        </Modal>
-      </>
-    );
-
-  return null;
+        </Flexbox>
+      </Modal>
+    </>
+  );
 };
