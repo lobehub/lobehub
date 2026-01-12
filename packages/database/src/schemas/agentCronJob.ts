@@ -154,7 +154,7 @@ export const executionConditionsSchema = z
 
 export const insertAgentCronJobSchema = createInsertSchema(agentCronJobs, {
   cronPattern: minimumIntervalSchema,
-  content: z.string().min(1).max(2000),
+  content: z.string(), // Allow empty content (when using editData for rich content)
   editData: z.record(z.any()).optional(), // Allow any JSON structure for rich content
   name: z.string().max(100).optional(),
   description: z.string().max(500).optional(),
