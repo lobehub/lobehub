@@ -15,11 +15,11 @@ export const shareRouter = router({
   getSharedTopic: publicProcedure
     .use(serverDatabase)
     .input(z.object({ shareId: z.string() }))
-    .query(async ({ input, ctx }): Promise<SharedTopicData | null> => {
+    .query(async ({ input, ctx }): Promise<SharedTopicData> => {
       const share = await TopicShareModel.findByShareId(ctx.serverDB, input.shareId);
 
       if (!share) {
-        return null;
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
       }
 
       const isOwner = ctx.userId && share.ownerId === ctx.userId;
@@ -27,7 +27,7 @@ export const shareRouter = router({
       // Check permission (owner can always access)
       if (!isOwner) {
         if (share.accessPermission === 'private') {
-          return null;
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
         }
         if (share.accessPermission === 'public_signin' && !ctx.userId) {
           throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Sign in required to view this shared topic' });

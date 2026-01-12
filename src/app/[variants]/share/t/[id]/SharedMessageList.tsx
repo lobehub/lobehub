@@ -28,15 +28,7 @@ const SharedMessageList = memo<SharedMessageListProps>(({ agentId, shareId, topi
 
   return (
     <ConversationProvider context={context}>
-      <Flexbox
-        flex={1}
-        style={{
-          overflowX: 'hidden',
-          overflowY: 'auto',
-          position: 'relative',
-        }}
-        width={'100%'}
-      >
+      <Flexbox>
         <ChatList itemContent={itemContent} />
       </Flexbox>
     </ConversationProvider>
