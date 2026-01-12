@@ -125,13 +125,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       sendVerificationEmail: async ({ user, url }, request) => {
         // Skip sending verification link email for mobile clients (Expo/React Native)
         // Mobile clients use OTP verification instead, triggered manually via emailOTP plugin
-        const userAgent = request?.headers?.get?.('user-agent') || '';
-        const isMobileClient =
-          userAgent.includes('okhttp') || // Android/React Native
-          userAgent.includes('Expo') ||
-          userAgent.includes('ReactNative');
-
-        if (isMobileClient) {
+        if (request?.headers?.get?.('x-client-type') === 'mobile') {
           // Mobile client will manually send OTP via sendVerificationOTP
           return;
         }
