@@ -8,12 +8,11 @@ import { memo } from 'react';
 import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
-import WideScreenContainer from '@/features/WideScreenContainer';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import SharedMessageList from './SharedMessageList';
 
-const useStyles = createStyles(({ css, token }) => ({
+const useStyles = createStyles(({ css }) => ({
   container: css`
     flex: 1;
   `,
@@ -26,12 +25,6 @@ const useStyles = createStyles(({ css, token }) => ({
     min-height: 400px;
     padding: 48px;
 
-    text-align: center;
-  `,
-  title: css`
-    margin-block-end: 24px;
-    padding-block-end: 16px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
     text-align: center;
   `,
 }));
@@ -103,12 +96,7 @@ const ShareTopicPage = memo(() => {
   if (!data) return null;
 
   return (
-    <Flexbox className={styles.container} gap={16}>
-      {data.title && (
-        <WideScreenContainer>
-          <h2 className={styles.title}>{data.title}</h2>
-        </WideScreenContainer>
-      )}
+    <Flexbox className={styles.container}>
       <SharedMessageList agentId={data.agentId} shareId={data.shareId} topicId={data.topicId} />
     </Flexbox>
   );
