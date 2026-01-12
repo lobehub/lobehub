@@ -89,10 +89,17 @@ export default function BetterAuthSignUpForm() {
       });
 
       if (error) {
+        interface ErrorWithDetails {
+          details?: {
+            cause?: {
+              code?: string;
+            };
+          };
+        }
         const isEmailDuplicate =
           error.code === 'FAILED_TO_CREATE_USER' &&
           // Postgres unique constraint violation
-          (error as any)?.details?.cause?.code === '23505';
+          (error as ErrorWithDetails)?.details?.cause?.code === '23505';
 
         if (isEmailDuplicate) {
           message.error(t('betterAuth.errors.emailExists'));
