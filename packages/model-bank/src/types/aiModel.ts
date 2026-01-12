@@ -278,8 +278,12 @@ export const ExtendParamsTypeSchema = z.enum([
   'urlContext',
 ]);
 
+export const ModelSearchImplementTypeSchema = z.enum(['tool', 'params', 'internal']);
+
 export const AiModelSettingsSchema = z.object({
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
+  searchImpl: ModelSearchImplementTypeSchema.optional(),
+  searchProvider: z.string().optional(),
 });
 
 export interface AIChatModelCard extends AIBaseModelCard {
