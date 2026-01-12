@@ -54,7 +54,7 @@ const Collection = () => {
       >
         <Flexbox align={'center'} gap={8} horizontal>
           <ActionIcon
-            icon={(showList ? CaretDownFilled : CaretRightOutlined) as any}
+            icon={showList ? CaretDownFilled : CaretRightOutlined}
             onClick={() => {
               setShowList(!showList);
             }}
