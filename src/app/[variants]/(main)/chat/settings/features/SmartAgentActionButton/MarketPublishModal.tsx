@@ -143,11 +143,11 @@ const MarketPublishModal = memo<MarketPublishModalProps>(
             try {
               await marketApiService.getAgentDetail(identifier);
             } catch {
-              const createPayload: Record<string, unknown> = {
+              const createPayload = {
                 identifier,
                 name: meta?.title || '',
               };
-              await marketApiService.createAgent(createPayload as any);
+              await marketApiService.createAgent(createPayload);
             }
           } else if (!identifier) {
             message.error({
