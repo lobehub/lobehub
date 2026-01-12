@@ -1,7 +1,16 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import type { ChatTopicMetadata, ThreadMetadata } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, primaryKey, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
 import { createNanoId, idGenerator } from '../utils/idGenerator';
@@ -153,6 +162,8 @@ export const topicShares = pgTable(
       .notNull(),
 
     accessPermission: text('access_permission').default('private').notNull(), // 'private' | 'public' | 'public_signin'
+
+    viewCount: integer('view_count').default(0).notNull(),
 
     ...timestamps,
   },

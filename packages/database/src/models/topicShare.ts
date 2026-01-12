@@ -1,5 +1,5 @@
 import type { ShareAccessPermission } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { agents, topicShares, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
@@ -81,6 +81,7 @@ export class TopicShareModel {
   /**
    * Find shared topic by share ID.
    * Returns share info including ownerId for permission checking by caller.
+   * Also increments the view count.
    */
   static findByShareId = async (db: LobeChatDatabase, shareId: string) => {
     const result = await db
@@ -101,7 +102,14 @@ export class TopicShareModel {
       .where(eq(topicShares.id, shareId))
       .limit(1);
 
+    // Increment view count
+    if (result[0]) {
+      await db
+        .update(topicShares)
+        .set({ viewCount: sql`${topicShares.viewCount} + 1` })
+        .where(eq(topicShares.id, shareId));
+    }
+
     return result[0] || null;
   };
-
 }
