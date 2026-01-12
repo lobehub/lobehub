@@ -68,7 +68,7 @@ export const List = memo(() => {
     }
   }, [isTransitioning, viewMode, data]);
 
-  const isEmpty = data && data.length === 0;
+  const isEmpty = !data || data.length === 0;
 
   const masonryContext = useMemo(() => ({}), []);
 
@@ -99,12 +99,12 @@ export const List = memo(() => {
       ) : viewMode === 'list' ? (
         <Virtuoso
           itemContent={(index) => {
-            const item = data![index];
+            const item = data[index];
             return <Item key={item.id} {...item} />;
           }}
           overscan={400}
           style={{ flex: 1, marginInline: -16 }}
-          totalCount={data!.length}
+          totalCount={data.length}
         />
       ) : (
         <div style={{ flex: 1, overflow: 'hidden' }}>
