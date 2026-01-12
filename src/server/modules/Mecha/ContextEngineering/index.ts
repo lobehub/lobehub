@@ -56,6 +56,7 @@ export const serverMessagesEngine = async ({
   agentBuilderContext,
   pageContentContext,
 }: ServerMessagesEngineParams): Promise<OpenAIChatMessage[]> => {
+  const filteredMessages = messages.filter((message) => !message.metadata?.isVirtualRoot);
   const engine = new MessagesEngine({
     // Capability injection
     capabilities: {
@@ -85,7 +86,7 @@ export const serverMessagesEngine = async ({
     },
 
     // Messages
-    messages,
+    messages: filteredMessages,
 
     // Model info
     model,

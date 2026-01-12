@@ -93,18 +93,6 @@ export const aiChatRouter = router({
         isCreateNewTopic = true;
         log('new topic created with id: %s', topicId);
 
-        // Create virtual root message before user messages (id = topicId)
-        await ctx.messageModel.create(
-          {
-            content: '',
-            metadata: { isVirtualRoot: true, activeBranchIndex: 0 },
-            parentId: undefined,
-            role: 'user',
-          },
-          topicId,
-        );
-        log('virtual root message created with id: %s', topicId);
-
         // update agent's updatedAt to reflect new activity
         if (input.agentId) {
           await ctx.agentModel.touchUpdatedAt(input.agentId);

@@ -280,15 +280,14 @@ describe('AI Agent Router Integration Tests', () => {
         .returning();
 
       // Create a thread (required by foreign key constraint on messages)
-      const [thread] = await serverDB
-        .insert(threads)
-        .values({
-          topicId: topic.id,
-          agentId: testAgentId,
-          userId,
-          type: 'isolation',
-        })
-        .returning();
+      const threadId = 'thread-1';
+      await serverDB.insert(threads).values({
+        agentId: testAgentId,
+        id: threadId,
+        topicId: topic.id,
+        type: 'isolation',
+        userId,
+      });
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
@@ -296,7 +295,7 @@ describe('AI Agent Router Integration Tests', () => {
         agentId: testAgentId,
         prompt: 'Test prompt',
         appContext: {
-          threadId: thread.id,
+          threadId,
           topicId: topic.id,
         },
       });
@@ -304,7 +303,7 @@ describe('AI Agent Router Integration Tests', () => {
       expect(mockCreateOperation).toHaveBeenCalledWith(
         expect.objectContaining({
           appContext: expect.objectContaining({
-            threadId: thread.id,
+            threadId,
           }),
         }),
       );

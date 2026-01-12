@@ -21,6 +21,7 @@ interface PreparedMessage {
   content: string;
   createdAt: Date;
   error?: Record<string, any> | null;
+  groupId?: string | null;
   id: string;
   metadata?: Record<string, any> | null;
   model?: string | null;
@@ -69,8 +70,10 @@ export class TopicImporterRepo {
     // Extract messages and title from parsed data
     const { messages: importedMessages, title } = this.parseImportData(parsedData);
 
-    // Filter out system messages and prepare messages
-    const filteredMessages = importedMessages.filter((m) => m.role !== 'system');
+    // Filter out system and virtual root messages
+    const filteredMessages = importedMessages.filter(
+      (m) => m.role !== 'system' && !m.metadata?.isVirtualRoot,
+    );
 
     if (filteredMessages.length === 0) {
       throw new Error('No valid messages to import');
@@ -87,6 +90,12 @@ export class TopicImporterRepo {
         agentId,
       );
 
+      const normalizedMessages = preparedMessages.map((message) => ({
+        ...message,
+        groupId: groupId || null,
+        parentId: message.parentId ?? topicId,
+      }));
+
       // Insert topic first
       await tx.insert(topics).values({
         agentId,
@@ -96,9 +105,22 @@ export class TopicImporterRepo {
         userId: this.userId,
       });
 
+      // Insert virtual root message for the topic
+      await tx.insert(messages).values({
+        agentId,
+        content: '',
+        groupId: groupId || null,
+        id: topicId,
+        metadata: { activeBranchIndex: 0, isVirtualRoot: true },
+        parentId: null,
+        role: 'user',
+        topicId,
+        userId: this.userId,
+      });
+
       // Batch insert messages
-      if (preparedMessages.length > 0) {
-        await tx.insert(messages).values(preparedMessages as any);
+      if (normalizedMessages.length > 0) {
+        await tx.insert(messages).values(normalizedMessages as any);
       }
 
       // Batch insert message plugins (for tool messages)

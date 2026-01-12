@@ -119,6 +119,7 @@ export class AiAgentService {
 
     // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
+    const groupId = appContext?.groupId ?? undefined;
     if (!topicId) {
       // Prepare metadata with cronJobId if provided
       const metadata = cronJobId ? { cronJobId } : undefined;
@@ -215,6 +216,8 @@ export class AiAgentService {
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
       content: prompt,
+      groupId,
+      parentId: topicId,
       role: 'user',
       threadId: appContext?.threadId ?? undefined,
       topicId,
@@ -226,6 +229,7 @@ export class AiAgentService {
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
       content: LOADING_FLAT,
+      groupId,
       model,
       parentId: userMessageRecord.id,
       provider,

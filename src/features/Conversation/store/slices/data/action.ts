@@ -67,8 +67,9 @@ export const dataSlice: StateCreator<
 
     // Re-parse for display order and grouping
     const { flatList } = parse(newDbMessages);
+    const filteredFlatList = flatList.filter((message) => !message.metadata?.isVirtualRoot);
 
-    set({ dbMessages: newDbMessages, displayMessages: flatList }, false, {
+    set({ dbMessages: newDbMessages, displayMessages: filteredFlatList }, false, {
       payload,
       type: `dispatchMessage/${payload.type}`,
     });
@@ -80,8 +81,13 @@ export const dataSlice: StateCreator<
   replaceMessages: (messages) => {
     // Parse messages using conversation-flow
     const { flatList } = parse(messages);
+    const filteredFlatList = flatList.filter((message) => !message.metadata?.isVirtualRoot);
 
-    set({ dbMessages: messages, displayMessages: flatList }, false, 'replaceMessages');
+    set(
+      { dbMessages: messages, displayMessages: filteredFlatList },
+      false,
+      'replaceMessages',
+    );
 
     // Sync changes to external store (ChatStore)
     get().onMessagesChange?.(messages);
@@ -117,10 +123,11 @@ export const dataSlice: StateCreator<
 
           // Parse messages using conversation-flow
           const { flatList } = parse(data);
+          const filteredFlatList = flatList.filter((message) => !message.metadata?.isVirtualRoot);
 
           set({
             dbMessages: data,
-            displayMessages: flatList,
+            displayMessages: filteredFlatList,
             messagesInit: true,
           });
 

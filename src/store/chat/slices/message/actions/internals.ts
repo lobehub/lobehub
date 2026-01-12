@@ -59,7 +59,8 @@ export const messageInternals: StateCreator<
 
     // parse to get display messages
     const { flatList } = parse(updatedRawMessages);
-    const nextDisplayMap = { ...get().messagesMap, [messagesKey]: flatList };
+    const filteredFlatList = flatList.filter((message) => !message.metadata?.isVirtualRoot);
+    const nextDisplayMap = { ...get().messagesMap, [messagesKey]: filteredFlatList };
 
     set({ dbMessagesMap: nextDbMap, messagesMap: nextDisplayMap }, false, {
       payload,
