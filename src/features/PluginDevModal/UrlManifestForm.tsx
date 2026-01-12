@@ -84,7 +84,7 @@ const UrlManifestForm = memo<{ form: FormInstance; isEditMode: boolean }>(
                   form.setFieldsValue({ identifier: data.identifier, manifest: data });
                 } catch (error) {
                   const err = error as PluginInstallError;
-                  throw t(`error.${err.message}`, { error: err.cause! });
+                  throw t(`error.${err.message}`, { error: err.cause });
                 }
               },
             },
