@@ -43,9 +43,12 @@ const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent 
   ]);
   useFetchMessages(context, skipFetch);
 
-  // Fetch notebook documents when topic is selected
-  useFetchNotebookDocuments(context.topicId!);
-  useFetchTopicMemories(enableUserMemories ? context.topicId : undefined);
+  // Skip fetching notebook and memories for share pages (they require authentication)
+  const isSharePage = !!context.topicShareId;
+
+  // Fetch notebook documents when topic is selected (skip for share pages)
+  useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
+  useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 
   // Use selectors for data
 
