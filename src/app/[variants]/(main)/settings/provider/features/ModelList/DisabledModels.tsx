@@ -71,26 +71,26 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab }) => {
       }
       case SortType.ReleasedAt: {
         return models.sort((a, b) => {
-          const aHasDate = !!a.releasedAt;
-          const bHasDate = !!b.releasedAt;
+          if (a.releasedAt && !b.releasedAt) return -1;
+          if (!a.releasedAt && b.releasedAt) return 1;
+          if (!a.releasedAt && !b.releasedAt) return 0;
 
-          if (aHasDate && !bHasDate) return -1;
-          if (!aHasDate && bHasDate) return 1;
-          if (!aHasDate && !bHasDate) return 0;
-
-          return a.releasedAt!.localeCompare(b.releasedAt!);
+          if (a.releasedAt && b.releasedAt) {
+            return a.releasedAt.localeCompare(b.releasedAt);
+          }
+          return 0;
         });
       }
       case SortType.ReleasedAtDesc: {
         return models.sort((a, b) => {
-          const aHasDate = !!a.releasedAt;
-          const bHasDate = !!b.releasedAt;
+          if (a.releasedAt && !b.releasedAt) return -1;
+          if (!a.releasedAt && b.releasedAt) return 1;
+          if (!a.releasedAt && !b.releasedAt) return 0;
 
-          if (aHasDate && !bHasDate) return -1;
-          if (!aHasDate && bHasDate) return 1;
-          if (!aHasDate && !bHasDate) return 0;
-
-          return b.releasedAt!.localeCompare(a.releasedAt!);
+          if (a.releasedAt && b.releasedAt) {
+            return b.releasedAt.localeCompare(a.releasedAt);
+          }
+          return 0;
         });
       }
       case SortType.Default: {

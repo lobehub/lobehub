@@ -24,7 +24,7 @@ export interface ImageUploadProps {
   onChange?: (
     data?:
       | string // Old API: just URL
-      | { dimensions?: { height: number, width: number; }, url: string; }, // New API: URL with dimensions
+      | { dimensions?: { height: number; width: number }; url: string }, // New API: URL with dimensions
   ) => void;
   style?: React.CSSProperties;
   value?: string | null;
@@ -606,7 +606,6 @@ const ImageUpload: FC<ImageUploadProps> = memo(
     });
 
     // Determine which view to render
-    const hasImage = Boolean(value);
     const isUploading = Boolean(uploadState);
 
     return (
@@ -627,9 +626,9 @@ const ImageUpload: FC<ImageUploadProps> = memo(
         {/* Conditional rendering based on state */}
         {isUploading && uploadState ? (
           <UploadingDisplay previewUrl={uploadState.previewUrl} progress={uploadState.progress} />
-        ) : hasImage ? (
+        ) : value && value !== '' ? (
           <SuccessDisplay
-            imageUrl={value!}
+            imageUrl={value}
             isDragOver={isDragOver}
             onChangeImage={handleFileSelect}
             onDelete={handleDelete}
