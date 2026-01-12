@@ -150,6 +150,12 @@ export interface SharedTopicData {
     backgroundColor?: string | null;
     title?: string | null;
   };
+  groupId: string | null;
+  groupMeta?: {
+    avatar?: string | null;
+    backgroundColor?: string | null;
+    title?: string | null;
+  };
   shareId: string;
   title: string | null;
   topicId: string;

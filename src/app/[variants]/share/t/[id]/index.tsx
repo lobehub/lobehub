@@ -97,7 +97,12 @@ const ShareTopicPage = memo(() => {
 
   return (
     <Flexbox className={styles.container}>
-      <SharedMessageList agentId={data.agentId} shareId={data.shareId} topicId={data.topicId} />
+      <SharedMessageList
+        agentId={data.agentId}
+        groupId={data.groupId}
+        shareId={data.shareId}
+        topicId={data.topicId}
+      />
     </Flexbox>
   );
 });

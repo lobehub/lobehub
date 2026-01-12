@@ -1,7 +1,7 @@
 import type { ShareAccessPermission } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
-import { agents, topicShares, topics } from '../schemas';
+import { agents, chatGroups, topicShares, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
 export class TopicShareModel {
@@ -91,6 +91,10 @@ export class TopicShareModel {
         agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
         agentTitle: agents.title,
+        groupAvatar: chatGroups.avatar,
+        groupBackgroundColor: chatGroups.backgroundColor,
+        groupId: topics.groupId,
+        groupTitle: chatGroups.title,
         ownerId: topicShares.userId,
         shareId: topicShares.id,
         title: topics.title,
@@ -99,6 +103,7 @@ export class TopicShareModel {
       .from(topicShares)
       .innerJoin(topics, eq(topicShares.topicId, topics.id))
       .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(eq(topicShares.id, shareId))
       .limit(1);
 

@@ -58,10 +58,12 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
     }
   }, [data?.agentId, data?.agentMeta, dispatchAgentMap]);
 
+  const agentOrGroupTitle = data?.groupMeta?.title || data?.agentMeta?.title;
+
   return (
     <Flexbox className={styles.container}>
       <Flexbox align="center" className={styles.header} gap={12} horizontal justify="space-between">
-        <Flexbox align="center" gap={12} horizontal>
+        <Flexbox align="center" flex={1} gap={12} horizontal>
           {isLogin ? (
             <Link to="/">
               <ProductLogo size={36} />
@@ -71,13 +73,20 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
               <ProductLogo size={36} />
             </NextLink>
           )}
-          {data?.agentMeta?.title && (
+          {agentOrGroupTitle && (
             <Typography.Text ellipsis strong>
-              {data.agentMeta.title}
+              {agentOrGroupTitle}
             </Typography.Text>
           )}
         </Flexbox>
-        {isLogin && <UserAvatar size={32} />}
+        {data?.title && (
+          <Typography.Text ellipsis strong style={{ textAlign: 'center' }}>
+            {data.title}
+          </Typography.Text>
+        )}
+        <Flexbox align="center" flex={1} horizontal justify="flex-end">
+          {isLogin && <UserAvatar size={32} />}
+        </Flexbox>
       </Flexbox>
       <Flexbox className={styles.content}>{children ?? <Outlet />}</Flexbox>
     </Flexbox>

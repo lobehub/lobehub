@@ -7,18 +7,20 @@ import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversa
 
 interface SharedMessageListProps {
   agentId: string | null;
+  groupId: string | null;
   shareId: string;
   topicId: string;
 }
 
-const SharedMessageList = memo<SharedMessageListProps>(({ agentId, shareId, topicId }) => {
+const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shareId, topicId }) => {
   const context = useMemo(
     () => ({
       agentId: agentId ?? '',
+      groupId: groupId ?? undefined,
       topicId,
       topicShareId: shareId,
     }),
-    [agentId, shareId, topicId],
+    [agentId, groupId, shareId, topicId],
   );
 
   const itemContent = useCallback(

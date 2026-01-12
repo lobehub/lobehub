@@ -30,7 +30,10 @@ export const shareRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
         }
         if (share.accessPermission === 'public_signin' && !ctx.userId) {
-          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Sign in required to view this shared topic' });
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Sign in required to view this shared topic',
+          });
         }
       }
 
@@ -42,6 +45,14 @@ export const shareRouter = router({
               avatar: share.agentAvatar,
               backgroundColor: share.agentBackgroundColor,
               title: share.agentTitle,
+            }
+          : undefined,
+        groupId: share.groupId,
+        groupMeta: share.groupId
+          ? {
+              avatar: share.groupAvatar,
+              backgroundColor: share.groupBackgroundColor,
+              title: share.groupTitle,
             }
           : undefined,
         shareId: share.shareId,
