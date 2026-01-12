@@ -85,14 +85,16 @@ const ResultFile = memo<CodeInterpreterFileItem>(({ filename, fileId, previewUrl
   const onDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
     let downloadUrl = previewUrl;
-    if (!downloadUrl) {
-      const { url } = await fileService.getFile(fileId!);
+    if (!downloadUrl && fileId) {
+      const { url } = await fileService.getFile(fileId);
       downloadUrl = url;
     }
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = baseName;
-    link.click();
+    if (downloadUrl) {
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = baseName;
+      link.click();
+    }
   };
   return (
     <div className={styles.container} onClick={onDownload}>
