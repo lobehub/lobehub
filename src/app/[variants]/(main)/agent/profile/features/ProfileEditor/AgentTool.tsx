@@ -5,7 +5,6 @@ import { Avatar, Button, Flexbox, Icon, type ItemType, Segmented } from '@lobehu
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, PlusIcon, Store, ToyBrick } from 'lucide-react';
-import Image from 'next/image';
 import React, { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -56,6 +55,12 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: transparent;
   `,
+  icon: css`
+    margin-right: ${cssVar.marginXS};
+    flex: none;
+    height: 18px;
+    width: 18px;
+  `,
   scroller: css`
     overflow: hidden auto;
   `,
@@ -68,13 +73,11 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
-    return (
-      <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} unoptimized width={18} />
-    );
+    return <img alt={label} className={styles.icon} height={18} src={icon} width={18} />;
   }
 
   // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+  return <Icon className={styles.icon} fill={cssVar.colorText} icon={icon} size={18} />;
 });
 
 const AgentTool = memo(() => {
