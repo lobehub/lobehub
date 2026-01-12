@@ -4,6 +4,28 @@ import type { ResourceItem } from '@/types/resource';
 
 import type { TreeItem } from './types';
 
+export const sortTreeItems = <T extends TreeItem>(items: T[]): T[] => {
+  return [...items].sort((a, b) => {
+    // Folders first
+    if (a.isFolder && !b.isFolder) return -1;
+    if (!a.isFolder && b.isFolder) return 1;
+    // Then alphabetically by name
+    return a.name.localeCompare(b.name);
+  });
+};
+
+export const resourceItemToTreeItem = (item: ResourceItem): TreeItem => {
+  return {
+    fileType: item.fileType,
+    id: item.id,
+    isFolder: item.fileType === 'custom/folder',
+    name: item.name,
+    slug: item.slug,
+    sourceType: item.sourceType,
+    url: item.url || '',
+  };
+};
+
 // Module-level state to persist expansion across re-renders
 const treeState = new Map<
   string,
@@ -65,27 +87,15 @@ export const clearTreeFolderCache = async (knowledgeBaseId: string) => {
 
   const buildChildrenFromStore = (parentKey: string | null) => {
     const parentId = resolveParentId(parentKey);
-    return resourceList
+    const items = resourceList
       .filter(
         (item) =>
           item.knowledgeBaseId === knowledgeBaseId &&
           (item.parentId ?? null) === (parentId ?? null),
       )
-      .map<ResourceItem>((item) => item)
-      .map((item) => ({
-        fileType: item.fileType,
-        id: item.id,
-        isFolder: item.fileType === 'custom/folder',
-        name: item.name,
-        slug: item.slug,
-        sourceType: item.sourceType,
-        url: item.url || '',
-      }))
-      .sort((a, b) => {
-        if (a.isFolder && !b.isFolder) return -1;
-        if (!a.isFolder && b.isFolder) return 1;
-        return a.name.localeCompare(b.name);
-      });
+      .map(resourceItemToTreeItem);
+
+    return sortTreeItems(items);
   };
 
   // Get list of all currently expanded folders before clearing

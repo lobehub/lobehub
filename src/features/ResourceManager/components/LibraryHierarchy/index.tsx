@@ -8,10 +8,16 @@ import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/u
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
+import type { ResourceQueryParams } from '@/types/resource';
 
 import { HierarchyNode } from './HierarchyNode';
 import TreeSkeleton from './TreeSkeleton';
-import { TREE_REFRESH_EVENT, getTreeState } from './treeState';
+import {
+  TREE_REFRESH_EVENT,
+  getTreeState,
+  resourceItemToTreeItem,
+  sortTreeItems,
+} from './treeState';
 import type { TreeItem } from './types';
 
 // Export for external use
@@ -26,6 +32,8 @@ const LibraryHierarchy = memo(() => {
   const [useFetchKnowledgeItems, useFetchFolderBreadcrumb, useFetchKnowledgeItem] = useFileStore(
     (s) => [s.useFetchKnowledgeItems, s.useFetchFolderBreadcrumb, s.useFetchKnowledgeItem],
   );
+
+  const [resourceList, resourceQueryParams] = useFileStore((s) => [s.resourceList, s.queryParams]);
 
   const [libraryId, currentViewItemId] = useResourceManagerStore((s) => [
     s.libraryId,
@@ -55,19 +63,42 @@ const LibraryHierarchy = memo(() => {
     showFilesInKnowledgeBase: false,
   });
 
-  // Sort items: folders first, then files
-  const sortItems = useCallback(<T extends TreeItem>(items: T[]): T[] => {
-    return [...items].sort((a, b) => {
-      // Folders first
-      if (a.isFolder && !b.isFolder) return -1;
-      if (!a.isFolder && b.isFolder) return 1;
-      // Then alphabetically by name
-      return a.name.localeCompare(b.name);
-    });
+  const isExplorerCacheActiveForTree = useMemo(() => {
+    if (!libraryId) return false;
+    if (!resourceQueryParams) return false;
+
+    // We intentionally ignore search per requirement: tree always shows full hierarchy
+    if (resourceQueryParams.q) return false;
+
+    return resourceQueryParams.libraryId === libraryId;
+  }, [libraryId, resourceQueryParams]);
+
+  const explorerParentKey = useMemo(() => {
+    if (!isExplorerCacheActiveForTree) return null;
+    return (resourceQueryParams as ResourceQueryParams).parentId ?? null;
+  }, [isExplorerCacheActiveForTree, resourceQueryParams]);
+
+  const explorerChildren = useMemo(() => {
+    if (!isExplorerCacheActiveForTree) return [];
+    return sortTreeItems(resourceList.map(resourceItemToTreeItem));
+  }, [isExplorerCacheActiveForTree, resourceList]);
+
+  const isSameTreeItems = useCallback((a: TreeItem[] | undefined, b: TreeItem[]) => {
+    if (!a) return false;
+    if (a.length !== b.length) return false;
+    // Compare minimal stable identity for change detection
+    let i = 0;
+    for (const item of a) {
+      if (item.id !== b[i]?.id) return false;
+      i += 1;
+    }
+    return true;
   }, []);
 
   // Convert root data to tree items
   const items: TreeItem[] = useMemo(() => {
+    // If Explorer has loaded root for this library, use its cache to ensure identical state
+    if (isExplorerCacheActiveForTree && explorerParentKey === null) return explorerChildren;
     if (!rootData) return [];
 
     const mappedItems: TreeItem[] = rootData.map((item) => ({
@@ -80,8 +111,30 @@ const LibraryHierarchy = memo(() => {
       url: item.url,
     }));
 
-    return sortItems(mappedItems);
-  }, [rootData, sortItems, updateKey]);
+    return sortTreeItems(mappedItems);
+  }, [explorerChildren, explorerParentKey, rootData, updateKey]);
+
+  // Hydrate tree cache for the folder Explorer has loaded (non-root only).
+  // This ensures the tree and explorer render identical children for that folder.
+  useEffect(() => {
+    if (!isExplorerCacheActiveForTree) return;
+    if (!explorerParentKey) return; // root handled via `items` memo above
+
+    const existing = state.folderChildrenCache.get(explorerParentKey);
+    if (isSameTreeItems(existing, explorerChildren)) return;
+
+    state.folderChildrenCache.set(explorerParentKey, explorerChildren);
+    state.loadedFolders.add(explorerParentKey);
+    forceUpdate();
+    // NOTE: folderChildrenCache / loadedFolders are mutated in-place
+  }, [
+    explorerChildren,
+    explorerParentKey,
+    isExplorerCacheActiveForTree,
+    isSameTreeItems,
+    state,
+    forceUpdate,
+  ]);
 
   const visibleNodes = useMemo(() => {
     interface VisibleNode {
@@ -121,6 +174,13 @@ const LibraryHierarchy = memo(() => {
       forceUpdate();
 
       try {
+        // Prefer Explorer's cache when it matches this folder (keeps tree + explorer identical)
+        if (isExplorerCacheActiveForTree && explorerParentKey === folderId) {
+          state.folderChildrenCache.set(folderId, explorerChildren);
+          state.loadedFolders.add(folderId);
+          return;
+        }
+
         // Use SWR mutate to trigger a fetch that will be cached and shared with FileExplorer
         const { mutate: swrMutate } = await import('swr');
         const response = await swrMutate(
@@ -159,7 +219,7 @@ const LibraryHierarchy = memo(() => {
         }));
 
         // Sort children: folders first, then files
-        const sortedChildren = sortItems(childItems);
+        const sortedChildren = sortTreeItems(childItems);
 
         // Store children in cache
         state.folderChildrenCache.set(folderId, sortedChildren);
@@ -173,7 +233,14 @@ const LibraryHierarchy = memo(() => {
         forceUpdate();
       }
     },
-    [libraryId, sortItems, state, forceUpdate],
+    [
+      explorerChildren,
+      explorerParentKey,
+      forceUpdate,
+      isExplorerCacheActiveForTree,
+      libraryId,
+      state,
+    ],
   );
 
   const handleToggleFolder = useCallback(
