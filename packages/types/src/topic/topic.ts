@@ -148,6 +148,7 @@ export interface SharedTopicData {
   agentMeta?: {
     avatar?: string | null;
     backgroundColor?: string | null;
+    marketIdentifier?: string | null;
     title?: string | null;
   };
   groupId: string | null;

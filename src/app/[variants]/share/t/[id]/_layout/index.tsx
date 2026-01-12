@@ -59,6 +59,28 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   }, [data?.agentId, data?.agentMeta, dispatchAgentMap]);
 
   const agentOrGroupTitle = data?.groupMeta?.title || data?.agentMeta?.title;
+  const agentMarketIdentifier = data?.agentMeta?.marketIdentifier;
+
+  const renderAgentOrGroupTitle = () => {
+    if (!agentOrGroupTitle) return null;
+
+    // If agent has marketIdentifier, render as link to assistant page
+    if (agentMarketIdentifier && !data?.groupMeta?.title) {
+      return (
+        <NextLink href={`/community/assistant/${agentMarketIdentifier}`} target="_blank">
+          <Typography.Text ellipsis strong>
+            {agentOrGroupTitle}
+          </Typography.Text>
+        </NextLink>
+      );
+    }
+
+    return (
+      <Typography.Text ellipsis strong>
+        {agentOrGroupTitle}
+      </Typography.Text>
+    );
+  };
 
   return (
     <Flexbox className={styles.container}>
@@ -73,11 +95,7 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
               <ProductLogo size={36} />
             </NextLink>
           )}
-          {agentOrGroupTitle && (
-            <Typography.Text ellipsis strong>
-              {agentOrGroupTitle}
-            </Typography.Text>
-          )}
+          {renderAgentOrGroupTitle()}
         </Flexbox>
         {data?.title && (
           <Typography.Text ellipsis strong style={{ textAlign: 'center' }}>

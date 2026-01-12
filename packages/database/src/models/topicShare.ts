@@ -90,6 +90,7 @@ export class TopicShareModel {
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
+        agentMarketIdentifier: agents.marketIdentifier,
         agentTitle: agents.title,
         groupAvatar: chatGroups.avatar,
         groupBackgroundColor: chatGroups.backgroundColor,
