@@ -411,7 +411,7 @@ export const desktopRoutes: RouteConfig[] = [
       },
     ],
     element: dynamicElement(
-      () => import('../share/t/[id]/ShareTopicLayout'),
+      () => import('../share/t/[id]/_layout'),
       'Desktop > Share > Topic > Layout',
     ),
     path: '/share/t',

@@ -10,6 +10,7 @@ import { ProductLogo } from '@/components/Branding';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
+    width: 100vw;
     min-height: 100vh;
     background: ${token.colorBgLayout};
   `,

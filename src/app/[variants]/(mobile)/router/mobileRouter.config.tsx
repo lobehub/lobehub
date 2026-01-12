@@ -267,7 +267,7 @@ export const mobileRoutes: RouteConfig[] = [
       },
     ],
     element: dynamicElement(
-      () => import('../../share/t/[id]/ShareTopicLayout'),
+      () => import('../../share/t/[id]/_layout'),
       'Mobile > Share > Topic > Layout',
     ),
     path: '/share/t',
