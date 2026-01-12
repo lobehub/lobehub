@@ -7,29 +7,23 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import ShareImage from './ShareImage';
 import ShareJSON from './ShareJSON';
-import ShareLink from './ShareLink';
 import SharePdf from './SharePdf';
 import ShareText from './ShareText';
 
 enum Tab {
   JSON = 'json',
-  Link = 'link',
   PDF = 'pdf',
   Screenshot = 'screenshot',
   Text = 'text',
 }
 
 const ShareModal = memo<ModalProps>(({ onCancel, open }) => {
-  const [tab, setTab] = useState<Tab>(Tab.Link);
+  const [tab, setTab] = useState<Tab>(Tab.Screenshot);
   const { t } = useTranslation('chat');
   const isMobile = useIsMobile();
 
   const tabItems = useMemo(() => {
     return [
-      {
-        label: t('shareModal.link'),
-        value: Tab.Link,
-      },
       {
         label: t('shareModal.screenshot'),
         value: Tab.Screenshot,
@@ -75,7 +69,6 @@ const ShareModal = memo<ModalProps>(({ onCancel, open }) => {
           value={tab}
           variant={'filled'}
         />
-        {tab === Tab.Link && <ShareLink />}
         {tab === Tab.Screenshot && <ShareImage mobile={isMobile} />}
         {tab === Tab.Text && <ShareText />}
         {tab === Tab.PDF && <SharePdf />}

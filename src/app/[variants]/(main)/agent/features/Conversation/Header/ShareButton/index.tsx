@@ -10,6 +10,7 @@ import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layou
 import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
 
 const ShareModal = dynamic(() => import('@/features/ShareModal'));
+const SharePopover = dynamic(() => import('@/features/ShareModal/SharePopover'));
 
 interface ShareButtonProps {
   mobile?: boolean;
@@ -23,15 +24,16 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
 
   return (
     <>
-      <ActionIcon
-        icon={Share2}
-        onClick={() => setIsModalOpen(true)}
-        size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
-        title={t('share')}
-        tooltipProps={{
-          placement: 'bottom',
-        }}
-      />
+      <SharePopover onOpenModal={() => setIsModalOpen(true)}>
+        <ActionIcon
+          icon={Share2}
+          size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
+          title={t('share')}
+          tooltipProps={{
+            placement: 'bottom',
+          }}
+        />
+      </SharePopover>
       <ShareModal onCancel={() => setIsModalOpen(false)} open={isModalOpen} />
     </>
   );
