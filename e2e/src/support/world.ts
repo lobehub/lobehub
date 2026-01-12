@@ -17,6 +17,13 @@ export class CustomWorld extends World {
   page!: Page;
   testContext: TestContext;
 
+  /**
+   * Get the platform-specific modifier key (Meta for macOS, Control for Linux/Windows)
+   */
+  get modKey(): 'Meta' | 'Control' {
+    return process.platform === 'darwin' ? 'Meta' : 'Control';
+  }
+
   constructor(options: IWorldOptions) {
     super(options);
     this.testContext = {

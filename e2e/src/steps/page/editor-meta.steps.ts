@@ -100,9 +100,9 @@ When('用户输入标题 {string}', async function (this: CustomWorld, title: st
 
   const titleInput = this.page.locator('textarea').first();
 
-  // Clear existing content and type new title
+  // Clear existing content and type new title (use modKey for cross-platform support)
   await titleInput.click();
-  await this.page.keyboard.press('Meta+A');
+  await this.page.keyboard.press(`${this.modKey}+A`);
   await this.page.waitForTimeout(100);
   await this.page.keyboard.type(title, { delay: 30 });
 
@@ -117,7 +117,7 @@ When('用户清空标题内容', async function (this: CustomWorld) {
 
   const titleInput = this.page.locator('textarea').first();
   await titleInput.click();
-  await this.page.keyboard.press('Meta+A');
+  await this.page.keyboard.press(`${this.modKey}+A`);
   await this.page.keyboard.press('Backspace');
   await this.page.waitForTimeout(300);
 

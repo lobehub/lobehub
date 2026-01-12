@@ -76,8 +76,8 @@ async function inputPageName(
       await this.page.click('body', { position: { x: 10, y: 10 } });
     }
   } else {
-    // Keyboard fallback
-    await this.page.keyboard.press('Meta+A');
+    // Keyboard fallback (use modKey for cross-platform support)
+    await this.page.keyboard.press(`${this.modKey}+A`);
     await this.page.waitForTimeout(50);
     await this.page.keyboard.type(newName, { delay: 20 });
 
@@ -138,8 +138,8 @@ Given('用户在 Page 页面有一个文稿', async function (this: CustomWorld)
   await renameOption.click();
   await this.page.waitForTimeout(500);
 
-  // Input the unique name
-  await this.page.keyboard.press('Meta+A');
+  // Input the unique name (use modKey for cross-platform support)
+  await this.page.keyboard.press(`${this.modKey}+A`);
   await this.page.keyboard.type(uniqueTitle, { delay: 20 });
   await this.page.click('body', { position: { x: 10, y: 10 } });
   await this.page.waitForTimeout(1000);
@@ -188,8 +188,8 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
   await renameOption.click();
   await this.page.waitForTimeout(500);
 
-  // Input the new name
-  await this.page.keyboard.press('Meta+A');
+  // Input the new name (use modKey for cross-platform support)
+  await this.page.keyboard.press(`${this.modKey}+A`);
   await this.page.keyboard.type(title, { delay: 20 });
   await this.page.click('body', { position: { x: 10, y: 10 } });
   await this.page.waitForTimeout(1000);

@@ -79,7 +79,7 @@ When('用户在编辑器中输入内容 {string}', async function (this: CustomW
 When('用户选中所有内容', async function (this: CustomWorld) {
   console.log('   📍 Step: 选中所有内容...');
 
-  await this.page.keyboard.press('Meta+A');
+  await this.page.keyboard.press(`${this.modKey}+A`);
   await this.page.waitForTimeout(300);
 
   console.log('   ✅ 已选中所有内容');
@@ -122,10 +122,12 @@ When('用户输入斜杠命令 {string}', async function (this: CustomWorld, com
 When('用户按下快捷键 {string}', async function (this: CustomWorld, shortcut: string) {
   console.log(`   📍 Step: 按下快捷键 "${shortcut}"...`);
 
-  await this.page.keyboard.press(shortcut);
+  // Convert Meta to platform-specific modifier key for cross-platform support
+  const platformShortcut = shortcut.replaceAll('Meta', this.modKey);
+  await this.page.keyboard.press(platformShortcut);
   await this.page.waitForTimeout(300);
 
-  console.log(`   ✅ 已按下快捷键 "${shortcut}"`);
+  console.log(`   ✅ 已按下快捷键 "${platformShortcut}"`);
 });
 
 // ============================================
