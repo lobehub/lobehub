@@ -36,7 +36,7 @@ const TOOL_PRICING: Record<string, number> = {
 const collectActiveMessageIds = (messages: UIChatMessage[]) => {
   const ids = new Set<string>();
 
-  const collectFromAssistantGroup = (message: UIChatMessage) => {
+  function collectFromAssistantGroup(message: UIChatMessage): void {
     if (message.id) ids.add(message.id);
     message.children?.forEach((child) => {
       if (child.id) ids.add(child.id);
@@ -44,9 +44,11 @@ const collectActiveMessageIds = (messages: UIChatMessage[]) => {
         if (tool.result_msg_id) ids.add(tool.result_msg_id);
       });
     });
-  };
+  }
 
-  const collectFromCompare = (message: UIChatMessage) => {
+  // walk is defined after this function, but that's intentional for mutual recursion
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  function collectFromCompare(message: UIChatMessage): void {
     const columns = (message as any).columns as UIChatMessage[][] | undefined;
     if (columns && columns.length > 0) {
       const activeColumnId = (message as any).activeColumnId as string | undefined;
@@ -54,15 +56,17 @@ const collectActiveMessageIds = (messages: UIChatMessage[]) => {
         ? columns.find((column) => column.some((colMessage) => colMessage.id === activeColumnId))
         : columns[0];
 
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
       (activeColumn ?? columns[0]).forEach(walk);
       return;
     }
 
     const compareChildren = (message as any).children as UIChatMessage[] | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
     compareChildren?.forEach(walk);
-  };
+  }
 
-  const walk = (message?: UIChatMessage) => {
+  function walk(message?: UIChatMessage): void {
     if (!message) return;
 
     const role = message.role as string;
@@ -87,7 +91,7 @@ const collectActiveMessageIds = (messages: UIChatMessage[]) => {
     }
 
     if (message.id) ids.add(message.id);
-  };
+  }
 
   messages.forEach(walk);
 
@@ -219,7 +223,11 @@ export const createAgentExecutors = (context: {
       const activeMessageIds = collectActiveMessageIds(displayMessages);
       if (activeMessageIds.size > 0) {
         dbMessagesMap.forEach((message) => {
-          if (message.role === 'tool' && message.parentId && activeMessageIds.has(message.parentId)) {
+          if (
+            message.role === 'tool' &&
+            message.parentId &&
+            activeMessageIds.has(message.parentId)
+          ) {
             activeMessageIds.add(message.id);
           }
         });
