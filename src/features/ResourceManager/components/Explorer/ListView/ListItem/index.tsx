@@ -510,6 +510,7 @@ const FileListItem = memo<FileListItemProps>(
               onPointerDown={(e) => e.stopPropagation()}
             >
               {!isFolder &&
+                !isPage &&
                 (fileStoreState.isCreatingFileParseTask ||
                 isNull(chunkingStatus) ||
                 !chunkingStatus ? (
