@@ -476,6 +476,13 @@
       "when": 1767929492232,
       "tag": "0067_add_agent_cron_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1768189437504,
+      "tag": "0068_update_group_data",
+      "breakpoints": true
     }
   ],
   "version": "6"
