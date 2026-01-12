@@ -139,7 +139,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
 
     // Native HTML5 drag event handlers
     const handleDragStart = useCallback(
-      (e: DragEvent) => {
+      (e: React.DragEvent<HTMLDivElement>) => {
         setIsDragging(true);
         setCurrentDrag({
           data: dragData,
@@ -149,10 +149,12 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
 
         // Set drag image to be transparent (we use custom overlay)
         const img = getTransparentDragImage();
-        if (img) {
+        if (img && e.dataTransfer) {
           e.dataTransfer.setDragImage(img, 0, 0);
         }
-        e.dataTransfer.effectAllowed = 'move';
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+        }
       },
       [dragData, item.id, item.isFolder, setCurrentDrag],
     );
@@ -162,7 +164,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     }, []);
 
     const handleDragOver = useCallback(
-      (e: DragEvent) => {
+      (e: React.DragEvent<HTMLDivElement>) => {
         if (!item.isFolder || !isDragActive) return;
 
         e.preventDefault();
