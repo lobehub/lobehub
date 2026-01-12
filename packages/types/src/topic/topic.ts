@@ -145,6 +145,11 @@ export interface SharedMessage {
 export interface SharedTopicData {
   accessPermission: ShareAccessPermission;
   agentId: string | null;
+  agentMeta?: {
+    avatar?: string | null;
+    backgroundColor?: string | null;
+    title?: string | null;
+  };
   shareId: string;
   title: string | null;
   topicId: string;

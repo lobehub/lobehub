@@ -37,6 +37,13 @@ export const shareRouter = router({
       return {
         accessPermission: share.accessPermission as SharedTopicData['accessPermission'],
         agentId: share.agentId,
+        agentMeta: share.agentId
+          ? {
+              avatar: share.agentAvatar,
+              backgroundColor: share.agentBackgroundColor,
+              title: share.agentTitle,
+            }
+          : undefined,
         shareId: share.shareId,
         title: share.title,
         topicId: share.topicId,

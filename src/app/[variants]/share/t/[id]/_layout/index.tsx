@@ -4,12 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 import { Typography } from 'antd';
 import { createStyles } from 'antd-style';
 import Link from 'next/link';
-import { PropsWithChildren, memo } from 'react';
+import { PropsWithChildren, memo, useEffect } from 'react';
 import { Outlet, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
 import { lambdaClient } from '@/libs/trpc/client';
+import { useAgentStore } from '@/store/agent';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
@@ -34,12 +35,25 @@ const useStyles = createStyles(({ css, token }) => ({
 const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   const { styles } = useStyles();
   const { id } = useParams<{ id: string }>();
+  const dispatchAgentMap = useAgentStore((s) => s.internal_dispatchAgentMap);
 
   const { data } = useSWR(
     id ? ['shared-topic', id] : null,
     () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
     { revalidateOnFocus: false },
   );
+
+  // Set agent meta to agentStore for avatar display
+  useEffect(() => {
+    if (data?.agentId && data.agentMeta) {
+      const meta: any = {
+        avatar: data.agentMeta.avatar ?? undefined,
+        backgroundColor: data.agentMeta.backgroundColor ?? undefined,
+        title: data.agentMeta.title ?? undefined,
+      };
+      dispatchAgentMap(data.agentId, meta);
+    }
+  }, [data?.agentId, data?.agentMeta, dispatchAgentMap]);
 
   return (
     <Flexbox className={styles.container}>

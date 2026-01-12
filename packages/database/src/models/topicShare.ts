@@ -1,7 +1,7 @@
 import type { ShareAccessPermission } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import { topicShares, topics } from '../schemas';
+import { agents, topicShares, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
 export class TopicShareModel {
@@ -86,7 +86,10 @@ export class TopicShareModel {
     const result = await db
       .select({
         accessPermission: topicShares.accessPermission,
+        agentAvatar: agents.avatar,
+        agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
+        agentTitle: agents.title,
         ownerId: topicShares.userId,
         shareId: topicShares.id,
         title: topics.title,
@@ -94,6 +97,7 @@ export class TopicShareModel {
       })
       .from(topicShares)
       .innerJoin(topics, eq(topicShares.topicId, topics.id))
+      .leftJoin(agents, eq(topics.agentId, agents.id))
       .where(eq(topicShares.id, shareId))
       .limit(1);
 
