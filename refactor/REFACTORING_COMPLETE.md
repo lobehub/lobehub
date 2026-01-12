@@ -382,44 +382,16 @@ ANY Type - Uso de type assertion `as any` ao passar o ícone `CaretDownFilled` d
 
 ---
 
-## REFATORAÇÃO 10-12: Arquivos sem ANY no código
-
-Os seguintes arquivos foram identificados pela ferramenta mas não contêm `any` no código atual:
-- **Actions.tsx** (linha 7)
-- **GroupItem.tsx** (linha 6)  
-- **MentionedUserItem.tsx** (linha 2)
-
-Estes arquivos podem ter tido o code smell removido em refatorações anteriores, ou a ferramenta detectou o code smell de forma diferente. **Não é necessário refatorá-los no momento**.
-
----
-
-## REFATORAÇÃO 10: MUT - Missing Union Type Abstraction
-
-### Informações do Arquivo
-- **Arquivo**: `index.tsx` (linha 26 da tabela) - **PRECISA SER IDENTIFICADO**
-- **Code Smell**: MUT - Missing Union Type Abstraction
-
-### Status
-⚠️ **PENDENTE IDENTIFICAÇÃO** - É necessário identificar qual `index.tsx` específico na linha 26 da análise contém union types inline que precisam ser abstraídos em tipos nomeados.
-
-### Próximos Passos
-1. Analisar arquivos `index.tsx` próximos à linha 26 na estrutura do projeto
-2. Procurar por union types inline como `string | number`, `boolean | string`, etc. em props ou parâmetros
-3. Identificar union types que são usados em múltiplos lugares e deveriam ser abstraídos
-4. Criar tipos nomeados apropriados e substituir os union types inline
-
----
-
 ## Resumo das Refatorações
 
 | # | Arquivo | Code Smell | Status | Commit Message Prefix |
 |---|---------|------------|--------|----------------------|
-| 1 | ImageNum.tsx | ANY | ✅ Documentado | `refactor 1 ImageNum:` |
-| 2 | useNav.tsx | ANY | ✅ Documentado | `refactor 1 useNav:` |
-| 3 | Nav.tsx | ANY | ✅ Documentado | `refactor 1 Nav:` |
-| 4 | ErrorState.tsx | ANY | ✅ Documentado | `refactor 1 ErrorState:` |
-| 5 | Heading.tsx | ANY | ✅ Documentado | `refactor 1 Heading:` |
-| 6 | GroupMember.tsx | ANY | ✅ Documentado | `refactor 1 GroupMember:` |
+| 1 | ImageNum.tsx | ANY | ✅ Implementado | `refactor 1 ImageNum:` |
+| 2 | useNav.tsx | ANY | ✅ Implementado | `refactor 1 useNav:` |
+| 3 | Nav.tsx | ANY | ✅ Implementado | `refactor 1 Nav:` |
+| 4 | ErrorState.tsx | ANY | ✅ Implementado | `refactor 1 ErrorState:` |
+| 5 | Heading.tsx | ANY | ✅ Implementado | `refactor 1 Heading:` |
+| 6 | GroupMember.tsx | ANY | ✅ Implementado | `refactor 1 GroupMember:` |
 | 7 | UsageTable.tsx | ANY | ✅ Implementado | `refactor 1 UsageTable:` |
 | 8 | ClerkProfile.tsx | ANY | ✅ Implementado | `refactor 1 ClerkProfile:` |
 | 9 | CategoryMenu.tsx (knowledge) | ANY | ✅ Implementado | `refactor 1 CategoryMenu:` |
