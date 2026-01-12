@@ -259,6 +259,29 @@ export interface AiModelSettings {
   searchProvider?: string;
 }
 
+export const ExtendParamsTypeSchema = z.enum([
+  'reasoningBudgetToken',
+  'enableReasoning',
+  'disableContextCaching',
+  'reasoningEffort',
+  'gpt5ReasoningEffort',
+  'gpt5_1ReasoningEffort',
+  'gpt5_2ReasoningEffort',
+  'gpt5_2ProReasoningEffort',
+  'textVerbosity',
+  'thinking',
+  'thinkingBudget',
+  'thinkingLevel',
+  'thinkingLevel2',
+  'imageAspectRatio',
+  'imageResolution',
+  'urlContext',
+]);
+
+export const AiModelSettingsSchema = z.object({
+  extendParams: z.array(ExtendParamsTypeSchema).optional(),
+});
+
 export interface AIChatModelCard extends AIBaseModelCard {
   abilities?: ModelAbilities;
   config?: AiModelConfig;
@@ -344,6 +367,7 @@ export const CreateAiModelSchema = z.object({
   id: z.string(),
   providerId: z.string(),
   releasedAt: z.string().optional(),
+  settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 
   // checkModel: z.string().optional(),
@@ -380,6 +404,7 @@ export const UpdateAiModelSchema = z.object({
     .optional(),
   contextWindowTokens: z.number().nullable().optional(),
   displayName: z.string().nullable().optional(),
+  settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 });
 
