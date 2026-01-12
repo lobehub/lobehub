@@ -14,7 +14,8 @@ const leftActions: ActionKeys[] = [
   'fileUpload',
   'tools',
   '---',
-  ['typo', 'params', 'clear'],
+  ['typo', 'params', 'history', 'clear'],
+  'stt',
   'mainToken',
 ];
 
