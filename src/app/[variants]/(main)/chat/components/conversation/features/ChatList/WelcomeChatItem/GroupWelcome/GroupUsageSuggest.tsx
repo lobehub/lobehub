@@ -5,7 +5,7 @@ import { createStyles } from 'antd-style';
 import { shuffle } from 'lodash-es';
 import { RefreshCw } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { TFunction, useTranslation } from 'react-i18next';
 import { Flexbox } from 'react-layout-kit';
 
 import { useSendGroupMessage } from '../../../ChatInput/useSend';
@@ -66,7 +66,7 @@ const useStyles = createStyles(({ css, token, responsive }) => ({
 }));
 
 // Get fallback activities from general section
-const getFallbackActivities = (t: any) => {
+const getFallbackActivities = (t: TFunction) => {
   const generalActivities = t('guide.groupActivities.general', { returnObjects: true }) as Record<
     string,
     { description: string; emoji: string; prompt: string; title: string }

@@ -49,7 +49,12 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 interface MentionedUserItemProps {
-  agent: any; // The actual agent data from the group
+  agent: {
+    avatar?: string;
+    backgroundColor?: string;
+    id: string;
+    title?: string;
+  };
 }
 
 const MentionedUserItem = memo<MentionedUserItemProps>(({ agent }) => {

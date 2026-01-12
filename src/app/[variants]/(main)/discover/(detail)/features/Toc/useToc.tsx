@@ -7,7 +7,7 @@ import { FC, PropsWithChildren, createContext, useContext, useState } from 'reac
 interface TocState {
   isLoading: boolean;
   setFinished: () => void;
-  setToc: (data: any) => void;
+  setToc: (data: AnchorProps['items']) => void;
   toc?: AnchorProps['items'];
 }
 

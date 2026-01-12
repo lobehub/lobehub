@@ -5,7 +5,7 @@ import { createStyles, useTheme } from 'antd-style';
 import { kebabCase } from 'lodash-es';
 import { Heading2, Heading3, Heading4, Heading5 } from 'lucide-react';
 import Link from 'next/link';
-import { Children, ComponentProps, FC, ReactNode, isValidElement, useEffect, useMemo } from 'react';
+import { Children, ComponentProps, ComponentType, FC, ReactNode, isValidElement, useEffect, useMemo } from 'react';
 
 import { useToc } from './useToc';
 
@@ -23,7 +23,7 @@ const extractTextChildren = (children: ReactNode) => {
   return text;
 };
 
-const HeadingIcon: any = {
+const HeadingIcon: Record<string, ComponentType> = {
   h2: Heading2,
   h3: Heading3,
   h4: Heading4,

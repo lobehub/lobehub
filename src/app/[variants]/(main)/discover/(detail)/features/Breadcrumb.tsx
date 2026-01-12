@@ -23,7 +23,7 @@ const Breadcrumb = memo<{ identifier: string; tab: DiscoverTab }>(({ tab, identi
         {
           title: (
             <Link href={urlJoin('/discover', tab)}>
-              {tab === DiscoverTab.Mcp ? 'MCP Servers' : t(`tab.${tab}` as any)}
+              {tab === DiscoverTab.Mcp ? 'MCP Servers' : t(`tab.${tab}` as keyof typeof DiscoverTab)}
             </Link>
           ),
         },
