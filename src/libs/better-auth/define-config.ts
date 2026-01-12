@@ -126,7 +126,6 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
         // Skip sending verification link email for mobile clients (Expo/React Native)
         // Mobile clients use OTP verification instead, triggered manually via emailOTP plugin
         if (request?.headers?.get?.('x-client-type') === 'mobile') {
-          // Mobile client will manually send OTP via sendVerificationOTP
           return;
         }
 
