@@ -185,6 +185,8 @@ export function defineConfig() {
     '/oidc/token',
     // market
     '/market-auth-callback',
+    // public share pages
+    '/share(.*)',
   ]);
 
   const isProtectedRoute = createRouteMatcher([

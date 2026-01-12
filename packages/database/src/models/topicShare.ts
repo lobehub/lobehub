@@ -1,7 +1,7 @@
 import type { ShareAccessPermission } from '@lobechat/types';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
-import { agents, chatGroups, topicShares, topics } from '../schemas';
+import { agents, chatGroups, chatGroupsAgents, topicShares, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
 export class TopicShareModel {
@@ -108,14 +108,33 @@ export class TopicShareModel {
       .where(eq(topicShares.id, shareId))
       .limit(1);
 
-    // Increment view count
-    if (result[0]) {
-      await db
-        .update(topicShares)
-        .set({ viewCount: sql`${topicShares.viewCount} + 1` })
-        .where(eq(topicShares.id, shareId));
+    if (!result[0]) return null;
+
+    const share = result[0];
+
+    // Fetch group members if this is a group topic
+    let groupMembers: { avatar: string | null; backgroundColor: string | null }[] | undefined;
+    if (share.groupId) {
+      const members = await db
+        .select({
+          avatar: agents.avatar,
+          backgroundColor: agents.backgroundColor,
+        })
+        .from(chatGroupsAgents)
+        .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+        .where(eq(chatGroupsAgents.chatGroupId, share.groupId))
+        .orderBy(asc(chatGroupsAgents.order))
+        .limit(4);
+
+      groupMembers = members;
     }
 
-    return result[0] || null;
+    // Increment view count
+    await db
+      .update(topicShares)
+      .set({ viewCount: sql`${topicShares.viewCount} + 1` })
+      .where(eq(topicShares.id, shareId));
+
+    return { ...share, groupMembers };
   };
 }

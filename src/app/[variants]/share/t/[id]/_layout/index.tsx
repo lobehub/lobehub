@@ -1,14 +1,16 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Avatar, Flexbox } from '@lobehub/ui';
 import { Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStyles, cssVar } from 'antd-style';
 import NextLink from 'next/link';
-import { PropsWithChildren, memo, useEffect } from 'react';
+import { PropsWithChildren, memo, useEffect, useMemo } from 'react';
 import { Link, Outlet, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
+import { DEFAULT_AVATAR } from '@/const/meta';
+import GroupAvatar from '@/features/GroupAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
@@ -28,9 +30,8 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-inline: 24px;
   `,
   header: css`
-    padding-block: 16px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    height: 52px;
+    padding: 8px;
   `,
 }));
 
@@ -60,6 +61,37 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
 
   const agentOrGroupTitle = data?.groupMeta?.title || data?.agentMeta?.title;
   const agentMarketIdentifier = data?.agentMeta?.marketIdentifier;
+  const isGroup = !!data?.groupId;
+
+  // Build group avatars for GroupAvatar component
+  const groupAvatars = useMemo(() => {
+    if (!isGroup || !data?.groupMeta?.members) return [];
+    return data.groupMeta.members.map((member) => ({
+      avatar: member.avatar || DEFAULT_AVATAR,
+      backgroundColor: member.backgroundColor || undefined,
+    }));
+  }, [isGroup, data?.groupMeta?.members]);
+
+  const renderAgentOrGroupAvatar = () => {
+    // For group: use GroupAvatar with members
+    if (isGroup && groupAvatars.length > 0) {
+      return <GroupAvatar avatars={groupAvatars} size={24} />;
+    }
+
+    // For agent: use single Avatar
+    if (data?.agentMeta?.avatar) {
+      return (
+        <Avatar
+          avatar={data.agentMeta.avatar}
+          background={data.agentMeta.backgroundColor || cssVar.colorFillTertiary}
+          shape="square"
+          size={24}
+        />
+      );
+    }
+
+    return null;
+  };
 
   const renderAgentOrGroupTitle = () => {
     if (!agentOrGroupTitle) return null;
@@ -88,13 +120,14 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
         <Flexbox align="center" flex={1} gap={12} horizontal>
           {isLogin ? (
             <Link to="/">
-              <ProductLogo size={36} />
+              <ProductLogo size={24} />
             </Link>
           ) : (
             <NextLink href="/login">
-              <ProductLogo size={36} />
+              <ProductLogo size={24} />
             </NextLink>
           )}
+          {renderAgentOrGroupAvatar()}
           {renderAgentOrGroupTitle()}
         </Flexbox>
         {data?.title && (
@@ -103,7 +136,7 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
           </Typography.Text>
         )}
         <Flexbox align="center" flex={1} horizontal justify="flex-end">
-          {isLogin && <UserAvatar size={32} />}
+          {isLogin && <UserAvatar size={24} />}
         </Flexbox>
       </Flexbox>
       <Flexbox className={styles.content}>{children ?? <Outlet />}</Flexbox>

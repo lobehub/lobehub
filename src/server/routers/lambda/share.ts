@@ -53,6 +53,7 @@ export const shareRouter = router({
           ? {
               avatar: share.groupAvatar,
               backgroundColor: share.groupBackgroundColor,
+              members: share.groupMembers,
               title: share.groupTitle,
             }
           : undefined,
