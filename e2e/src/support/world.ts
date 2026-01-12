@@ -3,6 +3,11 @@ import { Browser, BrowserContext, Page, Response, chromium } from '@playwright/t
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+/**
+ * Default timeout for waiting operations (e.g., waitForURL, toBeVisible)
+ */
+export const WAIT_TIMEOUT = 13_000;
+
 export interface TestContext {
   [key: string]: any;
   consoleErrors: string[];

@@ -10,7 +10,7 @@
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld } from '../../support/world';
+import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // Helper Functions
@@ -118,7 +118,7 @@ Given('用户在 Page 页面有一个文稿', async function (this: CustomWorld)
   await this.page.waitForTimeout(1500);
 
   // Wait for the new page to be created and URL to change
-  await this.page.waitForURL(/\/page\/.+/, { timeout: 10_000 });
+  await this.page.waitForURL(/\/page\/.+/, { timeout: WAIT_TIMEOUT });
 
   // Create a unique title for this test page
   const uniqueTitle = `E2E Page ${Date.now()}`;
@@ -146,7 +146,7 @@ Given('用户在 Page 页面有一个文稿', async function (this: CustomWorld)
 
   // Wait for the renamed page to be visible
   const renamedItem = this.page.getByText(uniqueTitle, { exact: true }).first();
-  await expect(renamedItem).toBeVisible({ timeout: 10_000 });
+  await expect(renamedItem).toBeVisible({ timeout: WAIT_TIMEOUT });
 
   // Store page reference for later use
   this.testContext.targetItemTitle = uniqueTitle;
@@ -168,7 +168,7 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
   await this.page.waitForTimeout(1500);
 
   // Wait for the new page to be created
-  await this.page.waitForURL(/\/page\/.+/, { timeout: 10_000 });
+  await this.page.waitForURL(/\/page\/.+/, { timeout: WAIT_TIMEOUT });
 
   // Default title is "无标题" (Untitled) - support both languages
   const defaultTitleRegex = /^(无标题|Untitled)$/;
@@ -196,7 +196,7 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
 
   console.log('   📍 Step: 查找文稿...');
   const renamedItem = this.page.getByText(title, { exact: true }).first();
-  await expect(renamedItem).toBeVisible({ timeout: 10_000 });
+  await expect(renamedItem).toBeVisible({ timeout: WAIT_TIMEOUT });
 
   this.testContext.targetItemTitle = title;
   this.testContext.targetType = 'page';
@@ -344,7 +344,7 @@ Then('文稿列表中应该出现 {string}', async function (this: CustomWorld, 
     return;
   }
 
-  await expect(duplicatedItem).toBeVisible({ timeout: 10_000 });
+  await expect(duplicatedItem).toBeVisible({ timeout: WAIT_TIMEOUT });
   console.log(`   ✅ 文稿列表中出现 "${expectedName}"`);
 });
 
