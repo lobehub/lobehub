@@ -1,9 +1,18 @@
 // @vitest-environment node
 import { LobeChatDatabase } from '@lobechat/database';
-import { agents, agentsToSessions, sessions, threads, topics } from '@lobechat/database/schemas';
+import {
+  agents,
+  agentsToSessions,
+  messages,
+  sessions,
+  threads,
+  topics,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { VIRTUAL_ROOT_MESSAGE_CONTENT } from '@/database/constants/message';
 
 import { aiAgentRouter } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
@@ -114,6 +123,25 @@ describe('AI Agent Router Integration Tests', () => {
     jwtPayload: { userId },
   });
 
+  // Helper function to create a virtual root message for a topic
+  const createVirtualRootMessage = async (
+    db: LobeChatDatabase,
+    topic: typeof topics.$inferSelect,
+    uid: string,
+  ) => {
+    await db.insert(messages).values({
+      id: topic.id,
+      content: VIRTUAL_ROOT_MESSAGE_CONTENT,
+      role: 'user',
+      topicId: topic.id,
+      userId: uid,
+      parentId: null,
+      agentId: topic.agentId ?? undefined,
+      sessionId: topic.sessionId ?? undefined,
+      metadata: { isVirtualRoot: true },
+    });
+  };
+
   describe('execAgent', () => {
     it('should create a new topic when topicId is not provided', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
@@ -170,6 +198,9 @@ describe('AI Agent Router Integration Tests', () => {
           userId,
         })
         .returning();
+
+      // Create virtual root message for the existing topic
+      await createVirtualRootMessage(serverDB, existingTopic, userId);
 
       const result = await caller.execAgent({
         agentId: testAgentId,
@@ -278,6 +309,9 @@ describe('AI Agent Router Integration Tests', () => {
           userId,
         })
         .returning();
+
+      // Create virtual root message for the topic
+      await createVirtualRootMessage(serverDB, topic, userId);
 
       // Create a thread (required by foreign key constraint on messages)
       const threadId = 'thread-1';

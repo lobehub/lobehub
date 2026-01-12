@@ -12,6 +12,7 @@ import { and, eq } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { VIRTUAL_ROOT_MESSAGE_CONTENT } from '@/database/constants/message';
 import { inMemoryAgentStateManager } from '@/server/modules/AgentRuntime/InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -51,6 +52,24 @@ const createTestContext = () => ({
   jwtPayload: { userId },
   userId,
 });
+
+// Helper function to create a virtual root message for a topic
+const createVirtualRootMessage = async (
+  db: LobeChatDatabase,
+  topic: typeof topics.$inferSelect,
+  uid: string,
+) => {
+  await db.insert(messages).values({
+    id: topic.id,
+    content: VIRTUAL_ROOT_MESSAGE_CONTENT,
+    role: 'user',
+    topicId: topic.id,
+    userId: uid,
+    parentId: null,
+    agentId: topic.agentId ?? undefined,
+    metadata: { isVirtualRoot: true },
+  });
+};
 
 beforeEach(async () => {
   // Setup test database
@@ -105,15 +124,19 @@ describe('execAgent', () => {
       expect(createdTopics).toHaveLength(1);
       expect(createdTopics[0].title).toBe(prompt);
 
-      // Verify user message and assistant message placeholder were created
+      // Verify user message and assistant message placeholder were created (includes virtual root)
       const createdMessages = await serverDB
         .select()
         .from(messages)
         .where(and(eq(messages.agentId, testAgentId), eq(messages.topicId, createdTopics[0].id)));
 
-      expect(createdMessages).toHaveLength(2);
+      // 3 messages: virtual root + user message + assistant message
+      expect(createdMessages).toHaveLength(3);
 
-      const userMessage = createdMessages.find((m) => m.role === 'user');
+      // Find user message (exclude virtual root which also has role='user')
+      const userMessage = createdMessages.find(
+        (m) => m.role === 'user' && m.content !== VIRTUAL_ROOT_MESSAGE_CONTENT,
+      );
       expect(userMessage).toBeDefined();
       expect(userMessage?.content).toBe(prompt);
 
@@ -167,6 +190,9 @@ describe('execAgent', () => {
         .insert(topics)
         .values({ agentId: testAgentId, title: 'Existing Topic', userId })
         .returning();
+
+      // Create virtual root message for the existing topic
+      await createVirtualRootMessage(serverDB, existingTopic, userId);
 
       const result = await caller.execAgent({
         agentId: testAgentId,
@@ -231,6 +257,9 @@ describe('execAgent', () => {
           userId,
         })
         .returning();
+
+      // Create virtual root message for the topic
+      await createVirtualRootMessage(serverDB, topic, userId);
 
       const [thread] = await serverDB
         .insert(threads)
@@ -372,7 +401,10 @@ describe('execAgent', () => {
         .from(messages)
         .where(eq(messages.agentId, testAgentId));
 
-      const userMessage = allMessages.find((m) => m.role === 'user');
+      // Find user message (exclude virtual root which also has role='user')
+      const userMessage = allMessages.find(
+        (m) => m.role === 'user' && m.content !== VIRTUAL_ROOT_MESSAGE_CONTENT,
+      );
       const assistantMessage = allMessages.find((m) => m.role === 'assistant');
 
       expect(userMessage).toBeDefined();
@@ -616,9 +648,13 @@ describe('execAgent', () => {
         .from(messages)
         .where(eq(messages.agentId, testAgentWithToolsId));
 
-      expect(allMessages.length).toEqual(4);
+      // 5 messages: virtual root + user + assistant1 + tool + assistant2
+      expect(allMessages.length).toEqual(5);
 
-      const userMessage = allMessages.find((m) => m.role === 'user');
+      // Find user message (exclude virtual root which also has role='user')
+      const userMessage = allMessages.find(
+        (m) => m.role === 'user' && m.content !== VIRTUAL_ROOT_MESSAGE_CONTENT,
+      );
       expect(userMessage).toBeDefined();
       expect(userMessage?.content).toBe('杭州天气如何');
 
@@ -675,11 +711,16 @@ describe('execAgent', () => {
         .from(messages)
         .where(eq(messages.agentId, testAgentWithToolsId));
 
-      expect(allMessages.length).toBe(4);
+      // 5 messages: virtual root + user + assistant1 + tool + assistant2
+      expect(allMessages.length).toBe(5);
 
-      const userMessage = allMessages.find((m) => m.role === 'user');
+      // Find user message (exclude virtual root which also has role='user')
+      const userMessage = allMessages.find(
+        (m) => m.role === 'user' && m.content !== VIRTUAL_ROOT_MESSAGE_CONTENT,
+      );
       expect(userMessage).toBeDefined();
-      expect(userMessage?.parentId).toBeNull();
+      // With virtual root, user message's parentId is the topicId (virtual root message id)
+      expect(userMessage?.parentId).toBe(userMessage?.topicId);
 
       const firstAssistant = allMessages.find(
         (m) => m.role === 'assistant' && m.parentId === userMessage?.id,
