@@ -298,6 +298,7 @@
   "shareModal.withPluginInfo": "包含技能信息",
   "shareModal.withRole": "包含消息角色",
   "shareModal.withSystemRole": "包含助理档案",
+  "sharePageDisclaimer": "此内容由用户分享，不代表 LobeHub 观点。LobeHub 不对该分享内容产生的任何后果承担责任。",
   "stt.action": "语音输入",
   "stt.loading": "识别中…",
   "stt.prettifying": "润色中…",

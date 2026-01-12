@@ -5,6 +5,7 @@ import { Typography } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import NextLink from 'next/link';
 import { PropsWithChildren, memo, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -29,6 +30,12 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 24px;
     padding-inline: 24px;
   `,
+  footer: css`
+    padding-block: 16px;
+    padding-inline: 24px;
+    color: ${token.colorTextTertiary};
+    text-align: center;
+  `,
   header: css`
     height: 52px;
     padding: 8px;
@@ -37,6 +44,7 @@ const useStyles = createStyles(({ css, token }) => ({
 
 const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   const { styles } = useStyles();
+  const { t } = useTranslation('chat');
   const { id } = useParams<{ id: string }>();
   const dispatchAgentMap = useAgentStore((s) => s.internal_dispatchAgentMap);
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -140,6 +148,7 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
         </Flexbox>
       </Flexbox>
       <Flexbox className={styles.content}>{children ?? <Outlet />}</Flexbox>
+      <Typography.Text className={styles.footer}>{t('sharePageDisclaimer')}</Typography.Text>
     </Flexbox>
   );
 });
