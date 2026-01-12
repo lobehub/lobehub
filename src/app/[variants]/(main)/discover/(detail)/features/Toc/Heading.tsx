@@ -5,7 +5,7 @@ import { createStyles, useTheme } from 'antd-style';
 import { kebabCase } from 'lodash-es';
 import { Heading2, Heading3, Heading4, Heading5 } from 'lucide-react';
 import Link from 'next/link';
-import { Children, ComponentProps, ComponentType, FC, ReactNode, isValidElement, useEffect, useMemo } from 'react';
+import { Children, ComponentProps, ComponentType, FC, ReactElement, ReactNode, isValidElement, useEffect, useMemo } from 'react';
 
 import { useToc } from './useToc';
 
@@ -15,8 +15,11 @@ const extractTextChildren = (children: ReactNode) => {
   Children.forEach(children, (child) => {
     if (typeof child === 'string' || typeof child === 'number') {
       text += child;
-    } else if (isValidElement(child) && (child as any).props.children) {
-      text += extractTextChildren((child as any).props.children);
+    } else if (isValidElement(child)) {
+      const element = child as ReactElement<{ children?: ReactNode }>;
+      if (element.props.children) {
+        text += extractTextChildren(element.props.children);
+      }
     }
   });
 
