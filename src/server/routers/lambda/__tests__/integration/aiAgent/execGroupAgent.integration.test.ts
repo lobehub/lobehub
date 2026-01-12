@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { VIRTUAL_ROOT_MESSAGE_CONTENT } from '@/database/constants/message';
 import { inMemoryAgentStateManager } from '@/server/modules/AgentRuntime/InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 
@@ -164,6 +165,18 @@ describe('execGroupAgent', () => {
         })
         .returning();
 
+      await serverDB.insert(messages).values({
+        agentId: testAgentId,
+        content: VIRTUAL_ROOT_MESSAGE_CONTENT,
+        groupId: testGroupId,
+        id: existingTopic.id,
+        metadata: { activeBranchIndex: 0, isVirtualRoot: true },
+        parentId: null,
+        role: 'user',
+        topicId: existingTopic.id,
+        userId,
+      });
+
       const caller = aiAgentRouter.createCaller(createTestCallerContext(userId));
 
       const result = await caller.execGroupAgent({
@@ -229,9 +242,11 @@ describe('execGroupAgent', () => {
         .from(messages)
         .where(and(eq(messages.topicId, result.topicId), eq(messages.role, 'user')));
 
-      expect(createdMessages).toHaveLength(1);
-      expect(createdMessages[0].content).toBe('User message in group');
-      expect(createdMessages[0].agentId).toBe(testAgentId);
+      const nonRootMessages = createdMessages.filter((message) => !message.metadata?.isVirtualRoot);
+
+      expect(nonRootMessages).toHaveLength(1);
+      expect(nonRootMessages[0].content).toBe('User message in group');
+      expect(nonRootMessages[0].agentId).toBe(testAgentId);
     });
   });
 
@@ -274,6 +289,18 @@ describe('execGroupAgent', () => {
           userId,
         })
         .returning();
+
+      await serverDB.insert(messages).values({
+        agentId: testAgentId,
+        content: VIRTUAL_ROOT_MESSAGE_CONTENT,
+        groupId: testGroupId,
+        id: existingTopic.id,
+        metadata: { activeBranchIndex: 0, isVirtualRoot: true },
+        parentId: null,
+        role: 'user',
+        topicId: existingTopic.id,
+        userId,
+      });
 
       const caller = aiAgentRouter.createCaller(createTestCallerContext(userId));
 
