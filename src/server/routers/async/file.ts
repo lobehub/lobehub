@@ -14,6 +14,8 @@ import { FileModel } from '@/database/models/file';
 import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
 import { fileEnv } from '@/envs/file';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
+import { assertAuthed } from '@/libs/trpc/lambda/context';
+import { withAsyncFileModels } from '@/libs/trpc/async/middlewares';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
@@ -27,20 +29,7 @@ import {
 import { safeParseJSON } from '@/utils/safeParseJSON';
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
 
-const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
-  const { ctx } = opts;
-
-  return opts.next({
-    ctx: {
-      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
-      chunkService: new ChunkService(ctx.serverDB, ctx.userId),
-      embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId),
-      fileModel: new FileModel(ctx.serverDB, ctx.userId),
-      fileService: new FileService(ctx.serverDB, ctx.userId),
-    },
-  });
-});
+const fileProcedure = asyncAuthedProcedure.use(withAsyncFileModels);
 
 export const fileRouter = router({
   embeddingChunks: fileProcedure
@@ -67,6 +56,8 @@ export const fileRouter = router({
       if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
 
       try {
+        let taskFinished = false;
+
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
             reject(
@@ -79,7 +70,7 @@ export const fileRouter = router({
         });
 
         const embeddingPromise = async () => {
-          // update the task status to success
+          // update the task status to processing
           await ctx.asyncTaskModel.update(input.taskId, {
             status: AsyncTaskStatus.Processing,
           });
@@ -95,27 +86,31 @@ export const fileRouter = router({
             await pMap(
               requestArray,
               async (chunks) => {
+                if (taskFinished) return;
+
                 // Read user's provider config from database
+                if (!ctx.serverDB) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
                 const modelRuntime = await initModelRuntimeFromDB(
-                  ctx.serverDB,
-                  ctx.userId,
+                  ctx.serverDB!,
+                  ctx.userId!,
                   provider,
                 );
 
                 const embeddings = await modelRuntime.embeddings({
                   dimensions: 1024,
-                  input: chunks.map((c) => c.text),
+                  input: chunks.map((c: NewChunkItem) => c.text),
                   model,
                 });
 
                 const items: NewEmbeddingsItem[] =
-                  embeddings?.map((e, idx) => ({
+                  (embeddings?.map((e, idx) => ({
                     chunkId: chunks[idx].id,
                     embeddings: e,
                     fileId: input.fileId,
                     model,
-                  })) || [];
+                  })) as NewEmbeddingsItem[]) || [];
 
+                if (taskFinished) return;
                 await ctx.embeddingModel.bulkCreate(items);
               },
               { concurrency: CONCURRENCY },
@@ -128,6 +123,9 @@ export const fileRouter = router({
           }
 
           const duration = Date.now() - startAt;
+
+          if (taskFinished) return { success: false };
+
           // update the task status to success
           await ctx.asyncTaskModel.update(input.taskId, {
             duration,
@@ -138,7 +136,14 @@ export const fileRouter = router({
         };
 
         // Race between the chunking process and the timeout
-        return await Promise.race([embeddingPromise(), timeoutPromise]);
+        try {
+          const res = await Promise.race([embeddingPromise(), timeoutPromise]);
+          taskFinished = true;
+          return res;
+        } catch (e) {
+          taskFinished = true;
+          throw e;
+        }
       } catch (e) {
         console.error('embeddingChunks error', e);
 
@@ -162,116 +167,8 @@ export const fileRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const file = await ctx.fileModel.findById(input.fileId);
-      if (!file) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
-      }
-
-      let content: Uint8Array | undefined;
-      try {
-        content = await ctx.fileService.getFileByteArray(file.url);
-      } catch (e) {
-        console.error(e);
-        // if file not found, delete it from db
-        if ((e as any).Code === 'NoSuchKey') {
-          await ctx.fileModel.delete(input.fileId, serverDBEnv.REMOVE_GLOBAL_FILE);
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
-        }
-      }
-
-      if (!content) return;
-
-      const asyncTask = await ctx.asyncTaskModel.findById(input.taskId);
-
-      if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
-
-      try {
-        const startAt = Date.now();
-
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(
-              new AsyncTaskError(
-                AsyncTaskErrorType.Timeout,
-                'chunking task is timeout, please try again',
-              ),
-            );
-          }, ASYNC_TASK_TIMEOUT);
-        });
-
-        const chunkingPromise = async () => {
-          const chunkService = ctx.chunkService;
-          // update the task status to processing
-          await ctx.asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
-
-          // partition file to chunks
-          const chunkResult = await chunkService.chunkContent({
-            content,
-            fileType: file.fileType,
-            filename: file.name,
-          });
-
-          // after finish partition, we need to filter out some elements
-          const chunks = chunkResult.chunks.map(
-            ({ text, ...item }): NewChunkItem => ({
-              ...item,
-              text: text ? sanitizeUTF8(text) : '',
-              userId: ctx.userId,
-            }),
-          );
-
-          const duration = Date.now() - startAt;
-
-          // if no chunk found, throw error
-          if (chunks.length === 0) {
-            throw {
-              message:
-                'No chunk found in this file. it may due to current chunking method can not parse file accurately',
-              name: AsyncTaskErrorType.NoChunkError,
-            };
-          }
-
-          await ctx.chunkModel.bulkCreate(chunks, input.fileId);
-
-          if (chunkResult.unstructuredChunks) {
-            const unstructuredChunks = chunkResult.unstructuredChunks.map(
-              (item): NewChunkItem => ({ ...item, fileId: input.fileId, userId: ctx.userId }),
-            );
-            await ctx.chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
-          }
-
-          // update the task status to success
-          await ctx.asyncTaskModel.update(input.taskId, {
-            duration,
-            status: AsyncTaskStatus.Success,
-          });
-
-          // if enable auto embedding, trigger the embedding task
-          if (fileEnv.CHUNKS_AUTO_EMBEDDING) {
-            await chunkService.asyncEmbeddingFileChunks(input.fileId);
-          }
-
-          return { success: true };
-        };
-        // Race between the chunking process and the timeout
-        return await Promise.race([chunkingPromise(), timeoutPromise]);
-      } catch (e) {
-        const error = e as any;
-
-        const asyncTaskError = error.body
-          ? ({ body: safeParseJSON(error.body) ?? error.body, name: error.name } as IAsyncTaskError)
-          : new AsyncTaskError((error as Error).name, error.message);
-
-        console.error('[Chunking Error]', asyncTaskError);
-        await ctx.asyncTaskModel.update(input.taskId, {
-          error: asyncTaskError,
-          status: AsyncTaskStatus.Error,
-        });
-
-        return {
-          message: `File ${file.name}(${input.taskId}) failed to chunking: ${(e as Error).message}`,
-          success: false,
-        };
-      }
+      return await parseFileToChunksHandler(ctx, input);
     }),
 });
+
+export { parseFileToChunksHandler } from './handlers/parseFileToChunks';
