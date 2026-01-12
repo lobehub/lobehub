@@ -207,7 +207,7 @@ const ModelItem = memo<ModelItemProps>(
                     type: 'primary',
                   },
                   onOk: async () => {
-                    await removeAiModel(id, activeAiProvider!);
+                    await removeAiModel(id, activeAiProvider || '');
                     message.success(t('providerModels.item.delete.success'));
                   },
                   title: t('providerModels.item.delete.confirm', {

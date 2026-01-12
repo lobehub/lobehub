@@ -75,14 +75,18 @@ const OAuthApplicationLogo = memo<OAuthApplicationLogoProps>(
     const { styles, theme } = useStyles();
     return isFirstParty ? (
       <Flexbox align={'center'} gap={12} horizontal justify={'center'}>
-        <Image
-          alt={clientDisplayName}
-          height={64}
-          src={logoUrl!}
-          style={{ height: 'auto', maxWidth: '100%' }}
-          unoptimized
-          width={64}
-        />
+        {logoUrl ? (
+          <Image
+            alt={clientDisplayName}
+            height={64}
+            src={logoUrl}
+            style={{ height: 'auto', maxWidth: '100%' }}
+            unoptimized
+            width={64}
+          />
+        ) : (
+          <ProductLogo height={64} style={{ height: 'auto', maxWidth: '100%' }} width={64} />
+        )}
       </Flexbox>
     ) : (
       <Flexbox align={'center'} gap={12} horizontal justify={'center'}>

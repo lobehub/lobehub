@@ -58,7 +58,6 @@ const ChatItem = memo<ChatItemProps>(
       variant,
     });
 
-    // 在 ChatItem 组件中添加
     const contentRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [layoutMode] = useState<'horizontal' | 'vertical'>(
@@ -104,7 +103,7 @@ const ChatItem = memo<ChatItemProps>(
           <Flexbox
             align={placement === 'left' ? 'flex-start' : 'flex-end'}
             className={styles.messageContent}
-            data-layout={layoutMode} // 添加数据属性以方便样式选择
+            data-layout={layoutMode}
             direction={
               layoutMode === 'horizontal'
                 ? placement === 'left'
@@ -118,26 +117,32 @@ const ChatItem = memo<ChatItemProps>(
               {error && (message === placeholderMessage || !message) ? (
                 <ErrorContent error={error} message={errorMessage} placement={placement} />
               ) : (
-                <MessageContent
-                  disabled={disabled}
-                  editing={editing}
-                  id={id!}
-                  markdownProps={markdownProps}
-                  message={message}
-                  messageExtra={
-                    <>
-                      {error && (
-                        <ErrorContent error={error} message={errorMessage} placement={placement} />
-                      )}
-                      {messageExtra}
-                    </>
-                  }
-                  onDoubleClick={onDoubleClick}
-                  placement={placement}
-                  primary={primary}
-                  renderMessage={renderMessage}
-                  variant={variant}
-                />
+                id && (
+                  <MessageContent
+                    disabled={disabled}
+                    editing={editing}
+                    id={id}
+                    markdownProps={markdownProps}
+                    message={message}
+                    messageExtra={
+                      <>
+                        {error && (
+                          <ErrorContent
+                            error={error}
+                            message={errorMessage}
+                            placement={placement}
+                          />
+                        )}
+                        {messageExtra}
+                      </>
+                    }
+                    onDoubleClick={onDoubleClick}
+                    placement={placement}
+                    primary={primary}
+                    renderMessage={renderMessage}
+                    variant={variant}
+                  />
+                )
               )}
             </Flexbox>
             {actions && (

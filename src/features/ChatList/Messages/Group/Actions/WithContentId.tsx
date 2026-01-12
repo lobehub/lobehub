@@ -186,13 +186,15 @@ const WithContentId = memo<GroupActionsProps>(({ id, data, index, contentBlock }
         }}
         onActionClick={onActionClick}
       />
-      <ShareMessageModal
-        message={data!}
-        onCancel={() => {
-          setShareModal(false);
-        }}
-        open={showShareModal}
-      />
+      {data && (
+        <ShareMessageModal
+          message={data}
+          onCancel={() => {
+            setShareModal(false);
+          }}
+          open={showShareModal}
+        />
+      )}
     </>
   );
 });
