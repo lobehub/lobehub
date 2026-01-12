@@ -104,7 +104,7 @@ const CategoryMenu = memo(() => {
             transition={{ duration: 0.2, ease: 'easeInOut' }}
           >
             <ActionIcon
-              icon={CaretDownFilled as any}
+              icon={<CaretDownFilled />}
               onClick={(e) => {
                 e.stopPropagation();
                 setShowCollapsed(!showCollapsed);
