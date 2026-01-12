@@ -44,6 +44,8 @@ const labelStyle: CSSProperties = {
   width: 160,
 };
 
+type EditStatus = 'idle' | 'editing' | 'saving';
+
 const ProfileRow = memo<ProfileRowProps>(({ label, children, action, mobile }) => {
   if (mobile) {
     return (
@@ -149,17 +151,19 @@ const FullNameRow = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('auth');
   const fullName = useUserStore(userProfileSelectors.fullName);
   const updateFullName = useUserStore((s) => s.updateFullName);
-  const [isEditing, setIsEditing] = useState(false);
+  const [status, setStatus] = useState<EditStatus>('idle');
   const [editValue, setEditValue] = useState('');
-  const [saving, setSaving] = useState(false);
+
+  const isEditing = status === 'editing' || status === 'saving';
+  const saving = status === 'saving';
 
   const handleStartEdit = () => {
     setEditValue(fullName || '');
-    setIsEditing(true);
+    setStatus('editing');
   };
 
   const handleCancel = () => {
-    setIsEditing(false);
+    setStatus('idle');
     setEditValue('');
   };
 
@@ -167,17 +171,16 @@ const FullNameRow = memo<{ mobile?: boolean }>(({ mobile }) => {
     if (!editValue.trim()) return;
 
     try {
-      setSaving(true);
+      setStatus('saving');
       await updateFullName(editValue.trim());
-      setIsEditing(false);
+      setStatus('idle');
     } catch (error) {
       console.error('Failed to update fullName:', error);
       fetchErrorNotification.error({
         errorMessage: error instanceof Error ? error.message : String(error),
         status: 500,
       });
-    } finally {
-      setSaving(false);
+      setStatus('editing');
     }
   }, [editValue, updateFullName]);
 
@@ -261,21 +264,23 @@ const UsernameRow = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('auth');
   const username = useUserStore(userProfileSelectors.username);
   const updateUsername = useUserStore((s) => s.updateUsername);
-  const [isEditing, setIsEditing] = useState(false);
+  const [status, setStatus] = useState<EditStatus>('idle');
   const [editValue, setEditValue] = useState('');
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const isEditing = status === 'editing' || status === 'saving';
+  const saving = status === 'saving';
 
   const usernameRegex = /^\w+$/;
 
   const handleStartEdit = () => {
     setEditValue(username || '');
     setError('');
-    setIsEditing(true);
+    setStatus('editing');
   };
 
   const handleCancel = () => {
-    setIsEditing(false);
+    setStatus('idle');
     setEditValue('');
     setError('');
   };
@@ -295,10 +300,10 @@ const UsernameRow = memo<{ mobile?: boolean }>(({ mobile }) => {
     }
 
     try {
-      setSaving(true);
+      setStatus('saving');
       setError('');
       await updateUsername(editValue.trim());
-      setIsEditing(false);
+      setStatus('idle');
     } catch (err: any) {
       console.error('Failed to update username:', err);
       // Handle duplicate username error
@@ -307,8 +312,7 @@ const UsernameRow = memo<{ mobile?: boolean }>(({ mobile }) => {
       } else {
         setError(t('profile.usernameUpdateFailed'));
       }
-    } finally {
-      setSaving(false);
+      setStatus('editing');
     }
   }, [editValue, updateUsername, t]);
 
