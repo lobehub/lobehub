@@ -10,7 +10,6 @@ import { useMounted } from '@/hooks/useMounted';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
 
 const PWAInstall = memo(() => {
   const { t } = useTranslation('metadata');
@@ -21,11 +20,7 @@ const PWAInstall = memo(() => {
 
   const { install, canInstall } = usePWAInstall();
 
-  const isShowPWAGuide = useUserStore((s) => s.isShowPWAGuide);
-  const [hidePWAInstaller, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.hidePWAInstaller(s),
-    s.updateSystemStatus,
-  ]);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   // Initialize component: load PWA install library
   useEffect(() => {
@@ -54,15 +49,15 @@ const PWAInstall = memo(() => {
     };
   }, [mounted, updateSystemStatus]);
 
-  // Trigger PWA guide when needed
+  // Trigger PWA guide when library and install capability are ready
   useEffect(() => {
-    if (!mounted || !canInstall || hidePWAInstaller || !isShowPWAGuide) return;
+    if (!mounted || !canInstall) return;
 
     install();
     if ('serviceWorker' in navigator && window.serwist !== undefined) {
       window.serwist.register();
     }
-  }, [mounted, canInstall, hidePWAInstaller, isShowPWAGuide, install]);
+  }, [mounted, canInstall, install]);
 
   if (!mounted || !libraryReady) return null;
 
