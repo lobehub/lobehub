@@ -47,7 +47,7 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
               href={GITHUB_ISSUES}
               onClick={(e) => {
                 e.preventDefault();
-                githubService.submitImportError(error!);
+                if (error) githubService.submitImportError(error);
               }}
               target="_blank"
             >
