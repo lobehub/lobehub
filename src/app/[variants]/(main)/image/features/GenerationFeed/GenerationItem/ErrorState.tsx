@@ -37,13 +37,13 @@ export const ErrorState = memo<ErrorStateProps>(
         ) {
           // Use localized error message - ComfyUI errors are under 'response' namespace
           const translationKey = `response.${errorBody}`;
-          const translated = tError(translationKey as any);
+          const translated = tError(translationKey);
 
           // If translation key is not found, it returns the key itself
           // Check if we got back the key (meaning translation failed)
           if (translated === translationKey || (translated as string).startsWith('response.')) {
             // Try without any prefix (for backwards compatibility)
-            const directTranslated = tError(errorBody as any);
+            const directTranslated = tError(errorBody);
             if (directTranslated !== errorBody) {
               return directTranslated as string;
             }
