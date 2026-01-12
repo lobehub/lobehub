@@ -15,12 +15,13 @@ import {
   type TasksBatchResultPayload,
   UsageCounter,
 } from '@lobechat/agent-runtime';
-import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
+import type { ChatToolPayload, CreateMessageParams, UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
+import { displayMessageSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { sleep } from '@/utils/sleep';
 
@@ -30,6 +31,67 @@ const log = debug('lobe-store:agent-executors');
 const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/craw': 0.002,
   'lobe-web-browsing/search': 0.001,
+};
+
+const collectActiveMessageIds = (messages: UIChatMessage[]) => {
+  const ids = new Set<string>();
+
+  const collectFromAssistantGroup = (message: UIChatMessage) => {
+    if (message.id) ids.add(message.id);
+    message.children?.forEach((child) => {
+      if (child.id) ids.add(child.id);
+      child.tools?.forEach((tool) => {
+        if (tool.result_msg_id) ids.add(tool.result_msg_id);
+      });
+    });
+  };
+
+  const collectFromCompare = (message: UIChatMessage) => {
+    const columns = (message as any).columns as UIChatMessage[][] | undefined;
+    if (columns && columns.length > 0) {
+      const activeColumnId = (message as any).activeColumnId as string | undefined;
+      const activeColumn = activeColumnId
+        ? columns.find((column) => column.some((colMessage) => colMessage.id === activeColumnId))
+        : columns[0];
+
+      (activeColumn ?? columns[0]).forEach(walk);
+      return;
+    }
+
+    const compareChildren = (message as any).children as UIChatMessage[] | undefined;
+    compareChildren?.forEach(walk);
+  };
+
+  const walk = (message?: UIChatMessage) => {
+    if (!message) return;
+
+    const role = message.role as string;
+    if (role === 'assistantGroup' || role === 'supervisor') {
+      collectFromAssistantGroup(message);
+      return;
+    }
+
+    if (role === 'agentCouncil') {
+      message.members?.forEach(walk);
+      return;
+    }
+
+    if (role === 'compare' || role === 'compareGroup') {
+      collectFromCompare(message);
+      return;
+    }
+
+    if (role === 'tasks') {
+      message.tasks?.forEach(walk);
+      return;
+    }
+
+    if (message.id) ids.add(message.id);
+  };
+
+  messages.forEach(walk);
+
+  return ids;
 };
 
 /**
@@ -149,7 +211,28 @@ export const createAgentExecutors = (context: {
       // - Loading state management
       // - Error handling
       // Use messages from state (already contains full conversation history)
-      const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
+      const dbMessagesMap = context.get().dbMessagesMap[context.messageKey] || [];
+      const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(context.messageKey)(
+        context.get(),
+      );
+
+      const activeMessageIds = collectActiveMessageIds(displayMessages);
+      if (activeMessageIds.size > 0) {
+        dbMessagesMap.forEach((message) => {
+          if (message.role === 'tool' && message.parentId && activeMessageIds.has(message.parentId)) {
+            activeMessageIds.add(message.id);
+          }
+        });
+      }
+
+      const rawMessageIds = new Set(dbMessagesMap.map((message) => message.id));
+      const messages = llmPayload.messages.filter((message) => {
+        if (message.id === assistantMessageId) return false;
+        if (!message.id) return true;
+        if (activeMessageIds.size === 0) return true;
+        if (!rawMessageIds.has(message.id)) return true;
+        return activeMessageIds.has(message.id);
+      });
       const {
         isFunctionCall,
         content,
