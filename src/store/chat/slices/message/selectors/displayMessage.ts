@@ -42,7 +42,9 @@ const getDisplayMessagesByKey =
  */
 const activeDisplayMessages = (s: ChatStoreState): UIChatMessage[] => {
   if (!s.activeAgentId) return [];
-  return getDisplayMessagesByKey(currentDisplayChatKey(s))(s);
+  return getDisplayMessagesByKey(currentDisplayChatKey(s))(s).filter(
+    (m) => !m.metadata?.isVirtualRoot,
+  );
 };
 
 // ============= Display Message Queries ========== //

@@ -96,6 +96,9 @@ export const contextEngineering = async ({
 }: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
   log('tools: %o', tools);
 
+  // Filter out virtual root messages to avoid sending them to AI
+  const filteredMessages = messages.filter((m) => !m.metadata?.isVirtualRoot);
+
   // Check if Agent Builder tool is enabled
   const isAgentBuilderEnabled = tools?.includes(AgentBuilderIdentifier) ?? false;
   // Check if Group Agent Builder tool is enabled
@@ -333,7 +336,7 @@ export const contextEngineering = async ({
     },
 
     // Messages
-    messages,
+    messages: filteredMessages,
 
     // Model info
     model,

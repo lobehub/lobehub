@@ -93,6 +93,18 @@ export const aiChatRouter = router({
         isCreateNewTopic = true;
         log('new topic created with id: %s', topicId);
 
+        // Create virtual root message before user messages (id = topicId)
+        await ctx.messageModel.create(
+          {
+            content: '',
+            metadata: { isVirtualRoot: true, activeBranchIndex: 0 },
+            parentId: undefined,
+            role: 'user',
+          },
+          topicId,
+        );
+        log('virtual root message created with id: %s', topicId);
+
         // update agent's updatedAt to reflect new activity
         if (input.agentId) {
           await ctx.agentModel.touchUpdatedAt(input.agentId);
@@ -123,12 +135,14 @@ export const aiChatRouter = router({
 
       // create user message
       log('creating user message with content length: %d', input.newUserMessage.content.length);
+      // For new topics, user message parentId points to virtual root (topicId)
+      const userMessageParentId = isCreateNewTopic ? topicId : input.newUserMessage.parentId;
       const userMessageItem = await ctx.messageModel.create({
         agentId: input.agentId,
         content: input.newUserMessage.content,
         files: input.newUserMessage.files,
         groupId: input.groupId,
-        parentId: input.newUserMessage.parentId,
+        parentId: userMessageParentId,
         role: 'user',
         sessionId,
         threadId,

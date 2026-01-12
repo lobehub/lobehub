@@ -80,6 +80,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
+  isVirtualRoot: z.boolean().optional(),
 });
 
 export interface ModelUsage extends ModelTokensUsage {
@@ -147,4 +148,9 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
    */
   instruction?: string;
   taskTitle?: string;
+  /**
+   * Flag indicating if this message is a virtual root message
+   * Virtual root is an invisible message (id=topicId) used for branch management
+   */
+  isVirtualRoot?: boolean;
 }
