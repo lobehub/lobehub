@@ -122,7 +122,13 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     emailVerification: {
       autoSignInAfterVerification: true,
       expiresIn: VERIFICATION_LINK_EXPIRES_IN,
-      sendVerificationEmail: async ({ user, url }) => {
+      sendVerificationEmail: async ({ user, url }, request) => {
+        // Skip sending verification link email for mobile clients (Expo/React Native)
+        // Mobile clients use OTP verification instead, triggered manually via emailOTP plugin
+        if (request?.headers?.get?.('x-client-type') === 'mobile') {
+          return;
+        }
+
         const template = getVerificationEmailTemplate({
           expiresInSeconds: VERIFICATION_LINK_EXPIRES_IN,
           url,

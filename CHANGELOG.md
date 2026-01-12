@@ -2,6 +2,39 @@
 
 # Changelog
 
+## [Version 2.0.0-next.270](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.269...v2.0.0-next.270)
+
+<sup>Released on **2026-01-12**</sup>
+
+#### ✨ Features
+
+- **community**: Recommendation for agent & Discover tab.
+
+#### 🐛 Bug Fixes
+
+- **database**: Remove content validation limits for agent cron jobs.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **community**: Recommendation for agent & Discover tab, closes [#11445](https://github.com/lobehub/lobe-chat/issues/11445) ([5c102b5](https://github.com/lobehub/lobe-chat/commit/5c102b5))
+
+#### What's fixed
+
+- **database**: Remove content validation limits for agent cron jobs, closes [#11444](https://github.com/lobehub/lobe-chat/issues/11444) ([04a28d3](https://github.com/lobehub/lobe-chat/commit/04a28d3))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.269](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.268...v2.0.0-next.269)
 
 <sup>Released on **2026-01-12**</sup>
