@@ -142,9 +142,21 @@ errorElement: <ErrorBoundary resetPath="/chat" />
 
 ### Navigation
 
+**Important**: For SPA pages (React Router DOM routes), use `Link` from `react-router-dom`, NOT from `next/link`.
+
+```tsx
+// ❌ Wrong - next/link in SPA pages
+import Link from 'next/link';
+<Link href="/">Home</Link>
+
+// ✅ Correct - react-router-dom Link in SPA pages
+import { Link } from 'react-router-dom';
+<Link to="/">Home</Link>
+```
+
 ```tsx
 // In components - use react-router-dom hooks
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 
 const navigate = useNavigate();
 navigate('/chat');

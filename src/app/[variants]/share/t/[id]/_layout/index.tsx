@@ -3,9 +3,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { Typography } from 'antd';
 import { createStyles } from 'antd-style';
-import Link from 'next/link';
 import { PropsWithChildren, memo, useEffect } from 'react';
-import { Outlet, useParams } from 'react-router-dom';
+import { Link, Outlet, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
@@ -58,7 +57,7 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   return (
     <Flexbox className={styles.container}>
       <Flexbox align="center" className={styles.header} gap={12} horizontal justify="space-between">
-        <Link href="/">
+        <Link to="/">
           <ProductLogo size={36} />
         </Link>
         {data?.title && (

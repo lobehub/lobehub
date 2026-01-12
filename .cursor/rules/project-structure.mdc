@@ -1,6 +1,5 @@
 ---
-description: Project directory structure overview
-alwaysApply: false
+alwaysApply: true
 ---
 
 # LobeChat Project Structure
