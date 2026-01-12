@@ -85,6 +85,22 @@ export class TopicService {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
   };
 
+  getShareInfo = (topicId: string) => {
+    return lambdaClient.topic.getShareInfo.query({ topicId });
+  };
+
+  enableSharing = (topicId: string, permission?: 'private' | 'public' | 'public_signin') => {
+    return lambdaClient.topic.enableSharing.mutate({ permission, topicId });
+  };
+
+  updateSharePermission = (topicId: string, permission: 'private' | 'public' | 'public_signin') => {
+    return lambdaClient.topic.updateSharePermission.mutate({ permission, topicId });
+  };
+
+  disableSharing = (topicId: string) => {
+    return lambdaClient.topic.disableSharing.mutate({ topicId });
+  };
+
   removeTopic = (id: string) => {
     return lambdaClient.topic.removeTopic.mutate({ id });
   };

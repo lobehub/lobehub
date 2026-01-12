@@ -1093,6 +1093,21 @@ table topic_documents {
   }
 }
 
+table topic_shares {
+  id text [pk, not null]
+  topic_id text [not null]
+  user_id text [not null]
+  access_permission text [not null, default: 'public']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    topic_id [name: 'topic_shares_topic_id_unique', unique]
+    user_id [name: 'topic_shares_user_id_idx']
+  }
+}
+
 table topics {
   id text [pk, not null]
   title text

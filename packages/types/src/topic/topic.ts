@@ -1,6 +1,8 @@
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
+export type ShareAccessPermission = 'private' | 'public' | 'public_signin';
+
 export type TimeGroupId =
   | 'today'
   | 'yesterday'
@@ -125,4 +127,34 @@ export interface QueryTopicParams {
    */
   isInbox?: boolean;
   pageSize?: number;
+}
+
+/**
+ * Shared message data for public sharing
+ */
+export interface SharedMessage {
+  content: string;
+  createdAt: Date;
+  id: string;
+  role: string;
+}
+
+/**
+ * Shared topic data returned by public API
+ */
+export interface SharedTopicData {
+  accessPermission: ShareAccessPermission;
+  agentId: string | null;
+  shareId: string;
+  title: string | null;
+  topicId: string;
+}
+
+/**
+ * Topic share info returned to the owner
+ */
+export interface TopicShareInfo {
+  accessPermission: ShareAccessPermission;
+  id: string;
+  topicId: string;
 }

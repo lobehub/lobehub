@@ -26,6 +26,7 @@ export const config = {
     '/page(.*)',
     '/me',
     '/me(.*)',
+    '/share(.*)',
     '/desktop-onboarding',
     '/desktop-onboarding(.*)',
     '/onboarding',
