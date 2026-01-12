@@ -43,8 +43,8 @@ export interface ChatTopicMetadata {
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
-   * Local System 工作目录（桌面端专用）
-   * 优先级高于 Agent 级别的设置
+   * Local System working directory (desktop only)
+   * Priority is higher than Agent-level settings
    */
   workingDirectory?: string;
 }

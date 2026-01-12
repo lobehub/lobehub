@@ -8,19 +8,31 @@
  *
  * This module automatically resolves the full dependency tree.
  */
-
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
+ * Get the current target platform
+ * During build, electron-builder sets npm_config_platform
+ * Falls back to os.platform() for development
+ */
+function getTargetPlatform() {
+  return process.env.npm_config_platform || os.platform();
+}
+const isDarwin = getTargetPlatform() === 'darwin';
+/**
  * List of native modules that need special handling
  * Only add the top-level native modules here - dependencies are resolved automatically
+ *
+ * Platform-specific modules are only included when building for their target platform
  */
 export const nativeModules = [
-  'node-mac-permissions',
+  // macOS-only native modules
+  ...(isDarwin ? ['node-mac-permissions'] : []),
   // Add more native modules here as needed
   // e.g., 'better-sqlite3', 'sharp', etc.
 ];
@@ -32,7 +44,11 @@ export const nativeModules = [
  * @param {string} nodeModulesPath - Path to node_modules directory
  * @returns {Set<string>} Set of all dependencies
  */
-function resolveDependencies(moduleName, visited = new Set(), nodeModulesPath = path.join(__dirname, 'node_modules')) {
+function resolveDependencies(
+  moduleName,
+  visited = new Set(),
+  nodeModulesPath = path.join(__dirname, 'node_modules'),
+) {
   if (visited.has(moduleName)) {
     return visited;
   }

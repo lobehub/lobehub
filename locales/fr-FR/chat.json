@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Intensité de la réflexion",
   "extendParams.textVerbosity.title": "Niveau de détail du texte généré",
   "extendParams.thinking.title": "Interrupteur de réflexion approfondie",
+  "extendParams.thinkingBudget.title": "Budget de réflexion",
   "extendParams.thinkingLevel.title": "Niveau de réflexion",
   "extendParams.title": "Fonctionnalités d’extension du modèle",
   "extendParams.urlContext.desc": "Lorsqu’il est activé, les liens web sont automatiquement analysés pour extraire le contenu réel de la page",

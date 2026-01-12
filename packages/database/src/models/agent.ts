@@ -453,6 +453,52 @@ export class AgentModel {
   };
 
   /**
+   * Duplicate an agent.
+   * Returns the new agent ID.
+   */
+  duplicate = async (agentId: string, newTitle?: string): Promise<{ agentId: string } | null> => {
+    // Get the source agent
+    const sourceAgent = await this.db.query.agents.findFirst({
+      where: and(eq(agents.id, agentId), eq(agents.userId, this.userId)),
+    });
+
+    if (!sourceAgent) return null;
+
+    // Create new agent with explicit include fields
+    const [newAgent] = await this.db
+      .insert(agents)
+      .values({
+        avatar: sourceAgent.avatar,
+        backgroundColor: sourceAgent.backgroundColor,
+        chatConfig: sourceAgent.chatConfig,
+        description: sourceAgent.description,
+        fewShots: sourceAgent.fewShots,
+        model: sourceAgent.model,
+        openingMessage: sourceAgent.openingMessage,
+        openingQuestions: sourceAgent.openingQuestions,
+        params: sourceAgent.params,
+        pinned: sourceAgent.pinned,
+        // Config
+        plugins: sourceAgent.plugins,
+        provider: sourceAgent.provider,
+
+        // Session group
+        sessionGroupId: sourceAgent.sessionGroupId,
+        systemRole: sourceAgent.systemRole,
+
+        tags: sourceAgent.tags,
+        // Metadata
+        title: newTitle || (sourceAgent.title ? `${sourceAgent.title} (Copy)` : 'Copy'),
+        tts: sourceAgent.tts,
+        // User
+        userId: this.userId,
+      })
+      .returning();
+
+    return { agentId: newAgent.id };
+  };
+
+  /**
    * Get a builtin agent by slug, creating it if it doesn't exist.
    * Builtin agents are standalone agents not bound to sessions.
    *

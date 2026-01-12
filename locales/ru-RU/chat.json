@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Интенсивность мышления",
   "extendParams.textVerbosity.title": "Уровень детализации текста",
   "extendParams.thinking.title": "Переключатель глубокого мышления",
+  "extendParams.thinkingBudget.title": "Бюджет на размышления",
   "extendParams.thinkingLevel.title": "Уровень мышления",
   "extendParams.title": "Расширенные функции модели",
   "extendParams.urlContext.desc": "При включении веб-ссылки будут автоматически анализироваться для извлечения содержимого страницы",

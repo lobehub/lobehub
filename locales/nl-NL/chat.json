@@ -63,6 +63,7 @@
   "extendParams.reasoningEffort.title": "Denkintensiteit",
   "extendParams.textVerbosity.title": "Detailniveau Tekstoutput",
   "extendParams.thinking.title": "Schakel Diep Denken in",
+  "extendParams.thinkingBudget.title": "Denkbudget",
   "extendParams.thinkingLevel.title": "Denkniveau",
   "extendParams.title": "Modeluitbreidingsfuncties",
   "extendParams.urlContext.desc": "Indien ingeschakeld, worden webkoppelingen automatisch geanalyseerd om de inhoud van de webpagina op te halen",

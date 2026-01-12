@@ -9,7 +9,7 @@ import { ErrorBoundary, type RouteConfig, dynamicElement, redirectElement } from
 
 import DesktopOnboarding from '../(desktop)/desktop-onboarding';
 import DesktopMainLayout from '../(main)/_layout';
-import DesktopChatLayout from '../(main)/chat/_layout';
+import DesktopChatLayout from '../(main)/agent/_layout';
 import DesktopGroupLayout from '../(main)/group/_layout';
 import DesktopImageLayout from '../(main)/image/_layout';
 import DesktopMemoryLayout from '../(main)/memory/_layout';
@@ -29,19 +29,19 @@ export const desktopRoutes: RouteConfig[] = [
           {
             children: [
               {
-                element: dynamicElement(() => import('../(main)/chat'), 'Desktop > Chat'),
+                element: dynamicElement(() => import('../(main)/agent'), 'Desktop > Chat'),
                 index: true,
               },
               {
                 element: dynamicElement(
-                  () => import('../(main)/chat/profile'),
+                  () => import('../(main)/agent/profile'),
                   'Desktop > Chat > Profile',
                 ),
                 path: 'profile',
               },
               {
                 element: dynamicElement(
-                  () => import('../(main)/chat/cron/[cronId]'),
+                  () => import('../(main)/agent/cron/[cronId]'),
                   'Desktop > Chat > Cron Detail',
                 ),
                 path: 'cron/:cronId',

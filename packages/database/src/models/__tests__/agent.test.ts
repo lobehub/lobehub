@@ -3,7 +3,9 @@ import { INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../core/getTestDB';
 import {
+  NewAgent,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -11,12 +13,12 @@ import {
   documents,
   files,
   knowledgeBases,
+  sessionGroups,
   sessions,
   users,
 } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -290,9 +292,7 @@ describe('AgentModel', () => {
       // Create agent and session for user2
       await serverDB.insert(agents).values({ id: agentId, userId: userId2 });
       await serverDB.insert(sessions).values({ id: sessionId, userId: userId2 });
-      await serverDB
-        .insert(agentsToSessions)
-        .values({ agentId, sessionId, userId: userId2 });
+      await serverDB.insert(agentsToSessions).values({ agentId, sessionId, userId: userId2 });
 
       // Try to access with user1's model
       const result = await agentModel.findBySessionId(sessionId);
@@ -1387,6 +1387,167 @@ describe('AgentModel', () => {
         where: eq(agentsKnowledgeBases.agentId, agent.id),
       });
       expect(remainingKBs).toHaveLength(0);
+    });
+  });
+
+  describe('duplicate', () => {
+    it('should duplicate an agent with all config fields', async () => {
+      // Create source agent with full config
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Original Agent',
+          description: 'Original description',
+          tags: ['tag1', 'tag2'],
+          avatar: 'avatar-url',
+          backgroundColor: '#ffffff',
+          plugins: ['plugin1'],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: 'You are helpful',
+          openingMessage: 'Hello!',
+          openingQuestions: ['Q1', 'Q2'],
+          chatConfig: { historyCount: 10 },
+          fewShots: [{ role: 'user', content: 'test' }],
+          params: { temperature: 0.7 },
+          tts: { showAllLocaleVoice: true },
+        } as NewAgent)
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      expect(result).toBeDefined();
+      expect(result?.agentId).toBeDefined();
+      expect(result?.agentId).not.toBe(sourceAgent.id);
+
+      // Verify the duplicated agent
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent).toEqual(
+        expect.objectContaining({
+          // Should be copied
+          title: 'Original Agent (Copy)',
+          description: 'Original description',
+          tags: ['tag1', 'tag2'],
+          avatar: 'avatar-url',
+          backgroundColor: '#ffffff',
+          plugins: ['plugin1'],
+          model: 'gpt-4',
+          provider: 'openai',
+          systemRole: 'You are helpful',
+          openingMessage: 'Hello!',
+          openingQuestions: ['Q1', 'Q2'],
+          chatConfig: { historyCount: 10 },
+          fewShots: [{ role: 'user', content: 'test' }],
+          params: { temperature: 0.7 },
+          tts: { showAllLocaleVoice: true },
+          sessionGroupId: null,
+          userId,
+          // Should NOT be copied (new values)
+          virtual: false,
+          pinned: null,
+          clientId: null,
+          editorData: null,
+          marketIdentifier: null,
+        }),
+      );
+
+      // Verify these are NOT copied from source
+      expect(duplicatedAgent?.id).not.toBe(sourceAgent.id);
+      expect(duplicatedAgent?.slug).not.toBe(sourceAgent.slug);
+    });
+
+    it('should use provided title when duplicating', async () => {
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Original' })
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id, 'Custom Title');
+
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent?.title).toBe('Custom Title');
+    });
+
+    it('should return null for non-existent agent', async () => {
+      const result = await agentModel.duplicate('non-existent-id');
+
+      expect(result).toBeNull();
+    });
+
+    it('should not duplicate another user agent', async () => {
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ userId: userId2, title: 'User2 Agent' })
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      expect(result).toBeNull();
+    });
+
+    it('should not copy marketIdentifier, slug, or id', async () => {
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Original',
+          slug: 'original-slug',
+          marketIdentifier: 'market-123',
+        })
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent?.id).not.toBe(sourceAgent.id);
+      expect(duplicatedAgent?.slug).not.toBe('original-slug');
+      expect(duplicatedAgent?.marketIdentifier).toBeNull();
+    });
+
+    it('should preserve sessionGroupId when duplicating', async () => {
+      // Create a session group
+      const [sessionGroup] = await serverDB
+        .insert(sessionGroups)
+        .values({ userId, name: 'Test Group' })
+        .returning();
+
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Agent in Group', sessionGroupId: sessionGroup.id })
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent?.sessionGroupId).toBe(sessionGroup.id);
+    });
+
+    it('should handle agent with null title', async () => {
+      const [sourceAgent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: null })
+        .returning();
+
+      const result = await agentModel.duplicate(sourceAgent.id);
+
+      const duplicatedAgent = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, result!.agentId),
+      });
+
+      expect(duplicatedAgent?.title).toBe('Copy');
     });
   });
 

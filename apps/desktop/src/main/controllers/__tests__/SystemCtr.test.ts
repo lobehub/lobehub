@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { App } from '@/core/App';
 import type { IpcContext } from '@/utils/ipc';
 import { IpcHandler } from '@/utils/ipc/base';
+import {
+  __resetMacPermissionsModuleCache,
+  __setMacPermissionsModule,
+} from '@/utils/permissions';
 
 import SystemController from '../SystemCtr';
 
@@ -131,6 +135,9 @@ describe('SystemController', () => {
     ipcHandlers.clear();
     ipcMainHandleMock.mockClear();
     (IpcHandler.getInstance() as any).registeredChannels?.clear();
+    // Reset and inject mock permissions module for testing
+    __resetMacPermissionsModuleCache();
+    __setMacPermissionsModule(permissionsMock as any);
     controller = new SystemController(mockApp);
   });
 
@@ -169,6 +176,8 @@ describe('SystemController', () => {
     it('should return true on non-macOS when requesting accessibility access', async () => {
       const { macOS } = await import('electron-is');
       vi.mocked(macOS).mockReturnValue(false);
+      // Clear the injected module to simulate non-macOS behavior
+      __setMacPermissionsModule(null);
 
       const result = await invokeIpc('system.requestAccessibilityAccess');
 
@@ -177,6 +186,7 @@ describe('SystemController', () => {
 
       // Reset
       vi.mocked(macOS).mockReturnValue(true);
+      __setMacPermissionsModule(permissionsMock as any);
     });
   });
 
@@ -226,6 +236,8 @@ describe('SystemController', () => {
       const { macOS } = await import('electron-is');
       const { shell } = await import('electron');
       vi.mocked(macOS).mockReturnValue(false);
+      // Clear the injected module to simulate non-macOS behavior
+      __setMacPermissionsModule(null);
 
       const result = await invokeIpc('system.requestMicrophoneAccess');
 
@@ -235,6 +247,7 @@ describe('SystemController', () => {
 
       // Reset
       vi.mocked(macOS).mockReturnValue(true);
+      __setMacPermissionsModule(permissionsMock as any);
     });
   });
 

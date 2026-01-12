@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const useIsEditorInit = (editor: IEditor) => {
-  const [isEditInit, setEditInit] = useState<boolean>(!!editor.getLexicalEditor());
+  const [isEditInit, setEditInit] = useState<boolean>(!!editor?.getLexicalEditor());
 
   useEffect(() => {
     if (!editor) return;
