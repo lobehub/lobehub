@@ -268,6 +268,20 @@ export class SearchRepo {
   }
 
   /**
+   * Truncate content at database level with ellipsis indicator
+   * Uses SQL LEFT() function for efficient truncation
+   * Note: This helper is defined for documentation but not currently used.
+   * Truncation is implemented inline in query methods for better SQL readability.
+   */
+  private truncateContent(columnName: string, maxLength: number): string {
+    return `CASE
+      WHEN LENGTH(${columnName}) > ${maxLength}
+      THEN LEFT(${columnName}, ${maxLength}) || '...'
+      ELSE ${columnName}
+    END`;
+  }
+
+  /**
    * Build agent search query
    * Searches: title, description, slug, tags (JSONB array)
    */
@@ -362,7 +376,10 @@ export class SearchRepo {
         t.id,
         'topic' as type,
         t.title,
-        t.content as description,
+        CASE
+          WHEN length(COALESCE(t.content, '')) > 200 THEN substring(COALESCE(t.content, ''), 1, 200) || '...'
+          ELSE t.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
@@ -447,7 +464,7 @@ export class SearchRepo {
         m.id,
         'message' as type,
         CASE
-          WHEN length(m.content) > 100 THEN substring(m.content, 1, 100) || '...'
+          WHEN length(m.content) > 200 THEN substring(m.content, 1, 200) || '...'
           ELSE m.content
         END as title,
         COALESCE(a.title, 'General Chat') as description,
@@ -492,7 +509,10 @@ export class SearchRepo {
         f.id,
         'file' as type,
         f.name as title,
-        d.content as description,
+        CASE
+          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
+          ELSE d.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
@@ -526,7 +546,10 @@ export class SearchRepo {
         d.id,
         'file' as type,
         COALESCE(d.title, d.filename, 'Untitled') as title,
-        d.content as description,
+        CASE
+          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
+          ELSE d.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
@@ -635,7 +658,10 @@ export class SearchRepo {
         d.id,
         'pageContent' as type,
         COALESCE(d.title, d.filename, 'Untitled') as title,
-        d.content as description,
+        CASE
+          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
+          ELSE d.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
