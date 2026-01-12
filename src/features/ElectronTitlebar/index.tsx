@@ -67,3 +67,4 @@ const TitleBar = memo(() => {
 export default TitleBar;
 
 export { TITLE_BAR_HEIGHT } from './const';
+export { default as SimpleTitleBar } from './SimpleTitleBar';
