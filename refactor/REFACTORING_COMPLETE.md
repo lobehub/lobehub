@@ -4,7 +4,7 @@
 
 Este documento detalha todas as refatorações realizadas para remover code smells identificados pela ferramenta de análise estática.
 
-**Total de Refatorações**: 9 (9 ANY Type)
+**Total de Refatorações**: 10 (10 ANY Type)
 **Status**: ✅ Todas refatorações implementadas, commits criados e documentação completa
 
 ---
@@ -382,6 +382,46 @@ ANY Type - Uso de type assertion `as any` ao passar o ícone `CaretDownFilled` d
 
 ---
 
+## REFATORAÇÃO 10: EnableSwitch.tsx - ANY Type
+
+### Informações do Arquivo
+- **Arquivo**: `src/app/[variants]/(main)/settings/provider/features/ProviderConfig/EnableSwitch.tsx`
+- **Linha do Code Smell**: 40
+- **Code Smell**: ANY - Any Type
+- **Código Original**: `await toggleProviderEnabled(id as any, enabled);`
+
+### Confirmação do Code Smell
+✅ **Sim, é realmente um code smell ANY Type**. O código usa type assertion `as any` ao chamar `toggleProviderEnabled`, removendo a segurança de tipos quando o `id` já é do tipo `string` que é compatível com a assinatura da função.
+
+### Refatoração Proposta
+Remover o type assertion `as any` já que `id` é do tipo `string` e é compatível com o tipo esperado por `toggleProviderEnabled`.
+
+### Texto de Commit
+```
+refactor 1 EnableSwitch: remove unnecessary any type assertion for provider id
+
+Remove as any type assertion when calling toggleProviderEnabled since the id
+parameter is already a string type, which is compatible with the function signature.
+This improves type safety and removes unnecessary type casting.
+```
+
+### Respostas às 3 Perguntas
+
+**1. Eu estou atualmente trabalhando na refatoração do seguinte code smell:**
+ANY Type - Uso de type assertion `as any` ao chamar `toggleProviderEnabled(id as any, enabled)`, removendo a segurança de tipos mesmo quando o parâmetro `id` já é do tipo `string` e é compatível com a função.
+
+**2. Minhas principais dificuldades na remoção do code smell são:**
+- Verificar se o tipo do parâmetro `id` (que é `string`) é compatível com o tipo esperado por `toggleProviderEnabled`
+- Confirmar que remover o `as any` não quebrará a compilação ou funcionalidade
+- Entender se há alguma razão específica para o type assertion (como incompatibilidade de tipos)
+
+**3. Eu estou usando os seguintes métodos de refatoração para remover o code smell:**
+- Verificar a assinatura da função `toggleProviderEnabled` para confirmar que aceita `string` como primeiro parâmetro
+- Remover o type assertion `as any` já que `id` é do tipo `string` e é compatível
+- Testar que a funcionalidade continua funcionando corretamente após a remoção
+
+---
+
 ## Resumo das Refatorações
 
 | # | Arquivo | Code Smell | Status | Commit Message Prefix |
@@ -395,6 +435,7 @@ ANY Type - Uso de type assertion `as any` ao passar o ícone `CaretDownFilled` d
 | 7 | UsageTable.tsx | ANY | ✅ Implementado | `refactor 1 UsageTable:` |
 | 8 | ClerkProfile.tsx | ANY | ✅ Implementado | `refactor 1 ClerkProfile:` |
 | 9 | CategoryMenu.tsx (knowledge) | ANY | ✅ Implementado | `refactor 1 CategoryMenu:` |
+| 10 | EnableSwitch.tsx | ANY | ✅ Implementado | `refactor 1 EnableSwitch:` |
 
 ---
 
@@ -406,7 +447,7 @@ ANY Type - Uso de type assertion `as any` ao passar o ícone `CaretDownFilled` d
 
 3. **Branch**: Todas as refatorações foram commitadas na branch `any`.
 
-4. **Status**: ✅ Todas as 9 refatorações ANY Type foram implementadas, testadas (sem erros de lint) e commitadas individualmente.
+4. **Status**: ✅ Todas as 10 refatorações ANY Type foram implementadas, testadas (sem erros de lint) e commitadas individualmente.
 
-5. **Arquivos Refatorados**: 9 arquivos com code smell ANY Type foram refatorados com sucesso, melhorando a segurança de tipos em todo o código.
+5. **Arquivos Refatorados**: 10 arquivos com code smell ANY Type foram refatorados com sucesso, melhorando a segurança de tipos em todo o código.
 
