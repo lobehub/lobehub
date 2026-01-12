@@ -9,6 +9,7 @@ import { Flexbox } from 'react-layout-kit';
 import { parseAsInteger, useQueryParam } from '@/hooks/useQueryParam';
 import { useClientDataSWR } from '@/libs/swr';
 import { usageService } from '@/services/usage';
+import { UsageRecordItem } from '@/types/usage/usageRecord';
 import { formatDate, formatNumber } from '@/utils/format';
 
 import { UsageChartProps } from '../Client';
@@ -34,7 +35,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
     }
   }, [dateStrings]);
 
-  const columns: TableColumnType<any>[] = [
+  const columns: TableColumnType<UsageRecordItem>[] = [
     {
       hidden: true,
       key: 'id',
@@ -70,7 +71,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
         },
       ],
       key: 'type',
-      onFilter: (value, record) => record.callType === value,
+      onFilter: (value, record) => record.type === value,
       render: (value) => {
         return <Tag>{value}</Tag>;
       },

@@ -73,7 +73,7 @@ const Nav = memo(() => {
           <Tabs
             activeKey={activeKey}
             compact
-            items={items as any}
+            items={items}
             onChange={(key) => {
               const path = key === DiscoverTab.Home ? '/discover' : `/discover/${key}`;
               const search = q ? `?q=${encodeURIComponent(q)}` : '';

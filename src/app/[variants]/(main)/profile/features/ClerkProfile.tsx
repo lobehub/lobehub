@@ -50,7 +50,7 @@ export const useStyles = createStyles(
       scrollBox: css`
         background: transparent !important;
       `,
-    }) as Partial<Record<keyof ElementsConfig, any>>,
+    }) as Partial<Record<keyof ElementsConfig, string>>,
 );
 
 const Client = memo<{ mobile?: boolean }>(({ mobile }) => {

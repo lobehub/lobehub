@@ -37,7 +37,7 @@ const Switch = ({ id, Component }: SwitchProps) => {
     <InstantSwitch
       enabled={enabled}
       onChange={async (enabled) => {
-        await toggleProviderEnabled(id as any, enabled);
+        await toggleProviderEnabled(id, enabled);
       }}
     />
   );

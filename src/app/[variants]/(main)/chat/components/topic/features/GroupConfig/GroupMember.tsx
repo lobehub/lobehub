@@ -14,7 +14,7 @@ import { useChatGroupStore } from '@/store/chatGroup';
 import { chatGroupSelectors } from '@/store/chatGroup/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { LobeGroupSession } from '@/types/session';
+import { GroupMemberWithAgent, LobeGroupSession } from '@/types/session';
 
 import AgentSettings from '../../../features/AgentSettings';
 import GroupMemberItem from './GroupMemberItem';
@@ -93,10 +93,8 @@ const GroupMember = memo<GroupMemberProps>(
       onAddModalOpenChange(false);
     };
 
-    // TODO: fix type
-    // @ts-ignore
     const initialMembers = useMemo(() => currentSession?.members ?? [], [currentSession?.members]);
-    const [members, setMembers] = useState<any[]>(initialMembers);
+    const [members, setMembers] = useState<GroupMemberWithAgent[]>(initialMembers);
 
     const [removingMemberIds, setRemovingMemberIds] = useState<string[]>([]);
 
@@ -193,7 +191,7 @@ const GroupMember = memo<GroupMemberProps>(
             <SortableList
               gap={2}
               items={members}
-              onChange={async (items: any[]) => {
+              onChange={async (items: GroupMemberWithAgent[]) => {
                 setMembers(items);
                 if (!sessionId) return;
                 const orderedIds = items.map((m) => m.id);
@@ -201,7 +199,7 @@ const GroupMember = memo<GroupMemberProps>(
                   console.error('Failed to persist reorder');
                 });
               }}
-              renderItem={(item: any) => (
+              renderItem={(item: GroupMemberWithAgent) => (
                 <GroupMemberItem
                   actions={
                     <>
@@ -245,9 +243,7 @@ const GroupMember = memo<GroupMemberProps>(
             orchestratorModel: groupConfig?.orchestratorModel,
             orchestratorProvider: groupConfig?.orchestratorProvider,
           }}
-          // @ts-ignore
-          // TODO: fix type
-          existingMembers={currentSession?.members?.map((member: any) => member.id) || []}
+          existingMembers={currentSession?.members?.map((member) => member.id) || []}
           groupId={sessionId}
           mode="add"
           onCancel={() => onAddModalOpenChange(false)}
