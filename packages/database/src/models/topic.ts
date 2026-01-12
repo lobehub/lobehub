@@ -701,6 +701,7 @@ export class TopicModel {
     agentId: topic.agentId,
     content: '',
     groupId: topic.groupId,
+    id: topic.id,
     metadata: { activeBranchIndex, isVirtualRoot: true },
     parentId: null,
     role: 'user',
