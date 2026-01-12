@@ -192,7 +192,10 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     <div style={{ color: cssVar.colorTextSecondary }}>
                       {t('messages.tokenDetails.speed.tps.title')}
                     </div>
-                    <InfoTooltip title={t('messages.tokenDetails.speed.tps.tooltip')} />
+                    <InfoTooltip
+                      title={t('messages.tokenDetails.speed.tps.tooltip')}
+                      zIndex={1200}
+                    />
                   </Flexbox>
                   <div style={{ fontWeight: 500 }}>{tps}</div>
                 </Flexbox>
@@ -203,7 +206,10 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     <div style={{ color: cssVar.colorTextSecondary }}>
                       {t('messages.tokenDetails.speed.ttft.title')}
                     </div>
-                    <InfoTooltip title={t('messages.tokenDetails.speed.ttft.tooltip')} />
+                    <InfoTooltip
+                      title={t('messages.tokenDetails.speed.ttft.tooltip')}
+                      zIndex={1200}
+                    />
                   </Flexbox>
                   <div style={{ fontWeight: 500 }}>{ttft}s</div>
                 </Flexbox>

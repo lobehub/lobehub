@@ -12,6 +12,9 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { getPrice } from './pricing';
 
+// Popover 内部 Tooltip 需要更高的 z-index 以避免被遮挡
+const TOOLTIP_ZINDEX = 1200;
+
 export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     container: css`
@@ -61,24 +64,25 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
         </Flexbox>
         {!!pricing && (
           <Flexbox>
-            <Segmented
-              onChange={(value) => {
-                updateSystemStatus({ isShowCredit: value === 'credit' });
-              }}
-              options={[
-                { label: 'Token', value: 'token' },
-                {
-                  label: (
-                    <Tooltip title={t('messages.modelCard.creditTooltip')}>
-                      {t('messages.modelCard.credit')}
-                    </Tooltip>
-                  ),
-                  value: 'credit',
-                },
-              ]}
-              size={'small'}
-              value={isShowCredit ? 'credit' : 'token'}
-            />
+            <Tooltip
+              title={isShowCredit ? undefined : t('messages.modelCard.creditTooltip')}
+              zIndex={TOOLTIP_ZINDEX}
+            >
+              <Segmented
+                onChange={(value) => {
+                  updateSystemStatus({ isShowCredit: value === 'credit' });
+                }}
+                options={[
+                  { label: 'Token', value: 'token' },
+                  {
+                    label: t('messages.modelCard.credit'),
+                    value: 'credit',
+                  },
+                ]}
+                size={'small'}
+                value={isShowCredit ? 'credit' : 'token'}
+              />
+            </Tooltip>
           </Flexbox>
         )}
       </Flexbox>
@@ -92,6 +96,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
                 title={t('messages.modelCard.pricing.inputCachedTokens', {
                   amount: formatPrice.cachedInput,
                 })}
+                zIndex={TOOLTIP_ZINDEX}
               >
                 <Flexbox gap={2} horizontal>
                   <Icon icon={CircleFadingArrowUp} />
@@ -104,6 +109,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
                 title={t('messages.modelCard.pricing.writeCacheInputTokens', {
                   amount: formatPrice.writeCacheInput,
                 })}
+                zIndex={TOOLTIP_ZINDEX}
               >
                 <Flexbox gap={2} horizontal>
                   <Icon icon={BookUp2Icon} />
@@ -113,6 +119,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             )}
             <Tooltip
               title={t('messages.modelCard.pricing.inputTokens', { amount: formatPrice.input })}
+              zIndex={TOOLTIP_ZINDEX}
             >
               <Flexbox gap={2} horizontal>
                 <Icon icon={ArrowUpFromDot} />
@@ -121,6 +128,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             </Tooltip>
             <Tooltip
               title={t('messages.modelCard.pricing.outputTokens', { amount: formatPrice.output })}
+              zIndex={TOOLTIP_ZINDEX}
             >
               <Flexbox gap={2} horizontal>
                 <Icon icon={ArrowDownToDot} />
