@@ -63,7 +63,7 @@ const ProviderConfig = memo(() => {
         </Link>
       ),
     },
-  ].filter(Boolean) as any;
+  ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   if (!items || items?.length === 0)
     return (
