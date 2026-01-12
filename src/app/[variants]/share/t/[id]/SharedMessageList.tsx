@@ -29,7 +29,7 @@ const SharedMessageList = memo<SharedMessageListProps>(({ agentId, shareId, topi
   return (
     <ConversationProvider context={context}>
       <Flexbox flex={1}>
-        <ChatList itemContent={itemContent} />
+        <ChatList disableActionsBar itemContent={itemContent} />
       </Flexbox>
     </ConversationProvider>
   );

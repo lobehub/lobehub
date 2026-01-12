@@ -16,6 +16,10 @@ import VirtualizedList from './components/VirtualizedList';
 
 export interface ChatListProps {
   /**
+   * Disable the actions bar for all messages (e.g., in share page)
+   */
+  disableActionsBar?: boolean;
+  /**
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
@@ -29,7 +33,7 @@ export interface ChatListProps {
  *
  * Uses ConversationStore for message data and fetching.
  */
-const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
+const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent }) => {
   // Fetch messages (SWR key is null when skipFetch is true)
   const context = useConversationStore((s) => s.context);
   const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
@@ -77,7 +81,7 @@ const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
   }
 
   return (
-    <MessageActionProvider withSingletonActionsBar>
+    <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
       <VirtualizedList
         dataSource={displayMessageIds}
         // isGenerating={isGenerating}
