@@ -26,11 +26,11 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const useStoreUpdater = createStoreUpdater(storeApi);
     const editor = useChatInputEditor();
 
-    useStoreUpdater('mobile', mobile!);
-    useStoreUpdater('sendMenu', sendMenu!);
+    useStoreUpdater('mobile', mobile);
+    useStoreUpdater('sendMenu', sendMenu);
     useStoreUpdater('mentionItems', mentionItems);
-    useStoreUpdater('leftActions', leftActions!);
-    useStoreUpdater('rightActions', rightActions!);
+    useStoreUpdater('leftActions', leftActions || []);
+    useStoreUpdater('rightActions', rightActions || []);
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('onSend', onSend);
