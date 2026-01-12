@@ -22,7 +22,6 @@ const AddButton = () => {
   const { t } = useTranslation('file');
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
-  const createResource = useFileStore((s) => s.createResource);
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
 
   // TODO: Migrate Notion import to use createResource

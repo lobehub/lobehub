@@ -47,6 +47,20 @@ const styles = createStaticStyles(({ css }) => {
       }
     `,
 
+    dragOver: css`
+      color: ${cssVar.colorBgElevated} !important;
+      background-color: ${cssVar.colorText} !important;
+
+      * {
+        color: ${cssVar.colorBgElevated} !important;
+      }
+    `,
+
+    dragging: css`
+      will-change: transform;
+      opacity: 0.5;
+    `,
+
     evenRow: css`
       background: ${cssVar.colorFillQuaternary};
 
@@ -64,20 +78,6 @@ const styles = createStaticStyles(({ css }) => {
       .any-row-hovered &:hover {
         background: ${cssVar.colorFillTertiary};
       }
-    `,
-
-    dragOver: css`
-      color: ${cssVar.colorBgElevated} !important;
-      background-color: ${cssVar.colorText} !important;
-
-      * {
-        color: ${cssVar.colorBgElevated} !important;
-      }
-    `,
-
-    dragging: css`
-      will-change: transform;
-      opacity: 0.5;
     `,
 
     hover: css`
@@ -155,7 +155,6 @@ const FileListItem = memo<FileListItemProps>(
     sourceType,
     slug,
     pendingRenameItemId,
-    isAnyRowHovered,
     onHoverChange,
   }) => {
     const { t } = useTranslation(['components', 'file']);
@@ -497,7 +496,10 @@ const FileListItem = memo<FileListItemProps>(
                   value={renamingValue}
                 />
               ) : (
-                <TruncatedFileName className={styles.name} name={name || t('file:pageList.untitled')} />
+                <TruncatedFileName
+                  className={styles.name}
+                  name={name || t('file:pageList.untitled')}
+                />
               )}
             </Flexbox>
             <Flexbox
