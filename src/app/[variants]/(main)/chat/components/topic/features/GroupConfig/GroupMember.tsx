@@ -65,7 +65,11 @@ const GroupMember = memo<GroupMemberProps>(
 
       // Update host config if changed
       if (hostConfig !== undefined || enableSupervisor !== undefined) {
-        const newConfig: any = {};
+        const newConfig: {
+          enableSupervisor?: boolean;
+          orchestratorModel?: string;
+          orchestratorProvider?: string;
+        } = {};
 
         if (enableSupervisor !== undefined) {
           newConfig.enableSupervisor = enableSupervisor;
