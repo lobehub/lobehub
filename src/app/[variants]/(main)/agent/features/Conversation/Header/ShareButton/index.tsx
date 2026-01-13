@@ -1,6 +1,6 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { ENABLE_TOPIC_LINK_SHARE } from '@lobechat/business-const';
 import { ActionIcon } from '@lobehub/ui';
 import { Share2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -31,7 +31,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const iconButton = (
     <ActionIcon
       icon={Share2}
-      onClick={ENABLE_BUSINESS_FEATURES ? undefined : () => setIsModalOpen(true)}
+      onClick={ENABLE_TOPIC_LINK_SHARE ? undefined : () => setIsModalOpen(true)}
       size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
       title={t('share')}
       tooltipProps={{
@@ -42,7 +42,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
 
   return (
     <>
-      {ENABLE_BUSINESS_FEATURES ? (
+      {ENABLE_TOPIC_LINK_SHARE ? (
         <SharePopover onOpenModal={() => setIsModalOpen(true)}>{iconButton}</SharePopover>
       ) : (
         iconButton
