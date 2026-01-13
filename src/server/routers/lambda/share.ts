@@ -1,5 +1,4 @@
 import type { SharedTopicData } from '@lobechat/types';
-import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -16,26 +15,11 @@ export const shareRouter = router({
     .use(serverDatabase)
     .input(z.object({ shareId: z.string() }))
     .query(async ({ input, ctx }): Promise<SharedTopicData> => {
-      const result = await TopicShareModel.findByShareIdWithAccessCheck(
+      const share = await TopicShareModel.findByShareIdWithAccessCheck(
         ctx.serverDB,
         input.shareId,
         ctx.userId ?? undefined,
       );
-
-      if (result.error) {
-        if (result.error === 'not_found') {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
-        }
-        if (result.error === 'private') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
-        }
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Sign in required to view this shared topic',
-        });
-      }
-
-      const { share } = result;
 
       // Increment view count after permission check passes
       await TopicShareModel.incrementViewCount(ctx.serverDB, input.shareId);

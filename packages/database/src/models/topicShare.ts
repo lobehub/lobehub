@@ -1,18 +1,13 @@
 import type { ShareAccessPermission } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { agents, chatGroups, chatGroupsAgents, topicShares, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
-export type ShareAccessError = 'not_found' | 'private' | 'signin_required';
-
 export type TopicShareData = NonNullable<
   Awaited<ReturnType<(typeof TopicShareModel)['findByShareId']>>
 >;
-
-export type FindShareWithAccessResult =
-  | { error: ShareAccessError; share?: undefined }
-  | { error?: undefined; share: TopicShareData };
 
 export class TopicShareModel {
   private userId: string;
@@ -154,30 +149,33 @@ export class TopicShareModel {
 
   /**
    * Find shared topic by share ID with access permission check.
-   * Returns share data if access is allowed, or error reason if not.
+   * Throws TRPCError if access is denied.
    */
   static findByShareIdWithAccessCheck = async (
     db: LobeChatDatabase,
     shareId: string,
     accessUserId?: string,
-  ): Promise<FindShareWithAccessResult> => {
+  ): Promise<TopicShareData> => {
     const share = await TopicShareModel.findByShareId(db, shareId);
 
     if (!share) {
-      return { error: 'not_found' };
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
     }
 
     const isOwner = accessUserId && share.ownerId === accessUserId;
 
     if (!isOwner) {
       if (share.accessPermission === 'private') {
-        return { error: 'private' };
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
       }
       if (share.accessPermission === 'public_signin' && !accessUserId) {
-        return { error: 'signin_required' };
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Sign in required to view this shared topic',
+        });
       }
     }
 
-    return { share };
+    return share;
   };
 }
