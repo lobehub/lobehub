@@ -153,7 +153,7 @@ export class S3 {
     });
   }
 
-  // 添加一个新方法用于上传二进制内容
+  // Add a new method for uploading binary content
   public async uploadBuffer(path: string, buffer: Buffer, contentType?: string) {
     const command = new PutObjectCommand({
       ACL: this.setAcl ? 'public-read' : undefined,
