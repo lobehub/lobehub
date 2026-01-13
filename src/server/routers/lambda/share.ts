@@ -16,16 +16,17 @@ export const shareRouter = router({
     .use(serverDatabase)
     .input(z.object({ shareId: z.string() }))
     .query(async ({ input, ctx }): Promise<SharedTopicData> => {
-      const share = await TopicShareModel.findByShareId(ctx.serverDB, input.shareId);
+      const result = await TopicShareModel.findByShareIdWithAccessCheck(
+        ctx.serverDB,
+        input.shareId,
+        ctx.userId ?? undefined,
+      );
 
-      if (!share) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
-      }
-
-      // Check permission
-      const accessCheck = TopicShareModel.checkAccess(share, ctx.userId ?? undefined);
-      if (!accessCheck.allowed) {
-        if (accessCheck.reason === 'private') {
+      if (result.error) {
+        if (result.error === 'not_found') {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
+        }
+        if (result.error === 'private') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
         }
         throw new TRPCError({
@@ -33,6 +34,8 @@ export const shareRouter = router({
           message: 'Sign in required to view this shared topic',
         });
       }
+
+      const { share } = result;
 
       // Increment view count after permission check passes
       await TopicShareModel.incrementViewCount(ctx.serverDB, input.shareId);

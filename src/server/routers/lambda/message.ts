@@ -110,23 +110,24 @@ export const messageRouter = router({
 
       // Public access via topicShareId
       if (topicShareId) {
-        const share = await TopicShareModel.findByShareId(ctx.serverDB, topicShareId);
-        if (!share) {
+        const result = await TopicShareModel.findByShareIdWithAccessCheck(
+          ctx.serverDB,
+          topicShareId,
+          ctx.userId ?? undefined,
+        );
+
+        if (result.error) {
+          if (result.error === 'signin_required') {
+            throw new TRPCError({
+              code: 'UNAUTHORIZED',
+              message: 'Sign in required to view this shared topic',
+            });
+          }
+          // not_found or private
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found or not public' });
         }
 
-        // Check permission
-        const accessCheck = TopicShareModel.checkAccess(share, ctx.userId ?? undefined);
-        if (!accessCheck.allowed) {
-          if (accessCheck.reason === 'private') {
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found or not public' });
-          }
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'Sign in required to view this shared topic',
-          });
-        }
-
+        const { share } = result;
         const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
         const fileService = new FileService(ctx.serverDB, share.ownerId);
 

@@ -4,9 +4,15 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { agents, chatGroups, chatGroupsAgents, topicShares, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
-export type ShareAccessCheckResult =
-  | { allowed: true }
-  | { allowed: false; reason: 'private' | 'signin_required' };
+export type ShareAccessError = 'not_found' | 'private' | 'signin_required';
+
+export type TopicShareData = NonNullable<
+  Awaited<ReturnType<(typeof TopicShareModel)['findByShareId']>>
+>;
+
+export type FindShareWithAccessResult =
+  | { error: ShareAccessError; share?: undefined }
+  | { error?: undefined; share: TopicShareData };
 
 export class TopicShareModel {
   private userId: string;
@@ -147,27 +153,31 @@ export class TopicShareModel {
   };
 
   /**
-   * Check if user has access to the share.
-   * Owner can always access, others depend on accessPermission.
+   * Find shared topic by share ID with access permission check.
+   * Returns share data if access is allowed, or error reason if not.
    */
-  static checkAccess(
-    share: { accessPermission: string; ownerId: string },
-    userId?: string,
-  ): ShareAccessCheckResult {
-    const isOwner = userId && share.ownerId === userId;
+  static findByShareIdWithAccessCheck = async (
+    db: LobeChatDatabase,
+    shareId: string,
+    accessUserId?: string,
+  ): Promise<FindShareWithAccessResult> => {
+    const share = await TopicShareModel.findByShareId(db, shareId);
 
-    if (isOwner) {
-      return { allowed: true };
+    if (!share) {
+      return { error: 'not_found' };
     }
 
-    if (share.accessPermission === 'private') {
-      return { allowed: false, reason: 'private' };
+    const isOwner = accessUserId && share.ownerId === accessUserId;
+
+    if (!isOwner) {
+      if (share.accessPermission === 'private') {
+        return { error: 'private' };
+      }
+      if (share.accessPermission === 'public_signin' && !accessUserId) {
+        return { error: 'signin_required' };
+      }
     }
 
-    if (share.accessPermission === 'public_signin' && !userId) {
-      return { allowed: false, reason: 'signin_required' };
-    }
-
-    return { allowed: true };
-  }
+    return { share };
+  };
 }
