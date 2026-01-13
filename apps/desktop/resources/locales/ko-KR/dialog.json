@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "확인",
-    "detail": "대형 언어 모델 기반의 채팅 애플리케이션",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "정보"
-  },
-  "confirm": {
-    "cancel": "취소",
-    "no": "아니요",
-    "title": "확인",
-    "yes": "예"
-  },
-  "error": {
-    "button": "확인",
-    "detail": "작업 중 오류가 발생했습니다. 나중에 다시 시도해 주세요.",
-    "message": "오류 발생",
-    "title": "오류"
-  },
-  "update": {
-    "downloadAndInstall": "다운로드 및 설치",
-    "downloadComplete": "다운로드 완료",
-    "downloadCompleteMessage": "업데이트 패키지가 다운로드 완료되었습니다. 지금 설치하시겠습니까?",
-    "installLater": "나중에 설치",
-    "installNow": "지금 설치",
-    "later": "나중에 알림",
-    "newVersion": "새 버전 발견",
-    "newVersionAvailable": "새 버전 발견: {{version}}",
-    "skipThisVersion": "이 버전 건너뛰기"
-  }
+  "about.button": "확인",
+  "about.detail": "대형 언어 모델 기반의 채팅 애플리케이션",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "정보",
+  "confirm.cancel": "취소",
+  "confirm.no": "아니요",
+  "confirm.title": "확인",
+  "confirm.yes": "예",
+  "error.button": "확인",
+  "error.detail": "작업 중 오류가 발생했습니다. 나중에 다시 시도해 주세요.",
+  "error.message": "오류 발생",
+  "error.title": "오류",
+  "update.downloadAndInstall": "다운로드 및 설치",
+  "update.downloadComplete": "다운로드 완료",
+  "update.downloadCompleteMessage": "업데이트 패키지가 다운로드 완료되었습니다. 지금 설치하시겠습니까?",
+  "update.installLater": "나중에 설치",
+  "update.installNow": "지금 설치",
+  "update.later": "나중에 알림",
+  "update.newVersion": "새 버전 발견",
+  "update.newVersionAvailable": "새 버전 발견: {{version}}",
+  "update.skipThisVersion": "이 버전 건너뛰기"
 }

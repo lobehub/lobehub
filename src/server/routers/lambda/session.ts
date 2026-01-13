@@ -9,8 +9,8 @@ import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentChatConfigSchema } from '@/types/agent';
 import { LobeMetaDataSchema } from '@/types/meta';
-import { BatchTaskResult } from '@/types/service';
-import { ChatSessionList, LobeGroupSession } from '@/types/session';
+import { type BatchTaskResult } from '@/types/service';
+import { type ChatSessionList, type LobeGroupSession } from '@/types/session';
 
 const sessionProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

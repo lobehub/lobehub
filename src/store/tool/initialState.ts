@@ -1,16 +1,24 @@
-import { BuiltinToolState, initialBuiltinToolState } from './slices/builtin';
-import { CustomPluginState, initialCustomPluginState } from './slices/customPlugin';
-import { KlavisStoreState, initialKlavisStoreState } from './slices/klavisStore';
-import { MCPStoreState, initialMCPStoreState } from './slices/mcpStore';
-import { PluginState, initialPluginState } from './slices/plugin';
-import { PluginStoreState, initialPluginStoreState } from './slices/oldStore';
+import { type BuiltinToolState, initialBuiltinToolState } from './slices/builtin/initialState';
+import {
+  type CustomPluginState,
+  initialCustomPluginState,
+} from './slices/customPlugin/initialState';
+import { type KlavisStoreState, initialKlavisStoreState } from './slices/klavisStore/initialState';
+import {
+  type LobehubSkillStoreState,
+  initialLobehubSkillStoreState,
+} from './slices/lobehubSkillStore/initialState';
+import { type MCPStoreState, initialMCPStoreState } from './slices/mcpStore/initialState';
+import { type PluginStoreState, initialPluginStoreState } from './slices/oldStore/initialState';
+import { type PluginState, initialPluginState } from './slices/plugin/initialState';
 
 export type ToolStoreState = PluginState &
   CustomPluginState &
   PluginStoreState &
   BuiltinToolState &
   MCPStoreState &
-  KlavisStoreState;
+  KlavisStoreState &
+  LobehubSkillStoreState;
 
 export const initialState: ToolStoreState = {
   ...initialPluginState,
@@ -19,4 +27,5 @@ export const initialState: ToolStoreState = {
   ...initialBuiltinToolState,
   ...initialMCPStoreState,
   ...initialKlavisStoreState,
+  ...initialLobehubSkillStoreState,
 };

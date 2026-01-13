@@ -1,12 +1,57 @@
-import { LobeToolMeta } from '@lobechat/types';
+import { type LobeToolMeta } from '@lobechat/types';
 
 import { shouldEnableTool } from '@/helpers/toolFilters';
 
 import type { ToolStoreState } from '../../initialState';
 import { KlavisServerStatus } from '../klavisStore';
 
+export interface LobeToolMetaWithAvailability extends LobeToolMeta {
+  /**
+   * Whether the tool is available in web environment
+   * e.g., LocalSystem is desktop-only, so availableInWeb is false
+   */
+  availableInWeb: boolean;
+}
+
+const toBuiltinMeta = (t: ToolStoreState['builtinTools'][number]): LobeToolMeta => ({
+  author: 'LobeHub',
+  identifier: t.identifier,
+  meta: t.manifest.meta,
+  type: 'builtin' as const,
+});
+
+const toBuiltinMetaWithAvailability = (
+  t: ToolStoreState['builtinTools'][number],
+): LobeToolMetaWithAvailability => ({
+  ...toBuiltinMeta(t),
+  availableInWeb: shouldEnableTool(t.identifier),
+});
+
+const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
+  (s.servers || [])
+    .filter((server) => server.status === KlavisServerStatus.CONNECTED && server.tools?.length)
+    .map((server) => ({
+      author: 'Klavis',
+      // 使用 identifier 作为存储标识符（如 'google-calendar'）
+      identifier: server.identifier,
+      meta: {
+        avatar: '☁️',
+        description: `LobeHub Mcp Server: ${server.serverName}`,
+        tags: ['klavis', 'mcp'],
+        // title 仍然使用 serverName 显示友好名称
+        title: server.serverName,
+      },
+      type: 'builtin' as const,
+    }));
+
+const getKlavisMetasWithAvailability = (s: ToolStoreState): LobeToolMetaWithAvailability[] =>
+  getKlavisMetas(s).map((meta) => ({ ...meta, availableInWeb: true }));
+
+/**
+ * Get visible builtin tools meta list (excludes hidden tools)
+ * Used for general tool display in chat input bar
+ */
 const metaList = (s: ToolStoreState): LobeToolMeta[] => {
-  // Get builtin tools meta list
   const builtinMetas = s.builtinTools
     .filter((item) => {
       // Filter hidden tools
@@ -17,33 +62,37 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
 
       return true;
     })
-    .map((t) => ({
-      author: 'LobeHub',
-      identifier: t.identifier,
-      meta: t.manifest.meta,
-      type: 'builtin' as const,
-    }));
+    .map(toBuiltinMeta);
 
-  // Get Klavis servers as builtin tools meta
-  const klavisMetas = (s.servers || [])
-    .filter((server) => server.status === KlavisServerStatus.CONNECTED && server.tools?.length)
-    .map((server) => ({
-      author: 'Klavis',
-      // 使用 identifier 作为存储标识符（如 'google-calendar'）
-      identifier: server.identifier,
-      meta: {
-        avatar: '☁️',
-        description: `Klavis MCP Server: ${server.serverName}`,
-        tags: ['klavis', 'mcp'],
-        // title 仍然使用 serverName 显示友好名称
-        title: server.serverName,
-      },
-      type: 'builtin' as const,
-    }));
+  return [...builtinMetas, ...getKlavisMetas(s)];
+};
 
-  return [...builtinMetas, ...klavisMetas];
+// Tools that should never be exposed in agent profile configuration
+const EXCLUDED_TOOLS = new Set([
+  'lobe-agent-builder',
+  'lobe-group-agent-builder',
+  'lobe-group-management',
+]);
+
+/**
+ * Get all builtin tools meta list (includes hidden tools and platform-specific tools)
+ * Used for agent profile tool configuration where all tools should be configurable
+ * Returns availability info so UI can show hints for unavailable tools
+ */
+const allMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[] => {
+  const builtinMetas = s.builtinTools
+    .filter((item) => {
+      // Exclude internal tools that should not be user-configurable
+      if (EXCLUDED_TOOLS.has(item.identifier)) return false;
+
+      return true;
+    })
+    .map(toBuiltinMetaWithAvailability);
+
+  return [...builtinMetas, ...getKlavisMetasWithAvailability(s)];
 };
 
 export const builtinToolSelectors = {
+  allMetaList,
   metaList,
 };

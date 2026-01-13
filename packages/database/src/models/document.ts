@@ -118,6 +118,12 @@ export class DocumentModel {
     });
   };
 
+  findBySlug = async (slug: string): Promise<DocumentItem | undefined> => {
+    return this.db.query.documents.findFirst({
+      where: and(eq(documents.userId, this.userId), eq(documents.slug, slug)),
+    });
+  };
+
   update = async (id: string, value: Partial<DocumentItem>) => {
     return this.db
       .update(documents)

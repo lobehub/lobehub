@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Съотношение",
-      "lock": "Заключване на съотношението на страните",
-      "unlock": "Отключване на съотношението на страните"
-    },
-    "cfg": {
-      "label": "Интензитет на насочване"
-    },
-    "header": {
-      "desc": "Кратко описание, създавайте веднага",
-      "title": "Рисуване"
-    },
-    "height": {
-      "label": "Височина"
-    },
-    "imageNum": {
-      "label": "Брой изображения"
-    },
-    "imageUrl": {
-      "label": "Референтно изображение"
-    },
-    "imageUrls": {
-      "label": "Референтни изображения"
-    },
-    "model": {
-      "label": "Модел"
-    },
-    "prompt": {
-      "placeholder": "Опишете съдържанието, което искате да генерирате"
-    },
-    "quality": {
-      "label": "Качество на изображението",
-      "options": {
-        "hd": "Висока резолюция",
-        "standard": "Стандартно"
-      }
-    },
-    "resolution": {
-      "label": "Резолюция",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Семена",
-      "random": "Случаен семенен код"
-    },
-    "size": {
-      "label": "Размер"
-    },
-    "steps": {
-      "label": "Стъпки"
-    },
-    "title": "AI рисуване",
-    "width": {
-      "label": "Ширина"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Приложи семе",
-      "copyError": "Копиране на грешка",
-      "copyPrompt": "Копирай подсказката",
-      "copySeed": "Копиране на семето",
-      "delete": "Изтриване",
-      "deleteBatch": "Изтриване на партида",
-      "download": "Изтегляне",
-      "downloadFailed": "Неуспешно изтегляне на изображението",
-      "errorCopied": "Съобщението за грешка е копирано в клипборда",
-      "errorCopyFailed": "Неуспешно копиране на съобщението за грешка",
-      "generate": "Генерирай",
-      "promptCopied": "Подсказката е копирана в клипборда",
-      "promptCopyFailed": "Неуспешно копиране на подсказката",
-      "reuseSettings": "Използване на настройките отново",
-      "seedApplied": "Семето е приложено към конфигурацията",
-      "seedApplyFailed": "Неуспешно прилагане на семе",
-      "seedCopied": "Семето е копирано в клипборда",
-      "seedCopyFailed": "Неуспешно копиране на семето"
-    },
-    "metadata": {
-      "count": "{{count}} изображения"
-    },
-    "status": {
-      "failed": "Генерирането не бе успешно",
-      "generating": "Генериране..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "Настоящият инсталиран екземпляр използва клиентски режим с база данни и не поддържа функцията за генериране на AI изображения. Моля, преминете към <1>режим на сървърна база данни</1> или използвайте директно <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "Дълбока интеграция с файловата система, генерираните изображения се запазват автоматично във файловата система, поддържайки централизирано управление и организация",
-        "title": "Интеграция с файловата система"
-      },
-      "llmAssisted": {
-        "desc": "Комбинира възможностите на големи езикови модели за интелигентна оптимизация и разширяване на подсказките, подобрявайки качеството на генерираните изображения (скоро)",
-        "title": "Подпомагане с LLM"
-      },
-      "multiProviders": {
-        "desc": "Поддържа множество AI доставчици за рисуване, включително OpenAI gpt-image-1, Google Imagen, FAL.ai и други, предоставяйки богат избор от модели",
-        "title": "Поддръжка на множество доставчици"
-      }
-    },
-    "title": "Настоящият режим на инсталация не поддържа AI рисуване"
-  },
-  "topic": {
-    "createNew": "Създаване на нова тема",
-    "deleteConfirm": "Потвърждение за изтриване на тема",
-    "deleteConfirmDesc": "Ще изтриете тази генерирана тема. След изтриването тя не може да бъде възстановена. Моля, действайте внимателно.",
-    "empty": "Няма генерирани теми",
-    "title": "Тема на рисуване",
-    "untitled": "По подразбиране тема"
-  }
+  "config.aspectRatio.label": "Съотношение на страните",
+  "config.aspectRatio.lock": "Заключи съотношението",
+  "config.aspectRatio.unlock": "Отключи съотношението",
+  "config.cfg.label": "Интензитет на насоките",
+  "config.header.desc": "Кратко описание, създай незабавно",
+  "config.header.title": "Картина",
+  "config.height.label": "Височина",
+  "config.imageNum.label": "Брой изображения",
+  "config.imageUrl.label": "Референтно изображение",
+  "config.imageUrls.label": "Референтни изображения",
+  "config.model.label": "Модел",
+  "config.prompt.placeholder": "Опишете какво искате да генерирате",
+  "config.quality.label": "Качество на изображението",
+  "config.quality.options.hd": "Висока резолюция",
+  "config.quality.options.standard": "Стандартно",
+  "config.resolution.label": "Резолюция",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Сийд",
+  "config.seed.random": "Случаен сийд",
+  "config.size.label": "Размер",
+  "config.steps.label": "Стъпки",
+  "config.title": "AI Изображение",
+  "config.width.label": "Ширина",
+  "generation.actions.applySeed": "Приложи сийд",
+  "generation.actions.copyError": "Копирай съобщението за грешка",
+  "generation.actions.copyPrompt": "Копирай подканата",
+  "generation.actions.copySeed": "Копирай сийд",
+  "generation.actions.delete": "Изтрий",
+  "generation.actions.deleteBatch": "Изтрий партида",
+  "generation.actions.download": "Изтегли",
+  "generation.actions.downloadFailed": "Неуспешно изтегляне на изображението. Моля, проверете мрежовата връзка или конфигурацията на CORS за S3 хранилището.",
+  "generation.actions.errorCopied": "Съобщението за грешка е копирано в клипборда",
+  "generation.actions.errorCopyFailed": "Неуспешно копиране на съобщението за грешка",
+  "generation.actions.generate": "Генерирай",
+  "generation.actions.promptCopied": "Подканата е копирана в клипборда",
+  "generation.actions.promptCopyFailed": "Неуспешно копиране на подканата",
+  "generation.actions.reuseSettings": "Използвай повторно настройките",
+  "generation.actions.seedApplied": "Сийдът е приложен към конфигурацията",
+  "generation.actions.seedApplyFailed": "Неуспешно прилагане на сийд",
+  "generation.actions.seedCopied": "Сийдът е копиран в клипборда",
+  "generation.actions.seedCopyFailed": "Неуспешно копиране на сийд",
+  "generation.metadata.count": "{{count}} изображения",
+  "generation.status.failed": "Генерирането неуспешно",
+  "generation.status.generating": "Генериране...",
+  "notSupportGuide.desc": "Текущият режим на внедряване не поддържа AI генериране на изображения. Превключете към <1>режим на внедряване със сървърна база данни</1> или използвайте <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Дълбока интеграция със системата за управление на файлове; генерираните изображения се запазват автоматично във файловата система за унифицирано управление и организация.",
+  "notSupportGuide.features.fileIntegration.title": "Интеграция с файловата система",
+  "notSupportGuide.features.llmAssisted.desc": "Комбинира възможностите на големи езикови модели за интелигентна оптимизация и разширяване на подканите, подобрявайки качеството на генерираните изображения (Очаквайте скоро).",
+  "notSupportGuide.features.llmAssisted.title": "Генериране на изображения с помощта на LLM",
+  "notSupportGuide.features.multiProviders.desc": "Поддържа множество доставчици на AI генериране на изображения, включително OpenAI gpt-image-1, Google Imagen, FAL.ai и други, предлагащи богат избор от модели.",
+  "notSupportGuide.features.multiProviders.title": "Поддръжка на множество доставчици",
+  "notSupportGuide.title": "Текущият режим на внедряване не поддържа AI генериране на изображения",
+  "topic.createNew": "Нова тема",
+  "topic.deleteConfirm": "Изтриване на тема за генериране",
+  "topic.deleteConfirmDesc": "Ще изтриете тази тема за генериране. Това действие не може да бъде отменено, моля, бъдете внимателни.",
+  "topic.empty": "Няма теми за генериране",
+  "topic.title": "Тема на картината",
+  "topic.untitled": "Тема по подразбиране"
 }

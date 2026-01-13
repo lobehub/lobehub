@@ -41,6 +41,10 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
+vi.mock('@/libs/trpc/utils/internalJwt', () => ({
+  signInternalJWT: vi.fn().mockResolvedValue('mock-internal-jwt-token'),
+}));
+
 describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -61,7 +65,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://public.example.com';
       mockAppEnv.INTERNAL_APP_URL = 'http://localhost:3210';
 
-      await createAsyncServerClient('user-123', { apiKey: 'test-key' });
+      await createAsyncServerClient('user-123');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -76,7 +80,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://fallback.example.com';
       mockAppEnv.INTERNAL_APP_URL = 'https://fallback.example.com'; // getInternalAppUrl() returns APP_URL
 
-      await createAsyncServerClient('user-456', {});
+      await createAsyncServerClient('user-456');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -88,7 +92,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://cdn-proxied.example.com';
       mockAppEnv.INTERNAL_APP_URL = 'http://127.0.0.1:3210';
 
-      await createAsyncServerClient('user-789', {});
+      await createAsyncServerClient('user-789');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -101,7 +105,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://public.example.com';
       mockAppEnv.INTERNAL_APP_URL = 'http://lobe-service:3210';
 
-      await createAsyncServerClient('user-docker', {});
+      await createAsyncServerClient('user-docker');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -112,7 +116,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
     it('should handle INTERNAL_APP_URL with trailing slash', async () => {
       mockAppEnv.INTERNAL_APP_URL = 'http://localhost:3210/';
 
-      await createAsyncServerClient('user-trailing', {});
+      await createAsyncServerClient('user-trailing');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -124,7 +128,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
     it('should handle INTERNAL_APP_URL without trailing slash', async () => {
       mockAppEnv.INTERNAL_APP_URL = 'https://example.com';
 
-      await createAsyncServerClient('user-no-trailing', {});
+      await createAsyncServerClient('user-no-trailing');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -134,29 +138,26 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
   });
 
   describe('authentication and headers', () => {
-    it('should include Authorization header with KEY_VAULTS_SECRET', async () => {
-      await createAsyncServerClient('user-auth', {});
+    it('should include Authorization header with internal JWT token', async () => {
+      await createAsyncServerClient('user-auth');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
 
       expect(httpLinkOptions.headers).toHaveProperty('Authorization');
-      expect(httpLinkOptions.headers.Authorization).toBe('Bearer test-secret-key');
+      expect(httpLinkOptions.headers.Authorization).toBe('mock-internal-jwt-token');
     });
 
-    it('should encrypt and include user payload in x-lobe-chat-auth header', async () => {
-      const testPayload = { apiKey: 'test-api-key-value', provider: 'openai' };
+    it('should encrypt and include userId in x-lobe-chat-auth header', async () => {
       const mockEncrypt = vi.fn().mockResolvedValue('test-encrypted-auth-data');
       vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValueOnce({
         encrypt: mockEncrypt,
       } as any);
 
-      await createAsyncServerClient('user-encrypt', testPayload);
+      await createAsyncServerClient('user-encrypt');
 
       expect(KeyVaultsGateKeeper.initWithEnvKey).toHaveBeenCalled();
-      expect(mockEncrypt).toHaveBeenCalledWith(
-        JSON.stringify({ payload: testPayload, userId: 'user-encrypt' }),
-      );
+      expect(mockEncrypt).toHaveBeenCalledWith(JSON.stringify({ userId: 'user-encrypt' }));
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -172,7 +173,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       const originalEnv = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
       process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'test-bypass-value';
 
-      await createAsyncServerClient('user-vercel', {});
+      await createAsyncServerClient('user-vercel');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -191,7 +192,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
     it('should not include Vercel bypass secret when not available', async () => {
       delete process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
-      await createAsyncServerClient('user-no-vercel', {});
+      await createAsyncServerClient('user-no-vercel');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -207,9 +208,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
         encrypt: mockEncrypt,
       } as any);
 
-      await expect(createAsyncServerClient('user-enc-fail', {})).rejects.toThrow(
-        'Encryption failed',
-      );
+      await expect(createAsyncServerClient('user-enc-fail')).rejects.toThrow('Encryption failed');
 
       expect(KeyVaultsGateKeeper.initWithEnvKey).toHaveBeenCalled();
     });
@@ -219,7 +218,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://only-app-url.com';
       mockAppEnv.INTERNAL_APP_URL = 'https://only-app-url.com'; // Result of fallback
 
-      await createAsyncServerClient('user-null', {});
+      await createAsyncServerClient('user-null');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -232,7 +231,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://fallback-from-empty.com';
       mockAppEnv.INTERNAL_APP_URL = '';
 
-      await createAsyncServerClient('user-empty', {});
+      await createAsyncServerClient('user-empty');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -245,7 +244,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
     it('should handle malformed URL gracefully', async () => {
       mockAppEnv.INTERNAL_APP_URL = 'not-a-valid-url';
 
-      await createAsyncServerClient('user-malformed', {});
+      await createAsyncServerClient('user-malformed');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -258,7 +257,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
 
   describe('TRPC client configuration', () => {
     it('should configure httpLink with proper options', async () => {
-      await createAsyncServerClient('user-config', {});
+      await createAsyncServerClient('user-config');
 
       expect(httpLink).toHaveBeenCalled();
       const httpLinkOptions = vi.mocked(httpLink).mock.calls[0][0];
@@ -269,7 +268,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
     });
 
     it('should pass httpLink result to createTRPCClient', async () => {
-      await createAsyncServerClient('user-link', {});
+      await createAsyncServerClient('user-link');
 
       expect(createTRPCClient).toHaveBeenCalledWith({
         links: expect.arrayContaining([
@@ -282,7 +281,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
     });
 
     it('should return the created TRPC client', async () => {
-      const client = await createAsyncServerClient('user-return', {});
+      const client = await createAsyncServerClient('user-return');
 
       expect(client).toBeDefined();
       expect(client).toHaveProperty('_mockClient');
@@ -295,7 +294,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://lobechat.example.com';
       mockAppEnv.INTERNAL_APP_URL = 'http://localhost:3210';
 
-      await createAsyncServerClient('prod-user', { apiKey: 'test-key' });
+      await createAsyncServerClient('prod-user');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -308,7 +307,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://public.example.com';
       mockAppEnv.INTERNAL_APP_URL = 'http://lobe-chat-database:3210';
 
-      await createAsyncServerClient('docker-user', {});
+      await createAsyncServerClient('docker-user');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;
@@ -321,7 +320,7 @@ describe('createAsyncServerClient - INTERNAL_APP_URL Tests', () => {
       mockAppEnv.APP_URL = 'https://direct-access.example.com';
       mockAppEnv.INTERNAL_APP_URL = 'https://direct-access.example.com'; // Result of getInternalAppUrl() fallback
 
-      await createAsyncServerClient('direct-user', {});
+      await createAsyncServerClient('direct-user');
 
       const config = vi.mocked(createTRPCClient).mock.calls[0][0];
       const httpLinkOptions = config.links[0] as any;

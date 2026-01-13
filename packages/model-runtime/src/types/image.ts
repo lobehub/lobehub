@@ -34,7 +34,7 @@ export type CreateImageResponse = {
   modelUsage?: ModelUsage;
 };
 
-// 新增：支持认证图片下载的运行时接口
+// New: Runtime interface for authenticated image download support
 export interface AuthenticatedImageRuntime {
   /**
    * Get authentication headers for image download

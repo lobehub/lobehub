@@ -17,13 +17,3 @@ export interface ProtocolBroadcastEvents {
     schema: McpInstallSchema;
   }) => void;
 }
-
-/**
- * 协议处理相关的 Dispatch 事件（渲染进程 -> 主进程）
- */
-export interface ProtocolDispatchEvents {
-  /**
-   * 通知主进程协议URL已被处理
-   */
-  protocolUrlHandled: (data: { error?: string; success: boolean; url: string }) => Promise<void>;
-}

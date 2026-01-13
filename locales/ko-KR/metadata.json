@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "{{appName}}의 새로운 기능과 개선 사항을 지속적으로 추적하세요",
-    "title": "업데이트 로그"
-  },
-  "chat": {
-    "description": "{{appName}}는 ChatGPT, Claude, Gemini, OLLaMA WebUI의 최고의 사용 경험을 제공합니다",
-    "title": "{{appName}}: 개인용 AI 생산성 도구, 더 똑똑한 두뇌를 위한 선택"
-  },
-  "discover": {
-    "assistants": {
-      "description": "콘텐츠 제작, 카피라이팅, Q&A, 이미지 생성, 영상 생성, 음성 생성, 지능형 에이전트, 자동화 워크플로우 등 나만의 AI / GPTs / OLLaMA 스마트 어시스턴트를 맞춤 설정하세요",
-      "title": "어시스턴트 마켓"
-    },
-    "description": "콘텐츠 제작, 카피라이팅, Q&A, 이미지 생성, 영상 생성, 음성 생성, 지능형 에이전트, 자동화 워크플로우, 맞춤형 AI 애플리케이션으로 나만의 AI 워크스테이션을 구축하세요",
-    "mcp": {
-      "description": "수천 개의 MCP 서버를 검색, 비교 및 연결하여 AI 시스템이 파일 시스템, 데이터베이스, API 등 핵심 리소스에 쉽게 접근할 수 있도록 지원하고 AI 역량을 확장하세요",
-      "title": "MCP 서버 마켓"
-    },
-    "models": {
-      "description": "OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek 등 주요 AI 모델을 탐색하세요",
-      "title": "모델 마켓"
-    },
-    "plugins": {
-      "description": "차트 생성, 학술, 이미지 생성, 영상 생성, 음성 생성, 자동화 워크플로우 등 다양한 플러그인을 어시스턴트에 통합하세요",
-      "title": "플러그인 마켓"
-    },
-    "providers": {
-      "description": "OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter 등 주요 모델 제공업체를 탐색하세요",
-      "title": "모델 서비스 마켓"
-    },
-    "search": "검색",
-    "title": "탐색"
-  },
-  "image": {
-    "description": "{{appName}}는 GPT Image, Flux, Midjourney, Stable Diffusion의 최고의 사용 경험을 제공합니다",
-    "title": "AI 그림"
-  },
-  "plugins": {
-    "description": "검색, 차트 생성, 학술, 이미지 생성, 영상 생성, 음성 생성, 자동화 워크플로우 등 ChatGPT / Claude 전용 ToolCall 플러그인 기능을 맞춤 설정하세요",
-    "title": "플러그인 마켓"
-  },
-  "welcome": {
-    "description": "{{appName}}는 ChatGPT, Claude, Gemini, OLLaMA WebUI의 최고의 사용 경험을 제공합니다",
-    "title": "{{appName}}에 오신 것을 환영합니다: 개인용 AI 생산성 도구, 더 똑똑한 두뇌를 위한 선택"
-  }
+  "changelog.description": "{{appName}}의 새로운 기능과 개선 사항을 지속적으로 추적하세요",
+  "changelog.title": "업데이트 로그",
+  "chat.description": "{{appName}}는 ChatGPT, Claude, Gemini, OLLaMA WebUI의 최고의 사용 경험을 제공합니다",
+  "chat.title": "{{appName}} · 협업 에이전트를 위한 플랫폼",
+  "discover.assistants.description": "콘텐츠 제작, 카피라이팅, Q&A, 이미지 생성, 영상 생성, 음성 생성, 지능형 도우미, 자동화 워크플로우 등 나만의 AI / GPTs / OLLaMA 스마트 도우미를 맞춤 설정하세요",
+  "discover.assistants.title": "도우미 커뮤니티",
+  "discover.description": "콘텐츠 제작, 카피라이팅, Q&A, 이미지 생성, 영상 생성, 음성 생성, 지능형 도우미, 자동화 워크플로우, 맞춤형 AI 애플리케이션으로 나만의 AI 워크스테이션을 구축하세요",
+  "discover.mcp.description": "수천 개의 MCP 서버를 검색, 비교 및 연결하여 AI 시스템이 파일 시스템, 데이터베이스, API 등 핵심 리소스에 쉽게 접근할 수 있도록 지원하고 AI 역량을 확장하세요",
+  "discover.mcp.title": "MCP 서버 커뮤니티",
+  "discover.models.description": "OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek 등 주요 AI 모델을 탐색하세요",
+  "discover.models.title": "모델 커뮤니티",
+  "discover.plugins.description": "차트 생성, 학술, 이미지 생성, 영상 생성, 음성 생성, 자동화 워크플로우 등 다양한 기능을 도우미에 통합하세요",
+  "discover.plugins.title": "기능 커뮤니티",
+  "discover.providers.description": "OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter 등 주요 모델 제공업체를 탐색하세요",
+  "discover.providers.title": "모델 서비스 커뮤니티",
+  "discover.search": "검색",
+  "discover.title": "탐색",
+  "image.description": "{{appName}}는 GPT Image, Flux, Midjourney, Stable Diffusion의 최고의 사용 경험을 제공합니다",
+  "image.title": "AI 그림",
+  "plugins.description": "검색, 차트 생성, 학술, 이미지 생성, 영상 생성, 음성 생성, 자동화 워크플로우 등 ChatGPT / Claude 전용 ToolCall 기능 기능을 맞춤 설정하세요",
+  "plugins.title": "기능 커뮤니티",
+  "welcome.description": "{{appName}}는 ChatGPT, Claude, Gemini, OLLaMA WebUI의 최고의 사용 경험을 제공합니다",
+  "welcome.title": "{{appName}}에 오신 것을 환영합니다 · 협업 에이전트를 위한 플랫폼"
 }

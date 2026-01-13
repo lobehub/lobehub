@@ -4,8 +4,10 @@
   "private": true,
   "description": "E2E tests for LobeChat using Cucumber and Playwright",
   "scripts": {
+    "build": "cd .. && bun run build",
     "test": "cucumber-js --config cucumber.config.js",
-    "test:discover": "cucumber-js --config cucumber.config.js src/features/discover/",
+    "test:ci": "bun run build && bun run test",
+    "test:community": "cucumber-js --config cucumber.config.js src/features/community/",
     "test:headed": "HEADLESS=false cucumber-js --config cucumber.config.js",
     "test:routes": "cucumber-js --config cucumber.config.js --tags '@routes'",
     "test:routes:ci": "cucumber-js --config cucumber.config.js --tags '@routes and not @ci-skip'",
@@ -14,6 +16,8 @@
   "dependencies": {
     "@cucumber/cucumber": "^12.2.0",
     "@playwright/test": "^1.57.0",
+    "bcryptjs": "^3.0.3",
+    "pg": "^8.16.0",
     "playwright": "^1.57.0"
   },
   "devDependencies": {

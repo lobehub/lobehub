@@ -1,7 +1,7 @@
 'use client';
 
 import { ClerkProvider } from '@clerk/nextjs';
-import { PropsWithChildren, memo, useEffect, useMemo, useState, useTransition } from 'react';
+import { type PropsWithChildren, memo, useEffect, useMemo, useState, useTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UserUpdater from './UserUpdater';

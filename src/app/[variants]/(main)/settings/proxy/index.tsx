@@ -1,15 +1,19 @@
-'use client';
+import { useTranslation } from 'react-i18next';
+
+import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 
 import ProxyForm from './features/ProxyForm';
 
-const ProxySettings = () => {
+const Page = () => {
+  const { t } = useTranslation('setting');
   return (
-    <div style={{ maxWidth: '1024px', width: '100%' }}>
+    <>
+      <SettingHeader title={t('tab.proxy')} />
       <ProxyForm />
-    </div>
+    </>
   );
 };
 
-ProxySettings.displayName = 'ProxySettings';
+Page.displayName = 'ProxySetting';
 
-export default ProxySettings;
+export default Page;

@@ -62,7 +62,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             click: () => {
               this.app.updaterManager.checkForUpdates({ manual: true });
             },
-            label: t('common.checkUpdates') || '检查更新',
+            label: t('common.checkUpdates'),
           },
           { type: 'separator' },
           {
@@ -100,6 +100,36 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
           { accelerator: 'Ctrl+-', label: t('view.zoomOut'), role: 'zoomOut' },
           { type: 'separator' },
           { accelerator: 'F11', label: t('view.toggleFullscreen'), role: 'togglefullscreen' },
+        ],
+      },
+      {
+        label: t('history.title'),
+        submenu: [
+          {
+            accelerator: 'Alt+Left',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoBack');
+            },
+            label: t('history.back'),
+          },
+          {
+            accelerator: 'Alt+Right',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoForward');
+            },
+            label: t('history.forward'),
+          },
+          { type: 'separator' },
+          {
+            accelerator: 'Ctrl+Shift+H',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('navigate', { path: '/' });
+            },
+            label: t('history.home'),
+          },
         ],
       },
       {

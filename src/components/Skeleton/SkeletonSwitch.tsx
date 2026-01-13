@@ -1,4 +1,4 @@
-import { Skeleton } from 'antd';
+import { Skeleton } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
 
 const switchLoading = cx(css`

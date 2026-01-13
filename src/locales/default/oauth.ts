@@ -1,64 +1,41 @@
-const oauth = {
-  consent: {
-    buttons: {
-      accept: '授权',
-      deny: '拒绝',
-    },
-    description: '应用 {{clientName}} 申请您的账户授权',
-
-    error: {
-      sessionInvalid: {
-        message: '授权会话已过期或无效，请重新发起授权流程。',
-        title: '授权会话无效',
-      },
-      title: '发生错误',
-      unsupportedInteraction: {
-        message: '不支持的交互类型: {promptName}',
-        title: '不支持的交互类型',
-      },
-    },
-    permissionsTitle: '请求以下权限：',
-    redirectUri: '授权成功后将重定向到',
-    redirecting: '授权成功，跳转中...',
-    scope: {
-      'email': '访问您的电子邮件地址',
-      'offline_access': '允许客户端访问您的数据',
-      'openid': '使用您的 LobeChat 账户进行身份验证',
-      'profile': '访问您的基本资料信息（名称、头像等）',
-      'sync-read': '读取您的同步数据',
-      'sync-write': '写入并更新您的同步数据',
-    },
-    title: '授权 {{clientName}}',
-  },
-  error: {
-    backToHome: '返回首页',
-    desc: 'OAuth 授权失败，失败原因：{{reason}}',
-    reason: {
-      internal_error: '服务端错误',
-      invalid_request: '无效的请求参数',
-    },
-    title: '授权失败',
-  },
-  handoff: {
-    desc: {
-      processing: '应用正在处理授权，即将跳转下一个页面...',
-      success: '已尝试打开桌面应用。如果应用未自动打开，请手动切换。您可以稍后关闭此浏览器窗口。',
-    },
-    title: {
-      processing: '授权处理中...',
-      success: '授权已完成',
-    },
-  },
-  login: {
-    button: '确认登录',
-    description: '应用 {{clientName}} 申请使用您的账户进行登录',
-    title: '登录 {{clientName}}',
-    userWelcome: '欢迎回来，',
-  },
-  success: {
-    subTitle: '您已成功授权应用访问您的账户，可以关闭该页面了',
-    title: '授权成功',
-  },
+export default {
+  'consent.buttons.accept': 'Authorize',
+  'consent.buttons.deny': 'Deny',
+  'consent.description':
+    'The application {{clientName}} is requesting authorization for your account',
+  'consent.error.sessionInvalid.message':
+    'The authorization session has expired or is invalid. Please restart the authorization process.',
+  'consent.error.sessionInvalid.title': 'Invalid Authorization Session',
+  'consent.error.title': 'An Error Occurred',
+  'consent.error.unknown.message': 'An unknown error occurred while loading authorization details.',
+  'consent.error.unsupportedInteraction.message': 'Unsupported interaction type: {{promptName}}',
+  'consent.error.unsupportedInteraction.title': 'Unsupported Interaction Type',
+  'consent.permissionsTitle': 'Requesting the following permissions:',
+  'consent.redirectUri': 'You will be redirected to after successful authorization',
+  'consent.redirecting': 'Authorization successful, redirecting...',
+  'consent.scope.email': 'Access your email address',
+  'consent.scope.offline_access': 'Allow the client to access your data',
+  'consent.scope.openid': 'Authenticate using your LobeHub account',
+  'consent.scope.profile': 'Access your basic profile information (name, avatar, etc.)',
+  'consent.scope.sync-read': 'Read your synchronized data',
+  'consent.scope.sync-write': 'Write and update your synchronized data',
+  'consent.title': 'Authorize {{clientName}}',
+  'error.backToHome': 'Back to Home',
+  'error.desc': 'OAuth authorization failed, reason: {{reason}}',
+  'error.reason.internal_error': 'Internal Server Error',
+  'error.reason.invalid_request': 'Invalid Request Parameters',
+  'error.title': 'Authorization Failed',
+  'handoff.desc.processing':
+    'The application is processing the authorization and will redirect to the next page soon...',
+  'handoff.desc.success':
+    'An attempt has been made to open the desktop application. If it does not open automatically, please switch manually. You can close this browser window later.',
+  'handoff.title.processing': 'Authorization in progress...',
+  'handoff.title.success': 'Authorization completed',
+  'login.button': 'Confirm Login',
+  'login.description': 'The application {{clientName}} is requesting to use your account for login',
+  'login.title': 'Login to {{clientName}}',
+  'login.userWelcome': 'Welcome back, ',
+  'success.subTitle':
+    'You have successfully authorized the application to access your account. You may now close this page.',
+  'success.title': 'Authorization Successful',
 };
-
-export default oauth;

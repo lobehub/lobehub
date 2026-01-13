@@ -8,7 +8,7 @@ table agents {
   avatar text
   background_color text
   market_identifier text
-  plugins jsonb [default: `[]`]
+  plugins jsonb
   client_id text
   user_id text [not null]
   chat_config jsonb
@@ -19,8 +19,10 @@ table agents {
   system_role text
   tts jsonb
   virtual boolean [default: false]
+  pinned boolean
   opening_message text
   opening_questions text[] [default: `[]`]
+  session_group_id text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -31,6 +33,7 @@ table agents {
     user_id [name: 'agents_user_id_idx']
     title [name: 'agents_title_idx']
     description [name: 'agents_description_idx']
+    session_group_id [name: 'agents_session_group_id_idx']
   }
 }
 
@@ -64,6 +67,37 @@ table agents_knowledge_bases {
   }
 }
 
+table agent_cron_jobs {
+  id text [pk, not null]
+  agent_id text [not null]
+  group_id text
+  user_id text [not null]
+  name text
+  description text
+  enabled boolean [default: true]
+  cron_pattern text [not null]
+  timezone text [default: 'UTC']
+  content text [not null]
+  edit_data jsonb
+  max_executions integer
+  remaining_executions integer
+  execution_conditions jsonb
+  last_executed_at timestamp
+  total_executions integer [default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    agent_id [name: 'agent_cron_jobs_agent_id_idx']
+    group_id [name: 'agent_cron_jobs_group_id_idx']
+    user_id [name: 'agent_cron_jobs_user_id_idx']
+    enabled [name: 'agent_cron_jobs_enabled_idx']
+    remaining_executions [name: 'agent_cron_jobs_remaining_executions_idx']
+    last_executed_at [name: 'agent_cron_jobs_last_executed_at_idx']
+  }
+}
+
 table ai_models {
   id varchar(150) [not null]
   display_name varchar(200)
@@ -88,6 +122,7 @@ table ai_models {
 
   indexes {
     (id, provider_id, user_id) [pk]
+    user_id [name: 'ai_models_user_id_idx']
   }
 }
 
@@ -111,6 +146,7 @@ table ai_providers {
 
   indexes {
     (id, user_id) [pk]
+    user_id [name: 'ai_providers_user_id_idx']
   }
 }
 
@@ -167,6 +203,25 @@ table accounts {
   }
 }
 
+table passkey {
+  aaguid text
+  backedUp boolean
+  counter integer
+  createdAt timestamp [default: `now()`]
+  credentialID text [not null]
+  deviceType text
+  id text [pk, not null]
+  name text
+  publicKey text [not null]
+  transports text
+  userId text [not null]
+
+  indexes {
+    credentialID [name: 'passkey_credential_id_unique', unique]
+    userId [name: 'passkey_user_id_idx']
+  }
+}
+
 table auth_sessions {
   created_at timestamp [not null, default: `now()`]
   expires_at timestamp [not null]
@@ -212,6 +267,10 @@ table chat_groups {
   id text [pk, not null]
   title text
   description text
+  avatar text
+  background_color text
+  content text
+  editor_data jsonb
   config jsonb
   client_id text
   user_id text [not null]
@@ -246,6 +305,7 @@ table chat_groups_agents {
 table documents {
   id varchar(255) [pk, not null]
   title text
+  description text
   content text
   file_type varchar(255) [not null]
   filename text
@@ -256,6 +316,7 @@ table documents {
   source_type text [not null]
   source text [not null]
   file_id text
+  knowledge_base_id text
   parent_id varchar(255)
   user_id text [not null]
   client_id text
@@ -272,6 +333,7 @@ table documents {
     user_id [name: 'documents_user_id_idx']
     file_id [name: 'documents_file_id_idx']
     parent_id [name: 'documents_parent_id_idx']
+    knowledge_base_id [name: 'documents_knowledge_base_id_idx']
     (client_id, user_id) [name: 'documents_client_id_user_id_unique', unique]
     (slug, user_id) [name: 'documents_slug_user_id_unique', unique]
   }
@@ -421,6 +483,9 @@ table message_groups {
   parent_message_id text
   title varchar(255)
   description text
+  type text
+  content text
+  editor_data jsonb
   client_id varchar(255)
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -429,6 +494,7 @@ table message_groups {
   indexes {
     (client_id, user_id) [name: 'message_groups_client_id_user_id_unique', unique]
     topic_id [name: 'message_groups_topic_id_idx']
+    type [name: 'message_groups_type_idx']
   }
 }
 
@@ -447,6 +513,7 @@ table message_plugins {
 
   indexes {
     (client_id, user_id) [name: 'message_plugins_client_id_user_id_unique', unique]
+    tool_call_id [name: 'message_plugins_tool_call_id_idx']
   }
 }
 
@@ -507,6 +574,7 @@ table messages {
   role varchar(255) [not null]
   content text
   editor_data jsonb
+  summary text
   reasoning jsonb
   search jsonb
   metadata jsonb
@@ -997,6 +1065,9 @@ table threads {
   source_message_id text
   parent_thread_id text
   client_id text
+  agent_id text
+  group_id text
+  metadata jsonb
   user_id text [not null]
   last_active_at "timestamp with time zone" [default: `now()`]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
@@ -1006,6 +1077,8 @@ table threads {
   indexes {
     (client_id, user_id) [name: 'threads_client_id_user_id_unique', unique]
     topic_id [name: 'threads_topic_id_idx']
+    agent_id [name: 'threads_agent_id_idx']
+    group_id [name: 'threads_group_id_idx']
   }
 }
 
@@ -1017,6 +1090,22 @@ table topic_documents {
 
   indexes {
     (document_id, topic_id) [pk]
+  }
+}
+
+table topic_shares {
+  id text [pk, not null]
+  topic_id text [not null]
+  user_id text [not null]
+  visibility text [not null, default: 'private']
+  page_view_count integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    topic_id [name: 'topic_shares_topic_id_unique', unique]
+    user_id [name: 'topic_shares_user_id_idx']
   }
 }
 
@@ -1033,6 +1122,8 @@ table topics {
   client_id text
   history_summary text
   metadata jsonb
+  trigger text
+  mode text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1075,6 +1166,7 @@ table user_settings {
   system_agent jsonb
   default_agent jsonb
   market jsonb
+  memory jsonb
   tool jsonb
   image jsonb
 }
@@ -1089,7 +1181,9 @@ table users {
   first_name text
   last_name text
   full_name text
+  interests "varchar(64)[]"
   is_onboarded boolean [default: false]
+  onboarding jsonb
   clerk_created_at "timestamp with time zone"
   email_verified boolean [not null, default: false]
   email_verified_at "timestamp with time zone"
@@ -1150,7 +1244,6 @@ table user_memories_contexts {
   associated_objects jsonb
   associated_subjects jsonb
   title text
-  title_vector vector(1024)
   description text
   description_vector vector(1024)
   type varchar(255)
@@ -1163,7 +1256,6 @@ table user_memories_contexts {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    title_vector [name: 'user_memories_contexts_title_vector_index']
     description_vector [name: 'user_memories_contexts_description_vector_index']
     type [name: 'user_memories_contexts_type_index']
     user_id [name: 'user_memories_contexts_user_id_index']
@@ -1250,6 +1342,8 @@ table user_memories_preferences {
 }
 
 ref: accounts.user_id > users.id
+
+ref: passkey.userId > users.id
 
 ref: auth_sessions.user_id > users.id
 

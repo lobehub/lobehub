@@ -7,8 +7,8 @@ import {
   SiPython,
 } from '@icons-pack/react-simple-icons';
 import { AutoComplete, type AutoCompleteProps } from '@lobehub/ui';
-import { FC, memo } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { Flexbox } from '@lobehub/ui';
+import { type FC, memo } from 'react';
 
 // 定义预设的命令选项
 const STDIO_COMMAND_OPTIONS: {

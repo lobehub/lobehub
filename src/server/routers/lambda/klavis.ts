@@ -1,4 +1,4 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { z } from 'zod';
 
 import { PluginModel } from '@/database/models/plugin';
@@ -36,7 +36,7 @@ export const klavisRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { serverName, userId, identifier } = input;
 
-      // 创建单个服务器实例
+      // Create a single server instance
       const response = await ctx.klavisClient.mcpServer.createServerInstance({
         serverName: serverName as any,
         userId,
@@ -44,11 +44,11 @@ export const klavisRouter = router({
 
       const { serverUrl, instanceId, oauthUrl } = response;
 
-      // 获取该服务器的工具列表
+      // Get the tool list for this server
       const toolsResponse = await ctx.klavisClient.mcpServer.getTools(serverName as any);
       const tools = toolsResponse.tools || [];
 
-      // 保存到数据库，使用传入的 identifier（格式：小写，空格替换为连字符）
+      // Save to database using the provided identifier (format: lowercase, spaces replaced with hyphens)
       const manifest: LobeChatPluginManifest = {
         api: tools.map((tool: any) => ({
           description: tool.description || '',
@@ -58,14 +58,14 @@ export const klavisRouter = router({
         identifier,
         meta: {
           avatar: '🔌',
-          description: `Klavis MCP Server: ${serverName}`,
+          description: `LobeHub Mcp Server: ${serverName}`,
           title: serverName,
         },
         type: 'default',
       };
 
-      // 保存到数据库，包含 oauthUrl 和 isAuthenticated 状态
-      const isAuthenticated = !oauthUrl; // 如果没有 oauthUrl，说明不需要认证或已认证
+      // Save to database with oauthUrl and isAuthenticated status
+      const isAuthenticated = !oauthUrl; // If there's no oauthUrl, authentication is not required or already authenticated
       await ctx.pluginModel.create({
         customParams: {
           klavis: {
@@ -104,10 +104,10 @@ export const klavisRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // 调用 Klavis API 删除服务器实例
+      // Call Klavis API to delete server instance
       await ctx.klavisClient.mcpServer.deleteServerInstance(input.instanceId);
 
-      // 从数据库删除（使用 identifier）
+      // Delete from database (using identifier)
       await ctx.pluginModel.delete(input.identifier);
 
       return { success: true };
@@ -200,10 +200,10 @@ export const klavisRouter = router({
       const { identifier, serverName, serverUrl, instanceId, tools, isAuthenticated, oauthUrl } =
         input;
 
-      // 获取现有插件（使用 identifier）
+      // Get existing plugin (using identifier)
       const existingPlugin = await ctx.pluginModel.findById(identifier);
 
-      // 构建包含所有工具的 manifest
+      // Build manifest containing all tools
       const manifest: LobeChatPluginManifest = {
         api: tools.map((tool) => ({
           description: tool.description || '',
@@ -213,7 +213,7 @@ export const klavisRouter = router({
         identifier,
         meta: existingPlugin?.manifest?.meta || {
           avatar: '🔌',
-          description: `Klavis MCP Server: ${serverName}`,
+          description: `LobeHub Mcp Server: ${serverName}`,
           title: serverName,
         },
         type: 'default',
@@ -229,7 +229,7 @@ export const klavisRouter = router({
         },
       };
 
-      // 更新或创建插件
+      // Update or create plugin
       if (existingPlugin) {
         await ctx.pluginModel.update(identifier, { customParams, manifest });
       } else {

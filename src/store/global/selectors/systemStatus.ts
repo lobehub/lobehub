@@ -1,28 +1,45 @@
-import { GlobalState, INITIAL_STATUS } from '../initialState';
+import { type GlobalState, INITIAL_STATUS } from '../initialState';
 
 export const systemStatus = (s: GlobalState) => s.status;
+
+const agentBuilderPanelWidth = (s: GlobalState) => s.status.agentBuilderPanelWidth || 360;
 
 const sessionGroupKeys = (s: GlobalState): string[] =>
   s.status.expandSessionGroupKeys || INITIAL_STATUS.expandSessionGroupKeys;
 
+const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expandTopicGroupKeys;
+
+const topicPageSize = (s: GlobalState): number => s.status.topicPageSize || 20;
+
+const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 10;
+
+const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
+
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
-const showChatSideBar = (s: GlobalState) => !s.status.zenMode && s.status.showChatSideBar;
-const showSessionPanel = (s: GlobalState) => !s.status.zenMode && s.status.showSessionPanel;
+const showRightPanel = (s: GlobalState) => !s.status.zenMode && s.status.showRightPanel;
+const showLeftPanel = (s: GlobalState) => !s.status.zenMode && s.status.showLeftPanel;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
 const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
 const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
-const themeMode = (s: GlobalState) => s.status.themeMode || 'auto';
 const language = (s: GlobalState) => s.status.language || 'auto';
+const modelSwitchPanelGroupMode = (s: GlobalState) =>
+  s.status.modelSwitchPanelGroupMode || 'byProvider';
+const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 430;
+const pageAgentPanelWidth = (s: GlobalState) => s.status.pageAgentPanelWidth || 360;
 
 const showChatHeader = (s: GlobalState) => !s.status.zenMode;
 const inZenMode = (s: GlobalState) => s.status.zenMode;
-const sessionWidth = (s: GlobalState) => s.status.sessionsWidth;
+const leftPanelWidth = (s: GlobalState): number => {
+  const width = s.status.leftPanelWidth;
+  return typeof width === 'string' ? Number.parseInt(width) : width;
+};
 const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
+const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
 const wideScreen = (s: GlobalState) => !s.status.noWideScreen;
@@ -34,7 +51,7 @@ const getAgentSystemRoleExpanded =
   (agentId: string) =>
   (s: GlobalState): boolean => {
     const map = s.status.systemRoleExpandedMap || {};
-    return map[agentId] !== false; // 角色设定默认为展开状态
+    return map[agentId] === true; // 角色设定默认为折叠状态
   };
 
 const disabledModelProvidersSortType = (s: GlobalState) =>
@@ -44,12 +61,15 @@ const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
 export const systemStatusSelectors = {
+  agentBuilderPanelWidth,
+  agentPageSize,
   chatInputHeight,
   disabledModelProvidersSortType,
   disabledModelsSortType,
   expandInputActionbar,
   filePanelWidth,
   getAgentSystemRoleExpanded,
+  groupAgentBuilderPanelWidth,
   hidePWAInstaller,
   imagePanelWidth,
   imageTopicPanelWidth,
@@ -57,20 +77,25 @@ export const systemStatusSelectors = {
   isShowCredit,
   isStatusInit,
   language,
+  leftPanelWidth,
   mobileShowPortal,
   mobileShowTopic,
+  modelSwitchPanelGroupMode,
+  modelSwitchPanelWidth,
+  pageAgentPanelWidth,
+  pagePageSize,
   portalWidth,
   sessionGroupKeys,
-  sessionWidth,
   showChatHeader,
-  showChatSideBar,
   showFilePanel,
   showImagePanel,
   showImageTopicPanel,
-  showSessionPanel,
+  showLeftPanel,
+  showRightPanel,
   showSystemRole,
   systemStatus,
-  themeMode,
   tokenDisplayFormatShort,
+  topicGroupKeys,
+  topicPageSize,
   wideScreen,
 };

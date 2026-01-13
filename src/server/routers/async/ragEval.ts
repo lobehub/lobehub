@@ -2,7 +2,7 @@ import { chainAnswerWithContext } from '@lobechat/prompts';
 import { EvalEvaluationStatus } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { ModelProvider } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { z } from 'zod';
 
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL } from '@/const/settings';
@@ -15,7 +15,7 @@ import {
   EvaluationRecordModel,
 } from '@/database/server/models/ragEval';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { AsyncTaskError } from '@/types/asyncTask';
 
@@ -51,9 +51,11 @@ export const ragEvalRouter = router({
 
       const now = Date.now();
       try {
-        const agentRuntime = await initModelRuntimeWithUserPayload(
+        // Read user's provider config from database
+        const modelRuntime = await initModelRuntimeFromDB(
+          ctx.serverDB,
+          ctx.userId,
           ModelProvider.OpenAI,
-          ctx.jwtPayload,
         );
 
         const { question, languageModel, embeddingModel } = evalRecord;
@@ -61,9 +63,9 @@ export const ragEvalRouter = router({
         let questionEmbeddingId = evalRecord.questionEmbeddingId;
         let context = evalRecord.context;
 
-        // 如果不存在 questionEmbeddingId，那么就需要做一次 embedding
+        // If questionEmbeddingId does not exist, perform an embedding
         if (!questionEmbeddingId) {
-          const embeddings = await agentRuntime.embeddings({
+          const embeddings = await modelRuntime.embeddings({
             dimensions: 1024,
             input: question,
             model: !!embeddingModel ? embeddingModel : DEFAULT_EMBEDDING_MODEL,
@@ -81,7 +83,7 @@ export const ragEvalRouter = router({
           questionEmbeddingId = embeddingId;
         }
 
-        // 如果不存在 context，那么就需要做一次检索
+        // If context does not exist, perform a retrieval
         if (!context || context.length === 0) {
           const datasetRecord = await ctx.datasetRecordModel.findById(evalRecord.datasetRecordId);
 
@@ -97,10 +99,10 @@ export const ragEvalRouter = router({
           await ctx.evalRecordModel.update(evalRecord.id, { context });
         }
 
-        // 做一次生成 LLM 答案生成
+        // Generate LLM answer
         const { messages } = chainAnswerWithContext({ context, knowledge: [], question });
 
-        const response = await agentRuntime.chat({
+        const response = await modelRuntime.chat({
           messages: messages!,
           model: !!languageModel ? languageModel : DEFAULT_MODEL,
           responseMode: 'json',

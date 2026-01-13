@@ -1,15 +1,142 @@
-import { GoogleGenAIOptions } from '@google/genai';
+import { type GoogleGenAIOptions } from '@google/genai';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
-import { ClientSecretPayload } from '@lobechat/types';
+import {
+  type AWSBedrockKeyVault,
+  type AzureOpenAIKeyVault,
+  type ClientSecretPayload,
+  type CloudflareKeyVault,
+  type ComfyUIKeyVault,
+  type OpenAICompatibleKeyVault,
+  type VertexAIKeyVault,
+} from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
 
+import { AiProviderModel } from '@/database/models/aiProvider';
+import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
 
+import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';
 
 export * from './trace';
+
+/**
+ * Combined KeyVaults type for all providers
+ */
+type ProviderKeyVaults = OpenAICompatibleKeyVault &
+  AzureOpenAIKeyVault &
+  AWSBedrockKeyVault &
+  CloudflareKeyVault &
+  ComfyUIKeyVault &
+  VertexAIKeyVault;
+
+/**
+ * Resolve the runtime provider for a given provider.
+ *
+ * This is the server-side equivalent of the frontend's resolveRuntimeProvider function.
+ * For builtin providers, returns the provider as-is.
+ * For custom providers, returns the sdkType from settings (defaults to 'openai').
+ *
+ * @param provider - The provider id
+ * @param sdkType - The sdkType from provider settings
+ * @returns The resolved runtime provider
+ */
+const resolveRuntimeProvider = (provider: string, sdkType?: string): string => {
+  const isBuiltin = Object.values(ModelProvider).includes(provider as ModelProvider);
+  if (isBuiltin) return provider;
+
+  return sdkType || 'openai';
+};
+
+/**
+ * Build ClientSecretPayload from keyVaults stored in database
+ *
+ * This is the server-side equivalent of the frontend's getProviderAuthPayload function.
+ * It converts the keyVaults object from database to the ClientSecretPayload format
+ * expected by initModelRuntimeWithUserPayload.
+ *
+ * For custom providers, we use runtimeProvider (sdkType) to determine which fields
+ * to include in the payload. This ensures that provider-specific fields like
+ * cloudflareBaseURLOrAccountID or azureApiVersion are correctly forwarded.
+ *
+ * @param keyVaults - The keyVaults object from database (already decrypted)
+ * @param runtimeProvider - The runtime provider (sdkType) to use for building payload
+ * @returns ClientSecretPayload for the provider
+ */
+export const buildPayloadFromKeyVaults = (
+  keyVaults: ProviderKeyVaults,
+  runtimeProvider: string,
+): ClientSecretPayload => {
+  // Use runtimeProvider to determine which fields to include
+  // This handles both builtin providers and custom providers with sdkType
+  switch (runtimeProvider) {
+    case ModelProvider.Bedrock: {
+      const { accessKeyId, region, secretAccessKey, sessionToken } = keyVaults;
+      const apiKey = (secretAccessKey || '') + (accessKeyId || '');
+
+      return {
+        apiKey,
+        awsAccessKeyId: accessKeyId,
+        awsRegion: region,
+        awsSecretAccessKey: secretAccessKey,
+        awsSessionToken: sessionToken,
+        runtimeProvider,
+      };
+    }
+
+    case ModelProvider.Azure: {
+      return {
+        apiKey: keyVaults.apiKey,
+        azureApiVersion: keyVaults.apiVersion,
+        baseURL: keyVaults.baseURL || keyVaults.endpoint,
+        runtimeProvider,
+      };
+    }
+
+    case ModelProvider.Ollama: {
+      return { baseURL: keyVaults.baseURL, runtimeProvider };
+    }
+
+    case ModelProvider.Cloudflare: {
+      return {
+        apiKey: keyVaults.apiKey,
+        cloudflareBaseURLOrAccountID: keyVaults.baseURLOrAccountID,
+        runtimeProvider,
+      };
+    }
+
+    case ModelProvider.ComfyUI: {
+      return {
+        apiKey: keyVaults.apiKey,
+        authType: keyVaults.authType,
+        baseURL: keyVaults.baseURL,
+        customHeaders: keyVaults.customHeaders,
+        password: keyVaults.password,
+        runtimeProvider,
+        username: keyVaults.username,
+      };
+    }
+
+    case ModelProvider.VertexAI: {
+      return {
+        apiKey: keyVaults.apiKey,
+        baseURL: keyVaults.baseURL,
+        runtimeProvider,
+        vertexAIRegion: keyVaults.region,
+      };
+    }
+
+    default: {
+      return {
+        apiKey: keyVaults.apiKey,
+        baseURL: keyVaults.baseURL,
+        runtimeProvider,
+      };
+    }
+  }
+};
 
 /**
  * Retrieves the options object from environment and apikeymanager
@@ -23,6 +150,10 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
   const llmConfig = getLLMConfig() as Record<string, any>;
 
   switch (provider) {
+    case ModelProvider.LobeHub: {
+      return { apikey: payload.apiKey, baseURL: payload.baseURL, ...payload };
+    }
+
     case ModelProvider.VertexAI: {
       return {};
     }
@@ -171,7 +302,10 @@ const buildVertexOptions = (
 
   const project = projectFromParams || projectFromCredentials || projectFromEnv;
   const location =
-    (params.location as string | undefined) || payload.vertexAIRegion || process.env.VERTEXAI_LOCATION || undefined;
+    (params.location as string | undefined) ||
+    payload.vertexAIRegion ||
+    process.env.VERTEXAI_LOCATION ||
+    undefined;
 
   const googleAuthOptions = params.googleAuthOptions || (credentials ? { credentials } : undefined);
 
@@ -212,4 +346,50 @@ export const initModelRuntimeWithUserPayload = (
     ...getParamsFromPayload(runtimeProvider, payload),
     ...params,
   });
+};
+
+/**
+ * Initialize ModelRuntime by reading user's provider configuration from database
+ *
+ * This function replaces the pattern of passing userPayload from frontend.
+ * It reads the user's AI provider configuration from the database, decrypts
+ * the keyVaults, and initializes the ModelRuntime.
+ *
+ * @param db - The database instance
+ * @param userId - The user ID
+ * @param provider - The model provider (e.g., 'openai', 'azure')
+ * @returns Promise<ModelRuntime> - The initialized ModelRuntime instance
+ *
+ * @example
+ * ```typescript
+ * const modelRuntime = await initModelRuntimeFromDB(db, userId, 'openai');
+ * const response = await modelRuntime.chat({ messages, model });
+ * ```
+ */
+export const initModelRuntimeFromDB = async (
+  db: LobeChatDatabase,
+  userId: string,
+  provider: string,
+): Promise<ModelRuntime> => {
+  // 1. Get user's provider configuration from database
+  const aiProviderModel = new AiProviderModel(db, userId);
+
+  // Use getAiProviderById with KeyVaultsGateKeeper.getUserKeyVaults as decryptor
+  const providerConfig = await aiProviderModel.getAiProviderById(
+    provider,
+    KeyVaultsGateKeeper.getUserKeyVaults,
+  );
+
+  // 2. Resolve the runtime provider for custom providers
+  // For custom providers, use sdkType from settings (defaults to 'openai')
+  const sdkType = providerConfig?.settings?.sdkType;
+  const runtimeProvider = resolveRuntimeProvider(provider, sdkType);
+
+  // 3. Build ClientSecretPayload from keyVaults based on runtimeProvider
+  // This ensures provider-specific fields (e.g., cloudflareBaseURLOrAccountID) are included
+  const keyVaults = (providerConfig?.keyVaults || {}) as ProviderKeyVaults;
+  const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
+
+  // 4. Initialize ModelRuntime with the payload
+  return initModelRuntimeWithUserPayload(provider, payload);
 };

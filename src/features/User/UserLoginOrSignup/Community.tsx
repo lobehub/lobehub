@@ -1,8 +1,7 @@
 import { useAnalytics } from '@lobehub/analytics/react';
-import { Button } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import UserInfo from '../UserInfo';
 

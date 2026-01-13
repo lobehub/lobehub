@@ -1,4 +1,4 @@
-import { Modal, Segmented, SegmentedProps } from '@lobehub/ui';
+import { Modal, Segmented, type SegmentedProps } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
@@ -9,11 +9,11 @@ import { pluginHelpers } from '@/store/tool';
 import APIs from './APIs';
 import Meta from './Meta';
 
-interface PluginDetailModalProps {
+export interface PluginDetailModalProps {
   id: string;
   onClose: () => void;
   onTabChange?: (key: string) => void;
-  open?: boolean;
+  open: boolean;
   schema: any;
   tab?: string;
 }

@@ -1,8 +1,8 @@
-import { ClientSecretPayload } from '@lobechat/types';
+import { type ClientSecretPayload } from '@lobechat/types';
 import { parse } from 'cookie';
 import debug from 'debug';
-import { User } from 'next-auth';
-import { NextRequest } from 'next/server';
+import { type User } from 'next-auth';
+import { type NextRequest } from 'next/server';
 
 import {
   LOBE_CHAT_AUTH_HEADER,
@@ -10,13 +10,25 @@ import {
   enableBetterAuth,
   enableClerk,
   enableNextAuth,
-} from '@/const/auth';
-import { oidcEnv } from '@/envs/oidc';
-import { ClerkAuth, IClerkAuth } from '@/libs/clerk-auth';
+ authEnv } from '@/envs/auth';
+import { ClerkAuth, type IClerkAuth } from '@/libs/clerk-auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
+
+const extractClientIp = (request: NextRequest): string | undefined => {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const ip = forwardedFor.split(',')[0]?.trim();
+    if (ip) return ip;
+  }
+
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+
+  return undefined;
+};
 
 export interface OIDCAuth {
   // Other OIDC information that might be needed (optional, as payload contains all info)
@@ -30,6 +42,7 @@ export interface OIDCAuth {
 export interface AuthContext {
   authorizationHeader?: string | null;
   clerkAuth?: IClerkAuth;
+  clientIp?: string | null;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
   nextAuth?: User;
@@ -47,6 +60,7 @@ export interface AuthContext {
 export const createContextInner = async (params?: {
   authorizationHeader?: string | null;
   clerkAuth?: IClerkAuth;
+  clientIp?: string | null;
   marketAccessToken?: string;
   nextAuth?: User;
   oidcAuth?: OIDCAuth | null;
@@ -59,6 +73,7 @@ export const createContextInner = async (params?: {
   return {
     authorizationHeader: params?.authorizationHeader,
     clerkAuth: params?.clerkAuth,
+    clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     nextAuth: params?.nextAuth,
     oidcAuth: params?.oidcAuth,
@@ -92,6 +107,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   const authorization = request.headers.get(LOBE_CHAT_AUTH_HEADER);
   const userAgent = request.headers.get('user-agent') || undefined;
+  const clientIp = extractClientIp(request);
 
   // get marketAccessToken from cookies
   const cookieHeader = request.headers.get('cookie');
@@ -101,6 +117,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   log('marketAccessToken from cookie:', marketAccessToken ? '[HIDDEN]' : 'undefined');
   const commonContext = {
     authorizationHeader: authorization,
+    clientIp,
     marketAccessToken,
     userAgent,
   };
@@ -111,11 +128,9 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   let oidcAuth = null;
 
   // Prioritize checking for OIDC authentication (both standard Authorization and custom Oidc-Auth headers)
-  if (oidcEnv.ENABLE_OIDC) {
+  if (authEnv.ENABLE_OIDC) {
     log('OIDC enabled, attempting OIDC authentication');
-    const standardAuthorization = request.headers.get('Authorization');
     const oidcAuthToken = request.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
-    log('Standard Authorization header: %s', standardAuthorization ? 'exists' : 'not found');
     log('Oidc-Auth header: %s', oidcAuthToken ? 'exists' : 'not found');
 
     try {

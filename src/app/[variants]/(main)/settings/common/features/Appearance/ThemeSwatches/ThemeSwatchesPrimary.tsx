@@ -1,4 +1,4 @@
-import { ColorSwatches, PrimaryColors, findCustomThemeName, primaryColors } from '@lobehub/ui';
+import { ColorSwatches, type PrimaryColors, findCustomThemeName, primaryColors } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

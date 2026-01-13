@@ -3,7 +3,8 @@ description: 当要做 electron 相关工作时
 globs:
 alwaysApply: false
 ---
-**桌面端新功能实现指南**
+
+# 桌面端新功能实现指南
 
 ## 桌面端应用架构概述
 
@@ -26,6 +27,7 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 ### 1. 确定功能需求与设计
 
 首先确定新功能的需求和设计，包括：
+
 - 功能描述和用例
 - 是否需要系统级API（如文件系统、网络等）
 - UI/UX设计（如必要）
@@ -37,10 +39,10 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
    - 位置：`apps/desktop/src/main/controllers/`
    - 示例：创建 `NewFeatureCtr.ts`
    - 需继承 `ControllerModule`，并设置 `static readonly groupName`（例如 `static override readonly groupName = 'newFeature';`）
-   - 按 `_template.ts` 模板格式实现，并在 `apps/desktop/src/main/controllers/registry.ts` 的 `controllerIpcConstructors`（或 `controllerServerIpcConstructors`）中注册，保证类型推导与自动装配
+   - 按 `_template.ts` 模板格式实现，并在 `apps/desktop/src/main/controllers/registry.ts` 的 `controllerIpcConstructors` 中注册，保证类型推导与自动装配
 
 2. **定义 IPC 事件处理器**
-   - 使用 `@IpcMethod()` 装饰器暴露渲染进程可访问的通道，或使用 `@IpcServerMethod()` 声明仅供 Next.js 服务器调用的 IPC
+   - 使用 `@IpcMethod()` 装饰器暴露渲染进程可访问的通道
    - 通道名称基于 `groupName.methodName` 自动生成，不再手动拼接字符串
    - 处理函数可通过 `getIpcContext()` 获取 `sender`、`event` 等上下文信息，并按照需要返回结构化结果
 
@@ -64,8 +66,9 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
    ```typescript
    // src/services/electron/newFeatureService.ts
-   import { ensureElectronIpc } from '@/utils/electron/ipc';
    import type { NewFeatureParams } from '@lobechat/electron-client-ipc';
+
+   import { ensureElectronIpc } from '@/utils/electron/ipc';
 
    const ipc = ensureElectronIpc();
 
@@ -84,7 +87,7 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
 ### 5. 如果是新增内置工具，遵循工具实现流程
 
-参考 [desktop-local-tools-implement.mdc](mdc:desktop-local-tools-implement.mdc) 了解更多关于添加内置工具的详细步骤。
+参考 `desktop-local-tools-implement.mdc` 了解更多关于添加内置工具的详细步骤。
 
 ### 6. 添加测试
 
@@ -120,12 +123,13 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
 ```typescript
 // apps/desktop/src/main/controllers/NotificationCtr.ts
-import { Notification } from 'electron';
-import { ControllerModule, IpcMethod } from '@/controllers';
 import type {
   DesktopNotificationResult,
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
+import { Notification } from 'electron';
+
+import { ControllerModule, IpcMethod } from '@/controllers';
 
 export default class NotificationCtr extends ControllerModule {
   static override readonly groupName = 'notification';

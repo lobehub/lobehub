@@ -1,38 +1,36 @@
 'use client';
 
-import { Form, type FormGroupItemType, Icon, ImageSelect, InputPassword } from '@lobehub/ui';
-import { Select } from '@lobehub/ui';
-import { Segmented, Skeleton } from 'antd';
+import { Form, type FormGroupItemType, Icon, ImageSelect } from '@lobehub/ui';
+import { Select, Skeleton } from '@lobehub/ui';
+import { Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
+import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
+import { isDesktop } from '@/const/version';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { LocaleMode } from '@/types/locale';
+import { type LocaleMode } from '@/types/locale';
 
 const Common = memo(() => {
   const { t } = useTranslation('setting');
 
-  const showAccessCodeConfig = useServerConfigStore(serverConfigSelectors.enabledAccessCode);
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
-  const themeMode = useGlobalStore(systemStatusSelectors.themeMode);
+  const { theme, setTheme } = useNextThemesTheme();
   const language = useGlobalStore(systemStatusSelectors.language);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
-  const [setThemeMode, switchLocale, isStatusInit] = useGlobalStore((s) => [
-    s.switchThemeMode,
-    s.switchLocale,
-    s.isStatusInit,
-  ]);
+  const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
   const [loading, setLoading] = useState(false);
+
+  // Use the theme value from next-themes, default to 'system'
+  const currentTheme = theme || 'system';
 
   const handleLangChange = (value: LocaleMode) => {
     switchLocale(value);
@@ -41,13 +39,13 @@ const Common = memo(() => {
   if (!(isStatusInit && isUserStateInit))
     return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
-  const theme: FormGroupItemType = {
+  const themeFormGroup: FormGroupItemType = {
     children: [
       {
         children: (
           <ImageSelect
             height={60}
-            onChange={setThemeMode}
+            onChange={(value) => setTheme(value === 'auto' ? 'system' : value)}
             options={[
               {
                 icon: Sun,
@@ -65,11 +63,11 @@ const Common = memo(() => {
                 icon: Monitor,
                 img: imageUrl('theme_auto.webp'),
                 label: t('settingCommon.themeMode.auto'),
-                value: 'auto',
+                value: 'system',
               },
             ]}
-            unoptimized={false}
-            value={themeMode}
+            unoptimized={isDesktop}
+            value={currentTheme}
             width={100}
           />
         ),
@@ -138,15 +136,33 @@ const Common = memo(() => {
 
       {
         children: (
-          <InputPassword
-            autoComplete={'new-password'}
-            placeholder={t('settingSystem.accessCode.placeholder')}
+          <Select
+            options={[
+              { label: t('settingCommon.responseLanguage.auto'), value: '' },
+              ...localeOptions,
+            ]}
+            placeholder={t('settingCommon.responseLanguage.placeholder')}
           />
         ),
-        desc: t('settingSystem.accessCode.desc'),
-        hidden: !showAccessCodeConfig,
-        label: t('settingSystem.accessCode.title'),
-        name: 'password',
+        desc: t('settingCommon.responseLanguage.desc'),
+        label: t('settingCommon.responseLanguage.title'),
+        name: 'responseLanguage',
+      },
+      {
+        children: <Switch />,
+        desc: t('settingCommon.liteMode.desc'),
+        label: t('settingCommon.liteMode.title'),
+        minWidth: undefined,
+        name: 'isLiteMode',
+        valuePropName: 'checked',
+      },
+      {
+        children: <Switch />,
+        desc: t('settingCommon.devMode.desc'),
+        label: t('settingCommon.devMode.title'),
+        minWidth: undefined,
+        name: 'isDevMode',
+        valuePropName: 'checked',
       },
     ],
     extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
@@ -155,15 +171,16 @@ const Common = memo(() => {
 
   return (
     <Form
+      collapsible={false}
       initialValues={general}
-      items={[theme]}
+      items={[themeFormGroup]}
       itemsType={'group'}
       onValuesChange={async (v) => {
         setLoading(true);
         await setSettings({ general: v });
         setLoading(false);
       }}
-      variant={'borderless'}
+      variant={'filled'}
       {...FORM_STYLE}
     />
   );

@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "比例",
-      "lock": "鎖定寬高比",
-      "unlock": "解鎖寬高比"
-    },
-    "cfg": {
-      "label": "引導強度"
-    },
-    "header": {
-      "desc": "簡單描述，即刻創作",
-      "title": "繪畫"
-    },
-    "height": {
-      "label": "高度"
-    },
-    "imageNum": {
-      "label": "圖片數量"
-    },
-    "imageUrl": {
-      "label": "參考圖"
-    },
-    "imageUrls": {
-      "label": "參考圖"
-    },
-    "model": {
-      "label": "模型"
-    },
-    "prompt": {
-      "placeholder": "描述你想要生成的內容"
-    },
-    "quality": {
-      "label": "圖片品質",
-      "options": {
-        "hd": "高清",
-        "standard": "標準"
-      }
-    },
-    "resolution": {
-      "label": "解析度",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "種子",
-      "random": "隨機種子"
-    },
-    "size": {
-      "label": "尺寸"
-    },
-    "steps": {
-      "label": "步數"
-    },
-    "title": "AI 繪畫",
-    "width": {
-      "label": "寬度"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "應用種子",
-      "copyError": "複製錯誤訊息",
-      "copyPrompt": "複製提示詞",
-      "copySeed": "複製種子",
-      "delete": "刪除",
-      "deleteBatch": "刪除批次",
-      "download": "下載",
-      "downloadFailed": "下載圖片失敗",
-      "errorCopied": "錯誤訊息已複製到剪貼簿",
-      "errorCopyFailed": "複製錯誤訊息失敗",
-      "generate": "生成",
-      "promptCopied": "提示詞已複製到剪貼簿",
-      "promptCopyFailed": "複製提示詞失敗",
-      "reuseSettings": "重用設定",
-      "seedApplied": "種子已應用到配置",
-      "seedApplyFailed": "應用種子失敗",
-      "seedCopied": "種子已複製到剪貼簿",
-      "seedCopyFailed": "複製種子失敗"
-    },
-    "metadata": {
-      "count": "{{count}} 張圖片"
-    },
-    "status": {
-      "failed": "生成失敗",
-      "generating": "生成中..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "當前部署實例為客戶端資料庫模式，無法使用 AI 圖像生成功能。請切換到<1>服務端資料庫部署模式</1>，或直接使用 <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "與檔案管理系統深度整合，生成的圖片自動保存到檔案系統，支援統一管理和組織",
-        "title": "檔案系統互通"
-      },
-      "llmAssisted": {
-        "desc": "結合大型語言模型能力，智能優化和擴展提示詞，提升圖像生成品質（即將推出）",
-        "title": "LLM 輔助生圖"
-      },
-      "multiProviders": {
-        "desc": "支援多種 AI 繪畫服務商，包括 OpenAI gpt-image-1、Google Imagen、FAL.ai 等，提供豐富的模型選擇",
-        "title": "多 Providers 支援"
-      }
-    },
-    "title": "當前部署模式不支援 AI 繪畫"
-  },
-  "topic": {
-    "createNew": "新建主題",
-    "deleteConfirm": "刪除生成主題",
-    "deleteConfirmDesc": "即將刪除該生成主題，刪除後將無法復原，請謹慎操作。",
-    "empty": "暫無生成主題",
-    "title": "繪畫主題",
-    "untitled": "預設主題"
-  }
+  "config.aspectRatio.label": "比例",
+  "config.aspectRatio.lock": "鎖定寬高比",
+  "config.aspectRatio.unlock": "解鎖寬高比",
+  "config.cfg.label": "引導強度",
+  "config.header.desc": "簡單描述，即刻創作",
+  "config.header.title": "繪畫",
+  "config.height.label": "高度",
+  "config.imageNum.label": "圖片數量",
+  "config.imageUrl.label": "參考圖",
+  "config.imageUrls.label": "參考圖",
+  "config.model.label": "模型",
+  "config.prompt.placeholder": "描述你想要生成的內容",
+  "config.quality.label": "圖片品質",
+  "config.quality.options.hd": "高清",
+  "config.quality.options.standard": "標準",
+  "config.resolution.label": "解析度",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "種子",
+  "config.seed.random": "隨機種子",
+  "config.size.label": "尺寸",
+  "config.steps.label": "步數",
+  "config.title": "AI 繪畫",
+  "config.width.label": "寬度",
+  "generation.actions.applySeed": "應用種子",
+  "generation.actions.copyError": "複製錯誤訊息",
+  "generation.actions.copyPrompt": "複製提示詞",
+  "generation.actions.copySeed": "複製種子",
+  "generation.actions.delete": "刪除",
+  "generation.actions.deleteBatch": "刪除批次",
+  "generation.actions.download": "下載",
+  "generation.actions.downloadFailed": "下載圖片失敗",
+  "generation.actions.errorCopied": "錯誤訊息已複製到剪貼簿",
+  "generation.actions.errorCopyFailed": "複製錯誤訊息失敗",
+  "generation.actions.generate": "生成",
+  "generation.actions.promptCopied": "提示詞已複製到剪貼簿",
+  "generation.actions.promptCopyFailed": "複製提示詞失敗",
+  "generation.actions.reuseSettings": "重用設定",
+  "generation.actions.seedApplied": "種子已應用到配置",
+  "generation.actions.seedApplyFailed": "應用種子失敗",
+  "generation.actions.seedCopied": "種子已複製到剪貼簿",
+  "generation.actions.seedCopyFailed": "複製種子失敗",
+  "generation.metadata.count": "{{count}} 張圖片",
+  "generation.status.failed": "生成失敗",
+  "generation.status.generating": "生成中...",
+  "notSupportGuide.desc": "當前部署實例為客戶端資料庫模式，無法使用 AI 圖像生成功能。請切換到<1>服務端資料庫部署模式</1>，或直接使用 <3>LobeChat Cloud</3>",
+  "notSupportGuide.features.fileIntegration.desc": "與檔案管理系統深度整合，生成的圖片自動保存到檔案系統，支援統一管理和組織",
+  "notSupportGuide.features.fileIntegration.title": "檔案系統互通",
+  "notSupportGuide.features.llmAssisted.desc": "結合大型語言模型能力，智能優化和擴展提示詞，提升圖像生成品質（即將推出）",
+  "notSupportGuide.features.llmAssisted.title": "LLM 輔助生圖",
+  "notSupportGuide.features.multiProviders.desc": "支援多種 AI 繪畫服務商，包括 OpenAI gpt-image-1、Google Imagen、FAL.ai 等，提供豐富的模型選擇",
+  "notSupportGuide.features.multiProviders.title": "多 Providers 支援",
+  "notSupportGuide.title": "當前部署模式不支援 AI 繪畫",
+  "topic.createNew": "新建主題",
+  "topic.deleteConfirm": "刪除生成主題",
+  "topic.deleteConfirmDesc": "即將刪除該生成主題，刪除後將無法復原，請謹慎操作。",
+  "topic.empty": "暫無生成主題",
+  "topic.title": "繪畫主題",
+  "topic.untitled": "預設主題"
 }

@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "Нет доступных агентов",
+  "agentSelection.noAvailable": "В данный момент нельзя добавить агентов",
+  "agentSelection.noSelected": "Агенты не выбраны",
+  "agentSelection.search": "Совпадающих агентов не найдено",
+  "project.create": "Новый проект",
+  "project.deleteConfirm": "Этот проект будет удалён и не подлежит восстановлению. Подтвердите, чтобы продолжить.",
+  "starter.createAgent": "Создать агента",
+  "starter.createGroup": "Создать группу",
+  "starter.deepResearch": "Глубокое исследование",
+  "starter.developing": "Скоро появится",
+  "starter.image": "Изображение",
+  "starter.write": "Написать"
+}

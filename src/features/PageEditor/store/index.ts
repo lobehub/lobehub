@@ -1,0 +1,23 @@
+'use client';
+
+import { type StoreApiWithSelector } from '@lobechat/types';
+import { createContext } from 'zustand-utils';
+import { subscribeWithSelector } from 'zustand/middleware';
+import { shallow } from 'zustand/shallow';
+import { createWithEqualityFn } from 'zustand/traditional';
+
+import { type Store, store } from './action';
+import { type State } from './initialState';
+
+export type { PublicState, State } from './initialState';
+
+export const createStore = (initState?: Partial<State>) =>
+  createWithEqualityFn(subscribeWithSelector(store(initState)), shallow);
+
+export const {
+  useStore: usePageEditorStore,
+  useStoreApi,
+  Provider,
+} = createContext<StoreApiWithSelector<Store>>();
+
+export { selectors } from './selectors';

@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Oran",
-      "lock": "En boy oranını kilitle",
-      "unlock": "En boy oranının kilidini aç"
-    },
-    "cfg": {
-      "label": "Yönlendirme Gücü"
-    },
-    "header": {
-      "desc": "Basit açıklama, hemen yarat",
-      "title": "Resim"
-    },
-    "height": {
-      "label": "Yükseklik"
-    },
-    "imageNum": {
-      "label": "Resim Sayısı"
-    },
-    "imageUrl": {
-      "label": "Referans Görsel"
-    },
-    "imageUrls": {
-      "label": "Referans Görseller"
-    },
-    "model": {
-      "label": "Model"
-    },
-    "prompt": {
-      "placeholder": "Oluşturmak istediğiniz içeriği tanımlayın"
-    },
-    "quality": {
-      "label": "Görüntü Kalitesi",
-      "options": {
-        "hd": "Yüksek Çözünürlük",
-        "standard": "Standart"
-      }
-    },
-    "resolution": {
-      "label": "Çözünürlük",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Tohum",
-      "random": "Rastgele Tohum"
-    },
-    "size": {
-      "label": "Boyut"
-    },
-    "steps": {
-      "label": "Adım Sayısı"
-    },
-    "title": "Yapay Zeka Resim",
-    "width": {
-      "label": "Genişlik"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Tohum Uygula",
-      "copyError": "Hata Mesajını Kopyala",
-      "copyPrompt": "İpucunu Kopyala",
-      "copySeed": "Tohumu Kopyala",
-      "delete": "Sil",
-      "deleteBatch": "Toplu Silme",
-      "download": "İndir",
-      "downloadFailed": "Resim indirilemedi",
-      "errorCopied": "Hata mesajı panoya kopyalandı",
-      "errorCopyFailed": "Hata mesajı kopyalanamadı",
-      "generate": "Oluştur",
-      "promptCopied": "İpucu panoya kopyalandı",
-      "promptCopyFailed": "İpucu kopyalanamadı",
-      "reuseSettings": "Ayarları Yeniden Kullan",
-      "seedApplied": "Tohum yapılandırmaya uygulandı",
-      "seedApplyFailed": "Tohum uygulama başarısız oldu",
-      "seedCopied": "Tohum panoya kopyalandı",
-      "seedCopyFailed": "Tohum kopyalanamadı"
-    },
-    "metadata": {
-      "count": "{{count}} resim"
-    },
-    "status": {
-      "failed": "Oluşturma başarısız",
-      "generating": "Oluşturuluyor..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "Mevcut dağıtım örneği istemci veritabanı modundadır, AI resim oluşturma özelliği kullanılamaz. Lütfen <1>sunucu veritabanı dağıtım moduna</1> geçin veya doğrudan <3>LobeChat Cloud</3> kullanın",
-    "features": {
-      "fileIntegration": {
-        "desc": "Dosya yönetim sistemi ile derin entegrasyon, oluşturulan resimler otomatik olarak dosya sistemine kaydedilir, merkezi yönetim ve organizasyon desteklenir",
-        "title": "Dosya Sistemi Entegrasyonu"
-      },
-      "llmAssisted": {
-        "desc": "Büyük dil modeli yetenekleriyle birleşerek ipuçlarını akıllıca optimize eder ve genişletir, resim oluşturma kalitesini artırır (Yakında)",
-        "title": "LLM Destekli Resim Oluşturma"
-      },
-      "multiProviders": {
-        "desc": "OpenAI gpt-image-1, Google Imagen, FAL.ai gibi çeşitli AI resim hizmet sağlayıcılarını destekler, zengin model seçenekleri sunar",
-        "title": "Çoklu Sağlayıcı Desteği"
-      }
-    },
-    "title": "Mevcut Dağıtım Modu AI Resim Oluşturmayı Desteklemiyor"
-  },
-  "topic": {
-    "createNew": "Yeni Konu Oluştur",
-    "deleteConfirm": "Oluşturulan Konuyu Sil",
-    "deleteConfirmDesc": "Bu oluşturulan konu silinecek, silme işlemi geri alınamaz, lütfen dikkatli olun.",
-    "empty": "Oluşturulmuş konu yok",
-    "title": "Resim Konusu",
-    "untitled": "Varsayılan Konu"
-  }
+  "config.aspectRatio.label": "En Boy Oranı",
+  "config.aspectRatio.lock": "En Boy Oranını Kilitle",
+  "config.aspectRatio.unlock": "En Boy Oranını Kilidi Aç",
+  "config.cfg.label": "Yönlendirme Yoğunluğu",
+  "config.header.desc": "Kısa açıklama, anında oluştur",
+  "config.header.title": "Resim",
+  "config.height.label": "Yükseklik",
+  "config.imageNum.label": "Görüntü Sayısı",
+  "config.imageUrl.label": "Referans Görsel",
+  "config.imageUrls.label": "Referans Görseller",
+  "config.model.label": "Model",
+  "config.prompt.placeholder": "Oluşturmak istediğinizi tanımlayın",
+  "config.quality.label": "Görüntü Kalitesi",
+  "config.quality.options.hd": "Yüksek Çözünürlük",
+  "config.quality.options.standard": "Standart",
+  "config.resolution.label": "Çözünürlük",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Tohum",
+  "config.seed.random": "Rastgele Tohum",
+  "config.size.label": "Boyut",
+  "config.steps.label": "Adımlar",
+  "config.title": "Yapay Zeka Görseli",
+  "config.width.label": "Genişlik",
+  "generation.actions.applySeed": "Tohumu Uygula",
+  "generation.actions.copyError": "Hata Mesajını Kopyala",
+  "generation.actions.copyPrompt": "İstemi Kopyala",
+  "generation.actions.copySeed": "Tohumu Kopyala",
+  "generation.actions.delete": "Sil",
+  "generation.actions.deleteBatch": "Toplu Sil",
+  "generation.actions.download": "İndir",
+  "generation.actions.downloadFailed": "Görsel indirilemedi. Lütfen ağ bağlantınızı veya S3 depolama CORS yapılandırmanızı kontrol edin.",
+  "generation.actions.errorCopied": "Hata Mesajı Panoya Kopyalandı",
+  "generation.actions.errorCopyFailed": "Hata Mesajı Kopyalanamadı",
+  "generation.actions.generate": "Oluştur",
+  "generation.actions.promptCopied": "İstem Panoya Kopyalandı",
+  "generation.actions.promptCopyFailed": "İstem Kopyalanamadı",
+  "generation.actions.reuseSettings": "Ayarları Yeniden Kullan",
+  "generation.actions.seedApplied": "Tohum Yapılandırmaya Uygulandı",
+  "generation.actions.seedApplyFailed": "Tohum Uygulanamadı",
+  "generation.actions.seedCopied": "Tohum Panoya Kopyalandı",
+  "generation.actions.seedCopyFailed": "Tohum Kopyalanamadı",
+  "generation.metadata.count": "{{count}} Görsel",
+  "generation.status.failed": "Oluşturma Başarısız",
+  "generation.status.generating": "Oluşturuluyor...",
+  "notSupportGuide.desc": "Mevcut dağıtım modu yapay zeka görsel oluşturmayı desteklemiyor. <1>sunucu veritabanı dağıtım moduna</1> geçin veya <3>LobeHub Cloud</3> kullanın.",
+  "notSupportGuide.features.fileIntegration.desc": "Dosya yönetim sistemiyle derin entegrasyon; oluşturulan görseller otomatik olarak dosya sistemine kaydedilir ve merkezi olarak yönetilir.",
+  "notSupportGuide.features.fileIntegration.title": "Dosya Sistemi Entegrasyonu",
+  "notSupportGuide.features.llmAssisted.desc": "Büyük dil modeli yetenekleriyle istemleri akıllıca optimize eder ve genişletir, görsel oluşturma kalitesini artırır (Yakında).",
+  "notSupportGuide.features.llmAssisted.title": "LLM Destekli Görsel Oluşturma",
+  "notSupportGuide.features.multiProviders.desc": "OpenAI gpt-image-1, Google Imagen, FAL.ai ve daha fazlası dahil olmak üzere birden fazla yapay zeka görsel oluşturma sağlayıcısını destekler, geniş model seçenekleri sunar.",
+  "notSupportGuide.features.multiProviders.title": "Çoklu Sağlayıcı Desteği",
+  "notSupportGuide.title": "Mevcut Dağıtım Modu Yapay Zeka Görsel Oluşturmayı Desteklemiyor",
+  "topic.createNew": "Yeni Konu",
+  "topic.deleteConfirm": "Oluşturma Konusunu Sil",
+  "topic.deleteConfirmDesc": "Bu oluşturma konusunu silmek üzeresiniz. Bu işlem geri alınamaz, lütfen dikkatli olun.",
+  "topic.empty": "Henüz oluşturma konusu yok",
+  "topic.title": "Resim Teması",
+  "topic.untitled": "Varsayılan Konu"
 }

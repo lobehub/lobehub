@@ -3,30 +3,39 @@ name: Test CI
 on: [push, pull_request]
 
 permissions:
+  actions: write
   contents: read
 
-jobs:
-  # Package tests - using each package's own test script
-  test-intenral-packages:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        package:
-          - file-loaders
-          - prompts
-          - model-runtime
-          - web-crawler
-          - electron-server-ipc
-          - utils
-          - python-interpreter
-          - context-engine
-          - agent-runtime
-          - conversation-flow
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-    name: Test package ${{ matrix.package }}
+jobs:
+  # Check for duplicate runs
+  check-duplicate-run:
+    name: Check Duplicate Run
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          concurrent_skipping: "same_content_newer"
+          skip_after_successful_duplicate: "true"
+          do_not_skip: '["workflow_dispatch", "schedule"]'
+
+  # Package tests - all packages in single job to save runner resources
+  test-packages:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    name: Test Packages
+    env:
+      PACKAGES: "@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/python-interpreter @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory model-bank"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -42,59 +51,65 @@ jobs:
       - name: Install deps
         run: bun i
 
-      - name: Test ${{ matrix.package }} package with coverage
-        run: bun run --filter @lobechat/${{ matrix.package }} test:coverage
+      - name: Test packages with coverage
+        run: |
+          for package in $PACKAGES; do
+            echo "::group::Testing $package"
+            bun run --filter $package test:coverage
+            echo "::endgroup::"
+          done
 
-      - name: Upload ${{ matrix.package }} coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/${{ matrix.package }}/coverage/lcov.info
-          flags: packages/${{ matrix.package }}
+      - name: Upload coverage to Codecov
+        if: always()
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          curl -Os https://cli.codecov.io/latest/linux/codecov
+          chmod +x codecov
 
-  test-packages:
-    runs-on: ubuntu-latest
+          # Build common args
+          COMMON_ARGS="--git-service github"
+
+          # PR args setup
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            COMMON_ARGS="$COMMON_ARGS --pr ${{ github.event.pull_request.number }}"
+            COMMON_ARGS="$COMMON_ARGS --sha ${{ github.event.pull_request.head.sha }}"
+            # Fork PR needs username:branch format for tokenless upload
+            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+              COMMON_ARGS="$COMMON_ARGS --branch ${{ github.event.pull_request.head.label }}"
+            else
+              COMMON_ARGS="$COMMON_ARGS --branch ${{ github.event.pull_request.head.ref }}"
+            fi
+          fi
+
+          # Token (if available)
+          if [ -n "$CODECOV_TOKEN" ]; then
+            COMMON_ARGS="$COMMON_ARGS -t $CODECOV_TOKEN"
+          fi
+
+          for package in $PACKAGES; do
+            dir="${package#@lobechat/}"
+            if [ -f "./packages/$dir/coverage/lcov.info" ]; then
+              echo "Uploading coverage for $dir..."
+              ./codecov upload-coverage \
+                $COMMON_ARGS \
+                --file ./packages/$dir/coverage/lcov.info \
+                --flag packages/$dir \
+                --disable-search
+            fi
+          done
+
+  # App tests - run sharded tests
+  test-app:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     strategy:
       matrix:
-        package: [model-bank]
-
-    name: Test package ${{ matrix.package }}
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.23
-
-      - name: Install deps
-        run: bun i
-
-      - name: Test ${{ matrix.package }} package with coverage
-        run: bun run --filter ${{ matrix.package }} test:coverage
-
-      - name: Upload ${{ matrix.package }} coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./packages/${{ matrix.package }}/coverage/lcov.info
-          flags: packages/${{ matrix.package }}
-
-  # App tests
-  test-website:
-    name: Test Website
-
+        shard: [1, 2]
+    name: Test App (shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -105,13 +120,49 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.23
+          bun-version: latest
 
       - name: Install deps
         run: bun i
 
-      - name: Test App Coverage
-        run: bun run test-app:coverage
+      - name: Run tests
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2
+
+      - name: Upload blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: .vitest-reports
+          include-hidden-files: true
+          retention-days: 1
+
+  # Merge sharded test reports and upload coverage
+  merge-app-coverage:
+    needs: test-app
+    if: ${{ !cancelled() && needs.test-app.result == 'success' }}
+    name: Merge and Upload App Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun i
+
+      - name: Download blob reports
+        uses: actions/download-artifact@v7
+        with:
+          path: .vitest-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge reports
+        run: bunx vitest --merge-reports --reporter=default --coverage
 
       - name: Upload App Coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -121,12 +172,14 @@ jobs:
           flags: app
 
   test-desktop:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Desktop App
 
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -143,10 +196,10 @@ jobs:
         run: pnpm install
         working-directory: apps/desktop
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Typecheck Desktop
-        run: pnpm typecheck
+        run: pnpm type-check
         working-directory: apps/desktop
 
       - name: Test Desktop Client
@@ -161,6 +214,8 @@ jobs:
           flags: desktop
 
   test-databsae:
+    needs: check-duplicate-run
+    if: needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Database
 
     runs-on: ubuntu-latest
@@ -177,7 +232,7 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

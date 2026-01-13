@@ -1,8 +1,8 @@
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
 /**
  * Manages loading states during streaming operations

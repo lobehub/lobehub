@@ -1,5 +1,5 @@
 import { ActionIcon, Select, type SelectProps } from '@lobehub/ui';
-import { isString } from 'lodash-es';
+import { isString } from 'es-toolkit/compat';
 import { Wand2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "Bestätigen",
-    "detail": "Eine Chat-Anwendung, die auf einem großen Sprachmodell basiert",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "Über"
-  },
-  "confirm": {
-    "cancel": "Abbrechen",
-    "no": "Nein",
-    "title": "Bestätigung",
-    "yes": "Ja"
-  },
-  "error": {
-    "button": "Bestätigen",
-    "detail": "Während der Operation ist ein Fehler aufgetreten, bitte versuchen Sie es später erneut",
-    "message": "Ein Fehler ist aufgetreten",
-    "title": "Fehler"
-  },
-  "update": {
-    "downloadAndInstall": "Herunterladen und installieren",
-    "downloadComplete": "Download abgeschlossen",
-    "downloadCompleteMessage": "Das Update-Paket wurde heruntergeladen, möchten Sie es jetzt installieren?",
-    "installLater": "Später installieren",
-    "installNow": "Jetzt installieren",
-    "later": "Später erinnern",
-    "newVersion": "Neue Version gefunden",
-    "newVersionAvailable": "Neue Version verfügbar: {{version}}",
-    "skipThisVersion": "Diese Version überspringen"
-  }
+  "about.button": "Bestätigen",
+  "about.detail": "Eine Chat-Anwendung, die auf einem großen Sprachmodell basiert",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "Über",
+  "confirm.cancel": "Abbrechen",
+  "confirm.no": "Nein",
+  "confirm.title": "Bestätigung",
+  "confirm.yes": "Ja",
+  "error.button": "Bestätigen",
+  "error.detail": "Während der Operation ist ein Fehler aufgetreten, bitte versuchen Sie es später erneut",
+  "error.message": "Ein Fehler ist aufgetreten",
+  "error.title": "Fehler",
+  "update.downloadAndInstall": "Herunterladen und installieren",
+  "update.downloadComplete": "Download abgeschlossen",
+  "update.downloadCompleteMessage": "Das Update-Paket wurde heruntergeladen, möchten Sie es jetzt installieren?",
+  "update.installLater": "Später installieren",
+  "update.installNow": "Jetzt installieren",
+  "update.later": "Später erinnern",
+  "update.newVersion": "Neue Version gefunden",
+  "update.newVersionAvailable": "Neue Version verfügbar: {{version}}",
+  "update.skipThisVersion": "Diese Version überspringen"
 }

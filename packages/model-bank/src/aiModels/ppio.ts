@@ -7,7 +7,7 @@ const ppioChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     description:
-      'DeepSeek R1是DeepSeek团队发布的最新开源模型，具备非常强悍的推理性能，尤其在数学、编程和推理任务上达到了与OpenAI的o1模型相当的水平。',
+      'DeepSeek R1 is the latest open-source model released by the DeepSeek team, with very strong reasoning performance, especially in math, coding, and reasoning tasks, comparable to OpenAI o1.',
     displayName: 'DeepSeek: DeepSeek R1 (Community)',
     enabled: true,
     id: 'deepseek/deepseek-r1/community',
@@ -23,7 +23,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 64_000,
     description:
-      'DeepSeek-V3在推理速度方面实现了比之前模型的重大突破。在开源模型中排名第一，并可与全球最先进的闭源模型相媲美。DeepSeek-V3 采用了多头潜在注意力 （MLA） 和 DeepSeekMoE 架构，这些架构在 DeepSeek-V2 中得到了全面验证。此外，DeepSeek-V3 开创了一种用于负载均衡的辅助无损策略，并设定了多标记预测训练目标以获得更强的性能。',
+      'DeepSeek-V3 delivers a major breakthrough in reasoning speed over previous models. It ranks first among open-source models and rivals the most advanced closed models. DeepSeek-V3 adopts Multi-Head Latent Attention (MLA) and the DeepSeekMoE architecture, both fully validated in DeepSeek-V2. It also introduces a lossless auxiliary strategy for load balancing and a multi-token prediction training objective for stronger performance.',
     displayName: 'DeepSeek: DeepSeek V3 (Community)',
     enabled: true,
     id: 'deepseek/deepseek-v3/community',
@@ -42,7 +42,7 @@ const ppioChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     description:
-      'DeepSeek R1是DeepSeek团队发布的最新开源模型，具备非常强悍的推理性能，尤其在数学、编程和推理任务上达到了与OpenAI的o1模型相当的水平。',
+      'DeepSeek R1 is the latest open-source model released by the DeepSeek team, with very strong reasoning performance, especially in math, coding, and reasoning tasks, comparable to OpenAI o1.',
     displayName: 'DeepSeek R1',
     enabled: true,
     id: 'deepseek/deepseek-r1',
@@ -58,7 +58,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 64_000,
     description:
-      'DeepSeek-V3在推理速度方面实现了比之前模型的重大突破。在开源模型中排名第一，并可与全球最先进的闭源模型相媲美。DeepSeek-V3 采用了多头潜在注意力 （MLA） 和 DeepSeekMoE 架构，这些架构在 DeepSeek-V2 中得到了全面验证。此外，DeepSeek-V3 开创了一种用于负载均衡的辅助无损策略，并设定了多标记预测训练目标以获得更强的性能。',
+      'DeepSeek-V3 delivers a major breakthrough in reasoning speed over previous models. It ranks first among open-source models and rivals the most advanced closed models. DeepSeek-V3 adopts Multi-Head Latent Attention (MLA) and the DeepSeekMoE architecture, both fully validated in DeepSeek-V2. It also introduces a lossless auxiliary strategy for load balancing and a multi-token prediction training objective for stronger performance.',
     displayName: 'DeepSeek V3',
     enabled: true,
     id: 'deepseek/deepseek-v3',
@@ -77,7 +77,7 @@ const ppioChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'DeepSeek R1 Distill Llama 70B是基于Llama3.3  70B的大型语言模型，该模型利用DeepSeek R1输出的微调，实现了与大型前沿模型相当的竞争性能。',
+      'DeepSeek R1 Distill Llama 70B is a distilled LLM based on Llama 3.3 70B, fine-tuned using DeepSeek R1 outputs to achieve competitive performance with large frontier models.',
     displayName: 'DeepSeek R1 Distill Llama 70B',
     enabled: true,
     id: 'deepseek/deepseek-r1-distill-llama-70b',
@@ -96,7 +96,7 @@ const ppioChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     description:
-      'DeepSeek R1 Distill Qwen 32B 是一种基于 Qwen 2.5 32B 的蒸馏大语言模型，通过使用 DeepSeek R1 的输出进行训练而得。该模型在多个基准测试中超越了 OpenAI 的 o1-mini，取得了密集模型（dense models）的最新技术领先成果（state-of-the-art）。以下是一些基准测试的结果：\nAIME 2024 pass@1: 72.6\nMATH-500 pass@1: 94.3\nCodeForces Rating: 1691\n该模型通过从 DeepSeek R1 的输出中进行微调，展现了与更大规模的前沿模型相当的竞争性能。',
+      'DeepSeek R1 Distill Qwen 32B is a distilled LLM based on Qwen 2.5 32B, trained using DeepSeek R1 outputs. It surpasses OpenAI o1-mini on multiple benchmarks, achieving state-of-the-art results among dense models. Benchmark highlights:\nAIME 2024 pass@1: 72.6\nMATH-500 pass@1: 94.3\nCodeForces Rating: 1691\nFine-tuning on DeepSeek R1 outputs delivers competitive performance with larger frontier models.',
     displayName: 'DeepSeek: DeepSeek R1 Distill Qwen 32B',
     enabled: true,
     id: 'deepseek/deepseek-r1-distill-qwen-32b',
@@ -115,7 +115,7 @@ const ppioChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     description:
-      'DeepSeek R1 Distill Qwen 14B 是一种基于 Qwen 2.5 14B 的蒸馏大语言模型，通过使用 DeepSeek R1 的输出进行训练而得。该模型在多个基准测试中超越了 OpenAI 的 o1-mini，取得了密集模型（dense models）的最新技术领先成果（state-of-the-art）。以下是一些基准测试的结果：\nAIME 2024 pass@1: 69.7\nMATH-500 pass@1: 93.9\nCodeForces Rating: 1481\n该模型通过从 DeepSeek R1 的输出中进行微调，展现了与更大规模的前沿模型相当的竞争性能。',
+      'DeepSeek R1 Distill Qwen 14B is a distilled LLM based on Qwen 2.5 14B, trained using DeepSeek R1 outputs. It surpasses OpenAI o1-mini on multiple benchmarks, achieving state-of-the-art results among dense models. Benchmark highlights:\nAIME 2024 pass@1: 69.7\nMATH-500 pass@1: 93.9\nCodeForces Rating: 1481\nFine-tuning on DeepSeek R1 outputs delivers competitive performance with larger frontier models.',
     displayName: 'DeepSeek: DeepSeek R1 Distill Qwen 14B',
     enabled: true,
     id: 'deepseek/deepseek-r1-distill-qwen-14b',
@@ -134,7 +134,7 @@ const ppioChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      'DeepSeek R1 Distill Llama 8B 是一种基于 Llama-3.1-8B-Instruct 的蒸馏大语言模型，通过使用 DeepSeek R1 的输出进行训练而得。',
+      'DeepSeek R1 Distill Llama 8B is a distilled LLM based on Llama-3.1-8B-Instruct, trained using DeepSeek R1 outputs.',
     displayName: 'DeepSeek: DeepSeek R1 Distill Llama 8B',
     enabled: true,
     id: 'deepseek/deepseek-r1-distill-llama-8b',
@@ -150,7 +150,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Qwen2.5-72B-Instruct 是阿里云发布的最新大语言模型系列之一。该 72B 模型在编码和数学等领域具有显著改进的能力。该模型还提供了多语言支持，覆盖超过 29 种语言，包括中文、英文等。模型在指令跟随、理解结构化数据以及生成结构化输出（尤其是 JSON）方面都有显著提升。',
+      'Qwen2.5-72B-Instruct is one of Alibaba Cloud’s latest LLM releases. The 72B model brings notable improvements in coding and math, supports over 29 languages (including Chinese and English), and significantly improves instruction following, structured data understanding, and structured output (especially JSON).',
     displayName: 'qwen/qwen-2.5-72b-instruct',
     enabled: true,
     id: 'qwen/qwen-2.5-72b-instruct',
@@ -169,7 +169,7 @@ const ppioChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Qwen2-VL 是 Qwen-VL 模型的最新迭代版本，在视觉理解基准测试中达到了最先进的性能，包括 MathVista、DocVQA、RealWorldQA 和 MTVQA 等。Qwen2-VL 能够理解超过 20 分钟的视频，用于高质量的基于视频的问答、对话和内容创作。它还具备复杂推理和决策能力，可以与移动设备、机器人等集成，基于视觉环境和文本指令进行自动操作。除了英语和中文，Qwen2-VL 现在还支持理解图像中不同语言的文本，包括大多数欧洲语言、日语、韩语、阿拉伯语和越南语等',
+      'Qwen2-VL is the latest iteration of Qwen-VL, reaching state-of-the-art performance on vision benchmarks such as MathVista, DocVQA, RealWorldQA, and MTVQA. It can understand 20+ minutes of video for high-quality video Q&A, dialogue, and content creation. It also handles complex reasoning and decision-making, integrating with mobile devices and robots to act based on visual context and text instructions. Beyond English and Chinese, it also reads text in images across many languages, including most European languages, Japanese, Korean, Arabic, and Vietnamese.',
     displayName: 'qwen/qwen-2-vl-72b-instruct',
     enabled: true,
     id: 'qwen/qwen-2-vl-72b-instruct',
@@ -200,7 +200,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_000,
     description:
-      'Qwen2.5-32B-Instruct 是阿里云发布的最新大语言模型系列之一。该 32B 模型在编码和数学等领域具有显著改进的能力。该模型提供了多语言支持，覆盖超过 29 种语言，包括中文、英文等。模型在指令跟随、理解结构化数据以及生成结构化输出（尤其是 JSON）方面都有显著提升。',
+      'Qwen2.5-32B-Instruct is one of Alibaba Cloud’s latest LLM releases. The 32B model brings notable improvements in coding and math, supports over 29 languages (including Chinese and English), and significantly improves instruction following, structured data understanding, and structured output (especially JSON).',
     displayName: 'qwen/qwen2.5-32b-instruct',
     enabled: true,
     id: 'qwen/qwen2.5-32b-instruct',
@@ -216,7 +216,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 14_336,
     description:
-      'Baichuan-13B 百川智能开发的包含 130 亿参数的开源可商用的大规模语言模型，在权威的中文和英文 benchmark 上均取得同尺寸最好的效果',
+      'Baichuan-13B is an open-source, commercially usable 13B-parameter LLM from Baichuan, achieving best-in-class results for its size on authoritative Chinese and English benchmarks.',
     displayName: 'baichuan/baichuan2-13b-chat',
     enabled: true,
     id: 'baichuan/baichuan2-13b-chat',
@@ -232,7 +232,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Meta最新一代的Llama 3.1模型系列，70B（700亿参数）的指令微调版本针对高质量对话场景进行了优化。在业界评估中，与领先的闭源模型相比，它展现出了强劲的性能。(仅针对企业实名认证通过主体开放）',
+      'Meta’s latest Llama 3.1 series, the 70B instruction-tuned variant optimized for high-quality dialogue. In industry evaluations, it shows strong performance against leading closed models. (Available only to enterprise-verified entities.)',
     displayName: 'meta-llama/llama-3.1-70b-instruct',
     enabled: true,
     id: 'meta-llama/llama-3.1-70b-instruct',
@@ -248,7 +248,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Meta最新一代的Llama 3.1模型系列，8B（80亿参数）的指令微调版本特别快速高效。在业界评估中，表现出强劲的性能，超越了很多领先的闭源模型。(仅针对企业实名认证通过主体开放）',
+      'Meta’s latest Llama 3.1 series, the 8B instruction-tuned variant is especially fast and efficient. In industry evaluations, it delivers strong performance, surpassing many leading closed models. (Available only to enterprise-verified entities.)',
     displayName: 'meta-llama/llama-3.1-8b-instruct',
     enabled: true,
     id: 'meta-llama/llama-3.1-8b-instruct',
@@ -264,7 +264,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 16_384,
     description:
-      '零一万物，最新开源微调模型，340亿参数，微调支持多种对话场景，高质量训练数据，对齐人类偏好。',
+      '01.AI’s latest open-source fine-tuned model with 34B parameters, supporting multiple dialogue scenarios, trained on high-quality data and aligned with human preferences.',
     displayName: '01-ai/yi-1.5-34b-chat',
     enabled: true,
     id: '01-ai/yi-1.5-34b-chat',
@@ -280,7 +280,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 16_384,
     description:
-      '零一万物，最新开源微调模型，90亿参数，微调支持多种对话场景，高质量训练数据，对齐人类偏好。',
+      '01.AI’s latest open-source fine-tuned model with 9B parameters, supporting multiple dialogue scenarios, trained on high-quality data and aligned with human preferences.',
     displayName: '01-ai/yi-1.5-9b-chat',
     enabled: true,
     id: '01-ai/yi-1.5-9b-chat',
@@ -295,7 +295,7 @@ const ppioChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: '智谱AI发布的GLM-4系列最新一代预训练模型的开源版本。',
+    description: 'The open-source release of Zhipu AI’s latest GLM-4 pretraining model.',
     displayName: 'thudm/glm-4-9b-chat',
     enabled: true,
     id: 'thudm/glm-4-9b-chat',
@@ -311,7 +311,7 @@ const ppioChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Qwen2是全新的Qwen大型语言模型系列。Qwen2 7B是一个基于transformer的模型，在语言理解、多语言能力、编程、数学和推理方面表现出色。',
+      'Qwen2 is the new Qwen LLM series. Qwen2 7B is a transformer-based model that excels in language understanding, multilingual capability, programming, math, and reasoning.',
     displayName: 'qwen/qwen-2-7b-instruct',
     enabled: true,
     id: 'qwen/qwen-2-7b-instruct',

@@ -1,18 +1,10 @@
 {
-  "desc": "Tại đây, chúng tôi sẽ cập nhật định kỳ các tính năng mới đang được khám phá. Rất hoan nghênh bạn dùng thử!",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "Tổng hợp tin nhắn trợ lý và kết quả gọi công cụ vào cùng một nhóm để hiển thị",
-      "title": "Nhóm tin nhắn trợ lý"
-    },
-    "groupChat": {
-      "desc": "Kích hoạt khả năng điều phối trò chuyện nhóm với nhiều tác nhân thông minh.",
-      "title": "Trò chuyện nhóm (đa tác nhân)"
-    },
-    "inputMarkdown": {
-      "desc": "Hiển thị trực tiếp Markdown trong vùng nhập (in đậm, khối mã, bảng, v.v.).",
-      "title": "Hiển thị Markdown trong ô nhập"
-    }
-  },
-  "title": "Phòng thí nghiệm"
+  "desc": "Tại đây, bạn sẽ tìm thấy các cập nhật thỉnh thoảng về những tính năng mới mà chúng tôi đang khám phá — hãy thoải mái dùng thử nhé!",
+  "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
+  "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
+  "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
+  "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
+  "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
+  "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
+  "title": "Phòng Thí Nghiệm"
 }

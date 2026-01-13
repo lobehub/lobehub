@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Réduire",
-      "on": "Développer"
-    },
-    "typobar": {
-      "off": "Masquer la barre d'outils de formatage",
-      "on": "Afficher la barre d'outils de formatage"
-    }
-  },
+  "actions.expand.off": "Réduire",
+  "actions.expand.on": "Développer",
+  "actions.typobar.off": "Masquer la barre de mise en forme",
+  "actions.typobar.on": "Afficher la barre de mise en forme",
+  "autoSave.latest": "Dernière version chargée",
+  "autoSave.saved": "Enregistré",
+  "autoSave.saving": "Enregistrement automatique...",
   "cancel": "Annuler",
+  "codemirror.copyFailed": "Échec de la copie",
+  "codemirror.copySuccess": "Code copié dans le presse-papiers",
+  "codemirror.selectLanguage": "Sélectionner la langue",
+  "codemirror.selectTheme": "Sélectionner le thème",
+  "codemirror.showLineNumbers": "Afficher les numéros de ligne",
+  "codemirror.tabSize": "Taille de tabulation",
+  "codemirror.theme": "Thème",
+  "codemirror.useTabs": "Utiliser des tabulations",
   "confirm": "Confirmer",
-  "file": {
-    "error": "Erreur : {{message}}",
-    "uploading": "Téléversement du fichier en cours..."
-  },
-  "image": {
-    "broken": "Image endommagée"
-  },
-  "link": {
-    "edit": "Modifier le lien",
-    "open": "Ouvrir le lien",
-    "placeholder": "Entrez l'URL du lien",
-    "unlink": "Supprimer le lien"
-  },
-  "math": {
-    "placeholder": "Veuillez saisir une formule TeX"
-  },
-  "slash": {
-    "h1": "Titre de niveau 1",
-    "h2": "Titre de niveau 2",
-    "h3": "Titre de niveau 3",
-    "hr": "Ligne de séparation",
-    "table": "Tableau",
-    "tex": "Formule TeX"
-  },
-  "table": {
-    "delete": "Supprimer le tableau",
-    "deleteColumn": "Supprimer la colonne",
-    "deleteRow": "Supprimer la ligne",
-    "insertColumnLeft": "Insérer {{count}} colonne(s) à gauche",
-    "insertColumnRight": "Insérer {{count}} colonne(s) à droite",
-    "insertRowAbove": "Insérer {{count}} ligne(s) au-dessus",
-    "insertRowBelow": "Insérer {{count}} ligne(s) en dessous"
-  },
-  "typobar": {
-    "blockquote": "Citation",
-    "bold": "Gras",
-    "bulletList": "Liste à puces",
-    "code": "Code en ligne",
-    "codeblock": "Bloc de code",
-    "italic": "Italique",
-    "link": "Lien",
-    "numberList": "Liste numérotée",
-    "strikethrough": "Barré",
-    "table": "tableau",
-    "taskList": "Liste des tâches",
-    "tex": "Formule TeX",
-    "underline": "Souligné"
-  }
+  "file.error": "Erreur : {{message}}",
+  "file.uploading": "Téléversement du fichier...",
+  "image.broken": "Image corrompue",
+  "link.edit": "Modifier le lien",
+  "link.editLinkTitle": "Lien",
+  "link.editTextTitle": "Titre",
+  "link.open": "Ouvrir le lien",
+  "link.placeholder": "Saisir l’URL du lien",
+  "link.unlink": "Supprimer le lien",
+  "markdown.cancel": "Annuler",
+  "markdown.confirm": "Convertir",
+  "markdown.parseMessage": "Convertir au format Markdown. Le contenu existant sera écrasé. Êtes-vous sûr ? (Fermeture automatique dans 5 secondes)",
+  "markdown.parseTitle": "Formater en Markdown",
+  "math.placeholder": "Veuillez saisir une formule TeX",
+  "modifier.accept": "Conserver",
+  "modifier.acceptAll": "Tout conserver",
+  "modifier.reject": "Annuler",
+  "modifier.rejectAll": "Tout annuler",
+  "slash.h1": "Titre 1",
+  "slash.h2": "Titre 2",
+  "slash.h3": "Titre 3",
+  "slash.hr": "Séparateur",
+  "slash.table": "Tableau",
+  "slash.tex": "Formule TeX",
+  "table.delete": "Supprimer le tableau",
+  "table.deleteColumn": "Supprimer la colonne",
+  "table.deleteRow": "Supprimer la ligne",
+  "table.insertColumnLeft": "Insérer {{count}} colonne(s) à gauche",
+  "table.insertColumnRight": "Insérer {{count}} colonne(s) à droite",
+  "table.insertRowAbove": "Insérer {{count}} ligne(s) au-dessus",
+  "table.insertRowBelow": "Insérer {{count}} ligne(s) en dessous",
+  "typobar.blockquote": "Citation",
+  "typobar.bold": "Gras",
+  "typobar.bulletList": "Liste à puces",
+  "typobar.code": "Code en ligne",
+  "typobar.codeblock": "Bloc de code",
+  "typobar.image": "Image",
+  "typobar.italic": "Italique",
+  "typobar.link": "Lien",
+  "typobar.numberList": "Liste numérotée",
+  "typobar.redo": "Rétablir",
+  "typobar.strikethrough": "Barré",
+  "typobar.table": "Tableau",
+  "typobar.taskList": "Liste de tâches",
+  "typobar.tex": "Formule TeX",
+  "typobar.underline": "Souligné",
+  "typobar.undo": "Annuler"
 }

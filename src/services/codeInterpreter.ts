@@ -1,0 +1,67 @@
+import { toolsClient } from '@/libs/trpc/client';
+import type {
+  CallCodeInterpreterToolInput,
+  CallToolResult,
+  ExportAndUploadFileInput,
+  ExportAndUploadFileResult,
+} from '@/server/routers/tools/market';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/slices/settings/selectors/settings';
+
+/**
+ * Get Market access token from user settings (stored by MarketAuthProvider)
+ */
+const getMarketAccessToken = (): string | undefined => {
+  const settings = settingsSelectors.currentSettings(useUserStore.getState());
+  return settings.market?.accessToken;
+};
+
+class CodeInterpreterService {
+  /**
+   * Call a cloud code interpreter tool
+   * @param toolName - The name of the tool to call (e.g., 'runCommand', 'writeLocalFile')
+   * @param params - The parameters for the tool
+   * @param context - Session context containing userId and topicId for isolation
+   */
+  async callTool(
+    toolName: string,
+    params: Record<string, any>,
+    context: { topicId: string; userId: string },
+  ): Promise<CallToolResult> {
+    const marketAccessToken = getMarketAccessToken();
+
+    const input: CallCodeInterpreterToolInput = {
+      marketAccessToken,
+      params,
+      toolName,
+      topicId: context.topicId,
+      userId: context.userId,
+    };
+
+    return toolsClient.market.callCodeInterpreterTool.mutate(input);
+  }
+
+  /**
+   * Export a file from sandbox and upload to S3, then create a persistent file record
+   * This is a single call that combines: getUploadUrl + callTool(exportFile) + createFileRecord
+   * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
+   * @param path - The file path in the sandbox
+   * @param filename - The name of the file to export
+   * @param topicId - The topic ID for organizing files
+   */
+  async exportAndUploadFile(
+    path: string,
+    filename: string,
+    topicId: string,
+  ): Promise<ExportAndUploadFileResult> {
+    const input: ExportAndUploadFileInput = {
+      filename,
+      path,
+      topicId,
+    };
+
+    return toolsClient.market.exportAndUploadFile.mutate(input);
+  }
+}
+
+export const codeInterpreterService = new CodeInterpreterService();

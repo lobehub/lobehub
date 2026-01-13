@@ -1,0 +1,28 @@
+{
+  "name": "@lobechat/observability-otel",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./node": "./src/node.ts",
+    "./api": "./src/api.ts",
+    "./trpc": "./src/trpc/index.ts",
+    "./gen-ai": "./src/gen-ai/index.ts",
+    "./modules/memory-user-memory": "./src/modules/memory-user-memory/index.ts",
+    "./modules/upstash-workflow": "./src/modules/upstash-workflow/index.ts"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.67.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.208.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
+    "@opentelemetry/instrumentation": "^0.208.0",
+    "@opentelemetry/instrumentation-http": "^0.208.0",
+    "@opentelemetry/instrumentation-pg": "^0.61.0",
+    "@opentelemetry/resources": "^2.2.0",
+    "@opentelemetry/sdk-metrics": "^2.2.0",
+    "@opentelemetry/sdk-node": "^0.208.0",
+    "@opentelemetry/sdk-trace-node": "^2.2.0",
+    "@opentelemetry/semantic-conventions": "^1.38.0",
+    "@vercel/otel": "^2.1.0"
+  }
+}

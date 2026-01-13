@@ -1,9 +1,18 @@
 import { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
-import { app, nativeTheme, shell, systemPreferences } from 'electron';
+import { app, dialog, nativeTheme, shell } from 'electron';
 import { macOS } from 'electron-is';
 import process from 'node:process';
 
 import { createLogger } from '@/utils/logger';
+import {
+  getAccessibilityStatus,
+  getFullDiskAccessStatus,
+  getMediaAccessStatus,
+  openFullDiskAccessSettings,
+  requestAccessibilityAccess,
+  requestMicrophoneAccess,
+  requestScreenCaptureAccess,
+} from '@/utils/permissions';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -35,8 +44,9 @@ export default class SystemController extends ControllerModule {
       isLinux: platform === 'linux',
       isMac: platform === 'darwin',
       isWindows: platform === 'win32',
+      locale: this.app.storeManager.get('locale', 'auto'),
+
       platform: platform as 'darwin' | 'win32' | 'linux',
-      systemAppearance: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
       userPath: {
         // User Paths (ensure keys match UserPathData / DesktopAppState interface)
         desktop: app.getPath('desktop'),
@@ -51,13 +61,100 @@ export default class SystemController extends ControllerModule {
     };
   }
 
+  @IpcMethod()
+  requestAccessibilityAccess() {
+    return requestAccessibilityAccess();
+  }
+
+  @IpcMethod()
+  getAccessibilityStatus() {
+    const status = getAccessibilityStatus();
+    return status === 'granted';
+  }
+
+  @IpcMethod()
+  getFullDiskAccessStatus(): boolean {
+    const status = getFullDiskAccessStatus();
+    return status === 'granted';
+  }
+
   /**
-   * 检查可用性
+   * Prompt the user with a native dialog if Full Disk Access is not granted.
+   *
+   * @param options - Dialog options
+   * @returns 'granted' if already granted, 'opened_settings' if user chose to open settings,
+   *          'skipped' if user chose to skip, 'cancelled' if dialog was cancelled
    */
   @IpcMethod()
-  checkAccessibilityForMacOS() {
-    if (!macOS()) return;
-    return systemPreferences.isTrustedAccessibilityClient(true);
+  async promptFullDiskAccessIfNotGranted(options?: {
+    message?: string;
+    openSettingsButtonText?: string;
+    skipButtonText?: string;
+    title?: string;
+  }): Promise<'cancelled' | 'granted' | 'opened_settings' | 'skipped'> {
+    // Check if already granted
+    const status = getFullDiskAccessStatus();
+    if (status === 'granted') {
+      logger.info('[FullDiskAccess] Already granted, skipping prompt');
+      return 'granted';
+    }
+
+    if (!macOS()) {
+      logger.info('[FullDiskAccess] Not macOS, returning granted');
+      return 'granted';
+    }
+
+    const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
+
+    // Get localized strings
+    const t = this.app.i18n.ns('dialog');
+    const title = options?.title || t('fullDiskAccess.title');
+    const message = options?.message || t('fullDiskAccess.message');
+    const openSettingsButtonText =
+      options?.openSettingsButtonText || t('fullDiskAccess.openSettings');
+    const skipButtonText = options?.skipButtonText || t('fullDiskAccess.skip');
+
+    logger.info('[FullDiskAccess] Showing native prompt dialog');
+
+    const result = await dialog.showMessageBox(mainWindow!, {
+      buttons: [openSettingsButtonText, skipButtonText],
+      cancelId: 1,
+      defaultId: 0,
+      message: message,
+      title: title,
+      type: 'info',
+    });
+
+    if (result.response === 0) {
+      // User chose to open settings
+      logger.info('[FullDiskAccess] User chose to open settings');
+      await this.openFullDiskAccessSettings();
+      return 'opened_settings';
+    } else {
+      // User chose to skip or cancelled
+      logger.info('[FullDiskAccess] User chose to skip');
+      return 'skipped';
+    }
+  }
+
+  @IpcMethod()
+  async getMediaAccessStatus(mediaType: 'microphone' | 'screen'): Promise<string> {
+    return getMediaAccessStatus(mediaType);
+  }
+
+  @IpcMethod()
+  async requestMicrophoneAccess(): Promise<boolean> {
+    return requestMicrophoneAccess();
+  }
+
+  @IpcMethod()
+  async requestScreenAccess(): Promise<boolean> {
+    return requestScreenCaptureAccess();
+  }
+
+  @IpcMethod()
+  async openFullDiskAccessSettings() {
+    return openFullDiskAccessSettings();
   }
 
   @IpcMethod()
@@ -65,15 +162,35 @@ export default class SystemController extends ControllerModule {
     return shell.openExternal(url);
   }
 
-  /**
-   * 更新应用语言设置
-   */
+  @IpcMethod()
+  async selectFolder(payload?: {
+    defaultPath?: string;
+    title?: string;
+  }): Promise<string | undefined> {
+    const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
+
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      defaultPath: payload?.defaultPath,
+      properties: ['openDirectory', 'createDirectory'],
+      title: payload?.title || 'Select Folder',
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return undefined;
+    }
+
+    return result.filePaths[0];
+  }
+
+  @IpcMethod()
+  getSystemLocale(): string {
+    return app.getLocale();
+  }
+
   @IpcMethod()
   async updateLocale(locale: string) {
-    // 保存语言设置
     this.app.storeManager.set('locale', locale);
 
-    // 更新i18n实例的语言
     await this.app.i18n.changeLanguage(locale === 'auto' ? app.getLocale() : locale);
     this.app.browserManager.broadcastToAllWindows('localeChanged', { locale });
 
@@ -87,11 +204,20 @@ export default class SystemController extends ControllerModule {
 
     // Apply visual effects to all browser windows when theme mode changes
     this.app.browserManager.handleAppThemeChange();
+    // Set app theme mode to the system theme mode
+
+    this.setSystemThemeMode(themeMode);
   }
 
-  /**
-   * Initialize system theme listener to monitor OS theme changes
-   */
+  @IpcMethod()
+  async getSystemThemeMode() {
+    return nativeTheme.themeSource;
+  }
+
+  private async setSystemThemeMode(themeMode: ThemeMode) {
+    nativeTheme.themeSource = themeMode;
+  }
+
   private initializeSystemThemeListener() {
     if (this.systemThemeListenerInitialized) {
       logger.debug('System theme listener already initialized');
@@ -99,11 +225,6 @@ export default class SystemController extends ControllerModule {
     }
 
     logger.info('Initializing system theme listener');
-
-    // Get initial system theme
-    const initialDarkMode = nativeTheme.shouldUseDarkColors;
-    const initialSystemTheme: ThemeMode = initialDarkMode ? 'dark' : 'light';
-    logger.info(`Initial system theme: ${initialSystemTheme}`);
 
     // Listen for system theme changes
     nativeTheme.on('updated', () => {

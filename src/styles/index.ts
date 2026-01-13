@@ -10,4 +10,5 @@ export const GlobalStyle = createGlobalStyle(({ theme }) => [
   antdOverride({ prefixCls, token: theme }),
 ]);
 
+export { shinyTextStyles } from './loading';
 export * from './text';

@@ -32,7 +32,7 @@ pnpm install-isolated
 pnpm electron:dev
 
 # Type checking
-pnpm typecheck
+pnpm type-check
 
 # Run tests
 pnpm test
@@ -66,9 +66,9 @@ cp .env.desktop .env
 pnpm electron:dev # Start with hot reload
 
 # 2. Code Quality
-pnpm lint      # ESLint checking
-pnpm format    # Prettier formatting
-pnpm typecheck # TypeScript validation
+pnpm lint       # ESLint checking
+pnpm format     # Prettier formatting
+pnpm type-check # TypeScript validation
 
 # 3. Testing
 pnpm test # Run Vitest tests
@@ -183,16 +183,15 @@ The `App.ts` class orchestrates the entire application lifecycle through key pha
 #### 🔌 Dependency Injection & Event System
 
 - **IoC Container** - WeakMap-based container for decorated controller methods
-- **Typed IPC Decorators** - `@IpcMethod` and `@IpcServerMethod` wire controller methods into type-safe channels
+- **Typed IPC Decorators** - `@IpcMethod` wires controller methods into type-safe channels
 - **Automatic Event Mapping** - Events registered during controller loading
 - **Service Locator** - Type-safe service and controller retrieval
 
 ##### 🧠 Type-Safe IPC Flow
 
 - **Async Context Propagation** - `src/main/utils/ipc/base.ts` captures the `IpcContext` with `AsyncLocalStorage`, so controller logic can call `getIpcContext()` anywhere inside an IPC handler without explicitly threading arguments.
-- **Service Constructors Registry** - `src/main/controllers/registry.ts` exports `controllerIpcConstructors`, `DesktopIpcServices`, and `DesktopServerIpcServices`, enabling automatic typing of both renderer and server IPC proxies.
+- **Service Constructors Registry** - `src/main/controllers/registry.ts` exports `controllerIpcConstructors` and `DesktopIpcServices`, enabling automatic typing of renderer IPC proxies.
 - **Renderer Proxy Helper** - `src/utils/electron/ipc.ts` exposes `ensureElectronIpc()` which lazily builds a proxy on top of `window.electronAPI.invoke`, giving React/Next.js code a type-safe API surface without exposing raw proxies in preload.
-- **Server Proxy Helper** - `src/server/modules/ElectronIPCClient/index.ts` mirrors the same typing strategy for the Next.js server runtime, providing a dedicated proxy for `@IpcServerMethod` handlers.
 - **Shared Typings Package** - `apps/desktop/src/main/exports.d.ts` augments `@lobechat/electron-client-ipc` so every package can consume `DesktopIpcServices` without importing desktop business code directly.
 
 #### 🪟 Window Management
@@ -278,20 +277,6 @@ await ipc.windows.openSettingsWindow({ tab: 'provider' });
 
 The helper internally builds a proxy on top of `window.electronAPI.invoke`, so no proxy objects need to be cloned across the preload boundary.
 
-##### 🖥️ Server IPC Helper
-
-Next.js (Node) modules use the same proxy pattern via `ensureElectronServerIpc` from `src/server/modules/ElectronIPCClient`. It lazily wraps the socket-based `ElectronIpcClient` so server code can call controllers with full type safety:
-
-```ts
-import { ensureElectronServerIpc } from '@/server/modules/ElectronIPCClient';
-
-const ipc = ensureElectronServerIpc();
-const dbPath = await ipc.system.getDatabasePath();
-await ipc.upload.deleteFiles(['foo.txt']);
-```
-
-All server methods are declared via `@IpcServerMethod` and live in dedicated controller classes, keeping renderer typings clean.
-
 #### 🛡️ Security Features
 
 - **OAuth 2.0 + PKCE** - Secure authentication with state parameter validation
@@ -313,7 +298,7 @@ tests/                                       # Integration tests
 ```bash
 pnpm test       # Run all tests
 pnpm test:watch # Watch mode
-pnpm typecheck  # Type validation
+pnpm type-check # Type validation
 ```
 
 ### Test Coverage

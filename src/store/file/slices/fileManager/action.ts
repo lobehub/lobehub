@@ -1,40 +1,74 @@
+import {
+  buildFolderTree,
+  createNanoId,
+  sanitizeFolderName,
+  topologicalSortFolders,
+} from '@lobechat/utils';
+import { t } from 'i18next';
 import pMap from 'p-map';
-import { SWRResponse, mutate } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import type { SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
+import { message } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { documentService } from '@/services/document';
 import { FileService, fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import {
-  UploadFileListDispatch,
+  type UploadFileListDispatch,
   uploadFileListReducer,
 } from '@/store/file/reducers/uploadFileList';
-import { FileListItem, QueryFileListParams } from '@/types/files';
+import { type FileListItem, type QueryFileListParams } from '@/types/files';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { unzipFile } from '@/utils/unzipFile';
 
-import { FileStore } from '../../store';
+import { type FileStore } from '../../store';
 import { fileManagerSelectors } from './selectors';
 
 const serverFileService = new FileService();
 
+export interface FolderCrumb {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export interface FileManageAction {
+  cancelUpload: (id: string) => void;
   dispatchDockFileList: (payload: UploadFileListDispatch) => void;
   embeddingChunks: (fileIds: string[]) => Promise<void>;
+  loadMoreKnowledgeItems: () => Promise<void>;
+  moveFileToFolder: (fileId: string, parentId: string | null) => Promise<void>;
   parseFilesToChunks: (ids: string[], params?: { skipExist?: boolean }) => Promise<void>;
-  pushDockFileList: (files: File[], knowledgeBaseId?: string) => Promise<void>;
+  pushDockFileList: (files: File[], knowledgeBaseId?: string, parentId?: string) => Promise<void>;
 
   reEmbeddingChunks: (id: string) => Promise<void>;
   reParseFile: (id: string) => Promise<void>;
+  /**
+   * @deprecated Use fetchResources(queryParams) from resource slice instead
+   * This method is kept for backward compatibility with non-ResourceManager code
+   */
   refreshFileList: () => Promise<void>;
   removeAllFiles: () => Promise<void>;
   removeFileItem: (id: string) => Promise<void>;
   removeFiles: (ids: string[]) => Promise<void>;
+  renameFolder: (folderId: string, newName: string) => Promise<void>;
+
+  setCurrentFolderId: (folderId: string | null | undefined) => void;
+  setPendingRenameItemId: (id: string | null) => void;
+  setUploadDockExpanded: (expanded: boolean) => void;
 
   toggleEmbeddingIds: (ids: string[], loading?: boolean) => void;
   toggleParsingIds: (ids: string[], loading?: boolean) => void;
 
+  uploadFolderWithStructure: (
+    files: File[],
+    knowledgeBaseId?: string,
+    currentFolderId?: string,
+  ) => Promise<void>;
+
+  useFetchFolderBreadcrumb: (slug?: string | null) => SWRResponse<FolderCrumb[]>;
   useFetchKnowledgeItem: (id?: string) => SWRResponse<FileListItem | undefined>;
   useFetchKnowledgeItems: (params: QueryFileListParams) => SWRResponse<FileListItem[]>;
 }
@@ -47,6 +81,21 @@ export const createFileManageSlice: StateCreator<
   [],
   FileManageAction
 > = (set, get) => ({
+  cancelUpload: (id) => {
+    const { dockUploadFileList, dispatchDockFileList } = get();
+    const uploadItem = dockUploadFileList.find((item) => item.id === id);
+
+    if (uploadItem?.abortController) {
+      uploadItem.abortController.abort();
+    }
+
+    // Update status to cancelled
+    dispatchDockFileList({
+      id,
+      status: 'cancelled',
+      type: 'updateFileStatus',
+    });
+  },
   dispatchDockFileList: (payload: UploadFileListDispatch) => {
     const nextValue = uploadFileListReducer(get().dockUploadFileList, payload);
     if (nextValue === get().dockUploadFileList) return;
@@ -70,6 +119,61 @@ export const createFileManageSlice: StateCreator<
     await get().refreshFileList();
     get().toggleEmbeddingIds(fileIds, false);
   },
+
+  loadMoreKnowledgeItems: async () => {
+    const { queryListParams, fileList, fileListOffset, fileListHasMore } = get();
+
+    // Don't load if there's no more data or no params
+    if (!fileListHasMore || !queryListParams) return;
+
+    try {
+      const response = await serverFileService.getKnowledgeItems({
+        ...queryListParams,
+        limit: queryListParams.limit ?? 50,
+        offset: fileListOffset,
+      });
+
+      // Deduplicate items by ID to prevent duplicate items at page boundaries
+      const existingIds = new Set(fileList.map((item) => item.id));
+      const newItems = response.items.filter((item) => !existingIds.has(item.id));
+      const updatedFileList = [...fileList, ...newItems];
+
+      // Update Zustand store
+      set({
+        fileList: updatedFileList,
+        fileListHasMore: response.hasMore,
+        fileListOffset: fileListOffset + newItems.length,
+      });
+
+      // Update SWR cache so the component sees the new items
+      await mutate([FETCH_ALL_KNOWLEDGE_KEY, queryListParams], updatedFileList, {
+        revalidate: false,
+      });
+    } catch (error) {
+      console.error('Failed to load more knowledge items:', error);
+    }
+  },
+
+  moveFileToFolder: async (fileId, parentId) => {
+    // Optimistically update all file list caches
+    await mutate(
+      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      async (currentData: FileListItem[] | undefined) => {
+        if (!currentData) return currentData;
+        // Update the moved file's parentId in the cache
+        return currentData.map((item) => (item.id === fileId ? { ...item, parentId } : item));
+      },
+      {
+        revalidate: false, // Don't revalidate yet
+      },
+    );
+
+    // Perform the actual update
+    await fileService.updateFile(fileId, { parentId });
+
+    // Revalidate to get fresh data from server
+    await get().refreshFileList();
+  },
   parseFilesToChunks: async (ids: string[], params) => {
     // toggle file ids
     get().toggleParsingIds(ids);
@@ -87,7 +191,8 @@ export const createFileManageSlice: StateCreator<
     await get().refreshFileList();
     get().toggleParsingIds(ids, false);
   },
-  pushDockFileList: async (rawFiles, knowledgeBaseId) => {
+
+  pushDockFileList: async (rawFiles, knowledgeBaseId, parentId) => {
     const { dispatchDockFileList } = get();
 
     // 0. Process ZIP files and extract their contents
@@ -110,31 +215,52 @@ export const createFileManageSlice: StateCreator<
     // 1. skip file in blacklist
     const files = filesToUpload.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
-    // 2. Add all files to dock
+    // 2. Create upload items with abort controllers
+    const uploadFiles = files.map((file) => {
+      const abortController = new AbortController();
+      return {
+        abortController,
+        file,
+        id: file.name,
+        status: 'pending' as const,
+      };
+    });
+
+    // 3. Add all files to dock
     dispatchDockFileList({
       atStart: true,
-      files: files.map((file) => ({ file, id: file.name, status: 'pending' })),
+      files: uploadFiles,
       type: 'addFiles',
     });
 
-    // 3. Upload files with concurrency limit using p-map
+    // 4. Upload files with concurrency limit using p-map
     const uploadResults = await pMap(
-      files,
-      async (file) => {
+      uploadFiles,
+      async (uploadFileItem) => {
         const result = await get().uploadWithProgress({
-          file,
+          abortController: uploadFileItem.abortController,
+          file: uploadFileItem.file,
           knowledgeBaseId,
           onStatusUpdate: dispatchDockFileList,
+          parentId,
         });
 
-        await get().refreshFileList();
+        // Note: Don't refresh after each file to avoid flickering
+        // We'll refresh once at the end
 
-        return { file, fileId: result?.id, fileType: file.type };
+        return {
+          file: uploadFileItem.file,
+          fileId: result?.id,
+          fileType: uploadFileItem.file.type,
+        };
       },
       { concurrency: MAX_UPLOAD_FILE_COUNT },
     );
 
-    // 4. auto-embed files that support chunking
+    // Refresh file list to show newly uploaded files
+    await get().refreshFileList();
+
+    // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults
       .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
       .map(({ fileId }) => fileId!);
@@ -143,7 +269,6 @@ export const createFileManageSlice: StateCreator<
       await get().parseFilesToChunks(fileIdsToEmbed, { skipExist: false });
     }
   },
-
   reEmbeddingChunks: async (id) => {
     if (fileManagerSelectors.isCreatingChunkEmbeddingTask(id)(get())) return;
 
@@ -171,11 +296,27 @@ export const createFileManageSlice: StateCreator<
     get().toggleParsingIds([id], false);
   },
   refreshFileList: async () => {
-    await mutate([FETCH_ALL_KNOWLEDGE_KEY, get().queryListParams]);
+    // Invalidate all queries that start with FETCH_ALL_KNOWLEDGE_KEY
+    // This ensures all file lists (explorer, tree, etc.) are refreshed
+    // Note: We don't pass data as undefined to avoid clearing the cache,
+    // which would cause isLoading to become true and show skeleton screen
+    await mutate(
+      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      async (currentData) => currentData,
+      {
+        revalidate: true,
+      },
+    );
+
+    // Also revalidate the ResourceManager resource list cache (SWR_RESOURCES)
+    // so uploaded files appear immediately in the Explorer without a full refresh.
+    const { revalidateResources } = await import('../resource/hooks');
+    await revalidateResources();
   },
   removeAllFiles: async () => {
     await fileService.removeAllFiles();
   },
+
   removeFileItem: async (id) => {
     await fileService.removeFile(id);
     await get().refreshFileList();
@@ -185,6 +326,43 @@ export const createFileManageSlice: StateCreator<
     await fileService.removeFiles(ids);
     await get().refreshFileList();
   },
+
+  renameFolder: async (folderId, newName) => {
+    // Optimistically update all file list caches
+    await mutate(
+      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      async (currentData: FileListItem[] | undefined) => {
+        if (!currentData) return currentData;
+        // Update the folder's name in the cache
+        return currentData.map((item) =>
+          item.id === folderId ? { ...item, name: newName } : item,
+        );
+      },
+      {
+        revalidate: false, // Don't revalidate yet
+      },
+    );
+
+    // Perform the actual update
+    const { documentService } = await import('@/services/document');
+    await documentService.updateDocument({ id: folderId, title: newName });
+
+    // Revalidate to get fresh data from server
+    await get().refreshFileList();
+  },
+
+  setCurrentFolderId: (folderId) => {
+    set({ currentFolderId: folderId }, false, 'setCurrentFolderId');
+  },
+
+  setPendingRenameItemId: (id) => {
+    set({ pendingRenameItemId: id }, false, 'setPendingRenameItemId');
+  },
+
+  setUploadDockExpanded: (expanded) => {
+    set({ uploadDockExpanded: expanded }, false, 'setUploadDockExpanded');
+  },
+
   toggleEmbeddingIds: (ids, loading) => {
     set((state) => {
       const nextValue = new Set(state.creatingEmbeddingTaskIds);
@@ -220,19 +398,180 @@ export const createFileManageSlice: StateCreator<
     });
   },
 
+  uploadFolderWithStructure: async (files, knowledgeBaseId, currentFolderId) => {
+    const { dispatchDockFileList } = get();
+
+    // 1. Build folder tree from file paths
+    const { filesByFolder, folders } = buildFolderTree(files);
+
+    // 2. Sort folders by depth to ensure parents are created before children
+    const sortedFolderPaths = topologicalSortFolders(folders);
+
+    // Show toast notification if there are folders to create
+    const messageKey = 'uploadFolder.creatingFolders';
+    if (sortedFolderPaths.length > 0) {
+      message.loading({
+        content: t('header.actions.uploadFolder.creatingFolders', { ns: 'file' }),
+        duration: 0, // Don't auto-dismiss
+        key: messageKey,
+      });
+    }
+
+    try {
+      // Map to store created folder IDs: relative path -> folder ID
+      const folderIdMap = new Map<string, string>();
+
+      // 3. Group folders by depth level for batch creation
+      const foldersByLevel = new Map<number, string[]>();
+      for (const folderPath of sortedFolderPaths) {
+        const depth = (folderPath.match(/\//g) || []).length;
+        if (!foldersByLevel.has(depth)) {
+          foldersByLevel.set(depth, []);
+        }
+        foldersByLevel.get(depth)!.push(folderPath);
+      }
+
+      // 4. Create folders level by level using batch API
+      const generateSlug = createNanoId(8);
+      const levels = Array.from(foldersByLevel.keys()).sort((a, b) => a - b);
+      for (const level of levels) {
+        const foldersAtThisLevel = foldersByLevel.get(level)!;
+
+        // Prepare batch creation data for this level
+        const batchCreateData = foldersAtThisLevel.map((folderPath) => {
+          const folder = folders[folderPath];
+          const parentId = folder.parent ? folderIdMap.get(folder.parent) : currentFolderId;
+          const sanitizedName = sanitizeFolderName(folder.name);
+
+          // Generate unique slug for the folder
+          const slug = generateSlug();
+
+          return {
+            content: '',
+            editorData: '{}',
+            fileType: 'custom/folder',
+            knowledgeBaseId,
+            metadata: { createdAt: Date.now() },
+            parentId,
+            slug,
+            title: sanitizedName,
+          };
+        });
+
+        // Create all folders at this level in a single batch request
+        const createdFolders = await documentService.createDocuments(batchCreateData);
+
+        // Store folder ID mappings for the next level
+        for (const [i, element] of foldersAtThisLevel.entries()) {
+          folderIdMap.set(element, createdFolders[i].id);
+        }
+      }
+
+      // Dismiss the toast after folders are created
+      if (sortedFolderPaths.length > 0) {
+        message.destroy(messageKey);
+      }
+
+      // Refresh file list to show the new folders
+      await get().refreshFileList();
+
+      // 5. Prepare all file uploads with their target folder IDs
+      const allUploads: Array<{ file: File; parentId: string | undefined }> = [];
+
+      for (const [folderPath, folderFiles] of Object.entries(filesByFolder)) {
+        // Root-level files (no folder path) go to currentFolderId
+        const targetFolderId = folderPath ? folderIdMap.get(folderPath) : currentFolderId;
+
+        allUploads.push(
+          ...folderFiles.map((file) => ({
+            file,
+            parentId: targetFolderId,
+          })),
+        );
+      }
+
+      // 6. Filter out blacklisted files
+      const validUploads = allUploads.filter(
+        ({ file }) => !FILE_UPLOAD_BLACKLIST.includes(file.name),
+      );
+
+      // 7. Add all files to dock
+      dispatchDockFileList({
+        atStart: true,
+        files: validUploads.map(({ file }) => ({ file, id: file.name, status: 'pending' })),
+        type: 'addFiles',
+      });
+
+      // 8. Upload files with concurrency limit
+      const uploadResults = await pMap(
+        validUploads,
+        async ({ file, parentId }) => {
+          const result = await get().uploadWithProgress({
+            file,
+            knowledgeBaseId,
+            onStatusUpdate: dispatchDockFileList,
+            parentId,
+          });
+
+          // Note: Don't refresh after each file to avoid flickering
+          // We'll refresh once at the end
+
+          return { file, fileId: result?.id, fileType: file.type };
+        },
+        { concurrency: MAX_UPLOAD_FILE_COUNT },
+      );
+
+      // Refresh the file list once after all uploads are complete
+      await get().refreshFileList();
+
+      // 9. Auto-embed files that support chunking
+      const fileIdsToEmbed = uploadResults
+        .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
+        .map(({ fileId }) => fileId!);
+
+      if (fileIdsToEmbed.length > 0) {
+        await get().parseFilesToChunks(fileIdsToEmbed, { skipExist: false });
+      }
+    } catch (error) {
+      // Dismiss toast on error
+      if (sortedFolderPaths.length > 0) {
+        message.destroy(messageKey);
+      }
+      throw error;
+    }
+  },
+
+  useFetchFolderBreadcrumb: (slug) =>
+    useClientDataSWR<FolderCrumb[]>(!slug ? null : ['useFetchFolderBreadcrumb', slug], async () => {
+      const response = await serverFileService.getFolderBreadcrumb(slug!);
+      return response;
+    }),
+
   useFetchKnowledgeItem: (id) =>
-    useClientDataSWR<FileListItem | undefined>(!id ? null : ['useFetchKnowledgeItem', id], () =>
-      serverFileService.getKnowledgeItem(id!),
+    useClientDataSWR<FileListItem | undefined>(
+      !id ? null : ['useFetchKnowledgeItem', id],
+      async () => {
+        const response = await serverFileService.getKnowledgeItem(id!);
+        return response ?? undefined;
+      },
     ),
 
   useFetchKnowledgeItems: (params) =>
-    useClientDataSWR<FileListItem[]>(
-      [FETCH_ALL_KNOWLEDGE_KEY, params],
-      () => serverFileService.getKnowledgeItems(params),
-      {
-        onSuccess: (data) => {
-          set({ fileList: data, queryListParams: params });
-        },
-      },
-    ),
+    useClientDataSWR<FileListItem[]>([FETCH_ALL_KNOWLEDGE_KEY, params], async () => {
+      const response = await serverFileService.getKnowledgeItems({
+        ...params,
+        limit: params.limit ?? 50,
+        offset: 0,
+      });
+
+      // Update store immediately with response data (no duplicate fetch!)
+      set({
+        fileList: response.items,
+        fileListHasMore: response.hasMore,
+        fileListOffset: response.items.length,
+        queryListParams: params,
+      });
+
+      return response.items;
+    }),
 });

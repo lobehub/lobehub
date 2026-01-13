@@ -1,10 +1,10 @@
 import { chainSummaryHistory } from '@lobechat/prompts';
-import { TraceNameMap, UIChatMessage } from '@lobechat/types';
-import { StateCreator } from 'zustand/vanilla';
+import { TraceNameMap, type UIChatMessage } from '@lobechat/types';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { chatService } from '@/services/chat';
 import { topicService } from '@/services/topic';
-import { ChatStore } from '@/store/chat';
+import { type ChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
@@ -31,7 +31,7 @@ export const chatMemory: StateCreator<
       },
       params: { ...chainSummaryHistory(messages), model, provider, stream: false },
       trace: {
-        sessionId: get().activeId,
+        sessionId: get().activeAgentId,
         topicId: get().activeTopicId,
         traceName: TraceNameMap.SummaryHistoryMessages,
       },

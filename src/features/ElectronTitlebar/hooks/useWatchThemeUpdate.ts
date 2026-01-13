@@ -1,30 +1,15 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { useTheme } from 'antd-style';
-import { rgba } from 'polished';
+import { useTheme } from 'next-themes';
 import { useEffect } from 'react';
 
+import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 export const useWatchThemeUpdate = () => {
-  const [isAppStateInit, systemAppearance, updateElectronAppState, isMac] = useElectronStore(
-    (s) => [
-      s.isAppStateInit,
-      s.appState.systemAppearance,
-      s.updateElectronAppState,
-      s.appState.isMac,
-    ],
-  );
-  const [switchThemeMode, switchLocale] = useGlobalStore((s) => [
-    s.switchThemeMode,
-    s.switchLocale,
-  ]);
-
-  const theme = useTheme();
-
-  useWatchBroadcast('themeChanged', ({ themeMode }) => {
-    switchThemeMode(themeMode, { skipBroadcast: true });
-  });
+  const [updateElectronAppState] = useElectronStore((s) => [s.updateElectronAppState]);
+  const [switchLocale] = useGlobalStore((s) => [s.switchLocale]);
 
   useWatchBroadcast('localeChanged', ({ locale }) => {
     switchLocale(locale as any, { skipBroadcast: true });
@@ -34,13 +19,20 @@ export const useWatchThemeUpdate = () => {
     updateElectronAppState({ systemAppearance: themeMode });
   });
 
+  const { theme } = useTheme();
+
   useEffect(() => {
-    if (!isAppStateInit || !isMac) return;
-    document.documentElement.style.background = 'none';
+    if (!isDesktop) return;
+    if (!theme) return;
 
-    // https://x.com/alanblogsooo/status/1939208908993896684
-    const isNotSameTheme = !systemAppearance ? true : theme.appearance !== systemAppearance;
-
-    document.body.style.background = rgba(theme.colorBgLayout, isNotSameTheme ? 0.95 : 0.66);
-  }, [theme, systemAppearance, isAppStateInit, isMac]);
+    (async () => {
+      try {
+        await ensureElectronIpc().system.updateThemeModeHandler(
+          theme as 'dark' | 'light' | 'system',
+        );
+      } catch {
+        // Ignore errors in non-electron environment
+      }
+    })();
+  }, [theme]);
 };

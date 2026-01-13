@@ -1,9 +1,9 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { DEFAULT_PREFERENCE } from '@lobechat/const';
-import type { CustomPluginParams } from '@lobechat/types';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import type { CustomPluginParams, UserOnboarding } from '@lobechat/types';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz, varchar255 } from './_helpers';
 
@@ -20,8 +20,10 @@ export const users = pgTable(
     firstName: text('first_name'),
     lastName: text('last_name'),
     fullName: text('full_name'),
+    interests: varchar('interests', { length: 64 }).array(),
 
     isOnboarded: boolean('is_onboarded').default(false),
+    onboarding: jsonb('onboarding').$type<UserOnboarding>(),
     // Time user was created in Clerk
     clerkCreatedAt: timestamptz('clerk_created_at'),
 
@@ -77,6 +79,7 @@ export const userSettings = pgTable('user_settings', {
   systemAgent: jsonb('system_agent'),
   defaultAgent: jsonb('default_agent'),
   market: jsonb('market'),
+  memory: jsonb('memory'),
   tool: jsonb('tool'),
   image: jsonb('image'),
 });

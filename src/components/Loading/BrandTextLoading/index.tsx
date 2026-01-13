@@ -1,16 +1,42 @@
 import { BrandLoading, LobeHubText } from '@lobehub/ui/brand';
-import { Center } from 'react-layout-kit';
 
 import { isCustomBranding } from '@/const/version';
 
 import CircleLoading from '../CircleLoading';
+import styles from './index.module.css';
 
-export default () => {
-  if (isCustomBranding) return <CircleLoading />;
+interface BrandTextLoadingProps {
+  debugId: string;
+}
+
+const BrandTextLoading = ({ debugId }: BrandTextLoadingProps) => {
+  if (isCustomBranding)
+    return (
+      <div className={styles.container}>
+        <CircleLoading />
+      </div>
+    );
+
+  const showDebug = process.env.NODE_ENV === 'development' && debugId;
 
   return (
-    <Center height={'100%'} width={'100%'}>
-      <BrandLoading size={40} style={{ opacity: 0.6 }} text={LobeHubText} />
-    </Center>
+    <div className={styles.container}>
+      <div aria-label="Loading" className={styles.brand} role="status">
+        <BrandLoading size={40} text={LobeHubText} />
+      </div>
+      {showDebug && (
+        <div className={styles.debug}>
+          <div className={styles.debugRow}>
+            <code>Debug ID:</code>
+            <span className={styles.debugTag}>
+              <code>{debugId}</code>
+            </span>
+          </div>
+          <div className={styles.debugHint}>only visible in development</div>
+        </div>
+      )}
+    </div>
   );
 };
+
+export default BrandTextLoading;

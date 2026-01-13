@@ -1,6 +1,8 @@
 export * from './base64';
 export * from './client/cookie';
 export * from './detectChinese';
+export * from './env';
+export * from './folderStructure';
 export * from './format';
 export * from './imageToBase64';
 export * from './keyboard';
@@ -8,6 +10,7 @@ export * from './merge';
 export * from './multimodalContent';
 export * from './number';
 export * from './object';
+export * from './platform';
 export * from './pricing';
 export * from './safeParseJSON';
 export * from './sleep';

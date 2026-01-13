@@ -1,7 +1,7 @@
 import { useEditor } from '@lobehub/editor/react';
-import { ReactNode, memo, useRef } from 'react';
+import { type ReactNode, memo, useRef } from 'react';
 
-import StoreUpdater, { StoreUpdaterProps } from './StoreUpdater';
+import StoreUpdater, { type StoreUpdaterProps } from './StoreUpdater';
 import { Provider, createStore } from './store';
 
 interface ChatInputProviderProps extends StoreUpdaterProps {
@@ -10,6 +10,7 @@ interface ChatInputProviderProps extends StoreUpdaterProps {
 
 export const ChatInputProvider = memo<ChatInputProviderProps>(
   ({
+    agentId,
     children,
     leftActions,
     rightActions,
@@ -20,6 +21,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     chatInputEditorRef,
     onMarkdownContentChange,
     mentionItems,
+    allowExpand,
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -28,6 +30,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
       <Provider
         createStore={() =>
           createStore({
+            allowExpand,
             editor,
             leftActions,
             mentionItems,
@@ -40,6 +43,8 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
         }
       >
         <StoreUpdater
+          agentId={agentId}
+          allowExpand={allowExpand}
           chatInputEditorRef={chatInputEditorRef}
           leftActions={leftActions}
           mentionItems={mentionItems}

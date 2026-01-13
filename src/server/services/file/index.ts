@@ -1,14 +1,16 @@
-import { LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { sha256 } from 'js-sha256';
 
 import { serverDBEnv } from '@/config/db';
 import { FileModel } from '@/database/models/file';
-import { FileItem } from '@/database/schemas';
+import { type FileItem } from '@/database/schemas';
+import { appEnv } from '@/envs/app';
 import { TempFileManager } from '@/server/utils/tempFileManager';
 
-import { FileServiceImpl, createFileServiceModule } from './impls';
+import { createFileServiceModule } from './impls';
+import { type FileServiceImpl } from './impls/type';
 
 /**
  * File service class
@@ -18,11 +20,12 @@ export class FileService {
   private userId: string;
   private fileModel: FileModel;
 
-  private impl: FileServiceImpl = createFileServiceModule();
+  private impl: FileServiceImpl;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.fileModel = new FileModel(db, userId);
+    this.impl = createFileServiceModule(db);
   }
 
   /**
@@ -61,6 +64,16 @@ export class FileService {
   }
 
   /**
+   * Get file metadata from storage
+   * Used to verify actual file size instead of trusting client-provided values
+   */
+  public async getFileMetadata(
+    key: string,
+  ): Promise<{ contentLength: number; contentType?: string }> {
+    return this.impl.getFileMetadata(key);
+  }
+
+  /**
    * Create pre-signed preview URL
    */
   public async createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {
@@ -84,7 +97,7 @@ export class FileService {
   /**
    * Extract key from full URL
    */
-  public getKeyFromFullUrl(url: string): string {
+  public async getKeyFromFullUrl(url: string): Promise<string | null> {
     return this.impl.getKeyFromFullUrl(url);
   }
 
@@ -128,10 +141,10 @@ export class FileService {
       !isExist, // insertToGlobalFiles
     );
 
-    // Return unified proxy URL: /f/:id
+    // Return unified proxy URL: ${APP_URL}/f/:id
     return {
       fileId: id,
-      url: `/f/${id}`,
+      url: `${appEnv.APP_URL}/f/${id}`,
     };
   }
 

@@ -1,9 +1,9 @@
 'use client';
 
 import { useAutoAnimate } from '@formkit/auto-animate/react';
+import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { Fragment, memo, useEffect, useRef } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import { useImageStore } from '@/store/image';
 import { generationBatchSelectors } from '@/store/image/selectors';
@@ -77,8 +77,8 @@ const GenerationFeed = memo(() => {
   }
 
   return (
-    <>
-      <Flexbox flex={1} gap={16} ref={parent} width="100%">
+    <Flexbox flex={1} style={{ overflowY: 'auto' }}>
+      <Flexbox gap={16} ref={parent} style={{ paddingBottom: 48 }} width="100%">
         {currentGenerationBatches.map((batch, index) => (
           <Fragment key={batch.id}>
             {Boolean(index !== 0) && <Divider dashed style={{ margin: 0 }} />}
@@ -88,7 +88,7 @@ const GenerationFeed = memo(() => {
       </Flexbox>
       {/* Invisible element for scroll target */}
       <div ref={containerRef} style={{ height: 1 }} />
-    </>
+    </Flexbox>
   );
 });
 

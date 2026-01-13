@@ -1,8 +1,10 @@
-import { ConfigProvider, Table, TableProps } from 'antd';
-import { createStyles } from 'antd-style';
+import { ConfigProvider, Table, type TableProps } from 'antd';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 
-const useStyles = createStyles(({ css, prefixCls }) => ({
+const prefixCls = 'ant';
+
+const styles = createStaticStyles(({ css }) => ({
   hoverToActive: css`
     opacity: 0.6;
 
@@ -41,13 +43,12 @@ const useStyles = createStyles(({ css, prefixCls }) => ({
 
 const InlineTable = memo<TableProps & { hoverToActive?: boolean }>(
   ({ hoverToActive, className, ...rest }) => {
-    const { cx, styles, theme } = useStyles();
     return (
       <ConfigProvider
         theme={{
           components: {
             Table: {
-              headerBg: theme.colorFillQuaternary,
+              headerBg: cssVar.colorFillQuaternary,
               headerBorderRadius: 0,
             },
           },

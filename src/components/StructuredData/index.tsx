@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import { type FC } from 'react';
 
 const StructuredData: FC<{ ld: any }> = ({ ld }) => {
   return (

@@ -1,7 +1,7 @@
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 
-import { isDev } from '@/const/env';
+import { isDev, isWindows } from '@/const/env';
 import { UPDATE_CHANNEL as channel, updaterConfig } from '@/modules/updater/configs';
 import { createLogger } from '@/utils/logger';
 
@@ -144,12 +144,16 @@ export class UpdaterManager {
     // Close all windows first to ensure clean exit
     logger.info('Closing all windows before update installation...');
     const { BrowserWindow, app } = require('electron');
-    const allWindows = BrowserWindow.getAllWindows();
-    allWindows.forEach((window) => {
-      if (!window.isDestroyed()) {
-        window.close();
-      }
-    });
+    // do not close windows and quit first
+    // on Windows, window-all-closed -> app.quit()` can terminate the process before the timer fires
+    if (!isWindows) {
+      const allWindows = BrowserWindow.getAllWindows();
+      allWindows.forEach((window) => {
+        if (!window.isDestroyed()) {
+          window.close();
+        }
+      });
+    }
 
     // Release single instance lock before quitting
     // This ensures the new instance can acquire the lock

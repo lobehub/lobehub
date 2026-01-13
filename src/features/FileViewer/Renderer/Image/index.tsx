@@ -1,37 +1,38 @@
-import { DocRenderer } from '@cyntler/react-doc-viewer';
-import { Center } from 'react-layout-kit';
+'use client';
 
-const ImageRenderer: DocRenderer = ({ mainState: { currentDocument } }) => {
-  const { uri, fileName } = currentDocument || {};
+import { Center } from '@lobehub/ui';
+import { memo, useState } from 'react';
+
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+
+interface ImageViewerProps {
+  fileId: string;
+  url: string | null;
+}
+
+const ImageViewer = memo<ImageViewerProps>(({ url }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  if (!url) return null;
 
   return (
     <Center height={'100%'} width={'100%'}>
+      {!isLoaded && <NeuralNetworkLoading size={36} />}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        alt={fileName}
-        height={'100%'}
-        src={uri}
-        style={{ objectFit: 'contain', overflow: 'hidden' }}
-        width={'100%'}
+        alt="Image preview"
+        onLoad={() => setIsLoaded(true)}
+        src={url}
+        style={{
+          display: isLoaded ? 'block' : 'none',
+          height: '100%',
+          objectFit: 'contain',
+          overflow: 'hidden',
+          width: '100%',
+        }}
       />
     </Center>
   );
-};
+});
 
-export default ImageRenderer;
-
-ImageRenderer.fileTypes = [
-  'jpg',
-  'jpeg',
-  'image/jpg',
-  'image/jpeg',
-  'png',
-  'image/png',
-  'webp',
-  'image/webp',
-  'gif',
-  'image/gif',
-  'bmp',
-  'image/bmp',
-];
-ImageRenderer.weight = 0;
+export default ImageViewer;

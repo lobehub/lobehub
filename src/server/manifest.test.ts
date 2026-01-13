@@ -1,8 +1,8 @@
 // @vitest-environment node
+import { BRANDING_LOGO_URL } from '@lobechat/business-const';
 import qs from 'query-string';
 import { describe, expect, it, vi } from 'vitest';
 
-import { BRANDING_LOGO_URL } from '@/const/branding';
 import { getCanonicalUrl } from '@/server/utils/url';
 
 import { Manifest, manifestModule } from './manifest';
@@ -150,7 +150,7 @@ describe('Manifest', () => {
         immutable: 'true',
         max_age: 31536000,
         sizes: '1280x676',
-        src: 'https://example.com/logo.png?v=1',
+        src: 'https://example.com/screenshot.png?v=1',
         type: 'image/png',
       });
     });

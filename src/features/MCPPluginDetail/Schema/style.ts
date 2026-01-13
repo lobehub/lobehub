@@ -1,9 +1,9 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token }) => {
+export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     code: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
     `,
   };
 });

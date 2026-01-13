@@ -1,6 +1,5 @@
 import { NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { merge } from 'lodash';
-import { isEqual } from 'lodash-es';
+import { isEqual, merge } from 'es-toolkit/compat';
 
 import { defaultProxySettings } from '@/const/store';
 import { createLogger } from '@/utils/logger';

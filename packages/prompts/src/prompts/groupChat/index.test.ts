@@ -19,7 +19,6 @@ describe('buildGroupChatSystemPrompt', () => {
       content: 'Hello everyone',
       createdAt: mockTimestamp,
       updatedAt: mockTimestamp,
-      meta: {},
     },
     {
       id: 'm2',
@@ -28,7 +27,6 @@ describe('buildGroupChatSystemPrompt', () => {
       content: 'Hi! I can help with that.',
       createdAt: mockTimestamp,
       updatedAt: mockTimestamp,
-      meta: {},
     },
   ];
 
@@ -114,7 +112,6 @@ describe('filterMessagesForAgent', () => {
     content,
     createdAt: mockTimestamp,
     updatedAt: mockTimestamp,
-    meta: {},
     ...options,
   });
 

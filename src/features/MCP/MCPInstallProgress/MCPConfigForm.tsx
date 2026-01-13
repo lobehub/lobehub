@@ -1,10 +1,9 @@
-import { Form, Markdown } from '@lobehub/ui';
-import { Form as AForm, Button } from 'antd';
-import { createStyles } from 'antd-style';
-import { motion } from 'framer-motion';
+import { Button, Flexbox, Form, Markdown } from '@lobehub/ui';
+import { Form as AForm } from 'antd';
+import { createStaticStyles } from 'antd-style';
+import * as motion from 'motion/react-m';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import ItemRender from '@/components/JSONSchemaConfig/ItemRender';
 import { transformPluginSettings } from '@/features/PluginSettings';
@@ -17,33 +16,32 @@ interface MCPConfigFormProps {
   onSubmit?: (config: Record<string, any>) => Promise<void>;
 }
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    margin-block-start: ${token.marginXS}px;
-    padding: ${token.padding}px;
-    border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadius}px;
+    margin-block-start: ${cssVar.marginXS};
+    padding: ${cssVar.padding};
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius};
 
-    background-color: ${token.colorBgContainer};
+    background-color: ${cssVar.colorBgContainer};
   `,
   footer: css`
     display: flex;
-    gap: ${token.marginXS}px;
+    gap: ${cssVar.marginXS};
     justify-content: flex-end;
 
-    margin-block-start: ${token.margin}px;
-    padding-block-start: ${token.paddingXS}px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    margin-block-start: ${cssVar.margin};
+    padding-block-start: ${cssVar.paddingXS};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   markdown: css`
     p {
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     }
   `,
 }));
 
 const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCancel }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation(['plugin', 'common']);
   const [form] = AForm.useForm();
   const [loading, setLoading] = useState(false);

@@ -4,18 +4,11 @@ import {
   LobeChatGroupMetaConfig,
 } from '@lobechat/types';
 
-import { DEFAULT_MODEL, DEFAULT_PROVIDER } from './llm';
-
 export const DEFAULT_CHAT_GROUP_CHAT_CONFIG: LobeChatGroupChatConfig = {
   allowDM: true,
-  enableSupervisor: true,
-  maxResponseInRow: 10,
-  orchestratorModel: DEFAULT_MODEL,
-  orchestratorProvider: DEFAULT_PROVIDER,
-  responseOrder: 'natural',
-  responseSpeed: 'fast',
+  openingMessage: '',
+  openingQuestions: [],
   revealDM: false,
-  scene: 'productive',
   systemPrompt: '',
 };
 

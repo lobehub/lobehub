@@ -1,4 +1,8 @@
-import { ElectronAppState } from '@lobechat/electron-client-ipc';
+import type {
+  ElectronAppState,
+  WindowResizableParams,
+  WindowSizeParams,
+} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -6,6 +10,10 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
  * Service class for interacting with Electron's system-level information and actions.
  */
 class ElectronSystemService {
+  private get ipc() {
+    return ensureElectronIpc();
+  }
+
   /**
    * Fetches the application state from the Electron main process.
    * This includes system information (platform, arch) and user-specific paths.
@@ -13,24 +21,46 @@ class ElectronSystemService {
    */
   async getAppState(): Promise<ElectronAppState> {
     // Calls the underlying IPC function to get data from the main process
-    return ensureElectronIpc().system.getAppState();
+    return this.ipc.system.getAppState();
   }
 
   async closeWindow(): Promise<void> {
-    return ensureElectronIpc().windows.closeWindow();
+    return this.ipc.windows.closeWindow();
   }
 
   async maximizeWindow(): Promise<void> {
-    return ensureElectronIpc().windows.maximizeWindow();
+    return this.ipc.windows.maximizeWindow();
   }
 
   async minimizeWindow(): Promise<void> {
-    return ensureElectronIpc().windows.minimizeWindow();
+    return this.ipc.windows.minimizeWindow();
+  }
+
+  async setWindowResizable(params: WindowResizableParams): Promise<void> {
+    return this.ipc.windows.setWindowResizable(params);
+  }
+
+  async setWindowSize(params: WindowSizeParams): Promise<void> {
+    return this.ipc.windows.setWindowSize(params);
+  }
+
+  async openExternalLink(url: string): Promise<void> {
+    return this.ipc.system.openExternalLink(url);
   }
 
   showContextMenu = async (type: string, data?: any) => {
-    return ensureElectronIpc().menu.showContextMenu({ data, type });
+    return this.ipc.menu.showContextMenu({ data, type });
   };
+
+  /**
+   * Open native folder picker dialog
+   */
+  async selectFolder(params?: {
+    defaultPath?: string;
+    title?: string;
+  }): Promise<string | undefined> {
+    return this.ipc.system.selectFolder(params);
+  }
 }
 
 // Export a singleton instance of the service

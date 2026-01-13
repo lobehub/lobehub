@@ -4,9 +4,25 @@ export interface UserMemoryTimestamps {
   updatedAt: Date;
 }
 
+export enum UserMemoryContextObjectType {
+  Application = 'application',
+  Item = 'item',
+  Knowledge = 'knowledge',
+  Other = 'other',
+  Person = 'person',
+  Place = 'place'
+}
+
+export enum UserMemoryContextSubjectType {
+  Item = 'item',
+  Other = 'other',
+  Person = 'person',
+  Pet = 'pet'
+}
+
 export interface UserMemoryContext extends UserMemoryTimestamps {
-  associatedObjects: Record<string, unknown>[] | null;
-  associatedSubjects: Record<string, unknown>[] | null;
+  associatedObjects: { extra?: Record<string, unknown> | null, name?: string, type?: UserMemoryContextObjectType }[] | null;
+  associatedSubjects: { extra?: Record<string, unknown> | null, name?: string, type?: UserMemoryContextSubjectType }[] | null;
   currentStatus: string | null;
   description: string | null;
   descriptionVector: number[] | null;
@@ -21,6 +37,17 @@ export interface UserMemoryContext extends UserMemoryTimestamps {
   userId: string | null;
   userMemoryIds: string[] | null;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export type UserMemoryContextWithoutVectors = Omit<
+  UserMemoryContext,
+  'descriptionVector' | 'titleVector'
+>;
+
+export type UserMemoryContextsListItem = Omit<
+  UserMemoryContextWithoutVectors,
+  'associatedObjects' | 'associatedSubjects'
+>;
 
 export interface UserMemoryExperience extends UserMemoryTimestamps {
   action: string | null;
@@ -40,6 +67,17 @@ export interface UserMemoryExperience extends UserMemoryTimestamps {
   userMemoryId: string | null;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export type UserMemoryExperienceWithoutVectors = Omit<
+  UserMemoryExperience,
+  'actionVector' | 'keyLearningVector' | 'situationVector'
+>;
+
+export type UserMemoryExperiencesListItem = Omit<
+  UserMemoryExperienceWithoutVectors,
+  'possibleOutcome' | 'reasoning'
+>;
+
 export interface UserMemoryPreference extends UserMemoryTimestamps {
   conclusionDirectives: string | null;
   conclusionDirectivesVector: number[] | null;
@@ -52,3 +90,14 @@ export interface UserMemoryPreference extends UserMemoryTimestamps {
   userId: string | null;
   userMemoryId: string | null;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export type UserMemoryPreferenceWithoutVectors = Omit<
+  UserMemoryPreference,
+  'conclusionDirectivesVector'
+>;
+
+export type UserMemoryPreferencesListItem = Omit<
+  UserMemoryPreferenceWithoutVectors,
+  'suggestions'
+>;

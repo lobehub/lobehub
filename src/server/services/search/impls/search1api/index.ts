@@ -1,10 +1,10 @@
-import { SearchParams, UniformSearchResponse, UniformSearchResult } from '@lobechat/types';
+import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { SearchServiceImpl } from '../type';
-import { Search1ApiResponse } from './type';
+import { type SearchServiceImpl } from '../type';
+import { type Search1ApiResponse } from './type';
 
 interface Search1APIQueryParams {
   crawl_results?: 0 | 1;
@@ -41,7 +41,7 @@ export class Search1APIImpl implements SearchServiceImpl {
     const { searchEngines } = params;
 
     const defaultQueryParams: Search1APIQueryParams = {
-      crawl_results: 0, // 默认不做抓取
+      crawl_results: 0, // Default is no crawling
       image: false,
       max_results: 15, // Default max results
       query,

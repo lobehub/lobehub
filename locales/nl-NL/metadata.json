@@ -1,47 +1,25 @@
 {
-  "changelog": {
-    "description": "Blijf op de hoogte van nieuwe functies en verbeteringen van {{appName}}",
-    "title": "Wijzigingslog"
-  },
-  "chat": {
-    "description": "{{appName}} biedt je de beste ervaring met ChatGPT, Claude, Gemini, en OLLaMA WebUI",
-    "title": "{{appName}}: Persoonlijke AI-efficiëntietool, geef jezelf een slimmer brein"
-  },
-  "discover": {
-    "assistants": {
-      "description": "Inhoud creatie, copywriting, vraag-en-antwoord, beeldgeneratie, video-generatie, spraakgeneratie, slimme agenten, geautomatiseerde workflows, pas je eigen AI / GPTs / OLLaMA slimme assistent aan",
-      "title": "AI-assistenten"
-    },
-    "description": "Inhoud creatie, copywriting, vraag-en-antwoord, beeldgeneratie, video-generatie, spraakgeneratie, slimme agenten, geautomatiseerde workflows, aangepaste AI-toepassingen, pas je eigen AI-toepassingswerkplek aan",
-    "mcp": {
-      "description": "Zoek, vergelijk en verbind met duizenden MCP-servers om AI-systemen eenvoudig toegang te geven tot bestandssystemen, databases, API's en andere essentiële bronnen, en zo je AI-mogelijkheden aanzienlijk uit te breiden",
-      "title": "MCP Servers Markt"
-    },
-    "models": {
-      "description": "Verken populaire AI-modellen zoals OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
-      "title": "AI-modellen"
-    },
-    "plugins": {
-      "description": "Zoek naar grafiekgeneratie, academische toepassingen, afbeeldingsgeneratie, videogeneratie, spraakgeneratie en geautomatiseerde workflows om rijke plug-in mogelijkheden voor je assistent te integreren.",
-      "title": "AI-plug-ins"
-    },
-    "providers": {
-      "description": "Verken populaire modelproviders zoals OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
-      "title": "AI-modelleveranciers"
-    },
-    "search": "Zoeken",
-    "title": "Ontdekken"
-  },
-  "image": {
-    "description": "{{appName}} biedt je de beste ervaring met GPT Image, Flux, Midjourney en Stable Diffusion",
-    "title": "AI Schilderen"
-  },
-  "plugins": {
-    "description": "Zoeken, grafiekgeneratie, academisch, beeldgeneratie, video-generatie, spraakgeneratie, geautomatiseerde workflows, pas de ToolCall-pluginmogelijkheden van ChatGPT / Claude aan",
-    "title": "Pluginmarkt"
-  },
-  "welcome": {
-    "description": "{{appName}} biedt je de beste ervaring met ChatGPT, Claude, Gemini, en OLLaMA WebUI",
-    "title": "Welkom bij {{appName}}: Persoonlijke AI-efficiëntietool, geef jezelf een slimmer brein"
-  }
+  "changelog.description": "Blijf op de hoogte van de nieuwe functies en verbeteringen van {{appName}}",
+  "changelog.title": "Wijzigingslogboek",
+  "chat.description": "{{appName}} biedt je de beste gebruikerservaring voor ChatGPT, Claude, Gemini en OLLaMA.",
+  "chat.title": "{{appName}} · Voor Samenwerkende Agenten",
+  "discover.assistants.description": "Inhoud, Q&A, afbeeldingen, video, spraak, workflows—blader door en voeg Agenten toe vanuit de Community.",
+  "discover.assistants.title": "Agentencommunity",
+  "discover.description": "Ontdek Agenten, Vaardigheden, Providers, modellen en MCP-servers.",
+  "discover.mcp.description": "Zoek, vergelijk en verbind met duizenden MCP-servers, waarmee AI-systemen eenvoudig toegang krijgen tot bestandssystemen, databases, API’s en andere essentiële bronnen, en je AI-mogelijkheden aanzienlijk worden uitgebreid.",
+  "discover.mcp.title": "MCP-servercommunity",
+  "discover.models.description": "Ontdek toonaangevende AI-modellen OpenAI / GPT / Claude 3 / Gemini / Ollama / Azure / DeepSeek",
+  "discover.models.title": "Modelcommunity",
+  "discover.plugins.description": "Ontdek grafieken, academische tools, beeld-/video-/spraakgeneratie en workflows—voeg Vaardigheden toe aan je Agenten.",
+  "discover.plugins.title": "Vaardighedencommunity",
+  "discover.providers.description": "Ontdek toonaangevende modelproviders OpenAI / Qwen / Ollama / Anthropic / DeepSeek / Google Gemini / OpenRouter",
+  "discover.providers.title": "Providercommunity",
+  "discover.search": "Zoeken",
+  "discover.title": "Ontdekken",
+  "image.description": "{{appName}} biedt je de beste ervaring met GPT Image, Flux, Midjourney en Stable Diffusion",
+  "image.title": "AI-kunst",
+  "plugins.description": "Zoeken, grafieken, academische tools, beeld-/video-/spraakgeneratie, workflows—voeg Vaardigheden toe aan je Agenten.",
+  "plugins.title": "Vaardighedencommunity",
+  "welcome.description": "{{appName}} biedt je de beste gebruikerservaring voor ChatGPT, Claude, Gemini en OLLaMA.",
+  "welcome.title": "Welkom bij {{appName}} · Voor Samenwerkende Agenten"
 }

@@ -1,30 +1,25 @@
 {
-  "Artifacts": "Artifacts",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "分块",
-      "file": "文件"
-    }
-  },
-  "Plugins": "插件",
-  "artifacts": {
-    "display": {
-      "code": "代码",
-      "preview": "预览"
-    },
-    "svg": {
-      "copyAsImage": "复制为图片",
-      "copyFail": "复制失败，错误原因:{{error}}",
-      "copySuccess": "图片复制成功",
-      "download": {
-        "png": "下载为 PNG",
-        "svg": "下载为 SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "当前 Artifacts 列表为空，请在会话中按需使用插件后再查看",
+  "Artifacts": "构件",
+  "FilePreview.tabs.chunk": "分块",
+  "FilePreview.tabs.file": "文件",
+  "Plugins": "技能",
+  "artifacts.display.code": "代码",
+  "artifacts.display.preview": "预览",
+  "artifacts.svg.copyAsImage": "复制为图片",
+  "artifacts.svg.copyFail": "复制遇到了问题：{{error}}。你可以再试一次",
+  "artifacts.svg.copySuccess": "图片复制成功",
+  "artifacts.svg.download.png": "下载为 PNG",
+  "artifacts.svg.download.svg": "下载为 SVG",
+  "document.todos.allCompleted": "所有任务已完成",
+  "document.todos.title": "任务",
+  "emptyArtifactList": "当前 Artifacts 列表为空，请在会话中按需使用技能后再查看",
   "emptyKnowledgeList": "当前知识列表为空",
   "files": "文件",
   "messageDetail": "消息详情",
+  "notebook.confirmDelete": "确定要删除这个文档吗？",
+  "notebook.delete": "删除",
+  "notebook.empty": "暂无文档，当前话题关联的文档将会显示在这里",
+  "notebook.title": "Notebook",
+  "openInPageEditor": "在文稿中编辑",
   "title": "工作区"
 }

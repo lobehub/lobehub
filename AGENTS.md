@@ -26,6 +26,7 @@ The project follows a well-organized monorepo structure:
 - `src/` - Main source code
 - `docs/` - Documentation
 - `.cursor/rules/` - Development rules and guidelines
+- PR titles starting with `✨ feat/` or `🐛 fix` will trigger the release workflow upon merge. Only use these prefixes for significant user-facing feature changes or bug fixes
 
 ## Development Workflow
 
@@ -65,13 +66,17 @@ The project follows a well-organized monorepo structure:
 
 ### Type Checking
 
-- Use `bun run typecheck` to check for type errors
+- Use `bun run type-check` to check for type errors
 
 ### i18n
 
 - **Keys**: Add to `src/locales/default/namespace.ts`
 - **Dev**: Translate `locales/zh-CN/namespace.json` locale file only for preview
 - DON'T run `pnpm i18n`, let CI auto handle it
+
+## Linear Issue Management
+
+Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-not-installed-linear-mcp) when working with Linear issues.
 
 ## Project Rules Index
 
@@ -83,10 +88,10 @@ All following rules are saved under `.cursor/rules/` directory:
 
 ### Frontend
 
-- `react-component.mdc` – React component style guide and conventions
+- `react.mdc` – React component style guide and conventions
 - `i18n.mdc` – Internationalization guide using react-i18next
 - `typescript.mdc` – TypeScript code style guide
-- `packages/react-layout-kit.mdc` – Usage guide for react-layout-kit
+- `packages/react-layout-kit.mdc` – Usage guide for Flexbox and Center components from @lobehub/ui
 
 ### State Management
 

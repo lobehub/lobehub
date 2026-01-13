@@ -1,15 +1,17 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { FilesStoreState, initialState } from './initialState';
-import { FileAction, createFileSlice } from './slices/chat';
-import { FileChunkAction, createFileChunkSlice } from './slices/chunk';
-import { DocumentAction, createDocumentSlice } from './slices/document';
-import { FileManageAction, createFileManageSlice } from './slices/fileManager';
-import { TTSFileAction, createTTSFileSlice } from './slices/tts';
-import { FileUploadAction, createFileUploadSlice } from './slices/upload/action';
+import { type FilesStoreState, initialState } from './initialState';
+import { type FileAction, createFileSlice } from './slices/chat';
+import { type FileChunkAction, createFileChunkSlice } from './slices/chunk';
+import { type DocumentAction, createDocumentSlice } from './slices/document';
+import { type FileManageAction, createFileManageSlice } from './slices/fileManager';
+import { type ResourceAction, createResourceSlice } from './slices/resource/action';
+import { type ResourceState } from './slices/resource/initialState';
+import { type TTSFileAction, createTTSFileSlice } from './slices/tts';
+import { type FileUploadAction, createFileUploadSlice } from './slices/upload/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -19,7 +21,9 @@ export type FileStore = FilesStoreState &
   TTSFileAction &
   FileManageAction &
   FileChunkAction &
-  FileUploadAction;
+  FileUploadAction &
+  ResourceAction &
+  ResourceState;
 
 const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (...parameters) => ({
   ...initialState,
@@ -29,6 +33,7 @@ const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (...
   ...createTTSFileSlice(...parameters),
   ...createFileChunkSlice(...parameters),
   ...createFileUploadSlice(...parameters),
+  ...createResourceSlice(...parameters),
 });
 
 //  ===============  Implement useStore ============ //

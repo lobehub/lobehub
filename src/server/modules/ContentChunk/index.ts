@@ -1,9 +1,6 @@
-import { Strategy } from 'unstructured-client/sdk/models/shared';
-
 import type { NewChunkItem, NewUnstructuredChunkItem } from '@/database/schemas';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { ChunkingLoader } from '@/libs/langchain';
-import { ChunkingStrategy, Unstructured } from '@/libs/unstructured';
 
 import { ChunkingRuleParser } from './rules';
 import type { ChunkingService } from './rules';
@@ -21,12 +18,10 @@ interface ChunkResult {
 }
 
 export class ContentChunk {
-  private unstructuredClient: Unstructured;
   private langchainClient: ChunkingLoader;
   private chunkingRules: Record<string, ChunkingService[]>;
 
   constructor() {
-    this.unstructuredClient = new Unstructured();
     this.langchainClient = new ChunkingLoader();
     this.chunkingRules = ChunkingRuleParser.parse(knowledgeEnv.FILE_TYPE_CHUNKING_RULES || '');
   }
@@ -42,13 +37,6 @@ export class ContentChunk {
     for (const service of services) {
       try {
         switch (service) {
-          case 'unstructured': {
-            if (this.canUseUnstructured()) {
-              return await this.chunkByUnstructured(params.filename, params.content);
-            }
-            break;
-          }
-
           case 'doc2x': {
             // Future implementation
             break;
@@ -73,86 +61,6 @@ export class ContentChunk {
   private canUseUnstructured(): boolean {
     return !!(knowledgeEnv.UNSTRUCTURED_API_KEY && knowledgeEnv.UNSTRUCTURED_SERVER_URL);
   }
-
-  private chunkByUnstructured = async (
-    filename: string,
-    content: Uint8Array,
-  ): Promise<ChunkResult> => {
-    const result = await this.unstructuredClient.partition({
-      chunkingStrategy: ChunkingStrategy.ByPage,
-      fileContent: content,
-      filename,
-      strategy: Strategy.Auto,
-    });
-
-    // after finish partition, we need to filter out some elements
-    const documents = result.compositeElements
-      .filter((e) => !new Set(['PageNumber', 'Footer']).has(e.type))
-      .map((item, index): NewChunkItem => {
-        const {
-          text_as_html,
-          page_number,
-          page_name,
-          image_mime_type,
-          image_base64,
-          parent_id,
-          languages,
-          coordinates,
-        } = item.metadata;
-
-        return {
-          id: item.element_id,
-          index,
-          metadata: {
-            coordinates,
-            image_base64,
-            image_mime_type,
-            languages,
-            page_name,
-            page_number,
-            parent_id,
-            text_as_html,
-          },
-          text: item.text,
-          type: item.type,
-        };
-      });
-
-    const chunks = result.originElements
-      .filter((e) => !new Set(['PageNumber', 'Footer']).has(e.type))
-      .map((item, index): NewUnstructuredChunkItem => {
-        const {
-          text_as_html,
-          page_number,
-          page_name,
-          image_mime_type,
-          image_base64,
-          parent_id,
-          languages,
-          coordinates,
-        } = item.metadata;
-
-        return {
-          compositeId: item.compositeId,
-          id: item.element_id,
-          index,
-          metadata: {
-            coordinates,
-            image_base64,
-            image_mime_type,
-            languages,
-            page_name,
-            page_number,
-            text_as_html,
-          },
-          parentId: parent_id,
-          text: item.text,
-          type: item.type,
-        };
-      });
-
-    return { chunks: documents, unstructuredChunks: chunks };
-  };
 
   private chunkByLangChain = async (
     filename: string,

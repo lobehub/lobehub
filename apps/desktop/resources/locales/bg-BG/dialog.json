@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "Потвърди",
-    "detail": "Приложение за чат, базирано на голям езиков модел",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "За нас"
-  },
-  "confirm": {
-    "cancel": "Отказ",
-    "no": "Не",
-    "title": "Потвърждение",
-    "yes": "Да"
-  },
-  "error": {
-    "button": "Потвърди",
-    "detail": "Възникна грешка по време на операцията, моля опитайте отново по-късно",
-    "message": "Възникна грешка",
-    "title": "Грешка"
-  },
-  "update": {
-    "downloadAndInstall": "Изтегли и инсталирай",
-    "downloadComplete": "Изтеглянето е завършено",
-    "downloadCompleteMessage": "Актуализационният пакет е изтеглен, желаете ли да го инсталирате веднага?",
-    "installLater": "Инсталирай по-късно",
-    "installNow": "Инсталирай сега",
-    "later": "Напомни по-късно",
-    "newVersion": "Открита нова версия",
-    "newVersionAvailable": "Открита нова версия: {{version}}",
-    "skipThisVersion": "Пропусни тази версия"
-  }
+  "about.button": "Потвърди",
+  "about.detail": "Приложение за чат, базирано на голям езиков модел",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "За нас",
+  "confirm.cancel": "Отказ",
+  "confirm.no": "Не",
+  "confirm.title": "Потвърждение",
+  "confirm.yes": "Да",
+  "error.button": "Потвърди",
+  "error.detail": "Възникна грешка по време на операцията, моля опитайте отново по-късно",
+  "error.message": "Възникна грешка",
+  "error.title": "Грешка",
+  "update.downloadAndInstall": "Изтегли и инсталирай",
+  "update.downloadComplete": "Изтеглянето е завършено",
+  "update.downloadCompleteMessage": "Актуализационният пакет е изтеглен, желаете ли да го инсталирате веднага?",
+  "update.installLater": "Инсталирай по-късно",
+  "update.installNow": "Инсталирай сега",
+  "update.later": "Напомни по-късно",
+  "update.newVersion": "Открита нова версия",
+  "update.newVersionAvailable": "Открита нова версия: {{version}}",
+  "update.skipThisVersion": "Пропусни тази версия"
 }

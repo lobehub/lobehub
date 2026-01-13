@@ -4,12 +4,12 @@ import type {
   AiProviderRuntimeConfig,
   EnabledProvider,
 } from '@lobechat/types';
-import { AiProviderModelListItem, EnabledAiModel } from 'model-bank';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AiProviderModelListItem, EnabledAiModel, ExtendParamsType } from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_MODEL_PROVIDER_LIST } from '@/config/modelProviders';
-import { clientDB, initializeDB } from '@/database/client/db';
-
+import { getTestDB } from '../../core/getTestDB';
+import { LobeChatDatabase } from '../../type';
 import { AiInfraRepos } from './index';
 
 const userId = 'test-user-id';
@@ -18,14 +18,17 @@ const mockProviderConfigs = {
   anthropic: { enabled: false },
 };
 
+let serverDB: LobeChatDatabase;
 let repo: AiInfraRepos;
 
-beforeEach(async () => {
-  await initializeDB();
-  vi.clearAllMocks();
-
-  repo = new AiInfraRepos(clientDB as any, userId, mockProviderConfigs);
+beforeAll(async () => {
+  serverDB = await getTestDB();
 }, 30000);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  repo = new AiInfraRepos(serverDB, userId, mockProviderConfigs);
+});
 
 describe('AiInfraRepos', () => {
   describe('getAiProviderList', () => {
@@ -798,6 +801,46 @@ describe('AiInfraRepos', () => {
       expect(merged?.settings).toEqual({ searchImpl: 'tool', searchProvider: 'google' });
     });
 
+    it('should merge builtin settings with user-provided extend params', async () => {
+      const mockProviders = [
+        { enabled: true, id: 'openai', name: 'OpenAI', source: 'builtin' as const },
+      ];
+
+      const userModel: EnabledAiModel = {
+        abilities: {},
+        id: 'gpt-4',
+        providerId: 'openai',
+        enabled: true,
+        type: 'chat',
+        settings: { extendParams: ['reasoningEffort'] as ExtendParamsType[] },
+      };
+
+      const builtinModel = {
+        id: 'gpt-4',
+        enabled: true,
+        type: 'chat' as const,
+        settings: {
+          extendParams: ['thinking'] as ExtendParamsType[],
+          searchImpl: 'params',
+          searchProvider: 'builtin-provider',
+        },
+      };
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue([userModel]);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([builtinModel]);
+
+      const result = await repo.getEnabledModels();
+
+      const merged = result.find((m) => m.id === 'gpt-4');
+      expect(merged).toBeDefined();
+      expect(merged?.settings).toEqual({
+        extendParams: ['reasoningEffort'],
+        searchImpl: 'params',
+        searchProvider: 'builtin-provider',
+      });
+    });
+
     it('should have no settings when both user and builtin have no settings', async () => {
       const mockProviders = [
         { enabled: true, id: 'openai', name: 'OpenAI', source: 'builtin' as const },
@@ -913,6 +956,55 @@ describe('AiInfraRepos', () => {
       expect(result).toHaveLength(0);
     });
 
+    it('should support offset/limit pagination', async () => {
+      const providerId = 'openai';
+      const userModels = Array.from({ length: 5 }).map((_, i) => ({
+        enabled: i % 2 === 0,
+        id: `u-${i + 1}`,
+        type: 'chat',
+      })) as AiProviderModelListItem[];
+
+      const builtinModels = Array.from({ length: 5 }).map((_, i) => ({
+        enabled: true,
+        id: `b-${i + 1}`,
+        type: 'chat',
+      })) as AiProviderModelListItem[];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(userModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const all = await repo.getAiProviderModelList(providerId);
+      const result = await repo.getAiProviderModelList(providerId, { limit: 3, offset: 2 });
+
+      expect(result.map((i) => i.id)).toEqual(all.slice(2, 5).map((i) => i.id));
+    });
+
+    it('should support enabled filter with pagination', async () => {
+      const providerId = 'openai';
+
+      const userModels = [
+        { enabled: false, id: 'u-1', type: 'chat' },
+        { enabled: true, id: 'u-2', type: 'chat' },
+        { enabled: false, id: 'u-3', type: 'chat' },
+      ] as AiProviderModelListItem[];
+
+      const builtinModels = [
+        { enabled: false, id: 'b-1', type: 'chat' },
+        { enabled: true, id: 'b-2', type: 'chat' },
+      ] as AiProviderModelListItem[];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(userModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const result = await repo.getAiProviderModelList(providerId, {
+        enabled: false,
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(result.map((i) => i.id)).toEqual(['u-1', 'u-3', 'b-1']);
+    });
+
     // New tests for getAiProviderModelList per the corrected behavior
     it('should allow search=true and add searchImpl=params when user enables it without providing settings (builtin has no search and no settings)', async () => {
       const providerId = 'openai';
@@ -946,9 +1038,9 @@ describe('AiInfraRepos', () => {
 
       const merged = result.find((m) => m.id === 'gpt-4');
       expect(merged).toBeDefined();
-      expect(merged.abilities).toMatchObject({ search: true });
+      expect(merged!.abilities).toMatchObject({ search: true });
       // when user enables search with no settings, default searchImpl should be 'params'
-      expect(merged.settings).toEqual({ searchImpl: 'params' });
+      expect(merged!.settings).toEqual({ searchImpl: 'params' });
     });
 
     it('should remove builtin search settings and disable search when user turns search off', async () => {
@@ -984,9 +1076,9 @@ describe('AiInfraRepos', () => {
       const merged = result.find((m) => m.id === 'gpt-4');
       expect(merged).toBeDefined();
       // User's choice takes precedence
-      expect(merged.abilities).toMatchObject({ search: false });
+      expect(merged!.abilities).toMatchObject({ search: false });
       // Builtin search settings should be removed since user turned search off
-      expect(merged.settings).toBeUndefined();
+      expect(merged!.settings).toBeUndefined();
     });
 
     it('should set search=true and settings=params for custom provider when user enables search and builtin has no search/settings', async () => {

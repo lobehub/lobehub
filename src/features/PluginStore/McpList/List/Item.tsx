@@ -1,15 +1,14 @@
-import { Block, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useRef } from 'react';
-import { Flexbox } from 'react-layout-kit';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
-import { DiscoverMcpItem } from '@/types/discover';
+import { type DiscoverMcpItem } from '@/types/discover';
 import { MCPInstallStep } from '@/types/plugins';
-import { LobeToolType } from '@/types/tool/tool';
+import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Action';
 

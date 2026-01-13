@@ -1,11 +1,11 @@
-import { SWRResponse } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { fileService } from '@/services/file';
-import { FileItem } from '@/types/files';
+import { type FileItem } from '@/types/files';
 
-import { FileStore } from '../../store';
+import { type FileStore } from '../../store';
 
 const FETCH_TTS_FILE = 'fetchTTSFile';
 

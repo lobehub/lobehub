@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Avatar",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Sovraccarico",
+    "tokenTag.remained": "Rimanenti",
+    "tokenTag.used": "Utilizzati"
+  },
+  "common": {
+    "common.cancel": "Annulla",
+    "common.confirm": "Conferma",
+    "common.delete": "Elimina",
+    "common.edit": "Modifica"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Aggiungi Proprietà",
+    "editableMessage.delete": "Elimina",
+    "editableMessage.input": "Input",
+    "editableMessage.inputPlaceholder": "Inserisci un contenuto di input di esempio",
+    "editableMessage.output": "Output",
+    "editableMessage.outputPlaceholder": "Inserisci un contenuto di output di esempio",
+    "editableMessage.system": "Sistema"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Elimina",
+    "emojiPicker.draggerDesc": "Clicca o trascina un'immagine in quest'area per caricarla",
+    "emojiPicker.emoji": "Emoji",
+    "emojiPicker.fileTypeError": "Puoi caricare solo file immagine!",
+    "emojiPicker.upload": "Carica",
+    "emojiPicker.uploadBtn": "Ritaglia e carica"
+  },
+  "form": {
+    "form.reset": "Reimposta",
+    "form.submit": "Invia",
+    "form.unsavedChanges": "Modifiche non salvate",
+    "form.unsavedWarning": "Hai modifiche non salvate. Sei sicuro di voler uscire?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Questa scorciatoia è in conflitto con un'altra esistente.",
+    "hotkey.invalidCombination": "La scorciatoia deve includere un tasto modificatore (Ctrl, Alt, Shift) e solo un tasto normale.",
+    "hotkey.placeholder": "Premi i tasti per registrare la scorciatoia",
+    "hotkey.reset": "Ripristina predefiniti"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Annulla",
+    "messageModal.confirm": "Conferma",
+    "messageModal.edit": "Modifica"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Comprimi barra laterale",
+    "sideNav.demoActiveLabel": "Attivo",
+    "sideNav.demoFeatureAutoCollapseDesc": "Trascina sotto la soglia per comprimere automaticamente",
+    "sideNav.demoFeatureAutoCollapseTitle": "Comprimere automaticamente",
+    "sideNav.demoFeaturePerformanceDesc": "Nessuna animazione per prestazioni migliori",
+    "sideNav.demoFeaturePerformanceTitle": "Prestazioni",
+    "sideNav.demoFeatureResizeDesc": "Trascina per regolare la larghezza del pannello",
+    "sideNav.demoFeatureResizeTitle": "Ridimensionamento flessibile",
+    "sideNav.demoFeatureSmartHandleDesc": "Passa il mouse per mostrare il pulsante di attivazione",
+    "sideNav.demoFeatureSmartHandleTitle": "Gestione intelligente",
+    "sideNav.demoFeaturesTitle": "Funzionalità",
+    "sideNav.demoHint": "Prova a trascinare il bordo del pannello e a usare il pulsante di attivazione ->",
+    "sideNav.demoSubtitle": "Un pannello laterale in stile workspace con ridimensionamento trascinabile",
+    "sideNav.demoTitle": "Demo DraggableSideNav",
+    "sideNav.expand": "Espandi barra laterale"
+  }
+}

@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "Bevestigen",
-    "detail": "Een chatapplicatie gebaseerd op een groot taalmodel",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "Over"
-  },
-  "confirm": {
-    "cancel": "Annuleren",
-    "no": "Nee",
-    "title": "Bevestigen",
-    "yes": "Ja"
-  },
-  "error": {
-    "button": "Bevestigen",
-    "detail": "Er is een fout opgetreden tijdens de operatie, probeer het later opnieuw",
-    "message": "Er is een fout opgetreden",
-    "title": "Fout"
-  },
-  "update": {
-    "downloadAndInstall": "Downloaden en installeren",
-    "downloadComplete": "Download voltooid",
-    "downloadCompleteMessage": "Het updatepakket is gedownload, wilt u het nu installeren?",
-    "installLater": "Later installeren",
-    "installNow": "Nu installeren",
-    "later": "Later herinneren",
-    "newVersion": "Nieuwe versie gevonden",
-    "newVersionAvailable": "Nieuwe versie beschikbaar: {{version}}",
-    "skipThisVersion": "Deze versie overslaan"
-  }
+  "about.button": "Bevestigen",
+  "about.detail": "Een chatapplicatie gebaseerd op een groot taalmodel",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "Over",
+  "confirm.cancel": "Annuleren",
+  "confirm.no": "Nee",
+  "confirm.title": "Bevestigen",
+  "confirm.yes": "Ja",
+  "error.button": "Bevestigen",
+  "error.detail": "Er is een fout opgetreden tijdens de operatie, probeer het later opnieuw",
+  "error.message": "Er is een fout opgetreden",
+  "error.title": "Fout",
+  "update.downloadAndInstall": "Downloaden en installeren",
+  "update.downloadComplete": "Download voltooid",
+  "update.downloadCompleteMessage": "Het updatepakket is gedownload, wilt u het nu installeren?",
+  "update.installLater": "Later installeren",
+  "update.installNow": "Nu installeren",
+  "update.later": "Later herinneren",
+  "update.newVersion": "Nieuwe versie gevonden",
+  "update.newVersionAvailable": "Nieuwe versie beschikbaar: {{version}}",
+  "update.skipThisVersion": "Deze versie overslaan"
 }

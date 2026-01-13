@@ -1,6 +1,6 @@
 import { USD_TO_CNY } from '@lobechat/const';
 import dayjs from 'dayjs';
-import { isNumber } from 'lodash-es';
+import { isNumber } from 'es-toolkit/compat';
 import { ModelPriceCurrency } from 'model-bank';
 import numeral from 'numeral';
 

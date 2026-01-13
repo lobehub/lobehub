@@ -4,15 +4,9 @@ import { serialize } from 'cookie';
 import debug from 'debug';
 import { z } from 'zod';
 
-import { ToolCallContent } from '@/libs/mcp';
-import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
+import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
-import { FileService } from '@/server/services/file';
-import {
-  contentBlocksToString,
-  processContentBlocks,
-} from '@/server/services/mcp/contentProcessor';
 import {
   AssistantSorts,
   McpConnectionType,
@@ -22,98 +16,33 @@ import {
   ProviderSorts,
 } from '@/types/discover';
 
+import { agentRouter } from './agent';
+import { oidcRouter } from './oidc';
+import { socialRouter } from './social';
+import { userRouter } from './user';
+
 const log = debug('lambda-router:market');
 
 const marketSourceSchema = z.enum(['legacy', 'new']);
 
-const marketProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  return next({
-    ctx: {
-      discoverService: new DiscoverService({ accessToken: ctx.marketAccessToken }),
-    },
+// Public procedure with optional user info for trusted client token
+const marketProcedure = publicProcedure
+  .use(serverDatabase)
+  .use(marketUserInfo)
+  .use(async ({ ctx, next }) => {
+    return next({
+      ctx: {
+        discoverService: new DiscoverService({
+          accessToken: ctx.marketAccessToken,
+          userInfo: ctx.marketUserInfo,
+        }),
+      },
+    });
   });
-});
-
-// Procedure with user authentication for operations requiring user access token
-const authedMarketProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
-  const { UserModel } = await import('@/database/models/user');
-  const userModel = new UserModel(ctx.serverDB, ctx.userId);
-
-  return next({
-    ctx: {
-      discoverService: new DiscoverService({ accessToken: ctx.marketAccessToken }),
-      fileService: new FileService(ctx.serverDB, ctx.userId),
-      userModel,
-    },
-  });
-});
 
 export const marketRouter = router({
-  // ============================== Cloud MCP Gateway ==============================
-  callCloudMcpEndpoint: authedMarketProcedure
-    .input(
-      z.object({
-        apiParams: z.record(z.any()),
-        identifier: z.string(),
-        toolName: z.string(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      log('callCloudMcpEndpoint input: %O', input);
-
-      try {
-        // Query user_settings to get market.accessToken
-        const userState = await ctx.userModel.getUserState(async () => ({}));
-        const userAccessToken = userState.settings?.market?.accessToken;
-
-        log('callCloudMcpEndpoint: userAccessToken exists=%s', !!userAccessToken);
-
-        if (!userAccessToken) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'User access token not found. Please sign in to Market first.',
-          });
-        }
-
-        const cloudResult = await ctx.discoverService.callCloudMcpEndpoint({
-          apiParams: input.apiParams,
-          identifier: input.identifier,
-          toolName: input.toolName,
-          userAccessToken,
-        });
-        const cloudResultContent = (cloudResult?.content ?? []) as ToolCallContent[];
-
-        // Format the cloud result to MCPToolCallResult format
-        // Process content blocks (upload images, etc.)
-        const newContent =
-          cloudResult?.isError || !ctx.fileService
-            ? cloudResultContent
-            : // FIXME: the type assertion here is a temporary solution, need to remove it after refactoring
-              await processContentBlocks(cloudResultContent, ctx.fileService);
-
-        // Convert content blocks to string
-        const content = contentBlocksToString(newContent);
-        const state = { ...cloudResult, content: newContent };
-
-        if (cloudResult?.isError) {
-          return { content, state, success: true };
-        }
-
-        return { content, state, success: true };
-      } catch (error) {
-        log('Error calling cloud MCP endpoint: %O', error);
-
-        // Re-throw TRPCError as-is
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to call cloud MCP endpoint',
-        });
-      }
-    }),
+  // ============================== Agent Management (authenticated) ==============================
+  agent: agentRouter,
 
   // ============================== Assistant Market ==============================
   getAssistantCategories: marketProcedure
@@ -238,7 +167,7 @@ export const marketRouter = router({
     }),
 
   // ============================== MCP Market ==============================
-  getMcpCategories: marketProcedure
+getMcpCategories: marketProcedure
     .input(
       z
         .object({
@@ -422,7 +351,7 @@ export const marketRouter = router({
     }),
 
   // ============================== Plugin Market ==============================
-  getPluginCategories: marketProcedure
+getPluginCategories: marketProcedure
     .input(
       z
         .object({
@@ -510,7 +439,7 @@ export const marketRouter = router({
     }),
 
   // ============================== Providers ==============================
-  getProviderDetail: marketProcedure
+getProviderDetail: marketProcedure
     .input(
       z.object({
         identifier: z.string(),
@@ -573,6 +502,31 @@ export const marketRouter = router({
       }
     }),
 
+  // ============================== User Profile ==============================
+getUserInfo: marketProcedure
+    .input(
+      z.object({
+        locale: z.string().optional(),
+        username: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getUserInfo input: %O', input);
+
+      try {
+        return await ctx.discoverService.getUserInfo(input);
+      } catch (error) {
+        log('Error fetching user info: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch user info',
+        });
+      }
+    }),
+
+  // ============================== OIDC Authentication ==============================
+  oidc: oidcRouter,
+
   registerClientInMarketplace: marketProcedure.input(z.object({})).mutation(async ({ ctx }) => {
     return ctx.discoverService.registerClient({
       userAgent: ctx.userAgent,
@@ -605,11 +559,11 @@ export const marketRouter = router({
         log('get access token, expiresIn value:', expiresIn);
         log('expiresIn type:', typeof expiresIn);
 
-        const expirationTime = new Date(Date.now() + (expiresIn - 60) * 1000); // 提前 60 秒过期
+        const expirationTime = new Date(Date.now() + (expiresIn - 60) * 1000); // Expire 60 seconds early
 
         log('expirationTime:', expirationTime.toISOString());
 
-        // 设置 HTTP-Only Cookie 存储实际的 access token
+        // Set HTTP-Only Cookie to store the actual access token
         const tokenCookie = serialize('mp_token', accessToken, {
           expires: expirationTime,
           httpOnly: true,
@@ -618,7 +572,7 @@ export const marketRouter = router({
           secure: process.env.NODE_ENV === 'production',
         });
 
-        // 设置客户端可读的状态标记 cookie（不包含实际 token）
+        // Set client-readable status marker cookie (without actual token)
         const statusCookie = serialize('mp_token_status', 'active', {
           expires: expirationTime,
           httpOnly: false,
@@ -627,7 +581,7 @@ export const marketRouter = router({
           secure: process.env.NODE_ENV === 'production',
         });
 
-        // 通过 context 的 resHeaders 设置 Set-Cookie 头
+        // Set Set-Cookie header via context's resHeaders
         ctx.resHeaders?.append('Set-Cookie', tokenCookie);
         ctx.resHeaders?.append('Set-Cookie', statusCookie);
 
@@ -641,6 +595,43 @@ export const marketRouter = router({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch M2M token',
         });
+      }
+    }),
+
+  reportAgentEvent: marketProcedure
+    .input(
+      z.object({
+        event: z.enum(['add', 'chat', 'click']),
+        identifier: z.string(),
+        source: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('createAgentEvent input: %O', input);
+
+      try {
+        await ctx.discoverService.createAgentEvent(input);
+        return { success: true };
+      } catch (error) {
+        console.error('Error reporting Agent event: %O', error);
+        return { success: false };
+      }
+    }),
+
+  reportAgentInstall: marketProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('reportAgentInstall input: %O', input);
+      try {
+        await ctx.discoverService.increaseAgentInstallCount(input.identifier);
+        return { success: true };
+      } catch (error) {
+        log('Error reporting agent installation: %O', error);
+        return { success: false };
       }
     }),
 
@@ -679,7 +670,28 @@ export const marketRouter = router({
         return { success: true };
       } catch (error) {
         console.error('Error reporting call: %O', error);
-        // 不抛出错误，因为上报失败不应影响主流程
+        // Don't throw error, as reporting failure should not affect main flow
+        return { success: false };
+      }
+    }),
+
+
+  reportMcpEvent: marketProcedure
+    .input(
+      z.object({
+        event: z.enum(['click', 'install', 'activate', 'uninstall']),
+        identifier: z.string(),
+        source: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('createMcpEvent input: %O', input);
+
+      try {
+        await ctx.discoverService.createPluginEvent(input);
+        return { success: true };
+      } catch (error) {
+        console.error('Error reporting MCP event: %O', error);
         return { success: false };
       }
     }),
@@ -707,8 +719,14 @@ export const marketRouter = router({
         return { success: true };
       } catch (error) {
         log('Error reporting MCP installation result: %O', error);
-        // 不抛出错误，因为上报失败不应影响主流程
+        // Don't throw error, as reporting failure should not affect main flow
         return { success: false };
       }
     }),
+
+  // ============================== Social Features ==============================
+  social: socialRouter,
+
+  // ============================== User Profile ==============================
+  user: userRouter,
 });

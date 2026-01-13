@@ -6,7 +6,6 @@
     "parentId": null,
     "createdAt": 1704067200000,
     "updatedAt": 1704067200000,
-    "meta": {},
     "metadata": {
       "compare": true
     }
@@ -20,13 +19,12 @@
     "provider": "openai",
     "createdAt": 1704067205000,
     "updatedAt": 1704067205000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 12,
       "totalOutputTokens": 145,
       "totalTokens": 157,
       "cost": 0.00471,
-      "tps": 42.0,
+      "tps": 42,
       "ttft": 387,
       "duration": 3452,
       "latency": 3839
@@ -41,13 +39,12 @@
     "provider": "anthropic",
     "createdAt": 1704067205100,
     "updatedAt": 1704067205100,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 12,
       "totalOutputTokens": 158,
       "totalTokens": 170,
       "cost": 0.00085,
-      "tps": 51.0,
+      "tps": 51,
       "ttft": 298,
       "duration": 3098,
       "latency": 3396,
@@ -60,8 +57,7 @@
     "content": "What about performance differences?",
     "parentId": "msg-603",
     "createdAt": 1704067215000,
-    "updatedAt": 1704067215000,
-    "meta": {}
+    "updatedAt": 1704067215000
   },
   {
     "id": "msg-605",
@@ -70,13 +66,12 @@
     "parentId": "msg-604",
     "createdAt": 1704067217000,
     "updatedAt": 1704067217000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 182,
       "totalOutputTokens": 167,
       "totalTokens": 349,
       "cost": 0.001745,
-      "tps": 48.0,
+      "tps": 48,
       "ttft": 345,
       "duration": 3479,
       "latency": 3824

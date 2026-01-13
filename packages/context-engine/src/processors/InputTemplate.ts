@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { template } from 'lodash-es';
+import { template } from 'es-toolkit/compat';
 
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { PipelineContext, ProcessorOptions } from '../types';

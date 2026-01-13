@@ -1,15 +1,17 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { ToolNameResolver } from '@lobechat/context-engine';
-import { ChatToolPayload, MessageToolCall, ToolsCallingContext } from '@lobechat/types';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { StateCreator } from 'zustand/vanilla';
+import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
+import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
-import { klavisStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
+import {
+  klavisStoreSelectors,
+  lobehubSkillStoreSelectors,
+  pluginSelectors,
+} from '@/store/tool/selectors';
 import { builtinTools } from '@/tools';
-
-import { displayMessageSelectors } from '../../message/selectors';
 
 /**
  * Internal utility methods and runtime state management
@@ -20,11 +22,6 @@ export interface PluginInternalsAction {
    * Transform tool calls from runtime format to storage format
    */
   internal_transformToolCalls: (toolCalls: MessageToolCall[]) => ChatToolPayload[];
-
-  /**
-   * Construct tools calling context for plugin invocation
-   */
-  internal_constructToolsCallingContext: (id: string) => ToolsCallingContext | undefined;
 }
 
 export const pluginInternals: StateCreator<
@@ -32,7 +29,7 @@ export const pluginInternals: StateCreator<
   [['zustand/devtools', never]],
   [],
   PluginInternalsAction
-> = (set, get) => ({
+> = () => ({
   internal_transformToolCalls: (toolCalls) => {
     const toolNameResolver = new ToolNameResolver();
 
@@ -41,7 +38,7 @@ export const pluginInternals: StateCreator<
     const manifests: Record<string, LobeChatPluginManifest> = {};
 
     // Track source for each identifier
-    const sourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis'> = {};
+    const sourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'> = {};
 
     // Get all installed plugins
     const installedPlugins = pluginSelectors.installedPlugins(toolStoreState);
@@ -70,20 +67,20 @@ export const pluginInternals: StateCreator<
       }
     }
 
+    // Get all LobeHub Skill tools
+    const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
+    for (const tool of lobehubSkillTools) {
+      if (tool.manifest) {
+        manifests[tool.identifier] = tool.manifest as LobeChatPluginManifest;
+        sourceMap[tool.identifier] = 'lobehubSkill';
+      }
+    }
+
     // Resolve tool calls and add source field
     const resolved = toolNameResolver.resolve(toolCalls, manifests);
     return resolved.map((payload) => ({
       ...payload,
       source: sourceMap[payload.identifier],
     }));
-  },
-
-  internal_constructToolsCallingContext: (id: string) => {
-    const message = displayMessageSelectors.getDisplayMessageById(id)(get());
-    if (!message) return;
-
-    return {
-      topicId: message.topicId,
-    };
   },
 });

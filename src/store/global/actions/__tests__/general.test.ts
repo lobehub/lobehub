@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import { ThemeMode } from 'antd-style';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withSWR } from '~test-utils';
 
@@ -117,39 +116,33 @@ describe('generalActionSlice', () => {
     });
   });
 
-  describe('switchThemeMode', () => {
-    it('should update theme mode in system status', () => {
-      const { result } = renderHook(() => useGlobalStore());
-      const themeMode: ThemeMode = 'dark';
+  describe('useInitSystemStatus', () => {
+    it('should reset transient UI states when loading from localStorage', async () => {
+      const mockStatus = {
+        ...initialState.status,
+        showCommandMenu: true,
+        showHotkeyHelper: true,
+        noWideScreen: false,
+      };
 
-      act(() => {
-        useGlobalStore.setState({ isStatusInit: true });
-        result.current.switchThemeMode(themeMode);
+      const { result } = renderHook(() => useGlobalStore());
+      const getFromLocalStorageSpy = vi
+        .spyOn(result.current.statusStorage, 'getFromLocalStorage')
+        .mockResolvedValueOnce(mockStatus);
+
+      const { result: hookResult } = renderHook(() => useGlobalStore().useInitSystemStatus(), {
+        wrapper: withSWR,
       });
 
-      expect(result.current.status.themeMode).toBe(themeMode);
-    });
-
-    it('should not update theme mode if status is not initialized', () => {
-      const { result } = renderHook(() => useGlobalStore());
-      const themeMode: ThemeMode = 'dark';
-
-      act(() => {
-        result.current.switchThemeMode(themeMode);
+      await act(async () => {
+        await hookResult.current.data;
       });
 
-      expect(result.current.status.themeMode).toBe(initialState.status.themeMode);
-    });
-
-    it('should handle light theme mode', () => {
-      const { result } = renderHook(() => useGlobalStore());
-
-      act(() => {
-        useGlobalStore.setState({ isStatusInit: true });
-        result.current.switchThemeMode('light');
-      });
-
-      expect(result.current.status.themeMode).toBe('light');
+      expect(getFromLocalStorageSpy).toHaveBeenCalled();
+      expect(useGlobalStore.getState().isStatusInit).toBe(true);
+      expect(useGlobalStore.getState().status.showCommandMenu).toBe(false);
+      expect(useGlobalStore.getState().status.showHotkeyHelper).toBe(false);
+      expect(useGlobalStore.getState().status.noWideScreen).toBe(false);
     });
   });
 

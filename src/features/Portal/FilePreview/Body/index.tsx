@@ -1,8 +1,7 @@
-import { Icon, Markdown, Segmented } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown, Segmented } from '@lobehub/ui';
 import { BoltIcon, FileIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import Loading from '@/components/Loading/CircleLoading';
 import FileViewer from '@/features/FileViewer';

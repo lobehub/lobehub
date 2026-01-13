@@ -138,7 +138,7 @@ describe('request_human_approve executor', () => {
       ];
 
       const instruction = createRequestHumanApproveInstruction(toolCalls);
-      const state = createInitialState({ sessionId: 'test-session' });
+      const state = createInitialState({ operationId: 'test-session' });
 
       // When
       const result = await executeWithMockContext({
@@ -154,7 +154,7 @@ describe('request_human_approve executor', () => {
       expect(result.events[0]).toMatchObject({
         type: 'human_approve_required',
         pendingToolsCalling: toolCalls,
-        sessionId: 'test-session',
+        operationId: 'test-session',
       });
     });
   });
@@ -384,7 +384,7 @@ describe('request_human_approve executor', () => {
       const context = createTestContext();
       const instruction = createRequestHumanApproveInstruction();
       const state = createInitialState({
-        sessionId: 'test-session',
+        operationId: 'test-session',
         stepCount: 10,
         messages: [{ role: 'user', content: 'test' } as any],
         cost: {
@@ -428,7 +428,7 @@ describe('request_human_approve executor', () => {
       });
 
       // Then
-      expect(result.newState.sessionId).toBe(state.sessionId);
+      expect(result.newState.operationId).toBe(state.operationId);
       expect(result.newState.stepCount).toBe(state.stepCount);
       expect(result.newState.messages).toEqual(state.messages);
       expect(result.newState.usage).toEqual(state.usage);

@@ -1,18 +1,10 @@
 {
-  "desc": "Qui troverai aggiornamenti periodici sulle nuove funzionalità che stiamo esplorando. Sentiti libero di provarle!",
-  "features": {
-    "assistantMessageGroup": {
-      "desc": "Raggruppa i messaggi dell'assistente e i risultati delle chiamate agli strumenti in un unico gruppo",
-      "title": "Raggruppamento dei messaggi dell'assistente"
-    },
-    "groupChat": {
-      "desc": "Abilita la capacità di coordinamento in chat di gruppo con più agenti intelligenti.",
-      "title": "Chat di gruppo (multi-agente)"
-    },
-    "inputMarkdown": {
-      "desc": "Rendering in tempo reale del Markdown nell'area di input (grassetto, blocchi di codice, tabelle, ecc.).",
-      "title": "Rendering Markdown nell'input"
-    }
-  },
-  "title": "Laboratorio"
+  "desc": "Qui troverai aggiornamenti occasionali sulle nuove funzionalità che stiamo esplorando: sentiti libero di provarle!",
+  "features.assistantMessageGroup.desc": "Raggruppa i messaggi dell'agente e i risultati delle chiamate agli strumenti per una visualizzazione unificata",
+  "features.assistantMessageGroup.title": "Raggruppamento Messaggi Agente",
+  "features.groupChat.desc": "Abilita il coordinamento della chat di gruppo con più agenti.",
+  "features.groupChat.title": "Chat di Gruppo (Multi-Agente)",
+  "features.inputMarkdown.desc": "Visualizza in tempo reale il Markdown nell'area di input (testo in grassetto, blocchi di codice, tabelle, ecc.).",
+  "features.inputMarkdown.title": "Rendering Markdown in Input",
+  "title": "Laboratori"
 }

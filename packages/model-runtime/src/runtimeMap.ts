@@ -28,6 +28,7 @@ import { LobeInfiniAI } from './providers/infiniai';
 import { LobeInternLMAI } from './providers/internlm';
 import { LobeJinaAI } from './providers/jina';
 import { LobeLMStudioAI } from './providers/lmstudio';
+import { LobeHubAI } from './providers/lobehub';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMistralAI } from './providers/mistral';
 import { LobeModelScopeAI } from './providers/modelscope';
@@ -61,6 +62,7 @@ import { LobeVLLMAI } from './providers/vllm';
 import { LobeVolcengineAI } from './providers/volcengine';
 import { LobeWenxinAI } from './providers/wenxin';
 import { LobeXAI } from './providers/xai';
+import { LobeXiaomiMiMoAI } from './providers/xiaomimimo';
 import { LobeXinferenceAI } from './providers/xinference';
 import { LobeZenMuxAI } from './providers/zenmux';
 import { LobeZeroOneAI } from './providers/zeroone';
@@ -86,6 +88,7 @@ export const providerRuntimeMap = {
   deepseek: LobeDeepSeekAI,
   fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
+  lobehub: LobeHubAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
   google: LobeGoogleAI,
@@ -131,6 +134,7 @@ export const providerRuntimeMap = {
   volcengine: LobeVolcengineAI,
   wenxin: LobeWenxinAI,
   xai: LobeXAI,
+  xiaomimimo: LobeXiaomiMiMoAI,
   xinference: LobeXinferenceAI,
   zenmux: LobeZenMuxAI,
   zeroone: LobeZeroOneAI,

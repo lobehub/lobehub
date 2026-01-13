@@ -1,0 +1,26 @@
+description: LobeHub Prompts (memory-user-memory) Testing Suite
+
+# Test configurations - run all prompt tests
+testPaths:
+  - promptfoo/evals/identity/with-s3-trace/eval.yaml
+
+# Output configuration
+outputPath: promptfoo-results.json
+
+# Default test settings
+defaultTest:
+  assert:
+    - type: llm-rubric
+      provider: openai:gpt-5-mini
+      value: "The response should be relevant and well-formatted"
+    - type: cost
+      threshold: 0.01 # Maximum cost per test in USD
+
+# Evaluation settings
+evaluateOptions:
+  maxConcurrency: 5
+  delay: 100
+
+# TypeScript support
+transforms:
+  - "typescript"

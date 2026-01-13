@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { enableClerk } from '@/const/auth';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel, UserNotFoundError } from '@/database/models/user';
 import { serverDB } from '@/database/server';
+import { enableClerk } from '@/envs/auth';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { NextAuthUserService } from '@/server/services/nextAuthUser';
 import { UserService } from '@/server/services/user';
@@ -28,7 +28,7 @@ vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/server/modules/S3');
 vi.mock('@/server/services/user');
 vi.mock('@/server/services/nextAuthUser');
-vi.mock('@/const/auth', () => ({
+vi.mock('@/envs/auth', () => ({
   enableBetterAuth: false,
   enableClerk: true,
   enableNextAuth: false,
@@ -105,7 +105,7 @@ describe('userRouter', () => {
       vi.mocked(MessageModel).mockImplementation(
         () =>
           ({
-            hasMoreThanN: vi.fn().mockResolvedValue(true),
+            countUpTo: vi.fn().mockResolvedValue(5),
           }) as any,
       );
 
@@ -118,7 +118,7 @@ describe('userRouter', () => {
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserState();
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         isOnboard: true,
         preference: { telemetry: true },
         settings: {},
@@ -171,7 +171,7 @@ describe('userRouter', () => {
       vi.mocked(MessageModel).mockImplementation(
         () =>
           ({
-            hasMoreThanN: vi.fn().mockResolvedValue(false),
+            countUpTo: vi.fn().mockResolvedValue(0),
           }) as any,
       );
 
@@ -184,8 +184,8 @@ describe('userRouter', () => {
 
       const result = await userRouter.createCaller({ ...mockCtx } as any).getUserState();
 
-      expect(result).toEqual({
-        isOnboard: true,
+      expect(result).toMatchObject({
+        isOnboard: false,
         preference: { telemetry: null },
         settings: {},
         hasConversation: false,

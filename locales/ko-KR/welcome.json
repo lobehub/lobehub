@@ -1,362 +1,312 @@
 {
-  "guide": {
-    "agents": {
-      "replaceBtn": "다른 것으로 바꾸기",
-      "title": "새로운 보조 추천: "
+  "guide.agents.replaceBtn": "다른 추천 보기",
+  "guide.agents.title": "새로운 도우미 추천:",
+  "guide.defaultMessage": "저는 당신의 개인 인공지능 도우미 {{appName}}입니다. 무엇을 도와드릴까요?<br />더 전문적이거나 맞춤형 도우미가 필요하시면 <plus />를 클릭하여 직접 만들어보세요.",
+  "guide.defaultMessageWithoutCreate": "저는 당신의 개인 인공지능 도우미 {{appName}}입니다. 무엇을 도와드릴까요?",
+  "guide.groupActivities.analysis.codeReview.description": "코드 변경 및 구현에 대한 기술 토론과 동료 검토",
+  "guide.groupActivities.analysis.codeReview.emoji": "💻",
+  "guide.groupActivities.analysis.codeReview.prompt": "함께 코드를 검토해 봅시다. 이 코드를 분석하고 개선할 수 있는 부분을 찾아줄 수 있나요?",
+  "guide.groupActivities.analysis.codeReview.title": "코드 리뷰",
+  "guide.groupActivities.analysis.investment.description": "시장 분석, 투자 전략 논의 및 금융 인사이트 공유",
+  "guide.groupActivities.analysis.investment.emoji": "📈",
+  "guide.groupActivities.analysis.investment.prompt": "함께 시장을 분석해 봅시다. 투자 전략을 논의하고 금융 인사이트를 공유해 줄 수 있나요?",
+  "guide.groupActivities.analysis.investment.title": "투자 클럽",
+  "guide.groupActivities.analysis.research.description": "과학 개념 탐구, 실험 수행 및 발견 공유",
+  "guide.groupActivities.analysis.research.emoji": "🔬",
+  "guide.groupActivities.analysis.research.prompt": "함께 과학을 탐구해 봅시다! 실험을 수행하고 발견한 내용을 공유해 줄 수 있나요?",
+  "guide.groupActivities.analysis.research.title": "과학 전시회",
+  "guide.groupActivities.analysis.study.description": "개념을 토론하고 문제를 함께 해결하는 협업 학습 세션",
+  "guide.groupActivities.analysis.study.emoji": "📚",
+  "guide.groupActivities.analysis.study.prompt": "스터디 그룹을 만들어 봅시다. 개념을 이해하고 함께 문제를 해결하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.analysis.study.title": "스터디 그룹",
+  "guide.groupActivities.brainstorm.artWorkshop.description": "다양한 형태의 시각 및 디지털 아트 창작, 감상 및 비평",
+  "guide.groupActivities.brainstorm.artWorkshop.emoji": "🖼️",
+  "guide.groupActivities.brainstorm.artWorkshop.prompt": "아트 워크숍을 열어 봅시다! 다양한 형태의 예술을 창작하고 감상하며 비평하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.brainstorm.artWorkshop.title": "아트 워크숍",
+  "guide.groupActivities.brainstorm.debate.description": "다양한 주제와 시사에 대한 구조화된 토론과 논쟁",
+  "guide.groupActivities.brainstorm.debate.emoji": "⚖️",
+  "guide.groupActivities.brainstorm.debate.prompt": "구조화된 토론을 해봅시다. 이 주제에 대해 논리적인 토론을 조직하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.brainstorm.debate.title": "토론 클럽",
+  "guide.groupActivities.brainstorm.designReview.description": "디자인 개념, 프로토타입 또는 창작물에 대한 협업 피드백 세션",
+  "guide.groupActivities.brainstorm.designReview.emoji": "🎨",
+  "guide.groupActivities.brainstorm.designReview.prompt": "디자인 작업을 검토해야 합니다. 디자인 개념과 프로토타입에 대해 건설적인 피드백을 제공해 줄 수 있나요?",
+  "guide.groupActivities.brainstorm.designReview.title": "디자인 리뷰",
+  "guide.groupActivities.brainstorm.ideation.description": "다양한 관점에서의 협업적 아이디어 생성 및 창의적 문제 해결",
+  "guide.groupActivities.brainstorm.ideation.emoji": "🧠",
+  "guide.groupActivities.brainstorm.ideation.prompt": "프로젝트를 위한 브레인스토밍을 시작해 봅시다. 창의적인 아이디어와 해결책을 제시해 줄 수 있나요?",
+  "guide.groupActivities.brainstorm.ideation.title": "브레인스토밍",
+  "guide.groupActivities.game.debateClub.description": "다양한 주제와 시사에 대한 구조화된 토론과 논쟁",
+  "guide.groupActivities.game.debateClub.emoji": "⚖️",
+  "guide.groupActivities.game.debateClub.prompt": "구조화된 토론을 해봅시다. 이 주제에 대해 논리적인 토론을 조직하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.game.debateClub.title": "토론 클럽",
+  "guide.groupActivities.game.gameNight.description": "재미있는 인터랙티브 게임과 활동으로 팀 유대감을 형성하고 즐거움을 나눔",
+  "guide.groupActivities.game.gameNight.emoji": "🎲",
+  "guide.groupActivities.game.gameNight.prompt": "게임 나이트가 시작됩니다! 팀워크를 다질 수 있는 재미있는 게임을 조직해 줄 수 있나요?",
+  "guide.groupActivities.game.gameNight.title": "게임 나이트",
+  "guide.groupActivities.game.modelUN.description": "모의 유엔 토론 및 글로벌 이슈에 대한 외교 협상",
+  "guide.groupActivities.game.modelUN.emoji": "🌍",
+  "guide.groupActivities.game.modelUN.prompt": "모의 유엔 토론을 해봅시다. 글로벌 이슈에 대한 외교 협상을 설정하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.game.modelUN.title": "모의 유엔",
+  "guide.groupActivities.game.werewolf.description": "플레이어가 전략과 토론을 통해 늑대인을 찾아내는 소셜 추리 게임",
+  "guide.groupActivities.game.werewolf.emoji": "🐺",
+  "guide.groupActivities.game.werewolf.prompt": "마피아 게임을 해봅시다! 규칙을 설정하고 이 소셜 추리 게임을 진행하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.game.werewolf.title": "마피아 게임",
+  "guide.groupActivities.general.brainstorm.description": "다양한 관점에서의 협업적 아이디어 생성 및 창의적 문제 해결",
+  "guide.groupActivities.general.brainstorm.emoji": "🧠",
+  "guide.groupActivities.general.brainstorm.prompt": "프로젝트를 위한 브레인스토밍을 시작해 봅시다. 창의적인 아이디어와 해결책을 제시해 줄 수 있나요?",
+  "guide.groupActivities.general.brainstorm.title": "브레인스토밍",
+  "guide.groupActivities.general.debate.description": "다양한 주제와 시사에 대한 구조화된 토론과 논쟁",
+  "guide.groupActivities.general.debate.emoji": "⚖️",
+  "guide.groupActivities.general.debate.prompt": "구조화된 토론을 해봅시다. 이 주제에 대해 논리적인 토론을 조직하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.general.debate.title": "토론 클럽",
+  "guide.groupActivities.general.languagePractice.description": "원어민과 함께 말하기 연습 및 새로운 언어 학습",
+  "guide.groupActivities.general.languagePractice.emoji": "🗣️",
+  "guide.groupActivities.general.languagePractice.prompt": "새로운 언어를 함께 연습해 봅시다. 이 언어를 배우고 말하는 연습을 도와줄 수 있나요?",
+  "guide.groupActivities.general.languagePractice.title": "언어 연습",
+  "guide.groupActivities.general.studyGroup.description": "개념을 토론하고 문제를 함께 해결하는 협업 학습 세션",
+  "guide.groupActivities.general.studyGroup.emoji": "📚",
+  "guide.groupActivities.general.studyGroup.prompt": "스터디 그룹을 만들어 봅시다. 개념을 이해하고 함께 문제를 해결하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.general.studyGroup.title": "스터디 그룹",
+  "guide.groupActivities.planning.cookingClass.description": "요리 기술, 레시피 및 요리 전통을 배우고 공유",
+  "guide.groupActivities.planning.cookingClass.emoji": "👨‍🍳",
+  "guide.groupActivities.planning.cookingClass.prompt": "요리 수업을 시작해 봅시다! 새로운 레시피와 요리 기술을 함께 배우는 데 도와줄 수 있나요?",
+  "guide.groupActivities.planning.cookingClass.title": "요리 수업",
+  "guide.groupActivities.planning.fitnessChallenge.description": "그룹 피트니스 목표 설정, 운동 방법 공유 및 상호 동기 부여",
+  "guide.groupActivities.planning.fitnessChallenge.emoji": "💪",
+  "guide.groupActivities.planning.fitnessChallenge.prompt": "피트니스 챌린지를 시작해 봅시다! 목표를 설정하고 건강을 유지하도록 서로 격려하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.planning.fitnessChallenge.title": "피트니스 챌린지",
+  "guide.groupActivities.planning.planningPoker.description": "카드를 사용하여 프로젝트 작업과 작업량을 추정하는 애자일 추정 기법",
+  "guide.groupActivities.planning.planningPoker.emoji": "🃏",
+  "guide.groupActivities.planning.planningPoker.prompt": "우리는 프로젝트를 위해 플래닝 포커를 진행 중입니다. 애자일 기법을 사용해 작업량을 추정하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.planning.planningPoker.title": "플래닝 포커",
+  "guide.groupActivities.planning.travelPlanning.description": "여행 계획 수립, 여행 경험 공유 및 새로운 목적지 탐색",
+  "guide.groupActivities.planning.travelPlanning.emoji": "✈️",
+  "guide.groupActivities.planning.travelPlanning.prompt": "함께 여행을 계획해 봅시다! 목적지를 조사하고 여행 일정을 짜는 데 도와줄 수 있나요?",
+  "guide.groupActivities.planning.travelPlanning.title": "여행 계획",
+  "guide.groupActivities.product.codeReview.description": "코드 변경 및 구현에 대한 기술 토론과 동료 검토",
+  "guide.groupActivities.product.codeReview.emoji": "💻",
+  "guide.groupActivities.product.codeReview.prompt": "함께 코드를 검토해 봅시다. 이 코드를 분석하고 개선할 수 있는 부분을 찾아줄 수 있나요?",
+  "guide.groupActivities.product.codeReview.title": "코드 리뷰",
+  "guide.groupActivities.product.designReview.description": "디자인 개념, 프로토타입 또는 창작물에 대한 협업 피드백 세션",
+  "guide.groupActivities.product.designReview.emoji": "🎨",
+  "guide.groupActivities.product.designReview.prompt": "디자인 작업을 검토해야 합니다. 디자인 개념과 프로토타입에 대해 건설적인 피드백을 제공해 줄 수 있나요?",
+  "guide.groupActivities.product.designReview.title": "디자인 리뷰",
+  "guide.groupActivities.product.sprintPlanning.description": "카드를 사용하여 프로젝트 작업과 작업량을 추정하는 애자일 추정 기법",
+  "guide.groupActivities.product.sprintPlanning.emoji": "🃏",
+  "guide.groupActivities.product.sprintPlanning.prompt": "우리는 프로젝트를 위해 플래닝 포커를 진행 중입니다. 애자일 기법을 사용해 작업량을 추정하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.product.sprintPlanning.title": "플래닝 포커",
+  "guide.groupActivities.product.techExchange.description": "신기술, 혁신 및 업계 트렌드에 대한 토론",
+  "guide.groupActivities.product.techExchange.emoji": "🚀",
+  "guide.groupActivities.product.techExchange.prompt": "기술 교류를 해봅시다! 신기술과 업계 트렌드에 대해 논의하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.product.techExchange.title": "기술 교류",
+  "guide.groupActivities.title": "팀 채팅 활용 추천",
+  "guide.groupActivities.writing.bookClub.description": "책, 이야기 및 문학 작품에 대한 문학적 토론과 분석",
+  "guide.groupActivities.writing.bookClub.emoji": "📖",
+  "guide.groupActivities.writing.bookClub.prompt": "북클럽 토론을 시작해 봅시다. 이 책을 분석하고 주제를 함께 탐구하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.writing.bookClub.title": "북클럽",
+  "guide.groupActivities.writing.movieClub.description": "영화, 다큐멘터리 및 시각 매체를 함께 감상하고 토론",
+  "guide.groupActivities.writing.movieClub.emoji": "🎬",
+  "guide.groupActivities.writing.movieClub.prompt": "영화 클럽 토론을 시작해 봅시다. 이 영화를 분석하고 주제를 함께 탐구하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.writing.movieClub.title": "영화 클럽",
+  "guide.groupActivities.writing.musicSession.description": "협업 음악 창작, 공유 및 감상 세션",
+  "guide.groupActivities.writing.musicSession.emoji": "🎵",
+  "guide.groupActivities.writing.musicSession.prompt": "즉흥 음악 세션을 해봅시다! 함께 음악을 창작하고 감상하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.writing.musicSession.title": "즉흥 음악",
+  "guide.groupActivities.writing.studyGroup.description": "개념을 토론하고 문제를 함께 해결하는 협업 학습 세션",
+  "guide.groupActivities.writing.studyGroup.emoji": "📚",
+  "guide.groupActivities.writing.studyGroup.prompt": "스터디 그룹을 만들어 봅시다. 개념을 이해하고 함께 문제를 해결하는 데 도와줄 수 있나요?",
+  "guide.groupActivities.writing.studyGroup.title": "스터디 그룹",
+  "guide.groupMessage": "그룹 채팅에 오신 것을 환영합니다! 여러 AI 도우미와 함께 공유된 대화 공간에서 협업해 보세요.",
+  "guide.groupTemplates.analysis.description": "데이터 기반 인사이트와 심층 분석",
+  "guide.groupTemplates.analysis.members": [
+    {
+      "avatar": "📊",
+      "backgroundColor": "#E8F8F5",
+      "plugins": ["steam"],
+      "systemRole": "당신은 데이터를 처리하고 해석하는 데 능숙하며, 차트와 통계 분석을 통해 데이터 속 패턴과 트렌드를 밝혀냅니다.",
+      "title": "데이터 분석가"
     },
-    "defaultMessage": "저는 당신의 개인 스마트 어시스턴트 {{appName}}입니다. 지금 무엇을 도와드릴까요?<br />더 전문적이거나 맞춤형 어시스턴트가 필요하시면 <plus />를 클릭하여 사용자 정의 어시스턴트를 생성하세요.",
-    "defaultMessageWithoutCreate": "저는 당신의 개인 스마트 어시스턴트 {{appName}}입니다. 지금 무엇을 도와드릴까요?",
-    "groupActivities": {
-      "analysis": {
-        "codeReview": {
-          "description": "코드 변경 및 구현에 대한 기술 토론과 동료 검토",
-          "emoji": "💻",
-          "prompt": "함께 코드를 검토해 봅시다. 이 코드를 분석하고 개선할 부분을 찾아줄 수 있나요?",
-          "title": "코드 리뷰"
-        },
-        "investment": {
-          "description": "시장 분석, 투자 전략 토론 및 금융 인사이트 공유",
-          "emoji": "📈",
-          "prompt": "함께 시장을 분석해 봅시다. 투자 전략을 논의하고 금융 인사이트를 공유하는 데 도움을 줄 수 있나요?",
-          "title": "투자 클럽"
-        },
-        "research": {
-          "description": "과학 개념 탐구, 실험 수행 및 발견 공유",
-          "emoji": "🔬",
-          "prompt": "함께 과학을 탐구해 봅시다! 실험을 도와주고 우리의 발견을 공유할 수 있나요?",
-          "title": "과학 전시"
-        },
-        "study": {
-          "description": "협력 학습 모임, 개념 토론 및 문제 공동 해결",
-          "emoji": "📚",
-          "prompt": "학습 그룹을 만들어 봅시다. 이 개념들을 이해하고 함께 문제를 해결하는 데 도움을 줄 수 있나요?",
-          "title": "학습 그룹"
-        }
-      },
-      "brainstorm": {
-        "artWorkshop": {
-          "description": "다양한 형태의 시각 및 디지털 아트 창작, 비평 및 감상",
-          "emoji": "🖼️",
-          "prompt": "아트 워크숍을 열어 봅시다! 다양한 형태의 예술을 창작하고 비평하며 감상하는 데 도움을 줄 수 있나요?",
-          "title": "아트 워크숍"
-        },
-        "debate": {
-          "description": "다양한 주제와 시사에 대한 구조화된 토론 및 논쟁",
-          "emoji": "⚖️",
-          "prompt": "구조화된 토론을 진행해 봅시다. 이 주제에 대해 논리적이고 근거 있는 토론을 조직하는 데 도움을 줄 수 있나요?",
-          "title": "토론 클럽"
-        },
-        "designReview": {
-          "description": "디자인 개념, 프로토타입 또는 창작물에 대한 협력 피드백 회의",
-          "emoji": "🎨",
-          "prompt": "디자인 작품을 검토해야 합니다. 디자인 개념과 프로토타입에 건설적인 피드백을 제공하는 데 도움을 줄 수 있나요?",
-          "title": "디자인 리뷰"
-        },
-        "ideation": {
-          "description": "다양한 관점에서 협력하는 창의적 아이디어 생성 및 문제 해결",
-          "emoji": "🧠",
-          "prompt": "프로젝트를 위한 브레인스토밍을 시작합시다. 창의적인 아이디어와 해결책을 제안하는 데 도움을 줄 수 있나요?",
-          "title": "브레인스토밍"
-        }
-      },
-      "game": {
-        "debateClub": {
-          "description": "다양한 주제와 시사에 대한 구조화된 토론 및 논쟁",
-          "emoji": "⚖️",
-          "prompt": "구조화된 토론을 진행해 봅시다. 이 주제에 대해 논리적이고 근거 있는 토론을 조직하는 데 도움을 줄 수 있나요?",
-          "title": "토론 클럽"
-        },
-        "gameNight": {
-          "description": "재미있는 인터랙티브 게임과 활동으로 팀 유대감 형성 및 즐거움 제공",
-          "emoji": "🎲",
-          "prompt": "게임의 밤이 시작됩니다! 팀 유대감을 형성할 재미있는 인터랙티브 게임을 조직하는 데 도움을 줄 수 있나요?",
-          "title": "게임의 밤"
-        },
-        "modelUN": {
-          "description": "모의 유엔 토론 및 글로벌 이슈에 대한 외교 협상",
-          "emoji": "🌍",
-          "prompt": "모의 유엔 토론을 해 봅시다. 글로벌 이슈에 대한 외교 협상을 설정하는 데 도움을 줄 수 있나요?",
-          "title": "모의 유엔"
-        },
-        "werewolf": {
-          "description": "플레이어가 전략과 토론을 통해 늑대인을 찾아내는 소셜 추리 게임",
-          "emoji": "🐺",
-          "prompt": "늑대인간 게임을 해 봅시다! 규칙을 설정하고 이 소셜 추리 게임을 진행하는 데 도움을 줄 수 있나요?",
-          "title": "늑대인간 게임"
-        }
-      },
-      "general": {
-        "brainstorm": {
-          "description": "다양한 관점에서 협력하는 창의적 아이디어 생성 및 문제 해결",
-          "emoji": "🧠",
-          "prompt": "프로젝트를 위한 브레인스토밍을 시작합시다. 창의적인 아이디어와 해결책을 제안하는 데 도움을 줄 수 있나요?",
-          "title": "브레인스토밍"
-        },
-        "debate": {
-          "description": "다양한 주제와 시사에 대한 구조화된 토론 및 논쟁",
-          "emoji": "⚖️",
-          "prompt": "구조화된 토론을 진행해 봅시다. 이 주제에 대해 논리적이고 근거 있는 토론을 조직하는 데 도움을 줄 수 있나요?",
-          "title": "토론 클럽"
-        },
-        "languagePractice": {
-          "description": "원어민과 함께 말하기 연습 및 새로운 언어 학습",
-          "emoji": "🗣️",
-          "prompt": "함께 새로운 언어를 연습해 봅시다. 이 언어를 배우고 말하는 연습을 하는 데 도움을 줄 수 있나요?",
-          "title": "언어 연습"
-        },
-        "studyGroup": {
-          "description": "협력 학습 모임, 개념 토론 및 문제 공동 해결",
-          "emoji": "📚",
-          "prompt": "학습 그룹을 만들어 봅시다. 이 개념들을 이해하고 함께 문제를 해결하는 데 도움을 줄 수 있나요?",
-          "title": "학습 그룹"
-        }
-      },
-      "planning": {
-        "cookingClass": {
-          "description": "요리 기술, 레시피 및 요리 전통 학습과 공유",
-          "emoji": "👨‍🍳",
-          "prompt": "요리 수업을 시작합시다! 새로운 레시피와 요리 기술을 함께 배우는 데 도움을 줄 수 있나요?",
-          "title": "요리 교실"
-        },
-        "fitnessChallenge": {
-          "description": "단체 피트니스 목표 설정, 운동 방법 공유 및 상호 격려",
-          "emoji": "💪",
-          "prompt": "피트니스 챌린지를 시작합시다! 목표를 설정하고 건강을 유지하도록 서로 격려하는 데 도움을 줄 수 있나요?",
-          "title": "피트니스 챌린지"
-        },
-        "planningPoker": {
-          "description": "카드를 사용해 프로젝트 작업과 업무량을 추정하는 애자일 추정 기법",
-          "emoji": "🃏",
-          "prompt": "프로젝트를 위한 플래닝 포커를 진행 중입니다. 애자일 기법을 사용해 작업량을 추정하는 데 도움을 줄 수 있나요?",
-          "title": "플래닝 포커"
-        },
-        "travelPlanning": {
-          "description": "여행 계획, 여행 경험 공유 및 새로운 목적지 발견",
-          "emoji": "✈️",
-          "prompt": "함께 여행을 계획해 봅시다! 목적지를 조사하고 여행 일정을 계획하는 데 도움을 줄 수 있나요?",
-          "title": "여행 계획"
-        }
-      },
-      "product": {
-        "codeReview": {
-          "description": "코드 변경 및 구현에 대한 기술 토론과 동료 검토",
-          "emoji": "💻",
-          "prompt": "함께 코드를 검토해 봅시다. 이 코드를 분석하고 개선할 부분을 찾아줄 수 있나요?",
-          "title": "코드 리뷰"
-        },
-        "designReview": {
-          "description": "디자인 개념, 프로토타입 또는 창작물에 대한 협력 피드백 회의",
-          "emoji": "🎨",
-          "prompt": "디자인 작품을 검토해야 합니다. 디자인 개념과 프로토타입에 건설적인 피드백을 제공하는 데 도움을 줄 수 있나요?",
-          "title": "디자인 리뷰"
-        },
-        "sprintPlanning": {
-          "description": "카드를 사용해 프로젝트 작업과 업무량을 추정하는 애자일 추정 기법",
-          "emoji": "🃏",
-          "prompt": "프로젝트를 위한 플래닝 포커를 진행 중입니다. 애자일 기법을 사용해 작업량을 추정하는 데 도움을 줄 수 있나요?",
-          "title": "플래닝 포커"
-        },
-        "techExchange": {
-          "description": "신기술, 혁신 및 업계 동향 토론",
-          "emoji": "🚀",
-          "prompt": "기술 교류를 해 봅시다! 신기술과 업계 동향에 대해 토론하는 데 도움을 줄 수 있나요?",
-          "title": "기술 교류"
-        }
-      },
-      "title": "팀 채팅 활용 추천",
-      "writing": {
-        "bookClub": {
-          "description": "책, 이야기 및 문학 작품에 대한 문학적 토론과 분석",
-          "emoji": "📖",
-          "prompt": "독서 클럽 토론을 시작합시다. 이 책을 분석하고 주제를 함께 탐구하는 데 도움을 줄 수 있나요?",
-          "title": "독서 클럽"
-        },
-        "movieClub": {
-          "description": "영화, 다큐멘터리 및 시각 매체 함께 감상 및 토론",
-          "emoji": "🎬",
-          "prompt": "영화 클럽 토론을 시작합시다. 이 영화를 분석하고 주제를 함께 탐구하는 데 도움을 줄 수 있나요?",
-          "title": "영화 클럽"
-        },
-        "musicSession": {
-          "description": "협력 음악 창작, 공유 및 감상 모임",
-          "emoji": "🎵",
-          "prompt": "즉흥 음악 세션을 해 봅시다! 함께 음악을 창작하고 감상하는 데 도움을 줄 수 있나요?",
-          "title": "즉흥 음악"
-        },
-        "studyGroup": {
-          "description": "협력 학습 모임, 개념 토론 및 문제 공동 해결",
-          "emoji": "📚",
-          "prompt": "학습 그룹을 만들어 봅시다. 이 개념들을 이해하고 함께 문제를 해결하는 데 도움을 줄 수 있나요?",
-          "title": "학습 그룹"
-        }
-      }
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "당신은 연구 전문가로, 정보 수집과 심층 조사에 능하며 다양한 관점에서 문제를 분석할 수 있습니다.",
+      "title": "연구 전문가"
     },
-    "groupMessage": "그룹 채팅에 오신 것을 환영합니다! 여러 AI 어시스턴트와 공유 대화 공간에서 협업할 수 있습니다.",
-    "groupTemplates": {
-      "analysis": {
-        "description": "데이터 기반 인사이트, 심층 연구 분석",
-        "members": [
-          {
-            "avatar": "📊",
-            "backgroundColor": "#E8F8F5",
-            "plugins": ["steam"],
-            "systemRole": "당신은 데이터를 다루고 해석하는 데 능숙하며, 차트와 통계 분석을 통해 데이터 이면의 규칙과 트렌드를 밝혀냅니다.",
-            "title": "데이터 분석가"
-          },
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "당신은 연구 전문가로, 정보 수집과 심층 조사를 담당하며, 다양한 관점에서 문제를 종합적으로 분석할 수 있습니다.",
-            "title": "연구 전문가"
-          },
-          {
-            "avatar": "📈",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "당신은 통계 전문가로, 다양한 통계 방법과 모델에 능통하며, 데이터에서 가치 있는 비즈니스 인사이트를 도출할 수 있습니다.",
-            "title": "통계 전문가"
-          },
-          {
-            "avatar": "🧮",
-            "backgroundColor": "#F0F8FF",
-            "systemRole": "당신은 정량 분석가로, 정량 모델링과 리스크 평가를 전문으로 하며, 수학적 방법으로 복잡한 문제를 해결합니다.",
-            "title": "정량 분석가"
-          }
-        ],
-        "title": "분석 팀"
-      },
-      "brainstorm": {
-        "description": "다각도의 창의적 사고, 무한한 가능성 자극",
-        "members": [
-          {
-            "avatar": "🧠",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "당신은 크리에이티브 디렉터로, 거시적 관점에서 창의적 방향을 조율하며, 추상적 개념을 구체적 실행 가능한 창의안으로 전환할 수 있습니다.",
-            "title": "크리에이티브 디렉터"
-          },
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "당신은 혁신 전문가로, 참신한 해결책과 획기적 사고를 발견하는 데 능하며, 고정관념을 벗어나 문제를 사고합니다.",
-            "title": "혁신 전문가"
-          },
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "당신은 디자인 씽킹 전문가로, 사용자 경험과 시각적 표현 관점에서 문제를 고민하며, 창의성의 시각적 표현에 중점을 둡니다.",
-            "title": "디자인 씽킹 전문가"
-          }
-        ],
-        "title": "브레인스토밍 그룹"
-      },
-      "game": {
-        "description": "여러 명이 즐기는 다양한 텍스트 게임, 예를 들어 마피아 게임과 스파이 게임",
-        "members": [
-          null,
-          {
-            "avatar": "🧑‍🔬",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "다양한 다인용 텍스트 게임에 능숙하며 게임 규칙에 따라 게임을 진행할 수 있습니다.",
-            "title": "게임 플레이어"
-          },
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "다양한 다인용 텍스트 게임에 능숙하며 게임 규칙에 따라 게임을 진행할 수 있습니다.",
-            "title": "게임 플레이어"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "다양한 다인용 텍스트 게임에 능숙하며 게임 규칙에 따라 게임을 진행할 수 있습니다.",
-            "title": "게임 플레이어"
-          }
-        ],
-        "title": "게임룸"
-      },
-      "planning": {
-        "description": "전략 기획 및 프로젝트 관리, 전반적 조율",
-        "members": [
-          {
-            "avatar": "📋",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "프로젝트의 전체 계획, 일정 관리 및 자원 조정을 담당하여 프로젝트가 제시간에 고품질로 완료되도록 합니다.",
-            "title": "셰프"
-          },
-          {
-            "avatar": "🎯",
-            "backgroundColor": "#FFF7E8",
-            "systemRole": "장기 전략 계획을 수립하고 시장 기회를 분석하며 목표와 실행 경로를 설정합니다.",
-            "title": "재료 구매 전문가"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#F0F8FF",
-            "systemRole": "상세 실행 계획을 수립하고 부서 간 자원을 조정하여 계획의 실행 가능성을 보장합니다.",
-            "title": "요리 연구 개발 전문가"
-          }
-        ],
-        "title": "요리 연구 개발 팀"
-      },
-      "product": {
-        "description": "제품 설계 및 개발, 고품질 제품 제작",
-        "members": [
-          {
-            "avatar": "🎨",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "당신은 디자이너로, 다양한 유형의 제품 설계에 능숙하며 제품 요구사항에 따라 디자인합니다.",
-            "title": "디자이너"
-          },
-          {
-            "avatar": "🧑",
-            "backgroundColor": "#E8F5FF",
-            "systemRole": "당신은 제품 매니저로, 제품의 기획, 설계, 개발 및 유지 관리를 담당하며 제품 품질과 사용자 경험을 보장합니다.",
-            "title": "제품 매니저"
-          },
-          {
-            "avatar": "🧑‍💻",
-            "backgroundColor": "#E8F8F5",
-            "systemRole": "당신은 경험 많은 풀스택 엔지니어로, 다양한 유형의 제품 개발에 능숙하며 제품 요구사항에 따라 개발합니다.",
-            "title": "풀스택 엔지니어"
-          }
-        ],
-        "title": "제품 개발 팀"
-      },
-      "writing": {
-        "description": "콘텐츠 창작 및 편집, 고품질 문안 제작",
-        "members": [
-          {
-            "avatar": "✍️",
-            "backgroundColor": "#F6E8FF",
-            "systemRole": "다양한 문체의 콘텐츠 창작에 능숙하며 상황과 대상에 따라 글쓰기 스타일을 조정할 수 있습니다.",
-            "title": "콘텐츠 작가"
-          },
-          {
-            "avatar": "🧑‍🎨",
-            "backgroundColor": "#E8F8F5",
-            "systemRole": "당신은 편집자로, 텍스트 교정, 다듬기 및 최적화를 담당하며 콘텐츠의 정확성, 유창성 및 전문성을 보장합니다.",
-            "title": "편집자"
-          }
-        ],
-        "title": "글쓰기 그룹"
-      }
+    {
+      "avatar": "📈",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "당신은 통계 전문가로, 다양한 통계 기법과 모델에 정통하며 데이터에서 유의미한 비즈니스 인사이트를 도출할 수 있습니다.",
+      "title": "통계 전문가"
     },
-    "questions": {
-      "moreBtn": "더 알아보기",
-      "title": "다음과 같이 질문해 보세요:"
-    },
-    "welcome": {
-      "afternoon": "안녕하세요",
-      "morning": "좋은 아침",
-      "night": "안녕히 주무세요",
-      "noon": "안녕하세요"
+    {
+      "avatar": "🧮",
+      "backgroundColor": "#F0F8FF",
+      "systemRole": "당신은 정량 분석가로, 수학적 모델링과 리스크 평가를 통해 복잡한 문제를 해결합니다.",
+      "title": "정량 분석가"
     }
-  },
+  ],
+  "guide.groupTemplates.analysis.title": "분석 팀",
+  "guide.groupTemplates.brainstorm.description": "다양한 시각의 창의적 사고로 무한한 가능성 발굴",
+  "guide.groupTemplates.brainstorm.members": [
+    {
+      "avatar": "🧠",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "당신은 크리에이티브 디렉터로, 창의적 방향을 총괄하며 추상적인 개념을 실행 가능한 아이디어로 전환할 수 있습니다.",
+      "title": "크리에이티브 디렉터"
+    },
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "당신은 혁신 전문가로, 새로운 해결책과 창의적 사고를 통해 기존 틀을 깨는 아이디어를 제시합니다.",
+      "title": "혁신 전문가"
+    },
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "당신은 디자인 씽킹 전문가로, 사용자 경험과 시각적 표현을 중시하며 아이디어를 시각화합니다.",
+      "title": "디자인 씽커"
+    }
+  ],
+  "guide.groupTemplates.brainstorm.title": "브레인스토밍 팀",
+  "guide.groupTemplates.game.description": "마피아 게임, 스파이 찾기 등 다양한 텍스트 기반 멀티플레이 게임 즐기기",
+  "guide.groupTemplates.game.members": [
+    {
+      "avatar": "🧠",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "당신은 게임 마스터로, 다양한 텍스트 기반 멀티플레이 게임을 조직하고 진행할 수 있습니다.",
+      "title": "게임 마스터"
+    },
+    {
+      "avatar": "🧑‍🔬",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "당신은 다양한 텍스트 기반 멀티플레이 게임에 능숙하며, 게임 규칙에 따라 플레이할 수 있습니다.",
+      "title": "게임 플레이어"
+    },
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "당신은 다양한 텍스트 기반 멀티플레이 게임에 능숙하며, 게임 규칙에 따라 플레이할 수 있습니다.",
+      "title": "게임 플레이어"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "당신은 다양한 텍스트 기반 멀티플레이 게임에 능숙하며, 게임 규칙에 따라 플레이할 수 있습니다.",
+      "title": "게임 플레이어"
+    }
+  ],
+  "guide.groupTemplates.game.title": "게임룸",
+  "guide.groupTemplates.planning.description": "전략 수립과 프로젝트 관리로 전체를 조율",
+  "guide.groupTemplates.planning.members": [
+    {
+      "avatar": "📋",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "당신은 프로젝트의 전반적인 계획, 일정 관리 및 자원 조율을 담당하여 고품질의 결과물을 제시간에 완성합니다.",
+      "title": "셰프"
+    },
+    {
+      "avatar": "🎯",
+      "backgroundColor": "#FFF7E8",
+      "systemRole": "당신은 장기 전략을 수립하고 시장 기회를 분석하며 목표와 실행 경로를 설정합니다.",
+      "title": "재료 조달 전문가"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#F0F8FF",
+      "systemRole": "당신은 실행 계획을 수립하고 부서 간 자원을 조율하여 실행 가능성을 확보합니다.",
+      "title": "요리 연구 전문가"
+    }
+  ],
+  "guide.groupTemplates.planning.title": "요리 연구팀",
+  "guide.groupTemplates.product.description": "제품 설계 및 개발로 고품질 제품 제작",
+  "guide.groupTemplates.product.members": [
+    {
+      "avatar": "🎨",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "당신은 디자이너로, 다양한 유형의 제품을 설계하며 제품 요구사항에 맞춰 디자인할 수 있습니다.",
+      "title": "디자이너"
+    },
+    {
+      "avatar": "🧑",
+      "backgroundColor": "#E8F5FF",
+      "systemRole": "당신은 제품 매니저로, 제품의 기획, 설계, 개발 및 유지보수를 책임지며 품질과 사용자 경험을 보장합니다.",
+      "title": "제품 매니저"
+    },
+    {
+      "avatar": "🧑‍💻",
+      "backgroundColor": "#E8F8F5",
+      "systemRole": "당신은 숙련된 풀스택 개발자로, 다양한 제품을 개발하며 제품 요구사항에 맞춰 구현할 수 있습니다.",
+      "title": "풀스택 개발자"
+    }
+  ],
+  "guide.groupTemplates.product.title": "제품 개발팀",
+  "guide.groupTemplates.writing.description": "콘텐츠 창작과 편집으로 고품질 문서 제작",
+  "guide.groupTemplates.writing.members": [
+    {
+      "avatar": "✍️",
+      "backgroundColor": "#F6E8FF",
+      "systemRole": "당신은 다양한 장르의 콘텐츠를 창작하며, 상황과 대상에 맞춰 글쓰기 스타일을 조정할 수 있습니다.",
+      "title": "콘텐츠 작가"
+    },
+    {
+      "avatar": "🧑‍🎨",
+      "backgroundColor": "#E8F8F5",
+      "systemRole": "당신은 편집자로, 텍스트의 교정, 다듬기 및 최적화를 통해 콘텐츠의 정확성, 유창성 및 전문성을 보장합니다.",
+      "title": "편집자"
+    }
+  ],
+  "guide.groupTemplates.writing.title": "작가 모임",
+  "guide.questions.moreBtn": "더 알아보기",
+  "guide.questions.title": "이렇게 물어보세요:",
+  "guide.welcome.afternoon": "좋은 오후입니다",
+  "guide.welcome.morning": "좋은 아침입니다",
+  "guide.welcome.night": "좋은 밤입니다",
+  "guide.welcome.noon": "좋은 점심입니다",
   "header": "환영합니다",
-  "pickAgent": "또는 다음 도우미 템플릿 중 하나를 선택하세요",
+  "pickAgent": "또는 아래 도우미 템플릿 중에서 선택하세요",
   "skip": "생성 건너뛰기",
-  "slogan": {
-    "desc1": "뇌 클러스터를 시작하여 아이디어를 자극하세요. 당신의 지능형 어시스턴트가 항상 여기에 있습니다.",
-    "desc2": "첫 번째 어시스턴트를 만들어 보세요. 시작해 봅시다~",
-    "title": "더 똑똑한 뇌를 위해 스스로에게 선물하세요"
+  "slogan.desc1": "두뇌 클러스터를 시작하고 창의력을 발휘하세요. 당신의 스마트 도우미가 항상 함께합니다.",
+  "slogan.desc2": "첫 번째 도우미를 만들어보세요. 지금 시작해볼까요?",
+  "slogan.title": "더 똑똑한 두뇌를 위한 선택",
+  "welcomeMessages": {
+    "1": "다시 오신 걸 환영해요 😊",
+    "2": "안녕하세요, 여기 있어요",
+    "3": "준비 완료!",
+    "4": "만나서 반가워요",
+    "5": "시작할 준비 되셨나요?",
+    "6": "오늘의 일, 제가 도와드릴게요",
+    "7": "계속 나아가요!",
+    "8": "함께 힘내요 💪",
+    "9": "일 시작해요 🏃‍♂️",
+    "10": "생산성 최고조~",
+    "11": "명령을 기다리고 있어요!",
+    "12": "기다리게 해서 미안해요~☕",
+    "13": "이제 시작해볼까요 ✅",
+    "14": "새로운 질문이 있으신가요?",
+    "15": "오늘도 수고 많으셨어요!",
+    "16": "영감 불러오는 중",
+    "17": "온라인 상태, 에너지 충전 완료 ⚡",
+    "18": "출발합니다! 🚀",
+    "19": "생각이 흐름을 따라잡았어요.",
+    "20": "곧 영감이 떠오를 거예요",
+    "21": "당신의 호출만 기다리고 있어요",
+    "22": "고효율 모드 재가동!",
+    "23": "대기 중입니다",
+    "24": "도전을 맞이할 준비 완료",
+    "25": "새로운 아이디어 생성 중",
+    "26": "앞길이 명확해요, 출발합시다!",
+    "27": "시스템 온라인, 언제든 도와드릴게요 💡",
+    "28": "좋은 기분 로딩 중",
+    "29": "지금부터 리듬을 잡아봐요 🎵",
+    "30": "효율성 향상 중 …",
+    "31": "오늘의 목표, 차근차근 달성 중 🎯",
+    "32": "영감에 반짝임을 더해요 ✨",
+    "33": "작업 업데이트 완료",
+    "34": "모든 준비 완료",
+    "35": "가속 모드 시작",
+    "36": "좋아요! 시작해볼까요 😎",
+    "37": "여기서 당신을 기다리고 있었어요",
+    "38": "좋은 컨디션 계속 유지하세요!",
+    "39": "잠깐 쉬는 것도 잊지 마세요~ 💤"
   }
 }

@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "افزودن",
-    "back": "بازگشت",
-    "cancel": "لغو",
-    "close": "بستن",
-    "confirm": "تأیید",
-    "delete": "حذف",
-    "edit": "ویرایش",
-    "more": "بیشتر",
-    "next": "مرحله بعد",
-    "ok": "تأیید",
-    "previous": "مرحله قبل",
-    "refresh": "به‌روزرسانی",
-    "remove": "حذف",
-    "retry": "تلاش مجدد",
-    "save": "ذخیره",
-    "search": "جستجو",
-    "submit": "ارسال"
-  },
-  "app": {
-    "description": "پلتفرم همکاری دستیار هوش مصنوعی شما",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "خطا",
-    "info": "اطلاعات",
-    "loading": "در حال بارگذاری",
-    "success": "موفق",
-    "warning": "هشدار"
-  }
+  "actions.add": "افزودن",
+  "actions.back": "بازگشت",
+  "actions.cancel": "لغو",
+  "actions.close": "بستن",
+  "actions.confirm": "تأیید",
+  "actions.delete": "حذف",
+  "actions.edit": "ویرایش",
+  "actions.more": "بیشتر",
+  "actions.next": "مرحله بعد",
+  "actions.ok": "تأیید",
+  "actions.previous": "مرحله قبل",
+  "actions.refresh": "به‌روزرسانی",
+  "actions.remove": "حذف",
+  "actions.retry": "تلاش مجدد",
+  "actions.save": "ذخیره",
+  "actions.search": "جستجو",
+  "actions.submit": "ارسال",
+  "app.description": "پلتفرم همکاری دستیار هوش مصنوعی شما",
+  "app.name": "LobeHub",
+  "status.error": "خطا",
+  "status.info": "اطلاعات",
+  "status.loading": "در حال بارگذاری",
+  "status.success": "موفق",
+  "status.warning": "هشدار"
 }

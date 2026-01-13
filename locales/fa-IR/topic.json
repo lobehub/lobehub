@@ -1,39 +1,37 @@
 {
-  "actions": {
-    "autoRename": "نام‌گذاری هوشمند",
-    "confirmRemoveAll": "در حال حذف تمام موضوعات، پس از حذف قابل بازیابی نخواهد بود، لطفاً با احتیاط عمل کنید.",
-    "confirmRemoveTopic": "در حال حذف این موضوع، پس از حذف قابل بازیابی نخواهد بود، لطفاً با احتیاط عمل کنید.",
-    "confirmRemoveUnstarred": "در حال حذف موضوعات بدون علامت، پس از حذف قابل بازیابی نخواهد بود، لطفاً با احتیاط عمل کنید.",
-    "duplicate": "ایجاد نسخه",
-    "export": "صادرات موضوع",
-    "openInNewWindow": "باز کردن صفحه در پنجره‌ای جدید",
-    "removeAll": "حذف تمام موضوعات",
-    "removeUnstarred": "حذف موضوعات بدون علامت"
-  },
-  "defaultTitle": "موضوع پیش‌فرض",
-  "duplicateLoading": "در حال کپی موضوع...",
-  "duplicateSuccess": "کپی موضوع با موفقیت انجام شد",
-  "favorite": "علاقه‌مندی",
-  "groupMode": {
-    "ascMessages": "بر اساس تعداد پیام‌ها به ترتیب صعودی",
-    "byTime": "بر اساس زمان گروه‌بندی",
-    "descMessages": "بر اساس تعداد پیام‌ها به ترتیب نزولی",
-    "flat": "بدون گروه‌بندی"
-  },
-  "groupTitle": {
-    "byTime": {
-      "month": "این ماه",
-      "today": "امروز",
-      "week": "این هفته",
-      "yesterday": "دیروز"
-    }
-  },
-  "guide": {
-    "desc": "برای ذخیره مکالمه فعلی به عنوان موضوع تاریخی و شروع یک دور جدید مکالمه، دکمه سمت چپ ارسال را کلیک کنید.",
-    "title": "لیست موضوعات"
-  },
-  "searchPlaceholder": "جستجوی موضوع...",
-  "searchResultEmpty": "نتیجه‌ای برای جستجو یافت نشد",
+  "actions.addNewTopic": "شروع گفت‌وگوی جدید",
+  "actions.autoRename": "تغییر نام هوشمند",
+  "actions.confirmRemoveAll": "در حال حذف تمام گفت‌وگوها هستید. این عملیات قابل بازگشت نیست.",
+  "actions.confirmRemoveTopic": "در حال حذف این گفت‌وگو هستید. این عملیات قابل بازگشت نیست.",
+  "actions.confirmRemoveUnstarred": "در حال حذف گفت‌وگوهای بدون ستاره هستید. این عملیات قابل بازگشت نیست.",
+  "actions.duplicate": "ایجاد نسخه مشابه",
+  "actions.export": "خروجی گرفتن از گفت‌وگوها",
+  "actions.import": "وارد کردن گفت‌وگو",
+  "actions.openInNewWindow": "باز کردن در پنجره جدید",
+  "actions.removeAll": "حذف تمام گفت‌وگوها",
+  "actions.removeUnstarred": "حذف گفت‌وگوهای بدون ستاره",
+  "defaultTitle": "گفت‌وگوی پیش‌فرض",
+  "displayItems": "نمایش موارد",
+  "duplicateLoading": "در حال کپی‌برداری از گفت‌وگو...",
+  "duplicateSuccess": "گفت‌وگو با موفقیت کپی شد",
+  "favorite": "نشان‌کردن",
+  "groupMode.ascMessages": "مرتب‌سازی بر اساس تعداد پیام (صعودی)",
+  "groupMode.byTime": "گروه‌بندی بر اساس زمان",
+  "groupMode.descMessages": "مرتب‌سازی بر اساس تعداد پیام (نزولی)",
+  "groupMode.flat": "بدون گروه‌بندی",
+  "groupTitle.byTime.month": "این ماه",
+  "groupTitle.byTime.today": "امروز",
+  "groupTitle.byTime.week": "این هفته",
+  "groupTitle.byTime.yesterday": "دیروز",
+  "guide.desc": "برای ذخیره گفت‌وگوی فعلی به‌عنوان یک موضوع تاریخی و شروع گفت‌وگوی جدید، روی دکمه سمت چپ کلیک کنید.",
+  "guide.title": "فهرست گفت‌وگوها",
+  "importError": "وارد کردن ناموفق بود",
+  "importInvalidFormat": "فرمت فایل نامعتبر است. لطفاً مطمئن شوید که فایل JSON معتبر است.",
+  "importLoading": "در حال وارد کردن گفت‌وگو...",
+  "importSuccess": "{{count}} پیام با موفقیت وارد شد",
+  "loadMore": "بارگذاری بیشتر",
+  "searchPlaceholder": "جستجوی گفت‌وگوها...",
+  "searchResultEmpty": "نتیجه‌ای برای جستجو یافت نشد.",
   "temp": "موقت",
-  "title": "موضوع"
+  "title": "گفت‌وگو"
 }

@@ -24,6 +24,17 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
     return false;
   };
 
+  const ensureResultsOrSkipAssertions = (results: unknown[], hint: string) => {
+    if (results.length > 0) return true;
+    // eslint-disable-next-line no-console
+    console.warn(
+      `⚠️  Spotlight returned 0 results for "${hint}". This usually means indexing is incomplete/disabled. Skipping strict assertions.`,
+    );
+    // Keep a minimal assertion so we still validate the call didn't throw.
+    expect(Array.isArray(results)).toBe(true);
+    return false;
+  };
+
   describe('checkSearchServiceStatus', () => {
     it('should verify Spotlight is available on macOS', async () => {
       const isAvailable = await searchService.checkSearchServiceStatus();
@@ -40,7 +51,7 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
         onlyIn: repoRoot,
       });
 
-      if (!ensureResults(results, 'package.json search')) return;
+      if (!ensureResultsOrSkipAssertions(results, 'package.json')) return;
 
       // Should find at least one package.json
       const packageJson = results.find((r) => r.name === 'package.json');
@@ -55,7 +66,7 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
         limit: 10,
         onlyIn: repoRoot,
       });
-      if (!ensureResults(results, 'README search')) return;
+      if (!ensureResultsOrSkipAssertions(results, 'README')) return;
 
       // Should contain markdown files
       const mdFile = results.find((r) => r.type === 'md');
@@ -70,7 +81,7 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
         onlyIn: repoRoot,
       });
 
-      if (!ensureResults(results, 'TypeScript file search')) return;
+      if (!ensureResultsOrSkipAssertions(results, 'macOS')) return;
 
       // Should find the macOS.ts implementation file
       const macOSFile = results.find((r) => r.name.includes('macOS') && r.type === 'ts');
@@ -112,7 +123,7 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
         onlyIn: repoRoot,
       });
 
-      if (!ensureResults(results, 'test file search')) return;
+      if (!ensureResultsOrSkipAssertions(results, 'test.ts')) return;
 
       // Should find test files (can be in __tests__ directory or co-located with source files)
       const testFile = results.find((r) => r.name.endsWith('.test.ts'));
@@ -230,7 +241,7 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
         onlyIn: repoRoot,
       });
 
-      if (!ensureResults(results, 'file metadata read')) return;
+      if (!ensureResultsOrSkipAssertions(results, 'package.json (metadata)')) return;
 
       const file = results[0];
 
@@ -288,7 +299,7 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
         onlyIn: repoRoot,
       });
 
-      if (!ensureResults(results, 'fuzzy search accuracy')) return;
+      if (!ensureResultsOrSkipAssertions(results, 'LocalFile')) return;
 
       // Should find LocalFileCtr.ts or similar files
       const found = results.some(
@@ -328,8 +339,8 @@ describe.skipIf(process.platform !== 'darwin')('MacOSSearchServiceImpl Integrati
       });
 
       // Both searches should find similar files
-      if (!ensureResults(lowerResults, 'case-insensitive search (lower)')) return;
-      if (!ensureResults(upperResults, 'case-insensitive search (upper)')) return;
+      if (!ensureResultsOrSkipAssertions(lowerResults, 'readme')) return;
+      if (!ensureResultsOrSkipAssertions(upperResults, 'README (case-insensitive)')) return;
     });
   });
 

@@ -1,32 +1,26 @@
 {
-  "actions": {
-    "add": "新增",
-    "back": "返回",
-    "cancel": "取消",
-    "close": "關閉",
-    "confirm": "確認",
-    "delete": "刪除",
-    "edit": "編輯",
-    "more": "更多",
-    "next": "下一步",
-    "ok": "確定",
-    "previous": "上一步",
-    "refresh": "刷新",
-    "remove": "移除",
-    "retry": "重試",
-    "save": "儲存",
-    "search": "搜尋",
-    "submit": "提交"
-  },
-  "app": {
-    "description": "你的 AI 助手協作平台",
-    "name": "LobeHub"
-  },
-  "status": {
-    "error": "錯誤",
-    "info": "資訊",
-    "loading": "載入中",
-    "success": "成功",
-    "warning": "警告"
-  }
+  "actions.add": "新增",
+  "actions.back": "返回",
+  "actions.cancel": "取消",
+  "actions.close": "關閉",
+  "actions.confirm": "確認",
+  "actions.delete": "刪除",
+  "actions.edit": "編輯",
+  "actions.more": "更多",
+  "actions.next": "下一步",
+  "actions.ok": "確定",
+  "actions.previous": "上一步",
+  "actions.refresh": "刷新",
+  "actions.remove": "移除",
+  "actions.retry": "重試",
+  "actions.save": "儲存",
+  "actions.search": "搜尋",
+  "actions.submit": "提交",
+  "app.description": "你的 AI 助手協作平台",
+  "app.name": "LobeHub",
+  "status.error": "錯誤",
+  "status.info": "資訊",
+  "status.loading": "載入中",
+  "status.success": "成功",
+  "status.warning": "警告"
 }

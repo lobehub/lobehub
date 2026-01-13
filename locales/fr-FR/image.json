@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "Ratio",
-      "lock": "Verrouiller le rapport hauteur/largeur",
-      "unlock": "Déverrouiller le rapport hauteur/largeur"
-    },
-    "cfg": {
-      "label": "Intensité de guidage"
-    },
-    "header": {
-      "desc": "Description simple, création immédiate",
-      "title": "Peinture"
-    },
-    "height": {
-      "label": "Hauteur"
-    },
-    "imageNum": {
-      "label": "Nombre d'images"
-    },
-    "imageUrl": {
-      "label": "Image de référence"
-    },
-    "imageUrls": {
-      "label": "Images de référence"
-    },
-    "model": {
-      "label": "Modèle"
-    },
-    "prompt": {
-      "placeholder": "Décrivez ce que vous souhaitez générer"
-    },
-    "quality": {
-      "label": "Qualité de l'image",
-      "options": {
-        "hd": "Haute définition",
-        "standard": "Standard"
-      }
-    },
-    "resolution": {
-      "label": "Résolution",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "Graine",
-      "random": "Graine aléatoire"
-    },
-    "size": {
-      "label": "Taille"
-    },
-    "steps": {
-      "label": "Étapes"
-    },
-    "title": "Peinture IA",
-    "width": {
-      "label": "Largeur"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "Appliquer la graine",
-      "copyError": "Copier l'erreur",
-      "copyPrompt": "Copier l'invite",
-      "copySeed": "Copier la graine",
-      "delete": "Supprimer",
-      "deleteBatch": "Supprimer le lot",
-      "download": "Télécharger",
-      "downloadFailed": "Échec du téléchargement de l'image",
-      "errorCopied": "Message d'erreur copié dans le presse-papiers",
-      "errorCopyFailed": "Échec de la copie du message d'erreur",
-      "generate": "Générer",
-      "promptCopied": "Invite copiée dans le presse-papiers",
-      "promptCopyFailed": "Échec de la copie de l'invite",
-      "reuseSettings": "Réutiliser les paramètres",
-      "seedApplied": "Graine appliquée à la configuration",
-      "seedApplyFailed": "Échec de l'application de la graine",
-      "seedCopied": "Graine copiée dans le presse-papiers",
-      "seedCopyFailed": "Échec de la copie de la graine"
-    },
-    "metadata": {
-      "count": "{{count}} image(s)"
-    },
-    "status": {
-      "failed": "Échec de la génération",
-      "generating": "Génération en cours..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "L'instance déployée actuelle utilise un mode base de données client, la fonction de génération d'images IA n'est pas disponible. Veuillez passer au <1>mode de déploiement base de données serveur</1> ou utiliser directement <3>LobeChat Cloud</3>",
-    "features": {
-      "fileIntegration": {
-        "desc": "Intégration approfondie avec le système de gestion de fichiers, les images générées sont automatiquement sauvegardées dans le système de fichiers pour une gestion et organisation unifiées",
-        "title": "Interopérabilité avec le système de fichiers"
-      },
-      "llmAssisted": {
-        "desc": "Combinaison avec les capacités des grands modèles de langage pour optimiser et étendre intelligemment les invites, améliorant la qualité de génération d'images (Bientôt disponible)",
-        "title": "Assistance LLM pour la génération d'images"
-      },
-      "multiProviders": {
-        "desc": "Prise en charge de plusieurs fournisseurs de services de peinture IA, y compris OpenAI gpt-image-1, Google Imagen, FAL.ai, offrant un large choix de modèles",
-        "title": "Support multi-fournisseurs"
-      }
-    },
-    "title": "Le mode de déploiement actuel ne prend pas en charge la peinture IA"
-  },
-  "topic": {
-    "createNew": "Créer un nouveau sujet",
-    "deleteConfirm": "Supprimer le sujet généré",
-    "deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet généré. Cette action est irréversible, veuillez procéder avec prudence.",
-    "empty": "Aucun sujet généré",
-    "title": "Thème de peinture",
-    "untitled": "Sujet par défaut"
-  }
+  "config.aspectRatio.label": "Format d'image",
+  "config.aspectRatio.lock": "Verrouiller le format",
+  "config.aspectRatio.unlock": "Déverrouiller le format",
+  "config.cfg.label": "Intensité de la guidance",
+  "config.header.desc": "Brève description, création instantanée",
+  "config.header.title": "Peinture",
+  "config.height.label": "Hauteur",
+  "config.imageNum.label": "Nombre d'images",
+  "config.imageUrl.label": "Image de référence",
+  "config.imageUrls.label": "Images de référence",
+  "config.model.label": "Modèle",
+  "config.prompt.placeholder": "Décrivez ce que vous souhaitez générer",
+  "config.quality.label": "Qualité de l'image",
+  "config.quality.options.hd": "Haute définition",
+  "config.quality.options.standard": "Standard",
+  "config.resolution.label": "Résolution",
+  "config.resolution.options.1K": "1K",
+  "config.resolution.options.2K": "2K",
+  "config.resolution.options.4K": "4K",
+  "config.seed.label": "Graine",
+  "config.seed.random": "Graine aléatoire",
+  "config.size.label": "Taille",
+  "config.steps.label": "Étapes",
+  "config.title": "Image IA",
+  "config.width.label": "Largeur",
+  "generation.actions.applySeed": "Appliquer la graine",
+  "generation.actions.copyError": "Copier le message d'erreur",
+  "generation.actions.copyPrompt": "Copier l'invite",
+  "generation.actions.copySeed": "Copier la graine",
+  "generation.actions.delete": "Supprimer",
+  "generation.actions.deleteBatch": "Supprimer le lot",
+  "generation.actions.download": "Télécharger",
+  "generation.actions.downloadFailed": "Échec du téléchargement de l'image. Veuillez vérifier votre connexion réseau ou la configuration CORS de votre stockage S3.",
+  "generation.actions.errorCopied": "Message d'erreur copié dans le presse-papiers",
+  "generation.actions.errorCopyFailed": "Échec de la copie du message d'erreur",
+  "generation.actions.generate": "Générer",
+  "generation.actions.promptCopied": "Invite copiée dans le presse-papiers",
+  "generation.actions.promptCopyFailed": "Échec de la copie de l'invite",
+  "generation.actions.reuseSettings": "Réutiliser les paramètres",
+  "generation.actions.seedApplied": "Graine appliquée à la configuration",
+  "generation.actions.seedApplyFailed": "Échec de l'application de la graine",
+  "generation.actions.seedCopied": "Graine copiée dans le presse-papiers",
+  "generation.actions.seedCopyFailed": "Échec de la copie de la graine",
+  "generation.metadata.count": "{{count}} images",
+  "generation.status.failed": "Échec de la génération",
+  "generation.status.generating": "Génération en cours...",
+  "notSupportGuide.desc": "Le mode de déploiement actuel ne prend pas en charge la génération d'images IA. Passez au <1>mode de déploiement avec base de données serveur</1>, ou utilisez <3>LobeHub Cloud</3>.",
+  "notSupportGuide.features.fileIntegration.desc": "Intégration poussée avec le système de gestion de fichiers ; les images générées sont automatiquement enregistrées dans le système de fichiers pour une gestion et une organisation unifiées.",
+  "notSupportGuide.features.fileIntegration.title": "Intégration au système de fichiers",
+  "notSupportGuide.features.llmAssisted.desc": "Combine les capacités des grands modèles de langage pour optimiser et enrichir intelligemment les invites, améliorant ainsi la qualité de génération d'image (bientôt disponible).",
+  "notSupportGuide.features.llmAssisted.title": "Génération d'images assistée par LLM",
+  "notSupportGuide.features.multiProviders.desc": "Prend en charge plusieurs fournisseurs de génération d'images IA, y compris OpenAI gpt-image-1, Google Imagen, FAL.ai, et d'autres, offrant un large choix de modèles.",
+  "notSupportGuide.features.multiProviders.title": "Prise en charge multi-fournisseurs",
+  "notSupportGuide.title": "Le mode de déploiement actuel ne prend pas en charge la génération d'images IA",
+  "topic.createNew": "Nouveau sujet",
+  "topic.deleteConfirm": "Supprimer le sujet de génération",
+  "topic.deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet de génération. Cette action est irréversible, veuillez procéder avec prudence.",
+  "topic.empty": "Aucun sujet de génération",
+  "topic.title": "Thème de peinture",
+  "topic.untitled": "Sujet par défaut"
 }

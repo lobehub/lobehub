@@ -4,8 +4,15 @@ import { theme } from 'antd';
 // mock indexedDB to test with dexie
 // refs: https://github.com/dumbmatter/fakeIndexedDB#dexie-and-other-indexeddb-api-wrappers
 import 'fake-indexeddb/auto';
+import i18n from 'i18next';
 import React from 'react';
 import { vi } from 'vitest';
+
+import chat from '@/locales/default/chat';
+import common from '@/locales/default/common';
+import discover from '@/locales/default/discover';
+import home from '@/locales/default/home';
+import oauth from '@/locales/default/oauth';
 
 // Global mock for @lobehub/analytics/react to avoid AnalyticsProvider dependency
 // This prevents tests from failing when components use useAnalytics hook
@@ -30,6 +37,25 @@ if (typeof window === 'undefined') {
 
 // remove antd hash on test
 theme.defaultConfig.hashed = false;
+
+// init i18n for non-React modules (stores/utils) using i18next.t(...)
+// Use in-memory resources to avoid interfering with Vitest module mocking.
+await i18n.init({
+  defaultNS: 'common',
+  fallbackLng: 'zh-CN',
+  interpolation: { escapeValue: false },
+  lng: 'zh-CN',
+  ns: ['common', 'chat', 'discover', 'home', 'oauth'],
+  resources: {
+    'zh-CN': {
+      chat,
+      common,
+      discover,
+      home,
+      oauth,
+    },
+  },
+});
 
 // 将 React 设置为全局变量，这样就不需要在每个测试文件中导入它了
 (global as any).React = React;

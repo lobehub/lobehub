@@ -1,14 +1,14 @@
 import { ProviderIcon } from '@lobehub/icons';
 import { Button, type FormItemProps, FormModal, Icon, Input, Select, TextArea } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { App } from 'antd';
 import { BrainIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import { useNavigate } from 'react-router-dom';
 
 import { useAiInfraStore } from '@/store/aiInfra/store';
-import { AiProviderDetailItem, UpdateAiProviderParams } from '@/types/aiProvider';
+import { type AiProviderDetailItem, type UpdateAiProviderParams } from '@/types/aiProvider';
 
 import { CUSTOM_PROVIDER_SDK_OPTIONS } from '../../customProviderSdkOptions';
 
@@ -121,7 +121,7 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open, initial
                 okText: t('delete', { ns: 'common' }),
                 onOk: async () => {
                   await deleteAiProvider(id);
-                  navigate('/settings?active=provider');
+                  navigate('/settings/provider/all');
 
                   onClose?.();
                   message.success(t('updateAiProvider.deleteSuccess'));

@@ -1,0 +1,26 @@
+{
+  "name": "@lobechat/builtin-tool-page-agent",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executor": "./src/executor/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/editor-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^4",
+    "antd-style": "*",
+    "debug": "*",
+    "lucide-react": "*",
+    "polished": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

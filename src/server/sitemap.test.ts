@@ -49,24 +49,24 @@ describe('Sitemap', () => {
           priority: 0.4,
         }),
       );
+      // /discover has been replaced with /community routes
       expect(pageSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover'),
-          changeFrequency: 'daily',
-          priority: 0.7,
-        }),
-      );
-      // Note: The actual implementation generates URLs like /discover/assistant and /discover/plugin (not category-specific)
-      expect(pageSitemap).toContainEqual(
-        expect.objectContaining({
-          url: getCanonicalUrl('/discover/assistant'),
+          url: getCanonicalUrl('/community'),
           changeFrequency: 'daily',
           priority: 0.7,
         }),
       );
       expect(pageSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/plugin'),
+          url: getCanonicalUrl('/community/assistant'),
+          changeFrequency: 'daily',
+          priority: 0.7,
+        }),
+      );
+      expect(pageSitemap).toContainEqual(
+        expect.objectContaining({
+          url: getCanonicalUrl('/community/plugin'),
           changeFrequency: 'daily',
           priority: 0.7,
         }),
@@ -85,13 +85,13 @@ describe('Sitemap', () => {
       expect(assistantsSitemap.length).toBe(LOCALE_COUNT);
       expect(assistantsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/assistant/test-assistant'),
+          url: getCanonicalUrl('/community/assistant/test-assistant'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
       expect(assistantsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/assistant/test-assistant?hl=zh-CN'),
+          url: getCanonicalUrl('/community/assistant/test-assistant?hl=zh-CN'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
@@ -113,7 +113,7 @@ describe('Sitemap', () => {
       expect(firstPageSitemap.length).toBe(100 * LOCALE_COUNT); // 100 items * LOCALE_COUNT locales
       expect(firstPageSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/assistant/test-assistant-0'),
+          url: getCanonicalUrl('/community/assistant/test-assistant-0'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
@@ -123,7 +123,7 @@ describe('Sitemap', () => {
       expect(secondPageSitemap.length).toBe(50 * LOCALE_COUNT); // 50 items * LOCALE_COUNT locales
       expect(secondPageSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/assistant/test-assistant-100'),
+          url: getCanonicalUrl('/community/assistant/test-assistant-100'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
@@ -141,13 +141,13 @@ describe('Sitemap', () => {
       expect(pluginsSitemap.length).toBe(LOCALE_COUNT);
       expect(pluginsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/plugin/test-plugin'),
+          url: getCanonicalUrl('/community/plugin/test-plugin'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
       expect(pluginsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/plugin/test-plugin?hl=ja-JP'),
+          url: getCanonicalUrl('/community/plugin/test-plugin?hl=ja-JP'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
@@ -185,13 +185,13 @@ describe('Sitemap', () => {
       expect(modelsSitemap.length).toBe(LOCALE_COUNT);
       expect(modelsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/model/test:model'),
+          url: getCanonicalUrl('/community/model/test:model'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
       expect(modelsSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/model/test:model?hl=ko-KR'),
+          url: getCanonicalUrl('/community/model/test:model?hl=ko-KR'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
@@ -229,13 +229,13 @@ describe('Sitemap', () => {
       expect(providersSitemap.length).toBe(LOCALE_COUNT);
       expect(providersSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/provider/test-provider'),
+          url: getCanonicalUrl('/community/provider/test-provider'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );
       expect(providersSitemap).toContainEqual(
         expect.objectContaining({
-          url: getCanonicalUrl('/discover/provider/test-provider?hl=ar'),
+          url: getCanonicalUrl('/community/provider/test-provider?hl=ar'),
           lastModified: '2023-01-01T00:00:00.000Z',
         }),
       );

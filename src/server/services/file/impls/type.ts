@@ -6,7 +6,6 @@ export interface FileServiceImpl {
    * Create pre-signed upload URL
    */
   createPreSignedUrl(key: string): Promise<string>;
-
   /**
    * Create pre-signed preview URL
    */
@@ -33,6 +32,12 @@ export interface FileServiceImpl {
   getFileContent(key: string): Promise<string>;
 
   /**
+   * Get file metadata from storage
+   * Used to verify actual file size instead of trusting client-provided values
+   */
+  getFileMetadata(key: string): Promise<{ contentLength: number; contentType?: string }>;
+
+  /**
    * Get full file URL
    */
   getFullFileUrl(url?: string | null, expiresIn?: number): Promise<string>;
@@ -40,7 +45,7 @@ export interface FileServiceImpl {
   /**
    * Extract key from full URL
    */
-  getKeyFromFullUrl(url: string): string;
+  getKeyFromFullUrl(url: string): Promise<string | null>;
 
   /**
    * Upload content

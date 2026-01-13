@@ -1,13 +1,12 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Collapse, Icon, Text } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { ActionIcon, Avatar, Collapse, Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { DotIcon } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
@@ -15,17 +14,17 @@ import PublishedTime from '@/components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 import TagList from './TagList';
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css }) => {
   return {
     desc: css`
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     time: css`
       font-size: 12px;
-      color: ${token.colorTextDescription};
+      color: ${cssVar.colorTextDescription};
     `,
     version: css`
-      font-family: ${token.fontFamilyCode};
+      font-family: ${cssVar.fontFamilyCode};
       font-size: 13px;
     `,
   };
@@ -33,14 +32,13 @@ const useStyles = createStyles(({ css, token }) => {
 
 const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile, inModal }) => {
   const { author, identifier, createdAt, avatar, title, tags, description } = useDetailContext();
-  const { styles, theme } = useStyles();
   const { mobile = isMobile } = useResponsive();
   const { t } = useTranslation('discover');
 
   return (
     <Flexbox gap={24}>
       <Flexbox align={'flex-start'} gap={16} horizontal width={'100%'}>
-        <Avatar avatar={avatar} size={mobile ? 48 : 64} />
+        <Avatar avatar={avatar} shape={'square'} size={mobile ? 48 : 64} />
         <Flexbox
           flex={1}
           gap={4}
@@ -87,7 +85,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
                   onClick={(e) => e.stopPropagation()}
                   target={'_blank'}
                 >
-                  <ActionIcon fill={theme.colorTextDescription} icon={Github} />
+                  <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
                 </Link>
               </Flexbox>
             )}
@@ -115,7 +113,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
 
       <Collapse
         defaultActiveKey={['summary']}
-        expandIconPosition={'end'}
+        expandIconPlacement={'end'}
         items={[
           {
             children: description,

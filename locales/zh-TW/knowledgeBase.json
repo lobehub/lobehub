@@ -1,32 +1,21 @@
 {
-  "addToKnowledgeBase": {
-    "addSuccess": "文件添加成功，<1>立即查看</1>",
-    "confirm": "添加",
-    "id": {
-      "placeholder": "請選擇要添加的知識庫",
-      "required": "請選擇知識庫",
-      "title": "目標知識庫"
-    },
-    "title": "添加到知識庫",
-    "totalFiles": "已選擇 {{count}} 個文件"
-  },
-  "createNew": {
-    "confirm": "新建",
-    "description": {
-      "placeholder": "知識庫簡介（選填）"
-    },
-    "formTitle": "基本信息",
-    "name": {
-      "placeholder": "知識庫名稱",
-      "required": "請填寫知識庫名稱"
-    },
-    "title": "新建知識庫"
-  },
-  "tab": {
-    "evals": "評測",
-    "files": "文檔",
-    "settings": "設置",
-    "testing": "召回測試"
-  },
+  "addToKnowledgeBase.addSuccess": "文件添加成功，<1>立即查看</1>",
+  "addToKnowledgeBase.confirm": "添加",
+  "addToKnowledgeBase.error": "新增檔案至知識庫失敗",
+  "addToKnowledgeBase.id.placeholder": "請選擇要新增的知識庫",
+  "addToKnowledgeBase.id.required": "請選擇知識庫",
+  "addToKnowledgeBase.id.title": "目標知識庫",
+  "addToKnowledgeBase.title": "新增至知識庫",
+  "addToKnowledgeBase.totalFiles": "已選擇 {{count}} 個文件",
+  "createNew.confirm": "新建",
+  "createNew.description.placeholder": "知識庫簡介（選填）",
+  "createNew.formTitle": "基本信息",
+  "createNew.name.placeholder": "知識庫名稱",
+  "createNew.name.required": "請填寫知識庫名稱",
+  "createNew.title": "建立新知識庫",
+  "tab.evals": "評測",
+  "tab.files": "文檔",
+  "tab.settings": "設置",
+  "tab.testing": "召回測試",
   "title": "知識庫"
 }

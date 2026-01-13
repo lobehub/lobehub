@@ -1,13 +1,13 @@
-import { Schema, ValidationResult } from '@cfworker/json-schema';
-import { SWRResponse } from 'swr';
-import { StateCreator } from 'zustand/vanilla';
+import { type Schema, type ValidationResult } from '@cfworker/json-schema';
+import { type SWRResponse } from 'swr';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { useClientDataSWR } from '@/libs/swr';
 import { pluginService } from '@/services/plugin';
 import { merge } from '@/utils/merge';
 
-import { ToolStore } from '../../store';
+import { type ToolStore } from '../../store';
 import { pluginStoreSelectors } from '../oldStore/selectors';
 import { pluginSelectors } from './selectors';
 

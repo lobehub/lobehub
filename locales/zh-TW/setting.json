@@ -1,811 +1,587 @@
 {
-  "about": {
-    "title": "關於"
-  },
-  "agentInfoDescription": {
-    "basic": {
-      "avatar": "頭像",
-      "description": "描述",
-      "name": "名稱",
-      "tags": "標籤",
-      "title": "助手資訊"
-    },
-    "chat": {
-      "displayMode": "顯示模式",
-      "enableHistoryCount": "啟用歷史訊息計數",
-      "historyCount": "歷史訊息數量",
-      "no": "否",
-      "searchMode": "搜尋模式",
-      "title": "聊天偏好",
-      "yes": "是"
-    },
-    "model": {
-      "maxTokens": "最大 Token 數",
-      "model": "模型",
-      "provider": "服務提供者",
-      "temperature": "溫度",
-      "title": "模型設定",
-      "topP": "Top P 值"
-    },
-    "plugins": {
-      "count": "外掛設定（{{count}}）",
-      "empty": "尚未安裝外掛",
-      "title": "已安裝外掛"
-    },
-    "role": {
-      "systemRole": "系統提示詞",
-      "title": "角色設定"
-    },
-    "value": {
-      "unset": "未設定",
-      "untitled": "未命名助手"
-    }
-  },
-  "agentTab": {
-    "chat": "聊天偏好",
-    "meta": "助手資訊",
-    "modal": "模型設定",
-    "opening": "開場設定",
-    "plugin": "外掛程式設定",
-    "prompt": "角色設定",
-    "tts": "語音服務"
-  },
-  "analytics": {
-    "telemetry": {
-      "desc": "透過選擇發送遙測數據，你可以幫助我們改善 {{appName}} 整體用戶體驗",
-      "title": "發送匿名使用數據"
-    },
-    "title": "數據統計"
-  },
+  "_cloud.officialProvider": "{{name}} 官方模型服務",
+  "about.title": "關於",
+  "advancedSettings": "進階設定",
+  "agentCronJobs.addJob": "新增排程任務",
+  "agentCronJobs.confirmDelete": "您確定要刪除此排程任務嗎？",
+  "agentCronJobs.content": "任務內容",
+  "agentCronJobs.create": "建立",
+  "agentCronJobs.createSuccess": "排程任務建立成功",
+  "agentCronJobs.deleteJob": "刪除任務",
+  "agentCronJobs.deleteSuccess": "排程任務刪除成功",
+  "agentCronJobs.description": "透過排程執行自動化您的代理程式",
+  "agentCronJobs.disable": "停用",
+  "agentCronJobs.editJob": "編輯排程任務",
+  "agentCronJobs.empty.description": "建立您的第一個排程任務以自動化代理程式",
+  "agentCronJobs.empty.title": "尚無排程任務",
+  "agentCronJobs.enable": "啟用",
+  "agentCronJobs.form.content.placeholder": "輸入給代理程式的提示或指令",
+  "agentCronJobs.form.maxExecutions.placeholder": "留空表示無限制",
+  "agentCronJobs.form.name.placeholder": "輸入任務名稱",
+  "agentCronJobs.form.timeRange.end": "結束時間",
+  "agentCronJobs.form.timeRange.start": "開始時間",
+  "agentCronJobs.form.validation.contentRequired": "任務內容為必填",
+  "agentCronJobs.form.validation.invalidTimeRange": "開始時間必須早於結束時間",
+  "agentCronJobs.form.validation.nameRequired": "任務名稱為必填",
+  "agentCronJobs.interval.12hours": "每 12 小時",
+  "agentCronJobs.interval.1hour": "每小時",
+  "agentCronJobs.interval.30min": "每 30 分鐘",
+  "agentCronJobs.interval.6hours": "每 6 小時",
+  "agentCronJobs.interval.daily": "每日",
+  "agentCronJobs.interval.weekly": "每週",
+  "agentCronJobs.lastExecuted": "上次執行時間",
+  "agentCronJobs.maxExecutions": "最大執行次數",
+  "agentCronJobs.name": "任務名稱",
+  "agentCronJobs.never": "從未",
+  "agentCronJobs.noExecutionResults": "沒有執行結果",
+  "agentCronJobs.remainingExecutions": "剩餘：{{count}}",
+  "agentCronJobs.save": "儲存",
+  "agentCronJobs.schedule": "排程",
+  "agentCronJobs.status.depleted": "已耗盡",
+  "agentCronJobs.status.disabled": "已停用",
+  "agentCronJobs.status.enabled": "已啟用",
+  "agentCronJobs.timeRange": "時間範圍",
+  "agentCronJobs.title": "排程任務",
+  "agentCronJobs.unlimited": "無限制",
+  "agentCronJobs.unnamedTask": "未命名的任務",
+  "agentCronJobs.updateSuccess": "排程任務更新成功",
+  "agentCronJobs.weekdays": "平日",
+  "agentInfoDescription.basic.avatar": "頭像",
+  "agentInfoDescription.basic.description": "描述",
+  "agentInfoDescription.basic.name": "名稱",
+  "agentInfoDescription.basic.tags": "標籤",
+  "agentInfoDescription.basic.title": "助手資訊",
+  "agentInfoDescription.chat.enableHistoryCount": "啟用歷史訊息計數",
+  "agentInfoDescription.chat.historyCount": "歷史訊息數量",
+  "agentInfoDescription.chat.no": "否",
+  "agentInfoDescription.chat.searchMode": "搜尋模式",
+  "agentInfoDescription.chat.title": "聊天偏好",
+  "agentInfoDescription.chat.yes": "是",
+  "agentInfoDescription.model.maxTokens": "最大 Token 數",
+  "agentInfoDescription.model.model": "模型",
+  "agentInfoDescription.model.provider": "服務提供者",
+  "agentInfoDescription.model.temperature": "溫度",
+  "agentInfoDescription.model.title": "模型設定",
+  "agentInfoDescription.model.topP": "Top P 值",
+  "agentInfoDescription.plugins.count": "外掛設定（{{count}}）",
+  "agentInfoDescription.plugins.empty": "尚未安裝外掛",
+  "agentInfoDescription.plugins.title": "已安裝外掛",
+  "agentInfoDescription.role.systemRole": "系統提示詞",
+  "agentInfoDescription.role.title": "角色設定",
+  "agentInfoDescription.value.unset": "未設定",
+  "agentInfoDescription.value.untitled": "未命名助手",
+  "agentTab.chat": "聊天偏好",
+  "agentTab.meta": "助手資訊",
+  "agentTab.modal": "模型設定",
+  "agentTab.opening": "開場設定",
+  "agentTab.plugin": "外掛程式設定",
+  "agentTab.prompt": "角色設定",
+  "agentTab.tts": "語音服務",
+  "analytics.telemetry.desc": "協助我們透過匿名使用資料改進 {{appName}}",
+  "analytics.telemetry.title": "發送匿名使用數據",
+  "analytics.title": "數據統計",
   "checking": "檢查中...",
   "checkingPermissions": "檢查權限中...",
-  "danger": {
-    "clear": {
-      "action": "立即清除",
-      "confirm": "確認清除所有聊天資料？",
-      "desc": "將會清除所有對話資料，包括助手、檔案、訊息、外掛等",
-      "success": "已清除所有對話訊息",
-      "title": "清除所有對話訊息"
-    },
-    "reset": {
-      "action": "立即重置",
-      "confirm": "確認重置所有設定？",
-      "currentVersion": "當前版本",
-      "desc": "重置所有設定項回預設值",
-      "success": "已重設所有設定",
-      "title": "重置所有設定"
-    }
-  },
-  "groupTab": {
-    "chat": "聊天",
-    "members": "成員",
-    "meta": "基本資訊"
-  },
-  "header": {
-    "desc": "偏好與模型設定",
-    "global": "全域設定",
-    "group": "團隊設定",
-    "groupDesc": "管理 Agent 團隊與聊天偏好",
-    "session": "對話設定",
-    "sessionDesc": "角色設定與會話偏好",
-    "sessionWithName": "對話設定 · {{name}}",
-    "title": "設定"
-  },
-  "hotkey": {
-    "conflicts": "與現有快捷鍵衝突",
-    "errors": {
-      "CONFLICT": "快速鍵衝突：該快速鍵已被其他功能佔用",
-      "INVALID_FORMAT": "快速鍵格式無效：請使用正確的格式（如 CommandOrControl+E）",
-      "INVALID_ID": "無效的快速鍵ID",
-      "NO_MODIFIER": "快速鍵必須包含修飾鍵（Ctrl、Alt、Shift等）",
-      "SYSTEM_OCCUPIED": "快速鍵已被系統或其他應用程式佔用",
-      "UNKNOWN": "更新失敗：未知錯誤"
-    },
-    "group": {
-      "conversation": "對話",
-      "desktop": "桌面端",
-      "essential": "基本"
-    },
-    "invalidCombination": "快捷鍵需要至少包含一個修飾鍵 (Ctrl, Alt, Shift) 和一個常規鍵",
-    "record": "按下按鍵以錄製快捷鍵",
-    "reset": "重置為預設快捷鍵",
-    "title": "快速鍵",
-    "updateError": "快速鍵更新失敗：網路或系統錯誤",
-    "updateSuccess": "快速鍵更新成功"
-  },
-  "llm": {
-    "aesGcm": "您的金鑰與代理地址等將使用 <1>AES-GCM</1> 加密演算法進行加密",
-    "apiKey": {
-      "desc": "請填寫您的 {{name}} API 金鑰",
-      "placeholder": "{{name}} API 金鑰",
-      "title": "API 金鑰"
-    },
-    "checker": {
-      "button": "檢查",
-      "desc": "測試 API 金鑰與代理地址是否正確填寫",
-      "pass": "檢查通過",
-      "title": "連通性檢查"
-    },
-    "customModelCards": {
-      "addNew": "創建並添加 {{id}} 模型",
-      "config": "配置模型",
-      "confirmDelete": "即將刪除該自定義模型，刪除後將不可恢復，請謹慎操作。",
-      "modelConfig": {
-        "azureDeployName": {
-          "extra": "在 Azure OpenAI 中實際請求的字段",
-          "placeholder": "請輸入 Azure 中的模型部署名稱",
-          "title": "模型部署名稱"
-        },
-        "displayName": {
-          "placeholder": "請輸入模型的展示名稱，例如 ChatGPT、GPT-4 等",
-          "title": "模型展示名稱"
-        },
-        "files": {
-          "extra": "當前文件上傳實現僅為一種 Hack 方案，僅限自行嘗試。完整文件上傳能力請等待後續實現",
-          "title": "支援文件上傳"
-        },
-        "functionCall": {
-          "extra": "此配置將僅開啟應用中的函數調用能力，是否支持函數調用完全取決於模型本身，請自行測試該模型的函數調用能力可用性",
-          "title": "支援函數調用"
-        },
-        "id": {
-          "extra": "將作為模型標籤進行展示",
-          "placeholder": "請輸入模型id，例如 gpt-4-turbo-preview 或 claude-2.1",
-          "title": "模型 ID"
-        },
-        "modalTitle": "自定義模型配置",
-        "tokens": {
-          "title": "最大 token 數"
-        },
-        "vision": {
-          "extra": "此配置將僅開啟應用中的圖片上傳配置，是否支持識別完全取決於模型本身，請自行測試該模型的視覺識別能力可用性",
-          "title": "支援視覺識別"
-        }
-      }
-    },
-    "fetchOnClient": {
-      "desc": "客戶端請求模式將從瀏覽器直接發起會話請求，可提升響應速度",
-      "title": "使用客戶端請求模式"
-    },
-    "fetcher": {
-      "clear": "清除獲取的模型",
-      "fetch": "獲取模型列表",
-      "fetching": "正在獲取模型列表...",
-      "latestTime": "上次更新時間：{{time}}",
-      "noLatestTime": "暫未獲取列表"
-    },
-    "helpDoc": "配置說明文件",
-    "modelList": {
-      "desc": "選擇在會話中展示的模型，選擇的模型會在模型列表中展示",
-      "placeholder": "請從列表中選擇模型",
-      "title": "模型列表",
-      "total": "共 {{count}} 個模型可用"
-    },
-    "proxyUrl": {
-      "desc": "必須包含 http(s):// 以外的預設地址",
-      "title": "API 代理位址"
-    },
-    "waitingForMore": "更多模型正在 <1>計劃接入</1> 中，敬請期待"
-  },
-  "marketPublish": {
-    "modal": {
-      "changelog": {
-        "extra": "描述此版本的主要變更與改進",
-        "label": "變更日誌",
-        "maxLengthError": "變更日誌不能超過 500 個字元",
-        "placeholder": "請輸入變更日誌",
-        "required": "請輸入變更日誌"
-      },
-      "comparison": {
-        "local": "本地目前版本",
-        "remote": "目前已發布版本"
-      },
-      "identifier": {
-        "extra": "識別碼將作為助手的唯一標識，建議使用小寫字母、數字與連字號",
-        "label": "助手識別碼",
-        "lengthError": "識別碼長度應在 3-50 個字元之間",
-        "patternError": "識別碼只能包含小寫字母、數字與連字號",
-        "placeholder": "請輸入助手的唯一識別碼，例如：web-development",
-        "required": "請輸入助手識別碼"
-      },
-      "loading": {
-        "fetchingRemote": "正在載入遠端資料...",
-        "submit": "正在發布助手...",
-        "upload": "正在發布新版本..."
-      },
-      "messages": {
-        "createVersionFailed": "版本建立失敗：{{message}}",
-        "fetchRemoteFailed": "取得遠端助手資料失敗",
-        "missingIdentifier": "目前助手尚未設定市場識別碼",
-        "notAuthenticated": "請先登入市場帳號",
-        "publishFailed": "發布失敗：{{message}}"
-      },
-      "submitButton": "發布",
-      "title": {
-        "submit": "分享到助手市集",
-        "upload": "發布新版本"
-      }
-    },
-    "resultModal": {
-      "message": "助手已提交審核，審核通過後將自動上線。點擊「在市集查看」以查看已發布的助手。",
-      "view": "在市集查看"
-    },
-    "submit": {
-      "button": "分享到市集",
-      "tooltip": "分享助手到市集"
-    },
-    "upload": {
-      "button": "發布新版本",
-      "tooltip": "發布新版本到助手市集"
-    }
-  },
-  "message": {
-    "success": "更新成功"
-  },
-  "plugin": {
-    "addMCPPlugin": "新增 MCP 外掛",
-    "addTooltip": "新增自訂外掛程式",
-    "clearDeprecated": "清除已棄用的外掛",
-    "empty": "目前沒有安裝任何外掛，歡迎前往 <1>外掛商店</1> 探索",
-    "installStatus": {
-      "deprecated": "已解除安裝"
-    },
-    "settings": {
-      "hint": "請根據描述填寫以下設定",
-      "title": "{{id}} 外掛設定",
-      "tooltip": "外掛設定"
-    },
-    "store": "外掛商店"
-  },
-  "settingAgent": {
-    "avatar": {
-      "title": "頭像"
-    },
-    "backgroundColor": {
-      "title": "背景色"
-    },
-    "description": {
-      "desc": "簡單介紹你的助手，不作為角色設定",
-      "placeholder": "請輸入助手描述",
-      "title": "助手描述"
-    },
-    "name": {
-      "placeholder": "請輸入助手名稱",
-      "title": "名稱"
-    },
-    "prompt": {
-      "placeholder": "請輸入角色 Prompt 提示詞",
-      "title": "角色設定"
-    },
-    "submit": "更新助手資訊",
-    "tag": {
-      "desc": "助手標籤將在助手市場中展示",
-      "placeholder": "請輸入標籤",
-      "title": "標籤"
-    },
-    "title": "助手資訊"
-  },
-  "settingAppearance": {
-    "animationMode": {
-      "agile": "敏捷",
-      "desc": "選擇應用程式操作回應的動畫速度",
-      "disabled": "關閉",
-      "elegant": "優雅",
-      "title": "回應動畫"
-    },
-    "contextMenuMode": {
-      "default": "預設",
-      "desc": "選擇聊天訊息右鍵選單的顯示方案",
-      "disabled": "不使用",
-      "title": "右鍵選單方案"
-    },
-    "neutralColor": {
-      "desc": "不同色彩傾向的灰階自訂",
-      "title": "中性色"
-    },
-    "noAnimation": {
-      "desc": "停用應用程式中的所有動畫效果",
-      "title": "無動畫模式"
-    },
-    "preview": {
-      "title": "調色盤"
-    },
-    "primaryColor": {
-      "desc": "自訂主題色",
-      "title": "主題色"
-    },
-    "title": "應用外觀"
-  },
-  "settingChat": {
-    "autoCreateTopicThreshold": {
-      "desc": "當前訊息數超過設定值後，將自動建立話題",
-      "title": "訊息閾值"
-    },
-    "chatStyleType": {
-      "title": "聊天視窗樣式",
-      "type": {
-        "chat": "對話模式",
-        "docs": "文件模式"
-      }
-    },
-    "compressThreshold": {
-      "desc": "當未壓縮的歷史訊息超過該值時，將進行壓縮",
-      "title": "歷史訊息長度壓縮閾值"
-    },
-    "enableAutoCreateTopic": {
-      "desc": "對話過程中是否自動建立話題，僅在臨時話題中生效",
-      "title": "自動建立話題"
-    },
-    "enableCompressHistory": {
-      "title": "開啟歷史消息自動總結"
-    },
-    "enableHistoryCount": {
-      "alias": "不限制",
-      "limited": "只包含 {{number}} 條對話訊息",
-      "setlimited": "設置限制",
-      "title": "限制歷史訊息數",
-      "unlimited": "不限歷史訊息數"
-    },
-    "enableStreaming": {
-      "desc": "啟用串流輸出以即時顯示回應。停用後僅顯示完整回應。",
-      "title": "啟用串流輸出"
-    },
-    "historyCount": {
-      "desc": "每次請求攜帶的歷史訊息數",
-      "title": "附帶歷史訊息數"
-    },
-    "inputTemplate": {
-      "desc": "使用者最新的一條訊息會填充到此模板",
-      "placeholder": "預處理模板 {{text}} 將替換為實時輸入資訊",
-      "title": "使用者輸入預處理"
-    },
-    "submit": "更新聊天偏好",
-    "title": "聊天設定"
-  },
-  "settingChatAppearance": {
-    "fontSize": {
-      "desc": "聊天內容的字體大小",
-      "marks": {
-        "normal": "標準"
-      },
-      "title": "字體大小"
-    },
-    "highlighterTheme": {
-      "title": "程式碼高亮主題"
-    },
-    "mermaidTheme": {
-      "title": "美人魚主題"
-    },
-    "title": "聊天外觀",
-    "transitionMode": {
-      "desc": "聊天訊息的過渡動畫",
-      "options": {
-        "fadeIn": "淡入",
-        "none": {
-          "desc": "這取決於模型的回應輸出方式，請自行測試。",
-          "value": "無"
-        },
-        "smooth": "平滑"
-      },
-      "title": "過渡動畫"
-    }
-  },
-  "settingCommon": {
-    "lang": {
-      "autoMode": "跟隨系統",
-      "title": "語言"
-    },
-    "themeMode": {
-      "auto": "自動",
-      "dark": "深色",
-      "light": "淺色",
-      "title": "主題"
-    },
-    "title": "通用設定"
-  },
-  "settingGroup": {
-    "description": {
-      "placeholder": "請輸入團隊描述",
-      "title": "團隊描述"
-    },
-    "name": {
-      "placeholder": "請輸入團隊名稱",
-      "title": "團隊名稱"
-    },
-    "scene": {
-      "desc": "選擇團隊場景",
-      "options": {
-        "casual": "休閒",
-        "productive": "生產力"
-      },
-      "title": "團隊場景"
-    },
-    "submit": "更新團隊",
-    "systemPrompt": {
-      "placeholder": "請輸入主持人系統提示詞",
-      "title": "主持人系統提示詞"
-    },
-    "title": "Agent 團隊資訊"
-  },
-  "settingGroupChat": {
-    "allowDM": {
-      "desc": "關閉後，你仍然可以主動向助手發送私訊",
-      "title": "允許助手發送私訊"
-    },
-    "enableSupervisor": {
-      "desc": "啟用 Agent 團隊主持人功能，主持人將管理團隊對話流程",
-      "title": "啟用主持人"
-    },
-    "maxResponseInRow": {
-      "desc": "選擇成員可以連續回覆多少條訊息。設定為 0 則禁用此限制。",
-      "title": "連續回覆訊息數"
-    },
-    "model": {
-      "desc": "群成員發言不受影響。部分模型無法作為主持人模型使用。",
-      "title": "主持人模型"
-    },
-    "orchestratorTitle": "主持人設定",
-    "responseOrder": {
-      "desc": "代理將依照在聊天中設定的順序進行回覆",
-      "options": {
-        "natural": "自然",
-        "sequential": "順序"
-      },
-      "placeholder": "選擇回覆順序",
-      "title": "回覆順序"
-    },
-    "responseSpeed": {
-      "desc": "控制聊天的整體進行速度",
-      "options": {
-        "fast": "快速",
-        "medium": "中等",
-        "slow": "慢速"
-      },
-      "placeholder": "選擇回覆速度",
-      "title": "回覆速度"
-    },
-    "revealDM": {
-      "desc": "使發送給其他成員的私訊內容對你可見。",
-      "title": "顯示私訊內容"
-    },
-    "submit": "更新設定",
-    "systemPrompt": {
-      "desc": "群聊對話主持人的自訂系統提示詞。這可能影響預設的主持人行為。",
-      "placeholder": "請輸入自訂主持人系統提示詞...",
-      "title": "主持人系統提示詞"
-    },
-    "title": "聊天設定"
-  },
-  "settingGroupMembers": {
-    "addToGroup": "加入群組",
-    "availableAgents": "可用助理",
-    "createMember": "建立成員",
-    "defaultAgent": "自訂助理",
-    "disableHost": "關閉主持助理",
-    "edit": "編輯成員",
-    "empty": "該團隊中尚無成員。點擊 + 按鈕新增成員。",
-    "enableHost": "啟用主持助理",
-    "groupHost": "群主持",
-    "groupMembers": "群組成員",
-    "host": {
-      "description": "主持人在群組中時，群聊將自動化運行，適合發散性任務。",
-      "title": "主持人"
-    },
-    "noAvailableAgents": "暫無可用助理",
-    "noDescription": "暫無描述",
-    "noMembersInGroup": "群組暫無成員",
-    "owner": "你（所有者）",
-    "remove": "移除成員",
-    "removeFromGroup": "移出群組",
-    "you": "你"
-  },
-  "settingImage": {
-    "defaultCount": {
-      "desc": "設定圖像生成面板在建立新任務時的預設圖片數量。",
-      "label": "預設圖片數量",
-      "title": "AI 繪圖設定"
-    }
-  },
-  "settingModel": {
-    "enableMaxTokens": {
-      "title": "啟用單次回覆限制"
-    },
-    "enableReasoningEffort": {
-      "title": "開啟推理強度調整"
-    },
-    "frequencyPenalty": {
-      "desc": "值越大，用詞越豐富多樣；值越低，用詞更樸實簡單",
-      "title": "詞彙豐富度"
-    },
-    "maxTokens": {
-      "desc": "單次互動所使用的最大 Token 數",
-      "title": "單次回覆限制"
-    },
-    "model": {
-      "desc": "{{provider}} 模型",
-      "title": "模型"
-    },
-    "params": {
-      "title": "高級參數"
-    },
-    "presencePenalty": {
-      "desc": "值越大，越傾向不同的表達方式，避免概念重複；值越小，越傾向使用重複的概念或敘述，表達更具一致性",
-      "title": "表述發散度"
-    },
-    "reasoningEffort": {
-      "desc": "數值越大，推理能力越強，但可能會增加回應時間和 Token 消耗",
-      "options": {
-        "high": "高",
-        "low": "低",
-        "medium": "中"
-      },
-      "title": "推理強度"
-    },
-    "submit": "更新模型設定",
-    "temperature": {
-      "desc": "數值越大，回答越有創意和想像力；數值越小，回答越嚴謹",
-      "title": "創意活躍度",
-      "warning": "創意活躍度數值過大，輸出可能會產生亂碼"
-    },
-    "title": "模型設定",
-    "topP": {
-      "desc": "考慮多少種可能性，值越大，接受更多可能的回答；值越小，傾向選擇最可能的回答。不推薦和創意活躍度一起更改",
-      "title": "思維開放度"
-    }
-  },
-  "settingOpening": {
-    "openingMessage": {
-      "desc": "打開會話時的開場消息，用來介紹助手的功能",
-      "placeholder": "你好，我是 自訂助手，你可以立即與我開始對話，也可以前往 助手設定 完善我的資訊。",
-      "title": "開場消息"
-    },
-    "openingQuestions": {
-      "desc": "會話開始時展示的引導性問題",
-      "empty": "暫無問題",
-      "placeholder": "請輸入問題",
-      "repeat": "問題已存在",
-      "title": "開場問題"
-    },
-    "title": "開場設定"
-  },
-  "settingPlugin": {
-    "title": "插件列表"
-  },
-  "settingSystem": {
-    "accessCode": {
-      "desc": "管理員已開啟加密訪問",
-      "placeholder": "請輸入訪問密碼",
-      "title": "訪問密碼"
-    },
-    "oauth": {
-      "info": {
-        "desc": "已登錄",
-        "title": "帳戶資訊"
-      },
-      "signin": {
-        "action": "登錄",
-        "desc": "使用 SSO 登錄以解鎖應用",
-        "title": "登錄帳號"
-      },
-      "signout": {
-        "action": "退出登錄",
-        "confirm": "確認退出？",
-        "success": "退出登錄成功"
-      }
-    },
-    "title": "系統設定"
-  },
-  "settingTTS": {
-    "openai": {
-      "sttModel": "OpenAI 語音識別模型",
-      "title": "OpenAI",
-      "ttsModel": "OpenAI 語音合成模型"
-    },
-    "showAllLocaleVoice": {
-      "desc": "關閉則只顯示當前語種的聲源",
-      "title": "顯示所有語種聲源"
-    },
-    "stt": "語音識別設定",
-    "sttAutoStop": {
-      "desc": "關閉後，語音識別將不會自動結束，需要手動點擊結束按鈕",
-      "title": "自動結束語音識別"
-    },
-    "sttLocale": {
-      "desc": "語音輸入的語種，此選項可提高語音識別準確率",
-      "title": "語音識別語種"
-    },
-    "sttService": {
-      "desc": "其中 browser 為瀏覽器原生的語音識別服務",
-      "title": "語音識別服務"
-    },
-    "submit": "更新語音服務",
-    "title": "語音服務",
-    "tts": "語音合成設定",
-    "ttsService": {
-      "desc": "如使用 OpenAI 語音合成服務，需要保證 OpenAI 模型服務已開啟",
-      "title": "語音合成服務"
-    },
-    "voice": {
-      "desc": "為當前助手挑選一個聲音，不同 TTS 服務支持的聲源不同",
-      "preview": "試聽聲源",
-      "title": "語音合成聲源"
-    }
-  },
-  "storage": {
-    "actions": {
-      "export": {
-        "button": "匯出",
-        "exportType": {
-          "agent": "匯出助手設定",
-          "agentWithMessage": "匯出助手和訊息",
-          "all": "匯出全域設定和所有助手資料",
-          "allAgent": "匯出所有助手設定",
-          "allAgentWithMessage": "匯出所有助手和訊息",
-          "globalSetting": "匯出全域設定"
-        },
-        "title": "匯出資料"
-      },
-      "import": {
-        "button": "匯入",
-        "title": "匯入資料"
-      },
-      "title": "進階操作"
-    },
-    "desc": "當前瀏覽器中的儲存用量",
-    "embeddings": {
-      "used": "向量儲存"
-    },
-    "title": "資料儲存",
-    "used": "儲存用量"
-  },
-  "submitAgentModal": {
-    "button": "提交助手",
-    "identifier": "助手識別碼（identifier）",
-    "metaMiss": "請補全助手信息後提交，需要包含名稱、描述和標籤",
-    "placeholder": "請輸入助手的標識符，需要是唯一的，比如 web-development",
-    "tooltips": "分享到助手市場"
-  },
-  "submitFooter": {
-    "reset": "重置",
-    "submit": "保存",
-    "unSaved": "未保存更改",
-    "unSavedWarning": "當前有未保存的更改"
-  },
-  "sync": {
-    "device": {
-      "deviceName": {
-        "hint": "添加名稱以便於識別",
-        "placeholder": "請輸入裝置名稱",
-        "title": "裝置名稱"
-      },
-      "title": "裝置資訊",
-      "unknownBrowser": "未知瀏覽器",
-      "unknownOS": "未知系統"
-    },
-    "warning": {
-      "tip": "經過較長一段時間社區公測，WebRTC 同步可能無法穩定滿足通用的資料同步需求。請自行 <1>部署信令伺服器</1> 後使用。"
-    },
-    "webrtc": {
-      "channelName": {
-        "desc": "WebRTC 將使用此名創建同步頻道，確保頻道名稱唯一",
-        "placeholder": "請輸入同步頻道名稱",
-        "shuffle": "隨機生成",
-        "title": "同步頻道名稱"
-      },
-      "channelPassword": {
-        "desc": "添加密碼確保頻道私密性，只有密碼正確時，裝置才可加入頻道",
-        "placeholder": "請輸入同步頻道密碼",
-        "title": "同步頻道密碼"
-      },
-      "desc": "實時、點對點的數據通信，需裝置同時在線才可同步",
-      "enabled": {
-        "invalid": "請填寫信令伺服器和同步頻道名稱後再啟用",
-        "title": "開啟同步"
-      },
-      "signaling": {
-        "desc": "WebRTC 將使用該地址進行同步",
-        "placeholder": "請輸入信令伺服器地址",
-        "title": "信令伺服器"
-      },
-      "title": "WebRTC 同步"
-    }
-  },
-  "systemAgent": {
-    "agentMeta": {
-      "label": "助理元數據生成模型",
-      "modelDesc": "指定用於生成助理名稱、描述、頭像、標籤的模型",
-      "title": "自動生成助理資訊"
-    },
-    "customPrompt": {
-      "addPrompt": "新增自訂提示",
-      "desc": "填寫後，系統助理將在生成內容時使用自訂提示",
-      "placeholder": "請輸入自訂提示詞",
-      "title": "自訂提示詞"
-    },
-    "generationTopic": {
-      "label": "AI 繪畫話題命名模型",
-      "modelDesc": "指定用於 AI 繪畫自動命名話題的模型",
-      "title": "AI 繪畫自動命名話題"
-    },
-    "helpInfo": "當創建新助手時，將以預設助手設定作為預設值。",
-    "historyCompress": {
-      "label": "會話歷史模型",
-      "modelDesc": "指定用於壓縮會話歷史的模型",
-      "title": "自動總結會話歷史"
-    },
-    "queryRewrite": {
-      "label": "提問重寫模型",
-      "modelDesc": "指定用於優化用戶提問的模型",
-      "title": "知識庫提問重寫"
-    },
-    "thread": {
-      "label": "子主題命名模型",
-      "modelDesc": "指定用於子主題自動重命名的模型",
-      "title": "子主題自動命名"
-    },
-    "title": "系統助手",
-    "topic": {
-      "label": "話題命名模型",
-      "modelDesc": "指定用於話題自動重命名的模型",
-      "title": "話題自動命名"
-    },
-    "translation": {
-      "label": "翻譯模型",
-      "modelDesc": "指定用於翻譯的模型",
-      "title": "翻譯助手設定"
-    }
-  },
-  "tab": {
-    "about": "關於",
-    "agent": "默認助手",
-    "common": "通用設置",
-    "experiment": "實驗",
-    "hotkey": "快速鍵",
-    "image": "AI 繪圖",
-    "llm": "語言模型",
-    "provider": "AI 服務商",
-    "proxy": "網路代理",
-    "storage": "資料儲存",
-    "sync": "雲端同步",
-    "system-agent": "系統助手",
-    "tts": "語音服務"
-  },
-  "tools": {
-    "builtins": {
-      "groupName": "內置"
-    },
-    "disabled": "當前模型不支持函數調用，無法使用插件",
-    "klavis": {
-      "addServer": "新增伺服器",
-      "authCompleted": "驗證完成",
-      "authFailed": "驗證失敗",
-      "authRequired": "需要驗證",
-      "connected": "已連線",
-      "error": "錯誤",
-      "groupName": "Klavis 工具",
-      "manage": "管理 Klavis",
-      "manageTitle": "管理 Klavis 整合",
-      "noServers": "尚未連線任何伺服器",
-      "notEnabled": "Klavis 服務未啟用",
-      "oauthRequired": "請在新視窗中完成 OAuth 驗證",
-      "pendingAuth": "待驗證",
-      "serverCreated": "伺服器建立成功",
-      "serverCreatedFailed": "伺服器建立失敗",
-      "serverRemoved": "伺服器已刪除",
-      "servers": "個伺服器",
-      "tools": "個工具",
-      "verifyAuth": "我已完成驗證"
-    },
-    "plugins": {
-      "enabled": "已啟用 {{num}}",
-      "groupName": "插件",
-      "noEnabled": "暫無啟用插件",
-      "store": "插件商店"
-    },
-    "tabs": {
-      "all": "全部",
-      "installed": "已啟用"
-    },
-    "title": "擴展工具"
-  }
+  "danger.clear.action": "立即清除",
+  "danger.clear.confirm": "確認清除所有聊天資料？",
+  "danger.clear.desc": "刪除所有資料，包括代理人、檔案、訊息與技能。您的帳號將不會被刪除。",
+  "danger.clear.success": "已清除所有對話訊息",
+  "danger.clear.title": "清除資料",
+  "danger.reset.action": "立即重置",
+  "danger.reset.confirm": "確認重置所有設定？",
+  "danger.reset.currentVersion": "當前版本",
+  "danger.reset.desc": "將所有設定還原為預設值。您的資料不會被刪除。",
+  "danger.reset.success": "已重設所有設定",
+  "danger.reset.title": "重置所有設定",
+  "defaultAgent.model.desc": "建立新 Agent 時使用的預設模型",
+  "defaultAgent.model.title": "模型",
+  "defaultAgent.title": "預設助手設定",
+  "group.aiConfig": "AI 設定",
+  "group.common": "通用",
+  "group.profile": "帳號",
+  "group.subscription": "訂閱",
+  "group.system": "系統",
+  "groupTab.chat": "聊天",
+  "groupTab.members": "成員",
+  "groupTab.meta": "基本資訊",
+  "header.desc": "偏好與模型設定",
+  "header.global": "全域設定",
+  "header.group": "團隊設定",
+  "header.groupDesc": "管理群組與聊天偏好",
+  "header.session": "對話設定",
+  "header.sessionDesc": "角色設定與會話偏好",
+  "header.sessionWithName": "對話設定 · {{name}}",
+  "header.title": "設定",
+  "hotkey.conflicts": "與現有快捷鍵衝突",
+  "hotkey.errors.CONFLICT": "快速鍵衝突：該快速鍵已被其他功能佔用",
+  "hotkey.errors.INVALID_FORMAT": "快速鍵格式無效：請使用正確的格式（如 CommandOrControl+E）",
+  "hotkey.errors.INVALID_ID": "無效的快速鍵ID",
+  "hotkey.errors.NO_MODIFIER": "快速鍵必須包含修飾鍵（Ctrl、Alt、Shift等）",
+  "hotkey.errors.SYSTEM_OCCUPIED": "快速鍵已被系統或其他應用程式佔用",
+  "hotkey.errors.UNKNOWN": "更新失敗：未知錯誤",
+  "hotkey.group.conversation": "對話",
+  "hotkey.group.desktop": "桌面端",
+  "hotkey.group.essential": "基本",
+  "hotkey.invalidCombination": "快捷鍵需要至少包含一個修飾鍵 (Ctrl, Alt, Shift) 和一個常規鍵",
+  "hotkey.record": "按下按鍵以錄製快捷鍵",
+  "hotkey.reset": "重置為預設快捷鍵",
+  "hotkey.title": "快速鍵",
+  "hotkey.updateError": "快速鍵更新失敗：網路或系統錯誤",
+  "hotkey.updateSuccess": "快速鍵更新成功",
+  "llm.aesGcm": "您的金鑰與代理地址等將使用 <1>AES-GCM</1> 加密演算法進行加密",
+  "llm.apiKey.desc": "請填寫您的 {{name}} API 金鑰",
+  "llm.apiKey.placeholder": "{{name}} API 金鑰",
+  "llm.apiKey.title": "API 金鑰",
+  "llm.checker.button": "檢查",
+  "llm.checker.desc": "測試 API 金鑰與代理地址是否正確填寫",
+  "llm.checker.pass": "檢查通過",
+  "llm.checker.title": "連通性檢查",
+  "llm.customModelCards.addNew": "創建並添加 {{id}} 模型",
+  "llm.customModelCards.config": "配置模型",
+  "llm.customModelCards.confirmDelete": "即將刪除該自定義模型，刪除後將不可恢復，請謹慎操作。",
+  "llm.customModelCards.modelConfig.azureDeployName.extra": "在 Azure OpenAI 中實際請求的字段",
+  "llm.customModelCards.modelConfig.azureDeployName.placeholder": "請輸入 Azure 中的模型部署名稱",
+  "llm.customModelCards.modelConfig.azureDeployName.title": "模型部署名稱",
+  "llm.customModelCards.modelConfig.displayName.placeholder": "請輸入模型的展示名稱，例如 ChatGPT、GPT-4 等",
+  "llm.customModelCards.modelConfig.displayName.title": "模型展示名稱",
+  "llm.customModelCards.modelConfig.files.extra": "當前文件上傳實現僅為一種 Hack 方案，僅限自行嘗試。完整文件上傳能力請等待後續實現",
+  "llm.customModelCards.modelConfig.files.title": "支援文件上傳",
+  "llm.customModelCards.modelConfig.functionCall.extra": "此配置將僅開啟應用中的函數調用能力，是否支持函數調用完全取決於模型本身，請自行測試該模型的函數調用能力可用性",
+  "llm.customModelCards.modelConfig.functionCall.title": "支援函數調用",
+  "llm.customModelCards.modelConfig.id.extra": "將作為模型標籤進行展示",
+  "llm.customModelCards.modelConfig.id.placeholder": "請輸入模型id，例如 gpt-4-turbo-preview 或 claude-2.1",
+  "llm.customModelCards.modelConfig.id.title": "模型 ID",
+  "llm.customModelCards.modelConfig.modalTitle": "自定義模型配置",
+  "llm.customModelCards.modelConfig.tokens.title": "最大 token 數",
+  "llm.customModelCards.modelConfig.vision.extra": "此配置將僅開啟應用中的圖片上傳配置，是否支持識別完全取決於模型本身，請自行測試該模型的視覺識別能力可用性",
+  "llm.customModelCards.modelConfig.vision.title": "支援視覺識別",
+  "llm.fetchOnClient.desc": "客戶端請求模式將從瀏覽器直接發起會話請求，可提升響應速度",
+  "llm.fetchOnClient.title": "使用客戶端請求模式",
+  "llm.fetcher.clear": "清除獲取的模型",
+  "llm.fetcher.fetch": "獲取模型列表",
+  "llm.fetcher.fetching": "正在獲取模型列表...",
+  "llm.fetcher.latestTime": "上次更新時間：{{time}}",
+  "llm.fetcher.noLatestTime": "暫未獲取列表",
+  "llm.helpDoc": "配置說明文件",
+  "llm.modelList.desc": "選擇在會話中展示的模型，選擇的模型會在模型列表中展示",
+  "llm.modelList.placeholder": "請從列表中選擇模型",
+  "llm.modelList.title": "模型列表",
+  "llm.modelList.total": "共 {{count}} 個模型可用",
+  "llm.proxyUrl.desc": "必須包含 http(s):// 以外的預設地址",
+  "llm.proxyUrl.title": "API 代理位址",
+  "llm.waitingForMore": "更多模型正在 <1>計劃接入</1> 中，敬請期待",
+  "llm.waitingForMoreLinkAriaLabel": "開啟模型服務商接入需求表單",
+  "marketPublish.forkConfirm.by": "由 {{author}}",
+  "marketPublish.forkConfirm.confirm": "確認發佈",
+  "marketPublish.forkConfirm.description": "您即將發佈一個基於社群中現有代理所衍生的版本。您的新代理將作為獨立項目發佈至市集。",
+  "marketPublish.forkConfirm.title": "發佈衍生代理",
+  "marketPublish.modal.changelog.extra": "描述此版本的主要變更與改進",
+  "marketPublish.modal.changelog.label": "變更日誌",
+  "marketPublish.modal.changelog.maxLengthError": "變更日誌不能超過 500 個字元",
+  "marketPublish.modal.changelog.placeholder": "請輸入變更日誌",
+  "marketPublish.modal.changelog.required": "請輸入變更日誌",
+  "marketPublish.modal.comparison.local": "本地目前版本",
+  "marketPublish.modal.comparison.remote": "目前已發布版本",
+  "marketPublish.modal.identifier.extra": "識別碼將作為助手的唯一標識，建議使用小寫字母、數字與連字號",
+  "marketPublish.modal.identifier.label": "助手識別碼",
+  "marketPublish.modal.identifier.lengthError": "識別碼長度應在 3-50 個字元之間",
+  "marketPublish.modal.identifier.patternError": "識別碼只能包含小寫字母、數字與連字號",
+  "marketPublish.modal.identifier.placeholder": "請輸入助手的唯一識別碼，例如：web-development",
+  "marketPublish.modal.identifier.required": "請輸入助手識別碼",
+  "marketPublish.modal.loading.fetchingRemote": "正在載入遠端資料...",
+  "marketPublish.modal.loading.submit": "正在發布助手...",
+  "marketPublish.modal.loading.upload": "正在發布新版本...",
+  "marketPublish.modal.messages.createVersionFailed": "版本建立失敗：{{message}}",
+  "marketPublish.modal.messages.fetchRemoteFailed": "取得遠端助手資料失敗",
+  "marketPublish.modal.messages.missingIdentifier": "目前的助手尚未設定社群識別碼",
+  "marketPublish.modal.messages.notAuthenticated": "請先登入社群帳號",
+  "marketPublish.modal.messages.publishFailed": "發布失敗：{{message}}",
+  "marketPublish.modal.submitButton": "發布",
+  "marketPublish.modal.title.submit": "分享到助手社群",
+  "marketPublish.modal.title.upload": "發布新版本",
+  "marketPublish.resultModal.message": "您創作的助手已提交審核，通過後將自動上線。",
+  "marketPublish.resultModal.title": "提交成功",
+  "marketPublish.resultModal.view": "前往社群查看",
+  "marketPublish.submit.button": "分享到社群",
+  "marketPublish.submit.tooltip": "分享助手到社群",
+  "marketPublish.upload.button": "發布新版本",
+  "marketPublish.upload.tooltip": "發佈新版本到助手社群",
+  "memory.enabled.desc": "允許 LobeHub 從對話中提取偏好與資訊，並於日後使用。您可隨時檢視、編輯或清除記憶內容。",
+  "memory.enabled.title": "啟用記憶功能",
+  "memory.title": "記憶設定",
+  "message.success": "更新成功",
+  "myAgents.actions.cancel": "取消",
+  "myAgents.actions.confirmDeprecate": "確認廢棄",
+  "myAgents.actions.deprecate": "永久廢棄",
+  "myAgents.actions.deprecateConfirmContent": "廢棄後該助手將永久從市集移除，且無法重新上架。此操作不可逆，請謹慎操作。",
+  "myAgents.actions.deprecateConfirmTitle": "確認要廢棄助手？",
+  "myAgents.actions.deprecateError": "廢棄助手失敗",
+  "myAgents.actions.deprecateLoading": "正在廢棄助手⋯",
+  "myAgents.actions.deprecateSuccess": "助手已廢棄",
+  "myAgents.actions.edit": "前往編輯 Agent",
+  "myAgents.actions.publish": "上架 Agent",
+  "myAgents.actions.publishError": "上架助手失敗",
+  "myAgents.actions.publishLoading": "正在上架助手⋯",
+  "myAgents.actions.publishSuccess": "助手已上架",
+  "myAgents.actions.unpublish": "下架 Agent",
+  "myAgents.actions.unpublishError": "下架助手失敗",
+  "myAgents.actions.unpublishLoading": "正在下架助手⋯",
+  "myAgents.actions.unpublishSuccess": "助手已下架",
+  "myAgents.actions.viewDetail": "查看詳情",
+  "myAgents.detail.category": "分類",
+  "myAgents.detail.description": "描述",
+  "myAgents.detail.identifier": "識別碼",
+  "myAgents.detail.title": "助手詳情",
+  "myAgents.empty.description": "你尚未將任何助手發布到市集",
+  "myAgents.empty.title": "尚無已發布的助手",
+  "myAgents.errors.editFailed": "編輯助手失敗，請稍後再試",
+  "myAgents.errors.fetchFailed": "取得助手詳情失敗",
+  "myAgents.errors.notAuthenticated": "請先登入市集帳號",
+  "myAgents.loginRequired.button": "登入市集帳號",
+  "myAgents.loginRequired.description": "請先登入市集帳號以查看你發布的助手",
+  "myAgents.loginRequired.title": "需要登入",
+  "myAgents.status.archived": "已封存",
+  "myAgents.status.deprecated": "已廢棄",
+  "myAgents.status.published": "已上架",
+  "myAgents.status.unpublished": "未上架",
+  "myAgents.title": "我發布的助手",
+  "plugin.addMCPPlugin": "新增 MCP 外掛",
+  "plugin.addTooltip": "新增自訂外掛程式",
+  "plugin.clearDeprecated": "清除已棄用的外掛",
+  "plugin.empty": "目前沒有安裝任何外掛，歡迎前往 <1>外掛商店</1> 探索",
+  "plugin.installStatus.deprecated": "已解除安裝",
+  "plugin.settings.hint": "請根據描述填寫以下設定",
+  "plugin.settings.title": "{{id}} 外掛設定",
+  "plugin.settings.tooltip": "外掛設定",
+  "plugin.store": "外掛商店",
+  "settingAgent.avatar.sizeExceeded": "圖片大小超過 1MB 限制，請選擇較小的圖片",
+  "settingAgent.avatar.title": "頭像",
+  "settingAgent.backgroundColor.title": "背景色",
+  "settingAgent.description.desc": "簡單介紹你的助手，不作為角色設定",
+  "settingAgent.description.placeholder": "請輸入助手描述",
+  "settingAgent.description.title": "助手描述",
+  "settingAgent.name.placeholder": "請輸入助手名稱",
+  "settingAgent.name.title": "名稱",
+  "settingAgent.prompt.placeholder": "輸入助手設定，按 / 開啟指令選單",
+  "settingAgent.prompt.templatePlaceholder": "#### 目標\n描述此代理的主要目的與目標。\n\n#### 技能\n- 列出主要能力\n- 以及專業知識領域\n\n#### 工作流程\n1. 步驟式流程\n2. 代理執行任務的方式\n3. 與使用者的預期互動方式\n\n#### 限制\n- 必須遵守的重要限制\n- 行為準則",
+  "settingAgent.prompt.title": "助手設定",
+  "settingAgent.submit": "更新助手資訊",
+  "settingAgent.tag.desc": "助手標籤將會在助手社群中顯示",
+  "settingAgent.tag.placeholder": "請輸入標籤",
+  "settingAgent.tag.title": "標籤",
+  "settingAgent.title": "助手資訊",
+  "settingAppearance.animationMode.agile": "敏捷",
+  "settingAppearance.animationMode.desc": "選擇應用程式操作回應的動畫速度",
+  "settingAppearance.animationMode.disabled": "關閉",
+  "settingAppearance.animationMode.elegant": "優雅",
+  "settingAppearance.animationMode.title": "回應動畫",
+  "settingAppearance.contextMenuMode.default": "預設",
+  "settingAppearance.contextMenuMode.desc": "啟用部分清單項目的右鍵選單。",
+  "settingAppearance.contextMenuMode.disabled": "不使用",
+  "settingAppearance.contextMenuMode.title": "右鍵選單方案",
+  "settingAppearance.neutralColor.desc": "不同色彩傾向的灰階自訂",
+  "settingAppearance.neutralColor.title": "中性色",
+  "settingAppearance.noAnimation.desc": "停用應用程式中的所有動畫效果",
+  "settingAppearance.noAnimation.title": "無動畫模式",
+  "settingAppearance.preview.title": "調色盤",
+  "settingAppearance.primaryColor.desc": "自訂主題色",
+  "settingAppearance.primaryColor.title": "主題色",
+  "settingAppearance.title": "應用外觀",
+  "settingChat.autoCreateTopicThreshold.desc": "當前訊息數超過設定值後，將自動建立話題",
+  "settingChat.autoCreateTopicThreshold.title": "訊息閾值",
+  "settingChat.chatStyleType.title": "聊天視窗樣式",
+  "settingChat.chatStyleType.type.chat": "對話模式",
+  "settingChat.chatStyleType.type.docs": "文件模式",
+  "settingChat.compressThreshold.desc": "當未壓縮的歷史訊息超過該值時，將進行壓縮",
+  "settingChat.compressThreshold.title": "歷史訊息長度壓縮閾值",
+  "settingChat.enableAutoCreateTopic.desc": "對話過程中是否自動建立話題，僅在臨時話題中生效",
+  "settingChat.enableAutoCreateTopic.title": "自動建立話題",
+  "settingChat.enableCompressHistory.title": "開啟歷史消息自動總結",
+  "settingChat.enableHistoryCount.alias": "不限制",
+  "settingChat.enableHistoryCount.limited": "只包含 {{number}} 條對話訊息",
+  "settingChat.enableHistoryCount.setlimited": "設置限制",
+  "settingChat.enableHistoryCount.title": "限制歷史訊息數",
+  "settingChat.enableHistoryCount.unlimited": "不限歷史訊息數",
+  "settingChat.enableStreaming.desc": "啟用串流輸出以即時顯示回應。停用後僅顯示完整回應。",
+  "settingChat.enableStreaming.title": "啟用串流輸出",
+  "settingChat.historyCount.desc": "每次請求攜帶的歷史訊息數",
+  "settingChat.historyCount.title": "附帶歷史訊息數",
+  "settingChat.inputTemplate.desc": "使用者最新的一條訊息會填充到此模板",
+  "settingChat.inputTemplate.placeholder": "預處理模板 {{text}} 將替換為實時輸入資訊",
+  "settingChat.inputTemplate.title": "使用者輸入預處理",
+  "settingChat.submit": "更新聊天偏好",
+  "settingChat.title": "聊天設定",
+  "settingChatAppearance.fontSize.desc": "訊息字體大小",
+  "settingChatAppearance.fontSize.marks.normal": "標準",
+  "settingChatAppearance.fontSize.title": "字體大小",
+  "settingChatAppearance.highlighterTheme.title": "程式碼高亮主題",
+  "settingChatAppearance.mermaidTheme.title": "美人魚主題",
+  "settingChatAppearance.title": "聊天外觀",
+  "settingChatAppearance.transitionMode.desc": "選擇聊天訊息的顯示方式",
+  "settingChatAppearance.transitionMode.options.fadeIn": "淡入",
+  "settingChatAppearance.transitionMode.options.none.desc": "這取決於模型的回應輸出方式，請自行測試。",
+  "settingChatAppearance.transitionMode.options.none.value": "無",
+  "settingChatAppearance.transitionMode.options.smooth": "平滑",
+  "settingChatAppearance.transitionMode.title": "過渡動畫",
+  "settingCommon.devMode.desc": "開啟後將顯示開發者相關的功能與選項",
+  "settingCommon.devMode.title": "開發者模式",
+  "settingCommon.lang.autoMode": "跟隨系統",
+  "settingCommon.lang.title": "語言",
+  "settingCommon.liteMode.desc": "簡化介面並隱藏進階功能",
+  "settingCommon.liteMode.title": "精簡模式",
+  "settingCommon.responseLanguage.auto": "依系統設定",
+  "settingCommon.responseLanguage.desc": "設定 AI 回覆所使用的語言",
+  "settingCommon.responseLanguage.placeholder": "選擇回覆語言",
+  "settingCommon.responseLanguage.title": "回覆語言",
+  "settingCommon.themeMode.auto": "自動",
+  "settingCommon.themeMode.dark": "深色",
+  "settingCommon.themeMode.light": "淺色",
+  "settingCommon.themeMode.title": "主題",
+  "settingCommon.title": "通用設定",
+  "settingGroup.description.placeholder": "請輸入團隊描述",
+  "settingGroup.description.title": "團隊描述",
+  "settingGroup.name.placeholder": "請輸入團隊名稱",
+  "settingGroup.name.title": "團隊名稱",
+  "settingGroup.scene.desc": "選擇團隊場景",
+  "settingGroup.scene.options.casual": "休閒",
+  "settingGroup.scene.options.productive": "生產力",
+  "settingGroup.scene.title": "團隊場景",
+  "settingGroup.submit": "更新團隊",
+  "settingGroup.systemPrompt.placeholder": "請輸入主持人系統提示詞",
+  "settingGroup.systemPrompt.title": "主持人系統提示詞",
+  "settingGroup.title": "群組資訊",
+  "settingGroupChat.allowDM.desc": "關閉後，你仍然可以主動向助手發送私訊",
+  "settingGroupChat.allowDM.title": "允許助手發送私訊",
+  "settingGroupChat.enableSupervisor.desc": "啟用群組主持人功能，主持人將管理團隊對話流程",
+  "settingGroupChat.enableSupervisor.title": "啟用主持人",
+  "settingGroupChat.maxResponseInRow.desc": "選擇成員可以連續回覆多少條訊息。設定為 0 則禁用此限制。",
+  "settingGroupChat.maxResponseInRow.title": "連續回覆訊息數",
+  "settingGroupChat.model.desc": "群成員發言不受影響。部分模型無法作為主持人模型使用。",
+  "settingGroupChat.model.title": "主持人模型",
+  "settingGroupChat.orchestratorTitle": "主持人設定",
+  "settingGroupChat.responseOrder.desc": "代理將依照在聊天中設定的順序進行回覆",
+  "settingGroupChat.responseOrder.options.natural": "自然",
+  "settingGroupChat.responseOrder.options.sequential": "順序",
+  "settingGroupChat.responseOrder.placeholder": "選擇回覆順序",
+  "settingGroupChat.responseOrder.title": "回覆順序",
+  "settingGroupChat.responseSpeed.desc": "控制聊天的整體進行速度",
+  "settingGroupChat.responseSpeed.options.fast": "快速",
+  "settingGroupChat.responseSpeed.options.medium": "中等",
+  "settingGroupChat.responseSpeed.options.slow": "慢速",
+  "settingGroupChat.responseSpeed.placeholder": "選擇回覆速度",
+  "settingGroupChat.responseSpeed.title": "回覆速度",
+  "settingGroupChat.revealDM.desc": "使發送給其他成員的私訊內容對你可見。",
+  "settingGroupChat.revealDM.title": "顯示私訊內容",
+  "settingGroupChat.submit": "更新設定",
+  "settingGroupChat.systemPrompt.desc": "群聊對話主持人的自訂系統提示詞。這可能影響預設的主持人行為。",
+  "settingGroupChat.systemPrompt.placeholder": "請輸入自訂主持人系統提示詞...",
+  "settingGroupChat.systemPrompt.title": "主持人系統提示詞",
+  "settingGroupChat.title": "聊天設定",
+  "settingGroupMembers.addToGroup": "加入群組",
+  "settingGroupMembers.availableAgents": "可用助理",
+  "settingGroupMembers.createMember": "建立成員",
+  "settingGroupMembers.defaultAgent": "自訂助理",
+  "settingGroupMembers.disableHost": "關閉主持助理",
+  "settingGroupMembers.edit": "編輯成員",
+  "settingGroupMembers.empty": "該團隊中尚無成員。點擊 + 按鈕新增成員。",
+  "settingGroupMembers.enableHost": "啟用主持助理",
+  "settingGroupMembers.groupHost": "群主持",
+  "settingGroupMembers.groupMembers": "群組成員",
+  "settingGroupMembers.host.description": "主持人在群組中時，群聊將自動化運行，適合發散性任務。",
+  "settingGroupMembers.host.title": "主持人",
+  "settingGroupMembers.noAvailableAgents": "暫無可用助理",
+  "settingGroupMembers.noDescription": "暫無描述",
+  "settingGroupMembers.noMembersInGroup": "群組暫無成員",
+  "settingGroupMembers.owner": "你（所有者）",
+  "settingGroupMembers.remove": "移除成員",
+  "settingGroupMembers.removeFromGroup": "移出群組",
+  "settingGroupMembers.you": "你",
+  "settingImage.defaultCount.desc": "設定圖像生成面板在建立新任務時的預設圖片數量。",
+  "settingImage.defaultCount.label": "預設圖片數量",
+  "settingImage.defaultCount.title": "AI 繪圖設定",
+  "settingModel.enableMaxTokens.title": "啟用單次回覆限制",
+  "settingModel.enableReasoningEffort.title": "開啟推理強度調整",
+  "settingModel.frequencyPenalty.desc": "值越大，用詞越豐富多樣；值越低，用詞更樸實簡單",
+  "settingModel.frequencyPenalty.title": "詞彙豐富度",
+  "settingModel.maxTokens.desc": "單次互動所使用的最大 Token 數",
+  "settingModel.maxTokens.title": "單次回覆限制",
+  "settingModel.model.desc": "{{provider}} 模型",
+  "settingModel.model.title": "模型",
+  "settingModel.params.title": "高級參數",
+  "settingModel.presencePenalty.desc": "值越大，越傾向不同的表達方式，避免概念重複；值越小，越傾向使用重複的概念或敘述，表達更具一致性",
+  "settingModel.presencePenalty.title": "表述發散度",
+  "settingModel.reasoningEffort.desc": "數值越大，推理能力越強，但可能會增加回應時間和 Token 消耗",
+  "settingModel.reasoningEffort.options.high": "高",
+  "settingModel.reasoningEffort.options.low": "低",
+  "settingModel.reasoningEffort.options.medium": "中",
+  "settingModel.reasoningEffort.title": "推理強度",
+  "settingModel.submit": "更新模型設定",
+  "settingModel.temperature.desc": "數值越大，回答越有創意和想像力；數值越小，回答越嚴謹",
+  "settingModel.temperature.title": "創意活躍度",
+  "settingModel.temperature.warning": "創意活躍度數值過大，輸出可能會產生亂碼",
+  "settingModel.title": "模型設定",
+  "settingModel.topP.desc": "考慮多少種可能性，值越大，接受更多可能的回答；值越小，傾向選擇最可能的回答。不推薦和創意活躍度一起更改",
+  "settingModel.topP.title": "思維開放度",
+  "settingOpening.openingMessage.desc": "打開會話時的開場消息，用來介紹助手的功能",
+  "settingOpening.openingMessage.placeholder": "你好，我是 自訂助手，你可以立即與我開始對話，也可以前往 助手設定 完善我的資訊。",
+  "settingOpening.openingMessage.title": "開場消息",
+  "settingOpening.openingQuestions.desc": "會話開始時展示的引導性問題",
+  "settingOpening.openingQuestions.empty": "新增開場問題，協助使用者快速開始對話",
+  "settingOpening.openingQuestions.placeholder": "請輸入問題",
+  "settingOpening.openingQuestions.repeat": "問題已存在",
+  "settingOpening.openingQuestions.title": "開場問題",
+  "settingOpening.title": "開場設定",
+  "settingPlugin.title": "插件列表",
+  "settingSystem.oauth.info.desc": "已登錄",
+  "settingSystem.oauth.info.title": "帳戶資訊",
+  "settingSystem.oauth.signin.action": "登錄",
+  "settingSystem.oauth.signin.desc": "使用 SSO 登錄以解鎖應用",
+  "settingSystem.oauth.signin.title": "登錄帳號",
+  "settingSystem.oauth.signout.action": "退出登錄",
+  "settingSystem.oauth.signout.confirm": "確認退出？",
+  "settingSystem.oauth.signout.success": "退出登錄成功",
+  "settingSystem.title": "系統設定",
+  "settingTTS.openai.sttModel": "OpenAI 語音識別模型",
+  "settingTTS.openai.title": "OpenAI",
+  "settingTTS.openai.ttsModel": "OpenAI 語音合成模型",
+  "settingTTS.showAllLocaleVoice.desc": "關閉則只顯示當前語種的聲源",
+  "settingTTS.showAllLocaleVoice.title": "顯示所有語種聲源",
+  "settingTTS.stt": "語音識別設定",
+  "settingTTS.sttAutoStop.desc": "關閉後，語音識別將不會自動結束，需要手動點擊結束按鈕",
+  "settingTTS.sttAutoStop.title": "自動結束語音識別",
+  "settingTTS.sttLocale.desc": "語音輸入的語種，此選項可提高語音識別準確率",
+  "settingTTS.sttLocale.title": "語音識別語種",
+  "settingTTS.sttService.desc": "其中 browser 為瀏覽器原生的語音識別服務",
+  "settingTTS.sttService.title": "語音識別服務",
+  "settingTTS.submit": "更新語音服務",
+  "settingTTS.title": "語音服務",
+  "settingTTS.tts": "語音合成設定",
+  "settingTTS.ttsService.desc": "如使用 OpenAI 語音合成服務，需要保證 OpenAI 模型服務已開啟",
+  "settingTTS.ttsService.title": "語音合成服務",
+  "settingTTS.voice.desc": "為當前助手挑選一個聲音，不同 TTS 服務支持的聲源不同",
+  "settingTTS.voice.preview": "試聽聲源",
+  "settingTTS.voice.title": "語音合成聲源",
+  "startConversation": "開始對話",
+  "storage.actions.export.button": "匯出",
+  "storage.actions.export.exportType.agent": "匯出助手設定",
+  "storage.actions.export.exportType.agentWithMessage": "匯出助手和訊息",
+  "storage.actions.export.exportType.all": "匯出全域設定和所有助手資料",
+  "storage.actions.export.exportType.allAgent": "匯出所有助手設定",
+  "storage.actions.export.exportType.allAgentWithMessage": "匯出所有助手和訊息",
+  "storage.actions.export.exportType.globalSetting": "匯出全域設定",
+  "storage.actions.export.title": "匯出資料",
+  "storage.actions.import.button": "匯入",
+  "storage.actions.import.title": "匯入資料",
+  "storage.actions.title": "進階操作",
+  "storage.desc": "當前瀏覽器中的儲存用量",
+  "storage.embeddings.used": "向量儲存",
+  "storage.title": "資料儲存",
+  "storage.used": "儲存用量",
+  "submitAgentModal.button": "提交助手",
+  "submitAgentModal.identifier": "助手識別碼（identifier）",
+  "submitAgentModal.metaMiss": "請補全助手信息後提交，需要包含名稱、描述和標籤",
+  "submitAgentModal.placeholder": "請輸入助手的標識符，需要是唯一的，比如 web-development",
+  "submitAgentModal.success": "助手提交成功",
+  "submitAgentModal.tooltips": "分享到助手社群",
+  "sync.device.deviceName.hint": "添加名稱以便於識別",
+  "sync.device.deviceName.placeholder": "請輸入裝置名稱",
+  "sync.device.deviceName.title": "裝置名稱",
+  "sync.device.title": "裝置資訊",
+  "sync.device.unknownBrowser": "未知瀏覽器",
+  "sync.device.unknownOS": "未知系統",
+  "sync.warning.tip": "經過較長一段時間社區公測，WebRTC 同步可能無法穩定滿足通用的資料同步需求。請自行 <1>部署信令伺服器</1> 後使用。",
+  "sync.webrtc.channelName.desc": "WebRTC 將使用此名創建同步頻道，確保頻道名稱唯一",
+  "sync.webrtc.channelName.placeholder": "請輸入同步頻道名稱",
+  "sync.webrtc.channelName.shuffle": "隨機生成",
+  "sync.webrtc.channelName.title": "同步頻道名稱",
+  "sync.webrtc.channelPassword.desc": "添加密碼確保頻道私密性，只有密碼正確時，裝置才可加入頻道",
+  "sync.webrtc.channelPassword.placeholder": "請輸入同步頻道密碼",
+  "sync.webrtc.channelPassword.title": "同步頻道密碼",
+  "sync.webrtc.desc": "實時、點對點的數據通信，需裝置同時在線才可同步",
+  "sync.webrtc.enabled.invalid": "請填寫信令伺服器和同步頻道名稱後再啟用",
+  "sync.webrtc.enabled.title": "開啟同步",
+  "sync.webrtc.signaling.desc": "WebRTC 將使用該地址進行同步",
+  "sync.webrtc.signaling.placeholder": "請輸入信令伺服器地址",
+  "sync.webrtc.signaling.title": "信令伺服器",
+  "sync.webrtc.title": "WebRTC 同步",
+  "systemAgent.agentMeta.label": "模型",
+  "systemAgent.agentMeta.modelDesc": "指定用於生成助理名稱、描述、頭像、標籤的模型",
+  "systemAgent.agentMeta.title": "助理資訊生成助手",
+  "systemAgent.customPrompt.addPrompt": "新增自訂提示",
+  "systemAgent.customPrompt.desc": "填寫後，系統助理將在生成內容時使用自訂提示",
+  "systemAgent.customPrompt.placeholder": "請輸入自訂提示詞",
+  "systemAgent.customPrompt.title": "自訂提示詞",
+  "systemAgent.generationTopic.label": "模型",
+  "systemAgent.generationTopic.modelDesc": "指定用於 AI 繪畫自動命名話題的模型",
+  "systemAgent.generationTopic.title": "AI 繪圖主題命名助手",
+  "systemAgent.helpInfo": "當創建新助手時，將以預設助手設定作為預設值。",
+  "systemAgent.historyCompress.label": "模型",
+  "systemAgent.historyCompress.modelDesc": "指定用於壓縮會話歷史的模型",
+  "systemAgent.historyCompress.title": "對話歷史壓縮助手",
+  "systemAgent.queryRewrite.label": "模型",
+  "systemAgent.queryRewrite.modelDesc": "指定用於優化用戶提問的模型",
+  "systemAgent.queryRewrite.title": "資源庫提問重寫助手",
+  "systemAgent.thread.label": "模型",
+  "systemAgent.thread.modelDesc": "指定用於子主題自動重命名的模型",
+  "systemAgent.thread.title": "子主題自動命名助手",
+  "systemAgent.title": "系統助手",
+  "systemAgent.topic.label": "模型",
+  "systemAgent.topic.modelDesc": "指定用於話題自動重命名的模型",
+  "systemAgent.topic.title": "主題自動命名助手",
+  "systemAgent.translation.label": "模型",
+  "systemAgent.translation.modelDesc": "指定用於翻譯的模型",
+  "systemAgent.translation.title": "訊息內容翻譯助手",
+  "tab.about": "關於",
+  "tab.agent": "默認助手",
+  "tab.apikey": "API Key 管理",
+  "tab.chatAppearance": "聊天外觀",
+  "tab.common": "外觀",
+  "tab.experiment": "實驗",
+  "tab.hotkey": "快速鍵",
+  "tab.image": "繪圖服務",
+  "tab.llm": "語言模型",
+  "tab.memory": "記憶設定",
+  "tab.profile": "我的帳號",
+  "tab.provider": "AI 服務商",
+  "tab.proxy": "網路代理",
+  "tab.security": "安全",
+  "tab.stats": "數據統計",
+  "tab.storage": "資料儲存",
+  "tab.sync": "雲端同步",
+  "tab.tts": "語音服務",
+  "tab.usage": "使用量統計",
+  "tools.add": "整合外掛",
+  "tools.builtins.groupName": "內置",
+  "tools.disabled": "當前模型不支持函數調用，無法使用插件",
+  "tools.klavis.addServer": "新增伺服器",
+  "tools.klavis.authCompleted": "驗證完成",
+  "tools.klavis.authFailed": "驗證失敗",
+  "tools.klavis.authRequired": "需要驗證",
+  "tools.klavis.connected": "已連線",
+  "tools.klavis.error": "錯誤",
+  "tools.klavis.groupName": "Klavis 工具",
+  "tools.klavis.manage": "管理 Klavis",
+  "tools.klavis.manageTitle": "管理 Klavis 整合",
+  "tools.klavis.noServers": "尚未連線任何伺服器",
+  "tools.klavis.notEnabled": "Klavis 服務未啟用",
+  "tools.klavis.oauthRequired": "請在新視窗中完成 OAuth 驗證",
+  "tools.klavis.pendingAuth": "待驗證",
+  "tools.klavis.serverCreated": "伺服器建立成功",
+  "tools.klavis.serverCreatedFailed": "伺服器建立失敗",
+  "tools.klavis.serverRemoved": "伺服器已刪除",
+  "tools.klavis.servers": "個伺服器",
+  "tools.klavis.tools": "個工具",
+  "tools.klavis.verifyAuth": "我已完成驗證",
+  "tools.lobehubSkill.authorize": "授權",
+  "tools.lobehubSkill.connect": "連接",
+  "tools.lobehubSkill.error": "錯誤",
+  "tools.notInstalled": "尚未安裝",
+  "tools.notInstalledWarning": "目前外掛尚未安裝，可能會影響助手使用",
+  "tools.plugins.enabled": "已啟用 {{num}}",
+  "tools.plugins.groupName": "插件",
+  "tools.plugins.noEnabled": "暫無啟用插件",
+  "tools.plugins.store": "插件商店",
+  "tools.tabs.all": "全部",
+  "tools.tabs.installed": "已啟用",
+  "tools.title": "擴展工具"
 }

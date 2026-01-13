@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "Onayla",
-      "deny": "Reddet"
-    },
-    "description": "Uygulama {{clientName}} hesabınıza erişim izni talep ediyor",
-    "error": {
-      "sessionInvalid": {
-        "message": "Yetki oturumu süresi dolmuş veya geçersiz, lütfen yetkilendirme sürecini yeniden başlatın.",
-        "title": "Yetki oturumu geçersiz"
-      },
-      "title": "Bir hata oluştu",
-      "unsupportedInteraction": {
-        "message": "Desteklenmeyen etkileşim türü: {promptName}",
-        "title": "Desteklenmeyen etkileşim türü"
-      }
-    },
-    "permissionsTitle": "Aşağıdaki izinleri talep et:",
-    "redirectUri": "İzin verildikten sonra şu adrese yönlendirileceksiniz",
-    "redirecting": "Yetkilendirme başarılı, yönlendiriliyor...",
-    "scope": {
-      "email": "E-posta adresinize erişim",
-      "offline_access": "Müşterinin verilerinize erişmesine izin ver",
-      "openid": "LobeChat hesabınızla kimlik doğrulama",
-      "profile": "Temel profil bilgilerinize (isim, avatar vb.) erişim",
-      "sync-read": "Senkronize verilerinizi okumak",
-      "sync-write": "Senkronize verilerinizi yazmak ve güncellemek"
-    },
-    "title": "İzin Ver {{clientName}}"
-  },
-  "error": {
-    "backToHome": "Ana sayfaya dön",
-    "desc": "OAuth yetkilendirmesi başarısız oldu, hata nedeni: {{reason}}",
-    "reason": {
-      "internal_error": "Sunucu hatası",
-      "invalid_request": "Geçersiz istek parametresi"
-    },
-    "title": "Yetkilendirme başarısız"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "Uygulama yetkilendirmeyi işliyor, bir sonraki sayfaya geçmek üzere...",
-      "success": "Masaüstü uygulaması açılmaya çalışıldı. Uygulama otomatik olarak açılmazsa, lütfen manuel olarak geçiş yapın. Bu tarayıcı penceresini daha sonra kapatabilirsiniz."
-    },
-    "title": {
-      "processing": "Yetkilendirme işleniyor...",
-      "success": "Yetkilendirme tamamlandı"
-    }
-  },
-  "login": {
-    "button": "Giriş Yap",
-    "description": "Uygulama {{clientName}} hesabınızı kullanmak için giriş talep ediyor",
-    "title": "{{clientName}} Girişi",
-    "userWelcome": "Hoş geldiniz, "
-  },
-  "success": {
-    "subTitle": "Uygulamanın hesabınıza erişim izni başarıyla verildi, bu sayfayı kapatabilirsiniz",
-    "title": "Yetkilendirme başarılı"
-  }
+  "consent.buttons.accept": "Yetkilendir",
+  "consent.buttons.deny": "Reddet",
+  "consent.description": "{{clientName}} uygulaması hesabınız için yetkilendirme talep ediyor",
+  "consent.error.sessionInvalid.message": "Yetkilendirme oturumu sona erdi veya geçersiz. Lütfen yetkilendirme işlemini yeniden başlatın.",
+  "consent.error.sessionInvalid.title": "Geçersiz Yetkilendirme Oturumu",
+  "consent.error.title": "Bir Hata Oluştu",
+  "consent.error.unknown.message": "Yetkilendirme bilgileri yüklenirken bilinmeyen bir hata oluştu.",
+  "consent.error.unsupportedInteraction.message": "Desteklenmeyen etkileşim türü: {{promptName}}",
+  "consent.error.unsupportedInteraction.title": "Desteklenmeyen Etkileşim Türü",
+  "consent.permissionsTitle": "Aşağıdaki izinler isteniyor:",
+  "consent.redirectUri": "Yetkilendirme başarılı olduktan sonra yönlendirileceğiniz adres",
+  "consent.redirecting": "Yetkilendirme başarılı, yönlendiriliyorsunuz...",
+  "consent.scope.email": "E-posta adresinize erişim",
+  "consent.scope.offline_access": "Uygulamanın verilerinize erişmesine izin verin",
+  "consent.scope.openid": "LobeHub hesabınızla kimlik doğrulama",
+  "consent.scope.profile": "Temel profil bilgilerinize erişim (isim, avatar vb.)",
+  "consent.scope.sync-read": "Senkronize verilerinizi okuma",
+  "consent.scope.sync-write": "Senkronize verilerinizi yazma ve güncelleme",
+  "consent.title": "{{clientName}} uygulamasını yetkilendir",
+  "error.backToHome": "Ana Sayfaya Dön",
+  "error.desc": "OAuth yetkilendirmesi başarısız oldu, sebep: {{reason}}",
+  "error.reason.internal_error": "Sunucu Hatası",
+  "error.reason.invalid_request": "Geçersiz İstek Parametreleri",
+  "error.title": "Yetkilendirme Başarısız",
+  "handoff.desc.processing": "Uygulama yetkilendirmeyi işliyor ve yakında bir sonraki sayfaya yönlendirecek...",
+  "handoff.desc.success": "Masaüstü uygulamasını açma girişiminde bulunuldu. Otomatik olarak açılmazsa lütfen manuel olarak geçiş yapın. Bu tarayıcı penceresini daha sonra kapatabilirsiniz.",
+  "handoff.title.processing": "Yetkilendirme devam ediyor...",
+  "handoff.title.success": "Yetkilendirme tamamlandı",
+  "login.button": "Girişi Onayla",
+  "login.description": "{{clientName}} uygulaması hesabınızı kullanarak giriş yapmak istiyor",
+  "login.title": "{{clientName}} için Giriş Yap",
+  "login.userWelcome": "Tekrar hoş geldiniz, ",
+  "success.subTitle": "Uygulamaya hesabınıza erişim yetkisi başarıyla verildi. Bu sayfayı artık kapatabilirsiniz.",
+  "success.title": "Yetkilendirme Başarılı"
 }

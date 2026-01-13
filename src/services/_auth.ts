@@ -1,16 +1,16 @@
-import { LOBE_CHAT_AUTH_HEADER } from '@lobechat/const';
 import {
-  AWSBedrockKeyVault,
-  AzureOpenAIKeyVault,
-  ClientSecretPayload,
-  CloudflareKeyVault,
-  ComfyUIKeyVault,
-  OpenAICompatibleKeyVault,
-  VertexAIKeyVault,
+  type AWSBedrockKeyVault,
+  type AzureOpenAIKeyVault,
+  type ClientSecretPayload,
+  type CloudflareKeyVault,
+  type ComfyUIKeyVault,
+  type OpenAICompatibleKeyVault,
+  type VertexAIKeyVault,
 } from '@lobechat/types';
 import { clientApiKeyManager } from '@lobechat/utils/client';
 import { ModelProvider } from 'model-bank';
 
+import { LOBE_CHAT_AUTH_HEADER, SECRET_XOR_KEY } from '@/envs/auth';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -107,7 +107,7 @@ export const getProviderAuthPayload = (
 const createAuthTokenWithPayload = (payload = {}) => {
   const userId = userProfileSelectors.userId(useUserStore.getState());
 
-  return obfuscatePayloadWithXOR<ClientSecretPayload>({ userId, ...payload });
+  return obfuscatePayloadWithXOR<ClientSecretPayload>({ userId, ...payload }, SECRET_XOR_KEY);
 };
 
 interface AuthParams {
@@ -130,7 +130,7 @@ export const createPayloadWithKeyVaults = (provider: string) => {
 
 export const createXorKeyVaultsPayload = (provider: string) => {
   const payload = createPayloadWithKeyVaults(provider);
-  return obfuscatePayloadWithXOR(payload);
+  return obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 };
 
 // eslint-disable-next-line no-undef

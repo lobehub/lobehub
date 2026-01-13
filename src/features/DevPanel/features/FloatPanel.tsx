@@ -1,19 +1,19 @@
 'use client';
 
-import { ActionIcon, FluentEmoji, Icon, SideNav } from '@lobehub/ui';
+import { BRANDING_NAME } from '@lobechat/business-const';
+import { ActionIcon, Flexbox, FluentEmoji, Icon, SideNav } from '@lobehub/ui';
 import { FloatButton } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BugIcon, BugOff, XIcon } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { ReactNode, memo, useEffect, useState } from 'react';
-import { Flexbox } from 'react-layout-kit';
+import { type ReactNode, memo, useEffect, useState } from 'react';
 import { Rnd } from 'react-rnd';
 
-import { BRANDING_NAME } from '@/const/branding';
 import { isDesktop } from '@/const/version';
 
 // 定义样式
-export const useStyles = createStyles(({ token, css, prefixCls }) => {
+const styles = createStaticStyles(({ css }) => {
+  const prefixCls = 'ant';
   return {
     collapsed: css`
       pointer-events: none;
@@ -31,15 +31,15 @@ export const useStyles = createStyles(({ token, css, prefixCls }) => {
 
       width: 36px;
       height: 36px;
-      border: 1px solid ${token.colorBorderSecondary};
+      border: 1px solid ${cssVar.colorBorderSecondary};
 
       font-size: 20px;
       .${prefixCls}-float-btn-body {
-        background: ${token.colorBgLayout};
+        background: ${cssVar.colorBgLayout};
 
         &:hover {
           width: auto;
-          background: ${token.colorBgElevated};
+          background: ${cssVar.colorBgElevated};
         }
       }
     `,
@@ -49,11 +49,11 @@ export const useStyles = createStyles(({ token, css, prefixCls }) => {
 
       padding-block: 8px;
       padding-inline: 16px;
-      border-block-end: 1px solid ${token.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
 
-      background: ${token.colorFillAlter};
+      background: ${cssVar.colorFillAlter};
     `,
     panel: css`
       position: fixed;
@@ -62,13 +62,13 @@ export const useStyles = createStyles(({ token, css, prefixCls }) => {
       overflow: hidden;
       display: flex;
 
-      border: 1px solid ${token.colorBorderSecondary};
+      border: 1px solid ${cssVar.colorBorderSecondary};
       border-radius: 12px;
 
-      background: ${token.colorBgContainer};
-      box-shadow: ${token.boxShadow};
+      background: ${cssVar.colorBgContainer};
+      box-shadow: ${cssVar.boxShadow};
 
-      transition: opacity ${token.motionDurationMid} ${token.motionEaseInOut};
+      transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
     `,
   };
 });
@@ -81,7 +81,6 @@ interface CollapsibleFloatPanelProps {
 }
 
 const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
-  const { styles, theme } = useStyles();
   const [tab, setTab] = useState<string>(items[0].key);
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -113,7 +112,7 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
     <>
       {
         // desktop devtools 下隐藏
-        pathname !== '/desktop/devtools' && (
+        pathname !== '/desktop/devtools' && isDesktop && (
           <FloatButton
             className={styles.floatButton}
             icon={<Icon icon={isExpanded ? BugOff : BugIcon} />}
@@ -133,7 +132,7 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
       {isExpanded && (
         <Rnd
           bounds="window"
-          className={`${styles.panel} ${isExpanded ? styles.expanded : styles.collapsed}`}
+          className={cx(styles.panel, isExpanded ? styles.expanded : styles.collapsed)}
           dragHandleClassName="panel-drag-handle"
           minHeight={minHeight}
           minWidth={minWidth}
@@ -183,14 +182,14 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
             >
               <Flexbox
                 align={'center'}
-                className={`panel-drag-handle ${styles.header}`}
+                className={cx('panel-drag-handle', styles.header)}
                 horizontal
                 justify={'space-between'}
               >
                 <Flexbox align={'baseline'} gap={6} horizontal>
                   <b>{BRANDING_NAME} Dev Tools</b>
-                  <span style={{ color: theme.colorTextDescription }}>/</span>
-                  <span style={{ color: theme.colorTextDescription }}>{tab}</span>
+                  <span style={{ color: cssVar.colorTextDescription }}>/</span>
+                  <span style={{ color: cssVar.colorTextDescription }}>{tab}</span>
                 </Flexbox>
                 <ActionIcon icon={XIcon} onClick={() => setIsExpanded(false)} />
               </Flexbox>

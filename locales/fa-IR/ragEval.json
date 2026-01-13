@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "ایجاد جدید",
-    "description": {
-      "placeholder": "توضیحات مجموعه داده (اختیاری)"
-    },
-    "name": {
-      "placeholder": "نام مجموعه داده",
-      "required": "لطفاً نام مجموعه داده را وارد کنید"
-    },
-    "title": "افزودن مجموعه داده"
-  },
-  "dataset": {
-    "addNewButton": "ایجاد مجموعه داده",
-    "emptyGuide": "مجموعه داده فعلی خالی است، لطفاً یک مجموعه داده ایجاد کنید.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "وارد کردن داده‌ها"
-        },
-        "columns": {
-          "actions": "عملیات",
-          "ideal": {
-            "title": "پاسخ مورد انتظار"
-          },
-          "question": {
-            "title": "سؤال"
-          },
-          "referenceFiles": {
-            "title": "فایل‌های مرجع"
-          }
-        },
-        "notSelected": "لطفاً یک مجموعه داده از سمت چپ انتخاب کنید",
-        "title": "جزئیات مجموعه داده"
-      },
-      "title": "مجموعه داده"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "ایجاد جدید",
-      "datasetId": {
-        "placeholder": "لطفاً مجموعه داده‌های ارزیابی خود را انتخاب کنید",
-        "required": "لطفاً مجموعه داده‌های ارزیابی را انتخاب کنید"
-      },
-      "description": {
-        "placeholder": "توضیحات وظیفه ارزیابی (اختیاری)"
-      },
-      "name": {
-        "placeholder": "نام وظیفه ارزیابی",
-        "required": "لطفاً نام وظیفه ارزیابی را وارد کنید"
-      },
-      "title": "افزودن وظیفه ارزیابی"
-    },
-    "addNewButton": "ایجاد ارزیابی",
-    "emptyGuide": "در حال حاضر هیچ وظیفه ارزیابی وجود ندارد، ایجاد ارزیابی را شروع کنید.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "بررسی وضعیت",
-          "confirmDelete": "آیا این ارزیابی حذف شود؟",
-          "confirmRun": "آیا می‌خواهید اجرا را شروع کنید؟ پس از شروع، وظیفه ارزیابی به صورت غیرهمزمان در پس‌زمینه اجرا می‌شود و بستن صفحه بر اجرای وظیفه غیرهمزمان تأثیری نخواهد داشت.",
-          "downloadRecords": "دانلود ارزیابی",
-          "retry": "تلاش مجدد",
-          "run": "اجرا",
-          "title": "عملیات"
-        },
-        "datasetId": {
-          "title": "مجموعه داده"
-        },
-        "name": {
-          "title": "نام وظیفه ارزیابی"
-        },
-        "records": {
-          "title": "تعداد رکوردهای ارزیابی"
-        },
-        "referenceFiles": {
-          "title": "فایل‌های مرجع"
-        },
-        "status": {
-          "error": "خطا در اجرا",
-          "pending": "در انتظار اجرا",
-          "processing": "در حال اجرا",
-          "success": "اجرای موفق",
-          "title": "وضعیت"
-        }
-      },
-      "title": "لیست وظایف ارزیابی"
-    }
-  }
+  "addDataset.confirm": "ایجاد",
+  "addDataset.description.placeholder": "توضیحات دیتاست (اختیاری)",
+  "addDataset.name.placeholder": "نام دیتاست",
+  "addDataset.name.required": "لطفاً نام دیتاست را وارد کنید",
+  "addDataset.title": "افزودن دیتاست",
+  "dataset.addNewButton": "ایجاد دیتاست",
+  "dataset.emptyGuide": "در حال حاضر هیچ دیتاستی وجود ندارد. لطفاً یک دیتاست ایجاد کنید.",
+  "dataset.list.table.actions.importData": "وارد کردن داده",
+  "dataset.list.table.columns.actions": "اقدامات",
+  "dataset.list.table.columns.ideal.title": "پاسخ مورد انتظار",
+  "dataset.list.table.columns.question.title": "سؤال",
+  "dataset.list.table.columns.referenceFiles.title": "فایل‌های مرجع",
+  "dataset.list.table.notSelected": "لطفاً یک دیتاست از سمت چپ انتخاب کنید",
+  "dataset.list.table.title": "جزئیات دیتاست",
+  "dataset.list.title": "دیتاست",
+  "evaluation.addEvaluation.confirm": "ایجاد",
+  "evaluation.addEvaluation.datasetId.placeholder": "لطفاً دیتاست ارزیابی خود را انتخاب کنید",
+  "evaluation.addEvaluation.datasetId.required": "لطفاً یک دیتاست برای ارزیابی انتخاب کنید",
+  "evaluation.addEvaluation.description.placeholder": "توضیحات وظیفه ارزیابی (اختیاری)",
+  "evaluation.addEvaluation.name.placeholder": "نام وظیفه ارزیابی",
+  "evaluation.addEvaluation.name.required": "لطفاً نام وظیفه ارزیابی را وارد کنید",
+  "evaluation.addEvaluation.title": "افزودن وظیفه ارزیابی",
+  "evaluation.addNewButton": "ایجاد ارزیابی",
+  "evaluation.emptyGuide": "در حال حاضر هیچ وظیفه ارزیابی‌ای وجود ندارد. ایجاد یک ارزیابی را آغاز کنید.",
+  "evaluation.table.columns.actions.checkStatus": "بررسی وضعیت",
+  "evaluation.table.columns.actions.confirmDelete": "آیا از حذف این ارزیابی مطمئن هستید؟",
+  "evaluation.table.columns.actions.confirmRun": "آیا از شروع اجرای این ارزیابی مطمئن هستید؟ وظیفه ارزیابی به‌صورت غیرهمزمان در پس‌زمینه اجرا خواهد شد و بستن صفحه تأثیری بر اجرای آن نخواهد داشت.",
+  "evaluation.table.columns.actions.downloadRecords": "دانلود ارزیابی",
+  "evaluation.table.columns.actions.retry": "تلاش مجدد",
+  "evaluation.table.columns.actions.run": "اجرا",
+  "evaluation.table.columns.actions.title": "اقدامات",
+  "evaluation.table.columns.datasetId.title": "دیتاست",
+  "evaluation.table.columns.name.title": "نام وظیفه ارزیابی",
+  "evaluation.table.columns.records.title": "تعداد رکوردهای ارزیابی",
+  "evaluation.table.columns.referenceFiles.title": "فایل‌های مرجع",
+  "evaluation.table.columns.status.error": "خطا در اجرا",
+  "evaluation.table.columns.status.pending": "در انتظار",
+  "evaluation.table.columns.status.processing": "در حال اجرا",
+  "evaluation.table.columns.status.success": "اجرا با موفقیت انجام شد",
+  "evaluation.table.columns.status.title": "وضعیت",
+  "evaluation.table.title": "فهرست وظایف ارزیابی"
 }

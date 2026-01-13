@@ -1,9 +1,4 @@
-import { ChatStoreState } from '@/store/chat';
-
-const isDallEImageGenerating = (id: string) => (s: ChatStoreState) => s.dalleImageLoading[id];
-
-const isGeneratingDallEImage = (s: ChatStoreState) =>
-  Object.values(s.dalleImageLoading).some(Boolean);
+import { type ChatStoreState } from '@/store/chat';
 
 const isInterpreterExecuting = (id: string) => (s: ChatStoreState) => {
   // Check if there's a running builtinToolInterpreter operation for this message
@@ -33,8 +28,6 @@ const isSearchingLocalFiles = (id: string) => (s: ChatStoreState) => {
 };
 
 export const chatToolSelectors = {
-  isDallEImageGenerating,
-  isGeneratingDallEImage,
   isInterpreterExecuting,
   isSearXNGSearching,
   isSearchingLocalFiles,

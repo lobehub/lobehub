@@ -5,8 +5,7 @@
     "content": "Write a haiku about programming",
     "parentId": null,
     "createdAt": 1704067200000,
-    "updatedAt": 1704067200000,
-    "meta": {}
+    "updatedAt": 1704067200000
   },
   {
     "id": "msg-202",
@@ -15,7 +14,6 @@
     "parentId": "msg-201",
     "createdAt": 1704067203000,
     "updatedAt": 1704067203000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 12,
       "totalOutputTokens": 28,
@@ -30,7 +28,6 @@
     "parentId": "msg-201",
     "createdAt": 1704067203100,
     "updatedAt": 1704067203100,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 12,
       "totalOutputTokens": 24,
@@ -45,7 +42,6 @@
     "parentId": "msg-201",
     "createdAt": 1704067203200,
     "updatedAt": 1704067203200,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 12,
       "totalOutputTokens": 26,
@@ -59,8 +55,7 @@
     "content": "I like the first one best!",
     "parentId": "msg-202",
     "createdAt": 1704067220000,
-    "updatedAt": 1704067220000,
-    "meta": {}
+    "updatedAt": 1704067220000
   },
   {
     "id": "msg-206",
@@ -69,7 +64,6 @@
     "parentId": "msg-205",
     "createdAt": 1704067222000,
     "updatedAt": 1704067222000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 52,
       "totalOutputTokens": 48,
@@ -83,8 +77,7 @@
     "content": "Actually, I prefer the second one with the dancing variables.",
     "parentId": "msg-203",
     "createdAt": 1704067225000,
-    "updatedAt": 1704067225000,
-    "meta": {}
+    "updatedAt": 1704067225000
   },
   {
     "id": "msg-208",
@@ -93,7 +86,6 @@
     "parentId": "msg-207",
     "createdAt": 1704067227000,
     "updatedAt": 1704067227000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 48,
       "totalOutputTokens": 52,
@@ -107,8 +99,7 @@
     "content": "Yes, please write one more about debugging!",
     "parentId": "msg-206",
     "createdAt": 1704067230000,
-    "updatedAt": 1704067230000,
-    "meta": {}
+    "updatedAt": 1704067230000
   },
   {
     "id": "msg-210",
@@ -117,7 +108,6 @@
     "parentId": "msg-209",
     "createdAt": 1704067232000,
     "updatedAt": 1704067232000,
-    "meta": {},
     "metadata": {
       "totalInputTokens": 78,
       "totalOutputTokens": 24,

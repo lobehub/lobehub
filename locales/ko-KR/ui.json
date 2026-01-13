@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "아바타",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "초과",
+    "tokenTag.remained": "남음",
+    "tokenTag.used": "사용"
+  },
+  "common": {
+    "common.cancel": "취소",
+    "common.confirm": "확인",
+    "common.delete": "삭제",
+    "common.edit": "편집"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "속성 추가",
+    "editableMessage.delete": "삭제",
+    "editableMessage.input": "입력",
+    "editableMessage.inputPlaceholder": "예시 입력 내용을 입력하세요",
+    "editableMessage.output": "출력",
+    "editableMessage.outputPlaceholder": "예시 출력 내용을 입력하세요",
+    "editableMessage.system": "시스템"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "삭제",
+    "emojiPicker.draggerDesc": "클릭하거나 이미지를 이 영역으로 끌어다 놓아 업로드하세요",
+    "emojiPicker.emoji": "이모지",
+    "emojiPicker.fileTypeError": "이미지 파일만 업로드할 수 있습니다!",
+    "emojiPicker.upload": "업로드",
+    "emojiPicker.uploadBtn": "자르고 업로드"
+  },
+  "form": {
+    "form.reset": "재설정",
+    "form.submit": "제출",
+    "form.unsavedChanges": "저장되지 않은 변경사항",
+    "form.unsavedWarning": "저장되지 않은 변경사항이 있습니다. 정말 나가시겠습니까?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "이 단축키는 기존 단축키와 충돌합니다.",
+    "hotkey.invalidCombination": "단축키는 수정 키(Ctrl, Alt, Shift)를 포함해야 하며 일반 키는 하나만 포함할 수 있습니다.",
+    "hotkey.placeholder": "키를 눌러 단축키를 기록하세요",
+    "hotkey.reset": "기본값으로 재설정"
+  },
+  "messageModal": {
+    "messageModal.cancel": "취소",
+    "messageModal.confirm": "확인",
+    "messageModal.edit": "편집"
+  },
+  "sideNav": {
+    "sideNav.collapse": "사이드바 접기",
+    "sideNav.demoActiveLabel": "활성",
+    "sideNav.demoFeatureAutoCollapseDesc": "임계값 아래로 드래그하면 스마트하게 접힘",
+    "sideNav.demoFeatureAutoCollapseTitle": "자동 접기",
+    "sideNav.demoFeaturePerformanceDesc": "애니메이션 오버헤드 없이 더 나은 성능",
+    "sideNav.demoFeaturePerformanceTitle": "성능",
+    "sideNav.demoFeatureResizeDesc": "드래그하여 패널 너비 조정",
+    "sideNav.demoFeatureResizeTitle": "유연한 크기 조정",
+    "sideNav.demoFeatureSmartHandleDesc": "호버하면 토글 버튼 표시",
+    "sideNav.demoFeatureSmartHandleTitle": "스마트 핸들",
+    "sideNav.demoFeaturesTitle": "기능",
+    "sideNav.demoHint": "패널 가장자리를 드래그하고 토글 버튼을 사용해 보세요 ->",
+    "sideNav.demoSubtitle": "드래그로 크기를 조절하는 워크스페이스 스타일 사이드 패널",
+    "sideNav.demoTitle": "DraggableSideNav 데모",
+    "sideNav.expand": "사이드바 펼치기"
+  }
+}

@@ -1,9 +1,11 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { ChatToolPayload, UIChatMessage } from '@lobechat/types';
-import { StateCreator } from 'zustand/vanilla';
+import { type ChatToolPayload, type RuntimeStepContext, type UIChatMessage } from '@lobechat/types';
+import i18n from 'i18next';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
+import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
 import { displayMessageSelectors } from '../../message/selectors';
 
 /**
@@ -13,11 +15,16 @@ import { displayMessageSelectors } from '../../message/selectors';
 export interface PluginPublicApiAction {
   /**
    * Fill plugin message content and optionally trigger AI message
+   * @param id - message id
+   * @param content - content to fill
+   * @param triggerAiMessage - whether to trigger AI message
+   * @param context - Optional context for optimistic update (required for Group mode)
    */
   fillPluginMessageContent: (
     id: string,
     content: string,
     triggerAiMessage?: boolean,
+    context?: OptimisticUpdateContext,
   ) => Promise<void>;
 
   /**
@@ -33,8 +40,16 @@ export interface PluginPublicApiAction {
   /**
    * Invoke different type of plugin based on payload type
    * This is the unified entry point for plugin invocation
+   *
+   * @param id - Tool message ID
+   * @param payload - Tool call payload
+   * @param stepContext - Optional step context with dynamic state like GTD todos
    */
-  internal_invokeDifferentTypePlugin: (id: string, payload: ChatToolPayload) => Promise<any>;
+  internal_invokeDifferentTypePlugin: (
+    id: string,
+    payload: ChatToolPayload,
+    stepContext?: RuntimeStepContext,
+  ) => Promise<any>;
 }
 
 export const pluginPublicApi: StateCreator<
@@ -43,10 +58,10 @@ export const pluginPublicApi: StateCreator<
   [],
   PluginPublicApiAction
 > = (set, get) => ({
-  fillPluginMessageContent: async (id, content, triggerAiMessage) => {
+  fillPluginMessageContent: async (id, content, triggerAiMessage, context) => {
     const { triggerAIMessage, optimisticUpdateMessageContent } = get();
 
-    await optimisticUpdateMessageContent(id, content);
+    await optimisticUpdateMessageContent(id, content, undefined, context);
 
     if (triggerAiMessage) await triggerAIMessage({ parentId: id });
   },
@@ -73,11 +88,18 @@ export const pluginPublicApi: StateCreator<
     const message = displayMessageSelectors.getDisplayMessageById(id)(get());
     if (!message || message.role !== 'tool') return;
 
+    const { activeAgentId, activeTopicId, activeThreadId } = get();
+
     await get().internal_execAgentRuntime({
+      context: {
+        agentId: activeAgentId,
+        topicId: activeTopicId,
+        threadId: activeThreadId ?? undefined,
+      },
       messages: [
         {
           role: 'assistant',
-          content: '作为一名总结专家，请结合以上系统提示词，将以下内容进行总结：',
+          content: i18n.t('prompts.summaryExpert', { ns: 'chat' }),
         },
         {
           ...message,
@@ -92,7 +114,7 @@ export const pluginPublicApi: StateCreator<
     });
   },
 
-  internal_invokeDifferentTypePlugin: async (id, payload) => {
+  internal_invokeDifferentTypePlugin: async (id, payload, stepContext) => {
     switch (payload.type) {
       case 'standalone': {
         return await get().invokeStandaloneTypePlugin(id, payload);
@@ -103,7 +125,8 @@ export const pluginPublicApi: StateCreator<
       }
 
       case 'builtin': {
-        return await get().invokeBuiltinTool(id, payload);
+        // Pass stepContext to builtin tools for dynamic state access
+        return await get().invokeBuiltinTool(id, payload, stepContext);
       }
 
       // @ts-ignore

@@ -1,10 +1,10 @@
-import { LOBE_CHAT_CLOUD } from '@lobechat/const';
+import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { LibraryBig } from 'lucide-react';
 import { Suspense, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TipGuide from '@/components/TipGuide';
-import { AttachKnowledgeModal } from '@/features/KnowledgeBaseModal';
+import { AttachKnowledgeModal } from '@/features/LibraryModal';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';

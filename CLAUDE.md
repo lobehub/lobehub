@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This document serves as a shared guideline for all team members when using Claude Code in this repository.
+This document serves as a shared guideline for all team members when using Claude Code in this opensource lobe-chat(also known as lobehub) repository.
 
 ## Tech Stack
 
@@ -14,11 +14,11 @@ read @.cursor/rules/project-structure.mdc
 
 ### Git Workflow
 
-- The current release branch is `next` instead of `main` until v2.0.0 is officially released
 - use rebase for git pull
 - git commit message should prefix with gitmoji
-- git branch name format example: tj/feat/feature-name
+- git branch name format template: <type>/<feature-name>
 - use .github/PULL_REQUEST_TEMPLATE.md to generate pull request description
+- PR titles starting with `✨ feat/` or `🐛 fix` will trigger the release workflow upon merge. Only use these prefixes for significant user-facing feature changes or bug fixes
 
 ### Package Management
 
@@ -34,7 +34,7 @@ see @.cursor/rules/typescript.mdc
 
 ### Testing
 
-- **Required Rule**: read `@.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
+- **Required Rule**: read `.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
 - **Command**:
   - web: `bunx vitest run --silent='passed-only' '[file-path-pattern]'`
   - packages(eg: database): `cd packages/database && bunx vitest run --silent='passed-only' '[file-path-pattern]'`
@@ -44,10 +44,12 @@ see @.cursor/rules/typescript.mdc
 - wrap the file path in single quotes to avoid shell expansion
 - Never run `bun run test` etc to run tests, this will run all tests and cost about 10mins
 - If trying to fix the same test twice, but still failed, stop and ask for help.
+- **Prefer `vi.spyOn` over `vi.mock`**: When mocking modules or functions, prefer using `vi.spyOn` to mock specific functions rather than `vi.mock` to mock entire modules. This approach is more targeted, easier to maintain, and allows for better control over mock behavior in individual tests.
+- **Tests must pass type check**: After writing or modifying tests, run `bun run type-check` to ensure there are no type errors. Tests should pass both runtime execution and TypeScript type checking.
 
 ### Typecheck
 
-- use `bun run typecheck` to check type errors.
+- use `bun run type-check` to check type errors.
 
 ### i18n
 
@@ -55,7 +57,7 @@ see @.cursor/rules/typescript.mdc
 - **Dev**: Translate `locales/zh-CN/namespace.json` and `locales/en-US/namespace.json` locales file only for dev preview
 - DON'T run `pnpm i18n`, let CI auto handle it
 
-## Linear Issue Management
+## Linear Issue Management (ignore if not installed linear mcp)
 
 When working with Linear issues:
 
@@ -63,6 +65,10 @@ When working with Linear issues:
 2. **Check for sub-issues**: If the issue has sub-issues, retrieve and review ALL sub-issues using `mcp__linear-server__list_issues` with `parentId` filter before starting work
 3. **Update issue status** when completing tasks using `mcp__linear-server__update_issue`
 4. **MUST add completion comment** using `mcp__linear-server__create_comment`
+
+### Creating Issues
+
+When creating new Linear issues using `mcp__linear-server__create_issue`, **MUST add the `claude code` label** to indicate the issue was created by Claude Code.
 
 ### Completion Comment (REQUIRED)
 
@@ -72,6 +78,10 @@ When working with Linear issues:
 - Code review context
 - Future reference and debugging
 
+### PR Linear Issue Association (REQUIRED)
+
+**When creating PRs for Linear issues, MUST include magic keywords in PR body:** `Fixes LOBE-123`, `Closes LOBE-123`, or `Resolves LOBE-123`, and summarize the work done in the linear issue comment and update the issue status to "In Review".
+
 ### IMPORTANT: Per-Issue Completion Rule
 
 **When working on multiple issues (e.g., parent issue with sub-issues), you MUST update status and add comment for EACH issue IMMEDIATELY after completing it.** Do NOT wait until all issues are done to update them in batch.
@@ -79,7 +89,7 @@ When working with Linear issues:
 **Workflow for EACH individual issue:**
 
 1. Complete the implementation for this specific issue
-2. Run type check: `bun run typecheck`
+2. Run type check: `bun run type-check`
 3. Run related tests if applicable
 4. Create PR if needed
 5. **IMMEDIATELY** update issue status to **"In Review"** (NOT "Done"): `mcp__linear-server__update_issue`

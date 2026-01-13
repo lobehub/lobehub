@@ -1,13 +1,11 @@
-import { Highlighter, Icon } from '@lobehub/ui';
-import { Button, Tag } from 'antd';
-import { useTheme } from 'antd-style';
-import { motion } from 'framer-motion';
+import { Button, Flexbox, Highlighter, Icon, Tag } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import * as motion from 'motion/react-m';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
-import { MCPErrorInfoMetadata } from '@/types/plugins';
+import { type MCPErrorInfoMetadata } from '@/types/plugins';
 
 const ErrorDetails = memo<{
   errorInfo: MCPErrorInfoMetadata;
@@ -16,7 +14,6 @@ const ErrorDetails = memo<{
   const { t } = useTranslation('plugin');
   const [expanded, setExpanded] = useState(false);
 
-  const theme = useTheme();
   return (
     <Flexbox gap={8}>
       <Button
@@ -44,7 +41,7 @@ const ErrorDetails = memo<{
           <Flexbox
             gap={8}
             style={{
-              backgroundColor: theme.colorFillQuaternary,
+              backgroundColor: cssVar.colorFillQuaternary,
               borderRadius: 8,
               fontFamily: 'monospace',
               fontSize: '11px',
@@ -54,7 +51,7 @@ const ErrorDetails = memo<{
             {errorInfo.params && (
               <Flexbox gap={4}>
                 <div>
-                  <Tag bordered={false} color="blue">
+                  <Tag color="blue" variant={'filled'}>
                     {t('mcpInstall.errorDetails.connectionParams')}
                   </Tag>
                 </div>
@@ -76,7 +73,7 @@ const ErrorDetails = memo<{
             {errorInfo.errorLog && (
               <Flexbox gap={4}>
                 <div>
-                  <Tag bordered={false} color="red">
+                  <Tag color="red" variant={'filled'}>
                     {t('mcpInstall.errorDetails.errorOutput')}
                   </Tag>
                 </div>

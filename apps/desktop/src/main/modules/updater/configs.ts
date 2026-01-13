@@ -1,7 +1,8 @@
 import { isDev } from '@/const/env';
+import { getDesktopEnv } from '@/env';
 
 // 更新频道（stable, beta, alpha 等）
-export const UPDATE_CHANNEL = process.env.UPDATE_CHANNEL;
+export const UPDATE_CHANNEL = getDesktopEnv().UPDATE_CHANNEL;
 
 export const updaterConfig = {
   // 应用更新配置

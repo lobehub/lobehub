@@ -1,12 +1,14 @@
 import { Input } from '@lobehub/ui';
-import { Checkbox, Form, FormInstance, Select } from 'antd';
-import { AiModelType } from 'model-bank';
+import { Checkbox, Form, type FormInstance, Select } from 'antd';
+import { type AiModelType } from 'model-bank';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MaxTokenSlider from '@/components/MaxTokenSlider';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { ChatModelCard } from '@/types/llm';
+import { type ChatModelCard } from '@/types/llm';
+
+import ExtendParamsSelect from './ExtendParamsSelect';
 
 interface ModelConfigFormProps {
   idEditable?: boolean;
@@ -101,6 +103,13 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
             name={'contextWindowTokens'}
           >
             <MaxTokenSlider />
+          </Form.Item>
+          <Form.Item
+            extra={t('providerModels.item.modelConfig.extendParams.extra')}
+            label={t('providerModels.item.modelConfig.extendParams.title')}
+            name={['settings', 'extendParams']}
+          >
+            <ExtendParamsSelect />
           </Form.Item>
           <Form.Item
             extra={t('providerModels.item.modelConfig.functionCall.extra')}

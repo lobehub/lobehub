@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "Geen agenten beschikbaar",
+  "agentSelection.noAvailable": "Er kunnen momenteel geen agenten worden toegevoegd",
+  "agentSelection.noSelected": "Geen agenten geselecteerd",
+  "agentSelection.search": "Geen overeenkomende agenten gevonden",
+  "project.create": "Nieuw project",
+  "project.deleteConfirm": "Dit project wordt verwijderd en kan niet worden hersteld. Bevestig om door te gaan.",
+  "starter.createAgent": "Agent aanmaken",
+  "starter.createGroup": "Groep aanmaken",
+  "starter.deepResearch": "Diepgaand onderzoek",
+  "starter.developing": "Binnenkort beschikbaar",
+  "starter.image": "Afbeelding",
+  "starter.write": "Schrijven"
+}

@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS（每秒權杖數）：每秒輸出的權杖數量",
+  "duration.TTFT": "TTFT（首次權杖時間）：第一個權杖的延遲時間",
+  "duration.completion": "輸出完成時間",
+  "duration.latency": "耗時",
+  "duration.stage.end": "結束",
+  "duration.stage.firstToken": "第一個權杖",
+  "duration.stage.start": "開始",
+  "table.columns.TTFT.tooltip": "首次權杖時間，單位：秒",
+  "table.columns.duration": "耗時",
+  "table.columns.model": "模型",
+  "table.columns.spend": "使用點數",
+  "table.columns.startTime": "建立時間",
+  "table.columns.totalTokens": "權杖使用量",
+  "table.columns.type.enums.chat": "文字生成",
+  "table.columns.type.enums.imageGeneration": "圖像生成",
+  "table.columns.type.title": "類型",
+  "table.desc": "文字生成、嵌入、圖像生成等計算點數使用詳情",
+  "table.more": "查看詳情",
+  "table.title": "計算點數使用詳情",
+  "table.totalToken.input": "輸入",
+  "table.totalToken.output": "輸出"
+}

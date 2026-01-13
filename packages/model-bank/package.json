@@ -4,6 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./modelProviders": "./src/modelProviders/index.ts",
+    "./modelProviders/lobehub": "./src/modelProviders/lobehub.ts",
     "./ai21": "./src/aiModels/ai21.ts",
     "./ai302": "./src/aiModels/ai302.ts",
     "./ai360": "./src/aiModels/ai360.ts",
@@ -69,6 +71,7 @@
     "./volcengine": "./src/aiModels/volcengine.ts",
     "./wenxin": "./src/aiModels/wenxin.ts",
     "./xai": "./src/aiModels/xai.ts",
+    "./xiaomimimo": "./src/aiModels/xiaomimimo.ts",
     "./xinference": "./src/aiModels/xinference.ts",
     "./zenmux": "./src/aiModels/zenmux.ts",
     "./zeroone": "./src/aiModels/zeroone.ts",
@@ -80,6 +83,10 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
+    "@lobechat/business-const": "workspace:*",
+    "type-fest": "^5.2.0"
+  },
+  "peerDependencies": {
     "zod": "^3.25.76"
   }
 }

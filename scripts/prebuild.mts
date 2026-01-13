@@ -1,14 +1,84 @@
+import { execSync } from 'node:child_process';
 import * as dotenv from 'dotenv';
+import dotenvExpand from 'dotenv-expand';
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
+const isBundleAnalyzer = process.env.ANALYZE === 'true' && process.env.CI === 'true';
 
-dotenv.config();
+if (isDesktop) {
+  dotenvExpand.expand(dotenv.config({ path: '.env.desktop' }));
+  dotenvExpand.expand(dotenv.config({ override: true, path: '.env.desktop.local' }));
+} else {
+  dotenvExpand.expand(dotenv.config());
+}
+
+// Auth flags - use process.env directly for build-time dead code elimination
+const enableClerk =
+  process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === '1'
+    ? true
+    : !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const enableBetterAuth = process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1';
+const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
+const enableAuth = enableClerk || enableBetterAuth || enableNextAuth || false;
+
+const getCommandVersion = (command: string): string | null => {
+  try {
+    return execSync(`${command} --version`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+      .trim()
+      .split('\n')[0];
+  } catch {
+    return null;
+  }
+};
+
+const printEnvInfo = () => {
+  console.log('\n📋 Build Environment Info:');
+  console.log('─'.repeat(50));
+
+  // Runtime versions
+  console.log(`  Node.js: ${process.version}`);
+  console.log(`  npm: ${getCommandVersion('npm') ?? 'not installed'}`);
+
+  const bunVersion = getCommandVersion('bun');
+  if (bunVersion) console.log(`  bun: ${bunVersion}`);
+
+  const pnpmVersion = getCommandVersion('pnpm');
+  if (pnpmVersion) console.log(`  pnpm: ${pnpmVersion}`);
+
+  // Auth-related env vars
+  console.log('\n  Auth Environment Variables:');
+  console.log(`    NEXT_PUBLIC_AUTH_URL: ${process.env.NEXT_PUBLIC_AUTH_URL ?? '(not set)'}`);
+  console.log(`    NEXTAUTH_URL: ${process.env.NEXTAUTH_URL ?? '(not set)'}`);
+  console.log(`    APP_URL: ${process.env.APP_URL ?? '(not set)'}`);
+  console.log(`    VERCEL_URL: ${process.env.VERCEL_URL ?? '(not set)'}`);
+  console.log(`    AUTH_EMAIL_VERIFICATION: ${process.env.AUTH_EMAIL_VERIFICATION ?? '(not set)'}`);
+  console.log(`    ENABLE_MAGIC_LINK: ${process.env.ENABLE_MAGIC_LINK ?? '(not set)'}`);
+  console.log(`    AUTH_SECRET: ${process.env.AUTH_SECRET ? '✓ set' : '✗ not set'}`);
+  console.log(`    KEY_VAULTS_SECRET: ${process.env.KEY_VAULTS_SECRET ? '✓ set' : '✗ not set'}`);
+
+  // Auth flags
+  console.log('\n  Auth Flags:');
+  console.log(`    enableClerk: ${enableClerk}`);
+  console.log(`    enableBetterAuth: ${enableBetterAuth}`);
+  console.log(`    enableNextAuth: ${enableNextAuth}`);
+  console.log(`    enableAuth: ${enableAuth}`);
+
+  console.log('─'.repeat(50));
+};
+
 // 创建需要排除的特性映射
 /* eslint-disable sort-keys-fix/sort-keys-fix */
 const partialBuildPages = [
+  // no need for bundle analyzer (frontend only)
+  {
+    name: 'backend-routes',
+    disabled: isBundleAnalyzer,
+    paths: ['src/app/(backend)'],
+  },
   // no need for desktop
   // {
   //   name: 'changelog',
@@ -62,22 +132,24 @@ const partialBuildPages = [
 /**
  * 删除指定的目录
  */
-const removeDirectories = async () => {
+export const runPrebuild = async (targetDir: string = 'src') => {
   // 遍历 partialBuildPages 数组
   for (const page of partialBuildPages) {
     // 检查是否需要禁用该功能
     if (page.disabled) {
       for (const dirPath of page.paths) {
-        const fullPath = path.resolve(process.cwd(), dirPath);
+        // Replace 'src' with targetDir
+        const relativePath = dirPath.replace(/^src/, targetDir);
+        const fullPath = path.resolve(process.cwd(), relativePath);
 
         // 检查目录是否存在
         if (existsSync(fullPath)) {
           try {
             // 递归删除目录
             await rm(fullPath, { force: true, recursive: true });
-            console.log(`♻️ Removed ${dirPath} successfully`);
+            console.log(`♻️ Removed ${relativePath} successfully`);
           } catch (error) {
-            console.error(`Failed to remove directory ${dirPath}:`, error);
+            console.error(`Failed to remove directory ${relativePath}:`, error);
           }
         }
       }
@@ -85,7 +157,13 @@ const removeDirectories = async () => {
   }
 };
 
-// 执行删除操作
-console.log('Starting prebuild cleanup...');
-await removeDirectories();
-console.log('Prebuild cleanup completed.');
+// Check if the script is being run directly
+const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
+
+if (isMainModule) {
+  printEnvInfo();
+  // 执行删除操作
+  console.log('\nStarting prebuild cleanup...');
+  await runPrebuild();
+  console.log('Prebuild cleanup completed.');
+}

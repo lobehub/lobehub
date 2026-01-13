@@ -1,15 +1,19 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
-import { ToolStoreState, initialState } from './initialState';
-import { BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
-import { CustomPluginAction, createCustomPluginSlice } from './slices/customPlugin';
-import { KlavisStoreAction, createKlavisStoreSlice } from './slices/klavisStore';
-import { PluginMCPStoreAction, createMCPPluginStoreSlice } from './slices/mcpStore';
-import { PluginAction, createPluginSlice } from './slices/plugin';
-import { PluginStoreAction, createPluginStoreSlice } from './slices/oldStore';
+import { type ToolStoreState, initialState } from './initialState';
+import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
+import { type CustomPluginAction, createCustomPluginSlice } from './slices/customPlugin';
+import { type KlavisStoreAction, createKlavisStoreSlice } from './slices/klavisStore';
+import {
+  type LobehubSkillStoreAction,
+  createLobehubSkillStoreSlice,
+} from './slices/lobehubSkillStore';
+import { type PluginMCPStoreAction, createMCPPluginStoreSlice } from './slices/mcpStore';
+import { type PluginStoreAction, createPluginStoreSlice } from './slices/oldStore';
+import { type PluginAction, createPluginSlice } from './slices/plugin';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -19,7 +23,8 @@ export type ToolStore = ToolStoreState &
   PluginStoreAction &
   BuiltinToolAction &
   PluginMCPStoreAction &
-  KlavisStoreAction;
+  KlavisStoreAction &
+  LobehubSkillStoreAction;
 
 const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (...parameters) => ({
   ...initialState,
@@ -29,6 +34,7 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (...
   ...createBuiltinToolSlice(...parameters),
   ...createMCPPluginStoreSlice(...parameters),
   ...createKlavisStoreSlice(...parameters),
+  ...createLobehubSkillStoreSlice(...parameters),
 });
 
 //  ===============  Implement useStore ============ //

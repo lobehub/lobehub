@@ -1,91 +1,43 @@
 {
-  "addDataset": {
-    "confirm": "Създаване",
-    "description": {
-      "placeholder": "Описание на набора от данни (по избор)"
-    },
-    "name": {
-      "placeholder": "Име на набора от данни",
-      "required": "Моля, попълнете името на набора от данни"
-    },
-    "title": "Добавяне на набор от данни"
-  },
-  "dataset": {
-    "addNewButton": "Създаване на набор от данни",
-    "emptyGuide": "Текущият набор от данни е празен, моля, създайте нов набор от данни.",
-    "list": {
-      "table": {
-        "actions": {
-          "importData": "Импорт на данни"
-        },
-        "columns": {
-          "actions": "Действия",
-          "ideal": {
-            "title": "Очакван отговор"
-          },
-          "question": {
-            "title": "Въпрос"
-          },
-          "referenceFiles": {
-            "title": "Референтни файлове"
-          }
-        },
-        "notSelected": "Моля, изберете набор от данни отляво",
-        "title": "Детайли на набора от данни"
-      },
-      "title": "Набор от данни"
-    }
-  },
-  "evaluation": {
-    "addEvaluation": {
-      "confirm": "Създаване",
-      "datasetId": {
-        "placeholder": "Моля, изберете вашия набор от данни за оценка",
-        "required": "Моля, изберете набор от данни за оценка"
-      },
-      "description": {
-        "placeholder": "Описание на задачата за оценка (по избор)"
-      },
-      "name": {
-        "placeholder": "Име на задачата за оценка",
-        "required": "Моля, попълнете името на задачата за оценка"
-      },
-      "title": "Добавяне на задача за оценка"
-    },
-    "addNewButton": "Създаване на оценка",
-    "emptyGuide": "Текущата задача за оценка е празна, започнете да създавате оценка.",
-    "table": {
-      "columns": {
-        "actions": {
-          "checkStatus": "Проверка на статуса",
-          "confirmDelete": "Наистина ли искате да изтриете тази оценка?",
-          "confirmRun": "Наистина ли искате да стартирате? След стартиране, задачата за оценка ще се изпълнява асинхронно на заден план, затварянето на страницата няма да повлияе на изпълнението на асинхронната задача.",
-          "downloadRecords": "Изтегляне на оценки",
-          "retry": "Опитай отново",
-          "run": "Стартиране",
-          "title": "Действия"
-        },
-        "datasetId": {
-          "title": "Набор от данни"
-        },
-        "name": {
-          "title": "Име на задачата за оценка"
-        },
-        "records": {
-          "title": "Брой оценки"
-        },
-        "referenceFiles": {
-          "title": "Референтни файлове"
-        },
-        "status": {
-          "error": "Грешка при изпълнение",
-          "pending": "В очакване на изпълнение",
-          "processing": "Изпълнява се",
-          "success": "Успешно изпълнение",
-          "title": "Статус"
-        }
-      },
-      "title": "Списък с задачи за оценка"
-    }
-  }
+  "addDataset.confirm": "Създай",
+  "addDataset.description.placeholder": "Описание на набора от данни (по избор)",
+  "addDataset.name.placeholder": "Име на набора от данни",
+  "addDataset.name.required": "Моля, въведете име на набора от данни",
+  "addDataset.title": "Добавяне на набор от данни",
+  "dataset.addNewButton": "Създай набор от данни",
+  "dataset.emptyGuide": "В момента няма налични набори от данни. Моля, създайте нов набор.",
+  "dataset.list.table.actions.importData": "Импортирай данни",
+  "dataset.list.table.columns.actions": "Действия",
+  "dataset.list.table.columns.ideal.title": "Очакван отговор",
+  "dataset.list.table.columns.question.title": "Въпрос",
+  "dataset.list.table.columns.referenceFiles.title": "Референтни файлове",
+  "dataset.list.table.notSelected": "Моля, изберете набор от данни отляво",
+  "dataset.list.table.title": "Детайли за набора от данни",
+  "dataset.list.title": "Набори от данни",
+  "evaluation.addEvaluation.confirm": "Създай",
+  "evaluation.addEvaluation.datasetId.placeholder": "Моля, изберете набор от данни за оценка",
+  "evaluation.addEvaluation.datasetId.required": "Моля, изберете набор от данни за оценка",
+  "evaluation.addEvaluation.description.placeholder": "Описание на задачата за оценка (по избор)",
+  "evaluation.addEvaluation.name.placeholder": "Име на задачата за оценка",
+  "evaluation.addEvaluation.name.required": "Моля, въведете име на задачата за оценка",
+  "evaluation.addEvaluation.title": "Добавяне на задача за оценка",
+  "evaluation.addNewButton": "Създай оценка",
+  "evaluation.emptyGuide": "В момента няма задачи за оценка. Започнете с добавяне на нова задача.",
+  "evaluation.table.columns.actions.checkStatus": "Провери състоянието",
+  "evaluation.table.columns.actions.confirmDelete": "Сигурни ли сте, че искате да изтриете тази оценка?",
+  "evaluation.table.columns.actions.confirmRun": "Сигурни ли сте, че искате да стартирате? Задачата за оценка ще се изпълнява асинхронно във фонов режим и затварянето на страницата няма да повлияе на изпълнението.",
+  "evaluation.table.columns.actions.downloadRecords": "Изтегли оценка",
+  "evaluation.table.columns.actions.retry": "Повтори",
+  "evaluation.table.columns.actions.run": "Стартирай",
+  "evaluation.table.columns.actions.title": "Действия",
+  "evaluation.table.columns.datasetId.title": "Набор от данни",
+  "evaluation.table.columns.name.title": "Име на задачата за оценка",
+  "evaluation.table.columns.records.title": "Брой записи за оценка",
+  "evaluation.table.columns.referenceFiles.title": "Референтни файлове",
+  "evaluation.table.columns.status.error": "Грешка при изпълнение",
+  "evaluation.table.columns.status.pending": "В изчакване",
+  "evaluation.table.columns.status.processing": "В процес на изпълнение",
+  "evaluation.table.columns.status.success": "Успешно изпълнение",
+  "evaluation.table.columns.status.title": "Състояние",
+  "evaluation.table.title": "Списък със задачи за оценка"
 }

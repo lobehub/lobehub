@@ -50,4 +50,4 @@ export class ControllerModule extends IpcService implements IControllerModule {
 
 export type IControlModule = typeof ControllerModule;
 
-export { IpcMethod, IpcServerMethod } from '@/utils/ipc';
+export { IpcMethod } from '@/utils/ipc';

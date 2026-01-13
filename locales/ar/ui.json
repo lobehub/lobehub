@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "الصورة الرمزية",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "زيادة التحميل",
+    "tokenTag.remained": "المتبقي",
+    "tokenTag.used": "المستخدم"
+  },
+  "common": {
+    "common.cancel": "إلغاء",
+    "common.confirm": "تأكيد",
+    "common.delete": "حذف",
+    "common.edit": "تعديل"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "إضافة خصائص",
+    "editableMessage.delete": "حذف",
+    "editableMessage.input": "المدخلات",
+    "editableMessage.inputPlaceholder": "يرجى إدخال محتوى مدخلات تجريبي",
+    "editableMessage.output": "المخرجات",
+    "editableMessage.outputPlaceholder": "يرجى إدخال محتوى مخرجات تجريبي",
+    "editableMessage.system": "النظام"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "حذف",
+    "emojiPicker.draggerDesc": "انقر أو اسحب الصورة إلى هذه المنطقة للتحميل",
+    "emojiPicker.emoji": "رموز تعبيرية",
+    "emojiPicker.fileTypeError": "يمكنك تحميل ملفات الصور فقط!",
+    "emojiPicker.upload": "تحميل",
+    "emojiPicker.uploadBtn": "قص وتحميل"
+  },
+  "form": {
+    "form.reset": "إعادة تعيين",
+    "form.submit": "إرسال",
+    "form.unsavedChanges": "تغييرات غير محفوظة",
+    "form.unsavedWarning": "لديك تغييرات غير محفوظة. هل أنت متأكد أنك تريد المغادرة؟"
+  },
+  "hotkey": {
+    "hotkey.conflict": "هذا الاختصار يتعارض مع اختصار موجود.",
+    "hotkey.invalidCombination": "يجب أن يتضمن الاختصار مفتاح تعديل (Ctrl أو Alt أو Shift) ومفتاح عادي واحد فقط.",
+    "hotkey.placeholder": "اضغط على المفاتيح لتسجيل الاختصار",
+    "hotkey.reset": "إعادة التعيين إلى الوضع الافتراضي"
+  },
+  "messageModal": {
+    "messageModal.cancel": "إلغاء",
+    "messageModal.confirm": "تأكيد",
+    "messageModal.edit": "تعديل"
+  },
+  "sideNav": {
+    "sideNav.collapse": "طي الشريط الجانبي",
+    "sideNav.demoActiveLabel": "نشط",
+    "sideNav.demoFeatureAutoCollapseDesc": "اسحب أسفل العتبة للطي الذكي",
+    "sideNav.demoFeatureAutoCollapseTitle": "الطي التلقائي",
+    "sideNav.demoFeaturePerformanceDesc": "بدون رسوم متحركة لأداء أفضل",
+    "sideNav.demoFeaturePerformanceTitle": "الأداء",
+    "sideNav.demoFeatureResizeDesc": "اسحب لتعديل عرض اللوحة",
+    "sideNav.demoFeatureResizeTitle": "تعديل مرن",
+    "sideNav.demoFeatureSmartHandleDesc": "مرر لإظهار زر التبديل",
+    "sideNav.demoFeatureSmartHandleTitle": "مقبض ذكي",
+    "sideNav.demoFeaturesTitle": "الميزات",
+    "sideNav.demoHint": "جرّب سحب حافة اللوحة واستخدام زر التبديل ->",
+    "sideNav.demoSubtitle": "لوحة جانبية بأسلوب مساحة العمل مع إمكانية تغيير الحجم بالسحب",
+    "sideNav.demoTitle": "عرض توضيحي لـ DraggableSideNav",
+    "sideNav.expand": "توسيع الشريط الجانبي"
+  }
+}

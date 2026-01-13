@@ -1,6 +1,7 @@
 const config = require('@lobehub/lint').eslint;
 
-config.extends.push('plugin:@next/next/recommended');
+config.root = true;
+config.extends.push('plugin:@next/next/recommended-legacy');
 
 config.rules['unicorn/no-negated-condition'] = 0;
 config.rules['unicorn/prefer-type-error'] = 0;
@@ -21,6 +22,7 @@ config.rules['unicorn/prefer-query-selector'] = 0;
 config.rules['unicorn/no-array-callback-reference'] = 0;
 // FIXME: Linting error in src/app/[variants]/(main)/chat/features/Migration/DBReader.ts, the fundamental solution should be upgrading typescript-eslint
 config.rules['@typescript-eslint/no-useless-constructor'] = 0;
+config.rules['@next/next/no-img-element'] = 0;
 
 config.overrides = [
   {

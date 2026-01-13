@@ -1,13 +1,13 @@
+import { isDesktop } from '@lobechat/const';
 import { memo } from 'react';
 
 import OllamaSetupGuide from '@/components/OllamaSetupGuide';
-import { isDesktop } from '@/const/version';
-import { ErrorActionContainer } from '@/features/ChatList/Error/style';
+import { ErrorActionContainer } from '@/features/Conversation/Error/style';
 
 import OllamaDesktopSetupGuide from './Desktop';
 
-const SetupGuide = memo<{ container?: boolean; id?: string }>(({ id, container = true }) => {
-  const content = isDesktop ? <OllamaDesktopSetupGuide id={id} /> : <OllamaSetupGuide />;
+const SetupGuide = memo<{ container?: boolean }>(({ container = true }) => {
+  const content = isDesktop ? <OllamaDesktopSetupGuide /> : <OllamaSetupGuide />;
 
   if (!container) return content;
 

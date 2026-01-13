@@ -1,26 +1,28 @@
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { TRPCError } from '@trpc/server';
-import { chunk } from 'lodash-es';
+import { chunk } from 'es-toolkit/compat';
 import pMap from 'p-map';
 import { z } from 'zod';
 
+import { checkBudgetsUsage, checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
 import { serverDBEnv } from '@/config/db';
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
-import { ASYNC_TASK_TIMEOUT, AsyncTaskModel } from '@/database/models/asyncTask';
+import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
-import { NewChunkItem, NewEmbeddingsItem } from '@/database/schemas';
+import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
 import { fileEnv } from '@/envs/file';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { FileService } from '@/server/services/file';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
   AsyncTaskStatus,
-  IAsyncTaskError,
+  type IAsyncTaskError,
 } from '@/types/asyncTask';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
@@ -42,6 +44,8 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
 
 export const fileRouter = router({
   embeddingChunks: fileProcedure
+    .use(checkEmbeddingUsage)
+    .use(checkBudgetsUsage)
     .input(
       z.object({
         fileId: z.string(),
@@ -91,9 +95,14 @@ export const fileRouter = router({
             await pMap(
               requestArray,
               async (chunks) => {
-                const agentRuntime = initModelRuntimeWithUserPayload(provider, ctx.jwtPayload);
+                // Read user's provider config from database
+                const modelRuntime = await initModelRuntimeFromDB(
+                  ctx.serverDB,
+                  ctx.userId,
+                  provider,
+                );
 
-                const embeddings = await agentRuntime.embeddings({
+                const embeddings = await modelRuntime.embeddings({
                   dimensions: 1024,
                   input: chunks.map((c) => c.text),
                   model,
@@ -111,9 +120,9 @@ export const fileRouter = router({
               },
               { concurrency: CONCURRENCY },
             );
-          } catch (e) {
+          } catch (e: any) {
             throw {
-              message: JSON.stringify(e),
+              message: e.errorType ?? e.message ?? JSON.stringify(e),
               name: AsyncTaskErrorType.EmbeddingError,
             };
           }
@@ -239,7 +248,7 @@ export const fileRouter = router({
 
           // if enable auto embedding, trigger the embedding task
           if (fileEnv.CHUNKS_AUTO_EMBEDDING) {
-            await chunkService.asyncEmbeddingFileChunks(input.fileId, ctx.jwtPayload);
+            await chunkService.asyncEmbeddingFileChunks(input.fileId);
           }
 
           return { success: true };

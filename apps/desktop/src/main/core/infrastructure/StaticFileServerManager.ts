@@ -25,14 +25,12 @@ const getAllowedOrigin = (rawOrigin?: string) => {
 };
 
 export class StaticFileServerManager {
-  private app: App;
   private fileService: FileService;
   private httpServer: any = null;
   private serverPort: number = 0;
   private isInitialized = false;
 
   constructor(app: App) {
-    this.app = app;
     this.fileService = app.getService(FileService);
     logger.debug('StaticFileServerManager initialized');
   }

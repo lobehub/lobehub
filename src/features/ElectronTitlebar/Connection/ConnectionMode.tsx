@@ -1,18 +1,17 @@
-import { StorageMode, StorageModeEnum } from '@lobechat/electron-client-ipc';
-import { Button, Input } from '@lobehub/ui';
+import { type StorageMode, StorageModeEnum } from '@lobechat/electron-client-ipc';
+import { Button, Center, Flexbox, Input } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
-import { createStyles } from 'antd-style';
-import { ComputerIcon, Server } from 'lucide-react';
+import { createStaticStyles } from 'antd-style';
+import { Server } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 
 import { Option } from './Option';
 
-const useStyles = createStyles(({ token, css }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     cardGroup: css`
       width: 400px; /* Increased width */
@@ -33,7 +32,7 @@ const useStyles = createStyles(({ token, css }) => {
       padding-inline-start: 4px; /* Align with card padding */
       font-size: 16px;
       font-weight: 500;
-      color: ${token.colorTextSecondary};
+      color: ${cssVar.colorTextSecondary};
     `,
     header: css`
       text-align: center;
@@ -41,7 +40,7 @@ const useStyles = createStyles(({ token, css }) => {
     inputError: css`
       margin-block-start: 8px;
       font-size: 12px;
-      color: ${token.colorError};
+      color: ${cssVar.colorError};
     `,
     modal: css`
       .ant-drawer-close {
@@ -56,37 +55,38 @@ const useStyles = createStyles(({ token, css }) => {
     selfHostedText: css`
       cursor: pointer;
       font-size: 14px;
-      color: ${token.colorTextTertiary};
+      color: ${cssVar.colorTextTertiary};
 
       :hover {
-        color: ${token.colorTextSecondary};
+        color: ${cssVar.colorTextSecondary};
       }
     `,
     title: css`
       margin-block: 16px 48px; /* Increased Spacing below title */
       font-size: 24px; /* Increased font size */
       font-weight: 600;
-      color: ${token.colorTextHeading};
+      color: ${cssVar.colorTextHeading};
     `,
   };
 });
 
+type RemoteStorageMode = Extract<StorageMode, 'cloud' | 'selfHost'>;
+
 interface ConnectionModeProps {
-  setIsOpen: (open: boolean) => void;
   setWaiting: (waiting: boolean) => void;
 }
 
-const ConnectionMode = memo<ConnectionModeProps>(({ setIsOpen, setWaiting }) => {
-  const { styles } = useStyles();
+const ConnectionMode = memo<ConnectionModeProps>(({ setWaiting }) => {
   const { t } = useTranslation(['electron', 'common']);
   const [urlError, setUrlError] = useState<string | undefined>();
 
   const connect = useElectronStore((s) => s.connectRemoteServer);
-  const disconnect = useElectronStore((s) => s.disconnectRemoteServer);
   const storageMode = useElectronStore(electronSyncSelectors.storageMode);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
 
-  const [selectedOption, setSelectedOption] = useState<StorageMode>(storageMode);
+  const [selectedOption, setSelectedOption] = useState<RemoteStorageMode>(
+    storageMode === StorageModeEnum.SelfHost ? StorageModeEnum.SelfHost : StorageModeEnum.Cloud,
+  );
   const [selfHostedUrl, setSelfHostedUrl] = useState(remoteServerUrl);
 
   const validateUrl = useCallback((url: string) => {
@@ -104,7 +104,7 @@ const ConnectionMode = memo<ConnectionModeProps>(({ setIsOpen, setWaiting }) => 
     }
   }, []);
 
-  const handleSelectOption = (option: StorageMode) => {
+  const handleSelectOption = (option: RemoteStorageMode) => {
     setSelectedOption(option);
     if (option !== StorageModeEnum.SelfHost) {
       setUrlError(undefined);
@@ -120,12 +120,6 @@ const ConnectionMode = memo<ConnectionModeProps>(({ setIsOpen, setWaiting }) => 
       if (error) {
         return;
       }
-    }
-
-    if (selectedOption === StorageModeEnum.Local) {
-      await disconnect();
-      setIsOpen(false);
-      return;
     }
 
     // try to connect
@@ -153,7 +147,7 @@ const ConnectionMode = memo<ConnectionModeProps>(({ setIsOpen, setWaiting }) => 
           <Option
             description={t('sync.lobehubCloud.description')}
             icon={LobeHub}
-            isSelected={selectedOption === 'cloud'}
+            isSelected={selectedOption === StorageModeEnum.Cloud}
             label={t('sync.lobehubCloud.title')}
             onClick={handleSelectOption}
             value={StorageModeEnum.Cloud}
@@ -188,19 +182,6 @@ const ConnectionMode = memo<ConnectionModeProps>(({ setIsOpen, setWaiting }) => 
             </Option>
           )}
         </Flexbox>
-        <Flexbox>
-          <div className={styles.groupTitle} style={{ marginBottom: 12 }}>
-            {t('sync.mode.localStorage')}
-          </div>
-          <Option
-            description={t('sync.local.description')}
-            icon={ComputerIcon}
-            isSelected={selectedOption === StorageModeEnum.Local}
-            label={t('sync.local.title')}
-            onClick={handleSelectOption}
-            value={StorageModeEnum.Local}
-          />
-        </Flexbox>
       </Flexbox>
 
       <Button
@@ -214,7 +195,7 @@ const ConnectionMode = memo<ConnectionModeProps>(({ setIsOpen, setWaiting }) => 
         style={{ maxWidth: 400 }}
         type="primary"
       >
-        {selectedOption === 'local' ? t('save', { ns: 'common' }) : t('sync.continue')}
+        {t('sync.continue')}
       </Button>
     </Center>
   );

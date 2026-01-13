@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "إضافة المحتوى الحالي كرسالة مستخدم دون تفعيل التوليد",
-    "title": "إضافة رسالة مستخدم"
-  },
-  "clearCurrentMessages": {
-    "desc": "مسح الرسائل والملفات المرفوعة في المحادثة الحالية",
-    "title": "مسح رسائل المحادثة"
-  },
-  "commandPalette": {
-    "desc": "افتح لوحة الأوامر العامة للوصول السريع إلى الميزات",
-    "title": "لوحة الأوامر"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "حذف الرسالة الأخيرة وإعادة إنشائها",
-    "title": "حذف وإعادة إنشاء"
-  },
-  "deleteLastMessage": {
-    "desc": "حذف الرسالة الأخيرة",
-    "title": "حذف الرسالة الأخيرة"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "افتح صفحة إعدادات التطبيق",
-      "title": "إعدادات التطبيق"
-    },
-    "showApp": {
-      "desc": "مفتاح اختصار عام لإظهار أو إخفاء النافذة الرئيسية",
-      "title": "إظهار/إخفاء النافذة الرئيسية"
-    }
-  },
-  "editMessage": {
-    "desc": "الدخول إلى وضع التحرير عن طريق الضغط على مفتاح Alt والنقر المزدوج على الرسالة",
-    "title": "تحرير الرسالة"
-  },
-  "navigateToChat": {
-    "desc": "التبديل إلى علامة تبويب المحادثة والدخول إلى دردشة عشوائية",
-    "title": "التبديل إلى المحادثة الافتراضية"
-  },
-  "openChatSettings": {
-    "desc": "عرض وتعديل إعدادات المحادثة الحالية",
-    "title": "فتح إعدادات المحادثة"
-  },
-  "openHotkeyHelper": {
-    "desc": "عرض جميع تعليمات استخدام الاختصارات",
-    "title": "فتح مساعدة الاختصارات"
-  },
-  "regenerateMessage": {
-    "desc": "إعادة توليد آخر رسالة",
-    "title": "إعادة توليد الرسالة"
-  },
-  "saveTopic": {
-    "desc": "حفظ الموضوع الحالي وفتح موضوع جديد",
-    "title": "فتح موضوع جديد"
-  },
-  "search": {
-    "desc": "استدعاء مربع البحث الرئيسي في الصفحة الحالية",
-    "title": "بحث"
-  },
-  "showApp": {
-    "desc": "استدعاء نافذة التطبيق الرئيسية بسرعة",
-    "title": "عرض النافذة الرئيسية"
-  },
-  "switchAgent": {
-    "desc": "تبديل المساعد المثبت في الشريط الجانبي عن طريق الضغط على Ctrl مع الأرقام من 0 إلى 9",
-    "title": "تبديل المساعد بسرعة"
-  },
-  "toggleLeftPanel": {
-    "desc": "عرض أو إخفاء لوحة المساعد على اليسار",
-    "title": "عرض/إخفاء لوحة المساعد"
-  },
-  "toggleRightPanel": {
-    "desc": "عرض أو إخفاء لوحة المواضيع على اليمين",
-    "title": "عرض/إخفاء لوحة الموضوع"
-  },
-  "toggleZenMode": {
-    "desc": "في وضع التركيز، عرض المحادثة الحالية فقط، وإخفاء واجهة المستخدم الأخرى",
-    "title": "تبديل وضع التركيز"
-  }
+  "addUserMessage.desc": "أضف الإدخال الحالي كرسالة مستخدم دون بدء التوليد",
+  "addUserMessage.title": "إضافة رسالة مستخدم",
+  "clearCurrentMessages.desc": "مسح الرسائل والملفات المرفوعة من المحادثة الحالية",
+  "clearCurrentMessages.title": "مسح رسائل المحادثة",
+  "commandPalette.desc": "افتح لوحة الأوامر العامة للوصول السريع إلى الميزات",
+  "commandPalette.title": "لوحة الأوامر",
+  "deleteAndRegenerateMessage.desc": "حذف الرسالة الأخيرة وإعادة توليدها",
+  "deleteAndRegenerateMessage.title": "حذف وإعادة توليد",
+  "deleteLastMessage.desc": "حذف الرسالة الأخيرة",
+  "deleteLastMessage.title": "حذف الرسالة الأخيرة",
+  "desktop.openSettings.desc": "افتح صفحة إعدادات التطبيق",
+  "desktop.openSettings.title": "إعدادات التطبيق",
+  "desktop.showApp.desc": "تبديل ظهور النافذة الرئيسية باستخدام اختصار عام",
+  "desktop.showApp.title": "إظهار/إخفاء النافذة الرئيسية",
+  "editMessage.desc": "ادخل وضع التعديل بالضغط على Alt والنقر المزدوج على الرسالة",
+  "editMessage.title": "تعديل الرسالة",
+  "navigateToChat.desc": "الانتقال إلى تبويب الدردشة والدخول إلى Lobe AI",
+  "navigateToChat.title": "الانتقال إلى الدردشة الافتراضية",
+  "openChatSettings.desc": "عرض وتعديل إعدادات المحادثة الحالية",
+  "openChatSettings.title": "فتح إعدادات المحادثة",
+  "openHotkeyHelper.desc": "عرض تعليمات جميع اختصارات لوحة المفاتيح",
+  "openHotkeyHelper.title": "فتح تعليمات الاختصارات",
+  "regenerateMessage.desc": "إعادة توليد الرسالة الأخيرة",
+  "regenerateMessage.title": "إعادة توليد الرسالة",
+  "saveDocument.desc": "حفظ جميع التغييرات على الصفحة الحالية فورًا",
+  "saveDocument.title": "حفظ الصفحة",
+  "saveTopic.desc": "حفظ الموضوع الحالي وفتح موضوع جديد",
+  "saveTopic.title": "بدء موضوع جديد",
+  "search.desc": "تفعيل مربع البحث الرئيسي في الصفحة الحالية",
+  "search.title": "بحث",
+  "showApp.desc": "فتح نافذة التطبيق الرئيسية بسرعة",
+  "showApp.title": "إظهار النافذة الرئيسية",
+  "switchAgent.desc": "التبديل بين الوكلاء المثبتين في الشريط الجانبي بالضغط على Ctrl مع الأرقام من 0 إلى 9",
+  "switchAgent.title": "تبديل سريع للوكلاء",
+  "toggleLeftPanel.desc": "إظهار أو إخفاء اللوحة اليسرى",
+  "toggleLeftPanel.title": "تبديل اللوحة اليسرى",
+  "toggleRightPanel.desc": "إظهار أو إخفاء اللوحة اليمنى",
+  "toggleRightPanel.title": "تبديل اللوحة اليمنى",
+  "toggleZenMode.desc": "في وضع التركيز، عرض المحادثة الحالية فقط وإخفاء عناصر الواجهة الأخرى",
+  "toggleZenMode.title": "تبديل وضع التركيز"
 }

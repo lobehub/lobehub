@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "Fügen Sie den aktuellen Eingabetext als Benutzernachricht hinzu, ohne die Generierung auszulösen",
-    "title": "Benutzernachricht hinzufügen"
-  },
-  "clearCurrentMessages": {
-    "desc": "Aktuelle Nachrichten und hochgeladene Dateien im Gespräch löschen",
-    "title": "Gesprächsnachrichten löschen"
-  },
-  "commandPalette": {
-    "desc": "Öffne die globale Befehlspalette für schnellen Zugriff auf Funktionen",
-    "title": "Befehlspalette"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "Letzte Nachricht löschen und neu generieren",
-    "title": "Löschen und neu generieren"
-  },
-  "deleteLastMessage": {
-    "desc": "Letzte Nachricht löschen",
-    "title": "Letzte Nachricht löschen"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "Öffnet die Anwendungseinstellungsseite",
-      "title": "Anwendungseinstellungen"
-    },
-    "showApp": {
-      "desc": "Globale Tastenkombination zum Anzeigen oder Verbergen des Hauptfensters",
-      "title": "Hauptfenster anzeigen/verbergen"
-    }
-  },
-  "editMessage": {
-    "desc": "Treten Sie in den Bearbeitungsmodus, indem Sie die Alt-Taste gedrückt halten und auf die Nachricht doppelklicken",
-    "title": "Nachricht bearbeiten"
-  },
-  "navigateToChat": {
-    "desc": "Zum Chat-Tab wechseln und einfach plaudern",
-    "title": "Zum Standard-Chat wechseln"
-  },
-  "openChatSettings": {
-    "desc": "Aktuelle Sitzungseinstellungen anzeigen und ändern",
-    "title": "Chat-Einstellungen öffnen"
-  },
-  "openHotkeyHelper": {
-    "desc": "Anleitung zur Verwendung aller Tastenkombinationen anzeigen",
-    "title": "Tastenkombinationshilfe öffnen"
-  },
-  "regenerateMessage": {
-    "desc": "Die letzte Nachricht neu generieren",
-    "title": "Nachricht neu generieren"
-  },
-  "saveTopic": {
-    "desc": "Das aktuelle Thema speichern und ein neues Thema öffnen",
-    "title": "Neues Thema beginnen"
-  },
-  "search": {
-    "desc": "Hauptsuchfeld der aktuellen Seite aufrufen",
-    "title": "Suche"
-  },
-  "showApp": {
-    "desc": "Schnelles Öffnen des Hauptfensters der Anwendung",
-    "title": "Hauptfenster anzeigen"
-  },
-  "switchAgent": {
-    "desc": "Wechseln Sie zwischen den im Seitenbereich fixierten Assistenten, indem Sie die Strg-Taste gedrückt halten und eine Zahl von 0 bis 9 drücken",
-    "title": "Schnell zwischen Assistenten wechseln"
-  },
-  "toggleLeftPanel": {
-    "desc": "Linkes Hilfepanel ein- oder ausblenden",
-    "title": "Assistentenpanel ein-/ausblenden"
-  },
-  "toggleRightPanel": {
-    "desc": "Rechtes Themenpanel ein- oder ausblenden",
-    "title": "Themenpanel ein-/ausblenden"
-  },
-  "toggleZenMode": {
-    "desc": "Im Fokusmodus nur die aktuelle Sitzung anzeigen, andere UI ausblenden",
-    "title": "Fokussierungsmodus umschalten"
-  }
+  "addUserMessage.desc": "Füge die aktuelle Eingabe als Benutzernachricht hinzu, ohne die Generierung auszulösen",
+  "addUserMessage.title": "Benutzernachricht hinzufügen",
+  "clearCurrentMessages.desc": "Lösche die Nachrichten und hochgeladenen Dateien aus dem aktuellen Gespräch",
+  "clearCurrentMessages.title": "Gesprächsnachrichten löschen",
+  "commandPalette.desc": "Öffne die globale Befehlspalette für schnellen Zugriff auf Funktionen",
+  "commandPalette.title": "Befehlspalette",
+  "deleteAndRegenerateMessage.desc": "Lösche die letzte Nachricht und generiere sie neu",
+  "deleteAndRegenerateMessage.title": "Löschen und neu generieren",
+  "deleteLastMessage.desc": "Lösche die letzte Nachricht",
+  "deleteLastMessage.title": "Letzte Nachricht löschen",
+  "desktop.openSettings.desc": "Öffne die Einstellungsseite der Anwendung",
+  "desktop.openSettings.title": "Anwendungseinstellungen",
+  "desktop.showApp.desc": "Schalte die Sichtbarkeit des Hauptfensters mit einer globalen Tastenkombination um",
+  "desktop.showApp.title": "Hauptfenster ein-/ausblenden",
+  "editMessage.desc": "Bearbeitungsmodus aktivieren, indem Sie Alt gedrückt halten und doppelt auf die Nachricht klicken",
+  "editMessage.title": "Nachricht bearbeiten",
+  "navigateToChat.desc": "Wechsle zum Chat-Tab und öffne Lobe AI",
+  "navigateToChat.title": "Zum Standard-Chat wechseln",
+  "openChatSettings.desc": "Einstellungen für das aktuelle Gespräch anzeigen und ändern",
+  "openChatSettings.title": "Chat-Einstellungen öffnen",
+  "openHotkeyHelper.desc": "Anleitung für alle Tastenkombinationen anzeigen",
+  "openHotkeyHelper.title": "Tastenkürzel-Hilfe öffnen",
+  "regenerateMessage.desc": "Letzte Nachricht neu generieren",
+  "regenerateMessage.title": "Nachricht neu generieren",
+  "saveDocument.desc": "Alle Änderungen auf der aktuellen Seite sofort speichern",
+  "saveDocument.title": "Seite speichern",
+  "saveTopic.desc": "Aktuelles Thema speichern und ein neues beginnen",
+  "saveTopic.title": "Neues Thema starten",
+  "search.desc": "Hauptsuchfeld auf der aktuellen Seite aktivieren",
+  "search.title": "Suche",
+  "showApp.desc": "Hauptfenster der Anwendung schnell öffnen",
+  "showApp.title": "Hauptfenster anzeigen",
+  "switchAgent.desc": "Zwischen angehefteten Agenten in der Seitenleiste wechseln, indem Sie Strg gedrückt halten und die Zahlen 0–9 drücken",
+  "switchAgent.title": "Schnellwechsel-Agent",
+  "toggleLeftPanel.desc": "Linkes Panel ein- oder ausblenden",
+  "toggleLeftPanel.title": "Linkes Panel umschalten",
+  "toggleRightPanel.desc": "Rechtes Panel ein- oder ausblenden",
+  "toggleRightPanel.title": "Rechtes Panel umschalten",
+  "toggleZenMode.desc": "Im Fokusmodus wird nur das aktuelle Gespräch angezeigt und andere UI-Elemente werden ausgeblendet",
+  "toggleZenMode.title": "Fokusmodus umschalten"
 }

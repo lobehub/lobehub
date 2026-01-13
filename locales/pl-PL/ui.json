@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Awatar",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Przeciążenie",
+    "tokenTag.remained": "Pozostało",
+    "tokenTag.used": "Użyto"
+  },
+  "common": {
+    "common.cancel": "Anuluj",
+    "common.confirm": "Potwierdź",
+    "common.delete": "Usuń",
+    "common.edit": "Edytuj"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Dodaj właściwości",
+    "editableMessage.delete": "Usuń",
+    "editableMessage.input": "Wejście",
+    "editableMessage.inputPlaceholder": "Wprowadź przykładową treść wejściową",
+    "editableMessage.output": "Wyjście",
+    "editableMessage.outputPlaceholder": "Wprowadź przykładową treść wyjściową",
+    "editableMessage.system": "System"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Usuń",
+    "emojiPicker.draggerDesc": "Kliknij lub przeciągnij obraz tutaj, aby go przesłać",
+    "emojiPicker.emoji": "Emoji",
+    "emojiPicker.fileTypeError": "Można przesyłać tylko pliki graficzne!",
+    "emojiPicker.upload": "Prześlij",
+    "emojiPicker.uploadBtn": "Przytnij i prześlij"
+  },
+  "form": {
+    "form.reset": "Resetuj",
+    "form.submit": "Zatwierdź",
+    "form.unsavedChanges": "Niezapisane zmiany",
+    "form.unsavedWarning": "Masz niezapisane zmiany. Czy na pewno chcesz opuścić stronę?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Ten skrót klawiszowy koliduje z istniejącym.",
+    "hotkey.invalidCombination": "Skrót musi zawierać klawisz modyfikujący (Ctrl, Alt, Shift) i tylko jeden zwykły klawisz.",
+    "hotkey.placeholder": "Naciśnij klawisze, aby nagrać skrót",
+    "hotkey.reset": "Przywróć domyślne"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Anuluj",
+    "messageModal.confirm": "Potwierdź",
+    "messageModal.edit": "Edytuj"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Zwiń pasek boczny",
+    "sideNav.demoActiveLabel": "Aktywny",
+    "sideNav.demoFeatureAutoCollapseDesc": "Przeciągnij poniżej progu, aby inteligentnie zwinąć",
+    "sideNav.demoFeatureAutoCollapseTitle": "Automatyczne zwijanie",
+    "sideNav.demoFeaturePerformanceDesc": "Brak animacji dla lepszej wydajności",
+    "sideNav.demoFeaturePerformanceTitle": "Wydajność",
+    "sideNav.demoFeatureResizeDesc": "Przeciągnij, aby dostosować szerokość panelu",
+    "sideNav.demoFeatureResizeTitle": "Elastyczne skalowanie",
+    "sideNav.demoFeatureSmartHandleDesc": "Najedź, aby pokazać przycisk przełączania",
+    "sideNav.demoFeatureSmartHandleTitle": "Inteligentny uchwyt",
+    "sideNav.demoFeaturesTitle": "Funkcje",
+    "sideNav.demoHint": "Spróbuj przeciągnąć krawędź panelu i użyć przycisku przełączania ->",
+    "sideNav.demoSubtitle": "Panel boczny w stylu przestrzeni roboczej z możliwością zmiany rozmiaru przez przeciąganie",
+    "sideNav.demoTitle": "Demo DraggableSideNav",
+    "sideNav.expand": "Rozwiń pasek boczny"
+  }
+}

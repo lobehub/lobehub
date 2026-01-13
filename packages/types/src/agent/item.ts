@@ -7,50 +7,60 @@ import { LobeAgentChatConfig } from './chatConfig';
 import { LobeAgentTTSConfig } from './tts';
 
 export interface LobeAgentConfig {
+  avatar?: string;
+
   chatConfig: LobeAgentChatConfig;
+
+  /**
+   * Editor content (JSON format)
+   * Used to save the complete state of the rich text editor, including special nodes like mention
+   */
+  editorData?: any;
+  enableAgentMode?: boolean;
   fewShots?: FewShots;
   files?: FileItem[];
   id?: string;
+
   /**
    * knowledge bases
    */
   knowledgeBases?: KnowledgeBaseItem[];
   /**
-   * 角色所使用的语言模型
+   * Language model used by the agent
    * @default gpt-4o-mini
    */
   model: string;
 
   /**
-   * 开场白
+   * Opening message
    */
   openingMessage?: string;
   /**
-   * 开场问题
+   * Opening questions
    */
   openingQuestions?: string[];
 
   /**
-   * 语言模型参数
+   * Language model parameters
    */
   params: LLMParams;
   /**
-   * 启用的插件
+   * Enabled plugins
    */
   plugins?: string[];
 
   /**
-   *  模型供应商
+   *  Model provider
    */
   provider?: string;
 
   /**
-   * 系统角色
+   * System role
    */
   systemRole: string;
 
   /**
-   * 语音服务
+   * Text-to-speech service
    */
   tts: LobeAgentTTSConfig;
 
@@ -72,14 +82,19 @@ export interface AgentItem {
   clientId?: string | null;
   createdAt: Date;
   description?: string | null;
+  editorData?: any | null;
   fewShots?: any | null;
   id: string;
+  /** Market agent identifier for published agents */
+  marketIdentifier?: string | null;
   model?: string | null;
   openingMessage?: string | null;
   openingQuestions?: string[];
   params?: any;
   plugins?: string[];
   provider?: string | null;
+  /** Session group ID for direct grouping */
+  sessionGroupId?: string | null;
   slug?: string | null;
   systemRole?: string | null;
   tags?: string[];

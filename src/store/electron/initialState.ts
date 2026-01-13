@@ -1,8 +1,13 @@
 import {
-  DataSyncConfig,
-  ElectronAppState,
-  NetworkProxySettings,
+  type DataSyncConfig,
+  type ElectronAppState,
+  type NetworkProxySettings,
 } from '@lobechat/electron-client-ipc';
+
+import {
+  type NavigationHistoryState,
+  navigationHistoryInitialState,
+} from './actions/navigationHistory';
 
 export type RemoteServerError = 'CONFIG_ERROR' | 'AUTH_ERROR' | 'DISCONNECT_ERROR';
 
@@ -15,7 +20,7 @@ export const defaultProxySettings: NetworkProxySettings = {
   proxyType: 'http',
 };
 
-export interface ElectronState {
+export interface ElectronState extends NavigationHistoryState {
   appState: ElectronAppState;
   dataSyncConfig: DataSyncConfig;
   desktopHotkeys: Record<string, string>;
@@ -29,8 +34,9 @@ export interface ElectronState {
 }
 
 export const initialState: ElectronState = {
+  ...navigationHistoryInitialState,
   appState: {},
-  dataSyncConfig: { storageMode: 'local' },
+  dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},
   isAppStateInit: false,
   isConnectingServer: false,

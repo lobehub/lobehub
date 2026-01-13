@@ -3,14 +3,14 @@ import { PackagePlus } from 'lucide-react';
 import { forwardRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useStore } from '@/features/AgentSetting/store';
 import DevModal from '@/features/PluginDevModal';
+import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 
 const AddPluginButton = forwardRef<HTMLButtonElement>((props, ref) => {
   const { t } = useTranslation('setting');
   const [showModal, setModal] = useState(false);
-  const [toggleAgentPlugin] = useStore((s) => [s.toggleAgentPlugin]);
+  const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
   const [installCustomPlugin, updateNewDevPlugin] = useToolStore((s) => [
     s.installCustomPlugin,
     s.updateNewCustomPlugin,

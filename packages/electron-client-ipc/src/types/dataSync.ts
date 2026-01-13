@@ -1,7 +1,6 @@
 export type StorageMode = 'local' | 'cloud' | 'selfHost';
 export enum StorageModeEnum {
   Cloud = 'cloud',
-  Local = 'local',
   SelfHost = 'selfHost',
 }
 

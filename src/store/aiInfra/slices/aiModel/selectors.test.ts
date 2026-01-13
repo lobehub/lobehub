@@ -62,6 +62,7 @@ describe('aiModelSelectors', () => {
     ],
     activeProviderModelList: [],
     aiProviderConfigUpdatingIds: [],
+    aiProviderDetailMap: {},
     aiProviderList: [],
     aiProviderLoadingIds: [],
     providerSearchKeyword: '',

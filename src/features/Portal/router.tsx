@@ -1,72 +1,69 @@
 'use client';
 
-import { memo } from 'react';
+import React, { Fragment, memo } from 'react';
+
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 import { Artifacts } from './Artifacts';
+import { Document } from './Document';
 import { FilePreview } from './FilePreview';
 import { GroupThread } from './GroupThread';
 import { HomeBody, HomeTitle } from './Home';
 import { MessageDetail } from './MessageDetail';
+import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
 import { Thread } from './Thread';
 import Header from './components/Header';
-import { PortalImpl } from './type';
+import { type PortalImpl } from './type';
 
-// Keep GroupThread before Thread so group DM threads take precedence when enabled
-const items: PortalImpl[] = [GroupThread, Thread, MessageDetail, Artifacts, Plugins, FilePreview];
+// View type to component mapping
+const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
+  [PortalViewType.Home]: {
+    Body: HomeBody,
+    Title: HomeTitle,
+  },
+  [PortalViewType.Artifact]: Artifacts,
+  [PortalViewType.Document]: Document,
+  [PortalViewType.Notebook]: Notebook,
+  [PortalViewType.FilePreview]: FilePreview,
+  [PortalViewType.MessageDetail]: MessageDetail,
+  [PortalViewType.ToolUI]: Plugins,
+  [PortalViewType.Thread]: Thread,
+  [PortalViewType.GroupThread]: GroupThread,
+};
 
-export const PortalTitle = memo(() => {
-  const enabledList: boolean[] = [];
+// Default Home component
+const HomeImpl: PortalImpl = {
+  Body: HomeBody,
+  Title: HomeTitle,
+};
 
-  for (const item of items) {
-    const enabled = item.useEnable();
-    enabledList.push(enabled);
-  }
+interface PortalContentProps {
+  renderBody?: (body: React.ReactNode) => React.ReactNode;
+}
 
-  for (const [i, element] of enabledList.entries()) {
-    const Title = items[i].Title;
-    if (element) {
-      return <Title />;
-    }
-  }
+/**
+ * Portal content with Wrapper support
+ * Uses the view stack to determine which component to render
+ */
+export const PortalContent = memo<PortalContentProps>(({ renderBody }) => {
+  const viewType = useChatStore(chatPortalSelectors.currentViewType);
+  const ViewImpl = viewType ? VIEW_COMPONENTS[viewType] : HomeImpl;
 
-  return <HomeTitle />;
+  const Wrapper = ViewImpl?.Wrapper || Fragment;
+  const CustomHeader = ViewImpl?.Header;
+  const Body = ViewImpl?.Body || HomeBody;
+  const Title = ViewImpl?.Title || HomeTitle;
+
+  const headerContent = CustomHeader ? <CustomHeader /> : <Header title={<Title />} />;
+  const bodyContent = <Body />;
+
+  return (
+    <Wrapper>
+      {headerContent}
+      {renderBody ? renderBody(bodyContent) : bodyContent}
+    </Wrapper>
+  );
 });
-
-export const PortalHeader = memo(() => {
-  const enabledList: boolean[] = [];
-
-  for (const item of items) {
-    const enabled = item.useEnable();
-    enabledList.push(enabled);
-  }
-
-  for (const [i, element] of enabledList.entries()) {
-    const Header = items[i].Header;
-    if (element && Header) {
-      return <Header />;
-    }
-  }
-
-  return <Header title={<PortalTitle />} />;
-});
-
-const PortalBody = memo(() => {
-  const enabledList: boolean[] = [];
-
-  for (const item of items) {
-    const enabled = item.useEnable();
-    enabledList.push(enabled);
-  }
-
-  for (const [i, element] of enabledList.entries()) {
-    const Body = items[i].Body;
-    if (element) {
-      return <Body />;
-    }
-  }
-
-  return <HomeBody />;
-});
-
-export default PortalBody;

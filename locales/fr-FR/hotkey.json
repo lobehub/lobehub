@@ -1,80 +1,42 @@
 {
-  "addUserMessage": {
-    "desc": "Ajouter le contenu actuel en tant que message utilisateur sans déclencher de génération",
-    "title": "Ajouter un message utilisateur"
-  },
-  "clearCurrentMessages": {
-    "desc": "Effacer les messages de la session actuelle et les fichiers téléchargés",
-    "title": "Effacer les messages de la session"
-  },
-  "commandPalette": {
-    "desc": "Ouvrez le panneau de commande global pour accéder rapidement aux fonctionnalités",
-    "title": "Panneau de commande"
-  },
-  "deleteAndRegenerateMessage": {
-    "desc": "Supprimer le dernier message et régénérer",
-    "title": "Supprimer et régénérer"
-  },
-  "deleteLastMessage": {
-    "desc": "Supprimer le dernier message",
-    "title": "Supprimer le dernier message"
-  },
-  "desktop": {
-    "openSettings": {
-      "desc": "Ouvrir la page des paramètres de l'application",
-      "title": "Paramètres de l'application"
-    },
-    "showApp": {
-      "desc": "Afficher ou masquer la fenêtre principale via un raccourci global",
-      "title": "Afficher/Masquer la fenêtre principale"
-    }
-  },
-  "editMessage": {
-    "desc": "Entrez en mode édition en maintenant la touche Alt enfoncée et en double-cliquant sur le message",
-    "title": "Éditer le message"
-  },
-  "navigateToChat": {
-    "desc": "Basculer vers l'onglet de conversation et commencer une discussion libre",
-    "title": "Passer à la conversation par défaut"
-  },
-  "openChatSettings": {
-    "desc": "Voir et modifier les paramètres de la conversation actuelle",
-    "title": "Ouvrir les paramètres de la conversation"
-  },
-  "openHotkeyHelper": {
-    "desc": "Voir les instructions d'utilisation de tous les raccourcis",
-    "title": "Ouvrir l'aide des raccourcis"
-  },
-  "regenerateMessage": {
-    "desc": "Régénérer le dernier message",
-    "title": "Régénérer le message"
-  },
-  "saveTopic": {
-    "desc": "Enregistrer le sujet actuel et ouvrir un nouveau sujet",
-    "title": "Ouvrir un nouveau sujet"
-  },
-  "search": {
-    "desc": "Faire apparaître la barre de recherche principale de la page actuelle",
-    "title": "Rechercher"
-  },
-  "showApp": {
-    "desc": "Ouvrir rapidement la fenêtre principale de l'application",
-    "title": "Afficher la fenêtre principale"
-  },
-  "switchAgent": {
-    "desc": "Changer d'assistant fixé dans la barre latérale en maintenant Ctrl et en appuyant sur un chiffre de 0 à 9",
-    "title": "Changer rapidement d'assistant"
-  },
-  "toggleLeftPanel": {
-    "desc": "Afficher ou masquer le panneau d'assistance à gauche",
-    "title": "Afficher/masquer le panneau de l'assistant"
-  },
-  "toggleRightPanel": {
-    "desc": "Afficher ou masquer le panneau de sujets à droite",
-    "title": "Afficher/masquer le panneau de sujet"
-  },
-  "toggleZenMode": {
-    "desc": "En mode concentration, n'afficher que la conversation actuelle, masquer les autres interfaces",
-    "title": "Basculer en mode concentration"
-  }
+  "addUserMessage.desc": "Ajouter l'entrée actuelle comme message utilisateur sans déclencher la génération",
+  "addUserMessage.title": "Ajouter un message utilisateur",
+  "clearCurrentMessages.desc": "Effacer les messages et les fichiers téléchargés de la conversation en cours",
+  "clearCurrentMessages.title": "Effacer les messages de la conversation",
+  "commandPalette.desc": "Ouvrir la palette de commandes globale pour un accès rapide aux fonctionnalités",
+  "commandPalette.title": "Palette de commandes",
+  "deleteAndRegenerateMessage.desc": "Supprimer le dernier message et le régénérer",
+  "deleteAndRegenerateMessage.title": "Supprimer et régénérer",
+  "deleteLastMessage.desc": "Supprimer le dernier message",
+  "deleteLastMessage.title": "Supprimer le dernier message",
+  "desktop.openSettings.desc": "Ouvrir la page des paramètres de l'application",
+  "desktop.openSettings.title": "Paramètres de l'application",
+  "desktop.showApp.desc": "Afficher ou masquer la fenêtre principale avec un raccourci global",
+  "desktop.showApp.title": "Afficher/Masquer la fenêtre principale",
+  "editMessage.desc": "Entrer en mode édition en maintenant Alt et en double-cliquant sur le message",
+  "editMessage.title": "Modifier le message",
+  "navigateToChat.desc": "Passer à l'onglet Chat et entrer dans Lobe AI",
+  "navigateToChat.title": "Passer au chat par défaut",
+  "openChatSettings.desc": "Afficher et modifier les paramètres de la conversation en cours",
+  "openChatSettings.title": "Ouvrir les paramètres du chat",
+  "openHotkeyHelper.desc": "Afficher les instructions pour tous les raccourcis clavier",
+  "openHotkeyHelper.title": "Aide des raccourcis clavier",
+  "regenerateMessage.desc": "Régénérer le dernier message",
+  "regenerateMessage.title": "Régénérer le message",
+  "saveDocument.desc": "Enregistrer immédiatement toutes les modifications de la page en cours",
+  "saveDocument.title": "Enregistrer la page",
+  "saveTopic.desc": "Enregistrer le sujet actuel et en ouvrir un nouveau",
+  "saveTopic.title": "Commencer un nouveau sujet",
+  "search.desc": "Activer la barre de recherche principale sur la page en cours",
+  "search.title": "Rechercher",
+  "showApp.desc": "Ouvrir rapidement la fenêtre principale de l'application",
+  "showApp.title": "Afficher la fenêtre principale",
+  "switchAgent.desc": "Basculer entre les agents épinglés dans la barre latérale en maintenant Ctrl et en appuyant sur les chiffres 0 à 9",
+  "switchAgent.title": "Changer rapidement d'agent",
+  "toggleLeftPanel.desc": "Afficher ou masquer le panneau de gauche",
+  "toggleLeftPanel.title": "Afficher/Masquer le panneau gauche",
+  "toggleRightPanel.desc": "Afficher ou masquer le panneau de droite",
+  "toggleRightPanel.title": "Afficher/Masquer le panneau droit",
+  "toggleZenMode.desc": "En mode concentration, n'afficher que la conversation en cours et masquer les autres éléments de l'interface",
+  "toggleZenMode.title": "Activer/Désactiver le mode concentration"
 }

@@ -1,12 +1,10 @@
 /* eslint-disable no-undef */
-import { Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
-import { darken, lighten } from 'polished';
 import { memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Center, Flexbox } from 'react-layout-kit';
 
 import { getContainer, useDragUpload } from './useDragUpload';
 
@@ -18,7 +16,7 @@ const useStyles = createStyles(({ css, token }) => {
     container: css`
       width: 320px;
       height: 200px;
-      padding: ${token.borderRadiusLG + 4}px;
+      padding: calc(${token.borderRadiusLG}px + 4px);
       border-radius: 16px;
 
       background: ${token.geekblue};
@@ -37,11 +35,23 @@ const useStyles = createStyles(({ css, token }) => {
     `,
     icon: css`
       border-radius: ${token.borderRadiusLG}px;
-      color: ${darken(0.05, token.geekblue)};
-      background: ${lighten(0.38, token.geekblue)};
+      color: color-mix(in srgb, ${token.geekblue} 95%, black);
+      background: color-mix(in srgb, ${token.geekblue} 38%, white);
     `,
     iconGroup: css`
       margin-block-start: -44px;
+    `,
+    iconLeft: css`
+      transform: rotateZ(-20deg) translateX(10px);
+      border-radius: ${token.borderRadiusLG}px;
+      color: color-mix(in srgb, ${token.geekblue} 95%, black);
+      background: color-mix(in srgb, ${token.geekblue} 68%, white);
+    `,
+    iconRight: css`
+      transform: rotateZ(20deg) translateX(-10px);
+      border-radius: ${token.borderRadiusLG}px;
+      color: color-mix(in srgb, ${token.geekblue} 95%, black);
+      background: color-mix(in srgb, ${token.geekblue} 68%, white);
     `,
     title: css`
       font-size: 20px;
@@ -69,8 +79,8 @@ interface DragUploadProps {
 }
 
 const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }) => {
-  const { styles, theme } = useStyles();
   const { t } = useTranslation('components');
+  const { styles } = useStyles();
 
   const isDragging = useDragUpload(onUploadFiles);
 
@@ -81,15 +91,7 @@ const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }
       <div className={styles.container}>
         <Center className={styles.content} gap={12}>
           <Flexbox className={styles.iconGroup} horizontal>
-            <Center
-              className={styles.icon}
-              height={BLOCK_SIZE * 1.25}
-              style={{
-                background: lighten(0.32, theme.geekblue),
-                transform: 'rotateZ(-20deg) translateX(10px)',
-              }}
-              width={BLOCK_SIZE}
-            >
+            <Center className={styles.iconLeft} height={BLOCK_SIZE * 1.25} width={BLOCK_SIZE}>
               <Icon icon={FileImage} size={ICON_SIZE} />
             </Center>
             <Center
@@ -103,15 +105,7 @@ const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }
             >
               <Icon icon={FileUpIcon} size={ICON_SIZE} />
             </Center>
-            <Center
-              className={styles.icon}
-              height={BLOCK_SIZE * 1.25}
-              style={{
-                background: lighten(0.32, theme.geekblue),
-                transform: 'rotateZ(20deg) translateX(-10px)',
-              }}
-              width={BLOCK_SIZE}
-            >
+            <Center className={styles.iconRight} height={BLOCK_SIZE * 1.25} width={BLOCK_SIZE}>
               <Icon icon={FileText} size={ICON_SIZE} />
             </Center>
           </Flexbox>

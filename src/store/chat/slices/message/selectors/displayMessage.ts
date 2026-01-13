@@ -1,13 +1,8 @@
-import { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
+import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
 
-import { DEFAULT_USER_AVATAR } from '@/const/meta';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { useAgentStore } from '@/store/agent';
 import { agentChatConfigSelectors } from '@/store/agent/selectors';
-import { useSessionStore } from '@/store/session';
-import { sessionMetaSelectors } from '@/store/session/selectors';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 import { chatHelpers } from '../../../helpers';
 import type { ChatStoreState } from '../../../initialState';
@@ -20,39 +15,10 @@ import { messageMapKey } from '../../../utils/messageMapKey';
  * Use these selectors when you need to:
  * - Render messages in UI components
  * - Display assistantGroup messages with children
- * - Show messages with proper meta information
  * - Present message history with filters
  *
  * DO NOT use these for data mutations - use dbMessage.ts selectors instead.
  */
-
-// ============= Meta Information ========== //
-
-const getMeta = (message: UIChatMessage) => {
-  switch (message.role) {
-    case 'user': {
-      return {
-        avatar: userProfileSelectors.userAvatar(useUserStore.getState()) || DEFAULT_USER_AVATAR,
-      };
-    }
-
-    case 'system': {
-      return message.meta;
-    }
-
-    default: {
-      // For group chat, get meta from agent session
-      if (message.groupId && message.agentId) {
-        return sessionMetaSelectors.getAgentMetaByAgentId(message.agentId)(
-          useSessionStore.getState(),
-        );
-      }
-
-      // Otherwise, use the current session's agent meta for single agent chat
-      return sessionMetaSelectors.currentAgentMeta(useSessionStore.getState());
-    }
-  }
-};
 
 // ============= Basic Display Message Access ========== //
 
@@ -60,23 +26,22 @@ const getMeta = (message: UIChatMessage) => {
  * Get the current chat key for accessing messagesMap
  */
 export const currentDisplayChatKey = (s: ChatStoreState) =>
-  messageMapKey(s.activeId, s.activeTopicId);
+  messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
 
 /**
- * Get display messages by key (with meta information)
+ * Get display messages by key
  */
 const getDisplayMessagesByKey =
   (key: string) =>
   (s: ChatStoreState): UIChatMessage[] => {
-    const messages = s.messagesMap[key] || [];
-    return messages.map((i) => ({ ...i, meta: getMeta(i) }));
+    return s.messagesMap[key] || [];
   };
 
 /**
- * Get current active session's display messages (includes assistantGroup messages)
+ * Get current active agent's display messages (includes assistantGroup messages)
  */
 const activeDisplayMessages = (s: ChatStoreState): UIChatMessage[] => {
-  if (!s.activeId) return [];
+  if (!s.activeAgentId) return [];
   return getDisplayMessagesByKey(currentDisplayChatKey(s))(s);
 };
 
@@ -177,7 +142,7 @@ const isCurrentDisplayChatLoaded = (s: ChatStoreState) => !!s.messagesMap[curren
  * Show inbox welcome screen
  */
 const showInboxWelcome = (s: ChatStoreState): boolean => {
-  const isInbox = s.activeId === INBOX_SESSION_ID;
+  const isInbox = s.activeAgentId === INBOX_SESSION_ID;
   if (!isInbox) return false;
 
   const data = activeDisplayMessages(s);
@@ -306,16 +271,6 @@ const findLastMessageId = (id: string) => (s: ChatStoreState) => {
   return findLastMessageIdRecursive(message);
 };
 
-// ============= Supervisor Selectors ========== //
-
-const isSupervisorLoading = (groupId: string) => (s: ChatStoreState) =>
-  s.supervisorDecisionLoading.includes(groupId);
-
-const getSupervisorTodos = (groupId?: string, topicId?: string | null) => (s: ChatStoreState) => {
-  if (!groupId) return [];
-  return s.supervisorTodos[messageMapKey(groupId, topicId)] || [];
-};
-
 // ============= Inbox Selectors ========== //
 
 /**
@@ -323,7 +278,7 @@ const getSupervisorTodos = (groupId?: string, topicId?: string | null) => (s: Ch
  */
 const inboxActiveTopicDisplayMessages = (state: ChatStoreState) => {
   const activeTopicId = state.activeTopicId;
-  const key = messageMapKey(INBOX_SESSION_ID, activeTopicId);
+  const key = messageMapKey({ agentId: INBOX_SESSION_ID, topicId: activeTopicId });
   return state.messagesMap[key] || [];
 };
 
@@ -335,12 +290,10 @@ export const displayMessageSelectors = {
   getDisplayMessageById,
   getDisplayMessagesByKey,
   getGroupLatestMessageWithoutTools,
-  getSupervisorTodos,
   getThreadMessageIDs,
   getThreadMessages,
   inboxActiveTopicDisplayMessages,
   isCurrentDisplayChatLoaded,
-  isSupervisorLoading,
   lastDisplayMessageId,
   mainAIChats,
   mainAIChatsMessageString,

@@ -1,7 +1,7 @@
 'use client';
 
 import { EditorProvider } from '@lobehub/editor/react';
-import { PropsWithChildren, memo, useMemo } from 'react';
+import { type PropsWithChildren, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const Editor = memo<PropsWithChildren>(({ children }) => {

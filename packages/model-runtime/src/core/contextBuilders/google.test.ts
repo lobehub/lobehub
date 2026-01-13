@@ -1028,6 +1028,90 @@ describe('google contextBuilders', () => {
 
       expect(result.parameters?.description).toBe('Test parameters');
     });
+
+    it('should convert const to enum for Google compatibility', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with const values',
+          name: 'constTool',
+          parameters: {
+            properties: {
+              action: { const: 'insert', type: 'string' },
+              nested: {
+                properties: {
+                  operation: { const: 'create', type: 'string' },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // const should be converted to enum with single value
+      expect(result.parameters?.properties).toEqual({
+        action: { enum: ['insert'], type: 'string' },
+        nested: {
+          properties: {
+            operation: { enum: ['create'], type: 'string' },
+          },
+          type: 'object',
+        },
+      });
+    });
+
+    it('should handle oneOf with const values (like page-agent modifyNodes)', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'Modify nodes operation',
+          name: 'modifyNodes',
+          parameters: {
+            properties: {
+              operations: {
+                items: {
+                  oneOf: [
+                    {
+                      properties: {
+                        action: { const: 'insert', type: 'string' },
+                        beforeId: { type: 'string' },
+                      },
+                      type: 'object',
+                    },
+                    {
+                      properties: {
+                        action: { const: 'modify', type: 'string' },
+                        content: { type: 'string' },
+                      },
+                      type: 'object',
+                    },
+                  ],
+                },
+                type: 'array',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // All const values in nested oneOf should be converted to enum
+      const operations = result.parameters?.properties?.operations as any;
+      expect(operations.items.oneOf[0].properties.action).toEqual({
+        enum: ['insert'],
+        type: 'string',
+      });
+      expect(operations.items.oneOf[1].properties.action).toEqual({
+        enum: ['modify'],
+        type: 'string',
+      });
+    });
   });
 
   describe('buildGoogleTools', () => {

@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "جمع کردن",
-      "on": "باز کردن"
-    },
-    "typobar": {
-      "off": "مخفی کردن نوار ابزار قالب‌بندی",
-      "on": "نمایش نوار ابزار قالب‌بندی"
-    }
-  },
+  "actions.expand.off": "جمع کردن",
+  "actions.expand.on": "باز کردن",
+  "actions.typobar.off": "پنهان کردن نوار ابزار قالب‌بندی",
+  "actions.typobar.on": "نمایش نوار ابزار قالب‌بندی",
+  "autoSave.latest": "آخرین نسخه بارگذاری شد",
+  "autoSave.saved": "ذخیره شد",
+  "autoSave.saving": "در حال ذخیره‌سازی خودکار...",
   "cancel": "لغو",
+  "codemirror.copyFailed": "کپی ناموفق بود",
+  "codemirror.copySuccess": "کد در کلیپ‌بورد کپی شد",
+  "codemirror.selectLanguage": "انتخاب زبان",
+  "codemirror.selectTheme": "انتخاب پوسته",
+  "codemirror.showLineNumbers": "نمایش شماره خطوط",
+  "codemirror.tabSize": "اندازه تب",
+  "codemirror.theme": "پوسته",
+  "codemirror.useTabs": "استفاده از تب‌ها",
   "confirm": "تأیید",
-  "file": {
-    "error": "خطا: {{message}}",
-    "uploading": "در حال بارگذاری فایل..."
-  },
-  "image": {
-    "broken": "تصویر خراب است"
-  },
-  "link": {
-    "edit": "ویرایش پیوند",
-    "open": "باز کردن پیوند",
-    "placeholder": "آدرس URL پیوند را وارد کنید",
-    "unlink": "حذف پیوند"
-  },
-  "math": {
-    "placeholder": "لطفاً فرمول TeX را وارد کنید"
-  },
-  "slash": {
-    "h1": "عنوان سطح یک",
-    "h2": "عنوان سطح دو",
-    "h3": "عنوان سطح سه",
-    "hr": "خط جداکننده",
-    "table": "جدول",
-    "tex": "فرمول TeX"
-  },
-  "table": {
-    "delete": "حذف جدول",
-    "deleteColumn": "حذف ستون",
-    "deleteRow": "حذف ردیف",
-    "insertColumnLeft": "درج {{count}} ستون در سمت چپ",
-    "insertColumnRight": "درج {{count}} ستون در سمت راست",
-    "insertRowAbove": "درج {{count}} ردیف در بالا",
-    "insertRowBelow": "درج {{count}} ردیف در پایین"
-  },
-  "typobar": {
-    "blockquote": "نقل قول",
-    "bold": "پررنگ",
-    "bulletList": "فهرست نشانه‌دار",
-    "code": "کد درون‌خطی",
-    "codeblock": "بلوک کد",
-    "italic": "ایتالیک",
-    "link": "پیوند",
-    "numberList": "فهرست شماره‌دار",
-    "strikethrough": "خط خورده",
-    "table": "جدول",
-    "taskList": "فهرست وظایف",
-    "tex": "فرمول TeX",
-    "underline": "زیرخط"
-  }
+  "file.error": "خطا: {{message}}",
+  "file.uploading": "در حال بارگذاری فایل...",
+  "image.broken": "تصویر خراب است",
+  "link.edit": "ویرایش لینک",
+  "link.editLinkTitle": "لینک",
+  "link.editTextTitle": "عنوان",
+  "link.open": "باز کردن لینک",
+  "link.placeholder": "آدرس لینک را وارد کنید",
+  "link.unlink": "حذف لینک",
+  "markdown.cancel": "لغو",
+  "markdown.confirm": "تبدیل",
+  "markdown.parseMessage": "تبدیل به فرمت Markdown. محتوای فعلی بازنویسی خواهد شد. آیا مطمئن هستید؟ (به‌صورت خودکار در ۵ ثانیه بسته می‌شود)",
+  "markdown.parseTitle": "قالب‌بندی به Markdown",
+  "math.placeholder": "لطفاً فرمول TeX را وارد کنید",
+  "modifier.accept": "نگه‌داشتن",
+  "modifier.acceptAll": "نگه‌داشتن همه",
+  "modifier.reject": "بازگرداندن",
+  "modifier.rejectAll": "بازگرداندن همه",
+  "slash.h1": "سرفصل ۱",
+  "slash.h2": "سرفصل ۲",
+  "slash.h3": "سرفصل ۳",
+  "slash.hr": "خط جداکننده",
+  "slash.table": "جدول",
+  "slash.tex": "فرمول TeX",
+  "table.delete": "حذف جدول",
+  "table.deleteColumn": "حذف ستون",
+  "table.deleteRow": "حذف ردیف",
+  "table.insertColumnLeft": "درج {{count}} ستون در سمت چپ",
+  "table.insertColumnRight": "درج {{count}} ستون در سمت راست",
+  "table.insertRowAbove": "درج {{count}} ردیف در بالا",
+  "table.insertRowBelow": "درج {{count}} ردیف در پایین",
+  "typobar.blockquote": "نقل‌قول",
+  "typobar.bold": "درشت",
+  "typobar.bulletList": "لیست نشانه‌دار",
+  "typobar.code": "کد درون‌خطی",
+  "typobar.codeblock": "بلوک کد",
+  "typobar.image": "تصویر",
+  "typobar.italic": "مورب",
+  "typobar.link": "لینک",
+  "typobar.numberList": "لیست شماره‌دار",
+  "typobar.redo": "انجام دوباره",
+  "typobar.strikethrough": "خط خورده",
+  "typobar.table": "جدول",
+  "typobar.taskList": "لیست وظایف",
+  "typobar.tex": "فرمول TeX",
+  "typobar.underline": "زیرخط‌دار",
+  "typobar.undo": "واگرد"
 }

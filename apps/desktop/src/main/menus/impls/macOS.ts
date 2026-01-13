@@ -2,6 +2,8 @@ import { Menu, MenuItemConstructorOptions, app, shell } from 'electron';
 import * as path from 'node:path';
 
 import { isDev } from '@/const/env';
+import NotificationCtr from '@/controllers/NotificationCtr';
+import SystemController from '@/controllers/SystemCtr';
 
 import type { IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
@@ -57,7 +59,6 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   private getAppMenuTemplate(options?: MenuOptions): MenuItemConstructorOptions[] {
     const appName = app.getName();
     const showDev = isDev || options?.showDevItems;
-
     // 创建命名空间翻译函数
     const t = this.app.i18n.ns('menu');
 
@@ -69,8 +70,12 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: appName,
         submenu: [
           {
+            click: async () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('navigate', { path: '/settings/about' });
+            },
             label: t('macOS.about', { appName }),
-            role: 'about',
           },
           {
             click: () => {
@@ -83,8 +88,8 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             accelerator: 'Command+,',
             click: async () => {
               const mainWindow = this.app.browserManager.getMainWindow();
-              await mainWindow.loadUrl('/settings');
               mainWindow.show();
+              mainWindow.broadcast('navigate', { path: '/settings' });
             },
             label: t('macOS.preferences'),
           },
@@ -163,6 +168,39 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         ],
       },
       {
+        label: t('history.title'),
+        submenu: [
+          {
+            accelerator: 'Command+[',
+            acceleratorWorksWhenHidden: true,
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoBack');
+            },
+            label: t('history.back'),
+          },
+          {
+            accelerator: 'Command+]',
+            acceleratorWorksWhenHidden: true,
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('historyGoForward');
+            },
+            label: t('history.forward'),
+          },
+          { type: 'separator' },
+          {
+            accelerator: 'Shift+Command+H',
+            acceleratorWorksWhenHidden: true,
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.broadcast('navigate', { path: '/' });
+            },
+            label: t('history.home'),
+          },
+        ],
+      },
+      {
         label: t('window.title'),
         role: 'windowMenu',
       },
@@ -198,7 +236,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
                 // Optionally show an error dialog to the user
               });
             },
-            label: '打开日志目录',
+            label: t('help.openLogsDir'),
           },
           {
             click: () => {
@@ -209,7 +247,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
                 // Optionally show an error dialog to the user
               });
             },
-            label: '配置目录',
+            label: t('help.openConfigDir'),
           },
         ],
       },
@@ -233,13 +271,55 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           },
           { type: 'separator' },
           {
+            label: t('dev.permissions.title'),
+            submenu: [
+              {
+                click: () => {
+                  const notificationCtr = this.app.getController(NotificationCtr);
+                  void notificationCtr.requestNotificationPermission();
+                },
+                label: t('dev.permissions.notification.request'),
+              },
+              { type: 'separator' },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.requestAccessibilityAccess();
+                },
+                label: t('dev.permissions.accessibility.request'),
+              },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.requestMicrophoneAccess();
+                },
+                label: t('dev.permissions.microphone.request'),
+              },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.requestScreenAccess();
+                },
+                label: t('dev.permissions.screen.request'),
+              },
+              { type: 'separator' },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.promptFullDiskAccessIfNotGranted();
+                },
+                label: t('dev.permissions.fullDisk.request'),
+              },
+            ],
+          },
+          {
             click: () => {
               const userDataPath = app.getPath('userData');
               shell.openPath(userDataPath).catch((err) => {
                 console.error(`[Menu] Error opening path ${userDataPath}:`, err);
               });
             },
-            label: '用户配置目录',
+            label: t('dev.openUserDataDir'),
           },
           {
             click: () => {
@@ -251,35 +331,35 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
                 console.error(`[Menu] Error opening path ${updaterCachePath}:`, err);
               });
             },
-            label: '更新缓存目录',
+            label: t('dev.openUpdaterCacheDir'),
           },
           {
             click: () => {
               this.app.storeManager.openInEditor();
             },
-            label: '打开 Settings 配置文件',
+            label: t('dev.openSettingsFile'),
           },
           { type: 'separator' },
           {
-            label: '自动更新测试模拟',
+            label: t('dev.updaterSimulation'),
             submenu: [
               {
                 click: () => {
                   this.app.updaterManager.simulateUpdateAvailable();
                 },
-                label: '模拟启动后台自动下载更新（3s 下完）',
+                label: t('dev.simulateAutoDownload'),
               },
               {
                 click: () => {
                   this.app.updaterManager.simulateDownloadProgress();
                 },
-                label: '模拟下载进度',
+                label: t('dev.simulateDownloadProgress'),
               },
               {
                 click: () => {
                   this.app.updaterManager.simulateUpdateDownloaded();
                 },
-                label: '模拟下载完成',
+                label: t('dev.simulateDownloadComplete'),
               },
             ],
           },
@@ -341,8 +421,8 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         click: async () => {
           const mainWindow = this.app.browserManager.getMainWindow();
-          await mainWindow.loadUrl('/settings');
           mainWindow.show();
+          mainWindow.broadcast('navigate', { path: '/settings' });
         },
         label: t('file.preferences'),
       },

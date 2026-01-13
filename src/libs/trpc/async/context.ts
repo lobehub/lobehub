@@ -1,16 +1,14 @@
-import { LobeChatDatabase } from '@lobechat/database';
-import { ClientSecretPayload } from '@lobechat/types';
+import { type LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 
-import { LOBE_CHAT_AUTH_HEADER } from '@/const/auth';
+import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 const log = debug('lobe-async:context');
 
 export interface AsyncAuthContext {
-  jwtPayload: ClientSecretPayload;
-  secret: string;
+  authorizationToken?: string;
   serverDB?: LobeChatDatabase;
   userId?: string | null;
 }
@@ -20,12 +18,10 @@ export interface AsyncAuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createAsyncContextInner = async (params?: {
-  jwtPayload?: ClientSecretPayload;
-  secret?: string;
+  authorizationToken?: string;
   userId?: string | null;
 }): Promise<AsyncAuthContext> => ({
-  jwtPayload: params?.jwtPayload || {},
-  secret: params?.secret || '',
+  authorizationToken: params?.authorizationToken,
   userId: params?.userId,
 });
 
@@ -52,9 +48,6 @@ export const createAsyncRouteContext = async (request: NextRequest): Promise<Asy
     throw new Error('No LobeChat authorization header found');
   }
 
-  const secret = authorization?.split(' ')[1];
-  log('Secret extracted from authorization header: %s', !!secret);
-
   try {
     log('Initializing KeyVaultsGateKeeper');
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -63,15 +56,11 @@ export const createAsyncRouteContext = async (request: NextRequest): Promise<Asy
     const { plaintext } = await gateKeeper.decrypt(lobeChatAuthorization);
 
     log('Parsing decrypted authorization data');
-    const { userId, payload } = JSON.parse(plaintext);
+    const { userId } = JSON.parse(plaintext);
 
-    log(
-      'Successfully parsed authorization data - userId: %s, payload keys: %O',
-      userId,
-      Object.keys(payload || {}),
-    );
+    log('Successfully parsed authorization data - userId: %s', userId);
 
-    return createAsyncContextInner({ jwtPayload: payload, secret, userId });
+    return createAsyncContextInner({ authorizationToken: authorization, userId });
   } catch (error) {
     log('Error creating async route context: %O', error);
     throw error;

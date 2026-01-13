@@ -440,6 +440,17 @@ Solutions:
 
 - A straightforward troubleshooting method is to use the `curl` command in the LobeChat container terminal to access your authentication service at `https://auth.example.com/.well-known/openid-configuration`. If JSON format data is returned, it indicates your authentication service is functioning correctly.
 
+#### OAuth Token Exchange Failures with Reverse Proxy
+
+If OAuth authentication fails during the token exchange phase when using Docker behind a reverse proxy, this is typically caused by the default `MIDDLEWARE_REWRITE_THROUGH_LOCAL=1` setting which rewrites URLs to `127.0.0.1:3210`.
+
+**Solution**: Set `MIDDLEWARE_REWRITE_THROUGH_LOCAL=0` in your `.env` file and restart Docker containers:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
 ````markdown
 ## Extended Configuration
 

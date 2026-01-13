@@ -6,10 +6,10 @@ import type {
   UpdateAiProviderConfigParams,
 } from '@lobechat/types';
 import { and, asc, desc, eq } from 'drizzle-orm';
-import { isEmpty } from 'lodash-es';
+import { isEmpty } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
-import { DEFAULT_MODEL_PROVIDER_LIST } from '@/config/modelProviders';
 import { merge } from '@/utils/merge';
 
 import { AiProviderSelectItem, aiModels, aiProviders } from '../schemas';

@@ -1,31 +1,23 @@
 {
-  "about": {
-    "button": "Conferma",
-    "detail": "Un'app di chat basata su un grande modello linguistico",
-    "message": "{{appName}} {{appVersion}}",
-    "title": "Informazioni"
-  },
-  "confirm": {
-    "cancel": "Annulla",
-    "no": "No",
-    "title": "Conferma",
-    "yes": "Sì"
-  },
-  "error": {
-    "button": "Conferma",
-    "detail": "Si è verificato un errore durante l'operazione, riprovare più tardi",
-    "message": "Si è verificato un errore",
-    "title": "Errore"
-  },
-  "update": {
-    "downloadAndInstall": "Scarica e installa",
-    "downloadComplete": "Download completato",
-    "downloadCompleteMessage": "Il pacchetto di aggiornamento è stato scaricato, vuoi installarlo subito?",
-    "installLater": "Installa più tardi",
-    "installNow": "Installa ora",
-    "later": "Promemoria più tardi",
-    "newVersion": "Nuova versione disponibile",
-    "newVersionAvailable": "Nuova versione trovata: {{version}}",
-    "skipThisVersion": "Salta questa versione"
-  }
+  "about.button": "Conferma",
+  "about.detail": "Un'app di chat basata su un grande modello linguistico",
+  "about.message": "{{appName}} {{appVersion}}",
+  "about.title": "Informazioni",
+  "confirm.cancel": "Annulla",
+  "confirm.no": "No",
+  "confirm.title": "Conferma",
+  "confirm.yes": "Sì",
+  "error.button": "Conferma",
+  "error.detail": "Si è verificato un errore durante l'operazione, riprovare più tardi",
+  "error.message": "Si è verificato un errore",
+  "error.title": "Errore",
+  "update.downloadAndInstall": "Scarica e installa",
+  "update.downloadComplete": "Download completato",
+  "update.downloadCompleteMessage": "Il pacchetto di aggiornamento è stato scaricato, vuoi installarlo subito?",
+  "update.installLater": "Installa più tardi",
+  "update.installNow": "Installa ora",
+  "update.later": "Promemoria più tardi",
+  "update.newVersion": "Nuova versione disponibile",
+  "update.newVersionAvailable": "Nuova versione trovata: {{version}}",
+  "update.skipThisVersion": "Salta questa versione"
 }

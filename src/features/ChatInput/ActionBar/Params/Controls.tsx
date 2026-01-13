@@ -1,12 +1,12 @@
-import { Form, type FormItemProps, Tag } from '@lobehub/ui';
-import { Form as AntdForm, Checkbox } from 'antd';
-import { createStyles } from 'antd-style';
+import { Form, type FormItemProps, SliderWithInput, Tag } from '@lobehub/ui';
+import { Checkbox, Flexbox } from '@lobehub/ui';
+import { Form as AntdForm, Switch } from 'antd';
+import { createStaticStyles } from 'antd-style';
+import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
-import { debounce } from 'lodash-es';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flexbox } from 'react-layout-kit';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import {
@@ -16,8 +16,11 @@ import {
   TopP,
 } from '@/features/ModelParamsControl';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
+
+import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
 interface ControlsProps {
   setUpdating: (updating: boolean) => void;
@@ -38,14 +41,14 @@ type ParamDescKey =
   | 'settingModel.presencePenalty.desc'
   | 'settingModel.frequencyPenalty.desc';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   checkbox: css`
     .ant-checkbox-inner {
       border-radius: 4px;
     }
 
     &:hover .ant-checkbox-inner {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
   `,
   label: css`
@@ -77,9 +80,9 @@ const ParamControlWrapper = memo<ParamControlWrapperProps>(
         <Checkbox
           checked={checked}
           className={styles.checkbox}
-          onChange={(e) => {
+          onClick={(e) => {
             e.stopPropagation();
-            onToggle(e.target.checked);
+            onToggle(!checked);
           }}
         />
         <div style={{ flex: 1 }}>
@@ -142,12 +145,13 @@ const PARAM_CONFIG = {
 const Controls = memo<ControlsProps>(({ setUpdating }) => {
   const { t } = useTranslation('setting');
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const updateAgentConfig = useAgentStore((s) => s.updateAgentConfig);
-  const { styles } = useStyles();
+  const agentId = useAgentId();
+  const { updateAgentConfig } = useUpdateAgentConfig();
 
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+  const config = useAgentStore((s) => agentByIdSelectors.getAgentConfigById(agentId)(s), isEqual);
   const [form] = Form.useForm();
 
+  const enableMaxTokens = AntdForm.useWatch(['chatConfig', 'enableMaxTokens'], form);
   const { frequency_penalty, presence_penalty, temperature, top_p } = config.params ?? {};
 
   const lastValuesRef = useRef<Record<ParamKey, number | undefined>>({
@@ -272,6 +276,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
           disabled={!enabled}
           onToggle={(checked) => handleToggle(key, checked)}
           styles={styles}
+          value={form.getFieldValue(PARAM_NAME_MAP[key])}
         />
       ),
       label: (
@@ -285,6 +290,40 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     } satisfies FormItemProps;
   });
 
+  // MaxTokens items
+  const maxTokensItems: FormItemProps[] = [
+    {
+      children: <Switch />,
+      label: (
+        <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+          {t('settingModel.enableMaxTokens.title')}
+        </Flexbox>
+      ),
+      name: ['chatConfig', 'enableMaxTokens'],
+      tag: 'max_tokens',
+      valuePropName: 'checked',
+    },
+    ...(enableMaxTokens
+      ? [
+          {
+            children: (
+              <SliderWithInput max={32_000} min={0} step={100} unlimitedInput />
+            ),
+            label: (
+              <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+                {t('settingModel.maxTokens.title')}
+                <InfoTooltip title={t('settingModel.maxTokens.desc')} />
+              </Flexbox>
+            ),
+            name: ['params', 'max_tokens'],
+            tag: 'max_tokens',
+          } satisfies FormItemProps,
+        ]
+      : []),
+  ];
+
+  const allItems = [...baseItems, ...maxTokensItems];
+
   return (
     <Form
       form={form}
@@ -292,8 +331,8 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
       itemMinWidth={220}
       items={
         mobile
-          ? baseItems
-          : baseItems.map(({ tag, ...item }) => ({
+          ? allItems
+          : allItems.map(({ tag, ...item }) => ({
               ...item,
               desc: <Tag size={'small'}>{tag}</Tag>,
             }))

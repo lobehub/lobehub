@@ -1,24 +1,25 @@
 'use client';
 
 import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } from '@lobehub/ui';
-import { createStyles, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { PropsWithChildren, memo, useEffect, useState } from 'react';
+import { type PropsWithChildren, memo, useEffect, useState } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-export const useStyles = createStyles(({ css, token }) => ({
-  panel: css`
+export const styles = createStaticStyles(({ css }) => ({
+  content: css`
     height: 100%;
-    background: ${token.colorBgContainerSecondary};
+    background: ${cssVar.colorBgContainer};
+  `,
+  handle: css`
+    background: ${cssVar.colorBgContainer} !important;
   `,
 }));
 
 const ImageTopicPanel = memo<PropsWithChildren>(({ children }) => {
   const { md = true } = useResponsive();
-
-  const { styles } = useStyles();
   const [imageTopicPanelWidth, showImageTopicPanel, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.imageTopicPanelWidth(s),
     systemStatusSelectors.showImageTopicPanel(s),
@@ -51,7 +52,10 @@ const ImageTopicPanel = memo<PropsWithChildren>(({ children }) => {
 
   return (
     <DraggablePanel
-      className={styles.panel}
+      classNames={{
+        content: styles.content,
+        handle: styles.handle,
+      }}
       defaultSize={{ width: tmpWidth }}
       expand={showImageTopicPanel}
       maxWidth={320}

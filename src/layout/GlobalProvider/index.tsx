@@ -1,6 +1,11 @@
-import { ReactNode, Suspense } from 'react';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { ContextMenuHost, ModalHost, TooltipGroup } from '@lobehub/ui';
+import { LazyMotion, domMax } from 'motion/react';
+import { type ReactNode, Suspense } from 'react';
 
+import { ReferralProvider } from '@/business/client/ReferralProvider';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
+import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { getServerFeatureFlagsValue } from '@/config/featureFlags';
 import { appEnv } from '@/envs/app';
 import DevPanel from '@/features/DevPanel';
@@ -8,17 +13,16 @@ import { getServerGlobalConfig } from '@/server/globalConfig';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import { getAntdLocale } from '@/utils/locale';
 
-import AntdV5MonkeyPatch from './AntdV5MonkeyPatch';
 import AppTheme from './AppTheme';
-import CmdkLazy from './CmdkLazy';
+import { GroupWizardProvider } from './GroupWizardProvider';
 import ImportSettings from './ImportSettings';
 import Locale from './Locale';
+import NextThemeProvider from './NextThemeProvider';
 import QueryProvider from './Query';
 import StoreInitialization from './StoreInitialization';
 import StyleRegistry from './StyleRegistry';
 
 interface GlobalLayoutProps {
-  appearance: string;
   children: ReactNode;
   isMobile: boolean;
   locale: string;
@@ -32,7 +36,7 @@ const GlobalLayout = async ({
   neutralColor,
   primaryColor,
   locale: userLocale,
-  appearance,
+
   isMobile,
   variants,
 }: GlobalLayoutProps) => {
@@ -41,36 +45,47 @@ const GlobalLayout = async ({
   // get default feature flags to use with ssr
   const serverFeatureFlags = getServerFeatureFlagsValue();
   const serverConfig = await getServerGlobalConfig();
+
   return (
     <StyleRegistry>
       <Locale antdLocale={antdLocale} defaultLang={userLocale}>
-        <AppTheme
-          customFontFamily={appEnv.CUSTOM_FONT_FAMILY}
-          customFontURL={appEnv.CUSTOM_FONT_URL}
-          defaultAppearance={appearance}
-          defaultNeutralColor={neutralColor as any}
-          defaultPrimaryColor={primaryColor as any}
-          globalCDN={appEnv.CDN_USE_GLOBAL}
-        >
-          <ServerConfigStoreProvider
-            featureFlags={serverFeatureFlags}
-            isMobile={isMobile}
-            segmentVariants={variants}
-            serverConfig={serverConfig}
+        <NextThemeProvider>
+          <AppTheme
+            customFontFamily={appEnv.CUSTOM_FONT_FAMILY}
+            customFontURL={appEnv.CUSTOM_FONT_URL}
+            defaultNeutralColor={neutralColor as any}
+            defaultPrimaryColor={primaryColor as any}
+            globalCDN={appEnv.CDN_USE_GLOBAL}
           >
-            <QueryProvider>
-              <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
-            </QueryProvider>
-            <StoreInitialization />
-            <Suspense>
-              <ImportSettings />
-              {process.env.NODE_ENV === 'development' && <DevPanel />}
-            </Suspense>
-            <CmdkLazy />
-          </ServerConfigStoreProvider>
-        </AppTheme>
+            <ServerConfigStoreProvider
+              featureFlags={serverFeatureFlags}
+              isMobile={isMobile}
+              segmentVariants={variants}
+              serverConfig={serverConfig}
+            >
+              <QueryProvider>
+                <GroupWizardProvider>
+                  <DragUploadProvider>
+                    <LazyMotion features={domMax}>
+                      <TooltipGroup layoutAnimation={false}>
+                        <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                      </TooltipGroup>
+                      <ModalHost />
+                      <ContextMenuHost />
+                    </LazyMotion>
+                  </DragUploadProvider>
+                </GroupWizardProvider>
+              </QueryProvider>
+              <StoreInitialization />
+              <Suspense>
+                {ENABLE_BUSINESS_FEATURES ? <ReferralProvider /> : null}
+                <ImportSettings />
+                {process.env.NODE_ENV === 'development' && <DevPanel />}
+              </Suspense>
+            </ServerConfigStoreProvider>
+          </AppTheme>
+        </NextThemeProvider>
       </Locale>
-      <AntdV5MonkeyPatch />
     </StyleRegistry>
   );
 };

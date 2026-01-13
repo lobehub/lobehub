@@ -1,22 +1,25 @@
-import { useChatGroupStore } from '@/store/chatGroup';
-import { useSessionStore } from '@/store/session';
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 export const useInitGroupConfig = () => {
-  const [useFetchGroupDetail] = useChatGroupStore((s) => [s.useFetchGroupDetail]);
+  const [useFetchGroupDetail, activeGroupId] = useAgentGroupStore((s) => [
+    s.useFetchGroupDetail,
+    s.activeGroupId,
+  ]);
 
   const isLogin = useUserStore(authSelectors.isLogin);
 
-  const [sessionId] = useSessionStore((s) => [s.activeId]);
-
-  // Only fetch group detail if we have a valid session ID and user is logged in
-  const shouldFetch = Boolean(isLogin && sessionId && sessionId !== 'inbox');
-  const data = useFetchGroupDetail(shouldFetch, sessionId || '');
+  // Only fetch group detail if we have a valid group ID and user is logged in
+  const shouldFetch = Boolean(isLogin && activeGroupId);
+  const { isValidating, data, ...rest } = useFetchGroupDetail(shouldFetch, activeGroupId || '');
 
   return {
-    ...data,
-    error: data.error || (!shouldFetch ? undefined : data.error),
-    isLoading: (data.isLoading && isLogin) || !shouldFetch,
+    ...rest,
+    data,
+    error: rest.error || (!shouldFetch ? undefined : rest.error),
+    isLoading: (rest.isLoading && isLogin) || !shouldFetch,
+    // isRevalidating: 有缓存数据，后台正在更新
+    isRevalidating: isValidating && !!data,
   };
 };

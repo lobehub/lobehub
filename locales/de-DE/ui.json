@@ -1,0 +1,66 @@
+{
+  "chat": {
+    "chat.avatar": "Avatar",
+    "chat.placeholder": "...",
+    "tokenTag.overload": "Überlastung",
+    "tokenTag.remained": "Verbleibend",
+    "tokenTag.used": "Verbraucht"
+  },
+  "common": {
+    "common.cancel": "Abbrechen",
+    "common.confirm": "Bestätigen",
+    "common.delete": "Löschen",
+    "common.edit": "Bearbeiten"
+  },
+  "editableMessage": {
+    "editableMessage.addProps": "Eigenschaften hinzufügen",
+    "editableMessage.delete": "Löschen",
+    "editableMessage.input": "Eingabe",
+    "editableMessage.inputPlaceholder": "Bitte Beispielinhalt für die Eingabe eingeben",
+    "editableMessage.output": "Ausgabe",
+    "editableMessage.outputPlaceholder": "Bitte Beispielinhalt für die Ausgabe eingeben",
+    "editableMessage.system": "System"
+  },
+  "emojiPicker": {
+    "emojiPicker.delete": "Löschen",
+    "emojiPicker.draggerDesc": "Klicken oder Bild hierher ziehen, um es hochzuladen",
+    "emojiPicker.emoji": "Emoji",
+    "emojiPicker.fileTypeError": "Sie können nur Bilddateien hochladen!",
+    "emojiPicker.upload": "Hochladen",
+    "emojiPicker.uploadBtn": "Zuschneiden und hochladen"
+  },
+  "form": {
+    "form.reset": "Zurücksetzen",
+    "form.submit": "Absenden",
+    "form.unsavedChanges": "Nicht gespeicherte Änderungen",
+    "form.unsavedWarning": "Sie haben nicht gespeicherte Änderungen. Möchten Sie die Seite wirklich verlassen?"
+  },
+  "hotkey": {
+    "hotkey.conflict": "Diese Tastenkombination steht in Konflikt mit einer bestehenden.",
+    "hotkey.invalidCombination": "Die Tastenkombination muss eine Modifikatortaste (Strg, Alt, Umschalt) und nur eine normale Taste enthalten.",
+    "hotkey.placeholder": "Tasten drücken, um Tastenkombination aufzuzeichnen",
+    "hotkey.reset": "Auf Standard zurücksetzen"
+  },
+  "messageModal": {
+    "messageModal.cancel": "Abbrechen",
+    "messageModal.confirm": "Bestätigen",
+    "messageModal.edit": "Bearbeiten"
+  },
+  "sideNav": {
+    "sideNav.collapse": "Seitenleiste einklappen",
+    "sideNav.demoActiveLabel": "Aktiv",
+    "sideNav.demoFeatureAutoCollapseDesc": "Unterhalb des Schwellenwerts ziehen, um automatisch einzuklappen",
+    "sideNav.demoFeatureAutoCollapseTitle": "Automatisches Einklappen",
+    "sideNav.demoFeaturePerformanceDesc": "Keine Animation für bessere Leistung",
+    "sideNav.demoFeaturePerformanceTitle": "Leistung",
+    "sideNav.demoFeatureResizeDesc": "Ziehen, um die Panelbreite anzupassen",
+    "sideNav.demoFeatureResizeTitle": "Flexible Größenanpassung",
+    "sideNav.demoFeatureSmartHandleDesc": "Zum Anzeigen der Umschalttaste mit der Maus darüberfahren",
+    "sideNav.demoFeatureSmartHandleTitle": "Intelligenter Griff",
+    "sideNav.demoFeaturesTitle": "Funktionen",
+    "sideNav.demoHint": "Versuchen Sie, den Rand des Panels zu ziehen und die Umschalttaste zu verwenden ->",
+    "sideNav.demoSubtitle": "Ein Seitenpanel im Arbeitsbereich-Stil mit ziehbarer Größenanpassung",
+    "sideNav.demoTitle": "DraggableSideNav-Demo",
+    "sideNav.expand": "Seitenleiste ausklappen"
+  }
+}

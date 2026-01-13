@@ -1,0 +1,23 @@
+{
+  "duration.TPS": "TPS（毎秒トークン数）：1秒あたりのトークン出力数",
+  "duration.TTFT": "TTFT（最初のトークンまでの時間）：最初のトークンの遅延時間",
+  "duration.completion": "出力完了時間",
+  "duration.latency": "所要時間",
+  "duration.stage.end": "終了",
+  "duration.stage.firstToken": "最初のトークン",
+  "duration.stage.start": "開始",
+  "table.columns.TTFT.tooltip": "最初のトークンまでの時間（単位：秒）",
+  "table.columns.duration": "所要時間",
+  "table.columns.model": "モデル",
+  "table.columns.spend": "クレジット",
+  "table.columns.startTime": "作成日時",
+  "table.columns.totalTokens": "トークン使用量",
+  "table.columns.type.enums.chat": "テキスト生成",
+  "table.columns.type.enums.imageGeneration": "画像生成",
+  "table.columns.type.title": "タイプ",
+  "table.desc": "テキスト生成、埋め込み、画像生成などにおけるコンピューティングクレジットの使用状況の詳細",
+  "table.more": "詳細を見る",
+  "table.title": "コンピューティングクレジット使用状況の詳細",
+  "table.totalToken.input": "入力",
+  "table.totalToken.output": "出力"
+}

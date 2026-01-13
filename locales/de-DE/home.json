@@ -1,0 +1,14 @@
+{
+  "agentSelection.empty": "Keine Agenten verfügbar",
+  "agentSelection.noAvailable": "Derzeit können keine Agenten hinzugefügt werden",
+  "agentSelection.noSelected": "Keine Agenten ausgewählt",
+  "agentSelection.search": "Keine passenden Agenten gefunden",
+  "project.create": "Neues Projekt",
+  "project.deleteConfirm": "Dieses Projekt wird gelöscht und kann nicht wiederhergestellt werden. Bestätigen Sie, um fortzufahren.",
+  "starter.createAgent": "Agent erstellen",
+  "starter.createGroup": "Gruppe erstellen",
+  "starter.deepResearch": "Tiefgehende Recherche",
+  "starter.developing": "Demnächst verfügbar",
+  "starter.image": "Bild",
+  "starter.write": "Schreiben"
+}

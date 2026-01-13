@@ -68,6 +68,7 @@ export const HotkeyEnum = {
   OpenChatSettings: 'openChatSettings',
   OpenHotkeyHelper: 'openHotkeyHelper',
   RegenerateMessage: 'regenerateMessage',
+  SaveDocument: 'saveDocument',
   SaveTopic: 'saveTopic',
   Search: 'search',
   ShowApp: 'showApp',

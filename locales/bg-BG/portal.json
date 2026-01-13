@@ -1,30 +1,25 @@
 {
   "Artifacts": "Артефакти",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Част",
-      "file": "Файл"
-    }
-  },
-  "Plugins": "Плъгини",
-  "artifacts": {
-    "display": {
-      "code": "Код",
-      "preview": "Преглед"
-    },
-    "svg": {
-      "copyAsImage": "Копирай като изображение",
-      "copyFail": "Копирането не успя, причина за грешката: {{error}}",
-      "copySuccess": "Изображението е копирано успешно",
-      "download": {
-        "png": "Изтегли като PNG",
-        "svg": "Изтегли като SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "Списъкът с текущите артефакти е празен. Моля, използвайте добавки в разговора и след това проверете отново.",
-  "emptyKnowledgeList": "Текущият списък с познания е празен. Моля, активирайте базата данни на познанията по време на сесията, за да я прегледате.",
-  "files": "файлове",
-  "messageDetail": "Детайли на съобщението",
-  "title": "Разширено прозорец"
+  "FilePreview.tabs.chunk": "Фрагмент",
+  "FilePreview.tabs.file": "Файл",
+  "Plugins": "Умения",
+  "artifacts.display.code": "Код",
+  "artifacts.display.preview": "Преглед",
+  "artifacts.svg.copyAsImage": "Копирай като изображение",
+  "artifacts.svg.copyFail": "Копирането неуспешно: {{error}}. Опитайте отново.",
+  "artifacts.svg.copySuccess": "Изображението е копирано успешно",
+  "artifacts.svg.download.png": "Изтегли като PNG",
+  "artifacts.svg.download.svg": "Изтегли като SVG",
+  "document.todos.allCompleted": "Всички задачи са изпълнени",
+  "document.todos.title": "Задачи",
+  "emptyArtifactList": "Все още няма артефакти. Използвайте умения в разговора и се върнете тук.",
+  "emptyKnowledgeList": "Този списък е празен.",
+  "files": "Файлове",
+  "messageDetail": "Детайли за съобщението",
+  "notebook.confirmDelete": "Да изтрием ли тази страница?",
+  "notebook.delete": "Изтрий",
+  "notebook.empty": "Все още няма страници. Страниците, свързани с тази тема, ще се появят тук.",
+  "notebook.title": "Бележник",
+  "openInPageEditor": "Редактирай в страница",
+  "title": "Работно пространство"
 }

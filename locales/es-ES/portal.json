@@ -1,30 +1,25 @@
 {
   "Artifacts": "Artefactos",
-  "FilePreview": {
-    "tabs": {
-      "chunk": "Fragmento",
-      "file": "Archivo"
-    }
-  },
-  "Plugins": "Complementos",
-  "artifacts": {
-    "display": {
-      "code": "Código",
-      "preview": "Vista previa"
-    },
-    "svg": {
-      "copyAsImage": "Copiar como imagen",
-      "copyFail": "Error al copiar, motivo del error: {{error}}",
-      "copySuccess": "Imagen copiada con éxito",
-      "download": {
-        "png": "Descargar como PNG",
-        "svg": "Descargar como SVG"
-      }
-    }
-  },
-  "emptyArtifactList": "La lista de Artefactos actual está vacía. Por favor, utilice los complementos en la conversación y vuelva a intentarlo.",
-  "emptyKnowledgeList": "La lista de conocimientos actual está vacía. Por favor, activa la base de conocimientos según sea necesario en la conversación antes de volver a revisar.",
-  "files": "archivos",
+  "FilePreview.tabs.chunk": "Fragmento",
+  "FilePreview.tabs.file": "Archivo",
+  "Plugins": "Habilidades",
+  "artifacts.display.code": "Código",
+  "artifacts.display.preview": "Vista previa",
+  "artifacts.svg.copyAsImage": "Copiar como imagen",
+  "artifacts.svg.copyFail": "Error al copiar: {{error}}. Inténtalo de nuevo.",
+  "artifacts.svg.copySuccess": "Imagen copiada con éxito",
+  "artifacts.svg.download.png": "Descargar como PNG",
+  "artifacts.svg.download.svg": "Descargar como SVG",
+  "document.todos.allCompleted": "Todas las tareas completadas",
+  "document.todos.title": "Tareas",
+  "emptyArtifactList": "Aún no hay artefactos. Usa habilidades en la conversación y luego vuelve aquí.",
+  "emptyKnowledgeList": "Esta lista está vacía.",
+  "files": "Archivos",
   "messageDetail": "Detalles del mensaje",
-  "title": "Ventana de expansión"
+  "notebook.confirmDelete": "¿Eliminar esta página?",
+  "notebook.delete": "Eliminar",
+  "notebook.empty": "Aún no hay páginas. Las páginas vinculadas a este tema aparecerán aquí.",
+  "notebook.title": "Cuaderno",
+  "openInPageEditor": "Editar en la página",
+  "title": "Espacio de trabajo"
 }

@@ -1,14 +1,20 @@
-import { PropsWithChildren } from 'react';
-import { Center, Flexbox } from 'react-layout-kit';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { type FC, type PropsWithChildren } from 'react';
 
-const Page = ({ children }: PropsWithChildren) => {
+import ClientOnly from '@/components/client/ClientOnly';
+
+import AuthContainer from './_layout';
+
+const AuthLayout: FC<PropsWithChildren> = ({ children }) => {
   return (
-    <Flexbox height={'100%'} width={'100%'}>
-      <Center height={'100%'} width={'100%'}>
-        {children}
-      </Center>
-    </Flexbox>
+    <ClientOnly>
+      <NuqsAdapter>
+        <AuthContainer>{children}</AuthContainer>
+      </NuqsAdapter>
+    </ClientOnly>
   );
 };
 
-export default Page;
+AuthLayout.displayName = 'AuthLayout';
+
+export default AuthLayout;

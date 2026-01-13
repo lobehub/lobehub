@@ -1,118 +1,62 @@
 {
-  "config": {
-    "aspectRatio": {
-      "label": "نسبت ابعاد",
-      "lock": "قفل نسبت ابعاد",
-      "unlock": "باز کردن قفل نسبت ابعاد"
-    },
-    "cfg": {
-      "label": "شدت راهنمایی"
-    },
-    "header": {
-      "desc": "توضیح ساده، خلق فوری",
-      "title": "نقاشی"
-    },
-    "height": {
-      "label": "ارتفاع"
-    },
-    "imageNum": {
-      "label": "تعداد تصاویر"
-    },
-    "imageUrl": {
-      "label": "تصویر مرجع"
-    },
-    "imageUrls": {
-      "label": "تصاویر مرجع"
-    },
-    "model": {
-      "label": "مدل"
-    },
-    "prompt": {
-      "placeholder": "توصیف محتوایی که می‌خواهید تولید شود"
-    },
-    "quality": {
-      "label": "کیفیت تصویر",
-      "options": {
-        "hd": "وضوح بالا",
-        "standard": "استاندارد"
-      }
-    },
-    "resolution": {
-      "label": "وضوح تصویر",
-      "options": {
-        "1K": "1K",
-        "2K": "2K",
-        "4K": "4K"
-      }
-    },
-    "seed": {
-      "label": "بذر",
-      "random": "بذر تصادفی"
-    },
-    "size": {
-      "label": "اندازه"
-    },
-    "steps": {
-      "label": "تعداد مراحل"
-    },
-    "title": "نقاشی هوش مصنوعی",
-    "width": {
-      "label": "عرض"
-    }
-  },
-  "generation": {
-    "actions": {
-      "applySeed": "اعمال بذر",
-      "copyError": "کپی خطا",
-      "copyPrompt": "کپی عبارت راهنما",
-      "copySeed": "کپی بذر",
-      "delete": "حذف",
-      "deleteBatch": "حذف دسته‌ای",
-      "download": "دانلود",
-      "downloadFailed": "دانلود تصویر ناموفق بود",
-      "errorCopied": "اطلاعات خطا به کلیپ‌بورد کپی شد",
-      "errorCopyFailed": "کپی اطلاعات خطا ناموفق بود",
-      "generate": "تولید",
-      "promptCopied": "عبارت راهنما به کلیپ‌بورد کپی شد",
-      "promptCopyFailed": "کپی عبارت راهنما ناموفق بود",
-      "reuseSettings": "استفاده مجدد از تنظیمات",
-      "seedApplied": "بذر به پیکربندی اعمال شد",
-      "seedApplyFailed": "اعمال بذر ناموفق بود",
-      "seedCopied": "بذر به کلیپ‌بورد کپی شد",
-      "seedCopyFailed": "کپی بذر ناموفق بود"
-    },
-    "metadata": {
-      "count": "{{count}} تصویر"
-    },
-    "status": {
-      "failed": "تولید ناموفق بود",
-      "generating": "در حال تولید..."
-    }
-  },
-  "notSupportGuide": {
-    "desc": "نمونه استقرار فعلی در حالت پایگاه داده کلاینت است و امکان استفاده از قابلیت تولید تصویر هوش مصنوعی وجود ندارد. لطفاً به <1>حالت استقرار پایگاه داده سرور</1> تغییر دهید یا مستقیماً از <3>LobeChat Cloud</3> استفاده کنید.",
-    "features": {
-      "fileIntegration": {
-        "desc": "ادغام عمیق با سیستم مدیریت فایل، تصاویر تولید شده به طور خودکار در سیستم فایل ذخیره می‌شوند و مدیریت و سازماندهی یکپارچه را فراهم می‌کنند",
-        "title": "یکپارچگی سیستم فایل"
-      },
-      "llmAssisted": {
-        "desc": "ترکیب قابلیت‌های مدل زبان بزرگ برای بهینه‌سازی هوشمند و گسترش عبارت‌های راهنما، بهبود کیفیت تولید تصویر (به زودی)",
-        "title": "تولید تصویر با کمک LLM"
-      },
-      "multiProviders": {
-        "desc": "پشتیبانی از چندین ارائه‌دهنده خدمات نقاشی هوش مصنوعی، از جمله OpenAI gpt-image-1، Google Imagen، FAL.ai و غیره، با انتخاب گسترده مدل‌ها",
-        "title": "پشتیبانی چند ارائه‌دهنده"
-      }
-    },
-    "title": "حالت استقرار فعلی از نقاشی هوش مصنوعی پشتیبانی نمی‌کند"
-  },
-  "topic": {
-    "createNew": "ایجاد موضوع جدید",
-    "deleteConfirm": "حذف موضوع تولید شده",
-    "deleteConfirmDesc": "موضوع تولید شده در حال حذف است، پس از حذف قابل بازیابی نیست، لطفاً با دقت اقدام کنید.",
-    "empty": "موضوع تولید شده‌ای وجود ندارد",
-    "title": "موضوع نقاشی",
-    "untitled": "موضوع پیش‌فرض"
-  }
+  "config.aspectRatio.label": "نسبت تصویر",
+  "config.aspectRatio.lock": "قفل نسبت تصویر",
+  "config.aspectRatio.unlock": "باز کردن قفل نسبت تصویر",
+  "config.cfg.label": "شدت راهنمایی",
+  "config.header.desc": "توضیح کوتاه، ایجاد فوری",
+  "config.header.title": "نقاشی",
+  "config.height.label": "ارتفاع",
+  "config.imageNum.label": "تعداد تصاویر",
+  "config.imageUrl.label": "تصویر مرجع",
+  "config.imageUrls.label": "تصاویر مرجع",
+  "config.model.label": "مدل",
+  "config.prompt.placeholder": "توصیف کنید که چه چیزی می‌خواهید تولید شود",
+  "config.quality.label": "کیفیت تصویر",
+  "config.quality.options.hd": "وضوح بالا",
+  "config.quality.options.standard": "استاندارد",
+  "config.resolution.label": "وضوح تصویر",
+  "config.resolution.options.1K": "۱K",
+  "config.resolution.options.2K": "۲K",
+  "config.resolution.options.4K": "۴K",
+  "config.seed.label": "بذر (Seed)",
+  "config.seed.random": "بذر تصادفی",
+  "config.size.label": "اندازه",
+  "config.steps.label": "مراحل",
+  "config.title": "تصویر هوش مصنوعی",
+  "config.width.label": "عرض",
+  "generation.actions.applySeed": "اعمال بذر",
+  "generation.actions.copyError": "کپی پیام خطا",
+  "generation.actions.copyPrompt": "کپی درخواست",
+  "generation.actions.copySeed": "کپی بذر",
+  "generation.actions.delete": "حذف",
+  "generation.actions.deleteBatch": "حذف گروهی",
+  "generation.actions.download": "دانلود",
+  "generation.actions.downloadFailed": "دانلود تصویر ناموفق بود. لطفاً اتصال شبکه یا تنظیمات CORS فضای ذخیره‌سازی S3 را بررسی کنید.",
+  "generation.actions.errorCopied": "پیام خطا در کلیپ‌بورد کپی شد",
+  "generation.actions.errorCopyFailed": "کپی پیام خطا ناموفق بود",
+  "generation.actions.generate": "تولید",
+  "generation.actions.promptCopied": "درخواست در کلیپ‌بورد کپی شد",
+  "generation.actions.promptCopyFailed": "کپی درخواست ناموفق بود",
+  "generation.actions.reuseSettings": "استفاده مجدد از تنظیمات",
+  "generation.actions.seedApplied": "بذر در پیکربندی اعمال شد",
+  "generation.actions.seedApplyFailed": "اعمال بذر ناموفق بود",
+  "generation.actions.seedCopied": "بذر در کلیپ‌بورد کپی شد",
+  "generation.actions.seedCopyFailed": "کپی بذر ناموفق بود",
+  "generation.metadata.count": "{{count}} تصویر",
+  "generation.status.failed": "تولید ناموفق بود",
+  "generation.status.generating": "در حال تولید...",
+  "notSupportGuide.desc": "حالت فعلی استقرار از تولید تصویر با هوش مصنوعی پشتیبانی نمی‌کند. به <1>حالت استقرار پایگاه‌داده سرور</1> تغییر دهید یا از <3>LobeHub Cloud</3> استفاده کنید.",
+  "notSupportGuide.features.fileIntegration.desc": "ادغام عمیق با سیستم مدیریت فایل؛ تصاویر تولیدشده به‌صورت خودکار در سیستم فایل ذخیره می‌شوند تا مدیریت و سازماندهی یکپارچه‌ای فراهم شود.",
+  "notSupportGuide.features.fileIntegration.title": "ادغام با سیستم فایل",
+  "notSupportGuide.features.llmAssisted.desc": "ترکیب با قابلیت‌های مدل‌های زبانی بزرگ برای بهینه‌سازی هوشمند و گسترش درخواست‌ها، بهبود کیفیت تولید تصویر (به‌زودی).",
+  "notSupportGuide.features.llmAssisted.title": "تولید تصویر با کمک LLM",
+  "notSupportGuide.features.multiProviders.desc": "پشتیبانی از چندین ارائه‌دهنده تولید تصویر هوش مصنوعی، از جمله OpenAI gpt-image-1، Google Imagen، FAL.ai و دیگران، با ارائه انتخاب گسترده‌ای از مدل‌ها.",
+  "notSupportGuide.features.multiProviders.title": "پشتیبانی از چند ارائه‌دهنده",
+  "notSupportGuide.title": "حالت فعلی استقرار از تولید تصویر با هوش مصنوعی پشتیبانی نمی‌کند",
+  "topic.createNew": "موضوع جدید",
+  "topic.deleteConfirm": "حذف موضوع تولید",
+  "topic.deleteConfirmDesc": "در حال حذف این موضوع تولید هستید. این عمل قابل بازگشت نیست، لطفاً با احتیاط ادامه دهید.",
+  "topic.empty": "هیچ موضوع تولیدی وجود ندارد",
+  "topic.title": "موضوع نقاشی",
+  "topic.untitled": "موضوع پیش‌فرض"
 }

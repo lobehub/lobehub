@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Zwiń",
-      "on": "Rozwiń"
-    },
-    "typobar": {
-      "off": "Ukryj pasek narzędzi formatowania",
-      "on": "Pokaż pasek narzędzi formatowania"
-    }
-  },
+  "actions.expand.off": "Zwiń",
+  "actions.expand.on": "Rozwiń",
+  "actions.typobar.off": "Ukryj pasek formatowania",
+  "actions.typobar.on": "Pokaż pasek formatowania",
+  "autoSave.latest": "Załadowano najnowszą wersję",
+  "autoSave.saved": "Zapisano",
+  "autoSave.saving": "Automatyczne zapisywanie...",
   "cancel": "Anuluj",
+  "codemirror.copyFailed": "Kopiowanie nie powiodło się",
+  "codemirror.copySuccess": "Kod skopiowany do schowka",
+  "codemirror.selectLanguage": "Wybierz język",
+  "codemirror.selectTheme": "Wybierz motyw",
+  "codemirror.showLineNumbers": "Pokaż numery linii",
+  "codemirror.tabSize": "Rozmiar tabulatora",
+  "codemirror.theme": "Motyw",
+  "codemirror.useTabs": "Użyj tabulatorów",
   "confirm": "Potwierdź",
-  "file": {
-    "error": "Błąd: {{message}}",
-    "uploading": "Przesyłanie pliku..."
-  },
-  "image": {
-    "broken": "Obraz uszkodzony"
-  },
-  "link": {
-    "edit": "Edytuj link",
-    "open": "Otwórz link",
-    "placeholder": "Wpisz adres URL linku",
-    "unlink": "Usuń link"
-  },
-  "math": {
-    "placeholder": "Wprowadź formułę TeX"
-  },
-  "slash": {
-    "h1": "Nagłówek poziomu 1",
-    "h2": "Nagłówek poziomu 2",
-    "h3": "Nagłówek poziomu 3",
-    "hr": "Linia pozioma",
-    "table": "Tabela",
-    "tex": "Formuła TeX"
-  },
-  "table": {
-    "delete": "Usuń tabelę",
-    "deleteColumn": "Usuń kolumnę",
-    "deleteRow": "Usuń wiersz",
-    "insertColumnLeft": "Wstaw {{count}} kolumn po lewej",
-    "insertColumnRight": "Wstaw {{count}} kolumn po prawej",
-    "insertRowAbove": "Wstaw {{count}} wierszy powyżej",
-    "insertRowBelow": "Wstaw {{count}} wierszy poniżej"
-  },
-  "typobar": {
-    "blockquote": "Cytat",
-    "bold": "Pogrubienie",
-    "bulletList": "Lista punktowana",
-    "code": "Kod w linii",
-    "codeblock": "Blok kodu",
-    "italic": "Kursywa",
-    "link": "Link",
-    "numberList": "Lista numerowana",
-    "strikethrough": "Przekreślenie",
-    "table": "tabela",
-    "taskList": "Lista zadań",
-    "tex": "Formuła TeX",
-    "underline": "Podkreślenie"
-  }
+  "file.error": "Błąd: {{message}}",
+  "file.uploading": "Przesyłanie pliku...",
+  "image.broken": "Obraz jest uszkodzony",
+  "link.edit": "Edytuj link",
+  "link.editLinkTitle": "Link",
+  "link.editTextTitle": "Tytuł",
+  "link.open": "Otwórz link",
+  "link.placeholder": "Wprowadź adres URL",
+  "link.unlink": "Usuń link",
+  "markdown.cancel": "Anuluj",
+  "markdown.confirm": "Konwertuj",
+  "markdown.parseMessage": "Konwertuj na format Markdown. Istniejąca treść zostanie nadpisana. Czy na pewno chcesz kontynuować? (Zamknie się automatycznie za 5 sekund)",
+  "markdown.parseTitle": "Formatuj jako Markdown",
+  "math.placeholder": "Wprowadź formułę TeX",
+  "modifier.accept": "Zachowaj",
+  "modifier.acceptAll": "Zachowaj wszystkie",
+  "modifier.reject": "Cofnij",
+  "modifier.rejectAll": "Cofnij wszystkie",
+  "slash.h1": "Nagłówek 1",
+  "slash.h2": "Nagłówek 2",
+  "slash.h3": "Nagłówek 3",
+  "slash.hr": "Separator",
+  "slash.table": "Tabela",
+  "slash.tex": "Formuła TeX",
+  "table.delete": "Usuń tabelę",
+  "table.deleteColumn": "Usuń kolumnę",
+  "table.deleteRow": "Usuń wiersz",
+  "table.insertColumnLeft": "Wstaw {{count}} kolumn(y) z lewej",
+  "table.insertColumnRight": "Wstaw {{count}} kolumn(y) z prawej",
+  "table.insertRowAbove": "Wstaw {{count}} wiersz(e) powyżej",
+  "table.insertRowBelow": "Wstaw {{count}} wiersz(e) poniżej",
+  "typobar.blockquote": "Cytat blokowy",
+  "typobar.bold": "Pogrubienie",
+  "typobar.bulletList": "Lista punktowana",
+  "typobar.code": "Kod w linii",
+  "typobar.codeblock": "Blok kodu",
+  "typobar.image": "Obraz",
+  "typobar.italic": "Kursywa",
+  "typobar.link": "Link",
+  "typobar.numberList": "Lista numerowana",
+  "typobar.redo": "Ponów",
+  "typobar.strikethrough": "Przekreślenie",
+  "typobar.table": "Tabela",
+  "typobar.taskList": "Lista zadań",
+  "typobar.tex": "Formuła TeX",
+  "typobar.underline": "Podkreślenie",
+  "typobar.undo": "Cofnij"
 }

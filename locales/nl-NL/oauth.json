@@ -1,61 +1,36 @@
 {
-  "consent": {
-    "buttons": {
-      "accept": "Toestaan",
-      "deny": "Weigeren"
-    },
-    "description": "De applicatie {{clientName}} vraagt om toestemming voor uw account",
-    "error": {
-      "sessionInvalid": {
-        "message": "De autorisatiesessie is verlopen of ongeldig, start het autorisatieproces opnieuw.",
-        "title": "Ongeldige autorisatiesessie"
-      },
-      "title": "Er is een fout opgetreden",
-      "unsupportedInteraction": {
-        "message": "Niet-ondersteund interactietype: {promptName}",
-        "title": "Niet-ondersteund interactietype"
-      }
-    },
-    "permissionsTitle": "Vraag om de volgende toestemmingen:",
-    "redirectUri": "U wordt omgeleid naar na succesvolle autorisatie",
-    "redirecting": "Autorisatie geslaagd, doorverwijzen...",
-    "scope": {
-      "email": "Toegang tot uw e-mailadres",
-      "offline_access": "Toestaan dat de client toegang heeft tot uw gegevens",
-      "openid": "Authenticatie met uw LobeChat-account",
-      "profile": "Toegang tot uw basisprofielinformatie (naam, profielfoto, enz.)",
-      "sync-read": "Lees uw gesynchroniseerde gegevens",
-      "sync-write": "Schrijf en werk uw gesynchroniseerde gegevens bij"
-    },
-    "title": "Toestemming voor {{clientName}}"
-  },
-  "error": {
-    "backToHome": "Terug naar startpagina",
-    "desc": "OAuth-autorisatie mislukt, reden: {{reason}}",
-    "reason": {
-      "internal_error": "Serverfout",
-      "invalid_request": "Ongeldige aanvraagparameters"
-    },
-    "title": "Autorisatie mislukt"
-  },
-  "handoff": {
-    "desc": {
-      "processing": "De applicatie verwerkt de autorisatie, u wordt binnenkort doorgestuurd naar de volgende pagina...",
-      "success": "Er is geprobeerd de desktopapplicatie te openen. Als de applicatie niet automatisch opent, schakelt u handmatig over. U kunt dit browservenster later sluiten."
-    },
-    "title": {
-      "processing": "Autorisatie wordt verwerkt...",
-      "success": "Autorisatie is voltooid"
-    }
-  },
-  "login": {
-    "button": "Bevestig inloggen",
-    "description": "De applicatie {{clientName}} vraagt om uw account te gebruiken voor inloggen",
-    "title": "Inloggen bij {{clientName}}",
-    "userWelcome": "Welkom terug, "
-  },
-  "success": {
-    "subTitle": "U hebt de applicatie succesvol gemachtigd om toegang te krijgen tot uw account. U kunt deze pagina nu sluiten.",
-    "title": "Autorisatie succesvol"
-  }
+  "consent.buttons.accept": "Toestaan",
+  "consent.buttons.deny": "Weigeren",
+  "consent.description": "De applicatie {{clientName}} vraagt toestemming om je account te gebruiken",
+  "consent.error.sessionInvalid.message": "De autorisatiesessie is verlopen of ongeldig. Start het autorisatieproces opnieuw.",
+  "consent.error.sessionInvalid.title": "Ongeldige autorisatiesessie",
+  "consent.error.title": "Er is een fout opgetreden",
+  "consent.error.unknown.message": "Er is een onbekende fout opgetreden bij het laden van de autorisatiegegevens.",
+  "consent.error.unsupportedInteraction.message": "Niet-ondersteund interactietype: {{promptName}}",
+  "consent.error.unsupportedInteraction.title": "Niet-ondersteund interactietype",
+  "consent.permissionsTitle": "De volgende machtigingen worden gevraagd:",
+  "consent.redirectUri": "Je wordt doorgestuurd na succesvolle autorisatie",
+  "consent.redirecting": "Autorisatie geslaagd, je wordt doorgestuurd...",
+  "consent.scope.email": "Toegang tot je e-mailadres",
+  "consent.scope.offline_access": "Sta de applicatie toe om toegang te krijgen tot je gegevens",
+  "consent.scope.openid": "Authenticeer met je LobeHub-account",
+  "consent.scope.profile": "Toegang tot je basisprofielinformatie (naam, avatar, enz.)",
+  "consent.scope.sync-read": "Lees je gesynchroniseerde gegevens",
+  "consent.scope.sync-write": "Schrijf en werk je gesynchroniseerde gegevens bij",
+  "consent.title": "Geef toestemming aan {{clientName}}",
+  "error.backToHome": "Terug naar startpagina",
+  "error.desc": "OAuth-autorisatie mislukt, reden: {{reason}}",
+  "error.reason.internal_error": "Interne serverfout",
+  "error.reason.invalid_request": "Ongeldige aanvraagparameters",
+  "error.title": "Autorisatie mislukt",
+  "handoff.desc.processing": "De applicatie verwerkt de autorisatie en zal je binnenkort doorsturen naar de volgende pagina...",
+  "handoff.desc.success": "Er is geprobeerd de desktopapplicatie te openen. Als dit niet automatisch gebeurt, schakel dan handmatig over. Je kunt dit browservenster later sluiten.",
+  "handoff.title.processing": "Autorisatie bezig...",
+  "handoff.title.success": "Autorisatie voltooid",
+  "login.button": "Inloggen bevestigen",
+  "login.description": "De applicatie {{clientName}} wil je account gebruiken om in te loggen",
+  "login.title": "Inloggen bij {{clientName}}",
+  "login.userWelcome": "Welkom terug, ",
+  "success.subTitle": "Je hebt de applicatie succesvol gemachtigd om toegang te krijgen tot je account. Je kunt deze pagina nu sluiten.",
+  "success.title": "Autorisatie geslaagd"
 }

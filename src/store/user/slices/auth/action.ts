@@ -1,7 +1,7 @@
-import { SSOProvider } from '@lobechat/types';
-import { StateCreator } from 'zustand/vanilla';
+import { type SSOProvider } from '@lobechat/types';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/const/auth';
+import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
 import { userService } from '@/services/user';
 
 import type { UserStore } from '../../store';
@@ -41,6 +41,7 @@ const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
       accounts
         .filter((account) => account.providerId !== 'credential')
         .map(async (account) => {
+          // In theory, the id_token could be decrypted from the accounts table, but I found that better-auth on GitHub does not save the id_token
           const info = await accountInfo({
             query: { accountId: account.accountId },
           });
@@ -108,6 +109,16 @@ export const createAuthSlice: StateCreator<
     }
   },
   openLogin: async () => {
+    // Skip if already on a login page
+    const pathname = location.pathname;
+    if (
+      pathname.startsWith('/signin') ||
+      pathname.startsWith('/signup') ||
+      pathname.startsWith('/login')
+    ) {
+      return;
+    }
+
     if (enableClerk) {
       const redirectUrl = location.toString();
       get().clerkSignIn?.({

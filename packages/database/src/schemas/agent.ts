@@ -1,5 +1,6 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import type { LobeAgentChatConfig, LobeAgentTTSConfig } from '@lobechat/types';
+import { AgentChatConfigSchema } from '@lobechat/types';
 import {
   boolean,
   index,
@@ -15,6 +16,7 @@ import { createInsertSchema } from 'drizzle-zod';
 import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { files, knowledgeBases } from './file';
+import { sessionGroups } from './session';
 import { users } from './user';
 
 // Agent table is the main table for storing agents
@@ -37,7 +39,7 @@ export const agents = pgTable(
     backgroundColor: text('background_color'),
     marketIdentifier: text('market_identifier'),
 
-    plugins: jsonb('plugins').$type<string[]>().default([]),
+    plugins: jsonb('plugins').$type<string[]>(),
 
     clientId: text('client_id'),
 
@@ -55,9 +57,14 @@ export const agents = pgTable(
     tts: jsonb('tts').$type<LobeAgentTTSConfig>(),
 
     virtual: boolean('virtual').default(false),
+    pinned: boolean('pinned'),
 
     openingMessage: text('opening_message'),
     openingQuestions: text('opening_questions').array().default([]),
+
+    sessionGroupId: text('session_group_id').references(() => sessionGroups.id, {
+      onDelete: 'set null',
+    }),
 
     ...timestamps,
   },
@@ -67,10 +74,14 @@ export const agents = pgTable(
     index('agents_user_id_idx').on(t.userId),
     index('agents_title_idx').on(t.title),
     index('agents_description_idx').on(t.description),
+    index('agents_session_group_id_idx').on(t.sessionGroupId),
   ],
 );
 
-export const insertAgentSchema = createInsertSchema(agents);
+export const insertAgentSchema = createInsertSchema(agents, {
+  // Override chatConfig type to use the proper schema
+  chatConfig: AgentChatConfigSchema.nullable().optional(),
+});
 
 export type NewAgent = typeof agents.$inferInsert;
 export type AgentItem = typeof agents.$inferSelect;

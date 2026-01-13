@@ -6,7 +6,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: '通义千问超大规模语言模型，支持中文、英文等不同语言输入。',
+    description: 'Ultra-large Qwen model supporting Chinese, English, and other languages.',
     displayName: 'Qwen Turbo',
     enabled: true,
     id: 'qwen-turbo',
@@ -24,7 +24,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: '通义千问超大规模语言模型增强版，支持中文、英文等不同语言输入。',
+    description: 'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
     displayName: 'Qwen Plus',
     enabled: true,
     id: 'qwen-plus',
@@ -43,7 +43,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      '通义千问千亿级别超大规模语言模型，支持中文、英文等不同语言输入，当前通义千问2.5产品版本背后的API模型。',
+      'Hundred-billion-scale ultra-large Qwen model supporting Chinese, English, and other languages; the API model behind current Qwen2.5 products.',
     displayName: 'Qwen Max',
     enabled: true,
     id: 'qwen-max',
@@ -59,7 +59,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 1_000_000,
     description:
-      '通义千问超大规模语言模型，支持长文本上下文，以及基于长文档、多文档等多个场景的对话功能。',
+      'Ultra-large Qwen model with long context and chat across long- and multi-document scenarios.',
     displayName: 'Qwen Long',
     id: 'qwen-long',
     pricing: {
@@ -77,7 +77,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      '通义千问大规模视觉语言模型增强版。大幅提升细节识别能力和文字识别能力，支持超百万像素分辨率和任意长宽比规格的图像。',
+      'Enhanced large-scale Qwen vision-language model with major gains in detail and text recognition, supporting over one-megapixel resolution and arbitrary aspect ratios.',
     displayName: 'Qwen VL Plus',
     enabled: true,
     id: 'qwen-vl-plus-latest',
@@ -96,7 +96,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      '通义千问超大规模视觉语言模型。相比增强版，再次提升视觉推理能力和指令遵循能力，提供更高的视觉感知和认知水平。',
+      'Ultra-large Qwen vision-language model. Compared to the enhanced version, it further improves visual reasoning and instruction following for stronger perception and cognition.',
     displayName: 'Qwen VL Max',
     enabled: true,
     id: 'qwen-vl-max-latest',
@@ -111,7 +111,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: '通义千问数学模型是专门用于数学解题的语言模型。',
+    description: 'Qwen Math is a language model specialized for solving math problems.',
     displayName: 'Qwen Math Turbo',
     id: 'qwen-math-turbo-latest',
     pricing: {
@@ -125,7 +125,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: '通义千问数学模型是专门用于数学解题的语言模型。',
+    description: 'Qwen Math is a language model specialized for solving math problems.',
     displayName: 'Qwen Math Plus',
     id: 'qwen-math-plus-latest',
     pricing: {
@@ -139,7 +139,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: '通义千问代码模型。',
+    description: 'Qwen code model.',
     displayName: 'Qwen Coder Turbo',
     id: 'qwen-coder-turbo-latest',
     pricing: {
@@ -156,7 +156,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: '通义千问2.5对外开源的7B规模的模型。',
+    description: 'Qwen2.5 open-source 7B model.',
     displayName: 'Qwen2.5 7B',
     id: 'qwen2.5-7b-instruct',
     pricing: {
@@ -173,7 +173,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: '通义千问2.5对外开源的14B规模的模型。',
+    description: 'Qwen2.5 open-source 14B model.',
     displayName: 'Qwen2.5 14B',
     id: 'qwen2.5-14b-instruct',
     pricing: {
@@ -190,7 +190,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: '通义千问2.5对外开源的32B规模的模型。',
+    description: 'Qwen2.5 open-source 32B model.',
     displayName: 'Qwen2.5 32B',
     id: 'qwen2.5-32b-instruct',
     pricing: {
@@ -207,7 +207,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: '通义千问2.5对外开源的72B规模的模型。',
+    description: 'Qwen2.5 open-source 72B model.',
     displayName: 'Qwen2.5 72B',
     id: 'qwen2.5-72b-instruct',
     pricing: {
@@ -221,7 +221,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'Qwen-Math 模型具有强大的数学解题能力。',
+    description: 'Qwen-Math delivers strong math problem-solving.',
     displayName: 'Qwen2.5 Math 1.5B',
     id: 'qwen2.5-math-1.5b-instruct',
     pricing: {
@@ -235,7 +235,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'Qwen-Math 模型具有强大的数学解题能力。',
+    description: 'Qwen-Math delivers strong math problem-solving.',
     displayName: 'Qwen2.5 Math 7B',
     id: 'qwen2.5-math-7b-instruct',
     pricing: {
@@ -249,7 +249,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'Qwen-Math 模型具有强大的数学解题能力。',
+    description: 'Qwen-Math delivers strong math problem-solving.',
     displayName: 'Qwen2.5 Math 72B',
     id: 'qwen2.5-math-72b-instruct',
     pricing: {
@@ -263,7 +263,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: '通义千问代码模型开源版。',
+    description: 'Open-source Qwen code model.',
     displayName: 'Qwen2.5 Coder 1.5B',
     id: 'qwen2.5-coder-1.5b-instruct',
     pricing: {
@@ -277,7 +277,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: '通义千问代码模型开源版。',
+    description: 'Open-source Qwen code model.',
     displayName: 'Qwen2.5 Coder 7B',
     id: 'qwen2.5-coder-7b-instruct',
     pricing: {
@@ -294,7 +294,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8000,
-    description: '以 Qwen-7B 语言模型初始化，添加图像模型，图像输入分辨率为448的预训练模型。',
+    description:
+      'Pretrained model initialized from Qwen-7B with an added vision module and 448 image resolution input.',
     displayName: 'Qwen VL',
     id: 'qwen-vl-v1',
     pricing: {
@@ -311,7 +312,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8000,
-    description: '通义千问VL支持灵活的交互方式，包括多图、多轮问答、创作等能力的模型。',
+    description:
+      'Qwen VL supports flexible interactions including multi-image input, multi-turn QA, and creative tasks.',
     displayName: 'Qwen VL Chat',
     id: 'qwen-vl-chat-v1',
     pricing: {
@@ -329,7 +331,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'Moonshot V1 8K 专为生成短文本任务设计，具有高效的处理性能，能够处理8,192个tokens，非常适合简短对话、速记和快速内容生成。',
+      'Moonshot V1 8K is designed for short-text generation with efficient processing, handling 8,192 tokens for brief chats, quick notes, and fast content generation.',
     displayName: 'Moonshot V1 8K',
     enabled: true,
     id: 'moonshot-v1-8k',
@@ -341,7 +343,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Moonshot V1 32K 提供中等长度的上下文处理能力，能够处理32,768个tokens，特别适合生成各种长文档和复杂对话，应用于内容创作、报告生成和对话系统等领域。',
+      'Moonshot V1 32K provides mid-length context handling up to 32,768 tokens, ideal for long documents and complex dialogues in content creation, report writing, and chat systems.',
     displayName: 'Moonshot V1 32K',
     enabled: true,
     id: 'moonshot-v1-32k',
@@ -353,7 +355,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Moonshot V1 128K 是一款拥有超长上下文处理能力的模型，适用于生成超长文本，满足复杂的生成任务需求，能够处理多达128,000个tokens的内容，非常适合科研、学术和大型文档生成等应用场景。',
+      'Moonshot V1 128K offers ultra-long context up to 128,000 tokens, suited for very long text generation and complex tasks in research, academia, and large document creation.',
     displayName: 'Moonshot V1 128K',
     enabled: true,
     id: 'moonshot-v1-128k',
@@ -365,7 +367,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      '模型能力国内第一，在知识百科、长文本、生成创作等中文任务上超越国外主流模型。还具备行业领先的多模态能力，多项权威评测基准表现优异。',
+      'Top domestic performance, surpassing leading overseas models on Chinese tasks like encyclopedic knowledge, long text, and creative generation. Also offers industry-leading multimodal capabilities and strong benchmark results.',
     displayName: 'Baichuan 4',
     enabled: true,
     id: 'Baichuan4',
@@ -405,7 +407,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      '针对企业高频场景优化，效果大幅提升，高性价比。相对于Baichuan2模型，内容创作提升20%，知识问答提升17%， 角色扮演能力提升40%。整体效果比GPT3.5更优。',
+      'Optimized for high-frequency enterprise scenarios with major gains and strong value. Compared to Baichuan2, content creation improves by 20%, knowledge QA by 17%, and roleplay by 40%. Overall performance is better than GPT-3.5.',
     displayName: 'Baichuan 3 Turbo',
     enabled: true,
     id: 'Baichuan3-Turbo',
@@ -422,7 +424,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      '具备 128K 超长上下文窗口，针对企业高频场景优化，效果大幅提升，高性价比。相对于Baichuan2模型，内容创作提升20%，知识问答提升17%， 角色扮演能力提升40%。整体效果比GPT3.5更优。',
+      'With a 128K ultra-long context window, it is optimized for high-frequency enterprise scenarios with major gains and strong value. Compared to Baichuan2, content creation improves by 20%, knowledge QA by 17%, and roleplay by 40%. Overall performance is better than GPT-3.5.',
     displayName: 'Baichuan 3 Turbo 128k',
     enabled: true,
     id: 'Baichuan3-Turbo-128k',
@@ -439,7 +441,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      '采用搜索增强技术实现大模型与领域知识、全网知识的全面链接。支持PDF、Word等多种文档上传及网址输入，信息获取及时、全面，输出结果准确、专业。',
+      'Uses search augmentation to connect the model with domain and web knowledge. Supports PDF/Word uploads and URL inputs for timely, comprehensive retrieval and professional, accurate outputs.',
     displayName: 'Baichuan 2 Turbo',
     id: 'Baichuan2-Turbo',
     maxOutput: 8192,
@@ -454,7 +456,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '最新高性能模型，保证高质量输出同时，推理速度大幅提升。',
+    description: 'Latest high-performance model with high-quality output and much faster reasoning.',
     displayName: 'Yi Lightning',
     enabled: true,
     id: 'yi-lightning',
@@ -469,7 +471,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '小而精悍，轻量极速模型。提供强化数学运算和代码编写能力。',
+    description:
+      'Small but powerful, lightweight and ultra-fast, with enhanced math and coding capabilities.',
     displayName: 'Yi Spark',
     enabled: true,
     id: 'yi-spark',
@@ -484,7 +487,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '中型尺寸模型升级微调，能力均衡，性价比高。深度优化指令遵循能力。',
+    description:
+      'Upgraded mid-size model with balanced capabilities, strong value, and improved instruction following.',
     displayName: 'Yi Medium',
     enabled: true,
     id: 'yi-medium',
@@ -499,7 +503,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 200_000,
-    description: '200K 超长上下文窗口，提供长文本深度理解和生成能力。',
+    description: '200K ultra-long context window for deep long-text understanding and generation.',
     displayName: 'Yi Medium 200K',
     enabled: true,
     id: 'yi-medium-200k',
@@ -514,7 +518,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '超高性价比、卓越性能。根据性能和推理速度、成本，进行平衡性高精度调优。',
+    description:
+      'Excellent value and performance, tuned to balance capability, reasoning speed, and cost.',
     displayName: 'Yi Large Turbo',
     enabled: true,
     id: 'yi-large-turbo',
@@ -530,7 +535,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 16_384,
     description:
-      '基于 yi-large 超强模型的高阶服务，结合检索与生成技术提供精准答案，实时全网检索信息服务。',
+      'Advanced service based on the powerful yi-large model, combining retrieval and generation for precise answers with real-time web search.',
     displayName: 'Yi Large RAG',
     enabled: true,
     id: 'yi-large-rag',
@@ -549,7 +554,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      '在 yi-large 模型的基础上支持并强化了工具调用的能力，适用于各种需要搭建 agent 或 workflow 的业务场景。',
+      'Builds on yi-large with enhanced tool calling, suitable for agent or workflow business scenarios.',
     displayName: 'Yi Large FC',
     enabled: true,
     id: 'yi-large-fc',
@@ -564,7 +569,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: '全新千亿参数模型，提供超强问答及文本生成能力。',
+    description: 'New 100B-parameter model with strong QA and text generation.',
     displayName: 'Yi Large',
     id: 'yi-large',
     pricing: {
@@ -581,7 +586,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 16_384,
-    description: '复杂视觉任务模型，提供高性能图片理解、分析能力。',
+    description: 'Model for complex visual tasks with high-performance image understanding and analysis.',
     displayName: 'Yi Vision',
     enabled: true,
     id: 'yi-vision',
@@ -596,7 +601,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '初期版本，推荐使用 yi-large（新版本）。',
+    description: 'Early version; recommended to use yi-large (new version).',
     displayName: 'Yi Large Preview',
     id: 'yi-large-preview',
     pricing: {
@@ -610,7 +615,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '轻量化版本，推荐使用 yi-lightning。',
+    description: 'Lightweight version; recommended to use yi-lightning.',
     displayName: 'Yi Lightning Lite',
     id: 'yi-lightning-lite',
     pricing: {
@@ -627,7 +632,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GLM-4-Flash 是处理简单任务的理想选择，速度最快且免费。',
+    description: 'GLM-4-Flash is ideal for simple tasks: fastest and free.',
     displayName: 'GLM-4-Flash',
     enabled: true,
     id: 'glm-4-flash',
@@ -645,7 +650,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GLM-4-FlashX 是Flash的增强版本，超快推理速度。',
+    description: 'GLM-4-FlashX is an enhanced Flash version with ultra-fast reasoning.',
     displayName: 'GLM-4-FlashX',
     enabled: true,
     id: 'glm-4-flashx',
@@ -663,7 +668,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 1_024_000,
-    description: 'GLM-4-Long 支持超长文本输入，适合记忆型任务与大规模文档处理。',
+    description:
+      'GLM-4-Long supports ultra-long inputs for memory-style tasks and large-scale document processing.',
     displayName: 'GLM-4-Long',
     id: 'glm-4-long',
     pricing: {
@@ -680,7 +686,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GLM-4-Air 是性价比高的版本，性能接近GLM-4，提供快速度和实惠的价格。',
+    description:
+      'GLM-4-Air is a high-value option with performance close to GLM-4, fast speed, and lower cost.',
     displayName: 'GLM-4-Air',
     enabled: true,
     id: 'glm-4-air',
@@ -698,7 +705,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'GLM-4-AirX 提供 GLM-4-Air 的高效版本，推理速度可达其2.6倍。',
+    description:
+      'GLM-4-AirX is a more efficient GLM-4-Air variant with up to 2.6x faster reasoning.',
     displayName: 'GLM-4-AirX',
     enabled: true,
     id: 'glm-4-airx',
@@ -717,7 +725,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GLM-4-AllTools 是一个多功能智能体模型，优化以支持复杂指令规划与工具调用，如网络浏览、代码解释和文本生成，适用于多任务执行。',
+      'GLM-4-AllTools is a versatile agent model optimized for complex instruction planning and tool use such as web browsing, code explanation, and text generation, suitable for multi-task execution.',
     displayName: 'GLM-4-AllTools',
     id: 'glm-4-alltools',
     pricing: {
@@ -734,7 +742,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GLM-4-Plus 作为高智能旗舰，具备强大的处理长文本和复杂任务的能力，性能全面提升。',
+    description:
+      'GLM-4-Plus is a high-intelligence flagship with strong long-text and complex-task handling and upgraded overall performance.',
     displayName: 'GLM-4-Plus',
     enabled: true,
     id: 'glm-4-plus',
@@ -752,7 +761,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GLM-4-0520 是最新模型版本，专为高度复杂和多样化任务设计，表现卓越。',
+    description:
+      'GLM-4-0520 is the latest model version, designed for highly complex and diverse tasks with excellent performance.',
     displayName: 'GLM-4-0520',
     id: 'glm-4-0520',
     pricing: {
@@ -769,7 +779,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GLM-4 是发布于2024年1月的旧旗舰版本，目前已被更强的 GLM-4-0520 取代。',
+    description:
+      'GLM-4 is the older flagship released in Jan 2024, now replaced by the stronger GLM-4-0520.',
     displayName: 'GLM-4',
     id: 'glm-4',
     pricing: {
@@ -786,7 +797,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8192,
-    description: 'GLM-4V-Plus 具备对视频内容及多图片的理解能力，适合多模态任务。',
+    description: 'GLM-4V-Plus understands video and multiple images, suitable for multimodal tasks.',
     displayName: 'GLM-4V-Plus',
     enabled: true,
     id: 'glm-4v-plus',
@@ -804,7 +815,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2048,
-    description: 'GLM-4V 提供强大的图像理解与推理能力，支持多种视觉任务。',
+    description: 'GLM-4V provides strong image understanding and reasoning across visual tasks.',
     displayName: 'GLM-4V',
     id: 'glm-4v',
     pricing: {
@@ -818,7 +829,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'CharGLM-3 专为角色扮演与情感陪伴设计，支持超长多轮记忆与个性化对话，应用广泛。',
+    description:
+      'CharGLM-3 is built for roleplay and emotional companionship, supporting ultra-long multi-turn memory and personalized dialogue.',
     displayName: 'CharGLM-3',
     id: 'charglm-3',
     pricing: {
@@ -832,7 +844,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'Emohaa 是心理模型，具备专业咨询能力，帮助用户理解情感问题。',
+    description:
+      'Emohaa is a mental health model with professional counseling abilities to help users understand emotional issues.',
     displayName: 'Emohaa',
     id: 'emohaa',
     pricing: {
@@ -847,7 +860,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '360GPT2 Pro 是 360 公司推出的高级自然语言处理模型，具备卓越的文本生成和理解能力，尤其在生成与创作领域表现出色，能够处理复杂的语言转换和角色演绎任务。',
+      '360GPT2 Pro is an advanced NLP model from 360 with excellent text generation and understanding, especially for creative tasks, handling complex transformations and roleplay.',
     displayName: '360GPT2 Pro',
     enabled: true,
     id: '360gpt2-pro',
@@ -867,7 +880,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      '360GPT Pro 作为 360 AI 模型系列的重要成员，以高效的文本处理能力满足多样化的自然语言应用场景，支持长文本理解和多轮对话等功能。',
+      '360GPT Pro is a key 360 AI model with efficient text processing for diverse NLP scenarios, supporting long-text understanding and multi-turn dialogue.',
     displayName: '360GPT Pro',
     enabled: true,
     id: '360gpt-pro',
@@ -884,7 +897,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '360GPT Turbo 提供强大的计算和对话能力，具备出色的语义理解和生成效率，是企业和开发者理想的智能助理解决方案。',
+      '360GPT Turbo delivers strong compute and chat capability with excellent semantic understanding and generation efficiency, ideal for enterprise and developers.',
     displayName: '360GPT Turbo',
     enabled: true,
     id: '360gpt-turbo',
@@ -901,7 +914,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '360GPT Turbo Responsibility 8K 强调语义安全和责任导向，专为对内容安全有高度要求的应用场景设计，确保用户体验的准确性与稳健性。',
+      '360GPT Turbo Responsibility 8K emphasizes semantic safety and responsibility for content-sensitive applications, ensuring accurate and robust user experiences.',
     displayName: '360GPT Turbo Responsibility 8K',
     enabled: true,
     id: '360gpt-turbo-responsibility-8k',
@@ -918,7 +931,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '百度自研的旗舰级大规模⼤语⾔模型，覆盖海量中英文语料，具有强大的通用能力，可满足绝大部分对话问答、创作生成、插件应用场景要求；支持自动对接百度搜索插件，保障问答信息时效。',
+      'Baidu’s flagship large-scale LLM trained on massive Chinese/English corpora with strong general ability for chat, creation, and plugin use; supports automatic Baidu Search plugin integration for fresh answers.',
     displayName: 'ERNIE 3.5 8K',
     enabled: true,
     id: 'ERNIE-3.5-8K',
@@ -934,7 +947,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '百度自研的旗舰级大规模⼤语⾔模型，覆盖海量中英文语料，具有强大的通用能力，可满足绝大部分对话问答、创作生成、插件应用场景要求；支持自动对接百度搜索插件，保障问答信息时效。',
+      'Baidu’s flagship large-scale LLM trained on massive Chinese/English corpora with strong general ability for chat, creation, and plugin use; supports automatic Baidu Search plugin integration for fresh answers.',
     displayName: 'ERNIE 3.5 8K Preview',
     id: 'ERNIE-3.5-8K-Preview',
     pricing: {
@@ -949,7 +962,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      '百度自研的旗舰级大规模⼤语⾔模型，覆盖海量中英文语料，具有强大的通用能力，可满足绝大部分对话问答、创作生成、插件应用场景要求；支持自动对接百度搜索插件，保障问答信息时效。',
+      'Baidu’s flagship large-scale LLM trained on massive Chinese/English corpora with strong general ability for chat, creation, and plugin use; supports automatic Baidu Search plugin integration for fresh answers.',
     displayName: 'ERNIE 3.5 128K',
     enabled: true,
     id: 'ERNIE-3.5-128K',
@@ -965,7 +978,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '百度自研的旗舰级超大规模⼤语⾔模型，相较ERNIE 3.5实现了模型能力全面升级，广泛适用于各领域复杂任务场景；支持自动对接百度搜索插件，保障问答信息时效。',
+      'Baidu’s flagship ultra-large LLM with comprehensive upgrades over ERNIE 3.5, suitable for complex tasks across domains; supports Baidu Search plugin integration for fresh answers.',
     displayName: 'ERNIE 4.0 8K',
     enabled: true,
     id: 'ERNIE-4.0-8K-Latest',
@@ -981,7 +994,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '百度自研的旗舰级超大规模⼤语⾔模型，相较ERNIE 3.5实现了模型能力全面升级，广泛适用于各领域复杂任务场景；支持自动对接百度搜索插件，保障问答信息时效。',
+      'Baidu’s flagship ultra-large LLM with comprehensive upgrades over ERNIE 3.5, suitable for complex tasks across domains; supports Baidu Search plugin integration for fresh answers.',
     displayName: 'ERNIE 4.0 8K Preview',
     id: 'ERNIE-4.0-8K-Preview',
     pricing: {
@@ -996,7 +1009,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '百度自研的旗舰级超大规模⼤语⾔模型，综合效果表现出色，广泛适用于各领域复杂任务场景；支持自动对接百度搜索插件，保障问答信息时效。相较于ERNIE 4.0在性能表现上更优秀',
+      'Baidu’s flagship ultra-large LLM with strong overall performance for complex tasks, with Baidu Search plugin integration for fresh answers. It outperforms ERNIE 4.0.',
     displayName: 'ERNIE 4.0 Turbo 8K',
     enabled: true,
     id: 'ERNIE-4.0-Turbo-8K-Latest',
@@ -1012,7 +1025,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '百度自研的旗舰级超大规模⼤语⾔模型，综合效果表现出色，广泛适用于各领域复杂任务场景；支持自动对接百度搜索插件，保障问答信息时效。相较于ERNIE 4.0在性能表现上更优秀',
+      'Baidu’s flagship ultra-large LLM with strong overall performance for complex tasks, with Baidu Search plugin integration for fresh answers. It outperforms ERNIE 4.0.',
     displayName: 'ERNIE 4.0 Turbo 8K Preview',
     id: 'ERNIE-4.0-Turbo-8K-Preview',
     pricing: {
@@ -1027,7 +1040,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      '百度自研的轻量级大语言模型，兼顾优异的模型效果与推理性能，效果比ERNIE Lite更优，适合低算力AI加速卡推理使用。',
+      'Baidu’s lightweight LLM balancing quality and inference performance, better than ERNIE Lite and suitable for low-compute accelerators.',
     displayName: 'ERNIE Lite Pro 128K',
     enabled: true,
     id: 'ERNIE-Lite-Pro-128K',
@@ -1043,7 +1056,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      '百度2024年最新发布的自研高性能大语言模型，通用能力优异，效果比ERNIE Speed更优，适合作为基座模型进行精调，更好地处理特定场景问题，同时具备极佳的推理性能。',
+      'Baidu’s latest high-performance LLM (2024) with strong general ability, better than ERNIE Speed, suitable as a base for fine-tuning with excellent reasoning performance.',
     displayName: 'ERNIE Speed Pro 128K',
     enabled: true,
     id: 'ERNIE-Speed-Pro-128K',
@@ -1059,7 +1072,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      '百度2024年最新发布的自研高性能大语言模型，通用能力优异，适合作为基座模型进行精调，更好地处理特定场景问题，同时具备极佳的推理性能。',
+      'Baidu’s latest high-performance LLM (2024) with strong general ability, suitable as a base for fine-tuning to handle specific scenarios, with excellent reasoning performance.',
     displayName: 'ERNIE Speed 128K',
     id: 'ERNIE-Speed-128K',
     pricing: {
@@ -1074,7 +1087,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      '百度自研的垂直场景大语言模型，适合游戏NPC、客服对话、对话角色扮演等应用场景，人设风格更为鲜明、一致，指令遵循能力更强，推理性能更优。',
+      'Baidu’s vertical-domain LLM for game NPCs, customer service, and roleplay, with clearer persona consistency, stronger instruction following, and better reasoning.',
     displayName: 'ERNIE Character 8K',
     id: 'ERNIE-Character-8K',
     pricing: {
@@ -1089,7 +1102,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 256_000,
     description:
-      '升级为 MOE 结构，上下文窗口为 256k ，在 NLP，代码，数学，行业等多项评测集上领先众多开源模型。',
+      'Upgraded to an MoE architecture with a 256K context window, leading many open-source models across NLP, code, math, and domain benchmarks.',
     displayName: 'Hunyuan Lite',
     enabled: true,
     id: 'hunyuan-lite',
@@ -1106,7 +1119,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_000,
     description:
-      '采用更优的路由策略，同时缓解了负载均衡和专家趋同的问题。长文方面，大海捞针指标达到99.9%。MOE-32K 性价比相对更高，在平衡效果、价格的同时，可对实现对长文本输入的处理。',
+      'Uses improved routing to mitigate load balancing and expert collapse. Long-text "needle in a haystack" reaches 99.9%. MOE-32K offers better value while balancing quality and price for long-text inputs.',
     displayName: 'Hunyuan Standard',
     enabled: true,
     id: 'hunyuan-standard',
@@ -1123,7 +1136,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 256_000,
     description:
-      '采用更优的路由策略，同时缓解了负载均衡和专家趋同的问题。长文方面，大海捞针指标达到99.9%。MOE-256K 在长度和效果上进一步突破，极大的扩展了可输入长度。',
+      'Uses improved routing to mitigate load balancing and expert collapse. Long-text "needle in a haystack" reaches 99.9%. MOE-256K pushes further in length and quality, greatly expanding input length.',
     displayName: 'Hunyuan Standard 256K',
     enabled: true,
     id: 'hunyuan-standard-256K',
@@ -1143,7 +1156,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      '混元全新一代大语言模型的预览版，采用全新的混合专家模型（MoE）结构，相比hunyuan-pro推理效率更快，效果表现更强。',
+      'Preview of Hunyuan’s next-gen LLM with a new MoE architecture, delivering faster reasoning and stronger results than hunyuan-pro.',
     displayName: 'Hunyuan Turbo',
     enabled: true,
     id: 'hunyuan-turbo',
@@ -1163,7 +1176,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      '万亿级参数规模 MOE-32K 长文模型。在各种 benchmark 上达到绝对领先的水平，复杂指令和推理，具备复杂数学能力，支持 functioncall，在多语言翻译、金融法律医疗等领域应用重点优化。',
+      'Trillion-parameter MOE-32K long-context model leading benchmarks, strong at complex instructions and reasoning, advanced math, function calling, and optimized for multilingual translation, finance, law, and medical domains.',
     displayName: 'Hunyuan Pro',
     enabled: true,
     id: 'hunyuan-pro',
@@ -1192,7 +1205,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8000,
-    description: '混元最新多模态模型，支持图片+文本输入生成文本内容。',
+    description: 'Hunyuan latest multimodal model supporting image + text inputs to generate text.',
     displayName: 'Hunyuan Vision',
     enabled: true,
     id: 'hunyuan-vision',
@@ -1209,7 +1222,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8000,
     description:
-      '混元最新代码生成模型，经过 200B 高质量代码数据增训基座模型，迭代半年高质量 SFT 数据训练，上下文长窗口长度增大到 8K，五大语言代码生成自动评测指标上位居前列；五大语言10项考量各方面综合代码任务人工高质量评测上，性能处于第一梯队',
+      'Hunyuan’s latest code model trained on 200B high-quality code data plus six months of SFT data, with 8K context. It ranks near the top in automated code benchmarks and in expert human evaluations across five languages.',
     displayName: 'Hunyuan Code',
     id: 'hunyuan-code',
     maxOutput: 4000,
@@ -1228,7 +1241,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     description:
-      '混元最新 MOE 架构 FunctionCall 模型，经过高质量的 FunctionCall 数据训练，上下文窗口达 32K，在多个维度的评测指标上处于领先。',
+      'Hunyuan’s latest MoE FunctionCall model trained on high-quality tool-call data, with a 32K context window and leading benchmarks across dimensions.',
     displayName: 'Hunyuan FunctionCall',
     id: 'hunyuan-functioncall',
     maxOutput: 4000,
@@ -1244,7 +1257,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8000,
     description:
-      '混元最新版角色扮演模型，混元官方精调训练推出的角色扮演模型，基于混元模型结合角色扮演场景数据集进行增训，在角色扮演场景具有更好的基础效果。',
+      'Hunyuan’s latest roleplay model, officially fine-tuned with roleplay data, delivering stronger base performance in roleplay scenarios.',
     displayName: 'Hunyuan Role',
     id: 'hunyuan-role',
     maxOutput: 4000,
@@ -1262,7 +1275,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8000,
-    description: '高速模型，适合实时对话。',
+    description: 'High-speed model suitable for real-time chat.',
     displayName: 'Step 1 Flash',
     enabled: true,
     id: 'step-1-flash',
@@ -1280,7 +1293,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8000,
-    description: '小型模型，适合轻量级任务。',
+    description: 'Small model suited for lightweight tasks.',
     displayName: 'Step 1 8K',
     enabled: true,
     id: 'step-1-8k',
@@ -1298,7 +1311,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_000,
-    description: '支持中等长度的对话，适用于多种应用场景。',
+    description: 'Supports mid-length conversations for a wide range of scenarios.',
     displayName: 'Step 1 32K',
     enabled: true,
     id: 'step-1-32k',
@@ -1316,7 +1329,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: '平衡性能与成本，适合一般场景。',
+    description: 'Balances performance and cost for general scenarios.',
     displayName: 'Step 1 128K',
     enabled: true,
     id: 'step-1-128k',
@@ -1334,7 +1347,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 256_000,
-    description: '具备超长上下文处理能力，尤其适合长文档分析。',
+    description: 'Extra-long context handling, ideal for long-document analysis.',
     displayName: 'Step 1 256K',
     id: 'step-1-256k',
     pricing: {
@@ -1351,7 +1364,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 16_000,
-    description: '支持大规模上下文交互，适合复杂对话场景。',
+    description: 'Supports large-context interactions for complex dialogues.',
     displayName: 'Step 2 16K',
     enabled: true,
     id: 'step-2-16k',
@@ -1370,7 +1383,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8000,
-    description: '小型视觉模型，适合基本的图文任务。',
+    description: 'Small vision model for basic image-and-text tasks.',
     displayName: 'Step 1V 8K',
     enabled: true,
     id: 'step-1v-8k',
@@ -1389,7 +1402,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_000,
-    description: '支持视觉输入，增强多模态交互体验。',
+    description: 'Supports vision inputs for richer multimodal interaction.',
     displayName: 'Step 1V 32K',
     enabled: true,
     id: 'step-1v-32k',
@@ -1407,7 +1420,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_000,
-    description: '该模型拥有强大的视频理解能力。',
+    description: 'Strong video understanding capabilities.',
     displayName: 'Step 1.5V Mini',
     enabled: true,
     id: 'step-1.5v-mini',
@@ -1423,7 +1436,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Spark Lite 是一款轻量级大语言模型，具备极低的延迟与高效的处理能力，完全免费开放，支持实时在线搜索功能。其快速响应的特性使其在低算力设备上的推理应用和模型微调中表现出色，为用户带来出色的成本效益和智能体验，尤其在知识问答、内容生成及搜索场景下表现不俗。',
+      'Spark Lite is a lightweight LLM with ultra-low latency and efficient processing, fully free and supporting real-time web search. Its fast responses shine on low-compute devices and fine-tuning, offering strong value for knowledge QA, content creation, and search.',
     displayName: 'Spark Lite',
     enabled: true,
     id: 'lite',
@@ -1433,7 +1446,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Spark Pro 是一款为专业领域优化的高性能大语言模型，专注数学、编程、医疗、教育等多个领域，并支持联网搜索及内置天气、日期等插件。其优化后模型在复杂知识问答、语言理解及高层次文本创作中展现出色表现和高效性能，是适合专业应用场景的理想选择。',
+      'Spark Pro is a high-performance LLM optimized for professional domains like math, coding, healthcare, and education, with web search and built-in plugins such as weather and date. It excels at complex QA, language understanding, and advanced writing for professional use.',
     displayName: 'Spark Pro',
     enabled: true,
     id: 'generalv3',
@@ -1443,7 +1456,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Spark Pro 128K 配置了特大上下文处理能力，能够处理多达128K的上下文信息，特别适合需通篇分析和长期逻辑关联处理的长文内容，可在复杂文本沟通中提供流畅一致的逻辑与多样的引用支持。',
+      'Spark Pro 128K supports up to 128K context, ideal for full-document analysis and long-range reasoning, providing coherent logic and rich citations in complex text communication.',
     displayName: 'Spark Pro 128K',
     enabled: true,
     id: 'pro-128k',
@@ -1453,7 +1466,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Spark Max 为功能最为全面的版本，支持联网搜索及众多内置插件。其全面优化的核心能力以及系统角色设定和函数调用功能，使其在各种复杂应用场景中的表现极为优异和出色。',
+      'Spark Max is the most full-featured version, with web search and many built-in plugins. Its optimized core capabilities plus system roles and function calling excel across complex scenarios.',
     displayName: 'Spark Max',
     enabled: true,
     id: 'generalv3.5',
@@ -1463,7 +1476,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Spark Max 32K 配置了大上下文处理能力，更强的上下文理解和逻辑推理能力，支持32K tokens的文本输入，适用于长文档阅读、私有知识问答等场景',
+      'Spark Max 32K offers large-context processing with stronger understanding and logical reasoning, supporting 32K input for long documents and private knowledge QA.',
     displayName: 'Spark Max 32K',
     enabled: true,
     id: 'max-32k',
@@ -1473,7 +1486,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'Spark Ultra 是星火大模型系列中最为强大的版本，在升级联网搜索链路同时，提升对文本内容的理解和总结能力。它是用于提升办公生产力和准确响应需求的全方位解决方案，是引领行业的智能产品。',
+      'Spark Ultra is the most powerful Spark model, improving web search integration and text understanding/summarization. It is a comprehensive solution for productivity and accurate responses.',
     displayName: 'Spark 4.0 Ultra',
     enabled: true,
     id: '4.0Ultra',
@@ -1483,7 +1496,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      'o1-mini是一款针对编程、数学和科学应用场景而设计的快速、经济高效的推理模型。该模型具有128K上下文和2023年10月的知识截止日期。',
+      'o1-mini is a fast, cost-effective reasoning model designed for coding, math, and science. It has 128K context and an October 2023 knowledge cutoff.',
     displayName: 'OpenAI o1-mini',
     enabled: true,
     id: 'o1-mini',
@@ -1500,7 +1513,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     description:
-      'o1是OpenAI新的推理模型，适用于需要广泛通用知识的复杂任务。该模型具有128K上下文和2023年10月的知识截止日期。',
+      'o1 is OpenAI’s new reasoning model for complex tasks requiring broad knowledge. It has 128K context and an October 2023 knowledge cutoff.',
     displayName: 'OpenAI o1-preview',
     enabled: true,
     id: 'o1-preview',
@@ -1521,7 +1534,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-4o mini是OpenAI在GPT-4 Omni之后推出的最新模型，支持图文输入并输出文本。作为他们最先进的小型模型，它比其他近期的前沿模型便宜很多，并且比GPT-3.5 Turbo便宜超过60%。它保持了最先进的智能，同时具有显著的性价比。GPT-4o mini在MMLU测试中获得了 82% 的得分，目前在聊天偏好上排名高于 GPT-4。',
+      'GPT-4o mini is OpenAI’s latest model after GPT-4 Omni, supporting image+text input with text output. As their most advanced small model, it is much cheaper than recent frontier models and over 60% cheaper than GPT-3.5 Turbo, while retaining top-tier intelligence. It scores 82% on MMLU and ranks above GPT-4 in chat preference.',
     displayName: 'GPT-4o mini',
     enabled: true,
     id: 'gpt-4o-mini',
@@ -1541,7 +1554,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'GPT-4o',
     enabled: true,
     id: 'gpt-4o',
@@ -1560,7 +1573,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'GPT-4o 0806',
     id: 'gpt-4o-2024-08-06',
     pricing: {
@@ -1578,7 +1591,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'GPT-4o 0513',
     id: 'gpt-4o-2024-05-13',
     pricing: {
@@ -1595,7 +1608,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'ChatGPT-4o 是一款动态模型，实时更新以保持当前最新版本。它结合了强大的语言理解与生成能力，适合于大规模应用场景，包括客户服务、教育和技术支持。',
+      'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'ChatGPT-4o',
     enabled: true,
     id: 'chatgpt-4o-latest',
@@ -1614,7 +1627,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo model includes vision. Vision requests can use JSON mode and function calling. GPT-4 Turbo is an enhanced version that balances accuracy and efficiency for cost-effective multimodal tasks and real-time interactions.',
     displayName: 'GPT-4 Turbo',
     id: 'gpt-4-turbo',
     pricing: {
@@ -1632,7 +1645,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo model includes vision. Vision requests can use JSON mode and function calling. GPT-4 Turbo is an enhanced version that balances accuracy and efficiency for cost-effective multimodal tasks and real-time interactions.',
     displayName: 'GPT-4 Turbo Vision 0409',
     id: 'gpt-4-turbo-2024-04-09',
     pricing: {
@@ -1649,7 +1662,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo model includes vision. Vision requests can use JSON mode and function calling. GPT-4 Turbo is an enhanced version that balances accuracy and efficiency for cost-effective multimodal tasks and real-time interactions.',
     displayName: 'GPT-4 Turbo Preview',
     id: 'gpt-4-turbo-preview',
     pricing: {
@@ -1666,7 +1679,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo model includes vision. Vision requests can use JSON mode and function calling. GPT-4 Turbo is an enhanced version that balances accuracy and efficiency for cost-effective multimodal tasks and real-time interactions.',
     displayName: 'GPT-4 Turbo Preview 0125',
     id: 'gpt-4-0125-preview',
     pricing: {
@@ -1683,7 +1696,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '最新的 GPT-4 Turbo 模型具备视觉功能。现在，视觉请求可以使用 JSON 模式和函数调用。 GPT-4 Turbo 是一个增强版本，为多模态任务提供成本效益高的支持。它在准确性和效率之间找到平衡，适合需要进行实时交互的应用程序场景。',
+      'The latest GPT-4 Turbo model includes vision. Vision requests can use JSON mode and function calling. GPT-4 Turbo is an enhanced version that balances accuracy and efficiency for cost-effective multimodal tasks and real-time interactions.',
     displayName: 'GPT-4 Turbo Preview 1106',
     id: 'gpt-4-1106-preview',
     pricing: {
@@ -1700,7 +1713,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'GPT-4 提供了一个更大的上下文窗口，能够处理更长的文本输入，适用于需要广泛信息整合和数据分析的场景。',
+      'GPT-4 provides a larger context window to handle longer inputs for scenarios needing broad information integration and data analysis.',
     displayName: 'GPT-4',
     id: 'gpt-4',
     pricing: {
@@ -1717,7 +1730,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'GPT-4 提供了一个更大的上下文窗口，能够处理更长的文本输入，适用于需要广泛信息整合和数据分析的场景。',
+      'GPT-4 provides a larger context window to handle longer inputs for scenarios needing broad information integration and data analysis.',
     displayName: 'GPT-4 0613',
     id: 'gpt-4-0613',
     pricing: {
@@ -1734,7 +1747,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'GPT-4 提供了一个更大的上下文窗口，能够处理更长的文本输入，适用于需要广泛信息整合和数据分析的场景。',
+      'GPT-4 provides a larger context window to handle longer inputs for scenarios needing broad information integration and data analysis.',
     displayName: 'GPT-4 32K',
     id: 'gpt-4-32k',
     pricing: {
@@ -1751,7 +1764,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'GPT-4 提供了一个更大的上下文窗口，能够处理更长的文本输入，适用于需要广泛信息整合和数据分析的场景。',
+      'GPT-4 provides a larger context window to handle longer inputs for scenarios needing broad information integration and data analysis.',
     displayName: 'GPT-4 32K 0613',
     id: 'gpt-4-32k-0613',
     pricing: {
@@ -1768,7 +1781,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_385,
     description:
-      'GPT 3.5 Turbo，适用于各种文本生成和理解任务，Currently points to gpt-3.5-turbo-0125',
+      'GPT-3.5 Turbo for text generation and understanding. Currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo',
     id: 'gpt-3.5-turbo',
     pricing: {
@@ -1785,7 +1798,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_385,
     description:
-      'GPT 3.5 Turbo，适用于各种文本生成和理解任务，Currently points to gpt-3.5-turbo-0125',
+      'GPT-3.5 Turbo for text generation and understanding. Currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo 0125',
     id: 'gpt-3.5-turbo-0125',
     pricing: {
@@ -1802,7 +1815,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_385,
     description:
-      'GPT 3.5 Turbo，适用于各种文本生成和理解任务，Currently points to gpt-3.5-turbo-0125',
+      'GPT-3.5 Turbo for text generation and understanding. Currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo 1106',
     id: 'gpt-3.5-turbo-1106',
     pricing: {
@@ -1816,7 +1829,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 4096,
     description:
-      'GPT 3.5 Turbo，适用于各种文本生成和理解任务，Currently points to gpt-3.5-turbo-0125',
+      'GPT-3.5 Turbo for text generation and understanding. Currently points to gpt-3.5-turbo-0125.',
     displayName: 'GPT-3.5 Turbo Instruct',
     id: 'gpt-3.5-turbo-instruct',
     pricing: {
@@ -1833,7 +1846,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 16_385,
     description:
-      'GPT 3.5 Turbo，OpenAI提供的高效模型，适用于聊天和文本生成任务，支持并行函数调用。',
+      'GPT-3.5 Turbo is OpenAI’s efficient model for chat and text generation, supporting parallel function calling.',
     displayName: 'GPT 3.5 Turbo',
     enabled: true,
     id: 'gpt-35-turbo',
@@ -1845,7 +1858,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 16_384,
-    description: 'GPT 3.5 Turbo 16k，高容量文本生成模型，适合复杂任务。',
+    description: 'GPT-3.5 Turbo 16k is a high-capacity text generation model for complex tasks.',
     displayName: 'GPT 3.5 Turbo',
     id: 'gpt-35-turbo-16k',
     type: 'chat',
@@ -1856,7 +1869,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT 4 Turbo，多模态模型，提供杰出的语言理解和生成能力，同时支持图像输入。',
+    description: 'GPT-4 Turbo is a multimodal model with excellent language understanding and generation plus image input.',
     displayName: 'GPT 4 Turbo',
     enabled: true,
     id: 'gpt-4',
@@ -1867,7 +1880,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4 视觉预览版，专为图像分析和处理任务设计。',
+    description: 'GPT-4 Vision preview, designed for image analysis and processing tasks.',
     displayName: 'GPT 4 Turbo with Vision Preview',
     id: 'gpt-4-vision-preview',
     type: 'chat',
@@ -1878,7 +1891,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o Mini，小型高效模型，具备与GPT-4o相似的卓越性能。',
+    description: 'GPT-4o Mini is a small, efficient model with performance comparable to GPT-4o.',
     displayName: 'GPT 4o Mini',
     enabled: true,
     id: 'gpt-4o-mini',
@@ -1890,7 +1903,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'GPT-4o 是最新的多模态模型，结合高级文本和图像处理能力。',
+    description: 'GPT-4o is the latest multimodal model with advanced text and image processing.',
     displayName: 'GPT 4o',
     enabled: true,
     id: 'gpt-4o',
@@ -1902,7 +1915,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: '比 o1-preview 更小、更快，成本低80%，在代码生成和小上下文操作方面表现良好。',
+    description: 'Smaller and faster than o1-preview, 80% lower cost, strong at code generation and short-context tasks.',
     displayName: 'OpenAI o1-mini',
     enabled: true,
     id: 'o1-mini',
@@ -1916,7 +1929,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '专注于高级推理和解决复杂问题，包括数学和科学任务。非常适合需要深度上下文理解和自主工作流程的应用。',
+      'Focused on advanced reasoning and complex problem solving, including math and science. Ideal for applications needing deep context understanding and autonomous workflows.',
     displayName: 'OpenAI o1-preview',
     enabled: true,
     id: 'o1-preview',
@@ -1929,7 +1942,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: '一种经济高效的AI解决方案，适用于多种文本和图像任务。',
+    description: 'A cost-effective AI solution for a wide range of text and image tasks.',
     displayName: 'OpenAI GPT-4o mini',
     enabled: true,
     id: 'gpt-4o-mini',
@@ -1942,7 +1955,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'OpenAI GPT-4系列中最先进的多模态模型，可以处理文本和图像输入。',
+    description: 'The most advanced multimodal model in the GPT-4 family, handling text and image inputs.',
     displayName: 'OpenAI GPT-4o',
     enabled: true,
     id: 'gpt-4o',
@@ -1955,7 +1968,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      '一个52B参数（12B活跃）的多语言模型，提供256K长上下文窗口、函数调用、结构化输出和基于事实的生成。',
+      'A 52B-parameter (12B active) multilingual model with a 256K context window, function calling, structured output, and grounded generation.',
     displayName: 'AI21 Jamba 1.5 Mini',
     id: 'ai21-jamba-1.5-mini',
     maxOutput: 4096,
@@ -1967,7 +1980,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      '一个398B参数（94B活跃）的多语言模型，提供256K长上下文窗口、函数调用、结构化输出和基于事实的生成。',
+      'A 398B-parameter (94B active) multilingual model with a 256K context window, function calling, structured output, and grounded generation.',
     displayName: 'AI21 Jamba 1.5 Large',
     id: 'ai21-jamba-1.5-large',
     maxOutput: 4096,
@@ -1975,7 +1988,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Command R是一个可扩展的生成模型，旨在针对RAG和工具使用，使企业能够实现生产级AI。',
+    description:
+      'Command R is a scalable generative model designed for RAG and tool use, enabling production-grade AI.',
     displayName: 'Cohere Command R',
     id: 'cohere-command-r',
     maxOutput: 4096,
@@ -1983,7 +1997,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Command R+是一个最先进的RAG优化模型，旨在应对企业级工作负载。',
+    description: 'Command R+ is an advanced RAG-optimized model built for enterprise workloads.',
     displayName: 'Cohere Command R+',
     id: 'cohere-command-r-plus',
     maxOutput: 4096,
@@ -1992,7 +2006,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Mistral Nemo是一种尖端的语言模型（LLM），在其尺寸类别中拥有最先进的推理、世界知识和编码能力。',
+      'Mistral Nemo is a cutting-edge LLM with state-of-the-art reasoning, world knowledge, and coding for its size.',
     displayName: 'Mistral Nemo',
     id: 'mistral-nemo',
     maxOutput: 4096,
@@ -2000,7 +2014,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Mistral Small可用于任何需要高效率和低延迟的基于语言的任务。',
+    description: 'Mistral Small is suitable for any language-based task requiring high efficiency and low latency.',
     displayName: 'Mistral Small',
     id: 'mistral-small',
     maxOutput: 4096,
@@ -2009,7 +2023,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Mistral的旗舰模型，适合需要大规模推理能力或高度专业化的复杂任务（合成文本生成、代码生成、RAG或代理）。',
+      'Mistral’s flagship model for complex tasks needing large-scale reasoning or specialization (synthetic text, code, RAG, or agents).',
     displayName: 'Mistral Large',
     id: 'mistral-large',
     maxOutput: 4096,
@@ -2020,7 +2034,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: '在高分辨率图像上表现出色的图像推理能力，适用于视觉理解应用。',
+    description: 'Strong image reasoning on high-resolution images, suited for visual understanding apps.',
     displayName: 'Llama 3.2 11B Vision',
     id: 'llama-3.2-11b-vision-instruct',
     maxOutput: 4096,
@@ -2031,7 +2045,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: '适用于视觉理解代理应用的高级图像推理能力。',
+    description: 'Advanced image reasoning for visual-understanding agent applications.',
     displayName: 'Llama 3.2 90B Vision',
     id: 'llama-3.2-90b-vision-instruct',
     maxOutput: 4096,
@@ -2040,7 +2054,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1指令调优的文本模型，针对多语言对话用例进行了优化，在许多可用的开源和封闭聊天模型中，在常见行业基准上表现优异。',
+      'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 8B',
     id: 'meta-llama-3.1-8b-instruct',
     maxOutput: 4096,
@@ -2049,7 +2063,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1指令调优的文本模型，针对多语言对话用例进行了优化，在许多可用的开源和封闭聊天模型中，在常见行业基准上表现优异。',
+      'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 70B',
     id: 'meta-llama-3.1-70b-instruct',
     maxOutput: 4096,
@@ -2058,7 +2072,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1指令调优的文本模型，针对多语言对话用例进行了优化，在许多可用的开源和封闭聊天模型中，在常见行业基准上表现优异。',
+      'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 405B',
     id: 'meta-llama-3.1-405b-instruct',
     maxOutput: 4096,
@@ -2066,7 +2080,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: '一个多功能的80亿参数模型，针对对话和文本生成任务进行了优化。',
+    description: 'A versatile 8B-parameter model optimized for chat and text generation.',
     displayName: 'Meta Llama 3 8B',
     id: 'meta-llama-3-8b-instruct',
     maxOutput: 4096,
@@ -2074,7 +2088,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: '一个强大的700亿参数模型，在推理、编码和广泛的语言应用方面表现出色。',
+    description: 'A powerful 70B-parameter model that excels at reasoning, coding, and broad language tasks.',
     displayName: 'Meta Llama 3 70B',
     id: 'meta-llama-3-70b-instruct',
     maxOutput: 4096,
@@ -2082,7 +2096,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Phi-3-mini模型的更新版。',
+    description: 'An updated version of the Phi-3-mini model.',
     displayName: 'Phi-3.5-mini 128K',
     id: 'Phi-3.5-mini-instruct',
     maxOutput: 4096,
@@ -2093,7 +2107,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Phi-3-vision模型的更新版。',
+    description: 'An updated version of the Phi-3-vision model.',
     displayName: 'Phi-3.5-vision 128K',
     id: 'Phi-3.5-vision-instrust',
     maxOutput: 4096,
@@ -2101,7 +2115,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: 'Phi-3家族中最小的成员，针对质量和低延迟进行了优化。',
+    description: 'The smallest Phi-3 family member, optimized for quality and low latency.',
     displayName: 'Phi-3-mini 4K',
     id: 'Phi-3-mini-4k-instruct',
     maxOutput: 4096,
@@ -2109,7 +2123,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: '相同的Phi-3-mini模型，但具有更大的上下文大小，适用于RAG或少量提示。',
+    description: 'The same Phi-3-mini model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-mini 128K',
     id: 'Phi-3-mini-128k-instruct',
     maxOutput: 4096,
@@ -2117,7 +2131,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: '一个70亿参数模型，质量优于Phi-3-mini，重点关注高质量、推理密集型数据。',
+    description:
+      'A 7B-parameter model with higher quality than Phi-3-mini, focused on high-quality, reasoning-intensive data.',
     displayName: 'Phi-3-small 8K',
     id: 'Phi-3-small-8k-instruct',
     maxOutput: 4096,
@@ -2125,7 +2140,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: '相同的Phi-3-small模型，但具有更大的上下文大小，适用于RAG或少量提示。',
+    description: 'The same Phi-3-small model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-small 128K',
     id: 'Phi-3-small-128k-instruct',
     maxOutput: 4096,
@@ -2133,7 +2148,8 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description: '一个140亿参数模型，质量优于Phi-3-mini，重点关注高质量、推理密集型数据。',
+    description:
+      'A 14B-parameter model with higher quality than Phi-3-mini, focused on high-quality, reasoning-intensive data.',
     displayName: 'Phi-3-medium 4K',
     id: 'Phi-3-medium-4k-instruct',
     maxOutput: 4096,
@@ -2141,7 +2157,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: '相同的Phi-3-medium模型，但具有更大的上下文大小，适用于RAG或少量提示。',
+    description: 'The same Phi-3-medium model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-medium 128K',
     id: 'Phi-3-medium-128k-instruct',
     maxOutput: 4096,
@@ -2153,7 +2169,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'Llama 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'Llama 3.2 is designed for tasks combining vision and text, excelling at image captioning and visual QA to bridge language generation and visual reasoning.',
     displayName: 'Llama 3.2 11B Vision (Preview)',
     enabled: true,
     id: 'llama-3.2-11b-vision-preview',
@@ -2172,7 +2188,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     description:
-      'Llama 3.2 旨在处理结合视觉和文本数据的任务。它在图像描述和视觉问答等任务中表现出色，跨越了语言生成和视觉推理之间的鸿沟。',
+      'Llama 3.2 is designed for tasks combining vision and text, excelling at image captioning and visual QA to bridge language generation and visual reasoning.',
     displayName: 'Llama 3.2 90B Vision (Preview)',
     enabled: true,
     id: 'llama-3.2-90b-vision-preview',
@@ -2191,7 +2207,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1 8B 是一款高效能模型，提供了快速的文本生成能力，非常适合需要大规模效率和成本效益的应用场景。',
+      'Llama 3.1 8B is a high-efficiency model with fast text generation, ideal for large-scale, cost-effective applications.',
     displayName: 'Llama 3.1 8B',
     enabled: true,
     id: 'llama-3.1-8b-instant',
@@ -2210,7 +2226,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'Llama 3.1 70B 提供更强大的AI推理能力，适合复杂应用，支持超多的计算处理并保证高效和准确率。',
+      'Llama 3.1 70B delivers stronger AI reasoning for complex applications, supporting heavy compute with high efficiency and accuracy.',
     displayName: 'Llama 3.1 70B',
     enabled: true,
     id: 'llama-3.1-70b-versatile',
@@ -2228,7 +2244,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'Llama 3 Groq 8B Tool Use 是针对高效工具使用优化的模型，支持快速并行计算。',
+    description:
+      'Llama 3 Groq 8B Tool Use is optimized for efficient tool use with fast parallel compute.',
     displayName: 'Llama 3 Groq 8B Tool Use (Preview)',
     id: 'llama3-groq-8b-8192-tool-use-preview',
     pricing: {
@@ -2244,7 +2261,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'Llama 3 Groq 70B Tool Use 提供强大的工具调用能力，支持复杂任务的高效处理。',
+    description:
+      'Llama 3 Groq 70B Tool Use provides strong tool-calling for efficient handling of complex tasks.',
     displayName: 'Llama 3 Groq 70B Tool Use (Preview)',
     id: 'llama3-groq-70b-8192-tool-use-preview',
     pricing: {
@@ -2260,7 +2278,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'Meta Llama 3 8B 带来优质的推理效能，适合多场景应用需求。',
+    description: 'Meta Llama 3 8B delivers strong reasoning performance for diverse scenarios.',
     displayName: 'Meta Llama 3 8B',
     id: 'llama3-8b-8192',
     pricing: {
@@ -2276,7 +2294,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'Meta Llama 3 70B 提供无与伦比的复杂性处理能力，为高要求项目量身定制。',
+    description: 'Meta Llama 3 70B offers exceptional complexity handling for demanding projects.',
     displayName: 'Meta Llama 3 70B',
     id: 'llama3-70b-8192',
     pricing: {
@@ -2292,7 +2310,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'Gemma 2 9B 是一款优化用于特定任务和工具整合的模型。',
+    description: 'Gemma 2 9B is optimized for specific tasks and tool integration.',
     displayName: 'Gemma 2 9B',
     enabled: true,
     id: 'gemma2-9b-it',
@@ -2309,7 +2327,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: 'Gemma 7B 适合中小规模任务处理，兼具成本效益。',
+    description: 'Gemma 7B is cost-effective for small to mid-scale tasks.',
     displayName: 'Gemma 7B',
     id: 'gemma-7b-it',
     pricing: {
@@ -2325,7 +2343,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Mixtral 8x7B 提供高容错的并行计算能力，适合复杂任务。',
+    description: 'Mixtral 8x7B provides fault-tolerant parallel compute for complex tasks.',
     displayName: 'Mixtral 8x7B',
     id: 'mixtral-8x7b-32768',
     pricing: {
@@ -2341,7 +2359,8 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 4096,
-    description: 'LLaVA 1.5 7B 提供视觉处理能力融合，通过视觉信息输入生成复杂输出。',
+    description:
+      'LLaVA 1.5 7B fuses visual processing to generate complex outputs from visual inputs.',
     displayName: 'LLaVA 1.5 7B',
     id: 'llava-v1.5-7b-4096-preview',
     type: 'chat',
@@ -2352,7 +2371,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      '融合通用与代码能力的全新开源模型, 不仅保留了原有 Chat 模型的通用对话能力和 Coder 模型的强大代码处理能力，还更好地对齐了人类偏好。此外，DeepSeek-V2.5 在写作任务、指令跟随等多个方面也实现了大幅提升。',
+      'A new open-source model combining general and code abilities. It preserves the chat model’s general dialogue and the coder model’s strong coding, with better preference alignment. DeepSeek-V2.5 also improves writing and instruction following.',
     displayName: 'DeepSeek V2.5',
     enabled: true,
     id: 'deepseek-chat',
@@ -2372,7 +2391,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3.5 Haiku 是 Anthropic 最快的下一代模型。与 Claude 3 Haiku 相比，Claude 3.5 Haiku 在各项技能上都有所提升，并在许多智力基准测试中超越了上一代最大的模型 Claude 3 Opus。',
+      'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the prior largest model Claude 3 Opus on many intelligence benchmarks.',
     displayName: 'Claude 3.5 Haiku',
     enabled: true,
     id: 'claude-3-5-haiku-20241022',
@@ -2400,7 +2419,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3 Haiku 是 Anthropic 的最快且最紧凑的模型，旨在实现近乎即时的响应。它具有快速且准确的定向性能。',
+      'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
     displayName: 'Claude 3 Haiku',
     id: 'claude-3-haiku-20240307',
     maxOutput: 4096,
@@ -2420,7 +2439,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3 Sonnet 在智能和速度方面为企业工作负载提供了理想的平衡。它以更低的价格提供最大效用，可靠且适合大规模部署。',
+      'Claude 3 Sonnet balances intelligence and speed for enterprise workloads, delivering high utility at lower cost and reliable large-scale deployment.',
     displayName: 'Claude 3 Sonnet',
     id: 'claude-3-sonnet-20240229',
     maxOutput: 4096,
@@ -2440,7 +2459,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'Claude 3 Opus 是 Anthropic 用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+      'Claude 3 Opus is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude 3 Opus',
     enabled: true,
     id: 'claude-3-opus-20240229',
@@ -2457,7 +2476,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 200_000,
     description:
-      'Claude 2 为企业提供了关键能力的进步，包括业界领先的 200K token 上下文、大幅降低模型幻觉的发生率、系统提示以及一个新的测试功能：工具调用。',
+      'Claude 2 delivers key enterprise improvements, including a leading 200K-token context, reduced hallucinations, system prompts, and a new test feature: tool calling.',
     displayName: 'Claude 2.1',
     id: 'claude-2.1',
     maxOutput: 4096,
@@ -2473,7 +2492,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 100_000,
     description:
-      'Claude 2 为企业提供了关键能力的进步，包括业界领先的 200K token 上下文、大幅降低模型幻觉的发生率、系统提示以及一个新的测试功能：工具调用。',
+      'Claude 2 delivers key enterprise improvements, including a leading 200K-token context, reduced hallucinations, system prompts, and a new test feature: tool calling.',
     displayName: 'Claude 2.0',
     id: 'claude-2.0',
     maxOutput: 4096,
@@ -2493,7 +2512,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_008_192,
     description:
-      'Gemini 1.5 Flash 是Google最新的多模态AI模型，具备快速处理能力，支持文本、图像和视频输入，适用于多种任务的高效扩展。',
+      'Gemini 1.5 Flash is Google’s latest multimodal AI model with fast processing, supporting text, image, and video inputs for efficient scaling across tasks.',
     displayName: 'Gemini 1.5 Flash',
     enabled: true,
     id: 'gemini-1.5-flash-latest',
@@ -2513,7 +2532,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 002 是一款高效的多模态模型，支持广泛应用的扩展。',
+    description: 'Gemini 1.5 Flash 002 is an efficient multimodal model for broad application scaling.',
     displayName: 'Gemini 1.5 Flash 002',
     enabled: true,
     id: 'gemini-1.5-flash-002',
@@ -2534,7 +2553,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 001 是一款高效的多模态模型，支持广泛应用的扩展。',
+    description: 'Gemini 1.5 Flash 001 is an efficient multimodal model for broad application scaling.',
     displayName: 'Gemini 1.5 Flash 001',
     id: 'gemini-1.5-flash-001',
     maxOutput: 8192,
@@ -2553,7 +2572,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 0827 提供了优化后的多模态处理能力，适用多种复杂任务场景。',
+    description: 'Gemini 1.5 Flash 0827 delivers optimized multimodal processing for complex tasks.',
     displayName: 'Gemini 1.5 Flash 0827',
     id: 'gemini-1.5-flash-exp-0827',
     maxOutput: 8192,
@@ -2573,7 +2592,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 8B 是一款高效的多模态模型，支持广泛应用的扩展。',
+    description: 'Gemini 1.5 Flash 8B is an efficient multimodal model for broad application scaling.',
     displayName: 'Gemini 1.5 Flash 8B',
     enabled: true,
     id: 'gemini-1.5-flash-8b',
@@ -2595,7 +2614,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_008_192,
     description:
-      'Gemini 1.5 Flash 8B 0924 是最新的实验性模型，在文本和多模态用例中都有显著的性能提升。',
+      'Gemini 1.5 Flash 8B 0924 is the latest experimental model with notable gains across text and multimodal use cases.',
     displayName: 'Gemini 1.5 Flash 8B 0924',
     id: 'gemini-1.5-flash-8b-exp-0924',
     maxOutput: 8192,
@@ -2616,7 +2635,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_008_192,
     description:
-      'Gemini 1.5 Pro 支持高达200万个tokens，是中型多模态模型的理想选择，适用于复杂任务的多方面支持。',
+      'Gemini 1.5 Pro supports up to 2 million tokens, an ideal mid-sized multimodal model for complex tasks.',
     displayName: 'Gemini 1.5 Pro',
     enabled: true,
     id: 'gemini-1.5-pro-latest',
@@ -2638,7 +2657,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 2_008_192,
     description:
-      'Gemini 1.5 Pro 002 是最新的生产就绪模型，提供更高质量的输出，特别在数学、长上下文和视觉任务方面有显著提升。',
+      'Gemini 1.5 Pro 002 is the latest production-ready model with higher-quality outputs, especially improved in math, long context, and vision tasks.',
     displayName: 'Gemini 1.5 Pro 002',
     enabled: true,
     id: 'gemini-1.5-pro-002',
@@ -2659,7 +2678,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_008_192,
-    description: 'Gemini 1.5 Pro 001 是可扩展的多模态AI解决方案，支持广泛的复杂任务。',
+    description: 'Gemini 1.5 Pro 001 is a scalable multimodal AI solution for complex tasks.',
     displayName: 'Gemini 1.5 Pro 001',
     id: 'gemini-1.5-pro-001',
     maxOutput: 8192,
@@ -2679,7 +2698,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_008_192,
-    description: 'Gemini 1.5 Pro 0827 结合最新优化技术，带来更高效的多模态数据处理能力。',
+    description: 'Gemini 1.5 Pro 0827 applies latest optimizations for more efficient multimodal processing.',
     displayName: 'Gemini 1.5 Pro 0827',
     id: 'gemini-1.5-pro-exp-0827',
     maxOutput: 8192,
@@ -2699,7 +2718,7 @@ const higressChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 2_008_192,
-    description: 'Gemini 1.5 Pro 0801 提供出色的多模态处理能力，为应用开发带来更大灵活性。',
+    description: 'Gemini 1.5 Pro 0801 provides strong multimodal processing with greater flexibility for app development.',
     displayName: 'Gemini 1.5 Pro 0801',
     id: 'gemini-1.5-pro-exp-0801',
     maxOutput: 8192,
@@ -2715,7 +2734,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Gemini 1.0 Pro 是Google的高性能AI模型，专为广泛任务扩展而设计。',
+    description: 'Gemini 1.0 Pro is Google’s high-performance AI model designed for broad task scaling.',
     displayName: 'Gemini 1.0 Pro',
     id: 'gemini-1.0-pro-latest',
     maxOutput: 2048,
@@ -2734,7 +2753,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     description:
-      'Gemini 1.0 Pro 001 (Tuning) 提供稳定并可调优的性能，是复杂任务解决方案的理想选择。',
+      'Gemini 1.0 Pro 001 (Tuning) provides stable, tunable performance for complex tasks.',
     displayName: 'Gemini 1.0 Pro 001 (Tuning)',
     id: 'gemini-1.0-pro-001',
     maxOutput: 2048,
@@ -2749,7 +2768,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Gemini 1.0 Pro 002 (Tuning) 提供出色的多模态支持，专注于复杂任务的有效解决。',
+    description: 'Gemini 1.0 Pro 002 (Tuning) provides strong multimodal support for complex tasks.',
     displayName: 'Gemini 1.0 Pro 002 (Tuning)',
     id: 'gemini-1.0-pro-002',
     maxOutput: 2048,
@@ -2768,7 +2787,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Mistral Nemo是一个与Nvidia合作开发的12B模型，提供出色的推理和编码性能，易于集成和替换。',
+      'Mistral Nemo is a 12B model co-developed with Nvidia, offering strong reasoning and coding performance with easy integration.',
     displayName: 'Mistral Nemo',
     enabled: true,
     id: 'open-mistral-nemo',
@@ -2785,7 +2804,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 128_000,
-    description: 'Mistral Small是成本效益高、快速且可靠的选项，适用于翻译、摘要和情感分析等用例。',
+    description: 'Mistral Small is a cost-effective, fast, and reliable option for translation, summarization, and sentiment analysis.',
     displayName: 'Mistral Small',
     enabled: true,
     id: 'mistral-small-latest',
@@ -2803,7 +2822,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Mistral Large是旗舰大模型，擅长多语言任务、复杂推理和代码生成，是高端应用的理想选择。',
+      'Mistral Large is the flagship model, excelling at multilingual tasks, complex reasoning, and code generation for high-end applications.',
     displayName: 'Mistral Large',
     enabled: true,
     id: 'mistral-large-latest',
@@ -2817,7 +2836,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description: 'Codestral是专注于代码生成的尖端生成模型，优化了中间填充和代码补全任务。',
+    description: 'Codestral is a cutting-edge code generation model optimized for fill-in-the-middle and code completion.',
     displayName: 'Codestral',
     id: 'codestral-latest',
     pricing: {
@@ -2834,7 +2853,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'Pixtral 模型在图表和图理解、文档问答、多模态推理和指令遵循等任务上表现出强大的能力，能够以自然分辨率和宽高比摄入图像，还能够在长达 128K 令牌的长上下文窗口中处理任意数量的图像。',
+      'Pixtral performs strongly on chart/diagram understanding, document QA, multimodal reasoning, and instruction following. It ingests images at native resolution/aspect and can handle any number of images in a 128K context window.',
     displayName: 'Pixtral 12B',
     enabled: true,
     id: 'pixtral-12b-2409',
@@ -2848,7 +2867,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 128_000,
-    description: 'Ministral 3B 是Mistral的世界顶级边缘模型。',
+    description: 'Ministral 3B is Mistral’s top-tier edge model.',
     displayName: 'Ministral 3B',
     id: 'ministral-3b-latest',
     pricing: {
@@ -2861,7 +2880,7 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 128_000,
-    description: 'Ministral 8B 是Mistral的性价比极高的边缘模型。',
+    description: 'Ministral 8B is Mistral’s high-value edge model.',
     displayName: 'Ministral 8B',
     id: 'ministral-8b-latest',
     pricing: {
@@ -2875,7 +2894,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Mistral 7B是一款紧凑但高性能的模型，擅长批量处理和简单任务，如分类和文本生成，具有良好的推理能力。',
+      'Mistral 7B is compact but high-performing, strong for batch processing and simple tasks like classification and text generation, with solid reasoning.',
     displayName: 'Mistral 7B',
     id: 'open-mistral-7b',
     pricing: {
@@ -2889,7 +2908,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 32_768,
     description:
-      'Mixtral 8x7B是一个稀疏专家模型，利用多个参数提高推理速度，适合处理多语言和代码生成任务。',
+      'Mixtral 8x7B is a sparse MoE model that boosts inference speed, suitable for multilingual and code generation tasks.',
     displayName: 'Mixtral 8x7B',
     id: 'open-mixtral-8x7b',
     pricing: {
@@ -2906,7 +2925,7 @@ const higressChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'Mixtral 8x22B是一个更大的专家模型，专注于复杂任务，提供出色的推理能力和更高的吞吐量。',
+      'Mixtral 8x22B is a larger MoE model for complex tasks, offering strong reasoning and higher throughput.',
     displayName: 'Mixtral 8x22B',
     id: 'open-mixtral-8x22b',
     pricing: {
@@ -2920,7 +2939,7 @@ const higressChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 256_000,
     description:
-      'Codestral Mamba是专注于代码生成的Mamba 2语言模型，为先进的代码和推理任务提供强力支持。',
+      'Codestral Mamba is a Mamba-2 language model focused on code generation, supporting advanced code and reasoning tasks.',
     displayName: 'Codestral Mamba',
     id: 'open-codestral-mamba',
     pricing: {
@@ -2936,7 +2955,7 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 245_760,
-    description: '适用于广泛的自然语言处理任务，包括文本生成、对话系统等。',
+    description: 'Suitable for a wide range of NLP tasks, including text generation and dialogue systems.',
     displayName: 'abab6.5s',
     enabled: true,
     id: 'abab6.5s-chat',
@@ -2947,7 +2966,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: '专为多语种人设对话设计，支持英文及其他多种语言的高质量对话生成。',
+    description:
+      'Designed for multilingual persona chat, supporting high-quality dialogue generation in English and other languages.',
     displayName: 'abab6.5g',
     enabled: true,
     id: 'abab6.5g-chat',
@@ -2958,7 +2978,8 @@ const higressChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 8192,
-    description: '针对中文人设对话场景优化，提供流畅且符合中文表达习惯的对话生成能力。',
+    description:
+      'Optimized for Chinese persona chat, providing fluent dialogue that fits Chinese expression habits.',
     displayName: 'abab6.5t',
     enabled: true,
     id: 'abab6.5t-chat',
@@ -2966,14 +2987,16 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: '面向生产力场景，支持复杂任务处理和高效文本生成，适用于专业领域应用。',
+    description:
+      'Built for productivity scenarios with complex task handling and efficient text generation for professional use.',
     displayName: 'abab5.5',
     id: 'abab5.5-chat',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: '专为中文人设对话场景设计，提供高质量的中文对话生成能力，适用于多种应用场景。',
+    description:
+      'Designed for Chinese persona chat, delivering high-quality Chinese dialogue for various applications.',
     displayName: 'abab5.5s',
     id: 'abab5.5s-chat',
     type: 'chat',
@@ -2998,77 +3021,77 @@ const higressChatModels: AIChatModelCard[] = [
   },
   {
     description:
-      'Doubao-lite拥有极致的响应速度，更好的性价比，为客户不同场景提供更灵活的选择。支持4k上下文窗口的推理和精调。',
+      'Doubao-lite offers ultra-fast responses and better value, with flexible options across scenarios. Supports 4K context for inference and fine-tuning.',
     displayName: 'Doubao-lite-4k',
     id: 'Doubao-lite-4k',
     type: 'chat',
   },
   {
     description:
-      'Doubao-lite拥有极致的响应速度，更好的性价比，为客户不同场景提供更灵活的选择。支持32k上下文窗口的推理和精调。',
+      'Doubao-lite offers ultra-fast responses and better value, with flexible options across scenarios. Supports 32K context for inference and fine-tuning.',
     displayName: 'Doubao-lite-32k',
     id: 'Doubao-lite-32k',
     type: 'chat',
   },
   {
     description:
-      'Doubao-lite 拥有极致的响应速度，更好的性价比，为客户不同场景提供更灵活的选择。支持128k上下文窗口的推理和精调。',
+      'Doubao-lite offers ultra-fast responses and better value, with flexible options across scenarios. Supports 128K context for inference and fine-tuning.',
     displayName: 'Doubao-lite-128k',
     id: 'Doubao-lite-128k',
     type: 'chat',
   },
   {
     description:
-      '效果最好的主力模型，适合处理复杂任务，在参考问答、总结摘要、创作、文本分类、角色扮演等场景都有很好的效果。支持4k上下文窗口的推理和精调。',
+      'Best-performing flagship model for complex tasks, strong in reference QA, summarization, creation, classification, and roleplay. Supports 4K context for inference and fine-tuning.',
     displayName: 'Doubao-pro-4k',
     id: 'Doubao-pro-4k',
     type: 'chat',
   },
   {
     description:
-      '效果最好的主力模型，适合处理复杂任务，在参考问答、总结摘要、创作、文本分类、角色扮演等场景都有很好的效果。支持32k上下文窗口的推理和精调。',
+      'Best-performing flagship model for complex tasks, strong in reference QA, summarization, creation, classification, and roleplay. Supports 32K context for inference and fine-tuning.',
     displayName: 'Doubao-pro-32k',
     id: 'Doubao-pro-32k',
     type: 'chat',
   },
   {
     description:
-      '效果最好的主力模型，适合处理复杂任务，在参考问答、总结摘要、创作、文本分类、角色扮演等场景都有很好的效果。支持128k上下文窗口的推理和精调。',
+      'Best-performing flagship model for complex tasks, strong in reference QA, summarization, creation, classification, and roleplay. Supports 128K context for inference and fine-tuning.',
     displayName: 'Doubao-pro-128k',
     id: 'Doubao-pro-128k',
     type: 'chat',
   },
   {
     description:
-      '云雀（Skylark）第二代模型，Skylark2-pro-character模型具有优秀的角色扮演和聊天能力，擅长根据用户prompt要求扮演不同角色与用户展开聊天，角色风格突出，对话内容自然流畅，适用于构建聊天机器人、虚拟助手和在线客服等场景，有较高的响应速度。',
+      'Skylark 2nd-gen model. Skylark2-pro-character excels at roleplay and chat, matching prompts with distinct persona styles and natural dialogue for chatbots, virtual assistants, and customer service, with fast responses.',
     displayName: 'Skylark2-pro-character-4k',
     id: 'Skylark2-pro-character-4k',
     type: 'chat',
   },
   {
     description:
-      '云雀（Skylark）第二代模型，Skylark2-pro版本有较高的模型精度，适用于较为复杂的文本生成场景，如专业领域文案生成、小说创作、高质量翻译等，上下文窗口长度为32k。',
+      'Skylark 2nd-gen model. Skylark2-pro offers higher accuracy for complex text generation such as professional copywriting, novel writing, and high-quality translation, with a 32K context window.',
     displayName: 'Skylark2-pro-32k',
     id: 'Skylark2-pro-32k',
     type: 'chat',
   },
   {
     description:
-      '云雀（Skylark）第二代模型，Skylark2-pro模型有较高的模型精度，适用于较为复杂的文本生成场景，如专业领域文案生成、小说创作、高质量翻译等，上下文窗口长度为4k。',
+      'Skylark 2nd-gen model. Skylark2-pro offers higher accuracy for complex text generation such as professional copywriting, novel writing, and high-quality translation, with a 4K context window.',
     displayName: 'Skylark2-pro-4k',
     id: 'Skylark2-pro-4k',
     type: 'chat',
   },
   {
     description:
-      '云雀（Skylark）第二代模型，Skylark2-pro-turbo-8k推理更快，成本更低，上下文窗口长度为8k。',
+      'Skylark 2nd-gen model. Skylark2-pro-turbo-8k offers faster inference at lower cost with an 8K context window.',
     displayName: 'Skylark2-pro-turbo-8k',
     id: 'Skylark2-pro-turbo-8k',
     type: 'chat',
   },
   {
     description:
-      '云雀（Skylark）第二代模型，Skylark2-lite模型有较高的响应速度，适用于实时性要求高、成本敏感、对模型精度要求不高的场景，上下文窗口长度为8k。',
+      'Skylark 2nd-gen model. Skylark2-lite has fast responses for real-time, cost-sensitive scenarios with lower accuracy needs, with an 8K context window.',
     displayName: 'Skylark2-lite-8k',
     id: 'Skylark2-lite-8k',
     type: 'chat',

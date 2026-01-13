@@ -1,62 +1,66 @@
 {
-  "actions": {
-    "expand": {
-      "off": "Recolher",
-      "on": "Expandir"
-    },
-    "typobar": {
-      "off": "Ocultar barra de formatação",
-      "on": "Mostrar barra de formatação"
-    }
-  },
+  "actions.expand.off": "Recolher",
+  "actions.expand.on": "Expandir",
+  "actions.typobar.off": "Ocultar barra de formatação",
+  "actions.typobar.on": "Mostrar barra de formatação",
+  "autoSave.latest": "Última versão carregada",
+  "autoSave.saved": "Salvo",
+  "autoSave.saving": "Salvando automaticamente...",
   "cancel": "Cancelar",
+  "codemirror.copyFailed": "Falha ao copiar",
+  "codemirror.copySuccess": "Código copiado para a área de transferência",
+  "codemirror.selectLanguage": "Selecionar idioma",
+  "codemirror.selectTheme": "Selecionar tema",
+  "codemirror.showLineNumbers": "Mostrar números de linha",
+  "codemirror.tabSize": "Tamanho da tabulação",
+  "codemirror.theme": "Tema",
+  "codemirror.useTabs": "Usar tabulações",
   "confirm": "Confirmar",
-  "file": {
-    "error": "Erro: {{message}}",
-    "uploading": "Enviando arquivo..."
-  },
-  "image": {
-    "broken": "Imagem corrompida"
-  },
-  "link": {
-    "edit": "Editar link",
-    "open": "Abrir link",
-    "placeholder": "Digite a URL do link",
-    "unlink": "Remover link"
-  },
-  "math": {
-    "placeholder": "Por favor, insira a fórmula TeX"
-  },
-  "slash": {
-    "h1": "Título de Nível 1",
-    "h2": "Título de Nível 2",
-    "h3": "Título de Nível 3",
-    "hr": "Linha Divisória",
-    "table": "Tabela",
-    "tex": "Fórmula TeX"
-  },
-  "table": {
-    "delete": "Excluir tabela",
-    "deleteColumn": "Excluir coluna",
-    "deleteRow": "Excluir linha",
-    "insertColumnLeft": "Inserir {{count}} coluna(s) à esquerda",
-    "insertColumnRight": "Inserir {{count}} coluna(s) à direita",
-    "insertRowAbove": "Inserir {{count}} linha(s) acima",
-    "insertRowBelow": "Inserir {{count}} linha(s) abaixo"
-  },
-  "typobar": {
-    "blockquote": "Citação",
-    "bold": "Negrito",
-    "bulletList": "Lista não ordenada",
-    "code": "Código inline",
-    "codeblock": "Bloco de código",
-    "italic": "Itálico",
-    "link": "Link",
-    "numberList": "Lista numerada",
-    "strikethrough": "Tachado",
-    "table": "tabela",
-    "taskList": "Lista de Tarefas",
-    "tex": "Fórmula TeX",
-    "underline": "Sublinhado"
-  }
+  "file.error": "Erro: {{message}}",
+  "file.uploading": "Enviando arquivo...",
+  "image.broken": "Imagem corrompida",
+  "link.edit": "Editar link",
+  "link.editLinkTitle": "Link",
+  "link.editTextTitle": "Título",
+  "link.open": "Abrir link",
+  "link.placeholder": "Digite a URL do link",
+  "link.unlink": "Remover link",
+  "markdown.cancel": "Cancelar",
+  "markdown.confirm": "Converter",
+  "markdown.parseMessage": "Converter para o formato Markdown. O conteúdo existente será substituído. Tem certeza? (Fecha automaticamente em 5 segundos)",
+  "markdown.parseTitle": "Formatar como Markdown",
+  "math.placeholder": "Digite uma fórmula TeX",
+  "modifier.accept": "Manter",
+  "modifier.acceptAll": "Manter tudo",
+  "modifier.reject": "Reverter",
+  "modifier.rejectAll": "Reverter tudo",
+  "slash.h1": "Título 1",
+  "slash.h2": "Título 2",
+  "slash.h3": "Título 3",
+  "slash.hr": "Divisor",
+  "slash.table": "Tabela",
+  "slash.tex": "Fórmula TeX",
+  "table.delete": "Excluir tabela",
+  "table.deleteColumn": "Excluir coluna",
+  "table.deleteRow": "Excluir linha",
+  "table.insertColumnLeft": "Inserir {{count}} coluna(s) à esquerda",
+  "table.insertColumnRight": "Inserir {{count}} coluna(s) à direita",
+  "table.insertRowAbove": "Inserir {{count}} linha(s) acima",
+  "table.insertRowBelow": "Inserir {{count}} linha(s) abaixo",
+  "typobar.blockquote": "Citação",
+  "typobar.bold": "Negrito",
+  "typobar.bulletList": "Lista com marcadores",
+  "typobar.code": "Código embutido",
+  "typobar.codeblock": "Bloco de código",
+  "typobar.image": "Imagem",
+  "typobar.italic": "Itálico",
+  "typobar.link": "Link",
+  "typobar.numberList": "Lista numerada",
+  "typobar.redo": "Refazer",
+  "typobar.strikethrough": "Tachado",
+  "typobar.table": "Tabela",
+  "typobar.taskList": "Lista de tarefas",
+  "typobar.tex": "Fórmula TeX",
+  "typobar.underline": "Sublinhado",
+  "typobar.undo": "Desfazer"
 }

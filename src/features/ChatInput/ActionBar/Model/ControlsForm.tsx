@@ -7,32 +7,41 @@ import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+import { useAgentId } from '../../hooks/useAgentId';
+import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
+import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
+import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
 import ImageAspectRatioSelect from './ImageAspectRatioSelect';
 import ImageResolutionSlider from './ImageResolutionSlider';
 import ReasoningEffortSlider from './ReasoningEffortSlider';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
 import TextVerbositySlider from './TextVerbositySlider';
 import ThinkingBudgetSlider from './ThinkingBudgetSlider';
+import ThinkingLevel2Slider from './ThinkingLevel2Slider';
 import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
 const ControlsForm = memo(() => {
   const { t } = useTranslation('chat');
-  const [model, provider, updateAgentChatConfig] = useAgentStore((s) => [
-    agentSelectors.currentAgentModel(s),
-    agentSelectors.currentAgentModelProvider(s),
-    s.updateAgentChatConfig,
+  const agentId = useAgentId();
+  const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const [model, provider] = useAgentStore((s) => [
+    agentByIdSelectors.getAgentModelById(agentId)(s),
+    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
   ]);
   const [form] = Form.useForm();
   const enableReasoning = AntdForm.useWatch(['enableReasoning'], form);
 
-  const config = useAgentStore(agentChatConfigSelectors.currentChatConfig, isEqual);
+  const config = useAgentStore(
+    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
+    isEqual,
+  );
 
   const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
 
@@ -135,6 +144,28 @@ const ControlsForm = memo(() => {
       },
     },
     {
+      children: <GPT52ReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'gpt5_2ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <GPT52ProReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'gpt5_2ProReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
       children: <TextVerbositySlider />,
       desc: 'text_verbosity',
       label: t('extendParams.textVerbosity.title'),
@@ -147,7 +178,7 @@ const ControlsForm = memo(() => {
     },
     {
       children: <ThinkingBudgetSlider />,
-      label: t('extendParams.reasoningBudgetToken.title'),
+      label: t('extendParams.thinkingBudget.title'),
       layout: 'vertical',
       minWidth: 460,
       name: 'thinkingBudget',
@@ -167,7 +198,7 @@ const ControlsForm = memo(() => {
       layout: isNarrow ? 'vertical' : 'horizontal',
       minWidth: undefined,
       name: 'urlContext',
-      style: isNarrow ? undefined : { width: 445 },
+      style: isNarrow ? undefined : { minWidth: 360 },
       tag: 'urlContext',
     },
     {
@@ -187,8 +218,22 @@ const ControlsForm = memo(() => {
       minWidth: undefined,
       name: 'thinkingLevel',
       style: {
+        minWidth: 400,
         paddingBottom: 0,
       },
+      tag: 'thinkingLevel',
+    },
+    {
+      children: <ThinkingLevel2Slider />,
+      label: t('extendParams.thinkingLevel.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'thinkingLevel2',
+      style: {
+        minWidth: 400,
+        paddingBottom: 0,
+      },
+      tag: 'thinkingLevel',
     },
     {
       children: <ImageAspectRatioSelect />,

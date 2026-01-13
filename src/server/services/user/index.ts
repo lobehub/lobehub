@@ -1,14 +1,17 @@
-import { UserJSON } from '@clerk/backend';
-import { LobeChatDatabase } from '@lobechat/database';
+ 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { type UserJSON } from '@clerk/backend';
+import { type LobeChatDatabase } from '@lobechat/database';
 
+import { initNewUserForBusiness } from '@/business/server/user';
 import { UserModel } from '@/database/models/user';
 import { initializeServerAnalytics } from '@/libs/analytics';
 import { pino } from '@/libs/logger';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { S3 } from '@/server/modules/S3';
-import { AgentService } from '@/server/services/agent';
+import { FileS3 } from '@/server/modules/S3';
 
 type CreatedUser = {
+  createdAt?: Date | null;
   email?: string | null;
   firstName?: string | null;
   id: string;
@@ -25,11 +28,14 @@ export class UserService {
   }
 
   async initUser(user: CreatedUser) {
-    const agentService = new AgentService(this.db, user.id);
-    await agentService.createInbox();
-
-    /* ↓ cloud slot ↓ */
-    /* ↑ cloud slot ↑ */
+    if (ENABLE_BUSINESS_FEATURES) {
+      try {
+        await initNewUserForBusiness(user.id, user.createdAt);
+      } catch (error) {
+        console.error(error);
+        console.error('Failed to init new user for business');
+      }
+    }
 
     const analytics = await initializeServerAnalytics();
     analytics?.identify(user.id, {
@@ -134,7 +140,7 @@ export class UserService {
   };
 
   getUserAvatar = async (id: string, image: string) => {
-    const s3 = new S3();
+    const s3 = new FileS3();
     const s3FileUrl = `user/avatar/${id}/${image}`;
 
     try {

@@ -1,4 +1,3 @@
-import { Segmented } from '@lobehub/ui';
 import { Blocks } from 'lucide-react';
 import { Suspense, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,14 +5,12 @@ import { useTranslation } from 'react-i18next';
 import PluginStore from '@/features/PluginStore';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import {
-  featureFlagsSelectors,
-  serverConfigSelectors,
-  useServerConfigStore,
-} from '@/store/serverConfig';
+import { agentByIdSelectors } from '@/store/agent/selectors';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
+import PopoverContent from './PopoverContent';
 import { useControls } from './useControls';
 
 type TabType = 'all' | 'installed';
@@ -24,10 +21,9 @@ const Tools = memo(() => {
   const [updating, setUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType | null>(null);
   const { marketItems, installedPluginItems } = useControls({
-    setModalOpen,
     setUpdating,
   });
-  const { enablePlugins } = useServerConfigStore(featureFlagsSelectors);
+
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
   const isInitializedRef = useRef(false);
 
@@ -39,12 +35,12 @@ const Tools = memo(() => {
     }
   }, [installedPluginItems.length]);
 
-  const model = useAgentStore(agentSelectors.currentAgentModel);
-  const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
+  const agentId = useAgentId();
+  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
+  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
 
   const enableFC = useModelSupportToolUse(model, provider);
 
-  if (!enablePlugins) return null;
   if (!enableFC)
     return <Action disabled icon={Blocks} showTooltip={true} title={t('tools.disabled')} />;
 
@@ -55,41 +51,26 @@ const Tools = memo(() => {
   return (
     <Suspense fallback={<Action disabled icon={Blocks} title={t('tools.title')} />}>
       <Action
-        dropdown={{
-          maxHeight: 500,
-          maxWidth: 480,
-          menu: {
-            items: [
-              {
-                key: 'tabs',
-                label: (
-                  <Segmented
-                    block
-                    onChange={(v) => setActiveTab(v as TabType)}
-                    options={[
-                      {
-                        label: t('tools.tabs.all', { defaultValue: 'all' }),
-                        value: 'all',
-                      },
-                      {
-                        label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
-                        value: 'installed',
-                      },
-                    ]}
-                    size="small"
-                    value={effectiveTab}
-                  />
-                ),
-                type: 'group',
-              },
-              ...currentItems,
-            ],
-          },
-          minHeight: enableKlavis ? 500 : undefined,
-          minWidth: 320,
-        }}
         icon={Blocks}
         loading={updating}
+        popover={{
+          content: (
+            <PopoverContent
+              activeTab={effectiveTab}
+              currentItems={currentItems}
+              enableKlavis={enableKlavis}
+              onOpenStore={() => setModalOpen(true)}
+              onTabChange={setActiveTab}
+            />
+          ),
+          maxWidth: 320,
+          minWidth: 320,
+          styles: {
+            content: {
+              padding: 0,
+            },
+          },
+        }}
         showTooltip={false}
         title={t('tools.title')}
       />

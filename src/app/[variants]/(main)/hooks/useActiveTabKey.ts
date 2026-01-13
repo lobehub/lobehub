@@ -1,6 +1,6 @@
 import { useLocation, useSearchParams } from 'react-router-dom';
 
-import { ProfileTabs, SettingsTabs, SidebarTabKey } from '@/store/global/initialState';
+import { ProfileTabs, SettingsTabs, type SidebarTabKey } from '@/store/global/initialState';
 
 /**
  * Returns the active tab key (chat/discover/settings/...)

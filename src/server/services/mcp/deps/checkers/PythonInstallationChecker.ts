@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { InstallationChecker, PackageInstallCheckResult } from '../types';
+import { type InstallationChecker, type PackageInstallCheckResult } from '../types';
 
 const execPromise = promisify(exec);
 

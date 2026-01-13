@@ -16,8 +16,9 @@ read @.cursor/rules/project-structure.mdc
 
 - use rebase for git pull
 - git commit message should prefix with gitmoji
-- git branch name format example: tj/feat/feature-name
+- git branch name format template: <type>/<feature-name>
 - use .github/PULL_REQUEST_TEMPLATE.md to generate pull request description
+- PR titles starting with `✨ feat/` or `🐛 fix` will trigger the release workflow upon merge. Only use these prefixes for significant user-facing feature changes or bug fixes
 
 ### Package Management
 
@@ -33,7 +34,7 @@ see @.cursor/rules/typescript.mdc
 
 ### Testing
 
-- **Required Rule**: read `@.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
+- **Required Rule**: read `.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
 - **Command**:
   - web: `bunx vitest run --silent='passed-only' '[file-path-pattern]'`
   - packages(eg: database): `cd packages/database && bunx vitest run --silent='passed-only' '[file-path-pattern]'`
@@ -46,7 +47,7 @@ see @.cursor/rules/typescript.mdc
 
 ### Typecheck
 
-- use `bun run typecheck` to check type errors.
+- use `bun run type-check` to check type errors.
 
 ### i18n
 

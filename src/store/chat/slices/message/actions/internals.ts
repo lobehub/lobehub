@@ -1,15 +1,15 @@
 import { parse } from '@lobechat/conversation-flow';
-import { TraceEventPayloads } from '@lobechat/types';
+import { type TraceEventPayloads } from '@lobechat/types';
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
-import { StateCreator } from 'zustand/vanilla';
+import { type StateCreator } from 'zustand/vanilla';
 
 import { traceService } from '@/services/trace';
-import { ChatStore } from '@/store/chat/store';
+import { type ChatStore } from '@/store/chat/store';
 
 import { displayMessageSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
-import { MessageDispatch, messagesReducer } from '../reducer';
+import { type MessageDispatch, messagesReducer } from '../reducer';
 
 const log = debug('lobe-store:message-internals');
 
@@ -37,36 +37,17 @@ export const messageInternals: StateCreator<
 > = (set, get) => ({
   // the internal process method of the AI message
   internal_dispatchMessage: (payload, context) => {
-    let sessionId: string;
-    let topicId: string | null | undefined;
+    // Get full conversation context (including scope) from operation or global state
+    const ctx = get().internal_getConversationContext(context);
+    log(
+      '[internal_dispatchMessage] context: agentId=%s, topicId=%s, threadId=%s, scope=%s',
+      ctx.agentId,
+      ctx.topicId,
+      ctx.threadId,
+      ctx.scope,
+    );
 
-    // Get context from operation if operationId is provided
-    if (context?.operationId) {
-      const operation = get().operations[context.operationId];
-      if (!operation) {
-        log('[internal_dispatchMessage] ERROR: Operation not found: %s', context.operationId);
-        throw new Error(`Operation not found: ${context.operationId}`);
-      }
-      sessionId = operation.context.sessionId!;
-      topicId = operation.context.topicId;
-      log(
-        '[internal_dispatchMessage] get context from operation %s: sessionId=%s, topicId=%s',
-        context.operationId,
-        sessionId,
-        topicId,
-      );
-    } else {
-      // Fallback to global state
-      sessionId = get().activeId;
-      topicId = get().activeTopicId;
-      log(
-        '[internal_dispatchMessage] use global context: sessionId=%s, topicId=%s',
-        sessionId,
-        topicId,
-      );
-    }
-
-    const messagesKey = messageMapKey(sessionId, topicId);
+    const messagesKey = messageMapKey(ctx);
 
     // Get raw messages from dbMessagesMap and apply reducer
     const rawMessages = get().dbMessagesMap[messagesKey] || [];
