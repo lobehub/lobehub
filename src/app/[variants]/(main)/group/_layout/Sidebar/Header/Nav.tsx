@@ -41,7 +41,7 @@ const Nav = memo(() => {
           active={isProfileActive}
           icon={BotPromptIcon}
           onClick={() => {
-            switchTopic(undefined, true);
+            switchTopic(null, { skipRefreshMessage: true });
             router.push(urlJoin('/group', groupId!, 'profile'));
           }}
           title={t('tab.groupProfile')}

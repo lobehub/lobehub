@@ -1,5 +1,12 @@
 import { type IEditor } from '@lobehub/editor';
 
+export type SaveStatus = 'idle' | 'saving' | 'saved';
+
+export interface SaveState {
+  lastUpdatedTime?: Date | null;
+  saveStatus: SaveStatus;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface PublicState {}
 
@@ -11,6 +18,10 @@ export interface State extends PublicState {
   chatPanelExpanded: boolean;
   editor?: IEditor;
   editorState?: any; // EditorState from useEditorState hook
+  /**
+   * Save state map by tab ID (key: 'group' | agentId)
+   */
+  saveStateMap: Record<string, SaveState>;
   /**
    * Content being streamed from AI
    */
@@ -24,6 +35,7 @@ export interface State extends PublicState {
 export const initialState: State = {
   activeTabId: 'group',
   chatPanelExpanded: true,
+  saveStateMap: {},
   streamingContent: undefined,
   streamingInProgress: false,
 };

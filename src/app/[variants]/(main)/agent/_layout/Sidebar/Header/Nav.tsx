@@ -55,7 +55,7 @@ const Nav = memo(() => {
           active={isProfileActive}
           icon={BotPromptIcon}
           onClick={() => {
-            switchTopic(undefined, true);
+            switchTopic(null, { skipRefreshMessage: true });
             router.push(urlJoin('/agent', agentId!, 'profile'));
           }}
           title={t('tab.profile')}

@@ -3,7 +3,7 @@ import { type StateCreator } from 'zustand';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
 
-import { type State, initialState } from './initialState';
+import { type SaveState, type SaveStatus, type State, initialState } from './initialState';
 
 type SaveContentPayload = {
   content: string;
@@ -17,23 +17,47 @@ export interface Action {
   handleContentChange: (saveCallback: (payload: SaveContentPayload) => Promise<void>) => void;
   setActiveTabId: (tabId: string) => void;
   setChatPanelExpanded: (expanded: boolean | ((prev: boolean) => boolean)) => void;
+  updateSaveStatus: (tabId: string, status: SaveStatus) => void;
 }
 
 export type Store = State & Action;
 
-// Store the latest saveCallback reference to avoid stale closures
+// Store the latest saveCallback and tabId references to avoid stale closures
 let saveCallbackRef: ((payload: SaveContentPayload) => Promise<void>) | null = null;
+let currentTabIdRef: string | null = null;
+
+const DEFAULT_SAVE_STATE: SaveState = { lastUpdatedTime: null, saveStatus: 'idle' };
 
 export const store: StateCreator<Store> = (set, get) => {
+  const updateSaveStatusInternal = (tabId: string, status: SaveStatus) => {
+    const { saveStateMap } = get();
+    const currentState = saveStateMap[tabId] || DEFAULT_SAVE_STATE;
+    set({
+      saveStateMap: {
+        ...saveStateMap,
+        [tabId]: {
+          ...currentState,
+          lastUpdatedTime: status === 'saved' ? new Date() : currentState.lastUpdatedTime,
+          saveStatus: status,
+        },
+      },
+    });
+  };
+
   // Create debounced save that uses the latest callback reference
   const debouncedSave = debounce(
     async (payload: SaveContentPayload) => {
+      const tabId = currentTabIdRef;
+      if (!tabId) return;
+
       try {
         if (saveCallbackRef) {
           await saveCallbackRef(payload);
+          updateSaveStatusInternal(tabId, 'saved');
         }
       } catch (error) {
         console.error('[ProfileEditor] Failed to save:', error);
+        updateSaveStatusInternal(tabId, 'idle');
       }
     },
     EDITOR_DEBOUNCE_TIME,
@@ -59,7 +83,7 @@ export const store: StateCreator<Store> = (set, get) => {
     },
 
     finishStreaming: async (saveCallback) => {
-      const { editor, streamingContent } = get();
+      const { activeTabId, editor, streamingContent } = get();
       if (!streamingContent) {
         set({ streamingInProgress: false });
         return;
@@ -77,13 +101,17 @@ export const store: StateCreator<Store> = (set, get) => {
         }
       }
 
+      updateSaveStatusInternal(activeTabId, 'saving');
+
       try {
         await saveCallback({
           content: finalContent,
           editorData: structuredClone(editorData || {}),
         });
+        updateSaveStatusInternal(activeTabId, 'saved');
       } catch (error) {
         console.error('[ProfileEditor] Failed to save streaming content:', error);
+        updateSaveStatusInternal(activeTabId, 'idle');
       }
 
       set({
@@ -97,11 +125,15 @@ export const store: StateCreator<Store> = (set, get) => {
     },
 
     handleContentChange: (saveCallback) => {
-      const { editor } = get();
+      const { activeTabId, editor } = get();
       if (!editor) return;
 
-      // Always update ref to use the latest callback
+      // Always update refs to use the latest callback and tabId
       saveCallbackRef = saveCallback;
+      currentTabIdRef = activeTabId;
+
+      // Set saving status immediately when user makes changes
+      updateSaveStatusInternal(activeTabId, 'saving');
 
       try {
         const markdownContent = (editor.getDocument('markdown') as unknown as string) || '';
@@ -113,6 +145,7 @@ export const store: StateCreator<Store> = (set, get) => {
         });
       } catch (error) {
         console.error('[ProfileEditor] Failed to read editor content:', error);
+        updateSaveStatusInternal(activeTabId, 'idle');
       }
     },
 
@@ -126,6 +159,10 @@ export const store: StateCreator<Store> = (set, get) => {
       } else {
         set({ chatPanelExpanded: expanded });
       }
+    },
+
+    updateSaveStatus: (tabId, status) => {
+      updateSaveStatusInternal(tabId, status);
     },
   };
 };

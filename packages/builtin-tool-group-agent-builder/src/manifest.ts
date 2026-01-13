@@ -44,12 +44,6 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
             description: 'A brief description of what this agent does and its expertise.',
             type: 'string',
           },
-          plugins: {
-            description:
-              'Array of plugin identifiers to enable for this agent. Use identifiers from official_tools context (e.g., "lobe-cloud-sandbox", "web-crawler").',
-            items: { type: 'string' },
-            type: 'array',
-          },
           systemRole: {
             description:
               "The system prompt that defines the agent's behavior, personality, and capabilities.",
@@ -58,6 +52,12 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
           title: {
             description: 'The display name for the new agent.',
             type: 'string',
+          },
+          tools: {
+            description:
+              'Array of tool identifiers to enable for this agent. Use identifiers from official_tools context (e.g., "lobe-cloud-sandbox", "web-crawler").',
+            items: { type: 'string' },
+            type: 'array',
           },
         },
         required: ['title', 'systemRole'],
@@ -93,15 +93,15 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
                     "The system prompt that defines the agent's behavior, personality, and capabilities.",
                   type: 'string',
                 },
-                plugins: {
+                tools: {
                   description:
-                    'Array of plugin identifiers to enable for this agent. Use identifiers from official_tools context (e.g., "lobe-cloud-sandbox", "web-crawler").',
+                    'Array of tool identifiers to enable for this agent. Use identifiers from official_tools context (e.g., "lobe-cloud-sandbox", "web-crawler").',
                   items: { type: 'string' },
                   type: 'array',
                 },
                 /* eslint-enable sort-keys-fix/sort-keys-fix */
               },
-              required: ['title', 'systemRole'],
+              required: ['avatar', 'title', 'description', 'systemRole'],
               type: 'object',
             },
             type: 'array',

@@ -102,11 +102,12 @@ export class GroupAgentBuilderExecutionRuntime {
       }
 
       // Create a virtual agent only (no session needed for group agents)
+      // Map 'tools' from LLM input to 'plugins' for internal API
       const result = await agentService.createAgentOnly({
         config: {
           avatar: args.avatar,
           description: args.description,
-          plugins: args.plugins,
+          plugins: args.tools,
           systemRole: args.systemRole,
           title: args.title,
           virtual: true,
@@ -164,10 +165,11 @@ export class GroupAgentBuilderExecutionRuntime {
       }
 
       // Use batch API to create all agents in one request
+      // Map 'tools' from LLM input to 'plugins' for internal API
       const agentConfigs: GroupMemberConfig[] = args.agents.map((agentDef) => ({
         avatar: agentDef.avatar,
         description: agentDef.description,
-        plugins: agentDef.plugins,
+        plugins: agentDef.tools,
         systemRole: agentDef.systemRole,
         title: agentDef.title,
       }));
