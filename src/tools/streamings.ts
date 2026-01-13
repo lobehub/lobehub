@@ -3,6 +3,10 @@ import {
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
 import {
+  GroupAgentBuilderManifest,
+  GroupAgentBuilderStreamings,
+} from '@lobechat/builtin-tool-group-agent-builder/client';
+import {
   GroupManagementManifest,
   GroupManagementStreamings,
 } from '@lobechat/builtin-tool-group-management/client';
@@ -11,6 +15,7 @@ import {
   LocalSystemManifest,
   LocalSystemStreamings,
 } from '@lobechat/builtin-tool-local-system/client';
+import { NotebookManifest, NotebookStreamings } from '@lobechat/builtin-tool-notebook/client';
 import { type BuiltinStreaming } from '@lobechat/types';
 
 /**
@@ -23,12 +28,17 @@ import { type BuiltinStreaming } from '@lobechat/types';
  */
 const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
   [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
+  [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
+    string,
+    BuiltinStreaming
+  >,
   [GroupManagementManifest.identifier]: GroupManagementStreamings as Record<
     string,
     BuiltinStreaming
   >,
   [GTDManifest.identifier]: GTDStreamings as Record<string, BuiltinStreaming>,
   [LocalSystemManifest.identifier]: LocalSystemStreamings as Record<string, BuiltinStreaming>,
+  [NotebookManifest.identifier]: NotebookStreamings as Record<string, BuiltinStreaming>,
 };
 
 /**

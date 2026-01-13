@@ -25,10 +25,10 @@ const GroupItem = memo<GroupItemProps>(
           toggleMessageEditing(item.id, true);
         }}
       >
-        <ContentBlock {...item} assistantId={assistantId} error={error} />
+        <ContentBlock {...item} assistantId={assistantId} disableEditing={disableEditing} error={error} />
       </Flexbox>
     ) : (
-      <ContentBlock {...item} assistantId={assistantId} error={error} />
+      <ContentBlock {...item} assistantId={assistantId} disableEditing={disableEditing} error={error} />
     );
   },
   isEqual,

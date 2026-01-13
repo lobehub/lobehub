@@ -20,6 +20,7 @@ const Render = dynamic(() => import('../../AssistantGroup/Tool/Render'), {
 export interface InspectorProps {
   apiName: string;
   arguments?: string;
+  disableEditing?: boolean;
   identifier: string;
   index: number;
   messageId: string;
@@ -32,7 +33,7 @@ export interface InspectorProps {
  * Tool message component - adapts Tool message data to use AssistantGroup/Tool components
  */
 const Tool = memo<InspectorProps>(
-  ({ arguments: requestArgs, apiName, messageId, toolCallId, index, identifier, type }) => {
+  ({ arguments: requestArgs, apiName, disableEditing, messageId, toolCallId, index, identifier, type }) => {
     const [showDebug, setShowDebug] = useState(false);
     const [showPluginRender, setShowPluginRender] = useState(false);
     const [expand, setExpand] = useState(true);
@@ -66,16 +67,18 @@ const Tool = memo<InspectorProps>(
       >
         <AccordionItem
           action={
-            <Actions
-              assistantMessageId={messageId}
-              handleExpand={(expand) => setExpand(!!expand)}
-              identifier={identifier}
-              setShowDebug={setShowDebug}
-              setShowPluginRender={setShowPluginRender}
-              showCustomPluginRender={false}
-              showDebug={showDebug}
-              showPluginRender={showPluginRender}
-            />
+            !disableEditing && (
+              <Actions
+                assistantMessageId={messageId}
+                handleExpand={(expand) => setExpand(!!expand)}
+                identifier={identifier}
+                setShowDebug={setShowDebug}
+                setShowPluginRender={setShowPluginRender}
+                showCustomPluginRender={false}
+                showDebug={showDebug}
+                showPluginRender={showPluginRender}
+              />
+            )
           }
           itemKey={'tool'}
           paddingBlock={4}
@@ -83,7 +86,7 @@ const Tool = memo<InspectorProps>(
           title={<Inspectors apiName={apiName} identifier={identifier} result={result} />}
         >
           <Flexbox gap={8} paddingBlock={8}>
-            {showDebug && (
+            {showDebug && !disableEditing && (
               <Debug
                 apiName={apiName}
                 identifier={identifier}
@@ -96,6 +99,7 @@ const Tool = memo<InspectorProps>(
             <Render
               apiName={apiName}
               arguments={requestArgs}
+              disableEditing={disableEditing}
               identifier={identifier}
               messageId={messageId}
               result={result}

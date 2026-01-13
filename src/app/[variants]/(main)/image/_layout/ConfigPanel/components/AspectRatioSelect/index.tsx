@@ -29,8 +29,7 @@ const AspectRatioSelect = memo<AspectRatioSelectProps>(
           {options?.map((item) => {
             const [width, height] = item.value.split(':').map(Number);
             const isWidthGreater = width > height;
-            const isEqual = width === height;
-            const isActive = isEqual ? item.value === '1:1' : active === item.value;
+            const isActive = active === item.value;
             return (
               <Block
                 align={'center'}

@@ -1,5 +1,4 @@
-import { Flexbox, Input } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Flexbox, Input, Popover } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 import { useHomeStore } from '@/store/home';
@@ -11,7 +10,7 @@ interface EditingProps {
 }
 
 const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
-  const editing = useHomeStore((s) => s.agentRenamingId === id);
+  const editing = useHomeStore((s) => s.groupRenamingId === id);
 
   const [newTitle, setNewTitle] = useState(title);
 
@@ -20,17 +19,10 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
 
     if (hasChanges) {
       try {
-        // Set loading state
-        useHomeStore.getState().setAgentUpdatingId(id);
-
-        // TODO: Add group title update logic here
-        // await updateGroupTitle(id, newTitle);
-
-        // Refresh agent list to update sidebar display
-        await useHomeStore.getState().refreshAgentList();
+        useHomeStore.getState().setGroupUpdatingId(id);
+        await useHomeStore.getState().renameAgentGroup(id, newTitle);
       } finally {
-        // Clear loading state
-        useHomeStore.getState().setAgentUpdatingId(null);
+        useHomeStore.getState().setGroupUpdatingId(null);
       }
     }
     toggleEditing(false);
@@ -38,7 +30,6 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
 
   return (
     <Popover
-      arrow={false}
       content={
         <Flexbox gap={4} horizontal onClick={(e) => e.stopPropagation()} style={{ width: 280 }}>
           <Input
@@ -53,19 +44,18 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
           />
         </Flexbox>
       }
-      destroyOnHidden
       onOpenChange={(open) => {
         if (!open) handleUpdate();
         toggleEditing(open);
       }}
       open={editing}
-      placement={'bottomLeft'}
+      placement="bottomLeft"
       styles={{
-        container: {
+        content: {
           padding: 4,
         },
       }}
-      trigger={['click']}
+      trigger="click"
     >
       <div />
     </Popover>

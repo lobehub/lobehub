@@ -2,6 +2,10 @@
 
 import React, { Fragment, memo } from 'react';
 
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+
 import { Artifacts } from './Artifacts';
 import { Document } from './Document';
 import { FilePreview } from './FilePreview';
@@ -14,72 +18,27 @@ import { Thread } from './Thread';
 import Header from './components/Header';
 import { type PortalImpl } from './type';
 
-// Keep GroupThread before Thread so group DM threads take precedence when enabled
-// Document should be before Notebook so detail view takes precedence
-const items: PortalImpl[] = [
-  GroupThread,
-  Thread,
-  MessageDetail,
-  Artifacts,
-  Plugins,
-  FilePreview,
-  Document,
-  Notebook,
-];
+// View type to component mapping
+const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
+  [PortalViewType.Home]: {
+    Body: HomeBody,
+    Title: HomeTitle,
+  },
+  [PortalViewType.Artifact]: Artifacts,
+  [PortalViewType.Document]: Document,
+  [PortalViewType.Notebook]: Notebook,
+  [PortalViewType.FilePreview]: FilePreview,
+  [PortalViewType.MessageDetail]: MessageDetail,
+  [PortalViewType.ToolUI]: Plugins,
+  [PortalViewType.Thread]: Thread,
+  [PortalViewType.GroupThread]: GroupThread,
+};
 
-export const PortalTitle = memo(() => {
-  const enabledList: boolean[] = [];
-
-  for (const item of items) {
-    const enabled = item.useEnable();
-    enabledList.push(enabled);
-  }
-
-  for (const [i, element] of enabledList.entries()) {
-    const Title = items[i].Title;
-    if (element) {
-      return <Title />;
-    }
-  }
-
-  return <HomeTitle />;
-});
-
-export const PortalHeader = memo(() => {
-  const enabledList: boolean[] = [];
-
-  for (const item of items) {
-    const enabled = item.useEnable();
-    enabledList.push(enabled);
-  }
-
-  for (const [i, element] of enabledList.entries()) {
-    const Header = items[i].Header;
-    if (element && Header) {
-      return <Header />;
-    }
-  }
-
-  return <Header title={<PortalTitle />} />;
-});
-
-const PortalBody = memo(() => {
-  const enabledList: boolean[] = [];
-
-  for (const item of items) {
-    const enabled = item.useEnable();
-    enabledList.push(enabled);
-  }
-
-  for (const [i, element] of enabledList.entries()) {
-    const Body = items[i].Body;
-    if (element) {
-      return <Body />;
-    }
-  }
-
-  return <HomeBody />;
-});
+// Default Home component
+const HomeImpl: PortalImpl = {
+  Body: HomeBody,
+  Title: HomeTitle,
+};
 
 interface PortalContentProps {
   renderBody?: (body: React.ReactNode) => React.ReactNode;
@@ -87,37 +46,18 @@ interface PortalContentProps {
 
 /**
  * Portal content with Wrapper support
- * When an enabled item has a Wrapper, it wraps both Header and Body
+ * Uses the view stack to determine which component to render
  */
-const PortalContent = memo<PortalContentProps>(({ renderBody }) => {
-  const enabledList: boolean[] = [];
+export const PortalContent = memo<PortalContentProps>(({ renderBody }) => {
+  const viewType = useChatStore(chatPortalSelectors.currentViewType);
+  const ViewImpl = viewType ? VIEW_COMPONENTS[viewType] : HomeImpl;
 
-  for (const item of items) {
-    const enabled = item.useEnable();
-    enabledList.push(enabled);
-  }
+  const Wrapper = ViewImpl?.Wrapper || Fragment;
+  const CustomHeader = ViewImpl?.Header;
+  const Body = ViewImpl?.Body || HomeBody;
+  const Title = ViewImpl?.Title || HomeTitle;
 
-  // Find the first enabled item
-  let enabledIndex = -1;
-  for (const [i, element] of enabledList.entries()) {
-    if (element) {
-      enabledIndex = i;
-      break;
-    }
-  }
-
-  // Get components for the enabled item
-  const enabledItem = enabledIndex >= 0 ? items[enabledIndex] : null;
-  const Wrapper = enabledItem?.Wrapper || Fragment;
-  const CustomHeader = enabledItem?.Header;
-  const Body = enabledItem?.Body || HomeBody;
-
-  const headerContent = CustomHeader ? (
-    <CustomHeader />
-  ) : (
-    <Header title={enabledItem?.Title ? <enabledItem.Title /> : <HomeTitle />} />
-  );
-
+  const headerContent = CustomHeader ? <CustomHeader /> : <Header title={<Title />} />;
   const bodyContent = <Body />;
 
   return (
@@ -127,6 +67,3 @@ const PortalContent = memo<PortalContentProps>(({ renderBody }) => {
     </Wrapper>
   );
 });
-
-export { PortalContent };
-export default PortalBody;

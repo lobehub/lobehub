@@ -36,7 +36,7 @@ export const createMCPSlice: StateCreator<
     );
   },
 
-  useFetchMcpList: (params: any) => {
+  useFetchMcpList: (params) => {
     const locale = globalHelpers.getCurrentLanguage();
     return useClientDataSWR(
       ['mcp-list', locale, ...Object.values(params)].filter(Boolean).join('-'),

@@ -6,7 +6,7 @@ import { VList, type VListHandle } from 'virtua';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import PageEmpty from '@/features/PageEmpty';
-import { documentSelectors, useFileStore } from '@/store/file';
+import { pageSelectors, usePageStore } from '@/store/page';
 import { type LobeDocument } from '@/types/document';
 
 import Item from '../List/Item';
@@ -19,27 +19,27 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const fetchedCountRef = useRef(-1);
 
-  const [hasMore, isLoadingMore, loadMoreDocuments] = useFileStore((s) => [
-    documentSelectors.hasMoreDocuments(s),
-    documentSelectors.isLoadingMoreDocuments(s),
+  const [hasMore, isLoadingMore, loadMoreDocuments] = usePageStore((s) => [
+    pageSelectors.hasMoreDocuments(s),
+    pageSelectors.isLoadingMoreDocuments(s),
     s.loadMoreDocuments,
   ]);
 
-  const allFilteredPages = useFileStore(documentSelectors.getFilteredPages);
+  const allFilteredDocuments = usePageStore(pageSelectors.getFilteredDocuments);
 
   // Filter by search keyword
-  const displayPages = useMemo(() => {
-    if (!searchKeyword.trim()) return allFilteredPages;
+  const displayDocuments = useMemo(() => {
+    if (!searchKeyword.trim()) return allFilteredDocuments;
 
     const keyword = searchKeyword.toLowerCase();
-    return allFilteredPages.filter((page: LobeDocument) => {
-      const content = page.content?.toLowerCase() || '';
-      const title = page.title?.toLowerCase() || '';
+    return allFilteredDocuments.filter((doc: LobeDocument) => {
+      const content = doc.content?.toLowerCase() || '';
+      const title = doc.title?.toLowerCase() || '';
       return content.includes(keyword) || title.includes(keyword);
     });
-  }, [allFilteredPages, searchKeyword]);
+  }, [allFilteredDocuments, searchKeyword]);
 
-  const count = displayPages.length;
+  const count = displayDocuments.length;
   const isSearching = searchKeyword.trim().length > 0;
 
   // Handle scroll - use findItemIndex (official pattern)
@@ -74,9 +74,9 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
       ref={virtuaRef}
       style={{ height: '100%' }}
     >
-      {displayPages.map((page) => (
-        <Flexbox gap={1} key={page.id} padding={'4px 8px'}>
-          <Item pageId={page.id} />
+      {displayDocuments.map((doc) => (
+        <Flexbox gap={1} key={doc.id} padding={'4px 8px'}>
+          <Item pageId={doc.id} />
         </Flexbox>
       ))}
       {showLoading && (

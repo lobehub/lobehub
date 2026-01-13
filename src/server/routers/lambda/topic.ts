@@ -8,6 +8,7 @@ import { after } from 'next/server';
 import { z } from 'zod';
 
 import { TopicModel } from '@/database/models/topic';
+import { TopicShareModel } from '@/database/models/topicShare';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { agents, chatGroups, chatGroupsAgents } from '@/database/schemas';
@@ -30,6 +31,7 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
       agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
+      topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -49,7 +51,7 @@ export const topicRouter = router({
       ),
     )
     .mutation(async ({ input, ctx }): Promise<BatchTaskResult> => {
-      // 解析每个 topic 的 sessionId
+      // Resolve sessionId for each topic
       const resolvedTopics = await Promise.all(
         input.map(async (item) => {
           const { agentId, ...rest } = item;
@@ -138,15 +140,51 @@ export const topicRouter = router({
       return data.id;
     }),
 
+  /**
+   * Disable sharing for a topic (deletes share record)
+   */
+  disableSharing: topicProcedure
+    .input(z.object({ topicId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicShareModel.deleteByTopicId(input.topicId);
+    }),
+
+  /**
+   * Enable sharing for a topic (creates share record)
+   */
+  enableSharing: topicProcedure
+    .input(
+      z.object({
+        topicId: z.string(),
+        visibility: z.enum(['private', 'link']).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicShareModel.create(input.topicId, input.visibility);
+    }),
+
   getAllTopics: topicProcedure.query(async ({ ctx }) => {
     return ctx.topicModel.queryAll();
   }),
+
+  getCronTopicsGroupedByCronJob: topicProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return ctx.topicModel.getCronTopicsGroupedByCronJob(input.agentId);
+    }),
+
+  getShareInfo: topicProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return ctx.topicShareModel.getByTopicId(input.topicId);
+    }),
 
   getTopics: topicProcedure
     .input(
       z.object({
         agentId: z.string().nullable().optional(),
         current: z.number().optional(),
+        excludeTriggers: z.array(z.string()).optional(),
         groupId: z.string().nullable().optional(),
         isInbox: z.boolean().optional(),
         pageSize: z.number().optional(),
@@ -154,21 +192,26 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { sessionId, isInbox, groupId, ...rest } = input;
+      const { sessionId, isInbox, groupId, excludeTriggers, ...rest } = input;
 
       // If groupId is provided, query by groupId directly
       if (groupId) {
-        const result = await ctx.topicModel.query({ groupId, ...rest });
+        const result = await ctx.topicModel.query({ excludeTriggers, groupId, ...rest });
         return { items: result.items, total: result.total };
       }
 
-      // 如果提供了 sessionId 但没有 agentId，需要反向查找 agentId
+      // If sessionId is provided but no agentId, need to reverse lookup agentId
       let effectiveAgentId = rest.agentId;
       if (!effectiveAgentId && sessionId) {
         effectiveAgentId = await resolveAgentIdFromSession(sessionId, ctx.serverDB, ctx.userId);
       }
 
-      const result = await ctx.topicModel.query({ ...rest, agentId: effectiveAgentId, isInbox });
+      const result = await ctx.topicModel.query({
+        ...rest,
+        agentId: effectiveAgentId,
+        excludeTriggers,
+        isInbox,
+      });
 
       // Runtime migration: backfill agentId for ALL legacy topics and messages under this agent
       const runMigration = async () => {
@@ -407,6 +450,20 @@ export const topicRouter = router({
       return ctx.topicModel.queryByKeyword(input.keywords, resolved.sessionId);
     }),
 
+  /**
+   * Update share visibility
+   */
+  updateShareVisibility: topicProcedure
+    .input(
+      z.object({
+        topicId: z.string(),
+        visibility: z.enum(['private', 'link']),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicShareModel.updateVisibility(input.topicId, input.visibility);
+    }),
+
   updateTopic: topicProcedure
     .input(
       z.object({
@@ -430,7 +487,7 @@ export const topicRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { agentId, ...restValue } = input.value;
 
-      // 如果提供了 agentId，解析为 sessionId
+      // If agentId is provided, resolve to sessionId
       let resolvedSessionId = restValue.sessionId;
       if (agentId && !resolvedSessionId) {
         const resolved = await resolveContext({ agentId }, ctx.serverDB, ctx.userId);

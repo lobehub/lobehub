@@ -254,4 +254,22 @@ export const mobileRoutes: RouteConfig[] = [
     path: '/onboarding',
   },
   ...BusinessMobileRoutesWithoutMainLayout,
+
+  // Share topic route (outside main layout)
+  {
+    children: [
+      {
+        element: dynamicElement(
+          () => import('../../share/t/[id]'),
+          'Mobile > Share > Topic',
+        ),
+        path: ':id',
+      },
+    ],
+    element: dynamicElement(
+      () => import('../../share/t/[id]/_layout'),
+      'Mobile > Share > Topic > Layout',
+    ),
+    path: '/share/t',
+  },
 ];

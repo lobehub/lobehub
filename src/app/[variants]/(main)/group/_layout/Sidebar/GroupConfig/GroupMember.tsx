@@ -11,6 +11,7 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -36,7 +37,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
   const addAgentsToGroup = useAgentGroupStore((s) => s.addAgentsToGroup);
   const removeAgentFromGroup = useAgentGroupStore((s) => s.removeAgentFromGroup);
   const toggleThread = useAgentGroupStore((s) => s.toggleThread);
-  const togglePortal = useChatStore((s) => s.togglePortal);
+  const pushPortalView = useChatStore((s) => s.pushPortalView);
 
   // Get members from store (excluding supervisor)
   const groupMembers = useAgentGroupStore(agentGroupSelectors.getGroupMembers(groupId || ''));
@@ -76,7 +77,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
 
   const handleMemberClick = (agentId: string) => {
     toggleThread(agentId);
-    togglePortal(true);
+    pushPortalView({ agentId, type: PortalViewType.GroupThread });
   };
 
   return (
@@ -109,6 +110,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
                   }
                   avatar={item.avatar || DEFAULT_AVATAR}
                   background={item.backgroundColor ?? undefined}
+                  isExternal={!item.virtual}
                   title={item.title || t('defaultSession', { ns: 'common' })}
                 />
               </div>

@@ -18,13 +18,13 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 
 ### 产品架构覆盖
 
-| 模块             | 子功能               | 优先级 | 状态 |
-| ---------------- | -------------------- | ------ | ---- |
-| **Agent**        | Builder, 对话，Task  | P0     | 🚧   |
-| **Agent Group**  | Builder, 群聊        | P1     | ⏳   |
-| **Page（文稿）** | 创建，编辑，分享     | P1     | ⏳   |
-| **知识库**       | 创建，上传，RAG 对话 | P1     | ⏳   |
-| **记忆**         | 查看，编辑，关联     | P2     | ⏳   |
+| 模块             | 子功能                            | 优先级 | 状态 |
+| ---------------- | --------------------------------- | ------ | ---- |
+| **Agent**        | Builder, 对话，Task               | P0     | 🚧   |
+| **Agent Group**  | Builder, 群聊                     | P0     | ⏳   |
+| **Page（文稿）** | 侧边栏 CRUD ✅，文档编辑，Copilot | P0     | 🚧   |
+| **知识库**       | 创建，上传，RAG 对话              | P1     | ⏳   |
+| **记忆**         | 查看，编辑，关联                  | P2     | ⏳   |
 
 ### 标签系统
 
@@ -82,7 +82,7 @@ e2e/
 │   │   │   │   ├── group-builder.feature
 │   │   │   │   └── group-chat.feature
 │   │   │   ├── page/
-│   │   │   │   └── page-crud.feature
+│   │   │   │   └── page-crud.feature  ✅
 │   │   │   ├── knowledge/
 │   │   │   │   └── knowledge-rag.feature
 │   │   │   └── memory/
@@ -92,6 +92,7 @@ e2e/
 │   │   └── regression/              # 回归测试
 │   ├── steps/                       # Step definitions
 │   │   ├── agent/                   # Agent 相关 steps
+│   │   ├── page/                    # Page 相关 steps
 │   │   ├── common/                  # 通用 steps (auth, navigation)
 │   │   └── hooks.ts                 # Before/After hooks
 │   ├── mocks/                       # Mock 框架
@@ -108,57 +109,42 @@ e2e/
 
 > 详细流程参考 [e2e/docs/local-setup.md](./docs/local-setup.md)
 
-### 快速启动流程
+### 一键启动（推荐）
+
+使用 TypeScript 脚本自动完成环境设置：
 
 ```bash
-# Step 1: 清理环境
-docker stop postgres-e2e 2> /dev/null; docker rm postgres-e2e 2> /dev/null
-lsof -ti:3006 | xargs kill -9 2> /dev/null
-lsof -ti:5433 | xargs kill -9 2> /dev/null
+# 在项目根目录运行
 
-# Step 2: 启动数据库（使用 paradedb 镜像，支持 pgvector）
-docker run -d --name postgres-e2e \
-  -e POSTGRES_PASSWORD=postgres \
-  -p 5433:5432 \
-  paradedb/paradedb:latest
+# 仅设置数据库（启动 PostgreSQL + 运行迁移）
+bun e2e/scripts/setup.ts
 
-# 等待数据库就绪
-until docker exec postgres-e2e pg_isready; do sleep 2; done
+# 设置数据库并启动服务器
+bun e2e/scripts/setup.ts --start
 
-# Step 3: 运行数据库迁移（项目根目录）
-DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
-  DATABASE_DRIVER=node \
-  KEY_VAULTS_SECRET=LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s= \
-  bun run db:migrate
+# 完整设置（数据库 + 构建 + 启动服务器）
+bun e2e/scripts/setup.ts --build --start
 
-# Step 4: 构建应用（首次或代码变更后）
-DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
-  DATABASE_DRIVER=node \
-  KEY_VAULTS_SECRET=LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s= \
-  BETTER_AUTH_SECRET=e2e-test-secret-key-for-better-auth-32chars! \
-  NEXT_PUBLIC_ENABLE_BETTER_AUTH=1 \
-  SKIP_LINT=1 \
-  bun run build
-
-# Step 5: 启动服务器（必须在项目根目录运行！）
-DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres \
-  DATABASE_DRIVER=node \
-  KEY_VAULTS_SECRET=LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s= \
-  BETTER_AUTH_SECRET=e2e-test-secret-key-for-better-auth-32chars! \
-  NEXT_PUBLIC_ENABLE_BETTER_AUTH=1 \
-  NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION=0 \
-  S3_ACCESS_KEY_ID=e2e-mock-access-key \
-  S3_SECRET_ACCESS_KEY=e2e-mock-secret-key \
-  S3_BUCKET=e2e-mock-bucket \
-  S3_ENDPOINT=https://e2e-mock-s3.localhost \
-  bunx next start -p 3006
+# 清理环境
+bun e2e/scripts/setup.ts --clean
 ```
+
+### 脚本选项
+
+| 选项             | 说明                         |
+| ---------------- | ---------------------------- |
+| `--clean`        | 清理现有容器和进程           |
+| `--skip-db`      | 跳过数据库设置（使用已有的） |
+| `--skip-migrate` | 跳过数据库迁移               |
+| `--build`        | 启动前构建应用               |
+| `--start`        | 设置完成后启动服务器         |
+| `--port <port>`  | 服务器端口（默认 3006）      |
 
 **重要提示**:
 
 - 必须使用 `paradedb/paradedb:latest` 镜像（支持 pgvector 扩展）
 - 服务器必须在**项目根目录**启动，不能在 e2e 目录
-- S3 环境变量是**必需**的，即使不测试文件上传
+- S3 环境变量是**必需**的，即使不测试文件上传（脚本已自动处理）
 
 ## 运行测试
 
@@ -328,45 +314,21 @@ S3_ENDPOINT=https://e2e-mock-s3.localhost
 
 ## 清理环境
 
-测试完成后或需要重置环境时，执行以下清理操作：
-
-### 停止服务器
+测试完成后或需要重置环境时：
 
 ```bash
-# 查找并停止占用端口的进程
-lsof -ti:3006 | xargs kill -9 2> /dev/null
-lsof -ti:3010 | xargs kill -9 2> /dev/null
+# 一键清理（推荐）
+bun e2e/scripts/setup.ts --clean
 ```
 
-### 停止 Docker 容器
+或手动清理：
 
 ```bash
 # 停止并删除 PostgreSQL 容器
-docker stop postgres-e2e 2> /dev/null
-docker rm postgres-e2e 2> /dev/null
-```
+docker stop postgres-e2e && docker rm postgres-e2e
 
-### 一键清理（推荐）
-
-```bash
-# 清理所有 E2E 相关进程和容器
-docker stop postgres-e2e 2> /dev/null
-docker rm postgres-e2e 2> /dev/null
-lsof -ti:3006 | xargs kill -9 2> /dev/null
-lsof -ti:3010 | xargs kill -9 2> /dev/null
-lsof -ti:5433 | xargs kill -9 2> /dev/null
-echo "Cleanup done"
-```
-
-### 清理端口占用
-
-如果遇到端口被占用的错误，可以清理特定端口：
-
-```bash
-# 清理 Next.js 服务器端口
+# 清理端口占用
 lsof -ti:3006 | xargs kill -9
-
-# 清理 PostgreSQL 端口
 lsof -ti:5433 | xargs kill -9
 ```
 

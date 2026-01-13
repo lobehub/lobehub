@@ -1,5 +1,4 @@
-import { Highlighter } from '@lobehub/ui';
-import { Popover } from 'antd';
+import { Highlighter, Popover } from '@lobehub/ui';
 import { type ReactNode, memo } from 'react';
 
 interface PluginManifestPreviewerProps {
@@ -11,7 +10,6 @@ interface PluginManifestPreviewerProps {
 const ManifestPreviewer = memo<PluginManifestPreviewerProps>(
   ({ manifest, children, trigger = 'click' }) => (
     <Popover
-      arrow={false}
       content={
         <Highlighter
           language={'json'}
@@ -21,8 +19,7 @@ const ManifestPreviewer = memo<PluginManifestPreviewerProps>(
         </Highlighter>
       }
       placement={'right'}
-      style={{ width: 400 }}
-      title={'Manifest JSON'}
+      styles={{ content: { width: 400 } }}
       trigger={trigger}
     >
       {children}

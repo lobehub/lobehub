@@ -4,7 +4,7 @@ import { SendButton } from '@lobehub/editor/react';
 import { Button, Flexbox, Icon, Input } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { SignatureIcon, Undo2Icon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
@@ -23,13 +23,25 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
   const updateFullName = useUserStore((s) => s.updateFullName);
 
   const [value, setValue] = useState(existingFullName || '');
+  const [isNavigating, setIsNavigating] = useState(false);
+  const isNavigatingRef = useRef(false);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    setIsNavigating(true);
     if (value.trim()) {
       updateFullName(value.trim());
     }
     onNext();
-  };
+  }, [value, updateFullName, onNext]);
+
+  const handleBack = useCallback(() => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    setIsNavigating(true);
+    onBack();
+  }, [onBack]);
 
   return (
     <Flexbox gap={16}>
@@ -59,7 +71,7 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
           }}
           suffix={
             <SendButton
-              disabled={!value?.trim()}
+              disabled={!value?.trim() || isNavigating}
               onClick={handleNext}
               style={{
                 zoom: 1.5,
@@ -73,8 +85,9 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
       </Flexbox>
       <Flexbox horizontal justify={'flex-start'} style={{ marginTop: 32 }}>
         <Button
+          disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={onBack}
+          onClick={handleBack}
           style={{
             color: cssVar.colorTextDescription,
           }}

@@ -34,7 +34,7 @@ see @.cursor/rules/typescript.mdc
 
 ### Testing
 
-- **Required Rule**: read `@.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
+- **Required Rule**: read `.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
 - **Command**:
   - web: `bunx vitest run --silent='passed-only' '[file-path-pattern]'`
   - packages(eg: database): `cd packages/database && bunx vitest run --silent='passed-only' '[file-path-pattern]'`
@@ -77,6 +77,10 @@ When creating new Linear issues using `mcp__linear-server__create_issue`, **MUST
 - Team visibility and knowledge sharing
 - Code review context
 - Future reference and debugging
+
+### PR Linear Issue Association (REQUIRED)
+
+**When creating PRs for Linear issues, MUST include magic keywords in PR body:** `Fixes LOBE-123`, `Closes LOBE-123`, or `Resolves LOBE-123`, and summarize the work done in the linear issue comment and update the issue status to "In Review".
 
 ### IMPORTANT: Per-Issue Completion Rule
 

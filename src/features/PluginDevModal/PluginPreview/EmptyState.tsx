@@ -64,7 +64,7 @@ export default function PluginEmptyState() {
         {t('dev.preview.empty.title')}
       </Text>
       <Text className={styles.description}>{t('dev.preview.empty.desc')}</Text>
-      <Space align="center" direction="vertical">
+      <Space align="center" orientation="vertical">
         <div className={styles.line} style={{ width: 128 }} />
         <div className={styles.line} style={{ width: 96 }} />
         <div className={styles.line} style={{ width: 48 }} />

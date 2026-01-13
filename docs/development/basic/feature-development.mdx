@@ -254,14 +254,14 @@ Let's take the subcomponent `OpeningQuestion.tsx` as an example. Component imple
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Flexbox, SortableList } from '@lobehub/ui';
 import { Button, Empty, Input } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   empty: css`
     margin-block: 24px;
     margin-inline: 0;
@@ -270,7 +270,7 @@ const useStyles = createStyles(({ css, token }) => ({
     margin-block-end: 8px;
     padding-block: 2px;
     padding-inline: 10px 0;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   questionItemContent: css`
     flex: 1;
@@ -281,7 +281,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   repeatError: css`
     margin: 0;
-    color: ${token.colorErrorText};
+    color: ${cssVar.colorErrorText};
   `,
 }));
 
@@ -292,7 +292,6 @@ interface QuestionItem {
 
 const OpeningQuestions = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [questionInput, setQuestionInput] = useState('');
 
   // Use selector to access corresponding configuration

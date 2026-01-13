@@ -1,0 +1,125 @@
+import { ActionIcon } from '@lobehub/ui';
+import { ShapesUploadIcon } from '@lobehub/ui/icons';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { message } from '@/components/AntdStaticMethods';
+import { HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
+import { useServerConfigStore } from '@/store/serverConfig';
+
+import ForkConfirmModal from './ForkConfirmModal';
+import type { MarketPublishAction } from './types';
+import { type OriginalAgentInfo, useMarketPublish } from './useMarketPublish';
+
+interface MarketPublishButtonProps {
+  action: MarketPublishAction;
+  onPublishSuccess?: (identifier: string) => void;
+}
+
+const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess }) => {
+  const { t } = useTranslation(['setting', 'marketAuth']);
+
+  const mobile = useServerConfigStore((s) => s.isMobile);
+
+  const { isAuthenticated, isLoading, signIn } = useMarketAuth();
+  const { checkOwnership, isCheckingOwnership, isPublishing, publish } = useMarketPublish({
+    action,
+    onSuccess: onPublishSuccess,
+  });
+
+  // Fork confirmation modal state
+  const [showForkModal, setShowForkModal] = useState(false);
+  const [originalAgentInfo, setOriginalAgentInfo] = useState<OriginalAgentInfo | null>(null);
+
+  const buttonConfig = useMemo(() => {
+    if (action === 'upload') {
+      return {
+        authenticated: t('marketPublish.upload.tooltip'),
+        unauthenticated: t('marketPublish.upload.tooltip'),
+      } as const;
+    }
+
+    const submitText = t('submitAgentModal.tooltips');
+
+    return {
+      authenticated: submitText,
+      unauthenticated: t('marketPublish.submit.tooltip'),
+    } as const;
+  }, [action, t]);
+
+  const doPublish = useCallback(async () => {
+    // Check ownership before publishing
+    const { needsForkConfirm, originalAgent } = await checkOwnership();
+
+    if (needsForkConfirm && originalAgent) {
+      // Show fork confirmation modal
+      setOriginalAgentInfo(originalAgent);
+      setShowForkModal(true);
+      return;
+    }
+
+    // No confirmation needed, proceed with publish
+    await publish();
+  }, [checkOwnership, publish]);
+
+  const handleButtonClick = useCallback(async () => {
+    if (!isAuthenticated) {
+      try {
+        await signIn();
+        // After authentication, proceed with ownership check and publish
+        await doPublish();
+      } catch (error) {
+        console.error(`[MarketPublishButton][${action}] Authorization failed:`, error);
+        const normalizedError = resolveMarketAuthError(error);
+        message.error({
+          content: t(`errors.${normalizedError.code}`, { ns: 'marketAuth' }),
+          key: 'market-auth',
+        });
+      }
+      return;
+    }
+
+    // User is authenticated, check ownership and publish
+    await doPublish();
+  }, [action, doPublish, isAuthenticated, signIn, t]);
+
+  const handleForkConfirm = useCallback(async () => {
+    setShowForkModal(false);
+    setOriginalAgentInfo(null);
+    // User confirmed, proceed with publish
+    await publish();
+  }, [publish]);
+
+  const handleForkCancel = useCallback(() => {
+    setShowForkModal(false);
+    setOriginalAgentInfo(null);
+  }, []);
+
+  const buttonTitle = isAuthenticated ? buttonConfig.authenticated : buttonConfig.unauthenticated;
+  const loading = isLoading || isCheckingOwnership || isPublishing;
+
+  return (
+    <>
+      <ActionIcon
+        icon={ShapesUploadIcon}
+        loading={loading}
+        onClick={handleButtonClick}
+        size={HEADER_ICON_SIZE(mobile)}
+        title={buttonTitle}
+      />
+      <ForkConfirmModal
+        loading={isPublishing}
+        onCancel={handleForkCancel}
+        onConfirm={handleForkConfirm}
+        open={showForkModal}
+        originalAgent={originalAgentInfo}
+      />
+    </>
+  );
+});
+
+PublishButton.displayName = 'MarketPublishButton';
+
+export default PublishButton;

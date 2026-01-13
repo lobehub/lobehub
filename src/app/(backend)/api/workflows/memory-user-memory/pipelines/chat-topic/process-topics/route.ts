@@ -12,6 +12,10 @@ import {
   type MemoryExtractionPayloadInput,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { Client } from '@upstash/qstash'
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+
+const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
 const CEP_LAYERS: LayersEnum[] = [LayersEnum.Context, LayersEnum.Experience, LayersEnum.Preference];
 const IDENTITY_LAYERS: LayersEnum[] = [LayersEnum.Identity];
@@ -136,5 +140,17 @@ export const { POST } = serve<MemoryExtractionPayloadInput>((context) =>
         span.end();
       }
     },
-  ),
-);
+  ), {
+    // NOTICE(@nekomeowww): Here as scenarios like Vercel Deployment Protection,
+    // intermediate context.run(...) won't offer customizable headers like context.trigger(...) / client.trigger(...)
+    // for passing additional headers, we have to provide a custom QStash client with the required headers here.
+    //
+    // Refer to the doc for more details:
+    // https://upstash.com/docs/workflow/troubleshooting/vercel#step-2-pass-header-when-triggering
+    qstashClient: new Client({
+      headers: {
+        ...upstashWorkflowExtraHeaders,
+      },
+      token: process.env.QSTASH_TOKEN!
+    })
+});

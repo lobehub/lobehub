@@ -288,7 +288,7 @@ describe('displayMessageSelectors', () => {
   });
 
   describe('currentDisplayChatKey', () => {
-    it('should generate correct key with activeId only', () => {
+    it('should generate correct key with activeAgentId only', () => {
       const state: Partial<ChatStore> = {
         activeAgentId: 'testId',
         activeTopicId: undefined,
@@ -297,7 +297,7 @@ describe('displayMessageSelectors', () => {
       expect(result).toBe(messageMapKey({ agentId: 'testId', topicId: undefined }));
     });
 
-    it('should generate correct key with both activeId and activeTopicId', () => {
+    it('should generate correct key with both activeAgentId and activeTopicId', () => {
       const state: Partial<ChatStore> = {
         activeAgentId: 'testId',
         activeTopicId: 'topicId',
@@ -306,7 +306,7 @@ describe('displayMessageSelectors', () => {
       expect(result).toBe(messageMapKey({ agentId: 'testId', topicId: 'topicId' }));
     });
 
-    it('should generate key with undefined activeId', () => {
+    it('should generate key with undefined activeAgentId', () => {
       const state: Partial<ChatStore> = {
         activeAgentId: undefined,
         activeTopicId: 'topicId',
@@ -315,7 +315,7 @@ describe('displayMessageSelectors', () => {
       expect(result).toBe(messageMapKey({ agentId: undefined as any, topicId: 'topicId' }));
     });
 
-    it('should generate key with empty string activeId', () => {
+    it('should generate key with empty string activeAgentId', () => {
       const state: Partial<ChatStore> = {
         activeAgentId: '',
         activeTopicId: undefined,

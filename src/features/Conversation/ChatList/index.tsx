@@ -16,6 +16,10 @@ import VirtualizedList from './components/VirtualizedList';
 
 export interface ChatListProps {
   /**
+   * Disable the actions bar for all messages (e.g., in share page)
+   */
+  disableActionsBar?: boolean;
+  /**
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
@@ -29,7 +33,7 @@ export interface ChatListProps {
  *
  * Uses ConversationStore for message data and fetching.
  */
-const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
+const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent }) => {
   // Fetch messages (SWR key is null when skipFetch is true)
   const context = useConversationStore((s) => s.context);
   const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
@@ -39,9 +43,12 @@ const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
   ]);
   useFetchMessages(context, skipFetch);
 
-  // Fetch notebook documents when topic is selected
-  useFetchNotebookDocuments(context.topicId!);
-  useFetchTopicMemories(enableUserMemories ? context.topicId : undefined);
+  // Skip fetching notebook and memories for share pages (they require authentication)
+  const isSharePage = !!context.topicShareId;
+
+  // Fetch notebook documents when topic is selected (skip for share pages)
+  useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
+  useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 
   // Use selectors for data
 
@@ -56,7 +63,11 @@ const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
   );
   const messagesInit = useConversationStore(dataSelectors.messagesInit);
 
-  if (!messagesInit) {
+  // When topicId is null (new conversation), show welcome directly without waiting for fetch
+  // because there's no server data to fetch - only local optimistic updates exist
+  const isNewConversation = !context.topicId;
+
+  if (!messagesInit && !isNewConversation) {
     return <SkeletonList />;
   }
 
@@ -77,7 +88,7 @@ const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
   }
 
   return (
-    <MessageActionProvider withSingletonActionsBar>
+    <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
       <VirtualizedList
         dataSource={displayMessageIds}
         // isGenerating={isGenerating}

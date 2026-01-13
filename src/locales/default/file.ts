@@ -18,6 +18,9 @@ export default {
   'empty': 'No files or folders have been uploaded yet.',
   'header.actions.builtInBlockList.filtered': '{{ignored}} files filtered (out of {{total}} total)',
   'header.actions.connect': 'Connect...',
+  'header.actions.createFolderError': 'Failed to create folder',
+  'header.actions.creatingFolder': 'Creating folder...',
+  'header.actions.deleteLibrary': 'Delete Library',
   'header.actions.gitignore.apply': 'Apply Rules',
   'header.actions.gitignore.cancel': 'Ignore Rules',
   'header.actions.gitignore.content':
@@ -39,6 +42,7 @@ export default {
   'header.actions.notionGuide.title': 'Import from Notion',
   'header.actions.uploadFile': 'Upload File',
   'header.actions.uploadFolder': 'Upload Folder',
+  'header.actions.uploadFolder.creatingFolders': 'Creating folder structure...',
   'header.newPageButton': 'New Page',
   'header.uploadButton': 'Upload',
   'home.getStarted': 'Get Started',
@@ -115,6 +119,7 @@ export default {
   'preview.downloadFile': 'Download File',
   'preview.unsupportedFileAndContact':
     'This file format is not currently supported for online preview. If you have a request for previewing, feel free to <1>contact us</1>.',
+  'resource': 'Resource',
   'searchFilePlaceholder': 'Search Files',
   'searchPagePlaceholder': 'Search Pages',
   'tab.all': 'All',
@@ -129,6 +134,8 @@ export default {
   'title': 'Resources',
   'toggleLeftPanel': 'Show/Hide Left Panel',
   'uploadDock.body.collapse': 'Collapse',
+  'uploadDock.body.item.cancel': 'Cancel',
+  'uploadDock.body.item.cancelled': 'Cancelled',
   'uploadDock.body.item.done': 'Uploaded',
   'uploadDock.body.item.error': 'Upload failed, please try again',
   'uploadDock.body.item.pending': 'Preparing to upload...',
@@ -137,6 +144,7 @@ export default {
   'uploadDock.fileQueueInfo':
     'Uploading the first {{count}} files, {{remaining}} remaining in queue',
   'uploadDock.totalCount': 'Total {{count}} items',
+  'uploadDock.uploadStatus.cancelled': 'Upload cancelled',
   'uploadDock.uploadStatus.error': 'Upload error',
   'uploadDock.uploadStatus.pending': 'Waiting to upload',
   'uploadDock.uploadStatus.processing': 'Uploading',

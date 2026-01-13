@@ -1,12 +1,13 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Alert, Block, Flexbox, Skeleton, Text , Button } from '@lobehub/ui';
-import { App, Divider, Form, Input, Radio, Space, Switch } from 'antd';
-import isEqual from 'fast-deep-equal';
+import { Alert, Flexbox, Form, type FormGroupItemType, Icon, Skeleton } from '@lobehub/ui';
+import { Form as AntdForm, Button, Input, Radio, Space, Switch } from 'antd';
+import { Loader2Icon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { FORM_STYLE } from '@/const/layoutTokens';
 import { desktopSettingsService } from '@/services/electron/settings';
 import { useElectronStore } from '@/store/electron';
 
@@ -19,15 +20,15 @@ interface ProxyTestResult {
 const ProxyForm = () => {
   const { t } = useTranslation('electron');
   const [form] = Form.useForm();
-  const { message } = App.useApp();
   const [testUrl, setTestUrl] = useState('https://www.google.com');
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [testResult, setTestResult] = useState<ProxyTestResult | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const isEnableProxy = Form.useWatch('enableProxy', form);
-  const proxyRequireAuth = Form.useWatch('proxyRequireAuth', form);
+  const isEnableProxy = AntdForm.useWatch('enableProxy', form);
+  const proxyRequireAuth = AntdForm.useWatch('proxyRequireAuth', form);
 
   const [setProxySettings, useGetProxySettings] = useElectronStore((s) => [
     s.setProxySettings,
@@ -44,18 +45,11 @@ const ProxyForm = () => {
 
   // 监听表单变化
   const handleValuesChange = useCallback(() => {
+    setLoading(true);
     setHasUnsavedChanges(true);
     setTestResult(null); // 清除之前的测试结果
+    setLoading(false);
   }, []);
-
-  const updateFormValue = (value: any) => {
-    const preValues = form.getFieldsValue();
-    form.setFieldsValue(value);
-    const newValues = form.getFieldsValue();
-    if (isEqual(newValues, preValues)) return;
-
-    handleValuesChange();
-  };
 
   // 保存配置
   const handleSave = useCallback(async () => {
@@ -64,15 +58,12 @@ const ProxyForm = () => {
       const values = await form.validateFields();
       await setProxySettings(values);
       setHasUnsavedChanges(false);
-      message.success(t('proxy.saveSuccess'));
-    } catch (error) {
-      if (error instanceof Error) {
-        message.error(t('proxy.saveFailed', { error: error.message }));
-      }
+    } catch {
+      // validation error
     } finally {
       setIsSaving(false);
     }
-  }, [form, t, message]);
+  }, [form, setProxySettings]);
 
   // 重置配置
   const handleReset = useCallback(() => {
@@ -107,240 +98,159 @@ const ProxyForm = () => {
         success: false,
       };
       setTestResult(result);
-      message.error(t('proxy.testFailed'));
     } finally {
       setIsTesting(false);
     }
-  }, [proxySettings, testUrl]);
+  }, [proxySettings, testUrl, form]);
 
-  if (isLoading) return <Skeleton />;
+  if (isLoading) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+
+  const enableProxyGroup: FormGroupItemType = {
+    children: [
+      {
+        children: <Switch />,
+        desc: t('proxy.enableDesc'),
+        label: t('proxy.enable'),
+        layout: 'horizontal',
+        minWidth: undefined,
+        name: 'enableProxy',
+        valuePropName: 'checked',
+      },
+    ],
+    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    title: t('proxy.enable'),
+  };
+
+  const basicSettingsGroup: FormGroupItemType = {
+    children: [
+      {
+        children: (
+          <Radio.Group disabled={!isEnableProxy}>
+            <Radio value="http">HTTP</Radio>
+            <Radio value="https">HTTPS</Radio>
+            <Radio value="socks5">SOCKS5</Radio>
+          </Radio.Group>
+        ),
+        label: t('proxy.type'),
+        minWidth: undefined,
+        name: 'proxyType',
+      },
+      {
+        children: <Input disabled={!isEnableProxy} placeholder="127.0.0.1" />,
+        desc: t('proxy.validation.serverRequired'),
+        label: t('proxy.server'),
+        name: 'proxyServer',
+      },
+      {
+        children: <Input disabled={!isEnableProxy} placeholder="7890" style={{ width: 120 }} />,
+        desc: t('proxy.validation.portRequired'),
+        label: t('proxy.port'),
+        name: 'proxyPort',
+      },
+    ],
+    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    title: t('proxy.basicSettings'),
+  };
+
+  const authGroup: FormGroupItemType = {
+    children: [
+      {
+        children: <Switch disabled={!isEnableProxy} />,
+        desc: t('proxy.authDesc'),
+        label: t('proxy.auth'),
+        layout: 'horizontal',
+        minWidth: undefined,
+        name: 'proxyRequireAuth',
+        valuePropName: 'checked',
+      },
+      ...(proxyRequireAuth && isEnableProxy
+        ? [
+            {
+              children: <Input placeholder={t('proxy.username_placeholder')} />,
+              label: t('proxy.username'),
+              name: 'proxyUsername',
+            },
+            {
+              children: <Input.Password placeholder={t('proxy.password_placeholder')} />,
+              label: t('proxy.password'),
+              name: 'proxyPassword',
+            },
+          ]
+        : []),
+    ],
+    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    title: t('proxy.authSettings'),
+  };
+
+  const testGroup: FormGroupItemType = {
+    children: [
+      {
+        children: (
+          <Flexbox gap={8}>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                onChange={(e) => setTestUrl(e.target.value)}
+                placeholder={t('proxy.testUrlPlaceholder')}
+                style={{ flex: 1 }}
+                value={testUrl}
+              />
+              <Button loading={isTesting} onClick={handleTest} type="default">
+                {t('proxy.testButton')}
+              </Button>
+            </Space.Compact>
+            {/* 测试结果显示 */}
+            {!testResult ? null : testResult.success ? (
+              <Alert
+                closable
+                title={
+                  <Flexbox align="center" gap={8} horizontal>
+                    {t('proxy.testSuccessWithTime', { time: testResult.responseTime })}
+                  </Flexbox>
+                }
+                type={'success'}
+              />
+            ) : (
+              <Alert
+                closable
+                title={
+                  <Flexbox align="center" gap={8} horizontal>
+                    {t('proxy.testFailed')}: {testResult.message}
+                  </Flexbox>
+                }
+                type={'error'}
+                variant={'outlined'}
+              />
+            )}
+          </Flexbox>
+        ),
+        desc: t('proxy.testDescription'),
+        label: t('proxy.testUrl'),
+        minWidth: undefined,
+      },
+    ],
+    extra: loading && <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />,
+    title: t('proxy.connectionTest'),
+  };
 
   return (
-    <Form
-      disabled={isSaving}
-      form={form}
-      layout="vertical"
-      onValuesChange={handleValuesChange}
-      requiredMark={false}
-    >
-      <Flexbox gap={24}>
-        {/* 基本代理设置 */}
-        <Block
-          paddingBlock={16}
-          paddingInline={24}
-          style={{ borderRadius: 12 }}
-          variant={'outlined'}
-        >
-          <Form.Item name="enableProxy" noStyle valuePropName="checked">
-            <Flexbox align={'center'} horizontal justify={'space-between'}>
-              <Flexbox>
-                <Text as={'h4'}>{t('proxy.enable')}</Text>
-                <Text type={'secondary'}>{t('proxy.enableDesc')}</Text>
-              </Flexbox>
-              <Switch
-                checked={isEnableProxy}
-                onChange={(checked) => {
-                  updateFormValue({ enableProxy: checked });
-                }}
-              />
-            </Flexbox>
-          </Form.Item>
-        </Block>
-
-        {/* 认证设置 */}
-        <Block
-          paddingBlock={16}
-          paddingInline={24}
-          style={{ borderRadius: 12 }}
-          variant={'outlined'}
-        >
-          <Flexbox gap={24}>
-            <Flexbox>
-              <Text as={'h4'}>{t('proxy.basicSettings')}</Text>
-              <Text type={'secondary'}>{t('proxy.basicSettingsDesc')}</Text>
-            </Flexbox>
-            <Flexbox>
-              <Form.Item
-                dependencies={['enableProxy']}
-                label={t('proxy.type')}
-                name="proxyType"
-                rules={[
-                  ({ getFieldValue }) => ({
-                    message: t('proxy.validation.typeRequired'),
-                    required: getFieldValue('enableProxy'),
-                  }),
-                ]}
-              >
-                <Radio.Group disabled={!form.getFieldValue('enableProxy')}>
-                  <Radio value="http">HTTP</Radio>
-                  <Radio value="https">HTTPS</Radio>
-                  <Radio value="socks5">SOCKS5</Radio>
-                </Radio.Group>
-              </Form.Item>
-
-              <Space.Compact style={{ width: '100%' }}>
-                <Form.Item
-                  dependencies={['enableProxy']}
-                  label={t('proxy.server')}
-                  name="proxyServer"
-                  rules={[
-                    ({ getFieldValue }) => ({
-                      message: t('proxy.validation.serverRequired'),
-                      required: getFieldValue('enableProxy'),
-                    }),
-                    {
-                      message: t('proxy.validation.serverInvalid'),
-                      pattern:
-                        /^((25[0-5]|2[0-4]\d|[01]?\d{1,2})\.){3}(25[0-5]|2[0-4]\d|[01]?\d{1,2})$|^[\dA-Za-z]([\dA-Za-z-]*[\dA-Za-z])?(\.[\dA-Za-z]([\dA-Za-z-]*[\dA-Za-z])?)*$/,
-                    },
-                  ]}
-                  style={{ flex: 1, marginBottom: 0 }}
-                >
-                  <Input disabled={!form.getFieldValue('enableProxy')} placeholder="127.0.0.1" />
-                </Form.Item>
-
-                <Form.Item
-                  dependencies={['enableProxy']}
-                  label={t('proxy.port')}
-                  name="proxyPort"
-                  rules={[
-                    ({ getFieldValue }) => ({
-                      message: t('proxy.validation.portRequired'),
-                      required: getFieldValue('enableProxy'),
-                    }),
-                    {
-                      message: t('proxy.validation.portInvalid'),
-                      pattern:
-                        /^([1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$/,
-                    },
-                  ]}
-                  style={{ marginBottom: 0, width: 120 }}
-                >
-                  <Input disabled={!form.getFieldValue('enableProxy')} placeholder="7890" />
-                </Form.Item>
-              </Space.Compact>
-            </Flexbox>
-            <Divider size={'small'} />
-            <Flexbox gap={12}>
-              <Form.Item
-                dependencies={['enableProxy']}
-                name="proxyRequireAuth"
-                noStyle
-                valuePropName="checked"
-              >
-                <Flexbox align={'center'} horizontal justify={'space-between'}>
-                  <Flexbox>
-                    <Text as={'h5'}>{t('proxy.auth')}</Text>
-                    <Text type={'secondary'}>{t('proxy.authDesc')}</Text>
-                  </Flexbox>
-                  <Switch
-                    checked={proxyRequireAuth}
-                    disabled={!isEnableProxy}
-                    onChange={(checked) => {
-                      updateFormValue({ proxyRequireAuth: checked });
-                    }}
-                  />
-                </Flexbox>
-              </Form.Item>
-
-              <Form.Item
-                dependencies={['proxyRequireAuth', 'enableProxy']}
-                label={t('proxy.username')}
-                name="proxyUsername"
-                rules={[
-                  ({ getFieldValue }) => ({
-                    message: t('proxy.validation.usernameRequired'),
-                    required: getFieldValue('proxyRequireAuth') && getFieldValue('enableProxy'),
-                  }),
-                ]}
-                style={{
-                  display:
-                    form.getFieldValue('proxyRequireAuth') && form.getFieldValue('enableProxy')
-                      ? 'block'
-                      : 'none',
-                }}
-              >
-                <Input placeholder={t('proxy.username_placeholder')} />
-              </Form.Item>
-
-              <Form.Item
-                dependencies={['proxyRequireAuth', 'enableProxy']}
-                label={t('proxy.password')}
-                name="proxyPassword"
-                rules={[
-                  ({ getFieldValue }) => ({
-                    message: t('proxy.validation.passwordRequired'),
-                    required: getFieldValue('proxyRequireAuth') && getFieldValue('enableProxy'),
-                  }),
-                ]}
-                style={{
-                  display:
-                    form.getFieldValue('proxyRequireAuth') && form.getFieldValue('enableProxy')
-                      ? 'block'
-                      : 'none',
-                }}
-              >
-                <Input.Password placeholder={t('proxy.password_placeholder')} />
-              </Form.Item>
-            </Flexbox>
-          </Flexbox>
-        </Block>
-
-        {/* 连接测试 */}
-
-        <Block
-          paddingBlock={16}
-          paddingInline={24}
-          style={{ borderRadius: 12 }}
-          variant={'outlined'}
-        >
-          <Flexbox gap={24}>
-            <Flexbox>
-              <Text as={'h4'}>{t('proxy.connectionTest')}</Text>
-              <Text type={'secondary'}>{t('proxy.testDescription')}</Text>
-            </Flexbox>
-            <Form.Item label={t('proxy.testUrl')}>
-              <Flexbox gap={8}>
-                <Space.Compact style={{ width: '100%' }}>
-                  <Input
-                    onChange={(e) => setTestUrl(e.target.value)}
-                    placeholder={t('proxy.testUrlPlaceholder')}
-                    style={{ flex: 1 }}
-                    value={testUrl}
-                  />
-                  <Button loading={isTesting} onClick={handleTest} type="default">
-                    {t('proxy.testButton')}
-                  </Button>
-                </Space.Compact>
-                {/* 测试结果显示 */}
-                {!testResult ? null : testResult.success ? (
-                  <Alert
-                    closable
-                    title={
-                      <Flexbox align="center" gap={8} horizontal>
-                        {t('proxy.testSuccessWithTime', { time: testResult.responseTime })}
-                      </Flexbox>
-                    }
-                    type={'success'}
-                  />
-                ) : (
-                  <Alert
-                    closable
-                    title={
-                      <Flexbox align="center" gap={8} horizontal>
-                        {t('proxy.testFailed')}: {testResult.message}
-                      </Flexbox>
-                    }
-                    type={'error'}
-                    variant={'outlined'}
-                  />
-                )}
-              </Flexbox>
-            </Form.Item>
-          </Flexbox>
-        </Block>
-        {/* 操作按钮 */}
-        <Space>
+    <Flexbox gap={24}>
+      <Form
+        collapsible={false}
+        form={form}
+        initialValues={proxySettings}
+        items={[enableProxyGroup, basicSettingsGroup, authGroup, testGroup]}
+        itemsType={'group'}
+        onValuesChange={handleValuesChange}
+        variant={'filled'}
+        {...FORM_STYLE}
+      />
+      <Flexbox align="end" justify="flex-end">
+        {hasUnsavedChanges && (
+          <span style={{ color: 'var(--ant-color-warning)', marginBottom: 8 }}>
+            {t('proxy.unsavedChanges')}
+          </span>
+        )}
+        <Flexbox gap={8} horizontal>
           <Button
             disabled={!hasUnsavedChanges}
             loading={isSaving}
@@ -349,19 +259,12 @@ const ProxyForm = () => {
           >
             {t('proxy.saveButton')}
           </Button>
-
           <Button disabled={!hasUnsavedChanges || isSaving} onClick={handleReset}>
             {t('proxy.resetButton')}
           </Button>
-
-          {hasUnsavedChanges && (
-            <Text style={{ marginLeft: 8 }} type="warning">
-              {t('proxy.unsavedChanges')}
-            </Text>
-          )}
-        </Space>
+        </Flexbox>
       </Flexbox>
-    </Form>
+    </Flexbox>
   );
 };
 

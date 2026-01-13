@@ -5,7 +5,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { shinyTextStyles } from '@/styles';
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { ClearTodosParams, ClearTodosState } from '../../../types';
 
@@ -14,14 +14,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block-end: 1px;
     color: ${cssVar.colorText};
     background: linear-gradient(to top, ${cssVar.colorWarningBg} 40%, transparent 40%);
-  `,
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -33,7 +25,7 @@ export const ClearTodosInspector = memo<BuiltinInspectorProps<ClearTodosParams, 
 
     if (isArgumentsStreaming && !mode) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-gtd.apiName.clearTodos')}</span>
         </div>
       );
@@ -45,7 +37,9 @@ export const ClearTodosInspector = memo<BuiltinInspectorProps<ClearTodosParams, 
         : t('builtins.lobe-gtd.apiName.clearTodos.modeCompleted');
 
     return (
-      <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+      <div
+        className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
+      >
         <Trans
           components={{ mode: <span className={styles.mode} /> }}
           i18nKey="builtins.lobe-gtd.apiName.clearTodos.result"

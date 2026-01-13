@@ -8,10 +8,10 @@ import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
-import { getAuthConfig } from '@/envs/auth';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
@@ -31,7 +31,7 @@ export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { NEXT_PUBLIC_ENABLE_MAGIC_LINK: enableMagicLink } = getAuthConfig();
+  const enableMagicLink = useServerConfigStore(serverConfigSelectors.enableMagicLink);
   const [form] = Form.useForm<SignInFormValues>();
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);

@@ -1,4 +1,3 @@
-import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
@@ -17,9 +16,11 @@ import RejectedResponse from './RejectedResponse';
 interface RenderProps {
   apiName: string;
   arguments?: string;
+  disableEditing?: boolean;
   identifier: string;
   intervention?: ToolIntervention;
   isArgumentsStreaming?: boolean;
+  isToolCalling?: boolean;
   /**
    * ContentBlock ID (not the group message ID)
    */
@@ -43,6 +44,7 @@ const Render = memo<RenderProps>(
     toolCallId,
     messageId,
     arguments: requestArgs,
+    disableEditing,
     showPluginRender,
     setShowPluginRender,
     identifier,
@@ -52,8 +54,9 @@ const Render = memo<RenderProps>(
     intervention,
     toolMessageId,
     isArgumentsStreaming,
+    isToolCalling,
   }) => {
-    if (toolMessageId && intervention?.status === 'pending') {
+    if (toolMessageId && intervention?.status === 'pending' && !disableEditing) {
       return (
         <Intervention
           apiName={apiName}
@@ -125,10 +128,7 @@ const Render = memo<RenderProps>(
       />
     );
 
-    // Standalone plugins always have LOADING_FLAT as content
-    const inPlaceholder = result.content === LOADING_FLAT && type !== 'standalone';
-
-    if (inPlaceholder) return placeholder;
+    if (isToolCalling) return placeholder;
 
     return (
       <Suspense fallback={placeholder}>
@@ -152,9 +152,11 @@ const Render = memo<RenderProps>(
             showPluginRender={showPluginRender}
             toolCallId={toolCallId}
           />
-          <div>
-            <ModeSelector />
-          </div>
+          {!disableEditing && (
+            <div>
+              <ModeSelector />
+            </div>
+          )}
         </Flexbox>
       </Suspense>
     );

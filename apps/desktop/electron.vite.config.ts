@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { defineConfig } from 'electron-vite';
 import { resolve } from 'node:path';
+
+import { getExternalDependencies } from './native-deps.config.mjs';
 
 dotenv.config();
 
@@ -13,6 +15,10 @@ export default defineConfig({
     build: {
       minify: !isDev,
       outDir: 'dist/main',
+      rollupOptions: {
+        // Native modules must be externalized to work correctly
+        external: getExternalDependencies(),
+      },
       sourcemap: isDev ? 'inline' : false,
     },
     // 这里是关键：在构建时进行文本替换
@@ -21,7 +27,7 @@ export default defineConfig({
       'process.env.OFFICIAL_CLOUD_SERVER': JSON.stringify(process.env.OFFICIAL_CLOUD_SERVER),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
     },
-    plugins: [externalizeDepsPlugin({})],
+
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/main'),
@@ -35,11 +41,11 @@ export default defineConfig({
       outDir: 'dist/preload',
       sourcemap: isDev ? 'inline' : false,
     },
-    plugins: [externalizeDepsPlugin({})],
+
     resolve: {
       alias: {
-        '~common': resolve(__dirname, 'src/common'),
         '@': resolve(__dirname, 'src/main'),
+        '~common': resolve(__dirname, 'src/common'),
       },
     },
   },

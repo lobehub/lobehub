@@ -2,24 +2,13 @@
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import { type SearchKnowledgeBaseArgs, type SearchKnowledgeBaseState } from '../../..';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
 
 export const SearchKnowledgeBaseInspector = memo<
   BuiltinInspectorProps<SearchKnowledgeBaseArgs, SearchKnowledgeBaseState>
@@ -35,13 +24,13 @@ export const SearchKnowledgeBaseInspector = memo<
   if (isArgumentsStreaming) {
     if (!query)
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}</span>
         </div>
       );
 
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}: </span>
         <span className={highlightTextStyles.gold}>{query}</span>
       </div>
@@ -49,7 +38,7 @@ export const SearchKnowledgeBaseInspector = memo<
   }
 
   return (
-    <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
+    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
       <span style={{ marginInlineStart: 2 }}>
         <span>{t('builtins.lobe-knowledge-base.apiName.searchKnowledgeBase')}: </span>
         {query && <span className={highlightTextStyles.gold}>{query}</span>}

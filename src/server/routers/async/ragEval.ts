@@ -63,7 +63,7 @@ export const ragEvalRouter = router({
         let questionEmbeddingId = evalRecord.questionEmbeddingId;
         let context = evalRecord.context;
 
-        // 如果不存在 questionEmbeddingId，那么就需要做一次 embedding
+        // If questionEmbeddingId does not exist, perform an embedding
         if (!questionEmbeddingId) {
           const embeddings = await modelRuntime.embeddings({
             dimensions: 1024,
@@ -83,7 +83,7 @@ export const ragEvalRouter = router({
           questionEmbeddingId = embeddingId;
         }
 
-        // 如果不存在 context，那么就需要做一次检索
+        // If context does not exist, perform a retrieval
         if (!context || context.length === 0) {
           const datasetRecord = await ctx.datasetRecordModel.findById(evalRecord.datasetRecordId);
 
@@ -99,7 +99,7 @@ export const ragEvalRouter = router({
           await ctx.evalRecordModel.update(evalRecord.id, { context });
         }
 
-        // 做一次生成 LLM 答案生成
+        // Generate LLM answer
         const { messages } = chainAnswerWithContext({ context, knowledge: [], question });
 
         const response = await modelRuntime.chat({

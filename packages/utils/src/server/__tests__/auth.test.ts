@@ -7,7 +7,7 @@ let mockEnableBetterAuth = false;
 let mockEnableClerk = false;
 let mockEnableNextAuth = false;
 
-vi.mock('@/const/auth', () => ({
+vi.mock('@/envs/auth', () => ({
   get enableBetterAuth() {
     return mockEnableBetterAuth;
   },

@@ -19,6 +19,7 @@ import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
+import { PortalViewType } from '../portal/initialState';
 import { type ThreadDispatch, threadReducer } from './reducer';
 import { genParentMessages } from './selectors';
 
@@ -88,7 +89,8 @@ export const chatThreadMessage: StateCreator<
       false,
       'openThreadCreator',
     );
-    get().togglePortal(true);
+    // Push Thread view to portal stack instead of togglePortal
+    get().pushPortalView({ type: PortalViewType.Thread, startMessageId: messageId });
   },
   openThreadInPortal: (threadId, sourceMessageId) => {
     set(
@@ -96,7 +98,12 @@ export const chatThreadMessage: StateCreator<
       false,
       'openThreadInPortal',
     );
-    get().togglePortal(true);
+    // Push Thread view to portal stack with threadId
+    get().pushPortalView({
+      type: PortalViewType.Thread,
+      threadId,
+      startMessageId: sourceMessageId ?? undefined,
+    });
   },
 
   closeThreadPortal: () => {
@@ -105,7 +112,7 @@ export const chatThreadMessage: StateCreator<
       false,
       'closeThreadPortal',
     );
-    get().togglePortal(false);
+    get().clearPortalStack();
   },
   createThread: async ({ message, sourceMessageId, topicId, type }) => {
     set({ isCreatingThread: true }, false, n('creatingThread/start'));

@@ -2,6 +2,7 @@ import {
   BriefcaseIcon,
   CheckSquareIcon,
   CloudIcon,
+  CompassIcon,
   CodeIcon,
   CoffeeIcon,
   DollarSignIcon,
@@ -25,6 +26,12 @@ export const useCategory = () => {
   const { t } = useTranslation('discover');
   return useMemo(
     () => [
+      {
+        icon: CompassIcon,
+        key: McpCategory.Discover,
+        label: t('mcp.categories.discover.name'),
+        title: t('mcp.categories.discover.description'),
+      },
       {
         icon: LayoutPanelTopIcon,
         key: McpCategory.All,

@@ -1,6 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { CloudSandboxIdentifier, type ExportFileState } from '@lobechat/builtin-tool-cloud-sandbox';
-import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
@@ -61,6 +60,14 @@ export interface PluginTypesAction {
   invokeKlavisTypePlugin: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
 
   /**
+   * Invoke LobeHub Skill type plugin
+   */
+  invokeLobehubSkillTypePlugin: (
+    id: string,
+    payload: ChatToolPayload,
+  ) => Promise<string | undefined>;
+
+  /**
    * Invoke markdown type plugin
    */
   invokeMarkdownTypePlugin: (id: string, payload: ChatToolPayload) => Promise<void>;
@@ -93,6 +100,11 @@ export const pluginTypes: StateCreator<
       return await get().invokeKlavisTypePlugin(id, payload);
     }
 
+    // Check if this is a LobeHub Skill tool by source field
+    if (payload.source === 'lobehubSkill') {
+      return await get().invokeLobehubSkillTypePlugin(id, payload);
+    }
+
     // Check if this is Cloud Code Interpreter - route to specific handler
     if (payload.identifier === CloudSandboxIdentifier) {
       return await get().invokeCloudCodeInterpreterTool(id, payload);
@@ -112,8 +124,16 @@ export const pluginTypes: StateCreator<
 
       // Get agent ID, group ID, and topic ID from operation context
       const agentId = operation?.context?.agentId;
-      const groupId = operation?.context?.groupId;
+      let groupId = operation?.context?.groupId;
       const topicId = operation?.context?.topicId;
+
+      // For group-agent-builder tools, inject activeGroupId from store if not in context
+      // This is needed because AgentBuilderProvider uses a separate scope for messages
+      // but still needs groupId for tool execution
+      if (!groupId && payload.identifier === 'lobe-group-agent-builder') {
+        const { getChatGroupStoreState } = await import('@/store/agentGroup');
+        groupId = getChatGroupStoreState().activeGroupId;
+      }
 
       // Get group orchestration callbacks if available (for group management tools)
       const groupOrchestration = get().getGroupOrchestrationCallbacks?.();
@@ -196,25 +216,12 @@ export const pluginTypes: StateCreator<
       return result;
     }
 
-    // Route GroupAgentBuilder to its dedicated action
-    if (payload.identifier === GroupAgentBuilderIdentifier) {
-      log('[invokeBuiltinTool] Routing to GroupAgentBuilder: %s', payload.apiName);
-      return await get().internal_triggerGroupAgentBuilderToolCalling(id, payload.apiName, params);
-    }
-
-    // run tool api call (fallback for AgentBuilder and other legacy tools)
-    // @ts-ignore
-    const { [payload.apiName]: action } = get();
-    if (!action) {
-      console.error(`[invokeBuiltinTool] plugin Action not found: ${payload.apiName}`);
-      return;
-    }
-
-    const content = safeParseJSON(payload.arguments);
-
-    if (!content) return;
-
-    return await action(id, content);
+    // All builtin tools should be handled by the executor registry above
+    // If we reach here, it means the tool is not registered
+    console.error(
+      `[invokeBuiltinTool] No executor found for: ${payload.identifier}/${payload.apiName}`,
+    );
+    return;
   },
 
   invokeCloudCodeInterpreterTool: async (id, payload) => {
@@ -423,6 +430,97 @@ export const pluginTypes: StateCreator<
     if (!data) return;
 
     // operationId already declared above, reuse it
+    const context = operationId ? { operationId } : undefined;
+
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
+
+    return data.content;
+  },
+
+  invokeLobehubSkillTypePlugin: async (id, payload) => {
+    let data: MCPToolCallResult | undefined;
+
+    // Get message to extract sessionId/topicId
+    const message = dbMessageSelectors.getDbMessageById(id)(get());
+
+    // Get abort controller from operation
+    const operationId = get().messageOperationMap[id];
+    const operation = operationId ? get().operations[operationId] : undefined;
+    const abortController = operation?.abortController;
+
+    log(
+      '[invokeLobehubSkillTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+      id,
+      payload.apiName,
+      operationId,
+      abortController?.signal.aborted,
+    );
+
+    try {
+      // payload.identifier is the provider id (e.g., 'linear', 'microsoft')
+      const provider = payload.identifier;
+
+      // Parse arguments
+      const args = safeParseJSON(payload.arguments) || {};
+
+      // Call LobeHub Skill tool via store action
+      const result = await useToolStore.getState().callLobehubSkillTool({
+        args,
+        provider,
+        toolName: payload.apiName,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'LobeHub Skill tool execution failed');
+      }
+
+      // Convert to MCPToolCallResult format
+      const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+      data = {
+        content,
+        error: undefined,
+        state: { content: [{ text: content, type: 'text' }] },
+        success: true,
+      };
+    } catch (error) {
+      console.error('[invokeLobehubSkillTypePlugin] Error:', error);
+
+      // ignore the aborted request error
+      const err = error as Error;
+      if (err.message.includes('aborted')) {
+        log(
+          '[invokeLobehubSkillTypePlugin] Request aborted: messageId=%s, tool=%s',
+          id,
+          payload.apiName,
+        );
+      } else {
+        const result = await messageService.updateMessageError(id, error as any, {
+          agentId: message?.agentId,
+          topicId: message?.topicId,
+        });
+        if (result?.success && result.messages) {
+          get().replaceMessages(result.messages, {
+            context: {
+              agentId: message?.agentId,
+              topicId: message?.topicId,
+            },
+          });
+        }
+      }
+    }
+
+    // If error occurred, exit
+    if (!data) return;
+
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call
