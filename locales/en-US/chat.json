@@ -73,7 +73,7 @@
   "group.orchestratorThinking": "Orchestrator is thinking...",
   "group.profile.contentPlaceholder": "Set the group objectives/work modes here. This information will be shared with all group members.",
   "group.profile.external": "External",
-  "group.profile.externalAgentWarning": "External agent - changes will sync globally",
+  "group.profile.externalAgentWarning": "This is an external agent. Changes made here will directly modify the original agent configuration.",
   "group.profile.groupSettings": "Group Settings",
   "group.profile.supervisor": "Supervisor",
   "group.profile.supervisorPlaceholder": "The supervisor coordinates different agents. Setting supervisor information here enables more precise workflow coordination.",
