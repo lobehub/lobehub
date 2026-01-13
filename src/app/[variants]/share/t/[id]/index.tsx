@@ -5,6 +5,7 @@ import { TRPCClientError } from '@trpc/client';
 import { Button, Result, Skeleton } from 'antd';
 import { createStyles } from 'antd-style';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -31,6 +32,7 @@ const useStyles = createStyles(({ css }) => ({
 
 const ShareTopicPage = memo(() => {
   const { styles } = useStyles();
+  const { t } = useTranslation('chat');
   const { id } = useParams<{ id: string }>();
 
   const { data, error, isLoading } = useSWR(
@@ -58,12 +60,12 @@ const ShareTopicPage = memo(() => {
           <Result
             extra={
               <Button href="/login" type="primary">
-                Sign In
+                {t('sharePage.error.unauthorized.action')}
               </Button>
             }
             status="403"
-            subTitle="Please sign in to view this shared topic."
-            title="Sign In Required"
+            subTitle={t('sharePage.error.unauthorized.subtitle')}
+            title={t('sharePage.error.unauthorized.title')}
           />
         </Flexbox>
       );
@@ -74,8 +76,8 @@ const ShareTopicPage = memo(() => {
         <Flexbox className={styles.errorContainer}>
           <Result
             status="403"
-            subTitle="This share is private and not accessible."
-            title="Access Denied"
+            subTitle={t('sharePage.error.forbidden.subtitle')}
+            title={t('sharePage.error.forbidden.title')}
           />
         </Flexbox>
       );
@@ -86,8 +88,8 @@ const ShareTopicPage = memo(() => {
       <Flexbox className={styles.errorContainer}>
         <Result
           status="404"
-          subTitle="This topic does not exist or has been removed."
-          title="Topic Not Found"
+          subTitle={t('sharePage.error.notFound.subtitle')}
+          title={t('sharePage.error.notFound.title')}
         />
       </Flexbox>
     );
