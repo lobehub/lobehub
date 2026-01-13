@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "39105db2-42b5-4302-b28c-44f1bca3f706",
+  "id": "0517bc1a-e3f8-4d2a-8b95-a81661851a25",
   "policies": {},
   "prevId": "13fbe553-95a0-42b2-974c-f38b5e1da138",
   "roles": {},
@@ -7909,15 +7909,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "access_permission": {
-          "name": "access_permission",
+        "visibility": {
+          "name": "visibility",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'private'"
         },
-        "view_count": {
-          "name": "view_count",
+        "page_view_count": {
+          "name": "page_view_count",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
