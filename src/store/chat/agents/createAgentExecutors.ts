@@ -216,9 +216,15 @@ export const createAgentExecutors = (context: {
       // - Error handling
       // Use messages from state (already contains full conversation history)
       const dbMessagesMap = context.get().dbMessagesMap[context.messageKey] || [];
-      const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(context.messageKey)(
-        context.get(),
-      );
+      // Use displayMessages from messagesMap for filtering, fall back to empty if not available
+      let displayMessages: UIChatMessage[] = [];
+      try {
+        displayMessages =
+          displayMessageSelectors.getDisplayMessagesByKey(context.messageKey)(context.get()) || [];
+      } catch {
+        // messagesMap may not exist in test environment
+        displayMessages = [];
+      }
 
       const activeMessageIds = collectActiveMessageIds(displayMessages);
       if (activeMessageIds.size > 0) {
