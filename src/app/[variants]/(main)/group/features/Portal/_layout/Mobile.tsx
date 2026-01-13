@@ -39,6 +39,7 @@ const Layout = () => {
     <Modal
       allowFullscreen
       className={cx(isPortalThread && styles.container)}
+      destroyOnHidden
       footer={null}
       height={'95%'}
       onCancel={() => togglePortal(false)}

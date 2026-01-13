@@ -4,7 +4,7 @@ import { DraggablePanel, DraggablePanelContainer, type DraggablePanelProps } fro
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { type PropsWithChildren, memo, useState } from 'react';
+import { Activity, type PropsWithChildren, memo, useState } from 'react';
 
 import {
   CHAT_PORTAL_MAX_WIDTH,
@@ -94,7 +94,9 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
           minWidth: CHAT_PORTAL_WIDTH,
         }}
       >
-        <Flexbox className={styles.panel}>{children}</Flexbox>
+        <Activity mode={showPortal ? 'visible' : 'hidden'} name="GroupPortal">
+          <Flexbox className={styles.panel}>{children}</Flexbox>
+        </Activity>
       </DraggablePanelContainer>
     </DraggablePanel>
   );
