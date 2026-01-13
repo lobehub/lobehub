@@ -1,7 +1,7 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
-import { chatGroupService, type GroupMemberConfig } from '@/services/chatGroup';
+import { type GroupMemberConfig, chatGroupService } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -106,6 +106,7 @@ export class GroupAgentBuilderExecutionRuntime {
         config: {
           avatar: args.avatar,
           description: args.description,
+          plugins: args.plugins,
           systemRole: args.systemRole,
           title: args.title,
           virtual: true,
@@ -166,11 +167,12 @@ export class GroupAgentBuilderExecutionRuntime {
       const agentConfigs: GroupMemberConfig[] = args.agents.map((agentDef) => ({
         avatar: agentDef.avatar,
         description: agentDef.description,
+        plugins: agentDef.plugins,
         systemRole: agentDef.systemRole,
         title: agentDef.title,
       }));
 
-      const { agentIds, agents: createdAgents } = await chatGroupService.batchCreateAgentsInGroup(
+      const { agents: createdAgents } = await chatGroupService.batchCreateAgentsInGroup(
         groupId,
         agentConfigs,
       );
@@ -449,7 +451,9 @@ export class GroupAgentBuilderExecutionRuntime {
         }
         if (meta.description !== undefined) {
           updatedFields.push(
-            meta.description ? `description (${meta.description.length} chars)` : 'description (cleared)',
+            meta.description
+              ? `description (${meta.description.length} chars)`
+              : 'description (cleared)',
           );
         }
         if (meta.backgroundColor !== undefined) {
@@ -535,8 +539,6 @@ export class GroupAgentBuilderExecutionRuntime {
 
   /**
    * Stream update group prompt with typewriter effect
-   * Note: Currently content doesn't have store-level streaming support,
-   * so this directly updates the content.
    */
   private async streamUpdateGroupPrompt(prompt: string): Promise<void> {
     const state = getChatGroupStoreState();
@@ -544,8 +546,6 @@ export class GroupAgentBuilderExecutionRuntime {
 
     if (!group) return;
 
-    // For now, directly update the content since there's no streaming infrastructure
-    // TODO: Add streaming support for content similar to systemPrompt if needed
     await state.updateGroup(group.id, { content: prompt });
   }
 }

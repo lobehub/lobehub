@@ -2,11 +2,14 @@
 
 import { useEditor, useEditorState } from '@lobehub/editor/react';
 import { useUnmount } from 'ahooks';
-import { memo, useEffect, useRef } from 'react';
+import { memo } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
+import {
+  useBidirectionalQuerySync,
+  useBidirectionalQuerySyncOptional,
+} from '@/hooks/useBidirectionalQuerySync';
 import { useRegisterFilesHotkeys, useSaveDocumentHotkey } from '@/hooks/useHotkeys';
-import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
@@ -21,37 +24,21 @@ const ProfileHydration = memo(() => {
   storeUpdater('editor', editor);
   // Sync editorState to store
   storeUpdater('editorState', editorState);
-  // Sync tab query param to store
-  const [activeTabId] = useQueryState('tab', parseAsString.withDefault('group'));
-  storeUpdater('activeTabId', activeTabId);
+
+  // Bidirectional sync between URL query 'tab' and groupProfileStore.activeTabId
+  const activeTabId = useGroupProfileStore((s) => s.activeTabId);
+  useBidirectionalQuerySync(
+    'tab',
+    activeTabId,
+    (value) => useGroupProfileStore.setState({ activeTabId: value }),
+    { defaultValue: 'group' },
+  );
 
   // Bidirectional sync between URL query 'bt' and chatStore.activeTopicId
-  const [builderTopicId, setBuilderTopicId] = useQueryState('bt');
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-
-  // Track if the change came from URL to prevent sync loops
-  const isUrlChangeRef = useRef(false);
-
-  // Sync URL → Store (when URL changes)
-  useEffect(() => {
-    const urlTopicId = builderTopicId ?? undefined;
-    if (urlTopicId !== activeTopicId) {
-      isUrlChangeRef.current = true;
-      useChatStore.setState({ activeTopicId: urlTopicId });
-    }
-  }, [builderTopicId]);
-
-  // Sync Store → URL (when store changes, but not from URL)
-  useEffect(() => {
-    if (isUrlChangeRef.current) {
-      isUrlChangeRef.current = false;
-      return;
-    }
-    const urlTopicId = builderTopicId ?? undefined;
-    if (activeTopicId !== urlTopicId) {
-      setBuilderTopicId(activeTopicId ?? null);
-    }
-  }, [activeTopicId]);
+  useBidirectionalQuerySyncOptional('bt', activeTopicId, (value) =>
+    useChatStore.setState({ activeTopicId: value }),
+  );
 
   // Register hotkeys
   useRegisterFilesHotkeys();

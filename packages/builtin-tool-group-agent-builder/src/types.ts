@@ -61,6 +61,11 @@ export interface CreateAgentParams {
    */
   description?: string;
   /**
+   * List of plugin identifiers to enable for this agent.
+   * Use the same identifiers as shown in official_tools context.
+   */
+  plugins?: string[];
+  /**
    * The system prompt that defines the agent's behavior
    */
   systemRole: string;
@@ -162,7 +167,9 @@ export interface UpdateGroupState {
   /**
    * The updated metadata values
    */
-  updatedMeta?: Partial<Pick<MetaData, 'avatar' | 'backgroundColor' | 'description' | 'tags' | 'title'>>;
+  updatedMeta?: Partial<
+    Pick<MetaData, 'avatar' | 'backgroundColor' | 'description' | 'tags' | 'title'>
+  >;
 }
 
 export interface UpdateGroupPromptParams {
@@ -276,4 +283,3 @@ export interface RemoveAgentState {
    */
   success: boolean;
 }
-
