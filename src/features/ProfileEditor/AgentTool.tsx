@@ -16,7 +16,7 @@ import PluginStore from '@/features/PluginStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -83,6 +83,11 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
 
 export interface AgentToolProps {
   /**
+   * Optional agent ID to use instead of currentAgentConfig
+   * Used in group profile to specify which member's plugins to display
+   */
+  agentId?: string;
+  /**
    * Whether to filter tools by availableInWeb property
    * @default false
    */
@@ -100,15 +105,17 @@ export interface AgentToolProps {
 }
 
 const AgentTool = memo<AgentToolProps>(
-  ({ showWebBrowsing = false, filterAvailableInWeb = false, useAllMetaList = false }) => {
+  ({ agentId, showWebBrowsing = false, filterAvailableInWeb = false, useAllMetaList = false }) => {
     const { t } = useTranslation('setting');
-    const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+    const activeAgentId = useAgentStore((s) => s.activeAgentId);
+    const effectiveAgentId = agentId || activeAgentId || '';
+    const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId), isEqual);
 
     // Plugin state management
     const plugins = config?.plugins || [];
 
-    const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
-    const updateAgentChatConfig = useAgentStore((s) => s.updateAgentChatConfig);
+    const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+    const updateAgentChatConfigById = useAgentStore((s) => s.updateAgentChatConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
     // Use appropriate builtin list based on prop
@@ -117,8 +124,8 @@ const AgentTool = memo<AgentToolProps>(
       isEqual,
     );
 
-    // Web browsing uses searchMode instead of plugins array
-    const isSearchEnabled = useAgentStore(agentChatConfigSelectors.isAgentEnableSearch);
+    // Web browsing uses searchMode instead of plugins array - use byId selector
+    const isSearchEnabled = useAgentStore(chatConfigByIdSelectors.isEnableSearchById(effectiveAgentId));
 
     // Klavis 相关状态
     const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
@@ -144,11 +151,34 @@ const AgentTool = memo<AgentToolProps>(
     // 使用 SWR 加载用户的 Klavis 集成（从数据库）
     useFetchUserKlavisServers(isKlavisEnabledInEnv);
 
-    // Toggle web browsing via searchMode
+    // Toggle web browsing via searchMode - use byId action
     const toggleWebBrowsing = useCallback(async () => {
+      if (!effectiveAgentId) return;
       const nextMode = isSearchEnabled ? 'off' : 'auto';
-      await updateAgentChatConfig({ searchMode: nextMode });
-    }, [isSearchEnabled, updateAgentChatConfig]);
+      await updateAgentChatConfigById(effectiveAgentId, { searchMode: nextMode });
+    }, [isSearchEnabled, updateAgentChatConfigById, effectiveAgentId]);
+
+    // Toggle a plugin - use byId action
+    const togglePlugin = useCallback(
+      async (pluginId: string, state?: boolean) => {
+        if (!effectiveAgentId) return;
+        const currentPlugins = plugins;
+        const hasPlugin = currentPlugins.includes(pluginId);
+        const shouldEnable = state !== undefined ? state : !hasPlugin;
+
+        let newPlugins: string[];
+        if (shouldEnable && !hasPlugin) {
+          newPlugins = [...currentPlugins, pluginId];
+        } else if (!shouldEnable && hasPlugin) {
+          newPlugins = currentPlugins.filter((id) => id !== pluginId);
+        } else {
+          return;
+        }
+
+        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+      },
+      [effectiveAgentId, plugins, updateAgentConfigById],
+    );
 
     // Check if a tool is enabled (handles web browsing specially)
     const isToolEnabled = useCallback(
@@ -167,10 +197,10 @@ const AgentTool = memo<AgentToolProps>(
         if (showWebBrowsing && identifier === WEB_BROWSING_IDENTIFIER) {
           await toggleWebBrowsing();
         } else {
-          await toggleAgentPlugin(identifier);
+          await togglePlugin(identifier);
         }
       },
-      [toggleWebBrowsing, toggleAgentPlugin, showWebBrowsing],
+      [toggleWebBrowsing, togglePlugin, showWebBrowsing],
     );
 
     // Set default tab based on installed plugins (only on first load)
@@ -240,7 +270,7 @@ const AgentTool = memo<AgentToolProps>(
       [isKlavisEnabledInEnv, allKlavisServers],
     );
 
-    // Handle plugin remove via Tag close
+    // Handle plugin remove via Tag close - use byId actions
     const handleRemovePlugin =
       (
         pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> },
@@ -250,9 +280,10 @@ const AgentTool = memo<AgentToolProps>(
         e.stopPropagation();
         const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
         if (showWebBrowsing && identifier === WEB_BROWSING_IDENTIFIER) {
-          await updateAgentChatConfig({ searchMode: 'off' });
+          if (!effectiveAgentId) return;
+          await updateAgentChatConfigById(effectiveAgentId, { searchMode: 'off' });
         } else {
-          toggleAgentPlugin(identifier, false);
+          await togglePlugin(identifier, false);
         }
       };
 
@@ -304,13 +335,13 @@ const AgentTool = memo<AgentToolProps>(
               label={item.title}
               onUpdate={async () => {
                 setUpdating(true);
-                await toggleAgentPlugin(item.identifier);
+                await togglePlugin(item.identifier);
                 setUpdating(false);
               }}
             />
           ),
         })),
-      [installedPluginList, plugins, toggleAgentPlugin],
+      [installedPluginList, plugins, togglePlugin],
     );
 
     // All tab items (市场 tab)
@@ -411,7 +442,7 @@ const AgentTool = memo<AgentToolProps>(
               label={item.title}
               onUpdate={async () => {
                 setUpdating(true);
-                await toggleAgentPlugin(item.identifier);
+                await togglePlugin(item.identifier);
                 setUpdating(false);
               }}
             />
@@ -435,7 +466,7 @@ const AgentTool = memo<AgentToolProps>(
       plugins,
       isToolEnabled,
       handleToggleTool,
-      toggleAgentPlugin,
+      togglePlugin,
       t,
     ]);
 
