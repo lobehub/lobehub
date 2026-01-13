@@ -321,6 +321,7 @@ export default {
   'shareModal.popover.privacyWarning.content':
     'Please ensure the conversation does not contain any private or sensitive information before sharing. LobeHub is not responsible for any security issues that may arise from sharing.',
   'shareModal.popover.privacyWarning.title': 'Privacy Notice',
+  'shareModal.popover.title': 'Share Topic',
   'shareModal.popover.visibility': 'Visibility',
   'shareModal.regeneratePdf': 'Regenerate PDF',
   'shareModal.screenshot': 'Screenshot',

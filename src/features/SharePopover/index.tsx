@@ -1,8 +1,8 @@
 'use client';
 
-import { Button, Flexbox, Input, Popover, copyToClipboard, usePopoverContext } from '@lobehub/ui';
+import { Button, Flexbox, Popover, copyToClipboard, usePopoverContext } from '@lobehub/ui';
 import { App, Divider, Select, Skeleton, Typography } from 'antd';
-import { CopyIcon, ExternalLinkIcon, GlobeIcon, LinkIcon, LockIcon, UserIcon } from 'lucide-react';
+import { CopyIcon, ExternalLinkIcon, GlobeIcon, LockIcon, UserIcon } from 'lucide-react';
 import { type ReactNode, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -141,13 +141,22 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
 
   return (
     <Flexbox className={styles.container} gap={12} ref={containerRef}>
-      <Typography.Text strong>{t('share', { ns: 'common' })}</Typography.Text>
+      <Typography.Text strong>{t('shareModal.popover.title')}</Typography.Text>
 
-      <Flexbox align="center" gap={8} horizontal>
-        <Input prefix={<LinkIcon size={16} />} readOnly style={{ flex: 1 }} value={shareUrl} />
+      <Flexbox gap={4}>
+        <Typography.Text type="secondary">{t('shareModal.popover.visibility')}</Typography.Text>
         <Select
           disabled={updating}
           getPopupContainer={() => containerRef.current || document.body}
+          labelRender={({ value }) => {
+            const option = permissionOptions.find((o) => o.value === value);
+            return (
+              <Flexbox align="center" gap={8} horizontal>
+                {option?.icon}
+                {option?.label}
+              </Flexbox>
+            );
+          }}
           onChange={handlePermissionChange}
           optionRender={(option) => (
             <Flexbox align="center" gap={8} horizontal>
@@ -156,7 +165,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
             </Flexbox>
           )}
           options={permissionOptions}
-          style={{ width: 120 }}
+          style={{ width: '100%' }}
           value={currentPermission}
         />
       </Flexbox>
@@ -201,7 +210,7 @@ const SharePopover = memo<SharePopoverProps>(({ children, onOpenModal }) => {
       styles={{
         content: {
           padding: 0,
-          width: isMobile ? '100vw' : 420,
+          width: isMobile ? '100vw' : 366,
         },
       }}
       trigger={['click']}

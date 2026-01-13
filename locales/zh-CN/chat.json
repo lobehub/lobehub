@@ -290,6 +290,7 @@
   "shareModal.popover.privacyWarning.confirm": "我已了解，继续",
   "shareModal.popover.privacyWarning.content": "分享前请确保对话中不包含任何隐私或敏感信息。因分享而可能产生的任何安全问题，LobeHub 概不负责。",
   "shareModal.popover.privacyWarning.title": "隐私提醒",
+  "shareModal.popover.title": "分享话题",
   "shareModal.popover.visibility": "可见性",
   "shareModal.regeneratePdf": "重新生成 PDF",
   "shareModal.screenshot": "截图",

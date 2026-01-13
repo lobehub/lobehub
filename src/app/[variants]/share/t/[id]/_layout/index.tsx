@@ -18,6 +18,8 @@ import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import SharePortal from '../features/Portal';
+
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
     width: 100vw;
@@ -154,7 +156,12 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
           {isLogin && <UserAvatar size={24} />}
         </Flexbox>
       </Flexbox>
-      <Flexbox className={styles.content}>{children ?? <Outlet />}</Flexbox>
+      <Flexbox className={styles.content} horizontal style={{ overflow: 'hidden' }}>
+        <Flexbox flex={1} style={{ overflow: 'hidden' }}>
+          {children ?? <Outlet />}
+        </Flexbox>
+        <SharePortal />
+      </Flexbox>
       <Typography.Text className={styles.footer}>{t('sharePageDisclaimer')}</Typography.Text>
     </Flexbox>
   );
