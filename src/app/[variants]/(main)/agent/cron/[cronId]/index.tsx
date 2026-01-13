@@ -474,7 +474,7 @@ const CronJobDetailPage = memo(() => {
 
               <CronJobContentEditor
                 enableRichRender={enableRichRender}
-                initialValue={draft.content}
+                initialValue={cronJob?.content || ''}
                 onChange={handleContentChange}
               />
 
