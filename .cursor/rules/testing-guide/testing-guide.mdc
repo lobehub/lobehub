@@ -11,22 +11,22 @@ LobeChat 项目使用 Vitest 测试库，配置了两种不同的测试环境：
 
 ### 客户端数据库测试环境 (DOM Environment)
 
-- **配置文件**: [vitest.config.ts](mdc:vitest.config.ts)
+- **配置文件**: `vitest.config.ts`
 - **环境**: Happy DOM (浏览器环境模拟)
 - **数据库**: PGLite (浏览器环境的 PostgreSQL)
 - **用途**: 测试前端组件、客户端逻辑、React 组件等
-- **设置文件**: [tests/setup.ts](mdc:tests/setup.ts)
+- **设置文件**: `tests/setup.ts`
 
 ### 服务端数据库测试环境 (Node Environment)
 
 目前只有 `packages/database` 下的测试可以通过配置 `TEST_SERVER_DB=1` 环境变量来使用服务端数据库测试
 
-- **配置文件**: [packages/database/vitest.config.mts](mdc:packages/database/vitest.config.mts) 并且设置环境变量 `TEST_SERVER_DB=1`
+- **配置文件**: `packages/database/vitest.config.mts` 并且设置环境变量 `TEST_SERVER_DB=1`
 - **环境**: Node.js
 - **数据库**: 真实的 PostgreSQL 数据库
 - **并发限制**: 单线程运行 (`singleFork: true`)
 - **用途**: 测试数据库模型、服务端逻辑、API 端点等
-- **设置文件**: [packages/database/tests/setup-db.ts](mdc:packages/database/tests/setup-db.ts)
+- **设置文件**: `packages/database/tests/setup-db.ts`
 
 ## 测试运行命令
 
@@ -495,8 +495,8 @@ gh pr diff                  # 查看PR中的所有改动
 
 针对一些特殊场景的测试，需要阅读相关 rules：
 
-- [Electron IPC 接口测试策略](mdc:./electron-ipc-test.mdc)
-- [数据库 Model 测试指南](mdc:./db-model-test.mdc)
+- `electron-ipc-test.mdc` - Electron IPC 接口测试策略
+- `db-model-test.mdc` - 数据库 Model 测试指南
 
 ## 核心要点
 

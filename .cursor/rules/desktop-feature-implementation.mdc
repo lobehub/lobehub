@@ -84,7 +84,7 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
 ### 5. 如果是新增内置工具，遵循工具实现流程
 
-参考 [desktop-local-tools-implement.mdc](mdc:desktop-local-tools-implement.mdc) 了解更多关于添加内置工具的详细步骤。
+参考 `desktop-local-tools-implement.mdc` 了解更多关于添加内置工具的详细步骤。
 
 ### 6. 添加测试
 

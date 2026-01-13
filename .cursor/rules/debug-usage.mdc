@@ -5,7 +5,7 @@ alwaysApply: false
 ---
 # Debug 包使用指南
 
-本项目使用 [debug](mdc:https:/github.com/debug-js/debug) 包进行调试日志记录。使用此规则来确保团队成员统一调试日志格式。
+本项目使用 `debug` 包进行调试日志记录。使用此规则来确保团队成员统一调试日志格式。
 
 ## 基本用法
 
@@ -46,7 +46,7 @@ log('格式化数字: %d', number);
 
 ## 示例
 
-查看 [market/index.ts](mdc:src/server/routers/edge/market/index.ts) 中的使用示例：
+查看 `src/server/routers/edge/market/index.ts` 中的使用示例：
 
 ```typescript
 import debug from 'debug';
