@@ -1,5 +1,5 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { App, Switch } from 'antd';
+import { type DropdownItem, Icon } from '@lobehub/ui';
+import { App } from 'antd';
 import { cssVar, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import { CopyPlus, Download, Link2, Trash2 } from 'lucide-react';
@@ -75,25 +75,17 @@ export const useMenu = (): { menuItems: any[] } => {
     }
   };
 
-  const menuItems = useMemo(
-    () => [
+  const menuItems = useMemo<DropdownItem[]>(() => {
+    const items: DropdownItem[] = [
       ...(showViewModeSwitch
         ? [
             {
+              checked: wideScreen,
               key: 'full-width',
-              label: (
-                <Flexbox align="center" horizontal justify="space-between">
-                  <span>{t('viewMode.fullWidth', { ns: 'chat' })}</span>
-                  <Switch
-                    checked={wideScreen}
-                    onChange={toggleWideScreen}
-                    onClick={(checked, event) => {
-                      event.stopPropagation();
-                    }}
-                    size="small"
-                  />
-                </Flexbox>
-              ),
+              label: t('viewMode.fullWidth', { ns: 'chat' }),
+              onCheckedChange: toggleWideScreen,
+
+              type: 'checkbox' as const,
             },
             {
               type: 'divider' as const,
@@ -140,38 +132,43 @@ export const useMenu = (): { menuItems: any[] } => {
         key: 'export',
         label: t('pageEditor.menu.export'),
       },
-      {
-        type: 'divider' as const,
-      },
-      {
-        disabled: true,
-        key: 'page-info',
-        label: (
-          <div style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
-            <div>
-              {lastUpdatedTime
-                ? t('pageEditor.editedAt', {
-                    time: dayjs(lastUpdatedTime).format('MMMM D, YYYY [at] h:mm A'),
-                  })
-                : ''}
+    ];
+
+    if (lastUpdatedTime) {
+      items.push(
+        {
+          type: 'divider' as const,
+        },
+        {
+          disabled: true,
+          key: 'page-info',
+          label: (
+            <div style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
+              <div>
+                {lastUpdatedTime
+                  ? t('pageEditor.editedAt', {
+                      time: dayjs(lastUpdatedTime).format('MMMM D, YYYY [at] h:mm A'),
+                    })
+                  : ''}
+              </div>
             </div>
-          </div>
-        ),
-      },
-    ],
-    [
-      lastUpdatedTime,
-      storeApi,
-      t,
-      message,
-      modal,
-      wideScreen,
-      toggleWideScreen,
-      showViewModeSwitch,
-      handleDuplicate,
-      handleExportMarkdown,
-    ],
-  );
+          ),
+        },
+      );
+    }
+    return items;
+  }, [
+    lastUpdatedTime,
+    storeApi,
+    t,
+    message,
+    modal,
+    wideScreen,
+    toggleWideScreen,
+    showViewModeSwitch,
+    handleDuplicate,
+    handleExportMarkdown,
+  ]);
 
   return { menuItems };
 };
