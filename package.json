@@ -132,6 +132,7 @@
     ]
   },
   "overrides": {
+    "@lobehub/ui": "4.17.0",
     "stylelint-config-clean-order": "7.0.0"
   },
   "dependencies": {
