@@ -18,33 +18,33 @@ const CronJobHeader = memo<CronJobHeaderProps>(
     const { t } = useTranslation(['setting', 'common']);
 
     return (
-      <Flexbox align="center" gap={16} horizontal justify="space-between">
-        <Flexbox gap={6} style={{ flex: 1, minWidth: 0 }}>
-          <Input
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder={t('agentCronJobs.form.name.placeholder')}
-            style={{
-              fontSize: 28,
-              fontWeight: 600,
-              padding: 0,
-            }}
-            value={name}
-            variant={'borderless'}
-          />
-        </Flexbox>
+      <Flexbox gap={16}>
+        {/* Title Input */}
+        <Input
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder={t('agentCronJobs.form.name.placeholder')}
+          style={{
+            fontSize: 28,
+            fontWeight: 600,
+            padding: 0,
+          }}
+          value={name}
+          variant={'borderless'}
+        />
 
+        {/* Controls Row */}
         {!isNewJob && (
-          <Flexbox align="center" gap={8} horizontal>
-            <ActionIcon
-              icon={Trash2}
-              onClick={onDelete}
-              size={'small'}
-              title={t('delete', { ns: 'common' })}
-            />
-            <Text type="secondary">
-              {t(enabled ? 'agentCronJobs.status.enabled' : 'agentCronJobs.status.disabled')}
-            </Text>
-            <Switch checked={enabled ?? false} onChange={onToggleEnabled} size="small" />
+          <Flexbox align="center" gap={24} horizontal>
+            {/* Left: Enable/Disable Switch */}
+            <Flexbox align="center" gap={12} horizontal>
+              <Switch checked={enabled ?? false} onChange={onToggleEnabled} />
+              <Text type="secondary">
+                {t(enabled ? 'agentCronJobs.status.enabled' : 'agentCronJobs.status.disabled')}
+              </Text>
+            </Flexbox>
+
+            {/* Right: Delete Button */}
+            <ActionIcon icon={Trash2} onClick={onDelete} title={t('delete', { ns: 'common' })} />
           </Flexbox>
         )}
       </Flexbox>

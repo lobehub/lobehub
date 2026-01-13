@@ -274,12 +274,15 @@ const CronJobDetailPage = memo(() => {
     [cronId, mutate, refreshCronList],
   );
 
-  const handleDeleteCronJob = useCallback(() => {
+  const handleDeleteCronJob = useCallback(async () => {
     if (!cronId) return;
 
     modal.confirm({
+      cancelText: t('cancel', { ns: 'common' }),
       centered: true,
+      content: t('agentCronJobs.confirmDeleteCronJob' as any),
       okButtonProps: { danger: true },
+      okText: t('ok', { ns: 'common' }),
       onOk: async () => {
         try {
           let topicIds: string[] = [];
@@ -312,7 +315,7 @@ const CronJobDetailPage = memo(() => {
           message.error('Failed to delete scheduled task');
         }
       },
-      title: t('agentCronJobs.confirmDelete'),
+      title: t('agentCronJobs.deleteCronJob' as any),
     });
   }, [activeTopicId, cronId, cronListAgentId, modal, refreshTopic, router, switchTopic, t]);
 
