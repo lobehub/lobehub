@@ -1,6 +1,5 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
@@ -23,6 +22,7 @@ import { agentCronJobService } from '@/services/agentCronJob';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -84,6 +84,7 @@ const CronJobDetailPage = memo(() => {
   const router = useQueryRoute();
   const { modal } = App.useApp();
   const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const isNewJob = cronId === 'new';
 
@@ -110,7 +111,7 @@ const CronJobDetailPage = memo(() => {
   const cronListAgentId = activeAgentId || aid;
 
   const { data: cronJob, isLoading } = useSWR(
-    ENABLE_BUSINESS_FEATURES && cronId && !isNewJob ? ['cronJob', cronId] : null,
+    enableBusinessFeatures && cronId && !isNewJob ? ['cronJob', cronId] : null,
     async () => {
       if (!cronId || isNewJob) return null;
       const result = await agentCronJobService.getById(cronId);
@@ -435,7 +436,7 @@ const CronJobDetailPage = memo(() => {
     flushPendingSave();
   }, [cronJob, flushPendingSave]);
 
-  if (!ENABLE_BUSINESS_FEATURES) {
+  if (!enableBusinessFeatures) {
     return null;
   }
 
