@@ -56,7 +56,11 @@ const ChatList = memo<ChatListProps>(({ welcome, itemContent }) => {
   );
   const messagesInit = useConversationStore(dataSelectors.messagesInit);
 
-  if (!messagesInit) {
+  // When topicId is null (new conversation), show welcome directly without waiting for fetch
+  // because there's no server data to fetch - only local optimistic updates exist
+  const isNewConversation = !context.topicId;
+
+  if (!messagesInit && !isNewConversation) {
     return <SkeletonList />;
   }
 
