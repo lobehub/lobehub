@@ -115,24 +115,27 @@ export const messageRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found or not public' });
         }
 
-        const isOwner = ctx.userId && share.ownerId === ctx.userId;
-
-        // Check permission based on accessPermission (owner can always access)
-        if (!isOwner) {
-          if (share.accessPermission === 'private') {
+        // Check permission
+        const accessCheck = TopicShareModel.checkAccess(share, ctx.userId ?? undefined);
+        if (!accessCheck.allowed) {
+          if (accessCheck.reason === 'private') {
             throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found or not public' });
           }
-          if (share.accessPermission === 'public_signin' && !ctx.userId) {
-            throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Sign in required to view this shared topic' });
-          }
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Sign in required to view this shared topic',
+          });
         }
 
         const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
         const fileService = new FileService(ctx.serverDB, share.ownerId);
 
-        return messageModel.query({ ...queryParams, topicId: share.topicId }, {
-          postProcessUrl: (path) => fileService.getFullFileUrl(path),
-        });
+        return messageModel.query(
+          { ...queryParams, topicId: share.topicId },
+          {
+            postProcessUrl: (path) => fileService.getFullFileUrl(path),
+          },
+        );
       }
 
       // Authenticated access - require userId

@@ -22,19 +22,16 @@ export const shareRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
       }
 
-      const isOwner = ctx.userId && share.ownerId === ctx.userId;
-
-      // Check permission (owner can always access)
-      if (!isOwner) {
-        if (share.accessPermission === 'private') {
+      // Check permission
+      const accessCheck = TopicShareModel.checkAccess(share, ctx.userId ?? undefined);
+      if (!accessCheck.allowed) {
+        if (accessCheck.reason === 'private') {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
         }
-        if (share.accessPermission === 'public_signin' && !ctx.userId) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'Sign in required to view this shared topic',
-          });
-        }
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Sign in required to view this shared topic',
+        });
       }
 
       // Increment view count after permission check passes

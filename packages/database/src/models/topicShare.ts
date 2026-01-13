@@ -4,6 +4,10 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { agents, chatGroups, chatGroupsAgents, topicShares, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
+export type ShareAccessCheckResult =
+  | { allowed: true }
+  | { allowed: false; reason: 'private' | 'signin_required' };
+
 export class TopicShareModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -141,4 +145,29 @@ export class TopicShareModel {
       .set({ viewCount: sql`${topicShares.viewCount} + 1` })
       .where(eq(topicShares.id, shareId));
   };
+
+  /**
+   * Check if user has access to the share.
+   * Owner can always access, others depend on accessPermission.
+   */
+  static checkAccess(
+    share: { accessPermission: string; ownerId: string },
+    userId?: string,
+  ): ShareAccessCheckResult {
+    const isOwner = userId && share.ownerId === userId;
+
+    if (isOwner) {
+      return { allowed: true };
+    }
+
+    if (share.accessPermission === 'private') {
+      return { allowed: false, reason: 'private' };
+    }
+
+    if (share.accessPermission === 'public_signin' && !userId) {
+      return { allowed: false, reason: 'signin_required' };
+    }
+
+    return { allowed: true };
+  }
 }
