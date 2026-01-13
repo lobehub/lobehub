@@ -22,22 +22,17 @@ interface CronTopicListProps {
 const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
   const { t } = useTranslation('setting');
   const router = useQueryRoute();
-  const [agentId, createAgentCronJob, useFetchCronTopicsWithJobInfo] = useAgentStore((s) => [
+  const [agentId, useFetchCronTopicsWithJobInfo] = useAgentStore((s) => [
     s.activeAgentId,
-    s.createAgentCronJob,
     s.useFetchCronTopicsWithJobInfo,
   ]);
   const { data: cronTopicsGroupsWithJobInfo = [], isLoading } =
     useFetchCronTopicsWithJobInfo(agentId);
 
-  const handleCreateCronJob = useCallback(async () => {
+  const handleCreateCronJob = useCallback(() => {
     if (!agentId) return;
-
-    const cronJobId = await createAgentCronJob();
-    if (cronJobId) {
-      router.push(urlJoin('/agent', agentId, 'cron', cronJobId));
-    }
-  }, [agentId, createAgentCronJob, router]);
+    router.push(urlJoin('/agent', agentId, 'cron', 'new'));
+  }, [agentId, router]);
 
   if (!ENABLE_BUSINESS_FEATURES) return null;
 

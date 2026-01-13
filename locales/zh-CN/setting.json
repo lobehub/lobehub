@@ -37,6 +37,7 @@
   "agentCronJobs.noExecutionResults": "无执行结果",
   "agentCronJobs.remainingExecutions": "剩余：{{count}}",
   "agentCronJobs.save": "保存",
+  "agentCronJobs.saveAsNew": "保存为新定时任务",
   "agentCronJobs.schedule": "计划",
   "agentCronJobs.scheduleType.daily": "每日",
   "agentCronJobs.scheduleType.hourly": "每小时",
