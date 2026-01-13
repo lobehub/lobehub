@@ -58,7 +58,7 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   // Set agent meta to agentStore for avatar display
   useEffect(() => {
     if (data?.agentId && data.agentMeta) {
-      const meta: any = {
+      const meta = {
         avatar: data.agentMeta.avatar ?? undefined,
         backgroundColor: data.agentMeta.backgroundColor ?? undefined,
         title: data.agentMeta.title ?? undefined,

@@ -103,14 +103,14 @@ export const dataSlice: StateCreator<
   useFetchMessages: (context, skipFetch) => {
     // When skipFetch is true, SWR key is null - no fetch occurs
     // This is used when external messages are provided (e.g., creating new thread)
-    // Allow fetch if: has agentId (authenticated) OR has topicShareId (public share)
-    const shouldFetch = !skipFetch && (!!context.agentId || !!context.topicShareId);
+    // Allow fetch if: has agentId (both agent topics and group topics have agentId)
+    const shouldFetch = !skipFetch && !!context.agentId;
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? ['CONVERSATION_FETCH_MESSAGES', context] : null,
 
       async () => {
-        return messageService.getMessages(context as any);
+        return messageService.getMessages(context);
       },
       {
         onData: (data) => {
