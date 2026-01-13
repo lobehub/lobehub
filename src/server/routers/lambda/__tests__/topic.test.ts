@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { TopicModel } from '@/database/models/topic';
+import { TopicShareModel } from '@/database/models/topicShare';
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/topicShare', () => ({
+  TopicShareModel: vi.fn(),
 }));
 
 vi.mock('@/database/server', () => ({
@@ -258,6 +263,180 @@ describe('topicRouter', () => {
 
       expect(mockQueryByKeyword).toHaveBeenCalledWith('test', 'session1');
       expect(result).toEqual([{ id: 'topic1', title: 'Test' }]);
+    });
+  });
+
+  describe('topic sharing', () => {
+    it('should handle enableSharing with default permission', async () => {
+      const mockCreate = vi.fn().mockResolvedValue({
+        accessPermission: 'private',
+        id: 'share-123',
+        topicId: 'topic1',
+        userId: 'user1',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            create: mockCreate,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.create('topic1');
+
+      expect(mockCreate).toHaveBeenCalledWith('topic1');
+      expect(result.id).toBe('share-123');
+      expect(result.accessPermission).toBe('private');
+    });
+
+    it('should handle enableSharing with specified permission', async () => {
+      const mockCreate = vi.fn().mockResolvedValue({
+        accessPermission: 'public',
+        id: 'share-456',
+        topicId: 'topic1',
+        userId: 'user1',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            create: mockCreate,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.create('topic1', 'public');
+
+      expect(mockCreate).toHaveBeenCalledWith('topic1', 'public');
+      expect(result.accessPermission).toBe('public');
+    });
+
+    it('should handle disableSharing', async () => {
+      const mockDeleteByTopicId = vi.fn().mockResolvedValue(undefined);
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            deleteByTopicId: mockDeleteByTopicId,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      await ctx.topicShareModel.deleteByTopicId('topic1');
+
+      expect(mockDeleteByTopicId).toHaveBeenCalledWith('topic1');
+    });
+
+    it('should handle updateSharePermission', async () => {
+      const mockUpdatePermission = vi.fn().mockResolvedValue({
+        accessPermission: 'public_signin',
+        id: 'share-123',
+        topicId: 'topic1',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            updatePermission: mockUpdatePermission,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.updatePermission('topic1', 'public_signin');
+
+      expect(mockUpdatePermission).toHaveBeenCalledWith('topic1', 'public_signin');
+      expect(result.accessPermission).toBe('public_signin');
+    });
+
+    it('should handle getShareInfo', async () => {
+      const mockGetByTopicId = vi.fn().mockResolvedValue({
+        accessPermission: 'public',
+        id: 'share-123',
+        topicId: 'topic1',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            getByTopicId: mockGetByTopicId,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.getByTopicId('topic1');
+
+      expect(mockGetByTopicId).toHaveBeenCalledWith('topic1');
+      expect(result).toEqual({
+        accessPermission: 'public',
+        id: 'share-123',
+        topicId: 'topic1',
+      });
+    });
+
+    it('should return null when getShareInfo for non-shared topic', async () => {
+      const mockGetByTopicId = vi.fn().mockResolvedValue(null);
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            getByTopicId: mockGetByTopicId,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.getByTopicId('non-shared-topic');
+
+      expect(mockGetByTopicId).toHaveBeenCalledWith('non-shared-topic');
+      expect(result).toBeNull();
+    });
+
+    it('should handle all permission types', async () => {
+      const mockCreate = vi.fn();
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            create: mockCreate,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      // Test private permission
+      mockCreate.mockResolvedValueOnce({ accessPermission: 'private' });
+      await ctx.topicShareModel.create('topic1', 'private');
+      expect(mockCreate).toHaveBeenLastCalledWith('topic1', 'private');
+
+      // Test public permission
+      mockCreate.mockResolvedValueOnce({ accessPermission: 'public' });
+      await ctx.topicShareModel.create('topic2', 'public');
+      expect(mockCreate).toHaveBeenLastCalledWith('topic2', 'public');
+
+      // Test public_signin permission
+      mockCreate.mockResolvedValueOnce({ accessPermission: 'public_signin' });
+      await ctx.topicShareModel.create('topic3', 'public_signin');
+      expect(mockCreate).toHaveBeenLastCalledWith('topic3', 'public_signin');
     });
   });
 });
