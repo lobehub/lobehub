@@ -176,26 +176,12 @@ export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        let error: Error;
-
-        if (e instanceof Error) {
-          error = e;
-        } else {
-          error = new Error(String(e));
-          if (e && typeof e === 'object') {
-            Object.assign(error, e as object);
-          }
-        }
-
-        controller.enqueue(
-          (ERROR_CHUNK_PREFIX +
-            JSON.stringify({
-              message: error.message,
-        controller.enqueue(
-          (ERROR_CHUNK_PREFIX +
-            JSON.stringify({ message: error.message, name: error.name })) as T,
-        );
-        controller.close();
+        // If an error occurs during pulling, we should error the stream
+        // This is better than enqueuing an error chunk because:
+        // 1. It signals the error immediately to the consumer
+        // 2. It avoids type mismatches in streams that expect specific object shapes (e.g., Anthropic, Qwen)
+        // 3. It triggers the stream's error handling mechanisms
+        controller.error(e);
       }
     },
 
