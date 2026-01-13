@@ -67,9 +67,11 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
     }
   }, [data?.agentId, data?.agentMeta, dispatchAgentMap]);
 
-  const agentOrGroupTitle = data?.groupMeta?.title || data?.agentMeta?.title;
-  const agentMarketIdentifier = data?.agentMeta?.marketIdentifier;
   const isGroup = !!data?.groupId;
+  const isInboxAgent = !isGroup && data?.agentMeta?.slug === 'inbox';
+  const agentOrGroupTitle =
+    data?.groupMeta?.title || (isInboxAgent ? 'LobeAI' : data?.agentMeta?.title);
+  const agentMarketIdentifier = data?.agentMeta?.marketIdentifier;
 
   // Build group avatars for GroupAvatar component
   const groupAvatars = useMemo(() => {
@@ -84,6 +86,11 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
     // For group: use GroupAvatar with members
     if (isGroup && groupAvatars.length > 0) {
       return <GroupAvatar avatars={groupAvatars} size={24} />;
+    }
+
+    // For inbox agent: skip avatar as it's the same as product icon
+    if (isInboxAgent) {
+      return null;
     }
 
     // For agent: use single Avatar

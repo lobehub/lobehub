@@ -149,6 +149,7 @@ export interface SharedTopicData {
     avatar?: string | null;
     backgroundColor?: string | null;
     marketIdentifier?: string | null;
+    slug?: string | null;
     title?: string | null;
   };
   groupId: string | null;
