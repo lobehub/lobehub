@@ -176,11 +176,24 @@ export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        const error = e as Error;
+        let error: Error;
+
+        if (e instanceof Error) {
+          error = e;
+        } else {
+          error = new Error(String(e));
+          if (e && typeof e === 'object') {
+            Object.assign(error, e as object);
+          }
+        }
 
         controller.enqueue(
           (ERROR_CHUNK_PREFIX +
-            JSON.stringify({ message: error.message, name: error.name, stack: error.stack })) as T,
+            JSON.stringify({
+              message: error.message,
+              name: error.name,
+              stack: error.stack,
+            })) as T,
         );
         controller.close();
       }
