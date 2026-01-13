@@ -59,9 +59,10 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
 
       // Trigger time
       if (scheduleType === 'hourly') {
+        const minute = triggerTime.minute();
         result.push({
           key: 'interval',
-          label: `Every ${hourlyInterval || 1} hour(s)`,
+          label: `Every ${hourlyInterval || 1} hour(s) at :${minute.toString().padStart(2, '0')}`,
         });
       } else {
         result.push({
@@ -137,6 +138,7 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
             {scheduleType !== 'hourly' && (
               <TimePicker
                 format="HH:mm"
+                minuteStep={30}
                 onChange={(value) => {
                   if (value) onScheduleChange({ triggerTime: value });
                 }}
@@ -160,7 +162,19 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
                   style={{ width: 80 }}
                   value={hourlyInterval ?? 1}
                 />
-                <Text type="secondary">hour(s)</Text>
+                <Text type="secondary">hour(s) at</Text>
+                <Select
+                  onChange={(value: number) =>
+                    onScheduleChange({ triggerTime: dayjs().hour(0).minute(value) })
+                  }
+                  options={[
+                    { label: ':00', value: 0 },
+                    { label: ':30', value: 30 },
+                  ]}
+                  size="small"
+                  style={{ width: 80 }}
+                  value={triggerTime?.minute() ?? 0}
+                />
               </>
             )}
 

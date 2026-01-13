@@ -21,25 +21,6 @@ export const cronPatternSchema = z
 // Minimum 30 minutes validation (using standard cron format)
 export const minimumIntervalSchema = z.string().refine((pattern) => {
   // Standard cron format: minute hour day month weekday
-  const allowedPatterns = [
-    '*/30 * * * *', // Every 30 minutes
-    '0 * * * *', // Every hour
-    '0 */2 * * *', // Every 2 hours
-    '0 */3 * * *', // Every 3 hours
-    '0 */4 * * *', // Every 4 hours
-    '0 */6 * * *', // Every 6 hours
-    '0 */8 * * *', // Every 8 hours
-    '0 */12 * * *', // Every 12 hours
-    '0 0 * * *', // Daily at midnight
-    '0 0 * * 0', // Weekly on Sunday
-    '0 0 1 * *', // Monthly on 1st
-  ];
-
-  // Check if it matches allowed patterns
-  if (allowedPatterns.includes(pattern)) {
-    return true;
-  }
-
   // Parse pattern to validate minimum 30-minute interval
   const parts = pattern.split(' ');
   if (parts.length !== 5) {
@@ -48,24 +29,39 @@ export const minimumIntervalSchema = z.string().refine((pattern) => {
 
   const [minute, hour] = parts;
 
+  // Validate minute is 0 or 30 (we only allow 30-minute intervals)
+  const isValidMinute = minute === '0' || minute === '30' || minute === '*/30';
+
+  if (!isValidMinute) {
+    return false;
+  }
+
   // Allow minute intervals >= 30 (e.g., */30, */45, */60)
   if (minute.startsWith('*/')) {
     const interval = parseInt(minute.slice(2));
     if (!isNaN(interval) && interval >= 30) {
       return true;
     }
+    return false;
   }
 
-  // Allow hourly patterns: 0 */N * * * where N >= 1
-  if (minute === '0' && hour.startsWith('*/')) {
+  // Allow hourly patterns: {0|30} */N * * * where N >= 1
+  if ((minute === '0' || minute === '30') && hour.startsWith('*/')) {
     const interval = parseInt(hour.slice(2));
     if (!isNaN(interval) && interval >= 1) {
       return true;
     }
+    return false;
   }
 
-  // Allow specific hour patterns: 0 N * * * (runs once per day)
-  if (minute === '0' && /^\d+$/.test(hour)) {
+  // Allow hourly patterns: {0|30} * * * * (every hour at :00 or :30)
+  if ((minute === '0' || minute === '30') && hour === '*') {
+    return true;
+  }
+
+  // Allow specific hour patterns: {0|30} N * * * (runs once per day)
+  // or {0|30} N * * {weekdays} (runs on specific weekdays)
+  if ((minute === '0' || minute === '30') && /^\d+$/.test(hour)) {
     const h = parseInt(hour);
     if (!isNaN(h) && h >= 0 && h <= 23) {
       return true;

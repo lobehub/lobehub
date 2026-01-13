@@ -101,7 +101,9 @@ export const parseCronPattern = (
 
   // eslint-disable-next-line unicorn/no-unreadable-array-destructuring
   const [minute, hour, , , weekday] = parts;
-  const triggerMinute = minute === '*' ? 0 : Number.parseInt(minute);
+  const rawMinute = minute === '*' ? 0 : Number.parseInt(minute);
+  // Normalize to nearest 30-minute interval (0 or 30)
+  const triggerMinute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
 
   // Hourly: 0 * * * * or 0 */N * * *
   if (hour.startsWith('*/')) {
@@ -153,7 +155,9 @@ export const buildCronPattern = (
   hourlyInterval?: number,
   weekdays?: number[],
 ): string => {
-  const minute = triggerTime.minute();
+  const rawMinute = triggerTime.minute();
+  // Normalize to 0 or 30
+  const minute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
   const hour = triggerTime.hour();
 
   switch (scheduleType) {
