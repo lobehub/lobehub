@@ -10,7 +10,7 @@ export const PAGE_AGENT: BuiltinAgentDefinition = {
   // Persist config - stored in database
   persist: {
     model: 'claude-sonnet-4-5-20250929',
-    provider: 'anthropic',
+    provider: 'lobehub',
   },
 
   // Runtime function - generates dynamic config

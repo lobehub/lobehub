@@ -10,7 +10,7 @@ import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { TEST_USER } from '../../support/seedTestUser';
-import { CustomWorld } from '../../support/world';
+import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 /**
  * Create a test chat group directly in database
@@ -58,7 +58,7 @@ Given('用户在 Home 页面有一个 Agent Group', async function (this: Custom
 
   console.log('   📍 Step: 查找新创建的 Agent Group...');
   const groupItem = this.page.locator(`a[href="/group/${groupId}"]`).first();
-  await expect(groupItem).toBeVisible({ timeout: 10_000 });
+  await expect(groupItem).toBeVisible({ timeout: WAIT_TIMEOUT });
 
   const groupLabel = await groupItem.getAttribute('aria-label');
   this.testContext.targetItemId = groupLabel || groupId;
@@ -76,7 +76,7 @@ Given('该 Agent Group 未被置顶', async function (this: CustomWorld) {
   if ((await pinIcon.count()) > 0) {
     await targetItem.click({ button: 'right' });
     await this.page.waitForTimeout(300);
-    const unpinOption = this.page.getByRole('menuitem', { name: /取消置顶|Unpin/i });
+    const unpinOption = this.page.getByRole('menuitem', { name: /取消置顶|unpin/i });
     if ((await unpinOption.count()) > 0) {
       await unpinOption.click();
       await this.page.waitForTimeout(500);
@@ -95,7 +95,7 @@ Given('该 Agent Group 已被置顶', async function (this: CustomWorld) {
   if ((await pinIcon.count()) === 0) {
     await targetItem.click({ button: 'right' });
     await this.page.waitForTimeout(300);
-    const pinOption = this.page.getByRole('menuitem', { name: /置顶|Pin/i });
+    const pinOption = this.page.getByRole('menuitem', { name: /置顶|pin/i });
     if ((await pinOption.count()) > 0) {
       await pinOption.click();
       await this.page.waitForTimeout(500);

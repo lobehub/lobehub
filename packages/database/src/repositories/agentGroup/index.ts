@@ -13,7 +13,6 @@ import {
   chatGroupsAgents,
 } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
-import { ChatGroupConfig } from '../../types/chatGroup';
 
 export interface SupervisorAgentConfig {
   model?: string;
@@ -106,14 +105,12 @@ export class AgentGroupRepository {
 
     // 4. If no supervisor exists, create a virtual supervisor agent
     if (!supervisorAgentId) {
-      const groupConfig = group.config as ChatGroupConfig | undefined;
-
       // Create supervisor agent (virtual agent)
       const [supervisorAgent] = await this.db
         .insert(agents)
         .values({
-          model: groupConfig?.orchestratorModel,
-          provider: groupConfig?.orchestratorProvider,
+          model: undefined,
+          provider: undefined,
           title: 'Supervisor',
           userId: this.userId,
           virtual: true,
@@ -163,14 +160,12 @@ export class AgentGroupRepository {
     agentMembers: string[] = [],
     supervisorConfig?: SupervisorAgentConfig,
   ): Promise<CreateGroupWithSupervisorResult> {
-    const groupConfig = groupParams.config as ChatGroupConfig | undefined;
-
     // 1. Create supervisor agent (virtual agent)
     const [supervisorAgent] = await this.db
       .insert(agents)
       .values({
-        model: supervisorConfig?.model ?? groupConfig?.orchestratorModel,
-        provider: supervisorConfig?.provider ?? groupConfig?.orchestratorProvider,
+        model: supervisorConfig?.model,
+        provider: supervisorConfig?.provider,
         title: supervisorConfig?.title ?? 'Supervisor',
         userId: this.userId,
         virtual: true,

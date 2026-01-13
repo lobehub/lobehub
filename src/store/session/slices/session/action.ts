@@ -7,7 +7,6 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { message } from '@/components/AntdStaticMethods';
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
-import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
@@ -281,17 +280,14 @@ export const createSessionSlice: StateCreator<
             const chatGroupStore = getChatGroupStoreState();
             const chatGroups = groupSessions.map((session) => ({
               accessedAt: session.updatedAt,
+              avatar: null,
+              backgroundColor: null,
               clientId: null,
-              config: {
-                maxResponseInRow: 3,
-                orchestratorModel: 'gpt-4',
-                orchestratorProvider: 'openai',
-                responseOrder: 'sequential' as const,
-                responseSpeed: 'medium' as const,
-                scene: DEFAULT_CHAT_GROUP_CHAT_CONFIG.scene,
-              },
+              config: null,
+              content: null,
               createdAt: session.createdAt,
               description: session.meta?.description || '',
+              editorData: null,
 
               groupId: session.group || null,
               id: session.id, // Add the missing groupId property

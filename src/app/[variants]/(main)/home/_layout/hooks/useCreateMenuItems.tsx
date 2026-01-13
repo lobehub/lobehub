@@ -16,11 +16,6 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
 
-interface HostConfig {
-  model?: string;
-  provider?: string;
-}
-
 interface CreateAgentOptions {
   groupId?: string;
   isPinned?: boolean;
@@ -104,12 +99,7 @@ export const useCreateMenuItems = () => {
    * Uses backend batch creation for better performance and consistency
    */
   const createGroupFromTemplate = useCallback(
-    async (
-      templateId: string,
-      hostConfig?: HostConfig,
-      enableSupervisor?: boolean,
-      selectedMemberTitles?: string[],
-    ) => {
+    async (templateId: string, selectedMemberTitles?: string[]) => {
       setIsCreatingGroup(true);
       try {
         const template = groupTemplates.find((t) => t.id === templateId);
@@ -134,16 +124,6 @@ export const useCreateMenuItems = () => {
         // Use batch creation endpoint - creates all agents and group in one request
         const { groupId } = await chatGroupService.createGroupWithMembers(
           {
-            config: {
-              ...(hostConfig
-                ? {
-                    orchestratorModel: hostConfig.model,
-                    orchestratorProvider: hostConfig.provider,
-                  }
-                : {}),
-              enableSupervisor: enableSupervisor ?? true,
-              scene: DEFAULT_CHAT_GROUP_CHAT_CONFIG.scene,
-            },
             title: template.title,
           },
           memberConfigs,
@@ -172,28 +152,14 @@ export const useCreateMenuItems = () => {
    * Create group with members
    */
   const createGroupWithMembers = useCallback(
-    async (
-      selectedAgents: string[],
-      groupTitle?: string,
-      hostConfig?: HostConfig,
-      enableSupervisor?: boolean,
-    ) => {
+    async (selectedAgents: string[], groupTitle?: string) => {
       setIsCreatingGroup(true);
       try {
         const title = groupTitle || t('defaultGroupChat');
 
         await createGroup(
           {
-            config: {
-              ...DEFAULT_CHAT_GROUP_CHAT_CONFIG,
-              ...(hostConfig
-                ? {
-                    orchestratorModel: hostConfig.model,
-                    orchestratorProvider: hostConfig.provider,
-                  }
-                : {}),
-              enableSupervisor: enableSupervisor ?? true,
-            },
+            config: DEFAULT_CHAT_GROUP_CHAT_CONFIG,
             title,
           },
           selectedAgents,

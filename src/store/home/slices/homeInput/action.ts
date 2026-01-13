@@ -110,9 +110,6 @@ export const createHomeInputSlice: StateCreator<
       // 2. Create new Group with inherited model/provider for orchestrator
       const { group } = await chatGroupService.createGroup({
         config: {
-          orchestratorModel: model,
-          orchestratorProvider: provider,
-          scene: 'productive',
           systemPrompt: message,
         },
         title: message?.slice(0, 50) || 'New Group',

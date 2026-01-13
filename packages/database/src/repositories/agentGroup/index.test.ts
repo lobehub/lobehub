@@ -132,7 +132,7 @@ describe('AgentGroupRepository', () => {
 
       // Create group
       await serverDB.insert(chatGroups).values({
-        config: { scene: 'casual' },
+        config: { allowDM: true },
         id: 'detail-group',
         title: 'Detail Group',
         userId,
@@ -201,9 +201,9 @@ describe('AgentGroupRepository', () => {
     it('should return group with config', async () => {
       await serverDB.insert(chatGroups).values({
         config: {
-          maxResponseInRow: 3,
-          responseOrder: 'sequential',
-          scene: 'productive',
+          allowDM: true,
+          openingMessage: 'Welcome!',
+          revealDM: false,
         },
         description: 'Group with config',
         id: 'config-group',
@@ -216,9 +216,9 @@ describe('AgentGroupRepository', () => {
 
       expect(result).not.toBeNull();
       expect(result!.config).toEqual({
-        maxResponseInRow: 3,
-        responseOrder: 'sequential',
-        scene: 'productive',
+        allowDM: true,
+        openingMessage: 'Welcome!',
+        revealDM: false,
       });
       expect(result!.pinned).toBe(true);
     });
@@ -274,9 +274,8 @@ describe('AgentGroupRepository', () => {
       // Create group without supervisor
       await serverDB.insert(chatGroups).values({
         config: {
-          orchestratorModel: 'gpt-4o',
-          orchestratorProvider: 'openai',
-          scene: 'casual',
+          allowDM: true,
+          revealDM: true,
         },
         id: 'no-supervisor-group',
         title: 'Group without Supervisor',
@@ -307,13 +306,11 @@ describe('AgentGroupRepository', () => {
       // Should have 2 agents: auto-created supervisor + regular agent
       expect(result!.agents).toHaveLength(2);
 
-      // Verify agents include auto-created supervisor with config from group
+      // Verify agents include auto-created supervisor
       expect(result!.agents).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             isSupervisor: true,
-            model: 'gpt-4o',
-            provider: 'openai',
             title: 'Supervisor',
             virtual: true,
           }),
@@ -422,9 +419,8 @@ describe('AgentGroupRepository', () => {
     it('should create group with supervisor agent', async () => {
       const result = await agentGroupRepo.createGroupWithSupervisor({
         config: {
-          orchestratorModel: 'gpt-4',
-          orchestratorProvider: 'openai',
-          scene: 'productive',
+          allowDM: true,
+          openingMessage: 'Hello team!',
         },
         title: 'New Group with Supervisor',
       });
@@ -435,7 +431,7 @@ describe('AgentGroupRepository', () => {
       expect(result.supervisorAgentId).toBeDefined();
       expect(result.agents).toEqual([expect.objectContaining({ role: 'supervisor' })]);
 
-      // Verify supervisor agent was created with correct config
+      // Verify supervisor agent was created
       const groupDetail = await agentGroupRepo.findByIdWithAgents(result.group.id);
       expect(groupDetail).toMatchObject({
         supervisorAgentId: result.supervisorAgentId,
@@ -444,8 +440,6 @@ describe('AgentGroupRepository', () => {
         expect.arrayContaining([
           expect.objectContaining({
             id: result.supervisorAgentId,
-            model: 'gpt-4',
-            provider: 'openai',
             title: 'Supervisor',
             virtual: true,
           }),
@@ -772,11 +766,11 @@ describe('AgentGroupRepository', () => {
       // Create source group with full config
       await serverDB.insert(chatGroups).values({
         config: {
-          maxResponseInRow: 5,
-          orchestratorModel: 'gpt-4o',
-          orchestratorProvider: 'openai',
-          responseOrder: 'sequential',
-          scene: 'productive',
+          allowDM: true,
+          openingMessage: 'Welcome!',
+          openingQuestions: ['How can I help?'],
+          revealDM: false,
+          systemPrompt: 'You are a helpful assistant.',
         },
         id: 'source-group',
         pinned: true,
@@ -819,11 +813,11 @@ describe('AgentGroupRepository', () => {
       expect(duplicatedGroup).toEqual(
         expect.objectContaining({
           config: {
-            maxResponseInRow: 5,
-            orchestratorModel: 'gpt-4o',
-            orchestratorProvider: 'openai',
-            responseOrder: 'sequential',
-            scene: 'productive',
+            allowDM: true,
+            openingMessage: 'Welcome!',
+            openingQuestions: ['How can I help?'],
+            revealDM: false,
+            systemPrompt: 'You are a helpful assistant.',
           },
           pinned: true,
           title: 'Source Group (Copy)',

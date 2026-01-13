@@ -307,6 +307,11 @@ export const createFileManageSlice: StateCreator<
         revalidate: true,
       },
     );
+
+    // Also revalidate the ResourceManager resource list cache (SWR_RESOURCES)
+    // so uploaded files appear immediately in the Explorer without a full refresh.
+    const { revalidateResources } = await import('../resource/hooks');
+    await revalidateResources();
   },
   removeAllFiles: async () => {
     await fileService.removeAllFiles();
@@ -543,10 +548,13 @@ export const createFileManageSlice: StateCreator<
     }),
 
   useFetchKnowledgeItem: (id) =>
-    useClientDataSWR<FileListItem | undefined>(!id ? null : ['useFetchKnowledgeItem', id], async () => {
-      const response = await serverFileService.getKnowledgeItem(id!);
-      return response ?? undefined;
-    }),
+    useClientDataSWR<FileListItem | undefined>(
+      !id ? null : ['useFetchKnowledgeItem', id],
+      async () => {
+        const response = await serverFileService.getKnowledgeItem(id!);
+        return response ?? undefined;
+      },
+    ),
 
   useFetchKnowledgeItems: (params) =>
     useClientDataSWR<FileListItem[]>([FETCH_ALL_KNOWLEDGE_KEY, params], async () => {

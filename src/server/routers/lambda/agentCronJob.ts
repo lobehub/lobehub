@@ -1,13 +1,13 @@
+import {
+  type InsertAgentCronJob,
+  InsertAgentCronJobSchema,
+  type UpdateAgentCronJob,
+  UpdateAgentCronJobSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentCronJobModel } from '@/database/models/agentCronJob';
-import {
-  type CreateAgentCronJobData,
-  type UpdateAgentCronJobData,
-  insertAgentCronJobSchema,
-  updateAgentCronJobSchema,
-} from '@/database/schemas/agentCronJob';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -31,7 +31,7 @@ const batchUpdateStatusSchema = z.object({
 });
 
 // Create input schema for tRPC that omits server-managed fields
-const createAgentCronJobInputSchema = insertAgentCronJobSchema.omit({
+const createAgentCronJobInputSchema = InsertAgentCronJobSchema.omit({
   userId: true, // Provided by authentication context
 });
 
@@ -81,7 +81,7 @@ export const agentCronJobRouter = router({
         const cronJobModel = new AgentCronJobModel(db, userId);
         // Add userId to the input data since it's provided by authentication context
         const cronJobData = { ...input, userId };
-        const cronJob = await cronJobModel.create(cronJobData as CreateAgentCronJobData);
+        const cronJob = await cronJobModel.create(cronJobData as InsertAgentCronJob);
 
         return {
           data: cronJob,
@@ -327,7 +327,7 @@ export const agentCronJobRouter = router({
   update: agentCronJobProcedure
     .input(
       z.object({
-        data: updateAgentCronJobSchema,
+        data: UpdateAgentCronJobSchema,
         id: z.string(),
       }),
     )
@@ -337,7 +337,7 @@ export const agentCronJobRouter = router({
 
       try {
         const cronJobModel = new AgentCronJobModel(db, userId);
-        const cronJob = await cronJobModel.update(id, data as UpdateAgentCronJobData);
+        const cronJob = await cronJobModel.update(id, data as UpdateAgentCronJob);
 
         if (!cronJob) {
           throw new TRPCError({

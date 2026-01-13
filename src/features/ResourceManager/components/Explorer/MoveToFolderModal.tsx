@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FolderTree, { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
-import { clearTreeFolderCache } from '@/features/ResourceManager/components/Tree';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 
@@ -28,10 +28,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
     const [loadedFolders, setLoadedFolders] = useState<Set<string>>(new Set());
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
-    const [moveResource, createFolder] = useFileStore((s) => [
-      s.moveResource,
-      s.createFolder,
-    ]);
+    const [moveResource, createFolder] = useFileStore((s) => [s.moveResource, s.createFolder]);
 
     // Sort items: folders only
     const sortItems = useCallback((items: FolderTreeItem[]): FolderTreeItem[] => {

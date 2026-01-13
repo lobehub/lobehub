@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import FileTree from '@/features/ResourceManager/components/Tree';
+import LibraryHierarchy from '@/features/ResourceManager/components/LibraryHierarchy';
 
 import Head from '../_layout/Header/LibraryHead';
 
@@ -13,7 +13,7 @@ const Menu = memo<{ id: string }>(({ id }) => {
       <Flexbox paddingInline={12}>
         <Head id={id} />
       </Flexbox>
-      <FileTree />
+      <LibraryHierarchy />
     </Flexbox>
   );
 });

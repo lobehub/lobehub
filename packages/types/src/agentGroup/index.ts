@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { AgentItem } from '../agent';
 import { TaskDetail, UIChatMessage } from '../message';
 import { ChatTopic } from '../topic';
@@ -8,22 +10,41 @@ export interface LobeChatGroupMetaConfig {
 }
 
 export interface LobeChatGroupChatConfig {
-  allowDM: boolean;
-  enableSupervisor: boolean;
-  maxResponseInRow: number;
+  allowDM?: boolean;
   openingMessage?: string;
   openingQuestions?: string[];
-  orchestratorModel: string;
-  orchestratorProvider: string;
-  responseOrder: 'sequential' | 'natural';
-  responseSpeed: 'slow' | 'medium' | 'fast';
-  revealDM: boolean;
-  scene: 'casual' | 'productive';
+  revealDM?: boolean;
   systemPrompt?: string;
 }
 
 // Database config type (flat structure)
 export type LobeChatGroupConfig = LobeChatGroupChatConfig;
+
+// Zod schema for ChatGroupConfig (database insert)
+export const ChatGroupConfigSchema = z.object({
+  allowDM: z.boolean().optional(),
+  openingMessage: z.string().optional(),
+  openingQuestions: z.array(z.string()).optional(),
+  revealDM: z.boolean().optional(),
+  systemPrompt: z.string().optional(),
+});
+
+// Zod schema for inserting ChatGroup
+export const InsertChatGroupSchema = z.object({
+  avatar: z.string().optional().nullable(),
+  backgroundColor: z.string().optional().nullable(),
+  clientId: z.string().optional().nullable(),
+  config: ChatGroupConfigSchema.optional().nullable(),
+  content: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  editorData: z.record(z.string(), z.any()).optional().nullable(),
+  groupId: z.string().optional().nullable(),
+  id: z.string().optional(),
+  pinned: z.boolean().optional().nullable(),
+  title: z.string().optional().nullable(),
+});
+
+export type InsertChatGroup = z.infer<typeof InsertChatGroupSchema>;
 
 // Full group type with nested structure for UI components
 export interface LobeChatGroupFullConfig {

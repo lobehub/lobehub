@@ -267,6 +267,10 @@ table chat_groups {
   id text [pk, not null]
   title text
   description text
+  avatar text
+  background_color text
+  content text
+  editor_data jsonb
   config jsonb
   client_id text
   user_id text [not null]

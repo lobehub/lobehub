@@ -53,7 +53,7 @@ export interface StreamChunkData {
 export class StreamEventManager {
   private redis: Redis;
   private readonly STREAM_PREFIX = 'agent_runtime_stream';
-  private readonly STREAM_RETENTION = 2 * 3600; // 2小时
+  private readonly STREAM_RETENTION = 2 * 3600; // 2 hours
 
   constructor() {
     const redisClient = getAgentRuntimeRedisClient();
@@ -64,7 +64,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 发布流式事件到 Redis Stream
+   * Publish stream event to Redis Stream
    */
   async publishStreamEvent(
     operationId: string,
@@ -84,8 +84,8 @@ export class StreamEventManager {
         streamKey,
         'MAXLEN',
         '~',
-        '1000', // 限制流长度，防止内存溢出
-        '*', // 自动生成 ID
+        '1000', // Limit stream length to prevent memory overflow
+        '*', // Auto-generate ID
         'type',
         eventData.type,
         'stepIndex',
@@ -99,7 +99,7 @@ export class StreamEventManager {
       );
       const xaddEnd = Date.now();
 
-      // 设置过期时间
+      // Set expiration time
       await this.redis.expire(streamKey, this.STREAM_RETENTION);
 
       log(
@@ -126,7 +126,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 发布流式内容块
+   * Publish stream content chunk
    */
   async publishStreamChunk(
     operationId: string,
@@ -141,7 +141,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 发布 Agent 运行时初始化事件
+   * Publish Agent runtime initialization event
    */
   async publishAgentRuntimeInit(operationId: string, initialState: any): Promise<string> {
     return this.publishStreamEvent(operationId, {
@@ -152,7 +152,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 发布 Agent 运行时结束事件
+   * Publish Agent runtime end event
    */
   async publishAgentRuntimeEnd(
     operationId: string,
@@ -175,7 +175,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 订阅流式事件（用于 WebSocket/SSE）
+   * Subscribe to stream events (for WebSocket/SSE)
    */
   async subscribeStreamEvents(
     operationId: string,
@@ -193,7 +193,7 @@ export class StreamEventManager {
         const xreadStart = Date.now();
         const results = await this.redis.xread(
           'BLOCK',
-          1000, // 1秒超时
+          1000, // 1 second timeout
           'STREAMS',
           streamKey,
           currentLastId,
@@ -207,7 +207,7 @@ export class StreamEventManager {
           for (const [id, fields] of messages) {
             const eventData: any = {};
 
-            // 解析 Redis Stream 字段
+            // Parse Redis Stream fields
             for (let i = 0; i < fields.length; i += 2) {
               const key = fields[i];
               const value = fields[i + 1];
@@ -223,7 +223,7 @@ export class StreamEventManager {
 
             events.push({
               ...eventData,
-              id, // Redis Stream 事件 ID
+              id, // Redis Stream event ID
             } as StreamEvent);
 
             currentLastId = id;
@@ -231,7 +231,7 @@ export class StreamEventManager {
 
           if (events.length > 0) {
             const now = Date.now();
-            // 计算事件从发布到被读取的延迟
+            // Calculate latency from event publication to read
             for (const event of events) {
               const latency = now - event.timestamp;
               timing(
@@ -254,7 +254,7 @@ export class StreamEventManager {
         }
 
         console.error('[StreamEventManager] Stream subscription error:', error);
-        // 短暂延迟后重试
+        // Retry after brief delay
         await new Promise((resolve) => {
           setTimeout(resolve, 1000);
         });
@@ -265,7 +265,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 获取流式事件历史
+   * Get stream event history
    */
   async getStreamHistory(operationId: string, count: number = 100): Promise<StreamEvent[]> {
     const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
@@ -298,7 +298,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 清理操作的流式数据
+   * Clean up stream data for operation
    */
   async cleanupOperation(operationId: string): Promise<void> {
     const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
@@ -312,7 +312,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 获取活跃操作数量
+   * Get count of active operations
    */
   async getActiveOperationsCount(): Promise<number> {
     try {
@@ -326,7 +326,7 @@ export class StreamEventManager {
   }
 
   /**
-   * 关闭 Redis 连接
+   * Close Redis connection
    */
   async disconnect(): Promise<void> {
     await this.redis.quit();

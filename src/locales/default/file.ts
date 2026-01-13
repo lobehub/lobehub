@@ -20,6 +20,7 @@ export default {
   'header.actions.connect': 'Connect...',
   'header.actions.createFolderError': 'Failed to create folder',
   'header.actions.creatingFolder': 'Creating folder...',
+  'header.actions.deleteLibrary': 'Delete Library',
   'header.actions.gitignore.apply': 'Apply Rules',
   'header.actions.gitignore.cancel': 'Ignore Rules',
   'header.actions.gitignore.content':
@@ -118,6 +119,7 @@ export default {
   'preview.downloadFile': 'Download File',
   'preview.unsupportedFileAndContact':
     'This file format is not currently supported for online preview. If you have a request for previewing, feel free to <1>contact us</1>.',
+  'resource': 'Resource',
   'searchFilePlaceholder': 'Search Files',
   'searchPagePlaceholder': 'Search Pages',
   'tab.all': 'All',

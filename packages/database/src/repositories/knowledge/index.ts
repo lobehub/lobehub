@@ -202,7 +202,7 @@ export class KnowledgeRepo {
       FROM ${documents}
       WHERE user_id = ${this.userId}
         AND source_type != ${'file'}
-        AND (metadata->>'knowledgeBaseId') IS NULL
+        AND knowledge_base_id IS NULL
     `;
 
     const combinedQuery = sql`
@@ -554,11 +554,11 @@ export class KnowledgeRepo {
       }
 
       // When in a knowledge base, return standalone documents (folders and notes without fileId)
-      // that have the knowledgeBaseId set in their metadata. Documents with fileId are already
+      // that have the knowledgeBaseId column set. Documents with fileId are already
       // returned by the file query via their linked file records.
       kbWhereConditions.push(
         sql`d.file_id IS NULL`,
-        sql`d.metadata->>'knowledgeBaseId' = ${knowledgeBaseId}`,
+        sql`d.knowledge_base_id = ${knowledgeBaseId}`,
       );
 
       return sql`

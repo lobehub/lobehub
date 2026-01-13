@@ -1,6 +1,33 @@
 [
   {
     "children": {
+      "features": ["Improve baseline alignment for tool items."]
+    },
+    "date": "2026-01-12",
+    "version": "2.0.0-next.271"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.270"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.269"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.268"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.267"
+  },
+  {
+    "children": {
       "improvements": ["Improve cron jobs style."]
     },
     "date": "2026-01-11",

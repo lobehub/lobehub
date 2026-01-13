@@ -1,14 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-export const useMenu = (): { menuItems: any[] } => {
+export const useMenu = (): { menuItems: DropdownMenuCheckboxItem[] } => {
   const { t } = useTranslation('chat');
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
@@ -16,23 +15,14 @@ export const useMenu = (): { menuItems: any[] } => {
     s.toggleWideScreen,
   ]);
 
-  const menuItems = useMemo(
+  const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () => [
       {
+        checked: wideScreen,
         key: 'full-width',
-        label: (
-          <Flexbox align="center" horizontal justify="space-between">
-            <span>{t('viewMode.fullWidth')}</span>
-            <Switch
-              checked={wideScreen}
-              onChange={toggleWideScreen}
-              onClick={(checked, event) => {
-                event.stopPropagation();
-              }}
-              size="small"
-            />
-          </Flexbox>
-        ),
+        label: t('viewMode.fullWidth'),
+        onCheckedChange: toggleWideScreen,
+        type: 'checkbox',
       },
     ],
     [t, wideScreen, toggleWideScreen],
