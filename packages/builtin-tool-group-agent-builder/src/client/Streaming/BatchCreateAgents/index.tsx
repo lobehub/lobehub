@@ -2,8 +2,11 @@
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Markdown } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
+
+import ToolTag from '@/features/ToolTag';
 
 import type { BatchCreateAgentsParams } from '../../../types';
 
@@ -12,9 +15,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
 
-    font-size: 12px;
     line-height: 1.5;
     color: ${cssVar.colorTextDescription};
     text-overflow: ellipsis;
@@ -62,12 +64,25 @@ export const BatchCreateAgentsStreaming = memo<BuiltinStreamingProps<BatchCreate
     return (
       <Block variant={'outlined'} width="100%">
         {agents.map((agent, index) => (
-          <Flexbox className={styles.item} gap={8} horizontal key={index}>
+          <Flexbox align={'flex-start'} className={styles.item} gap={8} horizontal key={index}>
             <div className={styles.index}>{index + 1}.</div>
-            <Avatar avatar={agent.avatar} size={24} style={{ flexShrink: 0 }} title={agent.title} />
+            <Avatar
+              avatar={agent.avatar}
+              size={24}
+              style={{ flexShrink: 0, marginTop: 4 }}
+              title={agent.title}
+            />
             <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
               <span className={styles.title}>{agent.title}</span>
               {agent.description && <span className={styles.description}>{agent.description}</span>}
+              {agent.tools && agent.tools.length > 0 && (
+                <Flexbox gap={4} horizontal style={{ marginTop: 8 }} wrap={'wrap'}>
+                  {agent.tools.map((tool) => (
+                    <ToolTag identifier={tool} key={tool} />
+                  ))}
+                </Flexbox>
+              )}
+              <Divider />
               {agent.systemRole && (
                 <div className={styles.systemRole}>
                   <Markdown animated variant={'chat'}>
