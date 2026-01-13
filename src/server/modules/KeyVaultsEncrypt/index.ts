@@ -21,7 +21,7 @@ export class KeyVaultsGateKeeper {
 If you don't have it, please run \`openssl rand -base64 32\` to create one.
 `);
 
-    const rawKey = Buffer.from(KEY_VAULTS_SECRET, 'base64'); // 确保密钥是32字节（256位）
+    const rawKey = Buffer.from(KEY_VAULTS_SECRET, 'base64'); // Ensure key is 32 bytes (256 bits)
     const aesKey = await crypto.subtle.importKey(
       'raw',
       rawKey,
@@ -36,7 +36,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
    * encrypt user private data
    */
   encrypt = async (keyVault: string): Promise<string> => {
-    const iv = crypto.getRandomValues(new Uint8Array(12)); // 对于GCM，推荐使用12字节的IV
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // For GCM, 12-byte IV is recommended
     const encodedKeyVault = new TextEncoder().encode(keyVault);
 
     const encryptedData = await crypto.subtle.encrypt(
@@ -49,13 +49,13 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     );
 
     const buffer = Buffer.from(encryptedData);
-    const authTag = buffer.slice(-16); // 认证标签在加密数据的最后16字节
-    const encrypted = buffer.slice(0, -16); // 剩下的是加密数据
+    const authTag = buffer.slice(-16); // Authentication tag is in the last 16 bytes of encrypted data
+    const encrypted = buffer.slice(0, -16); // The rest is encrypted data
 
     return `${Buffer.from(iv).toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
   };
 
-  // 假设密钥和加密数据是从外部获取的
+  // Assuming key and encrypted data are obtained from external sources
   decrypt = async (encryptedData: string): Promise<DecryptionResult> => {
     const parts = encryptedData.split(':');
     if (parts.length !== 3) {
@@ -66,7 +66,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     const authTag = Buffer.from(parts[1], 'hex');
     const encrypted = Buffer.from(parts[2], 'hex');
 
-    // 合并加密数据和认证标签
+    // Combine encrypted data and authentication tag
     const combined = Buffer.concat([encrypted, authTag]);
 
     try {

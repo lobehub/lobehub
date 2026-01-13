@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "コミュニティアシスタント",
   "cmdk.search.file": "ファイル",
   "cmdk.search.files": "ファイル",
+  "cmdk.search.folder": "フォルダー",
+  "cmdk.search.folders": "フォルダー一覧",
   "cmdk.search.loading": "検索中…",
   "cmdk.search.market": "コミュニティ",
   "cmdk.search.mcp": "MCP サーバー",
