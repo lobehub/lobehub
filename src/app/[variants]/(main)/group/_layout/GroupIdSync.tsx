@@ -1,4 +1,4 @@
-import { useUnmount } from 'ahooks';
+import { useUnmount, useUpdateEffect } from 'ahooks';
 import { useParams } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -13,6 +13,12 @@ const GroupIdSync = () => {
   // Sync groupId to agentGroupStore and chatStore
   useAgentGroupStoreUpdater('activeGroupId', params.gid);
   useChatStoreUpdater('activeGroupId', params.gid);
+
+  // Clear activeTopicId when switching groups (params.gid changes after initial mount)
+  // This ensures new conversations get saved to a new topic instead of the previous group's topic
+  useUpdateEffect(() => {
+    useChatStore.setState({ activeThreadId: undefined, activeTopicId: undefined });
+  }, [params.gid]);
 
   // Clear activeGroupId when unmounting (leaving group page)
   useUnmount(() => {
