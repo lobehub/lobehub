@@ -1,5 +1,5 @@
 import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { Card, Checkbox, InputNumber, Select, TimePicker } from 'antd';
+import { Card, InputNumber, Select, TimePicker } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { memo, useMemo } from 'react';
@@ -119,20 +119,31 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
               value={scheduleType}
             />
 
+            {/* Weekdays - show only for weekly */}
+            {scheduleType === 'weekly' && (
+              <Select
+                maxTagCount="responsive"
+                mode="multiple"
+                onChange={(values: number[]) => onScheduleChange({ weekdays: values })}
+                options={WEEKDAY_OPTIONS}
+                placeholder="Select days"
+                size="small"
+                style={{ minWidth: 150 }}
+                value={weekdays}
+              />
+            )}
+
             {/* Trigger Time - show for daily and weekly */}
             {scheduleType !== 'hourly' && (
-              <>
-                <Tag variant={'borderless'}>Trigger Time</Tag>
-                <TimePicker
-                  format="HH:mm"
-                  onChange={(value) => {
-                    if (value) onScheduleChange({ triggerTime: value });
-                  }}
-                  size="small"
-                  style={{ minWidth: 120 }}
-                  value={triggerTime ?? dayjs().hour(0).minute(0)}
-                />
-              </>
+              <TimePicker
+                format="HH:mm"
+                onChange={(value) => {
+                  if (value) onScheduleChange({ triggerTime: value });
+                }}
+                size="small"
+                style={{ minWidth: 120 }}
+                value={triggerTime ?? dayjs().hour(0).minute(0)}
+              />
             )}
 
             {/* Hourly Interval - show only for hourly */}
@@ -154,7 +165,6 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
             )}
 
             {/* Timezone */}
-            <Tag variant={'borderless'}>Timezone</Tag>
             <Select
               onChange={(value: string) => onScheduleChange({ timezone: value })}
               options={TIMEZONE_OPTIONS}
@@ -164,18 +174,6 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
               value={timezone}
             />
 
-            {/* Weekdays - show only for weekly */}
-            {scheduleType === 'weekly' && (
-              <>
-                <Tag variant={'borderless'}>Days</Tag>
-                <Checkbox.Group
-                  onChange={(values: number[]) => onScheduleChange({ weekdays: values })}
-                  options={WEEKDAY_OPTIONS}
-                  style={{ display: 'flex', flexWrap: 'nowrap', gap: 8 }}
-                  value={weekdays}
-                />
-              </>
-            )}
           </Flexbox>
 
           {/* Max Executions */}

@@ -1,10 +1,11 @@
 'use client';
 
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { App, Empty, message } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
+import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -167,11 +168,11 @@ const CronJobDetailPage = memo(() => {
         (current) =>
           current
             ? {
-                ...current,
-                ...payload,
-                executionConditions: payload.executionConditions ?? null,
-                ...(updatedAt ? { updatedAt } : null),
-              }
+              ...current,
+              ...payload,
+              executionConditions: payload.executionConditions ?? null,
+              ...(updatedAt ? { updatedAt } : null),
+            }
             : current,
         false,
       );
@@ -371,6 +372,9 @@ const CronJobDetailPage = memo(() => {
   useEffect(() => {
     if (!isNewJob || draft) return;
 
+    // Get browser timezone
+    const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
     const defaultDraft: CronJobDraft = {
       content: '',
       cronPattern: '0 0 * * *', // Default: daily at midnight
@@ -378,7 +382,7 @@ const CronJobDetailPage = memo(() => {
       maxExecutions: null,
       name: '',
       scheduleType: 'daily',
-      timezone: 'UTC',
+      timezone: browserTimezone,
       triggerTime: dayjs().hour(0).minute(0),
       weekdays: [0, 1, 2, 3, 4, 5, 6],
     };
@@ -442,7 +446,14 @@ const CronJobDetailPage = memo(() => {
 
   return (
     <Flexbox flex={1} height={'100%'}>
-      <NavHeader left={!isNewJob ? <AutoSaveHintSlot /> : undefined} />
+      <NavHeader
+        left={!isNewJob ? <AutoSaveHintSlot /> : undefined}
+        right={
+          !isNewJob ? (
+            <ActionIcon icon={Trash2} onClick={handleDeleteCronJob} title={t('delete', { ns: 'common' })} />
+          ) : undefined
+        }
+      />
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         <WideScreenContainer paddingBlock={16}>
           {isLoading && <Loading debugId="CronJobDetailPage" />}
@@ -458,7 +469,6 @@ const CronJobDetailPage = memo(() => {
                 enabled={cronJob?.enabled ?? false}
                 isNewJob={isNewJob}
                 name={draft.name}
-                onDelete={handleDeleteCronJob}
                 onNameChange={(name) => updateDraft({ name })}
                 onToggleEnabled={handleToggleEnabled}
               />

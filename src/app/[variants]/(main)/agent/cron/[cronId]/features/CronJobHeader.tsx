@@ -1,6 +1,5 @@
-import { ActionIcon, Flexbox, Input, Text } from '@lobehub/ui';
+import { Flexbox, Input } from '@lobehub/ui';
 import { Switch } from 'antd';
-import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,13 +7,12 @@ interface CronJobHeaderProps {
   enabled?: boolean;
   isNewJob?: boolean;
   name: string;
-  onDelete?: () => void;
   onNameChange: (name: string) => void;
   onToggleEnabled?: (enabled: boolean) => void;
 }
 
 const CronJobHeader = memo<CronJobHeaderProps>(
-  ({ enabled, isNewJob, name, onDelete, onNameChange, onToggleEnabled }) => {
+  ({ enabled, isNewJob, name, onNameChange, onToggleEnabled }) => {
     const { t } = useTranslation(['setting', 'common']);
 
     return (
@@ -34,17 +32,9 @@ const CronJobHeader = memo<CronJobHeaderProps>(
 
         {/* Controls Row */}
         {!isNewJob && (
-          <Flexbox align="center" gap={24} horizontal>
-            {/* Left: Enable/Disable Switch */}
-            <Flexbox align="center" gap={12} horizontal>
-              <Switch checked={enabled ?? false} onChange={onToggleEnabled} />
-              <Text type="secondary">
-                {t(enabled ? 'agentCronJobs.status.enabled' : 'agentCronJobs.status.disabled')}
-              </Text>
-            </Flexbox>
-
-            {/* Right: Delete Button */}
-            <ActionIcon icon={Trash2} onClick={onDelete} title={t('delete', { ns: 'common' })} />
+          <Flexbox align="center" gap={12} horizontal>
+            {/* Enable/Disable Switch */}
+            <Switch checked={enabled ?? false} onChange={onToggleEnabled} />
           </Flexbox>
         )}
       </Flexbox>
