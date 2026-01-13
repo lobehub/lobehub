@@ -2,8 +2,6 @@
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import { IEditor } from '@lobehub/editor';
-import { useEditor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { App, Empty, message } from 'antd';
@@ -85,16 +83,13 @@ const CronJobDetailPage = memo(() => {
   const { aid, cronId } = useParams<{ aid?: string; cronId?: string }>();
   const router = useQueryRoute();
   const { modal } = App.useApp();
-  const editor = useEditor();
   const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
-  const [editorReady, setEditorReady] = useState(false);
 
   const isNewJob = cronId === 'new';
 
   const [draft, setDraft] = useState<CronJobDraft | null>(null);
   const draftRef = useRef<CronJobDraft | null>(null);
   const contentRef = useRef('');
-  const pendingContentRef = useRef<string | null>(null);
   const pendingSaveRef = useRef(false);
   const initializedIdRef = useRef<string | null>(null);
   const readyRef = useRef(false);
@@ -256,16 +251,11 @@ const CronJobDetailPage = memo(() => {
   );
 
   const handleContentChange = useCallback(
-    (e: IEditor) => {
-      console.log('handleContentChange', e.getDocument('text'));
-      const nextContent = enableRichRender
-        ? (e.getDocument('markdown') as unknown as string)
-        : (e.getDocument('text') as unknown as string);
-      contentRef.current = nextContent || '';
-      updateDraft({ content: nextContent });
-      scheduleSave();
+    (content: string) => {
+      contentRef.current = content;
+      updateDraft({ content });
     },
-    [enableRichRender, scheduleSave],
+    [updateDraft],
   );
 
   const handleToggleEnabled = useCallback(
@@ -432,47 +422,15 @@ const CronJobDetailPage = memo(() => {
     draftRef.current = nextDraft;
 
     contentRef.current = nextDraft.content;
-    pendingContentRef.current = nextDraft.content;
 
     setAutoSaveState({
       lastUpdatedTime: resolveDate(cronJob.updatedAt),
       status: 'saved',
     });
 
-    if (editorReady && editor) {
-      try {
-        setTimeout(() => {
-          editor.setDocument(enableRichRender ? 'markdown' : 'text', nextDraft.content);
-        }, 100);
-        pendingContentRef.current = null;
-        readyRef.current = true;
-        flushPendingSave();
-      } catch (error) {
-        console.error('[CronJobDetailPage] Failed to init editor content:', error);
-        setTimeout(() => {
-          editor.setDocument(enableRichRender ? 'markdown' : 'text', nextDraft.content);
-        }, 100);
-      }
-    }
-  }, [cronJob, editor, editorReady, enableRichRender, flushPendingSave]);
-
-  useEffect(() => {
-    if (!editorReady || !editor || pendingContentRef.current === null) return;
-    try {
-      setTimeout(() => {
-        editor.setDocument(enableRichRender ? 'markdown' : 'text', pendingContentRef.current);
-      }, 100);
-      pendingContentRef.current = null;
-      readyRef.current = true;
-      flushPendingSave();
-    } catch (error) {
-      console.error('[CronJobDetailPage] Failed to init editor content:', error);
-      setTimeout(() => {
-        console.log('setDocument timeout', pendingContentRef.current);
-        editor.setDocument(enableRichRender ? 'markdown' : 'text', pendingContentRef.current);
-      }, 100);
-    }
-  }, [editor, editorReady, enableRichRender]);
+    readyRef.current = true;
+    flushPendingSave();
+  }, [cronJob, flushPendingSave]);
 
   if (!ENABLE_BUSINESS_FEATURES) {
     return null;
@@ -512,10 +470,9 @@ const CronJobDetailPage = memo(() => {
               />
 
               <CronJobContentEditor
-                editor={editor}
                 enableRichRender={enableRichRender}
-                onContentChange={handleContentChange}
-                onEditorReady={() => setEditorReady(true)}
+                initialValue={draft.content}
+                onChange={handleContentChange}
               />
 
               {isNewJob && (
