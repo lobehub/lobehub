@@ -119,13 +119,16 @@ export const createHomeInputSlice: StateCreator<
       const groupStore = getChatGroupStoreState();
       await groupStore.loadGroups();
 
-      // 4. Navigate to Group profile page
+      // 4. Refresh sidebar agent list
+      get().refreshAgentList();
+
+      // 5. Navigate to Group profile page
       const { navigate } = get();
       if (navigate) {
         navigate(`/group/${group.id}/profile`);
       }
 
-      // 5. Update groupAgentBuilder's model config and send initial message
+      // 6. Update groupAgentBuilder's model config and send initial message
       const groupAgentBuilderId = builtinAgentSelectors.groupAgentBuilderId(agentState);
 
       if (groupAgentBuilderId) {
@@ -141,7 +144,7 @@ export const createHomeInputSlice: StateCreator<
         });
       }
 
-      // 6. Clear mode
+      // 7. Clear mode
       set({ inputActiveMode: null }, false, n('sendAsGroup/clearMode'));
 
       return group.id;

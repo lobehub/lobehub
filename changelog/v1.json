@@ -1,5 +1,19 @@
 [
   {
+    "children": {
+      "fixes": ["Refresh sidebar after sendAsGroup and add E2E tests."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.272"
+  },
+  {
+    "children": {
+      "features": ["Improve baseline alignment for tool items."]
+    },
+    "date": "2026-01-12",
+    "version": "2.0.0-next.271"
+  },
+  {
     "children": {},
     "date": "2026-01-12",
     "version": "2.0.0-next.270"

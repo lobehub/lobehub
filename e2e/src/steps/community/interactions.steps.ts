@@ -55,12 +55,13 @@ When('I click on a category in the category menu', async function (this: CustomW
   // Wait for categories to be visible
   await categoryItems.first().waitFor({ state: 'visible', timeout: 30_000 });
 
-  // Click the second category (skip "All" which is usually first)
-  const secondCategory = categoryItems.nth(1);
-  await secondCategory.click();
+  // Click the third category (skip "Discover" at index 0 and "All" at index 1)
+  // This should select the first actual category filter like "Academic"
+  const targetCategory = categoryItems.nth(2);
+  await targetCategory.click();
 
   // Store the category for later verification
-  const categoryText = await secondCategory.textContent();
+  const categoryText = await targetCategory.textContent();
   this.testContext.selectedCategory = categoryText?.trim();
 });
 
@@ -94,12 +95,13 @@ When('I click on a category in the category filter', async function (this: Custo
   // Wait for categories to be visible
   await categoryItems.first().waitFor({ state: 'visible', timeout: 30_000 });
 
-  // Click the second category (skip "All" which is usually first)
-  const secondCategory = categoryItems.nth(1);
-  await secondCategory.click();
+  // Click the third category (skip "Discover" at index 0 and "All" at index 1)
+  // This should select the first actual category filter
+  const targetCategory = categoryItems.nth(2);
+  await targetCategory.click();
 
   // Store the category for later verification
-  const categoryText = await secondCategory.textContent();
+  const categoryText = await targetCategory.textContent();
   this.testContext.selectedCategory = categoryText?.trim();
 });
 
@@ -285,10 +287,15 @@ When(
 
     // Try to find "more" link near MCP-related content
     const mcpSection = this.page.locator('section:has-text("MCP"), div:has-text("MCP Tools")');
-    const mcpSectionVisible = await mcpSection.first().isVisible().catch(() => false);
+    const mcpSectionVisible = await mcpSection
+      .first()
+      .isVisible()
+      .catch(() => false);
 
     if (mcpSectionVisible) {
-      const moreLinkInSection = mcpSection.locator(`a:has-text("${linkText}"), button:has-text("${linkText}")`);
+      const moreLinkInSection = mcpSection.locator(
+        `a:has-text("${linkText}"), button:has-text("${linkText}")`,
+      );
       if ((await moreLinkInSection.count()) > 0) {
         await moreLinkInSection.first().click();
         return;
@@ -297,7 +304,9 @@ When(
 
     // Fallback: click on MCP in the sidebar navigation
     console.log('   📍 Fallback: clicking MCP in sidebar');
-    const mcpNavItem = this.page.locator('nav a:has-text("MCP"), [class*="nav"] a:has-text("MCP")').first();
+    const mcpNavItem = this.page
+      .locator('nav a:has-text("MCP"), [class*="nav"] a:has-text("MCP")')
+      .first();
     if (await mcpNavItem.isVisible().catch(() => false)) {
       await mcpNavItem.click();
       return;
@@ -363,9 +372,19 @@ Then(
 
 Then('the URL should contain the category parameter', async function (this: CustomWorld) {
   const currentUrl = this.page.url();
+  console.log(`   📍 Current URL: ${currentUrl}`);
+  console.log(`   📍 Selected category: ${this.testContext.selectedCategory}`);
+
   // Check if URL contains a category-related parameter
+  // The URL format is: /community/assistant?category=xxx
+  const hasCategory =
+    currentUrl.includes('category=') ||
+    currentUrl.includes('tag=') ||
+    // For path-based routing like /community/assistant/category-name
+    /\/community\/assistant\/[^/?]+/.test(currentUrl);
+
   expect(
-    currentUrl.includes('category=') || currentUrl.includes('tag='),
+    hasCategory,
     `Expected URL to contain category parameter, but got: ${currentUrl}`,
   ).toBeTruthy();
 });
@@ -383,7 +402,9 @@ Then('I should see different assistant cards', async function (this: CustomWorld
 
   // If we used infinite scroll, check that we have cards (might be same or more)
   if (this.testContext.usedInfiniteScroll) {
-    console.log(`   📍 Used infinite scroll, initial count was: ${this.testContext.initialCardCount}`);
+    console.log(
+      `   📍 Used infinite scroll, initial count was: ${this.testContext.initialCardCount}`,
+    );
     expect(currentCount).toBeGreaterThan(0);
   } else {
     expect(currentCount).toBeGreaterThan(0);
@@ -463,7 +484,9 @@ Then('I should see the model detail content', async function (this: CustomWorld)
 
   // Model detail page should have tabs like "Overview", "Model Parameters"
   // Wait for these specific elements to appear
-  const modelTabs = this.page.locator('text=/Overview|Model Parameters|Related Recommendations|Configuration Guide/');
+  const modelTabs = this.page.locator(
+    'text=/Overview|Model Parameters|Related Recommendations|Configuration Guide/',
+  );
 
   console.log('   📍 Waiting for model detail content to load...');
   await expect(modelTabs.first()).toBeVisible({ timeout: 30_000 });

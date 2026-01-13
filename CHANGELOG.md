@@ -2,6 +2,56 @@
 
 # Changelog
 
+## [Version 2.0.0-next.272](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.271...v2.0.0-next.272)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Refresh sidebar after sendAsGroup and add E2E tests.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Refresh sidebar after sendAsGroup and add E2E tests, closes [#11450](https://github.com/lobehub/lobe-chat/issues/11450) ([8376a80](https://github.com/lobehub/lobe-chat/commit/8376a80))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.271](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.270...v2.0.0-next.271)
+
+<sup>Released on **2026-01-12**</sup>
+
+#### ✨ Features
+
+- **misc**: Improve baseline alignment for tool items.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Improve baseline alignment for tool items, closes [#11447](https://github.com/lobehub/lobe-chat/issues/11447) ([be8dddd](https://github.com/lobehub/lobe-chat/commit/be8dddd))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.270](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.269...v2.0.0-next.270)
 
 <sup>Released on **2026-01-12**</sup>
