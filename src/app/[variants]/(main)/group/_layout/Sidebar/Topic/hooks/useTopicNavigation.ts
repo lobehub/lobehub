@@ -1,10 +1,7 @@
 import { usePathname } from 'next/navigation';
 import { useCallback } from 'react';
-import urlJoin from 'url-join';
 
-import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
-import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
 /**
@@ -14,9 +11,8 @@ import { useGlobalStore } from '@/store/global';
 export const useTopicNavigation = () => {
   const pathname = usePathname();
   const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
-  const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
-  const switchTopic = useChatStore((s) => s.switchTopic);
+  const switchTopic = useAgentGroupStore((s) => s.switchTopic);
 
   const isInAgentSubRoute = useCallback(() => {
     if (!activeGroupId) return false;
@@ -31,15 +27,10 @@ export const useTopicNavigation = () => {
 
   const navigateToTopic = useCallback(
     (topicId?: string) => {
-      // If in agent sub-route, navigate back to agent chat first
-      if (isInAgentSubRoute() && activeGroupId) {
-        router.push(urlJoin('/group', activeGroupId as string));
-      }
-
       switchTopic(topicId);
       toggleConfig(false);
     },
-    [activeGroupId, router, switchTopic, toggleConfig, isInAgentSubRoute],
+    [switchTopic, toggleConfig],
   );
 
   return {
