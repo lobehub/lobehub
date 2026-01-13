@@ -10,10 +10,10 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 const Header = memo<{ title: ReactNode }>(({ title }) => {
-  const [canGoBack, goBack, togglePortal] = useChatStore((s) => [
+  const [canGoBack, goBack, clearPortalStack] = useChatStore((s) => [
     chatPortalSelectors.canGoBack(s),
     s.goBack,
-    s.togglePortal,
+    s.clearPortalStack,
   ]);
 
   return (
@@ -30,7 +30,7 @@ const Header = memo<{ title: ReactNode }>(({ title }) => {
         <ActionIcon
           icon={PanelRightCloseIcon}
           onClick={() => {
-            togglePortal(false);
+            clearPortalStack();
           }}
           size={DESKTOP_HEADER_ICON_SIZE}
         />

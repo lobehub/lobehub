@@ -15,9 +15,9 @@ const md = css`
 `;
 
 const MessageDetailBody = () => {
-  const [messageDetailId, togglePortal] = useChatStore((s) => [
+  const [messageDetailId, clearPortalStack] = useChatStore((s) => [
     chatPortalSelectors.messageDetailId(s),
-    s.togglePortal,
+    s.clearPortalStack,
   ]);
 
   const message = useChatStore(dbMessageSelectors.getDbMessageById(messageDetailId || ''), isEqual);
@@ -26,7 +26,7 @@ const MessageDetailBody = () => {
 
   useEffect(() => {
     if (!message) {
-      togglePortal(false);
+      clearPortalStack();
     }
   }, [message]);
 
