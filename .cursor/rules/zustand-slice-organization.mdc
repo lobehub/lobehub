@@ -105,7 +105,7 @@ export const initialTopicState: ChatTopicState = {
 };
 ```
 
-2. `reducer.ts` (复杂状态使用):
+1. `reducer.ts` (复杂状态使用):
    - 定义纯函数 reducer，处理同步状态转换
    - 使用 `immer` 确保不可变更新
 
@@ -151,7 +151,7 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
 };
 ```
 
-3. `selectors.ts`:
+1. `selectors.ts`:
    - 提供状态查询和计算函数
    - 供 UI 组件使用的状态订阅接口
    - 重要: 使用 `export const xxxSelectors` 模式聚合所有 selectors
@@ -186,7 +186,7 @@ export const topicSelectors = {
 
 当 slice 的 actions 过于复杂时，可以拆分到子目录：
 
-```
+```plaintext
 src/store/chat/slices/aiChat/
 ├── actions/
 │   ├── generateAIChat.ts       # AI 对话生成
@@ -204,7 +204,7 @@ src/store/chat/slices/aiChat/
 
 管理多种内置工具的状态：
 
-```
+```plaintext
 src/store/chat/slices/builtinTool/
 ├── actions/
 │   ├── dalle.ts                # DALL-E 图像生成
