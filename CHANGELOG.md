@@ -2,6 +2,40 @@
 
 # Changelog
 
+## [Version 2.0.0-next.274](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.273...v2.0.0-next.274)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### ✨ Features
+
+- **misc**: Improve group profile builder, update model definitions and sync i18n.
+
+#### 🐛 Bug Fixes
+
+- **@upstash/qstash**: Should properly extract Error message from thrown one.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Improve group profile builder, closes [#11452](https://github.com/lobehub/lobe-chat/issues/11452) ([9012b40](https://github.com/lobehub/lobe-chat/commit/9012b40))
+- **misc**: Update model definitions and sync i18n, closes [#11468](https://github.com/lobehub/lobe-chat/issues/11468) ([484ffb3](https://github.com/lobehub/lobe-chat/commit/484ffb3))
+
+#### What's fixed
+
+- **@upstash/qstash**: Should properly extract Error message from thrown one, closes [#11465](https://github.com/lobehub/lobe-chat/issues/11465) ([a8142b4](https://github.com/lobehub/lobe-chat/commit/a8142b4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.273](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.272...v2.0.0-next.273)
 
 <sup>Released on **2026-01-13**</sup>

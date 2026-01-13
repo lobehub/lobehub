@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "features": ["Improve group profile builder, update model definitions and sync i18n."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.274"
+  },
+  {
+    "children": {
       "improvements": ["Update i18n."]
     },
     "date": "2026-01-13",
