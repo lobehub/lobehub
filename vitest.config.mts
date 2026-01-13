@@ -94,7 +94,7 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
-        inline: ['vitest-canvas-mock', '@lobehub/ui', '@lobehub/fluent-emoji'],
+        inline: ['vitest-canvas-mock', '@lobehub/ui', '@lobehub/fluent-emoji', 'lru_map'],
       },
     },
     setupFiles: join(__dirname, './tests/setup.ts'),
