@@ -32,7 +32,7 @@ import useSWR from 'swr';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
-import type { ExecutionConditions, UpdateAgentCronJobData } from '@/database/schemas/agentCronJob';
+import type { UpdateAgentCronJobData } from '@/database/schemas/agentCronJob';
 import TypoBar from '@/features/EditorModal/Typobar';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -46,15 +46,27 @@ import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import {
+  SCHEDULE_TYPE_OPTIONS,
+  type ScheduleType,
+  TIMEZONE_OPTIONS,
+  WEEKDAY_LABELS,
+  WEEKDAY_OPTIONS,
+  buildCronPattern,
+  parseCronPattern,
+} from './CronConfig';
+
 interface CronJobDraft {
   content: string;
   cronPattern: string;
   description: string;
+  hourlyInterval?: number; // For hourly: interval in hours (1, 2, 6, 12)
   maxExecutions?: number | null;
-  maxExecutionsPerDay?: number | null;
   name: string;
-  timeRange?: [Dayjs, Dayjs];
-  weekdays: number[];
+  scheduleType: ScheduleType;
+  timezone: string;
+  triggerTime: Dayjs; // Trigger time (HH:mm)
+  weekdays: number[]; // For weekly: selected days
 }
 
 type AutoSaveStatus = 'idle' | 'saving' | 'saved';
@@ -84,52 +96,6 @@ const AutoSaveHintSlot = memo(() => {
   const { lastUpdatedTime, status } = useAutoSaveState();
   return <AutoSaveHint lastUpdatedTime={lastUpdatedTime} saveStatus={status} />;
 });
-
-// Standard cron format: minute hour day month weekday
-const CRON_PATTERNS = [
-  { label: 'agentCronJobs.interval.30min', value: '*/30 * * * *' },
-  { label: 'agentCronJobs.interval.1hour', value: '0 * * * *' },
-  { label: 'agentCronJobs.interval.2hours', value: '0 */2 * * *' },
-  { label: 'agentCronJobs.interval.6hours', value: '0 */6 * * *' },
-  { label: 'agentCronJobs.interval.12hours', value: '0 */12 * * *' },
-  { label: 'agentCronJobs.interval.daily', value: '0 0 * * *' },
-  { label: 'agentCronJobs.interval.weekly', value: '0 0 * * 0' },
-];
-
-const WEEKDAY_OPTIONS = [
-  { label: 'Mon', value: 1 },
-  { label: 'Tue', value: 2 },
-  { label: 'Wed', value: 3 },
-  { label: 'Thu', value: 4 },
-  { label: 'Fri', value: 5 },
-  { label: 'Sat', value: 6 },
-  { label: 'Sun', value: 0 },
-];
-
-const WEEKDAY_LABELS: Record<number, string> = {
-  0: 'Sunday',
-  1: 'Monday',
-  2: 'Tuesday',
-  3: 'Wednesday',
-  4: 'Thursday',
-  5: 'Friday',
-  6: 'Saturday',
-};
-
-const getIntervalText = (cronPattern: string) => {
-  // Standard cron format mapping
-  const intervalMap: Record<string, string> = {
-    '*/30 * * * *': 'agentCronJobs.interval.30min',
-    '0 * * * *': 'agentCronJobs.interval.1hour',
-    '0 */12 * * *': 'agentCronJobs.interval.12hours',
-    '0 */2 * * *': 'agentCronJobs.interval.2hours',
-    '0 */6 * * *': 'agentCronJobs.interval.6hours',
-    '0 0 * * *': 'agentCronJobs.interval.daily',
-    '0 0 * * 0': 'agentCronJobs.interval.weekly',
-  };
-
-  return intervalMap[cronPattern] || cronPattern;
-};
 
 const resolveDate = (value?: Date | string | null) => {
   if (!value) return null;
@@ -183,43 +149,51 @@ const CronJobDetailPage = memo(() => {
     },
   );
 
-  const resolvedCronPattern = draft ? draft.cronPattern : cronJob?.cronPattern;
-  const resolvedWeekdays = draft ? draft.weekdays : cronJob?.executionConditions?.weekdays || [];
-  const resolvedTimeRange = draft
-    ? draft.timeRange
-    : cronJob?.executionConditions?.timeRange
-      ? [
-          dayjs(cronJob.executionConditions.timeRange.start, 'HH:mm'),
-          dayjs(cronJob.executionConditions.timeRange.end, 'HH:mm'),
-        ]
-      : undefined;
-
   const summaryTags = useMemo(() => {
+    if (!draft) return [];
+
     const tags: Array<{ key: string; label: string }> = [];
 
-    if (resolvedCronPattern) {
+    // Schedule type
+    const scheduleTypeLabel = SCHEDULE_TYPE_OPTIONS.find(
+      (opt) => opt.value === draft.scheduleType,
+    )?.label;
+    if (scheduleTypeLabel) {
+      tags.push({
+        key: 'scheduleType',
+        label: t(scheduleTypeLabel as any),
+      });
+    }
+
+    // Trigger time
+    if (draft.scheduleType === 'hourly') {
       tags.push({
         key: 'interval',
-        label: t(getIntervalText(resolvedCronPattern) as any),
+        label: `Every ${draft.hourlyInterval || 1} hour(s)`,
+      });
+    } else {
+      tags.push({
+        key: 'triggerTime',
+        label: draft.triggerTime.format('HH:mm'),
       });
     }
 
-    if (resolvedWeekdays.length > 0) {
+    // Timezone
+    tags.push({
+      key: 'timezone',
+      label: draft.timezone,
+    });
+
+    // Weekdays for weekly schedule
+    if (draft.scheduleType === 'weekly' && draft.weekdays.length > 0) {
       tags.push({
         key: 'weekdays',
-        label: resolvedWeekdays.map((day) => WEEKDAY_LABELS[day]).join(', '),
-      });
-    }
-
-    if (resolvedTimeRange && resolvedTimeRange.length === 2) {
-      tags.push({
-        key: 'timeRange',
-        label: `${resolvedTimeRange[0].format('HH:mm')} - ${resolvedTimeRange[1].format('HH:mm')}`,
+        label: draft.weekdays.map((day) => WEEKDAY_LABELS[day]).join(', '),
       });
     }
 
     return tags;
-  }, [resolvedCronPattern, resolvedTimeRange, resolvedWeekdays, t]);
+  }, [draft, t]);
 
   const buildUpdateData = useCallback(
     (snapshot: CronJobDraft | null, content: string): UpdateAgentCronJobData | null => {
@@ -227,30 +201,22 @@ const CronJobDetailPage = memo(() => {
       if (!snapshot.content) return null;
       if (!snapshot.name) return null;
 
-      const executionConditions: ExecutionConditions = {};
-      if (snapshot.timeRange && snapshot.timeRange.length === 2) {
-        executionConditions.timeRange = {
-          end: snapshot.timeRange[1].format('HH:mm'),
-          start: snapshot.timeRange[0].format('HH:mm'),
-        };
-      }
-
-      if (snapshot.weekdays && snapshot.weekdays.length > 0) {
-        executionConditions.weekdays = snapshot.weekdays;
-      }
-
-      if (snapshot.maxExecutionsPerDay) {
-        executionConditions.maxExecutionsPerDay = snapshot.maxExecutionsPerDay;
-      }
+      // Build cron pattern from schedule configuration
+      const cronPattern = buildCronPattern(
+        snapshot.scheduleType,
+        snapshot.triggerTime,
+        snapshot.hourlyInterval,
+        snapshot.weekdays,
+      );
 
       return {
         content,
-        cronPattern: snapshot.cronPattern,
+        cronPattern,
         description: snapshot.description?.trim() || null,
-        executionConditions:
-          Object.keys(executionConditions).length > 0 ? executionConditions : null,
+        executionConditions: null, // No longer using executionConditions for time/weekdays
         maxExecutions: snapshot.maxExecutions ?? null,
         name: snapshot.name?.trim() || null,
+        timezone: snapshot.timezone,
       };
     },
     [],
@@ -433,20 +399,23 @@ const CronJobDetailPage = memo(() => {
     readyRef.current = false;
     lastSavedNameRef.current = cronJob.name ?? null;
 
+    // Parse cron pattern to extract schedule configuration
+    const parsed = parseCronPattern(cronJob.cronPattern);
+
     const nextDraft: CronJobDraft = {
       content: cronJob.content || '',
       cronPattern: cronJob.cronPattern,
       description: cronJob.description || '',
+      hourlyInterval: parsed.hourlyInterval,
       maxExecutions: cronJob.maxExecutions ?? null,
-      maxExecutionsPerDay: cronJob.executionConditions?.maxExecutionsPerDay ?? null,
       name: cronJob.name || '',
-      timeRange: cronJob.executionConditions?.timeRange
-        ? [
-            dayjs(cronJob.executionConditions.timeRange.start, 'HH:mm'),
-            dayjs(cronJob.executionConditions.timeRange.end, 'HH:mm'),
-          ]
-        : undefined,
-      weekdays: cronJob.executionConditions?.weekdays || [],
+      scheduleType: parsed.scheduleType,
+      timezone: cronJob.timezone || 'UTC',
+      triggerTime: dayjs().hour(parsed.triggerHour).minute(parsed.triggerMinute),
+      weekdays:
+        parsed.scheduleType === 'weekly' && parsed.weekdays
+          ? parsed.weekdays
+          : [0, 1, 2, 3, 4, 5, 6], // Default: all days for weekly
     };
 
     setDraft(nextDraft);
@@ -475,7 +444,7 @@ const CronJobDetailPage = memo(() => {
         }, 100);
       }
     }
-  }, [cronJob, editor, editorReady, enableRichRender]);
+  }, [cronJob, editor, editorReady, enableRichRender, flushPendingSave]);
 
   useEffect(() => {
     if (!editorReady || !editor || pendingContentRef.current === null) return;
@@ -563,52 +532,90 @@ const CronJobDetailPage = memo(() => {
                     </Flexbox>
                   )}
 
+                  {/* Schedule Configuration - All in one row */}
                   <Flexbox align="center" gap={8} horizontal style={{ flexWrap: 'wrap' }}>
                     <Tag variant={'borderless'}>{t('agentCronJobs.schedule')}</Tag>
                     <Select
-                      onChange={(value) => updateDraft({ cronPattern: value })}
-                      options={CRON_PATTERNS.map((pattern) => ({
-                        label: t(pattern.label as any),
-                        value: pattern.value,
-                      }))}
-                      size="small"
-                      style={{ minWidth: 160 }}
-                      value={draft?.cronPattern ?? cronJob.cronPattern}
-                    />
-                    <TimePicker.RangePicker
-                      format="HH:mm"
-                      onChange={(value) =>
+                      onChange={(value: ScheduleType) =>
                         updateDraft({
-                          timeRange:
-                            value && value.length === 2
-                              ? [value[0] as Dayjs, value[1] as Dayjs]
-                              : undefined,
+                          scheduleType: value,
+                          weekdays: value === 'weekly' ? [0, 1, 2, 3, 4, 5, 6] : [],
                         })
                       }
-                      placeholder={[
-                        t('agentCronJobs.form.timeRange.start'),
-                        t('agentCronJobs.form.timeRange.end'),
-                      ]}
+                      options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
+                        label: t(opt.label as any),
+                        value: opt.value,
+                      }))}
                       size="small"
-                      value={
-                        draft?.timeRange ??
-                        (resolvedTimeRange as [Dayjs, Dayjs] | undefined) ??
-                        null
-                      }
+                      style={{ minWidth: 120 }}
+                      value={draft?.scheduleType ?? 'daily'}
                     />
-                    <Checkbox.Group
-                      onChange={(values) => updateDraft({ weekdays: values as number[] })}
-                      options={WEEKDAY_OPTIONS}
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
-                      value={draft?.weekdays ?? resolvedWeekdays}
+
+                    {/* Trigger Time - show for daily and weekly */}
+                    {draft?.scheduleType !== 'hourly' && (
+                      <>
+                        <Tag variant={'borderless'}>Trigger Time</Tag>
+                        <TimePicker
+                          format="HH:mm"
+                          onChange={(value) => {
+                            if (value) updateDraft({ triggerTime: value });
+                          }}
+                          size="small"
+                          style={{ minWidth: 120 }}
+                          value={draft?.triggerTime ?? dayjs().hour(0).minute(0)}
+                        />
+                      </>
+                    )}
+
+                    {/* Hourly Interval - show only for hourly */}
+                    {draft?.scheduleType === 'hourly' && (
+                      <>
+                        <Tag variant={'borderless'}>Every</Tag>
+                        <InputNumber
+                          max={24}
+                          min={1}
+                          onChange={(value) => updateDraft({ hourlyInterval: value ?? 1 })}
+                          size="small"
+                          style={{ width: 80 }}
+                          value={draft?.hourlyInterval ?? 1}
+                        />
+                        <Text type="secondary">hour(s)</Text>
+                      </>
+                    )}
+
+                    {/* Timezone */}
+                    <Tag variant={'borderless'}>Timezone</Tag>
+                    <Select
+                      onChange={(value: string) => updateDraft({ timezone: value })}
+                      options={TIMEZONE_OPTIONS}
+                      showSearch
+                      size="small"
+                      style={{ maxWidth: 300, minWidth: 200 }}
+                      value={draft?.timezone ?? 'UTC'}
                     />
+
+                    {/* Weekdays - show only for weekly */}
+                    {draft?.scheduleType === 'weekly' && (
+                      <>
+                        <Tag variant={'borderless'}>Days</Tag>
+                        <Checkbox.Group
+                          onChange={(values: number[]) => updateDraft({ weekdays: values })}
+                          options={WEEKDAY_OPTIONS}
+                          style={{ display: 'flex', flexWrap: 'nowrap', gap: 8 }}
+                          value={draft?.weekdays ?? [0, 1, 2, 3, 4, 5, 6]}
+                        />
+                      </>
+                    )}
                   </Flexbox>
 
+                  {/* Max Executions */}
                   <Flexbox align="center" gap={8} horizontal style={{ flexWrap: 'wrap' }}>
                     <Tag variant={'borderless'}>{t('agentCronJobs.maxExecutions')}</Tag>
                     <InputNumber
                       min={1}
-                      onChange={(value) => updateDraft({ maxExecutions: value ?? null })}
+                      onChange={(value: number | null) =>
+                        updateDraft({ maxExecutions: value ?? null })
+                      }
                       placeholder={t('agentCronJobs.form.maxExecutions.placeholder')}
                       size="small"
                       style={{ width: 160 }}
