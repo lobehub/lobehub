@@ -1,5 +1,6 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { ActionIcon } from '@lobehub/ui';
 import { Share2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -27,18 +28,25 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   // Hide share button when no topic exists (no messages sent yet)
   if (!activeTopicId) return null;
 
+  const iconButton = (
+    <ActionIcon
+      icon={Share2}
+      onClick={ENABLE_BUSINESS_FEATURES ? undefined : () => setIsModalOpen(true)}
+      size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
+      title={t('share')}
+      tooltipProps={{
+        placement: 'bottom',
+      }}
+    />
+  );
+
   return (
     <>
-      <SharePopover onOpenModal={() => setIsModalOpen(true)}>
-        <ActionIcon
-          icon={Share2}
-          size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
-          title={t('share')}
-          tooltipProps={{
-            placement: 'bottom',
-          }}
-        />
-      </SharePopover>
+      {ENABLE_BUSINESS_FEATURES ? (
+        <SharePopover onOpenModal={() => setIsModalOpen(true)}>{iconButton}</SharePopover>
+      ) : (
+        iconButton
+      )}
       <ShareModal onCancel={() => setIsModalOpen(false)} open={isModalOpen} />
     </>
   );
