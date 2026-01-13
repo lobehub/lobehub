@@ -161,9 +161,9 @@ export const topicShares = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    accessPermission: text('access_permission').default('private').notNull(), // 'private' | 'public' | 'public_signin'
+    visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
 
-    viewCount: integer('view_count').default(0).notNull(),
+    pageViewCount: integer('page_view_count').default(0).notNull(),
 
     ...timestamps,
   },

@@ -2,7 +2,7 @@
 
 import { Button, Flexbox, Popover, copyToClipboard, usePopoverContext } from '@lobehub/ui';
 import { App, Divider, Select, Skeleton, Typography } from 'antd';
-import { CopyIcon, ExternalLinkIcon, GlobeIcon, LockIcon, UserIcon } from 'lucide-react';
+import { CopyIcon, ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
 import { type ReactNode, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -13,7 +13,7 @@ import { useChatStore } from '@/store/chat';
 
 import { useStyles } from './style';
 
-type Permission = 'private' | 'public' | 'public_signin';
+type Visibility = 'private' | 'link';
 
 interface SharePopoverContentProps {
   onOpenModal?: () => void;
@@ -47,17 +47,17 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
   }, [isLoading, shareInfo, activeTopicId, mutate]);
 
   const shareUrl = shareInfo?.id ? `${window.location.origin}/share/t/${shareInfo.id}` : '';
-  const currentPermission = (shareInfo?.accessPermission as Permission) || 'private';
+  const currentVisibility = (shareInfo?.visibility as Visibility) || 'private';
 
-  const updatePermission = useCallback(
-    async (permission: Permission) => {
+  const updateVisibility = useCallback(
+    async (visibility: Visibility) => {
       if (!activeTopicId) return;
 
       setUpdating(true);
       try {
-        await topicService.updateSharePermission(activeTopicId, permission);
+        await topicService.updateShareVisibility(activeTopicId, visibility);
         await mutate();
-        message.success(t('shareModal.link.permissionUpdated'));
+        message.success(t('shareModal.link.visibilityUpdated'));
       } catch {
         message.error(t('shareModal.link.updateError'));
       } finally {
@@ -67,23 +67,23 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
     [activeTopicId, mutate, message, t],
   );
 
-  const handlePermissionChange = useCallback(
-    (permission: Permission) => {
-      // Show confirmation when changing from private to any other permission
-      if (currentPermission === 'private' && permission !== 'private') {
+  const handleVisibilityChange = useCallback(
+    (visibility: Visibility) => {
+      // Show confirmation when changing from private to link
+      if (currentVisibility === 'private' && visibility === 'link') {
         modal.confirm({
           cancelText: t('cancel', { ns: 'common' }),
           content: t('shareModal.popover.privacyWarning.content'),
           okText: t('shareModal.popover.privacyWarning.confirm'),
-          onOk: () => updatePermission(permission),
+          onOk: () => updateVisibility(visibility),
           title: t('shareModal.popover.privacyWarning.title'),
           type: 'warning',
         });
       } else {
-        updatePermission(permission);
+        updateVisibility(visibility);
       }
     },
-    [currentPermission, modal, t, updatePermission],
+    [currentVisibility, modal, t, updateVisibility],
   );
 
   const handleCopyLink = useCallback(async () => {
@@ -107,34 +107,26 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
     );
   }
 
-  const permissionOptions = [
+  const visibilityOptions = [
     {
       icon: <LockIcon size={14} />,
       label: t('shareModal.link.permissionPrivate'),
       value: 'private',
     },
     {
-      icon: <UserIcon size={14} />,
-      label: t('shareModal.link.permissionPublicSignin'),
-      value: 'public_signin',
-    },
-    {
-      icon: <GlobeIcon size={14} />,
-      label: t('shareModal.link.permissionPublic'),
-      value: 'public',
+      icon: <LinkIcon size={14} />,
+      label: t('shareModal.link.permissionLink'),
+      value: 'link',
     },
   ];
 
-  const getPermissionHint = () => {
-    switch (currentPermission) {
+  const getVisibilityHint = () => {
+    switch (currentVisibility) {
       case 'private': {
         return t('shareModal.link.privateHint');
       }
-      case 'public': {
-        return t('shareModal.link.publicHint');
-      }
-      case 'public_signin': {
-        return t('shareModal.link.publicSigninHint');
+      case 'link': {
+        return t('shareModal.link.linkHint');
       }
     }
   };
@@ -149,7 +141,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
           disabled={updating}
           getPopupContainer={() => containerRef.current || document.body}
           labelRender={({ value }) => {
-            const option = permissionOptions.find((o) => o.value === value);
+            const option = visibilityOptions.find((o) => o.value === value);
             return (
               <Flexbox align="center" gap={8} horizontal>
                 {option?.icon}
@@ -157,21 +149,21 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
               </Flexbox>
             );
           }}
-          onChange={handlePermissionChange}
+          onChange={handleVisibilityChange}
           optionRender={(option) => (
             <Flexbox align="center" gap={8} horizontal>
-              {permissionOptions.find((o) => o.value === option.value)?.icon}
+              {visibilityOptions.find((o) => o.value === option.value)?.icon}
               {option.label}
             </Flexbox>
           )}
-          options={permissionOptions}
+          options={visibilityOptions}
           style={{ width: '100%' }}
-          value={currentPermission}
+          value={currentVisibility}
         />
       </Flexbox>
 
       <Typography.Text className={styles.hint} type="secondary">
-        {getPermissionHint()}
+        {getVisibilityHint()}
       </Typography.Text>
 
       <Divider style={{ margin: '4px 0' }} />

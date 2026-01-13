@@ -1,7 +1,7 @@
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
-export type ShareAccessPermission = 'private' | 'public' | 'public_signin';
+export type ShareVisibility = 'private' | 'link';
 
 export type TimeGroupId =
   | 'today'
@@ -143,7 +143,6 @@ export interface SharedMessage {
  * Shared topic data returned by public API
  */
 export interface SharedTopicData {
-  accessPermission: ShareAccessPermission;
   agentId: string | null;
   agentMeta?: {
     avatar?: string | null;
@@ -162,13 +161,14 @@ export interface SharedTopicData {
   shareId: string;
   title: string | null;
   topicId: string;
+  visibility: ShareVisibility;
 }
 
 /**
  * Topic share info returned to the owner
  */
 export interface TopicShareInfo {
-  accessPermission: ShareAccessPermission;
   id: string;
   topicId: string;
+  visibility: ShareVisibility;
 }

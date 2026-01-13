@@ -355,9 +355,9 @@ describe('messageRouter', () => {
   });
 
   describe('topicShareId support', () => {
-    it('should get messages via topicShareId for public share', async () => {
+    it('should get messages via topicShareId for link share', async () => {
       const mockShare = {
-        accessPermission: 'public',
+        visibility: 'link',
         ownerId: 'owner-user',
         shareId: 'share-123',
         topicId: 'topic-1',
@@ -410,7 +410,7 @@ describe('messageRouter', () => {
 
     it('should allow owner to access private share messages', async () => {
       const mockShare = {
-        accessPermission: 'private',
+        visibility: 'private',
         ownerId: 'owner-user',
         shareId: 'private-share',
         topicId: 'topic-private',
@@ -425,7 +425,7 @@ describe('messageRouter', () => {
       );
 
       expect(share).toBeDefined();
-      expect(share.accessPermission).toBe('private');
+      expect(share.visibility).toBe('private');
     });
 
     it('should throw FORBIDDEN for private share accessed by non-owner', async () => {
@@ -448,45 +448,6 @@ describe('messageRouter', () => {
       }
     });
 
-    it('should throw UNAUTHORIZED for public_signin share accessed anonymously', async () => {
-      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockRejectedValue(
-        new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Sign in required to view this shared topic',
-        }),
-      );
-
-      await expect(
-        TopicShareModel.findByShareIdWithAccessCheck({} as any, 'signin-share', undefined),
-      ).rejects.toThrow(TRPCError);
-
-      try {
-        await TopicShareModel.findByShareIdWithAccessCheck({} as any, 'signin-share', undefined);
-      } catch (error) {
-        expect((error as TRPCError).code).toBe('UNAUTHORIZED');
-      }
-    });
-
-    it('should allow authenticated user to access public_signin share messages', async () => {
-      const mockShare = {
-        accessPermission: 'public_signin',
-        ownerId: 'owner-user',
-        shareId: 'signin-share',
-        topicId: 'topic-signin',
-      };
-
-      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare as any);
-
-      const share = await TopicShareModel.findByShareIdWithAccessCheck(
-        {} as any,
-        'signin-share',
-        'logged-in-user', // Authenticated user
-      );
-
-      expect(share).toBeDefined();
-      expect(share.accessPermission).toBe('public_signin');
-    });
-
     it('should throw NOT_FOUND for non-existent share', async () => {
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockRejectedValue(
         new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' }),
@@ -505,7 +466,7 @@ describe('messageRouter', () => {
 
     it('should use owner id to query messages for shared topic', async () => {
       const mockShare = {
-        accessPermission: 'public',
+        visibility: 'link',
         ownerId: 'topic-owner',
         shareId: 'share-abc',
         topicId: 'shared-topic',

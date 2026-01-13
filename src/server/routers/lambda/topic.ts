@@ -155,12 +155,12 @@ export const topicRouter = router({
   enableSharing: topicProcedure
     .input(
       z.object({
-        permission: z.enum(['private', 'public', 'public_signin']).optional(),
         topicId: z.string(),
+        visibility: z.enum(['private', 'link']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicShareModel.create(input.topicId, input.permission);
+      return ctx.topicShareModel.create(input.topicId, input.visibility);
     }),
 
   getAllTopics: topicProcedure.query(async ({ ctx }) => {
@@ -451,17 +451,17 @@ export const topicRouter = router({
     }),
 
   /**
-   * Update share permission
+   * Update share visibility
    */
-  updateSharePermission: topicProcedure
+  updateShareVisibility: topicProcedure
     .input(
       z.object({
-        permission: z.enum(['private', 'public', 'public_signin']),
         topicId: z.string(),
+        visibility: z.enum(['private', 'link']),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicShareModel.updatePermission(input.topicId, input.permission);
+      return ctx.topicShareModel.updateVisibility(input.topicId, input.visibility);
     }),
 
   updateTopic: topicProcedure

@@ -6,7 +6,7 @@ import { TopicShareModel } from '@/database/models/topicShare';
 vi.mock('@/database/models/topicShare', () => ({
   TopicShareModel: {
     findByShareIdWithAccessCheck: vi.fn(),
-    incrementViewCount: vi.fn(),
+    incrementPageViewCount: vi.fn(),
   },
 }));
 
@@ -18,7 +18,6 @@ describe('shareRouter', () => {
   describe('getSharedTopic', () => {
     it('should return shared topic data for valid share', async () => {
       const mockShare = {
-        accessPermission: 'public',
         agentAvatar: 'avatar.png',
         agentBackgroundColor: '#fff',
         agentId: 'agent-1',
@@ -34,10 +33,11 @@ describe('shareRouter', () => {
         shareId: 'share-123',
         title: 'Test Topic',
         topicId: 'topic-1',
+        visibility: 'link',
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
-      vi.mocked(TopicShareModel.incrementViewCount).mockResolvedValue(undefined);
+      vi.mocked(TopicShareModel.incrementPageViewCount).mockResolvedValue(undefined);
 
       const ctx = {
         serverDB: {} as any,
@@ -54,16 +54,18 @@ describe('shareRouter', () => {
       expect(share.shareId).toBe('share-123');
       expect(share.topicId).toBe('topic-1');
       expect(share.title).toBe('Test Topic');
-      expect(share.accessPermission).toBe('public');
+      expect(share.visibility).toBe('link');
 
-      // Verify incrementViewCount would be called
-      await TopicShareModel.incrementViewCount(ctx.serverDB, 'share-123');
-      expect(TopicShareModel.incrementViewCount).toHaveBeenCalledWith(ctx.serverDB, 'share-123');
+      // Verify incrementPageViewCount would be called
+      await TopicShareModel.incrementPageViewCount(ctx.serverDB, 'share-123');
+      expect(TopicShareModel.incrementPageViewCount).toHaveBeenCalledWith(
+        ctx.serverDB,
+        'share-123',
+      );
     });
 
     it('should return agent meta when share has agent', async () => {
       const mockShare = {
-        accessPermission: 'public',
         agentAvatar: 'avatar.png',
         agentBackgroundColor: '#ffffff',
         agentId: 'agent-1',
@@ -79,6 +81,7 @@ describe('shareRouter', () => {
         shareId: 'share-123',
         title: 'Topic with Agent',
         topicId: 'topic-1',
+        visibility: 'link',
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -103,7 +106,6 @@ describe('shareRouter', () => {
 
     it('should return group meta when share has group', async () => {
       const mockShare = {
-        accessPermission: 'public',
         agentAvatar: null,
         agentBackgroundColor: null,
         agentId: null,
@@ -122,6 +124,7 @@ describe('shareRouter', () => {
         shareId: 'share-456',
         title: 'Group Topic',
         topicId: 'topic-2',
+        visibility: 'link',
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -183,33 +186,8 @@ describe('shareRouter', () => {
       }
     });
 
-    it('should throw UNAUTHORIZED for public_signin share accessed anonymously', async () => {
-      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockRejectedValue(
-        new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Sign in required to view this shared topic',
-        }),
-      );
-
-      const ctx = {
-        serverDB: {} as any,
-        userId: null,
-      };
-
-      await expect(
-        TopicShareModel.findByShareIdWithAccessCheck(ctx.serverDB, 'signin-share', undefined),
-      ).rejects.toThrow(TRPCError);
-
-      try {
-        await TopicShareModel.findByShareIdWithAccessCheck(ctx.serverDB, 'signin-share', undefined);
-      } catch (error) {
-        expect((error as TRPCError).code).toBe('UNAUTHORIZED');
-      }
-    });
-
     it('should allow owner to access private share', async () => {
       const mockShare = {
-        accessPermission: 'private',
         agentAvatar: null,
         agentBackgroundColor: null,
         agentId: null,
@@ -225,6 +203,7 @@ describe('shareRouter', () => {
         shareId: 'private-share',
         title: 'Private Topic',
         topicId: 'topic-private',
+        visibility: 'private',
       };
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare);
@@ -242,7 +221,7 @@ describe('shareRouter', () => {
 
       expect(share).toBeDefined();
       expect(share.ownerId).toBe('owner-user');
-      expect(share.accessPermission).toBe('private');
+      expect(share.visibility).toBe('private');
     });
   });
 });

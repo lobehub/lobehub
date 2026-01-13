@@ -267,12 +267,12 @@ describe('topicRouter', () => {
   });
 
   describe('topic sharing', () => {
-    it('should handle enableSharing with default permission', async () => {
+    it('should handle enableSharing with default visibility', async () => {
       const mockCreate = vi.fn().mockResolvedValue({
-        accessPermission: 'private',
         id: 'share-123',
         topicId: 'topic1',
         userId: 'user1',
+        visibility: 'private',
       });
 
       vi.mocked(TopicShareModel).mockImplementation(
@@ -290,15 +290,15 @@ describe('topicRouter', () => {
 
       expect(mockCreate).toHaveBeenCalledWith('topic1');
       expect(result.id).toBe('share-123');
-      expect(result.accessPermission).toBe('private');
+      expect(result.visibility).toBe('private');
     });
 
-    it('should handle enableSharing with specified permission', async () => {
+    it('should handle enableSharing with link visibility', async () => {
       const mockCreate = vi.fn().mockResolvedValue({
-        accessPermission: 'public',
         id: 'share-456',
         topicId: 'topic1',
         userId: 'user1',
+        visibility: 'link',
       });
 
       vi.mocked(TopicShareModel).mockImplementation(
@@ -312,10 +312,10 @@ describe('topicRouter', () => {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
       };
 
-      const result = await ctx.topicShareModel.create('topic1', 'public');
+      const result = await ctx.topicShareModel.create('topic1', 'link');
 
-      expect(mockCreate).toHaveBeenCalledWith('topic1', 'public');
-      expect(result.accessPermission).toBe('public');
+      expect(mockCreate).toHaveBeenCalledWith('topic1', 'link');
+      expect(result.visibility).toBe('link');
     });
 
     it('should handle disableSharing', async () => {
@@ -337,17 +337,17 @@ describe('topicRouter', () => {
       expect(mockDeleteByTopicId).toHaveBeenCalledWith('topic1');
     });
 
-    it('should handle updateSharePermission', async () => {
-      const mockUpdatePermission = vi.fn().mockResolvedValue({
-        accessPermission: 'public_signin',
+    it('should handle updateShareVisibility', async () => {
+      const mockUpdateVisibility = vi.fn().mockResolvedValue({
         id: 'share-123',
         topicId: 'topic1',
+        visibility: 'link',
       });
 
       vi.mocked(TopicShareModel).mockImplementation(
         () =>
           ({
-            updatePermission: mockUpdatePermission,
+            updateVisibility: mockUpdateVisibility,
           }) as any,
       );
 
@@ -355,17 +355,17 @@ describe('topicRouter', () => {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
       };
 
-      const result = await ctx.topicShareModel.updatePermission('topic1', 'public_signin');
+      const result = await ctx.topicShareModel.updateVisibility('topic1', 'link');
 
-      expect(mockUpdatePermission).toHaveBeenCalledWith('topic1', 'public_signin');
-      expect(result.accessPermission).toBe('public_signin');
+      expect(mockUpdateVisibility).toHaveBeenCalledWith('topic1', 'link');
+      expect(result.visibility).toBe('link');
     });
 
     it('should handle getShareInfo', async () => {
       const mockGetByTopicId = vi.fn().mockResolvedValue({
-        accessPermission: 'public',
         id: 'share-123',
         topicId: 'topic1',
+        visibility: 'link',
       });
 
       vi.mocked(TopicShareModel).mockImplementation(
@@ -383,9 +383,9 @@ describe('topicRouter', () => {
 
       expect(mockGetByTopicId).toHaveBeenCalledWith('topic1');
       expect(result).toEqual({
-        accessPermission: 'public',
         id: 'share-123',
         topicId: 'topic1',
+        visibility: 'link',
       });
     });
 
@@ -409,7 +409,7 @@ describe('topicRouter', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle all permission types', async () => {
+    it('should handle all visibility types', async () => {
       const mockCreate = vi.fn();
 
       vi.mocked(TopicShareModel).mockImplementation(
@@ -423,20 +423,15 @@ describe('topicRouter', () => {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
       };
 
-      // Test private permission
-      mockCreate.mockResolvedValueOnce({ accessPermission: 'private' });
+      // Test private visibility
+      mockCreate.mockResolvedValueOnce({ visibility: 'private' });
       await ctx.topicShareModel.create('topic1', 'private');
       expect(mockCreate).toHaveBeenLastCalledWith('topic1', 'private');
 
-      // Test public permission
-      mockCreate.mockResolvedValueOnce({ accessPermission: 'public' });
-      await ctx.topicShareModel.create('topic2', 'public');
-      expect(mockCreate).toHaveBeenLastCalledWith('topic2', 'public');
-
-      // Test public_signin permission
-      mockCreate.mockResolvedValueOnce({ accessPermission: 'public_signin' });
-      await ctx.topicShareModel.create('topic3', 'public_signin');
-      expect(mockCreate).toHaveBeenLastCalledWith('topic3', 'public_signin');
+      // Test link visibility
+      mockCreate.mockResolvedValueOnce({ visibility: 'link' });
+      await ctx.topicShareModel.create('topic2', 'link');
+      expect(mockCreate).toHaveBeenLastCalledWith('topic2', 'link');
     });
   });
 });

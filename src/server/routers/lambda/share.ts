@@ -9,7 +9,7 @@ export const shareRouter = router({
   /**
    * Get shared topic metadata for public access
    * Uses shareId (not topicId) for access
-   * Permission check: owner can always access, others depend on accessPermission
+   * Visibility check: owner can always access, others depend on visibility setting
    */
   getSharedTopic: publicProcedure
     .use(serverDatabase)
@@ -21,11 +21,10 @@ export const shareRouter = router({
         ctx.userId ?? undefined,
       );
 
-      // Increment view count after permission check passes
-      await TopicShareModel.incrementViewCount(ctx.serverDB, input.shareId);
+      // Increment page view count after visibility check passes
+      await TopicShareModel.incrementPageViewCount(ctx.serverDB, input.shareId);
 
       return {
-        accessPermission: share.accessPermission as SharedTopicData['accessPermission'],
         agentId: share.agentId,
         agentMeta: share.agentId
           ? {
@@ -48,6 +47,7 @@ export const shareRouter = router({
         shareId: share.shareId,
         title: share.title,
         topicId: share.topicId,
+        visibility: share.visibility as SharedTopicData['visibility'],
       };
     }),
 });

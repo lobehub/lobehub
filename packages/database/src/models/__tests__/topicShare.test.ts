@@ -48,26 +48,20 @@ describe('TopicShareModel', () => {
   });
 
   describe('create', () => {
-    it('should create a share for a topic with default permission', async () => {
+    it('should create a share for a topic with default visibility', async () => {
       const result = await topicShareModel.create(topicId);
 
       expect(result).toBeDefined();
       expect(result.topicId).toBe(topicId);
       expect(result.userId).toBe(userId);
-      expect(result.accessPermission).toBe('private');
+      expect(result.visibility).toBe('private');
       expect(result.id).toBeDefined();
     });
 
-    it('should create a share with specified permission', async () => {
-      const result = await topicShareModel.create(topicId, 'public');
+    it('should create a share with link visibility', async () => {
+      const result = await topicShareModel.create(topicId, 'link');
 
-      expect(result.accessPermission).toBe('public');
-    });
-
-    it('should create a share with public_signin permission', async () => {
-      const result = await topicShareModel.create(topicId, 'public_signin');
-
-      expect(result.accessPermission).toBe('public_signin');
+      expect(result.visibility).toBe('link');
     });
 
     it('should throw error when topic does not exist', async () => {
@@ -83,18 +77,18 @@ describe('TopicShareModel', () => {
     });
   });
 
-  describe('updatePermission', () => {
-    it('should update share permission', async () => {
+  describe('updateVisibility', () => {
+    it('should update share visibility', async () => {
       await topicShareModel.create(topicId, 'private');
 
-      const result = await topicShareModel.updatePermission(topicId, 'public');
+      const result = await topicShareModel.updateVisibility(topicId, 'link');
 
       expect(result).toBeDefined();
-      expect(result!.accessPermission).toBe('public');
+      expect(result!.visibility).toBe('link');
     });
 
     it('should return null when share does not exist', async () => {
-      const result = await topicShareModel.updatePermission('non-existent-topic', 'public');
+      const result = await topicShareModel.updateVisibility('non-existent-topic', 'link');
 
       expect(result).toBeNull();
     });
@@ -104,13 +98,13 @@ describe('TopicShareModel', () => {
       await topicShareModel2.create('user2-topic', 'private');
 
       // User1 tries to update user2's share
-      const result = await topicShareModel.updatePermission('user2-topic', 'public');
+      const result = await topicShareModel.updateVisibility('user2-topic', 'link');
 
       expect(result).toBeNull();
 
       // Verify user2's share is unchanged
       const share = await topicShareModel2.getByTopicId('user2-topic');
-      expect(share!.accessPermission).toBe('private');
+      expect(share!.visibility).toBe('private');
     });
   });
 
@@ -138,14 +132,14 @@ describe('TopicShareModel', () => {
 
   describe('getByTopicId', () => {
     it('should get share info by topic id', async () => {
-      const created = await topicShareModel.create(topicId, 'public');
+      const created = await topicShareModel.create(topicId, 'link');
 
       const result = await topicShareModel.getByTopicId(topicId);
 
       expect(result).toBeDefined();
       expect(result!.id).toBe(created.id);
       expect(result!.topicId).toBe(topicId);
-      expect(result!.accessPermission).toBe('public');
+      expect(result!.visibility).toBe('link');
     });
 
     it('should return null when share does not exist', async () => {
@@ -165,7 +159,7 @@ describe('TopicShareModel', () => {
 
   describe('findByShareId (static)', () => {
     it('should find share by share id with topic and agent info', async () => {
-      const created = await topicShareModel.create(topicId, 'public');
+      const created = await topicShareModel.create(topicId, 'link');
 
       const result = await TopicShareModel.findByShareId(serverDB, created.id);
 
@@ -174,7 +168,7 @@ describe('TopicShareModel', () => {
       expect(result!.topicId).toBe(topicId);
       expect(result!.title).toBe('Test Topic');
       expect(result!.ownerId).toBe(userId);
-      expect(result!.accessPermission).toBe('public');
+      expect(result!.visibility).toBe('link');
       expect(result!.agentId).toBe(agentId);
     });
 
@@ -194,41 +188,41 @@ describe('TopicShareModel', () => {
     });
   });
 
-  describe('incrementViewCount (static)', () => {
-    it('should increment view count', async () => {
+  describe('incrementPageViewCount (static)', () => {
+    it('should increment page view count', async () => {
       const created = await topicShareModel.create(topicId);
 
-      // Initial view count is 0
+      // Initial page view count is 0
       const initial = await serverDB.query.topicShares.findFirst({
         where: (t, { eq }) => eq(t.id, created.id),
       });
-      expect(initial!.viewCount).toBe(0);
+      expect(initial!.pageViewCount).toBe(0);
 
-      // Increment view count
-      await TopicShareModel.incrementViewCount(serverDB, created.id);
+      // Increment page view count
+      await TopicShareModel.incrementPageViewCount(serverDB, created.id);
 
       const after = await serverDB.query.topicShares.findFirst({
         where: (t, { eq }) => eq(t.id, created.id),
       });
-      expect(after!.viewCount).toBe(1);
+      expect(after!.pageViewCount).toBe(1);
     });
 
-    it('should increment view count multiple times', async () => {
+    it('should increment page view count multiple times', async () => {
       const created = await topicShareModel.create(topicId);
 
-      await TopicShareModel.incrementViewCount(serverDB, created.id);
-      await TopicShareModel.incrementViewCount(serverDB, created.id);
-      await TopicShareModel.incrementViewCount(serverDB, created.id);
+      await TopicShareModel.incrementPageViewCount(serverDB, created.id);
+      await TopicShareModel.incrementPageViewCount(serverDB, created.id);
+      await TopicShareModel.incrementPageViewCount(serverDB, created.id);
 
       const result = await serverDB.query.topicShares.findFirst({
         where: (t, { eq }) => eq(t.id, created.id),
       });
-      expect(result!.viewCount).toBe(3);
+      expect(result!.pageViewCount).toBe(3);
     });
   });
 
   describe('findByShareIdWithAccessCheck (static)', () => {
-    it('should return share for owner regardless of permission', async () => {
+    it('should return share for owner regardless of visibility', async () => {
       const created = await topicShareModel.create(topicId, 'private');
 
       const result = await TopicShareModel.findByShareIdWithAccessCheck(
@@ -241,26 +235,13 @@ describe('TopicShareModel', () => {
       expect(result.shareId).toBe(created.id);
     });
 
-    it('should return share for anonymous user when permission is public', async () => {
-      const created = await topicShareModel.create(topicId, 'public');
+    it('should return share for anonymous user when visibility is link', async () => {
+      const created = await topicShareModel.create(topicId, 'link');
 
       const result = await TopicShareModel.findByShareIdWithAccessCheck(
         serverDB,
         created.id,
         undefined,
-      );
-
-      expect(result).toBeDefined();
-      expect(result.shareId).toBe(created.id);
-    });
-
-    it('should return share for authenticated user when permission is public_signin', async () => {
-      const created = await topicShareModel.create(topicId, 'public_signin');
-
-      const result = await TopicShareModel.findByShareIdWithAccessCheck(
-        serverDB,
-        created.id,
-        userId2,
       );
 
       expect(result).toBeDefined();
@@ -279,7 +260,7 @@ describe('TopicShareModel', () => {
       }
     });
 
-    it('should throw FORBIDDEN when permission is private and user is not owner', async () => {
+    it('should throw FORBIDDEN when visibility is private and user is not owner', async () => {
       const created = await topicShareModel.create(topicId, 'private');
 
       await expect(
@@ -293,7 +274,7 @@ describe('TopicShareModel', () => {
       }
     });
 
-    it('should throw FORBIDDEN when permission is private and user is anonymous', async () => {
+    it('should throw FORBIDDEN when visibility is private and user is anonymous', async () => {
       const created = await topicShareModel.create(topicId, 'private');
 
       await expect(
@@ -306,20 +287,6 @@ describe('TopicShareModel', () => {
         expect((error as TRPCError).code).toBe('FORBIDDEN');
       }
     });
-
-    it('should throw UNAUTHORIZED when permission is public_signin and user is anonymous', async () => {
-      const created = await topicShareModel.create(topicId, 'public_signin');
-
-      await expect(
-        TopicShareModel.findByShareIdWithAccessCheck(serverDB, created.id, undefined),
-      ).rejects.toThrow(TRPCError);
-
-      try {
-        await TopicShareModel.findByShareIdWithAccessCheck(serverDB, created.id, undefined);
-      } catch (error) {
-        expect((error as TRPCError).code).toBe('UNAUTHORIZED');
-      }
-    });
   });
 
   describe('user isolation', () => {
@@ -328,7 +295,7 @@ describe('TopicShareModel', () => {
       await topicShareModel.create(topicId, 'private');
 
       // User2 creates a share
-      await topicShareModel2.create('user2-topic', 'public');
+      await topicShareModel2.create('user2-topic', 'link');
 
       // User1 cannot access user2's share via getByTopicId
       const user1Access = await topicShareModel.getByTopicId('user2-topic');
@@ -339,7 +306,7 @@ describe('TopicShareModel', () => {
       expect(user2Access).toBeNull();
 
       // User1 cannot update user2's share
-      const updateResult = await topicShareModel.updatePermission('user2-topic', 'private');
+      const updateResult = await topicShareModel.updateVisibility('user2-topic', 'private');
       expect(updateResult).toBeNull();
 
       // User1 cannot delete user2's share

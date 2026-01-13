@@ -1,4 +1,4 @@
-import type { ShareAccessPermission } from '@lobechat/types';
+import type { ShareVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
@@ -22,7 +22,7 @@ export class TopicShareModel {
    * Create a new share for a topic.
    * Each topic can only have one share record (enforced by unique constraint).
    */
-  create = async (topicId: string, permission: ShareAccessPermission = 'private') => {
+  create = async (topicId: string, visibility: ShareVisibility = 'private') => {
     // First verify the topic belongs to the user
     const topic = await this.db.query.topics.findFirst({
       where: and(eq(topics.id, topicId), eq(topics.userId, this.userId)),
@@ -35,9 +35,9 @@ export class TopicShareModel {
     const [result] = await this.db
       .insert(topicShares)
       .values({
-        accessPermission: permission,
         topicId,
         userId: this.userId,
+        visibility,
       })
       .returning();
 
@@ -45,12 +45,12 @@ export class TopicShareModel {
   };
 
   /**
-   * Update share permission
+   * Update share visibility
    */
-  updatePermission = async (topicId: string, permission: ShareAccessPermission) => {
+  updateVisibility = async (topicId: string, visibility: ShareVisibility) => {
     const [result] = await this.db
       .update(topicShares)
-      .set({ accessPermission: permission, updatedAt: new Date() })
+      .set({ updatedAt: new Date(), visibility })
       .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)))
       .returning();
 
@@ -72,9 +72,9 @@ export class TopicShareModel {
   getByTopicId = async (topicId: string) => {
     const result = await this.db
       .select({
-        accessPermission: topicShares.accessPermission,
         id: topicShares.id,
         topicId: topicShares.topicId,
+        visibility: topicShares.visibility,
       })
       .from(topicShares)
       .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)))
@@ -90,7 +90,6 @@ export class TopicShareModel {
   static findByShareId = async (db: LobeChatDatabase, shareId: string) => {
     const result = await db
       .select({
-        accessPermission: topicShares.accessPermission,
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
@@ -105,6 +104,7 @@ export class TopicShareModel {
         shareId: topicShares.id,
         title: topics.title,
         topicId: topics.id,
+        visibility: topicShares.visibility,
       })
       .from(topicShares)
       .innerJoin(topics, eq(topicShares.topicId, topics.id))
@@ -138,18 +138,18 @@ export class TopicShareModel {
   };
 
   /**
-   * Increment view count for a share.
+   * Increment page view count for a share.
    * Should be called after permission check passes.
    */
-  static incrementViewCount = async (db: LobeChatDatabase, shareId: string) => {
+  static incrementPageViewCount = async (db: LobeChatDatabase, shareId: string) => {
     await db
       .update(topicShares)
-      .set({ viewCount: sql`${topicShares.viewCount} + 1` })
+      .set({ pageViewCount: sql`${topicShares.pageViewCount} + 1` })
       .where(eq(topicShares.id, shareId));
   };
 
   /**
-   * Find shared topic by share ID with access permission check.
+   * Find shared topic by share ID with visibility check.
    * Throws TRPCError if access is denied.
    */
   static findByShareIdWithAccessCheck = async (
@@ -165,16 +165,11 @@ export class TopicShareModel {
 
     const isOwner = accessUserId && share.ownerId === accessUserId;
 
-    if (!isOwner) {
-      if (share.accessPermission === 'private') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
-      }
-      if (share.accessPermission === 'public_signin' && !accessUserId) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Sign in required to view this shared topic',
-        });
-      }
+    // Only check visibility for non-owners
+    // 'private' - only owner can view
+    // 'link' - anyone with the link can view
+    if (!isOwner && share.visibility === 'private') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
     }
 
     return share;

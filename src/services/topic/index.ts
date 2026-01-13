@@ -89,12 +89,12 @@ export class TopicService {
     return lambdaClient.topic.getShareInfo.query({ topicId });
   };
 
-  enableSharing = (topicId: string, permission?: 'private' | 'public' | 'public_signin') => {
-    return lambdaClient.topic.enableSharing.mutate({ permission, topicId });
+  enableSharing = (topicId: string, visibility?: 'private' | 'link') => {
+    return lambdaClient.topic.enableSharing.mutate({ topicId, visibility });
   };
 
-  updateSharePermission = (topicId: string, permission: 'private' | 'public' | 'public_signin') => {
-    return lambdaClient.topic.updateSharePermission.mutate({ permission, topicId });
+  updateShareVisibility = (topicId: string, visibility: 'private' | 'link') => {
+    return lambdaClient.topic.updateShareVisibility.mutate({ topicId, visibility });
   };
 
   disableSharing = (topicId: string) => {
