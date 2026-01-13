@@ -57,7 +57,7 @@ export const GroupManagementManifest: BuiltinToolManifest = {
     {
       description:
         'Create a new agent dynamically based on user requirements and add it to the group. Use this when no existing agent matches the needed expertise.',
-      humanIntervention: 'always',
+      humanIntervention: 'required',
       name: GroupManagementApiName.createAgent,
       parameters: {
         properties: {

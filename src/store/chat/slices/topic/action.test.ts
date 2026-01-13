@@ -346,22 +346,6 @@ describe('topic action', () => {
       expect(refreshMessagesSpy).toHaveBeenCalled();
     });
 
-    it('should support boolean as second parameter for backward compatibility', async () => {
-      const topicId = 'topic-id';
-      const { result } = renderHook(() => useChatStore());
-
-      const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages');
-
-      // Call with boolean (old API)
-      await act(async () => {
-        await result.current.switchTopic(topicId, true);
-      });
-
-      expect(useChatStore.getState().activeTopicId).toBe(topicId);
-      // Should not call refreshMessages when skipRefreshMessage is true
-      expect(refreshMessagesSpy).not.toHaveBeenCalled();
-    });
-
     it('should support options object as second parameter', async () => {
       const topicId = 'topic-id';
       const { result } = renderHook(() => useChatStore());
@@ -377,7 +361,7 @@ describe('topic action', () => {
       expect(refreshMessagesSpy).not.toHaveBeenCalled();
     });
 
-    it('should clear new key data when switching to new state (main scope)', async () => {
+    it('should clear new key data when switching to null (main scope)', async () => {
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = 'test-agent-id';
       const newKey = messageMapKey({ agentId: activeAgentId, topicId: null });
@@ -398,9 +382,9 @@ describe('topic action', () => {
 
       const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
 
-      // Switch to new state (id = undefined)
+      // Switch to new state (id = null)
       await act(async () => {
-        await result.current.switchTopic(undefined, { skipRefreshMessage: true });
+        await result.current.switchTopic(null, { skipRefreshMessage: true });
       });
 
       // Verify replaceMessages was called to clear the new key
@@ -418,7 +402,7 @@ describe('topic action', () => {
       expect(useChatStore.getState().activeTopicId).toBeNull();
     });
 
-    it('should clear new key data when switching to new state (group scope)', async () => {
+    it('should clear new key data when switching to null (group scope)', async () => {
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = 'test-agent-id';
       const activeGroupId = 'test-group-id';
@@ -434,9 +418,9 @@ describe('topic action', () => {
 
       const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
 
-      // Switch to new state
+      // Switch to new state with null
       await act(async () => {
-        await result.current.switchTopic(undefined, { skipRefreshMessage: true });
+        await result.current.switchTopic(null, { skipRefreshMessage: true });
       });
 
       // Verify replaceMessages was called with group scope
@@ -464,9 +448,9 @@ describe('topic action', () => {
 
       const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
 
-      // Switch to new state with explicit scope
+      // Switch to null with explicit scope
       await act(async () => {
-        await result.current.switchTopic(undefined, { skipRefreshMessage: true, scope: 'group' });
+        await result.current.switchTopic(null, { skipRefreshMessage: true, scope: 'group' });
       });
 
       // Verify replaceMessages was called with explicit scope
@@ -476,6 +460,28 @@ describe('topic action', () => {
         }),
         action: expect.any(String),
       });
+    });
+
+    it('should NOT clear new key data when switching with undefined (backward compatibility)', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-agent-id';
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId,
+          activeTopicId: 'existing-topic',
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      // Switch with undefined (should NOT clear because id !== null)
+      await act(async () => {
+        await result.current.switchTopic(undefined, { skipRefreshMessage: true });
+      });
+
+      // replaceMessages should NOT be called when switching with undefined
+      expect(replaceMessagesSpy).not.toHaveBeenCalled();
     });
 
     it('should not clear new key data when switching to an existing topic', async () => {
@@ -498,6 +504,50 @@ describe('topic action', () => {
 
       // replaceMessages should not be called when switching to existing topic
       expect(replaceMessagesSpy).not.toHaveBeenCalled();
+    });
+
+    it('should clear new key data when clearNewKey option is true (even with existing topic)', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-agent-id';
+      const newKey = messageMapKey({ agentId: activeAgentId, topicId: null });
+
+      // Setup initial state with some messages in the new key
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId,
+          activeTopicId: undefined,
+          dbMessagesMap: {
+            [newKey]: [{ id: 'msg-1' }, { id: 'msg-2' }] as any,
+          },
+          messagesMap: {
+            [newKey]: [{ id: 'msg-1' }, { id: 'msg-2' }] as any,
+          },
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      // Switch to an existing topic with clearNewKey option
+      await act(async () => {
+        await result.current.switchTopic('new-created-topic-id', {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
+      });
+
+      // replaceMessages should be called to clear the new key
+      expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
+        context: {
+          agentId: activeAgentId,
+          groupId: undefined,
+          scope: 'main',
+          topicId: null,
+        },
+        action: expect.any(String),
+      });
+
+      // Verify activeTopicId is set to the new topic
+      expect(useChatStore.getState().activeTopicId).toBe('new-created-topic-id');
     });
   });
   describe('removeSessionTopics', () => {

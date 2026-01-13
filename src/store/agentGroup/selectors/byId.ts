@@ -19,6 +19,8 @@ const groupConfig = (groupId: string) => (s: ChatGroupStore) => {
 const groupMeta = (groupId: string) => (s: ChatGroupStore) => {
   const group = groupById(groupId)(s);
   return merge(DEFAULT_CHAT_GROUP_META_CONFIG, {
+    avatar: group?.avatar || undefined,
+    backgroundColor: group?.backgroundColor || undefined,
     description: group?.description || '',
     title: group?.title || '',
   });
@@ -26,7 +28,7 @@ const groupMeta = (groupId: string) => (s: ChatGroupStore) => {
 
 const groupAgents =
   (groupId: string) =>
-  (s: ChatGroupStore): AgentItem[] => {
+  (s: ChatGroupStore): AgentGroupMember[] => {
     const group = groupById(groupId)(s);
     return group?.agents || [];
   };

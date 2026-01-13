@@ -88,7 +88,7 @@ const ProfileEditor = memo(() => {
             onClick={() => {
               if (!agentId) return;
               // Clear topicId before navigating to prevent stale state
-              switchTopic(undefined, true);
+              switchTopic(null, { skipRefreshMessage: true });
               router.push(urlJoin('/agent', agentId));
             }}
             type={'primary'}

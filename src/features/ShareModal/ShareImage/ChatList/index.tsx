@@ -8,7 +8,7 @@ import { chatSelectors } from '@/store/chat/selectors';
 const ChatList = memo(() => {
   const ids = useChatStore(chatSelectors.mainDisplayChatIDs);
   const messages = useChatStore(chatSelectors.activeBaseChats);
-  const agentId = useChatStore((s) => s.activeId);
+  const agentId = useChatStore((s) => s.activeAgentId);
   const topicId = useChatStore((s) => s.activeTopicId);
 
   return (
