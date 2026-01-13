@@ -1,5 +1,6 @@
 import { GroupAgentBuilderApiName } from '../../types';
 import BatchCreateAgents from './BatchCreateAgents';
+import UpdateAgentPrompt from './UpdateAgentPrompt';
 import UpdateGroupPrompt from './UpdateGroupPrompt';
 
 /**
@@ -10,5 +11,6 @@ import UpdateGroupPrompt from './UpdateGroupPrompt';
  */
 export const GroupAgentBuilderRenders = {
   [GroupAgentBuilderApiName.batchCreateAgents]: BatchCreateAgents,
+  [GroupAgentBuilderApiName.updateAgentPrompt]: UpdateAgentPrompt,
   [GroupAgentBuilderApiName.updateGroupPrompt]: UpdateGroupPrompt,
 };

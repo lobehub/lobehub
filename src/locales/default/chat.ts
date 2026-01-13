@@ -101,6 +101,7 @@ export default {
   'groupDescription': 'Group description',
   'groupSidebar.agentProfile.chat': 'Chat',
   'groupSidebar.agentProfile.model': 'Model',
+  'groupSidebar.agentProfile.settings': 'Settings',
   'groupSidebar.members.addMember': 'Add Member',
   'groupSidebar.members.enableOrchestrator': 'Enable Orchestrator',
   'groupSidebar.members.memberSettings': 'Member Settings',

@@ -82,6 +82,7 @@
   "groupDescription": "群组描述",
   "groupSidebar.agentProfile.chat": "对话",
   "groupSidebar.agentProfile.model": "模型",
+  "groupSidebar.agentProfile.settings": "设置",
   "groupSidebar.members.addMember": "添加成员",
   "groupSidebar.members.enableOrchestrator": "启用主持人",
   "groupSidebar.members.memberSettings": "成员设置",

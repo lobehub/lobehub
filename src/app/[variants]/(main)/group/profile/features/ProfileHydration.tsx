@@ -2,7 +2,7 @@
 
 import { useEditor, useEditorState } from '@lobehub/editor/react';
 import { useUnmount } from 'ahooks';
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { useRegisterFilesHotkeys, useSaveDocumentHotkey } from '@/hooks/useHotkeys';
@@ -17,7 +17,6 @@ const ProfileHydration = memo(() => {
   const flushSave = useProfileStore((s) => s.flushSave);
 
   const storeUpdater = createStoreUpdater(useProfileStore);
-  const chatStoreUpdater = createStoreUpdater(useChatStore);
 
   // Sync editor to store
   storeUpdater('editor', editor);
@@ -27,9 +26,33 @@ const ProfileHydration = memo(() => {
   const [activeTabId] = useQueryState('tab', parseAsString.withDefault('group'));
   storeUpdater('activeTabId', activeTabId);
 
-  // Sync builder topic query param (bt) to chatStore.activeTopicId
-  const [builderTopicId] = useQueryState('bt');
-  chatStoreUpdater('activeTopicId', builderTopicId ?? undefined);
+  // Bidirectional sync between URL query 'bt' and chatStore.activeTopicId
+  const [builderTopicId, setBuilderTopicId] = useQueryState('bt');
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+
+  // Track if the change came from URL to prevent sync loops
+  const isUrlChangeRef = useRef(false);
+
+  // Sync URL → Store (when URL changes)
+  useEffect(() => {
+    const urlTopicId = builderTopicId ?? undefined;
+    if (urlTopicId !== activeTopicId) {
+      isUrlChangeRef.current = true;
+      useChatStore.setState({ activeTopicId: urlTopicId });
+    }
+  }, [builderTopicId]);
+
+  // Sync Store → URL (when store changes, but not from URL)
+  useEffect(() => {
+    if (isUrlChangeRef.current) {
+      isUrlChangeRef.current = false;
+      return;
+    }
+    const urlTopicId = builderTopicId ?? undefined;
+    if (activeTopicId !== urlTopicId) {
+      setBuilderTopicId(activeTopicId ?? null);
+    }
+  }, [activeTopicId]);
 
   // Register hotkeys
   useRegisterFilesHotkeys();

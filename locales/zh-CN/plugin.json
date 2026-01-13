@@ -48,6 +48,7 @@
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "批量创建 Agent",
   "builtins.lobe-group-agent-builder.apiName.updateAgentConfig": "更新代理配置",
   "builtins.lobe-group-agent-builder.apiName.updateAgentPrompt": "更新助理提示词",
+  "builtins.lobe-group-agent-builder.apiName.updateSupervisorPrompt": "更新群组主管提示词",
   "builtins.lobe-group-agent-builder.apiName.updateGroup": "更新群组",
   "builtins.lobe-group-agent-builder.apiName.updateGroupPrompt": "更新群组提示词",
   "builtins.lobe-group-agent-builder.inspector.agents": "个 Agent",

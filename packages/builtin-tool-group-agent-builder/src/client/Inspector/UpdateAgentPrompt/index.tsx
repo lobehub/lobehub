@@ -10,14 +10,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { UpdateAgentPromptParams } from '../../../types';
-
-interface UpdateAgentPromptState {
-  agentId: string;
-  newPrompt: string;
-  previousPrompt?: string;
-  success: boolean;
-}
+import type { UpdateAgentPromptParams, UpdateAgentPromptState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
   agentName: css`
@@ -76,6 +69,13 @@ export const UpdateAgentPromptInspector = memo<
 
   const streamingLength = prompt?.length ?? 0;
 
+  const isSupervisor = agent?.isSupervisor ?? false;
+
+  // Use different i18n key for supervisor
+  const labelKey = isSupervisor
+    ? 'builtins.lobe-group-agent-builder.apiName.updateSupervisorPrompt'
+    : 'builtins.lobe-group-agent-builder.apiName.updateAgentPrompt';
+
   return (
     <Flexbox
       align="center"
@@ -83,10 +83,9 @@ export const UpdateAgentPromptInspector = memo<
       gap={6}
       horizontal
     >
-      <span className={styles.label}>
-        {t('builtins.lobe-group-agent-builder.apiName.updateAgentPrompt')}
-      </span>
-      {agent && (
+      <span className={styles.label}>{t(labelKey)}</span>
+      {/* Only show avatar and title for non-supervisor agents */}
+      {agent && !isSupervisor && (
         <>
           <Avatar avatar={agent.avatar ?? undefined} size={18} title={agent.title ?? undefined} />
           <span className={styles.agentName}>{agent.title}</span>

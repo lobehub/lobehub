@@ -3,7 +3,7 @@
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
-import { memo } from 'react';
+import { ReactNode, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
@@ -35,6 +35,18 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     display: flex;
     gap: 2px;
     align-items: center;
+  `,
+  externalTag: css`
+    flex-shrink: 0;
+
+    padding-block: 1px;
+    padding-inline: 4px;
+    border-radius: 4px;
+
+    font-size: 10px;
+    line-height: 1.2;
+
+    background: ${cv.colorFillSecondary};
   `,
   tab: css`
     cursor: pointer;
@@ -80,23 +92,11 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  externalTag: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 10px;
-    line-height: 1.2;
-
-    background: ${cv.colorFillSecondary};
-  `,
 }));
 
 export interface ChromeTabItem {
   avatar?: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   id: string;
   isExternal?: boolean;
   title: string;
@@ -119,8 +119,8 @@ const ChromeTabs = memo<ChromeTabsProps>(({ items, activeId, onChange, onAdd }) 
 
         return (
           <div
-            key={item.id}
             className={cx(styles.tab, isActive && styles.tabActive)}
+            key={item.id}
             onClick={() => onChange(item.id)}
           >
             <Flexbox align="center" gap={6} horizontal>

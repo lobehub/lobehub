@@ -1,7 +1,7 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
-import { chatGroupService } from '@/services/chatGroup';
+import { chatGroupService, type GroupMemberConfig } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -144,6 +144,7 @@ export class GroupAgentBuilderExecutionRuntime {
 
   /**
    * Create multiple agents at once and add them to the group
+   * Uses batch API for efficiency (single request instead of N requests)
    */
   async batchCreateAgents(
     groupId: string,
@@ -161,70 +162,38 @@ export class GroupAgentBuilderExecutionRuntime {
         };
       }
 
-      const results: Array<{ agentId: string; success: boolean; title: string }> = [];
-      let successCount = 0;
-      let failedCount = 0;
+      // Use batch API to create all agents in one request
+      const agentConfigs: GroupMemberConfig[] = args.agents.map((agentDef) => ({
+        avatar: agentDef.avatar,
+        description: agentDef.description,
+        systemRole: agentDef.systemRole,
+        title: agentDef.title,
+      }));
 
-      // Create each agent sequentially
-      for (const agentDef of args.agents) {
-        try {
-          const result = await agentService.createAgentOnly({
-            config: {
-              avatar: agentDef.avatar,
-              description: agentDef.description,
-              systemRole: agentDef.systemRole,
-              title: agentDef.title,
-              virtual: true,
-            },
-            groupId,
-          });
-
-          if (result.agentId) {
-            results.push({
-              agentId: result.agentId,
-              success: true,
-              title: agentDef.title,
-            });
-            successCount++;
-          } else {
-            results.push({
-              agentId: '',
-              success: false,
-              title: agentDef.title,
-            });
-            failedCount++;
-          }
-        } catch {
-          results.push({
-            agentId: '',
-            success: false,
-            title: agentDef.title,
-          });
-          failedCount++;
-        }
-      }
+      const { agentIds, agents: createdAgents } = await chatGroupService.batchCreateAgentsInGroup(
+        groupId,
+        agentConfigs,
+      );
 
       // Refresh the group detail in the store
       await state.refreshGroupDetail(groupId);
 
-      const createdList = results
-        .filter((r) => r.success)
-        .map((r) => `- ${r.title} (ID: ${r.agentId})`)
-        .join('\n');
+      const results = createdAgents.map((agent, index) => ({
+        agentId: agent.id,
+        success: true,
+        title: args.agents[index].title,
+      }));
 
-      const content =
-        failedCount === 0
-          ? `Successfully created ${successCount} agent${successCount > 1 ? 's' : ''}:\n${createdList}`
-          : `Created ${successCount} agent${successCount > 1 ? 's' : ''}, ${failedCount} failed:\n${createdList}`;
+      const createdList = results.map((r) => `- ${r.title} (ID: ${r.agentId})`).join('\n');
 
       return {
-        content,
+        content: `Successfully created ${results.length} agent${results.length > 1 ? 's' : ''}:\n${createdList}`,
         state: {
           agents: results,
-          failedCount,
-          successCount,
+          failedCount: 0,
+          successCount: results.length,
         } as BatchCreateAgentsState,
-        success: failedCount === 0,
+        success: true,
       };
     } catch (error) {
       const err = error as Error;

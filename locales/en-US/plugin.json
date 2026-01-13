@@ -48,6 +48,7 @@
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Batch create agents",
   "builtins.lobe-group-agent-builder.apiName.updateAgentConfig": "Update agent config",
   "builtins.lobe-group-agent-builder.apiName.updateAgentPrompt": "Update agent prompt",
+  "builtins.lobe-group-agent-builder.apiName.updateSupervisorPrompt": "Update supervisor prompt",
   "builtins.lobe-group-agent-builder.apiName.updateGroup": "Update group",
   "builtins.lobe-group-agent-builder.apiName.updateGroupPrompt": "Update group prompt",
   "builtins.lobe-group-agent-builder.inspector.agents": "agents",

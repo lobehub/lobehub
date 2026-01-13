@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
-import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
@@ -23,18 +22,12 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
   const [activeTopicId, switchTopic] = useChatStore((s) => [s.activeTopicId, s.switchTopic]);
   const topics = useChatStore((s) => topicSelectors.getTopicsByAgentId(agentId)(s));
 
-  // URL query state for builder topic
-  const [, setBuilderTopicQuery] = useQueryState('bt');
-
-  // Switch topic by updating both chatStore and URL query
+  // Switch topic - ProfileHydration handles URL sync automatically
   const handleSwitchTopic = useCallback(
     (topicId?: string) => {
-      // Update chatStore
       switchTopic(topicId);
-      // Update URL query for persistence
-      setBuilderTopicQuery(topicId ?? null);
     },
-    [switchTopic, setBuilderTopicQuery],
+    [switchTopic],
   );
 
   // Find active topic from the agent's topics list directly

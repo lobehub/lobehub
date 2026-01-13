@@ -95,6 +95,25 @@ export interface UpdateAgentPromptParams {
   prompt: string;
 }
 
+export interface UpdateAgentPromptState {
+  /**
+   * The agent ID that was updated
+   */
+  agentId: string;
+  /**
+   * The new prompt
+   */
+  newPrompt: string;
+  /**
+   * The previous prompt
+   */
+  previousPrompt?: string;
+  /**
+   * Whether the operation was successful
+   */
+  success: boolean;
+}
+
 /**
  * Extended UpdateAgentConfigParams with optional agentId for group context
  */

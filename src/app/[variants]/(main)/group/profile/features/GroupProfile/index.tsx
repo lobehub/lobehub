@@ -25,8 +25,8 @@ const GroupProfile = memo(() => {
   const editor = useProfileStore((s) => s.editor);
   const handleContentChange = useProfileStore((s) => s.handleContentChange);
 
-  // Wrap updateGroup for saving editor content
-  const updateContent = useCallback(
+  // Create save callback that captures latest groupId
+  const saveContent = useCallback(
     async (payload: { content: string; editorData: Record<string, any> }) => {
       if (!groupId) return;
       await updateGroup(groupId, {
@@ -37,10 +37,9 @@ const GroupProfile = memo(() => {
     [updateGroup, groupId],
   );
 
-  // Handle editor content change
   const onContentChange = useCallback(() => {
-    handleContentChange(updateContent);
-  }, [handleContentChange, updateContent]);
+    handleContentChange(saveContent);
+  }, [handleContentChange, saveContent]);
 
   return (
     <>
