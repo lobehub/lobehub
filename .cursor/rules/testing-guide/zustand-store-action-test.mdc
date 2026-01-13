@@ -1,6 +1,6 @@
 ---
 description: Best practices for testing Zustand store actions
-globs: 'src/store/**/*.test.ts'
+globs: src/store/**/*.test.ts
 alwaysApply: false
 ---
 

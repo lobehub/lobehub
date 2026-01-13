@@ -2,6 +2,20 @@
   {
     "children": {},
     "date": "2026-01-13",
+    "version": "2.0.0-next.278"
+  },
+  {
+    "children": {
+      "features": [
+        "Update the community user layout action button, update the cron job visiual way."
+      ]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.277"
+  },
+  {
+    "children": {},
+    "date": "2026-01-13",
     "version": "2.0.0-next.276"
   },
   {

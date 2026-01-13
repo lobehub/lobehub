@@ -3,7 +3,8 @@ description: 当要做 electron 相关工作时
 globs:
 alwaysApply: false
 ---
-**桌面端新功能实现指南**
+
+# 桌面端新功能实现指南
 
 ## 桌面端应用架构概述
 
@@ -26,6 +27,7 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 ### 1. 确定功能需求与设计
 
 首先确定新功能的需求和设计，包括：
+
 - 功能描述和用例
 - 是否需要系统级API（如文件系统、网络等）
 - UI/UX设计（如必要）
@@ -64,8 +66,9 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
    ```typescript
    // src/services/electron/newFeatureService.ts
-   import { ensureElectronIpc } from '@/utils/electron/ipc';
    import type { NewFeatureParams } from '@lobechat/electron-client-ipc';
+
+   import { ensureElectronIpc } from '@/utils/electron/ipc';
 
    const ipc = ensureElectronIpc();
 
@@ -84,7 +87,7 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
 ### 5. 如果是新增内置工具，遵循工具实现流程
 
-参考 [desktop-local-tools-implement.mdc](mdc:desktop-local-tools-implement.mdc) 了解更多关于添加内置工具的详细步骤。
+参考 `desktop-local-tools-implement.mdc` 了解更多关于添加内置工具的详细步骤。
 
 ### 6. 添加测试
 
@@ -120,12 +123,13 @@ LobeChat 桌面端基于 Electron 框架构建，采用主进程-渲染进程架
 
 ```typescript
 // apps/desktop/src/main/controllers/NotificationCtr.ts
-import { Notification } from 'electron';
-import { ControllerModule, IpcMethod } from '@/controllers';
 import type {
   DesktopNotificationResult,
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
+import { Notification } from 'electron';
+
+import { ControllerModule, IpcMethod } from '@/controllers';
 
 export default class NotificationCtr extends ControllerModule {
   static override readonly groupName = 'notification';

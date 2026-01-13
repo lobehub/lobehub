@@ -10,14 +10,14 @@ This document outlines the conventions and best practices for defining PostgreSQ
 
 ## Configuration
 
-- Drizzle configuration is managed in [drizzle.config.ts](mdc:drizzle.config.ts)
+- Drizzle configuration is managed in `drizzle.config.ts`
 - Schema files are located in the src/database/schemas/ directory
 - Migration files are output to `src/database/migrations/`
 - The project uses `postgresql` dialect with `strict: true`
 
 ## Helper Functions
 
-Commonly used column definitions, especially for timestamps, are centralized in [src/database/schemas/\_helpers.ts](mdc:src/database/schemas/_helpers.ts):
+Commonly used column definitions, especially for timestamps, are centralized in `src/database/schemas/_helpers.ts`:
 
 - `timestamptz(name: string)`: Creates a timestamp column with timezone
 - `createdAt()`, `updatedAt()`, `accessedAt()`: Helper functions for standard timestamp columns
@@ -46,7 +46,7 @@ Commonly used column definitions, especially for timestamps, are centralized in 
 
 ### Timestamps
 
-- Consistently use the `...timestamps` spread from [\_helpers.ts](mdc:src/database/schemas/_helpers.ts) for `created_at`, `updated_at`, and `accessed_at` columns
+- Consistently use the `...timestamps` spread from `_helpers.ts` for `created_at`, `updated_at`, and `accessed_at` columns
 
 ### Default Values
 
@@ -74,12 +74,12 @@ Commonly used column definitions, especially for timestamps, are centralized in 
 
 ## Relations
 
-- Table relationships are defined centrally in [src/database/schemas/relations.ts](mdc:src/database/schemas/relations.ts) using the `relations()` utility from `drizzle-orm`
+- Table relationships are defined centrally in `src/database/schemas/relations.ts` using the `relations()` utility from `drizzle-orm`
 
 ## Code Style & Structure
 
-- **File Organization**: Each main database entity typically has its own schema file (e.g., [user.ts](mdc:src/database/schemas/user.ts), [agent.ts](mdc:src/database/schemas/agent.ts))
-- All schemas are re-exported from [src/database/schemas/index.ts](mdc:src/database/schemas/index.ts)
+- **File Organization**: Each main database entity typically has its own schema file (e.g., `user.ts`, `agent.ts`)
+- All schemas are re-exported from `src/database/schemas/index.ts`
 - **ESLint**: Files often start with `/* eslint-disable sort-keys-fix/sort-keys-fix */`
 - **Comments**: Use JSDoc-style comments to explain the purpose of tables and complex columns, fields that are self-explanatory do not require jsdoc explanations, such as id, user_id, etc.
 

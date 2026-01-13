@@ -111,7 +111,7 @@ export const dataSlice: StateCreator<
       shouldFetch ? ['CONVERSATION_FETCH_MESSAGES', context] : null,
 
       async () => {
-        return messageService.getMessages(context as any);
+        return messageService.getMessages(context);
       },
       {
         onData: (data) => {

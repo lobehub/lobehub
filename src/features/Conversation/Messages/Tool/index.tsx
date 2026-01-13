@@ -8,11 +8,12 @@ import { dataSelectors, useConversationStore } from '../../store';
 import Tool from './Tool';
 
 interface ToolMessageProps {
+  disableEditing?: boolean;
   id: string;
   index: number;
 }
 
-const ToolMessage = memo<ToolMessageProps>(({ id, index }) => {
+const ToolMessage = memo<ToolMessageProps>(({ disableEditing, id, index }) => {
   const { t } = useTranslation('plugin');
   const item = useConversationStore(dataSelectors.getDbMessageById(id), isEqual) as UIChatMessage;
   const deleteToolMessage = useConversationStore((s) => s.deleteToolMessage);
@@ -29,17 +30,25 @@ const ToolMessage = memo<ToolMessageProps>(({ id, index }) => {
 
   return (
     <Flexbox gap={4} paddingBlock={12}>
-      <Alert
-        action={
-          <Button loading={loading} onClick={handleDelete} size={'small'} type={'primary'}>
-            {t('inspector.delete')}
-          </Button>
-        }
-        title={t('inspector.orphanedToolCall')}
-        type={'secondary'}
-      />
+      {!disableEditing && (
+        <Alert
+          action={
+            <Button loading={loading} onClick={handleDelete} size={'small'} type={'primary'}>
+              {t('inspector.delete')}
+            </Button>
+          }
+          title={t('inspector.orphanedToolCall')}
+          type={'secondary'}
+        />
+      )}
       {item.plugin && (
-        <Tool {...item.plugin} index={index} messageId={id} toolCallId={item.tool_call_id!} />
+        <Tool
+          {...item.plugin}
+          disableEditing={disableEditing}
+          index={index}
+          messageId={id}
+          toolCallId={item.tool_call_id!}
+        />
       )}
     </Flexbox>
   );

@@ -3,9 +3,10 @@ description: 包含添加 console.log 日志请求时
 globs:
 alwaysApply: false
 ---
+
 # Debug 包使用指南
 
-本项目使用 [debug](mdc:https:/github.com/debug-js/debug) 包进行调试日志记录。使用此规则来确保团队成员统一调试日志格式。
+本项目使用 `debug` 包进行调试日志记录。使用此规则来确保团队成员统一调试日志格式。
 
 ## 基本用法
 
@@ -15,14 +16,14 @@ alwaysApply: false
 import debug from 'debug';
 ```
 
-2. 创建一个命名空间的日志记录器：
+1. 创建一个命名空间的日志记录器：
 
 ```typescript
 // 格式: lobe:[模块]:[子模块]
 const log = debug('lobe-[模块名]:[子模块名]');
 ```
 
-3. 使用日志记录器：
+1. 使用日志记录器：
 
 ```typescript
 log('简单消息');
@@ -46,7 +47,7 @@ log('格式化数字: %d', number);
 
 ## 示例
 
-查看 [market/index.ts](mdc:src/server/routers/edge/market/index.ts) 中的使用示例：
+查看 `src/server/routers/edge/market/index.ts` 中的使用示例：
 
 ```typescript
 import debug from 'debug';
@@ -63,8 +64,9 @@ log('getAgent input: %O', input);
 ### 在浏览器中
 
 在控制台执行：
+
 ```javascript
-localStorage.debug = 'lobe-*'
+localStorage.debug = 'lobe-*';
 ```
 
 ### 在 Node.js 环境中
