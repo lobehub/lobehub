@@ -11,8 +11,6 @@ import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layou
 import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
 import { useChatStore } from '@/store/chat';
 
-console.log('ENABLE_TOPIC_LINK_SHARE', ENABLE_TOPIC_LINK_SHARE);
-
 const ShareModal = dynamic(() => import('@/features/ShareModal'));
 const SharePopover = dynamic(() => import('@/features/SharePopover'));
 

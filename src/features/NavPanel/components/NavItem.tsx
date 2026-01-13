@@ -12,8 +12,9 @@ import {
   Text,
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
+
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
 
@@ -72,7 +73,6 @@ const NavItem = memo<NavItemProps>(
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
     const textColor = active ? cssVar.colorText : cssVar.colorTextSecondary;
     const variant = active ? 'filled' : 'borderless';
-    const iconComponent = loading ? Loader2Icon : icon;
 
     const Content = (
       <Block
@@ -92,7 +92,11 @@ const NavItem = memo<NavItemProps>(
       >
         {icon && (
           <Center flex={'none'} height={28} width={28}>
-            <Icon color={iconColor} icon={iconComponent} size={18} spin={loading} />
+            {loading ? (
+              <NeuralNetworkLoading size={18} />
+            ) : (
+              <Icon color={iconColor} icon={icon} size={18} />
+            )}
           </Center>
         )}
 
