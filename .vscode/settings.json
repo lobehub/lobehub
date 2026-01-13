@@ -25,7 +25,6 @@
     "mdx"
   ],
   "npm.packageManager": "pnpm",
-  "references.preferredLocation": "view",
   "search.exclude": {
     "**/node_modules": true
     // useless to search this big folder
