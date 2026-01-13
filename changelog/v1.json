@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.273"
+  },
+  {
+    "children": {
       "fixes": ["Refresh sidebar after sendAsGroup and add E2E tests."]
     },
     "date": "2026-01-13",

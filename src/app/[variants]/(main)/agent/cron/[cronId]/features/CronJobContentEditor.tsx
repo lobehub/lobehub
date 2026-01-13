@@ -14,8 +14,6 @@ import { Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import TypoBar from '@/features/EditorModal/Typobar';
-
 interface CronJobContentEditorProps {
   enableRichRender: boolean;
   initialValue: string;
@@ -79,7 +77,6 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
           style={{ borderRadius: 12, overflow: 'hidden' }}
           styles={{ body: { padding: 0 } }}
         >
-          {enableRichRender && <TypoBar editor={editor} />}
           <Flexbox padding={16} style={{ minHeight: 220 }}>
             <Editor
               content={''}

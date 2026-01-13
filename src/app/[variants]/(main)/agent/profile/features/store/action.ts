@@ -28,26 +28,25 @@ export interface Action {
 
 export type Store = State & Action;
 
-// Create debounced save function outside of store for reuse
-const createDebouncedSave = (
-  get: () => Store,
-  updateConfig: (payload: SaveConfigPayload) => Promise<void>,
-) =>
-  debounce(
-    async (payload: SaveConfigPayload) => {
-      try {
-        await updateConfig(payload);
-      } catch (error) {
-        console.error('[ProfileEditor] Failed to save:', error);
-      }
-    },
-    EDITOR_DEBOUNCE_TIME,
-    { leading: false, maxWait: EDITOR_MAX_WAIT, trailing: true },
-  );
+// Store the latest updateConfig reference to avoid stale closures
+let updateConfigRef: ((payload: SaveConfigPayload) => Promise<void>) | null = null;
 
 export const store: (initState?: Partial<State>) => StateCreator<Store> =
   (initState) => (set, get) => {
-    let debouncedSave: ReturnType<typeof createDebouncedSave> | null = null;
+    // Create debounced save that uses the latest callback reference
+    const debouncedSave = debounce(
+      async (payload: SaveConfigPayload) => {
+        try {
+          if (updateConfigRef) {
+            await updateConfigRef(payload);
+          }
+        } catch (error) {
+          console.error('[ProfileEditor] Failed to save:', error);
+        }
+      },
+      EDITOR_DEBOUNCE_TIME,
+      { leading: false, maxWait: EDITOR_MAX_WAIT, trailing: true },
+    );
 
     return {
       ...initialState,
@@ -115,10 +114,8 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         const { editor } = get();
         if (!editor) return;
 
-        // Create debounced save on first use
-        if (!debouncedSave) {
-          debouncedSave = createDebouncedSave(get, updateConfig);
-        }
+        // Always update ref to use the latest callback
+        updateConfigRef = updateConfig;
 
         try {
           const markdownContent = (editor.getDocument('markdown') as unknown as string) || '';

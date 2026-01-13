@@ -381,18 +381,27 @@ describe('ChatPluginAction', () => {
   });
 
   describe('invokeBuiltinTool', () => {
-    it('should invoke the builtin tool action with parsed arguments', async () => {
+    it('should invoke Tool Store executor with parsed arguments', async () => {
       const payload = {
+        identifier: 'test-tool',
         apiName: 'mockBuiltinAction',
         arguments: JSON.stringify({ input: 'test', value: 123 }),
       } as ChatToolPayload;
 
       const messageId = 'message-id';
-      const mockActionFn = vi.fn().mockResolvedValue(undefined);
+      const mockInvokeBuiltinTool = vi.fn().mockResolvedValue({
+        content: 'result',
+        success: true,
+      });
 
-      useChatStore.setState({
-        mockBuiltinAction: mockActionFn,
-      } as any);
+      // Mock hasExecutor to return true
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(true);
+
+      // Mock Tool Store's invokeBuiltinTool
+      vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
+        mockInvokeBuiltinTool,
+      );
 
       const { result } = renderHook(() => useChatStore());
 
@@ -400,52 +409,70 @@ describe('ChatPluginAction', () => {
         await result.current.invokeBuiltinTool(messageId, payload);
       });
 
-      // Verify that the builtin action was called with correct arguments
-      expect(mockActionFn).toHaveBeenCalledWith(messageId, { input: 'test', value: 123 });
+      // Verify that Tool Store's invokeBuiltinTool was called with correct arguments
+      expect(mockInvokeBuiltinTool).toHaveBeenCalledWith(
+        'test-tool',
+        'mockBuiltinAction',
+        { input: 'test', value: 123 },
+        expect.objectContaining({
+          messageId,
+        }),
+      );
     });
 
-    it('should not invoke action if apiName does not exist in store', async () => {
+    it('should not throw error if executor does not exist', async () => {
       const payload = {
+        identifier: 'non-existent-tool',
         apiName: 'nonExistentAction',
         arguments: JSON.stringify({ key: 'value' }),
       } as ChatToolPayload;
 
       const messageId = 'message-id';
 
+      // Mock hasExecutor to return false
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(false);
+
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
       const { result } = renderHook(() => useChatStore());
 
       await act(async () => {
         await result.current.invokeBuiltinTool(messageId, payload);
       });
 
-      // Should not throw error, just return early
+      // Should log error but not throw
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('No executor found'));
+
+      consoleErrorSpy.mockRestore();
     });
 
-    it('should not invoke action if arguments cannot be parsed', async () => {
+    it('should return error result if arguments cannot be parsed', async () => {
       const payload = {
+        identifier: 'test-tool',
         apiName: 'mockBuiltinAction',
         arguments: 'invalid json',
       } as ChatToolPayload;
 
       const messageId = 'message-id';
-      const mockActionFn = vi.fn().mockResolvedValue(undefined);
-
-      useChatStore.setState({
-        mockBuiltinAction: mockActionFn,
-      } as any);
 
       const { result } = renderHook(() => useChatStore());
 
+      let returnValue: any;
       await act(async () => {
-        await result.current.invokeBuiltinTool(messageId, payload);
+        returnValue = await result.current.invokeBuiltinTool(messageId, payload);
       });
 
-      // Should not call the action if arguments can't be parsed
-      expect(mockActionFn).not.toHaveBeenCalled();
+      // Should return error result for invalid JSON
+      expect(returnValue).toEqual({ error: 'Invalid arguments', success: false });
     });
 
     describe('registerAfterCompletion with Tool Store executor', () => {
       it('should create registerAfterCompletion when root execAgentRuntime operation exists', async () => {
+        // Mock hasExecutor to return true
+        const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+        vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(true);
+
         // Setup: Create operation hierarchy
         // execAgentRuntime -> toolCalling -> executeToolCall
         const { result } = renderHook(() => useChatStore());
@@ -527,6 +554,10 @@ describe('ChatPluginAction', () => {
       });
 
       it('should not pass registerAfterCompletion when no root operation exists', async () => {
+        // Mock hasExecutor to return true
+        const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+        vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(true);
+
         const { result } = renderHook(() => useChatStore());
         const messageId = 'tool-message-id';
 
@@ -558,6 +589,10 @@ describe('ChatPluginAction', () => {
       });
 
       it('should find root operation through multiple levels of hierarchy', async () => {
+        // Mock hasExecutor to return true
+        const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+        vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(true);
+
         const { result } = renderHook(() => useChatStore());
 
         let execAgentRuntimeOpId: string;
@@ -1147,7 +1182,7 @@ describe('ChatPluginAction', () => {
         });
       });
 
-      it('should fallback to activeId/activeTopicId when context not provided', async () => {
+      it('should fallback to activeAgentId/activeTopicId when context not provided', async () => {
         const { result } = renderHook(() => useChatStore());
         const messageId = 'message-id';
         const pluginState = { key: 'value' };
