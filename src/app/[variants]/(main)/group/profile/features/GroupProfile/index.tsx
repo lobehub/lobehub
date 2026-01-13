@@ -13,6 +13,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { useProfileStore } from '../../store';
+import AutoSaveHint from '../Header/AutoSaveHint';
 import GroupHeader from './GroupHeader';
 
 const GroupProfile = memo(() => {
@@ -49,7 +50,11 @@ const GroupProfile = memo(() => {
         }}
         style={{ cursor: 'default', marginBottom: 12 }}
       >
-        <Flexbox height={66} width={'100%'} />
+        <Flexbox height={66} width={'100%'}>
+          <Flexbox paddingBlock={12}>
+            <AutoSaveHint />
+          </Flexbox>
+        </Flexbox>
         {/* Header: Group Avatar + Title */}
         <GroupHeader />
         {/* Start Conversation Button */}

@@ -38,17 +38,21 @@ const EditorDataMode = memo<EditorDataModeProps>(
   ({ editor, editorData, onContentChange, onInit, style, ...editorProps }) => {
     const { t } = useTranslation('file');
     const isEditorReadyRef = useRef(false);
-    const isContentLoadedRef = useRef(false);
+    // Track loaded content to support re-loading when data changes
+    const loadedContentRef = useRef<string | undefined>(undefined);
+
+    // Check if content has actually changed
+    const hasDataChanged = loadedContentRef.current !== editorData.content;
 
     const handleInit = useCallback(
       (editorInstance: IEditor) => {
         isEditorReadyRef.current = true;
 
-        // Try to load content if editorData is already available
-        if (!isContentLoadedRef.current) {
+        // Try to load content if editorData is available and hasn't been loaded yet
+        if (hasDataChanged) {
           try {
             if (loadEditorContent(editorInstance, editorData)) {
-              isContentLoadedRef.current = true;
+              loadedContentRef.current = editorData.content;
             }
           } catch (err) {
             console.error('[EditorCanvas] Failed to load content:', err);
@@ -57,21 +61,21 @@ const EditorDataMode = memo<EditorDataModeProps>(
 
         onInit?.(editorInstance);
       },
-      [editorData, onInit],
+      [editorData, hasDataChanged, onInit],
     );
 
-    // Load content when editorData becomes available after editor is ready
+    // Load content when editorData changes after editor is ready
     useEffect(() => {
-      if (!editor || !isEditorReadyRef.current || isContentLoadedRef.current) return;
+      if (!editor || !isEditorReadyRef.current || !hasDataChanged) return;
 
       try {
         if (loadEditorContent(editor, editorData)) {
-          isContentLoadedRef.current = true;
+          loadedContentRef.current = editorData.content;
         }
       } catch (err) {
         console.error('[EditorCanvas] Failed to load content:', err);
       }
-    }, [editor, editorData]);
+    }, [editor, editorData, hasDataChanged]);
 
     if (!editor) return null;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button, Center, Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
 import { Divider } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { InfoIcon, PlayIcon } from 'lucide-react';
@@ -17,6 +17,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { useProfileStore } from '../../store';
+import AutoSaveHint from '../Header/AutoSaveHint';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
 
@@ -72,8 +73,8 @@ const MemberProfile = memo(() => {
 
   return (
     <>
-      {/* External agent warning */}
-      <Center height={66} width={'100%'}>
+      {/* External agent warning or AutoSaveHint */}
+      <Flexbox height={66} width={'100%'}>
         {isExternal && !isSupervisor && (
           <Alert
             icon={<Icon icon={InfoIcon} />}
@@ -83,7 +84,10 @@ const MemberProfile = memo(() => {
             variant={'outlined'}
           />
         )}
-      </Center>
+        <Flexbox paddingBlock={12}>
+          <AutoSaveHint />
+        </Flexbox>
+      </Flexbox>
       <Flexbox
         onClick={(e) => {
           e.stopPropagation();
