@@ -286,7 +286,8 @@ export const conversationLifecycle: StateCreator<
       });
 
       if (data.isCreateNewTopic && data.topicId) {
-        await get().switchTopic(data.topicId, true);
+        // clearNewKey: true ensures the _new key data is cleared after topic creation
+        await get().switchTopic(data.topicId, { clearNewKey: true, skipRefreshMessage: true });
       }
     } catch (e) {
       console.error(e);

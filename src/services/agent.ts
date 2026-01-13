@@ -51,6 +51,15 @@ export interface CreateAgentResult {
   sessionId: string;
 }
 
+export interface CreateAgentOnlyParams {
+  config?: PartialDeep<AgentItem>;
+  groupId: string;
+}
+
+export interface CreateAgentOnlyResult {
+  agentId: string;
+}
+
 class AgentService {
   /**
    * Check if an agent with the given marketIdentifier already exists
@@ -75,6 +84,19 @@ class AgentService {
     const normalizedConfig = normalizeMarketAgentModel(params.config);
 
     return lambdaClient.agent.createAgent.mutate({
+      config: normalizedConfig as any,
+      groupId: params.groupId,
+    });
+  };
+
+  /**
+   * Create a virtual agent without session.
+   * Used for Group Agent Builder to create virtual agents for groups.
+   */
+  createAgentOnly = async (params: CreateAgentOnlyParams): Promise<CreateAgentOnlyResult> => {
+    const normalizedConfig = normalizeMarketAgentModel(params.config);
+
+    return lambdaClient.agent.createAgentOnly.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
     });

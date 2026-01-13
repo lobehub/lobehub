@@ -11,7 +11,7 @@ import {
   ReactMathPlugin,
   ReactTablePlugin,
 } from '@lobehub/editor';
-import { Editor, useEditor } from '@lobehub/editor/react';
+import { Editor, useEditor, useEditorState } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox, Icon, Input, Tag, Text } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { App, Card, Checkbox, Empty, InputNumber, Select, Switch, TimePicker, message } from 'antd';
@@ -33,7 +33,7 @@ import useSWR from 'swr';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
 import type { ExecutionConditions, UpdateAgentCronJobData } from '@/database/schemas/agentCronJob';
-import TypoBar from '@/features/EditorModal/Typobar';
+import { InlineToolbar } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
@@ -142,6 +142,7 @@ const CronJobDetailPage = memo(() => {
   const router = useQueryRoute();
   const { modal } = App.useApp();
   const editor = useEditor();
+  const editorState = useEditorState(editor);
   const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
   const [editorReady, setEditorReady] = useState(false);
 
@@ -628,7 +629,7 @@ const CronJobDetailPage = memo(() => {
                   style={{ borderRadius: 12, overflow: 'hidden' }}
                   styles={{ body: { padding: 0 } }}
                 >
-                  {enableRichRender && <TypoBar editor={editor} />}
+                  {enableRichRender && <InlineToolbar editor={editor} editorState={editorState} />}
                   <Flexbox padding={16} style={{ minHeight: 220 }}>
                     <Editor
                       content={''}

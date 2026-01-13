@@ -8,7 +8,7 @@ import { ArrowRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { ReplaceTextState } from '../../../types';
 
@@ -20,14 +20,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   from: css`
     color: ${cssVar.colorTextSecondary};
     text-decoration: line-through;
-  `,
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     margin-inline-end: 8px;
@@ -45,7 +37,7 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     // During streaming without searchText yet, show init message
     if (isArgumentsStreaming && !from) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-page-agent.apiName.replaceText.init')}</span>
         </div>
       );
@@ -55,7 +47,9 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     const hasResult = from && to !== undefined;
 
     return (
-      <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+      <div
+        className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
+      >
         <span className={styles.title}>{t('builtins.lobe-page-agent.apiName.replaceText')}</span>
         {hasResult && (
           <>

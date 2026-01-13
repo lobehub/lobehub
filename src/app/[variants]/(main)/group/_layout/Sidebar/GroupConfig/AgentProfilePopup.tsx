@@ -1,10 +1,12 @@
 'use client';
 
 import type { AgentItem } from '@lobechat/types';
-import { Avatar, Center, Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, Center, Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { Settings } from 'lucide-react';
 import { type PropsWithChildren, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import ModelSelect from '@/features/ModelSelect';
@@ -73,6 +75,7 @@ interface AgentProfilePopupProps extends PropsWithChildren {
 
 const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, children }) => {
   const { t } = useTranslation('chat');
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -90,10 +93,10 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
     }
   };
 
-  // const handleChat = () => {
-  //   setOpen(false);
-  //   onChat();
-  // };
+  const handleSettings = () => {
+    setOpen(false);
+    navigate(`/group/${groupId}/profile?tab=${agent.id}`);
+  };
 
   const content = (
     <Flexbox className={styles.container}>
@@ -127,9 +130,26 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
           }}
         />
         <Flexbox gap={2}>
-          <Text className={styles.name} ellipsis>
-            {agent.title || t('defaultSession', { ns: 'common' })}
-          </Text>
+          <Flexbox align={'center'} horizontal justify={'space-between'}>
+            <Text className={styles.name} ellipsis>
+              {agent.title || t('defaultSession', { ns: 'common' })}
+            </Text>
+
+            {/* Settings Button */}
+            <Flexbox
+              align="center"
+              horizontal
+              justify="flex-end"
+              style={{ paddingBlockStart: 0 }}
+            >
+              <ActionIcon
+                icon={Settings}
+                onClick={handleSettings}
+                size="small"
+                title={t('groupSidebar.agentProfile.settings')}
+              />
+            </Flexbox>
+          </Flexbox>
           {agent.description && (
             <Tooltip title={agent.description}>
               <Text className={styles.description} ellipsis={{ rows: 2 }}>
@@ -149,18 +169,6 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
           value={{ model: agent.model!, provider: agent.provider! }}
         />
       </Flexbox>
-
-      {/* Actions */}
-      {/*<Flexbox className={styles.section} style={{ paddingBlockStart: 0 }}>*/}
-      {/*  <Button*/}
-      {/*    className={styles.chatButton}*/}
-      {/*    icon={<MessageSquare size={14} />}*/}
-      {/*    onClick={handleChat}*/}
-      {/*    type="primary"*/}
-      {/*  >*/}
-      {/*    {t('groupSidebar.agentProfile.chat')}*/}
-      {/*  </Button>*/}
-      {/*</Flexbox>*/}
     </Flexbox>
   );
 
@@ -171,7 +179,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
       open={open}
       placement="right"
       styles={{
-        content: { overflow: 'hidden', padding: 0 },
+        content: { borderRadius: 12, overflow: 'hidden', padding: 0 },
       }}
       trigger="click"
     >

@@ -30,6 +30,7 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
     () =>
       ({
         components: Object.fromEntries(
+          // @ts-expect-error
           markdownElements.map((element) => {
             const Component = element.Component;
             return [element.tag, (props: any) => <Component {...props} id={id} />];

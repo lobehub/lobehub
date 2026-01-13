@@ -87,11 +87,21 @@ export default {
   'group.desc': 'Move a task forward with multiple Agents in one shared space.',
   'group.memberTooltip': 'There are {{count}} members in the group',
   'group.orchestratorThinking': 'Orchestrator is thinking...',
+  'group.profile.contentPlaceholder':
+    'Set the group objectives/work modes here. This information will be shared with all group members.',
+  'group.profile.external': 'External',
+  'group.profile.externalAgentWarning':
+    'This is an external agent. Changes made here will directly modify the original agent configuration.',
+  'group.profile.groupSettings': 'Group Settings',
+  'group.profile.supervisor': 'Supervisor',
+  'group.profile.supervisorPlaceholder':
+    'The supervisor coordinates different agents. Setting supervisor information here enables more precise workflow coordination.',
   'group.removeMember': 'Remove Member',
   'group.title': 'Group',
   'groupDescription': 'Group description',
   'groupSidebar.agentProfile.chat': 'Chat',
   'groupSidebar.agentProfile.model': 'Model',
+  'groupSidebar.agentProfile.settings': 'Settings',
   'groupSidebar.members.addMember': 'Add Member',
   'groupSidebar.members.enableOrchestrator': 'Enable Orchestrator',
   'groupSidebar.members.memberSettings': 'Member Settings',

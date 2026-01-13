@@ -1,12 +1,13 @@
 'use client';
 
+import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
 import { HIDE_TOOLBAR_COMMAND, type IEditor } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Block } from '@lobehub/ui';
+import { Avatar, Block } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BotIcon } from 'lucide-react';
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
@@ -23,10 +24,13 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActionsProps['items'] => {
+  const { t } = useTranslation('common');
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
 
   return useMemo(() => {
     if (!editor) return [];
+
+    const label = t('cmdk.askLobeAI');
 
     return [
       {
@@ -82,14 +86,14 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
             paddingInline={12}
             variant="borderless"
           >
-            <BotIcon />
-            <span>Ask Copilot</span>
+            <Avatar avatar={DEFAULT_INBOX_AVATAR} shape="square" size={16} />
+            <span>{label}</span>
           </Block>
         ),
         key: 'ask-copilot',
-        label: 'Ask Copilot',
+        label,
         onClick: () => {},
       },
     ];
-  }, [addSelectionContext, editor]);
+  }, [addSelectionContext, editor, t]);
 };
