@@ -450,7 +450,11 @@ const CronJobDetailPage = memo(() => {
         left={!isNewJob ? <AutoSaveHintSlot /> : undefined}
         right={
           !isNewJob ? (
-            <ActionIcon icon={Trash2} onClick={handleDeleteCronJob} title={t('delete', { ns: 'common' })} />
+            <ActionIcon
+              icon={Trash2}
+              onClick={handleDeleteCronJob}
+              title={t('delete', { ns: 'common' })}
+            />
           ) : undefined
         }
       />

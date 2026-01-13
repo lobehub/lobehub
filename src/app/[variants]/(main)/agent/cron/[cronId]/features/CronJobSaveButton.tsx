@@ -19,7 +19,6 @@ const CronJobSaveButton = memo<CronJobSaveButtonProps>(({ disabled, loading, onS
         icon={Save}
         loading={loading}
         onClick={onSave}
-        size="large"
         style={{ width: 200 }}
         type="primary"
       >

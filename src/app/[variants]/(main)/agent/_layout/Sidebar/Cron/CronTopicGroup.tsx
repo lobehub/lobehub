@@ -45,13 +45,13 @@ const CronTopicGroup = memo<CronTopicGroupProps>(({ cronJob, cronJobId, topics }
     <AccordionItem
       action={
         <Flexbox align="center" gap={4} horizontal>
-          <Actions cronJobId={cronJobId} topics={topics} />
           <ActionIcon
             icon={Settings2Icon}
             onClick={handleOpenCronJob}
             size="small"
             title={t('agentCronJobs.editJob')}
           />
+          <Actions cronJobId={cronJobId} topics={topics} />
         </Flexbox>
       }
       itemKey={cronJobId}
