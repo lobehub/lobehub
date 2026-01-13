@@ -11,7 +11,7 @@ import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
 import { useChatStore } from '@/store/chat';
 
 const ShareModal = dynamic(() => import('@/features/ShareModal'));
-const SharePopover = dynamic(() => import('@/features/ShareModal/SharePopover'));
+const SharePopover = dynamic(() => import('@/features/SharePopover'));
 
 interface ShareButtonProps {
   mobile?: boolean;
