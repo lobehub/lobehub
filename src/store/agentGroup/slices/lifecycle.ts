@@ -73,9 +73,10 @@ export const chatGroupLifecycleSlice: StateCreator<
     // Update chat store's activeTopicId
     useChatStore.getState().switchTopic(topicId ?? undefined);
 
-    // Navigate with proper query cleanup
+    // Navigate with replace to avoid stale query params
     router.push(urlJoin('/group', activeGroupId), {
-      query: { bt: null, tab: null, thread: null, topic: topicId ?? null },
+      query: { topic: topicId ?? null },
+      replace: true,
     });
   },
 });

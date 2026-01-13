@@ -51,6 +51,10 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
   contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
   disabled?: boolean;
   extra?: ReactNode;
+  /**
+   * Optional href for cmd+click to open in new tab
+   */
+  href?: string;
   icon?: IconProps['icon'];
   loading?: boolean;
   title: ReactNode;
@@ -62,6 +66,7 @@ const NavItem = memo<NavItemProps>(
     actions,
     contextMenuItems,
     active,
+    href,
     icon,
     title,
     onClick,
@@ -74,6 +79,15 @@ const NavItem = memo<NavItemProps>(
     const textColor = active ? cssVar.colorText : cssVar.colorTextSecondary;
     const variant = active ? 'filled' : 'borderless';
 
+    // Link props for cmd+click support
+    const linkProps = href
+      ? {
+          as: 'a' as const,
+          href,
+          style: { color: 'inherit', textDecoration: 'none' },
+        }
+      : {};
+
     const Content = (
       <Block
         align={'center'}
@@ -84,10 +98,16 @@ const NavItem = memo<NavItemProps>(
         horizontal
         onClick={(e) => {
           if (disabled || loading) return;
+          // Prevent default link behavior for normal clicks (let onClick handle it)
+          // But allow cmd+click to open in new tab
+          if (href && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+          }
           onClick?.(e);
         }}
         paddingInline={4}
         variant={variant}
+        {...linkProps}
         {...rest}
       >
         {icon && (

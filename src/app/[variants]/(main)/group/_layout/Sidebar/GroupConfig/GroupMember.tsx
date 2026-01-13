@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import UserAvatar from '@/features/User/UserAvatar';
+import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
@@ -30,6 +31,7 @@ interface GroupMemberProps {
  */
 const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange, groupId }) => {
   const { t } = useTranslation('chat');
+  const router = useQueryRoute();
   const [nickname, username] = useUserStore((s) => [
     userProfileSelectors.nickName(s),
     userProfileSelectors.username(s),
@@ -80,6 +82,11 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
     pushPortalView({ agentId, type: PortalViewType.GroupThread });
   };
 
+  const handleMemberDoubleClick = (agentId: string) => {
+    if (!groupId) return;
+    router.push(`/group/${groupId}/profile`, { query: { tab: agentId }, replace: true });
+  };
+
   return (
     <>
       <Flexbox gap={2}>
@@ -93,7 +100,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
               key={item.id}
               onChat={() => handleMemberClick(item.id)}
             >
-              <div>
+              <div onDoubleClick={() => handleMemberDoubleClick(item.id)}>
                 <GroupMemberItem
                   actions={
                     <ActionIcon

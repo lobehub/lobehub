@@ -3,7 +3,7 @@
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
-import { ReactNode, memo } from 'react';
+import { ReactNode, memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
@@ -109,15 +109,33 @@ interface ChromeTabsProps {
 
 const ChromeTabs = memo<ChromeTabsProps>(({ items, activeId, onChange, onAdd }) => {
   const { t } = useTranslation('chat');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !activeId) return;
+
+    const activeTab = containerRef.current.querySelector(`[data-tab-id="${activeId}"]`);
+    if (!activeTab) return;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const tabRect = activeTab.getBoundingClientRect();
+
+    const isVisible = tabRect.left >= containerRect.left && tabRect.right <= containerRect.right;
+
+    if (!isVisible) {
+      activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }, [activeId]);
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} ref={containerRef}>
       {items.map((item) => {
         const isActive = item.id === activeId;
 
         return (
           <div
             className={cx(styles.tab, isActive && styles.tabActive)}
+            data-tab-id={item.id}
             key={item.id}
             onClick={() => onChange(item.id)}
           >
