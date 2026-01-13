@@ -252,12 +252,11 @@ export const contextEngineering = async ({
     .map((kb) => ({ description: kb.description, id: kb.id, name: kb.name }));
 
   // Resolve user memories: topic memories and global identities are independent layers
+  // Both functions now read from cache only (no network requests) to avoid blocking sendMessage
   let userMemoryData;
   if (enableUserMemories) {
-    const [topicMemories, globalIdentities] = await Promise.all([
-      resolveTopicMemories(),
-      Promise.resolve(resolveGlobalIdentities()),
-    ]);
+    const topicMemories = resolveTopicMemories();
+    const globalIdentities = resolveGlobalIdentities();
     userMemoryData = combineUserMemoryData(topicMemories, globalIdentities);
   }
 
