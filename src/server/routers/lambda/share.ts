@@ -37,6 +37,9 @@ export const shareRouter = router({
         }
       }
 
+      // Increment view count after permission check passes
+      await TopicShareModel.incrementViewCount(ctx.serverDB, input.shareId);
+
       return {
         accessPermission: share.accessPermission as SharedTopicData['accessPermission'],
         agentId: share.agentId,

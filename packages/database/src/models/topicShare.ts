@@ -81,7 +81,6 @@ export class TopicShareModel {
   /**
    * Find shared topic by share ID.
    * Returns share info including ownerId for permission checking by caller.
-   * Also increments the view count.
    */
   static findByShareId = async (db: LobeChatDatabase, shareId: string) => {
     const result = await db
@@ -129,12 +128,17 @@ export class TopicShareModel {
       groupMembers = members;
     }
 
-    // Increment view count
+    return { ...share, groupMembers };
+  };
+
+  /**
+   * Increment view count for a share.
+   * Should be called after permission check passes.
+   */
+  static incrementViewCount = async (db: LobeChatDatabase, shareId: string) => {
     await db
       .update(topicShares)
       .set({ viewCount: sql`${topicShares.viewCount} + 1` })
       .where(eq(topicShares.id, shareId));
-
-    return { ...share, groupMembers };
   };
 }
