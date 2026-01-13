@@ -18,6 +18,12 @@ vi.mock('@lobechat/model-runtime', () => ({
   consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/database/models/aiProvider', () => ({
+  AiProviderModel: vi.fn().mockImplementation(() => ({
+    findById: vi.fn().mockResolvedValue(null),
+  })),
+}));
+
 describe('RuntimeExecutors', () => {
   let mockMessageModel: any;
   let mockStreamManager: any;
