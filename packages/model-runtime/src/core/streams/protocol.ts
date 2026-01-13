@@ -191,9 +191,9 @@ export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
           (ERROR_CHUNK_PREFIX +
             JSON.stringify({
               message: error.message,
-              name: error.name,
-              stack: error.stack,
-            })) as T,
+        controller.enqueue(
+          (ERROR_CHUNK_PREFIX +
+            JSON.stringify({ message: error.message, name: error.name })) as T,
         );
         controller.close();
       }
