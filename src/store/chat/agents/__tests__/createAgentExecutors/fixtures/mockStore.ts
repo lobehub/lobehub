@@ -12,6 +12,7 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
   const messageOperationMap: Record<string, string> = {};
   const operationsByMessage: Record<string, string[]> = {};
   const dbMessagesMap: Record<string, any[]> = {};
+  const messagesMap: Record<string, any[]> = {};
 
   const store = {
     // Other store properties (add as needed)
@@ -46,6 +47,7 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
 
     // Message state
     dbMessagesMap,
+    messagesMap,
 
     failOperation: vi.fn().mockImplementation((operationId, error) => {
       if (operations[operationId]) {
