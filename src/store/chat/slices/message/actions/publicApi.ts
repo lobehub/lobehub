@@ -256,7 +256,7 @@ export const messagePublicApi: StateCreator<
     get().replaceMessages([]);
 
     // after remove topic , go back to default topic
-    switchTopic();
+    switchTopic(null);
   },
 
   clearAllMessages: async () => {
