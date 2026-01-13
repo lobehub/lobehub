@@ -8,15 +8,14 @@ import { createStoreUpdater } from 'zustand-utils';
 import { useRegisterFilesHotkeys, useSaveDocumentHotkey } from '@/hooks/useHotkeys';
 import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
-
-import { useProfileStore } from '../store';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
 const ProfileHydration = memo(() => {
   const editor = useEditor();
   const editorState = useEditorState(editor);
-  const flushSave = useProfileStore((s) => s.flushSave);
+  const flushSave = useGroupProfileStore((s) => s.flushSave);
 
-  const storeUpdater = createStoreUpdater(useProfileStore);
+  const storeUpdater = createStoreUpdater(useGroupProfileStore);
 
   // Sync editor to store
   storeUpdater('editor', editor);
@@ -60,7 +59,7 @@ const ProfileHydration = memo(() => {
 
   // Clear state when unmounting
   useUnmount(() => {
-    useProfileStore.setState({
+    useGroupProfileStore.setState({
       activeTabId: 'group',
       editor: undefined,
       editorState: undefined,

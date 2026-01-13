@@ -1,6 +1,7 @@
-import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
+
+import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
 
 import { type State, initialState } from './initialState';
 
@@ -69,8 +70,7 @@ export const store: StateCreator<Store> = (set, get) => {
 
       if (editor) {
         try {
-          finalContent =
-            (editor.getDocument('markdown') as unknown as string) || streamingContent;
+          finalContent = (editor.getDocument('markdown') as unknown as string) || streamingContent;
           editorData = editor.getDocument('json') as unknown as Record<string, any>;
         } catch {
           // Use streaming content if editor read fails

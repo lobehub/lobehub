@@ -11,8 +11,8 @@ import { EditorCanvas } from '@/features/EditorCanvas';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
-import { useProfileStore } from '../../store';
 import AutoSaveHint from '../Header/AutoSaveHint';
 import GroupHeader from './GroupHeader';
 
@@ -23,8 +23,8 @@ const GroupProfile = memo(() => {
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
 
-  const editor = useProfileStore((s) => s.editor);
-  const handleContentChange = useProfileStore((s) => s.handleContentChange);
+  const editor = useGroupProfileStore((s) => s.editor);
+  const handleContentChange = useGroupProfileStore((s) => s.handleContentChange);
 
   // Create save callback that captures latest groupId
   const saveContent = useCallback(

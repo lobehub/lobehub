@@ -11,6 +11,6 @@ export type { PublicState, State } from './initialState';
 
 const devtools = createDevtools('group_profile');
 
-export const useProfileStore = createWithEqualityFn<Store>()(devtools(store), shallow);
+export const useGroupProfileStore = createWithEqualityFn<Store>()(devtools(store), shallow);
 
 export { selectors } from './selectors';

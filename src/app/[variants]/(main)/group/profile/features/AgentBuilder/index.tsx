@@ -8,14 +8,14 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
-import { useProfileStore } from '../../store';
 import AgentBuilderConversation from './AgentBuilderConversation';
 import AgentBuilderProvider from './AgentBuilderProvider';
 
 const AgentBuilder = memo(() => {
-  const chatPanelExpanded = useProfileStore((s) => s.chatPanelExpanded);
-  const setChatPanelExpanded = useProfileStore((s) => s.setChatPanelExpanded);
+  const chatPanelExpanded = useGroupProfileStore((s) => s.chatPanelExpanded);
+  const setChatPanelExpanded = useGroupProfileStore((s) => s.setChatPanelExpanded);
   const groupAgentBuilderId = useAgentStore(builtinAgentSelectors.groupAgentBuilderId);
 
   const [width, updateSystemStatus] = useGlobalStore((s) => [

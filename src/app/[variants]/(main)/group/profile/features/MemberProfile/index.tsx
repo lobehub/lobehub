@@ -15,8 +15,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
-import { useProfileStore } from '../../store';
 import AutoSaveHint from '../Header/AutoSaveHint';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
@@ -25,9 +25,9 @@ const MemberProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
 
   // Get agentId from profile store (activeTabId is the selected agent ID)
-  const agentId = useProfileStore((s) => s.activeTabId);
-  const editor = useProfileStore((s) => s.editor);
-  const handleContentChange = useProfileStore((s) => s.handleContentChange);
+  const agentId = useGroupProfileStore((s) => s.activeTabId);
+  const editor = useGroupProfileStore((s) => s.editor);
+  const handleContentChange = useGroupProfileStore((s) => s.handleContentChange);
 
   // Get agent config by agentId
   const config = useAgentStore(agentByIdSelectors.getAgentConfigById(agentId), isEqual);

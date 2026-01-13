@@ -7,17 +7,17 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AgentBuilder from './features/AgentBuilder';
 import GroupProfileSettings from './features/GroupProfile';
 import Header from './features/Header';
 import MemberProfile from './features/MemberProfile';
 import ProfileHydration from './features/ProfileHydration';
-import { useProfileStore } from './store';
 
 const ProfileArea = memo(() => {
-  const editor = useProfileStore((s) => s.editor);
-  const activeTabId = useProfileStore((s) => s.activeTabId);
+  const editor = useGroupProfileStore((s) => s.editor);
+  const activeTabId = useGroupProfileStore((s) => s.activeTabId);
   const isGroupsLoading = useAgentGroupStore(agentGroupSelectors.isGroupsInit);
 
   const isGroupTab = activeTabId === 'group';

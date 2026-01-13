@@ -17,8 +17,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
-
-import { useProfileStore } from '../../store';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
 const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 
@@ -34,7 +33,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   // Get agentId from profile store
-  const agentId = useProfileStore((s) => s.activeTabId);
+  const agentId = useGroupProfileStore((s) => s.activeTabId);
 
   // Get agent meta by agentId
   const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
