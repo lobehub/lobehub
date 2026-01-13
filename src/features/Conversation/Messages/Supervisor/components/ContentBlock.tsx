@@ -24,16 +24,7 @@ const ContentBlock = memo<ContentBlockProps>(
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
 
     if (error && (content === LOADING_FLAT || !content))
-      return (
-        <ErrorContent
-          error={
-            errorContent && error && (content === LOADING_FLAT || !content)
-              ? errorContent
-              : undefined
-          }
-          id={id}
-        />
-      );
+      return <ErrorContent error={errorContent} id={id} />;
 
     return (
       <Flexbox gap={8} id={id}>

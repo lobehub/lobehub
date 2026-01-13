@@ -107,11 +107,11 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
     // If agent has marketIdentifier, render as link to assistant page
     if (agentMarketIdentifier && !data?.groupMeta?.title) {
       return (
-        <NextLink href={`/community/assistant/${agentMarketIdentifier}`} target="_blank">
+        <a href={`/community/assistant/${agentMarketIdentifier}`} rel="noreferrer" target="_blank">
           <Typography.Text ellipsis strong>
             {agentOrGroupTitle}
           </Typography.Text>
-        </NextLink>
+        </a>
       );
     }
 
