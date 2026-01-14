@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { BrowserWindow, nativeTheme } from 'electron';
 import { join } from 'node:path';
 
@@ -9,7 +10,6 @@ import {
   SYMBOL_COLOR_DARK,
   SYMBOL_COLOR_LIGHT,
   THEME_CHANGE_DELAY,
-  TITLE_BAR_HEIGHT,
 } from '@/const/theme';
 import { createLogger } from '@/utils/logger';
 
