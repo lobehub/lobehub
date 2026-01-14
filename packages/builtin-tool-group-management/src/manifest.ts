@@ -195,7 +195,7 @@ export const GroupManagementManifest: BuiltinToolManifest = {
       description:
         'Assign an asynchronous task to an agent. The task runs in the background and results are returned to the conversation context upon completion. Ideal for longer operations.',
       name: GroupManagementApiName.executeTask,
-      humanIntervention: 'always',
+      humanIntervention: 'required',
       parameters: {
         properties: {
           agentId: {
@@ -221,6 +221,52 @@ export const GroupManagementManifest: BuiltinToolManifest = {
           },
         },
         required: ['agentId', 'task'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Assign multiple tasks to different agents to run in parallel. Each agent works independently in their own context. Use this when you need multiple agents to work on different parts of a problem simultaneously.',
+      name: GroupManagementApiName.executeTasks,
+      humanIntervention: 'required',
+      parameters: {
+        properties: {
+          tasks: {
+            description: 'Array of tasks, each assigned to a specific agent.',
+            items: {
+              properties: {
+                agentId: {
+                  description: 'The ID of the agent to execute this task.',
+                  type: 'string',
+                },
+                title: {
+                  description: 'Brief title describing what this task does (shown in UI).',
+                  type: 'string',
+                },
+                instruction: {
+                  description:
+                    'Detailed instruction/prompt for the task execution. Be specific about expected deliverables.',
+                  type: 'string',
+                },
+                timeout: {
+                  description:
+                    'Optional timeout in milliseconds for this task (default: 1800000, 30 minutes).',
+                  type: 'number',
+                },
+              },
+              required: ['agentId', 'title', 'instruction'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          skipCallSupervisor: {
+            default: false,
+            description:
+              'If true, the orchestration will end after all tasks complete, without calling the supervisor again.',
+            type: 'boolean',
+          },
+        },
+        required: ['tasks'],
         type: 'object',
       },
     },

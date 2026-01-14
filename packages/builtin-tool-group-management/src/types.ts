@@ -27,6 +27,8 @@ export const GroupManagementApiName = {
   // ==================== Task Execution ====================
   /** Let an agent execute a task asynchronously */
   executeTask: 'executeTask',
+  /** Let multiple agents execute different tasks in parallel */
+  executeTasks: 'executeTasks',
   /** Interrupt a running agent task */
   interrupt: 'interrupt',
 
@@ -114,6 +116,27 @@ export interface ExecuteTaskParams {
   skipCallSupervisor?: boolean;
   task: string;
   timeout?: number;
+}
+
+export interface TaskItem {
+  /** The ID of the agent to execute this task */
+  agentId: string;
+  /** Detailed instruction/prompt for the task execution */
+  instruction: string;
+  /** Optional timeout in milliseconds for this specific task */
+  timeout?: number;
+  /** Brief title describing what this task does (shown in UI) */
+  title: string;
+}
+
+export interface ExecuteTasksParams {
+  /**
+   * If true, the orchestration will end after all tasks complete,
+   * without calling the supervisor again.
+   */
+  skipCallSupervisor?: boolean;
+  /** Array of tasks to execute, each assigned to a specific agent */
+  tasks: TaskItem[];
 }
 
 export interface InterruptParams {

@@ -2,6 +2,7 @@ import type { BuiltinStreaming } from '@lobechat/types';
 
 import { GroupManagementApiName } from '../../types';
 import { BroadcastStreaming } from './Broadcast';
+import { ExecuteTasksStreaming } from './ExecuteTasks';
 import { SpeakStreaming } from './Speak';
 
 /**
@@ -12,5 +13,6 @@ import { SpeakStreaming } from './Speak';
  */
 export const GroupManagementStreamings: Record<string, BuiltinStreaming> = {
   [GroupManagementApiName.broadcast]: BroadcastStreaming as BuiltinStreaming,
+  [GroupManagementApiName.executeTasks]: ExecuteTasksStreaming as BuiltinStreaming,
   [GroupManagementApiName.speak]: SpeakStreaming as BuiltinStreaming,
 };
