@@ -1,7 +1,7 @@
 'use client';
 
 import { type KlavisServerType } from '@lobechat/const';
-import { FormItem, Icon, Image } from '@lobehub/ui';
+import { Flexbox, Icon, Image } from '@lobehub/ui';
 import { Button } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -18,12 +18,18 @@ const POLL_TIMEOUT_MS = 15_000;
 
 const useStyles = createStyles(({ css, token }) => ({
   connected: css`
+    font-size: 14px;
     color: ${token.colorSuccess};
   `,
+  container: css`
+    padding: 12px 0;
+  `,
   disconnected: css`
+    font-size: 14px;
     color: ${token.colorTextTertiary};
   `,
   error: css`
+    font-size: 14px;
     color: ${token.colorError};
   `,
   icon: css`
@@ -32,14 +38,20 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
 
     background: ${token.colorFillTertiary};
-    border-radius: 8px;
+    border-radius: 12px;
   `,
   pending: css`
+    font-size: 14px;
     color: ${token.colorWarning};
+  `,
+  title: css`
+    font-size: 15px;
+    font-weight: 500;
+    color: ${token.colorText};
   `,
 }));
 
@@ -270,13 +282,22 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   };
 
   return (
-    <FormItem
-      avatar={<div className={styles.icon}>{renderIcon()}</div>}
-      desc={renderStatus()}
-      label={serverType.label}
+    <Flexbox
+      align="center"
+      className={styles.container}
+      gap={16}
+      horizontal
+      justify="space-between"
     >
+      <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+        <div className={styles.icon}>{renderIcon()}</div>
+        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+          <span className={styles.title}>{serverType.label}</span>
+          {renderStatus()}
+        </Flexbox>
+      </Flexbox>
       {renderAction()}
-    </FormItem>
+    </Flexbox>
   );
 });
 

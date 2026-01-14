@@ -6,7 +6,6 @@ import {
   LOBEHUB_SKILL_PROVIDERS,
   type LobehubSkillProviderType,
 } from '@lobechat/const';
-import { Form, FormGroup } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
@@ -22,8 +21,9 @@ import {
 } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import { type LobeToolType } from '@/types/tool/tool';
 
-import InstalledSkillList from './InstalledSkillList';
+import InstalledSkillItem from './InstalledSkillItem';
 import KlavisSkillItem from './KlavisSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 
@@ -31,7 +31,7 @@ const useStyles = createStyles(({ css, token }) => ({
   container: css`
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 8px;
   `,
   description: css`
     margin-block-end: 8px;
@@ -71,47 +71,70 @@ const SkillList = memo(() => {
     return allKlavisServers.find((server) => server.identifier === identifier);
   };
 
-  // Merge and sort all integration skills: connected first
-  const sortedIntegrationSkills = useMemo(() => {
-    type LobehubSkillItem =
+  // Merge and sort all skills: installed first, then connected integrations
+  const sortedAllSkills = useMemo(() => {
+    type SkillItem =
+      | { plugin: (typeof installedPluginList)[0]; type: 'installed' }
       | { provider: LobehubSkillProviderType; type: 'lobehub' }
       | { serverType: KlavisServerType; type: 'klavis' };
 
-    const items: LobehubSkillItem[] = [];
+    const items: SkillItem[] = [];
 
+    // Add installed plugins first
+    for (const plugin of installedPluginList) {
+      items.push({ plugin, type: 'installed' });
+    }
+
+    // Add lobehub skills
     if (isLobehubSkillEnabled) {
       for (const provider of LOBEHUB_SKILL_PROVIDERS) {
         items.push({ provider, type: 'lobehub' });
       }
     }
 
+    // Add klavis skills
     if (isKlavisEnabled) {
       for (const serverType of KLAVIS_SERVER_TYPES) {
         items.push({ serverType, type: 'klavis' });
       }
     }
 
+    // Sort: installed first, then connected integrations, then disconnected
     return items.sort((a, b) => {
-      const isConnectedA =
-        a.type === 'lobehub'
-          ? getLobehubSkillServerByProvider(a.provider.id)?.status === LobehubSkillStatus.CONNECTED
-          : getKlavisServerByIdentifier(a.serverType.identifier)?.status ===
-            KlavisServerStatus.CONNECTED;
-      const isConnectedB =
-        b.type === 'lobehub'
-          ? getLobehubSkillServerByProvider(b.provider.id)?.status === LobehubSkillStatus.CONNECTED
-          : getKlavisServerByIdentifier(b.serverType.identifier)?.status ===
-            KlavisServerStatus.CONNECTED;
+      // Installed plugins always come first
+      if (a.type === 'installed' && b.type !== 'installed') return -1;
+      if (a.type !== 'installed' && b.type === 'installed') return 1;
 
-      if (isConnectedA && !isConnectedB) return -1;
-      if (!isConnectedA && isConnectedB) return 1;
+      // Among integrations, connected ones come first
+      if (a.type !== 'installed' && b.type !== 'installed') {
+        const isConnectedA =
+          a.type === 'lobehub'
+            ? getLobehubSkillServerByProvider(a.provider.id)?.status ===
+              LobehubSkillStatus.CONNECTED
+            : getKlavisServerByIdentifier(a.serverType.identifier)?.status ===
+              KlavisServerStatus.CONNECTED;
+        const isConnectedB =
+          b.type === 'lobehub'
+            ? getLobehubSkillServerByProvider(b.provider.id)?.status ===
+              LobehubSkillStatus.CONNECTED
+            : getKlavisServerByIdentifier(b.serverType.identifier)?.status ===
+              KlavisServerStatus.CONNECTED;
+
+        if (isConnectedA && !isConnectedB) return -1;
+        if (!isConnectedA && isConnectedB) return 1;
+      }
+
       return 0;
     });
-  }, [isLobehubSkillEnabled, isKlavisEnabled, allLobehubSkillServers, allKlavisServers]);
+  }, [
+    installedPluginList,
+    isLobehubSkillEnabled,
+    isKlavisEnabled,
+    allLobehubSkillServers,
+    allKlavisServers,
+  ]);
 
-  const hasIntegrations = sortedIntegrationSkills.length > 0;
-  const hasInstalledPlugins = installedPluginList.length > 0;
-  const hasAnySkills = hasIntegrations || hasInstalledPlugins;
+  const hasAnySkills = sortedAllSkills.length > 0;
 
   if (!hasAnySkills) {
     return (
@@ -124,37 +147,38 @@ const SkillList = memo(() => {
 
   return (
     <div className={styles.container}>
-      <p className={styles.description}>{t('tab.skillDesc')}</p>
-
-      {hasInstalledPlugins && (
-        <Form>
-          <FormGroup title={t('tab.skillInstalled')}>
-            <InstalledSkillList />
-          </FormGroup>
-        </Form>
-      )}
-
-      {hasIntegrations && (
-        <Form>
-          <FormGroup title={t('tab.skillIntegration')}>
-            {sortedIntegrationSkills.map((item) =>
-              item.type === 'lobehub' ? (
-                <LobehubSkillItem
-                  key={item.provider.id}
-                  provider={item.provider}
-                  server={getLobehubSkillServerByProvider(item.provider.id)}
-                />
-              ) : (
-                <KlavisSkillItem
-                  key={item.serverType.identifier}
-                  server={getKlavisServerByIdentifier(item.serverType.identifier)}
-                  serverType={item.serverType}
-                />
-              ),
-            )}
-          </FormGroup>
-        </Form>
-      )}
+      {sortedAllSkills.map((item) => {
+        if (item.type === 'installed') {
+          return (
+            <InstalledSkillItem
+              author={item.plugin.author}
+              avatar={item.plugin.avatar}
+              description={item.plugin.description}
+              identifier={item.plugin.identifier}
+              key={item.plugin.identifier}
+              runtimeType={item.plugin.runtimeType}
+              title={item.plugin.title || item.plugin.identifier}
+              type={item.plugin.type as LobeToolType}
+            />
+          );
+        }
+        if (item.type === 'lobehub') {
+          return (
+            <LobehubSkillItem
+              key={item.provider.id}
+              provider={item.provider}
+              server={getLobehubSkillServerByProvider(item.provider.id)}
+            />
+          );
+        }
+        return (
+          <KlavisSkillItem
+            key={item.serverType.identifier}
+            server={getKlavisServerByIdentifier(item.serverType.identifier)}
+            serverType={item.serverType}
+          />
+        );
+      })}
     </div>
   );
 });

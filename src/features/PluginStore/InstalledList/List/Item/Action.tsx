@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Dropdown, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { ActionIcon, Button, Drawer, Dropdown, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -66,8 +66,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
           setTab('settings');
         }
       }}
-      size="small"
-      type="text"
+      type="default"
     >
       {t('store.actions.configure')}
     </Button>
@@ -75,7 +74,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   return (
     <>
-      <Flexbox align={'center'} horizontal onClick={(e) => e.stopPropagation()}>
+      <Flexbox align={'center'} gap={8} horizontal onClick={(e) => e.stopPropagation()}>
         {installed ? (
           <>
             {showConfigureButton &&
@@ -155,17 +154,19 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         schema={plugin?.settings}
         tab={tab}
       />
-      <Modal
-        allowFullscreen
-        destroyOnClose
+      <Drawer
+        containerMaxWidth={'auto'}
+        destroyOnHidden
         footer={null}
-        onCancel={() => setMcpSettingsOpen(false)}
+        height={'100vh'}
+        onClose={() => setMcpSettingsOpen(false)}
         open={mcpSettingsOpen}
-        title={null}
-        width={800}
+        placement={'bottom'}
+        styles={{ body: { padding: 24 } }}
+        title={t('dev.title.edit')}
       >
         <McpDetail identifier={identifier} />
-      </Modal>
+      </Drawer>
     </>
   );
 });
