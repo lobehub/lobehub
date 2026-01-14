@@ -1,5 +1,13 @@
 {
   "clerkAuth.loginSuccess.action": "继续会话",
+  "inviteCode.currentEmail": "当前账号：{{email}}",
+  "inviteCode.desc": "需要邀请码才能访问 LobeHub。请输入有效的邀请码以继续。",
+  "inviteCode.getCodeHint": "获取邀请码：",
+  "inviteCode.title": "需要邀请码",
+  "waitlist.currentEmail": "当前账号：{{email}}",
+  "waitlist.desc": "你的账号不在白名单中。请联系管理员申请访问权限。",
+  "waitlist.switchAccount": "切换账号",
+  "waitlist.title": "访问受限",
   "clerkAuth.loginSuccess.desc": "{{greeting}}，{{nickName}}，我们从上次的话题继续；你也可以随时切换到新话题",
   "clerkAuth.loginSuccess.title": "欢迎回来，{{nickName}}",
   "error.backHome": "返回首页",

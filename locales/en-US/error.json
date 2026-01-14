@@ -1,5 +1,13 @@
 {
   "clerkAuth.loginSuccess.action": "Continue Session",
+  "inviteCode.currentEmail": "Current account: {{email}}",
+  "inviteCode.desc": "An invite code is required to access LobeHub. Please enter a valid invite code to continue.",
+  "inviteCode.getCodeHint": "Get an invite code from:",
+  "inviteCode.title": "Invite Code Required",
+  "waitlist.currentEmail": "Current account: {{email}}",
+  "waitlist.desc": "Your account is not on the whitelist. Please contact the administrator to request access.",
+  "waitlist.switchAccount": "Switch Account",
+  "waitlist.title": "Access Restricted",
   "clerkAuth.loginSuccess.desc": "{{greeting}}, it's great to continue serving you. Let's pick up where we left off.",
   "clerkAuth.loginSuccess.title": "Welcome back, {{nickName}}",
   "error.backHome": "Back to Home",

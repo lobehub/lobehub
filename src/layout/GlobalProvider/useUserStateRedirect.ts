@@ -68,7 +68,12 @@ export const useWebUserStateRedirect = () =>
       return;
     }
 
-    if (!onboardingSelectors.needsOnboarding(state)) return;
+      if (state.isInviteCodeRequired === true) {
+        redirectIfNotOn(pathname, '/invite-code');
+        return;
+      }
+
+      if (!onboardingSelectors.needsOnboarding(state)) return;
 
     redirectIfNotOn(pathname, '/onboarding');
   }, []);
