@@ -202,18 +202,30 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
   const renderStatus = () => {
     if (!server) {
-      return <span className={styles.disconnected}>Disconnected</span>;
+      return (
+        <span className={styles.disconnected}>
+          {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
+        </span>
+      );
     }
 
     switch (server.status) {
       case LobehubSkillStatus.CONNECTED: {
-        return <span className={styles.connected}>Connected</span>;
+        return (
+          <span className={styles.connected}>
+            {t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}
+          </span>
+        );
       }
       case LobehubSkillStatus.ERROR: {
         return <span className={styles.error}>{t('tools.lobehubSkill.error')}</span>;
       }
       default: {
-        return <span className={styles.disconnected}>Disconnected</span>;
+        return (
+          <span className={styles.disconnected}>
+            {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
+          </span>
+        );
       }
     }
   };

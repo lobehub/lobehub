@@ -198,7 +198,11 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
 
   const renderStatus = () => {
     if (!server) {
-      return <span className={styles.disconnected}>Disconnected</span>;
+      return (
+        <span className={styles.disconnected}>
+          {t('tools.klavis.disconnected', { defaultValue: 'Disconnected' })}
+        </span>
+      );
     }
 
     switch (server.status) {
@@ -212,7 +216,11 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
         return <span className={styles.error}>{t('tools.klavis.error')}</span>;
       }
       default: {
-        return <span className={styles.disconnected}>Disconnected</span>;
+        return (
+          <span className={styles.disconnected}>
+            {t('tools.klavis.disconnected', { defaultValue: 'Disconnected' })}
+          </span>
+        );
       }
     }
   };
