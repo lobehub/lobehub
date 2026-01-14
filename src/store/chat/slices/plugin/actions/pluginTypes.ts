@@ -123,9 +123,16 @@ export const pluginTypes: StateCreator<
       const context = operationId ? { operationId } : undefined;
 
       // Get agent ID, group ID, and topic ID from operation context
-      const agentId = operation?.context?.agentId;
+      let agentId = operation?.context?.agentId;
       let groupId = operation?.context?.groupId;
       const topicId = operation?.context?.topicId;
+
+      // For agent-builder tools, inject activeAgentId from store
+      // This is needed because AgentBuilderProvider uses agent_builder scope where
+      // operation.context.agentId is the agent builder itself, not the agent being edited.
+      if (payload.identifier === 'lobe-agent-builder') {
+        agentId = get().activeAgentId;
+      }
 
       // For group-agent-builder tools, inject activeGroupId from store if not in context
       // This is needed because AgentBuilderProvider uses a separate scope for messages
