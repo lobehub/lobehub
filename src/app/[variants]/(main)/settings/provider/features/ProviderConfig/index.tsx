@@ -161,18 +161,36 @@ const ProviderConfig = memo<ProviderConfigProps>(
     ]);
 
     // Watch form values in real-time to show/hide switches immediately
-    // Note: AntdForm.useWatch is a Hook, not a method on form instance
-    // Watch nested form values: keyVaults.apiKey, keyVaults.baseURL, keyVaults.endpoint
-    const formApiKey = AntdForm.useWatch(['keyVaults', 'apiKey'], { form });
-    const formBaseURL = AntdForm.useWatch(['keyVaults', 'baseURL'], { form });
-    const formEndpoint = AntdForm.useWatch(['keyVaults', 'endpoint'], { form });
+    // Watch nested form values for endpoints
+    const formBaseURL = AntdForm.useWatch(['keyVaults', 'baseURL'], form);
+    const formEndpoint = AntdForm.useWatch(['keyVaults', 'endpoint'], form);
+    // Watch all possible credential fields for different providers
+    const formApiKey = AntdForm.useWatch(['keyVaults', 'apiKey'], form);
+    const formAccessKeyId = AntdForm.useWatch(['keyVaults', 'accessKeyId'], form);
+    const formSecretAccessKey = AntdForm.useWatch(['keyVaults', 'secretAccessKey'], form);
+    const formUsername = AntdForm.useWatch(['keyVaults', 'username'], form);
+    const formPassword = AntdForm.useWatch(['keyVaults', 'password'], form);
 
     // Check if provider has endpoint and apiKey based on runtime config
     // Fallback to data.keyVaults if runtime config is not yet loaded
     const keyVaults = providerRuntimeConfig?.keyVaults || data?.keyVaults;
     // Use form values first (for immediate update), fallback to stored values
-    const isProviderEndpointNotEmpty = !!formBaseURL || !!formEndpoint || !!keyVaults?.baseURL || !!keyVaults?.endpoint;
-    const isProviderApiKeyNotEmpty = !!formApiKey || !!keyVaults?.apiKey;
+    const isProviderEndpointNotEmpty =
+      !!formBaseURL || !!formEndpoint || !!keyVaults?.baseURL || !!keyVaults?.endpoint;
+    // Check if any credential is present for different authentication types:
+    // - Standard apiKey (OpenAI, Azure, Cloudflare, VertexAI, etc.)
+    // - AWS Bedrock credentials (accessKeyId, secretAccessKey)
+    // - ComfyUI basic auth (username and password)
+    const isProviderApiKeyNotEmpty = !!(
+      formApiKey ||
+      keyVaults?.apiKey ||
+      formAccessKeyId ||
+      keyVaults?.accessKeyId ||
+      formSecretAccessKey ||
+      keyVaults?.secretAccessKey ||
+      (formUsername && formPassword) ||
+      (keyVaults?.username && keyVaults?.password)
+    );
 
     // Track the last initialized provider ID to avoid resetting form during edits
     const lastInitializedIdRef = useRef<string | null>(null);
@@ -223,39 +241,39 @@ const ProviderConfig = memo<ProviderConfigProps>(
     const apiKeyItem: FormItemProps[] = !showApiKey
       ? []
       : (apiKeyItems ?? [
-        {
-          children: isLoading ? (
-            <SkeletonInput />
-          ) : (
-            <FormPassword
-              autoComplete={'new-password'}
-              placeholder={t('providerModels.config.apiKey.placeholder', { name })}
-              suffix={
-                configUpdating && (
-                  <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
-                )
-              }
-            />
-          ),
-          desc: apiKeyUrl ? (
-            <Trans
-              components={[
-                <span key="0" />,
-                <span key="1" />,
-                <span key="2" />,
-                <Link href={apiKeyUrl} key="3" target={'_blank'} />,
-              ]}
-              i18nKey="providerModels.config.apiKey.descWithUrl"
-              ns={'modelProvider'}
-              values={{ name }}
-            />
-          ) : (
-            t(`providerModels.config.apiKey.desc`, { name })
-          ),
-          label: t(`providerModels.config.apiKey.title`),
-          name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
-        },
-      ]);
+          {
+            children: isLoading ? (
+              <SkeletonInput />
+            ) : (
+              <FormPassword
+                autoComplete={'new-password'}
+                placeholder={t('providerModels.config.apiKey.placeholder', { name })}
+                suffix={
+                  configUpdating && (
+                    <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
+                  )
+                }
+              />
+            ),
+            desc: apiKeyUrl ? (
+              <Trans
+                components={[
+                  <span key="0" />,
+                  <span key="1" />,
+                  <span key="2" />,
+                  <Link href={apiKeyUrl} key="3" target={'_blank'} />,
+                ]}
+                i18nKey="providerModels.config.apiKey.descWithUrl"
+                ns={'modelProvider'}
+                values={{ name }}
+              />
+            ) : (
+              t(`providerModels.config.apiKey.desc`, { name })
+            ),
+            label: t(`providerModels.config.apiKey.title`),
+            name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+          },
+        ]);
 
     const aceGcmItem: FormItemProps = {
       children: (
@@ -279,37 +297,37 @@ const ProviderConfig = memo<ProviderConfigProps>(
 
     const endpointItem = showEndpoint
       ? {
-        children: isLoading ? (
-          <SkeletonInput />
-        ) : (
-          <FormInput
-            allowClear
-            placeholder={
-              (!!proxyUrl && proxyUrl?.placeholder) ||
-              t('providerModels.config.baseURL.placeholder')
-            }
-            suffix={
-              configUpdating && (
-                <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
-              )
-            }
-          />
-        ),
-        desc: (!!proxyUrl && proxyUrl?.desc) || t('providerModels.config.baseURL.desc'),
-        label: (!!proxyUrl && proxyUrl?.title) || t('providerModels.config.baseURL.title'),
-        name: [KeyVaultsConfigKey, LLMProviderBaseUrlKey],
-        rules: [
-          {
-            validator: (_: any, value: string) => {
-              if (!value) return;
+          children: isLoading ? (
+            <SkeletonInput />
+          ) : (
+            <FormInput
+              allowClear
+              placeholder={
+                (!!proxyUrl && proxyUrl?.placeholder) ||
+                t('providerModels.config.baseURL.placeholder')
+              }
+              suffix={
+                configUpdating && (
+                  <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
+                )
+              }
+            />
+          ),
+          desc: (!!proxyUrl && proxyUrl?.desc) || t('providerModels.config.baseURL.desc'),
+          label: (!!proxyUrl && proxyUrl?.title) || t('providerModels.config.baseURL.title'),
+          name: [KeyVaultsConfigKey, LLMProviderBaseUrlKey],
+          rules: [
+            {
+              validator: (_: any, value: string) => {
+                if (!value) return;
 
-              return z.string().url().safeParse(value).error
-                ? Promise.reject(t('providerModels.config.baseURL.invalid'))
-                : Promise.resolve();
+                return z.string().url().safeParse(value).error
+                  ? Promise.reject(t('providerModels.config.baseURL.invalid'))
+                  : Promise.resolve();
+              },
             },
-          },
-        ],
-      }
+          ],
+        }
       : undefined;
 
     /*
@@ -329,12 +347,12 @@ const ProviderConfig = memo<ProviderConfigProps>(
 
     const clientFetchItem = showClientFetch
       ? {
-        children: isLoading ? <SkeletonSwitch /> : <Switch loading={configUpdating} />,
-        desc: t('providerModels.config.fetchOnClient.desc'),
-        label: t('providerModels.config.fetchOnClient.title'),
-        minWidth: undefined,
-        name: 'fetchOnClient',
-      }
+          children: isLoading ? <SkeletonSwitch /> : <Switch loading={configUpdating} />,
+          desc: t('providerModels.config.fetchOnClient.desc'),
+          label: t('providerModels.config.fetchOnClient.title'),
+          minWidth: undefined,
+          name: 'fetchOnClient',
+        }
       : undefined;
 
     const configItems = [
@@ -342,43 +360,39 @@ const ProviderConfig = memo<ProviderConfigProps>(
       endpointItem,
       supportResponsesApi
         ? {
-          children: isLoading ? (
-            <Skeleton.Button active />
-          ) : (
-            <Switch loading={configUpdating} />
-          ),
-          desc: t('providerModels.config.responsesApi.desc'),
-          label: t('providerModels.config.responsesApi.title'),
-          minWidth: undefined,
-          name: ['config', 'enableResponseApi'],
-        }
+            children: isLoading ? <Skeleton.Button active /> : <Switch loading={configUpdating} />,
+            desc: t('providerModels.config.responsesApi.desc'),
+            label: t('providerModels.config.responsesApi.title'),
+            minWidth: undefined,
+            name: ['config', 'enableResponseApi'],
+          }
         : undefined,
       clientFetchItem,
       showChecker
         ? {
-          children: isLoading ? (
-            <Skeleton.Button active />
-          ) : (
-            <Checker
-              checkErrorRender={checkErrorRender}
-              model={data?.checkModel || checkModel!}
-              onAfterCheck={async () => {
-                // 重置连接测试状态，允许后续的 onValuesChange 更新
-                isCheckingConnection.current = false;
-              }}
-              onBeforeCheck={async () => {
-                // 设置连接测试状态，阻止 onValuesChange 的重复请求
-                isCheckingConnection.current = true;
-                // 主动保存表单最新值，确保 fetchAiProviderRuntimeState 获取最新数据
-                await updateAiProviderConfig(id, form.getFieldsValue());
-              }}
-              provider={id}
-            />
-          ),
-          desc: t('providerModels.config.checker.desc'),
-          label: t('providerModels.config.checker.title'),
-          minWidth: undefined,
-        }
+            children: isLoading ? (
+              <Skeleton.Button active />
+            ) : (
+              <Checker
+                checkErrorRender={checkErrorRender}
+                model={data?.checkModel || checkModel!}
+                onAfterCheck={async () => {
+                  // 重置连接测试状态，允许后续的 onValuesChange 更新
+                  isCheckingConnection.current = false;
+                }}
+                onBeforeCheck={async () => {
+                  // 设置连接测试状态，阻止 onValuesChange 的重复请求
+                  isCheckingConnection.current = true;
+                  // 主动保存表单最新值，确保 fetchAiProviderRuntimeState 获取最新数据
+                  await updateAiProviderConfig(id, form.getFieldsValue());
+                }}
+                provider={id}
+              />
+            ),
+            desc: t('providerModels.config.checker.desc'),
+            label: t('providerModels.config.checker.title'),
+            minWidth: undefined,
+          }
         : undefined,
       showAceGcm && aceGcmItem,
     ].filter(Boolean) as FormItemProps[];
