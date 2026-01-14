@@ -1,13 +1,11 @@
-import { ActionIcon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui';
 import { ShapesUploadIcon } from '@lobehub/ui/icons';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
-import { HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
-import { useServerConfigStore } from '@/store/serverConfig';
 
 import ForkConfirmModal from './ForkConfirmModal';
 import type { MarketPublishAction } from './types';
@@ -20,8 +18,6 @@ interface MarketPublishButtonProps {
 
 const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess }) => {
   const { t } = useTranslation(['setting', 'marketAuth']);
-
-  const mobile = useServerConfigStore((s) => s.isMobile);
 
   const { isAuthenticated, isLoading, signIn } = useMarketAuth();
   const { checkOwnership, isCheckingOwnership, isPublishing, publish } = useMarketPublish({
@@ -102,13 +98,14 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
 
   return (
     <>
-      <ActionIcon
+      <Button
         icon={ShapesUploadIcon}
         loading={loading}
         onClick={handleButtonClick}
-        size={HEADER_ICON_SIZE(mobile)}
         title={buttonTitle}
-      />
+      >
+        {t('publishToCommunity')}
+      </Button>
       <ForkConfirmModal
         loading={isPublishing}
         onCancel={handleForkCancel}

@@ -265,6 +265,7 @@
   "plugin.settings.title": "{{id}} Skill Configuration",
   "plugin.settings.tooltip": "Skill Configuration",
   "plugin.store": "Skill Store",
+  "publishToCommunity": "Publish to Community",
   "settingAgent.avatar.sizeExceeded": "Image size exceeds 1MB limit, please choose a smaller image",
   "settingAgent.avatar.title": "Avatar",
   "settingAgent.backgroundColor.title": "Background Color",

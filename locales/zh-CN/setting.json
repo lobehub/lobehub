@@ -265,6 +265,7 @@
   "plugin.settings.title": "{{id}} 技能配置",
   "plugin.settings.tooltip": "技能配置",
   "plugin.store": "技能商店",
+  "publishToCommunity": "发布到社区",
   "settingAgent.avatar.sizeExceeded": "图片大小超过 1MB 限制，请选择更小的图片",
   "settingAgent.avatar.title": "助理头像",
   "settingAgent.backgroundColor.title": "头像背景色",

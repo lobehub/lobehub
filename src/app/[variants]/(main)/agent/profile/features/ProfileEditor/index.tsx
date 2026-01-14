@@ -17,6 +17,7 @@ import { useChatStore } from '@/store/chat';
 
 import AgentCronJobs from '../AgentCronJobs';
 import EditorCanvas from '../EditorCanvas';
+import AgentPublishButton from '../Header/AgentPublishButton';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
 
@@ -79,6 +80,7 @@ const ProfileEditor = memo(() => {
           >
             {t('startConversation')}
           </Button>
+          <AgentPublishButton />
           {ENABLE_BUSINESS_FEATURES && (
             <Button icon={Clock} onClick={handleCreateCronJob}>
               {t('agentCronJobs.addJob')}
