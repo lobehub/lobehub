@@ -2,6 +2,7 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
 import {
+  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -181,6 +182,11 @@ export const useCategory = () => {
         icon: Sparkles,
         key: SettingsTabs.Agent,
         label: t('tab.agent'),
+      },
+      {
+        icon: Blocks,
+        key: SettingsTabs.Skills,
+        label: t('tab.skills'),
       },
       {
         icon: BrainCircuit,

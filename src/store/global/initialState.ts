@@ -48,6 +48,7 @@ export enum SettingsTabs {
   Provider = 'provider',
   Proxy = 'proxy',
   Security = 'security',
+  Skills = 'skills',
   Stats = 'stats',
   Storage = 'storage',
   TTS = 'tts',
