@@ -45,12 +45,12 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-interface IntegrationSkillItemProps {
+interface LobehubSkillItemProps {
   provider: LobehubSkillProviderType;
   server?: LobehubSkillServer;
 }
 
-const IntegrationSkillItem = memo<IntegrationSkillItemProps>(({ provider, server }) => {
+const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const { t } = useTranslation('setting');
   const { styles } = useStyles();
   const [isConnecting, setIsConnecting] = useState(false);
@@ -237,7 +237,7 @@ const IntegrationSkillItem = memo<IntegrationSkillItemProps>(({ provider, server
 
     return (
       <Button icon={<Icon icon={Unplug} />} onClick={handleDisconnect} type="default">
-        Disconnect
+        {t('tools.lobehubSkill.disconnect', { defaultValue: 'Disconnect' })}
       </Button>
     );
   };
@@ -253,6 +253,6 @@ const IntegrationSkillItem = memo<IntegrationSkillItemProps>(({ provider, server
   );
 });
 
-IntegrationSkillItem.displayName = 'IntegrationSkillItem';
+LobehubSkillItem.displayName = 'LobehubSkillItem';
 
-export default IntegrationSkillItem;
+export default LobehubSkillItem;

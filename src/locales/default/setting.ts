@@ -671,6 +671,7 @@ export default {
   'tools.klavis.authFailed': 'Authentication Failed',
   'tools.klavis.authRequired': 'Authentication Required',
   'tools.klavis.connected': 'Connected',
+  'tools.klavis.disconnect': 'Disconnect',
   'tools.klavis.error': 'Error',
   'tools.klavis.groupName': 'Klavis Tools',
   'tools.klavis.manage': 'Manage Klavis',
@@ -687,6 +688,7 @@ export default {
   'tools.klavis.verifyAuth': 'I have completed authentication',
   'tools.lobehubSkill.authorize': 'Authorize',
   'tools.lobehubSkill.connect': 'Connect',
+  'tools.lobehubSkill.disconnect': 'Disconnect',
   'tools.lobehubSkill.error': 'Error',
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
