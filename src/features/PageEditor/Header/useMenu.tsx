@@ -84,8 +84,7 @@ export const useMenu = (): { menuItems: any[] } => {
               key: 'full-width',
               label: t('viewMode.fullWidth', { ns: 'chat' }),
               onCheckedChange: toggleWideScreen,
-
-              type: 'checkbox' as const,
+              type: 'switch' as const,
             },
             {
               type: 'divider' as const,
