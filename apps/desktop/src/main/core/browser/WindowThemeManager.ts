@@ -91,7 +91,8 @@ export class WindowThemeManager {
       icon: isDev ? join(buildDir, 'icon-dev.ico') : undefined,
       titleBarOverlay: {
         color: isDarkMode ? BACKGROUND_DARK : BACKGROUND_LIGHT,
-        height: TITLE_BAR_HEIGHT,
+        // Reduce 2px to prevent blocking the container border edge
+        height: TITLE_BAR_HEIGHT - 2,
         symbolColor: isDarkMode ? SYMBOL_COLOR_DARK : SYMBOL_COLOR_LIGHT,
       },
       titleBarStyle: 'hidden',
