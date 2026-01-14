@@ -163,7 +163,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         open={mcpSettingsOpen}
         placement={'bottom'}
         styles={{ body: { padding: 24 } }}
-        title={t('dev.title.edit')}
+        title={t('dev.title.editCommunity')}
       >
         <McpDetail identifier={identifier} />
       </Drawer>

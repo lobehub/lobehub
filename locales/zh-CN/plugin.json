@@ -319,6 +319,7 @@
   "dev.tabs.meta": "技能元信息",
   "dev.title.create": "添加自定义技能",
   "dev.title.edit": "编辑自定义技能",
+  "dev.title.editCommunity": "编辑社区技能",
   "dev.type.lobe": "{{appName}} 技能",
   "dev.type.openai": "OpenAI 技能",
   "dev.update": "更新",

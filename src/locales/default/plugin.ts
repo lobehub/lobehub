@@ -323,6 +323,7 @@ export default {
   'dev.tabs.meta': 'Meta info',
   'dev.title.create': 'Add custom Skill',
   'dev.title.edit': 'Edit custom Skill',
+  'dev.title.editCommunity': 'Edit Community Skill',
   'dev.type.lobe': '{{appName}} Skill',
   'dev.type.openai': 'OpenAI Skill',
   'dev.update': 'Update',
