@@ -2,17 +2,12 @@
 
 /**
  * API names for Group Management tool
+ *
+ * Note: Member management APIs (searchAgent, inviteAgent, createAgent, removeAgent)
+ * are handled by group-agent-builder tool. This tool focuses on orchestration.
  */
 export const GroupManagementApiName = {
-  // ==================== Member Management ====================
-  /** Search for agents that can be invited to the group */
-  searchAgent: 'searchAgent',
-  /** Invite an agent to join the group */
-  inviteAgent: 'inviteAgent',
-  /** Create a new agent and add it to the group */
-  createAgent: 'createAgent',
-  /** Remove an agent from the group */
-  removeAgent: 'removeAgent',
+  // ==================== Agent Info ====================
   /** Get detailed information about an agent */
   getAgentInfo: 'getAgentInfo',
 
@@ -26,9 +21,9 @@ export const GroupManagementApiName = {
 
   // ==================== Task Execution ====================
   /** Let an agent execute a task asynchronously */
-  executeTask: 'executeTask',
+  executeAgentTask: 'executeAgentTask',
   /** Let multiple agents execute different tasks in parallel */
-  executeTasks: 'executeTasks',
+  executeAgentTasks: 'executeAgentTasks',
   /** Interrupt a running agent task */
   interrupt: 'interrupt',
 
@@ -46,28 +41,7 @@ export const GroupManagementApiName = {
 export type GroupManagementApiNameType =
   (typeof GroupManagementApiName)[keyof typeof GroupManagementApiName];
 
-// ==================== Member Management Params ====================
-
-export interface SearchAgentParams {
-  limit?: number;
-  query?: string;
-  source?: 'user' | 'community';
-}
-
-export interface InviteAgentParams {
-  agentId: string;
-}
-
-export interface CreateAgentParams {
-  avatar?: string;
-  description?: string;
-  systemRole: string;
-  title: string;
-}
-
-export interface RemoveAgentParams {
-  agentId: string;
-}
+// ==================== Agent Info Params ====================
 
 export interface GetAgentInfoParams {
   agentId: string;
@@ -178,14 +152,6 @@ export interface VoteParams {
 }
 
 // ==================== Result Types ====================
-
-export interface AgentSearchResult {
-  avatar?: string;
-  description?: string;
-  id: string;
-  source: 'user' | 'community';
-  title: string;
-}
 
 export interface VoteResult {
   agentId: string;

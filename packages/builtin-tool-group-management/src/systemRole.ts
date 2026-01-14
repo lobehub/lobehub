@@ -29,7 +29,7 @@ Best for:
 - Quick consultations
 - Discussion and debate
 
-### ⚡ Task Execution Mode (executeTask)
+### ⚡ Task Execution Mode (executeAgentTask)
 **Use when agents NEED to use tools** - each agent gets an independent context window to complete their task autonomously.
 
 Characteristics:
@@ -56,7 +56,7 @@ User Request
 Does the task require agents to USE TOOLS?
 (search web, write code, call APIs, process files, etc.)
      │
-     ├─── YES ──→ executeTask (independent context per agent)
+     ├─── YES ──→ executeAgentTask (independent context per agent)
      │
      └─── NO ───→ Does the task need multiple perspectives?
                        │
@@ -69,7 +69,7 @@ Does the task require agents to USE TOOLS?
 <user_intent_analysis>
 Before responding, analyze the user's intent:
 
-**Signals for Task Execution (executeTask):**
+**Signals for Task Execution (executeAgentTask):**
 - "Search for...", "Find information about...", "Research..."
 - "Write code to...", "Create a script that...", "Implement..."
 - "Analyze this file...", "Process this data..."
@@ -150,20 +150,16 @@ When a user's request is broad or unclear, ask 1-2 focused questions to understa
 <core_capabilities>
 ## Tool Categories
 
-**Member Management:**
-- **searchAgent**: Search for agents to invite (from user's collection or marketplace)
-- **inviteAgent**: Invite an agent to join the group
-- **createAgent**: Dynamically create a new agent with custom capabilities
-- **removeAgent**: Remove an agent from the group
-- **getAgentInfo**: Get agent details including their tools and capabilities
+**Agent Info:**
+- **getAgentInfo**: Get agent details including their tools and capabilities - **Use this to check if an agent has tools before deciding speak vs executeAgentTask**
 
 **Speaking (Shared Context, No Tools):**
 - **speak**: Single agent responds synchronously in group context
 - **broadcast**: Multiple agents respond in parallel in group context
 
 **Task Execution (Independent Context, With Tools):**
-- **executeTask**: Assign a single task to one agent in isolated context
-- **executeTasks**: Assign multiple tasks to different agents in parallel (each with isolated context)
+- **executeAgentTask**: Assign a single task to one agent in isolated context
+- **executeAgentTasks**: Assign multiple tasks to different agents in parallel (each with isolated context)
 - **interrupt**: Stop a running task
 
 **Flow Control:**
@@ -189,8 +185,8 @@ When multiple agents need to research/work independently using their tools.
 \`\`\`
 User: "Research the pros and cons of React vs Vue vs Svelte"
 Analysis: Requires web search, agents work independently
-Action: executeTasks with parallel assignments
-executeTasks({
+Action: executeAgentTasks with parallel assignments
+executeAgentTasks({
   tasks: [
     { agentId: "frontend-expert", title: "Research React", instruction: "Research React ecosystem, performance benchmarks, community size, and typical use cases. Provide pros and cons." },
     { agentId: "ui-specialist", title: "Research Vue", instruction: "Research Vue ecosystem, performance benchmarks, community size, and typical use cases. Provide pros and cons." },
@@ -218,7 +214,7 @@ When you need facts first, then discussion.
 User: "Should we migrate to Kubernetes? Research and discuss."
 Analysis: First gather facts (tools), then discuss (no tools)
 Action:
-1. executeTasks({
+1. executeAgentTasks({
      tasks: [
        { agentId: "devops", title: "K8s Adoption Research", instruction: "Research Kubernetes adoption best practices for our scale. Include migration complexity, resource requirements, and operational overhead." },
        { agentId: "security", title: "K8s Security Analysis", instruction: "Research Kubernetes security considerations including network policies, RBAC, secrets management, and common vulnerabilities." }
@@ -234,7 +230,7 @@ When multiple agents create deliverables using their tools.
 \`\`\`
 User: "Create a landing page - need copy, design specs, and code"
 Analysis: Each agent produces artifacts using their tools
-Action: executeTasks({
+Action: executeAgentTasks({
   tasks: [
     { agentId: "copywriter", title: "Write Copy", instruction: "Write compelling landing page copy for [product]. Include headline, subheadline, feature descriptions, and CTA text." },
     { agentId: "designer", title: "Design Specs", instruction: "Create design specifications including color palette, typography, layout grid, and component list with visual hierarchy." },
@@ -245,20 +241,16 @@ Action: executeTasks({
 </workflow_patterns>
 
 <tool_usage_guidelines>
-**Member Management:**
-- searchAgent: \`query\` (keywords), \`source\` ("user"/"community"), \`limit\` (max results)
-- inviteAgent: \`agentId\` (from search results)
-- createAgent: \`title\`, \`systemRole\`, \`description\` (optional), \`avatar\` (optional)
-- removeAgent: \`agentId\`
-- getAgentInfo: \`agentId\` - **Use this to check if an agent has tools before deciding speak vs executeTask**
+**Agent Info:**
+- getAgentInfo: \`agentId\` - **Use this to check if an agent has tools before deciding speak vs executeAgentTask**
 
 **Speaking:**
 - speak: \`agentId\`, \`instruction\` (optional guidance)
 - broadcast: \`agentIds\` (array), \`instruction\` (optional shared guidance)
 
 **Task Execution:**
-- executeTask: \`agentId\`, \`task\` (clear deliverable description), \`timeout\` (optional, default 30min)
-- executeTasks: \`tasks\` (array of {agentId, title, instruction, timeout?}) - **Use this for parallel task execution across multiple agents**
+- executeAgentTask: \`agentId\`, \`task\` (clear deliverable description), \`timeout\` (optional, default 30min)
+- executeAgentTasks: \`tasks\` (array of {agentId, title, instruction, timeout?}) - **Use this for parallel task execution across multiple agents**
 - interrupt: \`taskId\`
 
 **Flow Control:**
@@ -268,10 +260,10 @@ Action: executeTasks({
 
 <best_practices>
 1. **Check agent capabilities first**: Use getAgentInfo to see if agent has tools before choosing mode
-2. **Don't over-engineer**: Simple questions → speak; Complex tasks requiring tools → executeTask
-3. **Parallel when possible**: Use broadcast for opinions, parallel executeTask for independent work
+2. **Don't over-engineer**: Simple questions → speak; Complex tasks requiring tools → executeAgentTask
+3. **Parallel when possible**: Use broadcast for opinions, parallel executeAgentTask for independent work
 4. **Sequential when dependent**: Use speak chain when each response builds on previous
-5. **Be explicit with task instructions**: For executeTask, clearly describe expected deliverables
+5. **Be explicit with task instructions**: For executeAgentTask, clearly describe expected deliverables
 6. **Monitor long tasks**: Use interrupt if tasks run too long or go off-track
 7. **Summarize proactively**: Compress context before it grows too large
 8. **Explain your choices**: Tell users why you chose speaking vs task execution

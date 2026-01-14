@@ -13,6 +13,6 @@ import { SpeakInspector } from './Speak';
  */
 export const GroupManagementInspectors: Record<string, BuiltinInspector> = {
   [GroupManagementApiName.broadcast]: BroadcastInspector as BuiltinInspector,
-  [GroupManagementApiName.executeTasks]: ExecuteTasksInspector as BuiltinInspector,
+  [GroupManagementApiName.executeAgentTasks]: ExecuteTasksInspector as BuiltinInspector,
   [GroupManagementApiName.speak]: SpeakInspector as BuiltinInspector,
 };

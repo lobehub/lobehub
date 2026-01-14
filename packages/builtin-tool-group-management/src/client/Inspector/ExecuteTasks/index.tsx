@@ -64,7 +64,7 @@ export const ExecuteTasksInspector = memo<BuiltinInspectorProps<ExecuteTasksPara
     if (isArgumentsStreaming && agents.length === 0) {
       return (
         <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-group-management.apiName.executeTasks')}</span>
+          <span>{t('builtins.lobe-group-management.apiName.executeAgentTasks')}</span>
         </div>
       );
     }
@@ -77,7 +77,7 @@ export const ExecuteTasksInspector = memo<BuiltinInspectorProps<ExecuteTasksPara
         horizontal
       >
         <span className={styles.title}>
-          {t('builtins.lobe-group-management.inspector.executeTasks.title')}
+          {t('builtins.lobe-group-management.inspector.executeAgentTasks.title')}
         </span>
         {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape={'circle'} size={24} />}
       </Flexbox>
