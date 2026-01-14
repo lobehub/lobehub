@@ -92,7 +92,7 @@ describe('WindowThemeManager', () => {
         icon: undefined,
         titleBarOverlay: {
           color: '#1a1a1a',
-          height: 38,
+          height: 36,
           symbolColor: '#ffffff',
         },
         titleBarStyle: 'hidden',
@@ -109,7 +109,7 @@ describe('WindowThemeManager', () => {
         icon: undefined,
         titleBarOverlay: {
           color: '#ffffff',
-          height: 38,
+          height: 36,
           symbolColor: '#000000',
         },
         titleBarStyle: 'hidden',
@@ -186,7 +186,7 @@ describe('WindowThemeManager', () => {
       expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#1a1a1a');
       expect(mockBrowserWindow.setTitleBarOverlay).toHaveBeenCalledWith({
         color: '#1a1a1a',
-        height: 38,
+        height: 36,
         symbolColor: '#ffffff',
       });
     });
@@ -198,7 +198,7 @@ describe('WindowThemeManager', () => {
       expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#ffffff');
       expect(mockBrowserWindow.setTitleBarOverlay).toHaveBeenCalledWith({
         color: '#ffffff',
-        height: 38,
+        height: 36,
         symbolColor: '#000000',
       });
     });
