@@ -64,6 +64,8 @@ export default {
   'funds.packages.expiringSoon': 'Expiring soon',
   'funds.packages.noPackages': 'No credit packages',
   'funds.packages.purchaseFirst': 'Purchase your first credit package',
+  'funds.packages.gift': 'Gift',
+  'funds.packages.giftedOn': 'Gifted on {{date}}',
   'funds.packages.purchasedOn': 'Purchased on {{date}}',
   'funds.packages.sort.amountAsc': 'Amount: Low to High',
   'funds.packages.sort.amountDesc': 'Amount: High to Low',
